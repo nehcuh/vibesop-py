@@ -1,0 +1,199 @@
+[project]
+name = "vibesop"
+version = "0.1.0"
+description = "A battle-tested, multi-platform workflow SOP for AI-assisted development"
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "MIT" }
+authors = [
+    { name = "nehcuh", email = "your@email.com" }
+]
+keywords = ["ai", "workflow", "sop", "claude-code", "skill-routing"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+
+dependencies = [
+    "pydantic>=2.10.0,<3.0.0",
+    "pydantic-settings>=2.7.0,<3.0.0",
+    "typer>=0.15.0,<1.0.0",
+    "rich>=13.9.0,<14.0.0",
+    "ruamel.yaml>=0.18.6,<0.19.0",
+    "httpx>=0.28.0,<1.0.0",
+    "anthropic>=0.45.0,<1.0.0",
+    "openai>=1.60.0,<2.0.0",
+    "questionary>=2.1.0,<3.0.0",
+    "python-dotenv>=1.0.0,<2.0.0",
+    "click>=8.1.0,<9.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3.0,<9.0.0",
+    "pytest-cov>=6.0.0,<7.0.0",
+    "pytest-asyncio>=0.25.0,<1.0.0",
+    "ruff>=0.9.0,<1.0.0",
+    "mypy>=1.14.0,<2.0.0",
+    "pre-commit>=4.0.0,<5.0.0",
+    "basedpyright>=1.24.0,<2.0.0",
+]
+
+[project.scripts]
+vibe = "vibesop.cli.main:app"
+
+[project.urls]
+Homepage = "https://github.com/nehcuh/vibesop-py"
+Documentation = "https://github.com/nehcuh/vibesop-py#readme"
+Repository = "https://github.com/nehcuh/vibesop-py.git"
+Issues = "https://github.com/nehcuh/vibesop-py/issues"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/vibesop"]
+
+# ============================================
+# Ruff - Modern Python Linter
+# ============================================
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+indent-width = 4
+
+[tool.ruff.lint]
+select = [
+    "E",     # pycodestyle errors
+    "W",     # pycodestyle warnings
+    "F",     # Pyflakes
+    "I",     # isort
+    "B",     # flake8-bugbear
+    "C4",    # flake8-comprehensions
+    "UP",    # pyupgrade
+    "ARG",   # flake8-unused-arguments
+    "SIM",   # flake8-simplify
+    "TCH",   # flake8-type-checking
+    "PTH",   # flake8-use-pathlib
+    "ERA",   # eradicate
+    "PL",    # Pylint
+    "RUF",   # Ruff-specific rules
+]
+ignore = [
+    "E501",   # line too long (handled by formatter)
+    "PLR09",  # too many X
+    "PLR2004",  # magic value comparison
+]
+unfixable = [
+    "F401",   # don't remove unused imports
+]
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401"]
+"tests/**/*.py" = ["ARG001", "PLR2004"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["vibesop"]
+case-sensitive = true
+
+[tool.ruff.lint.pyupgrade]
+keep-runtime-typing = true
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"
+
+# ============================================
+# Pyright - Type Checker
+# ============================================
+[tool.pyright]
+typeCheckingMode = "strict"
+pythonVersion = "3.12"
+pythonPlatform = "All"
+venvPath = "."
+venv = ".venv"
+
+include = ["src", "tests"]
+exclude = [
+    "**/__pycache__",
+    "**/.pytest_cache",
+    "**/node_modules",
+    "**/.venv",
+]
+
+stubPath = "src/stubs"
+
+reportMissingTypeStubs = false
+reportUnknownMemberType = "warning"
+reportUnknownVariableType = "warning"
+reportUnknownArgumentType = "warning"
+reportUnknownParameterType = "warning"
+reportMissingTypeArgument = "warning"
+reportUnusedImport = "error"
+reportUnusedClass = "error"
+reportUnusedFunction = "error"
+reportUnusedVariable = "error"
+reportDuplicateImport = "error"
+reportUntypedFunctionDecorator = "error"
+reportUntypedClassDef = "error"
+reportUntypedBaseClass = "error"
+reportUnnecessaryIsInstance = "warning"
+reportUnnecessaryComparison = "warning"
+reportUnnecessaryContains = "warning"
+
+# ============================================
+# Pytest - Test Framework
+# ============================================
+[tool.pytest.ini_options]
+minversion = "8.3"
+testpaths = ["tests"]
+pythonpath = ["src"]
+asyncio_mode = "auto"
+addopts = [
+    "--strict-markers",
+    "--strict-config",
+    "--cov=src/vibesop",
+    "--cov-report=term-missing",
+    "--cov-report=html",
+    "--cov-report=xml",
+]
+markers = [
+    "slow: marks tests as slow",
+    "integration: marks tests as integration tests",
+    "unit: marks tests as unit tests",
+]
+
+# ============================================
+# Coverage
+# ============================================
+[tool.coverage.run]
+source = ["src"]
+branch = true
+parallel = true
+omit = [
+    "*/__init__.py",
+    "*/__pycache__/*",
+    "*/tests/*",
+]
+
+[tool.coverage.report]
+precision = 2
+show_missing = true
+skip_covered = false
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+    "class .*\\bProtocol\\):",
+    "@(abc\\.)?abstractmethod",
+]
