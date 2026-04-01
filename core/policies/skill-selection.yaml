@@ -1,0 +1,151 @@
+# Skill Selection and Execution Policy
+# Cross-platform configuration for intelligent skill routing
+# This file is portable SSOT - use in config/platforms.yaml to reference
+
+schema_version: 1
+
+# Candidate skill selection strategy
+# Determines how to choose from multiple matching skills
+candidate_selection:
+  # Maximum number of candidate skills to present
+  max_candidates: 3
+
+  # Auto-selection threshold
+  # If (highest confidence - second highest) > this value, auto-select the top choice
+  # Lower values = more aggressive auto-selection
+  # Higher values = more user choice prompts
+  auto_select_threshold: 0.15
+
+  # Minimum confidence threshold
+  # Candidates below this confidence are filtered out
+  min_confidence: 0.6
+
+  # How to sort candidates
+  # Options: confidence, preference, balanced
+  sort_by: balanced
+
+# User preference learning
+preference_learning:
+  # Enable multi-dimensional preference learning
+  enabled: true
+
+  # Learning dimensions with weights
+  dimensions:
+    consistency:
+      weight: 0.4
+      threshold: 0.7
+      min_samples: 5
+      description: "User's historical consistency for similar tasks"
+
+    satisfaction:
+      weight: 0.3
+      min_samples: 3
+      description: "User's past satisfaction ratings"
+
+    context:
+      weight: 0.2
+      factors:
+        - file_type
+        - project_type
+        - time_of_day
+        - recent_files
+      description: "Context-aware preference matching"
+
+    recency:
+      weight: 0.1
+      decay_days: 30
+      description: "Recent choices weighted more heavily"
+
+  # When to prompt user vs auto-select based on preferences
+  decision_mode: smart  # Options: auto, smart, prompt, parallel
+
+# Parallel execution configuration
+parallel_execution:
+  # Enable parallel execution of multiple skills
+  enabled: true
+
+  # Maximum number of skills to execute in parallel
+  max_parallel: 2
+
+  # Execution mode
+  # auto: System decides when to run parallel
+  # user_choice: User chooses between serial/parallel
+  # disabled: Never run parallel
+  mode: auto
+
+  # Conditions for parallel execution
+  conditions:
+    # Only run parallel if candidates are within this confidence range
+    max_confidence_diff: 0.10
+
+    # Only run parallel if candidate count is within range
+    min_candidates: 2
+    max_candidates: 3
+
+    # Don't run parallel if execution time estimate exceeds threshold (seconds)
+    max_estimated_duration: 300
+
+  # Result aggregation strategy
+  # consensus: All skills must agree
+  # majority: Most skills agree
+  # first_success: First successful result
+  # all: Return all results for comparison
+  # merged: Merge insights from all results
+  aggregation:
+    method: merged
+    timeout: 300
+    on_timeout: return_partial
+
+  # Output format for parallel results
+  output_format:
+    show_individual_results: true
+    show_consensus: true
+    show_conflicts: true
+    recommendation: best_match
+
+# Platform-specific overrides
+# These override defaults when specific platform is active
+platform_overrides:
+  claude-code:
+    candidate_selection:
+      max_candidates: 4
+      auto_select_threshold: 0.12
+    parallel_execution:
+      enabled: false  # Claude Code CLI doesn't support true parallelism
+      fallback_strategy: ask_user
+
+  opencode:
+    candidate_selection:
+      max_candidates: 3
+      auto_select_threshold: 0.20
+    parallel_execution:
+      enabled: true
+      max_parallel: 3
+
+  cursor:
+    candidate_selection:
+      max_candidates: 3
+    parallel_execution:
+      enabled: false
+
+# Fallback behavior
+fallback:
+  # What to do when no candidates meet min_confidence
+  no_candidates: suggest_similar  # Options: suggest_similar, ask_user, fail
+
+  # What to do when preference learning is unavailable
+  no_preferences: use_confidence  # Options: use_confidence, random, ask_user
+
+  # What to do when parallel execution fails
+  parallel_failed: fallback_to_serial  # Options: fallback_to_serial, retry_serial, fail
+
+# Quality and safety
+quality:
+  # Minimum quality score for auto-selection
+  min_quality_score: 0.7
+
+  # Safety check before executing unknown skills
+  verify_unfamiliar_skills: true
+
+  # Maximum execution time per skill (seconds)
+  max_skill_duration: 600
