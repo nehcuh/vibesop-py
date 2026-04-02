@@ -15,6 +15,7 @@ from rich.panel import Panel
 from vibesop import __version__
 from vibesop.core.models import RoutingRequest
 from vibesop.core.routing.engine import SkillRouter
+from vibesop.core.skills import SkillManager
 
 app = typer.Typer(
     name="vibe",
@@ -238,6 +239,108 @@ def top_skills(
             f"   Selected: {pref.selection_count}x  "
             f"Helpful: {pref.helpful_count}x"
         )
+
+
+@app.command("skills")
+def skills_list(
+    namespace: str | None = typer.Option(None, "--namespace", "-n", help="Filter by namespace"),
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Show detailed information"),
+) -> None:
+    """List all available skills.
+
+    Example:
+        vibe skills
+        vibe skills --namespace gstack
+        vibe skills --verbose
+    """
+    manager = SkillManager()
+
+    all_skills = manager.list_skills(namespace=namespace)
+
+    if not all_skills:
+        console.print("[yellow]No skills found.[/yellow]")
+        raise typer.Exit(0)
+
+    console.print(f"[bold]📚 Available Skills[/bold] ({len(all_skills)} total)\n")
+
+    # Group by namespace
+    by_namespace: dict[str, list[dict]] = {}
+    for skill in all_skills:
+        ns = skill.get("namespace", "builtin")
+        if ns not in by_namespace:
+            by_namespace[ns] = []
+        by_namespace[ns].append(skill)
+
+    for ns in sorted(by_namespace.keys()):
+        ns_skills = by_namespace[ns]
+        console.print(f"[bold cyan]{ns}[/bold cyan] ({len(ns_skills)} skills)")
+
+        for skill in ns_skills:
+            skill_id = skill.get("id", "unknown")
+            name = skill.get("name", skill_id)
+            desc = skill.get("description", "")
+            skill_type = skill.get("type", "prompt")
+
+            if verbose:
+                console.print(
+                    f"  • [bold]{skill_id}[/bold] ([dim]{skill_type}[/dim])\n"
+                    f"    Name: {name}\n"
+                    f"    Description: {desc}\n"
+                    f"    Tags: {skill.get('tags', [])}\n"
+                    f"    Source: {skill.get('source', 'unknown')}"
+                )
+            else:
+                console.print(f"  • [bold]{skill_id}[/bold] - {desc}")
+
+        console.print()  # Blank line between namespaces
+
+    # Show stats
+    stats = manager.get_stats()
+    console.print(f"[dim]Namespaces: {', '.join(stats['namespaces'])}[/dim]")
+
+
+@app.command("skill-info")
+def skill_info(
+    skill_id: str = typer.Argument(..., help="Skill ID (e.g., gstack/review)"),
+) -> None:
+    """Show detailed information about a skill.
+
+    Example:
+        vibe skill-info gstack/review
+    """
+    manager = SkillManager()
+
+    info = manager.get_skill_info(skill_id)
+
+    if not info:
+        console.print(f"[red]Skill not found: {skill_id}[/red]")
+        raise typer.Exit(1)
+
+    console.print(
+        Panel.fit(
+            f"[bold]{info.get('name', info['id'])}[/bold]\n\n"
+            f"[dim]ID:[/dim] {info['id']}\n"
+            f"[dim]Type:[/dim] {info.get('type', 'prompt')}\n"
+            f"[dim]Namespace:[/dim] {info.get('namespace', 'builtin')}\n"
+            f"[dim]Version:[/dim] {info.get('version', '1.0.0')}\n"
+            f"[dim]Author:[/dim] {info.get('author', 'N/A')}\n"
+            f"[dim]Source:[/dim] {info.get('source', 'unknown')}\n"
+            f"\n"
+            f"[bold]Description[/bold]\n"
+            f"{info.get('description', 'No description')}\n"
+            f"\n"
+            f"[bold]Intent[/bold]\n"
+            f"{info.get('intent', 'No intent specified')}\n"
+            f"\n"
+            f"[bold]Tags[/bold]\n"
+            f"{', '.join(info.get('tags') or []) or 'None'}",
+            title="[bold]Skill Info[/bold]",
+            border_style="blue",
+        )
+    )
+
+    if info.get("source_file"):
+        console.print(f"\n[dim]Source file: {info['source_file']}[/dim]")
 
 
 if __name__ == "__main__":
