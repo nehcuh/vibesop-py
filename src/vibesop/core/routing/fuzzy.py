@@ -126,14 +126,14 @@ class FuzzyMatcher:
                 and best_score >= self.min_similarity
                 and not any(m.skill_id == best_match[0] for m in matches)
             ):
-                    matches.append(
-                        FuzzyMatch(
-                            skill_id=best_match[0],
-                            score=best_match[2],
-                            distance=best_match[3],
-                            matched_text=best_match[1],
-                        )
+                matches.append(
+                    FuzzyMatch(
+                        skill_id=best_match[0],
+                        score=best_match[2],
+                        distance=best_match[3],
+                        matched_text=best_match[1],
                     )
+                )
 
         # Sort by score descending
         matches.sort(key=lambda m: m.score, reverse=True)

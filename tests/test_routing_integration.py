@@ -26,9 +26,10 @@ class TestSkillRouterIntegration:
         result = router.route(request)
 
         assert result.primary.skill_id is not None
-        assert "review" in result.primary.skill_id.lower() or "review" in str(
-            result.primary.metadata
-        ).lower()
+        assert (
+            "review" in result.primary.skill_id.lower()
+            or "review" in str(result.primary.metadata).lower()
+        )
 
     def test_route_refactor_query(self) -> None:
         """Test routing a refactor query."""

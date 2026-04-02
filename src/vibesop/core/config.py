@@ -91,9 +91,7 @@ class ConfigLoader:
         if self._policy_cache and not force_reload:
             return self._policy_cache
 
-        policy_path = (
-            self.project_root / "core" / "policies" / "skill-selection.yaml"
-        )
+        policy_path = self.project_root / "core" / "policies" / "skill-selection.yaml"
 
         if not policy_path.exists():
             # Return default policy if file doesn't exist
@@ -159,9 +157,7 @@ class ConfigLoader:
             # Try matching suffix
             for skill in skills:
                 skill_full_id = skill.get("id", "")
-                if skill_full_id.endswith(f"/{skill_id}") or skill_full_id.endswith(
-                    f"-{skill_id}"
-                ):
+                if skill_full_id.endswith(f"/{skill_id}") or skill_full_id.endswith(f"-{skill_id}"):
                     return skill
 
         return None
@@ -181,11 +177,7 @@ class ConfigLoader:
             List of skill definitions in namespace
         """
         skills = self.get_all_skills(force_reload=force_reload)
-        return [
-            skill
-            for skill in skills
-            if skill.get("namespace") == namespace
-        ]
+        return [skill for skill in skills if skill.get("namespace") == namespace]
 
     def search_skills(
         self,

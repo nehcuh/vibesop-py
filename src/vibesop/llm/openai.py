@@ -118,8 +118,4 @@ class OpenAIProvider(LLMProvider):
 
         OpenAI keys start with 'sk-' and are typically 40+ characters.
         """
-        return bool(
-            self.api_key
-            and self.api_key.startswith("sk-")
-            and len(self.api_key) >= 40
-        )
+        return bool(self.api_key and self.api_key.startswith("sk-") and len(self.api_key) >= 40)

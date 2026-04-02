@@ -206,9 +206,7 @@ class TestSemanticMatcher:
         """Test cosine similarity with identical vectors."""
         matcher = SemanticMatcher()
 
-        matcher._documents = [
-            Document(text="test", tokens=["hello", "world"], metadata={})
-        ]
+        matcher._documents = [Document(text="test", tokens=["hello", "world"], metadata={})]
 
         # Manually set IDF for testing
         matcher._idf = {"hello": 1.0, "world": 1.0}
@@ -226,9 +224,7 @@ class TestSemanticMatcher:
         matcher = SemanticMatcher()
 
         # Create documents with no overlapping terms
-        matcher._documents = [
-            Document(text="doc1", tokens=["apple", "banana"], metadata={})
-        ]
+        matcher._documents = [Document(text="doc1", tokens=["apple", "banana"], metadata={})]
         matcher._calculate_idf()
 
         query_tfidf = {"orange": 1.0}

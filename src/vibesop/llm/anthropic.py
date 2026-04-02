@@ -119,8 +119,4 @@ class AnthropicProvider(LLMProvider):
 
         Anthropic keys start with 'sk-ant-' and are typically 40+ characters.
         """
-        return bool(
-            self.api_key
-            and self.api_key.startswith("sk-ant-")
-            and len(self.api_key) >= 40
-        )
+        return bool(self.api_key and self.api_key.startswith("sk-ant-") and len(self.api_key) >= 40)

@@ -157,5 +157,88 @@ def _check_llm_provider() -> tuple[bool, str]:
     return False, "No API key found (set ANTHROPIC_API_KEY or OPENAI_API_KEY)"
 
 
+@app.command()
+def record(
+    skill_id: str = typer.Argument(..., help="Skill ID that was selected"),
+    query: str = typer.Argument(..., help="Original user query"),
+    helpful: bool = typer.Option(True, "--helpful/--not-helpful", "-h/-H"),
+) -> None:
+    """Record a skill selection for preference learning.
+
+    Example:
+        vibe record /review "review my code"
+        vibe record systematic-debugging "debug this error" --not-helpful
+    """
+    router = SkillRouter()
+
+    router.record_selection(skill_id, query, was_helpful=helpful)
+
+    if helpful:
+        console.print(f"[green]✓[/green] Recorded selection: [bold]{skill_id}[/bold]")
+    else:
+        console.print(
+            f"[yellow]✓[/yellow] Recorded selection: [bold]{skill_id}[/bold] (not helpful)"
+        )
+
+    # Show updated preference score
+    score = router._preference_learner.get_preference_score(skill_id)
+    if score > 0:
+        console.print(f"   Preference score: {score:.2%}")
+    console.print("   This will improve future recommendations.")
+
+
+@app.command("preferences")
+def preferences() -> None:
+    """Show preference learning statistics.
+
+    Example:
+        vibe preferences
+    """
+    router = SkillRouter()
+    stats = router.get_preference_stats()
+
+    console.print("[bold]📊 Preference Learning Statistics[/bold]\n")
+
+    console.print(f"Total selections: {stats['total_selections']}")
+    console.print(f"Helpful rate: {stats['helpful_rate']:.1%}")
+    console.print(f"Unique skills: {stats['unique_skills']}")
+
+    if stats["top_skills"]:
+        console.print("\n[bold]Top Skills:[/bold]")
+        for skill_id, count in stats["top_skills"][:5]:
+            console.print(f"  • {skill_id}: {count} selections")
+
+    console.print(f"\nStorage: {stats['storage_path']}")
+
+
+@app.command("top-skills")
+def top_skills(
+    limit: int = typer.Option(5, "--limit", "-l", min=1, max=10),
+) -> None:
+    """Show most preferred skills.
+
+    Example:
+        vibe top-skills
+        vibe top-skills --limit 10
+    """
+    router = SkillRouter()
+    top_skills = router.get_top_skills(limit=limit, min_selections=1)
+
+    console.print(f"[bold]🏆 Top {len(top_skills)} Preferred Skills[/bold]\n")
+
+    for i, pref in enumerate(top_skills, 1):
+        # Create a nice display
+        bar_length = int(pref.score * 20)
+        bar = "█" * bar_length + "░" * (20 - bar_length)
+
+        console.print(
+            f"{i}. [bold cyan]{pref.skill_id}[/bold cyan]\n"
+            f"   Score: [green]{pref.score:.1%}[/green]  "
+            f"[dim]{bar}[/dim]\n"
+            f"   Selected: {pref.selection_count}x  "
+            f"Helpful: {pref.helpful_count}x"
+        )
+
+
 if __name__ == "__main__":
     app()

@@ -268,10 +268,7 @@ class SemanticMatcher:
 
         # Calculate TF-IDF for query
         query_tf = self._calculate_tf(query_tokens)
-        query_tfidf = {
-            term: tf * self._idf.get(term, 0)
-            for term, tf in query_tf.items()
-        }
+        query_tfidf = {term: tf * self._idf.get(term, 0) for term, tf in query_tf.items()}
 
         # Calculate cosine similarity with each document
         matches = []
@@ -311,11 +308,7 @@ class SemanticMatcher:
         tokens = text.split()
 
         # Filter stop words and short tokens
-        filtered = [
-            token
-            for token in tokens
-            if token not in STOP_WORDS and len(token) > 1
-        ]
+        filtered = [token for token in tokens if token not in STOP_WORDS and len(token) > 1]
 
         return filtered
 
@@ -355,10 +348,7 @@ class SemanticMatcher:
                 doc_counts[term] = doc_counts.get(term, 0) + 1
 
         # Calculate IDF: log(total_docs / doc_count)
-        self._idf = {
-            term: math.log(total_docs / count)
-            for term, count in doc_counts.items()
-        }
+        self._idf = {term: math.log(total_docs / count) for term, count in doc_counts.items()}
 
     def _cosine_similarity(
         self,
@@ -376,10 +366,7 @@ class SemanticMatcher:
         """
         # Calculate document TF-IDF
         doc_tf = self._calculate_tf(doc.tokens)
-        doc_tfidf = {
-            term: tf * self._idf.get(term, 0)
-            for term, tf in doc_tf.items()
-        }
+        doc_tfidf = {term: tf * self._idf.get(term, 0) for term, tf in doc_tf.items()}
 
         # Get all unique terms
         all_terms = set(query_tfidf.keys()) | set(doc_tfidf.keys())
@@ -388,17 +375,10 @@ class SemanticMatcher:
             return 0.0
 
         # Calculate dot product and magnitudes
-        dot_product = sum(
-            query_tfidf.get(term, 0) * doc_tfidf.get(term, 0)
-            for term in all_terms
-        )
+        dot_product = sum(query_tfidf.get(term, 0) * doc_tfidf.get(term, 0) for term in all_terms)
 
-        query_magnitude = math.sqrt(
-            sum(v * v for v in query_tfidf.values())
-        )
-        doc_magnitude = math.sqrt(
-            sum(v * v for v in doc_tfidf.values())
-        )
+        query_magnitude = math.sqrt(sum(v * v for v in query_tfidf.values()))
+        doc_magnitude = math.sqrt(sum(v * v for v in doc_tfidf.values()))
 
         # Avoid division by zero
         if query_magnitude == 0 or doc_magnitude == 0:

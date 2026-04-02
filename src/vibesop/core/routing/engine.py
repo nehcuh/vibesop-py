@@ -19,6 +19,7 @@ from vibesop.core.models import (
     RoutingResult,
     SkillRoute,
 )
+from vibesop.core.preference import PreferenceLearner
 from vibesop.core.routing.cache import CacheManager
 from vibesop.core.routing.fuzzy import FuzzyMatcher
 from vibesop.core.routing.semantic import SemanticMatcher
@@ -87,14 +88,11 @@ class SkillRouter:
         self._ai_triage_enabled = False
 
         if enable_ai_triage is None:
-            enable_ai_triage = (
-                os.getenv("VIBE_AI_TRIAGE_ENABLED", "true").lower() == "true"
-            )
+            enable_ai_triage = os.getenv("VIBE_AI_TRIAGE_ENABLED", "true").lower() == "true"
 
         # Check for Claude Code environment
         if (
-            os.getenv("CLAUDECODE") == "1"
-            or os.getenv("CLAUDE_CODE_ENTRYPOINT") == "cli"
+            os.getenv("CLAUDECODE") == "1" or os.getenv("CLAUDE_CODE_ENTRYPOINT") == "cli"
         ) and not os.getenv("VIBE_AI_TRIAGE_ENABLED"):
             # Claude Code has built-in reasoning, disable external AI by default
             enable_ai_triage = False
@@ -111,6 +109,14 @@ class SkillRouter:
 
         # Initialize fuzzy matcher (Layer 4)
         self._fuzzy_matcher = FuzzyMatcher(min_similarity=0.6, max_distance=2)
+
+        # Initialize preference learner
+        preference_path = self.project_root / ".vibe" / "preferences.json"
+        self._preference_learner = PreferenceLearner(
+            storage_path=preference_path,
+            decay_days=30,
+            min_samples=3,
+        )
 
         # Load skills from configuration
         self._load_skills()
@@ -165,9 +171,12 @@ class SkillRouter:
                 )
                 self._stats.layer_distribution[layer_name] += 1
 
+                # Apply preference learning boost
+                boosted_result = self._apply_preference_boost(layer_result, normalized_input)
+
                 return RoutingResult(
-                    primary=layer_result,
-                    alternatives=self._get_alternatives(layer_result),
+                    primary=boosted_result,
+                    alternatives=self._get_alternatives(boosted_result),
                     routing_path=[layer_num],
                 )
 
@@ -320,10 +329,7 @@ class SkillRouter:
                 )
 
         # Review scenarios
-        if any(
-            word in normalized_input
-            for word in ["review", "审查", "评审", "检查"]
-        ):
+        if any(word in normalized_input for word in ["review", "审查", "评审", "检查"]):
             skill = self._config.get_skill_by_id("gstack/review")
             if not skill:
                 skill = self._config.get_skill_by_id("/review")
@@ -465,6 +471,94 @@ Skill ID:"""
             return match.group(0)
 
         return None
+
+    def record_selection(
+        self,
+        skill_id: str,
+        query: str,
+        was_helpful: bool = True,
+    ) -> None:
+        """Record a skill selection for preference learning.
+
+        Args:
+            skill_id: Selected skill ID
+            query: Original user query
+            was_helpful: Whether the user found it helpful
+        """
+        self._preference_learner.record_selection(skill_id, query, was_helpful)
+
+    def get_preference_stats(self) -> dict[str, any]:
+        """Get preference learning statistics.
+
+        Returns:
+            Dictionary with preference stats
+        """
+        return self._preference_learner.get_stats()
+
+    def get_top_skills(
+        self,
+        limit: int = 5,
+        min_selections: int = 2,
+    ) -> list:
+        """Get top preferred skills based on user history.
+
+        Args:
+            limit: Maximum number to return
+            min_selections: Minimum selection count required
+
+        Returns:
+            List of PreferenceScore objects
+        """
+        return self._preference_learner.get_top_skills(limit, min_selections)
+
+    def clear_old_preferences(self, days: int = 90) -> int:
+        """Clear old preference data.
+
+        Args:
+            days: Remove data older than this many days
+
+        Returns:
+            Number of records removed
+        """
+        return self._preference_learner.clear_old_data(days)
+
+    def _apply_preference_boost(
+        self,
+        route: SkillRoute,
+        query: str,  # noqa: ARG002
+    ) -> SkillRoute:
+        """Apply preference learning boost to a route.
+
+        Args:
+            route: Original route result
+            query: User's query (used for context boost calculation)
+
+        Returns:
+            Boosted route with adjusted confidence
+        """
+        # Get preference score for this skill
+        pref_score = self._preference_learner.get_preference_score(route.skill_id)
+
+        # If no preference data, return original
+        if pref_score == 0.0:
+            return route
+
+        # Boost confidence based on preference (max 20% boost)
+        boost = pref_score * 0.2  # Max 20% boost
+        boosted_confidence = min(1.0, route.confidence + boost)
+
+        # Create boosted route
+        return SkillRoute(
+            skill_id=route.skill_id,
+            confidence=boosted_confidence,
+            layer=route.layer,
+            source=route.source,
+            metadata={
+                **route.metadata,
+                "preference_boost": boost,
+                "preference_score": pref_score,
+            },
+        )
 
     def _get_alternatives(
         self,
