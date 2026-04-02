@@ -39,9 +39,30 @@ class SkillRoute(BaseModel):
     @field_validator("skill_id")
     @classmethod
     def validate_skill_id(cls, v: str) -> str:
-        """Validate skill ID format."""
+        """Validate skill ID format.
+
+        Accepts formats:
+        - /review (shorthand)
+        - gstack/review (namespaced)
+        - superpowers/refactor (namespaced)
+
+        For consistency, ensures shorthand forms have a leading slash.
+        """
+        if not v:
+            raise ValueError("skill_id cannot be empty")
+
+        # Allow namespaced IDs (gstack/review, superpowers/refactor)
+        if "/" in v and not v.startswith("/"):
+            # Namespaced ID, validate format
+            parts = v.split("/")
+            if len(parts) != 2 or not parts[0] or not parts[1]:
+                raise ValueError("skill_id must be in format 'namespace/skill' or '/skill'")
+            return v
+
+        # Shorthand ID (review), ensure leading slash
         if not v.startswith("/"):
-            raise ValueError("skill_id must start with '/'")
+            return f"/{v}"
+
         return v
 
 
