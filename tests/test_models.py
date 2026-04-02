@@ -27,15 +27,34 @@ class TestSkillRoute:
         assert route.layer == 0
         assert route.source == "builtin"
 
-    def test_skill_id_must_start_with_slash(self) -> None:
-        """Test that skill_id must start with /."""
-        with pytest.raises(ValidationError):
-            SkillRoute(
-                skill_id="review",  # Missing /
-                confidence=0.95,
-                layer=0,
-                source="builtin",
-            )
+    def test_skill_id_valid_formats(self) -> None:
+        """Test that skill_id accepts valid formats."""
+        # Shorthand with leading slash
+        route1 = SkillRoute(
+            skill_id="/review",
+            confidence=0.95,
+            layer=0,
+            source="builtin",
+        )
+        assert route1.skill_id == "/review"
+
+        # Namespaced format
+        route2 = SkillRoute(
+            skill_id="gstack/review",
+            confidence=0.95,
+            layer=0,
+            source="gstack",
+        )
+        assert route2.skill_id == "gstack/review"
+
+        # Shorthand without leading slash gets normalized
+        route3 = SkillRoute(
+            skill_id="review",
+            confidence=0.95,
+            layer=0,
+            source="builtin",
+        )
+        assert route3.skill_id == "/review"
 
     def test_confidence_must_be_between_0_and_1(self) -> None:
         """Test confidence validation."""
