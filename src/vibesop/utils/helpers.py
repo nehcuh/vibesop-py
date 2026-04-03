@@ -8,7 +8,7 @@ import os
 from pathlib import Path
 from typing import Any, Dict
 
-import yaml
+from ruamel.yaml import YAML
 
 
 def normalize_path(path: Path) -> Path:
@@ -64,11 +64,12 @@ def load_yaml_safe(path: Path) -> Dict[str, Any]:
         )
 
     try:
+        yaml_parser = YAML()
         with open(path, "r", encoding=FileSystemSettings.DEFAULT_ENCODING) as f:
-            data = yaml.safe_load(f)
+            data = yaml_parser.load(f)
             return data if isinstance(data, dict) else {}
 
-    except yaml.YAMLError as e:
+    except Exception as e:
         raise ValueError(f"Failed to parse YAML file {path}: {e}") from e
 
     except (OSError, IOError) as e:
@@ -95,10 +96,18 @@ def write_yaml_safe(path: Path, data: Dict[str, Any]) -> None:
     ensure_directory(path.parent)
 
     try:
-        yaml_content = yaml.dump(data, default_flow_style=False, sort_keys=False)
+        from io import StringIO
+        yaml_parser = YAML()
+        yaml_parser.default_flow_style = False
+        yaml_parser.sort_keys = False
+
+        string_stream = StringIO()
+        yaml_parser.dump(data, string_stream)
+        yaml_content = string_stream.getvalue()
+
         write_text(path, yaml_content, encoding=FileSystemSettings.DEFAULT_ENCODING)
 
-    except yaml.YAMLError as e:
+    except Exception as e:
         raise ValueError(f"Failed to serialize data to YAML: {e}") from e
 
 

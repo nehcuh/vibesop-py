@@ -10,7 +10,8 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 from vibesop.builder.manifest import Manifest
-from vibesop.builder.doc_templates import DocType, DocSection, DocConfig
+from vibesop.builder.doc_templates import DocType
+from vibesop.builder.doc_models import DocSection, DocConfig
 
 
 class DocContentGenerator:

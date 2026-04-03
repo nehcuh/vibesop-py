@@ -10,6 +10,7 @@ Cache keys are generated from normalized input and relevant context.
 import contextlib
 import hashlib
 import json
+import os
 import re
 import time
 from dataclasses import dataclass, field
@@ -98,8 +99,6 @@ class CacheManager:
             memory_cache_max_size: Max entries in memory cache
         """
         if cache_dir is None:
-            from pathlib import Path
-            import os
             base_dir = Path(os.getcwd())
             cache_dir = base_dir / ".vibe" / CacheSettings.DEFAULT_CACHE_DIR
 

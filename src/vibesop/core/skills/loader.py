@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-import yaml
+from ruamel.yaml import YAML
 
 from vibesop.core.skills.base import (
     PromptSkill,
@@ -204,7 +204,8 @@ class SkillLoader:
                 body = parts[2].strip()
 
                 try:
-                    metadata_dict = yaml.safe_load(frontmatter)
+                    yaml_parser = YAML()
+                    metadata_dict = yaml_parser.load(frontmatter)
                     if not isinstance(metadata_dict, dict):
                         return
 
@@ -214,9 +215,9 @@ class SkillLoader:
                     if metadata.skill_type == SkillType.WORKFLOW:
                         # Parse workflow from YAML content in body
                         try:
-                            workflow = yaml.safe_load(body)
+                            workflow = yaml_parser.load(body)
                             content = workflow if isinstance(workflow, dict) else body
-                        except yaml.YAMLError:
+                        except Exception:
                             content = body
                     else:
                         content = body
@@ -229,7 +230,7 @@ class SkillLoader:
 
                     self._skill_cache[metadata.id] = definition
 
-                except yaml.YAMLError:
+                except Exception:
                     pass
 
     def _load_yaml_skill(self, file_path: Path) -> None:
@@ -239,8 +240,9 @@ class SkillLoader:
             file_path: Path to YAML file
         """
         try:
+            yaml_parser = YAML()
             with file_path.open("r", encoding="utf-8") as f:
-                data = yaml.safe_load(f)
+                data = yaml_parser.load(f)
 
             if not isinstance(data, dict):
                 return

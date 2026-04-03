@@ -180,6 +180,8 @@ markers = [
     "slow: marks tests as slow",
     "integration: marks tests as integration tests",
     "unit: marks tests as unit tests",
+    "e2e: marks tests as end-to-end tests",
+    "benchmark: marks tests as benchmark tests",
 ]
 
 # ============================================
@@ -208,4 +210,11 @@ exclude_lines = [
     "if TYPE_CHECKING:",
     "class .*\\bProtocol\\):",
     "@(abc\\.)?abstractmethod",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.4.2",
+    "pytest-asyncio>=0.26.0",
+    "pytest-cov>=6.3.0",
 ]

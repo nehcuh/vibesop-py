@@ -47,8 +47,9 @@ class TestOpenCodeAdapter:
         result = adapter.render_config(manifest, tmp_path)
 
         assert result.success
-        assert result.file_count == 1  # Only config.yaml
+        assert result.file_count == 2  # config.yaml + llm-config.json
         assert (tmp_path / "config.yaml").exists()
+        assert (tmp_path / "llm-config.json").exists()
 
     def test_render_config_with_skills(self, tmp_path: Path) -> None:
         """Test rendering with skills."""
@@ -70,9 +71,10 @@ class TestOpenCodeAdapter:
         result = adapter.render_config(manifest, tmp_path)
 
         assert result.success
-        assert result.file_count == 2  # config.yaml + README.md
+        assert result.file_count == 3  # config.yaml + README.md + llm-config.json
         assert (tmp_path / "config.yaml").exists()
         assert (tmp_path / "README.md").exists()
+        assert (tmp_path / "llm-config.json").exists()
 
     def test_config_yaml_content(self, tmp_path: Path) -> None:
         """Test config.yaml content."""
@@ -216,7 +218,7 @@ class TestOpenCodeAdapterEdgeCases:
 
         result = adapter.render_config(manifest, tmp_path)
         assert result.success
-        assert result.file_count == 1  # Only config.yaml, no README
+        assert result.file_count == 2  # config.yaml + llm-config.json, no README
 
     def test_render_with_full_metadata(self, tmp_path: Path) -> None:
         """Test rendering with full metadata."""

@@ -24,9 +24,10 @@ Examples:
     vibe build
 """
 
-import yaml
 from pathlib import Path
 from typing import Optional
+
+from ruamel.yaml import YAML
 
 import typer
 from rich.console import Console
@@ -59,8 +60,9 @@ def _get_configured_platform() -> Optional[str]:
         return None
 
     try:
+        yaml_parser = YAML()
         with open(config_path) as f:
-            config = yaml.safe_load(f)
+            config = yaml_parser.load(f)
             return config.get("platform") if config else None
     except Exception:
         return None
