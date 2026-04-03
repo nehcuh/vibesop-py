@@ -4,6 +4,8 @@ This module provides a simplified adapter for the OpenCode platform,
 demonstrating the adapter pattern with minimal complexity.
 """
 
+import json
+import os
 from pathlib import Path
 from typing import Any
 
@@ -97,6 +99,16 @@ class OpenCodeAdapter(PlatformAdapter):
                     validate_security=False,
                 )
                 result.add_file(readme_path)
+
+            # Generate llm-config.json
+            llm_config_content = self._generate_llm_config()
+            llm_config_path = output_dir / "llm-config.json"
+            self.write_file_atomic(
+                llm_config_path,
+                llm_config_content,
+                validate_security=False,
+            )
+            result.add_file(llm_config_path)
 
         except Exception as e:
             result.add_error(f"Failed to render configuration: {e}")
@@ -242,3 +254,84 @@ class OpenCodeAdapter(PlatformAdapter):
 
     # Note: install_hooks uses the default implementation from PlatformAdapter
     # which returns an empty dict (OpenCode doesn't support hooks)
+
+    def _generate_llm_config(self) -> str:
+        """Generate LLM configuration JSON content.
+
+        Creates a complete LLM configuration with provider settings,
+        API keys, models, and timeouts. API keys are read from environment
+        variables if available, otherwise placeholder values are used.
+
+        Returns:
+            JSON configuration content
+        """
+        # Detect provider from environment
+        provider = self._detect_provider()
+
+        # Build configuration
+        config = {
+            "version": "1.0.0",
+            "default_provider": provider,
+            "providers": {
+                "anthropic": {
+                    "api_key": os.getenv("ANTHROPIC_API_KEY", "YOUR_ANTHROPIC_API_KEY"),
+                    "base_url": os.getenv("ANTHROPIC_BASE_URL", "https://api.anthropic.com"),
+                    "models": {
+                        "default": "claude-sonnet-4-20250514",
+                        "fast": "claude-haiku-4-20250514",
+                        "powerful": "claude-opus-4-20250514",
+                    },
+                    "timeout": 120,
+                    "max_retries": 3,
+                    "enabled": bool(os.getenv("ANTHROPIC_API_KEY")),
+                },
+                "openai": {
+                    "api_key": os.getenv("OPENAI_API_KEY", "YOUR_OPENAI_API_KEY"),
+                    "base_url": os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1"),
+                    "models": {
+                        "default": "gpt-4o",
+                        "fast": "gpt-4o-mini",
+                        "powerful": "gpt-4o",
+                    },
+                    "timeout": 120,
+                    "max_retries": 3,
+                    "enabled": bool(os.getenv("OPENAI_API_KEY")),
+                },
+            },
+            "routing": {
+                "enable_ai_routing": True,
+                "confidence_threshold": 0.75,
+                "cache_enabled": True,
+            },
+            "preferences": {
+                "preferred_model": "default",
+                "stream_responses": True,
+                "temperature": 0.7,
+                "max_tokens": 4096,
+            },
+        }
+
+        return json.dumps(config, indent=2)
+
+    def _detect_provider(self) -> str:
+        """Detect default LLM provider from environment.
+
+        Priority:
+        1. VIBE_LLM_PROVIDER env var
+        2. ANTHROPIC_API_KEY env var
+        3. OPENAI_API_KEY env var
+        4. Default to 'anthropic'
+
+        Returns:
+            Provider name ('anthropic' or 'openai')
+        """
+        explicit_provider = os.getenv("VIBE_LLM_PROVIDER")
+        if explicit_provider and explicit_provider in ("anthropic", "openai"):
+            return explicit_provider
+
+        if os.getenv("ANTHROPIC_API_KEY"):
+            return "anthropic"
+        if os.getenv("OPENAI_API_KEY"):
+            return "openai"
+
+        return "anthropic"

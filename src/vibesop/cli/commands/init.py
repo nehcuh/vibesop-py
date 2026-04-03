@@ -30,6 +30,7 @@ from rich.panel import Panel
 from rich.table import Table
 
 from vibesop.installer.init_support import InitSupport
+from vibesop.integrations import IntegrationDetector, IntegrationManager, IntegrationStatus
 
 console = Console()
 
@@ -267,7 +268,73 @@ def _do_init(project_path: Path, platform: str, platform_label: str, force: bool
             f"  2. Run [cyan]vibe switch {platform}[/cyan] to build and deploy configuration\n"
         )
 
+        # Auto-detect integrations
+        console.print(
+            f"\n[bold cyan]🔍 Detecting Integrations[/bold cyan]"
+            f"\n{'=' * 40}\n"
+        )
+        _detect_and_show_integrations()
+
         raise typer.Exit(0)
     else:
         console.print("[red]✗ Initialization failed[/red]")
         raise typer.Exit(1)
+
+
+def _detect_and_show_integrations() -> None:
+    """Detect and display integration status.
+
+    Shows which skill pack integrations (gstack, superpowers) are installed
+    and provides install suggestions for missing ones.
+    """
+    manager = IntegrationManager()
+    all_integrations = manager.list_integrations(refresh=True)
+
+    # Create status table
+    table = Table(show_header=True)
+    table.add_column("Integration", style="cyan")
+    table.add_column("Status", style="bold")
+    table.add_column("Description")
+
+    installed_count = 0
+
+    for info in all_integrations:
+        if info.status == IntegrationStatus.INSTALLED:
+            status = "[green]✓ Installed[/green]"
+            installed_count += 1
+        elif info.status == IntegrationStatus.NOT_INSTALLED:
+            status = "[dim]⊘ Not installed[/dim]"
+        elif info.status == IntegrationStatus.INCOMPATIBLE:
+            status = "[yellow]⚠ Incompatible[/yellow]"
+        else:
+            status = "[dim]? Unknown[/dim]"
+
+        table.add_row(
+            info.name,
+            status,
+            info.description,
+        )
+
+    console.print(table)
+
+    # Show summary
+    total_count = len(all_integrations)
+    console.print(f"\n[dim]Installed: {installed_count}/{total_count} integrations[/dim]")
+
+    # Show install suggestions if not all installed
+    if installed_count < total_count:
+        not_installed = [
+            i.name for i in all_integrations
+            if i.status != IntegrationStatus.INSTALLED
+        ]
+        if not_installed:
+            console.print(
+                f"\n[yellow]⚠ Missing recommended integrations: {', '.join(not_installed)}[/yellow]"
+            )
+            console.print(
+                "[dim]Run to install:[/dim]\n"
+                "  [cyan]vibe install --auto[/cyan] [dim](install all recommended)[/dim]\n"
+                "  [cyan]vibe install <name>[/cyan] [dim](install specific)[/dim]"
+            )
+    else:
+        console.print("\n[green]✓ All recommended integrations installed![/green]")
