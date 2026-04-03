@@ -38,6 +38,8 @@ from vibesop.workflow.models import (
     WorkflowDefinition,
 )
 from vibesop.workflow.pipeline import WorkflowPipeline
+from vibesop.workflow.manager import WorkflowManager
+from vibesop.workflow.state import WorkflowStateManager, WorkflowState
 from vibesop.workflow.exceptions import WorkflowError, StageError
 
 __all__ = [
@@ -70,6 +72,9 @@ __all__ = [
     "RecoveryStrategy",
     "WorkflowDefinition",
     "WorkflowPipeline",
+    "WorkflowManager",
+    "WorkflowStateManager",
+    "WorkflowState",
     "WorkflowError",
     "StageError",
 ]
