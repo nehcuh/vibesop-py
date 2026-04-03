@@ -1,0 +1,36 @@
+name: example-workflow
+description: A simple example workflow for testing the v2.0 workflow system
+version: 1.0.0
+stages:
+  - name: validate
+    description: Validate input data
+    required: true
+    timeout_seconds: 30
+    retry_count: 2
+    metadata:
+      skill_id: /validate/input
+      category: validation
+
+  - name: process
+    description: Process the validated data
+    dependencies:
+      - validate
+    required: true
+    timeout_seconds: 60
+    metadata:
+      skill_id: /process/data
+      category: processing
+
+  - name: report
+    description: Generate a report
+    dependencies:
+      - process
+    required: false
+    timeout_seconds: 30
+    metadata:
+      skill_id: /report/generate
+      category: reporting
+strategy: sequential
+timeout_seconds: 300
+max_parallel: 3
+stop_on_first_failure: true
