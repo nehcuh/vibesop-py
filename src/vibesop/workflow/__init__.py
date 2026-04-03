@@ -28,23 +28,48 @@ from vibesop.workflow.instinct import (
     ActionType,
     ConfidenceLevel,
 )
+from vibesop.workflow.models import (
+    StageStatus,
+    PipelineStage,
+    WorkflowResult,
+    WorkflowExecutionContext,
+    RetryPolicy,
+    RecoveryStrategy,
+    WorkflowDefinition,
+)
+from vibesop.workflow.pipeline import WorkflowPipeline
+from vibesop.workflow.exceptions import WorkflowError, StageError
 
 __all__ = [
+    # Legacy cascade system
     "CascadeExecutor",
     "WorkflowStep",
     "WorkflowConfig",
     "StepResult",
     "StepStatus",
     "ExecutionStrategy",
+    # Experiment system
     "ExperimentManager",
     "Experiment",
     "Variant",
     "ExperimentStatus",
     "VariantStatus",
+    # Instinct system
     "InstinctManager",
     "Decision",
     "DecisionContext",
     "Pattern",
     "ActionType",
     "ConfidenceLevel",
+    # New v2.0 workflow system
+    "StageStatus",
+    "PipelineStage",
+    "WorkflowResult",
+    "WorkflowExecutionContext",
+    "RetryPolicy",
+    "RecoveryStrategy",
+    "WorkflowDefinition",
+    "WorkflowPipeline",
+    "WorkflowError",
+    "StageError",
 ]

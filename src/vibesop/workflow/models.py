@@ -50,6 +50,10 @@ class PipelineStage(BaseModel):
         description="Stage execution timeout"
     )
     retry_count: int = Field(default=0, ge=0, description="Retry attempts on failure")
+    metadata: Dict[str, Any] = Field(
+        default_factory=dict,
+        description="Additional stage metadata (e.g., skill_id)"
+    )
 
     @field_validator('name')
     @classmethod
@@ -145,9 +149,192 @@ class WorkflowExecutionContext(BaseModel):
         return self.stage_results.get(stage_name)
 
 
+class ExecutionStrategy(str, Enum):
+    """Execution strategy for workflow."""
+    SEQUENTIAL = "sequential"
+    PARALLEL = "parallel"
+    PIPELINE = "pipeline"
+
+
+class RetryPolicy(BaseModel):
+    """Retry policy for failed stages.
+
+    Attributes:
+        max_attempts: Maximum number of retry attempts
+        backoff_strategy: Strategy for backoff delay
+        base_delay: Base delay in seconds
+        max_delay: Maximum delay in seconds
+    """
+
+    max_attempts: int = Field(default=3, ge=1, description="Maximum retry attempts")
+    backoff_strategy: Literal["exponential", "linear", "constant"] = Field(
+        default="exponential",
+        description="Backoff delay strategy"
+    )
+    base_delay: float = Field(default=1.0, ge=0, description="Base delay in seconds")
+    max_delay: float = Field(default=60.0, ge=0, description="Maximum delay in seconds")
+
+
+class RecoveryStrategy(BaseModel):
+    """Recovery strategy for failed workflows.
+
+    Attributes:
+        checkpoint_on_failure: Create checkpoint on failure
+        rollback_on_failure: Rollback to checkpoint on failure
+        recovery_stages: Stages to execute for recovery
+    """
+
+    checkpoint_on_failure: bool = Field(
+        default=True,
+        description="Create checkpoint on failure"
+    )
+    rollback_on_failure: bool = Field(
+        default=False,
+        description="Rollback to checkpoint on failure"
+    )
+    recovery_stages: List[str] = Field(
+        default_factory=list,
+        description="Stages to execute for recovery"
+    )
+
+
+class WorkflowDefinition(BaseModel):
+    """Complete workflow definition with validation.
+
+    This is the primary user-facing model for defining workflows.
+    It provides full type safety and validation while integrating
+    seamlessly with the existing CascadeExecutor.
+
+    Attributes:
+        name: Workflow name
+        description: Workflow description
+        version: Workflow version
+        stages: Workflow stages in execution order
+        strategy: Default execution strategy
+        timeout_seconds: Workflow timeout
+        max_parallel: Max parallel stages (for parallel/pipeline)
+        stop_on_first_failure: Stop workflow on first failure
+        retry_policy: Retry policy for failed stages
+        recovery_strategy: Recovery strategy for failures
+        metadata: Additional metadata
+    """
+
+    name: str = Field(..., min_length=1, description="Workflow name")
+    description: str = Field(..., description="Workflow description")
+    version: str = Field(default="1.0.0", description="Workflow version")
+    stages: List[PipelineStage] = Field(
+        default_factory=list,
+        description="Workflow stages in execution order"
+    )
+    strategy: Literal["sequential", "parallel", "pipeline"] = Field(
+        default="sequential",
+        description="Default execution strategy"
+    )
+    timeout_seconds: int = Field(
+        default=300,
+        ge=1,
+        description="Workflow timeout"
+    )
+    max_parallel: int = Field(
+        default=3,
+        ge=1,
+        le=10,
+        description="Max parallel stages (for parallel/pipeline)"
+    )
+    stop_on_first_failure: bool = Field(
+        default=True,
+        description="Stop workflow on first failure"
+    )
+    retry_policy: RetryPolicy = Field(
+        default_factory=RetryPolicy,
+        description="Retry policy for failed stages"
+    )
+    recovery_strategy: RecoveryStrategy = Field(
+        default_factory=RecoveryStrategy,
+        description="Recovery strategy for failures"
+    )
+    metadata: Dict[str, Any] = Field(
+        default_factory=dict,
+        description="Additional metadata"
+    )
+
+    @field_validator('stages')
+    @classmethod
+    def validate_stages(
+        cls,
+        stages: List[PipelineStage]
+    ) -> List[PipelineStage]:
+        """Validate stages for circular dependencies."""
+        if not stages:
+            return stages
+
+        # Build dependency graph
+        dep_graph = {stage.name: stage.dependencies for stage in stages}
+        stage_names = {stage.name for stage in stages}
+
+        # Check for circular dependencies using topological sort
+        visited: set[str] = set()
+        rec_stack: set[str] = set()
+
+        def has_cycle(stage_name: str) -> bool:
+            """Detect circular dependencies using DFS."""
+            visited.add(stage_name)
+            rec_stack.add(stage_name)
+
+            for dep_id in dep_graph.get(stage_name, []):
+                if dep_id not in stage_names:
+                    raise ValueError(
+                        f"Stage '{stage_name}' depends on non-existent stage '{dep_id}'"
+                    )
+
+                if dep_id not in visited:
+                    if has_cycle(dep_id):
+                        return True
+                elif dep_id in rec_stack:
+                    raise ValueError(
+                        f"Circular dependency detected involving '{stage_name}' and '{dep_id}'"
+                    )
+
+            rec_stack.remove(stage_name)
+            return False
+
+        for stage_name in stage_names:
+            if stage_name not in visited:
+                has_cycle(stage_name)
+
+        return stages
+
+    @model_validator(mode='after')
+    def validate_handlers(self) -> 'WorkflowDefinition':
+        """Ensure all stages have handlers or skill references."""
+        for stage in self.stages:
+            has_handler = stage.handler is not None
+            has_skill = 'skill_id' in stage.metadata
+
+            if not has_handler and not has_skill:
+                raise ValueError(
+                    f"Stage '{stage.name}' must have either a handler or skill_id in metadata"
+                )
+        return self
+
+    @model_validator(mode='after')
+    def validate_strategy(self) -> 'WorkflowDefinition':
+        """Validate execution strategy matches workflow requirements."""
+        if self.strategy == "parallel" or self.strategy == "pipeline":
+            if len(self.stages) < 2:
+                raise ValueError(
+                    f"Strategy '{self.strategy}' requires at least 2 stages"
+                )
+        return self
+
+
 __all__ = [
     "StageStatus",
     "PipelineStage",
     "WorkflowResult",
     "WorkflowExecutionContext",
+    "ExecutionStrategy",
+    "RetryPolicy",
+    "RecoveryStrategy",
+    "WorkflowDefinition",
 ]
