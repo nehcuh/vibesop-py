@@ -35,8 +35,13 @@ vibe --help
 ## 🛠️ Development
 
 ```bash
-# Type checking
-uv run pyright
+# Install dev dependencies
+uv pip install -e ".[dev]"
+
+# Type checking (requires pyright or mypy)
+pyright src/vibesop
+# or
+mypy src/vibesop
 
 # Linting
 uv run ruff check
@@ -52,7 +57,12 @@ uv run pytest
 
 # Run tests with coverage
 uv run pytest --cov=src/vibesop --cov-report=html
+
+# Verify type checking (automated script)
+./scripts/verify-type-checking.sh
 ```
+
+See [scripts/verify-type-checking.md](scripts/verify-type-checking.md) for detailed type checking guide.
 
 ## 📦 Project Structure
 
