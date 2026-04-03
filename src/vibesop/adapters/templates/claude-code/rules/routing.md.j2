@@ -1,0 +1,136 @@
+# Skill Routing Rules
+
+> **Always Loaded**: These rules govern how skills are selected and invoked
+
+## 5-Layer Routing System
+
+### Layer 0: AI Semantic Triage (Primary)
+
+**When**: Starting any non-trivial task
+
+**Process**:
+1. Call `vibe route "<user_request>"`
+2. AI analyzes semantic meaning and context
+3. Returns best-matching skill with confidence score
+
+**Accuracy**: ~95% with Haiku/GPT models
+
+### Layer 1: Explicit Overrides
+
+**When**: User specifies a skill directly
+
+**Examples**:
+- `/review` - Force review skill
+- `vibe skills use tdd` - Use specific skill
+
+**Priority**: Overrides AI routing
+
+### Layer 2: Scenario Patterns
+
+**When**: Predefined scenarios match
+
+**Trigger Examples**:
+- Error/Test failure → `systematic-debugging`
+- Before claiming completion → `verification-before-completion`
+- Exit signal detected → `session-end` + memory flush
+
+**Definition**: `core/policies/task-routing.yaml`
+
+### Layer 3: Semantic Matching
+
+**When**: Layers 0-2 don't match
+
+**Process**:
+1. TF-IDF vectorization
+2. Cosine similarity comparison
+3. Best match above threshold
+
+**Accuracy**: ~70%
+
+### Layer 4: Fuzzy Matching
+
+**When**: All else fails
+
+**Process**:
+1. Levenshtein distance
+2. Typo tolerance
+3. Last resort
+
+## Candidate Selection
+
+### Auto-Selection
+
+**Condition**: Confidence ≥ {{ routing.confidence_threshold }}
+
+**Behavior**: Automatically use top match
+
+### Manual Selection
+
+**Condition**: Confidence < {{ routing.confidence_threshold }}
+
+**Behavior**: Present top {{ routing.max_candidates }} candidates to user
+
+## Preference Learning
+
+{% if routing.enable_preference_learning %}
+### Enabled
+
+Your choices are learned across dimensions:
+- **Consistency** (40%): How often you choose the same skill
+- **Satisfaction** (30%): Implicit feedback from behavior
+- **Context** (20%): Working directory, file types
+- **Recency** (10%): Recent choices weighted more
+
+**Min Samples**: 3-5 before pattern emerges
+{% else %}
+### Disabled
+
+Routing does not learn from your choices.
+{% endif %}
+
+## Routing Workflow
+
+```
+User Request
+     ↓
+[Layer 0] AI Semantic Triage
+     ↓ (no match)
+[Layer 1] Explicit Override
+     ↓ (no match)
+[Layer 2] Scenario Patterns
+     ↓ (no match)
+[Layer 3] Semantic Matching
+     ↓ (no match)
+[Layer 4] Fuzzy Matching
+     ↓
+Candidate Selection
+     ↓
+[Auto/Manual] → Skill Execution
+```
+
+## Skill Trigger Modes
+
+Each skill has a trigger mode:
+- **`mandatory`**: Must trigger when scenario matches (P0 rules)
+- **`suggest`**: Recommend to user, user decides
+- **`manual`**: Never auto-trigger, user must invoke
+
+## Override and Customization
+
+### Adding Custom Routes
+
+Edit `core/policies/task-routing.yaml`:
+```yaml
+scenario_patterns:
+  - trigger: "my specific scenario"
+    skill: "my-skill"
+    mode: "suggest"
+```
+
+### Disabling Routes
+
+Set skill trigger mode to `manual` in registry.
+
+---
+
+*Part of VibeSOP routing configuration*

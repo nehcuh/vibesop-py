@@ -16,6 +16,29 @@ from vibesop import __version__
 from vibesop.core.models import RoutingRequest
 from vibesop.core.routing.engine import SkillRouter
 from vibesop.core.skills import SkillManager
+# Import command modules
+from vibesop.cli.commands import init as init_module
+from vibesop.cli.commands import build as build_module
+from vibesop.cli.commands import deploy as deploy_module
+from vibesop.cli.commands import switch as switch_module
+from vibesop.cli.commands import inspect as inspect_module
+from vibesop.cli.commands import targets as targets_module
+from vibesop.cli.commands import checkpoint as checkpoint_module
+from vibesop.cli.commands import cascade as cascade_module
+from vibesop.cli.commands import experiment as experiment_module
+from vibesop.cli.commands import memory_cmd as memory_module
+from vibesop.cli.commands import instinct_cmd as instinct_module
+from vibesop.cli.commands import quickstart as quickstart_module
+from vibesop.cli.commands import onboard as onboard_module
+from vibesop.cli.commands import toolchain as toolchain_module
+from vibesop.cli.commands import scan as scan_module
+from vibesop.cli.commands import skill_craft as skill_craft_module
+from vibesop.cli.commands import tools_cmd as tools_module
+from vibesop.cli.commands import worktree as worktree_module
+from vibesop.cli.commands import route_commands as route_commands_module
+from vibesop.cli.commands import import_rules as import_rules_module
+from vibesop.cli.commands import detect as detect_module
+from vibesop.cli.commands import install as install_module
 
 app = typer.Typer(
     name="vibe",
@@ -84,11 +107,13 @@ def doctor() -> None:
         ("Dependencies", _check_dependencies()),
         ("Configuration", _check_config()),
         ("LLM Provider", _check_llm_provider()),
+        ("Platform Integrations", _check_integrations()),
+        ("Hook Status", _check_hooks()),
     ]
 
     for name, (status, message) in checks:
-        icon = "✅" if status else "❌"
-        color = "green" if status else "red"
+        icon = "✅" if status else "⚠️ " if name in ["Platform Integrations", "Hook Status"] else "❌"
+        color = "green" if status else "yellow" if name in ["Platform Integrations", "Hook Status"] else "red"
         console.print(f"{icon} [{color}]{name}[/{color}]: {message}")
 
     # Overall status
@@ -156,6 +181,52 @@ def _check_llm_provider() -> tuple[bool, str]:
     if os.getenv("OPENAI_API_KEY"):
         return True, "OpenAI (API key found)"
     return False, "No API key found (set ANTHROPIC_API_KEY or OPENAI_API_KEY)"
+
+
+def _check_integrations() -> tuple[bool, str]:
+    """Check platform integrations."""
+    try:
+        from vibesop.integrations import IntegrationManager
+
+        manager = IntegrationManager()
+        installed = manager.get_installed_integrations()
+        total = len(manager.list_integrations())
+
+        if installed:
+            names = [info.name for info in installed]
+            return True, f"{len(installed)}/{total} installed ({', '.join(names)})"
+        else:
+            return False, f"No integrations installed (0/{total})"
+    except Exception as e:
+        return False, f"Failed to check: {e}"
+
+
+def _check_hooks() -> tuple[bool, str]:
+    """Check hook installation status."""
+    try:
+        from vibesop.installer import VibeSOPInstaller
+
+        installer = VibeSOPInstaller()
+        platforms = installer.list_platforms()
+
+        results = []
+        for platform_info in platforms:
+            platform_name = platform_info["name"]
+            verify_result = installer.verify(platform_name)
+
+            if verify_result["installed"]:
+                hook_count = sum(1 for status in verify_result.get("hooks_installed", {}).values() if status)
+                total_hooks = len(verify_result.get("hooks_installed", {}))
+                results.append(f"{platform_name}: {hook_count}/{total_hooks}")
+            else:
+                results.append(f"{platform_name}: not installed")
+
+        if results:
+            return any("installed" not in r for r in results), "; ".join(results)
+        else:
+            return False, "No platforms checked"
+    except Exception as e:
+        return False, f"Failed to check: {e}"
 
 
 @app.command()
@@ -345,3 +416,29 @@ def skill_info(
 
 if __name__ == "__main__":
     app()
+
+
+# Register additional commands
+app.command()(init_module.init)
+app.command()(build_module.build)
+app.command()(deploy_module.deploy)
+app.command()(switch_module.switch)
+app.command("inspect")(inspect_module.inspect_cmd)
+app.command()(targets_module.targets)
+app.command()(checkpoint_module.checkpoint)
+app.command()(cascade_module.cascade)
+app.command()(experiment_module.experiment)
+app.command("memory")(memory_module.memory)
+app.command()(instinct_module.instinct)
+app.command()(quickstart_module.quickstart)
+app.command()(onboard_module.onboard)
+app.command()(toolchain_module.toolchain)
+app.command()(scan_module.scan)
+app.command("skill-craft")(skill_craft_module.skill_craft)
+app.command()(tools_module.tools)
+app.command()(worktree_module.worktree)
+app.command("route-select")(route_commands_module.route_select)
+app.command("route-validate")(route_commands_module.route_validate)
+app.command("import-rules")(import_rules_module.import_rules)
+app.command()(detect_module.detect)
+app.command()(install_module.install)

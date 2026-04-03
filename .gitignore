@@ -61,3 +61,4 @@ ruff.toml
 # Distribution
 *.whl
 *.tar.gz
+.alma-snapshots

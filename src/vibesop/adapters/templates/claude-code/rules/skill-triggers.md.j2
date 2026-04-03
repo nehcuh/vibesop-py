@@ -1,0 +1,133 @@
+# Skill Triggers
+
+> **Always Loaded**: Automatic skill invocation rules
+
+## P0 Mandatory Triggers
+
+These skills trigger automatically when their scenario is detected.
+
+### Error / Bug Detected
+
+**Trigger**:
+- Test failure
+- Build failure
+- Lint/check failure
+- Runtime error
+- "X doesn't work"
+- "Broken", "Not working"
+- Error message in context
+
+**Action**: Use `systematic-debugging` skill
+**Priority**: Mandatory
+**Why**: Prevents jumping to solutions without root cause analysis
+
+### Before Claiming Completion
+
+**Trigger**:
+- User asks "is it done?"
+- "That's all for now"
+- "Heading out"
+- Similar exit signals
+
+**Action**: Use `verification-before-completion` skill
+**Priority**: Mandatory
+**Why**: Ensures verification evidence before claiming done
+
+### Installing New Skill/MCP
+
+**Trigger**:
+- Adding skill files
+- Installing MCP server
+- Importing third-party code
+
+**Action**: Run skill security audit
+**Priority**: Mandatory
+**Why**: SKILL-INJECT paper findings - external code is high risk
+
+### 3+ Consecutive Failures
+
+**Trigger**:
+- Same error 3 times in a row
+- Each failure is different problem (not same root cause)
+
+**Action**: Pause, revert to debugging Phase 1
+**Priority**: Mandatory
+**Why**: Prevents thrashing, ensures proper diagnosis
+
+## P1 Suggested Triggers
+
+These skills are recommended but not automatic.
+
+### Stuck > 15 Minutes
+
+**Trigger**:
+- No progress for 15+ minutes
+- "I don't know what to do"
+- "I'm stuck"
+
+**Action**: Suggest `experience-evolution` skill
+**Priority**: Suggest
+**Why**: Leverages accumulated experience
+
+### Complex Task (>5 Files)
+
+**Trigger**:
+- Task will touch 5+ files
+- Multi-file refactoring
+- Complex feature addition
+
+**Action**: Suggest `planning-with-files` skill
+**Priority**: Suggest
+**Why**: Prevents getting lost in complexity
+
+### Before Creating PR
+
+**Trigger**:
+- Pull request creation imminent
+- "Review my code"
+
+**Action**: Suggest `verification-before-completion`
+**Priority**: Suggest
+**Why**: Quality gate before merge
+
+## Keyword Matching
+
+Triggers work in **both English and Chinese**:
+
+| English | Chinese | Trigger |
+|---------|---------|---------|
+| error, bug, failure | 错误, 故障, 失败 | Debugging |
+| done, complete | 完成, 搞定 | Verification |
+| stuck, blocked | 卡住了, 不行 | Experience evolution |
+| complex, complicated | 复杂, 麻烦 | Planning |
+
+## Manual Skills
+
+These skills never auto-trigger:
+
+### Brainstorming / Ideation
+
+**Invoke**: User explicitly requests
+**When**: "Help me brainstorm", "Let's think about ideas"
+
+### Architecture Design
+
+**Invoke**: User explicitly requests
+**When**: "Design the architecture", "Plan the system"
+
+### Optimization
+
+**Invoke**: User explicitly requests
+**When**: "Optimize this", "Make it faster"
+
+## Disabling Triggers
+
+To disable an automatic trigger:
+
+1. Edit `core/policies/task-routing.yaml`
+2. Change mode from `mandatory` to `suggest` or `manual`
+3. Re-run `vibe build claude-code`
+
+---
+
+*Part of VibeSOP skill trigger system*

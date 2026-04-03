@@ -1,0 +1,151 @@
+# Skill Catalog
+
+> **On-Demand**: Loaded when referenced
+
+## Available Skills ({{ skills|length }})
+
+{% for skill in skills %}
+### {{ skill.id }}: {{ skill.name }}
+
+**Description**: {{ skill.description }}
+
+**Trigger Condition**: {{ skill.trigger_when }}
+
+{% if skill.metadata %}
+**Metadata**:
+{% for key, value in skill.metadata.items() %}
+- **{{ key }}**: {{ value }}
+{% endfor %}
+{% endif %}
+
+---
+{% endfor %}
+
+## Usage
+
+### Invoking Skills
+
+#### Method 1: AI Routing (Recommended)
+
+```
+vibe route "<your request>"
+```
+
+Example:
+```
+vibe route "help me implement a login system"
+# Output: 🤖 Matched: gstack/plan-eng-review (95%)
+```
+
+#### Method 2: Direct Invocation
+
+```
+vibe skills use <skill-id>
+```
+
+Example:
+```
+vibe skills use tdd
+```
+
+### Skill Information
+
+To view skill details:
+```
+vibe skills info <skill-id>
+```
+
+## Skill Categories
+
+### Built-in Skills
+
+Core skills included with VibeSOP:
+- `systematic-debugging` - 5-phase debugging methodology
+- `verification-before-completion` - Quality gate
+- `session-end` - Session wrap-up and memory flush
+
+### External Skill Packs
+
+#### gstack (Virtual Engineering Team)
+
+**Status**: {% if 'gstack' in skills | map(attribute='id') | list %}Installed{% else %}Not Installed{% endif %}
+
+**Skills**:
+- `gstack/office-hours` - Product brainstorming
+- `gstack/plan-eng-review` - Architecture review
+- `gstack/review` - Pre-landing code review
+- `gstack/qa` - Browser-based testing
+- And more...
+
+#### superpowers
+
+**Status**: {% if 'superpowers' in skills | map(attribute='id') | list %}Installed{% else %}Not Installed{% endif %}
+
+**Skills**:
+- `superpowers/tdd` - Test-driven development
+- `superpowers/refactor` - Code refactoring
+- `superpowers/brainstorm` - Structured ideation
+- And more...
+
+## Installing Skill Packs
+
+### From Registry
+
+```
+vibe skills install gstack
+vibe skills install superpowers
+```
+
+### Manual Installation
+
+1. Clone/download skill pack
+2. Place in `~/.claude/skills/`
+3. Rebuild config: `vibe build claude-code`
+
+## Creating Custom Skills
+
+### Skill Structure
+
+```
+skills/my-skill/
+├── SKILL.md          # Skill definition
+└── metadata.yaml     # Optional metadata
+```
+
+### SKILL.md Format
+
+```markdown
+---
+name: My Skill
+description: Does something useful
+trigger_when: User asks for help with X
+---
+
+# My Skill
+
+## When to Use
+- Condition 1
+- Condition 2
+
+## Steps
+1. First step
+2. Second step
+3. Verification
+
+## Completion Criteria
+- [ ] Criterion 1
+- [ ] Criterion 2
+```
+
+## Skill Registry
+
+View all available skills:
+```
+vibe skills list
+vibe skills list --namespace gstack
+vibe skills search "testing"
+```
+
+---
+
+*Part of VibeSOP skill documentation*

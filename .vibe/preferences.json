@@ -1,0 +1,151 @@
+{
+  "selections": [],
+  "skill_scores": {
+    "/review": {
+      "score": 0.7902359478108525,
+      "selection_count": 4,
+      "helpful_count": 4,
+      "last_selected": "2026-04-02T20:37:07.998419"
+    },
+    "/debug": {
+      "score": 0.7673286795139986,
+      "selection_count": 1,
+      "helpful_count": 1,
+      "last_selected": "2026-04-02T20:37:07.893944"
+    },
+    "/skill0": {
+      "score": 0.7673286795139986,
+      "selection_count": 1,
+      "helpful_count": 1,
+      "last_selected": "2026-04-02T08:41:03.699970"
+    },
+    "/skill1": {
+      "score": 0.7673286795139986,
+      "selection_count": 1,
+      "helpful_count": 1,
+      "last_selected": "2026-04-02T08:41:03.700724"
+    },
+    "/skill2": {
+      "score": 0.7673286795139986,
+      "selection_count": 1,
+      "helpful_count": 1,
+      "last_selected": "2026-04-02T08:41:03.701553"
+    },
+    "/skill3": {
+      "score": 0.7673286795139986,
+      "selection_count": 1,
+      "helpful_count": 1,
+      "last_selected": "2026-04-02T08:41:03.702442"
+    },
+    "/skill4": {
+      "score": 0.7673286795139986,
+      "selection_count": 1,
+      "helpful_count": 1,
+      "last_selected": "2026-04-02T08:41:03.703372"
+    },
+    "/skill5": {
+      "score": 0.7673286795139986,
+      "selection_count": 1,
+      "helpful_count": 1,
+      "last_selected": "2026-04-02T08:41:03.704367"
+    },
+    "/skill6": {
+      "score": 0.7673286795139986,
+      "selection_count": 1,
+      "helpful_count": 1,
+      "last_selected": "2026-04-02T08:41:03.705390"
+    },
+    "/skill7": {
+      "score": 0.7673286795139986,
+      "selection_count": 1,
+      "helpful_count": 1,
+      "last_selected": "2026-04-02T08:41:03.706498"
+    },
+    "/skill8": {
+      "score": 0.7673286795139986,
+      "selection_count": 1,
+      "helpful_count": 1,
+      "last_selected": "2026-04-02T08:41:03.707676"
+    },
+    "/skill9": {
+      "score": 0.7673286795139986,
+      "selection_count": 1,
+      "helpful_count": 1,
+      "last_selected": "2026-04-02T08:41:03.708901"
+    },
+    "/gstack/review": {
+      "score": 0.7774653072167027,
+      "selection_count": 2,
+      "helpful_count": 2,
+      "last_selected": "2026-04-02T20:37:07.789114"
+    },
+    "test-skill": {
+      "score": 0.38465735902799725,
+      "selection_count": 3,
+      "helpful_count": 1,
+      "last_selected": "2026-04-02T20:37:01.397620"
+    }
+  },
+  "word_associations": {
+    "review": {
+      "/review": 82,
+      "/gstack/review": 27
+    },
+    "code": {
+      "/review": 101,
+      "/gstack/review": 54
+    },
+    "debug": {
+      "/debug": 6
+    },
+    "error": {
+      "/debug": 3
+    },
+    "again": {
+      "/review": 4
+    },
+    "test": {
+      "/skill0": 1,
+      "/skill1": 1,
+      "/skill2": 1,
+      "/skill3": 1,
+      "/skill4": 1,
+      "/skill5": 1,
+      "/skill6": 1,
+      "/skill7": 1,
+      "/skill8": 1,
+      "/skill9": 1,
+      "/review": 28,
+      "test-skill": 51
+    },
+    "query1": {
+      "/review": 2
+    },
+    "query2": {
+      "/debug": 2
+    },
+    "query3": {
+      "/review": 1
+    },
+    "old": {
+      "/review": 1
+    },
+    "query": {
+      "/review": 1,
+      "test-skill": 51
+    },
+    "quality": {
+      "/review": 1
+    },
+    "check": {
+      "/review": 28,
+      "/gstack/review": 27
+    },
+    "fix": {
+      "/debug": 28
+    },
+    "bug": {
+      "/debug": 28
+    }
+  }
+}

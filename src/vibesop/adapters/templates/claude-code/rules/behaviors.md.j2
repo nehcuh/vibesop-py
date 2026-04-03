@@ -1,0 +1,112 @@
+# Behavior Rules
+
+> **Always Loaded**: These rules apply to every session
+
+## Core Behaviors
+
+### 1. Verification Before Claims
+
+**Rule**: Never claim completion without fresh verification evidence.
+
+**Apply when**:
+- User asks "is it done?" or "are we finished?"
+- Before marking a task as completed
+
+**Implementation**:
+1. Re-read the original requirements
+2. Verify each requirement is met
+3. Check for regressions in adjacent functionality
+4. Only then claim completion
+
+### 2. Atomic Operations
+
+**Rule**: Prefer small, reversible, single-purpose changes.
+
+**Apply when**:
+- Implementing features
+- Making code changes
+- Configuring systems
+
+**Implementation**:
+- One logical unit of work per commit
+- Can be easily rolled back
+- Clear, focused purpose
+
+### 3. Progressive Disclosure
+
+**Rule**: Use AI-powered skill routing before manual skill selection.
+
+**Apply when**:
+- Starting any non-trivial task
+- User asks for help with a task
+- Determining which skill to use
+
+**Implementation**:
+1. Call `vibe route "<user request>"`
+2. Read the recommended skill file
+3. Follow the skill's steps
+4. Complete with verification
+
+## Safety Rules
+
+### Path Safety
+
+- **No Path Traversal**: All paths are validated against traversal attacks
+- **Safe Output**: File writes use atomic operations to prevent corruption
+- **Permission Checks**: Write permissions are verified before operations
+
+{% if security.scan_external_content %}
+### Content Security
+
+- **Threat Scanning**: All external content is scanned for:
+  - Prompt injection attempts
+  - Role hijacking
+  - Instruction injection
+  - Privilege escalation
+  - Indirect injection patterns
+- **Block on Threat**: Unsafe content is rejected with clear error messages
+{% else %}
+⚠️ **WARNING**: Content security scanning is DISABLED
+{% endif %}
+
+## Platform-Specific Rules
+
+### Working Directory
+
+- **Context Aware**: Operations respect the current working directory
+- **Path Resolution**: Relative paths are resolved from CWD
+- **Home Expansion**: `~` is expanded to user's home directory
+
+### File Operations
+
+- **Atomic Writes**: Use temporary files + rename for safety
+- **Backup on Failure**: Failed operations can be rolled back
+- **Permission Validation**: Write permissions checked before operations
+
+## Error Handling
+
+### Validation Errors
+
+**When**: Input validation fails
+
+**Response**:
+1. Clear error message explaining what's wrong
+2. Suggest fix if possible
+3. Don't proceed with unsafe operations
+
+### Security Violations
+
+**When**: Security threat detected
+
+**Response**:
+1. Immediate block of the operation
+2. Detailed threat report
+3. No workarounds for critical threats
+
+## Override Rules
+
+These behaviors can be customized in your VibeSOP manifest under `policies.behavior`.
+
+---
+
+*Part of VibeSOP behavior policies*

@@ -1,0 +1,247 @@
+# Task Routing Documentation
+
+> **On-Demand**: Loaded when referenced
+
+## Overview
+
+VibeSOP uses a 5-layer routing system to select the most appropriate skill for each task.
+
+## Routing Layers
+
+### Layer 0: AI Semantic Triage (Primary)
+
+**Technology**: Claude Haiku or OpenAI GPT
+
+**Process**:
+1. User provides natural language request
+2. AI analyzes semantic meaning, context, file types, recent work
+3. Returns best-matching skill with confidence score
+
+**Accuracy**: ~95%
+
+**Cost**: ~$0.11/month with 70%+ cache hit rate
+
+**Example**:
+```
+Input: "help me implement a login system"
+Output: gstack/plan-eng-review (95% confidence)
+```
+
+### Layer 1: Explicit Overrides
+
+**User Control**: Direct skill specification
+
+**Methods**:
+- `/skill-name` shorthand
+- `namespace/skill-name` full syntax
+- `vibe skills use <skill-id>` command
+
+**Priority**: Overrides AI routing
+
+**Example**:
+```
+User: /tdd
+→ Forces TDD skill, ignoring AI suggestion
+```
+
+### Layer 2: Scenario Patterns
+
+**Predefined**: Rules in `core/policies/task-routing.yaml`
+
+**Trigger Examples**:
+- Error/failure → `systematic-debugging`
+- Before completion → `verification-before-completion`
+- Exit signal → `session-end`
+- New skill added → Security audit
+
+**Definition**: YAML file with scenario → skill mappings
+
+### Layer 3: Semantic Matching
+
+**Technology**: TF-IDF + Cosine Similarity
+
+**Process**:
+1. Vectorize request and skill intents
+2. Calculate cosine similarity
+3. Return best match above threshold
+
+**Accuracy**: ~70%
+
+**Fallback**: When Layers 0-2 don't match
+
+### Layer 4: Fuzzy Matching
+
+**Technology**: Levenshtein Distance
+
+**Process**:
+1. Calculate edit distance
+2. Typo tolerance
+3. Last resort
+
+**Accuracy**: Low but catches typos
+
+## Selection Logic
+
+### Auto-Selection
+
+**Condition**: Top candidate confidence ≥ {{ routing.confidence_threshold }}
+
+**Behavior**: Automatically invoke the skill
+
+**User Experience**: Seamless, no prompting
+
+### Manual Selection
+
+**Condition**: Top candidate confidence < {{ routing.confidence_threshold }}
+
+**Behavior**: Present top {{ routing.max_candidates }} candidates
+
+**User Experience**: Choose from options
+
+## Preference Learning
+
+{% if routing.enable_preference_learning %}
+### Enabled
+
+Your choices improve future routing!
+
+**Learning Dimensions**:
+1. **Consistency** (40% weight)
+   - How often you choose the same skill
+   - Min samples: 5
+
+2. **Satisfaction** (30% weight)
+   - Implicit feedback from behavior
+   - Min samples: 3
+
+3. **Context** (20% weight)
+   - Working directory
+   - File types
+   - Time patterns
+
+4. **Recency** (10% weight)
+   - Recent choices
+   - Decay: 30 days
+
+**Memory**: Stored in `memory/preferences.json`
+
+**Example**:
+```
+User: "help me test"
+→ Last 5 times: chose /tdd
+→ Learned: prefers tdd for testing tasks
+→ Suggestion: /tdd (higher confidence)
+```
+{% else %}
+### Disabled
+
+Routing does not learn from your choices.
+
+To enable: Set `enable_preference_learning: true` in routing config.
+{% endif %}
+
+## Routing Workflow Diagram
+
+```
+┌─────────────────┐
+│  User Request   │
+└────────┬────────┘
+         ↓
+┌─────────────────────────┐
+│ Layer 0: AI Triage      │ ────┐
+│ (95% accuracy)          │     │
+└────────┬────────────────┘     │
+         ↓ No match            │
+┌─────────────────────────┐     │
+│ Layer 1: Explicit       │ ────┤
+│ (user override)         │     │
+└────────┬────────────────┘     │
+         ↓ No match            │
+┌─────────────────────────┐     │
+│ Layer 2: Scenarios      │ ────┤
+│ (predefined rules)      │     │
+└────────┬────────────────┘     │
+         ↓ No match            │
+┌─────────────────────────┐     │
+│ Layer 3: Semantic       │ ────┤
+│ (70% accuracy)          │     │
+└────────┬────────────────┘     │
+         ↓ No match            │
+┌─────────────────────────┐     │
+│ Layer 4: Fuzzy          │ ────┤
+│ (typo tolerance)        │     │
+└────────┬────────────────┘     │
+         ↓                     │
+┌─────────────────────────┐     │
+│ Candidate Selection     │ ◄───┘
+│ Confidence: 0.XX        │
+└────────┬────────────────┘
+         ↓
+    ┌────┴────┐
+    │         │
+  ≥0.6      <0.6
+    │         │
+    ↓         ↓
+  Auto    Manual
+```
+
+## Bilingual Support
+
+Routing works in **both English and Chinese**:
+
+| English | Chinese | Detected Intent |
+|---------|---------|-----------------|
+| "debug this error" | "调试这个错误" | Debugging |
+| "I'm done" | "搞定了" | Completion |
+| "I'm stuck" | "卡住了" | Help needed |
+
+## Configuration
+
+### Current Settings
+
+```yaml
+enable_ai_routing: {{ routing.enable_ai_routing }}
+confidence_threshold: {{ routing.confidence_threshold }}
+max_candidates: {{ routing.max_candidates }}
+enable_preference_learning: {{ routing.enable_preference_learning }}
+```
+
+### Customization
+
+Edit `core/policies/task-routing.yaml` to:
+- Add custom scenario patterns
+- Adjust confidence thresholds
+- Modify candidate selection
+
+## Troubleshooting
+
+### Wrong Skill Selected
+
+**Problem**: AI routes to wrong skill
+
+**Solutions**:
+1. Use explicit override: `/correct-skill`
+2. Your choice improves learning
+3. Add scenario pattern for your use case
+
+### Low Confidence
+
+**Problem**: Always prompted to choose
+
+**Solutions**:
+1. Lower `confidence_threshold`
+2. Use explicit overrides more
+3. Improve skill intent descriptions
+
+### Routing Not Working
+
+**Problem**: Routing fails completely
+
+**Check**:
+1. `vibe route --context` - View routing context
+2. Registry exists: `core/registry.yaml`
+3. Permissions: Can read registry files?
+
+---
+
+*Part of VibeSOP routing documentation*

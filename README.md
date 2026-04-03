@@ -82,13 +82,29 @@ This is a **complete rewrite** of the Ruby version in modern Python.
 
 - [x] Project structure and tooling
 - [x] Type system setup (Pydantic v2)
-- [ ] Core models (Skill, Route, Config)
-- [ ] CLI framework (Typer)
-- [ ] AI-powered routing
-- [ ] LLM clients
-- [ ] Skill management
-- [ ] Memory system
-- [ ] Checkpoint system
+- [x] Core models (Skill, Route, Config)
+- [x] CLI framework (Typer)
+- [x] AI-powered routing (5-layer system)
+- [x] LLM clients (Anthropic, OpenAI)
+- [x] Skill management (filesystem discovery)
+- [x] Memory system (conversation tracking)
+- [x] Checkpoint system (work state persistence)
+- [x] Preference learning (personalized routing)
+- [x] **Security scanning** (Phase 1: 66 tests ✅)
+- [x] **Platform adapters** (Phase 2: 83 tests ✅)
+- [x] **Configuration builder** (Phase 3: 40 tests ✅)
+- [x] **Hook system** (Phase 4: 32 tests ✅)
+- [x] **Integration management** (Phase 5: 26 tests ✅)
+- [x] **Installation system** (Phase 6: 16 tests ✅)
+
+**Total: 263+ tests passing across all modules**
+
+## 📚 Documentation
+
+- **[Implementation Summary](docs/IMPLEMENTATION_SUMMARY.md)** - Complete implementation details
+- **[CLI Reference](docs/CLI_REFERENCE.md)** - Full command reference
+- **[Development Plan](docs/development-plan.md)** - Original development roadmap
+- **[中文文档](README.zh.md)** - Chinese version of README
 
 ## 🎨 Key Features
 
