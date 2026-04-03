@@ -131,23 +131,34 @@ exclude = [
 
 stubPath = "src/stubs"
 
+# Missing type annotations
 reportMissingTypeStubs = false
-reportUnknownMemberType = "warning"
-reportUnknownVariableType = "warning"
-reportUnknownArgumentType = "warning"
-reportUnknownParameterType = "warning"
-reportMissingTypeArgument = "warning"
+reportMissingParameterType = "error"
+reportMissingReturnType = "error"
+reportMissingTypeArgument = "error"
+
+# Unknown types
+reportUnknownMemberType = "error"
+reportUnknownVariableType = "error"
+reportUnknownArgumentType = "error"
+reportUnknownParameterType = "error"
+
+# Unused code
 reportUnusedImport = "error"
 reportUnusedClass = "error"
 reportUnusedFunction = "error"
 reportUnusedVariable = "error"
 reportDuplicateImport = "error"
+
+# Untyped definitions
 reportUntypedFunctionDecorator = "error"
 reportUntypedClassDef = "error"
 reportUntypedBaseClass = "error"
-reportUnnecessaryIsInstance = "warning"
-reportUnnecessaryComparison = "warning"
-reportUnnecessaryContains = "warning"
+
+# Unnecessary code
+reportUnnecessaryIsInstance = "error"
+reportUnnecessaryComparison = "error"
+reportUnnecessaryContains = "error"
 
 # ============================================
 # Pytest - Test Framework
