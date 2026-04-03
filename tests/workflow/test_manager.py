@@ -313,10 +313,21 @@ stages:
         # Should return list (may be empty)
         assert isinstance(active, list)
 
-    def test_resume_workflow_not_implemented(self, workflow_manager):
+    def test_resume_workflow_not_implemented(self, workflow_manager, sample_workflow, sample_context):
         """Test that resume workflow is not yet implemented."""
+        # Create a workflow state first
+        workflow_id = "test-resume-workflow"
+        # Add workflow to cache so get_workflow can find it
+        workflow_manager._workflow_cache[sample_workflow.name] = sample_workflow
+        workflow_manager._state_manager.save_state(
+            workflow_id,
+            sample_workflow,
+            sample_context
+        )
+
+        # Resume should raise NotImplementedError
         with pytest.raises(NotImplementedError, match="not yet implemented"):
-            workflow_manager.resume_workflow("workflow-123")
+            workflow_manager.resume_workflow(workflow_id)
 
     def test_load_from_filesystem(self, temp_workflow_dir, workflow_yaml_content):
         """Test _load_from_filesystem method."""
@@ -331,7 +342,7 @@ stages:
         workflow = manager._load_from_filesystem("test-load")
 
         assert workflow is not None
-        assert workflow.name == "test-load"
+        assert workflow.name == "test-workflow"  # Name comes from YAML content
 
     def test_load_from_filesystem_not_found(self, workflow_manager):
         """Test _load_from_filesystem with non-existent workflow."""

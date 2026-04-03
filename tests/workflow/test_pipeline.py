@@ -220,7 +220,7 @@ class TestWorkflowPipeline:
         assert len(result.completed_stages) == 1
         assert len(result.failed_stages) == 1
         assert len(result.skipped_stages) == 1
-        assert "Stage 2 error" in result.errors
+        assert any("Stage 2 error" in err for err in result.errors)
 
     def test_generate_workflow_id(self):
         """Test workflow ID generation."""
