@@ -1,0 +1,29 @@
+"""Performance baseline data.
+
+This file stores baseline performance metrics for regression detection.
+"""
+
+{
+    "routing": {
+        "p50_latency_ms": 50.0,
+        "p95_latency_ms": 150.0,
+        "p99_latency_ms": 200.0,
+        "target_p50_ms": 100.0,
+        "target_p99_ms": 500.0
+    },
+    "cache": {
+        "hit_latency_ms": 1.0,
+        "miss_latency_ms": 50.0,
+        "target_hit_rate": 0.8
+    },
+    "config_rendering": {
+        "single_render_ms": 50.0,
+        "batch_10_renders_ms": 500.0,
+        "target_single_ms": 100.0
+    },
+    "metadata": {
+        "python_version": "3.12",
+        "measurement_date": "2026-04-03",
+        "machine_info": "baseline"
+    }
+}
