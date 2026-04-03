@@ -28,7 +28,7 @@ class SuperpowersInstaller(BaseInstaller):
 
     # Superpowers repository URLs
     SUPERPOWERS_REPO_URLS = [
-        "https://github.com/mpstown/superpowers.git",
+        "https://github.com/obra/superpowers.git",
         "https://gitee.com/mirrors/superpowers.git",  # China mirror
     ]
 
@@ -111,7 +111,9 @@ class SuperpowersInstaller(BaseInstaller):
 
             progress.update(70, "Creating platform symlinks...")
             # Create platform symlinks
-            platforms = [platform] if platform else list(self.SUPERPOWERS_PLATFORM_SYMLINK_PATHS.keys())
+            platforms = (
+                [platform] if platform else list(self.SUPERPOWERS_PLATFORM_SYMLINK_PATHS.keys())
+            )
             for plat in platforms:
                 symlink_result = self._create_platform_symlink(plat, progress)
                 if symlink_result:
@@ -227,10 +229,7 @@ class SuperpowersInstaller(BaseInstaller):
         Returns:
             True if installed, False otherwise
         """
-        return (
-            self._unified_path.exists()
-            and self._superpowers_markers_present()
-        )
+        return self._unified_path.exists() and self._superpowers_markers_present()
 
     def _superpowers_markers_present(self) -> bool:
         """Check if Superpowers marker files are present.
@@ -267,7 +266,7 @@ class SuperpowersInstaller(BaseInstaller):
                 try:
                     progress.update(
                         30 + (attempt * 10),
-                        f"Cloning from {repo_url} (attempt {attempt + 1}/{self.MAX_RETRIES})..."
+                        f"Cloning from {repo_url} (attempt {attempt + 1}/{self.MAX_RETRIES})...",
                     )
 
                     # Remove existing directory if force reinstall
@@ -299,10 +298,7 @@ class SuperpowersInstaller(BaseInstaller):
                     progress.warning(f"Failed to clone from {repo_url}: {e}")
                     if attempt < self.MAX_RETRIES - 1:
                         wait_time = (attempt + 1) * 5
-                        progress.update(
-                            30 + (attempt * 10),
-                            f"Retrying in {wait_time} seconds..."
-                        )
+                        progress.update(30 + (attempt * 10), f"Retrying in {wait_time} seconds...")
                         time.sleep(wait_time)
                     continue
                 except Exception as e:
