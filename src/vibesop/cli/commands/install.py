@@ -281,8 +281,8 @@ def _install_integration(
 
             progress_tracker = ProgressTracker(
                 f"Installing {name}",
-                mode="silent",
             )
+            progress_tracker._started = False  # Prevent auto-start
 
             result = installer.install(platform=None, force=force, progress=progress_tracker)
 

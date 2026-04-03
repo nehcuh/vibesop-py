@@ -16,6 +16,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from vibesop.constants import CacheSettings
+
 
 @dataclass
 class CacheEntry:
@@ -29,7 +31,7 @@ class CacheEntry:
 
     data: dict[str, Any]
     created_at: float = field(default_factory=time.time)
-    ttl: int = 86400  # 24 hours default
+    ttl: int = CacheSettings.DEFAULT_TTL
 
     def is_expired(self) -> bool:
         """Check if entry is expired."""
@@ -86,19 +88,25 @@ class CacheManager:
 
     def __init__(
         self,
-        cache_dir: str | Path = ".vibe/cache",
+        cache_dir: str | Path | None = None,
         memory_cache_max_size: int = 500,
     ) -> None:
         """Initialize the cache manager.
 
         Args:
-            cache_dir: Directory for file-based cache
+            cache_dir: Directory for file-based cache (default: from constants)
             memory_cache_max_size: Max entries in memory cache
         """
+        if cache_dir is None:
+            from pathlib import Path
+            import os
+            base_dir = Path(os.getcwd())
+            cache_dir = base_dir / ".vibe" / CacheSettings.DEFAULT_CACHE_DIR
+
         self.cache_dir = Path(cache_dir)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
-        self.memory_cache_max_size = memory_cache_max_size
+        self.memory_cache_max_size = min(memory_cache_max_size, CacheSettings.MAX_CACHE_SIZE)
         self._memory_cache: dict[str, CacheEntry] = {}
         self._stats = CacheStats()
 

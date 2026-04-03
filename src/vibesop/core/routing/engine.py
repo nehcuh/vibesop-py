@@ -15,6 +15,7 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
+from vibesop.constants import RoutingThresholds
 from vibesop.core.config import ConfigLoader
 from vibesop.core.models import (
     RoutingRequest,
@@ -112,10 +113,15 @@ class SkillRouter:
                     warnings.warn(f"AI triage disabled: {e}")
 
         # Initialize semantic matcher (Layer 3)
-        self._semantic_matcher = SemanticMatcher(min_score=0.4)
+        self._semantic_matcher = SemanticMatcher(
+            min_score=RoutingThresholds.SEMANTIC_SIMILARITY_MIN
+        )
 
         # Initialize fuzzy matcher (Layer 4)
-        self._fuzzy_matcher = FuzzyMatcher(min_similarity=0.6, max_distance=2)
+        self._fuzzy_matcher = FuzzyMatcher(
+            min_similarity=RoutingThresholds.FUZZY_SIMILARITY_THRESHOLD,
+            max_distance=2
+        )
 
         # Initialize preference learner
         preference_path = self.project_root / ".vibe" / "preferences.json"

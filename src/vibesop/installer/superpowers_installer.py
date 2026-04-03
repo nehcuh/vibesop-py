@@ -139,6 +139,9 @@ class SuperpowersInstaller(BaseInstaller):
     def uninstall(self) -> Dict[str, any]:
         """Uninstall Superpowers skill pack.
 
+        Removes all superpowers symlinks from each platform and deletes
+        the unified installation directory.
+
         Returns:
             Dictionary with uninstallation results
         """
@@ -150,12 +153,24 @@ class SuperpowersInstaller(BaseInstaller):
         }
 
         try:
-            # Remove platform symlinks
-            for platform, link_path in self.SUPERPOWERS_PLATFORM_SYMLINK_PATHS.items():
-                symlink_path = link_path.expanduser()
-                if symlink_path.exists() and symlink_path.is_symlink():
-                    symlink_path.unlink()
-                    result["symlinks_removed"].append(platform)
+            # Remove platform symlinks (all superpowers-* links)
+            for platform, link_dir in self.SUPERPOWERS_PLATFORM_SYMLINK_PATHS.items():
+                symlink_dir = link_dir.expanduser()
+                if not symlink_dir.exists():
+                    continue
+
+                removed_count = 0
+                for entry in symlink_dir.iterdir():
+                    # Only remove superpowers symlinks
+                    if entry.is_symlink() and entry.name.startswith(f"{self.SUPERPOWERS_REPO_NAME}-"):
+                        try:
+                            entry.unlink()
+                            removed_count += 1
+                        except OSError as e:
+                            result["errors"].append(f"Failed to remove {entry.name}: {e}")
+
+                if removed_count > 0:
+                    result["symlinks_removed"].append(f"{platform} ({removed_count} links)")
 
             # Remove unified installation directory
             if self._unified_path.exists():
@@ -181,6 +196,7 @@ class SuperpowersInstaller(BaseInstaller):
             "git_repo": False,
             "symlinks": {},
             "markers_present": False,
+            "skills_count": 0,
         }
 
         # Check if directory exists
@@ -196,14 +212,32 @@ class SuperpowersInstaller(BaseInstaller):
         # Check marker files
         result["markers_present"] = self._superpowers_markers_present()
 
-        # Check symlinks
-        for platform, link_path in self.SUPERPOWERS_PLATFORM_SYMLINK_PATHS.items():
-            symlink_path = link_path.expanduser()
-            result["symlinks"][platform] = {
-                "exists": symlink_path.exists(),
-                "is_symlink": symlink_path.is_symlink() if symlink_path.exists() else False,
-                "target": str(symlink_path.resolve()) if symlink_path.exists() else None,
+        # Count skills
+        skills_dir = self._unified_path / "skills"
+        if result["markers_present"] and skills_dir.exists():
+            skill_count = 0
+            for entry in skills_dir.iterdir():
+                if entry.is_dir():
+                    skill_count += 1
+            result["skills_count"] = skill_count
+
+        # Check symlinks for each platform
+        for platform, link_dir in self.SUPERPOWERS_PLATFORM_SYMLINK_PATHS.items():
+            symlink_dir = link_dir.expanduser()
+            platform_links = {
+                "directory_exists": symlink_dir.exists(),
+                "superpowers_links": [],
+                "total_count": 0,
             }
+
+            if symlink_dir.exists():
+                # Count superpowers symlinks
+                for entry in symlink_dir.iterdir():
+                    if entry.is_symlink() and entry.name.startswith(f"{self.SUPERPOWERS_REPO_NAME}-"):
+                        platform_links["superpowers_links"].append(entry.name)
+                        platform_links["total_count"] += 1
+
+            result["symlinks"][platform] = platform_links
 
         return result
 
@@ -237,14 +271,14 @@ class SuperpowersInstaller(BaseInstaller):
         Returns:
             True if markers are present, False otherwise
         """
-        # Check for common Superpowers files/directories
-        markers = [
-            self._unified_path / "skills",
-            self._unified_path / "README.md",
-            self._unified_path / ".git",
-        ]
-
-        return all(marker.exists() for marker in markers)
+        # Check for superpowers-specific marker files
+        # superpowers has a skills directory with subdirectories
+        skills_dir = self._unified_path / "skills"
+        return (
+            self._unified_path.exists()
+            and skills_dir.exists()
+            and any(skills_dir.iterdir())  # At least one skill subdirectory
+        )
 
     def _clone_repository(self, progress: ProgressTracker) -> bool:
         """Clone Superpowers repository.
@@ -308,7 +342,10 @@ class SuperpowersInstaller(BaseInstaller):
         return False
 
     def _create_platform_symlink(self, platform: str, progress: ProgressTracker) -> bool:
-        """Create symlink for a platform.
+        """Create symlinks for each skill in a platform.
+
+        Creates individual symlinks for each skill subdirectory,
+        following the pattern: superpowers-{skill_name}
 
         Args:
             platform: Platform name (claude-code, opencode)
@@ -322,27 +359,66 @@ class SuperpowersInstaller(BaseInstaller):
             return False
 
         try:
-            link_path = self.SUPERPOWERS_PLATFORM_SYMLINK_PATHS[platform].expanduser()
+            link_dir = self.SUPERPOWERS_PLATFORM_SYMLINK_PATHS[platform].expanduser()
+            skills_dir = self._unified_path / "skills"
 
             # Create parent directory
-            link_path.parent.mkdir(parents=True, exist_ok=True)
+            link_dir.mkdir(parents=True, exist_ok=True)
 
-            # Remove existing symlink if present
-            if link_path.exists():
+            # Check if skills directory exists
+            if not skills_dir.exists():
+                progress.warning(f"Skills directory not found: {skills_dir}")
+                return False
+
+            # Get all skill subdirectories
+            skill_entries = []
+            for entry in skills_dir.iterdir():
+                if entry.is_dir():
+                    skill_entries.append(entry)
+
+            if not skill_entries:
+                progress.warning(f"No skills found in superpowers skills directory")
+                return False
+
+            created = 0
+            skipped = 0
+
+            # Create individual symlink for each skill
+            for skill_path in skill_entries:
+                skill_name = skill_path.name
+                link_name = f"{self.SUPERPOWERS_REPO_NAME}-{skill_name}"
+                link_path = link_dir / link_name
+
+                # Check if already correctly linked
+                if link_path.is_symlink():
+                    try:
+                        if link_path.resolve() == skill_path:
+                            skipped += 1
+                            continue
+                    except OSError:
+                        pass
+
+                # Skip if exists but not a symlink
+                if link_path.exists() and not link_path.is_symlink():
+                    progress.warning(f"Skipping {link_name}: already exists")
+                    continue
+
+                # Remove old symlink if present
                 if link_path.is_symlink():
                     link_path.unlink()
-                else:
-                    # Not a symlink, don't overwrite
-                    progress.warning(f"Cannot overwrite existing directory: {link_path}")
-                    return False
 
-            # Create symlink
-            link_path.symlink_to(self._unified_path)
-            progress.success(f"Created symlink: {link_path} -> {self._unified_path}")
-            return True
+                # Create symlink
+                try:
+                    link_path.symlink_to(skill_path)
+                    created += 1
+                except OSError as e:
+                    progress.warning(f"Failed to create {link_name}: {e}")
+
+            progress.success(f"{platform}: {created} created, {skipped} up to date")
+            return created > 0
 
         except Exception as e:
-            progress.error(f"Failed to create symlink for {platform}: {e}")
+            progress.error(f"Failed to create symlinks for {platform}: {e}")
             return False
 
     def _verify_installation(self) -> bool:

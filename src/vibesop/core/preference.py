@@ -17,6 +17,8 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from vibesop.constants import PreferenceSettings
+
 
 @dataclass
 class SkillSelection:
@@ -81,8 +83,8 @@ class PreferenceLearner:
     def __init__(
         self,
         storage_path: str | Path = ".vibe/preferences.json",
-        decay_days: int = 30,
-        min_samples: int = 3,
+        decay_days: int | None = None,
+        min_samples: int | None = None,
     ) -> None:
         """Initialize the preference learner.
 
@@ -92,8 +94,8 @@ class PreferenceLearner:
             min_samples: Minimum selections before trusting a preference
         """
         self.storage_path = Path(storage_path)
-        self.decay_days = decay_days
-        self.min_samples = min_samples
+        self.decay_days = decay_days if decay_days is not None else PreferenceSettings.DECAY_DAYS
+        self.min_samples = min_samples if min_samples is not None else PreferenceSettings.MIN_SAMPLES
 
         self._storage = self._load_storage()
         self._recalculate_scores()

@@ -39,6 +39,7 @@ from vibesop.cli.commands import route_commands as route_commands_module
 from vibesop.cli.commands import import_rules as import_rules_module
 from vibesop.cli.commands import detect as detect_module
 from vibesop.cli.commands import install as install_module
+from vibesop.cli.commands import hooks as hooks_module
 
 app = typer.Typer(
     name="vibe",
@@ -442,3 +443,4 @@ app.command("route-validate")(route_commands_module.route_validate)
 app.command("import-rules")(import_rules_module.import_rules)
 app.command()(detect_module.detect)
 app.command()(install_module.install)
+app.command()(hooks_module.hooks)
