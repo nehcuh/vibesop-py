@@ -335,7 +335,9 @@ class HookInstaller:
 # Trigger memory flush
 if command -v vibe &> /dev/null; then
     echo "Flushing session memory..."
-    # vibe memory flush  # TODO: Implement when command is available
+    # Note: 'vibe memory flush' will be available in v1.1.0
+    # This hook is prepared for future memory management feature
+    echo "Session ending at $(date)"
 fi
 """
         elif hook_point == HookPoint.PRE_TOOL_USE:

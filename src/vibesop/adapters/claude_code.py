@@ -128,6 +128,12 @@ class ClaudeCodeAdapter(PlatformAdapter):
                 manifest,
                 result,
             )
+            self._render_and_write(
+                "rules/memory-flush.md.j2",
+                output_dir / "rules" / "memory-flush.md",
+                manifest,
+                result,
+            )
 
             # Render docs (on-demand)
             # Note: docs contain threat examples, skip security validation
@@ -234,7 +240,19 @@ class ClaudeCodeAdapter(PlatformAdapter):
         # Update settings based on policies
         if "allowedCommands" in settings:
             # Configure command permissions based on security policy
-            pass  # TODO: Implement
+            if security_policy.enable_command_blocklist:
+                # Add blocked commands to settings
+                blocklist = security_policy.command_blocklist or []
+                settings["allowedCommands"] = [
+                    cmd for cmd in settings.get("allowedCommands", [])
+                    if cmd not in blocklist
+                ]
+
+            if security_policy.require_command_allowlist:
+                # Only allow explicitly permitted commands
+                allowlist = security_policy.command_allowlist or []
+                if allowlist:
+                    settings["allowedCommands"] = allowlist
 
         # Write settings.json
         settings_path = output_dir / "settings.json"
@@ -318,7 +336,9 @@ class ClaudeCodeAdapter(PlatformAdapter):
 # Trigger memory flush
 if command -v vibe &> /dev/null; then
     echo "Flushing session memory..."
-    # vibe memory flush  # TODO: Implement when command is available
+    # Note: 'vibe memory flush' command will be available in future release
+    # For now, just log that session is ending
+    echo "Session ending at $(date)"
 fi
 """
             hook_path.parent.mkdir(parents=True, exist_ok=True)

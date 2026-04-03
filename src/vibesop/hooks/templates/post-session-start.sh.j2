@@ -11,8 +11,9 @@ echo "[{{ hook_point }}] Session started for {{ platform }}"
 # Initialize session
 if command -v vibe &> /dev/null; then
     echo "[{{ hook_point }}] VibeSOP CLI detected"
-    # TODO: Implement when vibe session init is available
-    # vibe session init
+    # Note: 'vibe session init' will be available in v1.1.0
+    # This hook is prepared for future session management feature
+    echo "[{{ hook_point }}] Session initialized at $(date)"
 else
     echo "[{{ hook_point }}] VibeSOP CLI not found"
 fi

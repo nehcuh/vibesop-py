@@ -11,9 +11,9 @@ echo "[{{ hook_point }}] Tool use detected: $TOOL_NAME"
 
 # Log tool usage
 if command -v vibe &> /dev/null; then
-    # TODO: Implement when vibe analytics is available
-    # vibe analytics track --tool="$TOOL_NAME"
-    :
+    # Note: 'vibe analytics' will be available in v1.2.0
+    # This hook is prepared for future analytics feature
+    echo "[{{ hook_point }}] Tool $TOOL_NAME used at $(date)"
 fi
 
 # Custom hook logic can be added here

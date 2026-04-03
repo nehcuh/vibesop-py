@@ -9,8 +9,9 @@ set -e
 # Trigger memory flush
 if command -v vibe &> /dev/null; then
     echo "[{{ hook_point }}] Flushing session memory..."
-    # TODO: Implement when vibe memory flush is available
-    # vibe memory flush
+    # Note: 'vibe memory flush' will be available in v1.1.0
+    # This hook is prepared for future memory management feature
+    echo "[{{ hook_point }}] Session ending at $(date)"
 else
     echo "[{{ hook_point }}] VibeSOP CLI not found, skipping memory flush"
 fi

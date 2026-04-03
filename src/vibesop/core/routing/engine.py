@@ -126,25 +126,22 @@ class SkillRouter:
         try:
             skills = self._config.get_all_skills()
 
+            if not skills:
+                # Log warning but don't fail - router can still function with empty skill set
+                import warnings
+                warnings.warn("No skills loaded from configuration. Router may not function properly.")
+
             # Index for semantic matching
-            self._semantic_matcher.index_skills(skills, self._config)
+            self._semantic_matcher.index_skills(skills or [], self._config)
 
             # Index for fuzzy matching
-            self._fuzzy_matcher.index_skills(skills)
+            self._fuzzy_matcher.index_skills(skills or [])
 
-        except Exception:
-            # Fall back to mock registry if config fails
-            self._skill_registry = self._load_mock_registry()
-            mock_skills = [
-                {
-                    "id": skill_id,
-                    "intent": skill["description"],
-                    "namespace": "builtin",
-                }
-                for skill_id, skill in self._skill_registry.items()
-            ]
-            self._semantic_matcher.index_skills(mock_skills)
-            self._fuzzy_matcher.index_skills(mock_skills)
+        except (FileNotFoundError, ValueError, KeyError) as e:
+            # Log error and re-raise - config loading is critical
+            import warnings
+            warnings.warn(f"Failed to load skills from configuration: {e}")
+            raise
 
     def route(self, request: RoutingRequest) -> RoutingResult:
         """Route a request to the appropriate skill.
@@ -562,42 +559,82 @@ Skill ID:"""
 
     def _get_alternatives(
         self,
-        primary: SkillRoute,  # noqa: ARG002
+        primary: SkillRoute,
     ) -> list[SkillRoute]:
-        """Get alternative skill matches."""
-        # For now, return empty list
-        # TODO: Implement proper alternative selection based on similarity
-        return []
+        """Get alternative skill matches based on similarity.
 
-    def _load_mock_registry(self) -> dict[str, dict[str, any]]:
-        """Load mock skill registry (fallback).
+        Returns up to 3 alternative skills that are similar to the primary match.
 
-        TODO: Remove once YAML loading is stable.
+        Args:
+            primary: The primary skill route
+
+        Returns:
+            List of alternative skill routes sorted by similarity
         """
-        return {
-            "/review": {
-                "id": "/review",
-                "description": "Review code for quality and best practices",
-                "keywords": ["review", "审查", "评审", "check", "检查"],
-            },
-            "/debug": {
-                "id": "/debug",
-                "description": "Debug errors and investigate issues",
-                "keywords": ["debug", "bug", "error", "错误", "调试", "fix", "修复"],
-            },
-            "/test": {
-                "id": "/test",
-                "description": "Write and run tests",
-                "keywords": ["test", "测试", "tdd", "spec"],
-            },
-            "/refactor": {
-                "id": "/refactor",
-                "description": "Refactor code for better structure",
-                "keywords": ["refactor", "重构", "clean", "cleanup"],
-            },
-            "/general": {
-                "id": "/general",
-                "description": "General purpose workflow",
-                "keywords": ["general", "help", "general"],
-            },
-        }
+        alternatives = []
+
+        # Get all skills from config
+        try:
+            all_skills = self._config.get_all_skills()
+            if not all_skills:
+                return alternatives
+
+            # Use semantic matcher to find similar skills
+            primary_skill_id = primary.skill_id
+            primary_intent = ""
+
+            # Get intent of primary skill
+            for skill in all_skills:
+                if skill["id"] == primary_skill_id:
+                    primary_intent = skill.get("intent", skill.get("description", ""))
+                    break
+
+            if not primary_intent:
+                return alternatives
+
+            # Find similar skills using semantic matching
+            similar_skills = []
+            for skill in all_skills:
+                # Skip the primary skill itself
+                if skill["id"] == primary_skill_id:
+                    continue
+
+                skill_intent = skill.get("intent", skill.get("description", ""))
+
+                # Calculate simple similarity based on keyword overlap
+                primary_words = set(primary_intent.lower().split())
+                skill_words = set(skill_intent.lower().split())
+
+                if primary_words and skill_words:
+                    intersection = primary_words & skill_words
+                    union = primary_words | skill_words
+                    similarity = len(intersection) / len(union) if union else 0
+
+                    if similarity > 0.2:  # Minimum similarity threshold
+                        similar_skills.append({
+                            "skill_id": skill["id"],
+                            "similarity": similarity,
+                            "source": "semantic",
+                        })
+
+            # Sort by similarity and take top 3
+            similar_skills.sort(key=lambda x: x["similarity"], reverse=True)
+            similar_skills = similar_skills[:3]
+
+            # Create SkillRoute objects for alternatives
+            for skill_info in similar_skills:
+                alternatives.append(
+                    SkillRoute(
+                        skill_id=skill_info["skill_id"],
+                        confidence=skill_info["similarity"],
+                        layer=primary.layer,
+                        source="alternative",
+                        metadata={"similarity": skill_info["similarity"]},
+                    )
+                )
+
+        except Exception:
+            # If alternative selection fails, return empty list
+            pass
+
+        return alternatives

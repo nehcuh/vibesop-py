@@ -210,10 +210,18 @@ def _do_from(
         # Extract patterns
         console.print(f"\n[dim]Analyzing patterns...[/dim]")
 
-        # TODO: Implement pattern extraction
-        console.print(f"\n[dim]Pattern extraction not yet implemented[/dim]")
-        console.print(f"\n[dim]Use --name and --description to create manually:[/dim]")
-        console.print(f"  [cyan]vibe skill-craft from {source} --name 'my-skill'[/cyan]")
+        # Basic pattern extraction
+        patterns = _extract_session_patterns(session)
+
+        if patterns:
+            console.print(f"\n[green]✓ Found {len(patterns)} patterns:[/green]")
+            for i, pattern in enumerate(patterns[:5], 1):
+                console.print(f"  {i}. [cyan]{pattern.get('name', 'Unnamed')}[/cyan]")
+                console.print(f"     {pattern.get('description', '')[:80]}")
+        else:
+            console.print(f"\n[dim]No clear patterns detected[/dim]")
+            console.print(f"\n[dim]Use --name and --description to create manually:[/dim]")
+            console.print(f"  [cyan]vibe skill-craft from {source} --name 'my-skill'[/cyan]")
 
     except json.JSONDecodeError:
         console.print(f"[red]✗ Invalid JSON file[/red]")
@@ -245,3 +253,67 @@ def _do_templates() -> None:
     console.print(
         f"\n[dim]Use: [cyan]vibe skill-craft create --name <name> --template <template>[/cyan][/dim]"
     )
+
+
+def _extract_session_patterns(session: dict) -> list[dict]:
+    """Extract patterns from a session for skill creation.
+
+    Args:
+        session: Session data containing messages and metadata
+
+    Returns:
+        List of detected patterns with name and description
+    """
+    patterns = []
+    messages = session.get("messages", [])
+
+    if not messages:
+        return patterns
+
+    # Analyze message patterns
+    user_messages = [m for m in messages if m.get("role") == "user"]
+
+    if not user_messages:
+        return patterns
+
+    # Pattern 1: Code review pattern
+    review_keywords = ["review", "check", "improve", "refactor", "优化", "审查"]
+    if any(any(kw in msg.get("content", "").lower() for kw in review_keywords)
+           for msg in user_messages):
+        patterns.append({
+            "name": "Code Review",
+            "description": "Review code for quality, style, and best practices",
+            "trigger": "when user asks to review or check code",
+        })
+
+    # Pattern 2: Debug pattern
+    debug_keywords = ["error", "bug", "fix", "debug", "issue", "错误", "调试"]
+    if any(any(kw in msg.get("content", "").lower() for kw in debug_keywords)
+           for msg in user_messages):
+        patterns.append({
+            "name": "Debugging",
+            "description": "Systematically debug errors and investigate issues",
+            "trigger": "when user reports errors or bugs",
+        })
+
+    # Pattern 3: Testing pattern
+    test_keywords = ["test", "spec", "tdd", "测试", "用例"]
+    if any(any(kw in msg.get("content", "").lower() for kw in test_keywords)
+           for msg in user_messages):
+        patterns.append({
+            "name": "Test Generation",
+            "description": "Generate test cases and test code",
+            "trigger": "when user asks about testing",
+        })
+
+    # Pattern 4: Documentation pattern
+    doc_keywords = ["document", "doc", "readme", "comment", "文档"]
+    if any(any(kw in msg.get("content", "").lower() for kw in doc_keywords)
+           for msg in user_messages):
+        patterns.append({
+            "name": "Documentation",
+            "description": "Write or improve documentation",
+            "trigger": "when user asks for documentation",
+        })
+
+    return patterns
