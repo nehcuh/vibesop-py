@@ -1,0 +1,29 @@
+{
+  "workflow_id": "test-resume-workflow",
+  "workflow_name": "test-workflow",
+  "workflow_version": "1.0.0",
+  "status": "running",
+  "current_stage": null,
+  "stage_states": {
+    "stage1": "pending",
+    "stage2": "pending",
+    "stage3": "pending"
+  },
+  "context": {
+    "input": {
+      "test": "data"
+    },
+    "current_stage": null,
+    "stage_results": {},
+    "metadata": {
+      "test_run": true
+    },
+    "created_at": "2026-04-04T07:39:39.859301",
+    "updated_at": "2026-04-04T07:39:39.859301"
+  },
+  "result": null,
+  "started_at": "2026-04-04T07:39:39.859387",
+  "completed_at": null,
+  "error": null,
+  "metadata": {}
+}

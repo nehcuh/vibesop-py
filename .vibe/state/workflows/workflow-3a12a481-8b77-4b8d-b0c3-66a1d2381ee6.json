@@ -1,0 +1,39 @@
+{
+  "workflow_id": "workflow-3a12a481-8b77-4b8d-b0c3-66a1d2381ee6",
+  "workflow_name": "parallel-test",
+  "workflow_version": "1.0.0",
+  "status": "completed",
+  "current_stage": null,
+  "stage_states": {
+    "task1": "pending",
+    "task2": "pending",
+    "task3": "pending"
+  },
+  "context": {
+    "input": {},
+    "current_stage": null,
+    "stage_results": {},
+    "metadata": {},
+    "created_at": "2026-04-04T07:34:47.628646",
+    "updated_at": "2026-04-04T07:34:47.628647"
+  },
+  "result": {
+    "success": true,
+    "workflow_name": "parallel-test",
+    "completed_stages": [
+      "task1",
+      "task2",
+      "task3"
+    ],
+    "failed_stages": [],
+    "skipped_stages": [],
+    "final_context": {},
+    "execution_time_seconds": 2.0,
+    "errors": [],
+    "metadata": {}
+  },
+  "started_at": "2026-04-04T07:34:47.628660",
+  "completed_at": "2026-04-04T07:34:47.628891",
+  "error": null,
+  "metadata": {}
+}

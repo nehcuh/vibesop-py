@@ -1,0 +1,43 @@
+{
+  "workflow_id": "workflow-2bce51f6-6687-4938-9c11-e4da8512f88d",
+  "workflow_name": "optional-test",
+  "workflow_version": "1.0.0",
+  "status": "failed",
+  "current_stage": null,
+  "stage_states": {
+    "required_stage": "pending",
+    "optional_stage": "pending",
+    "another_optional": "pending"
+  },
+  "context": {
+    "input": {},
+    "current_stage": null,
+    "stage_results": {},
+    "metadata": {},
+    "created_at": "2026-04-04T07:29:31.177978",
+    "updated_at": "2026-04-04T07:29:31.177979"
+  },
+  "result": {
+    "success": false,
+    "workflow_name": "optional-test",
+    "completed_stages": [
+      "required_stage"
+    ],
+    "failed_stages": [
+      "optional_stage"
+    ],
+    "skipped_stages": [
+      "another_optional"
+    ],
+    "final_context": {},
+    "execution_time_seconds": 1.0,
+    "errors": [
+      "Optional stage failed"
+    ],
+    "metadata": {}
+  },
+  "started_at": "2026-04-04T07:29:31.177996",
+  "completed_at": "2026-04-04T07:29:31.178256",
+  "error": null,
+  "metadata": {}
+}

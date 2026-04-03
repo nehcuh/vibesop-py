@@ -30,6 +30,7 @@ from pathlib import Path
 from typing import Optional
 import json
 import asyncio
+import os
 
 import typer
 from rich.console import Console
@@ -45,6 +46,23 @@ from vibesop.workflow import (
 from vibesop.workflow.exceptions import WorkflowError
 
 console = Console()
+
+
+def _create_manager() -> WorkflowManager:
+    """Create WorkflowManager with configurable directory from env var.
+
+    Supports VIBE_WORKFLOW_DIR environment variable for testing and
+    custom workflow directory locations.
+
+    Returns:
+        WorkflowManager instance
+    """
+    workflow_dir = os.environ.get("VIBE_WORKFLOW_DIR", ".vibe/workflows")
+    project_root = Path(os.environ.get("VIBE_PROJECT_ROOT", "."))
+    return WorkflowManager(
+        project_root=project_root,
+        workflow_dir=Path(workflow_dir)
+    )
 
 
 def workflow(
@@ -172,7 +190,7 @@ def _do_run(
         f"\n{'=' * 40}\n"
     )
 
-    manager = WorkflowManager()
+    manager = _create_manager()
 
     # Parse input data
     input_dict: dict = {}
@@ -276,7 +294,7 @@ def _do_list() -> None:
         f"\n{'=' * 40}\n"
     )
 
-    manager = WorkflowManager()
+    manager = _create_manager()
 
     try:
         workflows = manager.list_workflows()
@@ -326,7 +344,7 @@ def _do_resume(workflow_id: str | None, verbose: bool) -> None:
             f"\n{'=' * 40}\n"
         )
 
-        manager = WorkflowManager()
+        manager = _create_manager()
 
         try:
             active = manager.list_active_workflows()
@@ -368,7 +386,7 @@ def _do_resume(workflow_id: str | None, verbose: bool) -> None:
     )
     console.print(f"[dim]Workflow ID: {workflow_id}[/dim]\n")
 
-    manager = WorkflowManager()
+    manager = _create_manager()
 
     try:
         result = manager.resume_workflow(workflow_id)
@@ -401,7 +419,7 @@ def _do_validate(workflow_file: Path | None) -> None:
         f"\n{'=' * 40}\n"
     )
 
-    manager = WorkflowManager()
+    manager = _create_manager()
 
     try:
         workflow = manager._load_workflow_from_file(workflow_file)
