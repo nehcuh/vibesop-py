@@ -1,0 +1,62 @@
+name: security-review
+description: Comprehensive security review pipeline for code and configurations
+version: 1.0.0
+stages:
+  - name: scan
+    description: Scan input for security threats and vulnerabilities
+    required: true
+    timeout_seconds: 120
+    retry_count: 1
+    metadata:
+      skill_id: /security/scan
+      category: security
+      severity: critical
+
+  - name: analyze
+    description: Analyze threat types and severity levels
+    dependencies:
+      - scan
+    required: true
+    timeout_seconds: 180
+    retry_count: 2
+    metadata:
+      skill_id: /security/analyze
+      category: security
+      severity: high
+
+  - name: prioritize
+    description: Prioritize findings by risk and impact
+    dependencies:
+      - analyze
+    required: true
+    timeout_seconds: 60
+    metadata:
+      skill_id: /security/prioritize
+      category: security
+      severity: medium
+
+  - name: report
+    description: Generate comprehensive security report
+    dependencies:
+      - prioritize
+    required: false
+    timeout_seconds: 90
+    metadata:
+      skill_id: /security/report
+      category: reporting
+      severity: low
+
+  - name: remediate
+    description: Suggest remediation steps for critical issues
+    dependencies:
+      - report
+    required: false
+    timeout_seconds: 120
+    metadata:
+      skill_id: /security/remediate
+      category: remediation
+      severity: high
+strategy: sequential
+timeout_seconds: 600
+max_parallel: 2
+stop_on_first_failure: true

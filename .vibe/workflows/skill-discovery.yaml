@@ -1,0 +1,62 @@
+name: skill-discovery
+description: Discover and catalog available skills in the system
+version: 1.0.0
+stages:
+  - name: detect-integrations
+    description: Detect installed skill packs and integrations
+    required: true
+    timeout_seconds: 30
+    retry_count: 2
+    metadata:
+      skill_id: /integrations/detect
+      category: discovery
+
+  - name: catalog-skills
+    description: Catalog all available skills from detected sources
+    dependencies:
+      - detect-integrations
+    required: true
+    timeout_seconds: 60
+    retry_count: 2
+    metadata:
+      skill_id: /skills/catalog
+      category: cataloging
+
+  - name: analyze-coverage
+    description: Analyze skill coverage across different domains
+    dependencies:
+      - catalog-skills
+    required: false
+    timeout_seconds: 90
+    metadata:
+      skill_id: /skills/analyze-coverage
+      category: analysis
+
+  - name: route-query
+    description: Test routing with sample queries
+    dependencies:
+      - catalog-skills
+    required: false
+    timeout_seconds: 45
+    metadata:
+      skill_id: /route/query
+      category: testing
+      test_queries:
+        - "Review this code for bugs"
+        - "Debug this error"
+        - "Help me write tests"
+
+  - name: generate-report
+    description: Generate skill inventory report
+    dependencies:
+      - analyze-coverage
+      - route-query
+    required: false
+    timeout_seconds: 60
+    metadata:
+      skill_id: /report/generate
+      category: reporting
+strategy: pipeline
+timeout_seconds: 300
+max_parallel: 3
+stop_on_first_failure: false
