@@ -111,6 +111,14 @@ This is a **complete rewrite** of the Ruby version in modern Python.
 
 ## 📚 Documentation
 
+### v2.0 Roadmap 🚀
+- **[Roadmap Index](docs/ROADMAP_INDEX.md)** - Complete roadmap documentation index
+- **[Full Roadmap](docs/roadmap-2.0.md)** - Detailed v2.0 development plan
+- **[Quick Reference](docs/roadmap-2.0-summary.md)** - Executive summary of v2.0 features
+- **[Timeline](docs/roadmap-2.0-timeline.md)** - 12-week development schedule
+- **[Project Board](docs/roadmap-2.0-board.md)** - Agile development progress board
+
+### v1.0 Documentation
 - **[Implementation Summary](docs/IMPLEMENTATION_SUMMARY.md)** - Complete implementation details
 - **[CLI Reference](docs/CLI_REFERENCE.md)** - Full command reference
 - **[Development Plan](docs/development-plan.md)** - Original development roadmap
