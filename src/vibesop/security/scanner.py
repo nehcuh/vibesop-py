@@ -281,7 +281,7 @@ class SecurityScanner:
             try:
                 content = path.read_text(encoding="latin-1")
                 return self.scan(content)
-            except Exception as e:
+            except (OSError, PermissionError, ValueError) as e:
                 msg = f"Failed to read file: {e}"
                 raise IOError(msg) from e
 

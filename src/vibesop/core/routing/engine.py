@@ -13,6 +13,8 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from pydantic import ValidationError
+
 from vibesop.core.config import ConfigLoader
 from vibesop.core.models import (
     RoutingRequest,
@@ -101,8 +103,13 @@ class SkillRouter:
             try:
                 self._llm = create_from_env()
                 self._ai_triage_enabled = self._llm.configured()
-            except Exception:
+            except (ImportError, ValidationError, OSError) as e:
+                # LLM provider not available or misconfigured
+                # Disable AI triage and fall back to other layers
                 self._ai_triage_enabled = False
+                if os.getenv("VIBE_DEBUG"):
+                    import warnings
+                    warnings.warn(f"AI triage disabled: {e}")
 
         # Initialize semantic matcher (Layer 3)
         self._semantic_matcher = SemanticMatcher(min_score=0.4)
@@ -265,9 +272,12 @@ class SkillRouter:
                     # Cache result
                     self._cache.set(cache_key, result.model_dump())
                     return result
-        except Exception:
-            # AI triage failed, fall through to next layer
-            pass
+        except (TimeoutError, ConnectionError, ValueError, KeyError) as e:
+            # AI triage failed due to network, timeout, or parsing errors
+            # Fall through to next routing layer
+            if os.getenv("VIBE_DEBUG"):
+                import warnings
+                warnings.warn(f"AI triage call failed: {e}")
 
         return None
 
@@ -633,8 +643,11 @@ Skill ID:"""
                     )
                 )
 
-        except Exception:
-            # If alternative selection fails, return empty list
-            pass
+        except (KeyError, AttributeError, TypeError) as e:
+            # Alternative selection failed due to data access issues
+            # Return empty list and allow routing to continue
+            if os.getenv("VIBE_DEBUG"):
+                import warnings
+                warnings.warn(f"Alternative selection failed: {e}")
 
         return alternatives

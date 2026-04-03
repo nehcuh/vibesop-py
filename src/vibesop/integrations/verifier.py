@@ -170,7 +170,8 @@ class IntegrationVerifier:
                 if result.status == VerificationStatus.FAILED:
                     errors.append(f"{check_name}: {result.message}")
 
-            except Exception as e:
+            except (ValueError, KeyError, AttributeError, TypeError, OSError) as e:
+                # Catch specific exceptions from verification checks
                 errors.append(f"{check_name}: Verification failed with error: {e}")
                 results.append(VerificationResult(
                     check_name=check_name,
@@ -362,7 +363,46 @@ class IntegrationVerifier:
                 suggestions=[],
             )
 
-        skills_dir = Path(integration.path) / "skills"
+        integration_path = Path(integration.path)
+
+        # gstack stores skills as subdirectories with SKILL.md files
+        if integration_id == "gstack":
+            skills_found = []
+            skills_missing = []
+
+            for skill in required_skills:
+                skill_dir = integration_path / skill
+                skill_file = skill_dir / "SKILL.md"
+                if skill_file.exists():
+                    skills_found.append(skill)
+                else:
+                    skills_missing.append(skill)
+
+            if skills_missing:
+                return VerificationResult(
+                    check_name="skills_present",
+                    status=VerificationStatus.WARNING,
+                    message=f"Missing {len(skills_missing)} required skills",
+                    details={
+                        "found": skills_found,
+                        "missing": skills_missing,
+                    },
+                    suggestions=[
+                        f"Update {integration_id} to get missing skills",
+                        "Some functionality may be limited",
+                    ],
+                )
+
+            return VerificationResult(
+                check_name="skills_present",
+                status=VerificationStatus.PASSED,
+                message=f"All {len(skills_found)} required skills present",
+                details={"skills": skills_found},
+                suggestions=[],
+            )
+
+        # For other integrations, check for skills/ directory
+        skills_dir = integration_path / "skills"
         if not skills_dir.exists():
             return VerificationResult(
                 check_name="skills_present",
