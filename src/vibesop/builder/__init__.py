@@ -37,4 +37,4 @@ __all__ = [
     "validate_overlay",
 ]
 
-__version__ = "0.1.0"
+from vibesop._version import __version__  # noqa: E402

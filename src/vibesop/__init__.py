@@ -9,7 +9,8 @@ This project is a complete rewrite of the Ruby version, leveraging:
 - Type-safe LLM clients
 """
 
-__version__ = "0.1.0"
+from vibesop._version import __version__
+
 __author__ = "nehcuh"
 __license__ = "MIT"
 
