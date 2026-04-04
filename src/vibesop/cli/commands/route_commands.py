@@ -9,6 +9,7 @@ from typing import Optional
 import typer
 from rich.console import Console
 from rich.table import Table
+from rich.prompt import Prompt
 
 from vibesop.core.routing.engine import SkillRouter
 from vibesop.core.models import RoutingRequest
@@ -94,9 +95,42 @@ def route_select(
             selected = result.alternatives[0] if result.alternatives else result.primary
             console.print(f"\n[green]✓ Auto-selected: {selected.skill_id}[/green]")
 
-            # Record the selection
-            router.record_selection(selected.skill_id, query, was_helpful=None)
+            # Record the selection (assume helpful since user used --auto)
+            router.record_selection(selected.skill_id, query, was_helpful=True)
             raise typer.Exit(0)
+
+        # Interactive selection if there are alternatives
+        if result.alternatives:
+            console.print(
+                f"\n[dim]Enter skill number to use (or 0 to skip):[/dim] "
+            )
+
+            try:
+                choice = Prompt.ask(
+                    "[dim]Choice[/dim]",
+                    default="0",
+                    show_default=False,
+                )
+
+                # Validate choice
+                try:
+                    choice_num = int(choice)
+                    if 1 <= choice_num <= len(result.alternatives):
+                        selected = result.alternatives[choice_num - 1]
+                        console.print(
+                            f"\n[green]✓ Selected: {selected.skill_id}[/green]"
+                        )
+
+                        # Record the user's selection
+                        router.record_selection(selected.skill_id, query, was_helpful=True)
+
+                        console.print(
+                            f"\n[dim]This selection has been recorded to improve future recommendations[/dim]"
+                        )
+                except (ValueError, IndexError):
+                    pass
+            except (KeyboardInterrupt, EOFError):
+                console.print("\n[dim]Selection cancelled[/dim]")
 
     console.print(
         f"\n[dim]To use a skill, run its command directly[/dim]"

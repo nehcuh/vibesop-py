@@ -219,7 +219,15 @@ class SkillManager:
                 error="Invalid context for skill execution",
             )
 
-        return await skill.execute(context)
+        # Execute the skill
+        result = await skill.execute(context)
+
+        # Auto-record successful skill executions for preference learning
+        # This helps improve routing accuracy over time
+        if result.success:
+            self._auto_record_selection(skill_id, query)
+
+        return result
 
     def reload_skills(self) -> int:
         """Reload all skills from disk.
@@ -266,3 +274,36 @@ class SkillManager:
             "by_type": by_type,
             "namespaces": sorted(by_namespace.keys()),
         }
+
+    def _auto_record_selection(
+        self,
+        skill_id: str,
+        query: str,
+    ) -> None:
+        """Automatically record skill selection for preference learning.
+
+        This method is called after every successful skill execution to
+        build a preference history that improves routing accuracy over time.
+
+        Args:
+            skill_id: The skill that was executed
+            query: The original query that triggered the skill
+        """
+        try:
+            from vibesop.core.preference import PreferenceLearner
+
+            # Initialize preference learner
+            preference_path = self.project_root / ".vibe" / "preferences.json"
+            learner = PreferenceLearner(
+                storage_path=preference_path,
+                decay_days=30,
+                min_samples=3,
+            )
+
+            # Record the selection
+            # Assume helpful=True for successful executions
+            learner.record_selection(skill_id, query, was_helpful=True)
+
+        except Exception:
+            # Silently fail - auto-recording should never break skill execution
+            pass
