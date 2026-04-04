@@ -141,10 +141,18 @@ def switch(
     # Build phase
     if build:
         console.print("[bold]Phase 1: Build[/bold]\n")
-        # Build logic would be called here
-        # For now, simulate the build
-        console.print(f"[dim]Building {platform} with profile '{profile}'...[/dim]")
-        console.print("[green]✓ Build complete[/green]\n")
+
+        # Import build logic
+        from vibesop.cli.commands import build as build_module
+
+        # Call build logic (will raise typer.Exit on failure)
+        build_module._execute_build(
+            target=platform,
+            profile=profile,
+            output=None,  # Use default output
+            overlay=overlay,
+            verify=False,
+        )
     else:
         console.print("[dim]Skipping build (--no-build)[/dim]\n")
 

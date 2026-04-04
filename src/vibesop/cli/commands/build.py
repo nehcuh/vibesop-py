@@ -49,6 +49,118 @@ PROFILES = {
 }
 
 
+def _execute_build(
+    target: str,
+    profile: str,
+    output: Optional[Path],
+    overlay: Optional[Path],
+    verify: bool,
+) -> None:
+    """Execute build logic (reusable by other commands).
+
+    This function contains the core build logic without CLI parameter parsing,
+    allowing it to be called from other commands like `vibe switch`.
+
+    Args:
+        target: Target platform
+        profile: Build profile name
+        output: Output directory (None for default)
+        overlay: Optional overlay file path
+        verify: Verification mode (no file writes)
+
+    Raises:
+        typer.Exit: On build failure
+    """
+    # Validate profile
+    if profile not in PROFILES:
+        console.print(
+            f"[red]✗ Invalid profile: {profile}[/red]\n"
+            f"[dim]Valid profiles: {', '.join(PROFILES.keys())}[/dim]"
+        )
+        raise typer.Exit(1)
+
+    # Set default output directory
+    if output is None:
+        output = Path(f".vibe/dist/{target}")
+
+    console.print(
+        f"\n[bold cyan]🔨 Building {target}[/bold cyan]"
+        f"\n{'=' * 40}\n"
+    )
+
+    try:
+        # Build manifest
+        console.print(f"[dim]Loading manifest for {target}...[/dim]")
+        builder = ManifestBuilder(project_root=Path("."))
+
+        if overlay:
+            console.print(f"[dim]Applying overlay: {overlay}[/dim]")
+            manifest = builder.build(overlay_path=overlay, platform=target)
+        else:
+            manifest = builder.build_from_registry(platform=target)
+
+        console.print(
+            f"[green]✓[/green] Loaded {len(manifest.skills)} skills, "
+            f"{len(manifest.policies.behavior or {})} policy rules\n"
+        )
+
+        # Exit if manifest-only
+        if False:  # manifest_only mode not supported in switch
+            console.print("[bold]Manifest generated (manifest-only mode)[/bold]")
+            _display_manifest_summary(manifest)
+            return
+
+        # Verify mode
+        if verify:
+            _verify_build(target, manifest)
+            return
+
+        # Render configuration
+        console.print(f"[dim]Rendering configuration for {target}...[/dim]")
+        renderer = ConfigRenderer()
+
+        # Get output directory
+        output_dir = Path(output).expanduser().resolve()
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        # Render
+        result = renderer.render(
+            manifest=manifest,
+            output_dir=output_dir,
+        )
+
+        # Show results
+        console.print(
+            f"\n[green]✓ Build complete![/green]\n"
+            f"[bold]Output:[/bold] {output_dir}\n"
+        )
+
+        # Show created files
+        if result.files_created:
+            console.print("[bold]Files created:[/bold]")
+            for file_path in result.files_created:
+                rel_path = Path(file_path).relative_to(Path.cwd())
+                console.print(f"  📄 {rel_path}")
+
+        console.print(
+            f"\n[dim]Next steps:[/dim]\n"
+            f"  1. Review generated files in [cyan]{output_dir}[/cyan]\n"
+            f"  2. Run [cyan]vibe deploy {target}[/cyan] to install\n"
+        )
+
+        return
+
+    except FileNotFoundError as e:
+        console.print(f"[red]✗ File not found: {e}[/red]")
+        raise typer.Exit(1)
+    except ValueError as e:
+        console.print(f"[red]✗ Configuration error: {e}[/red]")
+        raise typer.Exit(1)
+    except Exception as e:
+        console.print(f"[red]✗ Build failed: {e}[/red]")
+        raise typer.Exit(1)
+
+
 def _get_configured_platform() -> Optional[str]:
     """Get platform from .vibe/config.yaml.
 
@@ -143,94 +255,14 @@ def build(
         )
         raise typer.Exit(1)
 
-    # Validate profile
-    if profile not in PROFILES:
-        console.print(
-            f"[red]✗ Invalid profile: {profile}[/red]\n"
-            f"[dim]Valid profiles: {', '.join(PROFILES.keys())}[/dim]"
-        )
-        raise typer.Exit(1)
-
-    # Set default output directory
-    if output is None:
-        output = Path(f".vibe/dist/{target}")
-
-    console.print(
-        f"\n[bold cyan]🔨 Building {target}[/bold cyan]"
-        f"\n{'=' * 40}\n"
+    # Execute build
+    _execute_build(
+        target=target,
+        profile=profile,
+        output=output,
+        overlay=overlay,
+        verify=verify,
     )
-
-    try:
-        # Build manifest
-        console.print(f"[dim]Loading manifest for {target}...[/dim]")
-        builder = ManifestBuilder(project_root=Path("."))
-
-        if overlay:
-            console.print(f"[dim]Applying overlay: {overlay}[/dim]")
-            manifest = builder.build(overlay_path=overlay, platform=target)
-        else:
-            manifest = builder.build_from_registry(platform=target)
-
-        console.print(
-            f"[green]✓[/green] Loaded {len(manifest.skills)} skills, "
-            f"{len(manifest.policies.behavior or {})} policy rules\n"
-        )
-
-        # Exit if manifest-only
-        if manifest_only:
-            console.print("[bold]Manifest generated (manifest-only mode)[/bold]")
-            _display_manifest_summary(manifest)
-            return
-
-        # Verify mode
-        if verify:
-            _verify_build(target, manifest)
-            return
-
-        # Render configuration
-        console.print(f"[dim]Rendering configuration for {target}...[/dim]")
-        renderer = ConfigRenderer()
-
-        # Get output directory
-        output_dir = Path(output).expanduser().resolve()
-        output_dir.mkdir(parents=True, exist_ok=True)
-
-        # Render
-        result = renderer.render(
-            manifest=manifest,
-            output_dir=output_dir,
-        )
-
-        # Show results
-        console.print(
-            f"\n[green]✓ Build complete![/green]\n"
-            f"[bold]Output:[/bold] {output_dir}\n"
-        )
-
-        # Show created files
-        if result.files_created:
-            console.print("[bold]Files created:[/bold]")
-            for file_path in result.files_created:
-                rel_path = Path(file_path).relative_to(Path.cwd())
-                console.print(f"  📄 {rel_path}")
-
-        console.print(
-            f"\n[dim]Next steps:[/dim]\n"
-            f"  1. Review generated files in [cyan]{output_dir}[/cyan]\n"
-            f"  2. Run [cyan]vibe deploy {target}[/cyan] to install\n"
-        )
-
-        return
-
-    except FileNotFoundError as e:
-        console.print(f"[red]✗ File not found: {e}[/red]")
-        raise typer.Exit(1)
-    except ValueError as e:
-        console.print(f"[red]✗ Configuration error: {e}[/red]")
-        raise typer.Exit(1)
-    except Exception as e:
-        console.print(f"[red]✗ Build failed: {e}[/red]")
-        raise typer.Exit(1)
 
 
 def _display_manifest_summary(manifest) -> None:
