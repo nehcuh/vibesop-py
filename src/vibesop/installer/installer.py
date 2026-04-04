@@ -5,7 +5,7 @@ for VibeSOP configurations.
 """
 
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 import shutil
 
 
@@ -23,7 +23,7 @@ class VibeSOPInstaller:
 
     def __init__(self) -> None:
         """Initialize the installer."""
-        self._platforms = {
+        self._platforms: dict[str, dict[str, Any]] = {
             "claude-code": {
                 "config_dir": Path.home() / ".claude",
                 "description": "Claude Code CLI",
@@ -39,7 +39,7 @@ class VibeSOPInstaller:
         platform: str,
         config_dir: Optional[Path] = None,
         force: bool = False,
-    ) -> Dict[str, any]:
+    ) -> Dict[str, Any]:
         """Install VibeSOP configuration for a platform.
 
         Args:
@@ -50,7 +50,7 @@ class VibeSOPInstaller:
         Returns:
             Dictionary with installation result
         """
-        result = {
+        result: Dict[str, Any] = {
             "success": False,
             "platform": platform,
             "config_dir": None,
@@ -66,17 +66,19 @@ class VibeSOPInstaller:
                 return result
 
             # Get config directory
+            target_dir: Path
             if config_dir is None:
-                config_dir = self._platforms[platform]["config_dir"]
+                target_dir = self._platforms[platform]["config_dir"]
+            else:
+                target_dir = config_dir
 
-            config_dir = config_dir.expanduser()
-            result["config_dir"] = str(config_dir)
+            target_dir = target_dir.expanduser()
+            result["config_dir"] = str(target_dir)
 
             # Check if already configured
-            if not force and self._is_configured(config_dir):
+            if not force and self._is_configured(target_dir):
                 result["warnings"].append(
-                    f"Configuration already exists in {config_dir}. "
-                    "Use --force to overwrite."
+                    f"Configuration already exists in {target_dir}. Use --force to overwrite."
                 )
                 result["success"] = True  # Not a failure
                 return result
@@ -90,34 +92,26 @@ class VibeSOPInstaller:
 
             # Render configuration
             renderer = ConfigRenderer()
-            render_result = renderer.render(manifest, config_dir)
+            render_result = renderer.render(manifest, target_dir)
 
             if not render_result.success:
                 result["errors"].extend(render_result.errors)
                 return result
 
-            result["files_created"] = [
-                str(f) for f in render_result.files_created
-            ]
+            result["files_created"] = [str(f) for f in render_result.files_created]
 
             # Install hooks
             hook_installer = HookInstaller()
-            hook_results = hook_installer.install_hooks(platform, config_dir)
+            hook_results = hook_installer.install_hooks(platform, target_dir)
 
-            installed_hooks = [
-                name for name, status in hook_results.items() if status
-            ]
-            failed_hooks = [
-                name for name, status in hook_results.items() if not status
-            ]
+            installed_hooks = [name for name, status in hook_results.items() if status]
+            failed_hooks = [name for name, status in hook_results.items() if not status]
 
             if installed_hooks:
                 result["hooks_installed"] = installed_hooks
 
             if failed_hooks:
-                result["warnings"].append(
-                    f"Failed to install hooks: {', '.join(failed_hooks)}"
-                )
+                result["warnings"].append(f"Failed to install hooks: {', '.join(failed_hooks)}")
 
             result["success"] = True
 
@@ -130,7 +124,7 @@ class VibeSOPInstaller:
         self,
         platform: str,
         config_dir: Optional[Path] = None,
-    ) -> Dict[str, any]:
+    ) -> Dict[str, Any]:
         """Uninstall VibeSOP configuration.
 
         Args:
@@ -140,7 +134,7 @@ class VibeSOPInstaller:
         Returns:
             Dictionary with uninstallation result
         """
-        result = {
+        result: Dict[str, Any] = {
             "success": False,
             "platform": platform,
             "files_removed": [],
@@ -154,30 +148,33 @@ class VibeSOPInstaller:
                 return result
 
             # Get config directory
+            target_dir: Path
             if config_dir is None:
-                config_dir = self._platforms[platform]["config_dir"]
+                target_dir = self._platforms[platform]["config_dir"]
+            else:
+                target_dir = config_dir
 
-            config_dir = config_dir.expanduser()
+            target_dir = target_dir.expanduser()
 
             # Uninstall hooks
             from vibesop.hooks import HookInstaller
 
             hook_installer = HookInstaller()
-            hook_installer.uninstall_hooks(platform, config_dir)
+            hook_installer.uninstall_hooks(platform, target_dir)
 
             # Remove configuration files
-            if not config_dir.exists():
-                result["errors"].append(f"Configuration directory not found: {config_dir}")
+            if not target_dir.exists():
+                result["errors"].append(f"Configuration directory not found: {target_dir}")
                 return result
 
             # Remove VibeSOP files (keeping user data)
             files_to_remove = [
-                config_dir / "CLAUDE.md",
-                config_dir / "config.yaml",
-                config_dir / "settings.json",
-                config_dir / "rules",
-                config_dir / "docs",
-                config_dir / "hooks",
+                target_dir / "CLAUDE.md",
+                target_dir / "config.yaml",
+                target_dir / "settings.json",
+                target_dir / "rules",
+                target_dir / "docs",
+                target_dir / "hooks",
             ]
 
             for file_path in files_to_remove:
@@ -199,7 +196,7 @@ class VibeSOPInstaller:
         self,
         platform: str,
         config_dir: Optional[Path] = None,
-    ) -> Dict[str, any]:
+    ) -> Dict[str, Any]:
         """Verify VibeSOP installation.
 
         Args:
@@ -209,7 +206,7 @@ class VibeSOPInstaller:
         Returns:
             Dictionary with verification results
         """
-        result = {
+        result: Dict[str, Any] = {
             "platform": platform,
             "installed": False,
             "config_valid": False,
@@ -219,24 +216,29 @@ class VibeSOPInstaller:
 
         try:
             # Get config directory
+            target_dir: Optional[Path] = None
             if config_dir is None:
-                config_dir = self._platforms.get(platform, {}).get("config_dir")
+                platform_info = self._platforms.get(platform)
+                if platform_info is not None:
+                    target_dir = platform_info.get("config_dir")
+            else:
+                target_dir = config_dir
 
-            if not config_dir:
+            if not target_dir:
                 result["issues"].append(f"Unknown platform: {platform}")
                 return result
 
-            config_dir = config_dir.expanduser()
+            target_dir = target_dir.expanduser()
 
             # Check if configured
-            if not self._is_configured(config_dir):
-                result["issues"].append(f"Not configured in {config_dir}")
+            if not self._is_configured(target_dir):
+                result["issues"].append(f"Not configured in {target_dir}")
                 return result
 
             result["installed"] = True
 
             # Verify configuration files
-            config_issues = self._verify_config_files(platform, config_dir)
+            config_issues = self._verify_config_files(platform, target_dir)
             result["issues"].extend(config_issues)
             result["config_valid"] = len(config_issues) == 0
 
@@ -244,7 +246,7 @@ class VibeSOPInstaller:
             from vibesop.hooks import HookInstaller
 
             hook_installer = HookInstaller()
-            hook_status = hook_installer.verify_hooks(platform, config_dir)
+            hook_status = hook_installer.verify_hooks(platform, target_dir)
             result["hooks_installed"] = hook_status
 
         except Exception as e:
@@ -258,14 +260,16 @@ class VibeSOPInstaller:
         Returns:
             List of platform information dictionaries
         """
-        platforms = []
+        platforms: List[Dict[str, str]] = []
 
         for name, config in self._platforms.items():
-            platforms.append({
-                "name": name,
-                "description": config["description"],
-                "config_dir": str(config["config_dir"]),
-            })
+            platforms.append(
+                {
+                    "name": name,
+                    "description": config["description"],
+                    "config_dir": str(config["config_dir"]),
+                }
+            )
 
         return platforms
 
@@ -304,7 +308,7 @@ class VibeSOPInstaller:
         Returns:
             List of issue descriptions (empty if all OK)
         """
-        issues = []
+        issues: List[str] = []
 
         # Platform-specific verification
         if platform == "claude-code":

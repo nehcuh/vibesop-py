@@ -8,7 +8,7 @@ import json
 import uuid
 from pathlib import Path
 from typing import Dict, List, Optional, Any
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
 from datetime import datetime
 from collections import defaultdict
@@ -24,6 +24,7 @@ class ExperimentStatus(Enum):
         COMPLETED: Experiment has completed
         CANCELLED: Experiment was cancelled
     """
+
     DRAFT = "draft"
     RUNNING = "running"
     PAUSED = "paused"
@@ -39,6 +40,7 @@ class VariantStatus(Enum):
         DISABLED: Variant is disabled
         WON: Variant won the experiment
     """
+
     ACTIVE = "active"
     DISABLED = "disabled"
     WON = "won"
@@ -57,6 +59,7 @@ class Variant:
         metrics: Collected metrics
         status: Variant status
     """
+
     variant_id: str
     name: str
     description: str
@@ -83,6 +86,7 @@ class Experiment:
         ended_at: End timestamp
         metadata: Additional metadata
     """
+
     experiment_id: str
     name: str
     description: str
@@ -149,11 +153,11 @@ class ExperimentManager:
         experiment_id = str(uuid.uuid4())
 
         # Create variant objects
-        variant_objs = []
+        variant_objs: list[Variant] = []
         for i, var_config in enumerate(variants):
             variant = Variant(
                 variant_id=str(uuid.uuid4()),
-                name=var_config.get("name", f"Variant {i+1}"),
+                name=var_config.get("name", f"Variant {i + 1}"),
                 description=var_config.get("description", ""),
                 config=var_config.get("config", {}),
                 traffic_allocation=var_config.get("traffic_allocation", 50),
@@ -193,7 +197,7 @@ class ExperimentManager:
         Returns:
             Result dictionary
         """
-        result = {
+        result: dict[str, Any] = {
             "success": False,
             "errors": [],
         }
@@ -264,6 +268,7 @@ class ExperimentManager:
 
         # Assign user to variant based on traffic allocation
         import random
+
         rand = random.randint(0, 99)
         cumulative = 0
 
@@ -296,7 +301,7 @@ class ExperimentManager:
         Returns:
             Result dictionary
         """
-        result = {
+        result: dict[str, Any] = {
             "success": False,
             "errors": [],
         }
@@ -331,7 +336,7 @@ class ExperimentManager:
         Returns:
             Results dictionary
         """
-        result = {
+        result: dict[str, Any] = {
             "experiment_id": experiment_id,
             "exists": False,
             "status": None,
@@ -351,13 +356,15 @@ class ExperimentManager:
 
         # Aggregate metrics by variant
         for variant in experiment.variants:
-            result["variants"].append({
-                "variant_id": variant.variant_id,
-                "name": variant.name,
-                "status": variant.status.value,
-                "traffic_allocation": variant.traffic_allocation,
-                "metrics": variant.metrics.copy(),
-            })
+            result["variants"].append(
+                {
+                    "variant_id": variant.variant_id,
+                    "name": variant.name,
+                    "status": variant.status.value,
+                    "traffic_allocation": variant.traffic_allocation,
+                    "metrics": variant.metrics.copy(),
+                }
+            )
 
         # Calculate winner (if completed)
         if experiment.status == ExperimentStatus.COMPLETED:
@@ -366,7 +373,7 @@ class ExperimentManager:
 
         # Summary statistics
         for metric_name in {experiment.primary_metric}:
-            values = []
+            values: list[float] = []
             for variant in experiment.variants:
                 if metric_name in variant.metrics:
                     values.append(variant.metrics[metric_name])
@@ -394,7 +401,7 @@ class ExperimentManager:
         Returns:
             Result dictionary
         """
-        result = {
+        result: dict[str, Any] = {
             "success": False,
             "errors": [],
         }

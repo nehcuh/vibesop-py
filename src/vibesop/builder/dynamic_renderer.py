@@ -5,11 +5,11 @@ based on configuration files and templates.
 """
 
 from pathlib import Path
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, cast
 
 from dataclasses import dataclass
 
-from jinja2 import Environment, FileSystemLoader, Template
+from jinja2 import Environment, FileSystemLoader
 from ruamel.yaml import YAML
 
 
@@ -71,17 +71,19 @@ class ConfigDrivenRenderer:
         try:
             yaml_parser = YAML()
             with open(rules_config, "r") as f:
-                config = yaml_parser.load(f)
+                config: dict[str, Any] = yaml_parser.load(f)  # pyright: ignore[reportUnknownVariableType,reportUnknownMemberType]
 
-            rules = []
-            for rule_data in config.get("rules", []):
+            rules: list[RenderRule] = []
+            rules_list = config.get("rules", [])  # pyright: ignore[reportUnknownMemberType,reportUnknownVariableType]
+            for rule_data in rules_list:  # pyright: ignore[reportUnknownVariableType]
+                rd = cast(dict[str, Any], rule_data)
                 rule = RenderRule(
-                    name=rule_data.get("name", ""),
-                    condition=rule_data.get("condition", ""),
-                    template=rule_data.get("template", ""),
-                    output_path=rule_data.get("output_path", ""),
-                    context_vars=rule_data.get("context", {}),
-                    enabled=rule_data.get("enabled", True),
+                    name=str(rd.get("name", "")),
+                    condition=str(rd.get("condition", "")),
+                    template=str(rd.get("template", "")),
+                    output_path=str(rd.get("output_path", "")),
+                    context_vars=rd.get("context", {}),
+                    enabled=bool(rd.get("enabled", True)),
                 )
                 rules.append(rule)
 
@@ -107,7 +109,7 @@ class ConfigDrivenRenderer:
         Returns:
             RenderResult with files created
         """
-        result = {
+        result: Dict[str, Any] = {
             "success": False,
             "files_created": [],
             "errors": [],
@@ -151,7 +153,7 @@ class ConfigDrivenRenderer:
 
         return result
 
-    def _get_default_rules(self, manifest) -> List[RenderRule]:
+    def _get_default_rules(self, manifest: Any) -> List[RenderRule]:
         """Get default rendering rules.
 
         Args:
@@ -192,9 +194,9 @@ class ConfigDrivenRenderer:
         else:
             return []
 
-    _SAFE_VARIABLES = {"platform", "version"}
+    _SAFE_VARIABLES: set[str] = {"platform", "version"}
 
-    def _evaluate_condition(self, condition: str, manifest) -> bool:
+    def _evaluate_condition(self, condition: str, manifest: Any) -> bool:
         """Evaluate a rule condition safely.
 
         Supports only simple equality comparisons:
@@ -213,7 +215,7 @@ class ConfigDrivenRenderer:
         condition = condition.strip()
 
         try:
-            context = {
+            context: Dict[str, Any] = {
                 "platform": manifest.metadata.platform,
                 "version": manifest.metadata.version,
             }
@@ -278,7 +280,7 @@ class ConfigDrivenRenderer:
 
     def render_dynamic_config(
         self,
-        manifest,
+        manifest: Any,
         config_spec: Dict[str, Any],
         output_dir: Path,
     ) -> Dict[str, Any]:
@@ -292,7 +294,7 @@ class ConfigDrivenRenderer:
         Returns:
             RenderResult
         """
-        result = {
+        result: Dict[str, Any] = {
             "success": False,
             "files_created": [],
             "errors": [],
@@ -321,7 +323,7 @@ class ConfigDrivenRenderer:
 
         return result
 
-    def _should_generate_file(self, file_spec: Dict, manifest) -> bool:
+    def _should_generate_file(self, file_spec: Dict[str, Any], manifest: Any) -> bool:
         """Check if file should be generated.
 
         Args:
@@ -332,7 +334,7 @@ class ConfigDrivenRenderer:
             True if file should be generated
         """
         # Check conditions
-        conditions = file_spec.get("conditions", {})
+        conditions: Dict[str, Any] = file_spec.get("conditions", {})
         if conditions:
             platform = conditions.get("platform")
             if platform and platform != manifest.metadata.platform:
@@ -341,7 +343,7 @@ class ConfigDrivenRenderer:
         # Check if file is enabled
         return file_spec.get("enabled", True)
 
-    def _render_file_content(self, file_spec: Dict, manifest) -> str:
+    def _render_file_content(self, file_spec: Dict[str, Any], manifest: Any) -> str:
         """Render file content.
 
         Args:

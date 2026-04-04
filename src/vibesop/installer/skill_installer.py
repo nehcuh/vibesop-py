@@ -6,7 +6,7 @@ to projects, including dependency management and registry updates.
 
 import shutil
 from pathlib import Path
-from typing import Dict, List, Optional, Any
+from typing import Any, Dict, List
 from dataclasses import dataclass
 
 
@@ -23,6 +23,7 @@ class SkillManifest:
         dependencies: List of skill dependencies
         trigger_when: Trigger conditions
     """
+
     id: str
     name: str
     description: str
@@ -101,7 +102,7 @@ class SkillInstaller:
         skill_path: Path,
         project_path: Path,
         force: bool = False,
-    ) -> Dict[str, any]:
+    ) -> Dict[str, Any]:
         """Install a skill to a project.
 
         Args:
@@ -112,7 +113,7 @@ class SkillInstaller:
         Returns:
             Dictionary with installation results
         """
-        result = {
+        result: Dict[str, Any] = {
             "success": False,
             "skill_id": skill_path.name,
             "installed_path": "",
@@ -132,7 +133,7 @@ class SkillInstaller:
             result["skill_id"] = manifest.id
 
             # Check dependencies
-            dep_result = self._install_dependencies(
+            dep_result: Dict[str, Any] = self._install_dependencies(
                 manifest.dependencies,
                 project_path,
             )
@@ -160,7 +161,7 @@ class SkillInstaller:
             result["installed_path"] = str(target_dir)
 
         except Exception as e:
-            result["errors"].append(f"Installation failed: {e}")
+            result["errors"].append(f"Installation failed: {e!s}")
 
         return result
 
@@ -168,7 +169,7 @@ class SkillInstaller:
         self,
         skill_id: str,
         project_path: Path,
-    ) -> Dict[str, any]:
+    ) -> Dict[str, Any]:
         """Uninstall a skill from a project.
 
         Args:
@@ -178,7 +179,7 @@ class SkillInstaller:
         Returns:
             Dictionary with uninstallation results
         """
-        result = {
+        result: Dict[str, Any] = {
             "success": False,
             "skill_id": skill_id,
             "removed_files": [],
@@ -206,7 +207,7 @@ class SkillInstaller:
 
         return result
 
-    def list_skills(self, project_path: Path) -> List[Dict[str, any]]:
+    def list_skills(self, project_path: Path) -> List[Dict[str, Any]]:
         """List installed skills in a project.
 
         Args:
@@ -215,7 +216,7 @@ class SkillInstaller:
         Returns:
             List of skill information dictionaries
         """
-        skills = []
+        skills: List[Dict[str, Any]] = []
         skills_dir = project_path / self._skills_dir
 
         if not skills_dir.exists():
@@ -225,13 +226,15 @@ class SkillInstaller:
             if skill_path.is_dir():
                 try:
                     manifest = self._load_skill_manifest(skill_path)
-                    skills.append({
-                        "id": manifest.id,
-                        "name": manifest.name,
-                        "description": manifest.description,
-                        "version": manifest.version,
-                        "path": str(skill_path),
-                    })
+                    skills.append(
+                        {
+                            "id": manifest.id,
+                            "name": manifest.name,
+                            "description": manifest.description,
+                            "version": manifest.version,
+                            "path": str(skill_path),
+                        }
+                    )
                 except Exception:
                     # Skip invalid skills
                     continue
@@ -242,7 +245,7 @@ class SkillInstaller:
         self,
         skill_id: str,
         project_path: Path,
-    ) -> Dict[str, any]:
+    ) -> Dict[str, Any]:
         """Verify a skill installation.
 
         Args:
@@ -252,7 +255,7 @@ class SkillInstaller:
         Returns:
             Dictionary with verification results
         """
-        result = {
+        result: Dict[str, Any] = {
             "skill_id": skill_id,
             "installed": False,
             "files_present": False,
@@ -308,7 +311,7 @@ class SkillInstaller:
         self,
         dependencies: List[str],
         project_path: Path,
-    ) -> Dict[str, any]:
+    ) -> Dict[str, Any]:
         """Install skill dependencies.
 
         Args:
@@ -318,7 +321,7 @@ class SkillInstaller:
         Returns:
             Dictionary with installation results
         """
-        result = {
+        result: Dict[str, Any] = {
             "success": True,
             "installed": [],
             "errors": [],
@@ -326,7 +329,7 @@ class SkillInstaller:
 
         for dep_id in dependencies:
             # Check if dependency is already installed
-            dep_verify = self.verify_skill(dep_id, project_path)
+            dep_verify: Dict[str, Any] = self.verify_skill(dep_id, project_path)
 
             if not dep_verify["installed"]:
                 # Dependency not installed
@@ -387,10 +390,7 @@ class SkillInstaller:
         if registry_path.exists():
             content = registry_path.read_text()
             lines = content.split("\n")
-            filtered_lines = [
-                line for line in lines
-                if skill_id not in line
-            ]
+            filtered_lines = [line for line in lines if skill_id not in line]
             registry_path.write_text("\n".join(filtered_lines))
 
     def _check_registry(self, skill_id: str, project_path: Path) -> bool:
