@@ -13,13 +13,9 @@ Usage:
 
 import json
 import re
-from collections import Counter
-from dataclasses import dataclass, field
-from datetime import datetime
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
-
-from pydantic import BaseModel
 
 
 @dataclass
@@ -131,7 +127,7 @@ class SessionAnalyzer:
 
     def _load_jsonl(self, file_path: Path) -> list[str]:
         """Load queries from JSONL file."""
-        queries = []
+        queries: list[str] = []
 
         for line in file_path.read_text(encoding="utf-8").strip().split("\n"):
             if not line:
@@ -161,9 +157,9 @@ class SessionAnalyzer:
         except (json.JSONDecodeError, KeyError):
             return []
 
-    def _extract_queries(self, session_data: list[dict]) -> list[str]:
+    def _extract_queries(self, session_data: list[dict[str, Any]]) -> list[str]:
         """Extract user queries from session data."""
-        queries = []
+        queries: list[str] = []
 
         for entry in session_data:
             query = self._extract_query_from_entry(entry)
@@ -172,7 +168,7 @@ class SessionAnalyzer:
 
         return queries
 
-    def _extract_query_from_entry(self, entry: dict) -> str | None:
+    def _extract_query_from_entry(self, entry: dict[str, Any]) -> str | None:
         """Extract query from a single session entry."""
         # Try different message formats
         if "content" in entry:
@@ -207,7 +203,7 @@ class SessionAnalyzer:
         clusters = self._cluster_by_similarity(queries)
 
         # Convert to patterns
-        patterns = []
+        patterns: list[QueryPattern] = []
         for cluster_queries in clusters:
             if len(cluster_queries) >= self.min_frequency:
                 pattern = self._create_pattern(cluster_queries)
@@ -226,36 +222,153 @@ class SessionAnalyzer:
 
         # Filter out common words
         stopwords = {
-            "the", "a", "an", "is", "are", "was", "were",
-            "be", "been", "being", "have", "has", "had",
-            "do", "does", "did", "will", "would", "could",
-            "should", "may", "might", "must", "shall",
-            "can", "need", "dare", "ought", "used",
-            "to", "of", "in", "for", "on", "with", "at",
-            "by", "from", "as", "into", "through", "during",
-            "before", "after", "above", "below", "between",
-            "under", "again", "further", "then", "once",
-            "here", "there", "when", "where", "why", "how",
-            "all", "each", "few", "more", "most", "other",
-            "some", "such", "no", "nor", "not", "only",
-            "own", "same", "so", "than", "too", "very",
-            "i", "me", "my", "myself", "we", "our", "ours",
-            "ourselves", "you", "your", "yours", "yourself",
-            "yourselves", "he", "him", "his", "himself",
-            "she", "her", "hers", "herself", "it", "its",
-            "itself", "they", "them", "their", "theirs",
-            "themselves", "what", "which", "who", "whom",
-            "this", "that", "these", "those", "am", "is",
-            "are", "was", "were", "be", "been", "being",
-            "have", "has", "had", "having", "do", "does",
-            "did", "doing", "帮", "我", "请", "的", "了",
-            "是", "在", "有", "和", "与", "或", "但",
+            "the",
+            "a",
+            "an",
+            "is",
+            "are",
+            "was",
+            "were",
+            "be",
+            "been",
+            "being",
+            "have",
+            "has",
+            "had",
+            "do",
+            "does",
+            "did",
+            "will",
+            "would",
+            "could",
+            "should",
+            "may",
+            "might",
+            "must",
+            "shall",
+            "can",
+            "need",
+            "dare",
+            "ought",
+            "used",
+            "to",
+            "of",
+            "in",
+            "for",
+            "on",
+            "with",
+            "at",
+            "by",
+            "from",
+            "as",
+            "into",
+            "through",
+            "during",
+            "before",
+            "after",
+            "above",
+            "below",
+            "between",
+            "under",
+            "again",
+            "further",
+            "then",
+            "once",
+            "here",
+            "there",
+            "when",
+            "where",
+            "why",
+            "how",
+            "all",
+            "each",
+            "few",
+            "more",
+            "most",
+            "other",
+            "some",
+            "such",
+            "no",
+            "nor",
+            "not",
+            "only",
+            "own",
+            "same",
+            "so",
+            "than",
+            "too",
+            "very",
+            "i",
+            "me",
+            "my",
+            "myself",
+            "we",
+            "our",
+            "ours",
+            "ourselves",
+            "you",
+            "your",
+            "yours",
+            "yourself",
+            "yourselves",
+            "he",
+            "him",
+            "his",
+            "himself",
+            "she",
+            "her",
+            "hers",
+            "herself",
+            "it",
+            "its",
+            "itself",
+            "they",
+            "them",
+            "their",
+            "theirs",
+            "themselves",
+            "what",
+            "which",
+            "who",
+            "whom",
+            "this",
+            "that",
+            "these",
+            "those",
+            "am",
+            "is",
+            "are",
+            "was",
+            "were",
+            "be",
+            "been",
+            "being",
+            "have",
+            "has",
+            "had",
+            "having",
+            "do",
+            "does",
+            "did",
+            "doing",
+            "帮",
+            "我",
+            "请",
+            "的",
+            "了",
+            "是",
+            "在",
+            "有",
+            "和",
+            "与",
+            "或",
+            "但",
         }
 
-        keywords = set()
+        keywords: set[str] = set()
         for word in words:
             # Remove punctuation
-            word = re.sub(r'[^\w\s]', '', word)
+            word = re.sub(r"[^\w\s]", "", word)
             # Skip stopwords and short words
             if word not in stopwords and len(word) > 2:
                 keywords.add(word)
@@ -279,8 +392,8 @@ class SessionAnalyzer:
         Returns:
             List of query clusters
         """
-        clusters = []
-        used = set()
+        clusters: list[list[str]] = []
+        used: set[int] = set()
 
         for i, query1 in enumerate(queries):
             if i in used:
@@ -359,7 +472,7 @@ class SessionAnalyzer:
         patterns: list[QueryPattern],
     ) -> list[SkillSuggestion]:
         """Generate skill suggestions from patterns."""
-        suggestions = []
+        suggestions: list[SkillSuggestion] = []
 
         for pattern in patterns:
             # Estimate value based on frequency and confidence
@@ -386,9 +499,7 @@ class SessionAnalyzer:
 
         # Sort by estimated value and frequency
         value_order = {"high": 0, "medium": 1, "low": 2}
-        suggestions.sort(
-            key=lambda s: (value_order[s.estimated_value], -s.frequency)
-        )
+        suggestions.sort(key=lambda s: (value_order[s.estimated_value], -s.frequency))
 
         return suggestions
 
@@ -401,8 +512,21 @@ class SessionAnalyzer:
         first_query = queries[0]
 
         # Extract main action
-        action_words = ["help", "create", "fix", "debug", "review", "test",
-                       "检查", "修复", "调试", "审查", "测试", "帮助", "创建"]
+        action_words = [
+            "help",
+            "create",
+            "fix",
+            "debug",
+            "review",
+            "test",
+            "检查",
+            "修复",
+            "调试",
+            "审查",
+            "测试",
+            "帮助",
+            "创建",
+        ]
 
         for word in action_words:
             if word in first_query.lower():

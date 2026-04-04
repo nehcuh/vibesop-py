@@ -5,7 +5,7 @@ skill pack integrations based on user needs and context.
 """
 
 from pathlib import Path
-from typing import Dict, List, Optional, Any
+from typing import Any
 from dataclasses import dataclass
 from enum import Enum
 
@@ -20,6 +20,7 @@ class RecommendationPriority(Enum):
         MEDIUM: Nice to have
         LOW: Optional
     """
+
     HIGH = "high"
     MEDIUM = "medium"
     LOW = "low"
@@ -38,13 +39,14 @@ class Recommendation:
         confidence: Confidence score (0-1)
         skills: List of skills provided
     """
+
     integration_id: str
     name: str
     description: str
     priority: RecommendationPriority
     reason: str
     confidence: float
-    skills: List[str]
+    skills: list[str]
 
 
 class IntegrationRecommender:
@@ -61,7 +63,7 @@ class IntegrationRecommender:
     """
 
     # Recommendation rules
-    RECOMMENDATION_RULES = {
+    RECOMMENDATION_RULES: dict[str, dict[str, Any]] = {
         "software-development": {
             "integrations": ["gstack", "superpowers"],
             "priority": RecommendationPriority.HIGH,
@@ -112,9 +114,9 @@ class IntegrationRecommender:
 
     def recommend(
         self,
-        user_context: Dict[str, Any],
+        user_context: dict[str, Any],
         max_recommendations: int = 5,
-    ) -> List[Recommendation]:
+    ) -> list[Recommendation]:
         """Generate integration recommendations.
 
         Args:
@@ -124,8 +126,8 @@ class IntegrationRecommender:
         Returns:
             List of Recommendation objects
         """
-        recommendations = []
-        scores = {}
+        recommendations: list[Recommendation] = []
+        scores: dict[str, float] = {}
 
         # Get available integrations
         available = self._get_available_integrations()
@@ -173,9 +175,9 @@ class IntegrationRecommender:
 
     def get_compatibility_report(
         self,
-        integration_ids: List[str],
+        integration_ids: list[str],
         platform: str,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Get compatibility report for integrations.
 
         Args:
@@ -185,47 +187,57 @@ class IntegrationRecommender:
         Returns:
             Compatibility report dictionary
         """
-        report = {
-            "compatible": [],
-            "incompatible": [],
-            "warnings": [],
+        compatible: list[str] = []
+        incompatible: list[dict[str, str]] = []
+        warnings: list[dict[str, list[str]]] = []
+
+        report: dict[str, Any] = {
+            "compatible": compatible,
+            "incompatible": incompatible,
+            "warnings": warnings,
             "platform": platform,
         }
 
         for integration_id in integration_ids:
             if integration_id not in self.SKILL_COMPATIBILITY:
-                report["incompatible"].append({
-                    "integration_id": integration_id,
-                    "reason": "Unknown integration",
-                })
+                incompatible.append(
+                    {
+                        "integration_id": integration_id,
+                        "reason": "Unknown integration",
+                    }
+                )
                 continue
 
             compat_info = self.SKILL_COMPATIBILITY[integration_id]
             platform = platform.lower()
 
             if platform in compat_info.get("compatible_with", []):
-                report["compatible"].append(integration_id)
+                compatible.append(integration_id)
             else:
-                report["incompatible"].append({
-                    "integration_id": integration_id,
-                    "reason": f"Not compatible with {platform}",
-                })
+                incompatible.append(
+                    {
+                        "integration_id": integration_id,
+                        "reason": f"Not compatible with {platform}",
+                    }
+                )
 
             # Check for conflicts
             if platform in compat_info.get("conflicts_with", []):
-                report["warnings"].append({
-                    "integration_id": integration_id,
-                    "conflicts_with": compat_info["conflicts_with"],
-                })
+                warnings.append(
+                    {
+                        "integration_id": integration_id,
+                        "conflicts_with": compat_info["conflicts_with"],
+                    }
+                )
 
         return report
 
     def generate_setup_plan(
         self,
-        recommendations: List[Recommendation],
+        recommendations: list[Recommendation],
         platform: str,
         output_dir: Path,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Generate setup plan for integrations.
 
         Args:
@@ -236,68 +248,77 @@ class IntegrationRecommender:
         Returns:
             Setup plan dictionary
         """
-        plan = {
+        integrations: list[dict[str, Any]] = []
+        steps: list[dict[str, Any]] = []
+        errors: list[str] = []
+
+        plan: dict[str, Any] = {
             "platform": platform,
-            "integrations": [],
-            "steps": [],
+            "integrations": integrations,
+            "steps": steps,
             "estimated_time": 0,
-            "errors": [],
+            "errors": errors,
         }
 
         try:
-            # Group by priority
-            high_priority = [r for r in recommendations if r.priority == RecommendationPriority.HIGH]
-            medium_priority = [r for r in recommendations if r.priority == RecommendationPriority.MEDIUM]
+            high_priority = [
+                r for r in recommendations if r.priority == RecommendationPriority.HIGH
+            ]
+            medium_priority = [
+                r for r in recommendations if r.priority == RecommendationPriority.MEDIUM
+            ]
 
-            # Add high priority integrations
             for rec in high_priority:
                 install_time = self._estimate_install_time(rec.integration_id)
-                plan["integrations"].append({
-                    "id": rec.integration_id,
-                    "name": rec.name,
-                    "priority": "high",
-                    "estimated_time": install_time,
-                })
 
-                # Add installation step
-                plan["steps"].append({
-                    "action": "install",
-                    "integration": rec.integration_id,
-                    "command": f"vibe install {rec.integration_id}",
-                    "description": f"Install {rec.name}",
-                    "estimated_time": install_time,
-                })
+                integrations.append(
+                    {
+                        "id": rec.integration_id,
+                        "name": rec.name,
+                        "priority": "high",
+                        "estimated_time": install_time,
+                    }
+                )
 
-            # Add medium priority integrations
+                steps.append(
+                    {
+                        "action": "install",
+                        "integration": rec.integration_id,
+                        "command": f"vibe install {rec.integration_id}",
+                        "description": f"Install {rec.name}",
+                        "estimated_time": install_time,
+                    }
+                )
+
             for rec in medium_priority:
                 install_time = self._estimate_install_time(rec.integration_id)
-                plan["integrations"].append({
-                    "id": rec.integration_id,
-                    "name": rec.name,
-                    "priority": "medium",
-                    "estimated_time": install_time,
-                })
+                integrations.append(
+                    {
+                        "id": rec.integration_id,
+                        "name": rec.name,
+                        "priority": "medium",
+                        "estimated_time": install_time,
+                    }
+                )
 
-                plan["steps"].append({
-                    "action": "install",
-                    "integration": rec.integration_id,
-                    "command": f"vibe install {rec.integration_id}",
-                    "description": f"Install {rec.name} (optional)",
-                    "estimated_time": install_time,
-                })
+                steps.append(
+                    {
+                        "action": "install",
+                        "integration": rec.integration_id,
+                        "command": f"vibe install {rec.integration_id}",
+                        "description": f"Install {rec.name} (optional)",
+                        "estimated_time": install_time,
+                    }
+                )
 
-            # Calculate total time
-            plan["estimated_time"] = sum(
-                step.get("estimated_time", 0)
-                for step in plan["steps"]
-            )
+            plan["estimated_time"] = sum(step.get("estimated_time", 0) for step in steps)
 
         except Exception as e:
-            plan["errors"].append(f"Setup plan generation failed: {e}")
+            errors.append(f"Setup plan generation failed: {e}")
 
         return plan
 
-    def _get_available_integrations(self) -> Dict[str, IntegrationInfo]:
+    def _get_available_integrations(self) -> dict[str, IntegrationInfo]:
         """Get available integrations.
 
         Returns:
@@ -310,7 +331,7 @@ class IntegrationRecommender:
         self,
         integration_id: str,
         info: IntegrationInfo,
-        user_context: Dict[str, Any],
+        user_context: dict[str, Any],
     ) -> float:
         """Score an integration based on user context.
 
@@ -359,7 +380,7 @@ class IntegrationRecommender:
 
         return min(score, 1.0)
 
-    def _get_recommendation_reason(self, integration_id: str, user_context: Dict) -> str:
+    def _get_recommendation_reason(self, integration_id: str, user_context: dict[str, Any]) -> str:
         """Get reason for recommendation.
 
         Args:
