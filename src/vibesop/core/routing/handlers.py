@@ -12,6 +12,7 @@ from abc import ABC, abstractmethod
 from typing import Any
 
 from vibesop.core.models import SkillRoute
+from vibesop.core.routing.scenario_config import DEFAULT_SCENARIOS
 
 
 class RoutingHandler(ABC):
@@ -159,8 +160,9 @@ class ExplicitHandler(RoutingHandler):
 class ScenarioHandler(RoutingHandler):
     """Layer 2: Scenario pattern matching (debug, test, review, refactor)."""
 
-    def __init__(self, config: Any) -> None:
+    def __init__(self, config: Any, scenarios: list[dict[str, Any]] | None = None) -> None:
         self._config = config
+        self._scenarios = scenarios or DEFAULT_SCENARIOS
 
     @property
     def layer_number(self) -> int:
@@ -175,28 +177,7 @@ class ScenarioHandler(RoutingHandler):
         normalized_input: str,
         context: dict[str, str | int],  # noqa: ARG002
     ) -> SkillRoute | None:
-        scenarios = [
-            {
-                "keywords": ["bug", "error", "错误", "调试", "debug", "fix", "修复"],
-                "skill_id": "systematic-debugging",
-            },
-            {
-                "keywords": ["review", "审查", "评审", "检查"],
-                "skill_id": "gstack/review",
-                "fallback_id": "/review",
-            },
-            {
-                "keywords": ["test", "测试", "tdd"],
-                "skill_id": "superpowers/tdd",
-                "fallback_id": "/test",
-            },
-            {
-                "keywords": ["refactor", "重构"],
-                "skill_id": "superpowers/refactor",
-            },
-        ]
-
-        for rule in scenarios:
+        for rule in self._scenarios:
             if any(kw in normalized_input for kw in rule["keywords"]):
                 skill = self._config.get_skill_by_id(rule["skill_id"])
                 if not skill and "fallback_id" in rule:
@@ -204,7 +185,7 @@ class ScenarioHandler(RoutingHandler):
                 if skill:
                     return SkillRoute(
                         skill_id=skill["id"],
-                        confidence=0.85,
+                        confidence=rule.get("confidence", 0.85),
                         layer=2,
                         source="scenario",
                     )
