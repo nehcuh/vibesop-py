@@ -32,6 +32,9 @@ clean: ## Clean up generated files
 
 check: lint type-check test ## Run all checks (lint, type-check, test)
 
+benchmark: ## Run performance benchmarks
+	uv run pytest tests/benchmark/ -v -m benchmark --no-cov
+
 bootstrap: dev ## Bootstrap development environment
 	@echo "✨ Development environment ready!"
 	@echo "Run 'make check' to verify everything is working."

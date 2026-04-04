@@ -6,7 +6,7 @@
 ## User Documentation
 
 - [Getting Started](user/getting-started.md) — Installation and quick start
-- [CLI Reference](CLI_REFERENCE.md) — Complete command reference
+- [CLI Reference](user/cli-reference.md) — Complete command reference
 - [Semantic Matching Guide](semantic/guide.md) — Semantic recognition setup and usage
 - [Trigger Patterns](triggers/guide.md) — Intent detection patterns
 - [Workflow Orchestration](user/workflows.md) — Multi-stage workflow guide

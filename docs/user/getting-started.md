@@ -52,6 +52,6 @@ vibe auto "scan for security issues"
 
 ## Next Steps
 
-- [CLI Reference](../CLI_REFERENCE.md) — Complete command reference
+- [CLI Reference](../user/cli-reference.md) — Complete command reference
 - [Semantic Matching Guide](../semantic/guide.md) — Enable semantic recognition
 - [Workflow Orchestration](workflows.md) — Multi-stage workflows

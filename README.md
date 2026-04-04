@@ -254,7 +254,7 @@ All v1.0 features remain fully supported:
 For complete documentation, see the [docs/](docs/) directory.
 
 **User Guides**:
-- **[CLI Reference](docs/CLI_REFERENCE.md)** — Full command reference
+- **[CLI Reference](docs/user/cli-reference.md)** — Full command reference
 - **[Trigger User Guide](docs/triggers/guide.md)** — Intent detection with examples
 - **[Trigger API](docs/triggers/api.md)** — API documentation
 - **[Trigger Patterns](docs/triggers/patterns.md)** — All 30 predefined patterns
@@ -262,7 +262,7 @@ For complete documentation, see the [docs/](docs/) directory.
 - **[Semantic API](docs/semantic/api.md)** — Semantic matching API
 
 **Developer Docs**:
-- **[Roadmap Index](docs/ROADMAP_INDEX.md)** — Project roadmap
+- **[Roadmap Index](docs/dev/roadmap-index.md)** — Project roadmap
 - **[Contributing](CONTRIBUTING.md)** — How to contribute
 
 ## 🎨 Key Features

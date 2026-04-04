@@ -60,11 +60,7 @@ vibe doctor
 
 ## 📚 Documentation
 
-- **[COMPLETION_SUMMARY.md](COMPLETION_SUMMARY.md)** - Project completion status
-- **[IMPLEMENTATION_SUMMARY.md](IMPLEMENTATION_SUMMARY.md)** - Technical details
-- **[CLI_REFERENCE.md](CLI_REFERENCE.md)** - Command reference
-- **[PROJECT_STATUS.md](PROJECT_STATUS.md)** - Current status
-- **[RECOMMENDATIONS.md](RECOMMENDATIONS.md)** - Next steps
+See [docs/README.md](README.md) for the documentation index.
 
 ---
 
