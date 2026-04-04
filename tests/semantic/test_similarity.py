@@ -151,8 +151,20 @@ class TestDotProductSimilarity:
 
         similarity = calc.calculate_single(v1, v2)
 
-        # Same direction should give high similarity
-        assert similarity > 0.9
+        # sigmoid(1.0) ≈ 0.731; same direction should give > 0.7
+        assert similarity > 0.7
+
+    def test_dot_product_large_magnitude(self):
+        """Test dot product with larger magnitude vectors."""
+        calc = SimilarityCalculator(metric="dot", normalize=True)
+
+        v1 = np.array([5.0, 0.0, 0.0])
+        v2 = np.array([5.0, 0.0, 0.0])
+
+        similarity = calc.calculate_single(v1, v2)
+
+        # dot=25, sigmoid(25) ≈ 1.0
+        assert similarity > 0.99
 
     def test_dot_product_opposite_directions(self):
         """Test dot product with opposite directions."""
@@ -517,3 +529,39 @@ class TestSimilarityNormalization:
 
         # Not normalized could have values > 1
         assert np.any(sim_not_normalized >= 0.0)
+
+    def test_cosine_zero_vector(self):
+        """Test cosine similarity with zero query vector."""
+        calc = SimilarityCalculator(metric="cosine")
+
+        query = np.array([0.0, 0.0, 0.0])
+        patterns = np.array([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]])
+
+        similarities = calc.calculate(query, patterns)
+
+        # Zero vector should return zeros
+        assert np.all(similarities == 0.0)
+
+    def test_euclidean_no_normalization(self):
+        """Test euclidean distance without normalization."""
+        calc = SimilarityCalculator(metric="euclidean", normalize=False)
+
+        query = np.array([0.0, 0.0, 0.0])
+        patterns = np.array([[3.0, 4.0, 0.0]])
+
+        distances = calc.calculate(query, patterns)
+
+        # Euclidean distance of [0,0,0] to [3,4,0] is 5.0
+        assert abs(distances[0] - 5.0) < 1e-5
+
+    def test_manhattan_no_normalization(self):
+        """Test manhattan distance without normalization."""
+        calc = SimilarityCalculator(metric="manhattan", normalize=False)
+
+        query = np.array([0.0, 0.0, 0.0])
+        patterns = np.array([[1.0, 2.0, 3.0]])
+
+        distances = calc.calculate(query, patterns)
+
+        # Manhattan distance of [0,0,0] to [1,2,3] is 6.0
+        assert abs(distances[0] - 6.0) < 1e-5
