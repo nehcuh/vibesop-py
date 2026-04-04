@@ -287,16 +287,23 @@ class SkillLoader:
         except ValueError:
             skill_type = SkillType.PROMPT
 
+        # Extract description
+        description = data.get("description", "")
+
+        # Extract trigger_when from description
+        trigger_when = self._extract_trigger_from_description(description)
+
         return SkillMetadata(
             id=skill_id,
             name=data.get("name", skill_id),
-            description=data.get("description", ""),
-            intent=data.get("intent", data.get("description", "")),
+            description=description,
+            intent=data.get("intent", description),
             namespace=data.get("namespace", "project"),
             version=data.get("version", "1.0.0"),
             author=data.get("author", ""),
             tags=data.get("tags"),
             skill_type=skill_type,
+            trigger_when=trigger_when,
         )
 
     def _generate_id_from_path(self, path: Path | None) -> str:
@@ -332,6 +339,47 @@ class SkillLoader:
                 return f"project/{parts[idx + 1]}/{name}"
 
         return f"project/{name}"
+
+    def _extract_trigger_from_description(self, description: str) -> str:
+        """Extract trigger conditions from skill description.
+
+        Looks for patterns like:
+        - "Use when asked to X, Y, Z"
+        - "Triggered when X"
+        - "Auto-trigger on X"
+
+        Args:
+            description: Skill description text
+
+        Returns:
+            Extracted trigger conditions (empty string if none found)
+        """
+        if not description:
+            return ""
+
+        import re
+
+        # Pattern 1: "Use when asked to X, Y, Z"
+        match = re.search(r'Use when asked to ([^.]+)', description, re.IGNORECASE)
+        if match:
+            return match.group(1).strip()
+
+        # Pattern 2: "Triggered when X"
+        match = re.search(r'Triggered when ([^.]+)', description, re.IGNORECASE)
+        if match:
+            return match.group(1).strip()
+
+        # Pattern 3: "Auto-trigger on X"
+        match = re.search(r'Auto-trigger on ([^.]+)', description, re.IGNORECASE)
+        if match:
+            return match.group(1).strip()
+
+        # Pattern 4: "Proactively suggest when X"
+        match = re.search(r'Proactively suggest when ([^.]+)', description, re.IGNORECASE)
+        if match:
+            return match.group(1).strip()
+
+        return ""
 
     def _metadata_keys(self) -> set[str]:
         """Get keys that are part of metadata.

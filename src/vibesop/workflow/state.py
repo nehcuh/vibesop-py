@@ -11,7 +11,7 @@ from datetime import datetime
 import json
 import uuid
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_serializer
 
 from vibesop.workflow.models import (
     WorkflowDefinition,
@@ -44,31 +44,13 @@ class WorkflowState(BaseModel):
     workflow_version: str = Field(default="1.0.0", description="Workflow version")
     status: str = Field(default="pending", description="Execution status")
     current_stage: Optional[str] = Field(default=None, description="Current stage")
-    stage_states: Dict[str, str] = Field(
-        default_factory=dict,
-        description="State of each stage"
-    )
-    context: Dict[str, Any] = Field(
-        default_factory=dict,
-        description="Workflow execution context"
-    )
-    result: Optional[Dict[str, Any]] = Field(
-        default=None,
-        description="Final workflow result"
-    )
-    started_at: datetime = Field(
-        default_factory=datetime.now,
-        description="Execution start time"
-    )
-    completed_at: Optional[datetime] = Field(
-        default=None,
-        description="Execution completion time"
-    )
+    stage_states: Dict[str, str] = Field(default_factory=dict, description="State of each stage")
+    context: Dict[str, Any] = Field(default_factory=dict, description="Workflow execution context")
+    result: Optional[Dict[str, Any]] = Field(default=None, description="Final workflow result")
+    started_at: datetime = Field(default_factory=datetime.now, description="Execution start time")
+    completed_at: Optional[datetime] = Field(default=None, description="Execution completion time")
     error: Optional[str] = Field(default=None, description="Error message if failed")
-    metadata: Dict[str, Any] = Field(
-        default_factory=dict,
-        description="Additional metadata"
-    )
+    metadata: Dict[str, Any] = Field(default_factory=dict, description="Additional metadata")
 
     @property
     def is_active(self) -> bool:
@@ -94,11 +76,10 @@ class WorkflowState(BaseModel):
         """Create from dictionary."""
         return cls(**data)
 
-    class Config:
-        """Pydantic configuration."""
-        json_encoders = {
-            datetime: lambda v: v.isoformat(),
-        }
+    @field_serializer("started_at", "completed_at")
+    @classmethod
+    def _serialize_datetime(cls, v: Optional[datetime]) -> Optional[str]:
+        return v.isoformat() if v else None
 
 
 class WorkflowStateManager:
@@ -119,11 +100,7 @@ class WorkflowStateManager:
         >>> result = manager.resume_workflow("workflow-123")
     """
 
-    def __init__(
-        self,
-        state_dir: Path = Path(".vibe/state/workflows"),
-        create_dir: bool = True
-    ):
+    def __init__(self, state_dir: Path = Path(".vibe/state/workflows"), create_dir: bool = True):
         """Initialize the state manager.
 
         Args:
@@ -147,7 +124,7 @@ class WorkflowStateManager:
         workflow_id: str,
         workflow: WorkflowDefinition,
         context: WorkflowExecutionContext,
-        result: Optional[WorkflowResult] = None
+        result: Optional[WorkflowResult] = None,
     ) -> WorkflowState:
         """Save workflow execution state.
 
@@ -167,10 +144,7 @@ class WorkflowStateManager:
             workflow_version=workflow.version,
             status="running",
             current_stage=context.current_stage,
-            stage_states={
-                stage.name: stage.status.value
-                for stage in workflow.stages
-            },
+            stage_states={stage.name: stage.status.value for stage in workflow.stages},
             context=context.model_dump(),
             result=result.model_dump() if result else None,
         )
@@ -208,16 +182,10 @@ class WorkflowStateManager:
             return WorkflowState.from_dict(data)
         except Exception as e:
             raise WorkflowRecoveryError(
-                f"Failed to load state for workflow '{workflow_id}': {e}",
-                workflow_id=workflow_id
+                f"Failed to load state for workflow '{workflow_id}': {e}", workflow_id=workflow_id
             )
 
-    def update_stage_state(
-        self,
-        workflow_id: str,
-        stage_name: str,
-        stage_status: str
-    ) -> None:
+    def update_stage_state(self, workflow_id: str, stage_name: str, stage_status: str) -> None:
         """Update state for a specific stage.
 
         Args:
@@ -228,8 +196,7 @@ class WorkflowStateManager:
         state = self.load_state(workflow_id)
         if not state:
             raise WorkflowRecoveryError(
-                f"Cannot update non-existent workflow '{workflow_id}'",
-                workflow_id=workflow_id
+                f"Cannot update non-existent workflow '{workflow_id}'", workflow_id=workflow_id
             )
 
         state.stage_states[stage_name] = stage_status
@@ -239,11 +206,7 @@ class WorkflowStateManager:
         state_file = self.state_dir / f"{workflow_id}.json"
         self._atomic_write(state_file, state.to_dict())
 
-    def complete_workflow(
-        self,
-        workflow_id: str,
-        result: WorkflowResult
-    ) -> None:
+    def complete_workflow(self, workflow_id: str, result: WorkflowResult) -> None:
         """Mark workflow as completed.
 
         Args:
@@ -253,8 +216,7 @@ class WorkflowStateManager:
         state = self.load_state(workflow_id)
         if not state:
             raise WorkflowRecoveryError(
-                f"Cannot complete non-existent workflow '{workflow_id}'",
-                workflow_id=workflow_id
+                f"Cannot complete non-existent workflow '{workflow_id}'", workflow_id=workflow_id
             )
 
         state.status = "completed" if result.success else "failed"
@@ -322,10 +284,7 @@ class WorkflowStateManager:
 
         return False
 
-    def cleanup_old_states(
-        self,
-        max_age_hours: int = 24
-    ) -> int:
+    def cleanup_old_states(self, max_age_hours: int = 24) -> int:
         """Clean up old workflow states.
 
         Args:

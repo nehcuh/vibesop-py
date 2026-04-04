@@ -5,13 +5,13 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import Mock, patch
 
-import numpy as np
 import pytest
+
+np = pytest.importorskip("numpy", reason="numpy not installed")
+pytest.importorskip("sentence_transformers", reason="sentence-transformers not installed")
 
 from vibesop.semantic.models import SemanticMatch, SemanticMethod, SemanticPattern
 from vibesop.semantic.strategies import CosineSimilarityStrategy, HybridMatchingStrategy
-
-pytest.importorskip("sentence_transformers", reason="sentence-transformers not installed")
 
 
 @pytest.fixture
@@ -171,6 +171,7 @@ class TestCosineSimilarityStrategyMatch:
         sample_patterns,
     ):
         """Test that match results have correct field values."""
+
         def mock_get(pattern_id, examples):
             # Return similarity based on pattern_id
             similarities = {
@@ -189,9 +190,12 @@ class TestCosineSimilarityStrategyMatch:
         # Check first match
         match = matches[0]
         assert match.pattern_id in ["security/scan", "dev/test", "config/deploy"]
-        assert match.semantic_score == mock_cache.get_or_compute.return_value[
-            list(mock_cache.get_or_compute.side_effect.__self__.keys())[0]
-        ]
+        assert (
+            match.semantic_score
+            == mock_cache.get_or_compute.return_value[
+                list(mock_cache.get_or_compute.side_effect.__self__.keys())[0]
+            ]
+        )
         assert match.semantic_method == SemanticMethod.COSINE
         assert match.model_used == "test-model"
         assert match.encoding_time is not None
@@ -226,11 +230,7 @@ class TestHybridMatchingStrategyInit:
         """Test that weights sum to 1.0."""
         strategy = HybridMatchingStrategy(mock_encoder, mock_cache)
 
-        total = (
-            strategy.keyword_weight +
-            strategy.regex_weight +
-            strategy.semantic_weight
-        )
+        total = strategy.keyword_weight + strategy.regex_weight + strategy.semantic_weight
 
         assert abs(total - 1.0) < 1e-5
 

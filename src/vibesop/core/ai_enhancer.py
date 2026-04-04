@@ -72,20 +72,25 @@ class AIEnhancer:
         Returns:
             Enhanced skill with better name, description, etc.
         """
-        # Generate enhancement prompt
-        prompt = self._build_enhancement_prompt(suggestion)
+        try:
+            # Generate enhancement prompt
+            prompt = self._build_enhancement_prompt(suggestion)
 
-        # Call LLM
-        response = self._llm.complete(
-            prompt,
-            max_tokens=500,
-            temperature=0.3,  # Lower temperature for consistency
-        )
+            # Call LLM
+            llm_response = self._llm.call(
+                prompt,
+                max_tokens=500,
+                temperature=0.3,  # Lower temperature for consistency
+            )
 
-        # Parse response
-        enhanced = self._parse_enhancement(response, suggestion)
+            # Parse response
+            enhanced = self._parse_enhancement(llm_response.content, suggestion)
 
-        return enhanced
+            return enhanced
+
+        except Exception:
+            # Fallback to basic enhancement
+            return self._fallback_enhancement(suggestion)
 
     def enhance_batch(
         self,
@@ -243,12 +248,18 @@ Return ONLY the JSON, no other text.
         # Extract tags from queries
         tags = self._extract_tags(suggestion.trigger_queries)
 
+        # Generate trigger conditions safely
+        if suggestion.trigger_queries:
+            trigger_conditions = [f"User asks about: {suggestion.trigger_queries[0][:50]}"]
+        else:
+            trigger_conditions = ["User requests assistance"]
+
         return EnhancedSkill(
             name=name,
             description=description,
             category=category,
             tags=tags,
-            trigger_conditions=[f"User asks about: {suggestion.trigger_queries[0][:50]}"],
+            trigger_conditions=trigger_conditions,
             steps=[
                 "Understand the user's request",
                 "Analyze the context",

@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-import numpy as np
 import pytest
+
+np = pytest.importorskip("numpy", reason="numpy not installed")
 
 from vibesop.semantic.similarity import (
     SimilarityCalculator,
@@ -108,11 +109,13 @@ class TestCosineSimilarity:
         calc = SimilarityCalculator(metric="cosine")
 
         query = np.array([1.0, 0.0, 0.0])
-        patterns = np.array([
-            [1.0, 0.0, 0.0],  # Identical
-            [0.0, 1.0, 0.0],  # Orthogonal
-            [-1.0, 0.0, 0.0],  # Opposite
-        ])
+        patterns = np.array(
+            [
+                [1.0, 0.0, 0.0],  # Identical
+                [0.0, 1.0, 0.0],  # Orthogonal
+                [-1.0, 0.0, 0.0],  # Opposite
+            ]
+        )
 
         similarities = calc.calculate(query, patterns)
 
@@ -439,7 +442,7 @@ class TestSimilarityCalculatorPerformance:
         avg_time = elapsed / iterations
 
         # Should be very fast (< 0.1ms per calculation)
-        assert avg_time < 0.0001, f"Similarity calculation too slow: {avg_time*1000:.3f}ms"
+        assert avg_time < 0.0001, f"Similarity calculation too slow: {avg_time * 1000:.3f}ms"
 
     @pytest.mark.slow
     def test_batch_calculate_performance(self):
@@ -459,7 +462,7 @@ class TestSimilarityCalculatorPerformance:
         avg_time = elapsed / len(queries)
 
         # Batch processing should be fast
-        assert avg_time < 0.01, f"Batch calculation too slow: {avg_time*1000:.2f}ms per query"
+        assert avg_time < 0.01, f"Batch calculation too slow: {avg_time * 1000:.2f}ms per query"
 
 
 class TestSimilarityNormalization:
@@ -494,11 +497,13 @@ class TestSimilarityNormalization:
     def test_dot_product_normalization_effect(self):
         """Test that normalization affects dot product output."""
         query = np.array([1.0, 0.0, 0.0])
-        patterns = np.array([
-            [1.0, 0.0, 0.0],
-            [2.0, 0.0, 0.0],
-            [-1.0, 0.0, 0.0],
-        ])
+        patterns = np.array(
+            [
+                [1.0, 0.0, 0.0],
+                [2.0, 0.0, 0.0],
+                [-1.0, 0.0, 0.0],
+            ]
+        )
 
         calc_normalized = SimilarityCalculator(metric="dot", normalize=True)
         calc_not_normalized = SimilarityCalculator(metric="dot", normalize=False)

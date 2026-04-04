@@ -1,20 +1,22 @@
+> **WARNING**: This document contains inaccurate claims about test coverage and feature completeness.
+> See `REFACTORING.md` for corrected metrics as of 2026-04-04.
+
 # VibeSOP Python Edition - Project Status
 
-**Last Updated**: 2026-04-02
-**Status**: ✅ **PRODUCTION READY**
-**Version**: 1.0.0
+**Last Updated**: 2026-04-04
+**Status**: Active development, pre-production
+**Version**: 2.1.0
 
 ---
 
-## 🎯 Executive Summary
+## Executive Summary
 
-VibeSOP Python Edition is a **complete, production-ready** implementation of the AI-assisted development workflow framework. All 6 phases of the development plan have been successfully implemented, tested, and documented.
+VibeSOP Python Edition is under active development. Core routing, security, and trigger systems are implemented. Semantic module requires optional `sentence-transformers` dependency.
 
 ### Key Metrics
-- **6 Major Modules** ✅
-- **263+ Tests Passing** ✅
-- **100% Feature Complete** ✅
-- **Comprehensive Documentation** ✅
+- **1,279 tests collected** (6 collection errors due to optional dependency)
+- **~24% line coverage** (excluding semantic module)
+- **Core features implemented**, semantic module tests require optional dependency
 
 ---
 

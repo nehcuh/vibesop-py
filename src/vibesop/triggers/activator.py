@@ -4,14 +4,23 @@ This module provides automatic skill and workflow activation
 based on detected user intent from keyword patterns.
 """
 
+import logging
 from typing import Optional, Dict, Any
 from pathlib import Path
-from unittest.mock import MagicMock
 
 from vibesop.triggers.models import TriggerPattern, PatternMatch
 from vibesop.core.skills.manager import SkillManager
 from vibesop.core.routing.engine import SkillRouter, RoutingRequest
 from vibesop.workflow import WorkflowManager
+
+logger = logging.getLogger(__name__)
+
+
+class _NullRouter:
+    """Fallback router that returns None for all requests."""
+
+    def route(self, *args: Any, **kwargs: Any) -> None:
+        return None
 
 
 class SkillActivator:
@@ -51,21 +60,15 @@ class SkillActivator:
         """
         self.project_root = Path(project_root).resolve()
 
-        # Initialize managers
         self.skill_manager = skill_manager or SkillManager(self.project_root)
 
-        # Initialize router (may fail if no registry, that's ok)
         try:
             self.router = router or SkillRouter(self.project_root)
         except Exception:
-            # Router initialization failed (e.g., no registry file)
-            # Create a mock router that returns None
-            self.router = MagicMock()
-            self.router.route.return_value = None
+            logger.warning("Router initialization failed, using null router")
+            self.router = _NullRouter()
 
-        self.workflow_manager = workflow_manager or WorkflowManager(
-            project_root=self.project_root
-        )
+        self.workflow_manager = workflow_manager or WorkflowManager(project_root=self.project_root)
 
     async def activate(
         self,
@@ -97,7 +100,7 @@ class SkillActivator:
                 "success": False,
                 "action": "none",
                 "result": None,
-                "error": "No pattern match provided"
+                "error": "No pattern match provided",
             }
 
         input_data = input_data or {}
@@ -107,40 +110,27 @@ class SkillActivator:
             # Pattern not provided, extract from match
             # We'll need to look it up by pattern_id
             from vibesop.triggers import DEFAULT_PATTERNS
-            pattern = next(
-                (p for p in DEFAULT_PATTERNS if p.pattern_id == match.pattern_id),
-                None
-            )
+
+            pattern = next((p for p in DEFAULT_PATTERNS if p.pattern_id == match.pattern_id), None)
 
         if not pattern:
             return {
                 "success": False,
                 "action": "none",
                 "result": None,
-                "error": f"Pattern not found: {match.pattern_id}"
+                "error": f"Pattern not found: {match.pattern_id}",
             }
 
         # Priority: Workflow > Skill
         # 1. Try workflow if specified
         if pattern.workflow_id:
-            return await self._activate_workflow(
-                pattern,
-                match,
-                input_data
-            )
+            return await self._activate_workflow(pattern, match, input_data)
 
         # 2. Try skill activation
-        return await self._activate_skill(
-            pattern,
-            match,
-            input_data
-        )
+        return await self._activate_skill(pattern, match, input_data)
 
     async def _activate_workflow(
-        self,
-        pattern: TriggerPattern,
-        match: PatternMatch,
-        input_data: Dict[str, Any]
+        self, pattern: TriggerPattern, match: PatternMatch, input_data: Dict[str, Any]
     ) -> Dict[str, Any]:
         """Activate workflow based on pattern.
 
@@ -178,10 +168,7 @@ class SkillActivator:
             }
 
     async def _activate_skill(
-        self,
-        pattern: TriggerPattern,
-        match: PatternMatch,
-        input_data: Dict[str, Any]
+        self, pattern: TriggerPattern, match: PatternMatch, input_data: Dict[str, Any]
     ) -> Dict[str, Any]:
         """Activate skill based on pattern.
 
@@ -201,9 +188,7 @@ class SkillActivator:
 
             # Execute skill via SkillManager
             result = await self.skill_manager.execute_skill(
-                skill_id,
-                query=query,
-                context=input_data
+                skill_id, query=query, context=input_data
             )
 
             return {
@@ -216,19 +201,10 @@ class SkillActivator:
 
         except Exception as e:
             # Try fallback via router
-            return await self._fallback_to_router(
-                pattern,
-                match,
-                input_data,
-                str(e)
-            )
+            return await self._fallback_to_router(pattern, match, input_data, str(e))
 
     async def _fallback_to_router(
-        self,
-        pattern: TriggerPattern,
-        match: PatternMatch,
-        input_data: Dict[str, Any],
-        error: str
+        self, pattern: TriggerPattern, match: PatternMatch, input_data: Dict[str, Any], error: str
     ) -> Dict[str, Any]:
         """Fallback to semantic routing if direct skill activation fails.
 
@@ -244,15 +220,12 @@ class SkillActivator:
         try:
             # Create routing request
             query = self._format_query(pattern, match, input_data)
-            request = RoutingRequest(
-                query=query,
-                context=input_data
-            )
+            request = RoutingRequest(query=query, context=input_data)
 
             # Route to best skill
             route = self.router.route(request)
 
-            if not route or not route.primary or not hasattr(route, 'primary'):
+            if not route or not route.primary or not hasattr(route, "primary"):
                 return {
                     "success": False,
                     "action": "none",
@@ -263,9 +236,7 @@ class SkillActivator:
 
             # Execute routed skill
             result = await self.skill_manager.execute_skill(
-                route.primary.skill_id,
-                query=query,
-                context=input_data
+                route.primary.skill_id, query=query, context=input_data
             )
 
             return {
@@ -287,10 +258,7 @@ class SkillActivator:
             }
 
     def _format_query(
-        self,
-        pattern: TriggerPattern,
-        match: PatternMatch,
-        input_data: Dict[str, Any]
+        self, pattern: TriggerPattern, match: PatternMatch, input_data: Dict[str, Any]
     ) -> str:
         """Format query for skill execution.
 
@@ -325,6 +293,7 @@ class SkillActivator:
 
 
 # Convenience function for quick activation
+
 
 async def auto_activate(
     query: str,
@@ -362,7 +331,7 @@ async def auto_activate(
             "success": False,
             "action": "none",
             "result": None,
-            "error": f"No intent detected above confidence threshold {min_confidence}"
+            "error": f"No intent detected above confidence threshold {min_confidence}",
         }
 
     # Activate skill/workflow

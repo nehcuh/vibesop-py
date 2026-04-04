@@ -13,7 +13,7 @@ import threading
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
 import numpy as np
 
@@ -21,9 +21,6 @@ if TYPE_CHECKING:
     from vibesop.semantic.encoder import SemanticEncoder
 
 logger = logging.getLogger(__name__)
-
-if TYPE_CHECKING:
-    pass
 
 
 @dataclass
@@ -457,9 +454,7 @@ class VectorCache:
         """
         with self._lock:
             # Estimate memory usage
-            size_bytes = sum(
-                v.nbytes for v in self._vectors.values()
-            )
+            size_bytes = sum(v.nbytes for v in self._vectors.values())
 
             return {
                 "hits": self._stats.hits,
@@ -478,13 +473,13 @@ class VectorCache:
             examples: List of example texts.
 
         Returns:
-            Hash string.
+            SHA-256 hash string.
         """
         import hashlib
 
         # Join examples and hash
         text = "|||".join(examples)
-        return hashlib.md5(text.encode()).hexdigest()
+        return hashlib.sha256(text.encode()).hexdigest()
 
     def preload_patterns(
         self,

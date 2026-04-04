@@ -1,3 +1,6 @@
+> **WARNING**: This document contains inaccurate claims about test coverage and feature completeness.
+> See `REFACTORING.md` for corrected metrics as of 2026-04-04.
+
 # 🎯 VibeSOP Python迁移 - 最终确认报告
 
 **检查日期**: 2026-04-02

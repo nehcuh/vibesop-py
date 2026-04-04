@@ -153,11 +153,22 @@ class ManifestBuilder:
             for skill_dict in skill_dicts:
                 try:
                     skill_id = skill_dict.get("id", "")
+
+                    # Try to load description from skill file
+                    description = self._load_skill_description(skill_id, skill_dict)
+
+                    # Extract trigger_when from description
+                    trigger_when = self._extract_trigger_from_description(description)
+
+                    # Use intent as fallback for description
+                    if not description:
+                        description = skill_dict.get("intent", "")
+
                     skill = SkillDefinition(
                         id=skill_id,
                         name=skill_dict.get("name") or skill_id,  # Fallback to id if name is empty
-                        description=skill_dict.get("description", ""),
-                        trigger_when=skill_dict.get("trigger_when", ""),
+                        description=description,
+                        trigger_when=trigger_when,
                         metadata=skill_dict.get("metadata", {}),
                     )
                     skills.append(skill)
@@ -170,6 +181,103 @@ class ManifestBuilder:
         except Exception as e:
             print(f"Warning: Failed to load skills from registry: {e}")
             return []
+
+    def _load_skill_description(self, skill_id: str, skill_dict: dict) -> str:
+        """Load skill description from skill file.
+
+        Args:
+            skill_id: Skill identifier (e.g., "gstack/review")
+            skill_dict: Skill dictionary from registry
+
+        Returns:
+            Description text from skill file (empty if not found)
+        """
+        # Try to find skill file
+        # For external skills, check ~/.config/skills/
+        skill_parts = skill_id.split("/")
+        if len(skill_parts) >= 2:
+            namespace = skill_parts[0]
+            skill_name = skill_parts[1]
+
+            # Check external skill paths
+            external_paths = [
+                Path(f"~/.config/skills/{namespace}/{skill_name}/SKILL.md"),
+                Path(f"~/.config/skills/{skill_name}/SKILL.md"),
+                Path(f".vibe/skills/{namespace}/{skill_name}/SKILL.md"),
+                Path(f"skills/{namespace}/{skill_name}/SKILL.md"),
+            ]
+
+            for skill_path in external_paths:
+                skill_path = skill_path.expanduser()
+                if skill_path.exists():
+                    try:
+                        content = skill_path.read_text(encoding="utf-8")
+
+                        # Extract description from YAML frontmatter
+                        if content.startswith("---"):
+                            parts = content.split("---", 2)
+                            if len(parts) >= 2:
+                                from ruamel.yaml import YAML
+                                yaml = YAML()
+                                frontmatter = yaml.load(parts[1])
+                                if isinstance(frontmatter, dict):
+                                    desc = frontmatter.get("description", "")
+                                    if desc:
+                                        return desc
+
+                        # If no frontmatter description, use first paragraph
+                        lines = content.split("\n")
+                        for line in lines:
+                            line = line.strip()
+                            if line and not line.startswith("<!--") and not line.startswith("#"):
+                                # Return first substantial line
+                                if len(line) > 20:
+                                    return line
+                    except Exception:
+                        pass
+
+        return ""
+
+    def _extract_trigger_from_description(self, description: str) -> str:
+        """Extract trigger conditions from skill description.
+
+        Looks for patterns like:
+        - "Use when asked to X, Y, Z"
+        - "Triggered when X"
+        - "Auto-trigger on X"
+
+        Args:
+            description: Skill description text
+
+        Returns:
+            Extracted trigger conditions (empty string if none found)
+        """
+        if not description:
+            return ""
+
+        import re
+
+        # Pattern 1: "Use when asked to X, Y, Z"
+        match = re.search(r'Use when asked to ([^.]+)', description, re.IGNORECASE)
+        if match:
+            return match.group(1).strip()
+
+        # Pattern 2: "Triggered when X"
+        match = re.search(r'Triggered when ([^.]+)', description, re.IGNORECASE)
+        if match:
+            return match.group(1).strip()
+
+        # Pattern 3: "Auto-trigger on X"
+        match = re.search(r'Auto-trigger on ([^.]+)', description, re.IGNORECASE)
+        if match:
+            return match.group(1).strip()
+
+        # Pattern 4: "Proactively suggest when X"
+        match = re.search(r'Proactively suggest when ([^.]+)', description, re.IGNORECASE)
+        if match:
+            return match.group(1).strip()
+
+        return ""
 
     def _load_policies(self) -> PolicySet:
         """Load policies from config files.

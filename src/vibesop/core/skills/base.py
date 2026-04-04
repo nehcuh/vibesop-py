@@ -30,6 +30,7 @@ class SkillMetadata:
         author: Skill author
         tags: List of tags for categorization
         skill_type: Type of skill
+        trigger_when: When to trigger this skill (extracted from description)
     """
 
     id: str
@@ -41,6 +42,7 @@ class SkillMetadata:
     author: str = ""
     tags: list[str] | None = None
     skill_type: SkillType = SkillType.PROMPT
+    trigger_when: str = ""
 
     def __post_init__(self) -> None:
         if self.tags is None:

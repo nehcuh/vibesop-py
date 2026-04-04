@@ -59,9 +59,8 @@ def load_yaml_safe(path: Path) -> Dict[str, Any]:
 
     if not path.exists():
         from vibesop.constants import FileSystemSettings
-        raise FileNotFoundError(
-            f"YAML file not found: {path}"
-        )
+
+        raise FileNotFoundError(f"YAML file not found: {path}")
 
     try:
         yaml_parser = YAML()
@@ -69,11 +68,11 @@ def load_yaml_safe(path: Path) -> Dict[str, Any]:
             data = yaml_parser.load(f)
             return data if isinstance(data, dict) else {}
 
-    except Exception as e:
-        raise ValueError(f"Failed to parse YAML file {path}: {e}") from e
-
     except (OSError, IOError) as e:
         raise OSError(f"Failed to read YAML file {path}: {e}") from e
+
+    except Exception as e:
+        raise ValueError(f"Failed to parse YAML file {path}: {e}") from e
 
 
 def write_yaml_safe(path: Path, data: Dict[str, Any]) -> None:
@@ -97,6 +96,7 @@ def write_yaml_safe(path: Path, data: Dict[str, Any]) -> None:
 
     try:
         from io import StringIO
+
         yaml_parser = YAML()
         yaml_parser.default_flow_style = False
         yaml_parser.sort_keys = False

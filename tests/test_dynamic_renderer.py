@@ -65,7 +65,10 @@ class TestConfigDrivenRenderer:
         rules = renderer.load_rules(Path("rules.yaml"))
         assert rules == []
 
-    @patch("builtins.open", new_callable=mock_open, read_data="""
+    @patch(
+        "builtins.open",
+        new_callable=mock_open,
+        read_data="""
 rules:
   - name: test-rule
     condition: "platform == 'test'"
@@ -74,7 +77,8 @@ rules:
     context:
       key: value
     enabled: true
-""")
+""",
+    )
     @patch("pathlib.Path.exists", return_value=True)
     def test_load_rules_valid_file(self, mock_exists: MagicMock, mock_file: MagicMock) -> None:
         """Test loading valid rules file."""
@@ -183,8 +187,8 @@ rules:
     def test_render_with_rules_condition_mismatch(self) -> None:
         """Test that rules with mismatched conditions are not applied."""
         renderer = ConfigDrivenRenderer()
-        # Create a custom rules config file
-        import yaml
+        from ruamel.yaml import YAML
+
         with tempfile.TemporaryDirectory() as tmpdir:
             rules_file = Path(tmpdir) / "rules.yaml"
             rules_config = {
@@ -199,6 +203,7 @@ rules:
                     }
                 ]
             }
+            yaml = YAML()
             with open(rules_file, "w") as f:
                 yaml.dump(rules_config, f)
 

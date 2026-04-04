@@ -9,14 +9,14 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import Mock, patch
 
-import numpy as np
 import pytest
+
+np = pytest.importorskip("numpy", reason="numpy not installed")
+pytest.importorskip("sentence_transformers", reason="sentence-transformers not installed")
 
 from vibesop.triggers.detector import KeywordDetector
 from vibesop.triggers.models import TriggerPattern, PatternCategory, PatternMatch
 from vibesop.semantic.models import EncoderConfig
-
-pytest.importorskip("sentence_transformers", reason="sentence-transformers not installed")
 
 
 @pytest.fixture
@@ -74,9 +74,9 @@ class TestDetectorWithSemanticEnabled:
 
     def test_initialization_with_semantic(self, sample_patterns):
         """Test initializing detector with semantic enabled."""
-        with patch('vibesop.triggers.detector.VectorCache'):
-            with patch('vibesop.triggers.detector.SemanticEncoder') as MockEncoder:
-                with patch('vibesop.triggers.detector.SimilarityCalculator'):
+        with patch("vibesop.triggers.detector.VectorCache"):
+            with patch("vibesop.triggers.detector.SemanticEncoder") as MockEncoder:
+                with patch("vibesop.triggers.detector.SimilarityCalculator"):
                     # Setup mock
                     mock_encoder_instance = Mock()
                     mock_encoder_instance.model_name = "test-model"
@@ -92,9 +92,9 @@ class TestDetectorWithSemanticEnabled:
 
     def test_detect_best_with_semantic(self, sample_patterns):
         """Test detect_best with semantic matching."""
-        with patch('vibesop.triggers.detector.VectorCache') as MockCache:
-            with patch('vibesop.triggers.detector.SemanticEncoder') as MockEncoder:
-                with patch('vibesop.triggers.detector.SimilarityCalculator') as MockCalc:
+        with patch("vibesop.triggers.detector.VectorCache") as MockCache:
+            with patch("vibesop.triggers.detector.SemanticEncoder") as MockEncoder:
+                with patch("vibesop.triggers.detector.SimilarityCalculator") as MockCalc:
                     # Setup mocks
                     mock_encoder = Mock()
                     mock_encoder.model_name = "test-model"
@@ -122,9 +122,9 @@ class TestDetectorWithSemanticEnabled:
 
     def test_semantic_refine_high_confidence(self, sample_patterns):
         """Test semantic refine with high traditional confidence."""
-        with patch('vibesop.triggers.detector.VectorCache'):
-            with patch('vibesop.triggers.detector.SemanticEncoder'):
-                with patch('vibesop.triggers.detector.SimilarityCalculator'):
+        with patch("vibesop.triggers.detector.VectorCache"):
+            with patch("vibesop.triggers.detector.SemanticEncoder"):
+                with patch("vibesop.triggers.detector.SimilarityCalculator"):
                     detector = KeywordDetector(
                         patterns=sample_patterns,
                         enable_semantic=True,
@@ -132,6 +132,7 @@ class TestDetectorWithSemanticEnabled:
 
                     # Create mock matches
                     from vibesop.triggers.models import PatternMatch
+
                     candidates = [
                         PatternMatch(
                             pattern_id="security/scan",
@@ -148,9 +149,9 @@ class TestDetectorWithSemanticEnabled:
 
     def test_semantic_refine_low_traditional_high_semantic(self, sample_patterns):
         """Test semantic refine with low traditional but high semantic."""
-        with patch('vibesop.triggers.detector.VectorCache'):
-            with patch('vibesop.triggers.detector.SemanticEncoder') as MockEncoder:
-                with patch('vibesop.triggers.detector.SimilarityCalculator') as MockCalc:
+        with patch("vibesop.triggers.detector.VectorCache"):
+            with patch("vibesop.triggers.detector.SemanticEncoder") as MockEncoder:
+                with patch("vibesop.triggers.detector.SimilarityCalculator") as MockCalc:
                     # Setup mocks
                     mock_encoder = Mock()
                     mock_encoder.model_name = "test-model"
@@ -168,6 +169,7 @@ class TestDetectorWithSemanticEnabled:
 
                     # Create mock matches
                     from vibesop.triggers.models import PatternMatch
+
                     candidates = [
                         PatternMatch(
                             pattern_id="security/scan",
@@ -184,9 +186,9 @@ class TestDetectorWithSemanticEnabled:
 
     def test_detect_all_with_semantic(self, sample_patterns):
         """Test detect_all with semantic matching."""
-        with patch('vibesop.triggers.detector.VectorCache'):
-            with patch('vibesop.triggers.detector.SemanticEncoder'):
-                with patch('vibesop.triggers.detector.SimilarityCalculator'):
+        with patch("vibesop.triggers.detector.VectorCache"):
+            with patch("vibesop.triggers.detector.SemanticEncoder"):
+                with patch("vibesop.triggers.detector.SimilarityCalculator"):
                     detector = KeywordDetector(
                         patterns=sample_patterns,
                         enable_semantic=True,
@@ -199,9 +201,9 @@ class TestDetectorWithSemanticEnabled:
 
     def test_synonym_detection(self, sample_patterns):
         """Test synonym detection using semantic matching."""
-        with patch('vibesop.triggers.detector.VectorCache') as MockCache:
-            with patch('vibesop.triggers.detector.SemanticEncoder') as MockEncoder:
-                with patch('vibesop.triggers.detector.SimilarityCalculator') as MockCalc:
+        with patch("vibesop.triggers.detector.VectorCache") as MockCache:
+            with patch("vibesop.triggers.detector.SemanticEncoder") as MockEncoder:
+                with patch("vibesop.triggers.detector.SimilarityCalculator") as MockCalc:
                     # Setup mocks
                     mock_encoder = Mock()
                     mock_encoder.model_name = "test-model"
@@ -229,9 +231,9 @@ class TestDetectorWithSemanticEnabled:
 
     def test_multilingual_matching(self, sample_patterns):
         """Test multilingual query matching."""
-        with patch('vibesop.triggers.detector.VectorCache') as MockCache:
-            with patch('vibesop.triggers.detector.SemanticEncoder') as MockEncoder:
-                with patch('vibesop.triggers.detector.SimilarityCalculator') as MockCalc:
+        with patch("vibesop.triggers.detector.VectorCache") as MockCache:
+            with patch("vibesop.triggers.detector.SemanticEncoder") as MockEncoder:
+                with patch("vibesop.triggers.detector.SimilarityCalculator") as MockCalc:
                     # Setup mocks
                     mock_encoder = Mock()
                     mock_encoder.model_name = "test-model"
@@ -329,7 +331,7 @@ class TestDetectorGracefulDegradation:
 
     def test_init_without_sentence_transformers(self, sample_patterns):
         """Test initialization when sentence-transformers is not available."""
-        with patch('vibesop.triggers.detector.SENTENCE_TRANSFORMERS_AVAILABLE', False):
+        with patch("vibesop.triggers.detector.SENTENCE_TRANSFORMERS_AVAILABLE", False):
             detector = KeywordDetector(
                 patterns=sample_patterns,
                 enable_semantic=True,
@@ -341,7 +343,7 @@ class TestDetectorGracefulDegradation:
 
     def test_detect_best_when_unavailable(self, sample_patterns):
         """Test detect_best when semantic is unavailable."""
-        with patch('vibesop.triggers.detector.SENTENCE_TRANSFORMERS_AVAILABLE', False):
+        with patch("vibesop.triggers.detector.SENTENCE_TRANSFORMERS_AVAILABLE", False):
             detector = KeywordDetector(
                 patterns=sample_patterns,
                 enable_semantic=True,
@@ -359,15 +361,16 @@ class TestDetectorSemanticScoring:
 
     def test_score_fusion_high_traditional(self, sample_patterns):
         """Test score fusion keeps high traditional scores."""
-        with patch('vibesop.triggers.detector.VectorCache'):
-            with patch('vibesop.triggers.detector.SemanticEncoder'):
-                with patch('vibesop.triggers.detector.SimilarityCalculator'):
+        with patch("vibesop.triggers.detector.VectorCache"):
+            with patch("vibesop.triggers.detector.SemanticEncoder"):
+                with patch("vibesop.triggers.detector.SimilarityCalculator"):
                     detector = KeywordDetector(
                         patterns=sample_patterns,
                         enable_semantic=True,
                     )
 
                     from vibesop.triggers.models import PatternMatch
+
                     candidates = [
                         PatternMatch(
                             pattern_id="security/scan",
@@ -383,9 +386,9 @@ class TestDetectorSemanticScoring:
 
     def test_score_fusion_high_semantic(self, sample_patterns):
         """Test score fusion uses high semantic scores."""
-        with patch('vibesop.triggers.detector.VectorCache'):
-            with patch('vibesop.triggers.detector.SemanticEncoder') as MockEncoder:
-                with patch('vibesop.triggers.detector.SimilarityCalculator') as MockCalc:
+        with patch("vibesop.triggers.detector.VectorCache"):
+            with patch("vibesop.triggers.detector.SemanticEncoder") as MockEncoder:
+                with patch("vibesop.triggers.detector.SimilarityCalculator") as MockCalc:
                     mock_encoder = Mock()
                     mock_encoder.model_name = "test-model"
                     mock_encoder.encode_query.return_value = np.random.rand(384)
@@ -401,6 +404,7 @@ class TestDetectorSemanticScoring:
                     )
 
                     from vibesop.triggers.models import PatternMatch
+
                     candidates = [
                         PatternMatch(
                             pattern_id="security/scan",
@@ -416,9 +420,9 @@ class TestDetectorSemanticScoring:
 
     def test_score_fusion_weighted_average(self, sample_patterns):
         """Test score fusion uses weighted average for medium scores."""
-        with patch('vibesop.triggers.detector.VectorCache'):
-            with patch('vibesop.triggers.detector.SemanticEncoder') as MockEncoder:
-                with patch('vibesop.triggers.detector.SimilarityCalculator') as MockCalc:
+        with patch("vibesop.triggers.detector.VectorCache"):
+            with patch("vibesop.triggers.detector.SemanticEncoder") as MockEncoder:
+                with patch("vibesop.triggers.detector.SimilarityCalculator") as MockCalc:
                     mock_encoder = Mock()
                     mock_encoder.model_name = "test-model"
                     mock_encoder.encode_query.return_value = np.random.rand(384)
@@ -434,6 +438,7 @@ class TestDetectorSemanticScoring:
                     )
 
                     from vibesop.triggers.models import PatternMatch
+
                     candidates = [
                         PatternMatch(
                             pattern_id="security/scan",
@@ -454,9 +459,9 @@ class TestDetectorSemanticMetadata:
 
     def test_match_includes_semantic_info(self, sample_patterns):
         """Test that matches include semantic information."""
-        with patch('vibesop.triggers.detector.VectorCache'):
-            with patch('vibesop.triggers.detector.SemanticEncoder') as MockEncoder:
-                with patch('vibesop.triggers.detector.SimilarityCalculator') as MockCalc:
+        with patch("vibesop.triggers.detector.VectorCache"):
+            with patch("vibesop.triggers.detector.SemanticEncoder") as MockEncoder:
+                with patch("vibesop.triggers.detector.SimilarityCalculator") as MockCalc:
                     mock_encoder = Mock()
                     mock_encoder.model_name = "test-model"
                     mock_encoder.encode_query.return_value = np.random.rand(384)

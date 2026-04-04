@@ -7,13 +7,13 @@ import time
 from pathlib import Path
 from unittest.mock import Mock
 
-import numpy as np
 import pytest
+
+np = pytest.importorskip("numpy", reason="numpy not installed")
+pytest.importorskip("sentence_transformers", reason="sentence-transformers not installed")
 
 from vibesop.semantic.cache import CacheMetadata, CacheStats, VectorCache
 from vibesop.semantic.models import SemanticPattern
-
-pytest.importorskip("sentence_transformers", reason="sentence-transformers not installed")
 
 
 @pytest.fixture
@@ -375,7 +375,7 @@ class TestVectorCacheStats:
         assert stats["hits"] == 2
         assert stats["misses"] == 1
         assert stats["total_requests"] == 3
-        assert abs(stats["hit_rate"] - 2/3) < 1e-5
+        assert abs(stats["hit_rate"] - 2 / 3) < 1e-5
 
     def test_cache_stats_size_calculation(self, temp_cache_dir):
         """Test that cache size is calculated correctly."""
@@ -492,10 +492,7 @@ class TestVectorCacheThreadSafety:
 
         # Concurrently access cache
         with ThreadPoolExecutor(max_workers=10) as executor:
-            futures = [
-                executor.submit(get_vector, f"pattern{i}")
-                for i in range(50)
-            ]
+            futures = [executor.submit(get_vector, f"pattern{i}") for i in range(50)]
             results = [f.result() for f in futures]
 
         # All results should be valid
@@ -545,7 +542,7 @@ class TestCacheStats:
         stats.misses = 3
 
         assert stats.total_requests == 8
-        assert abs(stats.hit_rate - 5/8) < 1e-5
+        assert abs(stats.hit_rate - 5 / 8) < 1e-5
 
     def test_cache_stats_hit_rate_no_requests(self):
         """Test hit_rate when there are no requests."""

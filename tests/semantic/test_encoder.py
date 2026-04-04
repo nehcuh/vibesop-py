@@ -4,12 +4,14 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import numpy as np
 import pytest
 
-from vibesop.semantic.encoder import SemanticEncoder
-
+pytest.importorskip("numpy", reason="numpy not installed")
 pytest.importorskip("sentence_transformers", reason="sentence-transformers not installed")
+
+import numpy as np
+
+from vibesop.semantic.encoder import SemanticEncoder
 
 
 class TestSemanticEncoderInit:
@@ -319,7 +321,7 @@ class TestSemanticEncoderPerformance:
         avg_time = elapsed / iterations
 
         # Should be less than 10ms per query
-        assert avg_time < 0.01, f"Query encoding too slow: {avg_time*1000:.2f}ms"
+        assert avg_time < 0.01, f"Query encoding too slow: {avg_time * 1000:.2f}ms"
 
 
 class TestSemanticEncoderMultilingual:

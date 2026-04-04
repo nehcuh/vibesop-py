@@ -6,9 +6,11 @@ based on configuration files and templates.
 
 from pathlib import Path
 from typing import Dict, List, Optional, Any
+
 from dataclasses import dataclass
 
 from jinja2 import Environment, FileSystemLoader, Template
+from ruamel.yaml import YAML
 
 
 @dataclass
@@ -23,6 +25,7 @@ class RenderRule:
         context_vars: Variables for template rendering
         enabled: Whether rule is enabled
     """
+
     name: str
     condition: str
     template: str
@@ -62,14 +65,13 @@ class ConfigDrivenRenderer:
         Returns:
             List of RenderRule instances
         """
-        import yaml
-
         if not rules_config.exists():
             return []
 
         try:
+            yaml_parser = YAML()
             with open(rules_config, "r") as f:
-                config = yaml.safe_load(f)
+                config = yaml_parser.load(f)
 
             rules = []
             for rule_data in config.get("rules", []):
@@ -91,7 +93,7 @@ class ConfigDrivenRenderer:
 
     def render_with_rules(
         self,
-        manifest,
+        manifest: Any,
         output_dir: Path,
         rules_config: Optional[Path] = None,
     ) -> Dict[str, Any]:
@@ -131,8 +133,7 @@ class ConfigDrivenRenderer:
 
                 # Render template
                 content = self._render_template(
-                    rule.template,
-                    {**rule.context_vars, "manifest": manifest}
+                    rule.template, {**rule.context_vars, "manifest": manifest}
                 )
 
                 # Write to file
@@ -191,8 +192,13 @@ class ConfigDrivenRenderer:
         else:
             return []
 
+    _SAFE_VARIABLES = {"platform", "version"}
+
     def _evaluate_condition(self, condition: str, manifest) -> bool:
-        """Evaluate a rule condition.
+        """Evaluate a rule condition safely.
+
+        Supports only simple equality comparisons:
+            variable == 'value'
 
         Args:
             condition: Condition string
@@ -201,21 +207,50 @@ class ConfigDrivenRenderer:
         Returns:
             True if condition evaluates to True
         """
-        if not condition:
+        if not condition or not condition.strip():
             return True
 
+        condition = condition.strip()
+
         try:
-            # Simple condition evaluation
-            # Can be extended with more complex logic
             context = {
                 "platform": manifest.metadata.platform,
                 "version": manifest.metadata.version,
             }
 
-            # Safe evaluation
-            return eval(condition, {"__builtins__": {}}, context)
+            return self._parse_simple_equality(condition, context)
         except Exception:
             return False
+
+    @staticmethod
+    def _parse_simple_equality(condition: str, context: Dict[str, Any]) -> bool:
+        """Parse a simple equality condition: variable == 'value'.
+
+        Args:
+            condition: Condition string like "platform == 'claude-code'"
+            context: Available variables
+
+        Returns:
+            Boolean result
+        """
+        if "==" not in condition:
+            return False
+
+        left, right = condition.split("==", 1)
+        left = left.strip()
+        right = right.strip()
+
+        if left not in context:
+            return False
+
+        if not right.startswith("'") or not right.endswith("'"):
+            if not right.startswith('"') or not right.endswith('"'):
+                return False
+
+        expected_value = right[1:-1]
+        actual_value = str(context[left])
+
+        return actual_value == expected_value
 
     def _render_template(self, template_name: str, context: Dict[str, Any]) -> str:
         """Render a template.

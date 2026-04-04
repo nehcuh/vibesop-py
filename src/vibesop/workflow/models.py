@@ -5,7 +5,7 @@ This module defines the core data models for the workflow orchestration system,
 using Pydantic v2 for runtime validation and type safety.
 """
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator, ConfigDict
 from typing import Literal, Callable, Any, Dict, List, Optional
 from enum import Enum
 from datetime import datetime
@@ -13,6 +13,7 @@ from datetime import datetime
 
 class StageStatus(str, Enum):
     """Status of a pipeline stage."""
+
     PENDING = "pending"
     IN_PROGRESS = "in_progress"
     COMPLETED = "completed"
@@ -40,37 +41,34 @@ class PipelineStage(BaseModel):
     status: StageStatus = Field(default=StageStatus.PENDING, description="Current stage status")
     dependencies: List[str] = Field(default_factory=list, description="Required stage names")
     handler: Optional[Callable[[Dict[str, Any]], Dict[str, Any]]] = Field(
-        default=None,
-        description="Stage execution handler"
+        default=None, description="Stage execution handler"
     )
     required: bool = Field(default=True, description="Whether stage must succeed")
     timeout_seconds: Optional[int] = Field(
-        default=None,
-        ge=1,
-        description="Stage execution timeout"
+        default=None, ge=1, description="Stage execution timeout"
     )
     retry_count: int = Field(default=0, ge=0, description="Retry attempts on failure")
     metadata: Dict[str, Any] = Field(
-        default_factory=dict,
-        description="Additional stage metadata (e.g., skill_id)"
+        default_factory=dict, description="Additional stage metadata (e.g., skill_id)"
     )
 
-    @field_validator('name')
+    @field_validator("name")
     @classmethod
     def validate_name(cls, v: str) -> str:
         """Ensure stage name is valid."""
-        if not v.replace('_', '').replace('-', '').isalnum():
-            raise ValueError("Stage name must contain only alphanumeric characters, hyphens, and underscores")
+        if not v.replace("_", "").replace("-", "").isalnum():
+            raise ValueError(
+                "Stage name must contain only alphanumeric characters, hyphens, and underscores"
+            )
         return v
 
-    @model_validator(mode='after')
-    def validate_dependencies(self) -> 'PipelineStage':
+    @model_validator(mode="after")
+    def validate_dependencies(self) -> "PipelineStage":
         """Ensure dependencies don't create circular references."""
         # This will be validated at the pipeline level
         return self
 
-    class Config:
-        frozen = True  # Make stages immutable for thread safety
+    model_config = ConfigDict(frozen=True)
 
 
 class WorkflowResult(BaseModel):
@@ -94,7 +92,9 @@ class WorkflowResult(BaseModel):
     completed_stages: List[str] = Field(default_factory=list, description="Completed stages")
     failed_stages: List[str] = Field(default_factory=list, description="Failed stages")
     skipped_stages: List[str] = Field(default_factory=list, description="Skipped stages")
-    final_context: Dict[str, Any] = Field(default_factory=dict, description="Final execution context")
+    final_context: Dict[str, Any] = Field(
+        default_factory=dict, description="Final execution context"
+    )
     execution_time_seconds: float = Field(..., ge=0, description="Execution time in seconds")
     errors: List[str] = Field(default_factory=list, description="Error messages")
     metadata: Dict[str, Any] = Field(default_factory=dict, description="Additional metadata")
@@ -132,8 +132,7 @@ class WorkflowExecutionContext(BaseModel):
     input: Dict[str, Any] = Field(default_factory=dict, description="Initial workflow input")
     current_stage: Optional[str] = Field(default=None, description="Current stage name")
     stage_results: Dict[str, Dict[str, Any]] = Field(
-        default_factory=dict,
-        description="Results from completed stages"
+        default_factory=dict, description="Results from completed stages"
     )
     metadata: Dict[str, Any] = Field(default_factory=dict, description="Additional metadata")
     created_at: datetime = Field(default_factory=datetime.now, description="Creation timestamp")
@@ -151,6 +150,7 @@ class WorkflowExecutionContext(BaseModel):
 
 class ExecutionStrategy(str, Enum):
     """Execution strategy for workflow."""
+
     SEQUENTIAL = "sequential"
     PARALLEL = "parallel"
     PIPELINE = "pipeline"
@@ -168,8 +168,7 @@ class RetryPolicy(BaseModel):
 
     max_attempts: int = Field(default=3, ge=1, description="Maximum retry attempts")
     backoff_strategy: Literal["exponential", "linear", "constant"] = Field(
-        default="exponential",
-        description="Backoff delay strategy"
+        default="exponential", description="Backoff delay strategy"
     )
     base_delay: float = Field(default=1.0, ge=0, description="Base delay in seconds")
     max_delay: float = Field(default=60.0, ge=0, description="Maximum delay in seconds")
@@ -184,17 +183,12 @@ class RecoveryStrategy(BaseModel):
         recovery_stages: Stages to execute for recovery
     """
 
-    checkpoint_on_failure: bool = Field(
-        default=True,
-        description="Create checkpoint on failure"
-    )
+    checkpoint_on_failure: bool = Field(default=True, description="Create checkpoint on failure")
     rollback_on_failure: bool = Field(
-        default=False,
-        description="Rollback to checkpoint on failure"
+        default=False, description="Rollback to checkpoint on failure"
     )
     recovery_stages: List[str] = Field(
-        default_factory=list,
-        description="Stages to execute for recovery"
+        default_factory=list, description="Stages to execute for recovery"
     )
 
 
@@ -223,47 +217,27 @@ class WorkflowDefinition(BaseModel):
     description: str = Field(..., description="Workflow description")
     version: str = Field(default="1.0.0", description="Workflow version")
     stages: List[PipelineStage] = Field(
-        default_factory=list,
-        description="Workflow stages in execution order"
+        default_factory=list, description="Workflow stages in execution order"
     )
     strategy: Literal["sequential", "parallel", "pipeline"] = Field(
-        default="sequential",
-        description="Default execution strategy"
+        default="sequential", description="Default execution strategy"
     )
-    timeout_seconds: int = Field(
-        default=300,
-        ge=1,
-        description="Workflow timeout"
-    )
+    timeout_seconds: int = Field(default=300, ge=1, description="Workflow timeout")
     max_parallel: int = Field(
-        default=3,
-        ge=1,
-        le=10,
-        description="Max parallel stages (for parallel/pipeline)"
+        default=3, ge=1, le=10, description="Max parallel stages (for parallel/pipeline)"
     )
-    stop_on_first_failure: bool = Field(
-        default=True,
-        description="Stop workflow on first failure"
-    )
+    stop_on_first_failure: bool = Field(default=True, description="Stop workflow on first failure")
     retry_policy: RetryPolicy = Field(
-        default_factory=RetryPolicy,
-        description="Retry policy for failed stages"
+        default_factory=RetryPolicy, description="Retry policy for failed stages"
     )
     recovery_strategy: RecoveryStrategy = Field(
-        default_factory=RecoveryStrategy,
-        description="Recovery strategy for failures"
+        default_factory=RecoveryStrategy, description="Recovery strategy for failures"
     )
-    metadata: Dict[str, Any] = Field(
-        default_factory=dict,
-        description="Additional metadata"
-    )
+    metadata: Dict[str, Any] = Field(default_factory=dict, description="Additional metadata")
 
-    @field_validator('stages')
+    @field_validator("stages")
     @classmethod
-    def validate_stages(
-        cls,
-        stages: List[PipelineStage]
-    ) -> List[PipelineStage]:
+    def validate_stages(cls, stages: List[PipelineStage]) -> List[PipelineStage]:
         """Validate stages for circular dependencies."""
         if not stages:
             return stages
@@ -304,12 +278,12 @@ class WorkflowDefinition(BaseModel):
 
         return stages
 
-    @model_validator(mode='after')
-    def validate_handlers(self) -> 'WorkflowDefinition':
+    @model_validator(mode="after")
+    def validate_handlers(self) -> "WorkflowDefinition":
         """Ensure all stages have handlers or skill references."""
         for stage in self.stages:
             has_handler = stage.handler is not None
-            has_skill = 'skill_id' in stage.metadata
+            has_skill = "skill_id" in stage.metadata
 
             if not has_handler and not has_skill:
                 raise ValueError(
@@ -317,14 +291,12 @@ class WorkflowDefinition(BaseModel):
                 )
         return self
 
-    @model_validator(mode='after')
-    def validate_strategy(self) -> 'WorkflowDefinition':
+    @model_validator(mode="after")
+    def validate_strategy(self) -> "WorkflowDefinition":
         """Validate execution strategy matches workflow requirements."""
         if self.strategy == "parallel" or self.strategy == "pipeline":
             if len(self.stages) < 2:
-                raise ValueError(
-                    f"Strategy '{self.strategy}' requires at least 2 stages"
-                )
+                raise ValueError(f"Strategy '{self.strategy}' requires at least 2 stages")
         return self
 
 
