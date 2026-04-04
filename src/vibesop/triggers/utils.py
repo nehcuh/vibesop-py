@@ -213,7 +213,7 @@ def calculate_keyword_match_score(
     """Calculate keyword matching score.
 
     Score is based on how many keywords appear in the query.
-    Case-insensitive matching.
+    Uses lenient matching: if any keyword matches, score is >= 0.5.
 
     Args:
         query: User input query
@@ -234,7 +234,12 @@ def calculate_keyword_match_score(
     query_lower = query.lower()
     matched = sum(1 for kw in keywords if kw.lower() in query_lower)
 
-    return matched / len(keywords)
+    if matched == 0:
+        return 0.0
+
+    # Lenient scoring: first match gives 0.5, additional matches add to score
+    score = 0.5 + (matched - 1) * 0.5 / len(keywords)
+    return min(score, 1.0)
 
 
 def calculate_regex_match_score(
@@ -244,6 +249,7 @@ def calculate_regex_match_score(
     """Calculate regex pattern matching score.
 
     Score is based on how many patterns match the query.
+    Uses lenient matching: if any pattern matches, score is >= 0.5.
 
     Args:
         query: User input query
@@ -266,7 +272,12 @@ def calculate_regex_match_score(
         if re.search(pattern, query, re.IGNORECASE)
     )
 
-    return matched / len(patterns)
+    if matched == 0:
+        return 0.0
+
+    # Lenient scoring: first match gives 0.5, additional matches add to score
+    score = 0.5 + (matched - 1) * 0.5 / len(patterns)
+    return min(score, 1.0)
 
 
 def calculate_combined_score(

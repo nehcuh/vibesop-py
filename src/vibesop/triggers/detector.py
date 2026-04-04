@@ -255,8 +255,9 @@ class KeywordDetector:
             sim = cosine_similarity(query_tfidf, example_tfidf)
             similarities.append(sim)
 
-        # Return maximum similarity
-        return max(similarities) if similarities else 0.0
+        # Return maximum similarity, clamped to [0, 1]
+        max_sim = max(similarities) if similarities else 0.0
+        return min(max(max_sim, 0.0), 1.0)
 
 
 def _regex_matches(pattern: str, text: str) -> bool:

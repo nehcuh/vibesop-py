@@ -17,12 +17,14 @@ from vibesop.triggers.models import (
     PatternCategory,
 )
 from vibesop.triggers.detector import KeywordDetector
+from vibesop.triggers.patterns import DEFAULT_PATTERNS
 
 __all__ = [
     "TriggerPattern",
     "PatternMatch",
     "PatternCategory",
     "KeywordDetector",
+    "DEFAULT_PATTERNS",
 ]
 
 # Version info
