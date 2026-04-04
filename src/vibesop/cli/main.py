@@ -41,6 +41,7 @@ from vibesop.cli.commands import detect as detect_module
 from vibesop.cli.commands import install as install_module
 from vibesop.cli.commands import hooks as hooks_module
 from vibesop.cli.commands import workflow as workflow_module
+from vibesop.cli.commands import auto as auto_module
 
 app = typer.Typer(
     name="vibe",
@@ -446,3 +447,4 @@ app.command()(detect_module.detect)
 app.command()(install_module.install)
 app.command()(hooks_module.hooks)
 app.command()(workflow_module.workflow)
+app.command()(auto_module.auto)
