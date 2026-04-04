@@ -127,6 +127,26 @@ class TriggerPattern(BaseModel):
         description="Additional pattern metadata"
     )
 
+    # Semantic matching fields (v2.1.0)
+    enable_semantic: bool = Field(
+        default=False,
+        description="Enable semantic matching for this pattern"
+    )
+    semantic_threshold: float = Field(
+        default=0.7,
+        ge=0.0,
+        le=1.0,
+        description="Semantic similarity threshold for this pattern"
+    )
+    semantic_examples: list[str] = Field(
+        default_factory=list,
+        description="Additional semantic examples for enhanced understanding"
+    )
+    embedding_vector: list[float] | None = Field(
+        default=None,
+        description="Pre-computed embedding vector (JSON serialized)"
+    )
+
     @field_validator('pattern_id')
     @classmethod
     def validate_pattern_id(cls, v: str) -> str:
@@ -228,6 +248,20 @@ class PatternMatch(BaseModel):
         ge=0.0,
         le=1.0,
         description="Semantic similarity score"
+    )
+    # Additional semantic fields (v2.1.0)
+    semantic_method: str | None = Field(
+        default=None,
+        description="Method used for semantic matching (e.g., 'cosine', 'hybrid')"
+    )
+    model_used: str | None = Field(
+        default=None,
+        description="Name of the embedding model used"
+    )
+    encoding_time: float | None = Field(
+        default=None,
+        ge=0.0,
+        description="Time taken to encode query (in seconds)"
     )
 
     def meets_threshold(self, threshold: float) -> bool:

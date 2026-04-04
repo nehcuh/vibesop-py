@@ -22,6 +22,7 @@ from rich.markdown import Markdown
 
 from vibesop.triggers import KeywordDetector, DEFAULT_PATTERNS, SkillActivator
 from vibesop.triggers.models import PatternCategory
+from vibesop.semantic.models import EncoderConfig
 
 console = Console()
 
@@ -54,6 +55,23 @@ def auto(
         "-v",
         help="Show detailed output",
     ),
+    # Semantic options (v2.1.0)
+    enable_semantic: bool = typer.Option(
+        False,
+        "--semantic",
+        "-s",
+        help="Enable semantic matching using sentence embeddings",
+    ),
+    semantic_model: str = typer.Option(
+        "paraphrase-multilingual-MiniLM-L12-v2",
+        "--semantic-model",
+        help="Semantic model name (default: paraphrase-multilingual-MiniLM-L12-v2)",
+    ),
+    semantic_threshold: float = typer.Option(
+        0.7,
+        "--semantic-threshold",
+        help="Semantic similarity threshold (0.0 - 1.0, default: 0.7)",
+    ),
 ) -> None:
     """Automatically detect intent and execute appropriate skill/workflow.
 
@@ -74,6 +92,9 @@ def auto(
         # Chinese queries work too
         vibe auto "帮我扫描安全漏洞"
 
+        # Enable semantic matching for better accuracy
+        vibe auto "帮我检查代码安全问题" --semantic
+
         # Preview what would happen
         vibe auto --dry-run "run tests"
 
@@ -89,6 +110,12 @@ def auto(
         2. Matches against keywords, regex patterns, and semantic similarity
         3. Activates the appropriate skill or workflow
         4. Falls back to semantic routing if needed
+
+    \\b
+    Semantic matching (v2.1.0):
+        Enable with --semantic flag for improved synonym detection and
+        multilingual support. Uses sentence transformer embeddings for
+        true semantic understanding (not just TF-IDF).
 
     \\b
     Pattern categories:
@@ -119,9 +146,25 @@ def auto(
 
     # Detect intent
     if verbose:
-        console.print(f"[dim]Detecting intent (min confidence: {min_confidence})...[/dim]\\n")
+        semantic_status = "enabled" if enable_semantic else "disabled"
+        console.print(
+            f"[dim]Detecting intent (min confidence: {min_confidence}, "
+            f"semantic: {semantic_status})...[/dim]\\n"
+        )
 
-    detector = KeywordDetector(patterns=DEFAULT_PATTERNS)
+    # Initialize semantic config if enabled
+    semantic_config = None
+    if enable_semantic:
+        semantic_config = EncoderConfig(
+            model_name=semantic_model,
+        )
+
+    detector = KeywordDetector(
+        patterns=DEFAULT_PATTERNS,
+        confidence_threshold=min_confidence,
+        enable_semantic=enable_semantic,
+        semantic_config=semantic_config,
+    )
     match = detector.detect_best(query, min_confidence=min_confidence)
 
     if not match:
@@ -189,8 +232,17 @@ def _show_match_details(match, verbose: bool) -> None:
                     if match.matched_regex else ""
                 )
                 + (
-                    f"[dim]Semantic:[/dim] {match.semantic_score:.2%}\\n"
+                    f"[dim]Semantic:[/dim] {match.semantic_score:.2%} "
+                    f"({match.semantic_method or 'N/A'})\\n"
                     if match.semantic_score else ""
+                )
+                + (
+                    f"[dim]Model:[/dim] {match.model_used or 'N/A'}\\n"
+                    if match.model_used else ""
+                )
+                + (
+                    f"[dim]Encoding Time:[/dim] {match.encoding_time*1000:.1f}ms\\n"
+                    if match.encoding_time else ""
                 ),
                 title="[bold green]✓ Intent Detected[/bold green]",
                 border_style="green",
