@@ -509,6 +509,30 @@
       "query": "help me review",
       "timestamp": "2026-04-04T16:08:04.446968",
       "was_helpful": true
+    },
+    {
+      "skill_id": "gstack/review",
+      "query": "\u5e2e\u6211\u8bc4\u5ba1\u4ee3\u7801",
+      "timestamp": "2026-04-04T16:55:52.739818",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "gstack/review",
+      "query": "review my code",
+      "timestamp": "2026-04-04T16:55:52.834723",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "gstack/review",
+      "query": "please review this",
+      "timestamp": "2026-04-04T16:55:52.835346",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "gstack/review",
+      "query": "help me review",
+      "timestamp": "2026-04-04T16:55:52.835775",
+      "was_helpful": true
     }
   ],
   "skill_scores": {
@@ -597,22 +621,22 @@
       "last_selected": "2026-04-04T14:14:45.664760"
     },
     "gstack/review": {
-      "score": 0.859550665866847,
-      "selection_count": 79,
-      "helpful_count": 79,
-      "last_selected": "2026-04-04T16:08:04.446968"
+      "score": 0.8607704199710828,
+      "selection_count": 83,
+      "helpful_count": 83,
+      "last_selected": "2026-04-04T16:55:52.835775"
     }
   },
   "word_associations": {
     "review": {
       "/review": 84,
       "/gstack/review": 28,
-      "gstack/review": 54
+      "gstack/review": 57
     },
     "code": {
       "/review": 104,
       "/gstack/review": 56,
-      "gstack/review": 18
+      "gstack/review": 19
     },
     "debug": {
       "/debug": 6
@@ -667,16 +691,16 @@
       "/debug": 29
     },
     "\u5e2e\u6211\u8bc4\u5ba1\u4ee3\u7801": {
-      "gstack/review": 25
+      "gstack/review": 26
     },
     "please": {
-      "gstack/review": 18
+      "gstack/review": 19
     },
     "this": {
-      "gstack/review": 18
+      "gstack/review": 19
     },
     "help": {
-      "gstack/review": 18
+      "gstack/review": 19
     }
   }
 }
