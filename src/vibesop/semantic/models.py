@@ -76,7 +76,9 @@ class SemanticPattern:
             ValueError: If numpy is not available or no examples provided.
         """
         if np is None:
-            raise ValueError("numpy is required for vector computation. Install with: pip install vibesop[semantic]")
+            raise ValueError(
+                "numpy is required for vector computation. Install with: pip install vibesop[semantic]"
+            )
 
         if not self.examples:
             raise ValueError(f"Cannot compute vector for pattern '{self.pattern_id}': no examples")
@@ -227,12 +229,13 @@ class EncoderConfig(BaseModel):
         import os
 
         return cls(
-            model_name=os.getenv("VIBE_SEMANTIC_MODEL", cls.model_name),
-            device=os.getenv("VIBE_SEMANTIC_DEVICE", cls.device),
+            model_name=os.getenv("VIBE_SEMANTIC_MODEL", "paraphrase-multilingual-MiniLM-L12-v2"),
+            device=os.getenv("VIBE_SEMANTIC_DEVICE", "auto"),
             cache_dir=Path(os.getenv("VIBE_SEMANTIC_CACHE_DIR", "")) or None,
-            batch_size=int(os.getenv("VIBE_SEMANTIC_BATCH_SIZE", str(cls.batch_size))),
+            batch_size=int(os.getenv("VIBE_SEMANTIC_BATCH_SIZE", "32")),
             show_progress=os.getenv("VIBE_SEMANTIC_SHOW_PROGRESS", "").lower() == "true",
-            enable_half_precision=os.getenv("VIBE_SEMANTIC_HALF_PRECISION", "true").lower() == "true",
+            enable_half_precision=os.getenv("VIBE_SEMANTIC_HALF_PRECISION", "true").lower()
+            == "true",
             enable_model_cache=os.getenv("VIBE_SEMANTIC_MODEL_CACHE", "true").lower() == "true",
         )
 
@@ -336,9 +339,7 @@ class SemanticConfig(BaseModel):
         if self.strategy == "hybrid":
             total = self.keyword_weight + self.regex_weight + self.semantic_weight
             if abs(total - 1.0) > 0.01:
-                raise ValueError(
-                    f"Weights must sum to 1.0 for hybrid strategy, got {total:.2f}"
-                )
+                raise ValueError(f"Weights must sum to 1.0 for hybrid strategy, got {total:.2f}")
 
     @classmethod
     def from_env(cls) -> "SemanticConfig":
@@ -359,9 +360,9 @@ class SemanticConfig(BaseModel):
         return cls(
             enabled=os.getenv("VIBE_SEMANTIC_ENABLED", "").lower() == "true",
             encoder=EncoderConfig.from_env(),
-            strategy=os.getenv("VIBE_SEMANTIC_STRATEGY", cls.strategy),
-            keyword_weight=float(os.getenv("VIBE_SEMANTIC_KEYWORD_WEIGHT", str(cls.keyword_weight))),
-            regex_weight=float(os.getenv("VIBE_SEMANTIC_REGEX_WEIGHT", str(cls.regex_weight))),
-            semantic_weight=float(os.getenv("VIBE_SEMANTIC_SEMANTIC_WEIGHT", str(cls.semantic_weight))),
-            threshold=float(os.getenv("VIBE_SEMANTIC_THRESHOLD", str(cls.threshold))),
+            strategy=os.getenv("VIBE_SEMANTIC_STRATEGY", "hybrid"),
+            keyword_weight=float(os.getenv("VIBE_SEMANTIC_KEYWORD_WEIGHT", "0.3")),
+            regex_weight=float(os.getenv("VIBE_SEMANTIC_REGEX_WEIGHT", "0.2")),
+            semantic_weight=float(os.getenv("VIBE_SEMANTIC_SEMANTIC_WEIGHT", "0.5")),
+            threshold=float(os.getenv("VIBE_SEMANTIC_THRESHOLD", "0.7")),
         )
