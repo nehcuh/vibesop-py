@@ -1,0 +1,19 @@
+# CODEOWNERS for VibeSOP
+# https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+* @nehcuh
+
+# Core modules
+/src/vibesop/routing/ @nehcuh
+/src/vibesop/workflow/ @nehcuh
+/src/vibesop/skills/ @nehcuh
+/src/vibesop/core/ @nehcuh
+
+# CLI
+/src/vibesop/cli/ @nehcuh
+
+# Tests
+/tests/ @nehcuh
+
+# Documentation
+/docs/ @nehcuh
