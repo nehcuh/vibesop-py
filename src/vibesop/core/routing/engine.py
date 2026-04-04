@@ -1,6 +1,6 @@
 """Skill routing engine with 5-layer system.
 
-Implements intelligent skill routing:
+Implements intelligent skill routing via pluggable handlers:
 - Layer 0: AI Semantic Triage (Claude Haiku/GPT-4o-mini)
 - Layer 1: Explicit overrides
 - Layer 2: Scenario patterns
@@ -26,18 +26,21 @@ from vibesop.core.models import (
 from vibesop.core.preference import PreferenceLearner
 from vibesop.core.routing.cache import CacheManager
 from vibesop.core.routing.fuzzy import FuzzyMatcher
+from vibesop.core.routing.handlers import (
+    AITriageHandler,
+    ExplicitHandler,
+    FuzzyHandler,
+    RoutingHandler,
+    ScenarioHandler,
+    SemanticHandler,
+)
 from vibesop.core.routing.semantic import SemanticMatcher
 from vibesop.llm import create_from_env
 
 
 @dataclass
 class RoutingStats:
-    """Statistics about routing performance.
-
-    Attributes:
-        total_routes: Total number of routing requests
-        layer_distribution: Distribution of routes by layer
-    """
+    """Statistics about routing performance."""
 
     total_routes: int = 0
     layer_distribution: dict[str, int] = field(
@@ -59,10 +62,6 @@ class SkillRouter:
         router = SkillRouter()
         result = router.route(RoutingRequest(query="帮我评审代码"))
         print(result.primary.skill_id)  # '/review'
-
-        # Get statistics
-        stats = router.get_stats()
-        print(stats)  # {'total_routes': 1, 'layer_distribution': {...}}
     """
 
     def __init__(
@@ -71,55 +70,38 @@ class SkillRouter:
         cache_dir: str = ".vibe/cache",
         enable_ai_triage: bool | None = None,
     ) -> None:
-        """Initialize the skill router.
-
-        Args:
-            project_root: Path to project root directory
-            cache_dir: Directory for cache storage
-            enable_ai_triage: Override AI triage setting
-        """
         self._stats = RoutingStats()
         self.project_root = Path(project_root).resolve()
-
-        # Initialize configuration loader
         self._config = ConfigLoader(project_root=self.project_root)
-
-        # Initialize cache
         self._cache = CacheManager(cache_dir=cache_dir)
 
         # Initialize LLM provider for AI triage
-        self._llm = None
-        self._ai_triage_enabled = False
-
+        self._llm: Any = None
         if enable_ai_triage is None:
             enable_ai_triage = os.getenv("VIBE_AI_TRIAGE_ENABLED", "true").lower() == "true"
 
-        # Check for Claude Code environment
         if (
             os.getenv("CLAUDECODE") == "1" or os.getenv("CLAUDE_CODE_ENTRYPOINT") == "cli"
         ) and not os.getenv("VIBE_AI_TRIAGE_ENABLED"):
-            # Claude Code has built-in reasoning, disable external AI by default
             enable_ai_triage = False
 
         if enable_ai_triage:
             try:
                 self._llm = create_from_env()
-                self._ai_triage_enabled = self._llm.configured()
+                ai_enabled = self._llm.configured()
             except (ImportError, ValidationError, OSError) as e:
-                # LLM provider not available or misconfigured
-                # Disable AI triage and fall back to other layers
-                self._ai_triage_enabled = False
+                ai_enabled = False
                 if os.getenv("VIBE_DEBUG"):
                     import warnings
 
                     warnings.warn(f"AI triage disabled: {e}")
+        else:
+            ai_enabled = False
 
-        # Initialize semantic matcher (Layer 3)
+        # Initialize matchers
         self._semantic_matcher = SemanticMatcher(
             min_score=RoutingThresholds.SEMANTIC_SIMILARITY_MIN
         )
-
-        # Initialize fuzzy matcher (Layer 4)
         self._fuzzy_matcher = FuzzyMatcher(
             min_similarity=RoutingThresholds.FUZZY_SIMILARITY_THRESHOLD, max_distance=2
         )
@@ -132,441 +114,102 @@ class SkillRouter:
             min_samples=3,
         )
 
-        # Load skills from configuration
+        # Build handler chain
+        self._handlers: list[RoutingHandler] = [
+            AITriageHandler(self._llm if ai_enabled else None, self._cache, self._config),
+            ExplicitHandler(self._config),
+            ScenarioHandler(self._config),
+            SemanticHandler(self._semantic_matcher),
+            FuzzyHandler(self._fuzzy_matcher),
+        ]
+
+        # Load skills
         self._load_skills()
 
     def _load_skills(self) -> None:
         """Load and index skills from configuration."""
         try:
             skills = self._config.get_all_skills()
-
             if not skills:
-                # Log warning but don't fail - router can still function with empty skill set
                 import warnings
 
                 warnings.warn(
                     "No skills loaded from configuration. Router may not function properly."
                 )
-
-            # Index for semantic matching
             self._semantic_matcher.index_skills(skills or [], self._config)
-
-            # Index for fuzzy matching
             self._fuzzy_matcher.index_skills(skills or [])
-
         except (FileNotFoundError, ValueError, KeyError) as e:
-            # Log error and re-raise - config loading is critical
             import warnings
 
             warnings.warn(f"Failed to load skills from configuration: {e}")
             raise
 
     def route(self, request: RoutingRequest) -> RoutingResult:
-        """Route a request to the appropriate skill.
-
-        Args:
-            request: The routing request
-
-        Returns:
-            RoutingResult with primary skill and alternatives
-        """
+        """Route a request to the appropriate skill."""
         self._stats.total_routes += 1
-
-        # Normalize input
         normalized_input = self._normalize_input(request.query)
 
-        # Try each layer in order
-        for layer_num in range(5):
-            layer_result = self._try_layer(layer_num, normalized_input, request.context)
-            if layer_result:
-                # Update stats
-                layer_name = (
-                    f"layer_{layer_num}_"
-                    f"{'ai' if layer_num == 0 else ['explicit', 'scenario', 'semantic', 'fuzzy'][layer_num - 1]}"
-                )
+        for handler in self._handlers:
+            result = handler.try_match(normalized_input, request.context)
+            if result:
+                layer_name = f"layer_{handler.layer_number}_{handler.layer_name}"
                 self._stats.layer_distribution[layer_name] += 1
-
-                # Apply preference learning boost
-                boosted_result = self._apply_preference_boost(layer_result, normalized_input)
-
+                boosted = self._apply_preference_boost(result, normalized_input)
                 return RoutingResult(
-                    primary=boosted_result,
-                    alternatives=self._get_alternatives(boosted_result),
-                    routing_path=[layer_num],  # type: ignore[arg-type]
+                    primary=boosted,
+                    alternatives=self._get_alternatives(boosted),
+                    routing_path=[handler.layer_number],  # type: ignore[arg-type]
                 )
 
-        # No match found
         self._stats.layer_distribution["no_match"] += 1
         return self._no_match_result(normalized_input)
 
     def get_stats(self) -> dict[str, int | dict[str, int]]:
-        """Get routing statistics.
-
-        Returns:
-            Dictionary with routing statistics
-        """
+        """Get routing statistics."""
         return {
             "total_routes": self._stats.total_routes,
             "layer_distribution": self._stats.layer_distribution.copy(),
         }
 
-    def _try_layer(
-        self,
-        layer_num: int,
-        normalized_input: str,
-        context: dict[str, str | int],
-    ) -> SkillRoute | None:
-        """Try a specific routing layer.
-
-        Args:
-            layer_num: Layer number (0-4)
-            normalized_input: Normalized user input
-            context: Routing context
-
-        Returns:
-            SkillRoute if matched, None otherwise
-        """
-        match layer_num:
-            case 0:
-                return self._layer_0_ai_triage(normalized_input, context)
-            case 1:
-                return self._layer_1_explicit(normalized_input)
-            case 2:
-                return self._layer_2_scenario(normalized_input, context)
-            case 3:
-                return self._layer_3_semantic(normalized_input)
-            case 4:
-                return self._layer_4_fuzzy(normalized_input)
-            case _:
-                return None
-
-    def _layer_0_ai_triage(
-        self,
-        normalized_input: str,
-        context: dict[str, str | int],
-    ) -> SkillRoute | None:
-        """Layer 0: AI-Powered Semantic Triage.
-
-        Uses LLM for semantic understanding (95% accuracy).
-        """
-        if not self._ai_triage_enabled or not self._llm:
-            return None
-
-        # Check cache first
-        cache_key = self._cache.generate_key(normalized_input, context)
-        cached = self._cache.get(cache_key)
-        if cached:
-            return SkillRoute(**cached)
-
-        # Build prompt
-        prompt = self._build_triage_prompt(normalized_input, context)
-
-        try:
-            response = self._llm.call(
-                prompt=prompt,
-                max_tokens=300,
-                temperature=0.3,
-            )
-
-            # Parse response
-            skill_id = self._parse_ai_response(response.content)
-            if skill_id:
-                # Look up skill in config
-                skill = self._config.get_skill_by_id(skill_id)
-                if skill:
-                    result = SkillRoute(
-                        skill_id=skill["id"],
-                        confidence=0.95,
-                        layer=0,
-                        source="ai_triage",
-                    )
-                    # Cache result
-                    self._cache.set(cache_key, result.model_dump())
-                    return result
-        except (TimeoutError, ConnectionError, ValueError, KeyError) as e:
-            # AI triage failed due to network, timeout, or parsing errors
-            # Fall through to next routing layer
-            if os.getenv("VIBE_DEBUG"):
-                import warnings
-
-                warnings.warn(f"AI triage call failed: {e}")
-
-        return None
-
-    def _layer_1_explicit(self, normalized_input: str) -> SkillRoute | None:
-        """Layer 1: Explicit overrides.
-
-        Matches explicit skill invocations like "/review" or "使用 review".
-        """
-        # Direct skill invocation: "/review" or "/review this code"
-        if match := re.match(r"^/(\w+)", normalized_input):
-            skill_id = f"/{match.group(1)}"
-            skill = self._config.get_skill_by_id(skill_id)
-            if skill:
-                return SkillRoute(
-                    skill_id=skill["id"],
-                    confidence=1.0,
-                    layer=1,
-                    source="explicit",
-                )
-
-        # Chinese explicit invocation: "使用 review" or "调用 review"
-        if match := re.match(r"(?:使用|调用)\s*(\w+)", normalized_input):
-            skill_id = f"/{match.group(1)}"
-            skill = self._config.get_skill_by_id(skill_id)
-            if skill:
-                return SkillRoute(
-                    skill_id=skill["id"],
-                    confidence=1.0,
-                    layer=1,
-                    source="explicit",
-                )
-
-        return None
-
-    def _layer_2_scenario(
-        self,
-        normalized_input: str,
-        context: dict[str, str | int],  # noqa: ARG002
-    ) -> SkillRoute | None:
-        """Layer 2: Scenario patterns.
-
-        Matches pre-defined scenarios like "debug error" or "test failure".
-        """
-        # Debug/bug scenarios
-        if any(
-            word in normalized_input
-            for word in ["bug", "error", "错误", "调试", "debug", "fix", "修复"]
-        ):
-            skill = self._config.get_skill_by_id("systematic-debugging")
-            if skill:
-                return SkillRoute(
-                    skill_id=skill["id"],
-                    confidence=0.85,
-                    layer=2,
-                    source="scenario",
-                )
-
-        # Review scenarios
-        if any(word in normalized_input for word in ["review", "审查", "评审", "检查"]):
-            skill = self._config.get_skill_by_id("gstack/review")
-            if not skill:
-                skill = self._config.get_skill_by_id("/review")
-            if skill:
-                return SkillRoute(
-                    skill_id=skill["id"],
-                    confidence=0.85,
-                    layer=2,
-                    source="scenario",
-                )
-
-        # Test scenarios
-        if any(word in normalized_input for word in ["test", "测试", "tdd"]):
-            skill = self._config.get_skill_by_id("superpowers/tdd")
-            if not skill:
-                skill = self._config.get_skill_by_id("/test")
-            if skill:
-                return SkillRoute(
-                    skill_id=skill["id"],
-                    confidence=0.85,
-                    layer=2,
-                    source="scenario",
-                )
-
-        # Refactor scenarios
-        if any(word in normalized_input for word in ["refactor", "重构"]):
-            skill = self._config.get_skill_by_id("superpowers/refactor")
-            if skill:
-                return SkillRoute(
-                    skill_id=skill["id"],
-                    confidence=0.85,
-                    layer=2,
-                    source="scenario",
-                )
-
-        return None
-
-    def _layer_3_semantic(self, normalized_input: str) -> SkillRoute | None:
-        """Layer 3: Semantic matching.
-
-        Uses TF-IDF + cosine similarity for semantic matching.
-        """
-        matches = self._semantic_matcher.match(normalized_input, top_k=1)
-
-        if matches and matches[0].score >= 0.5:
-            match = matches[0]
-            return SkillRoute(
-                skill_id=match.skill_id,
-                confidence=match.score,
-                layer=3,
-                source="semantic",
-            )
-
-        return None
-
-    def _layer_4_fuzzy(
-        self,
-        normalized_input: str,
-    ) -> SkillRoute | None:
-        """Layer 4: Fuzzy matching.
-
-        Uses Levenshtein distance for fuzzy matching.
-        """
-        matches = self._fuzzy_matcher.match(normalized_input, top_k=1)
-
-        if matches and matches[0].score >= 0.7:
-            match = matches[0]
-            return SkillRoute(
-                skill_id=match.skill_id,
-                confidence=match.score,
-                layer=4,
-                source="fuzzy",
-            )
-
-        return None
-
-    def _no_match_result(
-        self,
-        normalized_input: str,  # noqa: ARG002
-    ) -> RoutingResult:
+    def _no_match_result(self, normalized_input: str) -> RoutingResult:  # noqa: ARG002
         """Create a no-match result."""
-        # Return a general workflow skill
         skill = self._config.get_skill_by_id("riper-workflow")
         skill_id = skill["id"] if skill else "/riper-workflow"
-
-        primary = SkillRoute(
-            skill_id=skill_id,
-            confidence=0.3,
-            layer=4,
-            source="fallback",
-        )
-
-        return RoutingResult(
-            primary=primary,
-            alternatives=[],
-            routing_path=[],
-        )
+        primary = SkillRoute(skill_id=skill_id, confidence=0.3, layer=4, source="fallback")
+        return RoutingResult(primary=primary, alternatives=[], routing_path=[])
 
     def _normalize_input(self, input_text: str) -> str:
         """Normalize input text for matching."""
-        # Remove punctuation
         normalized = re.sub(r"[^\w\s]", " ", input_text)
-        # Normalize whitespace
         normalized = re.sub(r"\s+", " ", normalized)
         return normalized.strip().lower()
 
-    def _build_triage_prompt(self, input_text: str, context: dict[str, str | int]) -> str:
-        """Build prompt for AI triage."""
-        # Get skills summary from config
-        skills_list = self._config.get_all_skills()
-        skills_summary = "\n".join(
-            f"- {s['id']}: {s.get('intent', 'N/A')}" for s in skills_list[:20]
-        )  # Limit to 20 skills for token efficiency
+    # -- Preference learning --
 
-        context_str = ""
-        if context:
-            context_str = f"\nContext: {context}"
-
-        return f"""Analyze the user request and select the most appropriate skill.
-
-User request: {input_text}{context_str}
-
-Available skills (top 20):
-{skills_summary}
-
-Return ONLY the skill ID (e.g., "gstack/review" or "systematic-debugging"). Do not include any other text.
-
-Skill ID:"""
-
-    def _parse_ai_response(self, response: str) -> str | None:
-        """Parse AI response to extract skill ID."""
-        # Extract skill ID from response
-        # Handle markdown code blocks
-        if match := re.search(r"```(?:json)?\s*(\S+)```", response):
-            return match.group(1)
-
-        # Handle plain text response
-        if match := re.search(r"^[\w/-]+", response.strip(), re.MULTILINE):
-            return match.group(0)
-
-        return None
-
-    def record_selection(
-        self,
-        skill_id: str,
-        query: str,
-        was_helpful: bool = True,
-    ) -> None:
-        """Record a skill selection for preference learning.
-
-        Args:
-            skill_id: Selected skill ID
-            query: Original user query
-            was_helpful: Whether the user found it helpful
-        """
+    def record_selection(self, skill_id: str, query: str, was_helpful: bool = True) -> None:
+        """Record a skill selection for preference learning."""
         self._preference_learner.record_selection(skill_id, query, was_helpful)
 
     def get_preference_stats(self) -> dict[str, Any]:
-        """Get preference learning statistics.
-
-        Returns:
-            Dictionary with preference stats
-        """
+        """Get preference learning statistics."""
         return self._preference_learner.get_stats()
 
-    def get_top_skills(
-        self,
-        limit: int = 5,
-        min_selections: int = 2,
-    ) -> list[Any]:
-        """Get top preferred skills based on user history.
-
-        Args:
-            limit: Maximum number to return
-            min_selections: Minimum selection count required
-
-        Returns:
-            List of PreferenceScore objects
-        """
+    def get_top_skills(self, limit: int = 5, min_selections: int = 2) -> list[Any]:
+        """Get top preferred skills based on user history."""
         return self._preference_learner.get_top_skills(limit, min_selections)
 
     def clear_old_preferences(self, days: int = 90) -> int:
-        """Clear old preference data.
-
-        Args:
-            days: Remove data older than this many days
-
-        Returns:
-            Number of records removed
-        """
+        """Clear old preference data."""
         return self._preference_learner.clear_old_data(days)
 
-    def _apply_preference_boost(
-        self,
-        route: SkillRoute,
-        query: str,  # noqa: ARG002
-    ) -> SkillRoute:
-        """Apply preference learning boost to a route.
-
-        Args:
-            route: Original route result
-            query: User's query (used for context boost calculation)
-
-        Returns:
-            Boosted route with adjusted confidence
-        """
-        # Get preference score for this skill
+    def _apply_preference_boost(self, route: SkillRoute, query: str) -> SkillRoute:  # noqa: ARG002
+        """Apply preference learning boost to a route."""
         pref_score = self._preference_learner.get_preference_score(route.skill_id)
-
-        # If no preference data, return original
         if pref_score == 0.0:
             return route
 
-        # Boost confidence based on preference (max 20% boost)
-        boost = pref_score * 0.2  # Max 20% boost
+        boost = pref_score * 0.2
         boosted_confidence = min(1.0, route.confidence + boost)
-
-        # Create boosted route
         return SkillRoute(
             skill_id=route.skill_id,
             confidence=boosted_confidence,
@@ -579,33 +222,16 @@ Skill ID:"""
             },
         )
 
-    def _get_alternatives(
-        self,
-        primary: SkillRoute,
-    ) -> list[SkillRoute]:
-        """Get alternative skill matches based on similarity.
-
-        Returns up to 3 alternative skills that are similar to the primary match.
-
-        Args:
-            primary: The primary skill route
-
-        Returns:
-            List of alternative skill routes sorted by similarity
-        """
+    def _get_alternatives(self, primary: SkillRoute) -> list[SkillRoute]:
+        """Get alternative skill matches based on similarity."""
         alternatives: list[SkillRoute] = []
-
-        # Get all skills from config
         try:
             all_skills = self._config.get_all_skills()
             if not all_skills:
                 return alternatives
 
-            # Use semantic matcher to find similar skills
             primary_skill_id = primary.skill_id
             primary_intent = ""
-
-            # Get intent of primary skill
             for skill in all_skills:
                 if skill["id"] == primary_skill_id:
                     primary_intent = skill.get("intent", skill.get("description", ""))
@@ -614,25 +240,18 @@ Skill ID:"""
             if not primary_intent:
                 return alternatives
 
-            # Find similar skills using semantic matching
             similar_skills: list[dict[str, Any]] = []
             for skill in all_skills:
-                # Skip the primary skill itself
                 if skill["id"] == primary_skill_id:
                     continue
-
                 skill_intent = skill.get("intent", skill.get("description", ""))
-
-                # Calculate simple similarity based on keyword overlap
                 primary_words = set(primary_intent.lower().split())
                 skill_words = set(skill_intent.lower().split())
-
                 if primary_words and skill_words:
                     intersection = primary_words & skill_words
                     union = primary_words | skill_words
                     similarity = len(intersection) / len(union) if union else 0
-
-                    if similarity > 0.2:  # Minimum similarity threshold
+                    if similarity > 0.2:
                         similar_skills.append(
                             {
                                 "skill_id": skill["id"],
@@ -641,12 +260,8 @@ Skill ID:"""
                             }
                         )
 
-            # Sort by similarity and take top 3
             similar_skills.sort(key=lambda x: x["similarity"], reverse=True)
-            similar_skills = similar_skills[:3]
-
-            # Create SkillRoute objects for alternatives
-            for skill_info in similar_skills:
+            for skill_info in similar_skills[:3]:
                 alternatives.append(
                     SkillRoute(
                         skill_id=skill_info["skill_id"],
@@ -656,10 +271,7 @@ Skill ID:"""
                         metadata={"similarity": skill_info["similarity"]},
                     )
                 )
-
         except (KeyError, AttributeError, TypeError) as e:
-            # Alternative selection failed due to data access issues
-            # Return empty list and allow routing to continue
             if os.getenv("VIBE_DEBUG"):
                 import warnings
 

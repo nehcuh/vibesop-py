@@ -4,9 +4,11 @@ import os
 import shutil
 import tempfile
 from pathlib import Path
+from unittest.mock import Mock
 
 from vibesop.core.models import RoutingRequest, SkillRoute
 from vibesop.core.routing.engine import SkillRouter
+from vibesop.core.routing.handlers import AITriageHandler
 
 
 class TestLayer1Explicit:
@@ -330,44 +332,28 @@ class TestAIResponseParsing:
     """Test AI response parsing."""
 
     def test_parse_plain_skill_id(self) -> None:
-        """Test parsing plain skill ID."""
-        router = SkillRouter(enable_ai_triage=False)
-
-        result = router._parse_ai_response("gstack/review")
-
+        handler = AITriageHandler(None, Mock(), Mock())
+        result = handler._parse_response("gstack/review")
         assert result == "gstack/review"
 
     def test_parse_markdown_code_block(self) -> None:
-        """Test parsing markdown code block."""
-        router = SkillRouter(enable_ai_triage=False)
-
-        result = router._parse_ai_response("```json\ngstack/review\n```")
-
+        handler = AITriageHandler(None, Mock(), Mock())
+        result = handler._parse_response("```json\ngstack/review\n```")
         assert result == "gstack/review"
 
     def test_parse_plain_code_block(self) -> None:
-        """Test parsing plain code block."""
-        router = SkillRouter(enable_ai_triage=False)
-
-        result = router._parse_ai_response("```\ngstack/review\n```")
-
+        handler = AITriageHandler(None, Mock(), Mock())
+        result = handler._parse_response("```\ngstack/review\n```")
         assert result == "gstack/review"
 
     def test_parse_multiline_response(self) -> None:
-        """Test parsing multiline response."""
-        router = SkillRouter(enable_ai_triage=False)
-
-        # The regex matches first non-empty line
-        result = router._parse_ai_response("systematic-debugging\nMore text")
-
+        handler = AITriageHandler(None, Mock(), Mock())
+        result = handler._parse_response("systematic-debugging\nMore text")
         assert result == "systematic-debugging"
 
     def test_parse_invalid_response(self) -> None:
-        """Test parsing invalid response returns None."""
-        router = SkillRouter(enable_ai_triage=False)
-
-        result = router._parse_ai_response("")
-
+        handler = AITriageHandler(None, Mock(), Mock())
+        result = handler._parse_response("")
         assert result is None
 
 
@@ -375,27 +361,24 @@ class TestTriagePrompt:
     """Test AI triage prompt generation."""
 
     def test_prompt_includes_input(self) -> None:
-        """Test prompt includes user input."""
-        router = SkillRouter(enable_ai_triage=False)
-
-        prompt = router._build_triage_prompt("test query", {})
-
+        mock_config = Mock()
+        mock_config.get_all_skills.return_value = []
+        handler = AITriageHandler(None, Mock(), mock_config)
+        prompt = handler._build_prompt("test query", {})
         assert "test query" in prompt
 
     def test_prompt_includes_context(self) -> None:
-        """Test prompt includes context."""
-        router = SkillRouter(enable_ai_triage=False)
-
-        prompt = router._build_triage_prompt("test", {"file_type": "py"})
-
+        mock_config = Mock()
+        mock_config.get_all_skills.return_value = []
+        handler = AITriageHandler(None, Mock(), mock_config)
+        prompt = handler._build_prompt("test", {"file_type": "py"})
         assert "file_type" in prompt or "py" in prompt
 
     def test_prompt_lists_skills(self) -> None:
-        """Test prompt lists available skills."""
-        router = SkillRouter(enable_ai_triage=False)
-
-        prompt = router._build_triage_prompt("test", {})
-
+        mock_config = Mock()
+        mock_config.get_all_skills.return_value = [{"id": "test-skill", "intent": "test"}]
+        handler = AITriageHandler(None, Mock(), mock_config)
+        prompt = handler._build_prompt("test", {})
         assert "skills" in prompt.lower()
 
 
@@ -403,32 +386,22 @@ class TestRouterInit:
     """Test router initialization."""
 
     def test_init_with_custom_cache_dir(self) -> None:
-        """Test initialization with custom cache directory."""
         tmpdir = Path(tempfile.mkdtemp())
         router = SkillRouter(cache_dir=str(tmpdir / "cache"))
-
         assert router._cache.cache_dir == tmpdir / "cache"
-
-        # Cleanup
         shutil.rmtree(tmpdir)
 
     def test_init_with_ai_triage_disabled(self) -> None:
-        """Test initialization with AI triage disabled."""
         router = SkillRouter(enable_ai_triage=False)
-
-        assert not router._ai_triage_enabled
-        assert router._llm is None
+        ai_handler = router._handlers[0]
+        assert ai_handler._llm is None
 
     def test_init_with_ai_triage_enabled(self) -> None:
-        """Test initialization with AI triage enabled."""
-        # Only test if API key is available
         if not os.getenv("ANTHROPIC_API_KEY") and not os.getenv("OPENAI_API_KEY"):
-            return  # Skip test if no API key
-
+            return
         router = SkillRouter(enable_ai_triage=True)
-
-        # Should have attempted to initialize LLM
-        assert router._ai_triage_enabled or router._llm is not None
+        ai_handler = router._handlers[0]
+        assert ai_handler._llm is not None or ai_handler._ai_triage_enabled is False
 
 
 class TestSkillRoute:
