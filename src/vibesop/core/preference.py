@@ -95,10 +95,31 @@ class PreferenceLearner:
         """
         self.storage_path = Path(storage_path)
         self.decay_days = decay_days if decay_days is not None else PreferenceSettings.DECAY_DAYS
-        self.min_samples = min_samples if min_samples is not None else PreferenceSettings.MIN_SAMPLES
+        self.min_samples = (
+            min_samples if min_samples is not None else PreferenceSettings.MIN_SAMPLES
+        )
 
         self._storage = self._load_storage()
         self._recalculate_scores()
+
+    def record_feedback(
+        self,
+        skill_id: str,
+        query: str,
+        helpful: bool,
+    ) -> None:
+        """Record explicit feedback for a skill recommendation.
+
+        This allows recording feedback independently of a selection event,
+        useful for correcting past recommendations.
+
+        Args:
+            skill_id: The skill that was recommended.
+            query: The original user query.
+            helpful: Whether the recommendation was helpful.
+        """
+        # Record as a selection event with the feedback
+        self.record_selection(skill_id, query, was_helpful=helpful)
 
     def record_selection(
         self,

@@ -16,6 +16,7 @@ from vibesop import __version__
 from vibesop.core.models import RoutingRequest
 from vibesop.core.routing.engine import SkillRouter
 from vibesop.core.skills import SkillManager
+
 # Import command modules
 from vibesop.cli.commands import init as init_module
 from vibesop.cli.commands import build as build_module
@@ -118,8 +119,16 @@ def doctor() -> None:
     ]
 
     for name, (status, message) in checks:
-        icon = "✅" if status else "⚠️ " if name in ["Platform Integrations", "Hook Status"] else "❌"
-        color = "green" if status else "yellow" if name in ["Platform Integrations", "Hook Status"] else "red"
+        icon = (
+            "✅" if status else "⚠️ " if name in ["Platform Integrations", "Hook Status"] else "❌"
+        )
+        color = (
+            "green"
+            if status
+            else "yellow"
+            if name in ["Platform Integrations", "Hook Status"]
+            else "red"
+        )
         console.print(f"{icon} [{color}]{name}[/{color}]: {message}")
 
     # Overall status
@@ -221,7 +230,9 @@ def _check_hooks() -> tuple[bool, str]:
             verify_result = installer.verify(platform_name)
 
             if verify_result["installed"]:
-                hook_count = sum(1 for status in verify_result.get("hooks_installed", {}).values() if status)
+                hook_count = sum(
+                    1 for status in verify_result.get("hooks_installed", {}).values() if status
+                )
                 total_hooks = len(verify_result.get("hooks_installed", {}))
                 results.append(f"{platform_name}: {hook_count}/{total_hooks}")
             else:
@@ -263,6 +274,28 @@ def record(
     if score > 0:
         console.print(f"   Preference score: {score:.2%}")
     console.print("   This will improve future recommendations.")
+
+
+@app.command("route-stats")
+def route_stats() -> None:
+    """Show routing statistics.
+
+    Example:
+        vibe route-stats
+    """
+    router = SkillRouter()
+    stats = router.get_stats()
+
+    console.print("[bold]📊 Routing Statistics[/bold]\n")
+    console.print(f"Total routes: {stats['total_routes']}")
+
+    if stats["total_routes"] > 0:
+        console.print("\n[bold]Layer Distribution:[/bold]")
+        for layer, count in stats["layer_distribution"].items():
+            pct = count / stats["total_routes"] * 100
+            console.print(f"  • {layer}: {count} ({pct:.0f}%)")
+
+    console.print(f"\nCache: {stats.get('cache_dir', 'N/A')}")
 
 
 @app.command("preferences")

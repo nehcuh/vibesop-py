@@ -212,3 +212,20 @@ class TestPreferenceLearner:
         assert "debug" in words
         # Note: "and" is not filtered as it's long enough
         # Stop words filtering only applies to very common words
+
+    def test_record_feedback(self) -> None:
+        """Test recording explicit feedback."""
+        learner = self._create_learner()
+
+        # Record positive feedback
+        learner.record_feedback("/review", "review my code", helpful=True)
+        assert len(learner.get_selection_history()) == 1
+
+        # Record negative feedback
+        learner.record_feedback("/review", "review my code", helpful=False)
+        assert len(learner.get_selection_history()) == 2
+
+        # Check stats
+        stats = learner.get_stats()
+        assert stats["total_selections"] == 2
+        assert stats["helpful_count"] == 1
