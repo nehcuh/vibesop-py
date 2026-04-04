@@ -299,7 +299,7 @@ This is safe again on line 4."""
 
         # Content that might trigger heuristics but not patterns
         text = "This is a jailbreak with workaround and bypass"
-        result = scanner.scan(text)
+        scanner.scan(text)
 
         # With heuristics disabled, fewer threats might be detected
         # This test mainly verifies the option is accepted

@@ -4,9 +4,10 @@ Tests session analysis, pattern detection, and skill suggestion
 generation commands.
 """
 
-import json
+# pyright: reportPrivateUsage=none, reportUnknownMemberType=none, reportUnknownVariableType=none, reportUnknownArgumentType=none, reportUnknownParameterType=none, reportMissingParameterType=none
+
 from pathlib import Path
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
 import pytest
 from typer.testing import CliRunner
@@ -162,7 +163,18 @@ class TestAnalyzeSuggestions:
 
     def test_analyze_suggestions_basic(self, sample_session_file):
         """Test basic suggestion generation."""
-        result = runner.invoke(app, ["analyze", "suggestions", str(sample_session_file), "--min-frequency", "2", "--min-confidence", "0.3"])
+        result = runner.invoke(
+            app,
+            [
+                "analyze",
+                "suggestions",
+                str(sample_session_file),
+                "--min-frequency",
+                "2",
+                "--min-confidence",
+                "0.3",
+            ],
+        )
 
         assert result.exit_code == 0
         assert "Skill Suggestions" in result.stdout
@@ -176,7 +188,17 @@ class TestAnalyzeSuggestions:
             mock_ai.return_value = []  # Return empty to avoid actual AI call
 
             result = runner.invoke(
-                app, ["analyze", "suggestions", str(sample_session_file), "--ai", "--min-frequency", "2", "--min-confidence", "0.3"]
+                app,
+                [
+                    "analyze",
+                    "suggestions",
+                    str(sample_session_file),
+                    "--ai",
+                    "--min-frequency",
+                    "2",
+                    "--min-confidence",
+                    "0.3",
+                ],
             )
 
             assert result.exit_code == 0
@@ -188,7 +210,7 @@ class TestAnalyzeSuggestions:
         skills_dir = tmp_path / ".vibe" / "skills"
         skills_dir.mkdir(parents=True)
 
-        with patch("vibesop.cli.commands.analyze._auto_create_enhanced_skills") as mock_create:
+        with patch("vibesop.cli.commands.analyze._auto_create_enhanced_skills"):
             result = runner.invoke(
                 app, ["analyze", "suggestions", str(sample_session_file), "--auto-craft"]
             )
@@ -229,9 +251,7 @@ class TestAutoAnalyzeSession:
 
     def test_auto_analyze_quiet_mode(self, sample_session_file):
         """Test auto-analysis in quiet mode."""
-        result = runner.invoke(
-            app, ["auto-analyze-session", str(sample_session_file), "--quiet"]
-        )
+        result = runner.invoke(app, ["auto-analyze-session", str(sample_session_file), "--quiet"])
 
         # Should succeed silently
         assert result.exit_code == 0
@@ -391,23 +411,28 @@ class TestAIEnhancementIntegration:
             confidence=0.85,
         )
 
-        with patch(
-            "vibesop.cli.commands.analyze._ai_enhance_suggestions"
-        ) as mock_ai:
+        with patch("vibesop.cli.commands.analyze._ai_enhance_suggestions") as mock_ai:
             # Make the analyzer return suggestions first
             from vibesop.core.session_analyzer import SessionAnalyzer
+
             analyzer = SessionAnalyzer(min_frequency=3, min_confidence=0.3)
             suggestions = analyzer.analyze_session_file(sample_session_file)
 
             # Then mock AI enhancement to add our enhanced skill
-            mock_ai.return_value = [enhanced] + suggestions[1:] if len(suggestions) > 1 else [enhanced]
+            mock_ai.return_value = (
+                [enhanced] + suggestions[1:] if len(suggestions) > 1 else [enhanced]
+            )
 
             result = runner.invoke(
                 app, ["analyze", "suggestions", str(sample_session_file), "--ai"]
             )
 
             # Should complete without error
-            assert result.exit_code == 0 or "AI-Enhanced" in result.stdout or "Code Optimization" in result.stdout
+            assert (
+                result.exit_code == 0
+                or "AI-Enhanced" in result.stdout
+                or "Code Optimization" in result.stdout
+            )
 
 
 class TestWorkflowIntegration:
@@ -445,7 +470,7 @@ class TestWorkflowIntegration:
         assert "Skill Suggestions" in result.stdout
 
         # Step 2: Create skills (without AI for speed)
-        with patch("vibesop.cli.commands.analyze._auto_create_enhanced_skills") as mock_create:
+        with patch("vibesop.cli.commands.analyze._auto_create_enhanced_skills"):
             result = runner.invoke(
                 app, ["analyze", "suggestions", str(workflow_session), "--auto-craft"]
             )

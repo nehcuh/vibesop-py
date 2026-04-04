@@ -1,6 +1,5 @@
 """Tests for cascade execution system."""
 
-import pytest
 import asyncio
 import tempfile
 from pathlib import Path
@@ -9,7 +8,6 @@ from vibesop.workflow import (
     CascadeExecutor,
     WorkflowStep,
     WorkflowConfig,
-    StepResult,
     StepStatus,
     ExecutionStrategy,
 )
@@ -158,7 +156,7 @@ class TestCascadeExecutor:
         results = asyncio.run(executor.execute(config))
 
         assert results["step1"].status == StepStatus.FAILED
-        assert "Step failed" in results["step1"].error
+        assert "Step failed" in (results["step1"].error or "")
 
     def test_execute_parallel(self) -> None:
         """Test parallel execution."""

@@ -61,6 +61,7 @@ class TestLLMProvider:
 
     def test_provider_requires_implementation(self) -> None:
         """Test that call method raises NotImplementedError."""
+
         # Create a minimal implementation
         class DummyProvider(LLMProvider):
             @property
@@ -86,6 +87,7 @@ class TestLLMProvider:
 
     def test_configured_with_api_key(self) -> None:
         """Test configured checks API key length."""
+
         class DummyProvider(LLMProvider):
             @property
             def provider_name(self) -> str:
@@ -111,6 +113,7 @@ class TestLLMProvider:
 
     def test_stats(self) -> None:
         """Test getting provider stats."""
+
         class DummyProvider(LLMProvider):
             @property
             def provider_name(self) -> str:
@@ -245,7 +248,7 @@ class TestCreateFromEnv:
         finally:
             # Restore
             if old_anthropic or "ANTHROPIC_API_KEY" in os.environ:
-                os.environ["ANTHROPIC_API_KEY"] = old_anthropic
+                os.environ["ANTHROPIC_API_KEY"] = old_anthropic  # type: ignore[assignment]
             if old_openai:
                 os.environ["OPENAI_API_KEY"] = old_openai
             elif "OPENAI_API_KEY" in os.environ:

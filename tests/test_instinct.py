@@ -1,6 +1,5 @@
 """Tests for instinct management system."""
 
-import pytest
 import tempfile
 from pathlib import Path
 import uuid
@@ -10,7 +9,6 @@ from vibesop.workflow.instinct import (
     InstinctManager,
     Decision,
     DecisionContext,
-    Pattern,
     ActionType,
     ConfidenceLevel,
 )

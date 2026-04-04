@@ -1,9 +1,10 @@
 """Unit tests for semantic matching strategies."""
 
+# pyright: reportPrivateUsage=none, reportUnknownMemberType=none, reportUnknownVariableType=none, reportUnknownArgumentType=none, reportUnknownParameterType=none, reportMissingParameterType=none
+
 from __future__ import annotations
 
-from pathlib import Path
-from unittest.mock import Mock, patch
+from unittest.mock import Mock
 
 import numpy as np
 import pytest
@@ -286,8 +287,10 @@ class TestHybridMatchingStrategyMatch:
         strategy = HybridMatchingStrategy(
             mock_encoder,
             mock_cache,
-            threshold=0.9,
+            threshold=0.5,
         )
+
+        _ = strategy
 
         matches = strategy.match("test query", sample_patterns)
 
@@ -334,14 +337,14 @@ class TestHybridMatchingStrategyScoreFusion:
         mock_cache,
     ):
         """Test that high traditional score (>0.8) is kept."""
-        strategy = HybridMatchingStrategy(
+        HybridMatchingStrategy(
             mock_encoder,
             mock_cache,
             threshold=0.5,  # Low threshold to allow matches
         )
 
         # Create a pattern with high traditional score
-        pattern = SemanticPattern(
+        SemanticPattern(
             pattern_id="test/pattern",
             examples=["test"],
             threshold=0.5,

@@ -4,9 +4,10 @@ Tests the complete CLI workflow from command invocation
 to execution, including file I/O and error handling.
 """
 
+# pyright: reportPrivateUsage=none, reportUnknownMemberType=none, reportUnknownVariableType=none, reportUnknownArgumentType=none, reportUnknownParameterType=none, reportMissingParameterType=none
+
 import pytest
 from typer.testing import CliRunner
-from pathlib import Path
 
 from vibesop.cli.main import app
 
@@ -59,24 +60,14 @@ class TestCLICommandAuto:
 
     def test_auto_command_with_input(self, runner):
         """Test auto command with input data."""
-        result = runner.invoke(app, [
-            "auto",
-            "scan",
-            "--input", '{"target": "./src"}',
-            "--dry-run"
-        ])
+        result = runner.invoke(app, ["auto", "scan", "--input", '{"target": "./src"}', "--dry-run"])
 
         assert result.exit_code == 0
         assert "DRY RUN" in result.stdout
 
     def test_auto_command_verbose(self, runner):
         """Test auto command with --verbose flag."""
-        result = runner.invoke(app, [
-            "auto",
-            "--verbose",
-            "--dry-run",
-            "scan for security issues"
-        ])
+        result = runner.invoke(app, ["auto", "--verbose", "--dry-run", "scan for security issues"])
 
         assert result.exit_code == 0
         assert "Intent Detected" in result.stdout or "No intent detected" in result.stdout
@@ -93,11 +84,7 @@ class TestCLICommandAuto:
 
     def test_auto_command_invalid_json_input(self, runner):
         """Test auto command with invalid JSON input."""
-        result = runner.invoke(app, [
-            "auto",
-            "test",
-            "--input", "invalid json"
-        ])
+        result = runner.invoke(app, ["auto", "test", "--input", "invalid json"])
 
         assert result.exit_code == 1
         assert "Invalid JSON" in result.stdout
@@ -163,11 +150,7 @@ class TestAutoCommandCategories:
 
     def test_security_category_detection(self, runner):
         """Test security category queries."""
-        queries = [
-            "scan for security vulnerabilities",
-            "check security issues",
-            "security audit"
-        ]
+        queries = ["scan for security vulnerabilities", "check security issues", "security audit"]
 
         for query in queries:
             result = runner.invoke(app, ["auto", "--dry-run", query])
@@ -175,11 +158,7 @@ class TestAutoCommandCategories:
 
     def test_config_category_detection(self, runner):
         """Test config category queries."""
-        queries = [
-            "deploy configuration",
-            "validate config",
-            "render config files"
-        ]
+        queries = ["deploy configuration", "validate config", "render config files"]
 
         for query in queries:
             result = runner.invoke(app, ["auto", "--dry-run", query])
@@ -187,11 +166,7 @@ class TestAutoCommandCategories:
 
     def test_dev_category_detection(self, runner):
         """Test dev category queries."""
-        queries = [
-            "run tests",
-            "build project",
-            "debug code"
-        ]
+        queries = ["run tests", "build project", "debug code"]
 
         for query in queries:
             result = runner.invoke(app, ["auto", "--dry-run", query])
@@ -199,11 +174,7 @@ class TestAutoCommandCategories:
 
     def test_docs_category_detection(self, runner):
         """Test docs category queries."""
-        queries = [
-            "generate documentation",
-            "create readme",
-            "update docs"
-        ]
+        queries = ["generate documentation", "create readme", "update docs"]
 
         for query in queries:
             result = runner.invoke(app, ["auto", "--dry-run", query])
@@ -211,11 +182,7 @@ class TestAutoCommandCategories:
 
     def test_project_category_detection(self, runner):
         """Test project category queries."""
-        queries = [
-            "initialize new project",
-            "migrate project",
-            "project audit"
-        ]
+        queries = ["initialize new project", "migrate project", "project audit"]
 
         for query in queries:
             result = runner.invoke(app, ["auto", "--dry-run", query])

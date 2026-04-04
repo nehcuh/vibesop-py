@@ -1,5 +1,7 @@
 """Tests for KeywordDetector class."""
 
+# pyright: reportPrivateUsage=none, reportUnknownMemberType=none, reportUnknownVariableType=none, reportUnknownArgumentType=none, reportUnknownParameterType=none, reportMissingParameterType=none
+
 import pytest
 
 from vibesop.triggers.detector import KeywordDetector
@@ -20,7 +22,7 @@ def sample_patterns():
             skill_id="/security/scan",
             priority=100,
             confidence_threshold=0.6,
-            examples=["scan for security issues", "security scan"]
+            examples=["scan for security issues", "security scan"],
         ),
         TriggerPattern(
             pattern_id="dev/test",
@@ -32,7 +34,7 @@ def sample_patterns():
             skill_id="/dev/test",
             priority=90,
             confidence_threshold=0.5,
-            examples=["run tests", "execute tests"]
+            examples=["run tests", "execute tests"],
         ),
         TriggerPattern(
             pattern_id="docs/generate",
@@ -44,8 +46,8 @@ def sample_patterns():
             skill_id="/docs/generate",
             priority=80,
             confidence_threshold=0.7,
-            examples=["generate documentation"]
-        )
+            examples=["generate documentation"],
+        ),
     ]
 
 
@@ -76,7 +78,7 @@ class TestKeywordDetectorInit:
                 category=PatternCategory.DEV,
                 keywords=["test"],
                 skill_id="/test",
-                priority=10
+                priority=10,
             ),
             TriggerPattern(
                 pattern_id="test/high",
@@ -85,7 +87,7 @@ class TestKeywordDetectorInit:
                 category=PatternCategory.DEV,
                 keywords=["test"],
                 skill_id="/test",
-                priority=100
+                priority=100,
             ),
             TriggerPattern(
                 pattern_id="test/medium",
@@ -94,8 +96,8 @@ class TestKeywordDetectorInit:
                 category=PatternCategory.DEV,
                 keywords=["test"],
                 skill_id="/test",
-                priority=50
-            )
+                priority=50,
+            ),
         ]
 
         detector = KeywordDetector(patterns=patterns)
@@ -107,10 +109,7 @@ class TestKeywordDetectorInit:
 
     def test_custom_confidence_threshold(self, sample_patterns):
         """Test custom confidence threshold."""
-        detector = KeywordDetector(
-            patterns=sample_patterns,
-            confidence_threshold=0.8
-        )
+        detector = KeywordDetector(patterns=sample_patterns, confidence_threshold=0.8)
 
         assert detector.confidence_threshold == 0.8
 
@@ -166,7 +165,7 @@ class TestDetectBest:
             skill_id="/security/scan",
             priority=100,
             confidence_threshold=0.6,
-            examples=["扫描安全漏洞", "安全检查"]
+            examples=["扫描安全漏洞", "安全检查"],
         )
 
         detector_cn = KeywordDetector(patterns=[chinese_pattern])
@@ -196,7 +195,7 @@ class TestDetectAll:
         assert isinstance(matches, list)
         # At least one pattern should match
         if matches:
-            assert all(isinstance(m, pattern_id) for m in matches)
+            assert all(hasattr(m, "pattern_id") and hasattr(m, "confidence") for m in matches)
 
     def test_detect_all_sorted_by_confidence(self, detector):
         """Test results are sorted by confidence."""
@@ -204,7 +203,7 @@ class TestDetectAll:
 
         # Check if sorted in descending order
         for i in range(len(matches) - 1):
-            assert matches[i].confidence >= matches[i+1].confidence
+            assert matches[i].confidence >= matches[i + 1].confidence
 
     def test_detect_all_empty_query(self, detector):
         """Test with empty query."""
@@ -283,7 +282,7 @@ class TestPatternThresholds:
                 category=PatternCategory.DEV,
                 keywords=["test"],
                 skill_id="/test",
-                confidence_threshold=0.9  # Very high threshold
+                confidence_threshold=0.9,  # Very high threshold
             )
         ]
 
@@ -305,7 +304,7 @@ class TestPatternThresholds:
                 description="Test",
                 category=PatternCategory.DEV,
                 keywords=["test"],
-                skill_id="/test"
+                skill_id="/test",
                 # confidence_threshold defaults to 0.6
             )
         ]
@@ -334,14 +333,14 @@ class TestEdgeCases:
                 category=PatternCategory.DEV,
                 keywords=["test"],
                 regex_patterns=["[invalid"],  # Invalid regex
-                skill_id="/test"
+                skill_id="/test",
             )
         ]
 
         detector = KeywordDetector(patterns=patterns)
 
         # Should not crash, just skip invalid regex
-        match = detector.detect_best("test")
+        detector.detect_best("test")
         # May or may not match based on keywords
         # The important thing is it doesn't crash
         assert True  # Test passes if no exception is raised

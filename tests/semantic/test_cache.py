@@ -5,6 +5,8 @@ Tests cover all public methods and key private methods of VectorCache,
 CacheMetadata, and CacheStats.
 """
 
+# pyright: reportPrivateUsage=none, reportUnknownMemberType=none, reportUnknownVariableType=none, reportUnknownArgumentType=none, reportUnknownParameterType=none, reportMissingParameterType=none
+
 from __future__ import annotations
 
 import json
@@ -273,8 +275,8 @@ class TestVectorCacheGetOrCompute:
     def test_different_patterns_compute_separately(self, temp_cache_dir, mock_encoder):
         """Test different patterns are computed separately."""
         cache = VectorCache(cache_dir=temp_cache_dir, encoder=mock_encoder)
-        v1 = cache.get_or_compute("pattern1", ["example 1"])
-        v2 = cache.get_or_compute("pattern2", ["example 2"])
+        cache.get_or_compute("pattern1", ["example 1"])
+        cache.get_or_compute("pattern2", ["example 2"])
         assert mock_encoder.encode.call_count == 2
         assert len(cache._vectors) == 2
 

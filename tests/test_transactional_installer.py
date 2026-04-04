@@ -1,14 +1,13 @@
 """Tests for transactional installation."""
 
-import pytest
 import tempfile
+from typing import Any
 from pathlib import Path
 
 from vibesop.installer.transactional import (
     TransactionalInstaller,
     FileTransactionalInstaller,
     TransactionResult,
-    InstallationStep,
     execute_transaction,
 )
 
@@ -27,24 +26,24 @@ class TestTransactionalInstaller:
         with tempfile.TemporaryDirectory() as tmpdir:
             installer = TransactionalInstaller(snapshot_dir=Path(tmpdir))
 
-            def execute() -> dict:
+            def execute() -> dict[str, Any]:
                 return {"success": True}
 
             installer.add_step("Test step", execute)
-            assert len(installer._steps) == 1
+            assert len(installer._steps) == 1  # type: ignore[reportPrivateUsage]
 
     def test_execute_success(self) -> None:
         """Test successful execution."""
         with tempfile.TemporaryDirectory() as tmpdir:
             installer = TransactionalInstaller(snapshot_dir=Path(tmpdir))
 
-            executed = []
+            executed: list[str] = []
 
-            def step1() -> dict:
+            def step1() -> dict[str, Any]:
                 executed.append("step1")
                 return {"success": True}
 
-            def step2() -> dict:
+            def step2() -> dict[str, Any]:
                 executed.append("step2")
                 return {"success": True}
 
@@ -63,20 +62,20 @@ class TestTransactionalInstaller:
         with tempfile.TemporaryDirectory() as tmpdir:
             installer = TransactionalInstaller(
                 snapshot_dir=Path(tmpdir),
-                auto_rollback=False,  # Disable auto rollback for this test
+                auto_rollback=False,
             )
 
-            executed = []
+            executed: list[str] = []
 
-            def step1() -> dict:
+            def step1() -> dict[str, Any]:
                 executed.append("step1")
                 return {"success": True}
 
-            def step2() -> dict:
+            def step2() -> dict[str, Any]:
                 executed.append("step2")
                 return {"success": False, "error": "Step 2 failed"}
 
-            def step3() -> dict:
+            def step3() -> dict[str, Any]:
                 executed.append("step3")
                 return {"success": True}
 
@@ -101,19 +100,19 @@ class TestTransactionalInstaller:
                 auto_rollback=True,
             )
 
-            rollback_called = []
+            rollback_called: list[str] = []
 
-            def step1() -> dict:
+            def step1() -> dict[str, Any]:
                 return {"success": True}
 
-            def rollback1() -> dict:
+            def rollback1() -> dict[str, Any]:
                 rollback_called.append("rollback1")
                 return {"success": True}
 
-            def step2() -> dict:
+            def step2() -> dict[str, Any]:
                 return {"success": False, "error": "Failed"}
 
-            def rollback2() -> dict:
+            def rollback2() -> dict[str, Any]:
                 rollback_called.append("rollback2")
                 return {"success": True}
 
@@ -131,19 +130,19 @@ class TestTransactionalInstaller:
         with tempfile.TemporaryDirectory() as tmpdir:
             installer = TransactionalInstaller(
                 snapshot_dir=Path(tmpdir),
-                auto_rollback=False,  # Disable auto rollback
+                auto_rollback=False,
             )
 
-            rollback_called = []
+            rollback_called: list[str] = []
 
-            def step1() -> dict:
+            def step1() -> dict[str, Any]:
                 return {"success": True}
 
-            def rollback1() -> dict:
+            def rollback1() -> dict[str, Any]:
                 rollback_called.append("manual")
                 return {"success": True}
 
-            def step2() -> dict:
+            def step2() -> dict[str, Any]:
                 return {"success": False}
 
             installer.add_step("Step 1", step1, rollback1)
@@ -151,10 +150,8 @@ class TestTransactionalInstaller:
 
             result = installer.execute()
 
-            # Auto rollback disabled
             assert not result.rollback_completed
 
-            # Manual rollback
             rollback_result = installer.rollback()
             assert rollback_result["success"]
             assert "manual" in rollback_called
@@ -164,7 +161,7 @@ class TestTransactionalInstaller:
         with tempfile.TemporaryDirectory() as tmpdir:
             installer = TransactionalInstaller(snapshot_dir=Path(tmpdir))
 
-            def step1() -> dict:
+            def step1() -> dict[str, Any]:
                 return {"success": True}
 
             installer.add_step("Step 1", step1)
@@ -173,14 +170,11 @@ class TestTransactionalInstaller:
             snapshot_id = result.snapshot_id
             assert snapshot_id is not None
 
-            # Verify snapshot exists
             snapshot_path = Path(tmpdir) / snapshot_id
             assert snapshot_path.exists()
 
-            # Cleanup
             installer.cleanup_snapshot()
 
-            # Verify cleanup
             assert not snapshot_path.exists()
 
 
@@ -196,17 +190,14 @@ class TestFileTransactionalInstaller:
                 base_dir=base_dir,
             )
 
-            # Create a file
             test_file = base_dir / "test.txt"
             test_file.write_text("original content")
 
-            # Track it
             installer.track_file(test_file)
 
-            # Modify
             test_file.write_text("modified content")
 
-            assert "test.txt" in installer._tracked_files
+            assert "test.txt" in installer._tracked_files  # type: ignore[reportPrivateUsage]
 
     def test_restore_tracked_file(self) -> None:
         """Test restoring tracked files."""
@@ -217,24 +208,21 @@ class TestFileTransactionalInstaller:
                 base_dir=base_dir,
             )
 
-            # Create a file
             test_file = base_dir / "test.txt"
             test_file.write_text("original content")
 
-            # Track and execute
             installer.track_file(test_file)
 
-            def step1() -> dict:
+            def step1() -> dict[str, Any]:
                 test_file.write_text("modified content")
-                return {"success": False}  # Fail to trigger rollback
+                return {"success": False}
 
-            def rollback1() -> dict:
+            def rollback1() -> dict[str, Any]:
                 return {"success": True}
 
             installer.add_step("Modify", step1, rollback1)
-            result = installer.execute()
+            installer.execute()
 
-            # File should be restored to original
             assert test_file.read_text() == "original content"
 
     def test_nested_directory_tracking(self) -> None:
@@ -246,15 +234,13 @@ class TestFileTransactionalInstaller:
                 base_dir=base_dir,
             )
 
-            # Create nested file
             nested_file = base_dir / "subdir" / "nested.txt"
             nested_file.parent.mkdir(parents=True)
             nested_file.write_text("nested content")
 
-            # Track it
             installer.track_file(nested_file)
 
-            assert "subdir/nested.txt" in installer._tracked_files
+            assert "subdir/nested.txt" in installer._tracked_files  # type: ignore[reportPrivateUsage]
 
 
 class TestExecuteTransaction:
@@ -262,43 +248,47 @@ class TestExecuteTransaction:
 
     def test_success(self) -> None:
         """Test successful transaction."""
-        executed = []
+        executed: list[int] = []
 
-        def step1() -> dict:
+        def step1() -> dict[str, Any]:
             executed.append(1)
             return {"success": True}
 
-        def rollback1() -> dict:
+        def rollback1() -> dict[str, Any]:
             return {"success": True}
 
-        result = execute_transaction([
-            ("Step 1", step1, rollback1),
-        ])
+        result = execute_transaction(
+            [
+                ("Step 1", step1, rollback1),
+            ]
+        )
 
         assert result.success
         assert executed == [1]
 
     def test_failure_with_rollback(self) -> None:
         """Test failed transaction with rollback."""
-        executed = []
-        rolled_back = []
+        executed: list[int] = []
+        rolled_back: list[int] = []
 
-        def step1() -> dict:
+        def step1() -> dict[str, Any]:
             executed.append(1)
             return {"success": True}
 
-        def rollback1() -> dict:
+        def rollback1() -> dict[str, Any]:
             rolled_back.append(1)
             return {"success": True}
 
-        def step2() -> dict:
+        def step2() -> dict[str, Any]:
             executed.append(2)
             return {"success": False}
 
-        result = execute_transaction([
-            ("Step 1", step1, rollback1),
-            ("Step 2", step2, None),
-        ])
+        result = execute_transaction(
+            [
+                ("Step 1", step1, rollback1),
+                ("Step 2", step2, None),
+            ]
+        )
 
         assert not result.success
         assert executed == [1, 2]
@@ -307,22 +297,25 @@ class TestExecuteTransaction:
 
     def test_no_auto_rollback(self) -> None:
         """Test transaction without auto rollback."""
-        rolled_back = []
+        rolled_back: list[int] = []
 
-        def step1() -> dict:
+        def step1() -> dict[str, Any]:
             return {"success": True}
 
-        def rollback1() -> dict:
+        def rollback1() -> dict[str, Any]:
             rolled_back.append(1)
             return {"success": True}
 
-        def step2() -> dict:
+        def step2() -> dict[str, Any]:
             return {"success": False}
 
-        result = execute_transaction([
-            ("Step 1", step1, rollback1),
-            ("Step 2", step2, None),
-        ], auto_rollback=False)
+        result = execute_transaction(
+            [
+                ("Step 1", step1, rollback1),
+                ("Step 2", step2, None),
+            ],
+            auto_rollback=False,
+        )
 
         assert not result.success
         assert not result.rollback_completed

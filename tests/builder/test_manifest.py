@@ -1,6 +1,5 @@
 """Tests for ManifestBuilder and related functionality."""
 
-import tempfile
 from pathlib import Path
 
 import pytest
@@ -11,7 +10,7 @@ from vibesop.builder import (
     create_overlay,
     validate_overlay,
 )
-from vibesop.adapters.models import Manifest, ManifestMetadata
+from vibesop.adapters.models import ManifestMetadata
 
 
 class TestManifestBuilder:
@@ -113,14 +112,14 @@ policies:
         (registry_dir / "registry.yaml").write_text("skills: []")
 
         builder = ManifestBuilder(project_root=tmp_path)
-        skills = builder._load_skills()
+        skills = builder._load_skills()  # type: ignore[attr-defined]
 
         assert skills == []
 
     def test_load_policies_default(self, tmp_path: Path) -> None:
         """Test loading default policies."""
         builder = ManifestBuilder(project_root=tmp_path)
-        policies = builder._load_policies()
+        policies = builder._load_policies()  # type: ignore[attr-defined]
 
         assert policies is not None
         assert policies.security is not None
@@ -216,7 +215,7 @@ metadata:
             "key4": "value4",
         }
 
-        merged = merger._deep_merge(base, overlay)
+        merged = merger._deep_merge(base, overlay)  # type: ignore[attr-defined]
 
         assert merged["key1"] == "value1"  # Preserved
         assert merged["nested"]["key2"] == "overridden"  # Overridden

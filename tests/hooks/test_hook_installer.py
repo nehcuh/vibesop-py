@@ -1,6 +1,5 @@
 """Tests for HookInstaller."""
 
-import pytest
 from pathlib import Path
 import stat
 

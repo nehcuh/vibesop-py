@@ -1,7 +1,6 @@
 """Tests for vibe init command."""
 
 import tempfile
-from pathlib import Path
 
 from typer.testing import CliRunner
 
@@ -38,10 +37,7 @@ class TestInitCommand:
     def test_init_invalid_platform(self) -> None:
         """Test init with invalid platform."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            result = runner.invoke(
-                app,
-                ["init", tmpdir, "--platform", "invalid-platform"]
-            )
+            result = runner.invoke(app, ["init", tmpdir, "--platform", "invalid-platform"])
             assert result.exit_code == 1
             assert "Invalid platform" in result.stdout
 
@@ -52,4 +48,8 @@ class TestInitCommand:
             # Check that the command runs (may have path issues but should work)
             assert result.exit_code in (0, 1)  # May fail due to path resolution
             # Should mention Claude Code or have an error message
-            assert "Claude Code" in result.stdout or "Initialization" in result.stdout or "error" in result.stdout.lower()
+            assert (
+                "Claude Code" in result.stdout
+                or "Initialization" in result.stdout
+                or "error" in result.stdout.lower()
+            )

@@ -21,20 +21,25 @@ Examples:
 """
 
 from pathlib import Path
-from typing import Any, Optional, cast
 
 import typer
 from rich.console import Console
+from rich.panel import Panel
 from rich.table import Table
 
-from vibesop.workflow.cascade import CascadeExecutor
+from vibesop.workflow.cascade import (
+    CascadeExecutor,
+    ExecutionResult,
+    LoadedWorkflow,
+    StepStatus,
+)
 
 console = Console()
 
 
 def cascade(
     action: str = typer.Argument(..., help="Action: run, validate, list"),
-    workflow_file: Optional[Path] = typer.Argument(
+    workflow_file: Path | None = typer.Argument(
         None,
         help="Workflow YAML file",
         exists=True,
@@ -145,7 +150,7 @@ def _do_run(
 
     try:
         # Note: executor.run() signature may vary
-        result = executor.execute(
+        result = executor.run_workflow(
             workflow_file,
             strategy=strategy,
             verbose=verbose,
@@ -159,7 +164,7 @@ def _do_run(
         raise typer.Exit(1)
 
 
-def _do_dry_run(executor: CascadeExecutor, workflow, workflow_file: Path) -> None:
+def _do_dry_run(executor: CascadeExecutor, workflow: LoadedWorkflow, workflow_file: Path) -> None:
     """Show dry-run preview.
 
     Args:
@@ -235,7 +240,7 @@ def _do_list() -> None:
         Path("."),
     ]
 
-    found = []
+    found: list[Path] = []
     for base_path in workflow_paths:
         if base_path.exists():
             for yaml_file in base_path.rglob("*.yaml"):
@@ -253,7 +258,7 @@ def _do_list() -> None:
         console.print(f"  📄 {rel_path}")
 
 
-def _show_results(result) -> None:
+def _show_results(result: ExecutionResult) -> None:
     """Show execution results.
 
     Args:
@@ -275,7 +280,7 @@ def _show_results(result) -> None:
         table.add_column("Duration", style="dim")
 
         for step_result in result.step_results:
-            status_icon = "✓" if step_result.status == "completed" else "✗"
+            status_icon = "✓" if step_result.status == StepStatus.COMPLETED else "✗"
             duration = f"{step_result.duration_ms}ms" if step_result.duration_ms else "N/A"
 
             table.add_row(

@@ -1,7 +1,5 @@
 """Tests for Phase 3 commands (quickstart, onboard, toolchain, scan, skill-craft, tools)."""
 
-from pathlib import Path
-
 from typer.testing import CliRunner
 
 from vibesop.cli.main import app
@@ -31,8 +29,7 @@ class TestOnboardCommand:
     def test_onboard_skips(self) -> None:
         """Test onboard with skip options."""
         result = runner.invoke(
-            app,
-            ["onboard", "--skip-deploy", "--skip-hooks", "--skip-integrations"]
+            app, ["onboard", "--skip-deploy", "--skip-hooks", "--skip-integrations"]
         )
         assert result.exit_code == 0
 

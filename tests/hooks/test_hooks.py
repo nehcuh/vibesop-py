@@ -1,10 +1,8 @@
 """Tests for hook system."""
 
-import pytest
 from pathlib import Path
 
 from vibesop.hooks import (
-    Hook,
     HookPoint,
     ScriptHook,
     TemplateHook,
@@ -75,6 +73,7 @@ class TestScriptHook:
 
         # Check executable bit was set
         import stat
+
         st_mode = output_path.stat().st_mode
         assert st_mode & stat.S_IXUSR  # Owner execute permission
 

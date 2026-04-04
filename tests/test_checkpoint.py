@@ -412,7 +412,7 @@ class TestCheckpointManager:
             created_at=datetime.now() - timedelta(days=100),
         )
         old_cp = CheckpointData(metadata=old_metadata)
-        manager._storage.save(old_cp)
+        manager._storage.save(old_cp)  # type: ignore[attr-defined]
 
         # Clear old
         deleted = manager.clear_old_checkpoints(days=30)
@@ -478,6 +478,8 @@ class TestCheckpointManager:
 
         # Verify file is in checkpoint
         loaded = manager.get_checkpoint(cp.metadata.id)
+        assert loaded is not None
+        assert loaded.files is not None
         assert "test.txt" in loaded.files
 
         # Cleanup

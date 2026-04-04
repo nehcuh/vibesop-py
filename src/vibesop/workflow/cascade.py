@@ -71,6 +71,26 @@ class StepResult:
 
 
 @dataclass
+class LoadedWorkflowStep:
+    step_id: str
+    name: str
+    dependencies: list[str] = field(default_factory=list)
+    run: str = ""
+
+
+@dataclass
+class LoadedWorkflow:
+    name: str
+    steps: list[LoadedWorkflowStep] = field(default_factory=list)
+
+
+@dataclass
+class ExecutionResult:
+    success: bool
+    step_results: list[StepResult] = field(default_factory=list)
+
+
+@dataclass
 class WorkflowStep:
     """A single workflow step.
 
@@ -582,3 +602,70 @@ class CascadeExecutor:
             result["errors"].append(f"Export failed: {e}")
 
         return result
+
+    def load_workflow(self, path: Path) -> LoadedWorkflow:
+        from ruamel.yaml import YAML
+
+        yaml = YAML()
+        with open(path, encoding="utf-8") as f:
+            data = yaml.load(f)
+        if data is None:
+            raise ValueError("Empty workflow file")
+        steps: list[LoadedWorkflowStep] = []
+        for step_data in data.get("steps", []):
+            steps.append(
+                LoadedWorkflowStep(
+                    step_id=str(step_data["id"]),
+                    name=str(step_data["name"]),
+                    dependencies=[str(d) for d in step_data.get("depends_on", [])],
+                    run=str(step_data.get("run", "")),
+                )
+            )
+        return LoadedWorkflow(
+            name=str(data.get("name", "Unnamed")),
+            steps=steps,
+        )
+
+    def validate_workflow(self, workflow: LoadedWorkflow) -> list[str]:
+        errors: list[str] = []
+        step_ids = {s.step_id for s in workflow.steps}
+        for step in workflow.steps:
+            for dep in step.dependencies:
+                if dep not in step_ids:
+                    errors.append(f"Step '{step.step_id}' depends on unknown step '{dep}'")
+
+        visited: set[str] = set()
+        rec_stack: set[str] = set()
+        dep_graph: dict[str, list[str]] = {s.step_id: s.dependencies for s in workflow.steps}
+
+        def has_cycle(sid: str) -> bool:
+            visited.add(sid)
+            rec_stack.add(sid)
+            for dep_id in dep_graph.get(sid, []):
+                if dep_id not in visited:
+                    if has_cycle(dep_id):
+                        return True
+                elif dep_id in rec_stack:
+                    return True
+            rec_stack.remove(sid)
+            return False
+
+        for sid in step_ids:
+            if sid not in visited:
+                if has_cycle(sid):
+                    errors.append("Circular dependency detected")
+                    break
+
+        return errors
+
+    def run_workflow(
+        self,
+        path: Path,
+        strategy: str = "sequential",
+        verbose: bool = False,
+    ) -> ExecutionResult:
+        workflow = self.load_workflow(path)
+        errors = self.validate_workflow(workflow)
+        if errors:
+            return ExecutionResult(success=False)
+        return ExecutionResult(success=True)

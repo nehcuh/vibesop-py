@@ -4,7 +4,6 @@ import json
 from pathlib import Path
 from datetime import datetime
 
-import pytest
 from vibesop.adapters import ClaudeCodeAdapter
 from vibesop.adapters.models import (
     Manifest,

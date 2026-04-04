@@ -1,7 +1,5 @@
 """Tests for Phase 4 commands (worktree, route-select, route-validate, import-rules)."""
 
-from pathlib import Path
-
 from typer.testing import CliRunner
 
 from vibesop.cli.main import app

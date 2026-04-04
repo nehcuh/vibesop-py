@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 from vibesop.builder import ConfigRenderer, RenderProgressTracker
 from vibesop.builder import QuickBuilder
-from vibesop.adapters.models import Manifest, ManifestMetadata
+from vibesop.adapters.models import ManifestMetadata
 
 
 class TestConfigRenderer:
@@ -36,22 +36,18 @@ class TestConfigRenderer:
     def test_get_adapter_supported_platform(self) -> None:
         """Test getting adapter for supported platform."""
         renderer = ConfigRenderer()
-        adapter = renderer._get_adapter("claude-code")
+        adapter = renderer._get_adapter("claude-code")  # type: ignore[attr-defined]
 
         assert adapter is not None
         assert adapter.platform_name == "claude-code"
 
     def test_get_adapter_unsupported_platform(self) -> None:
-        """Test getting adapter for unsupported platform."""
-        renderer = ConfigRenderer()
-
         with pytest.raises(ValueError, match="Unsupported platform"):
-            renderer._get_adapter("unknown-platform")
+            renderer._get_adapter("unknown-platform")  # type: ignore[attr-defined]
 
     def test_render_with_auto_detection(self, tmp_path: Path) -> None:
-        """Test rendering with automatic platform detection."""
         renderer = ConfigRenderer()
-        metadata = ManifestMetadata(platform="opencode")
+        _metadata = ManifestMetadata(platform="opencode")
         manifest = QuickBuilder.minimal(platform="opencode")
 
         result = renderer.render(manifest, tmp_path / "output")
@@ -60,24 +56,21 @@ class TestConfigRenderer:
         assert (tmp_path / "output" / "config.yaml").exists()
 
     def test_render_with_default_output_dir(self, tmp_path: Path) -> None:
-        """Test rendering with default output directory."""
         renderer = ConfigRenderer()
-        metadata = ManifestMetadata(platform="opencode")
+        _metadata = ManifestMetadata(platform="opencode")
         manifest = QuickBuilder.minimal(platform="opencode")
 
-        # Use adapter's default config_dir
         result = renderer.render(manifest)
 
         assert result.success
-        # Should have used ~/.opencode
-        assert "/.opencode" in str(result.files_created[0]) or ".opencode" in str(result.files_created[0])
+        assert "/.opencode" in str(result.files_created[0]) or ".opencode" in str(
+            result.files_created[0]
+        )
 
     def test_render_invalid_platform(self) -> None:
-        """Test rendering with unsupported platform."""
         renderer = ConfigRenderer()
 
-        # Create manifest with unsupported platform
-        metadata = ManifestMetadata(platform="unknown-platform")
+        _metadata = ManifestMetadata(platform="unknown-platform")
         manifest = QuickBuilder.minimal(platform="unknown-platform")
 
         result = renderer.render(manifest, Path("/tmp/test"))
@@ -187,7 +180,7 @@ class TestRenderProgressTracker:
         assert summary["percent"] == 0
         assert not summary["complete"]
 
-    def test_print_progress(self, capsys: pytest.fixture) -> None:
+    def test_print_progress(self, capsys: pytest.CaptureFixture[str, str]) -> None:
         """Test printing progress."""
         tracker = RenderProgressTracker()
 

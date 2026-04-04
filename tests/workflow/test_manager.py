@@ -3,9 +3,11 @@
 Tests workflow discovery, loading, and execution management.
 """
 
+# pyright: reportPrivateUsage=none, reportUnknownMemberType=none, reportUnknownVariableType=none, reportUnknownArgumentType=none, reportUnknownParameterType=none, reportMissingParameterType=none
+
 import pytest
 from pathlib import Path
-from unittest.mock import Mock, AsyncMock, patch
+from unittest.mock import AsyncMock, patch
 
 from vibesop.workflow.manager import WorkflowManager
 from vibesop.workflow.models import (
@@ -23,10 +25,7 @@ class TestWorkflowManager:
 
     def test_initialization(self, temp_workflow_dir):
         """Test manager initialization."""
-        manager = WorkflowManager(
-            project_root=Path("."),
-            workflow_dir=temp_workflow_dir
-        )
+        manager = WorkflowManager(project_root=Path("."), workflow_dir=temp_workflow_dir)
 
         assert manager.project_root == Path(".").resolve()
         assert manager.workflow_dir == temp_workflow_dir
@@ -37,10 +36,7 @@ class TestWorkflowManager:
 
     def test_list_workflows_empty(self, temp_workflow_dir):
         """Test listing workflows when directory is empty."""
-        manager = WorkflowManager(
-            project_root=Path("."),
-            workflow_dir=temp_workflow_dir
-        )
+        manager = WorkflowManager(project_root=Path("."), workflow_dir=temp_workflow_dir)
 
         workflows = manager.list_workflows()
 
@@ -54,10 +50,7 @@ class TestWorkflowManager:
             workflow_yaml_content.replace("test-workflow", "workflow2")
         )
 
-        manager = WorkflowManager(
-            project_root=Path("."),
-            workflow_dir=temp_workflow_dir
-        )
+        manager = WorkflowManager(project_root=Path("."), workflow_dir=temp_workflow_dir)
 
         workflows = manager.list_workflows()
 
@@ -83,10 +76,7 @@ stages:
         # Create invalid workflow
         (temp_workflow_dir / "invalid.yaml").write_text("invalid: yaml: content:")
 
-        manager = WorkflowManager(
-            project_root=Path("."),
-            workflow_dir=temp_workflow_dir
-        )
+        manager = WorkflowManager(project_root=Path("."), workflow_dir=temp_workflow_dir)
 
         workflows = manager.list_workflows()
 
@@ -110,10 +100,7 @@ stages:
         # Create workflow file
         (temp_workflow_dir / "test-workflow.yaml").write_text(workflow_yaml_content)
 
-        manager = WorkflowManager(
-            project_root=Path("."),
-            workflow_dir=temp_workflow_dir
-        )
+        manager = WorkflowManager(project_root=Path("."), workflow_dir=temp_workflow_dir)
 
         workflow = manager.get_workflow("test-workflow")
 
@@ -132,10 +119,7 @@ stages:
         # Create workflow file
         (temp_workflow_dir / "cache-test.yaml").write_text(workflow_yaml_content)
 
-        manager = WorkflowManager(
-            project_root=Path("."),
-            workflow_dir=temp_workflow_dir
-        )
+        manager = WorkflowManager(project_root=Path("."), workflow_dir=temp_workflow_dir)
 
         # First call - should load from file
         workflow1 = manager.get_workflow("cache-test")
@@ -154,10 +138,7 @@ stages:
         workflow_file = temp_workflow_dir / "test-load.yaml"
         workflow_file.write_text(workflow_yaml_content)
 
-        manager = WorkflowManager(
-            project_root=Path("."),
-            workflow_dir=temp_workflow_dir
-        )
+        manager = WorkflowManager(project_root=Path("."), workflow_dir=temp_workflow_dir)
 
         workflow = manager._load_workflow_from_file(workflow_file)
 
@@ -171,10 +152,7 @@ stages:
         invalid_file = temp_workflow_dir / "invalid.yaml"
         invalid_file.write_text("not: valid: yaml:")
 
-        manager = WorkflowManager(
-            project_root=Path("."),
-            workflow_dir=temp_workflow_dir
-        )
+        manager = WorkflowManager(project_root=Path("."), workflow_dir=temp_workflow_dir)
 
         workflow = manager._load_workflow_from_file(invalid_file)
 
@@ -182,14 +160,9 @@ stages:
 
     def test_load_workflow_from_nonexistent_file(self, temp_workflow_dir):
         """Test loading from non-existent file returns None."""
-        manager = WorkflowManager(
-            project_root=Path("."),
-            workflow_dir=temp_workflow_dir
-        )
+        manager = WorkflowManager(project_root=Path("."), workflow_dir=temp_workflow_dir)
 
-        workflow = manager._load_workflow_from_file(
-            temp_workflow_dir / "nonexistent.yaml"
-        )
+        workflow = manager._load_workflow_from_file(temp_workflow_dir / "nonexistent.yaml")
 
         assert workflow is None
 
@@ -201,9 +174,7 @@ stages:
 
         # Mock pipeline execution
         with patch.object(
-            workflow_manager._pipeline,
-            'execute',
-            new_callable=AsyncMock
+            workflow_manager._pipeline, "execute", new_callable=AsyncMock
         ) as mock_execute:
             mock_execute.return_value = WorkflowResult(
                 success=True,
@@ -216,10 +187,7 @@ stages:
             )
 
             # Execute
-            result = await workflow_manager.execute_workflow(
-                "test-workflow",
-                {"input": "data"}
-            )
+            result = await workflow_manager.execute_workflow("test-workflow", {"input": "data"})
 
             # Verify
             assert result.success is True
@@ -237,9 +205,7 @@ stages:
         workflow_manager._workflow_cache["test-workflow"] = sample_workflow
 
         with patch.object(
-            workflow_manager._pipeline,
-            'execute',
-            new_callable=AsyncMock
+            workflow_manager._pipeline, "execute", new_callable=AsyncMock
         ) as mock_execute:
             mock_execute.return_value = WorkflowResult(
                 success=True,
@@ -253,9 +219,7 @@ stages:
 
             # Execute with parallel strategy
             await workflow_manager.execute_workflow(
-                "test-workflow",
-                {},
-                strategy=ExecutionStrategy.PARALLEL
+                "test-workflow", {}, strategy=ExecutionStrategy.PARALLEL
             )
 
             # Verify strategy was passed
@@ -268,9 +232,7 @@ stages:
         workflow_manager._workflow_cache["test-workflow"] = sample_workflow
 
         with patch.object(
-            workflow_manager._pipeline,
-            'execute',
-            new_callable=AsyncMock
+            workflow_manager._pipeline, "execute", new_callable=AsyncMock
         ) as mock_execute:
             mock_execute.return_value = WorkflowResult(
                 success=True,
@@ -295,9 +257,7 @@ stages:
         workflow_manager._workflow_cache["test-workflow"] = sample_workflow
 
         with patch.object(
-            workflow_manager._pipeline,
-            'execute',
-            new_callable=AsyncMock
+            workflow_manager._pipeline, "execute", new_callable=AsyncMock
         ) as mock_execute:
             # Simulate execution failure
             mock_execute.side_effect = Exception("Execution failed")
@@ -313,17 +273,15 @@ stages:
         # Should return list (may be empty)
         assert isinstance(active, list)
 
-    def test_resume_workflow_not_implemented(self, workflow_manager, sample_workflow, sample_context):
+    def test_resume_workflow_not_implemented(
+        self, workflow_manager, sample_workflow, sample_context
+    ):
         """Test that resume workflow is not yet implemented."""
         # Create a workflow state first
         workflow_id = "test-resume-workflow"
         # Add workflow to cache so get_workflow can find it
         workflow_manager._workflow_cache[sample_workflow.name] = sample_workflow
-        workflow_manager._state_manager.save_state(
-            workflow_id,
-            sample_workflow,
-            sample_context
-        )
+        workflow_manager._state_manager.save_state(workflow_id, sample_workflow, sample_context)
 
         # Resume should raise NotImplementedError
         with pytest.raises(NotImplementedError, match="not yet implemented"):
@@ -334,10 +292,7 @@ stages:
         # Create workflow file
         (temp_workflow_dir / "test-load.yaml").write_text(workflow_yaml_content)
 
-        manager = WorkflowManager(
-            project_root=Path("."),
-            workflow_dir=temp_workflow_dir
-        )
+        manager = WorkflowManager(project_root=Path("."), workflow_dir=temp_workflow_dir)
 
         workflow = manager._load_from_filesystem("test-load")
 
@@ -363,30 +318,21 @@ class TestWorkflowManagerIntegration:
 
     def test_manager_pipeline_integration(self, temp_workflow_dir):
         """Test WorkflowManager has pipeline integration."""
-        manager = WorkflowManager(
-            project_root=Path("."),
-            workflow_dir=temp_workflow_dir
-        )
+        manager = WorkflowManager(project_root=Path("."), workflow_dir=temp_workflow_dir)
 
         assert manager._pipeline is not None
-        assert hasattr(manager._pipeline, 'execute')
+        assert hasattr(manager._pipeline, "execute")
 
     def test_manager_state_manager_integration(self, temp_workflow_dir):
         """Test WorkflowManager has state manager integration."""
-        manager = WorkflowManager(
-            project_root=Path("."),
-            workflow_dir=temp_workflow_dir
-        )
+        manager = WorkflowManager(project_root=Path("."), workflow_dir=temp_workflow_dir)
 
         assert manager._state_manager is not None
-        assert hasattr(manager._state_manager, 'save_state')
-        assert hasattr(manager._state_manager, 'load_state')
+        assert hasattr(manager._state_manager, "save_state")
+        assert hasattr(manager._state_manager, "load_state")
 
     def test_manager_config_integration(self, temp_workflow_dir):
         """Test WorkflowManager has config loader integration."""
-        manager = WorkflowManager(
-            project_root=Path("."),
-            workflow_dir=temp_workflow_dir
-        )
+        manager = WorkflowManager(project_root=Path("."), workflow_dir=temp_workflow_dir)
 
         assert manager._config is not None

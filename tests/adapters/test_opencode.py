@@ -2,7 +2,6 @@
 
 from pathlib import Path
 
-import pytest
 from vibesop.adapters import OpenCodeAdapter
 from vibesop.adapters.models import (
     Manifest,
@@ -258,7 +257,7 @@ class TestOpenCodeAdapterEdgeCases:
 
         yaml = YAML()
         with (tmp_path / "config.yaml").open("r") as f:
-            config = yaml.load(f)
+            config: dict[str, object] = yaml.load(f)  # type: ignore[assignment]
 
         assert isinstance(config, dict)
         assert "version" in config

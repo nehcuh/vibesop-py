@@ -3,11 +3,11 @@
 Tests state persistence, recovery, and lifecycle management.
 """
 
+# pyright: reportPrivateUsage=none, reportUnknownMemberType=none, reportUnknownVariableType=none, reportUnknownArgumentType=none, reportUnknownParameterType=none, reportMissingParameterType=none
+
 import pytest
 import json
-from pathlib import Path
-from datetime import datetime, timedelta
-from time import sleep
+from datetime import datetime
 
 from vibesop.workflow.state import (
     WorkflowState,
@@ -132,10 +132,7 @@ class TestWorkflowStateManager:
     def test_initialization_no_create(self, tmp_path):
         """Test initialization without creating directory."""
         state_dir = tmp_path / ".vibe" / "state"
-        manager = WorkflowStateManager(
-            state_dir=state_dir,
-            create_dir=False
-        )
+        manager = WorkflowStateManager(state_dir=state_dir, create_dir=False)
 
         assert not state_dir.exists()
 
@@ -153,11 +150,7 @@ class TestWorkflowStateManager:
         workflow_id = "test-workflow-123"
 
         # Save state
-        state = state_manager.save_state(
-            workflow_id,
-            sample_workflow,
-            sample_context
-        )
+        state = state_manager.save_state(workflow_id, sample_workflow, sample_context)
 
         assert state.workflow_id == workflow_id
         assert state.workflow_name == sample_workflow.name
@@ -187,12 +180,7 @@ class TestWorkflowStateManager:
         )
 
         # Save state with result
-        state = state_manager.save_state(
-            workflow_id,
-            sample_workflow,
-            sample_context,
-            result
-        )
+        state = state_manager.save_state(workflow_id, sample_workflow, sample_context, result)
 
         assert state.status == "completed"  # Updated based on result
         assert state.result is not None
@@ -219,12 +207,7 @@ class TestWorkflowStateManager:
         )
 
         # Save state with result
-        state = state_manager.save_state(
-            workflow_id,
-            sample_workflow,
-            sample_context,
-            result
-        )
+        state = state_manager.save_state(workflow_id, sample_workflow, sample_context, result)
 
         assert state.status == "failed"
         assert state.error is not None
@@ -244,11 +227,7 @@ class TestWorkflowStateManager:
         state_manager.save_state(workflow_id, sample_workflow, sample_context)
 
         # Update stage state
-        state_manager.update_stage_state(
-            workflow_id,
-            "stage1",
-            "completed"
-        )
+        state_manager.update_stage_state(workflow_id, "stage1", "completed")
 
         # Load and verify
         loaded_state = state_manager.load_state(workflow_id)
@@ -258,11 +237,7 @@ class TestWorkflowStateManager:
     def test_update_stage_nonexistent_workflow(self, state_manager):
         """Test updating stage for non-existent workflow raises error."""
         with pytest.raises(WorkflowRecoveryError, match="Cannot update non-existent"):
-            state_manager.update_stage_state(
-                "nonexistent",
-                "stage1",
-                "completed"
-            )
+            state_manager.update_stage_state("nonexistent", "stage1", "completed")
 
     def test_complete_workflow(self, state_manager, sample_workflow, sample_context):
         """Test marking workflow as completed."""
@@ -348,9 +323,9 @@ class TestWorkflowStateManager:
                     name="stage1",
                     description="Stage 1",
                     handler=lambda ctx: {},
-                    metadata={"skill_id": "/test"}
+                    metadata={"skill_id": "/test"},
                 ),
-            ]
+            ],
         )
         state_manager.save_state("active-2", workflow2, sample_context)
 
@@ -431,6 +406,7 @@ class TestWorkflowStateManager:
         state_file = state_manager.state_dir / f"{old_id}.json"
         old_time = datetime.now().timestamp() - (25 * 3600)  # 25 hours ago
         import os
+
         os.utime(state_file, (old_time, old_time))
 
         # Save active workflow
@@ -458,7 +434,7 @@ class TestWorkflowStateManager:
         assert state_file.exists()
 
         # Should be valid JSON
-        with open(state_file, 'r') as f:
+        with open(state_file, "r") as f:
             data = json.load(f)
 
         assert data["workflow_id"] == workflow_id
@@ -472,11 +448,7 @@ class TestWorkflowStateManager:
 
         # Perform multiple updates
         for i in range(5):
-            state_manager.update_stage_state(
-                workflow_id,
-                f"stage{i}",
-                "completed"
-            )
+            state_manager.update_stage_state(workflow_id, f"stage{i}", "completed")
 
         # Final state should have all updates
         final_state = state_manager.load_state(workflow_id)

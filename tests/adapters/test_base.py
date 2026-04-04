@@ -10,7 +10,6 @@ from vibesop.adapters.models import (
     PolicySet,
     RenderResult,
     SecurityPolicy,
-    RoutingConfig,
 )
 from vibesop.core.models import SkillDefinition
 
@@ -30,7 +29,7 @@ class DummyAdapter(PlatformAdapter):
         # Simple implementation for testing
         return RenderResult(success=True)
 
-    def get_settings_schema(self) -> dict:
+    def get_settings_schema(self) -> dict[str, object]:
         return {"type": "object", "properties": {}}
 
 
@@ -43,8 +42,8 @@ class TestPlatformAdapter:
 
         assert adapter.platform_name == "dummy-platform"
         assert adapter.config_dir == Path("~/.dummy").expanduser()
-        assert adapter._path_safety is not None
-        assert adapter._security_scanner is not None
+        assert adapter._path_safety is not None  # type: ignore[attr-defined]
+        assert adapter._security_scanner is not None  # type: ignore[attr-defined]
 
     def test_is_abstract(self) -> None:
         """Test that PlatformAdapter cannot be instantiated directly."""
@@ -170,7 +169,7 @@ class TestPlatformAdapter:
         adapter = DummyAdapter()
 
         template = "Hello, {name}!"
-        context = {}  # Missing 'name'
+        context: dict[str, str] = {}
 
         with pytest.raises(ValueError, match="Missing template variable"):
             adapter.render_template_string(template, context)

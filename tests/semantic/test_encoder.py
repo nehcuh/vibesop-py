@@ -4,6 +4,8 @@ All tests mock sentence_transformers.SentenceTransformer to avoid
 loading real models. Tests cover all public methods and key private methods.
 """
 
+# pyright: reportPrivateUsage=none, reportUnknownMemberType=none, reportUnknownVariableType=none, reportUnknownArgumentType=none, reportUnknownParameterType=none, reportMissingParameterType=none
+
 from __future__ import annotations
 
 import sys

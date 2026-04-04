@@ -3,10 +3,10 @@
 from typer.testing import CliRunner
 
 from vibesop.cli.main import (
-    _check_config,
-    _check_dependencies,
-    _check_llm_provider,
-    _check_python_version,
+    _check_config,  # type: ignore[attr-defined]
+    _check_dependencies,  # type: ignore[attr-defined]
+    _check_llm_provider,  # type: ignore[attr-defined]
+    _check_python_version,  # type: ignore[attr-defined]
     app,
 )
 
@@ -94,9 +94,7 @@ class TestRecordCommand:
 
     def test_record_command_not_helpful(self) -> None:
         """Test recording a not helpful selection."""
-        result = runner.invoke(
-            app, ["record", "test-skill", "test query", "--not-helpful"]
-        )
+        result = runner.invoke(app, ["record", "test-skill", "test query", "--not-helpful"])
 
         assert result.exit_code == 0
 

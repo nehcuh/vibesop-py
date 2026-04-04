@@ -4,9 +4,9 @@ Tests the complete CLI workflow from command invocation
 to execution, including file I/O and error handling.
 """
 
+# pyright: reportPrivateUsage=none, reportUnknownMemberType=none, reportUnknownVariableType=none, reportUnknownArgumentType=none, reportUnknownParameterType=none, reportMissingParameterType=none
+
 import pytest
-import subprocess
-import json
 from pathlib import Path
 from typer.testing import CliRunner
 
@@ -41,9 +41,7 @@ stages:
 
         # Run command with custom workflow directory
         result = runner.invoke(
-            app,
-            ["workflow", "list"],
-            env={"VIBE_WORKFLOW_DIR": str(temp_workflow_dir)}
+            app, ["workflow", "list"], env={"VIBE_WORKFLOW_DIR": str(temp_workflow_dir)}
         )
 
         assert result.exit_code == 0
@@ -57,11 +55,7 @@ stages:
         empty_dir.mkdir()
 
         # Use empty directory
-        result = runner.invoke(
-            app,
-            ["workflow", "list"],
-            env={"VIBE_WORKFLOW_DIR": str(empty_dir)}
-        )
+        result = runner.invoke(app, ["workflow", "list"], env={"VIBE_WORKFLOW_DIR": str(empty_dir)})
 
         assert result.exit_code == 0
         assert "No workflow files found" in result.stdout
@@ -132,9 +126,7 @@ stages:
         workflow_file = temp_workflow_dir / "dry-run.yaml"
         workflow_file.write_text(workflow_yaml)
 
-        result = runner.invoke(app, [
-            "workflow", "run", str(workflow_file), "--dry-run"
-        ])
+        result = runner.invoke(app, ["workflow", "run", str(workflow_file), "--dry-run"])
 
         assert result.exit_code == 0
         assert "DRY RUN" in result.stdout
@@ -164,10 +156,7 @@ stages:
         workflow_file.write_text(workflow_yaml)
 
         # Test with parallel strategy from workflow definition
-        result = runner.invoke(app, [
-            "workflow", "run", str(workflow_file),
-            "--dry-run"
-        ])
+        result = runner.invoke(app, ["workflow", "run", str(workflow_file), "--dry-run"])
 
         assert result.exit_code == 0
         # Dry-run shows the strategy from workflow definition
@@ -189,11 +178,9 @@ stages:
         workflow_file.write_text(workflow_yaml)
 
         # Test with JSON input
-        result = runner.invoke(app, [
-            "workflow", "run", str(workflow_file),
-            "--input", '{"test": "data"}',
-            "--dry-run"
-        ])
+        result = runner.invoke(
+            app, ["workflow", "run", str(workflow_file), "--input", '{"test": "data"}', "--dry-run"]
+        )
 
         assert result.exit_code == 0
 
@@ -204,9 +191,7 @@ stages:
         state_dir.mkdir(parents=True)
 
         result = runner.invoke(
-            app,
-            ["workflow", "resume"],
-            env={"VIBE_PROJECT_ROOT": str(tmp_path)}
+            app, ["workflow", "resume"], env={"VIBE_PROJECT_ROOT": str(tmp_path)}
         )
 
         # Exit code may be 0 or 1 depending on whether state directory exists
@@ -236,9 +221,7 @@ class TestCLIWorkflowRealWorld:
         if not workflow_file.exists():
             pytest.skip("Predefined workflow not found")
 
-        result = runner.invoke(app, [
-            "workflow", "validate", str(workflow_file)
-        ])
+        result = runner.invoke(app, ["workflow", "validate", str(workflow_file)])
 
         assert result.exit_code == 0
         assert "security-review" in result.stdout
@@ -250,10 +233,7 @@ class TestCLIWorkflowRealWorld:
         if not workflow_file.exists():
             pytest.skip("Predefined workflow not found")
 
-        result = runner.invoke(app, [
-            "workflow", "run", str(workflow_file),
-            "--dry-run"
-        ])
+        result = runner.invoke(app, ["workflow", "run", str(workflow_file), "--dry-run"])
 
         assert result.exit_code == 0
         assert "config-deploy" in result.stdout

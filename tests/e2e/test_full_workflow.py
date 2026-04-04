@@ -4,7 +4,6 @@ These tests verify the entire workflow from initialization
 to deployment, ensuring all components work together.
 """
 
-import os
 import tempfile
 from pathlib import Path
 
@@ -13,7 +12,7 @@ import pytest
 from vibesop.core.routing.engine import SkillRouter
 from vibesop.core.models import RoutingRequest
 from vibesop.builder import ConfigRenderer, ManifestBuilder, QuickBuilder
-from vibesop.adapters import ClaudeCodeAdapter, Manifest, ManifestMetadata, PolicySet
+from vibesop.adapters import Manifest, ManifestMetadata
 from vibesop.security import SecurityScanner
 
 
@@ -44,14 +43,12 @@ class TestFullWorkflow:
         assert result.primary.layer in range(5)
 
         # Test alternative selection
-        alternatives = router._get_alternatives(result.primary)
+        alternatives = router._get_alternatives(result.primary)  # type: ignore[attr-defined]
         assert isinstance(alternatives, list)
 
         # Test preference recording
         router.record_selection(
-            skill_id=result.primary.skill_id,
-            query=request.query,
-            was_helpful=True
+            skill_id=result.primary.skill_id, query=request.query, was_helpful=True
         )
 
     def test_config_generation_workflow(self) -> None:
@@ -68,7 +65,6 @@ class TestFullWorkflow:
             # Create minimal manifest (no skills to avoid security scan issues)
             metadata = ManifestMetadata(
                 platform="claude-code",
-                project_name="Test Project",
                 description="A test project",
                 version="1.0.0",
             )
@@ -121,7 +117,8 @@ class TestFullWorkflow:
 
         with tempfile.TemporaryDirectory() as tmpdir:
             overlay_path = Path(tmpdir) / "overlay.yaml"
-            overlay_path.write_text("""
+            overlay_path.write_text(
+                """
 metadata:
   description: "Test project"
   version: "2.0.0"
@@ -129,13 +126,12 @@ skills: []
 policies:
   security:
     enable_scanning: true
-""", encoding="utf-8")
+""",
+                encoding="utf-8",
+            )
 
             # Build manifest
-            manifest = builder.build(
-                overlay_path=overlay_path,
-                platform="claude-code"
-            )
+            manifest = builder.build(overlay_path=overlay_path, platform="claude-code")
 
             # Verify manifest
             assert manifest is not None
@@ -220,9 +216,7 @@ class TestSkillExecution:
             result = router.route(RoutingRequest(query=query))
             if result.primary and result.primary.skill_id:
                 router.record_selection(
-                    skill_id=result.primary.skill_id,
-                    query=query,
-                    was_helpful=True
+                    skill_id=result.primary.skill_id, query=query, was_helpful=True
                 )
 
         # Verify preference learning
@@ -256,7 +250,7 @@ class TestE2EScenarios:
         result = renderer.render(manifest, temp_project_dir)
 
         # Verify setup
-        assert result["success"] is True
+        assert result.success is True
         assert (temp_project_dir / "CLAUDE.md").exists()
 
     def test_skill_discovery_and_routing(self) -> None:
@@ -276,7 +270,7 @@ class TestE2EScenarios:
             ("write docs", "documentation"),
         ]
 
-        for query, expected_intent in queries:
+        for query, _expected_intent in queries:
             result = router.route(RoutingRequest(query=query))
             assert result.primary is not None
             # Should find some match

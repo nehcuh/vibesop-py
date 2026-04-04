@@ -1,11 +1,8 @@
 """Tests for all installers."""
 
-import pytest
 from pathlib import Path
-import tempfile
 
 from vibesop.installer import (
-    VibeSOPInstaller,
     GstackInstaller,
     SuperpowersInstaller,
     SkillInstaller,
@@ -130,15 +127,15 @@ class TestQuickstartRunner:
         """Test getting supported platforms."""
         runner = QuickstartRunner()
 
-        assert "claude-code" in runner._supported_platforms
-        assert "opencode" in runner._supported_platforms
+        assert "claude-code" in runner._supported_platforms  # type: ignore[attr-defined]
+        assert "opencode" in runner._supported_platforms  # type: ignore[attr-defined]
 
     def test_available_integrations(self) -> None:
         """Test getting available integrations."""
         runner = QuickstartRunner()
 
-        assert "gstack" in runner._available_integrations
-        assert "superpowers" in runner._available_integrations
+        assert "gstack" in runner._available_integrations  # type: ignore[attr-defined]
+        assert "superpowers" in runner._available_integrations  # type: ignore[attr-defined]
 
 
 class TestInstallerIntegration:

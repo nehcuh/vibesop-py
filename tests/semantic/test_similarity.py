@@ -61,7 +61,7 @@ class TestSimilarityCalculatorInit:
     def test_initialization_invalid_metric_raises_error(self):
         """Test that invalid metric raises ValueError."""
         with pytest.raises(ValueError, match="Unknown metric"):
-            SimilarityCalculator(metric="invalid_metric")
+            SimilarityCalculator(metric="invalid_metric")  # type: ignore[arg-type]
 
 
 class TestCosineSimilarity:
@@ -468,7 +468,7 @@ class TestSimilarityCalculatorPerformance:
 
         start = time.time()
 
-        sim_matrix = calc.batch_calculate(queries, patterns)
+        calc.batch_calculate(queries, patterns)
 
         elapsed = time.time() - start
         avg_time = elapsed / len(queries)
