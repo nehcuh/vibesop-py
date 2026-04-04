@@ -7,6 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.2.0] - 2026-04-04
+
+### Engineering Quality Release
+
+This release significantly improves engineering quality across all dimensions:
+CI/CD automation, test coverage, documentation consistency.
+
+### Added
+- **CI/CD**: GitHub Actions workflows for lint, type-check, test, and release
+- **Performance Benchmarks**: Routing latency and throughput tests
+- **Doc Consistency Check**: Script to detect broken file references
+- **CODE_OF_CONDUCT.md** and **SECURITY.md**
+
+### Changed
+- **Documentation**: Reorganized into user/ and dev/ directories
+- **Pre-commit**: Replaced mypy with pyright (single type checker)
+- **Coverage Gate**: Set to 80% minimum
+
+### Fixed
+- **Documentation**: Removed 29 internal development documents
+- **Documentation**: Fixed 12+ broken file references
+- **Documentation**: Updated Chinese README migration status
+- **Documentation**: Fixed CLI_REFERENCE.md (removed non-existent commands, added missing ones)
+- **Documentation**: Fixed QUICK_REFERENCE.md version (1.0.0 → 2.2.0)
+- **Bug Report Template**: Updated for CLI tools (not web app)
+- **Metadata**: Removed placeholder email from pyproject.toml
+
+### Testing
+- **Coverage**: Added root-level conftest.py with shared fixtures
+- **Coverage**: Added tests for CLI commands (auto, build, doctor, skills)
+- **Coverage**: Added tests for installer (init_support, quickstart)
+- **Coverage**: Added tests for hooks (base, installer)
+- **Coverage**: Added tests for integrations, semantic
+
+---
+
 ## [2.1.0] - 2026-04-04
 
 ### Minor Release - Semantic Recognition Enhancement
