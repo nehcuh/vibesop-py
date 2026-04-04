@@ -14,12 +14,9 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import Any
 
 import numpy as np
-
-if TYPE_CHECKING:
-    from sentence_transformers import SentenceTransformer
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +47,7 @@ class SemanticEncoder:
     """
 
     # Class variable for model caching (global singleton)
-    _model_cache: dict[str, SentenceTransformer] = {}
+    _model_cache: dict[str, Any] = {}
 
     def __init__(
         self,
@@ -81,7 +78,7 @@ class SemanticEncoder:
             ImportError: If sentence-transformers is not installed.
         """
         try:
-            from sentence_transformers import SentenceTransformer
+            from sentence_transformers import SentenceTransformer  # type: ignore[import-untyped]
         except ImportError as e:
             raise ImportError(
                 "sentence-transformers is required for semantic encoding. "

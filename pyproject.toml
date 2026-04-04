@@ -146,6 +146,7 @@ stubPath = "src/stubs"
 
 # Missing type annotations
 reportMissingTypeStubs = false
+reportMissingImports = "warning"
 reportMissingParameterType = "error"
 reportMissingReturnType = "error"
 reportMissingTypeArgument = "error"
