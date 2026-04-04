@@ -42,25 +42,25 @@ def tokenize(text: str) -> list[str]:
 
     # Remove punctuation but preserve word characters
     # This works for both Latin and CJK characters
-    text = re.sub(r'[^\w\s\u4e00-\u9fff\u3040-\u309f\u30a0-\u30ff]', ' ', text)
+    text = re.sub(r"[^\w\s\u4e00-\u9fff\u3040-\u309f\u30a0-\u30ff]", " ", text)
 
-    tokens = []
+    tokens: list[str] = []
 
     # Split into segments
     segments = text.split()
 
     for segment in segments:
         # Check if segment contains CJK characters
-        if re.search(r'[\u4e00-\u9fff\u3040-\u309f\u30a0-\u30ff]', segment):
+        if re.search(r"[\u4e00-\u9fff\u3040-\u309f\u30a0-\u30ff]", segment):
             # Split CJK text into individual characters/words
             # For Chinese, each character or pair of characters can be a word
             i = 0
             while i < len(segment):
                 # Check for 2-character words (common in Chinese)
                 if i + 1 < len(segment):
-                    two_char = segment[i:i+2]
+                    two_char = segment[i : i + 2]
                     # If both are CJK characters, keep as 2-char token
-                    if re.match(r'[\u4e00-\u9fff]{2}', two_char):
+                    if re.match(r"[\u4e00-\u9fff]{2}", two_char):
                         tokens.append(two_char)
                         i += 2
                         continue
@@ -120,16 +120,16 @@ def calculate_idf(documents: list[list[str]]) -> dict[str, float]:
         return {}
 
     total_docs = len(documents)
-    term_doc_count = Counter()
+    term_doc_count: Counter[str] = Counter()
 
     # Count documents containing each term
     for doc in documents:
-        unique_terms = set(doc)
+        unique_terms: set[str] = set(doc)
         for term in unique_terms:
             term_doc_count[term] += 1
 
     # Calculate IDF: log(total_docs / doc_count)
-    idf = {}
+    idf: dict[str, float] = {}
     for term, doc_count in term_doc_count.items():
         # Add 1 to avoid division by zero
         idf[term] = math.log(total_docs / (doc_count + 1)) + 1
@@ -137,10 +137,7 @@ def calculate_idf(documents: list[list[str]]) -> dict[str, float]:
     return idf
 
 
-def calculate_tfidf(
-    tokens: list[str],
-    idf: dict[str, float]
-) -> dict[str, float]:
+def calculate_tfidf(tokens: list[str], idf: dict[str, float]) -> dict[str, float]:
     """Calculate TF-IDF vector for tokens.
 
     TF-IDF combines term frequency (TF) and inverse document frequency (IDF)
@@ -161,7 +158,7 @@ def calculate_tfidf(
     """
     tf = calculate_tf(tokens)
 
-    tfidf = {}
+    tfidf: dict[str, float] = {}
     for term, tf_score in tf.items():
         idf_score = idf.get(term, 1.0)
         tfidf[term] = tf_score * idf_score
@@ -169,10 +166,7 @@ def calculate_tfidf(
     return tfidf
 
 
-def cosine_similarity(
-    vec1: dict[str, float],
-    vec2: dict[str, float]
-) -> float:
+def cosine_similarity(vec1: dict[str, float], vec2: dict[str, float]) -> float:
     """Calculate cosine similarity between two vectors.
 
     Returns:
@@ -191,14 +185,11 @@ def cosine_similarity(
     all_terms = set(vec1.keys()) | set(vec2.keys())
 
     # Calculate dot product
-    dot_product = sum(
-        vec1.get(term, 0) * vec2.get(term, 0)
-        for term in all_terms
-    )
+    dot_product = sum(vec1.get(term, 0) * vec2.get(term, 0) for term in all_terms)
 
     # Calculate magnitudes
-    mag1 = math.sqrt(sum(v ** 2 for v in vec1.values()))
-    mag2 = math.sqrt(sum(v ** 2 for v in vec2.values()))
+    mag1 = math.sqrt(sum(v**2 for v in vec1.values()))
+    mag2 = math.sqrt(sum(v**2 for v in vec2.values()))
 
     if mag1 == 0 or mag2 == 0:
         return 0.0
@@ -206,10 +197,7 @@ def cosine_similarity(
     return dot_product / (mag1 * mag2)
 
 
-def calculate_keyword_match_score(
-    query: str,
-    keywords: list[str]
-) -> float:
+def calculate_keyword_match_score(query: str, keywords: list[str]) -> float:
     """Calculate keyword matching score.
 
     Score is based on how many keywords appear in the query.
@@ -242,10 +230,7 @@ def calculate_keyword_match_score(
     return min(score, 1.0)
 
 
-def calculate_regex_match_score(
-    query: str,
-    patterns: list[str]
-) -> float:
+def calculate_regex_match_score(query: str, patterns: list[str]) -> float:
     """Calculate regex pattern matching score.
 
     Score is based on how many patterns match the query.
@@ -267,10 +252,7 @@ def calculate_regex_match_score(
     if not patterns:
         return 0.0
 
-    matched = sum(
-        1 for pattern in patterns
-        if re.search(pattern, query, re.IGNORECASE)
-    )
+    matched = sum(1 for pattern in patterns if re.search(pattern, query, re.IGNORECASE))
 
     if matched == 0:
         return 0.0
@@ -284,7 +266,7 @@ def calculate_combined_score(
     keyword_score: float,
     regex_score: float,
     semantic_score: float,
-    weights: tuple[float, float, float] = (0.4, 0.3, 0.3)
+    weights: tuple[float, float, float] = (0.4, 0.3, 0.3),
 ) -> float:
     """Calculate combined confidence score from multiple strategies.
 
@@ -307,10 +289,6 @@ def calculate_combined_score(
     if abs(sum(weights) - 1.0) > 0.01:
         raise ValueError(f"Weights must sum to 1.0, got {sum(weights)}")
 
-    combined = (
-        keyword_score * weights[0] +
-        regex_score * weights[1] +
-        semantic_score * weights[2]
-    )
+    combined = keyword_score * weights[0] + regex_score * weights[1] + semantic_score * weights[2]
 
     return min(max(combined, 0.0), 1.0)

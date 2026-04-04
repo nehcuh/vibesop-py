@@ -72,97 +72,55 @@ class TriggerPattern(BaseModel):
         ... )
     """
 
-    pattern_id: str = Field(
-        ...,
-        min_length=1,
-        description="Unique pattern identifier"
-    )
-    name: str = Field(
-        ...,
-        min_length=1,
-        description="Human-readable pattern name"
-    )
-    description: str = Field(
-        ...,
-        description="What this pattern matches"
-    )
-    category: PatternCategory = Field(
-        ...,
-        description="Pattern category"
-    )
-    keywords: list[str] = Field(
-        default_factory=list,
-        description="Keywords for keyword matching"
-    )
+    pattern_id: str = Field(..., min_length=1, description="Unique pattern identifier")
+    name: str = Field(..., min_length=1, description="Human-readable pattern name")
+    description: str = Field(..., description="What this pattern matches")
+    category: PatternCategory = Field(..., description="Pattern category")
+    keywords: list[str] = Field(default_factory=list, description="Keywords for keyword matching")
     regex_patterns: list[str] = Field(
-        default_factory=list,
-        description="Regex patterns for pattern matching"
+        default_factory=list, description="Regex patterns for pattern matching"
     )
-    skill_id: str = Field(
-        ...,
-        description="Skill to activate when matched"
-    )
+    skill_id: str = Field(..., description="Skill to activate when matched")
     workflow_id: str | None = Field(
-        default=None,
-        description="Optional workflow to run instead of skill"
+        default=None, description="Optional workflow to run instead of skill"
     )
     priority: int = Field(
-        default=50,
-        ge=1,
-        le=100,
-        description="Pattern priority (higher = checked first)"
+        default=50, ge=1, le=100, description="Pattern priority (higher = checked first)"
     )
     confidence_threshold: float = Field(
-        default=0.6,
-        ge=0.0,
-        le=1.0,
-        description="Minimum confidence to match"
+        default=0.6, ge=0.0, le=1.0, description="Minimum confidence to match"
     )
-    examples: list[str] = Field(
-        default_factory=list,
-        description="Example queries that match"
-    )
+    examples: list[str] = Field(default_factory=list, description="Example queries that match")
     metadata: dict[str, Any] = Field(
-        default_factory=dict,
-        description="Additional pattern metadata"
+        default_factory=dict, description="Additional pattern metadata"
     )
 
     # Semantic matching fields (v2.1.0)
     enable_semantic: bool = Field(
-        default=False,
-        description="Enable semantic matching for this pattern"
+        default=False, description="Enable semantic matching for this pattern"
     )
     semantic_threshold: float = Field(
-        default=0.7,
-        ge=0.0,
-        le=1.0,
-        description="Semantic similarity threshold for this pattern"
+        default=0.7, ge=0.0, le=1.0, description="Semantic similarity threshold for this pattern"
     )
     semantic_examples: list[str] = Field(
-        default_factory=list,
-        description="Additional semantic examples for enhanced understanding"
+        default_factory=list, description="Additional semantic examples for enhanced understanding"
     )
     embedding_vector: list[float] | None = Field(
-        default=None,
-        description="Pre-computed embedding vector (JSON serialized)"
+        default=None, description="Pre-computed embedding vector (JSON serialized)"
     )
 
-    @field_validator('pattern_id')
+    @field_validator("pattern_id")
     @classmethod
     def validate_pattern_id(cls, v: str) -> str:
         """Validate pattern_id format."""
-        if '/' not in v:
-            raise ValueError(
-                f"pattern_id must contain '/' (category/name): {v}"
-            )
-        parts = v.split('/')
+        if "/" not in v:
+            raise ValueError(f"pattern_id must contain '/' (category/name): {v}")
+        parts = v.split("/")
         if len(parts) != 2:
-            raise ValueError(
-                f"pattern_id must be 'category/name' format: {v}"
-            )
+            raise ValueError(f"pattern_id must be 'category/name' format: {v}")
         return v
 
-    @field_validator('keywords')
+    @field_validator("keywords")
     @classmethod
     def validate_keywords(cls, v: list[str]) -> list[str]:
         """Validate keywords are non-empty and unique."""
@@ -174,8 +132,8 @@ class TriggerPattern(BaseModel):
             raise ValueError("Keywords cannot be empty strings")
 
         # Normalize and deduplicate
-        seen = set()
-        normalized = []
+        seen: set[str] = set()
+        normalized: list[str] = []
         for kw in v:
             kw_lower = kw.lower().strip()
             if kw_lower and kw_lower not in seen:
@@ -221,47 +179,25 @@ class PatternMatch(BaseModel):
         ... )
     """
 
-    pattern_id: str = Field(
-        ...,
-        description="ID of matched pattern"
-    )
-    confidence: float = Field(
-        ...,
-        ge=0.0,
-        le=1.0,
-        description="Confidence score (0.0 - 1.0)"
-    )
+    pattern_id: str = Field(..., description="ID of matched pattern")
+    confidence: float = Field(..., ge=0.0, le=1.0, description="Confidence score (0.0 - 1.0)")
     metadata: dict[str, Any] = Field(
-        default_factory=dict,
-        description="Additional match information"
+        default_factory=dict, description="Additional match information"
     )
-    matched_keywords: list[str] = Field(
-        default_factory=list,
-        description="Keywords that matched"
-    )
+    matched_keywords: list[str] = Field(default_factory=list, description="Keywords that matched")
     matched_regex: list[str] = Field(
-        default_factory=list,
-        description="Regex patterns that matched"
+        default_factory=list, description="Regex patterns that matched"
     )
     semantic_score: float | None = Field(
-        default=None,
-        ge=0.0,
-        le=1.0,
-        description="Semantic similarity score"
+        default=None, ge=0.0, le=1.0, description="Semantic similarity score"
     )
     # Additional semantic fields (v2.1.0)
     semantic_method: str | None = Field(
-        default=None,
-        description="Method used for semantic matching (e.g., 'cosine', 'hybrid')"
+        default=None, description="Method used for semantic matching (e.g., 'cosine', 'hybrid')"
     )
-    model_used: str | None = Field(
-        default=None,
-        description="Name of the embedding model used"
-    )
+    model_used: str | None = Field(default=None, description="Name of the embedding model used")
     encoding_time: float | None = Field(
-        default=None,
-        ge=0.0,
-        description="Time taken to encode query (in seconds)"
+        default=None, ge=0.0, description="Time taken to encode query (in seconds)"
     )
 
     def meets_threshold(self, threshold: float) -> bool:

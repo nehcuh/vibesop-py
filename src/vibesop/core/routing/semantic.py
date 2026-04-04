@@ -271,7 +271,7 @@ class SemanticMatcher:
         query_tfidf = {term: tf * self._idf.get(term, 0) for term, tf in query_tf.items()}
 
         # Calculate cosine similarity with each document
-        matches = []
+        matches: list[SemanticMatch] = []
         for doc in self._documents:
             score = self._cosine_similarity(query_tfidf, doc)
 

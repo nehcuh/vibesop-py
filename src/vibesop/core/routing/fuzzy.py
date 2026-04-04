@@ -97,7 +97,7 @@ class FuzzyMatcher:
         query_lower = query.lower()
         tokens = query_lower.split()
 
-        matches = []
+        matches: list[FuzzyMatch] = []
 
         # Try matching each token against known phrases
         for token in tokens:
@@ -193,22 +193,22 @@ class FuzzyMatcher:
         # Simple keyword extraction
         # Split by common separators
         separators = [" ", "-", "_", "/", "."]
-        keywords = [text]
+        keywords: list[str] = [text]
 
         for sep in separators:
-            new_keywords = []
+            new_keywords: list[str] = []
             for kw in keywords:
                 new_keywords.extend(kw.split(sep))
             keywords = new_keywords
 
         # Filter and clean
-        cleaned = []
+        cleaned: list[str] = []
         for kw in keywords:
             cleaned_kw = kw.strip().lower()
-            if len(cleaned_kw) >= 3:  # Only keep meaningful keywords
+            if len(cleaned_kw) >= 3:
                 cleaned.append(cleaned_kw)
 
-        return list(set(cleaned))  # Remove duplicates
+        return list(dict.fromkeys(cleaned))
 
     def suggest_corrections(
         self,
@@ -229,11 +229,11 @@ class FuzzyMatcher:
         if not matches:
             return []
 
-        suggestions = []
+        suggestions: list[str] = []
         for match in matches:
             # Find and replace the typo
             query_parts = query.split()
-            corrected_parts = []
+            corrected_parts: list[str] = []
 
             for part in query_parts:
                 part_lower = part.lower()

@@ -145,7 +145,7 @@ class SkillActivator:
         try:
             # Execute workflow
             result = await self.workflow_manager.execute_workflow(
-                pattern.workflow_id,
+                pattern.workflow_id or "",
                 input_data,
             )
 
@@ -248,7 +248,7 @@ class SkillActivator:
                 "routed": True,
             }
 
-        except Exception as e:
+        except Exception:
             return {
                 "success": False,
                 "action": "none",
@@ -281,7 +281,7 @@ class SkillActivator:
         # Add input data if relevant
         if input_data:
             # Add key inputs to query
-            inputs = []
+            inputs: list[str] = []
             for key, value in list(input_data.items())[:3]:  # First 3
                 if isinstance(value, str) and len(value) < 50:
                     inputs.append(f"{key}={value}")
