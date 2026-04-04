@@ -363,9 +363,9 @@ class SessionAnalyzer:
 
         for pattern in patterns:
             # Estimate value based on frequency and confidence
-            if pattern.frequency >= 5 and pattern.confidence >= 0.8:
+            if pattern.frequency >= 5 and pattern.confidence >= 0.7:
                 estimated_value = "high"
-            elif pattern.frequency >= 3 and pattern.confidence >= 0.7:
+            elif pattern.frequency >= 3 and pattern.confidence >= 0.4:
                 estimated_value = "medium"
             else:
                 estimated_value = "low"

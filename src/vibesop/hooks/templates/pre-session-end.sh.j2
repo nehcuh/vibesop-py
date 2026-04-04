@@ -6,23 +6,44 @@
 
 set -e
 
-# Trigger memory flush
+# Find and analyze current session
+analyze_session() {
+    local session_file=""
+
+    # Try to find session file in Claude Code format
+    if [ -n "$CLAUDE_SESSION_FILE" ]; then
+        session_file="$CLAUDE_SESSION_FILE"
+    elif [ -f ".claude/projects/-"*/"*.jsonl" ]; then
+        # Find most recent session
+        session_file=$(find .claude/projects/-* -name "*.jsonl" -type f -printf '%T@ %p\n' 2>/dev/null | sort -n | tail -1 | cut -d' ' -f2-)
+    elif [ -f "session.jsonl" ]; then
+        session_file="session.jsonl"
+    fi
+
+    # Analyze if found
+    if [ -n "$session_file" ] && [ -f "$session_file" ]; then
+        echo "[{{ hook_point }}] Analyzing session patterns..."
+        vibe auto-analyze-session "$session_file" --quiet || true
+    fi
+}
+
+# Run analysis
 if command -v vibe &> /dev/null; then
-    echo "[{{ hook_point }}] Flushing session memory..."
-    # Note: 'vibe memory flush' will be available in v1.1.0
-    # This hook is prepared for future memory management feature
     echo "[{{ hook_point }}] Session ending at $(date)"
+
+    # Run automatic analysis
+    analyze_session
+
+    echo "[{{ hook_point }}] Session analysis complete"
 else
-    echo "[{{ hook_point }}] VibeSOP CLI not found, skipping memory flush"
+    echo "[{{ hook_point }}] VibeSOP CLI not found, skipping analysis"
 fi
 
-# Custom hook logic can be added here
+# Platform-specific logic
 {% if platform == "claude-code" %}
-# Claude Code specific logic
-echo "[{{ hook_point }}] Claude Code session ending"
+# Additional Claude Code specific logic can go here
 {% elif platform == "opencode" %}
-# OpenCode specific logic
-echo "[{{ hook_point }}] OpenCode session ending"
+# Additional OpenCode specific logic can go here
 {% endif %}
 
 exit 0

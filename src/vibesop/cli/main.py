@@ -44,6 +44,7 @@ from vibesop.cli.commands import workflow as workflow_module
 from vibesop.cli.commands import auto as auto_module
 from vibesop.cli.commands import config as config_module
 from vibesop.cli.commands import analyze as analyze_module
+from vibesop.cli.commands import auto_analyze as auto_analyze_module
 
 app = typer.Typer(
     name="vibe",
@@ -453,3 +454,5 @@ app.command()(auto_module.auto)
 app.command()(config_module.config)
 app.command("semantic")(config_module.config_semantic)
 app.command()(analyze_module.analyze)
+app.command()(auto_analyze_module.auto_analyze_session)
+app.command("create-suggested-skills")(auto_analyze_module.create_suggested_skills)
