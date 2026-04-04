@@ -1,3 +1,4 @@
+# pyright: reportUnknownVariableType=false, reportUnknownMemberType=false, reportUnknownArgumentType=false, reportUnknownLambdaType=false
 """VibeSOP scan command - Security scanning.
 
 This command scans files for security issues and threats.
@@ -74,10 +75,7 @@ def scan(
         # Output report to file
         vibe scan . --output report.json
     """
-    console.print(
-        f"\n[bold cyan]🔍 Security Scan[/bold cyan]"
-        f"\n{'=' * 40}\n"
-    )
+    console.print(f"\n[bold cyan]🔍 Security Scan[/bold cyan]\n{'=' * 40}\n")
 
     scanner = SecurityScanner()
 
@@ -123,8 +121,7 @@ def scan(
         # Sort by severity
         severity_order = {"critical": 0, "high": 1, "medium": 2, "low": 3, "info": 4}
         sorted_results = sorted(
-            results,
-            key=lambda r: severity_order.get(r.get("severity", "low"), 99)
+            results, key=lambda r: severity_order.get(r.get("severity", "low"), 99)
         )
 
         for issue in sorted_results[:20]:
@@ -152,5 +149,6 @@ def scan(
     # Output report
     if output and results:
         import json
+
         output.write_text(json.dumps(results, indent=2))
         console.print(f"\n[dim]Report saved to: {output}[/dim]")

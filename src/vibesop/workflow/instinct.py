@@ -8,7 +8,7 @@ import json
 import uuid
 from pathlib import Path
 from typing import Dict, List, Optional, Any
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
 from datetime import datetime
 from collections import defaultdict
@@ -23,6 +23,7 @@ class ActionType(Enum):
         SKIP_STEP: Skip the current step
         ASK_USER: Ask user for input
     """
+
     USE_SKILL = "use_skill"
     ROUTE_TO_LLM = "route_to_llm"
     SKIP_STEP = "skip_step"
@@ -39,6 +40,7 @@ class ConfidenceLevel(Enum):
         HIGH: High confidence
         VERY_HIGH: Very high confidence
     """
+
     VERY_LOW = "very_low"
     LOW = "low"
     MEDIUM = "medium"
@@ -58,6 +60,7 @@ class DecisionContext:
         time_pressure: Time pressure (0-1)
         complexity: Complexity of task (0-1)
     """
+
     situation_type: str
     user_goal: str
     recent_history: List[str]
@@ -80,6 +83,7 @@ class Decision:
         outcome: Outcome of the decision
         timestamp: When the decision was made
     """
+
     decision_id: str
     action_type: ActionType
     target: Optional[str]
@@ -106,6 +110,7 @@ class Pattern:
         created_at: Creation timestamp
         last_used: Last time this pattern was used
     """
+
     pattern_id: str
     situation_type: str
     user_goal: str
@@ -256,15 +261,14 @@ class InstinctManager:
         Returns:
             Result dictionary
         """
-        result = {
+        result: dict[str, Any] = {
             "success": True,
             "patterns_created": 0,
             "patterns_updated": 0,
             "errors": [],
         }
 
-        # Group by situation
-        situations = defaultdict(list)
+        situations: dict[tuple[str, ...], list[dict[str, Any]]] = defaultdict(list)
         for record in history:
             if "context" in record and "action_type" in record:
                 key = (
@@ -325,7 +329,7 @@ class InstinctManager:
         Returns:
             Matching pattern or None
         """
-        matches = []
+        matches: list[Pattern] = []
 
         for pattern in self._patterns.values():
             # Check situation type match
@@ -420,7 +424,7 @@ class InstinctManager:
         Returns:
             Dictionary of action counts
         """
-        counts = defaultdict(int)
+        counts: dict[str, int] = defaultdict(int)
         for decision in self._decisions:
             counts[decision.action_type.value] += 1
         return dict(counts)

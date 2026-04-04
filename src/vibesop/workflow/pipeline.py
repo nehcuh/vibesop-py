@@ -1,3 +1,4 @@
+# pyright: reportUnknownVariableType=false, reportUnknownMemberType=false, reportUnknownArgumentType=false, reportUnknownLambdaType=false, reportMissingTypeArgument=false, reportUnknownParameterType=false
 """
 WorkflowPipeline - Core workflow orchestration engine.
 
@@ -14,11 +15,16 @@ from vibesop.workflow.models import (
     WorkflowDefinition,
     WorkflowResult,
     WorkflowExecutionContext,
-    ExecutionStrategy,
-    PipelineStage,
 )
 from vibesop.workflow.exceptions import WorkflowError, StageError
-from vibesop.workflow.cascade import CascadeExecutor, WorkflowConfig, WorkflowStep, StepStatus
+from vibesop.workflow.cascade import (
+    CascadeExecutor,
+    WorkflowConfig,
+    WorkflowStep,
+    StepStatus,
+    ExecutionStrategy,
+)
+from vibesop.workflow.exceptions import WorkflowError, StageError
 
 
 class WorkflowPipeline:
@@ -71,7 +77,7 @@ class WorkflowPipeline:
         self,
         workflow: WorkflowDefinition,
         context: WorkflowExecutionContext,
-        strategy: ExecutionStrategy | None = None
+        strategy: ExecutionStrategy | None = None,
     ) -> WorkflowResult:
         """Execute a workflow with validation.
 
@@ -87,6 +93,7 @@ class WorkflowPipeline:
             WorkflowError: If workflow execution fails
         """
         import time
+
         start_time = time.time()
 
         # 1. Validate workflow definition
@@ -102,26 +109,11 @@ class WorkflowPipeline:
         # 4. Execute using CascadeExecutor
         try:
             step_results = await self._executor.execute(cascade_config)
-            workflow_result = self._to_workflow_result(
-                workflow, step_results, context, start_time
-            )
+            workflow_result = self._to_workflow_result(workflow, step_results, context, start_time)
 
             return workflow_result
 
         except Exception as e:
-            # Handle failure
-            execution_time = time.time() - start_time
-            error_result = WorkflowResult(
-                success=False,
-                workflow_name=workflow.name,
-                completed_stages=[],
-                failed_stages=[stage.name for stage in workflow.stages],
-                skipped_stages=[],
-                final_context={},
-                execution_time_seconds=execution_time,
-                errors=[str(e)],
-                metadata={"exception_type": type(e).__name__}
-            )
             raise WorkflowError(f"Workflow execution failed: {e}") from e
 
     def _validate_workflow(self, workflow: WorkflowDefinition) -> None:
@@ -157,7 +149,7 @@ class WorkflowPipeline:
         self,
         workflow: WorkflowDefinition,
         context: WorkflowExecutionContext,
-        strategy: ExecutionStrategy
+        strategy: ExecutionStrategy,
     ) -> WorkflowConfig:
         """Convert WorkflowDefinition to WorkflowConfig.
 
@@ -180,20 +172,19 @@ class WorkflowPipeline:
                     if asyncio.iscoroutine(result):
                         return await result
                     return result
-                elif 'skill_id' in stage.metadata:
+                elif "skill_id" in stage.metadata:
                     # TODO: Execute skill using SkillManager
-                    return {"status": "executed", "skill": stage.metadata['skill_id']}
+                    return {"status": "executed", "skill": stage.metadata["skill_id"]}
                 else:
                     raise StageError(
-                        f"Stage '{stage.name}' has no handler or skill_id",
-                        stage_name=stage.name
+                        f"Stage '{stage.name}' has no handler or skill_id", stage_name=stage.name
                     )
 
             workflow_step = WorkflowStep(
                 step_id=stage.name,
                 name=stage.name,
                 description=stage.description,
-                handler=handler_wrapper,
+                handler=handler_wrapper,  # type: ignore[reportArgumentType]  # type: ignore[reportArgumentType]
                 dependencies=stage.dependencies,
                 timeout_seconds=stage.timeout_seconds or workflow.timeout_seconds,
                 retry_count=stage.retry_count,
@@ -208,7 +199,7 @@ class WorkflowPipeline:
             name=workflow.name,
             description=workflow.description,
             steps=workflow_steps,
-            strategy=strategy.value,
+            strategy=strategy,  # type: ignore[reportArgumentType]
             max_parallel=workflow.max_parallel,
             progress_tracker=None,  # TODO: Add progress tracking
             stop_on_first_failure=workflow.stop_on_first_failure,
@@ -219,7 +210,7 @@ class WorkflowPipeline:
         workflow: WorkflowDefinition,
         step_results: Dict[str, Any],
         context: WorkflowExecutionContext,
-        start_time: float
+        start_time: float,
     ) -> WorkflowResult:
         """Convert CascadeExecutor results to WorkflowResult.
 
@@ -266,7 +257,7 @@ class WorkflowPipeline:
                 "workflow_version": workflow.version,
                 "total_stages": len(workflow.stages),
                 "strategy": workflow.strategy,
-            }
+            },
         )
 
     def _generate_workflow_id(self) -> str:

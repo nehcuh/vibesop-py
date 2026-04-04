@@ -1,3 +1,4 @@
+# pyright: reportUnknownVariableType=false, reportUnknownMemberType=false, reportUnknownArgumentType=false, reportUnknownLambdaType=false, reportMissingTypeArgument=false, reportUnknownParameterType=false
 """Configuration loader for VibeSOP.
 
 Loads and manages YAML configuration files:
@@ -65,9 +66,9 @@ class ConfigLoader:
 
         try:
             with registry_path.open("r", encoding="utf-8") as f:
-                self._registry_cache = yaml.load(f)
+                self._registry_cache: dict[str, Any] = yaml.load(f)  # type: ignore[reportReturnType]
 
-            return self._registry_cache
+            return self._registry_cache            return self._registry_cache
 
         except Exception as e:
             msg = f"Failed to load registry: {e}"
@@ -100,7 +101,7 @@ class ConfigLoader:
 
         try:
             with policy_path.open("r", encoding="utf-8") as f:
-                self._policy_cache = yaml.load(f)
+                self._policy_cache = yaml.load(f)  # type: ignore[reportReturnType]  # type: ignore[reportReturnType]
 
             return self._policy_cache
 

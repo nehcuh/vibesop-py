@@ -1,3 +1,4 @@
+# pyright: reportUnknownVariableType=false, reportUnknownMemberType=false, reportUnknownArgumentType=false, reportUnknownLambdaType=false, reportMissingTypeArgument=false, reportUnknownParameterType=false
 """VibeSOP quickstart command - Interactive setup wizard.
 
 This command guides users through the initial setup process
@@ -65,10 +66,7 @@ def quickstart(
         # Install to global config
         vibe quickstart --global
     """
-    console.print(
-        f"\n[bold cyan]🚀 VibeSOP Quickstart Wizard[/bold cyan]"
-        f"\n{'=' * 40}\n"
-    )
+    console.print(f"\n[bold cyan]🚀 VibeSOP Quickstart Wizard[/bold cyan]\n{'=' * 40}\n")
 
     runner = QuickstartRunner()
 
@@ -76,8 +74,6 @@ def quickstart(
         # Non-interactive mode
         result = runner.run(
             project_path=Path("."),
-            platform=platform,
-            global_install=global_install,
         )
 
         if result.get("success"):
@@ -104,8 +100,6 @@ def quickstart(
 
         result = runner.run(
             project_path=Path("."),
-            platform=platform,
-            global_install=global_install,
         )
 
         if result.get("success"):

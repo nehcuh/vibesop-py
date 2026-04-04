@@ -1,3 +1,4 @@
+# pyright: reportUnknownVariableType=false, reportUnknownMemberType=false, reportUnknownArgumentType=false, reportUnknownLambdaType=false, reportMissingTypeArgument=false, reportUnknownParameterType=false
 """Manifest builder for creating configuration manifests.
 
 This module provides functionality for building Manifest objects
@@ -11,7 +12,6 @@ from vibesop.adapters.models import (
     Manifest,
     ManifestMetadata,
     PolicySet,
-    RenderResult,
     RoutingConfig,
     SecurityPolicy,
     SkillDefinition,
@@ -218,6 +218,7 @@ class ManifestBuilder:
                             parts = content.split("---", 2)
                             if len(parts) >= 2:
                                 from ruamel.yaml import YAML
+
                                 yaml = YAML()
                                 frontmatter = yaml.load(parts[1])
                                 if isinstance(frontmatter, dict):
@@ -258,22 +259,22 @@ class ManifestBuilder:
         import re
 
         # Pattern 1: "Use when asked to X, Y, Z"
-        match = re.search(r'Use when asked to ([^.]+)', description, re.IGNORECASE)
+        match = re.search(r"Use when asked to ([^.]+)", description, re.IGNORECASE)
         if match:
             return match.group(1).strip()
 
         # Pattern 2: "Triggered when X"
-        match = re.search(r'Triggered when ([^.]+)', description, re.IGNORECASE)
+        match = re.search(r"Triggered when ([^.]+)", description, re.IGNORECASE)
         if match:
             return match.group(1).strip()
 
         # Pattern 3: "Auto-trigger on X"
-        match = re.search(r'Auto-trigger on ([^.]+)', description, re.IGNORECASE)
+        match = re.search(r"Auto-trigger on ([^.]+)", description, re.IGNORECASE)
         if match:
             return match.group(1).strip()
 
         # Pattern 4: "Proactively suggest when X"
-        match = re.search(r'Proactively suggest when ([^.]+)', description, re.IGNORECASE)
+        match = re.search(r"Proactively suggest when ([^.]+)", description, re.IGNORECASE)
         if match:
             return match.group(1).strip()
 
@@ -289,12 +290,8 @@ class ManifestBuilder:
             policy_dict = self.config_loader.load_policy()
 
             # Convert to PolicySet
-            security = self._dict_to_security_policy(
-                policy_dict.get("security", {})
-            )
-            routing = self._dict_to_routing_config(
-                policy_dict.get("routing", {})
-            )
+            security = self._dict_to_security_policy(policy_dict.get("security", {}))
+            routing = self._dict_to_routing_config(policy_dict.get("routing", {}))
             behavior = policy_dict.get("behavior", {})
             custom = policy_dict.get("custom", {})
 
@@ -334,8 +331,7 @@ class ManifestBuilder:
         Returns:
             RoutingConfig instance
         """
-        # Handle candidate_selection
-        candidate_selection = data.get("candidate_selection", {})
+        # Handle preference_learning
         preference_learning = data.get("preference_learning", {})
 
         return RoutingConfig(

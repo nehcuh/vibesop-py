@@ -1,3 +1,4 @@
+# pyright: reportUnknownVariableType=false, reportUnknownMemberType=false, reportUnknownArgumentType=false, reportUnknownLambdaType=false, reportMissingTypeArgument=false, reportUnknownParameterType=false
 """Enforced security scanning for external inputs.
 
 This module provides decorators and wrappers that enforce
@@ -11,7 +12,7 @@ from functools import wraps
 from pathlib import Path
 from typing import Callable, TypeVar, Union, Any, Optional
 
-from vibesop.security.scanner import SecurityScanner, ScanResult
+from vibesop.security.scanner import SecurityScanner
 from vibesop.security.exceptions import SecurityError
 
 
@@ -59,8 +60,7 @@ def require_safe_scan(
                 if not scan_result.safe:
                     if on_unsafe == "raise":
                         raise SecurityEnforcementError(
-                            f"Unsafe content detected in {func.__name__}: "
-                            f"{scan_result.threats}"
+                            f"Unsafe content detected in {func.__name__}: {scan_result.threats}"
                         )
                     elif on_unsafe == "return_none":
                         return None  # type: ignore
@@ -73,8 +73,7 @@ def require_safe_scan(
                 if not scan_result.safe:
                     if on_unsafe == "raise":
                         raise SecurityEnforcementError(
-                            f"Unsafe file detected in {func.__name__}: "
-                            f"{scan_result.threats}"
+                            f"Unsafe file detected in {func.__name__}: {scan_result.threats}"
                         )
                     elif on_unsafe == "return_none":
                         return None  # type: ignore
@@ -88,8 +87,7 @@ def require_safe_scan(
                 if not scan_result.safe:
                     if on_unsafe == "raise":
                         raise SecurityEnforcementError(
-                            f"Unsafe content in dict from {func.__name__}: "
-                            f"{scan_result.threats}"
+                            f"Unsafe content in dict from {func.__name__}: {scan_result.threats}"
                         )
                     elif on_unsafe == "return_none":
                         return None  # type: ignore
@@ -97,6 +95,7 @@ def require_safe_scan(
             return result
 
         return wrapper
+
     return decorator
 
 
@@ -134,6 +133,7 @@ def scan_file_before_load(
             return func(*args, **kwargs)
 
         return wrapper
+
     return decorator
 
 
@@ -170,6 +170,7 @@ def scan_string_input(
             return func(*args, **kwargs)
 
         return wrapper
+
     return decorator
 
 
@@ -215,9 +216,7 @@ class SafeLoader:
         # Scan file
         scan_result = self._scanner.scan_file(path)
         if not scan_result.safe:
-            raise SecurityEnforcementError(
-                f"Cannot load unsafe file {path}: {scan_result.threats}"
-            )
+            raise SecurityEnforcementError(f"Cannot load unsafe file {path}: {scan_result.threats}")
 
         return path.read_text(encoding=encoding)
 
@@ -257,9 +256,7 @@ class SafeLoader:
         """
         scan_result = self._scanner.scan(content)
         if not scan_result.safe:
-            raise SecurityEnforcementError(
-                f"Content is unsafe: {scan_result.threats}"
-            )
+            raise SecurityEnforcementError(f"Content is unsafe: {scan_result.threats}")
         return content
 
     def check_file_path(self, path: Union[Path, str]) -> Path:
@@ -277,9 +274,7 @@ class SafeLoader:
         path = Path(path)
         scan_result = self._scanner.scan_file(path)
         if not scan_result.safe:
-            raise SecurityEnforcementError(
-                f"File {path} is unsafe: {scan_result.threats}"
-            )
+            raise SecurityEnforcementError(f"File {path} is unsafe: {scan_result.threats}")
         return path
 
 

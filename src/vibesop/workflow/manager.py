@@ -6,7 +6,7 @@ following the SkillManager pattern for consistency.
 """
 
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, cast
 from ruamel.yaml import YAML
 
 from vibesop.workflow.models import (
@@ -66,25 +66,29 @@ class WorkflowManager:
         Returns:
             List of workflow metadata dictionaries
         """
-        workflows = []
+        workflows: List[Dict[str, Any]] = []
 
-        # Load from filesystem
         if self.workflow_dir.exists():
             for workflow_file in self.workflow_dir.glob("*.yaml"):
                 try:
                     workflow = self._load_workflow_from_file(workflow_file)
-                    workflows.append({
-                        "id": workflow.name,
-                        "name": workflow.name,
-                        "description": workflow.description,
-                        "version": workflow.version,
-                        "stages": len(workflow.stages),
-                        "strategy": workflow.strategy,
-                        "source": str(workflow_file)
-                    })
+                    if workflow is None:
+                        continue
+                    workflows.append(
+                        {
+                            "id": workflow.name,
+                            "name": workflow.name,
+                            "description": workflow.description,
+                            "version": workflow.version,
+                            "stages": len(workflow.stages),
+                            "strategy": workflow.strategy,
+                            "source": str(workflow_file),
+                        }
+                    )
                 except Exception as e:
                     # Skip invalid workflows
                     import warnings
+
                     warnings.warn(f"Failed to load workflow from {workflow_file}: {e}")
                     continue
 
@@ -109,10 +113,7 @@ class WorkflowManager:
             return self._workflow_cache[workflow_id]
 
         # Try loading from various sources
-        workflow = (
-            self._load_from_filesystem(workflow_id) or
-            self._load_from_builtin(workflow_id)
-        )
+        workflow = self._load_from_filesystem(workflow_id) or self._load_from_builtin(workflow_id)
 
         if workflow:
             self._workflow_cache[workflow_id] = workflow
@@ -123,7 +124,7 @@ class WorkflowManager:
         self,
         workflow_id: str,
         input_data: Dict[str, Any],
-        strategy: Optional[ExecutionStrategy] = None
+        strategy: Optional[ExecutionStrategy] = None,
     ) -> WorkflowResult:
         """Execute workflow by ID.
 
@@ -140,10 +141,7 @@ class WorkflowManager:
         """
         workflow = self.get_workflow(workflow_id)
         if not workflow:
-            raise WorkflowError(
-                f"Workflow not found: {workflow_id}",
-                workflow_name=workflow_id
-            )
+            raise WorkflowError(f"Workflow not found: {workflow_id}", workflow_name=workflow_id)
 
         context = WorkflowExecutionContext(input=input_data)
 
@@ -175,13 +173,12 @@ class WorkflowManager:
                 skipped_stages=[],
                 final_context=context.model_dump(),
                 execution_time_seconds=0.0,
-                errors=[str(e)]
+                errors=[str(e)],
             )
             self._state_manager.complete_workflow(workflow_id, error_result)
 
             raise WorkflowError(
-                f"Workflow execution failed: {e}",
-                workflow_name=workflow.name
+                f"Workflow execution failed: {e}", workflow_name=workflow.name
             ) from e
 
     def resume_workflow(self, workflow_id: str) -> WorkflowResult:
@@ -200,26 +197,24 @@ class WorkflowManager:
         state = self._state_manager.load_state(workflow_id)
         if not state:
             raise WorkflowRecoveryError(
-                f"Workflow state not found: {workflow_id}",
-                workflow_id=workflow_id
+                f"Workflow state not found: {workflow_id}", workflow_id=workflow_id
             )
 
         if not state.is_active:
             raise WorkflowRecoveryError(
                 f"Workflow is not active (status: {state.status}): {workflow_id}",
-                workflow_id=workflow_id
+                workflow_id=workflow_id,
             )
 
         # Reload workflow definition
         workflow = self.get_workflow(state.workflow_name)
         if not workflow:
             raise WorkflowRecoveryError(
-                f"Workflow definition not found: {state.workflow_name}",
-                workflow_id=workflow_id
+                f"Workflow definition not found: {state.workflow_name}", workflow_id=workflow_id
             )
 
         # Restore context
-        context = WorkflowExecutionContext(**state.context)
+        _ = WorkflowExecutionContext(**state.context)
 
         # TODO: Implement resume logic
         raise NotImplementedError(
@@ -260,11 +255,11 @@ class WorkflowManager:
             return None
 
         try:
-            with file_path.open('r') as f:
-                data = self._yaml.load(f)
+            with file_path.open("r") as f:
+                data = cast(Dict[str, Any], self._yaml.load(f))  # type: ignore[reportUnknownMemberType]
 
             # Convert stages
-            stages = []
+            stages: List[PipelineStage] = []
             for stage_data in data.get("stages", []):
                 # Create PipelineStage
                 stage = PipelineStage(
@@ -295,6 +290,7 @@ class WorkflowManager:
 
         except Exception as e:
             import warnings
+
             warnings.warn(f"Failed to load workflow from {file_path}: {e}")
             return None
 

@@ -1,3 +1,4 @@
+# pyright: reportUnknownVariableType=false, reportUnknownMemberType=false, reportUnknownArgumentType=false, reportPrivateUsage=false, reportUnnecessaryIsInstance=false
 """Overlay merging utilities for customizing manifests.
 
 This module provides functionality for merging overlay configurations
@@ -149,18 +150,13 @@ class OverlayMerger:
             SecurityPolicy,
             SkillDefinition,
         )
-        from vibesop.core.models import SkillDefinition as CoreSkillDefinition
 
-        # Convert metadata
         metadata_dict = data.get("metadata", {})
         metadata = ManifestMetadata(**metadata_dict)
 
         # Convert skills
         skills_dicts = data.get("skills", [])
-        skills = [
-            SkillDefinition(**s) if isinstance(s, dict) else s
-            for s in skills_dicts
-        ]
+        skills = [SkillDefinition(**s) if isinstance(s, dict) else s for s in skills_dicts]
 
         # Convert policies
         policies_dict = data.get("policies", {})

@@ -28,6 +28,7 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
+from vibesop.core.checkpoint.base import CheckpointStatus
 from vibesop.core.checkpoint.manager import CheckpointManager
 
 console = Console()
@@ -121,10 +122,7 @@ def _do_save(
         console.print("[dim]Usage: vibe checkpoint save NAME[/dim]")
         raise typer.Exit(1)
 
-    console.print(
-        f"\n[bold cyan]💾 Saving Checkpoint[/bold cyan]"
-        f"\n{'=' * 40}\n"
-    )
+    console.print(f"\n[bold cyan]💾 Saving Checkpoint[/bold cyan]\n{'=' * 40}\n")
 
     # Snapshot files if requested
     files = None
@@ -142,7 +140,7 @@ def _do_save(
 
     console.print(
         f"[green]✓ Checkpoint saved[/green]\n"
-        f"  [dim]ID:[/dim] {checkpoint.id}\n"
+        f"  [dim]ID:[/dim] {checkpoint.metadata.id}\n"
         f"  [dim]Name:[/dim] {checkpoint.metadata.name}\n"
         f"  [dim]Created:[/dim] {checkpoint.metadata.created_at}\n"
     )
@@ -163,19 +161,15 @@ def _do_restore(manager: CheckpointManager, checkpoint_id: str | None) -> None:
         console.print("[dim]Usage: vibe checkpoint restore ID[/dim]")
         raise typer.Exit(1)
 
-    console.print(
-        f"\n[bold cyan]🔄 Restoring Checkpoint[/bold cyan]"
-        f"\n{'=' * 40}\n"
-    )
+    console.print(f"\n[bold cyan]🔄 Restoring Checkpoint[/bold cyan]\n{'=' * 40}\n")
 
     # Find checkpoint by ID or name
     checkpoint = manager.get_checkpoint(checkpoint_id)
     if not checkpoint:
-        # Try to find by name
         all_checkpoints = manager.list_checkpoints()
         for cp in all_checkpoints:
-            if cp.metadata.name == checkpoint_id:
-                checkpoint = cp
+            if cp.name == checkpoint_id:
+                checkpoint = manager.get_checkpoint(cp.id)
                 break
 
     if not checkpoint:
@@ -183,12 +177,15 @@ def _do_restore(manager: CheckpointManager, checkpoint_id: str | None) -> None:
         console.print("[dim]Run 'vibe checkpoint list' to see available checkpoints[/dim]")
         raise typer.Exit(1)
 
-    # Restore checkpoint
-    restored = manager.restore_checkpoint(checkpoint.id)
+    restored = manager.restore_checkpoint(checkpoint.metadata.id)
+
+    if not restored:
+        console.print(f"[red]✗ Failed to restore checkpoint: {checkpoint_id}[/red]")
+        raise typer.Exit(1)
 
     console.print(
         f"[green]✓ Checkpoint restored[/green]\n"
-        f"  [dim]ID:[/dim] {restored.id}\n"
+        f"  [dim]ID:[/dim] {restored.metadata.id}\n"
         f"  [dim]Name:[/dim] {restored.metadata.name}\n"
         f"  [dim]Description:[/dim] {restored.metadata.description or 'None'}\n"
     )
@@ -204,10 +201,7 @@ def _do_list(manager: CheckpointManager) -> None:
     Args:
         manager: CheckpointManager instance
     """
-    console.print(
-        f"\n[bold cyan]📋 Checkpoints[/bold cyan]"
-        f"\n{'=' * 40}\n"
-    )
+    console.print(f"\n[bold cyan]📋 Checkpoints[/bold cyan]\n{'=' * 40}\n")
 
     checkpoints = manager.list_checkpoints()
 
@@ -225,13 +219,13 @@ def _do_list(manager: CheckpointManager) -> None:
     table.add_column("Tags", style="dim")
 
     for cp in checkpoints[:20]:  # Show first 20
-        status_icon = "✓" if cp.metadata.status == "active" else "⊘"
-        tags_str = ", ".join(cp.metadata.tags or [])[:30]
+        status_icon = "✓" if cp.status == CheckpointStatus.CREATED else "⊘"
+        tags_str = ", ".join(cp.tags or [])[:30]
 
         table.add_row(
             cp.id,
-            cp.metadata.name[:30],
-            cp.metadata.created_at.strftime("%Y-%m-%d %H:%M"),
+            cp.name[:30],
+            cp.created_at.strftime("%Y-%m-%d %H:%M"),
             status_icon,
             tags_str,
         )
@@ -260,7 +254,7 @@ def _do_delete(manager: CheckpointManager, checkpoint_id: str | None) -> None:
         console.print(f"[red]✗ Checkpoint not found: {checkpoint_id}[/red]")
         raise typer.Exit(1)
 
-    manager.delete_checkpoint(checkpoint.id)
+    manager.delete_checkpoint(checkpoint.metadata.id)
     console.print(f"[green]✓ Checkpoint deleted: {checkpoint_id}[/green]")
 
 
@@ -271,7 +265,7 @@ def _do_prune(manager: CheckpointManager) -> None:
         manager: CheckpointManager instance
     """
     console.print("[dim]Pruning old checkpoints...[/dim]")
-    count = manager.prune_old()
+    count = manager.clear_old_checkpoints()
     console.print(f"[green]✓ Pruned {count} old checkpoints[/green]")
 
 
@@ -283,7 +277,7 @@ def _get_current_files() -> list[str]:
     """
     # Get common working files
     cwd = Path.cwd()
-    files = []
+    files: list[str] = []
 
     # Python files
     for py_file in cwd.rglob("*.py"):

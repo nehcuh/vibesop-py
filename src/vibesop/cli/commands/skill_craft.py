@@ -19,8 +19,9 @@ Examples:
     vibe skill-craft templates
 """
 
+import json
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 import typer
 from rich.console import Console
@@ -102,10 +103,7 @@ def _do_create(
         description: Skill description
         output: Output directory
     """
-    console.print(
-        f"\n[bold cyan]🛠️  Skill Craft[/bold cyan]"
-        f"\n{'=' * 40}\n"
-    )
+    console.print(f"\n[bold cyan]🛠️  Skill Craft[/bold cyan]\n{'=' * 40}\n")
 
     console.print(
         Panel(
@@ -124,13 +122,15 @@ def _do_create(
         console.print("[dim]Enter a short, memorable name (e.g., 'debug-error')[/dim]")
         console.print("\n[dim]Skipping interactive mode - provide --name[/dim]")
         console.print("\n[dim]Example:[/dim]")
-        console.print("  [cyan]vibe skill-craft create --name 'my-skill' --description 'My custom skill'[/dim]")
+        console.print(
+            "  [cyan]vibe skill-craft create --name 'my-skill' --description 'My custom skill'[/dim]"
+        )
         raise typer.Exit(0)
 
     # Generate skill template
     skill_content = f"""# {name}
 
-{description or 'A custom skill for VibeSOP.'}
+{description or "A custom skill for VibeSOP."}
 
 ## Trigger When
 
@@ -162,10 +162,7 @@ def _do_create(
     skill_file = output_dir / f"{name.lower().replace(' ', '-')}.md"
     skill_file.write_text(skill_content)
 
-    console.print(
-        f"\n[green]✓ Skill created[/green]\n"
-        f"  [dim]File:[/dim] {skill_file}\n"
-    )
+    console.print(f"\n[green]✓ Skill created[/green]\n  [dim]File:[/dim] {skill_file}\n")
     console.print(
         f"\n[dim]Edit the skill file to customize behavior.[/dim]\n"
         f"[dim]After editing, run [cyan]vibe build[/cyan] to include it.[/dim]"
@@ -191,18 +188,14 @@ def _do_from(
         console.print("[dim]Usage: vibe skill-craft from SESSION_FILE[/dim]")
         raise typer.Exit(1)
 
-    console.print(
-        f"\n[bold cyan]📄 Analyzing Session[/bold cyan]"
-        f"\n{'=' * 40}\n"
-    )
+    console.print(f"\n[bold cyan]📄 Analyzing Session[/bold cyan]\n{'=' * 40}\n")
 
     console.print(f"[dim]Source: {source}[/dim]\n")
 
     # Read session file
     try:
-        import json
         content = source.read_text()
-        session = json.loads(content)
+        session: dict[str, Any] = json.loads(content)
 
         console.print(f"[green]✓ Loaded session[/green]")
         console.print(f"  Messages: {len(session.get('messages', []))}")
@@ -233,10 +226,7 @@ def _do_from(
 
 def _do_templates() -> None:
     """List available skill templates."""
-    console.print(
-        f"\n[bold cyan]📋 Skill Templates[/bold cyan]"
-        f"\n{'=' * 40}\n"
-    )
+    console.print(f"\n[bold cyan]📋 Skill Templates[/bold cyan]\n{'=' * 40}\n")
 
     templates = [
         ("debug", "Debugging and troubleshooting", "For systematic debugging workflows"),
@@ -255,7 +245,7 @@ def _do_templates() -> None:
     )
 
 
-def _extract_session_patterns(session: dict) -> list[dict]:
+def _extract_session_patterns(session: dict[str, Any]) -> list[dict[str, Any]]:
     """Extract patterns from a session for skill creation.
 
     Args:
@@ -264,56 +254,68 @@ def _extract_session_patterns(session: dict) -> list[dict]:
     Returns:
         List of detected patterns with name and description
     """
-    patterns = []
-    messages = session.get("messages", [])
+    patterns: list[dict[str, Any]] = []
+    messages: list[dict[str, Any]] = session.get("messages", [])
 
     if not messages:
         return patterns
 
     # Analyze message patterns
-    user_messages = [m for m in messages if m.get("role") == "user"]
+    user_messages: list[dict[str, Any]] = [m for m in messages if m.get("role") == "user"]
 
     if not user_messages:
         return patterns
 
     # Pattern 1: Code review pattern
     review_keywords = ["review", "check", "improve", "refactor", "优化", "审查"]
-    if any(any(kw in msg.get("content", "").lower() for kw in review_keywords)
-           for msg in user_messages):
-        patterns.append({
-            "name": "Code Review",
-            "description": "Review code for quality, style, and best practices",
-            "trigger": "when user asks to review or check code",
-        })
+    if any(
+        any(kw in msg.get("content", "").lower() for kw in review_keywords) for msg in user_messages
+    ):
+        patterns.append(
+            {
+                "name": "Code Review",
+                "description": "Review code for quality, style, and best practices",
+                "trigger": "when user asks to review or check code",
+            }
+        )
 
     # Pattern 2: Debug pattern
     debug_keywords = ["error", "bug", "fix", "debug", "issue", "错误", "调试"]
-    if any(any(kw in msg.get("content", "").lower() for kw in debug_keywords)
-           for msg in user_messages):
-        patterns.append({
-            "name": "Debugging",
-            "description": "Systematically debug errors and investigate issues",
-            "trigger": "when user reports errors or bugs",
-        })
+    if any(
+        any(kw in msg.get("content", "").lower() for kw in debug_keywords) for msg in user_messages
+    ):
+        patterns.append(
+            {
+                "name": "Debugging",
+                "description": "Systematically debug errors and investigate issues",
+                "trigger": "when user reports errors or bugs",
+            }
+        )
 
     # Pattern 3: Testing pattern
     test_keywords = ["test", "spec", "tdd", "测试", "用例"]
-    if any(any(kw in msg.get("content", "").lower() for kw in test_keywords)
-           for msg in user_messages):
-        patterns.append({
-            "name": "Test Generation",
-            "description": "Generate test cases and test code",
-            "trigger": "when user asks about testing",
-        })
+    if any(
+        any(kw in msg.get("content", "").lower() for kw in test_keywords) for msg in user_messages
+    ):
+        patterns.append(
+            {
+                "name": "Test Generation",
+                "description": "Generate test cases and test code",
+                "trigger": "when user asks about testing",
+            }
+        )
 
     # Pattern 4: Documentation pattern
     doc_keywords = ["document", "doc", "readme", "comment", "文档"]
-    if any(any(kw in msg.get("content", "").lower() for kw in doc_keywords)
-           for msg in user_messages):
-        patterns.append({
-            "name": "Documentation",
-            "description": "Write or improve documentation",
-            "trigger": "when user asks for documentation",
-        })
+    if any(
+        any(kw in msg.get("content", "").lower() for kw in doc_keywords) for msg in user_messages
+    ):
+        patterns.append(
+            {
+                "name": "Documentation",
+                "description": "Write or improve documentation",
+                "trigger": "when user asks for documentation",
+            }
+        )
 
     return patterns

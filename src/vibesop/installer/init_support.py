@@ -4,9 +4,8 @@ This module provides functionality for initializing new projects
 with VibeSOP configuration.
 """
 
-import shutil
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Any, Dict
 
 
 class InitSupport:
@@ -34,7 +33,7 @@ class InitSupport:
         platform: str = "claude-code",
         force: bool = False,
         create_skills_dir: bool = True,
-    ) -> Dict[str, any]:
+    ) -> Dict[str, Any]:
         """Initialize a project with VibeSOP configuration.
 
         Args:
@@ -46,7 +45,7 @@ class InitSupport:
         Returns:
             Dictionary with initialization results
         """
-        result = {
+        result: dict[str, Any] = {
             "success": False,
             "project_path": str(project_path),
             "platform": platform,
@@ -75,9 +74,7 @@ class InitSupport:
             ]
 
             if create_skills_dir:
-                dirs_to_create.append(
-                    project_path / ".skills"
-                )
+                dirs_to_create.append(project_path / ".skills")
 
             for dir_path in dirs_to_create:
                 full_path = project_path / dir_path
@@ -106,7 +103,7 @@ class InitSupport:
 
         return result
 
-    def verify_init(self, project_path: Path) -> Dict[str, any]:
+    def verify_init(self, project_path: Path) -> Dict[str, Any]:
         """Verify project initialization.
 
         Args:
@@ -131,9 +128,7 @@ class InitSupport:
         result["skills_dir_exists"] = (vibe_dir / "skills").exists()
 
         result["initialized"] = (
-            result["vibe_dir_exists"]
-            and result["config_exists"]
-            and result["skills_dir_exists"]
+            result["vibe_dir_exists"] and result["config_exists"] and result["skills_dir_exists"]
         )
 
         result["structure_valid"] = result["initialized"]
@@ -246,4 +241,5 @@ For more information, see:
             ISO format date string
         """
         from datetime import datetime
+
         return datetime.now().strftime("%Y-%m-%d")

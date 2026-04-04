@@ -6,8 +6,7 @@ the availability of external tools required by VibeSOP.
 
 import subprocess
 import shutil
-from pathlib import Path
-from typing import Dict, List, Optional, Any
+from typing import Any, Dict, List, Optional
 from dataclasses import dataclass
 from enum import Enum
 
@@ -24,6 +23,7 @@ class ToolStatus(Enum):
         PERMISSION_DENIED: Tool exists but cannot be executed
         UNKNOWN: Unable to determine status
     """
+
     AVAILABLE = "available"
     NOT_AVAILABLE = "not_available"
     VERSION_MISMATCH = "version_mismatch"
@@ -45,6 +45,7 @@ class ToolInfo:
         version: Detected version (if available)
         path: Path to tool executable
     """
+
     name: str
     command: str
     version_command: Optional[str]
@@ -69,7 +70,7 @@ class ExternalToolsDetector:
     """
 
     # Known tools and their detection methods
-    KNOWN_TOOLS = {
+    KNOWN_TOOLS: Dict[str, Dict[str, Any]] = {
         "git": {
             "command": "git",
             "version_command": "git --version",
@@ -152,7 +153,7 @@ class ExternalToolsDetector:
         Returns:
             Dictionary mapping tool names to ToolInfo
         """
-        tools = {}
+        tools: Dict[str, ToolInfo] = {}
 
         for tool_name, tool_config in self.KNOWN_TOOLS.items():
             tool_info = self._detect_tool(tool_name, tool_config)
@@ -187,7 +188,7 @@ class ExternalToolsDetector:
         Returns:
             Dictionary with check results
         """
-        result = {
+        result: Dict[str, Any] = {
             "all_available": True,
             "missing_tools": [],
             "version_mismatches": [],
@@ -257,7 +258,7 @@ class ExternalToolsDetector:
 
         return instructions.get(tool_name)
 
-    def _detect_tool(self, tool_name: str, tool_config: Dict) -> ToolInfo:
+    def _detect_tool(self, tool_name: str, tool_config: Dict[str, Any]) -> ToolInfo:
         """Detect a single tool.
 
         Args:
@@ -267,7 +268,7 @@ class ExternalToolsDetector:
         Returns:
             ToolInfo with detection results
         """
-        command = tool_config["command"]
+        command: str = tool_config["command"]
         version_command = tool_config.get("version_command")
         min_version = tool_config.get("min_version")
         optional = tool_config.get("optional", False)
@@ -338,8 +339,8 @@ class ExternalToolsDetector:
         # Common version patterns
         patterns = [
             r"\d+\.\d+\.\d+",  # x.y.z
-            r"\d+\.\d+",       # x.y
-            r"v\d+\.\d+\.\d+", # vx.y.z
+            r"\d+\.\d+",  # x.y
+            r"v\d+\.\d+\.\d+",  # vx.y.z
         ]
 
         for pattern in patterns:
@@ -379,43 +380,39 @@ class ExternalToolsDetector:
         tools = self.detect_all()
 
         required_available = sum(
-            1 for t in tools.values()
-            if not t.optional and t.status == ToolStatus.AVAILABLE
+            1 for t in tools.values() if not t.optional and t.status == ToolStatus.AVAILABLE
         )
-        required_total = sum(
-            1 for t in tools.values()
-            if not t.optional
-        )
+        required_total = sum(1 for t in tools.values() if not t.optional)
         optional_available = sum(
-            1 for t in tools.values()
-            if t.optional and t.status == ToolStatus.AVAILABLE
+            1 for t in tools.values() if t.optional and t.status == ToolStatus.AVAILABLE
         )
-        optional_total = sum(
-            1 for t in tools.values()
-            if t.optional
-        )
+        optional_total = sum(1 for t in tools.values() if t.optional)
 
         return {
             "required_tools": {
                 "available": required_available,
                 "total": required_total,
-                "percentage": (required_available / required_total * 100) if required_total > 0 else 100,
+                "percentage": (required_available / required_total * 100)
+                if required_total > 0
+                else 100,
             },
             "optional_tools": {
                 "available": optional_available,
                 "total": optional_total,
-                "percentage": (optional_available / optional_total * 100) if optional_total > 0 else 100,
+                "percentage": (optional_available / optional_total * 100)
+                if optional_total > 0
+                else 100,
             },
             "all_tools": {
                 "available": required_available + optional_available,
                 "total": required_total + optional_total,
             },
             "missing_required": [
-                t.name for t in tools.values()
+                t.name
+                for t in tools.values()
                 if not t.optional and t.status != ToolStatus.AVAILABLE
             ],
             "missing_optional": [
-                t.name for t in tools.values()
-                if t.optional and t.status != ToolStatus.AVAILABLE
+                t.name for t in tools.values() if t.optional and t.status != ToolStatus.AVAILABLE
             ],
         }

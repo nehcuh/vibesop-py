@@ -92,12 +92,12 @@ class SemanticEncoder:
         self.show_progress = show_progress
 
         # Model will be loaded lazily on first call to encode()
-        self._model: SentenceTransformer | None = None
+        self._model: Any = None
 
         # Vector dimension is determined by the model
         self._dimension: int | None = None
 
-    def _load_model(self) -> SentenceTransformer:
+    def _load_model(self) -> Any:
         """Load the sentence transformer model (lazy loading).
 
         This method is called on first access to the model. It uses a class-level
@@ -121,15 +121,15 @@ class SemanticEncoder:
         start = time.time()
 
         # Import here to avoid unnecessary import overhead
-        from sentence_transformers import SentenceTransformer
+        from sentence_transformers import SentenceTransformer  # type: ignore[reportUnknownVariableType]
 
         # Build model kwargs
-        model_kwargs = {}
+        model_kwargs: dict[str, Any] = {}
         if self._cache_dir:
             model_kwargs["cache_folder"] = str(self._cache_dir)
 
         # Load model
-        model = SentenceTransformer(
+        model: Any = SentenceTransformer(  # type: ignore[reportUnknownVariableType]
             self.model_name,
             device=self._get_device(),
             **model_kwargs,
@@ -138,13 +138,11 @@ class SemanticEncoder:
         elapsed = time.time() - start
         logger.info(f"Model loaded in {elapsed:.2f}s")
 
-        # Cache the model
         self._model_cache[self.model_name] = model
 
-        # Store dimension
-        self._dimension = model.get_sentence_embedding_dimension()
+        self._dimension = model.get_sentence_embedding_dimension()  # type: ignore[reportUnknownMemberType]
 
-        return model
+        return model  # type: ignore[reportUnknownVariableType]
 
     def _get_device(self) -> str:
         """Determine the device to use for inference.
@@ -157,11 +155,11 @@ class SemanticEncoder:
 
         # Auto-detect device
         try:
-            import torch
+            import torch  # type: ignore[reportMissingImports]
 
-            if torch.cuda.is_available():
+            if torch.cuda.is_available():  # type: ignore[reportUnknownMemberType]
                 return "cuda"
-            elif torch.backends.mps.is_available():
+            elif torch.backends.mps.is_available():  # type: ignore[reportUnknownMemberType]
                 return "mps"
             else:
                 return "cpu"
@@ -169,7 +167,7 @@ class SemanticEncoder:
             return "cpu"
 
     @property
-    def model(self) -> SentenceTransformer:
+    def model(self) -> Any:
         """Get the model, loading it if necessary (lazy loading).
 
         Returns:

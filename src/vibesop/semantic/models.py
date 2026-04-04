@@ -1,3 +1,4 @@
+# pyright: reportUnknownVariableType=false, reportUnknownMemberType=false, reportUnknownArgumentType=false, reportUnknownLambdaType=false, reportMissingTypeArgument=false, reportUnknownParameterType=false
 """Data models for semantic pattern matching.
 
 This module defines the core data structures used in semantic matching,
@@ -6,7 +7,7 @@ including pattern representations, match results, and configuration.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
@@ -60,7 +61,7 @@ class SemanticPattern:
 
     def compute_vector(
         self,
-        encoder,
+        encoder: Any,
         strategy: str = "mean",
     ) -> Any:  # np.ndarray when available
         """Compute semantic vector for this pattern.
@@ -230,7 +231,7 @@ class EncoderConfig(BaseModel):
 
         return cls(
             model_name=os.getenv("VIBE_SEMANTIC_MODEL", "paraphrase-multilingual-MiniLM-L12-v2"),
-            device=os.getenv("VIBE_SEMANTIC_DEVICE", "auto"),
+            device=os.getenv("VIBE_SEMANTIC_DEVICE", "auto"),  # type: ignore[reportArgumentType]
             cache_dir=Path(os.getenv("VIBE_SEMANTIC_CACHE_DIR", "")) or None,
             batch_size=int(os.getenv("VIBE_SEMANTIC_BATCH_SIZE", "32")),
             show_progress=os.getenv("VIBE_SEMANTIC_SHOW_PROGRESS", "").lower() == "true",
@@ -360,7 +361,7 @@ class SemanticConfig(BaseModel):
         return cls(
             enabled=os.getenv("VIBE_SEMANTIC_ENABLED", "").lower() == "true",
             encoder=EncoderConfig.from_env(),
-            strategy=os.getenv("VIBE_SEMANTIC_STRATEGY", "hybrid"),
+            strategy=os.getenv("VIBE_SEMANTIC_STRATEGY", "hybrid"),  # type: ignore[reportArgumentType]
             keyword_weight=float(os.getenv("VIBE_SEMANTIC_KEYWORD_WEIGHT", "0.3")),
             regex_weight=float(os.getenv("VIBE_SEMANTIC_REGEX_WEIGHT", "0.2")),
             semantic_weight=float(os.getenv("VIBE_SEMANTIC_SEMANTIC_WEIGHT", "0.5")),

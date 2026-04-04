@@ -7,7 +7,7 @@ that track installation state and metadata.
 import json
 import hashlib
 from pathlib import Path
-from typing import Dict, List, Optional, Any
+from typing import Dict, Optional, Any
 from dataclasses import dataclass, asdict
 from datetime import datetime
 from enum import Enum
@@ -25,6 +25,7 @@ class MarkerType(Enum):
         SKILL: Skill installation marker
         HOOK: Hook installation marker
     """
+
     INSTALLATION = "installation"
     CONFIGURATION = "configuration"
     INTEGRATION = "integration"
@@ -45,6 +46,7 @@ class MarkerData:
         checksum: Checksum of installed files
         metadata: Additional metadata
     """
+
     marker_type: str
     name: str
     version: Optional[str]
@@ -129,7 +131,7 @@ class MarkerFileManager:
         Returns:
             Result dictionary
         """
-        result = {
+        result: dict[str, Any] = {
             "success": False,
             "marker_path": None,
             "errors": [],
@@ -138,7 +140,7 @@ class MarkerFileManager:
         try:
             # Validate paths (only check for obvious security issues)
             try:
-                if not self._path_safety.validate_path(install_path):
+                if not self._path_safety.check_traversal(install_path, self._base_path):
                     result["errors"].append(f"Invalid installation path: {install_path}")
                     return result
             except Exception:
@@ -189,9 +191,7 @@ class MarkerFileManager:
             MarkerData if found, None otherwise
         """
         try:
-            marker_file = (
-                self._base_path / self.MARKER_LOCATIONS[marker_type] / f"{name}.json"
-            )
+            marker_file = self._base_path / self.MARKER_LOCATIONS[marker_type] / f"{name}.json"
 
             if not marker_file.exists():
                 return None
@@ -218,15 +218,13 @@ class MarkerFileManager:
         Returns:
             Result dictionary
         """
-        result = {
+        result: dict[str, Any] = {
             "success": False,
             "errors": [],
         }
 
         try:
-            marker_file = (
-                self._base_path / self.MARKER_LOCATIONS[marker_type] / f"{name}.json"
-            )
+            marker_file = self._base_path / self.MARKER_LOCATIONS[marker_type] / f"{name}.json"
 
             if marker_file.exists():
                 marker_file.unlink()
@@ -249,7 +247,7 @@ class MarkerFileManager:
         Returns:
             Dictionary mapping names to MarkerData
         """
-        markers = {}
+        markers: Dict[str, MarkerData] = {}
 
         types_to_check = [marker_type] if marker_type else list(MarkerType)
 
@@ -287,7 +285,7 @@ class MarkerFileManager:
         Returns:
             Verification result dictionary
         """
-        result = {
+        result: dict[str, Any] = {
             "valid": False,
             "exists": False,
             "path_matches": False,
@@ -340,7 +338,7 @@ class MarkerFileManager:
         Returns:
             Cleanup result dictionary
         """
-        result = {
+        result: dict[str, Any] = {
             "cleaned": [],
             "kept": [],
             "errors": [],
@@ -424,7 +422,7 @@ class MarkerFileManager:
         Returns:
             Result dictionary
         """
-        result = {
+        result: dict[str, Any] = {
             "success": False,
             "exported_count": 0,
             "errors": [],
@@ -434,10 +432,7 @@ class MarkerFileManager:
             markers = self.list_markers(marker_type)
 
             # Convert to serializable format
-            export_data = {
-                name: marker.to_dict()
-                for name, marker in markers.items()
-            }
+            export_data = {name: marker.to_dict() for name, marker in markers.items()}
 
             # Write to file
             output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -466,7 +461,7 @@ class MarkerFileManager:
         Returns:
             Result dictionary
         """
-        result = {
+        result: dict[str, Any] = {
             "success": False,
             "imported_count": 0,
             "skipped_count": 0,

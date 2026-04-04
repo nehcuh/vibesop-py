@@ -5,7 +5,7 @@ for projects, including README, API docs, and guides.
 """
 
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 from vibesop.builder.manifest import Manifest
 from vibesop.builder.doc_templates import DocType, DocTemplates
@@ -48,7 +48,7 @@ class DocRenderer:
         Returns:
             Result dictionary with success status and output path
         """
-        result = {
+        result: Dict[str, Any] = {
             "success": False,
             "output_path": None,
             "errors": [],
@@ -57,7 +57,7 @@ class DocRenderer:
         try:
             # Validate output path
             try:
-                if not self._path_safety.validate_path(config.output_path.parent):
+                if not self._path_safety.verify_writable(config.output_path.parent):
                     result["errors"].append("Invalid output path")
                     return result
             except (ValueError, OSError):
@@ -105,7 +105,7 @@ class DocRenderer:
         Returns:
             Result dictionary
         """
-        result = {
+        result: Dict[str, Any] = {
             "success": False,
             "output_path": None,
             "errors": [],
@@ -167,7 +167,7 @@ class DocRenderer:
         Returns:
             Result dictionary with generation status
         """
-        result = {
+        result: Dict[str, Any] = {
             "success": False,
             "generated": [],
             "errors": [],
@@ -188,18 +188,18 @@ class DocRenderer:
 
             for doc_type in doc_types:
                 # Create config from manifest
-                config = self._generator.create_config_from_manifest(
-                    manifest, doc_type, output_dir
-                )
+                config = self._generator.create_config_from_manifest(manifest, doc_type, output_dir)
 
                 # Render
                 render_result = self.render(config)
 
                 if render_result["success"]:
-                    result["generated"].append({
-                        "type": doc_type.value,
-                        "path": render_result["output_path"],
-                    })
+                    result["generated"].append(
+                        {
+                            "type": doc_type.value,
+                            "path": render_result["output_path"],
+                        }
+                    )
                 else:
                     result["errors"].extend(render_result["errors"])
 
@@ -224,7 +224,7 @@ class DocRenderer:
         Returns:
             Result dictionary
         """
-        result = {
+        result: Dict[str, Any] = {
             "success": False,
             "created": [],
             "errors": [],
@@ -255,10 +255,12 @@ class DocRenderer:
             readme_result = self.render(readme_config)
 
             if readme_result["success"]:
-                result["created"].append({
-                    "type": "readme",
-                    "path": readme_result["output_path"],
-                })
+                result["created"].append(
+                    {
+                        "type": "readme",
+                        "path": readme_result["output_path"],
+                    }
+                )
                 result["success"] = True
             else:
                 result["errors"].extend(readme_result["errors"])

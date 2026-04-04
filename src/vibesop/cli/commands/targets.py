@@ -18,6 +18,8 @@ Examples:
     vibe targets --installed
 """
 
+from typing import Any
+
 import typer
 from rich.console import Console
 from rich.table import Table
@@ -100,10 +102,7 @@ def targets(
 
         # Filter by installed if requested
         if installed:
-            platforms = [
-                p for p in platforms
-                if installer.verify(p["name"])["installed"]
-            ]
+            platforms = [p for p in platforms if installer.verify(p["name"])["installed"]]
 
         # JSON output
         if json_output:
@@ -118,7 +117,7 @@ def targets(
         raise typer.Exit(1)
 
 
-def _output_table(platforms: list, verbose: bool, installed_only: bool) -> None:
+def _output_table(platforms: list[dict[str, str]], verbose: bool, installed_only: bool) -> None:
     """Output platforms as a table.
 
     Args:
@@ -126,10 +125,7 @@ def _output_table(platforms: list, verbose: bool, installed_only: bool) -> None:
         verbose: Show detailed information
         installed_only: Whether filtering by installed
     """
-    console.print(
-        f"\n[bold cyan]🎯 Available Targets[/bold cyan]"
-        f"\n{'=' * 40}\n"
-    )
+    console.print(f"\n[bold cyan]🎯 Available Targets[/bold cyan]\n{'=' * 40}\n")
 
     if not platforms:
         if installed_only:
@@ -152,17 +148,15 @@ def _output_table(platforms: list, verbose: bool, installed_only: bool) -> None:
         platform_id = platform_info["name"]
         info = PLATFORM_INFO.get(platform_id, {})
         name = info.get("name", platform_id.title())
-        status = info.get("status", "unknown")
         config_dir = info.get("config_dir", "N/A")
         description = info.get("description", "")
 
-        # Check installation status
         installer = VibeSOPInstaller()
         verify_result = installer.verify(platform_id)
         installed_status = "✓" if verify_result["installed"] else "✗"
         status_color = "green" if verify_result["installed"] else "dim"
 
-        row = [platform_id, name, f"[{status_color}]{installed_status}[/]"]
+        row: list[str] = [platform_id, name, f"[{status_color}]{installed_status}[/]"]
 
         if verbose:
             row.append(config_dir)
@@ -173,17 +167,11 @@ def _output_table(platforms: list, verbose: bool, installed_only: bool) -> None:
     console.print(table)
 
     # Show summary
-    installed_count = sum(
-        1 for p in platforms
-        if VibeSOPInstaller().verify(p["name"])["installed"]
-    )
-    console.print(
-        f"\n[dim]Showing {len(platforms)} targets "
-        f"({installed_count} installed)[/dim]\n"
-    )
+    installed_count = sum(1 for p in platforms if VibeSOPInstaller().verify(p["name"])["installed"])
+    console.print(f"\n[dim]Showing {len(platforms)} targets ({installed_count} installed)[/dim]\n")
 
 
-def _output_json(platforms: list, verbose: bool) -> None:
+def _output_json(platforms: list[dict[str, str]], verbose: bool) -> None:
     """Output platforms as JSON.
 
     Args:
@@ -192,7 +180,7 @@ def _output_json(platforms: list, verbose: bool) -> None:
     """
     import json
 
-    output = []
+    output: list[dict[str, Any]] = []
 
     for platform_info in platforms:
         platform_id = platform_info["name"]

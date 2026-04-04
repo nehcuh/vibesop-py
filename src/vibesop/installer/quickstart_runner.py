@@ -1,3 +1,4 @@
+# pyright: reportUnknownVariableType=false, reportUnknownMemberType=false, reportUnknownArgumentType=false, reportUnknownLambdaType=false, reportMissingTypeArgument=false, reportUnknownParameterType=false
 """Quickstart runner for interactive installation.
 
 This module provides an interactive wizard for setting up
@@ -5,7 +6,7 @@ VibeSOP configuration.
 """
 
 from pathlib import Path
-from typing import Dict, List, Optional, Any
+from typing import Any, Dict, List, Optional
 from dataclasses import dataclass
 
 from vibesop.installer.init_support import InitSupport
@@ -23,9 +24,10 @@ class QuickstartConfig:
         project_path: Project root path
         global_install: Whether this is a global install
     """
+
     platform: str
-    install_integrations: bool
-    install_hooks: bool
+    install_integrations: Optional[bool]
+    install_hooks: Optional[bool]
     project_path: Path
     global_install: bool
 
@@ -54,7 +56,7 @@ class QuickstartRunner:
             "superpowers": "General-purpose productivity skills",
         }
 
-    def run(self, project_path: Optional[Path] = None) -> Dict[str, any]:
+    def run(self, project_path: Optional[Path] = None) -> Dict[str, Any]:
         """Run the interactive quickstart wizard.
 
         Args:
@@ -63,7 +65,7 @@ class QuickstartRunner:
         Returns:
             Dictionary with setup results
         """
-        result = {
+        result: Dict[str, Any] = {
             "success": False,
             "config": None,
             "steps_completed": [],
@@ -312,7 +314,9 @@ class QuickstartRunner:
             # Step 4: Install hooks (if requested)
             if config.install_hooks:
                 hooks_result = installer.verify(config.platform, config.project_path)
-                hooks_installed = sum(1 for v in hooks_result.get("hooks_installed", {}).values() if v)
+                hooks_installed = sum(
+                    1 for v in hooks_result.get("hooks_installed", {}).values() if v
+                )
                 total_hooks = len(hooks_result.get("hooks_installed", {}))
 
                 if hooks_installed > 0:

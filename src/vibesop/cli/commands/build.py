@@ -25,7 +25,7 @@ Examples:
 """
 
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional, cast
 
 from ruamel.yaml import YAML
 
@@ -33,16 +33,15 @@ import typer
 from rich.console import Console
 from rich.panel import Panel
 
-from vibesop.builder.manifest import ManifestBuilder, QuickBuilder
+from vibesop.adapters.models import Manifest
+from vibesop.builder.manifest import ManifestBuilder
 from vibesop.builder.renderer import ConfigRenderer
 
 console = Console()
 
-# Valid targets
 VALID_TARGETS = ["claude-code", "opencode", "superpowers", "cursor"]
 
-# Default profiles
-PROFILES = {
+PROFILES: dict[str, str] = {
     "default": "Full configuration with all skills",
     "minimal": "Minimal configuration with core skills only",
     "development": "Development-friendly configuration",
@@ -56,22 +55,7 @@ def _execute_build(
     overlay: Optional[Path],
     verify: bool,
 ) -> None:
-    """Execute build logic (reusable by other commands).
-
-    This function contains the core build logic without CLI parameter parsing,
-    allowing it to be called from other commands like `vibe switch`.
-
-    Args:
-        target: Target platform
-        profile: Build profile name
-        output: Output directory (None for default)
-        overlay: Optional overlay file path
-        verify: Verification mode (no file writes)
-
-    Raises:
-        typer.Exit: On build failure
-    """
-    # Validate profile
+    """Execute build logic (reusable by other commands)."""
     if profile not in PROFILES:
         console.print(
             f"[red]✗ Invalid profile: {profile}[/red]\n"
@@ -79,17 +63,12 @@ def _execute_build(
         )
         raise typer.Exit(1)
 
-    # Set default output directory
     if output is None:
         output = Path(f".vibe/dist/{target}")
 
-    console.print(
-        f"\n[bold cyan]🔨 Building {target}[/bold cyan]"
-        f"\n{'=' * 40}\n"
-    )
+    console.print(f"\n[bold cyan]🔨 Building {target}[/bold cyan]\n{'=' * 40}\n")
 
     try:
-        # Build manifest
         console.print(f"[dim]Loading manifest for {target}...[/dim]")
         builder = ManifestBuilder(project_root=Path("."))
 
@@ -104,38 +83,28 @@ def _execute_build(
             f"{len(manifest.policies.behavior or {})} policy rules\n"
         )
 
-        # Exit if manifest-only
-        if False:  # manifest_only mode not supported in switch
+        if False:
             console.print("[bold]Manifest generated (manifest-only mode)[/bold]")
             _display_manifest_summary(manifest)
             return
 
-        # Verify mode
         if verify:
             _verify_build(target, manifest)
             return
 
-        # Render configuration
         console.print(f"[dim]Rendering configuration for {target}...[/dim]")
         renderer = ConfigRenderer()
 
-        # Get output directory
         output_dir = Path(output).expanduser().resolve()
         output_dir.mkdir(parents=True, exist_ok=True)
 
-        # Render
         result = renderer.render(
             manifest=manifest,
             output_dir=output_dir,
         )
 
-        # Show results
-        console.print(
-            f"\n[green]✓ Build complete![/green]\n"
-            f"[bold]Output:[/bold] {output_dir}\n"
-        )
+        console.print(f"\n[green]✓ Build complete![/green]\n[bold]Output:[/bold] {output_dir}\n")
 
-        # Show created files
         if result.files_created:
             console.print("[bold]Files created:[/bold]")
             for file_path in result.files_created:
@@ -162,11 +131,7 @@ def _execute_build(
 
 
 def _get_configured_platform() -> Optional[str]:
-    """Get platform from .vibe/config.yaml.
-
-    Returns:
-        Platform string if configured, None otherwise
-    """
+    """Get platform from .vibe/config.yaml."""
     config_path = Path(".vibe/config.yaml")
     if not config_path.exists():
         return None
@@ -174,17 +139,17 @@ def _get_configured_platform() -> Optional[str]:
     try:
         yaml_parser = YAML()
         with open(config_path) as f:
-            config = yaml_parser.load(f)
+            config = cast(dict[str, Any], yaml_parser.load(f))  # type: ignore[reportUnknownMemberType,reportUnknownVariableType]
             return config.get("platform") if config else None
     except Exception:
         return None
 
 
 def build(
-    target: str = typer.Argument(
+    target: Optional[str] = typer.Argument(
         None,
         help="Target platform (claude-code, opencode, superpowers, cursor). "
-             "Defaults to platform from config.yaml or claude-code",
+        "Defaults to platform from config.yaml or claude-code",
     ),
     profile: str = typer.Option(
         "default",
@@ -216,29 +181,7 @@ def build(
         help="Verify build output without writing files",
     ),
 ) -> None:
-    """Build platform configuration from manifest.
-
-    This command generates platform-specific configuration files
-    from the manifest and source files.
-
-    \b
-    Examples:
-        # Build for Claude Code (default)
-        vibe build
-
-        # Build with specific profile
-        vibe build claude-code --profile minimal
-
-        # Build with overlay customization
-        vibe build claude-code --overlay .vibe/overlay.yaml
-
-        # Build to custom output directory
-        vibe build claude-code --output ./dist
-
-        # Only generate manifest
-        vibe build claude-code --manifest-only
-    """
-    # Determine target platform
+    """Build platform configuration from manifest."""
     if target is None:
         target = _get_configured_platform()
         if target is None:
@@ -247,7 +190,6 @@ def build(
         else:
             console.print(f"[dim]Using configured platform: {target}[/dim]\n")
 
-    # Validate target
     if target not in VALID_TARGETS:
         console.print(
             f"[red]✗ Invalid target: {target}[/red]\n"
@@ -255,7 +197,6 @@ def build(
         )
         raise typer.Exit(1)
 
-    # Execute build
     _execute_build(
         target=target,
         profile=profile,
@@ -265,12 +206,8 @@ def build(
     )
 
 
-def _display_manifest_summary(manifest) -> None:
-    """Display manifest summary.
-
-    Args:
-        manifest: Manifest to display
-    """
+def _display_manifest_summary(manifest: Manifest) -> None:
+    """Display manifest summary."""
     console.print(f"\n[bold]Manifest Summary[/bold]\n")
     console.print(f"  Platform: {manifest.metadata.platform}")
     console.print(f"  Version: {manifest.metadata.version}")
@@ -278,13 +215,8 @@ def _display_manifest_summary(manifest) -> None:
     console.print(f"  Policy rules: {len(manifest.policies.behavior or {})}")
 
 
-def _verify_build(target: str, manifest) -> None:
-    """Verify build without writing files.
-
-    Args:
-        target: Target platform
-        manifest: Built manifest
-    """
+def _verify_build(target: str, manifest: Manifest) -> None:
+    """Verify build without writing files."""
     console.print(
         Panel(
             f"[bold cyan]🔍 Verification Mode[/bold cyan]\n\n"

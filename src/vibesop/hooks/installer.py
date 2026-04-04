@@ -5,12 +5,12 @@ that manages hooks across all supported platforms.
 """
 
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from jinja2 import Environment, FileSystemLoader
 
 from vibesop.hooks.points import HOOK_DEFINITIONS, HookPoint
-from vibesop.hooks.base import Hook, ScriptHook
+from vibesop.hooks.base import Hook
 
 
 class HookInstaller:
@@ -61,7 +61,7 @@ class HookInstaller:
         Returns:
             Dictionary mapping hook names to installation status
         """
-        results = {}
+        results: Dict[str, bool] = {}
 
         # Get hook definitions for platform
         definitions = HOOK_DEFINITIONS.get(platform, {})
@@ -72,10 +72,7 @@ class HookInstaller:
         # Determine which hooks to install
         if hook_points is None:
             # Install all supported hooks
-            hooks_to_install = [
-                HookPoint(hook_name)
-                for hook_name in definitions.keys()
-            ]
+            hooks_to_install = [HookPoint(hook_name) for hook_name in definitions.keys()]
         else:
             hooks_to_install = hook_points
 
@@ -109,7 +106,7 @@ class HookInstaller:
         Returns:
             Dictionary mapping hook names to uninstallation status
         """
-        results = {}
+        results: Dict[str, bool] = {}
 
         # Get hook definitions for platform
         definitions = HOOK_DEFINITIONS.get(platform, {})
@@ -119,10 +116,7 @@ class HookInstaller:
 
         # Determine which hooks to uninstall
         if hook_points is None:
-            hooks_to_uninstall = [
-                HookPoint(hook_name)
-                for hook_name in definitions.keys()
-            ]
+            hooks_to_uninstall = [HookPoint(hook_name) for hook_name in definitions.keys()]
         else:
             hooks_to_uninstall = hook_points
 
@@ -152,7 +146,7 @@ class HookInstaller:
         Returns:
             Dictionary mapping hook names to verification status
         """
-        results = {}
+        results: Dict[str, bool] = {}
 
         # Get hook definitions for platform
         definitions = HOOK_DEFINITIONS.get(platform, {})
@@ -174,7 +168,7 @@ class HookInstaller:
         platform: str,
         hook_point: HookPoint,
         config_dir: Path,
-        hook_def: Dict[str, any],
+        hook_def: Dict[str, Any],
     ) -> bool:
         """Install a single hook.
 
@@ -216,7 +210,7 @@ class HookInstaller:
     def _uninstall_single_hook(
         self,
         config_dir: Path,
-        hook_def: Dict[str, any],
+        hook_def: Dict[str, Any],
     ) -> bool:
         """Uninstall a single hook.
 
@@ -254,7 +248,7 @@ class HookInstaller:
     def _verify_single_hook(
         self,
         config_dir: Path,
-        hook_def: Dict[str, any],
+        hook_def: Dict[str, Any],
     ) -> bool:
         """Verify a single hook installation.
 

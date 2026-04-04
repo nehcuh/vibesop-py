@@ -21,7 +21,7 @@ Examples:
 """
 
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional, cast
 
 import typer
 from rich.console import Console
@@ -96,8 +96,7 @@ def cascade(
         _do_list()
     else:
         console.print(
-            f"[red]✗ Unknown action: {action}[/red]\n"
-            f"[dim]Valid actions: run, validate, list[/dim]"
+            f"[red]✗ Unknown action: {action}[/red]\n[dim]Valid actions: run, validate, list[/dim]"
         )
         raise typer.Exit(1)
 
@@ -121,10 +120,7 @@ def _do_run(
         console.print("[dim]Usage: vibe cascade run WORKFLOW_FILE[/dim]")
         raise typer.Exit(1)
 
-    console.print(
-        f"\n[bold cyan]🌊 Running Workflow[/bold cyan]"
-        f"\n{'=' * 40}\n"
-    )
+    console.print(f"\n[bold cyan]🌊 Running Workflow[/bold cyan]\n{'=' * 40}\n")
 
     executor = CascadeExecutor()
 
@@ -202,10 +198,7 @@ def _do_validate(workflow_file: Path | None) -> None:
         console.print("[dim]Usage: vibe cascade validate WORKFLOW_FILE[/dim]")
         raise typer.Exit(1)
 
-    console.print(
-        f"\n[bold cyan]🔍 Validating Workflow[/bold cyan]"
-        f"\n{'=' * 40}\n"
-    )
+    console.print(f"\n[bold cyan]🔍 Validating Workflow[/bold cyan]\n{'=' * 40}\n")
 
     executor = CascadeExecutor()
 
@@ -233,10 +226,7 @@ def _do_validate(workflow_file: Path | None) -> None:
 
 def _do_list() -> None:
     """List available workflows."""
-    console.print(
-        f"\n[bold cyan]📋 Available Workflows[/bold cyan]"
-        f"\n{'=' * 40}\n"
-    )
+    console.print(f"\n[bold cyan]📋 Available Workflows[/bold cyan]\n{'=' * 40}\n")
 
     # Look for workflow files
     workflow_paths = [

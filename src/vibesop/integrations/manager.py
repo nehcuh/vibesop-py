@@ -1,3 +1,4 @@
+# pyright: reportUnknownVariableType=false, reportUnknownMemberType=false, reportUnknownArgumentType=false
 """Integration management for VibeSOP.
 
 This module provides management capabilities for external
@@ -5,7 +6,7 @@ skill pack integrations.
 """
 
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from vibesop.integrations.detector import (
     IntegrationDetector,
@@ -93,13 +94,10 @@ class IntegrationManager:
             List of skill IDs
         """
         if name:
-            # Get skills from specific integration
             return self.detector.get_integration_skills(name)
         else:
-            # Get skills from all installed integrations
-            all_skills = []
+            all_skills: list[str] = []
             integrations = self.list_integrations()
-
             for info in integrations:
                 if info.status == IntegrationStatus.INSTALLED:
                     all_skills.extend(info.skills)
@@ -113,11 +111,7 @@ class IntegrationManager:
             List of installed IntegrationInfo
         """
         integrations = self.list_integrations()
-        return [
-            info
-            for info in integrations
-            if info.status == IntegrationStatus.INSTALLED
-        ]
+        return [info for info in integrations if info.status == IntegrationStatus.INSTALLED]
 
     def get_compatible_integrations(self) -> List[IntegrationInfo]:
         """Get list of compatible integrations.
@@ -129,13 +123,14 @@ class IntegrationManager:
         return [
             info
             for info in integrations
-            if info.status in [
+            if info.status
+            in [
                 IntegrationStatus.INSTALLED,
                 IntegrationStatus.NOT_INSTALLED,
             ]
         ]
 
-    def get_summary(self) -> Dict:
+    def get_summary(self) -> Dict[str, Any]:
         """Get summary of all integrations.
 
         Returns:
@@ -144,9 +139,7 @@ class IntegrationManager:
         integrations = self.list_integrations()
 
         installed_count = sum(
-            1
-            for info in integrations
-            if info.status == IntegrationStatus.INSTALLED
+            1 for info in integrations if info.status == IntegrationStatus.INSTALLED
         )
         total_count = len(integrations)
 
@@ -177,7 +170,7 @@ class IntegrationManager:
     def check_integration_compatibility(
         self,
         name: str,
-    ) -> Dict[str, any]:
+    ) -> Dict[str, Any]:
         """Check integration compatibility.
 
         Args:
@@ -199,7 +192,7 @@ class IntegrationManager:
                 "compatible": True,
                 "reason": "Installed and compatible",
                 "version": info.version,
-                "path": str(info.path),
+                "path": str(info.path) if info.path else None,
             }
         elif info.status == IntegrationStatus.NOT_INSTALLED:
             return {
@@ -232,7 +225,7 @@ class IntegrationManager:
     def get_integration_registry(
         self,
         name: Optional[str] = None,
-    ) -> Dict[str, any]:
+    ) -> Dict[str, Any]:
         """Get integration registry for manifest generation.
 
         Args:

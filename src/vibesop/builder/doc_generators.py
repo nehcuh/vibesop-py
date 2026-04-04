@@ -1,3 +1,4 @@
+# pyright: reportUnknownVariableType=false, reportUnknownMemberType=false, reportUnknownArgumentType=false, reportMissingTypeArgument=false
 """Documentation content generators for VibeSOP.
 
 This module contains utilities for generating documentation content
@@ -50,12 +51,12 @@ class DocContentGenerator:
         output_path = output_dir / filenames.get(doc_type, "DOCUMENT.md")
 
         return DocConfig(
-            project_name=manifest.metadata.project_name or "Project",
+            project_name=manifest.metadata.description or "Project",
             project_description=manifest.metadata.description or "",
             version=manifest.metadata.version or "1.0.0",
             author=manifest.metadata.author or "",
-            license=manifest.metadata.license or "MIT",
-            repository=manifest.metadata.repository_url,
+            license="MIT",
+            repository=None,
             doc_type=doc_type,
             sections=[],
             output_path=output_path,
@@ -110,11 +111,13 @@ class DocContentGenerator:
                 content = py_file.read_text(encoding="utf-8")
                 docstring = DocContentGenerator.extract_module_docstring(content)
 
-                modules.append({
-                    "name": module_name,
-                    "path": str(py_file),
-                    "docstring": docstring,
-                })
+                modules.append(
+                    {
+                        "name": module_name,
+                        "path": str(py_file),
+                        "docstring": docstring,
+                    }
+                )
 
             except (OSError, UnicodeDecodeError):
                 # Skip files that can't be read

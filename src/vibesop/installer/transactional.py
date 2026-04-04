@@ -7,8 +7,7 @@ in a consistent state.
 
 import json
 import shutil
-import tempfile
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Any, Callable
@@ -133,9 +132,9 @@ class TransactionalInstaller:
         2. Execute steps in order
         3. Rollback on failure if auto_rollback is enabled
         """
-        completed_steps = []
-        failed_at = None
-        error = None
+        completed_steps: list[str] = []
+        failed_at: str | None = None
+        error: str | None = None
         rollback_completed = False
 
         # Create snapshot
@@ -215,7 +214,7 @@ class TransactionalInstaller:
         Returns:
             Result dictionary
         """
-        result = {
+        result: dict[str, Any] = {
             "success": True,
             "errors": [],
         }
@@ -383,7 +382,7 @@ class FileTransactionalInstaller(TransactionalInstaller):
 
 # Convenience functions
 def execute_transaction(
-    steps: List,
+    steps: List[tuple[str, Callable[[], Dict[str, Any]], Optional[Callable[[], Dict[str, Any]]]]],
     auto_rollback: bool = True,
 ) -> TransactionResult:
     """Execute a transaction with given steps.

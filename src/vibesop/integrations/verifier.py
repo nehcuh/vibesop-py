@@ -5,7 +5,8 @@ integrations to ensure they are correctly set up and functional.
 """
 
 from pathlib import Path
-from typing import Dict, List, Optional, Any
+from typing import Any
+
 from dataclasses import dataclass
 from enum import Enum
 
@@ -13,14 +14,6 @@ from vibesop.integrations import IntegrationManager, IntegrationInfo, Integratio
 
 
 class VerificationStatus(Enum):
-    """Verification status.
-
-    Attributes:
-        PASSED: Verification passed
-        FAILED: Verification failed
-        WARNING: Verification passed with warnings
-        SKIPPED: Verification skipped
-    """
     PASSED = "passed"
     FAILED = "failed"
     WARNING = "warning"
@@ -29,57 +22,25 @@ class VerificationStatus(Enum):
 
 @dataclass
 class VerificationResult:
-    """Result of a verification check.
-
-    Attributes:
-        check_name: Name of the verification check
-        status: Verification status
-        message: Result message
-        details: Additional details
-        suggestions: Suggestions for fixing failures
-    """
     check_name: str
     status: VerificationStatus
     message: str
-    details: Dict[str, Any]
-    suggestions: List[str]
+    details: dict[str, Any]
+    suggestions: list[str]
 
 
 @dataclass
 class IntegrationReport:
-    """Complete verification report for an integration.
-
-    Attributes:
-        integration_id: Integration identifier
-        overall_status: Overall verification status
-        results: List of verification results
-        installed: Whether integration is installed
-        functional: Whether integration is functional
-        errors: List of error messages
-    """
     integration_id: str
     overall_status: VerificationStatus
-    results: List[VerificationResult]
+    results: list[VerificationResult]
     installed: bool
     functional: bool
-    errors: List[str]
+    errors: list[str]
 
 
 class IntegrationVerifier:
-    """Verify integration installations.
-
-    Performs comprehensive checks on installed integrations
-    to ensure they are correctly set up and functional.
-
-    Example:
-        >>> verifier = IntegrationVerifier()
-        >>> report = verifier.verify_integration("gstack")
-        >>> if report.functional:
-        ...     print("Integration is working correctly")
-    """
-
-    # Verification checks for each integration
-    VERIFICATION_CHECKS = {
+    VERIFICATION_CHECKS: dict[str, dict[str, Any]] = {
         "gstack": {
             "checks": [
                 "installation_exists",
@@ -112,7 +73,6 @@ class IntegrationVerifier:
     }
 
     def __init__(self) -> None:
-        """Initialize the integration verifier."""
         self._manager = IntegrationManager()
 
     def verify_integration(
@@ -120,19 +80,9 @@ class IntegrationVerifier:
         integration_id: str,
         platform: str = "claude-code",
     ) -> IntegrationReport:
-        """Verify a single integration.
+        results: list[VerificationResult] = []
+        errors: list[str] = []
 
-        Args:
-            integration_id: Integration to verify
-            platform: Target platform
-
-        Returns:
-            IntegrationReport with verification results
-        """
-        results = []
-        errors = []
-
-        # Get integration info
         integrations = self._manager.list_integrations()
         integration = next(
             (i for i in integrations if i.name == integration_id),
@@ -151,12 +101,9 @@ class IntegrationVerifier:
 
         installed = integration.status == IntegrationStatus.INSTALLED
 
-        # Get verification checks for this integration
-        checks = self.VERIFICATION_CHECKS.get(
-            integration_id,
-            {}).get("checks", ["installation_exists"])
+        check_config = self.VERIFICATION_CHECKS.get(integration_id, {})
+        checks: list[str] = check_config.get("checks", ["installation_exists"])
 
-        # Run each check
         for check_name in checks:
             try:
                 result = self._run_check(
@@ -171,17 +118,17 @@ class IntegrationVerifier:
                     errors.append(f"{check_name}: {result.message}")
 
             except (ValueError, KeyError, AttributeError, TypeError, OSError) as e:
-                # Catch specific exceptions from verification checks
                 errors.append(f"{check_name}: Verification failed with error: {e}")
-                results.append(VerificationResult(
-                    check_name=check_name,
-                    status=VerificationStatus.FAILED,
-                    message=f"Check raised exception: {e}",
-                    details={},
-                    suggestions=[],
-                ))
+                results.append(
+                    VerificationResult(
+                        check_name=check_name,
+                        status=VerificationStatus.FAILED,
+                        message=f"Check raised exception: {e}",
+                        details={},
+                        suggestions=[],
+                    )
+                )
 
-        # Determine overall status
         overall_status = self._determine_overall_status(results)
         functional = overall_status in [VerificationStatus.PASSED, VerificationStatus.WARNING]
 
@@ -197,16 +144,8 @@ class IntegrationVerifier:
     def verify_all(
         self,
         platform: str = "claude-code",
-    ) -> Dict[str, IntegrationReport]:
-        """Verify all installed integrations.
-
-        Args:
-            platform: Target platform
-
-        Returns:
-            Dictionary mapping integration IDs to reports
-        """
-        reports = {}
+    ) -> dict[str, IntegrationReport]:
+        reports: dict[str, IntegrationReport] = {}
 
         integrations = self._manager.list_integrations()
         for integration in integrations:
@@ -218,15 +157,7 @@ class IntegrationVerifier:
     def get_quick_check(
         self,
         integration_id: str,
-    ) -> Dict[str, Any]:
-        """Perform a quick check on an integration.
-
-        Args:
-            integration_id: Integration to check
-
-        Returns:
-            Quick check result dictionary
-        """
+    ) -> dict[str, Any]:
         integrations = self._manager.list_integrations()
         integration = next(
             (i for i in integrations if i.name == integration_id),
@@ -243,7 +174,6 @@ class IntegrationVerifier:
 
         installed = integration.status == IntegrationStatus.INSTALLED
 
-        # Quick functional check
         if not installed:
             return {
                 "integration_id": integration_id,
@@ -252,7 +182,14 @@ class IntegrationVerifier:
                 "status": "not_installed",
             }
 
-        # Check if skills directory exists
+        if integration.path is None:
+            return {
+                "integration_id": integration_id,
+                "installed": True,
+                "functional": False,
+                "status": "no_path",
+            }
+
         skills_dir = Path(integration.path) / "skills"
         skills_exist = skills_dir.exists() and any(skills_dir.iterdir())
 
@@ -271,17 +208,6 @@ class IntegrationVerifier:
         platform: str,
         integration: IntegrationInfo,
     ) -> VerificationResult:
-        """Run a single verification check.
-
-        Args:
-            check_name: Name of the check to run
-            integration_id: Integration being verified
-            platform: Target platform
-            integration: Integration info
-
-        Returns:
-            VerificationResult
-        """
         if check_name == "installation_exists":
             return self._check_installation_exists(integration)
         elif check_name == "skills_present":
@@ -300,14 +226,15 @@ class IntegrationVerifier:
             )
 
     def _check_installation_exists(self, integration: IntegrationInfo) -> VerificationResult:
-        """Check if installation directory exists.
+        if integration.path is None:
+            return VerificationResult(
+                check_name="installation_exists",
+                status=VerificationStatus.FAILED,
+                message="Installation path is not set",
+                details={"path": None},
+                suggestions=[f"Install the integration: vibe install {integration.name}"],
+            )
 
-        Args:
-            integration: Integration info
-
-        Returns:
-            VerificationResult
-        """
         path = Path(integration.path)
 
         if not path.exists():
@@ -341,18 +268,8 @@ class IntegrationVerifier:
         integration_id: str,
         integration: IntegrationInfo,
     ) -> VerificationResult:
-        """Check if required skills are present.
-
-        Args:
-            integration_id: Integration ID
-            integration: Integration info
-
-        Returns:
-            VerificationResult
-        """
-        required_skills = self.VERIFICATION_CHECKS.get(
-            integration_id,
-            {}).get("required_skills", [])
+        check_cfg = self.VERIFICATION_CHECKS.get(integration_id, {})
+        required_skills: list[str] = check_cfg.get("required_skills", [])
 
         if not required_skills:
             return VerificationResult(
@@ -363,12 +280,20 @@ class IntegrationVerifier:
                 suggestions=[],
             )
 
+        if integration.path is None:
+            return VerificationResult(
+                check_name="skills_present",
+                status=VerificationStatus.FAILED,
+                message="Integration path is not set",
+                details={},
+                suggestions=[f"Install the integration: vibe install {integration_id}"],
+            )
+
         integration_path = Path(integration.path)
 
-        # gstack stores skills as subdirectories with SKILL.md files
         if integration_id == "gstack":
-            skills_found = []
-            skills_missing = []
+            skills_found: list[str] = []
+            skills_missing: list[str] = []
 
             for skill in required_skills:
                 skill_dir = integration_path / skill
@@ -401,7 +326,6 @@ class IntegrationVerifier:
                 suggestions=[],
             )
 
-        # For other integrations, check for skills/ directory
         skills_dir = integration_path / "skills"
         if not skills_dir.exists():
             return VerificationResult(
@@ -415,9 +339,8 @@ class IntegrationVerifier:
                 ],
             )
 
-        # Check for required skill files
-        found_skills = []
-        missing_skills = []
+        found_skills: list[str] = []
+        missing_skills: list[str] = []
 
         for skill in required_skills:
             skill_file = skills_dir / f"{skill}.md"
@@ -454,19 +377,7 @@ class IntegrationVerifier:
         integration_id: str,
         platform: str,
     ) -> VerificationResult:
-        """Check if integration configuration is valid.
-
-        Args:
-            integration_id: Integration ID
-            platform: Target platform
-
-        Returns:
-            VerificationResult
-        """
-        # For now, just check if config file exists
-        # In a full implementation, this would validate the config structure
-
-        config_paths = {
+        config_paths: dict[str, list[Path]] = {
             "claude-code": [
                 Path(".claude/skills"),
                 Path(".vibe/skills"),
@@ -476,7 +387,7 @@ class IntegrationVerifier:
             ],
         }
 
-        checked_paths = []
+        checked_paths: list[str] = []
         for config_path in config_paths.get(platform, []):
             if config_path.exists():
                 checked_paths.append(str(config_path))
@@ -505,28 +416,18 @@ class IntegrationVerifier:
         self,
         integration_id: str,
     ) -> VerificationResult:
-        """Check if integration dependencies are met.
-
-        Args:
-            integration_id: Integration ID
-
-        Returns:
-            VerificationResult
-        """
-        # For now, just check for common dependencies
-        # In a full implementation, this would check specific requirements
-
         import shutil
 
-        dependencies = []
+        dependencies: list[dict[str, Any]] = []
 
-        # Check for git (most integrations need it)
         git_available = shutil.which("git") is not None
-        dependencies.append({
-            "name": "git",
-            "installed": git_available,
-            "required": True,
-        })
+        dependencies.append(
+            {
+                "name": "git",
+                "installed": git_available,
+                "required": True,
+            }
+        )
 
         missing = [d for d in dependencies if not d["installed"] and d["required"]]
 
@@ -549,15 +450,7 @@ class IntegrationVerifier:
             suggestions=[],
         )
 
-    def _determine_overall_status(self, results: List[VerificationResult]) -> VerificationStatus:
-        """Determine overall status from verification results.
-
-        Args:
-            results: List of verification results
-
-        Returns:
-            Overall VerificationStatus
-        """
+    def _determine_overall_status(self, results: list[VerificationResult]) -> VerificationStatus:
         if not results:
             return VerificationStatus.SKIPPED
 

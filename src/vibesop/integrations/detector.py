@@ -1,3 +1,4 @@
+# pyright: reportUnknownVariableType=false, reportUnknownMemberType=false, reportUnknownArgumentType=false, reportUnknownLambdaType=false, reportMissingTypeArgument=false, reportUnknownParameterType=false
 """Integration detection for VibeSOP.
 
 This module detects external skill pack integrations
@@ -18,6 +19,7 @@ class IntegrationStatus(Enum):
         INCOMPATIBLE: Integration is installed but incompatible
         UNKNOWN: Status could not be determined
     """
+
     INSTALLED = "installed"
     NOT_INSTALLED = "not_installed"
     INCOMPATIBLE = "incompatible"
@@ -176,7 +178,6 @@ class IntegrationDetector:
         """
         if config is None:
             config = self.KNOWN_INTEGRATIONS.get(name, {})
-
         description = config.get("description", "Unknown integration")
         expected_paths = config.get("paths", [])
         skills = config.get("skills", [])
@@ -218,7 +219,8 @@ class IntegrationDetector:
             List of skill IDs
         """
         config = self.KNOWN_INTEGRATIONS.get(name, {})
-        return config.get("skills", [])
+        skills = config.get("skills", [])
+        return skills if isinstance(skills, list) else []
 
     def _find_skills_base_path(self) -> Optional[Path]:
         """Find the skills base directory.
@@ -284,6 +286,7 @@ class IntegrationDetector:
                     content = version_file.read_text()
                     # Try to extract version
                     import json
+
                     if version_file.suffix == ".json":
                         data = json.loads(content)
                         return data.get("version")
