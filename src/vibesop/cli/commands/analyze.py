@@ -50,6 +50,11 @@ def analyze(
         "-a",
         help="Automatically create suggested skills",
     ),
+    use_ai: bool = typer.Option(
+        False,
+        "--ai",
+        help="Use AI to enhance skill names and descriptions",
+    ),
 ) -> None:
     """Analyze sessions and suggest improvements.
 
@@ -67,8 +72,11 @@ def analyze(
         # Generate skill suggestions
         vibe analyze suggestions
 
-        # Auto-create suggested skills
-        vibe analyze suggestions --auto-craft
+        # Use AI to enhance suggestions
+        vibe analyze suggestions --ai
+
+        # Auto-create AI-enhanced skills
+        vibe analyze suggestions --ai --auto-craft
     """
     analyzer = SessionAnalyzer(
         min_frequency=min_frequency,
@@ -80,7 +88,7 @@ def analyze(
     elif action == "patterns":
         _do_analyze_patterns(analyzer, source)
     elif action == "suggestions":
-        _do_suggest_skills(analyzer, source, auto_craft)
+        _do_suggest_skills(analyzer, source, auto_craft, use_ai)
     else:
         console.print(
             f"[red]✗ Unknown action: {action}[/red]\n"
@@ -179,6 +187,7 @@ def _do_suggest_skills(
     analyzer: SessionAnalyzer,
     source: Optional[Path],
     auto_craft: bool,
+    use_ai: bool = False,
 ) -> None:
     """Generate and optionally create skill suggestions.
 
@@ -186,6 +195,7 @@ def _do_suggest_skills(
         analyzer: SessionAnalyzer instance
         source: Session file or directory
         auto_craft: Whether to auto-create skills
+        use_ai: Whether to use AI for enhancement
     """
     console.print(
         f"\n[bold cyan]💡 Skill Suggestions[/bold cyan]"
@@ -214,12 +224,18 @@ def _do_suggest_skills(
     high_value = [s for s in suggestions if s.estimated_value in ("high", "medium")]
     to_display = high_value if high_value else suggestions
 
+    # Apply AI enhancement if requested
+    if use_ai:
+        console.print("[dim]🤖 Using AI to enhance suggestions...[/dim]\n")
+        to_display = _ai_enhance_suggestions(to_display)
+        console.print("[green]✓ AI enhancement complete[/green]\n")
+
     console.print(f"[green]Generated {len(to_display)} suggestions[/green]\n")
 
     if auto_craft:
-        _auto_create_skills(to_display)
+        _auto_create_enhanced_skills(to_display)
     else:
-        _display_suggestions(to_display)
+        _display_enhanced_suggestions(to_display)
         console.print(
             f"\n[dim]To auto-create these skills, run:[/dim]\n"
             f"  [cyan]vibe analyze suggestions --auto-craft[/cyan]"
@@ -354,3 +370,158 @@ User asks for help with:
         )
     else:
         console.print("[yellow]No skills created[/yellow]")
+
+
+def _ai_enhance_suggestions(
+    suggestions: list,
+) -> list:
+    """Enhance skill suggestions using AI.
+
+    Args:
+        suggestions: List of skill suggestions
+
+    Returns:
+        List of enhanced skills
+    """
+    from vibesop.core.ai_enhancer import AIEnhancer
+
+    enhancer = AIEnhancer()
+
+    try:
+        enhanced = enhancer.enhance_batch(suggestions)
+        return enhanced
+    except Exception as e:
+        console.print(f"[yellow]AI enhancement failed: {e}[/yellow]")
+        console.print("[dim]Using basic enhancement instead[/dim]\n")
+        return suggestions
+
+
+def _display_enhanced_suggestions(enhanced_skills: list) -> None:
+    """Display AI-enhanced skill suggestions.
+
+    Args:
+        enhanced_skills: List of enhanced skills
+    """
+    for i, enhanced in enumerate(enhanced_skills, 1):
+        # Check if it's enhanced or original
+        is_enhanced = hasattr(enhanced, 'category')
+
+        if is_enhanced:
+            # Enhanced skill
+            value_color = {
+                "high": "green",
+                "medium": "yellow",
+                "low": "dim",
+            }.get(enhanced.original.estimated_value, "dim")
+
+            console.print(
+                Panel(
+                    f"[bold cyan]🤖 AI-Enhanced {i}. {enhanced.name}[/bold cyan]\n\n"
+                    f"[dim]Category:[/dim] {enhanced.category}\n"
+                    f"[dim]Description:[/dim] {enhanced.description}\n\n"
+                    f"[dim]Frequency:[/dim] {enhanced.original.frequency} queries  "
+                    f"[dim]Confidence:[/dim] {enhanced.original.confidence:.0%}  "
+                    f"[dim]AI Confidence:[/dim] {enhanced.confidence:.0%}  "
+                    f"[dim]Value:[/dim] [{value_color}]{enhanced.original.estimated_value}[/{value_color}]\n\n"
+                    f"[dim]Tags:[/dim] {', '.join(enhanced.tags[:5])}\n\n"
+                    f"[dim]Trigger Conditions:[/dim]\n"
+                    + "\n".join(f"  • {cond}" for cond in enhanced.trigger_conditions[:3])
+                    + "\n\n"
+                    f"[dim]Example queries:[/dim]\n"
+                    + "\n".join(f"  • {q[:60]}..." for q in enhanced.original.trigger_queries[:3]),
+                    title=f"[bold]AI-Enhanced Suggestion {i}[/bold]",
+                    border_style="cyan" if enhanced.confidence > 0.7 else "blue",
+                )
+            )
+        else:
+            # Original skill (fallback)
+            from vibesop.cli.commands.analyze import _display_suggestions
+            _display_suggestions([enhanced])
+
+        console.print()
+
+
+def _auto_create_enhanced_skills(enhanced_skills: list) -> None:
+    """Auto-create enhanced skills with better content.
+
+    Args:
+        enhanced_skills: List of enhanced skills
+    """
+    from vibesop.core.session_analyzer import SkillSuggestion
+
+    created = 0
+
+    for enhanced in enhanced_skills:
+        # Check if it's enhanced
+        if not hasattr(enhanced, 'category'):
+            # Use original auto-create
+            if isinstance(enhanced, SkillSuggestion):
+                from vibesop.cli.commands.analyze import _auto_create_skills
+                _auto_create_skills([enhanced])
+                return
+            continue
+
+        # Filter by value
+        if enhanced.original.estimated_value not in ("high", "medium"):
+            continue
+
+        console.print(
+            f"\n[cyan]Creating AI-enhanced skill:[/cyan] {enhanced.name}"
+        )
+
+        # Generate enhanced skill content
+        skill_content = f"""# {enhanced.name}
+
+{enhanced.description}
+
+## Category
+
+{enhanced.category}
+
+## Trigger When
+
+{chr(10).join(f"- {cond}" for cond in enhanced.trigger_conditions)}
+
+## Tags
+
+{', '.join(enhanced.tags)}
+
+## Steps
+
+{chr(10).join(f"{i+1}. {step}" for i, step in enumerate(enhanced.steps))}
+
+## Examples
+
+### Example 1
+
+**User**: {enhanced.original.trigger_queries[0] if enhanced.original.trigger_queries else "help me"}
+
+**Action**: {enhanced.steps[0] if enhanced.steps else "Assist the user"}
+
+---
+
+*AI-Enhanced by VibeSOP*
+*Based on {enhanced.original.frequency} similar queries*
+*AI Confidence: {enhanced.confidence:.0%}*
+"""
+
+        # Write skill file
+        output_dir = Path(".vibe/skills")
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        # Create safe filename
+        safe_name = enhanced.name.lower().replace(' ', '-').replace('/', '-')
+        skill_file = output_dir / f"{safe_name}.md"
+        skill_file.write_text(skill_content)
+
+        console.print(f"[green]✓ Created:[/green] {skill_file}")
+        created += 1
+
+    if created > 0:
+        console.print(
+            f"\n[green]✓ Created {created} AI-enhanced skills[/green]"
+            f"\n[dim]Run [cyan]vibe build[/cyan] to include them in your configuration.[/dim]"
+        )
+    else:
+        console.print("[yellow]No skills created[/yellow]")
+
