@@ -7,11 +7,18 @@ against trigger patterns using multiple strategies.
 import re
 import time
 from pathlib import Path
-from typing import Optional
-
-import numpy as np
+from typing import TYPE_CHECKING, Optional
 
 from vibesop.triggers.models import TriggerPattern, PatternMatch
+
+# Conditionally import numpy (optional dependency for semantic features)
+if TYPE_CHECKING:
+    import numpy as np
+else:
+    try:
+        import numpy as np
+    except ImportError:
+        np = None  # type: ignore
 from vibesop.triggers.utils import (
     tokenize,
     calculate_tfidf,
