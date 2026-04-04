@@ -43,6 +43,7 @@ from vibesop.cli.commands import hooks as hooks_module
 from vibesop.cli.commands import workflow as workflow_module
 from vibesop.cli.commands import auto as auto_module
 from vibesop.cli.commands import config as config_module
+from vibesop.cli.commands import analyze as analyze_module
 
 app = typer.Typer(
     name="vibe",
@@ -451,3 +452,4 @@ app.command()(workflow_module.workflow)
 app.command()(auto_module.auto)
 app.command()(config_module.config)
 app.command("semantic")(config_module.config_semantic)
+app.command()(analyze_module.analyze)
