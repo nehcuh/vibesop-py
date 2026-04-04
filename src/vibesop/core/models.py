@@ -91,11 +91,11 @@ class RoutingResult(BaseModel):
     """
 
     primary: SkillRoute
-    alternatives: list[SkillRoute] = Field(
+    alternatives: list[SkillRoute] = Field(  # type: ignore[reportUnknownVariableType]
         default_factory=list,
         description="Alternative skill matches",
     )
-    routing_path: list[Literal[0, 1, 2, 3, 4]] = Field(
+    routing_path: list[Literal[0, 1, 2, 3, 4]] = Field(  # type: ignore[reportUnknownVariableType]
         default_factory=list,
         description="Layers consulted during routing",
     )

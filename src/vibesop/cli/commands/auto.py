@@ -11,27 +11,24 @@ Usage:
     vibe auto --verbose "generate documentation"
 """
 
-from typing import Optional
+from __future__ import annotations
+
 import json
+from typing import Any, Optional
 
 import typer
 from rich.console import Console
 from rich.panel import Panel
-from rich.table import Table
-from rich.markdown import Markdown
 
-from vibesop.triggers import KeywordDetector, DEFAULT_PATTERNS, SkillActivator
-from vibesop.triggers.models import PatternCategory
+from vibesop.triggers import DEFAULT_PATTERNS, KeywordDetector, SkillActivator
+from vibesop.triggers.models import PatternCategory, PatternMatch
 from vibesop.semantic.models import EncoderConfig
 
 console = Console()
 
 
 def auto(
-    query: str = typer.Argument(
-        ...,
-        help="Natural language query describing what you want to do"
-    ),
+    query: str = typer.Argument(..., help="Natural language query describing what you want to do"),
     input_data: Optional[str] = typer.Option(
         None,
         "--input",
@@ -127,13 +124,10 @@ def auto(
     """
     import asyncio
 
-    console.print(
-        f"\\n[bold cyan]🎯 Intelligent Auto-Execution[/bold cyan]"
-        f"\\n{'=' * 40}\\n"
-    )
+    console.print(f"\\n[bold cyan]🎯 Intelligent Auto-Execution[/bold cyan]\\n{'=' * 40}\\n")
 
     # Parse input data
-    input_dict: dict = {}
+    input_dict: dict[str, Any] = {}
     if input_data:
         try:
             input_dict = json.loads(input_data)
@@ -194,11 +188,12 @@ def auto(
         console.print(f"[red]✗ Execution failed: {e}[/red]")
         if verbose:
             import traceback
+
             console.print(traceback.format_exc())
         raise typer.Exit(1)
 
 
-def _show_match_details(match, verbose: bool) -> None:
+def _show_match_details(match: PatternMatch, verbose: bool) -> None:
     """Show detected pattern match details.
 
     Args:
@@ -207,10 +202,8 @@ def _show_match_details(match, verbose: bool) -> None:
     """
     # Find pattern
     from vibesop.triggers import DEFAULT_PATTERNS
-    pattern = next(
-        (p for p in DEFAULT_PATTERNS if p.pattern_id == match.pattern_id),
-        None
-    )
+
+    pattern = next((p for p in DEFAULT_PATTERNS if p.pattern_id == match.pattern_id), None)
 
     if pattern:
         # Category emoji
@@ -225,24 +218,25 @@ def _show_match_details(match, verbose: bool) -> None:
                 f"[dim]Description:[/dim] {pattern.description}\\n"
                 + (
                     f"[dim]Keywords:[/dim] {', '.join(match.matched_keywords[:5])}\\n"
-                    if match.matched_keywords else ""
+                    if match.matched_keywords
+                    else ""
                 )
                 + (
                     f"[dim]Regex:[/dim] {len(match.matched_regex)} patterns matched\\n"
-                    if match.matched_regex else ""
+                    if match.matched_regex
+                    else ""
                 )
                 + (
                     f"[dim]Semantic:[/dim] {match.semantic_score:.2%} "
                     f"({match.semantic_method or 'N/A'})\\n"
-                    if match.semantic_score else ""
+                    if match.semantic_score
+                    else ""
                 )
+                + (f"[dim]Model:[/dim] {match.model_used or 'N/A'}\\n" if match.model_used else "")
                 + (
-                    f"[dim]Model:[/dim] {match.model_used or 'N/A'}\\n"
-                    if match.model_used else ""
-                )
-                + (
-                    f"[dim]Encoding Time:[/dim] {match.encoding_time*1000:.1f}ms\\n"
-                    if match.encoding_time else ""
+                    f"[dim]Encoding Time:[/dim] {match.encoding_time * 1000:.1f}ms\\n"
+                    if match.encoding_time
+                    else ""
                 ),
                 title="[bold green]✓ Intent Detected[/bold green]",
                 border_style="green",
@@ -255,7 +249,7 @@ def _show_match_details(match, verbose: bool) -> None:
                 console.print(f"[dim]Workflow ID: {pattern.workflow_id}[/dim]")
 
 
-def _show_dry_run(match, input_data: dict) -> None:
+def _show_dry_run(match: PatternMatch, input_data: dict[str, Any]) -> None:
     """Show dry-run preview.
 
     Args:
@@ -264,10 +258,7 @@ def _show_dry_run(match, input_data: dict) -> None:
     """
     from vibesop.triggers import DEFAULT_PATTERNS
 
-    pattern = next(
-        (p for p in DEFAULT_PATTERNS if p.pattern_id == match.pattern_id),
-        None
-    )
+    pattern = next((p for p in DEFAULT_PATTERNS if p.pattern_id == match.pattern_id), None)
 
     if not pattern:
         return
@@ -283,10 +274,7 @@ def _show_dry_run(match, input_data: dict) -> None:
             f"[bold]Will execute:[/bold]\\n"
             f"  • {action.title()}: {pattern.workflow_id or pattern.skill_id}\\n"
             f"  • Query: {pattern.description}\\n"
-            + (
-                f"  • Input: {json.dumps(input_data, indent=2)}\\n"
-                if input_data else ""
-            )
+            + (f"  • Input: {json.dumps(input_data, indent=2)}\\n" if input_data else "")
             + f"\\n[dim]Remove --dry-run to execute.[/dim]",
             title="[bold]Preview[/bold]",
             border_style="yellow",
@@ -294,7 +282,7 @@ def _show_dry_run(match, input_data: dict) -> None:
     )
 
 
-def _show_execution_result(result: dict, verbose: bool) -> None:
+def _show_execution_result(result: dict[str, Any], verbose: bool) -> None:
     """Show execution result.
 
     Args:
@@ -309,17 +297,17 @@ def _show_execution_result(result: dict, verbose: bool) -> None:
                 f"[bold]Pattern ID:[/bold] {result.get('pattern_id', 'N/A')}\\n"
                 + (
                     f"[bold]Skill ID:[/bold] {result.get('skill_id', 'N/A')}\\n"
-                    if result.get('skill_id')
+                    if result.get("skill_id")
                     else ""
                 )
                 + (
                     f"[bold]Workflow ID:[/bold] {result.get('workflow_id', 'N/A')}\\n"
-                    if result.get('workflow_id')
+                    if result.get("workflow_id")
                     else ""
                 )
                 + (
                     f"[bold]Routed:[/bold] Yes (via semantic routing)\\n"
-                    if result.get('routed')
+                    if result.get("routed")
                     else ""
                 ),
                 title="[bold green]Success[/bold green]",
@@ -381,7 +369,7 @@ def _show_available_patterns() -> None:
     console.print(f"\\n[bold]Available Patterns:[/bold]\\n")
 
     # Group by category
-    by_category = {}
+    by_category: dict[str, list[Any]] = {}
     for pattern in DEFAULT_PATTERNS:
         cat = pattern.category.value
         if cat not in by_category:
@@ -397,7 +385,7 @@ def _show_available_patterns() -> None:
             console.print(f"    • {pattern.name}")
             if pattern.examples:
                 example = pattern.examples[0]
-                console.print(f"      [dim]e.g., \"{example}\"[/dim]")
+                console.print(f'      [dim]e.g., "{example}"[/dim]')
 
 
 def _get_category_emoji(category: PatternCategory) -> str:

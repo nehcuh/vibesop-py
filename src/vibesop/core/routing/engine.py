@@ -12,6 +12,7 @@ import os
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 from pydantic import ValidationError
 
@@ -110,6 +111,7 @@ class SkillRouter:
                 self._ai_triage_enabled = False
                 if os.getenv("VIBE_DEBUG"):
                     import warnings
+
                     warnings.warn(f"AI triage disabled: {e}")
 
         # Initialize semantic matcher (Layer 3)
@@ -119,8 +121,7 @@ class SkillRouter:
 
         # Initialize fuzzy matcher (Layer 4)
         self._fuzzy_matcher = FuzzyMatcher(
-            min_similarity=RoutingThresholds.FUZZY_SIMILARITY_THRESHOLD,
-            max_distance=2
+            min_similarity=RoutingThresholds.FUZZY_SIMILARITY_THRESHOLD, max_distance=2
         )
 
         # Initialize preference learner
@@ -142,7 +143,10 @@ class SkillRouter:
             if not skills:
                 # Log warning but don't fail - router can still function with empty skill set
                 import warnings
-                warnings.warn("No skills loaded from configuration. Router may not function properly.")
+
+                warnings.warn(
+                    "No skills loaded from configuration. Router may not function properly."
+                )
 
             # Index for semantic matching
             self._semantic_matcher.index_skills(skills or [], self._config)
@@ -153,6 +157,7 @@ class SkillRouter:
         except (FileNotFoundError, ValueError, KeyError) as e:
             # Log error and re-raise - config loading is critical
             import warnings
+
             warnings.warn(f"Failed to load skills from configuration: {e}")
             raise
 
@@ -187,7 +192,7 @@ class SkillRouter:
                 return RoutingResult(
                     primary=boosted_result,
                     alternatives=self._get_alternatives(boosted_result),
-                    routing_path=[layer_num],
+                    routing_path=[layer_num],  # type: ignore[arg-type]
                 )
 
         # No match found
@@ -283,6 +288,7 @@ class SkillRouter:
             # Fall through to next routing layer
             if os.getenv("VIBE_DEBUG"):
                 import warnings
+
                 warnings.warn(f"AI triage call failed: {e}")
 
         return None
@@ -500,7 +506,7 @@ Skill ID:"""
         """
         self._preference_learner.record_selection(skill_id, query, was_helpful)
 
-    def get_preference_stats(self) -> dict[str, any]:
+    def get_preference_stats(self) -> dict[str, Any]:
         """Get preference learning statistics.
 
         Returns:
@@ -512,7 +518,7 @@ Skill ID:"""
         self,
         limit: int = 5,
         min_selections: int = 2,
-    ) -> list:
+    ) -> list[Any]:
         """Get top preferred skills based on user history.
 
         Args:
@@ -587,7 +593,7 @@ Skill ID:"""
         Returns:
             List of alternative skill routes sorted by similarity
         """
-        alternatives = []
+        alternatives: list[SkillRoute] = []
 
         # Get all skills from config
         try:
@@ -609,7 +615,7 @@ Skill ID:"""
                 return alternatives
 
             # Find similar skills using semantic matching
-            similar_skills = []
+            similar_skills: list[dict[str, Any]] = []
             for skill in all_skills:
                 # Skip the primary skill itself
                 if skill["id"] == primary_skill_id:
@@ -627,11 +633,13 @@ Skill ID:"""
                     similarity = len(intersection) / len(union) if union else 0
 
                     if similarity > 0.2:  # Minimum similarity threshold
-                        similar_skills.append({
-                            "skill_id": skill["id"],
-                            "similarity": similarity,
-                            "source": "semantic",
-                        })
+                        similar_skills.append(
+                            {
+                                "skill_id": skill["id"],
+                                "similarity": similarity,
+                                "source": "semantic",
+                            }
+                        )
 
             # Sort by similarity and take top 3
             similar_skills.sort(key=lambda x: x["similarity"], reverse=True)
@@ -654,6 +662,7 @@ Skill ID:"""
             # Return empty list and allow routing to continue
             if os.getenv("VIBE_DEBUG"):
                 import warnings
+
                 warnings.warn(f"Alternative selection failed: {e}")
 
         return alternatives

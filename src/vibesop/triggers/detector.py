@@ -4,21 +4,24 @@ This module provides the core detection logic for matching user input
 against trigger patterns using multiple strategies.
 """
 
+from __future__ import annotations
+
 import re
 import time
 from pathlib import Path
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 from vibesop.triggers.models import TriggerPattern, PatternMatch
 
 # Conditionally import numpy (optional dependency for semantic features)
 if TYPE_CHECKING:
-    import numpy as np
+    import numpy as np  # type: ignore[import-not-found]
+    from vibesop.semantic.models import EncoderConfig
 else:
     try:
         import numpy as np
     except ImportError:
-        np = None  # type: ignore
+        np = None  # type: ignore[assignment]
 from vibesop.triggers.utils import (
     tokenize,
     calculate_tfidf,
@@ -71,7 +74,7 @@ class KeywordDetector:
         patterns: list[TriggerPattern],
         confidence_threshold: float = 0.6,
         enable_semantic: bool = False,
-        semantic_config: Optional["EncoderConfig"] = None,
+        semantic_config: Optional["EncoderConfig"] = None,  # type: ignore[reportUnknownVariableType]
     ):
         """Initialize keyword detector.
 
@@ -81,11 +84,7 @@ class KeywordDetector:
             enable_semantic: Enable semantic matching (default: False)
             semantic_config: Semantic encoder configuration (optional)
         """
-        self.patterns = sorted(
-            patterns,
-            key=lambda p: p.priority,
-            reverse=True
-        )
+        self.patterns = sorted(patterns, key=lambda p: p.priority, reverse=True)
         self.confidence_threshold = confidence_threshold
 
         # Pre-compute IDF scores for all pattern examples
@@ -93,12 +92,12 @@ class KeywordDetector:
 
         # Semantic components (v2.1.0)
         self.enable_semantic = enable_semantic
-        self.semantic_config = semantic_config
+        self.semantic_config: Optional["EncoderConfig"] = semantic_config  # type: ignore[reportUnknownVariableType]
 
         # Lazy-loaded semantic components
-        self.semantic_encoder = None
-        self.semantic_cache = None
-        self.semantic_calculator = None
+        self.semantic_encoder: Any = None
+        self.semantic_cache: Any = None
+        self.semantic_calculator: Any = None
 
         # Initialize semantic components if enabled
         if self.enable_semantic:
@@ -113,7 +112,7 @@ class KeywordDetector:
         from vibesop.triggers.utils import calculate_idf
 
         # Collect all text from patterns
-        documents = []
+        documents: list[list[str]] = []
 
         for pattern in self.patterns:
             # Add keywords as a document
@@ -172,6 +171,7 @@ class KeywordDetector:
 
         except ImportError as e:
             import logging
+
             logging.warning(
                 f"Semantic matching requires sentence-transformers: {e}. "
                 "Install with: pip install vibesop[semantic]"
@@ -185,8 +185,7 @@ class KeywordDetector:
         Computes vectors for patterns that have semantic matching enabled.
         """
         patterns_with_semantic = [
-            p for p in self.patterns
-            if p.enable_semantic or p.semantic_examples
+            p for p in self.patterns if p.enable_semantic or p.semantic_examples
         ]
 
         if not patterns_with_semantic:
@@ -196,15 +195,10 @@ class KeywordDetector:
         for pattern in patterns_with_semantic:
             examples = pattern.examples + pattern.semantic_examples
             if examples:
-                self.semantic_cache.get_or_compute(
-                    pattern.pattern_id,
-                    examples
-                )
+                self.semantic_cache.get_or_compute(pattern.pattern_id, examples)
 
     def detect_best(
-        self,
-        query: str,
-        min_confidence: Optional[float] = None
+        self, query: str, min_confidence: Optional[float] = None
     ) -> Optional[PatternMatch]:
         """Detect best matching pattern for query.
 
@@ -258,7 +252,7 @@ class KeywordDetector:
         Returns:
             List of candidate matches, sorted by confidence
         """
-        matches = []
+        matches: list[PatternMatch] = []
         for pattern in self.patterns:
             match = self._score_pattern(query, pattern)
             if match and match.confidence >= pattern.confidence_threshold:
@@ -269,10 +263,7 @@ class KeywordDetector:
         return matches
 
     def _semantic_refine(
-        self,
-        query: str,
-        candidates: list[PatternMatch],
-        threshold: float
+        self, query: str, candidates: list[PatternMatch], threshold: float
     ) -> Optional[PatternMatch]:
         """Stage 2: Semantic refinement using sentence embeddings.
 
@@ -297,11 +288,11 @@ class KeywordDetector:
 
         # Encode query
         start_time = time.time()
-        query_vector = self.semantic_encoder.encode_query(query)
+        query_vector: Any = self.semantic_encoder.encode_query(query)
         encoding_time = time.time() - start_time
 
         # Get pattern vectors
-        pattern_vectors = []
+        pattern_vectors: list[tuple[PatternMatch, Any]] = []
         for match in candidates:
             pattern = self._get_pattern_by_id(match.pattern_id)
             if not pattern:
@@ -314,10 +305,7 @@ class KeywordDetector:
                 examples = pattern.keywords + pattern.regex_patterns
 
             if examples:
-                vector = self.semantic_cache.get_or_compute(
-                    pattern.pattern_id,
-                    examples
-                )
+                vector = self.semantic_cache.get_or_compute(pattern.pattern_id, examples)
                 pattern_vectors.append((match, vector))
 
         if not pattern_vectors:
@@ -325,22 +313,19 @@ class KeywordDetector:
             return max(candidates, key=lambda m: m.confidence)
 
         # Calculate similarities
-        matches_with_vectors = [m for m, _ in pattern_vectors]
-        vectors = np.array([v for _, v in pattern_vectors])
-        similarities = self.semantic_calculator.calculate(
-            query_vector,
-            vectors
-        )
+        matches_with_vectors: list[PatternMatch] = [m for m, _ in pattern_vectors]
+        vectors: Any = np.array([v for _, v in pattern_vectors])  # type: ignore[reportUnknownMemberType,reportUnknownVariableType]
+        similarities: Any = self.semantic_calculator.calculate(query_vector, vectors)
 
         # Fuse scores and update matches
-        best_match = None
-        best_score = 0.0
+        best_match: Optional[PatternMatch] = None
+        best_score: float = 0.0
 
         for match, similarity in zip(matches_with_vectors, similarities):
             # Score fusion strategy
             if match.confidence > 0.8:
                 # High traditional confidence, keep as-is
-                final_score = match.confidence
+                final_score: float = match.confidence
             elif similarity > 0.8:
                 # High semantic confidence, use semantic
                 final_score = similarity
@@ -379,11 +364,7 @@ class KeywordDetector:
                 return pattern
         return None
 
-    def detect_all(
-        self,
-        query: str,
-        min_confidence: Optional[float] = None
-    ) -> list[PatternMatch]:
+    def detect_all(self, query: str, min_confidence: Optional[float] = None) -> list[PatternMatch]:
         """Detect all matching patterns for query.
 
         Args:
@@ -416,11 +397,7 @@ class KeywordDetector:
 
         return matches
 
-    def _semantic_refine_all(
-        self,
-        query: str,
-        candidates: list[PatternMatch]
-    ) -> None:
+    def _semantic_refine_all(self, query: str, candidates: list[PatternMatch]) -> None:
         """Apply semantic refinement to all candidates.
 
         Updates candidates in-place with semantic scores.
@@ -434,11 +411,11 @@ class KeywordDetector:
 
         # Encode query
         start_time = time.time()
-        query_vector = self.semantic_encoder.encode_query(query)
+        query_vector: Any = self.semantic_encoder.encode_query(query)
         encoding_time = time.time() - start_time
 
         # Get pattern vectors
-        pattern_vectors = []
+        pattern_vectors: list[tuple[PatternMatch, Any]] = []
         for match in candidates:
             pattern = self._get_pattern_by_id(match.pattern_id)
             if not pattern:
@@ -449,28 +426,22 @@ class KeywordDetector:
                 examples = pattern.keywords + pattern.regex_patterns
 
             if examples:
-                vector = self.semantic_cache.get_or_compute(
-                    pattern.pattern_id,
-                    examples
-                )
+                vector = self.semantic_cache.get_or_compute(pattern.pattern_id, examples)
                 pattern_vectors.append((match, vector))
 
         if not pattern_vectors:
             return
 
         # Calculate similarities
-        matches_with_vectors = [m for m, _ in pattern_vectors]
-        vectors = np.array([v for _, v in pattern_vectors])
-        similarities = self.semantic_calculator.calculate(
-            query_vector,
-            vectors
-        )
+        matches_with_vectors: list[PatternMatch] = [m for m, _ in pattern_vectors]
+        vectors: Any = np.array([v for _, v in pattern_vectors])  # type: ignore[reportUnknownMemberType,reportUnknownVariableType]
+        similarities: Any = self.semantic_calculator.calculate(query_vector, vectors)
 
         # Update all matches with semantic info
         for match, similarity in zip(matches_with_vectors, similarities):
             # Score fusion
             if match.confidence > 0.8:
-                final_score = match.confidence
+                final_score: float = match.confidence
             elif similarity > 0.8:
                 final_score = similarity
             else:
@@ -482,11 +453,7 @@ class KeywordDetector:
             match.model_used = self.semantic_encoder.model_name
             match.encoding_time = encoding_time
 
-    def _score_pattern(
-        self,
-        query: str,
-        pattern: TriggerPattern
-    ) -> Optional[PatternMatch]:
+    def _score_pattern(self, query: str, pattern: TriggerPattern) -> Optional[PatternMatch]:
         """Score a single pattern against the query.
 
         Calculates combined confidence using:
@@ -502,43 +469,28 @@ class KeywordDetector:
             PatternMatch with confidence score, or None if no match
         """
         # Calculate keyword score
-        keyword_score = calculate_keyword_match_score(
-            query,
-            pattern.keywords
-        )
+        keyword_score = calculate_keyword_match_score(query, pattern.keywords)
 
         # Calculate regex score
-        regex_score = calculate_regex_match_score(
-            query,
-            pattern.regex_patterns
-        )
+        regex_score = calculate_regex_match_score(query, pattern.regex_patterns)
 
         # Calculate semantic score
-        semantic_score = self._calculate_semantic_score(
-            query,
-            pattern
-        )
+        semantic_score = self._calculate_semantic_score(query, pattern)
 
         # Calculate combined score
-        combined_score = calculate_combined_score(
-            keyword_score,
-            regex_score,
-            semantic_score
-        )
+        combined_score = calculate_combined_score(keyword_score, regex_score, semantic_score)
 
         # If combined score is very low, no match
         if combined_score < 0.1:
             return None
 
         # Collect matched keywords
-        matched_keywords = [
-            kw for kw in pattern.keywords
-            if kw.lower() in query.lower()
-        ]
+        matched_keywords = [kw for kw in pattern.keywords if kw.lower() in query.lower()]
 
         # Collect matched regex
         matched_regex = [
-            pattern_str for pattern_str in pattern.regex_patterns
+            pattern_str
+            for pattern_str in pattern.regex_patterns
             if _regex_matches(pattern_str, query)
         ]
 
@@ -560,11 +512,7 @@ class KeywordDetector:
             encoding_time=None,
         )
 
-    def _calculate_semantic_score(
-        self,
-        query: str,
-        pattern: TriggerPattern
-    ) -> float:
+    def _calculate_semantic_score(self, query: str, pattern: TriggerPattern) -> float:
         """Calculate semantic similarity score using TF-IDF.
 
         Compares query against pattern examples using TF-IDF + cosine similarity.
@@ -584,7 +532,7 @@ class KeywordDetector:
         query_tfidf = calculate_tfidf(query_tokens, self.idf_cache)
 
         # Calculate similarity with each example
-        similarities = []
+        similarities: list[float] = []
         for example in pattern.examples:
             example_tokens = tokenize(example)
             example_tfidf = calculate_tfidf(example_tokens, self.idf_cache)
@@ -593,7 +541,7 @@ class KeywordDetector:
             similarities.append(sim)
 
         # Return maximum similarity, clamped to [0, 1]
-        max_sim = max(similarities) if similarities else 0.0
+        max_sim: float = max(similarities) if similarities else 0.0
         return min(max(max_sim, 0.0), 1.0)
 
 

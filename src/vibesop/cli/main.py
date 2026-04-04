@@ -3,10 +3,13 @@
 Built with Typer for modern CLI UX.
 """
 
+from __future__ import annotations
+
 import importlib.util
 import os
 import sys
 from pathlib import Path
+from typing import Any
 
 import typer
 from rich.console import Console
@@ -171,7 +174,7 @@ def _check_python_version() -> tuple[bool, str]:
 def _check_dependencies() -> tuple[bool, str]:
     """Check if dependencies are installed."""
 
-    missing = []
+    missing: list[str] = []
     for module in ("pydantic", "typer", "rich"):
         if importlib.util.find_spec(module) is None:
             missing.append(module)
@@ -224,16 +227,15 @@ def _check_hooks() -> tuple[bool, str]:
         installer = VibeSOPInstaller()
         platforms = installer.list_platforms()
 
-        results = []
+        results: list[str] = []
         for platform_info in platforms:
             platform_name = platform_info["name"]
-            verify_result = installer.verify(platform_name)
+            verify_result: dict[str, Any] = installer.verify(platform_name)  # type: ignore[reportUnknownVariableType]
 
             if verify_result["installed"]:
-                hook_count = sum(
-                    1 for status in verify_result.get("hooks_installed", {}).values() if status
-                )
-                total_hooks = len(verify_result.get("hooks_installed", {}))
+                hooks_installed: dict[str, Any] = verify_result.get("hooks_installed", {})
+                hook_count = sum(1 for status in hooks_installed.values() if status)
+                total_hooks = len(hooks_installed)
                 results.append(f"{platform_name}: {hook_count}/{total_hooks}")
             else:
                 results.append(f"{platform_name}: not installed")
@@ -270,7 +272,7 @@ def record(
         )
 
     # Show updated preference score
-    score = router._preference_learner.get_preference_score(skill_id)
+    score = router._preference_learner.get_preference_score(skill_id)  # type: ignore[reportPrivateUsage]
     if score > 0:
         console.print(f"   Preference score: {score:.2%}")
     console.print("   This will improve future recommendations.")
@@ -287,13 +289,16 @@ def route_stats() -> None:
     stats = router.get_stats()
 
     console.print("[bold]📊 Routing Statistics[/bold]\n")
-    console.print(f"Total routes: {stats['total_routes']}")
+    total_routes = stats["total_routes"]
+    console.print(f"Total routes: {total_routes}")
 
-    if stats["total_routes"] > 0:
+    if isinstance(total_routes, int) and total_routes > 0:
         console.print("\n[bold]Layer Distribution:[/bold]")
-        for layer, count in stats["layer_distribution"].items():
-            pct = count / stats["total_routes"] * 100
-            console.print(f"  • {layer}: {count} ({pct:.0f}%)")
+        layer_dist = stats["layer_distribution"]
+        if isinstance(layer_dist, dict):
+            for layer, count in layer_dist.items():
+                pct = count / total_routes * 100
+                console.print(f"  • {layer}: {count} ({pct:.0f}%)")
 
     console.print(f"\nCache: {stats.get('cache_dir', 'N/A')}")
 
@@ -374,7 +379,7 @@ def skills_list(
     console.print(f"[bold]📚 Available Skills[/bold] ({len(all_skills)} total)\n")
 
     # Group by namespace
-    by_namespace: dict[str, list[dict]] = {}
+    by_namespace: dict[str, list[dict[str, Any]]] = {}
     for skill in all_skills:
         ns = skill.get("namespace", "builtin")
         if ns not in by_namespace:
@@ -386,10 +391,10 @@ def skills_list(
         console.print(f"[bold cyan]{ns}[/bold cyan] ({len(ns_skills)} skills)")
 
         for skill in ns_skills:
-            skill_id = skill.get("id", "unknown")
-            name = skill.get("name", skill_id)
-            desc = skill.get("description", "")
-            skill_type = skill.get("type", "prompt")
+            skill_id: str = skill.get("id", "unknown")
+            name: str = skill.get("name", skill_id)
+            desc: str = skill.get("description", "")
+            skill_type: str = skill.get("type", "prompt")
 
             if verbose:
                 console.print(
