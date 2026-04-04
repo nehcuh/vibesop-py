@@ -18,6 +18,7 @@ from vibesop.triggers.models import (
 )
 from vibesop.triggers.detector import KeywordDetector
 from vibesop.triggers.patterns import DEFAULT_PATTERNS
+from vibesop.triggers.activator import SkillActivator, auto_activate
 
 __all__ = [
     "TriggerPattern",
@@ -25,6 +26,8 @@ __all__ = [
     "PatternCategory",
     "KeywordDetector",
     "DEFAULT_PATTERNS",
+    "SkillActivator",
+    "auto_activate",
 ]
 
 # Version info
