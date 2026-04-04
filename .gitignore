@@ -45,9 +45,14 @@ uv.lock
 .pytest_cache/
 .coverage
 .coverage.*
+coverage.xml
 htmlcov/
 *.cover
 .hypothesis/
+
+# VibeSOP state
+.vibe/state/
+.vibe/sessions/
 
 # Type checking
 .mypy_cache/
