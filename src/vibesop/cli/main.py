@@ -19,36 +19,7 @@ from vibesop import __version__
 from vibesop.core.models import RoutingRequest
 from vibesop.core.routing.engine import SkillRouter
 from vibesop.core.skills import SkillManager
-
-# Import command modules
-from vibesop.cli.commands import init as init_module
-from vibesop.cli.commands import build as build_module
-from vibesop.cli.commands import deploy as deploy_module
-from vibesop.cli.commands import switch as switch_module
-from vibesop.cli.commands import inspect as inspect_module
-from vibesop.cli.commands import targets as targets_module
-from vibesop.cli.commands import checkpoint as checkpoint_module
-from vibesop.cli.commands import cascade as cascade_module
-from vibesop.cli.commands import experiment as experiment_module
-from vibesop.cli.commands import memory_cmd as memory_module
-from vibesop.cli.commands import instinct_cmd as instinct_module
-from vibesop.cli.commands import quickstart as quickstart_module
-from vibesop.cli.commands import onboard as onboard_module
-from vibesop.cli.commands import toolchain as toolchain_module
-from vibesop.cli.commands import scan as scan_module
-from vibesop.cli.commands import skill_craft as skill_craft_module
-from vibesop.cli.commands import tools_cmd as tools_module
-from vibesop.cli.commands import worktree as worktree_module
-from vibesop.cli.commands import route_commands as route_commands_module
-from vibesop.cli.commands import import_rules as import_rules_module
-from vibesop.cli.commands import detect as detect_module
-from vibesop.cli.commands import install as install_module
-from vibesop.cli.commands import hooks as hooks_module
-from vibesop.cli.commands import workflow as workflow_module
-from vibesop.cli.commands import auto as auto_module
-from vibesop.cli.commands import config as config_module
-from vibesop.cli.commands import analyze as analyze_module
-from vibesop.cli.commands import auto_analyze as auto_analyze_module
+from vibesop.cli.subcommands import register
 
 app = typer.Typer(
     name="vibe",
@@ -58,31 +29,19 @@ app = typer.Typer(
 console = Console()
 
 
+# -- Core routing commands --
+
+
 @app.command()
 def route(
     query: str = typer.Argument(..., help="Natural language query to route"),
-    json_output: bool = typer.Option(
-        False,
-        "--json",
-        "-j",
-        help="Output as JSON",
-    ),
+    json_output: bool = typer.Option(False, "--json", "-j", help="Output as JSON"),
 ) -> None:
-    """Route a query to the appropriate skill using AI-powered routing.
-
-    Example:
-        vibe route "帮我评审代码"
-        vibe route "debug this error" --json
-    """
+    """Route a query to the appropriate skill using AI-powered routing."""
     router = SkillRouter()
-
-    # Create routing request
     request = RoutingRequest(query=query)
-
-    # Route the request
     result = router.route(request)
 
-    # Output
     if json_output:
         console.print_json(result.model_dump_json(indent=2))
     else:
@@ -96,7 +55,6 @@ def route(
                 border_style="blue",
             )
         )
-
         if result.alternatives:
             console.print("\n[bold]💡 Alternatives:[/bold]")
             for alt in result.alternatives[:3]:
@@ -105,11 +63,7 @@ def route(
 
 @app.command()
 def doctor() -> None:
-    """Check environment and configuration.
-
-    Example:
-        vibe doctor
-    """
+    """Check environment and configuration."""
     console.print("[bold]🔍 Checking VibeSOP environment...[/bold]\n")
 
     checks = [
@@ -134,7 +88,6 @@ def doctor() -> None:
         )
         console.print(f"{icon} [{color}]{name}[/{color}]: {message}")
 
-    # Overall status
     all_ok = all(status for status, _ in checks)
     if all_ok:
         console.print("\n[bold green]✨ All checks passed![/bold green]")
@@ -146,11 +99,7 @@ def doctor() -> None:
 
 @app.command()
 def version() -> None:
-    """Show version information.
-
-    Example:
-        vibe version
-    """
+    """Show version information."""
     console.print(
         Panel(
             f"[bold]VibeSOP[/bold] Python Edition\n\n"
@@ -163,105 +112,14 @@ def version() -> None:
     )
 
 
-def _check_python_version() -> tuple[bool, str]:
-    """Check Python version."""
-    version = sys.version_info
-    if version >= (3, 12):
-        return True, f"{version.major}.{version.minor}.{version.micro}"
-    return False, f"{version.major}.{version.minor} (requires 3.12+)"
-
-
-def _check_dependencies() -> tuple[bool, str]:
-    """Check if dependencies are installed."""
-
-    missing: list[str] = []
-    for module in ("pydantic", "typer", "rich"):
-        if importlib.util.find_spec(module) is None:
-            missing.append(module)
-
-    if missing:
-        return False, f"Missing: {', '.join(missing)}"
-    return True, "All dependencies installed"
-
-
-def _check_config() -> tuple[bool, str]:
-    """Check configuration."""
-    config_dir = Path.cwd() / ".vibe"
-    if config_dir.exists():
-        return True, f"Found at {config_dir}"
-    return False, "No .vibe directory found"
-
-
-def _check_llm_provider() -> tuple[bool, str]:
-    """Check LLM provider configuration."""
-    if os.getenv("ANTHROPIC_API_KEY"):
-        return True, "Anthropic (API key found)"
-    if os.getenv("OPENAI_API_KEY"):
-        return True, "OpenAI (API key found)"
-    return False, "No API key found (set ANTHROPIC_API_KEY or OPENAI_API_KEY)"
-
-
-def _check_integrations() -> tuple[bool, str]:
-    """Check platform integrations."""
-    try:
-        from vibesop.integrations import IntegrationManager
-
-        manager = IntegrationManager()
-        installed = manager.get_installed_integrations()
-        total = len(manager.list_integrations())
-
-        if installed:
-            names = [info.name for info in installed]
-            return True, f"{len(installed)}/{total} installed ({', '.join(names)})"
-        else:
-            return False, f"No integrations installed (0/{total})"
-    except Exception as e:
-        return False, f"Failed to check: {e}"
-
-
-def _check_hooks() -> tuple[bool, str]:
-    """Check hook installation status."""
-    try:
-        from vibesop.installer import VibeSOPInstaller
-
-        installer = VibeSOPInstaller()
-        platforms = installer.list_platforms()
-
-        results: list[str] = []
-        for platform_info in platforms:
-            platform_name = platform_info["name"]
-            verify_result: dict[str, Any] = installer.verify(platform_name)  # type: ignore[reportUnknownVariableType]
-
-            if verify_result["installed"]:
-                hooks_installed: dict[str, Any] = verify_result.get("hooks_installed", {})
-                hook_count = sum(1 for status in hooks_installed.values() if status)
-                total_hooks = len(hooks_installed)
-                results.append(f"{platform_name}: {hook_count}/{total_hooks}")
-            else:
-                results.append(f"{platform_name}: not installed")
-
-        if results:
-            return any("installed" not in r for r in results), "; ".join(results)
-        else:
-            return False, "No platforms checked"
-    except Exception as e:
-        return False, f"Failed to check: {e}"
-
-
 @app.command()
 def record(
     skill_id: str = typer.Argument(..., help="Skill ID that was selected"),
     query: str = typer.Argument(..., help="Original user query"),
     helpful: bool = typer.Option(True, "--helpful/--not-helpful", "-h/-H"),
 ) -> None:
-    """Record a skill selection for preference learning.
-
-    Example:
-        vibe record /review "review my code"
-        vibe record systematic-debugging "debug this error" --not-helpful
-    """
+    """Record a skill selection for preference learning."""
     router = SkillRouter()
-
     router.record_selection(skill_id, query, was_helpful=helpful)
 
     if helpful:
@@ -271,7 +129,6 @@ def record(
             f"[yellow]✓[/yellow] Recorded selection: [bold]{skill_id}[/bold] (not helpful)"
         )
 
-    # Show updated preference score
     score = router._preference_learner.get_preference_score(skill_id)  # type: ignore[reportPrivateUsage]
     if score > 0:
         console.print(f"   Preference score: {score:.2%}")
@@ -280,11 +137,7 @@ def record(
 
 @app.command("route-stats")
 def route_stats() -> None:
-    """Show routing statistics.
-
-    Example:
-        vibe route-stats
-    """
+    """Show routing statistics."""
     router = SkillRouter()
     stats = router.get_stats()
 
@@ -305,16 +158,11 @@ def route_stats() -> None:
 
 @app.command("preferences")
 def preferences() -> None:
-    """Show preference learning statistics.
-
-    Example:
-        vibe preferences
-    """
+    """Show preference learning statistics."""
     router = SkillRouter()
     stats = router.get_preference_stats()
 
     console.print("[bold]📊 Preference Learning Statistics[/bold]\n")
-
     console.print(f"Total selections: {stats['total_selections']}")
     console.print(f"Helpful rate: {stats['helpful_rate']:.1%}")
     console.print(f"Unique skills: {stats['unique_skills']}")
@@ -331,22 +179,14 @@ def preferences() -> None:
 def top_skills(
     limit: int = typer.Option(5, "--limit", "-l", min=1, max=10),
 ) -> None:
-    """Show most preferred skills.
-
-    Example:
-        vibe top-skills
-        vibe top-skills --limit 10
-    """
+    """Show most preferred skills."""
     router = SkillRouter()
-    top_skills = router.get_top_skills(limit=limit, min_selections=1)
+    top = router.get_top_skills(limit=limit, min_selections=1)
 
-    console.print(f"[bold]🏆 Top {len(top_skills)} Preferred Skills[/bold]\n")
-
-    for i, pref in enumerate(top_skills, 1):
-        # Create a nice display
+    console.print(f"[bold]🏆 Top {len(top)} Preferred Skills[/bold]\n")
+    for i, pref in enumerate(top, 1):
         bar_length = int(pref.score * 20)
         bar = "█" * bar_length + "░" * (20 - bar_length)
-
         console.print(
             f"{i}. [bold cyan]{pref.skill_id}[/bold cyan]\n"
             f"   Score: [green]{pref.score:.1%}[/green]  "
@@ -361,15 +201,8 @@ def skills_list(
     namespace: str | None = typer.Option(None, "--namespace", "-n", help="Filter by namespace"),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Show detailed information"),
 ) -> None:
-    """List all available skills.
-
-    Example:
-        vibe skills
-        vibe skills --namespace gstack
-        vibe skills --verbose
-    """
+    """List all available skills."""
     manager = SkillManager()
-
     all_skills = manager.list_skills(namespace=namespace)
 
     if not all_skills:
@@ -378,7 +211,6 @@ def skills_list(
 
     console.print(f"[bold]📚 Available Skills[/bold] ({len(all_skills)} total)\n")
 
-    # Group by namespace
     by_namespace: dict[str, list[dict[str, Any]]] = {}
     for skill in all_skills:
         ns = skill.get("namespace", "builtin")
@@ -389,27 +221,23 @@ def skills_list(
     for ns in sorted(by_namespace.keys()):
         ns_skills = by_namespace[ns]
         console.print(f"[bold cyan]{ns}[/bold cyan] ({len(ns_skills)} skills)")
-
         for skill in ns_skills:
-            skill_id: str = skill.get("id", "unknown")
-            name: str = skill.get("name", skill_id)
+            sid: str = skill.get("id", "unknown")
+            name: str = skill.get("name", sid)
             desc: str = skill.get("description", "")
-            skill_type: str = skill.get("type", "prompt")
-
+            stype: str = skill.get("type", "prompt")
             if verbose:
                 console.print(
-                    f"  • [bold]{skill_id}[/bold] ([dim]{skill_type}[/dim])\n"
+                    f"  • [bold]{sid}[/bold] ([dim]{stype}[/dim])\n"
                     f"    Name: {name}\n"
                     f"    Description: {desc}\n"
                     f"    Tags: {skill.get('tags', [])}\n"
                     f"    Source: {skill.get('source', 'unknown')}"
                 )
             else:
-                console.print(f"  • [bold]{skill_id}[/bold] - {desc}")
+                console.print(f"  • [bold]{sid}[/bold] - {desc}")
+        console.print()
 
-        console.print()  # Blank line between namespaces
-
-    # Show stats
     stats = manager.get_stats()
     console.print(f"[dim]Namespaces: {', '.join(stats['namespaces'])}[/dim]")
 
@@ -418,13 +246,8 @@ def skills_list(
 def skill_info(
     skill_id: str = typer.Argument(..., help="Skill ID (e.g., gstack/review)"),
 ) -> None:
-    """Show detailed information about a skill.
-
-    Example:
-        vibe skill-info gstack/review
-    """
+    """Show detailed information about a skill."""
     manager = SkillManager()
-
     info = manager.get_skill_info(skill_id)
 
     if not info:
@@ -440,57 +263,96 @@ def skill_info(
             f"[dim]Version:[/dim] {info.get('version', '1.0.0')}\n"
             f"[dim]Author:[/dim] {info.get('author', 'N/A')}\n"
             f"[dim]Source:[/dim] {info.get('source', 'unknown')}\n"
-            f"\n"
-            f"[bold]Description[/bold]\n"
+            f"\n[bold]Description[/bold]\n"
             f"{info.get('description', 'No description')}\n"
-            f"\n"
-            f"[bold]Intent[/bold]\n"
+            f"\n[bold]Intent[/bold]\n"
             f"{info.get('intent', 'No intent specified')}\n"
-            f"\n"
-            f"[bold]Tags[/bold]\n"
+            f"\n[bold]Tags[/bold]\n"
             f"{', '.join(info.get('tags') or []) or 'None'}",
             title="[bold]Skill Info[/bold]",
             border_style="blue",
         )
     )
-
     if info.get("source_file"):
         console.print(f"\n[dim]Source file: {info['source_file']}[/dim]")
 
 
+# -- Health check helpers --
+
+
+def _check_python_version() -> tuple[bool, str]:
+    version = sys.version_info
+    if version >= (3, 12):
+        return True, f"{version.major}.{version.minor}.{version.micro}"
+    return False, f"{version.major}.{version.minor} (requires 3.12+)"
+
+
+def _check_dependencies() -> tuple[bool, str]:
+    missing: list[str] = []
+    for module in ("pydantic", "typer", "rich"):
+        if importlib.util.find_spec(module) is None:
+            missing.append(module)
+    if missing:
+        return False, f"Missing: {', '.join(missing)}"
+    return True, "All dependencies installed"
+
+
+def _check_config() -> tuple[bool, str]:
+    config_dir = Path.cwd() / ".vibe"
+    if config_dir.exists():
+        return True, f"Found at {config_dir}"
+    return False, "No .vibe directory found"
+
+
+def _check_llm_provider() -> tuple[bool, str]:
+    if os.getenv("ANTHROPIC_API_KEY"):
+        return True, "Anthropic (API key found)"
+    if os.getenv("OPENAI_API_KEY"):
+        return True, "OpenAI (API key found)"
+    return False, "No API key found (set ANTHROPIC_API_KEY or OPENAI_API_KEY)"
+
+
+def _check_integrations() -> tuple[bool, str]:
+    try:
+        from vibesop.integrations import IntegrationManager
+
+        manager = IntegrationManager()
+        installed = manager.get_installed_integrations()
+        total = len(manager.list_integrations())
+        if installed:
+            names = [info.name for info in installed]
+            return True, f"{len(installed)}/{total} installed ({', '.join(names)})"
+        return False, f"No integrations installed (0/{total})"
+    except Exception as e:
+        return False, f"Failed to check: {e}"
+
+
+def _check_hooks() -> tuple[bool, str]:
+    try:
+        from vibesop.installer import VibeSOPInstaller
+
+        installer = VibeSOPInstaller()
+        platforms = installer.list_platforms()
+        results: list[str] = []
+        for platform_info in platforms:
+            platform_name: str = platform_info["name"]
+            verify_result: dict[str, Any] = installer.verify(platform_name)  # type: ignore[reportUnknownVariableType]
+            if verify_result["installed"]:
+                hooks_status: dict[str, Any] = verify_result.get("hooks_installed", {})
+                hook_count = sum(1 for s in hooks_status.values() if s)
+                total_hooks = len(hooks_status)
+                results.append(f"{platform_name}: {hook_count}/{total_hooks}")
+            else:
+                results.append(f"{platform_name}: not installed")
+        if results:
+            return any("installed" not in r for r in results), "; ".join(results)
+        return False, "No platforms checked"
+    except Exception as e:
+        return False, f"Failed to check: {e}"
+
+
+# Register all subcommands
+register(app)
+
 if __name__ == "__main__":
     app()
-
-
-# Register additional commands
-app.command()(init_module.init)
-app.command()(build_module.build)
-app.command()(deploy_module.deploy)
-app.command()(switch_module.switch)
-app.command("inspect")(inspect_module.inspect_cmd)
-app.command()(targets_module.targets)
-app.command()(checkpoint_module.checkpoint)
-app.command()(cascade_module.cascade)
-app.command()(experiment_module.experiment)
-app.command("memory")(memory_module.memory)
-app.command()(instinct_module.instinct)
-app.command()(quickstart_module.quickstart)
-app.command()(onboard_module.onboard)
-app.command()(toolchain_module.toolchain)
-app.command()(scan_module.scan)
-app.command("skill-craft")(skill_craft_module.skill_craft)
-app.command()(tools_module.tools)
-app.command()(worktree_module.worktree)
-app.command("route-select")(route_commands_module.route_select)
-app.command("route-validate")(route_commands_module.route_validate)
-app.command("import-rules")(import_rules_module.import_rules)
-app.command()(detect_module.detect)
-app.command()(install_module.install)
-app.command()(hooks_module.hooks)
-app.command()(workflow_module.workflow)
-app.command()(auto_module.auto)
-app.command()(config_module.config)
-app.command("semantic")(config_module.config_semantic)
-app.command()(analyze_module.analyze)
-app.command()(auto_analyze_module.auto_analyze_session)
-app.command("create-suggested-skills")(auto_analyze_module.create_suggested_skills)
