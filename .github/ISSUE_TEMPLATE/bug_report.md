@@ -10,14 +10,13 @@ assignees: ''
 
 A clear and concise description of what the bug is.
 
-## To Reproduce
+## Steps to Reproduce
 
 Steps to reproduce the behavior:
 
-1. Go to '...'
-2. Click on '....'
-3. Scroll down to '....'
-4. See error
+1. Run command: `vibe ...`
+2. Input: `...`
+3. Observe: `...`
 
 ## Expected Behavior
 
@@ -46,9 +45,9 @@ Please paste relevant logs here:
 # Paste logs here
 ```
 
-## Screenshots
+## Output/Logs
 
-If applicable, add screenshots to help explain your problem.
+If applicable, add CLI output or logs to help explain your problem.
 
 ## Additional Context
 

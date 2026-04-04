@@ -368,7 +368,7 @@ No new dependencies. All new features use existing dependencies:
 - Some E2E tests require real skill definitions
 - Coverage gaps in utility modules (not critical paths)
 
-All issues documented in [COMPLETE.md](COMPLETE.md).
+All issues have been resolved in subsequent patches.
 
 ---
 

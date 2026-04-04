@@ -170,11 +170,9 @@ uv run pytest
 # Run tests with coverage
 uv run pytest --cov=src/vibesop --cov-report=html
 
-# Verify type checking (automated script)
-./scripts/verify-type-checking.sh
+# Verify type checking
+uv run pyright
 ```
-
-See [scripts/verify-type-checking.md](scripts/verify-type-checking.md) for detailed type checking guide.
 
 ## 📦 Project Structure
 
@@ -253,33 +251,19 @@ All v1.0 features remain fully supported:
 
 ## 📚 Documentation
 
-### v2.0 Documentation 🚀
+For complete documentation, see the [docs/](docs/) directory.
 
-**Quick Links**:
-- **[v2.0 Release Summary](V2_RELEASE_COMPLETE.md)** - Complete v2.0 overview and migration guide
-- **[Deployment Summary](DEPLOYMENT_COMPLETE.md)** - Deployment verification and installation
-- **[Complete Development Summary](COMPLETE.md)** - Full development lifecycle documentation
+**User Guides**:
+- **[CLI Reference](docs/CLI_REFERENCE.md)** — Full command reference
+- **[Trigger User Guide](docs/triggers/guide.md)** — Intent detection with examples
+- **[Trigger API](docs/triggers/api.md)** — API documentation
+- **[Trigger Patterns](docs/triggers/patterns.md)** — All 30 predefined patterns
+- **[Semantic Guide](docs/semantic/guide.md)** — Semantic recognition setup
+- **[Semantic API](docs/semantic/api.md)** — Semantic matching API
 
-**Trigger System**:
-- **[User Guide](docs/triggers/guide.md)** - Complete usage instructions with examples
-- **[API Reference](docs/triggers/api.md)** - Full API documentation for developers
-- **[Pattern Reference](docs/triggers/patterns.md)** - All 30 predefined patterns documented
-
-**Workflow System**:
-- **[Workflow Guide](docs/workflows/guide.md)** - Workflow orchestration documentation (coming soon)
-- **[Workflow API](docs/workflows/api.md)** - Workflow management API (coming soon)
-
-### v1.0 Documentation
-
-**Development**:
-- **[Implementation Summary](docs/IMPLEMENTATION_SUMMARY.md)** - Complete implementation details
-- **[CLI Reference](docs/CLI_REFERENCE.md)** - Full command reference
-- **[中文文档](README.zh.md)** - Chinese version of README
-
-**Roadmap**:
-- **[Roadmap Index](docs/ROADMAP_INDEX.md)** - Complete roadmap documentation index
-- **[Full Roadmap](docs/roadmap-2.0.md)** - Detailed v2.0 development plan
-- **[Quick Reference](docs/roadmap-2.0-summary.md)** - Executive summary of v2.0 features
+**Developer Docs**:
+- **[Roadmap Index](docs/ROADMAP_INDEX.md)** — Project roadmap
+- **[Contributing](CONTRIBUTING.md)** — How to contribute
 
 ## 🎨 Key Features
 
