@@ -149,9 +149,9 @@ class SessionAnalyzer:
             data = json.loads(file_path.read_text(encoding="utf-8"))
 
             if isinstance(data, list):
-                return self._extract_queries(data)
+                return self._extract_queries(data)  # type: ignore[reportUnknownArgumentType]
             elif isinstance(data, dict) and "messages" in data:
-                return self._extract_queries(data["messages"])
+                return self._extract_queries(data["messages"])  # type: ignore[reportUnknownArgumentType]
             else:
                 return []
         except (json.JSONDecodeError, KeyError):
@@ -446,10 +446,9 @@ class SessionAnalyzer:
     def _create_pattern(self, queries: list[str]) -> QueryPattern:
         """Create a pattern from a cluster of queries."""
         # Extract common keywords
-        all_keywords = [self._extract_keywords(q) for q in queries]
-        common_keywords = set.intersection(*all_keywords) if all_keywords else set()
+        all_keywords: list[set[str]] = [self._extract_keywords(q) for q in queries]
+        common_keywords: set[str] = set.intersection(*all_keywords) if all_keywords else set()  # type: ignore[reportUnknownMemberType, reportUnknownVariableType]
 
-        # Generate skill name from common keywords
         if common_keywords:
             skill_name = "-".join(sorted(common_keywords)[:3])
         else:

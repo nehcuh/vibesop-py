@@ -27,7 +27,7 @@ Examples:
 """
 
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 import json
 import asyncio
 import os
@@ -36,13 +36,13 @@ import typer
 from rich.console import Console
 from rich.table import Table
 from rich.panel import Panel
-from rich.progress import Progress, SpinnerColumn, TextColumn
+
 
 from vibesop.workflow import (
     WorkflowManager,
     WorkflowDefinition,
-    ExecutionStrategy,
 )
+from vibesop.workflow.models import ExecutionStrategy as ExecStrategy
 from vibesop.workflow.exceptions import WorkflowError
 
 console = Console()
@@ -59,10 +59,7 @@ def _create_manager() -> WorkflowManager:
     """
     workflow_dir = os.environ.get("VIBE_WORKFLOW_DIR", ".vibe/workflows")
     project_root = Path(os.environ.get("VIBE_PROJECT_ROOT", "."))
-    return WorkflowManager(
-        project_root=project_root,
-        workflow_dir=Path(workflow_dir)
-    )
+    return WorkflowManager(project_root=project_root, workflow_dir=Path(workflow_dir))
 
 
 def workflow(
@@ -185,15 +182,12 @@ def _do_run(
         console.print("[dim]Usage: vibe workflow run WORKFLOW_FILE[/dim]")
         raise typer.Exit(1)
 
-    console.print(
-        f"\n[bold cyan]⚙️ Running Workflow (v2.0)[/bold cyan]"
-        f"\n{'=' * 40}\n"
-    )
+    console.print(f"\n[bold cyan]⚙️ Running Workflow (v2.0)[/bold cyan]\n{'=' * 40}\n")
 
     manager = _create_manager()
 
     # Parse input data
-    input_dict: dict = {}
+    input_dict: dict[str, Any] = {}
     if input_data:
         try:
             input_dict = json.loads(input_data)
@@ -205,7 +199,7 @@ def _do_run(
     console.print(f"[dim]Loading workflow: {workflow_file}[/dim]\n")
 
     try:
-        workflow = manager._load_workflow_from_file(workflow_file)
+        workflow = manager._load_workflow_from_file(workflow_file)  # type: ignore[reportPrivateUsage]
         if not workflow:
             console.print(f"[red]✗ Failed to load workflow[/red]")
             raise typer.Exit(1)
@@ -219,6 +213,7 @@ def _do_run(
         console.print(f"[red]✗ Failed to load workflow: {e}[/red]")
         if verbose:
             import traceback
+
             console.print(traceback.format_exc())
         raise typer.Exit(1)
 
@@ -232,11 +227,13 @@ def _do_run(
 
     try:
         # Run async execution
-        result = asyncio.run(manager.execute_workflow(
-            workflow.name,
-            input_dict or {},
-            ExecutionStrategy(strategy) if strategy else None,
-        ))
+        result = asyncio.run(
+            manager.execute_workflow(
+                workflow.name,
+                input_dict or {},
+                ExecStrategy(strategy) if strategy else None,
+            )
+        )
 
         # Show results
         _show_results(result)
@@ -245,12 +242,14 @@ def _do_run(
         console.print(f"[red]✗ Workflow execution failed: {e}[/red]")
         if verbose:
             import traceback
+
             console.print(traceback.format_exc())
         raise typer.Exit(1)
     except Exception as e:
         console.print(f"[red]✗ Unexpected error: {e}[/red]")
         if verbose:
             import traceback
+
             console.print(traceback.format_exc())
         raise typer.Exit(1)
 
@@ -281,7 +280,11 @@ def _do_dry_run(workflow: WorkflowDefinition, workflow_file: Path) -> None:
 
     for i, stage in enumerate(workflow.stages, 1):
         deps = f" (after: {', '.join(stage.dependencies)})" if stage.dependencies else ""
-        skill = f" [dim]skill: {stage.metadata.get('skill_id', 'N/A')}[/dim]" if stage.metadata.get('skill_id') else ""
+        skill = (
+            f" [dim]skill: {stage.metadata.get('skill_id', 'N/A')}[/dim]"
+            if stage.metadata.get("skill_id")
+            else ""
+        )
         console.print(f"  {i}. [cyan]{stage.name}[/cyan] - {stage.description}{deps}{skill}")
         if not stage.required:
             console.print(f"     [dim]Optional: will continue if this stage fails[/dim]")
@@ -289,10 +292,7 @@ def _do_dry_run(workflow: WorkflowDefinition, workflow_file: Path) -> None:
 
 def _do_list() -> None:
     """List available workflows."""
-    console.print(
-        f"\n[bold cyan]📋 Available Workflows[/bold cyan]"
-        f"\n{'=' * 40}\n"
-    )
+    console.print(f"\n[bold cyan]📋 Available Workflows[/bold cyan]\n{'=' * 40}\n")
 
     manager = _create_manager()
 
@@ -317,7 +317,9 @@ def _do_list() -> None:
             table.add_row(
                 wf["id"],
                 wf["name"],
-                wf["description"][:40] + "..." if len(wf.get("description", "")) > 40 else wf.get("description", ""),
+                wf["description"][:40] + "..."
+                if len(wf.get("description", "")) > 40
+                else wf.get("description", ""),
                 str(wf.get("stages", 0)),
                 wf.get("strategy", "sequential"),
                 str(wf.get("source", ""))[:30],
@@ -339,10 +341,7 @@ def _do_resume(workflow_id: str | None, verbose: bool) -> None:
     """
     if not workflow_id:
         # List active workflows instead
-        console.print(
-            f"\n[bold cyan]🔄 Active Workflows[/bold cyan]"
-            f"\n{'=' * 40}\n"
-        )
+        console.print(f"\n[bold cyan]🔄 Active Workflows[/bold cyan]\n{'=' * 40}\n")
 
         manager = _create_manager()
 
@@ -362,12 +361,18 @@ def _do_resume(workflow_id: str | None, verbose: bool) -> None:
             table.add_column("Started At", style="dim")
 
             for state in active:
+                sid: str = state.get("workflow_id", "")  # type: ignore[reportUnknownMemberType]
+                sname: str = state.get("workflow_name", "")  # type: ignore[reportUnknownMemberType]
+                sstatus: str = state.get("status", "")  # type: ignore[reportUnknownMemberType]
+                cur_stage: str = state.get("current_stage") or "N/A"  # type: ignore[reportUnknownMemberType]
+                started = state.get("started_at")  # type: ignore[reportUnknownMemberType]
+                started_str = started.strftime("%Y-%m-%d %H:%M:%S") if started else "N/A"  # type: ignore[reportUnknownMemberType, reportUnionNotFolded]
                 table.add_row(
-                    state.workflow_id[:24],
-                    state.workflow_name,
-                    state.status,
-                    state.current_stage or "N/A",
-                    state.started_at.strftime("%Y-%m-%d %H:%M:%S") if state.started_at else "N/A",
+                    sid[:24],
+                    sname,
+                    sstatus,
+                    cur_stage,
+                    started_str,
                 )
 
             console.print(table)
@@ -380,10 +385,7 @@ def _do_resume(workflow_id: str | None, verbose: bool) -> None:
         return
 
     # Resume specific workflow
-    console.print(
-        f"\n[bold cyan]🔄 Resuming Workflow[/bold cyan]"
-        f"\n{'=' * 40}\n"
-    )
+    console.print(f"\n[bold cyan]🔄 Resuming Workflow[/bold cyan]\n{'=' * 40}\n")
     console.print(f"[dim]Workflow ID: {workflow_id}[/dim]\n")
 
     manager = _create_manager()
@@ -399,6 +401,7 @@ def _do_resume(workflow_id: str | None, verbose: bool) -> None:
         console.print(f"[red]✗ Failed to resume workflow: {e}[/red]")
         if verbose:
             import traceback
+
             console.print(traceback.format_exc())
         raise typer.Exit(1)
 
@@ -414,15 +417,12 @@ def _do_validate(workflow_file: Path | None) -> None:
         console.print("[dim]Usage: vibe workflow validate WORKFLOW_FILE[/dim]")
         raise typer.Exit(1)
 
-    console.print(
-        f"\n[bold cyan]🔍 Validating Workflow[/bold cyan]"
-        f"\n{'=' * 40}\n"
-    )
+    console.print(f"\n[bold cyan]🔍 Validating Workflow[/bold cyan]\n{'=' * 40}\n")
 
     manager = _create_manager()
 
     try:
-        workflow = manager._load_workflow_from_file(workflow_file)
+        workflow = manager._load_workflow_from_file(workflow_file)  # type: ignore[reportPrivateUsage]
 
         if not workflow:
             console.print("[red]✗ Failed to load workflow file[/red]")
@@ -444,14 +444,16 @@ def _do_validate(workflow_file: Path | None) -> None:
             for stage in workflow.stages:
                 required = "required" if stage.required else "optional"
                 deps = f" (deps: {', '.join(stage.dependencies)})" if stage.dependencies else ""
-                console.print(f"    • [cyan]{stage.name}[/cyan]: {stage.description} [{required}]{deps}")
+                console.print(
+                    f"    • [cyan]{stage.name}[/cyan]: {stage.description} [{required}]{deps}"
+                )
 
     except Exception as e:
         console.print(f"[red]✗ Validation failed: {e}[/red]")
         raise typer.Exit(1)
 
 
-def _show_results(result) -> None:
+def _show_results(result: Any) -> None:
     """Show execution results.
 
     Args:

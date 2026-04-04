@@ -189,7 +189,7 @@ class IntegrationRecommender:
         """
         compatible: list[str] = []
         incompatible: list[dict[str, str]] = []
-        warnings: list[dict[str, list[str]]] = []
+        warnings: list[dict[str, Any]] = []
 
         report: dict[str, Any] = {
             "compatible": compatible,
