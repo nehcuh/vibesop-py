@@ -143,8 +143,9 @@ class InstinctManager:
         self._patterns: Dict[str, Pattern] = {}
         self._decisions: List[Decision] = []
 
-        # Load existing patterns
+        # Load existing patterns and decisions
         self._load_patterns()
+        self._load_decisions()
 
     def decide(
         self,
@@ -478,6 +479,47 @@ class InstinctManager:
             except Exception:
                 # Skip invalid pattern files
                 continue
+
+    def _load_decisions(self) -> None:
+        """Load decision history from storage."""
+        history_file = self._storage_dir / "decisions.json"
+
+        if not history_file.exists():
+            return
+
+        try:
+            with open(history_file, "r", encoding="utf-8") as f:
+                data = json.load(f)
+
+            for item in data:
+                # Reconstruct DecisionContext
+                context_data = item.get("context", {})
+                decision_context = DecisionContext(
+                    situation_type=context_data.get("situation_type", "general"),
+                    user_goal=context_data.get("user_goal", ""),
+                    recent_history=context_data.get("recent_history", []),
+                    success_rate=context_data.get("success_rate", 0.5),
+                    time_pressure=context_data.get("time_pressure", 0.5),
+                    complexity=context_data.get("complexity", 0.5),
+                )
+
+                # Reconstruct Decision
+                decision = Decision(
+                    decision_id=item["decision_id"],
+                    action_type=ActionType(item["action_type"]),
+                    target=item.get("target"),
+                    confidence=ConfidenceLevel(item["confidence"]),
+                    reason=item.get("reason", ""),
+                    context=decision_context,
+                    outcome=item.get("outcome"),
+                    timestamp=item.get("timestamp", ""),
+                )
+
+                self._decisions.append(decision)
+
+        except Exception:
+            # If loading fails, start with empty history
+            pass
 
     def _save_decision_history(self) -> None:
         """Save decision history to storage."""

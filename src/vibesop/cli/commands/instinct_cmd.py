@@ -133,6 +133,7 @@ def _do_learn(
 
     # Create and record the decision
     from vibesop.workflow.instinct import Decision
+    from datetime import datetime
     import uuid
 
     recorded_decision = Decision(
@@ -143,8 +144,11 @@ def _do_learn(
         reason=f"User chose: {decision}",
         context=decision_context,
         outcome=None,
-        timestamp="",
+        timestamp=datetime.now().isoformat(),
     )
+
+    # Add to decision history (required for persistence)
+    manager._decisions.append(recorded_decision)
 
     # Record outcome
     manager.record_outcome(recorded_decision, success, outcome)
