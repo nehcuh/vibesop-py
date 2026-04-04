@@ -1,0 +1,43 @@
+{
+  "workflow_id": "workflow-d72b69fb-d3df-42cd-9ec0-6aabddecbba9",
+  "workflow_name": "e2e-test-workflow",
+  "workflow_version": "1.0.0",
+  "status": "completed",
+  "current_stage": null,
+  "stage_states": {
+    "validate": "pending",
+    "process": "pending",
+    "report": "pending"
+  },
+  "context": {
+    "input": {
+      "test": "data"
+    },
+    "current_stage": null,
+    "stage_results": {},
+    "metadata": {},
+    "created_at": "2026-04-04T07:35:18.911258",
+    "updated_at": "2026-04-04T07:35:18.911259"
+  },
+  "result": {
+    "success": true,
+    "workflow_name": "e2e-test-workflow",
+    "completed_stages": [
+      "validate",
+      "process",
+      "report"
+    ],
+    "failed_stages": [],
+    "skipped_stages": [],
+    "final_context": {
+      "done": true
+    },
+    "execution_time_seconds": 1.5,
+    "errors": [],
+    "metadata": {}
+  },
+  "started_at": "2026-04-04T07:35:18.911345",
+  "completed_at": "2026-04-04T07:35:18.911818",
+  "error": null,
+  "metadata": {}
+}

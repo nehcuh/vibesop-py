@@ -1,0 +1,48 @@
+{
+  "workflow_id": "workflow-c1a9c094-7c93-4ca9-ad65-2d19982bbf56",
+  "workflow_name": "security-review",
+  "workflow_version": "1.0.0",
+  "status": "completed",
+  "current_stage": null,
+  "stage_states": {
+    "scan": "pending",
+    "analyze": "pending",
+    "prioritize": "pending",
+    "report": "pending",
+    "remediate": "pending"
+  },
+  "context": {
+    "input": {},
+    "current_stage": null,
+    "stage_results": {},
+    "metadata": {},
+    "created_at": "2026-04-04T08:40:45.152032",
+    "updated_at": "2026-04-04T08:40:45.152034"
+  },
+  "result": {
+    "success": true,
+    "workflow_name": "security-review",
+    "completed_stages": [],
+    "failed_stages": [],
+    "skipped_stages": [],
+    "final_context": {
+      "input": {},
+      "current_stage": null,
+      "stage_results": {},
+      "metadata": {},
+      "created_at": "2026-04-04T08:40:45.152032",
+      "updated_at": "2026-04-04T08:40:45.152034"
+    },
+    "execution_time_seconds": 0.0003571510314941406,
+    "errors": [],
+    "metadata": {
+      "workflow_version": "1.0.0",
+      "total_stages": 5,
+      "strategy": "sequential"
+    }
+  },
+  "started_at": "2026-04-04T08:40:45.152071",
+  "completed_at": "2026-04-04T08:40:45.152844",
+  "error": null,
+  "metadata": {}
+}

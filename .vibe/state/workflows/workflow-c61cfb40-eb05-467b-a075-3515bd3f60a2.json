@@ -1,0 +1,35 @@
+{
+  "workflow_id": "workflow-c61cfb40-eb05-467b-a075-3515bd3f60a2",
+  "workflow_name": "state-test",
+  "workflow_version": "1.0.0",
+  "status": "completed",
+  "current_stage": null,
+  "stage_states": {
+    "stage1": "pending"
+  },
+  "context": {
+    "input": {},
+    "current_stage": null,
+    "stage_results": {},
+    "metadata": {},
+    "created_at": "2026-04-04T07:39:39.673708",
+    "updated_at": "2026-04-04T07:39:39.673710"
+  },
+  "result": {
+    "success": true,
+    "workflow_name": "state-test",
+    "completed_stages": [
+      "stage1"
+    ],
+    "failed_stages": [],
+    "skipped_stages": [],
+    "final_context": {},
+    "execution_time_seconds": 1.0,
+    "errors": [],
+    "metadata": {}
+  },
+  "started_at": "2026-04-04T07:39:39.673731",
+  "completed_at": "2026-04-04T07:39:39.674090",
+  "error": null,
+  "metadata": {}
+}

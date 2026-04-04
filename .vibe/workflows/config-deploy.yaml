@@ -1,0 +1,69 @@
+name: config-deploy
+description: Deploy configuration with validation and verification
+version: 1.0.0
+stages:
+  - name: validate
+    description: Validate configuration manifest and schema
+    required: true
+    timeout_seconds: 30
+    retry_count: 3
+    metadata:
+      skill_id: /config/validate
+      category: validation
+
+  - name: backup
+    description: Backup existing configuration before deployment
+    dependencies:
+      - validate
+    required: true
+    timeout_seconds: 60
+    metadata:
+      skill_id: /config/backup
+      category: backup
+
+  - name: render
+    description: Render configuration files from templates
+    dependencies:
+      - backup
+    required: true
+    timeout_seconds: 90
+    retry_count: 2
+    metadata:
+      skill_id: /config/render
+      category: rendering
+
+  - name: install
+    description: Install configuration to target locations
+    dependencies:
+      - render
+    required: true
+    timeout_seconds: 60
+    metadata:
+      skill_id: /config/install
+      category: deployment
+
+  - name: verify
+    description: Verify installation and check for errors
+    dependencies:
+      - install
+    required: true
+    timeout_seconds: 60
+    retry_count: 3
+    metadata:
+      skill_id: /config/verify
+      category: validation
+
+  - name: rollback
+    description: Rollback to previous configuration if verification fails
+    dependencies:
+      - verify
+    required: false
+    timeout_seconds: 60
+    metadata:
+      skill_id: /config/rollback
+      category: recovery
+      trigger_on_failure: true
+strategy: sequential
+timeout_seconds: 600
+max_parallel: 1
+stop_on_first_failure: false
