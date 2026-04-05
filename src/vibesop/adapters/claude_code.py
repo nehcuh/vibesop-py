@@ -279,7 +279,7 @@ class ClaudeCodeAdapter(PlatformAdapter):
             JSON schema as a dictionary
         """
         return {
-            "$schema": "http://json-schema.org/draft-07/schema#",
+            "$schema": "https://json.schemastore.org/claude-code-settings.json",
             "title": "Claude Code Settings",
             "type": "object",
             "properties": {
