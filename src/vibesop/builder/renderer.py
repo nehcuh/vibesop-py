@@ -43,14 +43,17 @@ class ConfigRenderer:
     def __init__(
         self,
         on_progress: Callable[[str, str, int], None] | None = None,
+        project_root: str | Path = ".",
     ) -> None:
         """Initialize the config renderer.
 
         Args:
             on_progress: Optional callback for progress updates
                            Signature: (stage, message, percent)
+            project_root: Path to VibeSOP project root (contains core/skills/)
         """
         self.on_progress = on_progress
+        self._project_root = Path(project_root).resolve()
 
     def render(
         self,
@@ -115,6 +118,27 @@ class ConfigRenderer:
                 success=False,
                 errors=[f"Unexpected error: {e}"],
             )
+
+    def render_config_only(
+        self,
+        manifest: Manifest,
+        output_dir: Path,
+    ) -> RenderResult:
+        """Render only config files (CLAUDE.md, rules/, docs/), not skills.
+
+        This is used by the installer which handles skills separately
+        via SkillStorage.sync_project_skills().
+
+        Args:
+            manifest: Configuration manifest
+            output_dir: Output directory for config files
+
+        Returns:
+            RenderResult with files created and any warnings/errors
+        """
+        # For now, this is the same as render() since adapters
+        # handle config and skills separately anyway
+        return self.render(manifest, output_dir)
 
     def render_multiple(
         self,
@@ -191,6 +215,9 @@ class ConfigRenderer:
             raise ValueError(msg)
 
         adapter_class = self._adapters[platform]
+        # Pass project_root to ClaudeCodeAdapter for skill content lookup
+        if platform == "claude-code":
+            return adapter_class(project_root=self._project_root)
         return adapter_class()
 
     def _notify_progress(self, stage: str, message: str, percent: int) -> None:

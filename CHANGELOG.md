@@ -7,6 +7,65 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [3.0.0] - 2026-04-05
+
+### Major Release - Unified Architecture
+
+This is a **major refactor** that consolidates duplicate abstractions and provides a clean, unified interface for routing and matching. **This release contains breaking changes.**
+
+### Added
+- **UnifiedRouter**: Single entry point for all routing operations
+- **Matching Infrastructure**: `vibesop.core.matching` module with:
+  - `IMatcher` protocol for consistent matcher interface
+  - `KeywordMatcher`, `TFIDFMatcher`, `EmbeddingMatcher`, `LevenshteinMatcher`
+  - Unified tokenization with CJK support
+  - Similarity calculation (cosine, dot product, euclidean, manhattan)
+  - TF-IDF calculator with scikit-learn style fit/transform
+- **ConfigManager**: Multi-source configuration with priority (defaults → global → project → env → CLI)
+- **RoutingConfig, SecurityConfig, SemanticConfig**: Type-safe configuration models
+- **External Skill Loading**: `vibesop.core.skills.external_loader` with:
+  - `ExternalSkillLoader` for discovering skills from `~/.claude/skills/`
+  - Support for third-party skill packs (superpowers, gstack)
+  - Automatic skill discovery from multiple sources
+- **Security Auditor**: `vibesop.security.skill_auditor` with:
+  - `SkillSecurityAuditor` for validating external skills
+  - 8 threat pattern detections (prompt injection, role hijacking, etc.)
+  - Path whitelist to prevent traversal attacks
+  - SKILL-INJECT attack protection
+- **Principles document**: `docs/PRINCIPLES.md` defining project philosophy
+- **Migration guide**: `docs/MIGRATION_V3.md` for v2.x → v3.0 migration
+
+### Changed
+- **CLI**: `vibe auto` replaced by `vibe route` (unified interface)
+- **CLI**: Added `--min-confidence` option to `vibe route`
+- **CLI**: Added `--json` output option to `vibe route`
+- **Python API**:
+  - `vibesop.triggers.*` → `vibesop.core.matching.*` (deprecated)
+  - `SkillRouter` → `UnifiedRouter`
+  - `KeywordDetector` → `KeywordMatcher`
+
+### Deprecated
+- `vibesop.triggers` module (use `vibesop.core.matching` instead)
+- `vibesop.core.routing.engine.SkillRouter` (use `UnifiedRouter` instead)
+- `vibesop.core.routing.semantic.SemanticMatcher` (use `EmbeddingMatcher` instead)
+- `vibesop.core.config.ConfigLoader` (use `vibesop.core.config.ConfigManager` instead)
+
+### Removed
+- `core/policies/skill-selection.yaml` (consolidated into ConfigManager)
+- `core/policies/task-routing.yaml` (consolidated into ConfigManager)
+- Multiple duplicate tokenization implementations
+- Multiple duplicate similarity calculation implementations
+
+### Fixed
+- Import conflicts between `core/config.py` and `core/config/` package
+- Matcher config not using routing min_confidence threshold
+- Missing namespace in MatchResult metadata
+
+### Migration
+See `docs/MIGRATION_V3.md` for detailed migration instructions.
+
+---
+
 ## [2.2.0] - 2026-04-04
 
 ### Engineering Quality Release

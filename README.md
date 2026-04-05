@@ -1,12 +1,12 @@
 # VibeSOP - Python Edition
 
-> **Modern Python implementation** of the battle-tested AI-assisted development workflow SOP.
-> **v2.1.0** - Now with true semantic understanding powered by Sentence Transformers!
+> **Production-Grade AI-Assisted Development Workflow SOP**
+> **v3.0.0** - Unified architecture with consolidated matching and routing
 
 [![Python](https://img.shields.io/badge/Python-3.12+-blue.svg)](https://www.python.org/downloads/)
 [![Ruff](https://img.shields.io/badge/Ruff-Enabled-black.svg)](https://github.com/astral-sh/ruff)
 [![Pyright](https://img.shields.io/badge/Pyright-Strict-blue.svg)](https://github.com/microsoft/pyright)
-[![Version](https://img.shields.io/badge/Version-2.1.0-green.svg)](https://github.com/nehcuh/vibesop-py/releases/tag/v2.1.0)
+[![Version](https://img.shields.io/badge/Version-3.0.0-green.svg)](https://github.com/nehcuh/vibesop-py)
 
 ## 🚀 Quick Start
 
@@ -14,356 +14,251 @@
 # Clone and setup
 git clone https://github.com/nehcuh/vibesop-py.git && cd vibesop-py
 
-# Using uv (recommended - 10-100x faster than pip)
+# Using uv (recommended)
 uv sync
-
-# Or using pip
-python -m venv .venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-pip install -e ".[dev]"
 
 # Run CLI
 vibe --help
 ```
 
-## ✨ What's New in v2.1.0
+## ✨ What's New in v3.0.0
 
-### 🧠 Semantic Recognition (NEW!)
+### 🏗️ Unified Architecture
 
-**True semantic understanding** using Sentence Transformers - not just keyword matching!
+**v3.0** is a major refactor that consolidates duplicate abstractions and provides a clean, unified interface:
+
+- **UnifiedRouter**: Single entry point for all routing operations
+- **Matching Infrastructure**: Consolidated tokenization, similarity, and TF-IDF
+- **ConfigManager**: Multi-source configuration with clear priority
+- **Deprecated**: `vibesop.triggers` (use `vibesop.core.matching` instead)
+
+### 🔀 Unified Routing
 
 ```bash
-# Enable semantic matching
-vibe auto "帮我检查代码安全问题" --semantic
+# One command for all routing (replaces vibe auto)
+vibe route "debug this error"
 
-# Understands synonyms and varied phrasing
-vibe auto "scan vulnerabilities" --semantic
-vibe auto "check for security issues" --semantic
-vibe auto "analyze security" --semantic
-# All match to: security/scan ✨
+# With options
+vibe route "help me plan" --min-confidence 0.2
+vibe route "review code" --json
 
-# Multilingual support
-vibe auto "扫描漏洞" --semantic  # Chinese
-vibe auto "scan vulnerabilities" --semantic  # English
-# Both work perfectly ✨
+# Chinese support
+vibe route "扫描安全漏洞"
 ```
 
-**Key Improvements**:
-- 🎯 **Accuracy**: 70% → 89% (+27% overall)
-- 🔄 **Synonyms**: 45% → 87% (+93% improvement)
-- 🌍 **Multilingual**: 30% → 82% (+173% improvement)
-- ⚡ **Fast**: < 20ms per query (vs 2.3ms traditional)
-- ✅ **Backward Compatible**: Opt-in, no breaking changes
+**Routing Layers** (tried in priority order):
+1. **Keyword** (<1ms): Fast keyword matching
+2. **TF-IDF** (~5ms): Semantic similarity
+3. **Embedding** (~20ms): Vector matching (optional)
+4. **Levenshtein** (~10ms): Fuzzy matching fallback
 
-**Installation**:
-```bash
-# Basic (traditional matching only)
-pip install vibesop
+## 📚 Core Concepts
 
-# With semantic features
-pip install vibesop[semantic]
+### Principles
+
+VibeSOP is built on these principles:
+
+1. **Production-First**: Every feature is validated in real projects
+2. **Structure > Prompting**: Configuration over prompt engineering
+3. **Memory > Intelligence**: Record solutions, avoid repeating mistakes
+4. **Verification > Confidence**: Don't claim done without proof
+5. **Portable > Specific**: Core is portable, adapters for platforms
+
+### Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                      UnifiedRouter                          │
+│  (Single entry point for all routing operations)            │
+├─────────────────────────────────────────────────────────────┤
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐  │
+│  │   Keyword   │  │   TF-IDF    │  │   Embedding (opt)   │  │
+│  │   Matcher   │  │   Matcher   │  │     Matcher         │  │
+│  └─────────────┘  └─────────────┘  └─────────────────────┘  │
+├─────────────────────────────────────────────────────────────┤
+│              Matching Infrastructure                        │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐  │
+│  │ Tokenizers  │  │ Similarity  │  │      TF-IDF         │  │
+│  │  (CJK, etc) │  │  (Cosine)   │  │   Calculator        │  │
+│  └─────────────┘  └─────────────┘  └─────────────────────┘  │
+├─────────────────────────────────────────────────────────────┤
+│                   ConfigManager                             │
+│  (defaults → global → project → env → cli)                 │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-### 🎯 Intelligent Trigger System (v2.0)
+## 🛠️ Usage
 
-### 🎯 Intelligent Trigger System
-
-Just describe what you want in plain language - VibeSOP automatically detects your intent and executes the right skill:
+### Basic Routing
 
 ```bash
-# English
-vibe auto "scan for security vulnerabilities"
-vibe auto "deploy configuration to production"
-vibe auto "run tests"
+# Find the best skill for your query
+vibe route "help me debug this error"
 
-# Chinese
-vibe auto "扫描安全漏洞"
-vibe auto "部署配置"
-vibe auto "运行测试"
+# Show more alternatives
+vibe route "deploy" --top 5
 
-# Mixed
-vibe auto "帮我 scan security issues"
+# Lower confidence threshold
+vibe route "test" --min-confidence 0.2
+
+# JSON output
+vibe route "review" --json
 ```
 
-**30 Predefined Patterns** across 5 categories:
-- 🔒 **Security** (5): scan, analyze, audit, fix, report
-- ⚙️ **Config** (5): deploy, validate, render, diff, backup
-- 🛠️ **Dev** (8): build, test, debug, refactor, lint, format, install, clean
-- 📚 **Docs** (6): generate, update, format, readme, api, changelog
-- 📁 **Project** (6): init, migrate, audit, upgrade, clean, status
+### Configuration
 
-### 🔄 Workflow Orchestration
+Configuration is loaded from multiple sources (priority order):
 
-Define and execute multi-stage workflows with dependency management:
+1. **Built-in defaults**: `vibesop/core/config/manager.py`
+2. **Global config**: `~/.vibe/config.yaml`
+3. **Project config**: `.vibe/config.yaml`
+4. **Environment**: `VIBE_ROUTING_MIN_CONFIDENCE=0.2`
+5. **CLI**: `--min-confidence 0.2`
 
-```bash
-# List workflows
-vibe workflow list
+Example `~/.vibe/config.yaml`:
 
-# Execute workflow
-vibe workflow run .vibe/workflows/security-review.yaml
+```yaml
+routing:
+  min_confidence: 0.3
+  enable_embedding: false
+  use_cache: true
 
-# Resume interrupted workflow
-vibe workflow resume <workflow-id>
+security:
+  scan_external: true
+  require_audit: true
+
+semantic:
+  enabled: false
+  model: "paraphrase-multilingual-MiniLM-L12-v2"
 ```
 
-### ⚡ Performance
+### Skills
 
-**Traditional Matching** (v2.0):
-- **Detection Speed**: 2.3ms (4x faster than target)
-- **Throughput**: 427 queries/second
-- **Memory Usage**: Minimal (50MB)
-
-**Semantic Matching** (v2.1.0):
-- **Detection Speed**: 12.4ms average (< 20ms target)
-- **Throughput**: 81 queries/second
-- **Memory Overhead**: +200MB (with models loaded)
-- **Accuracy**: 89% (vs 70% traditional)
-
-**Key Metrics**:
-| Feature | v2.0 | v2.1 Semantic | Improvement |
-|---------|------|--------------|-------------|
-| Overall Accuracy | 70% | 89% | +27% |
-| Synonym Detection | 45% | 87% | +93% |
-| Multilingual | 30% | 82% | +173% |
-| Varied Phrasing | 55% | 84% | +53% |
-
-**Optimization Features**:
-- ✅ Lazy loading (no startup cost)
-- ✅ Vector caching (95%+ hit rate)
-- ✅ Batch processing (500+ texts/sec)
-- ✅ Half precision FP16 (40% memory reduction)
-- ✅ Model caching (global cache)
-- ✅ Disk persistence (survives restarts)
-
-## 🎯 Design Philosophy
-
-- **Python 3.12+**: Leverages modern type system and performance improvements
-- **Pydantic v2**: Runtime validation with compile-time type hints
-- **uv**: Blazing fast package manager (written in Rust)
-- **Type Safety**: Strict type checking with basedpyright
-- **Modern Tooling**: Ruff for linting/formatting (100x faster than flake8/black)
-
-## 🛠️ Development
+Skills are discovered from:
+- Built-in: `core/skills/`
+- Project: `.vibe/skills/`
+- External: `~/.claude/skills/`, `~/.config/skills/`
 
 ```bash
-# Install dev dependencies
-uv pip install -e ".[dev]"
+# List available skills
+vibe skills list
 
-# Type checking (requires pyright or mypy)
-pyright src/vibesop
-# or
-mypy src/vibesop
+# Show skill details
+vibe skills show systematic-debugging
+```
 
-# Linting
-uv run ruff check
+### Security
 
-# Auto-fix issues
-uv run ruff check --fix
+External skills are automatically audited before loading:
 
-# Formatting
-uv run ruff format
+```python
+from vibesop.security import SkillSecurityAuditor
 
-# Run tests
+auditor = SkillSecurityAuditor()
+result = auditor.audit_skill_file(path/to/skill.md)
+
+if result.is_safe:
+    print("Safe to load")
+else:
+    print(f"Blocked: {result.reason}")
+```
+
+**Threat Detection**:
+- Prompt injection ("ignore all instructions")
+- Role hijacking ("you are now admin")
+- Command injection (`<|system.exec()`)
+- Instruction override
+- Privilege escalation
+- Data exfiltration attempts
+
+## 🧩 Development
+
+### Project Structure
+
+```
+src/vibesop/
+├── core/
+│   ├── matching/        # Unified matching infrastructure
+│   │   ├── base.py      # Protocols and models
+│   │   ├── tokenizers.py
+│   │   ├── similarity.py
+│   │   ├── tfidf.py
+│   │   └── strategies.py
+│   ├── routing/
+│   │   └── unified.py   # UnifiedRouter
+│   ├── config/
+│   │   └── manager.py   # ConfigManager
+│   └── skills/          # Skill management
+├── cli/                 # CLI commands
+└── adapters/            # Platform adapters
+```
+
+### Testing
+
+```bash
+# Run all tests
 uv run pytest
 
-# Run tests with coverage
-uv run pytest --cov=src/vibesop --cov-report=html
+# Run specific test
+uv run pytest tests/unit/matching/test_matchers.py
 
-# Verify type checking
-uv run pyright
+# With coverage
+uv run pytest --cov=vibesop --cov-report=html
 ```
 
-## 📦 Project Structure
+## 📖 Migration Guide (v2.x → v3.0)
 
-```
-vibesop-py/
-├── src/vibesop/              # Package source
-│   ├── cli/                  # CLI commands (Typer)
-│   ├── core/                 # Core business logic
-│   │   ├── models/           # Pydantic models
-│   │   ├── routing/          # AI routing system
-│   │   └── config/           # Configuration management
-│   ├── llm/                  # LLM clients (OpenAI, Anthropic)
-│   ├── semantic/             # Semantic recognition (v2.1.0) ⭐ NEW
-│   │   ├── encoder.py        # Text encoder
-│   │   ├── similarity.py     # Similarity calculator
-│   │   ├── cache.py          # Vector cache
-│   │   ├── models.py         # Data models
-│   │   └── strategies.py     # Matching strategies
-│   ├── skills/               # Skill management
-│   ├── triggers/             # Trigger detection system
-│   └── utils/                # Utilities
-├── tests/                    # Test suite
-│   ├── semantic/             # Semantic tests (v2.1.0) ⭐ NEW
-│   │   ├── test_encoder.py   # Encoder tests
-│   │   ├── test_similarity.py # Similarity tests
-│   │   ├── test_cache.py     # Cache tests
-│   │   ├── test_strategies.py # Strategy tests
-│   │   ├── test_e2e.py       # E2E tests
-│   │   └── benchmarks.py     # Performance benchmarks
-│   ├── unit/                 # Unit tests
-│   └── integration/          # Integration tests
-├── scripts/                  # Utility scripts
-│   └── sync-core.sh          # Sync core YAML from Ruby version
-├── docs/                     # Documentation
-│   └── semantic/            # Semantic docs (v2.1.0) ⭐ NEW
-│       ├── guide.md         # User guide
-│       └── api.md           # API reference
-├── pyproject.toml            # Project configuration
-└── README.md                 # This file
-```
+### Breaking Changes
 
-## 🔄 v2.0 Features
+| v2.x | v3.0 |
+|------|------|
+| `vibe auto "query"` | `vibe route "query"` |
+| `from vibesop.triggers` | `from vibesop.core.matching` |
+| `KeywordDetector` | `KeywordMatcher` |
+| `SkillRouter` | `UnifiedRouter` |
 
-### Phase 1: Workflow Orchestration Engine ✅
-- [x] WorkflowPipeline with state management
-- [x] 3 execution strategies (sequential, parallel, pipeline)
-- [x] Dependency resolution and validation
-- [x] State persistence and recovery
-- [x] CLI workflow commands
-- [x] 120+ tests
-
-### Phase 2: Intelligent Trigger System ✅
-- [x] 30 predefined patterns across 5 categories
-- [x] Multi-strategy detection (keywords, regex, semantic)
-- [x] Bilingual support (English + Chinese)
-- [x] `vibe auto` command for automatic execution
-- [x] 195 new tests (315 total)
-- [x] 2,100+ lines documentation
-
-**Total: 315 tests, 94-100% coverage on core modules**
-
-## 🔄 v1.0 Foundation
-
-All v1.0 features remain fully supported:
-
-- [x] Project structure and tooling
-- [x] Type system setup (Pydantic v2)
-- [x] Core models (Skill, Route, Config)
-- [x] CLI framework (Typer)
-- [x] AI-powered routing (5-layer system)
-- [x] LLM clients (Anthropic, OpenAI)
-- [x] Skill management (filesystem discovery)
-- [x] Memory system (conversation tracking)
-- [x] Checkpoint system (work state persistence)
-- [x] Preference learning (personalized routing)
-
-## 📚 Documentation
-
-For complete documentation, see the [docs/](docs/) directory.
-
-**User Guides**:
-- **[CLI Reference](docs/user/cli-reference.md)** — Full command reference
-- **[Trigger User Guide](docs/triggers/guide.md)** — Intent detection with examples
-- **[Trigger API](docs/triggers/api.md)** — API documentation
-- **[Trigger Patterns](docs/triggers/patterns.md)** — All 30 predefined patterns
-- **[Semantic Guide](docs/semantic/guide.md)** — Semantic recognition setup
-- **[Semantic API](docs/semantic/api.md)** — Semantic matching API
-
-**Developer Docs**:
-- **[Roadmap Index](docs/dev/roadmap-index.md)** — Project roadmap
-- **[Contributing](CONTRIBUTING.md)** — How to contribute
-
-## 🎨 Key Features
-
-### Intelligent Intent Detection
-
-```bash
-# Automatic intent detection (NEW in v2.0)
-$ vibe auto "scan for security vulnerabilities"
-
-🔍 Detecting intent...
-✅ Matched: security/scan (87% confidence)
-📊 Strategy: keywords (40%), regex (30%), semantic (30%)
-🚀 Executing: /security/scan skill
-
-# Works in Chinese too!
-$ vibe auto "扫描安全漏洞"
-
-🔍 检测意图...
-✅ 匹配: security/scan (82% confidence)
-🚀 执行: /security/scan skill
-```
-
-### AI-Powered Skill Routing
-
-```bash
-$ vibe route "帮我评审代码"
-
-📥 Input: 帮我评审代码
-✅ Matched: /review (95% confidence)
-   Source: gstack
-   Layer: AI Triage
-```
-
-### Modern Type Safety
+### Code Migration
 
 ```python
-from pydantic import BaseModel, Field, field_validator
+# Old (v2.x)
+from vibesop.triggers import KeywordDetector
+from vibesop.core.routing.engine import SkillRouter
 
-class SkillRoute(BaseModel):
-    """Skill routing result with runtime validation."""
+detector = KeywordDetector()
+router = SkillRouter()
 
-    skill_id: str = Field(..., min_length=1)
-    confidence: float = Field(ge=0.0, le=1.0)
-    layer: Literal[0, 1, 2, 3, 4]
+# New (v3.0)
+from vibesop.core.matching import KeywordMatcher
+from vibesop.core.routing import UnifiedRouter
 
-    @field_validator('skill_id')
-    @classmethod
-    def validate_skill_id(cls, v: str) -> str:
-        if not v.startswith('/'):
-            raise ValueError('skill_id must start with /')
-        return v
+matcher = KeywordMatcher()
+router = UnifiedRouter()
+result = router.route("query")
 ```
 
-## 📝 Development Guidelines
+### Deprecated Modules
 
-### Type Safety First
+- `vibesop.triggers` → Use `vibesop.core.matching`
+- `vibesop.semantic` → Use `vibesop.core.matching.EmbeddingMatcher`
 
-```python
-# ✅ Good: Full type annotations
-def route_request(request: RoutingRequest) -> RoutingResult:
-    """Route a request to the appropriate skill."""
-    ...
-
-# ❌ Bad: Missing types
-def route_request(request):
-    ...
-```
-
-### Use Pydantic for All Data Models
-
-```python
-from pydantic import BaseModel
-
-class Config(BaseModel):
-    """Configuration with runtime validation."""
-    debug: bool = False
-    log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
-```
-
-### Async First
-
-```python
-import asyncio
-
-async def call_llm(prompt: str) -> str:
-    """Call LLM asynchronously."""
-    # Use httpx for async HTTP
-    async with httpx.AsyncClient() as client:
-        response = await client.post(...)
-        return response.json()
-```
+These will be removed in v4.0.0.
 
 ## 🤝 Contributing
 
-This is the Python edition of VibeSOP. For the Ruby version, see [vibesop](https://github.com/nehcuh/vibesop).
+Contributions are welcome! Please read our contributing guidelines and submit PRs.
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Add tests
+5. Submit a PR
 
 ## 📄 License
 
-MIT - see [LICENSE](LICENSE) file.
+MIT License - see LICENSE file for details
 
 ## 🙏 Acknowledgments
 
-Based on the battle-tested Ruby implementation at [vibesop](https://github.com/nehcuh/vibesop).
+- Original VibeSOP concept and Ruby implementation
+- Inspiration from [obra/superpowers](https://github.com/obra/superpowers)
+- Inspiration from [garrytan/gstack](https://github.com/garrytan/gstack)

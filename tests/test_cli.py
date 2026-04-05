@@ -148,25 +148,25 @@ class TestSkillsCommand:
 
     def test_skills_command(self) -> None:
         """Test skills list command."""
-        result = runner.invoke(app, ["skills"])
+        result = runner.invoke(app, ["skills", "list"])
 
         assert result.exit_code == 0
 
-    def test_skills_with_namespace(self) -> None:
-        """Test skills filtered by namespace."""
-        result = runner.invoke(app, ["skills", "--namespace", "builtin"])
+    def test_skills_with_all(self) -> None:
+        """Test skills list with --all option."""
+        result = runner.invoke(app, ["skills", "list", "--all"])
 
         assert result.exit_code == 0
 
-    def test_skills_with_verbose(self) -> None:
-        """Test skills with verbose output."""
-        result = runner.invoke(app, ["skills", "--verbose"])
+    def test_skills_with_platform(self) -> None:
+        """Test skills filtered by platform."""
+        result = runner.invoke(app, ["skills", "list", "--platform", "claude-code"])
 
         assert result.exit_code == 0
 
     def test_skills_short_options(self) -> None:
         """Test skills with short options."""
-        result = runner.invoke(app, ["skills", "-n", "builtin", "-v"])
+        result = runner.invoke(app, ["skills", "list", "-a", "-p", "claude-code"])
 
         assert result.exit_code == 0
 

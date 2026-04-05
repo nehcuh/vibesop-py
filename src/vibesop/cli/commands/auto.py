@@ -3,6 +3,9 @@
 This command provides automatic keyword detection and skill/workflow
 activation based on natural language input.
 
+DEPRECATED (v3.0.0): This command is deprecated. Use 'vibe route' instead.
+The 'vibe auto' command will be removed in v4.0.0.
+
 Usage:
     vibe auto <query>
     vibe auto "scan for security issues"
@@ -14,15 +17,15 @@ Usage:
 from __future__ import annotations
 
 import json
+import warnings
+from pathlib import Path
 from typing import Any, Optional
 
 import typer
 from rich.console import Console
 from rich.panel import Panel
 
-from vibesop.triggers import DEFAULT_PATTERNS, KeywordDetector, SkillActivator
-from vibesop.triggers.models import PatternCategory, PatternMatch
-from vibesop.semantic.models import EncoderConfig
+from vibesop.core.routing import UnifiedRouter, RoutingConfig
 
 console = Console()
 
@@ -70,13 +73,24 @@ def auto(
         help="Semantic similarity threshold (0.0 - 1.0, default: 0.7)",
     ),
 ) -> None:
-    """Automatically detect intent and execute appropriate skill/workflow.
+    """[DEPRECATED] Automatically detect intent and execute appropriate skill.
 
-    This command uses intelligent keyword detection to understand what you
-    want to do and automatically activates the appropriate skill or workflow.
+    **DEPRECATED (v3.0.0)**: This command is deprecated. Use 'vibe route' instead.
+    The 'vibe auto' command will be removed in v4.0.0.
+
+    Migration:
+        OLD: vibe auto "scan for security issues"
+        NEW: vibe route "scan for security issues"
+
+    For automatic skill execution, use the skill directly:
+        OLD: vibe auto "debug error"  # (would auto-execute)
+        NEW: vibe skills execute systematic-debugging "debug error"
+
+    This command currently delegates to the new UnifiedRouter for backward
+    compatibility, but please migrate to 'vibe route' for future support.
 
     \\b
-    Examples:
+    Examples (deprecated):
         # Detect and execute security scan
         vibe auto "scan for security issues"
 
@@ -100,31 +114,45 @@ def auto(
 
         # Adjust confidence threshold
         vibe auto "test" --min-confidence 0.5
-
-    \\b
-    How it works:
-        1. Analyzes your query using 30+ predefined patterns
-        2. Matches against keywords, regex patterns, and semantic similarity
-        3. Activates the appropriate skill or workflow
-        4. Falls back to semantic routing if needed
-
-    \\b
-    Semantic matching (v2.1.0):
-        Enable with --semantic flag for improved synonym detection and
-        multilingual support. Uses sentence transformer embeddings for
-        true semantic understanding (not just TF-IDF).
-
-    \\b
-    Pattern categories:
-        - Security: scan, analyze, audit, fix, report
-        - Config: deploy, validate, render, diff, backup
-        - Dev: build, test, debug, refactor, lint, format
-        - Docs: generate, update, format, readme, api, changelog
-        - Project: init, migrate, audit, upgrade, clean, status
     """
+    # Show deprecation warning
+    warnings.warn(
+        "vibe auto is deprecated. Use 'vibe route' instead. "
+        "vibe auto will be removed in v4.0.0.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+
+    console.print(
+        f"\n[yellow]⚠️  'vibe auto' is deprecated. Use 'vibe route' instead.[/yellow]\n"
+    )
+
+    _auto_impl(
+        query=query,
+        input_data=input_data,
+        min_confidence=min_confidence,
+        dry_run=dry_run,
+        verbose=verbose,
+        enable_semantic=enable_semantic,
+        semantic_model=semantic_model,
+        semantic_threshold=semantic_threshold,
+    )
+
+
+def _auto_impl(
+    query: str,
+    input_data: Optional[str] = None,
+    min_confidence: float = 0.3,
+    dry_run: bool = False,
+    verbose: bool = False,
+    enable_semantic: bool = False,
+    semantic_model: str = "paraphrase-multilingual-MiniLM-L12-v2",
+    semantic_threshold: float = 0.7,
+) -> None:
+    """Internal implementation using UnifiedRouter."""
     import asyncio
 
-    console.print(f"\\n[bold cyan]🎯 Intelligent Auto-Execution[/bold cyan]\\n{'=' * 40}\\n")
+    console.print(f"\n[bold cyan]🎯 Intelligent Auto-Execution[/bold cyan]\n{'=' * 40}\n")
 
     # Parse input data
     input_dict: dict[str, Any] = {}
@@ -136,53 +164,57 @@ def auto(
             raise typer.Exit(1)
 
     # Show query
-    console.print(f"[bold]Query:[/bold] {query}\\n")
+    console.print(f"[bold]Query:[/bold] {query}\n")
 
-    # Detect intent
     if verbose:
-        semantic_status = "enabled" if enable_semantic else "disabled"
         console.print(
-            f"[dim]Detecting intent (min confidence: {min_confidence}, "
-            f"semantic: {semantic_status})...[/dim]\\n"
+            f"[dim]Routing query (min confidence: {min_confidence})...[/dim]\n"
         )
 
-    # Initialize semantic config if enabled
-    semantic_config = None
-    if enable_semantic:
-        semantic_config = EncoderConfig(
-            model_name=semantic_model,
-        )
-
-    detector = KeywordDetector(
-        patterns=DEFAULT_PATTERNS,
-        confidence_threshold=min_confidence,
-        enable_semantic=enable_semantic,
-        semantic_config=semantic_config,
+    # Initialize routing config
+    config = RoutingConfig(
+        min_confidence=min_confidence,
+        enable_embedding=enable_semantic,
     )
-    match = detector.detect_best(query, min_confidence=min_confidence)
 
-    if not match:
+    # Route using UnifiedRouter
+    router = UnifiedRouter(
+        project_root=Path.cwd(),
+        config=config,
+    )
+
+    result = router.route(query)
+
+    if not result.has_match:
         _show_no_match_detected(query, min_confidence, verbose)
         raise typer.Exit(1)
 
     # Show match
-    _show_match_details(match, verbose)
+    _show_match_details(result, verbose)
 
     # Dry run
     if dry_run:
-        _show_dry_run(match, input_dict)
+        _show_dry_run(result, input_dict)
         return
 
     # Execute
-    console.print(f"\\n[bold]Executing...[/bold]\\n")
+    console.print(f"\n[bold]Executing...[/bold]\n")
 
     try:
-        # Execute activation
-        activator = SkillActivator()
-        result = asyncio.run(activator.activate(match, input_data=input_dict))
+        # Execute the matched skill
+        from vibesop.core.skills import SkillManager
+
+        manager = SkillManager(project_root=Path.cwd())
+        skill_result = asyncio.run(
+            manager.execute_skill(
+                result.primary.skill_id,
+                query,
+                context=input_dict,
+            )
+        )
 
         # Show result
-        _show_execution_result(result, verbose)
+        _show_execution_result(skill_result, verbose)
 
     except Exception as e:
         console.print(f"[red]✗ Execution failed: {e}[/red]")
@@ -193,139 +225,104 @@ def auto(
         raise typer.Exit(1)
 
 
-def _show_match_details(match: PatternMatch, verbose: bool) -> None:
+def _show_match_details(result: Any, verbose: bool) -> None:
     """Show detected pattern match details.
 
     Args:
-        match: Pattern match result
+        result: Routing result from UnifiedRouter
         verbose: Show detailed output
     """
-    # Find pattern
-    from vibesop.triggers import DEFAULT_PATTERNS
+    primary = result.primary
 
-    pattern = next((p for p in DEFAULT_PATTERNS if p.pattern_id == match.pattern_id), None)
-
-    if pattern:
-        # Category emoji
-        category_emoji = _get_category_emoji(pattern.category)
-
-        console.print(
-            Panel(
-                f"[{category_emoji}] [bold cyan]{pattern.name}[/bold cyan]\\n\\n"
-                f"[dim]ID:[/dim] {match.pattern_id}\\n"
-                f"[dim]Category:[/dim] {pattern.category.value}\\n"
-                f"[dim]Confidence:[/dim] {match.confidence:.2%}\\n"
-                f"[dim]Description:[/dim] {pattern.description}\\n"
-                + (
-                    f"[dim]Keywords:[/dim] {', '.join(match.matched_keywords[:5])}\\n"
-                    if match.matched_keywords
-                    else ""
-                )
-                + (
-                    f"[dim]Regex:[/dim] {len(match.matched_regex)} patterns matched\\n"
-                    if match.matched_regex
-                    else ""
-                )
-                + (
-                    f"[dim]Semantic:[/dim] {match.semantic_score:.2%} "
-                    f"({match.semantic_method or 'N/A'})\\n"
-                    if match.semantic_score
-                    else ""
-                )
-                + (f"[dim]Model:[/dim] {match.model_used or 'N/A'}\\n" if match.model_used else "")
-                + (
-                    f"[dim]Encoding Time:[/dim] {match.encoding_time * 1000:.1f}ms\\n"
-                    if match.encoding_time
-                    else ""
-                ),
-                title="[bold green]✓ Intent Detected[/bold green]",
-                border_style="green",
-            )
-        )
-
-        if verbose:
-            console.print(f"[dim]Skill ID: {pattern.skill_id}[/dim]")
-            if pattern.workflow_id:
-                console.print(f"[dim]Workflow ID: {pattern.workflow_id}[/dim]")
-
-
-def _show_dry_run(match: PatternMatch, input_data: dict[str, Any]) -> None:
-    """Show dry-run preview.
-
-    Args:
-        match: Pattern match result
-        input_data: Input data for execution
-    """
-    from vibesop.triggers import DEFAULT_PATTERNS
-
-    pattern = next((p for p in DEFAULT_PATTERNS if p.pattern_id == match.pattern_id), None)
-
-    if not pattern:
-        return
-
-    action = "workflow" if pattern.workflow_id else "skill"
+    # Category emoji based on layer
+    layer_emoji = _get_layer_emoji(primary.layer)
 
     console.print(
         Panel(
-            f"[bold yellow]🔍 DRY RUN[/bold yellow]\\n\\n"
-            f"[bold]Action:[/bold] {action.upper()}\\n"
-            f"[bold]Pattern:[/bold] {pattern.name}\\n"
-            f"[bold]Description:[/bold] {pattern.description}\\n\\n"
-            f"[bold]Will execute:[/bold]\\n"
-            f"  • {action.title()}: {pattern.workflow_id or pattern.skill_id}\\n"
-            f"  • Query: {pattern.description}\\n"
-            + (f"  • Input: {json.dumps(input_data, indent=2)}\\n" if input_data else "")
-            + f"\\n[dim]Remove --dry-run to execute.[/dim]",
+            f"[{layer_emoji}] [bold cyan]{primary.skill_id}[/bold cyan]\n\n"
+            f"[dim]Layer:[/dim] {primary.layer.value}\n"
+            f"[dim]Confidence:[/dim] {primary.confidence:.2%}\n"
+            f"[dim]Source:[/dim] {primary.source}\n"
+            f"[dim]Duration:[/dim] {result.duration_ms:.1f}ms\n"
+            + (f"[dim]Metadata:[/dim] {primary.metadata}\n" if verbose and primary.metadata else ""),
+            title="[bold green]✓ Intent Detected[/bold green]",
+            border_style="green",
+        )
+    )
+
+    if verbose and result.alternatives:
+        console.print(f"\n[bold]Alternatives:[/bold]")
+        for i, alt in enumerate(result.alternatives[:3], 1):
+            console.print(f"  {i}. {alt.skill_id} - {alt.confidence:.1%}")
+
+
+def _show_dry_run(result: Any, input_data: dict[str, Any]) -> None:
+    """Show dry-run preview.
+
+    Args:
+        result: Routing result
+        input_data: Input data for execution
+    """
+    primary = result.primary
+
+    console.print(
+        Panel(
+            f"[bold yellow]🔍 DRY RUN[/bold yellow]\n\n"
+            f"[bold]Action:[/bold] SKILL\n"
+            f"[bold]Skill ID:[/bold] {primary.skill_id}\n"
+            f"[bold]Layer:[/bold] {primary.layer.value}\n"
+            f"[bold]Confidence:[/bold] {primary.confidence:.1%}\n\n"
+            f"[bold]Will execute:[/bold]\n"
+            f"  • Skill: {primary.skill_id}\n"
+            f"  • Source: {primary.source}\n"
+            + (f"  • Input: {json.dumps(input_data, indent=2)}\n" if input_data else "")
+            + f"\n[dim]Remove --dry-run to execute.[/dim]",
             title="[bold]Preview[/bold]",
             border_style="yellow",
         )
     )
 
 
-def _show_execution_result(result: dict[str, Any], verbose: bool) -> None:
+def _show_execution_result(skill_result: Any, verbose: bool) -> None:
     """Show execution result.
 
     Args:
-        result: Execution result dict
+        skill_result: Skill execution result
         verbose: Show detailed output
     """
-    if result.get("success"):
-        action = result.get("action", "unknown").upper()
+    # Handle different result formats
+    if isinstance(skill_result, dict):
+        success = skill_result.get("success", True)
+        result_data = skill_result.get("result")
+    elif hasattr(skill_result, "success"):
+        success = skill_result.success
+        result_data = getattr(skill_result, "result", None)
+    else:
+        success = True
+        result_data = skill_result
+
+    if success:
         console.print(
             Panel(
-                f"[bold green]✓ {action} completed successfully[/bold green]\\n\\n"
-                f"[bold]Pattern ID:[/bold] {result.get('pattern_id', 'N/A')}\\n"
+                f"[bold green]✓ Skill completed successfully[/bold green]\n\n"
                 + (
-                    f"[bold]Skill ID:[/bold] {result.get('skill_id', 'N/A')}\\n"
-                    if result.get("skill_id")
-                    else ""
-                )
-                + (
-                    f"[bold]Workflow ID:[/bold] {result.get('workflow_id', 'N/A')}\\n"
-                    if result.get("workflow_id")
-                    else ""
-                )
-                + (
-                    f"[bold]Routed:[/bold] Yes (via semantic routing)\\n"
-                    if result.get("routed")
+                    f"[bold]Result:[/bold]\n{result_data}\n"
+                    if result_data and verbose
                     else ""
                 ),
                 title="[bold green]Success[/bold green]",
                 border_style="green",
             )
         )
-
-        if verbose and result.get("result"):
-            console.print(f"\\n[bold]Result:[/bold]")
-            console.print(result["result"])
-
     else:
-        error = result.get("error", "Unknown error")
+        error = getattr(skill_result, "error", "Unknown error")
+        if isinstance(skill_result, dict):
+            error = skill_result.get("error", "Unknown error")
+
         console.print(
             Panel(
-                f"[bold red]✗ Execution failed[/bold red]\\n\\n"
-                f"[bold]Error:[/bold] {error}\\n\\n"
-                f"[bold]Pattern ID:[/bold] {result.get('pattern_id', 'N/A')}",
+                f"[bold red]✗ Execution failed[/bold red]\n\n"
+                f"[bold]Error:[/bold] {error}\n",
                 title="[bold red]Failure[/bold red]",
                 border_style="red",
             )
@@ -342,66 +339,38 @@ def _show_no_match_detected(query: str, min_confidence: float, verbose: bool) ->
     """
     console.print(
         Panel(
-            f"[bold yellow]⚠ No intent detected[/bold yellow]\\n\\n"
-            f"[bold]Query:[/bold] {query}\\n"
-            f"[bold]Confidence threshold:[/bold] {min_confidence:.2%}\\n\\n"
-            f"[dim]The system couldn't detect a clear intent from your query.[/dim]\\n"
-            f"[dim]Try:[/dim]\\n"
-            f"  • [dim]Rephrasing your query[/dim]\\n"
-            f"  • [dim]Using different keywords[/dim]\\n"
-            f"  • [dim]Lowering the confidence threshold with --min-confidence[/dim]\\n"
-            f"  • [dim]Using --verbose to see detection details[/dim]\\n\\n"
-            f"[dim]Supported categories:[/dim] Security, Config, Dev, Docs, Project",
+            f"[bold yellow]⚠ No intent detected[/bold yellow]\n\n"
+            f"[bold]Query:[/bold] {query}\n"
+            f"[bold]Confidence threshold:[/bold] {min_confidence:.2%}\n\n"
+            f"[dim]The system couldn't detect a clear intent from your query.[/dim]\n"
+            f"[dim]Try:[/dim]\n"
+            f"  • [dim]Rephrasing your query[/dim]\n"
+            f"  • [dim]Using different keywords[/dim]\n"
+            f"  • [dim]Lowering the confidence threshold with --min-confidence[/dim]\n"
+            f"  • [dim]Using --verbose to see detection details[/dim]\n"
+            f"  • [dim]Listing available skills with [cyan]vibe skills list[/cyan][/dim]",
             title="[bold]No Match[/bold]",
             border_style="yellow",
         )
     )
 
-    if verbose:
-        # Show available patterns
-        _show_available_patterns()
 
-
-def _show_available_patterns() -> None:
-    """Show available trigger patterns."""
-    from vibesop.triggers import DEFAULT_PATTERNS
-
-    console.print(f"\\n[bold]Available Patterns:[/bold]\\n")
-
-    # Group by category
-    by_category: dict[str, list[Any]] = {}
-    for pattern in DEFAULT_PATTERNS:
-        cat = pattern.category.value
-        if cat not in by_category:
-            by_category[cat] = []
-        by_category[cat].append(pattern)
-
-    # Show each category
-    for category, patterns in sorted(by_category.items()):
-        emoji = _get_category_emoji(patterns[0].category)
-        console.print(f"  {emoji} [bold]{category.title()}:[/bold]")
-
-        for pattern in sorted(patterns, key=lambda p: p.name):
-            console.print(f"    • {pattern.name}")
-            if pattern.examples:
-                example = pattern.examples[0]
-                console.print(f'      [dim]e.g., "{example}"[/dim]')
-
-
-def _get_category_emoji(category: PatternCategory) -> str:
-    """Get emoji for pattern category.
+def _get_layer_emoji(layer: Any) -> str:
+    """Get emoji for routing layer.
 
     Args:
-        category: Pattern category
+        layer: RoutingLayer enum
 
     Returns:
         Emoji string
     """
+    from vibesop.core.routing import RoutingLayer
+
     emojis = {
-        PatternCategory.SECURITY: "🔒",
-        PatternCategory.CONFIG: "⚙️",
-        PatternCategory.DEV: "🛠️",
-        PatternCategory.DOCS: "📚",
-        PatternCategory.PROJECT: "📁",
+        RoutingLayer.AI: "🤖",
+        RoutingLayer.EXPLICIT: "🎯",
+        RoutingLayer.SCENARIO: "📋",
+        RoutingLayer.SEMANTIC: "🧠",
+        RoutingLayer.FUZZY: "🔍",
     }
-    return emojis.get(category, "📌")
+    return emojis.get(layer, "📌")

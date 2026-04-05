@@ -13,8 +13,8 @@ class TestSkillsCommand:
     """Tests for vibe skills command."""
 
     def test_skills_runs(self) -> None:
-        """Test that skills command runs without crashing."""
-        result = runner.invoke(app, ["skills"])
+        """Test that skills list command runs without crashing."""
+        result = runner.invoke(app, ["skills", "list"])
 
         # Command should run (may have no skills loaded)
         assert result.exit_code in (0, 1)

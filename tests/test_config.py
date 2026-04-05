@@ -1,144 +1,81 @@
-"""Test configuration loader."""
+"""Test configuration manager (v3.0.0)."""
 
 from pathlib import Path
 
-from vibesop.core.config import ConfigLoader
+from vibesop.core.config import ConfigManager
 
 
 class TestConfigLoader:
-    """Test ConfigLoader class."""
+    """Test ConfigManager class (renamed from ConfigLoader in v3.0.0)."""
 
     def test_init_with_default_path(self) -> None:
         """Test initialization with default path."""
-        loader = ConfigLoader()
-        assert loader.project_root == Path().resolve()
+        manager = ConfigManager()
+        assert manager.project_root == Path().resolve()
 
     def test_init_with_custom_path(self) -> None:
         """Test initialization with custom path."""
-        loader = ConfigLoader(project_root="/tmp")
-        assert loader.project_root == Path("/tmp").resolve()
+        manager = ConfigManager(project_root="/tmp")
+        assert manager.project_root == Path("/tmp").resolve()
 
-    def test_load_registry(self) -> None:
-        """Test loading registry from YAML file."""
-        loader = ConfigLoader(project_root=".")
-        registry = loader.load_registry()
+    def test_get_routing_config(self) -> None:
+        """Test getting routing configuration."""
+        manager = ConfigManager(project_root=".")
+        config = manager.get_routing_config()
 
-        assert registry is not None
-        assert "skills" in registry
-        assert isinstance(registry["skills"], list)
+        assert config is not None
+        assert hasattr(config, "min_confidence")
+        assert 0.0 <= config.min_confidence <= 1.0
 
-    def test_load_registry_cache(self) -> None:
-        """Test that registry is cached."""
-        loader = ConfigLoader(project_root=".")
+    def test_get_security_config(self) -> None:
+        """Test getting security configuration."""
+        manager = ConfigManager(project_root=".")
+        config = manager.get_security_config()
 
-        # First call
-        registry1 = loader.load_registry()
-        # Second call should return cached
-        registry2 = loader.load_registry()
+        assert config is not None
+        assert hasattr(config, "scan_external")
 
-        assert registry1 is registry2
+    def test_get_semantic_config(self) -> None:
+        """Test getting semantic configuration."""
+        manager = ConfigManager(project_root=".")
+        config = manager.get_semantic_config()
 
-    def test_load_registry_force_reload(self) -> None:
-        """Test force reload bypasses cache."""
-        loader = ConfigLoader(project_root=".")
+        assert config is not None
+        assert hasattr(config, "enabled")
 
-        registry1 = loader.load_registry(force_reload=False)
-        registry2 = loader.load_registry(force_reload=True)
+    def test_get_with_default(self) -> None:
+        """Test getting config value with default."""
+        manager = ConfigManager(project_root=".")
 
-        # Should be different objects after force reload
-        assert registry1 is not registry2
+        # Non-existent key with default
+        value = manager.get("non.existent.key", default="default_value")
+        assert value == "default_value"
 
-    def test_get_all_skills(self) -> None:
-        """Test getting all skills."""
-        loader = ConfigLoader(project_root=".")
-        skills = loader.get_all_skills()
+    def test_get_nested_value(self) -> None:
+        """Test getting nested config value."""
+        manager = ConfigManager(project_root=".")
 
-        assert isinstance(skills, list)
-        assert len(skills) > 0
+        # Get min_confidence
+        min_conf = manager.get("routing.min_confidence")
+        assert min_conf is not None
+        assert isinstance(min_conf, float)
 
-        # Check skill structure
-        skill = skills[0]
-        assert "id" in skill
-        assert "namespace" in skill
+    def test_set_cli_override(self) -> None:
+        """Test setting CLI override."""
+        manager = ConfigManager(project_root=".")
 
-    def test_get_skill_by_id_exact_match(self) -> None:
-        """Test getting skill by exact ID."""
-        loader = ConfigLoader(project_root=".")
+        # Set CLI override
+        manager.set_cli_override("routing.min_confidence", 0.99)
+        value = manager.get("routing.min_confidence")
+        assert value == 0.99
 
-        # Try exact match
-        skill = loader.get_skill_by_id("systematic-debugging")
-        assert skill is not None
-        assert skill["id"] == "systematic-debugging"
+    def test_reload(self) -> None:
+        """Test reloading configuration."""
+        manager = ConfigManager(project_root=".")
 
-    def test_get_skill_by_id_shorthand(self) -> None:
-        """Test getting skill by shorthand ID."""
-        loader = ConfigLoader(project_root=".")
+        # Should not raise
+        manager.reload()
 
-        # Try exact skill ID from registry
-        skill = loader.get_skill_by_id("systematic-debugging")
-        assert skill is not None
-        assert skill["id"] == "systematic-debugging"
-
-    def test_get_skill_by_id_leading_slash(self) -> None:
-        """Test getting skill with leading slash shorthand."""
-        loader = ConfigLoader(project_root=".")
-
-        # Leading slash shorthand format - the loader normalizes this
-        # "/review" should match skills that end with "/review" or contain "review"
-        skill = loader.get_skill_by_id("/review")
-        # Should find a review-related skill
-        assert skill is not None
-        assert "review" in skill["id"].lower()
-
-    def test_get_skill_by_id_not_found(self) -> None:
-        """Test getting non-existent skill."""
-        loader = ConfigLoader(project_root=".")
-
-        skill = loader.get_skill_by_id("non-existent-skill")
-        assert skill is None
-
-    def test_get_skills_by_namespace(self) -> None:
-        """Test getting skills by namespace."""
-        loader = ConfigLoader(project_root=".")
-
-        # Get builtin skills
-        builtin_skills = loader.get_skills_by_namespace("builtin")
-        assert isinstance(builtin_skills, list)
-        assert len(builtin_skills) > 0
-
-        for skill in builtin_skills:
-            assert skill["namespace"] == "builtin"
-
-    def test_search_skills(self) -> None:
-        """Test searching skills by keyword."""
-        loader = ConfigLoader(project_root=".")
-
-        # Search for debugging related skills
-        results = loader.search_skills("debug")
-        assert isinstance(results, list)
-        assert len(results) > 0
-
-    def test_load_policy_default(self) -> None:
-        """Test loading default policy when file doesn't exist."""
-        loader = ConfigLoader(project_root=".")
-        policy = loader.load_policy()
-
-        assert policy is not None
-        assert "candidate_selection" in policy
-        assert "preference_learning" in policy
-        assert "parallel_execution" in policy
-
-    def test_clear_cache(self) -> None:
-        """Test clearing configuration cache."""
-        loader = ConfigLoader(project_root=".")
-
-        # Load to populate cache
-        registry1 = loader.load_registry()
-
-        # Clear cache
-        loader.clear_cache()
-
-        # Load again should create new object
-        registry2 = loader.load_registry()
-
-        assert registry1 is not registry2
+        # Config should still be accessible
+        config = manager.get_routing_config()
+        assert config is not None

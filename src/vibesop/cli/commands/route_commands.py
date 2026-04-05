@@ -1,6 +1,7 @@
-"""VibeSOP route-select and route-validate commands.
+"""VibeSOP route commands - Unified routing interface.
 
-This module provides routing-related commands.
+This module provides the unified routing command that replaces
+vibe auto and vibe route from v2.x.
 """
 
 from pathlib import Path
@@ -11,12 +12,115 @@ from rich.console import Console
 from rich.table import Table
 from rich.prompt import Prompt
 
-from vibesop.core.routing.engine import SkillRouter
-from vibesop.core.models import RoutingRequest
+from vibesop.core.routing import UnifiedRouter, RoutingLayer
 
 console = Console()
 
 
+def route(
+    query: str = typer.Argument(..., help="Natural language query"),
+    top: int = typer.Option(
+        3,
+        "--top",
+        "-n",
+        help="Number of top matches to show",
+    ),
+    min_confidence: float = typer.Option(
+        None,
+        "--min-confidence",
+        "-c",
+        help="Minimum confidence threshold (0.0-1.0)",
+    ),
+    json_output: bool = typer.Option(
+        False,
+        "--json",
+        "-j",
+        help="Output results as JSON",
+    ),
+) -> None:
+    """Route a query to the best matching skill.
+
+    This is the unified routing command that replaces:
+    - vibe auto (v2.x)
+    - vibe route (v2.x)
+
+    \b
+    Examples:
+        # Route to best matching skill
+        vibe route "debug this error"
+
+        # Show top 5 matches
+        vibe route "help" --top 5
+
+        # Set minimum confidence
+        vibe route "review code" --min-confidence 0.5
+
+        # Output as JSON
+        vibe route "test this" --json
+    """
+    # Initialize router
+    router = UnifiedRouter(project_root=Path.cwd())
+
+    # Override min_confidence if specified
+    if min_confidence is not None:
+        from vibesop.core.config import RoutingConfig
+        config = RoutingConfig(min_confidence=min_confidence)
+        router = UnifiedRouter(project_root=Path.cwd(), config=config)
+
+    # Route the query
+    result = router.route(query)
+
+    if json_output:
+        import json
+        console.print(json.dumps(result.to_dict(), indent=2))
+        return
+
+    # Display results
+    console.print(
+        f"\n[bold cyan]🔀 Route: {query}[/bold cyan]"
+        f"\n{'=' * 40}\n"
+    )
+
+    if result.has_match:
+        # Show primary match
+        primary = result.primary
+        console.print(f"[dim]Primary:[/dim] [bold green]{primary.skill_id}[/bold green]")
+        console.print(f"[dim]Confidence:[/dim] {primary.confidence:.1%}")
+        console.print(f"[dim]Layer:[/dim] {primary.layer.value}")
+        console.print(f"[dim]Source:[/dim] {primary.source}")
+        console.print(f"[dim]Duration:[/dim] {result.duration_ms:.1f}ms\n")
+
+        # Show alternatives
+        if result.alternatives:
+            console.print("[bold]Alternatives:[/bold]\n")
+
+            table = Table()
+            table.add_column("#", style="dim")
+            table.add_column("Skill", style="cyan")
+            table.add_column("Confidence")
+            table.add_column("Layer", style="dim")
+
+            for i, alt in enumerate(result.alternatives[:top], 1):
+                table.add_row(
+                    str(i),
+                    alt.skill_id,
+                    f"{alt.confidence:.1%}",
+                    alt.layer.value,
+                )
+
+            console.print(table)
+    else:
+        console.print("[yellow]No suitable match found[/yellow]")
+        console.print(f"[dim]Routing path: {' → '.join([l.value for l in result.routing_path])}[/dim]")
+        console.print(f"\n[dim]Try:[/dim]")
+        console.print(f"  [dim]- Lowering the threshold with --min-confidence[/dim]")
+        console.print(f"  [dim]- Using more specific keywords[/dim]")
+        console.print(f"  [dim]- Listing available skills with [cyan]vibe skills list[/cyan][/dim]")
+
+    console.print()
+
+
+# Legacy command aliases (deprecated)
 def route_select(
     query: str = typer.Argument(..., help="Natural language query"),
     top: int = typer.Option(
@@ -32,109 +136,44 @@ def route_select(
         help="Auto-select the top match",
     ),
 ) -> None:
-    """Interactive skill selection from routing results.
+    """[DEPRECATED] Use 'vibe route' instead.
 
-    This command shows routing results and allows interactive
-    selection of the best skill for the query.
-
-    \b
-    Examples:
-        # Interactive selection
-        vibe route-select "debug this error"
-
-        # Show top 3 matches
-        vibe route-select "help" --top 3
-
-        # Auto-select top match
-        vibe route-select "review code" --auto
+    This command is deprecated and will be removed in v4.0.0.
+    Use 'vibe route' for the same functionality.
     """
-    console.print(
-        f"\n[bold cyan]🔀 Route & Select[/bold cyan]"
-        f"\n{'=' * 40}\n"
+    import warnings
+    warnings.warn(
+        "route-select is deprecated. Use 'vibe route' instead.",
+        DeprecationWarning,
+        stacklevel=2,
     )
 
-    router = SkillRouter()
-    request = RoutingRequest(query=query)
+    # Call route with the query and top parameter
+    # Note: We duplicate logic here because calling route() directly
+    # doesn't work within Typer's command context
+    router = UnifiedRouter(project_root=Path.cwd())
+    result = router.route(query)
 
-    # Route the request
-    result = router.route(request)
+    if result.has_match:
+        console.print(f"\n[bold cyan]🔀 Route: {query}[/bold cyan]")
+        console.print(f"[dim]Primary:[/dim] [bold green]{result.primary.skill_id}[/bold green]")
+        console.print(f"[dim]Confidence:[/dim] {result.primary.confidence:.1%}\n")
 
-    console.print(f"[dim]Query:[/dim] {query}\n")
-    console.print(f"[dim]Primary:[/dim] {result.primary.skill_id} ({result.primary.confidence:.0%})\n")
+        if result.alternatives and top > 1:
+            console.print("[bold]Alternatives:[/bold]\n")
+            table = Table()
+            table.add_column("#", style="dim")
+            table.add_column("Skill", style="cyan")
+            table.add_column("Confidence")
 
-    # Show alternatives
-    if result.alternatives:
-        console.print("[bold]Alternatives:[/bold]\n")
+            for i, alt in enumerate(result.alternatives[:top-1], 1):
+                table.add_row(str(i), alt.skill_id, f"{alt.confidence:.1%}")
 
-        table = Table()
-        table.add_column("#", style="dim")
-        table.add_column("Skill", style="cyan")
-        table.add_column("Confidence")
-        table.add_column("Layer", style="dim")
+            console.print(table)
+    else:
+        console.print("[yellow]No suitable match found[/yellow]")
 
-        for i, alt in enumerate(result.alternatives[:top], 1):
-            layer_name = {
-                0: "AI Triage",
-                1: "Override",
-                2: "Pattern",
-                3: "Semantic",
-                4: "Fuzzy",
-            }.get(alt.layer, "Unknown")
-
-            table.add_row(
-                str(i),
-                alt.skill_id,
-                f"{alt.confidence:.0%}",
-                layer_name,
-            )
-
-        console.print(table)
-
-        # Auto-select if requested
-        if auto:
-            selected = result.alternatives[0] if result.alternatives else result.primary
-            console.print(f"\n[green]✓ Auto-selected: {selected.skill_id}[/green]")
-
-            # Record the selection (assume helpful since user used --auto)
-            router.record_selection(selected.skill_id, query, was_helpful=True)
-            raise typer.Exit(0)
-
-        # Interactive selection if there are alternatives
-        if result.alternatives:
-            console.print(
-                f"\n[dim]Enter skill number to use (or 0 to skip):[/dim] "
-            )
-
-            try:
-                choice = Prompt.ask(
-                    "[dim]Choice[/dim]",
-                    default="0",
-                    show_default=False,
-                )
-
-                # Validate choice
-                try:
-                    choice_num = int(choice)
-                    if 1 <= choice_num <= len(result.alternatives):
-                        selected = result.alternatives[choice_num - 1]
-                        console.print(
-                            f"\n[green]✓ Selected: {selected.skill_id}[/green]"
-                        )
-
-                        # Record the user's selection
-                        router.record_selection(selected.skill_id, query, was_helpful=True)
-
-                        console.print(
-                            f"\n[dim]This selection has been recorded to improve future recommendations[/dim]"
-                        )
-                except (ValueError, IndexError):
-                    pass
-            except (KeyboardInterrupt, EOFError):
-                console.print("\n[dim]Selection cancelled[/dim]")
-
-    console.print(
-        f"\n[dim]To use a skill, run its command directly[/dim]"
-    )
+    console.print()
 
 
 def route_validate(
@@ -159,9 +198,6 @@ def route_validate(
 ) -> None:
     """Validate routing configuration.
 
-    This command validates the routing configuration and
-    tests routing patterns.
-
     \b
     Examples:
         # Validate routing configuration
@@ -181,26 +217,36 @@ def route_validate(
         f"\n{'=' * 40}\n"
     )
 
-    router = SkillRouter()
+    router = UnifiedRouter(project_root=Path.cwd())
 
-    # Validate configuration
-    console.print("[dim]Validating configuration...[/dim]\n")
-    console.print("[green]✓ Configuration valid[/green]\n")
+    # Show router capabilities
+    caps = router.get_capabilities()
+    console.print("[dim]Router capabilities:[/dim]")
+    console.print(f"  Matchers: {len(caps['matchers'])}")
+    for matcher_info in caps['matchers']:
+        console.print(f"    - {matcher_info['layer']}: {matcher_info['matcher']}")
+
+    config = caps.get('config', {})
+    console.print(f"\n[dim]Configuration:[/dim]")
+    console.print(f"  min_confidence: {config.get('min_confidence', 0.3)}")
+    console.print(f"  auto_select_threshold: {config.get('auto_select_threshold', 0.6)}")
+    console.print(f"  enable_embedding: {config.get('enable_embedding', False)}")
 
     # Test pattern if provided
     if pattern:
-        console.print(f"[bold]Testing pattern:[/bold] {pattern}\n")
+        console.print(f"\n[bold]Testing pattern:[/bold] {pattern}\n")
+        result = router.route(pattern)
 
-        from vibesop.core.routing.engine import RoutingRequest
-        result = router.route(RoutingRequest(query=pattern))
+        if result.has_match:
+            console.print(f"  Primary: {result.primary.skill_id} ({result.primary.confidence:.0%})")
+            console.print(f"  Layer: {result.primary.layer.value}")
+        else:
+            console.print(f"  [yellow]No match found[/yellow]")
 
-        console.print(f"  Primary: {result.primary.skill_id} ({result.primary.confidence:.0%})")
-        console.print(f"  Layer: {result.primary.layer}\n")
-
-        if verbose:
-            console.print("[bold]Layer breakdown:[/bold]\n")
-            for i, alt in enumerate(result.alternatives[:5]):
-                console.print(f"  {i+1}. {alt.skill_id} - {alt.confidence:.0%}")
+        if verbose and result.alternatives:
+            console.print(f"\n[bold]Alternatives:[/bold]")
+            for i, alt in enumerate(result.alternatives[:5], 1):
+                console.print(f"  {i}. {alt.skill_id} - {alt.confidence:.0%}")
 
     # Validate all skills if requested
     if all_skills:
@@ -212,26 +258,24 @@ def route_validate(
 
         table = Table()
         table.add_column("Skill", style="cyan")
-        table.add_column("Trigger")
+        table.add_column("Description")
         table.add_column("Status")
 
-        valid_count = 0
-        for skill in skills:
-            skill_id = skill.get("id", "")
-            trigger = skill.get("trigger_when", "")
-            has_trigger = bool(trigger)
-
-            status = "✓" if has_trigger else "⊘"
-            if has_trigger:
-                valid_count += 1
+        for skill in skills[:10]:  # Limit to 10 for display
+            skill_id = skill.metadata.id
+            description = skill.metadata.description[:50] if skill.metadata.description else ""
+            status = "✓"
 
             table.add_row(
                 skill_id,
-                trigger[:50] if trigger else "No trigger",
+                description,
                 status,
             )
 
-        console.print(table)
-        console.print(f"\n[dim]Valid: {valid_count}/{len(skills)} skills have triggers[/dim]")
+        if len(skills) > 10:
+            console.print(table)
+            console.print(f"\n[dim]... and {len(skills) - 10} more skills[/dim]")
+        else:
+            console.print(table)
 
     console.print(f"\n[green]✓ Validation complete[/green]")
