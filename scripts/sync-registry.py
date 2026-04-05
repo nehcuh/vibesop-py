@@ -5,15 +5,16 @@ This script copies the core YAML configuration from the Ruby vibesop
 to the Python vibesop-py, ensuring both versions stay in sync.
 """
 
+import os
 import shutil
 from pathlib import Path
 
 
 def sync_registry() -> None:
     """Sync skill registry from Ruby version."""
-    # Define source and destination paths
-    ruby_project = Path("/Users/huchen/Projects/vibesop")
-    python_project = Path("/Users/huchen/Projects/vibesop-py")
+    # Define source and destination paths (configurable via environment variables)
+    ruby_project = Path(os.environ.get("VIBESOP_RUBY_PATH", "../vibesop"))
+    python_project = Path(os.environ.get("VIBESOP_PYTHON_PATH", "."))
 
     # Files to sync
     files_to_sync = [
