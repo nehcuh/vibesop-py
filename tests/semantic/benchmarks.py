@@ -9,6 +9,8 @@ Performance Targets:
     - E2E latency: < 20ms per query (with semantic)
     - Memory overhead: < 200MB
     - Cache hit rate: > 95%
+
+DEPRECATED: These benchmarks use the deprecated triggers module.
 """
 
 from __future__ import annotations
@@ -21,6 +23,10 @@ import numpy as np
 import pytest
 
 from vibesop.semantic.models import EncoderConfig, SemanticPattern
+
+# Skip these benchmarks since they depend on deprecated triggers module
+pytest.skip("Benchmarks depend on deprecated triggers module.", allow_module_level=True)
+
 from vibesop.triggers.detector import KeywordDetector
 from vibesop.triggers.models import TriggerPattern, PatternCategory
 

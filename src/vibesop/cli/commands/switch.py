@@ -159,7 +159,7 @@ def switch(
     # Deploy phase
     console.print("[bold]Phase 2: Deploy[/bold]\n")
 
-    # Deploy logic
+    # Deploy logic - actually call the deploy command
     source = Path(f".vibe/dist/{platform}")
 
     if not source.exists():
@@ -170,8 +170,19 @@ def switch(
         raise typer.Exit(1)
 
     console.print(f"[dim]Source: {source}[/dim]")
-    console.print(f"[dim]Destination: {destination or 'platform default'}[/dim]")
-    console.print("[green]✓ Deploy complete[/green]\n")
+    console.print(f"[dim]Destination: {destination or 'platform default'}[/dim]\n")
+
+    # Import and call the actual deploy function
+    from vibesop.cli.commands.deploy import _execute_deploy
+
+    _execute_deploy(
+        target=platform,
+        destination=destination,
+        source=source,
+        force=force,  # Use the force flag from switch
+        backup=True,
+        dry_run=False,
+    )
 
     console.print(
         f"[green]✓ Switched to {platform}[/green]\n"

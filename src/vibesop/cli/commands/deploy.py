@@ -85,6 +85,53 @@ def deploy(
         # Preview what would be deployed
         vibe deploy claude-code --dry-run
     """
+    _execute_deploy(
+        target=target,
+        destination=destination,
+        source=source,
+        force=force,
+        backup=backup,
+        dry_run=dry_run,
+    )
+
+    # Show success message
+    from vibesop.installer.installer import VibeSOPInstaller
+    installer = VibeSOPInstaller()
+    if destination is None:
+        destination = _get_default_destination(target)
+
+    console.print(
+        f"\n[green]✓ Deployment complete![/green]\n"
+        f"[dim]Configuration installed to:[/dim]\n"
+        f"  [cyan]{destination}[/cyan]\n"
+        f"[dim]Restart {target} to apply changes.[/dim]"
+    )
+    raise typer.Exit(0)
+
+
+def _execute_deploy(
+    target: str,
+    destination: Optional[Path] = None,
+    source: Optional[Path] = None,
+    force: bool = False,
+    backup: bool = True,
+    dry_run: bool = False,
+) -> None:
+    """Internal deployment function.
+
+    This function contains the actual deployment logic that can be
+    called from other commands.
+
+    Args:
+        target: Target platform identifier
+        destination: Destination directory (default: platform default)
+        source: Source build directory (default: .vibe/dist/<target>)
+        force: Force overwrite existing files
+        backup: Backup existing files before overwriting
+        dry_run: Preview deployment without making changes
+    """
+    from vibesop.installer.installer import VibeSOPInstaller
+
     # Set default source directory
     if source is None:
         source = Path(f".vibe/dist/{target}")
@@ -112,7 +159,7 @@ def deploy(
     # Dry-run mode
     if dry_run:
         _preview_deploy(source, destination, target)
-        raise typer.Exit(0)
+        return
 
     # Perform deployment
     try:
@@ -166,14 +213,6 @@ def deploy(
         if errors:
             console.print("\n[red]✗ Deployment completed with errors[/red]")
             raise typer.Exit(1)
-        else:
-            console.print(f"\n[green]✓ Deployment complete![/green]\n")
-            console.print(
-                f"[dim]Configuration installed to:[/dim]\n"
-                f"  [cyan]{destination}[/cyan]\n"
-                f"[dim]Restart {target} to apply changes.[/dim]"
-            )
-            raise typer.Exit(0)
 
     except Exception as e:
         console.print(f"[red]✗ Deployment failed: {e}[/red]")

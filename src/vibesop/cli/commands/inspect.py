@@ -26,7 +26,7 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
-from vibesop.core.config import ConfigLoader
+from vibesop.core.config_module import ConfigLoader
 from vibesop.installer.init_support import InitSupport
 from vibesop.installer.installer import VibeSOPInstaller
 

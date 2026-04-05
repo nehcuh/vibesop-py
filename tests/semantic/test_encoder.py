@@ -12,8 +12,10 @@ import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-import numpy as np
 import pytest
+
+# NumPy is optional for semantic features
+np = pytest.importorskip("numpy", reason="numpy not installed")
 
 
 @pytest.fixture

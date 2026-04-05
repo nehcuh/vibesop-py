@@ -1,0 +1,219 @@
+# Task Routing Configuration
+# Defines scenario patterns for Layer 2 routing
+# This is the portable SSOT - referenced by config/platforms.yaml
+
+schema_version: 1
+
+# Scenario patterns for automatic skill triggering
+# These define when specific skills should be suggested or mandated
+scenario_patterns:
+  # P0: Mandatory triggers - These MUST trigger when scenario matches
+  - id: error_detected
+    name: "Error / Bug Detected"
+    trigger_mode: mandatory
+    description: "Test failure, build failure, lint failure, runtime error"
+    keywords:
+      - "error"
+      - "bug"
+      - "failure"
+      - "failed"
+      - "broken"
+      - "not working"
+      - "doesn't work"
+      - "错误"
+      - "故障"
+      - "失败"
+      - "调试"
+      - "debug"
+      - "fix"
+      - "修复"
+      - "broken"
+      - "not working"
+    skill_id: "systematic-debugging"
+    priority: P0
+    message: "检测到错误，必须先找根因再修复"
+
+  - id: before_completion
+    name: "Before Claiming Completion"
+    trigger_mode: mandatory
+    description: "User asks if done, or signals task completion"
+    keywords:
+      - "is it done"
+      - "are we finished"
+      - "that's all"
+      - "heading out"
+      - "完成"
+      - "搞定"
+      - "结束"
+      - "好了吗"
+    skill_id: "verification-before-completion"
+    priority: P0
+    message: "声称完成前必须先验证"
+
+  # P1: Suggested triggers - These are recommended but not automatic
+  - id: stuck_for_15min
+    name: "Stuck for 15+ Minutes"
+    trigger_mode: suggest
+    description: "No progress for extended period"
+    keywords:
+      - "stuck"
+      - "blocked"
+      - "don't know what to do"
+      - "卡住了"
+      - "不行"
+      - "不知道怎么办"
+    skill_id: "experience-evolution"
+    priority: P1
+    message: "建议使用经验进化技能"
+
+  - id: complex_task
+    name: "Complex Task (>5 Files)"
+    trigger_mode: suggest
+    description: "Task involves multiple files or complex refactoring"
+    keywords:
+      - "complex"
+      - "complicated"
+      - "many files"
+      - "复杂"
+      - "麻烦"
+      - "很多文件"
+    skill_id: "planning-with-files"
+    priority: P1
+    message: "复杂任务建议先制定详细计划"
+
+  - id: create_pr
+    name: "Before Creating PR"
+    trigger_mode: suggest
+    description: "Pull request creation imminent"
+    keywords:
+      - "review my code"
+      - "create pr"
+      - "pull request"
+      - "提交代码"
+      - "审查代码"
+    skill_id: "verification-before-completion"
+    priority: P1
+    message: "PR前建议先验证"
+
+  - id: new_skill_install
+    name: "Installing New Skill/MCP"
+    trigger_mode: mandatory
+    description: "Adding skill files or installing MCP server"
+    keywords:
+      - "install skill"
+      - "add mcp"
+      - "new skill"
+    skill_id: "systematic-debugging"  # Security audit via debugging
+    priority: P0
+    message: "新技能需要先进行安全审计"
+
+  - id: consecutive_failures
+    name: "3+ Consecutive Failures"
+    trigger_mode: mandatory
+    description: "Same error 3 times with different root causes"
+    keywords:
+      - "still failing"
+      - "failed again"
+    skill_id: "systematic-debugging"
+    priority: P0
+    message: "连续失败需要暂停并重新诊断"
+
+  # Domain-specific triggers
+  - id: ship_release
+    name: "Release / Ship"
+    trigger_mode: suggest
+    description: "User wants to ship/merge/release"
+    keywords:
+      - "ship"
+      - "merge"
+      - "release"
+      - "deploy"
+      - "发布"
+      - "提交"
+      - "部署"
+    skill_id: "gstack/ship"
+    priority: P1
+    message: "检测到发布意图，建议使用 /ship"
+
+  - id: qa_testing
+    name: "QA / Browser Testing"
+    trigger_mode: suggest
+    description: "User wants to test website or run QA"
+    keywords:
+      - "test website"
+      - "qa"
+      - "e2e"
+      - "browser test"
+      - "测试网站"
+      - "端到端"
+      - "浏览器测试"
+    skill_id: "gstack/qa"
+    priority: P1
+    message: "建议使用 /qa 进行浏览器测试"
+
+  - id: product_ideation
+    name: "Product Ideation"
+    trigger_mode: suggest
+    description: "New feature idea or product brainstorming"
+    keywords:
+      - "new feature"
+      - "new idea"
+      - "feature request"
+      - "should we build"
+      - "新功能"
+      - "新想法"
+      - "要不要做"
+    skill_id: "gstack/office-hours"
+    priority: P1
+    message: "新想法建议先用 /office-hours 重新框定问题"
+
+  - id: code_review_request
+    name: "Code Review Request"
+    trigger_mode: suggest
+    description: "User asks for code review"
+    keywords:
+      - "review"
+      - "审查"
+      - "评审"
+      - "检查"
+      - "看看代码"
+    skill_id: "gstack/review"
+    priority: P1
+    message: "代码审查建议使用 /review"
+
+# Routing hints displayed to user
+routing_hints:
+  - keywords: ["实验", "优化", "迭代", "autonomous", "experiment", "循环优化", "自主实验"]
+    suggest: "builtin/autonomous-experiment"
+    message: "建议使用自主实验循环进行优化"
+
+# Conflict resolution between similar skills
+conflict_resolution:
+  enabled: true
+  
+  # When multiple skills match, use these rules to decide
+  strategies:
+    - scenario: debugging
+      primary: systematic-debugging
+      primary_source: builtin
+      reason: "P0 mandatory, always primary for debugging"
+      
+    - scenario: code_review
+      primary: gstack/review
+      primary_source: gstack
+      reason: "Pre-landing review with SQL safety"
+      
+    - scenario: planning
+      primary: planning-with-files
+      primary_source: builtin
+      reason: "Default planning skill"
+
+# Override keywords for explicit skill selection
+# When user mentions these, bypass routing and use specified skill
+override_keywords:
+  "用 gstack": gstack
+  "use gstack": gstack
+  "用 superpowers": superpowers
+  "use superpowers": superpowers
+  "用 builtin": builtin
+  "use builtin": builtin

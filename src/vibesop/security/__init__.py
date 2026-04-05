@@ -42,6 +42,13 @@ from vibesop.security.exceptions import (
 from vibesop.security.path_safety import PathSafety
 from vibesop.security.rules import RiskLevel, Threat, ThreatType
 from vibesop.security.scanner import ScanResult, SecurityScanner
+from vibesop.security.skill_auditor import (
+    ThreatLevel as SkillThreatLevel,
+    ThreatPattern,
+    AuditResult,
+    SkillSecurityAuditor,
+    audit_skill,
+)
 from vibesop.security.enforced import (
     SafeLoader,
     SecurityEnforcementError,
@@ -68,6 +75,12 @@ __all__ = [
     "RiskLevel",
     # Path safety
     "PathSafety",
+    # Skill auditor
+    "SkillSecurityAuditor",
+    "SkillThreatLevel",
+    "ThreatPattern",
+    "AuditResult",
+    "audit_skill",
     # Enforcement
     "SafeLoader",
     "require_safe_scan",

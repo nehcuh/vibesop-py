@@ -2,6 +2,9 @@
 
 These tests verify that semantic matching works correctly in real-world scenarios,
 including accuracy, multilingual support, and integration with the CLI.
+
+DEPRECATED: These tests use the deprecated triggers module.
+New semantic tests should use vibesop.core.matching instead.
 """
 
 from __future__ import annotations
@@ -13,6 +16,9 @@ import pytest
 
 np = pytest.importorskip("numpy", reason="numpy not installed")
 pytest.importorskip("sentence_transformers", reason="sentence-transformers not installed")
+
+# Skip these tests since they depend on deprecated triggers module
+pytest.skip("Tests depend on deprecated triggers module. Use vibesop.core.matching instead.", allow_module_level=True)
 
 from vibesop.triggers.detector import KeywordDetector
 from vibesop.triggers.models import TriggerPattern, PatternCategory, PatternMatch

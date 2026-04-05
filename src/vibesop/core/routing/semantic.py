@@ -12,7 +12,7 @@ from collections import Counter
 from dataclasses import dataclass
 from typing import Any
 
-from vibesop.core.config import ConfigLoader
+from vibesop.core.config_module import ConfigLoader
 
 # Common stop words (English and Chinese)
 STOP_WORDS = {

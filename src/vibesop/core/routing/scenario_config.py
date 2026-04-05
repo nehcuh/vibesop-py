@@ -1,13 +1,22 @@
 """Scenario routing configuration.
 
-Scenario patterns are configurable rather than hardcoded,
+Scenario patterns are loaded from core/policies/task-routing.yaml,
 allowing users to customize which skills handle which scenarios.
+
+Project-level overrides can be specified in .vibe/skill-routing.yaml
 """
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
+from ruamel.yaml import YAML
+
+yaml = YAML()
+yaml.preserve_quotes = True
+
+# Fallback scenarios if YAML file is not found
 DEFAULT_SCENARIOS: list[dict[str, Any]] = [
     {
         "name": "debug",
@@ -36,3 +45,81 @@ DEFAULT_SCENARIOS: list[dict[str, Any]] = [
         "confidence": 0.85,
     },
 ]
+
+
+def load_scenarios(project_root: str | Path = ".") -> list[dict[str, Any]]:
+    """Load scenario patterns from YAML configuration.
+
+    Args:
+        project_root: Path to project root directory
+
+    Returns:
+        List of scenario dictionaries
+    """
+    config_path = Path(project_root) / "core" / "policies" / "task-routing.yaml"
+
+    if not config_path.exists():
+        return DEFAULT_SCENARIOS
+
+    try:
+        with config_path.open("r", encoding="utf-8") as f:
+            data = yaml.load(f)
+
+        if not isinstance(data, dict):
+            return DEFAULT_SCENARIOS
+
+        patterns = data.get("scenario_patterns", [])
+        scenarios = []
+
+        for pattern in patterns:
+            if not isinstance(pattern, dict):
+                continue
+
+            scenario = {
+                "id": pattern.get("id", "unknown"),
+                "name": pattern.get("name", pattern.get("id", "unknown")),
+                "keywords": pattern.get("keywords", []),
+                "skill_id": pattern.get("skill_id", ""),
+                "confidence": pattern.get("confidence", 0.85),
+                "trigger_mode": pattern.get("trigger_mode", "suggest"),
+                "priority": pattern.get("priority", "P1"),
+                "message": pattern.get("message", ""),
+            }
+
+            # Add fallback_id if specified
+            if "fallback_id" in pattern:
+                scenario["fallback_id"] = pattern["fallback_id"]
+
+            scenarios.append(scenario)
+
+        return scenarios if scenarios else DEFAULT_SCENARIOS
+
+    except Exception:
+        return DEFAULT_SCENARIOS
+
+
+def get_routing_hints(project_root: str | Path = ".") -> list[dict[str, Any]]:
+    """Load routing hints from YAML configuration.
+
+    Args:
+        project_root: Path to project root directory
+
+    Returns:
+        List of routing hint dictionaries
+    """
+    config_path = Path(project_root) / "core" / "policies" / "task-routing.yaml"
+
+    if not config_path.exists():
+        return []
+
+    try:
+        with config_path.open("r", encoding="utf-8") as f:
+            data = yaml.load(f)
+
+        if not isinstance(data, dict):
+            return []
+
+        return data.get("routing_hints", [])
+
+    except Exception:
+        return []

@@ -35,30 +35,64 @@ console = Console()
 @app.command()
 def route(
     query: str = typer.Argument(..., help="Natural language query to route"),
+    min_confidence: float = typer.Option(
+        None,
+        "--min-confidence",
+        "-c",
+        help="Minimum confidence threshold (0.0-1.0)",
+    ),
     json_output: bool = typer.Option(False, "--json", "-j", help="Output as JSON"),
 ) -> None:
-    """Route a query to the appropriate skill using AI-powered routing."""
-    router = SkillRouter()
-    request = RoutingRequest(query=query)
-    result = router.route(request)
+    """Route a query to the appropriate skill using unified routing.
+
+    This replaces the old 'vibe auto' command.
+    """
+    from pathlib import Path
+    from vibesop.core.routing import UnifiedRouter, RoutingConfig
+
+    # Set up router with optional min_confidence override
+    if min_confidence is not None:
+        config = RoutingConfig(min_confidence=min_confidence)
+        router = UnifiedRouter(project_root=Path.cwd(), config=config)
+    else:
+        router = UnifiedRouter(project_root=Path.cwd())
+
+    result = router.route(query)
 
     if json_output:
-        console.print_json(result.model_dump_json(indent=2))
+        import json
+        console.print(json.dumps(result.to_dict(), indent=2))
     else:
-        console.print(
-            Panel(
-                f"[bold green]✅ Matched:[/bold green] {result.primary.skill_id}\n"
-                f"[dim]Confidence:[/dim] {result.primary.confidence:.0%}\n"
-                f"[dim]Layer:[/dim] {result.primary.layer}\n"
-                f"[dim]Source:[/dim] {result.primary.source}",
-                title="[bold]Routing Result[/bold]",
-                border_style="blue",
+        if result.has_match:
+            console.print(
+                Panel(
+                    f"[bold green]✅ Matched:[/bold green] {result.primary.skill_id}\n"
+                    f"[dim]Confidence:[/dim] {result.primary.confidence:.0%}\n"
+                    f"[dim]Layer:[/dim] {result.primary.layer.value}\n"
+                    f"[dim]Source:[/dim] {result.primary.source}\n"
+                    f"[dim]Duration:[/dim] {result.duration_ms:.1f}ms",
+                    title="[bold]Routing Result[/bold]",
+                    border_style="blue",
+                )
             )
-        )
-        if result.alternatives:
-            console.print("\n[bold]💡 Alternatives:[/bold]")
-            for alt in result.alternatives[:3]:
-                console.print(f"  • {alt.skill_id} ({alt.confidence:.0%})")
+            if result.alternatives:
+                console.print("\n[bold]💡 Alternatives:[/bold]")
+                for alt in result.alternatives[:3]:
+                    console.print(f"  • {alt.skill_id} ({alt.confidence:.0%})")
+        else:
+            console.print(
+                Panel(
+                    f"[yellow]❓ No suitable match found[/yellow]\n\n"
+                    f"[dim]Query:[/dim] {query}\n"
+                    f"[dim]Routing path:[/dim] {' → '.join([l.value for l in result.routing_path])}\n\n"
+                    f"[dim]Try:[/dim]\n"
+                    f"  • Using more specific keywords\n"
+                    f"  • Lowering the threshold\n"
+                    f"  • Listing available skills",
+                    title="[bold]Routing Result[/bold]",
+                    border_style="yellow",
+                )
+            )
 
 
 @app.command()

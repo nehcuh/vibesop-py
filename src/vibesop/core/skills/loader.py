@@ -1,5 +1,9 @@
 # pyright: reportUnknownVariableType=false, reportUnknownMemberType=false, reportUnknownArgumentType=false, reportUnknownLambdaType=false, reportMissingTypeArgument=false, reportUnknownParameterType=false
-"""Skill discovery and loading."""
+"""Skill discovery and loading.
+
+This module provides unified skill loading from both project-local skills
+and external skill packs (superpowers, gstack, etc.).
+"""
 
 from dataclasses import dataclass
 from pathlib import Path
@@ -14,6 +18,7 @@ from vibesop.core.skills.base import (
     SkillType,
     WorkflowSkill,
 )
+from vibesop.core.skills.external_loader import ExternalSkillLoader, SkillSource
 
 
 @dataclass
@@ -24,11 +29,13 @@ class SkillDefinition:
         metadata: Skill metadata
         content: Skill content (prompt template, workflow steps, etc.)
         source_file: Path to the source file
+        external_metadata: External skill metadata (if from external pack)
     """
 
     metadata: SkillMetadata
     content: str | dict[str, Any]
     source_file: Path | None = None
+    external_metadata: Any = None  # ExternalSkillMetadata if from external pack
 
 
 class SkillLoader:
@@ -42,6 +49,8 @@ class SkillLoader:
     The loader discovers skills in:
     - {project_root}/skills/
     - {project_root}/.vibe/skills/
+    - ~/.claude/skills/ (Claude Code skills)
+    - ~/.config/skills/ (External skill packs)
     - Built-in skills
     """
 
@@ -49,12 +58,16 @@ class SkillLoader:
         self,
         project_root: str | Path = ".",
         search_paths: list[str] | None = None,
+        enable_external: bool = True,
+        require_audit: bool = True,
     ) -> None:
         """Initialize the skill loader.
 
         Args:
             project_root: Project root directory
             search_paths: Additional paths to search for skills
+            enable_external: Whether to load external skills from ~/.claude/skills/
+            require_audit: Whether to require security audit for external skills
         """
         self.project_root = Path(project_root).resolve()
         self._search_paths = self._default_search_paths()
@@ -62,6 +75,16 @@ class SkillLoader:
             self._search_paths.extend([Path(p) for p in search_paths])
 
         self._skill_cache: dict[str, SkillDefinition] = {}
+        self._enable_external = enable_external
+        self._require_audit = require_audit
+        self._external_loader: ExternalSkillLoader | None = None
+
+        # Initialize external loader if enabled
+        if enable_external:
+            self._external_loader = ExternalSkillLoader(
+                require_audit=require_audit,
+                project_root=self.project_root,
+            )
 
     def _default_search_paths(self) -> list[Path]:
         """Get default skill search paths.
@@ -88,6 +111,7 @@ class SkillLoader:
 
         self._skill_cache = {}
 
+        # Load project-local skills
         for search_path in self._search_paths:
             if not search_path.exists():
                 continue
@@ -102,7 +126,104 @@ class SkillLoader:
             for yaml_file in search_path.rglob("*.yml"):
                 self._load_yaml_skill(yaml_file)
 
+        # Load external skills from packs (superpowers, gstack, etc.)
+        if self._enable_external and self._external_loader:
+            self._load_external_skills()
+
         return self._skill_cache
+
+    def _load_external_skills(self) -> None:
+        """Load skills from external packs.
+
+        Discovers skills from ~/.claude/skills/, ~/.config/skills/, etc.
+        Only loads skills that pass security audit.
+        """
+        if not self._external_loader:
+            return
+
+        # Discover all external skills
+        external_skills = self._external_loader.discover_all()
+
+        for skill_id, ext_metadata in external_skills.items():
+            # Skip if already loaded (project-local takes precedence)
+            if skill_id in self._skill_cache:
+                continue
+
+            # Check if safe to load
+            if self._require_audit and not ext_metadata.is_safe:
+                continue
+
+            # Convert external metadata to internal format
+            definition = self._convert_external_skill(ext_metadata)
+            if definition:
+                self._skill_cache[skill_id] = definition
+
+    def _convert_external_skill(self, ext_metadata: Any) -> SkillDefinition | None:
+        """Convert external skill metadata to internal SkillDefinition.
+
+        Args:
+            ext_metadata: ExternalSkillMetadata from ExternalSkillLoader
+
+        Returns:
+            SkillDefinition or None if conversion failed
+        """
+        from vibesop.core.skills.external_loader import ExternalSkillMetadata
+
+        if not isinstance(ext_metadata, ExternalSkillMetadata):
+            return None
+
+        base = ext_metadata.base_metadata
+
+        # Build skill ID with namespace
+        if ext_metadata.pack_name:
+            skill_id = f"{ext_metadata.pack_name}/{base.id}"
+        else:
+            skill_id = base.id
+
+        # Convert skill type string to enum
+        skill_type_str = getattr(base, "skill_type", "prompt")
+        try:
+            skill_type = SkillType(skill_type_str)
+        except ValueError:
+            skill_type = SkillType.PROMPT
+
+        # Create metadata
+        metadata = SkillMetadata(
+            id=skill_id,
+            name=base.name,
+            description=base.description,
+            intent=base.intent or base.description,
+            namespace=ext_metadata.pack_name or "external",
+            version=getattr(base, "version", "1.0.0"),
+            author=getattr(base, "author", ""),
+            tags=getattr(base, "tags", None),
+            skill_type=skill_type,
+            trigger_when=getattr(base, "trigger_when", ""),
+        )
+
+        # Read skill content from source file
+        content = ""
+        if ext_metadata.install_path:
+            skill_file = ext_metadata.install_path / "SKILL.md"
+            if skill_file.exists():
+                try:
+                    content = skill_file.read_text(encoding="utf-8")
+                    # Parse to extract just the content (after frontmatter)
+                    if content.startswith("---"):
+                        parts = content.split("---", 2)
+                        if len(parts) >= 3:
+                            content = parts[2].strip()
+                except (OSError, UnicodeDecodeError):
+                    pass
+
+        return SkillDefinition(
+            metadata=metadata,
+            content=content,
+            source_file=ext_metadata.install_path / "SKILL.md"
+            if ext_metadata.install_path
+            else None,
+            external_metadata=ext_metadata,
+        )
 
     def get_skill(self, skill_id: str) -> SkillDefinition | None:
         """Get a skill definition by ID.

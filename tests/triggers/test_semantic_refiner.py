@@ -4,11 +4,19 @@ from __future__ import annotations
 
 from unittest.mock import Mock
 
-import numpy as np
 import pytest
+
+# NumPy is optional for semantic features
+try:
+    import numpy as np
+    HAS_NUMPY = True
+except ImportError:
+    HAS_NUMPY = False
 
 from vibesop.triggers.models import PatternMatch
 from vibesop.triggers.semantic_refiner import SemanticRefiner
+
+pytestmark = pytest.mark.skipif(not HAS_NUMPY, reason="numpy not installed")
 
 
 @pytest.fixture

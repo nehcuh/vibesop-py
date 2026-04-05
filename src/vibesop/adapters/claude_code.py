@@ -32,10 +32,15 @@ class ClaudeCodeAdapter(PlatformAdapter):
         >>> print(f"Created {result.file_count} files")
     """
 
-    def __init__(self) -> None:
-        """Initialize the Claude Code adapter."""
+    def __init__(self, project_root: str | Path = ".") -> None:
+        """Initialize the Claude Code adapter.
+
+        Args:
+            project_root: Path to VibeSOP project root (contains core/skills/)
+        """
         super().__init__()
         self._template_env: Environment | None = None
+        self._project_root = Path(project_root).resolve()
 
     @property
     def platform_name(self) -> str:
@@ -166,18 +171,115 @@ class ClaudeCodeAdapter(PlatformAdapter):
             # Render settings.json
             self._render_settings_json(output_dir, manifest, result)
 
-            # Render skill definitions
+            # Render skill definitions - copy actual content from core/skills/
             for skill in manifest.skills:
                 skill_dir = output_dir / "skills" / skill.id
                 skill_dir.mkdir(parents=True, exist_ok=True)
-                self._render_and_write(
-                    "skills/SKILL.md.j2",
-                    skill_dir / "SKILL.md",
-                    manifest,
-                    result,
-                    skill=skill,
-                    validate_security=False,
-                )
+                self._render_skill_content(skill, skill_dir, manifest, result)
+
+        except Exception as e:
+            result.add_error(f"Failed to render configuration: {e}")
+            result.success = False
+
+        return result
+
+    def render_config_only(self, manifest: Manifest, output_dir: Path) -> RenderResult:
+        """Render configuration without skills.
+
+        This renders CLAUDE.md, rules/, docs/, and settings.json
+        but NOT the skills/ directory. Skills are managed separately
+        by SkillStorage with symlinks.
+
+        Args:
+            manifest: Configuration manifest
+            output_dir: Directory to write configuration files
+
+        Returns:
+            RenderResult with list of created files and any warnings/errors
+        """
+        result = self.create_render_result(success=True)
+
+        try:
+            # Validate manifest
+            errors = self.validate_manifest(manifest)
+            if errors:
+                for error in errors:
+                    result.add_error(error)
+                result.success = False
+                return result
+
+            # Ensure output directory exists
+            output_dir = self.ensure_output_dir(output_dir)
+
+            # Create directory structure (no skills/ directory)
+            (output_dir / "rules").mkdir(exist_ok=True)
+            (output_dir / "docs").mkdir(exist_ok=True)
+            (output_dir / "hooks").mkdir(exist_ok=True)
+
+            # Render main CLAUDE.md
+            self._render_and_write(
+                "CLAUDE.md.j2",
+                output_dir / "CLAUDE.md",
+                manifest,
+                result,
+                validate_security=False,
+            )
+
+            # Render rules (always-loaded)
+            self._render_and_write(
+                "rules/behaviors.md.j2",
+                output_dir / "rules" / "behaviors.md",
+                manifest,
+                result,
+                validate_security=False,
+            )
+            self._render_and_write(
+                "rules/routing.md.j2",
+                output_dir / "rules" / "routing.md",
+                manifest,
+                result,
+                validate_security=False,
+            )
+            self._render_and_write(
+                "rules/skill-triggers.md.j2",
+                output_dir / "rules" / "skill-triggers.md",
+                manifest,
+                result,
+                validate_security=False,
+            )
+            self._render_and_write(
+                "rules/memory-flush.md.j2",
+                output_dir / "rules" / "memory-flush.md",
+                manifest,
+                result,
+                validate_security=False,
+            )
+
+            # Render docs (on-demand)
+            self._render_and_write(
+                "docs/safety.md.j2",
+                output_dir / "docs" / "safety.md",
+                manifest,
+                result,
+                validate_security=False,
+            )
+            self._render_and_write(
+                "docs/skills.md.j2",
+                output_dir / "docs" / "skills.md",
+                manifest,
+                result,
+                validate_security=False,
+            )
+            self._render_and_write(
+                "docs/task-routing.md.j2",
+                output_dir / "docs" / "task-routing.md",
+                manifest,
+                result,
+                validate_security=False,
+            )
+
+            # Render settings.json
+            self._render_settings_json(output_dir, manifest, result)
 
         except Exception as e:
             result.add_error(f"Failed to render configuration: {e}")
@@ -220,6 +322,75 @@ class ClaudeCodeAdapter(PlatformAdapter):
 
         except Exception as e:
             result.add_error(f"Failed to render {template_name}: {e}")
+
+    def _render_skill_content(
+        self,
+        skill: Any,
+        skill_dir: Path,
+        manifest: Manifest,
+        result: RenderResult,
+    ) -> None:
+        """Render skill content from actual skill file.
+
+        Args:
+            skill: Skill definition from manifest
+            skill_dir: Directory to write skill files
+            manifest: Source manifest
+            result: RenderResult to track files
+        """
+        from vibesop.adapters.models import SkillDefinition
+
+        skill_id = skill.id if hasattr(skill, 'id') else skill.get('id', '')
+        skill_output_path = skill_dir / "SKILL.md"
+
+        # Try to find actual skill content from core/skills/
+        skill_content = self._find_skill_content(skill_id)
+
+        if skill_content:
+            # Use actual skill content
+            self.write_file_atomic(skill_output_path, skill_content, validate_security=False)
+            result.add_file(skill_output_path)
+        else:
+            # Fallback to template for external skills (superpowers, gstack, etc.)
+            self._render_and_write(
+                "skills/SKILL.md.j2",
+                skill_output_path,
+                manifest,
+                result,
+                skill=skill,
+                validate_security=False,
+            )
+
+    def _find_skill_content(self, skill_id: str) -> str | None:
+        """Find and read actual skill content from core/skills/.
+
+        Args:
+            skill_id: Skill identifier (e.g., "systematic-debugging" or "gstack/review")
+
+        Returns:
+            Skill file content or None if not found
+        """
+        # Normalize skill_id - handle namespace prefixes
+        if "/" in skill_id:
+            # External skill like "gstack/review" or "superpowers/tdd"
+            # These don't have local content, return None to use template
+            return None
+
+        # Built-in skill - try to find in core/skills/
+        skill_paths = [
+            self._project_root / "core" / "skills" / skill_id / "SKILL.md",
+            self._project_root / "skills" / skill_id / "SKILL.md",
+            Path(__file__).parent.parent.parent / "core" / "skills" / skill_id / "SKILL.md",
+        ]
+
+        for skill_path in skill_paths:
+            if skill_path.exists():
+                try:
+                    return skill_path.read_text(encoding="utf-8")
+                except Exception:
+                    pass
+
+        return None
 
     def _render_settings_json(
         self,

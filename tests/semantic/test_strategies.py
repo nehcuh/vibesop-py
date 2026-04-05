@@ -6,8 +6,10 @@ from __future__ import annotations
 
 from unittest.mock import Mock
 
-import numpy as np
 import pytest
+
+# NumPy is optional for semantic features
+np = pytest.importorskip("numpy", reason="numpy not installed")
 
 from vibesop.semantic.models import SemanticMatch, SemanticMethod, SemanticPattern
 from vibesop.semantic.strategies import CosineSimilarityStrategy, HybridMatchingStrategy

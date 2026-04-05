@@ -30,6 +30,7 @@ from vibesop.cli.commands import (
     route_commands as route_mod,
     scan as scan_mod,
     skill_craft as skill_craft_mod,
+    skills_cmd as skills_mod,
     switch as switch_mod,
     targets as targets_mod,
     toolchain as toolchain_mod,
@@ -44,6 +45,7 @@ config_app = typer.Typer(help="Configuration management")
 route_app = typer.Typer(help="Route management")
 experiment_app = typer.Typer(help="Experiment management")
 cascade_app = typer.Typer(help="Cascade execution")
+skills_app = typer.Typer(help="Skill storage management")
 
 
 def register(app: typer.Typer) -> None:
@@ -58,6 +60,7 @@ def register(app: typer.Typer) -> None:
     app.add_typer(route_app, name="route-cmd")
     app.add_typer(experiment_app, name="experiment")
     app.add_typer(cascade_app, name="cascade-cmd")
+    app.add_typer(skills_app, name="skills")
 
     # Workflow sub-commands
     workflow_app.command("run")(workflow_mod.workflow)
@@ -101,6 +104,15 @@ def register(app: typer.Typer) -> None:
     app.command()(auto_mod.auto)
 
     # Skills
+    skills_app.command()(skills_mod.list)
+    skills_app.command("install")(skills_mod.install)
+    skills_app.command("link")(skills_mod.link)
+    skills_app.command("unlink")(skills_mod.unlink)
+    skills_app.command("remove")(skills_mod.remove)
+    skills_app.command("sync")(skills_mod.sync)
+    skills_app.command("status")(skills_mod.status)
+
+    # Legacy: keep skill-craft as top-level for now
     app.command("skill-craft")(skill_craft_mod.skill_craft)
 
     # Git / Worktree

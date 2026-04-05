@@ -19,7 +19,7 @@ from vibesop.workflow.models import (
 from vibesop.workflow.pipeline import WorkflowPipeline
 from vibesop.workflow.state import WorkflowStateManager
 from vibesop.workflow.exceptions import WorkflowError, WorkflowRecoveryError
-from vibesop.core.config import ConfigLoader
+from vibesop.core.config_module import ConfigLoader
 
 
 class WorkflowManager:

@@ -16,7 +16,7 @@ from vibesop.adapters.models import (
     SecurityPolicy,
     SkillDefinition,
 )
-from vibesop.core.config import ConfigLoader
+from vibesop.core.config_module import ConfigLoader
 
 
 class ManifestBuilder:

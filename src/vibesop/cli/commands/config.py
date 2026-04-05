@@ -291,10 +291,11 @@ def _clear_semantic_cache() -> None:
 
 def _warmup_semantic() -> None:
     """Warmup semantic model (download + precompute)."""
+    from pathlib import Path
     from vibesop.semantic.encoder import SemanticEncoder
     from vibesop.semantic.cache import VectorCache
-    from vibesop.triggers import DEFAULT_PATTERNS
     from vibesop.semantic.models import EncoderConfig
+    from vibesop.core.skills import SkillLoader
     import time
 
     console.print("[bold cyan]🧠 Warming Up Semantic Model...[/bold cyan]\\n")
@@ -316,22 +317,31 @@ def _warmup_semantic() -> None:
     cache_dir = config.cache_dir or Path.home() / ".cache" / "vibesop" / "semantic"
     cache = VectorCache(cache_dir=cache_dir, encoder=encoder)
 
-    # Precompute pattern vectors
-    console.print("[dim]Precomputing pattern vectors...[/dim]")
+    # Precompute skill vectors (replaces pattern vectors)
+    console.print("[dim]Precomputing skill vectors...[/dim]")
     start = time.time()
 
-    patterns_with_examples = [
-        p for p in DEFAULT_PATTERNS
-        if p.examples or p.semantic_examples
-    ]
+    # Use SkillLoader to discover skills
+    loader = SkillLoader(project_root=Path.cwd())
+    skills = loader.discover_all()
 
-    for pattern in patterns_with_examples:
-        examples = pattern.examples + pattern.semantic_examples
-        if examples:
-            cache.get_or_compute(pattern.pattern_id, examples)
+    computed_count = 0
+    for skill_id, skill_def in skills.items():
+        # Use keywords and examples for vectorization
+        texts = []
+        if skill_def.keywords:
+            texts.extend(skill_def.keywords)
+        if skill_def.examples:
+            texts.extend(skill_def.examples)
+        if skill_def.triggers:
+            texts.extend(skill_def.triggers)
+
+        if texts:
+            cache.get_or_compute(skill_id, texts)
+            computed_count += 1
 
     compute_time = time.time() - start
-    console.print(f"[green]✅ Computed {len(patterns_with_examples)} vectors in {compute_time:.1f}s[/green]\\n")
+    console.print(f"[green]✅ Computed {computed_count} vectors in {compute_time:.1f}s[/green]\\n")
 
     # Save to disk
     console.print("[dim]Saving cache to disk...[/dim]")

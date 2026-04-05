@@ -86,19 +86,31 @@ class VibeSOPInstaller:
             # Install configuration
             from vibesop.builder import ConfigRenderer, QuickBuilder
             from vibesop.hooks import HookInstaller
+            from vibesop.core.skills import SkillStorage
 
             # Create manifest
             manifest = QuickBuilder.default(platform=platform)
 
-            # Render configuration
-            renderer = ConfigRenderer()
-            render_result = renderer.render(manifest, target_dir)
+            # Render configuration (CLAUDE.md, rules/, docs/) - NOT skills/
+            renderer = ConfigRenderer(project_root=self._get_project_root())
+            render_result = renderer.render_config_only(manifest, target_dir)
 
             if not render_result.success:
                 result["errors"].extend(render_result.errors)
                 return result
 
             result["files_created"] = [str(f) for f in render_result.files_created]
+
+            # Install skills using central storage with symlinks
+            storage = SkillStorage()
+            installed, linked, messages = storage.sync_project_skills(
+                project_root=self._get_project_root(),
+                platform=platform,
+                force=force,
+            )
+            result["skills_installed"] = installed
+            result["skills_linked"] = linked
+            result["skill_messages"] = messages
 
             # Install hooks
             hook_installer = HookInstaller()
@@ -272,6 +284,19 @@ class VibeSOPInstaller:
             )
 
         return platforms
+
+    def _get_project_root(self) -> Path:
+        """Get the VibeSOP project root directory.
+
+        Returns:
+            Path to project root containing core/skills/
+        """
+        # Try to find project root by looking for core/ directory
+        current = Path.cwd()
+        for path in [current, current / "src", Path(__file__).parent.parent.parent]:
+            if (path / "core" / "skills").exists():
+                return path.resolve()
+        return Path(".").resolve()
 
     def _is_configured(self, config_dir: Path) -> bool:
         """Check if platform is configured.

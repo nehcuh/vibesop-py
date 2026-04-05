@@ -3,7 +3,7 @@
 from pathlib import Path
 from typing import Any
 
-from vibesop.core.config import ConfigLoader
+from vibesop.core.config_module import ConfigLoader
 from vibesop.core.skills.base import Skill, SkillContext, SkillResult
 from vibesop.core.skills.loader import SkillLoader
 

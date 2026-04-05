@@ -1,15 +1,34 @@
 """VibeSOP-Py Intelligent Keyword Trigger System.
 
-This module provides automatic keyword detection and intent recognition
-for triggering workflows and skills based on natural language input.
+⚠️ **DEPRECATED** - This module is deprecated as of v3.0.0.
 
-Example:
-    >>> from vibesop.triggers import KeywordDetector, DEFAULT_PATTERNS
-    >>> detector = KeywordDetector(patterns=DEFAULT_PATTERNS)
-    >>> match = detector.detect_best("扫描安全漏洞")
-    >>> print(match.pattern_id)  # "security/scan"
-    >>> print(match.confidence)  # 0.95
+The functionality in this module has been consolidated into the new
+unified matching system:
+
+    >>> from vibesop.core.matching import KeywordMatcher
+    >>> from vibesop.core.routing import UnifiedRouter
+
+    # Use UnifiedRouter for all routing operations
+    >>> router = UnifiedRouter()
+    >>> result = router.route("扫描安全漏洞")
+
+Migration guide:
+    - KeywordDetector → KeywordMatcher (vibesop.core.matching)
+    - DEFAULT_PATTERNS → Built-in skill discovery
+    - SkillActivator → UnifiedRouter.route()
+
+This module will be removed in v4.0.0.
 """
+
+import warnings
+
+warnings.warn(
+    "The 'vibesop.triggers' module is deprecated as of v3.0.0 "
+    "and will be removed in v4.0.0. "
+    "Use 'vibesop.core.matching' and 'vibesop.core.routing' instead.",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
 from vibesop.triggers.models import (
     TriggerPattern,
@@ -31,4 +50,4 @@ __all__ = [
 ]
 
 # Version info
-__version__ = "2.0.0"
+__version__ = "2.0.0"  # Last version before deprecation

@@ -1,17 +1,228 @@
 {
-  "selections": [],
+  "selections": [
+    {
+      "skill_id": "gstack/review",
+      "query": "\u5e2e\u6211\u8bc4\u5ba1\u4ee3\u7801",
+      "timestamp": "2026-04-05T16:37:27.324345",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "/verification-before-completion",
+      "query": "review my code",
+      "timestamp": "2026-04-05T16:37:27.553160",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "gstack/review",
+      "query": "please review this",
+      "timestamp": "2026-04-05T16:37:27.554399",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "gstack/review",
+      "query": "help me review",
+      "timestamp": "2026-04-05T16:37:27.555507",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-05T16:37:40.477272",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-05T16:37:40.528562",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-05T16:37:40.587244",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "gstack/review",
+      "query": "\u5e2e\u6211\u8bc4\u5ba1\u4ee3\u7801",
+      "timestamp": "2026-04-05T16:38:29.147291",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "/verification-before-completion",
+      "query": "review my code",
+      "timestamp": "2026-04-05T16:38:29.388257",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "gstack/review",
+      "query": "please review this",
+      "timestamp": "2026-04-05T16:38:29.389755",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "gstack/review",
+      "query": "help me review",
+      "timestamp": "2026-04-05T16:38:29.391112",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-05T16:38:42.494900",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-05T16:38:42.544937",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-05T16:38:42.595016",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "gstack/review",
+      "query": "\u5e2e\u6211\u8bc4\u5ba1\u4ee3\u7801",
+      "timestamp": "2026-04-05T16:39:15.122962",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "/verification-before-completion",
+      "query": "review my code",
+      "timestamp": "2026-04-05T16:39:15.358595",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "gstack/review",
+      "query": "please review this",
+      "timestamp": "2026-04-05T16:39:15.360232",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "gstack/review",
+      "query": "help me review",
+      "timestamp": "2026-04-05T16:39:15.361811",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-05T16:39:28.700803",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-05T16:39:28.751801",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-05T16:39:28.803814",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "gstack/review",
+      "query": "\u5e2e\u6211\u8bc4\u5ba1\u4ee3\u7801",
+      "timestamp": "2026-04-05T16:40:09.210335",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "/verification-before-completion",
+      "query": "review my code",
+      "timestamp": "2026-04-05T16:40:09.442798",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "gstack/review",
+      "query": "please review this",
+      "timestamp": "2026-04-05T16:40:09.444536",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "gstack/review",
+      "query": "help me review",
+      "timestamp": "2026-04-05T16:40:09.446198",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-05T16:40:22.624641",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-05T16:40:22.675863",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-05T16:40:22.727354",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "gstack/review",
+      "query": "\u5e2e\u6211\u8bc4\u5ba1\u4ee3\u7801",
+      "timestamp": "2026-04-05T16:42:00.872250",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "/verification-before-completion",
+      "query": "review my code",
+      "timestamp": "2026-04-05T16:42:01.106942",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "gstack/review",
+      "query": "please review this",
+      "timestamp": "2026-04-05T16:42:01.108946",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "gstack/review",
+      "query": "help me review",
+      "timestamp": "2026-04-05T16:42:01.110824",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-05T16:42:14.813265",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-05T16:42:14.864604",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-05T16:42:14.915974",
+      "was_helpful": false
+    }
+  ],
   "skill_scores": {
     "/review": {
       "score": 0.7902359478108525,
       "selection_count": 4,
       "helpful_count": 4,
-      "last_selected": "2026-04-05T09:56:31.434712"
+      "last_selected": "2026-04-05T15:56:47.414259"
     },
     "/debug": {
       "score": 0.7673286795139986,
       "selection_count": 1,
       "helpful_count": 1,
-      "last_selected": "2026-04-05T09:56:31.418394"
+      "last_selected": "2026-04-05T15:56:47.369325"
     },
     "/skill0": {
       "score": 0.7673286795139986,
@@ -77,31 +288,39 @@
       "score": 0.7774653072167027,
       "selection_count": 2,
       "helpful_count": 2,
-      "last_selected": "2026-04-05T09:56:31.401520"
+      "last_selected": "2026-04-05T15:56:47.322308"
     },
     "test-skill": {
-      "score": 0.38465735902799725,
-      "selection_count": 3,
-      "helpful_count": 1,
-      "last_selected": "2026-04-05T09:44:56.132351"
+      "score": 0.4193147180559945,
+      "selection_count": 15,
+      "helpful_count": 5,
+      "last_selected": "2026-04-05T16:42:14.915974"
     },
     "gstack/review": {
-      "score": 0.7902359478108525,
-      "selection_count": 4,
-      "helpful_count": 4,
-      "last_selected": "2026-04-05T09:45:16.659958"
+      "score": 0.8193147180559945,
+      "selection_count": 15,
+      "helpful_count": 15,
+      "last_selected": "2026-04-05T16:42:01.110824"
+    },
+    "/verification-before-completion": {
+      "score": 0.7947939867307013,
+      "selection_count": 5,
+      "helpful_count": 5,
+      "last_selected": "2026-04-05T16:42:01.106942"
     }
   },
   "word_associations": {
     "review": {
-      "/review": 118,
-      "/gstack/review": 45,
-      "gstack/review": 69
+      "/review": 154,
+      "/gstack/review": 63,
+      "gstack/review": 111,
+      "/verification-before-completion": 6
     },
     "code": {
-      "/review": 155,
-      "/gstack/review": 90,
-      "gstack/review": 23
+      "/review": 209,
+      "/gstack/review": 126,
+      "gstack/review": 33,
+      "/verification-before-completion": 6
     },
     "debug": {
       "/debug": 6
@@ -123,8 +342,8 @@
       "/skill7": 1,
       "/skill8": 1,
       "/skill9": 1,
-      "/review": 46,
-      "test-skill": 63
+      "/review": 64,
+      "test-skill": 129
     },
     "query1": {
       "/review": 2
@@ -140,32 +359,32 @@
     },
     "query": {
       "/review": 1,
-      "test-skill": 63
+      "test-skill": 129
     },
     "quality": {
       "/review": 1
     },
     "check": {
-      "/review": 46,
-      "/gstack/review": 45
+      "/review": 64,
+      "/gstack/review": 63
     },
     "fix": {
-      "/debug": 46
+      "/debug": 64
     },
     "bug": {
-      "/debug": 46
+      "/debug": 64
     },
     "\u5e2e\u6211\u8bc4\u5ba1\u4ee3\u7801": {
-      "gstack/review": 30
+      "gstack/review": 47
     },
     "please": {
-      "gstack/review": 23
+      "gstack/review": 39
     },
     "this": {
-      "gstack/review": 23
+      "gstack/review": 39
     },
     "help": {
-      "gstack/review": 23
+      "gstack/review": 39
     }
   }
 }

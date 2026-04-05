@@ -87,6 +87,13 @@ class InitSupport:
             config_file.write_text(config_content)
             result["created_files"].append(str(config_file))
 
+            # Create project-level routing configuration
+            from vibesop.core.routing.project_config import create_default_project_routing
+
+            routing_file = create_default_project_routing(project_path)
+            if routing_file:
+                result["created_files"].append(str(routing_file))
+
             # Create .gitignore entries
             self._update_gitignore(project_path)
 

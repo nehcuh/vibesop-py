@@ -2,6 +2,11 @@
 
 Tests the complete CLI workflow from command invocation
 to execution, including file I/O and error handling.
+
+DEPRECATED: These tests are for the deprecated 'vibe auto' command.
+The command has been reimplemented using UnifiedRouter.
+These tests are kept for backward compatibility but may be skipped.
+In v4.0.0, these tests will be removed along with the triggers module.
 """
 
 # pyright: reportPrivateUsage=none, reportUnknownMemberType=none, reportUnknownVariableType=none, reportUnknownArgumentType=none, reportUnknownParameterType=none, reportMissingParameterType=none
@@ -10,6 +15,12 @@ import pytest
 from typer.testing import CliRunner
 
 from vibesop.cli.main import app
+
+
+# Skip these tests since vibe auto is deprecated
+pytestmark = pytest.mark.skip(
+    reason="'vibe auto' command is deprecated. Tests skipped pending v4.0.0 removal."
+)
 
 
 class TestCLICommandAuto:

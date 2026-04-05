@@ -1,0 +1,31 @@
+# Project-Level Skill Routing Configuration
+# This file allows you to customize routing behavior for this specific project.
+# Changes here override the global core/policies/task-routing.yaml settings.
+
+schema_version: 1
+
+# Add project-specific scenario patterns
+scenario_patterns:
+  - id: vibesop_dev
+    name: "VibeSOP Development"
+    trigger_mode: suggest
+    description: "Working on VibeSOP itself"
+    keywords:
+      - "refactor vibesop"
+      - "优化 vibesop"
+      - "vibesop 架构"
+      - "改进路由"
+    skill_id: "riper-workflow"
+    priority: P1
+    message: "VibeSOP 开发建议使用 RIPER 工作流进行系统性改进"
+
+# Project-specific routing hints
+routing_hints:
+  - keywords: ["模板", "template", "CLAUDE.md", "配置生成"]
+    suggest: "riper-workflow"
+    message: "模板修改建议使用 RIPER 流程：Research → Innovate → Plan → Execute → Review"
+
+# Override keywords
+override_keywords:
+  "用项目路由": project
+  "use project routing": project

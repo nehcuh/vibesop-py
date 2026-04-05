@@ -12,7 +12,7 @@ from abc import ABC, abstractmethod
 from typing import Any
 
 from vibesop.core.models import SkillRoute
-from vibesop.core.routing.scenario_config import DEFAULT_SCENARIOS
+from vibesop.core.routing.project_config import load_merged_scenarios
 
 
 class RoutingHandler(ABC):
@@ -160,9 +160,16 @@ class ExplicitHandler(RoutingHandler):
 class ScenarioHandler(RoutingHandler):
     """Layer 2: Scenario pattern matching (debug, test, review, refactor)."""
 
-    def __init__(self, config: Any, scenarios: list[dict[str, Any]] | None = None) -> None:
+    def __init__(self, config: Any, project_root: str = ".") -> None:
         self._config = config
-        self._scenarios = scenarios or DEFAULT_SCENARIOS
+        self._project_root = project_root
+        self._scenarios: list[dict[str, Any]] | None = None
+
+    def _load_scenarios(self) -> list[dict[str, Any]]:
+        """Lazy load scenarios with project-level overrides."""
+        if self._scenarios is None:
+            self._scenarios = load_merged_scenarios(self._project_root)
+        return self._scenarios
 
     @property
     def layer_number(self) -> int:
@@ -177,7 +184,8 @@ class ScenarioHandler(RoutingHandler):
         normalized_input: str,
         context: dict[str, str | int],  # noqa: ARG002
     ) -> SkillRoute | None:
-        for rule in self._scenarios:
+        scenarios = self._load_scenarios()
+        for rule in scenarios:
             if any(kw in normalized_input for kw in rule["keywords"]):
                 skill = self._config.get_skill_by_id(rule["skill_id"])
                 if not skill and "fallback_id" in rule:

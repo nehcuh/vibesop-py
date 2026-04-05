@@ -15,8 +15,10 @@ import time
 from pathlib import Path
 from unittest.mock import Mock
 
-import numpy as np
 import pytest
+
+# NumPy is optional for semantic features
+np = pytest.importorskip("numpy", reason="numpy not installed")
 
 from vibesop.semantic.cache import CacheMetadata, CacheStats, VectorCache
 

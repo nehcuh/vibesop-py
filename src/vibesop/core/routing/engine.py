@@ -17,7 +17,7 @@ from typing import Any
 from pydantic import ValidationError
 
 from vibesop.constants import RoutingThresholds
-from vibesop.core.config import ConfigLoader
+from vibesop.core.config_module import ConfigLoader
 from vibesop.core.models import (
     RoutingRequest,
     RoutingResult,
@@ -118,7 +118,7 @@ class SkillRouter:
         self._handlers: list[RoutingHandler] = [
             AITriageHandler(self._llm if ai_enabled else None, self._cache, self._config),
             ExplicitHandler(self._config),
-            ScenarioHandler(self._config),
+            ScenarioHandler(self._config, str(self.project_root)),
             SemanticHandler(self._semantic_matcher),
             FuzzyHandler(self._fuzzy_matcher),
         ]
