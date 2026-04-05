@@ -117,7 +117,7 @@ class PathSafety:
             full_path = path_obj
         else:
             # Join with base directory
-            full_path = (base_dir / path_obj)
+            full_path = base_dir / path_obj
 
         # Normalize the path (resolve .. and . components)
         # Use resolve() but be aware it follows symlinks
@@ -192,11 +192,11 @@ class PathSafety:
 
         # If path exists, check if it's writable
         if path.exists():
-            return os.access(path, os.W_OK)  # type: ignore
+            return os.access(str(path), os.W_OK)
 
         # Otherwise, check if parent directory is writable
         if path.parent.exists():
-            return os.access(path.parent, os.W_OK)  # type: ignore
+            return os.access(str(path.parent), os.W_OK)
 
         # Parent doesn't exist
         return False
@@ -221,7 +221,9 @@ class PathSafety:
             protected = Path(protected).resolve()
 
             if self.check_overlap(output_path, protected):
-                msg = f"Output path overlaps with protected path: {output_path} overlaps {protected}"
+                msg = (
+                    f"Output path overlaps with protected path: {output_path} overlaps {protected}"
+                )
                 raise PathOverlapError(
                     message=msg,
                     path1=str(output_path),
