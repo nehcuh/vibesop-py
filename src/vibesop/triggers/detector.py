@@ -75,7 +75,7 @@ class KeywordDetector:
     def __init__(
         self,
         patterns: list[TriggerPattern],
-        confidence_threshold: float = 0.6,
+        confidence_threshold: float = 0.3,
         enable_semantic: bool = False,
         semantic_config: Optional["EncoderConfig"] = None,  # type: ignore[reportUnknownVariableType]
     ):
@@ -365,7 +365,12 @@ class KeywordDetector:
         semantic_score = self._calculate_semantic_score(query, pattern)
 
         # Calculate combined score
-        combined_score = calculate_combined_score(keyword_score, regex_score, semantic_score)
+        combined_score = calculate_combined_score(
+            keyword_score,
+            regex_score,
+            semantic_score,
+            weights=(0.5, 0.2, 0.3),
+        )
 
         # If combined score is very low, no match
         if combined_score < 0.1:

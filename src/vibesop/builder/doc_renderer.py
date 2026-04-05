@@ -89,6 +89,84 @@ class DocRenderer:
 
         return result
 
+    def render_from_manifest(
+        self,
+        manifest: Manifest,
+        output_dir: Path,
+        doc_types: list[DocType] | None = None,
+    ) -> Dict[str, Any]:
+        """Render documentation from manifest.
+
+        Args:
+            manifest: Configuration manifest
+            output_dir: Output directory
+            doc_types: List of doc types to generate (all if None)
+
+        Returns:
+            Result dictionary with success status and generated files
+        """
+        result: Dict[str, Any] = {
+            "success": False,
+            "generated": [],
+            "errors": [],
+        }
+
+        try:
+            output_dir.mkdir(parents=True, exist_ok=True)
+
+            types = doc_types or [
+                DocType.README,
+                DocType.API,
+                DocType.GUIDE,
+                DocType.CHANGELOG,
+                DocType.CONTRIBUTING,
+            ]
+
+            for doc_type in types:
+                config = self._generator.create_config_from_manifest(manifest, doc_type, output_dir)
+                render_result = self.render(config)
+
+                if render_result["success"]:
+                    result["generated"].append(
+                        {
+                            "type": doc_type.value,
+                            "path": render_result["output_path"],
+                        }
+                    )
+                else:
+                    result["errors"].extend(render_result["errors"])
+
+            result["success"] = len(result["errors"]) == 0
+
+        except (OSError, ValueError) as e:
+            result["errors"].append(f"Rendering from manifest failed: {e}")
+
+        return result
+
+    @staticmethod
+    def _extract_module_docstring(content: str) -> str:
+        """Extract module docstring from Python file content.
+
+        Args:
+            content: Python file content
+
+        Returns:
+            Docstring or empty string
+        """
+        return DocContentGenerator.extract_module_docstring(content)
+
+    @staticmethod
+    def _scan_python_modules(source_dir: Path) -> list[Dict[str, Any]]:
+        """Scan source directory for Python modules.
+
+        Args:
+            source_dir: Source code directory
+
+        Returns:
+            List of module information dicts
+        """
+        return DocContentGenerator.scan_python_modules(source_dir)
+
     def generate_api_docs(
         self,
         source_dir: Path,

@@ -16,7 +16,7 @@ class TestInspectCommand:
         """Test inspect help output."""
         result = runner.invoke(app, ["inspect", "--help"])
         assert result.exit_code == 0
-        assert "Inspect current" in result.stdout
+        assert "--path" in result.stdout
 
     def test_inspect_default(self) -> None:
         """Test inspect default output."""

@@ -62,11 +62,14 @@ class SkillActivator:
 
         self.skill_manager = skill_manager or SkillManager(self.project_root)
 
-        try:
-            self.router = router or SkillRouter(self.project_root)
-        except Exception:
-            logger.warning("Router initialization failed, using null router")
-            self.router = _NullRouter()
+        if router is not None:
+            self.router = router
+        else:
+            try:
+                self.router = SkillRouter(self.project_root)
+            except Exception:
+                logger.warning("Router initialization failed, using null router")
+                self.router = _NullRouter()
 
         self.workflow_manager = workflow_manager or WorkflowManager(project_root=self.project_root)
 

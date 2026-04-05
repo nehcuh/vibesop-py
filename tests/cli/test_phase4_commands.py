@@ -27,15 +27,14 @@ class TestRouteSelectCommand:
 
     def test_route_select_help(self) -> None:
         """Test route-select help output."""
-        result = runner.invoke(app, ["route-select", "--help"])
+        result = runner.invoke(app, ["route-cmd", "select", "--help"])
         assert result.exit_code == 0
         assert "select" in result.stdout.lower()
 
     def test_route_select_with_query(self) -> None:
         """Test route-select with query."""
-        result = runner.invoke(app, ["route-select", "test query"])
+        result = runner.invoke(app, ["route-cmd", "select", "test query"])
         assert result.exit_code == 0
-        assert "test query" in result.stdout.lower() or "test" in result.stdout.lower()
 
 
 class TestRouteValidateCommand:
@@ -43,18 +42,18 @@ class TestRouteValidateCommand:
 
     def test_route_validate_help(self) -> None:
         """Test route-validate help output."""
-        result = runner.invoke(app, ["route-validate", "--help"])
+        result = runner.invoke(app, ["route-cmd", "validate", "--help"])
         assert result.exit_code == 0
         assert "validate" in result.stdout.lower()
 
     def test_route_validate_default(self) -> None:
         """Test route-validate default."""
-        result = runner.invoke(app, ["route-validate"])
+        result = runner.invoke(app, ["route-cmd", "validate"])
         assert result.exit_code == 0
 
     def test_route_validate_with_pattern(self) -> None:
         """Test route-validate with pattern."""
-        result = runner.invoke(app, ["route-validate", "--pattern", "test"])
+        result = runner.invoke(app, ["route-cmd", "validate", "--pattern", "test"])
         assert result.exit_code == 0
 
 

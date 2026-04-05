@@ -240,7 +240,6 @@ class ClaudeCodeAdapter(PlatformAdapter):
 
         # Apply manifest policies to settings
         security_policy = manifest.get_effective_security_policy()
-        routing_config = manifest.get_effective_routing_config()
 
         # Update settings based on policies
         if "allowedCommands" in settings:
@@ -328,7 +327,7 @@ class ClaudeCodeAdapter(PlatformAdapter):
         Returns:
             Dictionary mapping hook names to installation status
         """
-        results = {}
+        results: dict[str, bool] = {}
 
         # Install pre-session-end hook
         hook_path = config_dir / "hooks" / "pre-session-end.sh"
@@ -352,7 +351,7 @@ fi
             hook_path.chmod(0o755)
 
             results["pre-session-end"] = True
-        except Exception as e:
+        except Exception:
             results["pre-session-end"] = False
             # Note: error but don't fail
 

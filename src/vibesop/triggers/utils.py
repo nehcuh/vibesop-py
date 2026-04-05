@@ -12,6 +12,13 @@ import math
 from collections import Counter
 
 
+def _safe_regex_search(pattern: str, text: str) -> bool:
+    try:
+        return re.search(pattern, text, re.IGNORECASE) is not None
+    except re.error:
+        return False
+
+
 def tokenize(text: str) -> list[str]:
     """Tokenize text into words.
 
@@ -252,7 +259,7 @@ def calculate_regex_match_score(query: str, patterns: list[str]) -> float:
     if not patterns:
         return 0.0
 
-    matched = sum(1 for pattern in patterns if re.search(pattern, query, re.IGNORECASE))
+    matched = sum(1 for pattern in patterns if _safe_regex_search(pattern, query))
 
     if matched == 0:
         return 0.0

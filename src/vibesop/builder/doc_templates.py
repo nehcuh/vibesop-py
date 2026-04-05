@@ -4,6 +4,7 @@ This module contains template definitions and loading logic
 for generating various types of documentation.
 """
 
+from datetime import datetime
 from enum import Enum
 from jinja2 import Environment, Template, FileSystemLoader
 from pathlib import Path
@@ -21,6 +22,7 @@ class DocType(Enum):
         CONTRIBUTING: Contributing guidelines
         LICENSE: License file
     """
+
     README = "readme"
     API = "api"
     GUIDE = "guide"
@@ -69,9 +71,7 @@ class DocTemplates:
             template_dir = self._template_dir
         else:
             # Use default templates
-            template_dir = (
-                Path(__file__).parent.parent / "adapters" / "templates" / "docs"
-            )
+            template_dir = Path(__file__).parent.parent / "adapters" / "templates" / "docs"
 
         # If default templates don't exist, create minimal environment
         if not template_dir.exists():
@@ -82,6 +82,7 @@ class DocTemplates:
             loader=FileSystemLoader(template_dir),
             autoescape=False,
         )
+        self._env.globals["now"] = lambda fmt="%Y-%m-%d": datetime.now().strftime(fmt)
         return self._env
 
     def get_template(self, doc_type: DocType) -> Template:
@@ -118,6 +119,7 @@ class DocTemplates:
             Jinja2 template
         """
         env = Environment()
+        env.globals["now"] = lambda fmt="%Y-%m-%d": datetime.now().strftime(fmt)
 
         if doc_type == DocType.README:
             template_str = """# {{ project_name }}
@@ -186,7 +188,7 @@ class DocTemplates:
 
 All notable changes to {{ project_name }} will be documented in this file.
 
-## [{{ version }}] - {% now 'local', '%Y-%m-%d' %}
+## [{{ version }}] - {{ now('%Y-%m-%d') }}
 
 ### Added
 - Initial release

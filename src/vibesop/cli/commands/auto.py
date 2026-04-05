@@ -36,7 +36,7 @@ def auto(
         help="Input data as JSON string",
     ),
     min_confidence: float = typer.Option(
-        0.6,
+        0.3,
         "--min-confidence",
         "-c",
         help="Minimum confidence threshold (0.0 - 1.0)",

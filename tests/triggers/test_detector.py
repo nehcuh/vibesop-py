@@ -65,7 +65,7 @@ class TestKeywordDetectorInit:
         detector = KeywordDetector(patterns=sample_patterns)
 
         assert detector.patterns == sample_patterns
-        assert detector.confidence_threshold == 0.6
+        assert detector.confidence_threshold == 0.3
         assert len(detector.patterns) == 3
 
     def test_priority_ordering(self):
@@ -310,7 +310,7 @@ class TestPatternThresholds:
         ]
 
         detector = KeywordDetector(patterns=patterns)
-        assert detector.confidence_threshold == 0.6
+        assert detector.confidence_threshold == 0.3
 
 
 class TestEdgeCases:

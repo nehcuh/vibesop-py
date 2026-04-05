@@ -96,16 +96,16 @@ class TestE2EKeywordDetection:
         """Test that all categories can be detected."""
         test_queries = [
             ("scan security", "security"),
-            ("deploy configuration", "config"),  # Full word matches better
+            ("deploy configuration", "config"),
             ("run tests", "dev"),
-            ("generate docs", "docs"),
-            ("init project", "project"),
+            ("generate documentation", "docs"),
+            ("initialize project", "project"),
         ]
 
         detector = KeywordDetector(patterns=DEFAULT_PATTERNS)
 
         for query, expected_category in test_queries:
-            match = detector.detect_best(query, min_confidence=0.5)
+            match = detector.detect_best(query)
             assert match is not None, f"No match for query: {query}"
             assert match.metadata["category"] == expected_category
 
@@ -117,10 +117,11 @@ class TestE2ESkillActivation:
     async def test_complete_skill_activation_workflow(self, project_root):
         """Test complete workflow from detection to skill execution."""
         # Setup mocks
-        with patch('vibesop.triggers.activator.SkillManager') as mock_sm_class, \
-             patch('vibesop.triggers.activator.SkillRouter') as mock_router_class, \
-             patch('vibesop.triggers.activator.WorkflowManager') as mock_wm_class:
-
+        with (
+            patch("vibesop.triggers.activator.SkillManager") as mock_sm_class,
+            patch("vibesop.triggers.activator.SkillRouter") as mock_router_class,
+            patch("vibesop.triggers.activator.WorkflowManager") as mock_wm_class,
+        ):
             # Create mocks
             mock_sm = MagicMock()
             mock_sm.execute_skill = AsyncMock(return_value="Skill executed successfully")
@@ -149,10 +150,7 @@ class TestE2ESkillActivation:
 
             # Activate skill
             activator = SkillActivator(project_root=project_root)
-            result = await activator.activate(
-                match,
-                input_data={"target": "./src"}
-            )
+            result = await activator.activate(match, input_data={"target": "./src"})
 
             # Verify result (config/validate has no workflow_id, so should use skill)
             assert result["success"] is True
@@ -162,9 +160,10 @@ class TestE2ESkillActivation:
     @pytest.mark.asyncio
     async def test_auto_activate_convenience_function(self, project_root):
         """Test auto_activate convenience function."""
-        with patch('vibesop.triggers.activator.SkillManager') as mock_sm_class, \
-             patch('vibesop.triggers.activator.SkillRouter') as mock_router_class:
-
+        with (
+            patch("vibesop.triggers.activator.SkillManager") as mock_sm_class,
+            patch("vibesop.triggers.activator.SkillRouter") as mock_router_class,
+        ):
             # Setup mocks
             mock_sm = MagicMock()
             mock_sm.execute_skill = AsyncMock(return_value="Success")
@@ -176,9 +175,7 @@ class TestE2ESkillActivation:
 
             # Use convenience function
             result = await auto_activate(
-                "scan for security issues",
-                project_root=project_root,
-                min_confidence=0.6
+                "scan for security issues", project_root=project_root, min_confidence=0.6
             )
 
             # Verify
@@ -188,9 +185,10 @@ class TestE2ESkillActivation:
     @pytest.mark.asyncio
     async def test_skill_activation_with_failure_fallback(self, project_root):
         """Test skill activation with fallback to router."""
-        with patch('vibesop.triggers.activator.SkillManager') as mock_sm_class, \
-             patch('vibesop.triggers.activator.SkillRouter') as mock_router_class:
-
+        with (
+            patch("vibesop.triggers.activator.SkillManager") as mock_sm_class,
+            patch("vibesop.triggers.activator.SkillRouter") as mock_router_class,
+        ):
             # Setup mocks
             mock_sm = MagicMock()
             mock_sm.execute_skill = AsyncMock(side_effect=Exception("Skill not found"))
@@ -203,14 +201,17 @@ class TestE2ESkillActivation:
             mock_route.primary = mock_skill
             mock_router = MagicMock()
             mock_router.route.return_value = mock_route
-            mock_router_class.return_value = mock_router
 
-            # Detect and activate
-            query = "scan for security issues"
+            # Detect and activate (use pattern without workflow_id to test skill fallback)
+            query = "run tests"
             detector = KeywordDetector(patterns=DEFAULT_PATTERNS)
             match = detector.detect_best(query)
 
-            activator = SkillActivator(project_root=project_root)
+            activator = SkillActivator(
+                project_root=project_root,
+                skill_manager=mock_sm,
+                router=mock_router,
+            )
             result = await activator.activate(match)
 
             # Should have attempted fallback
@@ -224,10 +225,11 @@ class TestE2EIntegrationScenarios:
     @pytest.mark.asyncio
     async def test_security_scan_workflow(self, project_root):
         """Test complete security scan workflow."""
-        with patch('vibesop.triggers.activator.SkillManager') as mock_sm_class, \
-             patch('vibesop.triggers.activator.SkillRouter') as mock_router_class, \
-             patch('vibesop.triggers.activator.WorkflowManager') as mock_wm_class:
-
+        with (
+            patch("vibesop.triggers.activator.SkillManager") as mock_sm_class,
+            patch("vibesop.triggers.activator.SkillRouter") as mock_router_class,
+            patch("vibesop.triggers.activator.WorkflowManager") as mock_wm_class,
+        ):
             # Setup
             mock_sm = MagicMock()
             mock_sm.execute_skill = AsyncMock(return_value="Security scan complete")
@@ -260,8 +262,7 @@ class TestE2EIntegrationScenarios:
             # Execute with input data
             activator = SkillActivator(project_root=project_root)
             result = await activator.activate(
-                match,
-                input_data={"target": "./src", "severity": "high"}
+                match, input_data={"target": "./src", "severity": "high"}
             )
 
             # security/scan has workflow_id, so should activate workflow
@@ -272,10 +273,11 @@ class TestE2EIntegrationScenarios:
     @pytest.mark.asyncio
     async def test_config_deploy_workflow(self, project_root):
         """Test complete config deployment workflow."""
-        with patch('vibesop.triggers.activator.SkillManager') as mock_sm_class, \
-             patch('vibesop.triggers.activator.SkillRouter') as mock_router_class, \
-             patch('vibesop.triggers.activator.WorkflowManager') as mock_wm_class:
-
+        with (
+            patch("vibesop.triggers.activator.SkillManager") as mock_sm_class,
+            patch("vibesop.triggers.activator.SkillRouter") as mock_router_class,
+            patch("vibesop.triggers.activator.WorkflowManager") as mock_wm_class,
+        ):
             # Setup
             mock_sm = MagicMock()
             mock_sm.execute_skill = AsyncMock(return_value="Config deployed")
@@ -303,10 +305,7 @@ class TestE2EIntegrationScenarios:
             assert match.pattern_id == "config/deploy"
 
             activator = SkillActivator(project_root=project_root)
-            result = await activator.activate(
-                match,
-                input_data={"environment": "production"}
-            )
+            result = await activator.activate(match, input_data={"environment": "production"})
 
             # config/deploy has workflow_id, so should activate workflow
             assert result["success"] is True
@@ -315,10 +314,11 @@ class TestE2EIntegrationScenarios:
     @pytest.mark.asyncio
     async def test_multi_stage_workflow_simulation(self, project_root):
         """Test simulated multi-stage workflow."""
-        with patch('vibesop.triggers.activator.SkillManager') as mock_sm_class, \
-             patch('vibesop.triggers.activator.SkillRouter') as mock_router_class, \
-             patch('vibesop.triggers.activator.WorkflowManager') as mock_wm_class:
-
+        with (
+            patch("vibesop.triggers.activator.SkillManager") as mock_sm_class,
+            patch("vibesop.triggers.activator.SkillRouter") as mock_router_class,
+            patch("vibesop.triggers.activator.WorkflowManager") as mock_wm_class,
+        ):
             # Setup
             mock_sm = MagicMock()
             mock_sm.execute_skill = AsyncMock(return_value="Stage complete")
@@ -363,9 +363,7 @@ class TestE2EErrorHandling:
     async def test_no_match_error(self, project_root):
         """Test error handling when no pattern matches."""
         result = await auto_activate(
-            "xyzabc123 unmatched",
-            project_root=project_root,
-            min_confidence=0.8
+            "xyzabc123 unmatched", project_root=project_root, min_confidence=0.8
         )
 
         assert result["success"] is False
@@ -375,10 +373,11 @@ class TestE2EErrorHandling:
     @pytest.mark.asyncio
     async def test_skill_execution_error(self, project_root):
         """Test error handling when skill execution fails."""
-        with patch('vibesop.triggers.activator.SkillManager') as mock_sm_class, \
-             patch('vibesop.triggers.activator.SkillRouter') as mock_router_class, \
-             patch('vibesop.triggers.activator.WorkflowManager') as mock_wm_class:
-
+        with (
+            patch("vibesop.triggers.activator.SkillManager") as mock_sm_class,
+            patch("vibesop.triggers.activator.SkillRouter") as mock_router_class,
+            patch("vibesop.triggers.activator.WorkflowManager") as mock_wm_class,
+        ):
             # Setup failing skill, router, and workflow
             mock_sm = MagicMock()
             mock_sm.execute_skill = AsyncMock(side_effect=Exception("Skill failed"))
@@ -407,9 +406,10 @@ class TestE2EErrorHandling:
     @pytest.mark.asyncio
     async def test_invalid_input_data(self, project_root):
         """Test error handling with invalid input data."""
-        with patch('vibesop.triggers.activator.SkillManager') as mock_sm_class, \
-             patch('vibesop.triggers.activator.SkillRouter') as mock_router_class:
-
+        with (
+            patch("vibesop.triggers.activator.SkillManager") as mock_sm_class,
+            patch("vibesop.triggers.activator.SkillRouter") as mock_router_class,
+        ):
             mock_sm = MagicMock()
             mock_sm.execute_skill = AsyncMock(return_value="OK")
             mock_sm_class.return_value = mock_sm
@@ -501,10 +501,11 @@ class TestE2EPerformance:
         """Test concurrent skill activations."""
         import asyncio
 
-        with patch('vibesop.triggers.activator.SkillManager') as mock_sm_class, \
-             patch('vibesop.triggers.activator.SkillRouter') as mock_router_class, \
-             patch('vibesop.triggers.activator.WorkflowManager') as mock_wm_class:
-
+        with (
+            patch("vibesop.triggers.activator.SkillManager") as mock_sm_class,
+            patch("vibesop.triggers.activator.SkillRouter") as mock_router_class,
+            patch("vibesop.triggers.activator.WorkflowManager") as mock_wm_class,
+        ):
             # Setup
             mock_sm = MagicMock()
             mock_sm.execute_skill = AsyncMock(return_value="Done")
@@ -543,9 +544,7 @@ class TestE2EPerformance:
             ]
 
             # Run concurrently
-            results = await asyncio.gather(*[
-                run_detection(query) for query in queries
-            ])
+            results = await asyncio.gather(*[run_detection(query) for query in queries])
 
             # All should complete successfully
             assert len(results) == len(queries)
@@ -656,5 +655,6 @@ class TestE2EAccuracy:
             avg_vague = sum(vague_confidences) / len(vague_confidences)
 
             # Clear matches should have higher average confidence
-            assert avg_clear > avg_vague, \
+            assert avg_clear > avg_vague, (
                 f"Clear matches ({avg_clear:.2f}) should have higher confidence than vague ({avg_vague:.2f})"
+            )

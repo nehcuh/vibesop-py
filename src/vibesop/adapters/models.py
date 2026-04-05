@@ -38,6 +38,22 @@ class SecurityPolicy(BaseModel):
         default=False,
         description="Require skills to be cryptographically signed",
     )
+    enable_command_blocklist: bool = Field(
+        default=False,
+        description="Enable command blocklist filtering",
+    )
+    command_blocklist: list[str] = Field(
+        default_factory=list,
+        description="List of blocked command patterns",
+    )
+    require_command_allowlist: bool = Field(
+        default=False,
+        description="Require commands to be explicitly allowed",
+    )
+    command_allowlist: list[str] = Field(
+        default_factory=list,
+        description="List of allowed command patterns",
+    )
 
     @field_validator("allow_path_traversal")
     @classmethod

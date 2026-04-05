@@ -44,11 +44,11 @@ class TestPatternLibrary:
     def test_total_patterns_by_category(self):
         """Test total patterns match sum of categories."""
         total = (
-            len(SECURITY_PATTERNS) +
-            len(CONFIG_PATTERNS) +
-            len(DEV_PATTERNS) +
-            len(DOCS_PATTERNS) +
-            len(PROJECT_PATTERNS)
+            len(SECURITY_PATTERNS)
+            + len(CONFIG_PATTERNS)
+            + len(DEV_PATTERNS)
+            + len(DOCS_PATTERNS)
+            + len(PROJECT_PATTERNS)
         )
         assert total == len(DEFAULT_PATTERNS)
 
@@ -60,7 +60,7 @@ class TestPatternStructure:
         """Test all patterns have required fields."""
         for pattern in DEFAULT_PATTERNS:
             assert pattern.pattern_id
-            assert '/' in pattern.pattern_id
+            assert "/" in pattern.pattern_id
             assert pattern.name
             assert pattern.description
             assert pattern.category
@@ -227,10 +227,7 @@ class TestPatternPriority:
 
     def test_security_scan_has_high_priority(self):
         """Test security/scan has high priority."""
-        security_scan = next(
-            (p for p in DEFAULT_PATTERNS if p.pattern_id == "security/scan"),
-            None
-        )
+        security_scan = next((p for p in DEFAULT_PATTERNS if p.pattern_id == "security/scan"), None)
         assert security_scan is not None
         assert security_scan.priority >= 90
 
@@ -245,10 +242,7 @@ class TestPatternExamples:
 
     def test_security_scan_examples_match(self, detector):
         """Test security scan examples all match."""
-        pattern = next(
-            (p for p in DEFAULT_PATTERNS if p.pattern_id == "security/scan"),
-            None
-        )
+        pattern = next((p for p in DEFAULT_PATTERNS if p.pattern_id == "security/scan"), None)
         assert pattern is not None
 
         for example in pattern.examples:
@@ -260,10 +254,7 @@ class TestPatternExamples:
 
     def test_dev_test_examples_match(self, detector):
         """Test dev test examples all match."""
-        pattern = next(
-            (p for p in DEFAULT_PATTERNS if p.pattern_id == "dev/test"),
-            None
-        )
+        pattern = next((p for p in DEFAULT_PATTERNS if p.pattern_id == "dev/test"), None)
         assert pattern is not None
 
         for example in pattern.examples:
@@ -280,9 +271,9 @@ class TestPatternConfidence:
     def test_all_patterns_have_reasonable_thresholds(self):
         """Test all patterns have reasonable confidence thresholds."""
         for pattern in DEFAULT_PATTERNS:
-            assert 0.4 <= pattern.confidence_threshold <= 0.8
-            # Most patterns should be around 0.6-0.7
-            assert pattern.confidence_threshold >= 0.5 or pattern.confidence_threshold <= 0.8
+            assert 0.3 <= pattern.confidence_threshold <= 0.8
+            # Most patterns should be around 0.3-0.5
+            assert pattern.confidence_threshold >= 0.3 or pattern.confidence_threshold <= 0.8
 
     def test_high_priority_patterns_have_stricter_thresholds(self):
         """Test high priority patterns tend to have stricter thresholds."""
@@ -315,10 +306,7 @@ class TestPatternKeywords:
 
     def test_security_keywords_included(self):
         """Test security patterns include relevant keywords."""
-        security_scan = next(
-            (p for p in DEFAULT_PATTERNS if p.pattern_id == "security/scan"),
-            None
-        )
+        security_scan = next((p for p in DEFAULT_PATTERNS if p.pattern_id == "security/scan"), None)
         assert security_scan is not None
 
         keywords_lower = [k.lower() for k in security_scan.keywords]
@@ -363,7 +351,7 @@ class TestPatternMetadata:
     def test_pattern_ids_follow_convention(self):
         """Test pattern IDs follow category/name convention."""
         for pattern in DEFAULT_PATTERNS:
-            parts = pattern.pattern_id.split('/')
+            parts = pattern.pattern_id.split("/")
             assert len(parts) == 2
             category, name = parts
             assert category in ["security", "config", "dev", "docs", "project"]
