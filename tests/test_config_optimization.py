@@ -1,6 +1,7 @@
 """Tests for OptimizationConfig models."""
 
 import pytest
+from pydantic import ValidationError
 
 from vibesop.core.config import (
     ClusteringConfig,
@@ -130,3 +131,39 @@ class TestConfigManagerOptimization:
         manager.set_cli_override("optimization.enabled", False)
         config = manager.get_optimization_config()
         assert config.enabled is False
+
+    def test_env_var_override(self, monkeypatch):
+        monkeypatch.setenv("VIBE_OPTIMIZATION_ENABLED", "false")
+        manager = ConfigManager(project_root=".")
+        config = manager.get_optimization_config()
+        assert config.enabled is False
+
+
+class TestValidationFailures:
+    def test_prefilter_min_candidates_too_low(self):
+        with pytest.raises(ValidationError):
+            PrefilterConfig(min_candidates=0)
+
+    def test_prefilter_max_candidates_too_high(self):
+        with pytest.raises(ValidationError):
+            PrefilterConfig(max_candidates=51)
+
+    def test_preference_boost_weight_too_high(self):
+        with pytest.raises(ValidationError):
+            PreferenceBoostConfig(weight=1.5)
+
+    def test_preference_boost_weight_negative(self):
+        with pytest.raises(ValidationError):
+            PreferenceBoostConfig(weight=-0.1)
+
+    def test_clustering_confidence_gap_out_of_range(self):
+        with pytest.raises(ValidationError):
+            ClusteringConfig(confidence_gap_threshold=1.5)
+
+    def test_clustering_min_skills_too_low(self):
+        with pytest.raises(ValidationError):
+            ClusteringConfig(min_skills_for_clustering=2)
+
+    def test_clustering_max_clusters_too_low(self):
+        with pytest.raises(ValidationError):
+            ClusteringConfig(max_clusters=1)

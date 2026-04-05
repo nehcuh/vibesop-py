@@ -14,9 +14,12 @@ import os
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, Field
+
+if TYPE_CHECKING:
+    from vibesop.core.config.optimization_config import OptimizationConfig
 
 
 class ConfigSourcePriority(str, Enum):
