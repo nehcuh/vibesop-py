@@ -151,3 +151,32 @@ class LLMProvider(ABC):
         self._stats.total_calls += 1
         if tokens_used:
             self._stats.total_tokens += tokens_used
+
+    async def acall(
+        self,
+        prompt: str,
+        model: str | None = None,
+        max_tokens: int = 500,
+        temperature: float = 0.3,
+    ) -> LLMResponse:
+        """Asynchronous call to the LLM.
+
+        Default implementation runs the synchronous call in a thread pool.
+        Subclasses should override for native async support.
+
+        Args:
+            prompt: The prompt to send
+            model: Model to use (defaults to provider default)
+            max_tokens: Maximum tokens to generate
+            temperature: Sampling temperature (0.0 to 1.0)
+
+        Returns:
+            LLMResponse with generated content
+        """
+        import asyncio
+
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(
+            None,
+            lambda: self.call(prompt, model=model, max_tokens=max_tokens, temperature=temperature),
+        )

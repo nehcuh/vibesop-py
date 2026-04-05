@@ -6,7 +6,7 @@ Supports Claude 3.5 Haiku, Sonnet, and Opus models.
 import os
 
 import anthropic
-from anthropic import Anthropic
+from anthropic import Anthropic, AsyncAnthropic
 
 from vibesop.llm.base import LLMProvider, LLMResponse
 
@@ -120,3 +120,57 @@ class AnthropicProvider(LLMProvider):
         Anthropic keys start with 'sk-ant-' and are typically 40+ characters.
         """
         return bool(self.api_key and self.api_key.startswith("sk-ant-") and len(self.api_key) >= 40)
+
+    async def acall(
+        self,
+        prompt: str,
+        model: str | None = None,
+        max_tokens: int = 500,
+        temperature: float = 0.3,
+    ) -> LLMResponse:
+        """Asynchronous call to Claude using AsyncAnthropic client.
+
+        Args:
+            prompt: The prompt to send
+            model: Model to use (defaults to haiku for speed)
+            max_tokens: Maximum tokens to generate
+            temperature: Sampling temperature (0.0 to 1.0)
+
+        Returns:
+            LLMResponse with generated content
+
+        Raises:
+            ValueError: If provider is not configured
+            anthropic.APIError: If API call fails
+        """
+        if not self.api_key:
+            msg = "Anthropic provider not configured. Set ANTHROPIC_API_KEY."
+            raise ValueError(msg)
+
+        if model is None:
+            model = self.default_model()
+
+        try:
+            async with AsyncAnthropic(api_key=self.api_key, base_url=self.base_url) as client:
+                response = await client.messages.create(
+                    model=model,
+                    max_tokens=max_tokens,
+                    temperature=temperature,
+                    messages=[{"role": "user", "content": prompt}],
+                )
+
+                content = response.content[0].text  # type: ignore[reportUnknownVariableType]
+                tokens_used = response.usage.input_tokens + response.usage.output_tokens
+
+                self._record_call(tokens_used)
+
+                return LLMResponse(
+                    content=content,
+                    model=model,
+                    provider=self.provider_name,
+                    tokens_used=tokens_used,
+                )
+
+        except anthropic.APIError as e:
+            msg = f"Anthropic API error: {e}"
+            raise anthropic.APIError(msg) from e  # type: ignore[reportUnknownArgumentType]

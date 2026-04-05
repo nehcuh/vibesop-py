@@ -5,7 +5,7 @@ Supports GPT-4o, GPT-4o-mini, and other OpenAI models.
 
 import os
 
-from openai import OpenAI
+from openai import OpenAI, AsyncOpenAI
 
 from vibesop.llm.base import LLMProvider, LLMResponse
 
@@ -119,3 +119,57 @@ class OpenAIProvider(LLMProvider):
         OpenAI keys start with 'sk-' and are typically 40+ characters.
         """
         return bool(self.api_key and self.api_key.startswith("sk-") and len(self.api_key) >= 40)
+
+    async def acall(
+        self,
+        prompt: str,
+        model: str | None = None,
+        max_tokens: int = 500,
+        temperature: float = 0.3,
+    ) -> LLMResponse:
+        """Asynchronous call to GPT using AsyncOpenAI client.
+
+        Args:
+            prompt: The prompt to send
+            model: Model to use (defaults to gpt-4o-mini for speed)
+            max_tokens: Maximum tokens to generate
+            temperature: Sampling temperature (0.0 to 1.0)
+
+        Returns:
+            LLMResponse with generated content
+
+        Raises:
+            ValueError: If provider is not configured
+            Exception: If API call fails
+        """
+        if not self.api_key:
+            msg = "OpenAI provider not configured. Set OPENAI_API_KEY."
+            raise ValueError(msg)
+
+        if model is None:
+            model = self.default_model()
+
+        try:
+            async with AsyncOpenAI(api_key=self.api_key, base_url=self.base_url) as client:
+                response = await client.chat.completions.create(
+                    model=model,
+                    messages=[{"role": "user", "content": prompt}],
+                    max_tokens=max_tokens,
+                    temperature=temperature,
+                )
+
+                content = response.choices[0].message.content or ""
+                tokens_used = response.usage.total_tokens if response.usage else None
+
+                self._record_call(tokens_used)
+
+                return LLMResponse(
+                    content=content,
+                    model=model,
+                    provider=self.provider_name,
+                    tokens_used=tokens_used,
+                )
+
+        except Exception as e:
+            msg = f"OpenAI API error: {e}"
+            raise Exception(msg) from e
