@@ -316,3 +316,52 @@ class TestPipelineIntegration:
         )
 
         assert pipeline._router is mock_router  # type: ignore[reportPrivateUsage]
+
+
+class TestClosureBugFix:
+    """Test that closure bug is fixed in pipeline.py."""
+
+    @pytest.mark.asyncio
+    async def test_multiple_stages_execute_correct_handlers(self, tmp_path: Path) -> None:
+        """Test that each stage executes its own handler, not the last one."""
+        from vibesop.workflow.models import (
+            PipelineStage,
+            WorkflowDefinition,
+            WorkflowExecutionContext,
+        )
+
+        results: dict[str, str] = {}
+
+        def make_handler(stage_name: str):
+            def handler(ctx: dict) -> dict:
+                results[stage_name] = stage_name
+                return {"result": stage_name}
+
+            return handler
+
+        stages = [
+            PipelineStage(
+                name=f"stage-{i}",
+                description=f"Stage {i}",
+                handler=make_handler(f"stage-{i}"),
+            )
+            for i in range(3)
+        ]
+
+        workflow = WorkflowDefinition(
+            name="test-closure",
+            description="Test closure bug fix",
+            stages=stages,
+            strategy="sequential",
+        )
+        context = WorkflowExecutionContext(input={})
+
+        pipeline = WorkflowPipeline(project_root=tmp_path)
+        await pipeline.execute(workflow, context)
+
+        # Each stage should have executed its own handler
+        assert results == {
+            "stage-0": "stage-0",
+            "stage-1": "stage-1",
+            "stage-2": "stage-2",
+        }

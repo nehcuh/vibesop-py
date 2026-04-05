@@ -17,6 +17,8 @@ from vibesop.workflow.models import (
     RetryPolicy,
     RecoveryStrategy,
     WorkflowDefinition,
+    StepResult,
+    ExecutionResult,
 )
 
 
@@ -37,10 +39,7 @@ class TestPipelineStage:
 
     def test_create_minimal_stage(self):
         """Test creating a stage with minimal fields."""
-        stage = PipelineStage(
-            name="test-stage",
-            description="Test description"
-        )
+        stage = PipelineStage(name="test-stage", description="Test description")
 
         assert stage.name == "test-stage"
         assert stage.description == "Test description"
@@ -65,7 +64,7 @@ class TestPipelineStage:
             required=False,
             timeout_seconds=60,
             retry_count=3,
-            metadata={"skill_id": "/test/skill", "category": "test"}
+            metadata={"skill_id": "/test/skill", "category": "test"},
         )
 
         assert stage.name == "full-stage"
@@ -89,10 +88,7 @@ class TestPipelineStage:
         ]
 
         for name in valid_names:
-            stage = PipelineStage(
-                name=name,
-                description="Valid name"
-            )
+            stage = PipelineStage(name=name, description="Valid name")
             assert stage.name == name
 
     def test_stage_name_validation_invalid(self):
@@ -107,17 +103,11 @@ class TestPipelineStage:
 
         for name in invalid_names:
             with pytest.raises(ValidationError):
-                PipelineStage(
-                    name=name,
-                    description="Invalid name"
-                )
+                PipelineStage(name=name, description="Invalid name")
 
     def test_stage_immutable(self):
         """Test that PipelineStage is immutable (frozen)."""
-        stage = PipelineStage(
-            name="test",
-            description="Test"
-        )
+        stage = PipelineStage(name="test", description="Test")
 
         with pytest.raises(Exception):  # TypeError or ValidationError
             stage.name = "new-name"
@@ -129,9 +119,7 @@ class TestWorkflowExecutionContext:
     def test_create_context(self):
         """Test creating execution context."""
         context = WorkflowExecutionContext(
-            input={"data": "test"},
-            current_stage="stage1",
-            metadata={"test": True}
+            input={"data": "test"}, current_stage="stage1", metadata={"test": True}
         )
 
         assert context.input == {"data": "test"}
@@ -196,7 +184,7 @@ class TestWorkflowResult:
             skipped_stages=["stage3"],
             final_context={},
             execution_time_seconds=0.5,
-            errors=["Stage 2 failed"]
+            errors=["Stage 2 failed"],
         )
 
         assert result.success is False
@@ -214,7 +202,7 @@ class TestWorkflowResult:
             skipped_stages=[],
             final_context={
                 "__stage_result__stage1": {"output": "result1"},
-                "__stage_result__stage2": {"output": "result2"}
+                "__stage_result__stage2": {"output": "result2"},
             },
             execution_time_seconds=1.0,
         )
@@ -241,10 +229,7 @@ class TestRetryPolicy:
     def test_custom_policy(self):
         """Test creating custom retry policy."""
         policy = RetryPolicy(
-            max_attempts=5,
-            backoff_strategy="linear",
-            base_delay=2.0,
-            max_delay=30.0
+            max_attempts=5, backoff_strategy="linear", base_delay=2.0, max_delay=30.0
         )
 
         assert policy.max_attempts == 5
@@ -282,7 +267,7 @@ class TestRecoveryStrategy:
         strategy = RecoveryStrategy(
             checkpoint_on_failure=False,
             rollback_on_failure=True,
-            recovery_stages=["cleanup", "notify"]
+            recovery_stages=["cleanup", "notify"],
         )
 
         assert strategy.checkpoint_on_failure is False
@@ -296,9 +281,7 @@ class TestWorkflowDefinition:
     def test_create_minimal_workflow(self, sample_stage):
         """Test creating minimal workflow definition."""
         workflow = WorkflowDefinition(
-            name="test-workflow",
-            description="Test workflow",
-            stages=[sample_stage]
+            name="test-workflow", description="Test workflow", stages=[sample_stage]
         )
 
         assert workflow.name == "test-workflow"
@@ -314,8 +297,7 @@ class TestWorkflowDefinition:
         """Test creating workflow with all fields."""
         retry_policy = RetryPolicy(max_attempts=5)
         recovery_strategy = RecoveryStrategy(
-            checkpoint_on_failure=True,
-            recovery_stages=["cleanup"]
+            checkpoint_on_failure=True, recovery_stages=["cleanup"]
         )
 
         workflow = WorkflowDefinition(
@@ -329,7 +311,7 @@ class TestWorkflowDefinition:
             stop_on_first_failure=False,
             retry_policy=retry_policy,
             recovery_strategy=recovery_strategy,
-            metadata={"environment": "test"}
+            metadata={"environment": "test"},
         )
 
         assert workflow.name == "full-workflow"
@@ -344,9 +326,7 @@ class TestWorkflowDefinition:
     def test_validate_empty_stages(self):
         """Test that empty stages list is allowed."""
         workflow = WorkflowDefinition(
-            name="empty-workflow",
-            description="Workflow with no stages",
-            stages=[]
+            name="empty-workflow", description="Workflow with no stages", stages=[]
         )
 
         assert len(workflow.stages) == 0
@@ -359,11 +339,7 @@ class TestWorkflowDefinition:
         ]
 
         with pytest.raises(ValidationError):
-            WorkflowDefinition(
-                name="test",
-                description="Test",
-                stages=stages
-            )
+            WorkflowDefinition(name="test", description="Test", stages=stages)
 
     def test_validate_missing_dependency(self):
         """Test that missing dependencies are rejected."""
@@ -372,38 +348,22 @@ class TestWorkflowDefinition:
             PipelineStage(
                 name="stage2",
                 description="Stage 2",
-                dependencies=["missing-stage"]  # Doesn't exist
+                dependencies=["missing-stage"],  # Doesn't exist
             ),
         ]
 
         with pytest.raises(ValidationError, match="depends on non-existent stage"):
-            WorkflowDefinition(
-                name="test",
-                description="Test",
-                stages=stages
-            )
+            WorkflowDefinition(name="test", description="Test", stages=stages)
 
     def test_validate_circular_dependencies(self):
         """Test that circular dependencies are rejected."""
         stages = [
-            PipelineStage(
-                name="stage1",
-                description="Stage 1",
-                dependencies=["stage2"]
-            ),
-            PipelineStage(
-                name="stage2",
-                description="Stage 2",
-                dependencies=["stage1"]
-            ),
+            PipelineStage(name="stage1", description="Stage 1", dependencies=["stage2"]),
+            PipelineStage(name="stage2", description="Stage 2", dependencies=["stage1"]),
         ]
 
         with pytest.raises(ValidationError, match="Circular dependency"):
-            WorkflowDefinition(
-                name="test",
-                description="Test",
-                stages=stages
-            )
+            WorkflowDefinition(name="test", description="Test", stages=stages)
 
     def test_validate_complex_circular_dependencies(self):
         """Test detection of complex circular dependencies."""
@@ -414,11 +374,7 @@ class TestWorkflowDefinition:
         ]
 
         with pytest.raises(ValidationError, match="Circular dependency"):
-            WorkflowDefinition(
-                name="test",
-                description="Test",
-                stages=stages
-            )
+            WorkflowDefinition(name="test", description="Test", stages=stages)
 
     def test_validate_handlers_require_skill_or_handler(self):
         """Test that stages must have handler or skill_id."""
@@ -428,27 +384,15 @@ class TestWorkflowDefinition:
         ]
 
         with pytest.raises(ValidationError, match="must have either a handler or skill_id"):
-            WorkflowDefinition(
-                name="test",
-                description="Test",
-                stages=stages
-            )
+            WorkflowDefinition(name="test", description="Test", stages=stages)
 
     def test_validate_handler_passes(self):
         """Test that stage with handler passes validation."""
         stages = [
-            PipelineStage(
-                name="stage1",
-                description="Stage 1",
-                handler=lambda ctx: {}
-            ),
+            PipelineStage(name="stage1", description="Stage 1", handler=lambda ctx: {}),
         ]
 
-        workflow = WorkflowDefinition(
-            name="test",
-            description="Test",
-            stages=stages
-        )
+        workflow = WorkflowDefinition(name="test", description="Test", stages=stages)
 
         assert len(workflow.stages) == 1
 
@@ -456,80 +400,119 @@ class TestWorkflowDefinition:
         """Test that stage with skill_id in metadata passes validation."""
         stages = [
             PipelineStage(
-                name="stage1",
-                description="Stage 1",
-                metadata={"skill_id": "/test/skill"}
+                name="stage1", description="Stage 1", metadata={"skill_id": "/test/skill"}
             ),
         ]
 
-        workflow = WorkflowDefinition(
-            name="test",
-            description="Test",
-            stages=stages
-        )
+        workflow = WorkflowDefinition(name="test", description="Test", stages=stages)
 
         assert len(workflow.stages) == 1
 
     def test_validate_strategy_requires_multiple_stages(self):
         """Test that parallel/pipeline strategies require at least 2 stages."""
         single_stage = [
-            PipelineStage(
-                name="stage1",
-                description="Stage 1",
-                handler=lambda ctx: {}
-            ),
+            PipelineStage(name="stage1", description="Stage 1", handler=lambda ctx: {}),
         ]
 
         with pytest.raises(ValidationError, match="requires at least 2 stages"):
             WorkflowDefinition(
-                name="test",
-                description="Test",
-                stages=single_stage,
-                strategy="parallel"
+                name="test", description="Test", stages=single_stage, strategy="parallel"
             )
 
         with pytest.raises(ValidationError, match="requires at least 2 stages"):
             WorkflowDefinition(
-                name="test",
-                description="Test",
-                stages=single_stage,
-                strategy="pipeline"
+                name="test", description="Test", stages=single_stage, strategy="pipeline"
             )
 
     def test_validate_invalid_strategy(self):
         """Test that invalid strategy is rejected."""
         with pytest.raises(ValidationError):
             WorkflowDefinition(
-                name="test",
-                description="Test",
-                stages=[],
-                strategy="invalid-strategy"
+                name="test", description="Test", stages=[], strategy="invalid-strategy"
             )
 
     def test_validate_max_parallel_bounds(self):
         """Test that max_parallel is within bounds."""
         with pytest.raises(ValidationError):
-            WorkflowDefinition(
-                name="test",
-                description="Test",
-                stages=[],
-                max_parallel=0
-            )
+            WorkflowDefinition(name="test", description="Test", stages=[], max_parallel=0)
 
         with pytest.raises(ValidationError):
             WorkflowDefinition(
                 name="test",
                 description="Test",
                 stages=[],
-                max_parallel=11  # Max is 10
+                max_parallel=11,  # Max is 10
             )
 
     def test_validate_timeout_bounds(self):
         """Test that timeout_seconds is positive."""
         with pytest.raises(ValidationError):
-            WorkflowDefinition(
-                name="test",
-                description="Test",
-                stages=[],
-                timeout_seconds=0
-            )
+            WorkflowDefinition(name="test", description="Test", stages=[], timeout_seconds=0)
+
+
+class TestStepResult:
+    """Test StepResult model."""
+
+    def test_create_step_result(self):
+        """Test creating StepResult with minimal fields."""
+        result = StepResult(
+            step_id="step-1",
+            status=StageStatus.COMPLETED,
+        )
+        assert result.step_id == "step-1"
+        assert result.status == StageStatus.COMPLETED
+        assert result.output is None
+        assert result.error is None
+        assert result.duration_ms == 0
+
+    def test_create_full_step_result(self):
+        """Test creating StepResult with all fields."""
+        result = StepResult(
+            step_id="step-1",
+            status=StageStatus.COMPLETED,
+            output={"data": "test"},
+            error=None,
+            duration_ms=100,
+        )
+        assert result.step_id == "step-1"
+        assert result.status == StageStatus.COMPLETED
+        assert result.output == {"data": "test"}
+        assert result.error is None
+        assert result.duration_ms == 100
+
+
+class TestExecutionResult:
+    """Test ExecutionResult model."""
+
+    def test_create_execution_result(self):
+        """Test creating ExecutionResult."""
+        result = ExecutionResult(
+            success=True,
+            step_results={
+                "step-1": StepResult(
+                    step_id="step-1",
+                    status=StageStatus.COMPLETED,
+                    output={"result": "done"},
+                    duration_ms=100,
+                )
+            },
+        )
+        assert result.success is True
+        assert "step-1" in result.step_results
+        assert result.step_results["step-1"].status == StageStatus.COMPLETED
+
+    def test_execution_result_with_errors(self):
+        """Test ExecutionResult with failed steps."""
+        result = ExecutionResult(
+            success=False,
+            step_results={
+                "step-1": StepResult(
+                    step_id="step-1",
+                    status=StageStatus.FAILED,
+                    error="Something went wrong",
+                    duration_ms=50,
+                )
+            },
+        )
+        assert result.success is False
+        assert result.step_results["step-1"].error == "Something went wrong"
