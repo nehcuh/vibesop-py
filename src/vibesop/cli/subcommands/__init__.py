@@ -11,6 +11,7 @@ from vibesop.cli.commands import (
     analyze as analyze_mod,
     auto as auto_mod,
     auto_analyze as auto_analyze_mod,
+    autonomous_experiment as autonomous_experiment_mod,
     build as build_mod,
     cascade as cascade_mod,
     checkpoint as checkpoint_mod,
@@ -23,7 +24,7 @@ from vibesop.cli.commands import (
     init as init_mod,
     inspect as inspect_mod,
     install as install_mod,
-    instinct_cmd as instinct_mod,
+    instinct_new as instinct_mod,
     memory_cmd as memory_mod,
     onboard as onboard_mod,
     quickstart as quickstart_mod,
@@ -79,6 +80,9 @@ def register(app: typer.Typer) -> None:
     # Experiment sub-commands
     experiment_app.command()(experiment_mod.experiment)
 
+    # Autonomous experiment (autoresearch)
+    app.add_typer(autonomous_experiment_mod.app, name="autonomous-experiment")
+
     # Cascade sub-commands
     cascade_app.command()(cascade_mod.cascade)
 
@@ -124,7 +128,7 @@ def register(app: typer.Typer) -> None:
 
     # Memory / Instinct
     app.command("memory")(memory_mod.memory)
-    app.command()(instinct_mod.instinct)
+    app.add_typer(instinct_mod.app, name="instinct")
 
     # Checkpoint
     app.command()(checkpoint_mod.checkpoint)

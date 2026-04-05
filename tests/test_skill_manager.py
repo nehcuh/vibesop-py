@@ -250,15 +250,32 @@ class TestSkillLoader:
         return SkillManager(project_root=tmpdir), tmpdir
 
     def test_empty_manager(self) -> None:
-        """Test manager with no skills."""
-        manager, tmpdir = self._create_loader()
+        """Test manager with no project-local skills."""
+        import os
 
-        skills = manager.list_skills()
+        # Create temp directory and chroot to it
+        tmpdir = Path(tempfile.mkdtemp())
+        original_dir = os.getcwd()
 
-        assert len(skills) == 0
+        try:
+            os.chdir(tmpdir)
+            manager = SkillManager(project_root=tmpdir)
 
-        # Cleanup
-        shutil.rmtree(tmpdir)
+            # Check only project-local skills (not external skills)
+            # Project-local skills should be empty in temp directory
+            skills = manager.list_skills(include_registry=False)
+            project_local = [
+                s
+                for s in skills
+                if s.get("source") == "filesystem" and s.get("namespace") == "project"
+            ]
+
+            # Should have no project-local skills in empty temp directory
+            assert len(project_local) == 0
+        finally:
+            os.chdir(original_dir)
+            # Cleanup
+            shutil.rmtree(tmpdir)
 
     def test_list_skills_from_registry(self) -> None:
         """Test listing skills from YAML registry."""

@@ -1,0 +1,27 @@
+domain: routing-optimization
+objective:
+  description: "Improve routing accuracy"
+  evaluator:
+    type: agent_judge
+    rubric:
+      - id: effectiveness
+        weight: 0.4
+        description: "How well it solves the problem"
+      - id: clarity
+        weight: 0.3
+        description: "Clarity of instructions/steps"
+      - id: efficiency
+        weight: 0.3
+        description: "Resource usage and speed"
+scope:
+  modifiable:
+    - core/skills/routing-optimization/SKILL.md
+  readonly:
+    - core/policies/**
+    - src/**
+  test_command: null
+constraints:
+  max_iterations: 15
+  time_budget_per_iteration: 180
+  must_pass_tests: false
+  stale_threshold: 5
