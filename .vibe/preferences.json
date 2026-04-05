@@ -5,13 +5,13 @@
       "score": 0.7902359478108525,
       "selection_count": 4,
       "helpful_count": 4,
-      "last_selected": "2026-04-05T09:24:46.842765"
+      "last_selected": "2026-04-05T09:32:28.410624"
     },
     "/debug": {
       "score": 0.7673286795139986,
       "selection_count": 1,
       "helpful_count": 1,
-      "last_selected": "2026-04-05T09:24:46.827066"
+      "last_selected": "2026-04-05T09:32:28.381716"
     },
     "/skill0": {
       "score": 0.7673286795139986,
@@ -77,13 +77,13 @@
       "score": 0.7774653072167027,
       "selection_count": 2,
       "helpful_count": 2,
-      "last_selected": "2026-04-05T09:24:46.811539"
+      "last_selected": "2026-04-05T09:32:28.365406"
     },
     "test-skill": {
-      "score": 0.39864775372638284,
-      "selection_count": 6,
-      "helpful_count": 2,
-      "last_selected": "2026-04-04T14:14:45.664760"
+      "score": 0.38465735902799725,
+      "selection_count": 3,
+      "helpful_count": 1,
+      "last_selected": "2026-04-05T09:32:09.286700"
     },
     "gstack/review": {
       "score": 0.863044714426226,
@@ -94,13 +94,13 @@
   },
   "word_associations": {
     "review": {
-      "/review": 106,
-      "/gstack/review": 39,
+      "/review": 110,
+      "/gstack/review": 41,
       "gstack/review": 63
     },
     "code": {
-      "/review": 137,
-      "/gstack/review": 78,
+      "/review": 143,
+      "/gstack/review": 82,
       "gstack/review": 21
     },
     "debug": {
@@ -123,8 +123,8 @@
       "/skill7": 1,
       "/skill8": 1,
       "/skill9": 1,
-      "/review": 40,
-      "test-skill": 57
+      "/review": 42,
+      "test-skill": 60
     },
     "query1": {
       "/review": 2
@@ -140,20 +140,20 @@
     },
     "query": {
       "/review": 1,
-      "test-skill": 57
+      "test-skill": 60
     },
     "quality": {
       "/review": 1
     },
     "check": {
-      "/review": 40,
-      "/gstack/review": 39
+      "/review": 42,
+      "/gstack/review": 41
     },
     "fix": {
-      "/debug": 40
+      "/debug": 42
     },
     "bug": {
-      "/debug": 40
+      "/debug": 42
     },
     "\u5e2e\u6211\u8bc4\u5ba1\u4ee3\u7801": {
       "gstack/review": 28

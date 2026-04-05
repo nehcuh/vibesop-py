@@ -29,7 +29,10 @@ from vibesop.triggers.utils import (
     calculate_regex_match_score,
     calculate_combined_score,
 )
-from vibesop.triggers.semantic_refiner import SemanticRefiner
+
+# SemanticRefiner requires numpy (optional dependency)
+if np is not None:
+    from vibesop.triggers.semantic_refiner import SemanticRefiner
 
 
 class KeywordDetector:

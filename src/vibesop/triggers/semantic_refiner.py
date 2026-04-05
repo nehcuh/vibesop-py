@@ -9,9 +9,12 @@ from __future__ import annotations
 import time
 from typing import TYPE_CHECKING, Any, Optional
 
-import numpy as np
-
 from vibesop.triggers.models import PatternMatch
+
+try:
+    import numpy as np
+except ImportError:
+    np = None  # type: ignore[assignment]
 
 if TYPE_CHECKING:
     from vibesop.triggers.models import TriggerPattern
