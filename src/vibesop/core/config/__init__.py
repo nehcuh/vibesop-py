@@ -26,11 +26,21 @@ from vibesop.core.config.manager import (
     SecurityConfig,
     SemanticConfig,
 )
+from vibesop.core.config.optimization_config import (
+    ClusteringConfig,
+    OptimizationConfig,
+    PreferenceBoostConfig,
+    PrefilterConfig,
+)
 
 __all__ = [
+    "ClusteringConfig",
     "ConfigManager",
     "ConfigSource",
     "ConfigSourcePriority",
+    "OptimizationConfig",
+    "PreferenceBoostConfig",
+    "PrefilterConfig",
     "RoutingConfig",
     "SecurityConfig",
     "SemanticConfig",

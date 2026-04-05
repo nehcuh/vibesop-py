@@ -200,6 +200,29 @@ class ConfigManager:
             "cache_embeddings": True,
             "batch_size": 32,
         },
+        "optimization": {
+            "enabled": True,
+            "prefilter": {
+                "enabled": True,
+                "min_candidates": 5,
+                "max_candidates": 15,
+                "always_include_p0": True,
+                "namespace_relevance_threshold": 0.3,
+            },
+            "preference_boost": {
+                "enabled": True,
+                "weight": 0.3,
+                "min_samples": 2,
+                "decay_days": 30,
+            },
+            "clustering": {
+                "enabled": True,
+                "auto_resolve": True,
+                "confidence_gap_threshold": 0.1,
+                "min_skills_for_clustering": 10,
+                "max_clusters": 12,
+            },
+        },
     }
 
     # Environment variable prefix
@@ -353,6 +376,16 @@ class ConfigManager:
         """
         return SemanticConfig(**self._get_section("semantic"))
 
+    def get_optimization_config(self) -> "OptimizationConfig":
+        """Get optimization configuration.
+
+        Returns:
+            OptimizationConfig instance with merged values from all sources
+        """
+        from vibesop.core.config.optimization_config import OptimizationConfig
+
+        return OptimizationConfig(**self._get_section("optimization"))
+
     def _get_section(self, section: str) -> dict[str, Any]:
         """Get a complete configuration section merged from all sources.
 
@@ -376,7 +409,7 @@ class ConfigManager:
         prefix = f"{self.ENV_PREFIX}{section.upper()}_"
         for key, value in os.environ.items():
             if key.startswith(prefix):
-                config_key = key[len(prefix):].lower()
+                config_key = key[len(prefix) :].lower()
                 result[config_key] = self._parse_env_value(value)
 
         return result
