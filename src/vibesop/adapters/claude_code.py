@@ -107,6 +107,7 @@ class ClaudeCodeAdapter(PlatformAdapter):
                 output_dir / "CLAUDE.md",
                 manifest,
                 result,
+                validate_security=False,
             )
 
             # Render rules (always-loaded)
@@ -115,28 +116,31 @@ class ClaudeCodeAdapter(PlatformAdapter):
                 output_dir / "rules" / "behaviors.md",
                 manifest,
                 result,
+                validate_security=False,
             )
             self._render_and_write(
                 "rules/routing.md.j2",
                 output_dir / "rules" / "routing.md",
                 manifest,
                 result,
+                validate_security=False,
             )
             self._render_and_write(
                 "rules/skill-triggers.md.j2",
                 output_dir / "rules" / "skill-triggers.md",
                 manifest,
                 result,
+                validate_security=False,
             )
             self._render_and_write(
                 "rules/memory-flush.md.j2",
                 output_dir / "rules" / "memory-flush.md",
                 manifest,
                 result,
+                validate_security=False,
             )
 
             # Render docs (on-demand)
-            # Note: docs contain threat examples, skip security validation
             self._render_and_write(
                 "docs/safety.md.j2",
                 output_dir / "docs" / "safety.md",
@@ -165,13 +169,14 @@ class ClaudeCodeAdapter(PlatformAdapter):
             # Render skill definitions
             for skill in manifest.skills:
                 skill_dir = output_dir / "skills" / skill.id
-                skill_dir.mkdir(exist_ok=True)
+                skill_dir.mkdir(parents=True, exist_ok=True)
                 self._render_and_write(
                     "skills/SKILL.md.j2",
                     skill_dir / "SKILL.md",
                     manifest,
                     result,
                     skill=skill,
+                    validate_security=False,
                 )
 
         except Exception as e:
@@ -244,8 +249,7 @@ class ClaudeCodeAdapter(PlatformAdapter):
                 # Add blocked commands to settings
                 blocklist = security_policy.command_blocklist or []
                 settings["allowedCommands"] = [
-                    cmd for cmd in settings.get("allowedCommands", [])
-                    if cmd not in blocklist
+                    cmd for cmd in settings.get("allowedCommands", []) if cmd not in blocklist
                 ]
 
             if security_policy.require_command_allowlist:

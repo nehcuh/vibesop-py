@@ -41,7 +41,7 @@ stages:
 
         # Run command with custom workflow directory
         result = runner.invoke(
-            app, ["workflow", "list"], env={"VIBE_WORKFLOW_DIR": str(temp_workflow_dir)}
+            app, ["workflow", "list", "list"], env={"VIBE_WORKFLOW_DIR": str(temp_workflow_dir)}
         )
 
         assert result.exit_code == 0
@@ -55,7 +55,9 @@ stages:
         empty_dir.mkdir()
 
         # Use empty directory
-        result = runner.invoke(app, ["workflow", "list"], env={"VIBE_WORKFLOW_DIR": str(empty_dir)})
+        result = runner.invoke(
+            app, ["workflow", "list", "list"], env={"VIBE_WORKFLOW_DIR": str(empty_dir)}
+        )
 
         assert result.exit_code == 0
         assert "No workflow files found" in result.stdout
@@ -77,7 +79,7 @@ stages:
         workflow_file = temp_workflow_dir / "test.yaml"
         workflow_file.write_text(workflow_yaml)
 
-        result = runner.invoke(app, ["workflow", "validate", str(workflow_file)])
+        result = runner.invoke(app, ["workflow", "validate", "validate", str(workflow_file)])
 
         assert result.exit_code == 0
         assert "✓ Workflow is valid" in result.stdout
@@ -89,19 +91,17 @@ stages:
         invalid_file = temp_workflow_dir / "invalid.yaml"
         invalid_file.write_text("invalid: yaml: content:")
 
-        result = runner.invoke(app, ["workflow", "validate", str(invalid_file)])
+        result = runner.invoke(app, ["workflow", "validate", "validate", str(invalid_file)])
 
         assert result.exit_code == 1
         assert "✗" in result.stdout
 
     def test_workflow_validate_nonexistent_file(self, runner):
         """Test validating non-existent file."""
-        result = runner.invoke(app, ["workflow", "validate", "nonexistent.yaml"])
+        result = runner.invoke(app, ["workflow", "validate", "validate", "nonexistent.yaml"])
 
         # Typer validates file exists before our code runs, exit code 2
         assert result.exit_code == 2
-        # Typer's error message goes to stderr, not stdout
-        # or the message format may vary
 
     def test_workflow_run_dry_run(self, runner, temp_workflow_dir):
         """Test 'vibe workflow run --dry-run' command."""
@@ -126,7 +126,7 @@ stages:
         workflow_file = temp_workflow_dir / "dry-run.yaml"
         workflow_file.write_text(workflow_yaml)
 
-        result = runner.invoke(app, ["workflow", "run", str(workflow_file), "--dry-run"])
+        result = runner.invoke(app, ["workflow", "run", "run", str(workflow_file), "--dry-run"])
 
         assert result.exit_code == 0
         assert "DRY RUN" in result.stdout
@@ -156,7 +156,7 @@ stages:
         workflow_file.write_text(workflow_yaml)
 
         # Test with parallel strategy from workflow definition
-        result = runner.invoke(app, ["workflow", "run", str(workflow_file), "--dry-run"])
+        result = runner.invoke(app, ["workflow", "run", "run", str(workflow_file), "--dry-run"])
 
         assert result.exit_code == 0
         # Dry-run shows the strategy from workflow definition
@@ -179,7 +179,16 @@ stages:
 
         # Test with JSON input
         result = runner.invoke(
-            app, ["workflow", "run", str(workflow_file), "--input", '{"test": "data"}', "--dry-run"]
+            app,
+            [
+                "workflow",
+                "run",
+                "run",
+                str(workflow_file),
+                "--input",
+                '{"test": "data"}',
+                "--dry-run",
+            ],
         )
 
         assert result.exit_code == 0
@@ -191,7 +200,7 @@ stages:
         state_dir.mkdir(parents=True)
 
         result = runner.invoke(
-            app, ["workflow", "resume"], env={"VIBE_PROJECT_ROOT": str(tmp_path)}
+            app, ["workflow", "resume", "resume"], env={"VIBE_PROJECT_ROOT": str(tmp_path)}
         )
 
         # Exit code may be 0 or 1 depending on whether state directory exists
@@ -213,6 +222,11 @@ stages:
 class TestCLIWorkflowRealWorld:
     """Test CLI with real workflow files."""
 
+    @pytest.fixture
+    def runner(self):
+        """Create CLI test runner."""
+        return CliRunner()
+
     def test_security_review_workflow_cli(self, runner):
         """Test security-review workflow via CLI."""
         # Use predefined workflow
@@ -221,7 +235,7 @@ class TestCLIWorkflowRealWorld:
         if not workflow_file.exists():
             pytest.skip("Predefined workflow not found")
 
-        result = runner.invoke(app, ["workflow", "validate", str(workflow_file)])
+        result = runner.invoke(app, ["workflow", "validate", "validate", str(workflow_file)])
 
         assert result.exit_code == 0
         assert "security-review" in result.stdout
@@ -233,14 +247,14 @@ class TestCLIWorkflowRealWorld:
         if not workflow_file.exists():
             pytest.skip("Predefined workflow not found")
 
-        result = runner.invoke(app, ["workflow", "run", str(workflow_file), "--dry-run"])
+        result = runner.invoke(app, ["workflow", "run", "run", str(workflow_file), "--dry-run"])
 
         assert result.exit_code == 0
         assert "config-deploy" in result.stdout
 
     def test_list_all_predefined_workflows(self, runner):
         """Test listing all predefined workflows."""
-        result = runner.invoke(app, ["workflow", "list"])
+        result = runner.invoke(app, ["workflow", "list", "list"])
 
         assert result.exit_code == 0
 
