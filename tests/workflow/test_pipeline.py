@@ -119,7 +119,7 @@ class TestWorkflowPipeline:
 
         assert config.name == "test-workflow"
         assert config.description == "A test workflow"
-        assert config.strategy == "sequential"
+        assert config.strategy == ExecutionStrategy.SEQUENTIAL
         assert len(config.steps) == len(sample_workflow.stages)
 
         for i, step in enumerate(config.steps):

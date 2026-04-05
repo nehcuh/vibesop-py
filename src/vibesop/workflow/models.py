@@ -306,7 +306,32 @@ __all__ = [
     "WorkflowResult",
     "WorkflowExecutionContext",
     "ExecutionStrategy",
+    "StepResult",
+    "ExecutionResult",
     "RetryPolicy",
     "RecoveryStrategy",
     "WorkflowDefinition",
 ]
+
+
+class StepResult(BaseModel):
+    """Result of a single workflow step execution.
+
+    Unified Pydantic version of cascade.py's dataclass.
+    """
+
+    step_id: str = Field(..., description="Step identifier")
+    status: StageStatus = Field(..., description="Step status")
+    output: Optional[Dict[str, Any]] = Field(default=None, description="Step output data")
+    error: Optional[str] = Field(default=None, description="Error message if failed")
+    duration_ms: int = Field(default=0, ge=0, description="Execution duration in ms")
+    retry_count: int = Field(default=0, ge=0, description="Retry attempts")
+
+
+class ExecutionResult(BaseModel):
+    """Result of workflow execution (simplified)."""
+
+    success: bool = Field(..., description="Overall success status")
+    step_results: Dict[str, StepResult] = Field(
+        default_factory=dict, description="Per-step results keyed by step_id"
+    )

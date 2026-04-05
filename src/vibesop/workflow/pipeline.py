@@ -24,7 +24,6 @@ from vibesop.workflow.cascade import (
     StepStatus,
     ExecutionStrategy,
 )
-from vibesop.workflow.exceptions import WorkflowError, StageError
 
 
 class WorkflowPipeline:
@@ -164,27 +163,37 @@ class WorkflowPipeline:
         # Convert PipelineStage to WorkflowStep
         workflow_steps = []
         for stage in workflow.stages:
-            # Create async handler wrapper
-            async def handler_wrapper(ctx: Dict[str, Any]) -> Dict[str, Any]:
-                # Call the original handler
-                if stage.handler:
-                    result = stage.handler(ctx)
+            # Use default parameters to capture current stage and context values
+            # (fix closure-in-loop bug)
+            # Note: CascadeExecutor calls handler() with no args, so wrapper must accept none
+            async def handler_wrapper(
+                _stage=stage,
+                _context=context,
+            ) -> Dict[str, Any]:
+                ctx = _context.input.copy()
+                # Add previous stage results to context
+                for step_id, result in self._executor._results.items():
+                    if result.output:
+                        ctx[f"__stage_result__{step_id}"] = result.output
+
+                if _stage.handler:
+                    result = _stage.handler(ctx)
                     if asyncio.iscoroutine(result):
                         return await result
                     return result
-                elif "skill_id" in stage.metadata:
-                    # TODO: Execute skill using SkillManager
-                    return {"status": "executed", "skill": stage.metadata["skill_id"]}
+                elif "skill_id" in _stage.metadata:
+                    return {"status": "executed", "skill": _stage.metadata["skill_id"]}
                 else:
                     raise StageError(
-                        f"Stage '{stage.name}' has no handler or skill_id", stage_name=stage.name
+                        f"Stage '{_stage.name}' has no handler or skill_id",
+                        stage_name=_stage.name,
                     )
 
             workflow_step = WorkflowStep(
                 step_id=stage.name,
                 name=stage.name,
                 description=stage.description,
-                handler=handler_wrapper,  # type: ignore[reportArgumentType]  # type: ignore[reportArgumentType]
+                handler=handler_wrapper,  # type: ignore[reportArgumentType]
                 dependencies=stage.dependencies,
                 timeout_seconds=stage.timeout_seconds or workflow.timeout_seconds,
                 retry_count=stage.retry_count,

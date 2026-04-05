@@ -68,7 +68,7 @@ class ConfigLoader:
             with registry_path.open("r", encoding="utf-8") as f:
                 self._registry_cache: dict[str, Any] = yaml.load(f)  # type: ignore[reportReturnType]
 
-            return self._registry_cache            return self._registry_cache
+            return self._registry_cache
 
         except Exception as e:
             msg = f"Failed to load registry: {e}"
