@@ -5,13 +5,13 @@
       "score": 0.7902359478108525,
       "selection_count": 4,
       "helpful_count": 4,
-      "last_selected": "2026-04-04T20:08:57.997319"
+      "last_selected": "2026-04-05T09:24:46.842765"
     },
     "/debug": {
       "score": 0.7673286795139986,
       "selection_count": 1,
       "helpful_count": 1,
-      "last_selected": "2026-04-04T20:08:57.981562"
+      "last_selected": "2026-04-05T09:24:46.827066"
     },
     "/skill0": {
       "score": 0.7673286795139986,
@@ -77,7 +77,7 @@
       "score": 0.7774653072167027,
       "selection_count": 2,
       "helpful_count": 2,
-      "last_selected": "2026-04-04T20:08:57.965055"
+      "last_selected": "2026-04-05T09:24:46.811539"
     },
     "test-skill": {
       "score": 0.39864775372638284,
@@ -94,13 +94,13 @@
   },
   "word_associations": {
     "review": {
-      "/review": 102,
-      "/gstack/review": 37,
+      "/review": 106,
+      "/gstack/review": 39,
       "gstack/review": 63
     },
     "code": {
-      "/review": 131,
-      "/gstack/review": 74,
+      "/review": 137,
+      "/gstack/review": 78,
       "gstack/review": 21
     },
     "debug": {
@@ -123,7 +123,7 @@
       "/skill7": 1,
       "/skill8": 1,
       "/skill9": 1,
-      "/review": 38,
+      "/review": 40,
       "test-skill": 57
     },
     "query1": {
@@ -146,14 +146,14 @@
       "/review": 1
     },
     "check": {
-      "/review": 38,
-      "/gstack/review": 37
+      "/review": 40,
+      "/gstack/review": 39
     },
     "fix": {
-      "/debug": 38
+      "/debug": 40
     },
     "bug": {
-      "/debug": 38
+      "/debug": 40
     },
     "\u5e2e\u6211\u8bc4\u5ba1\u4ee3\u7801": {
       "gstack/review": 28

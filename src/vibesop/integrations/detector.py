@@ -9,6 +9,8 @@ from pathlib import Path
 from typing import Dict, List, Optional
 from enum import Enum
 
+from pydantic import BaseModel, Field
+
 
 class IntegrationStatus(Enum):
     """Status of an integration.
@@ -26,7 +28,7 @@ class IntegrationStatus(Enum):
     UNKNOWN = "unknown"
 
 
-class IntegrationInfo:
+class IntegrationInfo(BaseModel):
     """Information about an integration.
 
     Attributes:
@@ -38,33 +40,14 @@ class IntegrationInfo:
         skills: List of skills provided by this integration
     """
 
-    def __init__(
-        self,
-        name: str,
-        description: str,
-        status: IntegrationStatus,
-        version: Optional[str] = None,
-        path: Optional[Path] = None,
-        skills: Optional[List[str]] = None,
-    ) -> None:
-        """Initialize integration info.
+    name: str = Field(..., description="Integration name")
+    description: str = Field(..., description="Human-readable description")
+    status: IntegrationStatus = Field(..., description="Installation status")
+    version: Optional[str] = Field(default=None, description="Version string")
+    path: Optional[Path] = Field(default=None, description="Installation path")
+    skills: List[str] = Field(default_factory=list, description="List of skill IDs")
 
-        Args:
-            name: Integration name
-            description: Human-readable description
-            status: Installation status
-            version: Version (if available)
-            path: Installation path (if available)
-            skills: List of skills provided by this integration
-        """
-        self.name = name
-        self.description = description
-        self.status = status
-        self.version = version
-        self.path = path
-        self.skills = skills or []
-
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> Dict[str, object]:
         """Convert to dictionary.
 
         Returns:
