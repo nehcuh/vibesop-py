@@ -10,7 +10,7 @@ from vibesop.builder import (
     create_overlay,
     validate_overlay,
 )
-from vibesop.adapters.models import ManifestMetadata
+from vibesop.adapters.models import Manifest, ManifestMetadata
 
 
 class TestManifestBuilder:

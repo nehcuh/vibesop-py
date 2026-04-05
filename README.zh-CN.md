@@ -4,7 +4,7 @@
 
 [![Python](https://img.shields.io/badge/Python-3.12+-blue.svg)](https://www.python.org/downloads/)
 [![Ruff](https://img.shields.io/badge/Ruff-Enabled-black.svg)](https://github.com/astral-sh/ruff)
-[![Pyright](https://img.shields.io/badge/Pyright-Strict-blue.svg)](https://github.com/microsoft/pyright)
+[![Basedpyright](https://img.shields.io/badge/Basedpyright-Strict-blue.svg)](https://github.com/DetachHead/basedpyright)
 
 ## 🚀 快速开始
 
@@ -36,7 +36,7 @@ vibe --help
 
 ```bash
 # 类型检查
-uv run pyright
+uv run basedpyright
 
 # 代码检查
 uv run ruff check
@@ -93,6 +93,11 @@ vibesop-py/
 - [x] 工作流编排 (v2.0)
 - [x] 智能触发系统 (v2.0)
 - [x] 语义匹配 (v2.1)
+- [x] 工作流模型统一 (v3.0)
+- [x] Closure Bug 修复 (v3.0)
+- [x] LLM 异步支持 (v3.0)
+- [x] 密钥扫描 (v3.0)
+- [x] 发布 CI 门禁 (v3.0)
 
 ## 🎨 核心功能
 

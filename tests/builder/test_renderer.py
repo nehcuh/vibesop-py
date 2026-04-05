@@ -42,6 +42,7 @@ class TestConfigRenderer:
         assert adapter.platform_name == "claude-code"
 
     def test_get_adapter_unsupported_platform(self) -> None:
+        renderer = ConfigRenderer()
         with pytest.raises(ValueError, match="Unsupported platform"):
             renderer._get_adapter("unknown-platform")  # type: ignore[attr-defined]
 
@@ -180,7 +181,7 @@ class TestRenderProgressTracker:
         assert summary["percent"] == 0
         assert not summary["complete"]
 
-    def test_print_progress(self, capsys: pytest.CaptureFixture[str, str]) -> None:
+    def test_print_progress(self, capsys: pytest.CaptureFixture[str]) -> None:
         """Test printing progress."""
         tracker = RenderProgressTracker()
 
