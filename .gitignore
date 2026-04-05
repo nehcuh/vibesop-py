@@ -31,7 +31,6 @@ venv.bak/
 
 # uv
 .uv/
-uv.lock
 
 # IDE
 .vscode/
@@ -53,6 +52,16 @@ htmlcov/
 # VibeSOP state
 .vibe/state/
 .vibe/sessions/
+.vibe/preferences.json
+.vibe/skills/
+.vibe/instincts/
+.vibe/snapshots/
+.vibe/cache/
+.vibe/dist/
+.vibe/experiments/
+.vibe/memory/
+.vibe/checkpoints/
+.vibe/workflows/
 
 # Type checking
 .mypy_cache/
