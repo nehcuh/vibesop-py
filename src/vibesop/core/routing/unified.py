@@ -20,26 +20,20 @@ import json
 import os
 import re
 import time
-from dataclasses import dataclass, field
-from enum import Enum
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
-from pydantic import BaseModel, Field
-
+from vibesop.core.config import ConfigManager
+from vibesop.core.config import RoutingConfig as ConfigRoutingConfig
 from vibesop.core.matching import (
     IMatcher,
     KeywordMatcher,
     LevenshteinMatcher,
-    MatchResult,
     MatcherConfig,
-    MatcherType,
     RoutingContext,
-    SimilarityMetric,
     TFIDFMatcher,
-    tokenize,
 )
-from vibesop.core.config import ConfigManager, RoutingConfig as ConfigRoutingConfig
+from vibesop.core.models import RoutingLayer, RoutingResult, SkillRoute
 from vibesop.core.optimization import (
     CandidatePrefilter,
     PreferenceBooster,
@@ -47,83 +41,6 @@ from vibesop.core.optimization import (
 )
 from vibesop.core.routing.explicit_layer import check_explicit_override
 from vibesop.core.routing.scenario_layer import load_scenarios, match_scenario
-
-
-class RoutingLayer(str, Enum):
-    """Routing layers in priority order."""
-
-    AI_TRIAGE = "ai_triage"  # Layer 0: AI semantic analysis (95% accuracy)
-    EXPLICIT = "explicit"  # Layer 1: User-specified skill
-    SCENARIO = "scenario"  # Layer 2: Predefined patterns
-    KEYWORD = "keyword"  # Layer 3: Fast keyword matching
-    TFIDF = "tfidf"  # Layer 4: TF-IDF semantic
-    EMBEDDING = "embedding"  # Layer 5: Vector embedding
-    LEVENSHTEIN = "levenshtein"  # Layer 6: Fuzzy fallback
-    NO_MATCH = "no_match"  # No suitable match found
-
-
-@dataclass
-class SkillRoute:
-    """Single skill routing decision.
-
-    Attributes:
-        skill_id: The selected skill identifier
-        confidence: Confidence score (0.0 to 1.0)
-        layer: Which routing layer made this decision
-        source: Where the skill came from (builtin, external, user)
-        metadata: Additional routing metadata
-    """
-
-    skill_id: str
-    confidence: float
-    layer: RoutingLayer
-    source: str = "builtin"
-    metadata: dict[str, Any] = field(default_factory=dict)
-
-    def to_dict(self) -> dict[str, Any]:
-        """Convert to dictionary for serialization."""
-        return {
-            "skill_id": self.skill_id,
-            "confidence": self.confidence,
-            "layer": self.layer.value,
-            "source": self.source,
-            "metadata": self.metadata,
-        }
-
-
-@dataclass
-class RoutingResult:
-    """Result from routing a query.
-
-    Attributes:
-        primary: The primary selected skill
-        alternatives: Alternative skills (next best matches)
-        routing_path: Which layers were tried
-        query: The original query (for reference)
-        duration_ms: How long routing took
-    """
-
-    primary: SkillRoute | None
-    alternatives: list[SkillRoute]
-    routing_path: list[RoutingLayer]
-    query: str
-    duration_ms: float
-
-    @property
-    def has_match(self) -> bool:
-        """Whether a match was found."""
-        return self.primary is not None
-
-    def to_dict(self) -> dict[str, Any]:
-        """Convert to dictionary for serialization."""
-        return {
-            "primary": self.primary.to_dict() if self.primary else None,
-            "alternatives": [a.to_dict() for a in self.alternatives],
-            "routing_path": [l.value for l in self.routing_path],
-            "query": self.query,
-            "duration_ms": self.duration_ms,
-            "has_match": self.has_match,
-        }
 
 
 class UnifiedRouter:
@@ -143,7 +60,7 @@ class UnifiedRouter:
     """
 
     # Layer priority (fastest first, then more accurate)
-    _LAYER_PRIORITY = [
+    _LAYER_PRIORITY: ClassVar[list[RoutingLayer]] = [
         RoutingLayer.KEYWORD,
         RoutingLayer.TFIDF,
         RoutingLayer.EMBEDDING,
@@ -215,6 +132,9 @@ class UnifiedRouter:
         # Initialize prefilter
         self._prefilter = CandidatePrefilter(cluster_index=self._cluster_index)
 
+        self._total_routes = 0
+        self._layer_distribution: dict[str, int] = {}
+
         # Initialize preference booster
         pref_config = self._optimization_config.preference_boost
         self._preference_booster = PreferenceBooster(
@@ -227,21 +147,18 @@ class UnifiedRouter:
     def _create_config_manager_from_config(self, config: ConfigRoutingConfig) -> ConfigManager:
         """Create a ConfigManager wrapper for a RoutingConfig.
 
+        Uses dynamic field reflection so new fields are automatically adapted.
+
         Args:
             config: RoutingConfig instance
 
         Returns:
             ConfigManager that wraps the RoutingConfig
         """
-        # This is a simple wrapper - in production, you'd want to properly
-        # integrate the config into the ConfigManager's source hierarchy
         manager = ConfigManager(project_root=self.project_root)
-        manager.set_cli_override("routing.min_confidence", config.min_confidence)
-        manager.set_cli_override("routing.auto_select_threshold", config.auto_select_threshold)
-        manager.set_cli_override("routing.enable_ai_triage", config.enable_ai_triage)
-        manager.set_cli_override("routing.enable_embedding", config.enable_embedding)
-        manager.set_cli_override("routing.max_candidates", config.max_candidates)
-        manager.set_cli_override("routing.use_cache", config.use_cache)
+        for field_name in config.model_fields:
+            value = getattr(config, field_name)
+            manager.set_cli_override(f"routing.{field_name}", value)
         return manager
 
     def _ai_triage(
@@ -390,6 +307,8 @@ class UnifiedRouter:
         """
         start_time = time.perf_counter()
 
+        self._total_routes += 1
+
         # Auto-discover candidates if not provided
         if candidates is None:
             candidates = self._get_candidates(query)
@@ -398,6 +317,7 @@ class UnifiedRouter:
         ai_result = self._ai_triage(query, candidates)
         if ai_result:
             duration_ms = (time.perf_counter() - start_time) * 1000
+            self._record_layer(RoutingLayer.AI_TRIAGE)
             return RoutingResult(
                 primary=ai_result,
                 alternatives=[],
@@ -416,6 +336,7 @@ class UnifiedRouter:
                 source = self._get_skill_source(
                     explicit_skill, candidate.get("namespace", "builtin")
                 )
+                self._record_layer(RoutingLayer.EXPLICIT)
                 return RoutingResult(
                     primary=SkillRoute(
                         skill_id=explicit_skill,
@@ -459,6 +380,7 @@ class UnifiedRouter:
                                 metadata={"scenario": scenario.get("scenario")},
                             )
                         )
+                self._record_layer(RoutingLayer.SCENARIO)
                 return RoutingResult(
                     primary=SkillRoute(
                         skill_id=primary_id,
@@ -553,6 +475,8 @@ class UnifiedRouter:
                         primary_match.skill_id, primary_namespace
                     )
 
+                    self._record_layer(layer)
+
                     return RoutingResult(
                         primary=SkillRoute(
                             skill_id=primary_match.skill_id,
@@ -584,12 +508,13 @@ class UnifiedRouter:
 
         # No match found
         duration_ms = (time.perf_counter() - start_time) * 1000
+        self._record_layer(RoutingLayer.NO_MATCH)
         return self._no_match_result(query, routing_path, duration_ms)
 
     def score(
         self,
         query: str,
-        skill_id: str,
+        _skill_id: str,
         candidate: dict[str, Any],
         context: RoutingContext | None = None,
     ) -> float:
@@ -597,7 +522,7 @@ class UnifiedRouter:
 
         Args:
             query: User's natural language query
-            skill_id: The skill identifier
+            _skill_id: The skill identifier (unused, for API compatibility)
             candidate: Skill candidate data
             context: Additional routing context
 
@@ -615,21 +540,21 @@ class UnifiedRouter:
 
     def get_candidates(
         self,
-        query: str = "",
+        _query: str = "",
     ) -> list[dict[str, Any]]:
         """Get all available skill candidates.
 
         Args:
-            query: Optional query to filter candidates
+            _query: Optional query to filter candidates (reserved for future use)
 
         Returns:
             List of skill candidates
         """
-        return self._get_candidates(query)
+        return self._get_candidates(_query)
 
     def _get_candidates(
         self,
-        query: str = "",
+        _query: str = "",
     ) -> list[dict[str, Any]]:
         """Get skill candidates from all sources.
 
@@ -639,7 +564,7 @@ class UnifiedRouter:
         - Project-specific skills (.vibe/skills/)
 
         Args:
-            query: Optional query for filtering
+            _query: Optional query for filtering (reserved for future use)
 
         Returns:
             List of skill candidates
@@ -666,7 +591,7 @@ class UnifiedRouter:
 
         # Convert to candidate format for matchers
         candidates = []
-        for skill_id, definition in definitions.items():
+        for _skill_id, definition in definitions.items():
             metadata = definition.metadata
             candidates.append(
                 {
@@ -683,7 +608,7 @@ class UnifiedRouter:
 
         return candidates
 
-    def _get_skill_source(self, skill_id: str, namespace: str) -> str:
+    def _get_skill_source(self, _skill_id: str, namespace: str) -> str:
         """Determine where a skill comes from."""
         if namespace in ("superpowers", "gstack"):
             return "external"
@@ -710,9 +635,9 @@ class UnifiedRouter:
         """Return router capabilities."""
         return {
             "type": "unified",
-            "layers": [l.value for l in self._LAYER_PRIORITY],
+            "layers": [layer.value for layer in self._LAYER_PRIORITY],
             "matchers": [
-                {"layer": l.value, "matcher": type(m).__name__} for l, m in self._matchers
+                {"layer": layer.value, "matcher": type(m).__name__} for layer, m in self._matchers
             ],
             "config": {
                 "min_confidence": self._config.min_confidence,
@@ -722,12 +647,47 @@ class UnifiedRouter:
             },
         }
 
+    # -- Routing stats --
+
+    def _record_layer(self, layer: RoutingLayer) -> None:
+        key = layer.value
+        self._layer_distribution[key] = self._layer_distribution.get(key, 0) + 1
+
+    def get_stats(self) -> dict[str, Any]:
+        """Get routing statistics including total routes and layer distribution."""
+        return {
+            "total_routes": self._total_routes,
+            "layer_distribution": dict(self._layer_distribution),
+            "cache_dir": str(self.project_root / ".vibe" / "cache"),
+        }
+
+    # -- Preference learning API --
+
+    def record_selection(self, skill_id: str, query: str, was_helpful: bool = True) -> None:
+        """Record a skill selection for preference learning."""
+        learner = self._preference_booster._get_learner()
+        learner.record_selection(skill_id, query, was_helpful)
+
+    def get_preference_stats(self) -> dict[str, Any]:
+        """Get preference learning statistics."""
+        learner = self._preference_booster._get_learner()
+        return learner.get_stats()
+
+    def get_top_skills(self, limit: int = 5, min_selections: int = 2) -> list[Any]:
+        """Get top preferred skills based on user history."""
+        learner = self._preference_booster._get_learner()
+        return learner.get_top_skills(limit, min_selections)
+
+    def clear_old_preferences(self, days: int = 90) -> int:
+        """Clear old preference data."""
+        learner = self._preference_booster._get_learner()
+        return learner.clear_old_data(days)
+
 
 # Convenience exports
 __all__ = [
-    "UnifiedRouter",
-    "RoutingConfig",
     "RoutingLayer",
     "RoutingResult",
     "SkillRoute",
+    "UnifiedRouter",
 ]

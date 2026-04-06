@@ -16,10 +16,9 @@ from rich.console import Console
 from rich.panel import Panel
 
 from vibesop import __version__
-from vibesop.core.models import RoutingRequest
-from vibesop.core.routing.engine import SkillRouter
-from vibesop.core.skills import SkillManager
 from vibesop.cli.subcommands import register
+from vibesop.core.routing import UnifiedRouter
+from vibesop.core.skills import SkillManager
 
 app = typer.Typer(
     name="vibe",
@@ -51,7 +50,8 @@ def route(
     import asyncio
     import time
     from pathlib import Path
-    from vibesop.core.routing import UnifiedRouter, RoutingConfig
+
+    from vibesop.core.routing import RoutingConfig, UnifiedRouter
 
     # Set up router with optional min_confidence override
     if min_confidence is not None:
@@ -66,37 +66,36 @@ def route(
         import json
 
         console.print(json.dumps(result.to_dict(), indent=2))
+    elif result.has_match:
+        console.print(
+            Panel(
+                f"[bold green]✅ Matched:[/bold green] {result.primary.skill_id}\n"
+                f"[dim]Confidence:[/dim] {result.primary.confidence:.0%}\n"
+                f"[dim]Layer:[/dim] {result.primary.layer.value}\n"
+                f"[dim]Source:[/dim] {result.primary.source}\n"
+                f"[dim]Duration:[/dim] {result.duration_ms:.1f}ms",
+                title="[bold]Routing Result[/bold]",
+                border_style="blue",
+            )
+        )
+        if result.alternatives:
+            console.print("\n[bold]💡 Alternatives:[/bold]")
+            for alt in result.alternatives[:3]:
+                console.print(f"  • {alt.skill_id} ({alt.confidence:.0%})")
     else:
-        if result.has_match:
-            console.print(
-                Panel(
-                    f"[bold green]✅ Matched:[/bold green] {result.primary.skill_id}\n"
-                    f"[dim]Confidence:[/dim] {result.primary.confidence:.0%}\n"
-                    f"[dim]Layer:[/dim] {result.primary.layer.value}\n"
-                    f"[dim]Source:[/dim] {result.primary.source}\n"
-                    f"[dim]Duration:[/dim] {result.duration_ms:.1f}ms",
-                    title="[bold]Routing Result[/bold]",
-                    border_style="blue",
-                )
+        console.print(
+            Panel(
+                f"[yellow]❓ No suitable match found[/yellow]\n\n"
+                f"[dim]Query:[/dim] {query}\n"
+                f"[dim]Routing path:[/dim] {' → '.join([layer.value for layer in result.routing_path])}\n\n"
+                f"[dim]Try:[/dim]\n"
+                f"  • Using more specific keywords\n"
+                f"  • Lowering the threshold\n"
+                f"  • Listing available skills",
+                title="[bold]Routing Result[/bold]",
+                border_style="yellow",
             )
-            if result.alternatives:
-                console.print("\n[bold]💡 Alternatives:[/bold]")
-                for alt in result.alternatives[:3]:
-                    console.print(f"  • {alt.skill_id} ({alt.confidence:.0%})")
-        else:
-            console.print(
-                Panel(
-                    f"[yellow]❓ No suitable match found[/yellow]\n\n"
-                    f"[dim]Query:[/dim] {query}\n"
-                    f"[dim]Routing path:[/dim] {' → '.join([l.value for l in result.routing_path])}\n\n"
-                    f"[dim]Try:[/dim]\n"
-                    f"  • Using more specific keywords\n"
-                    f"  • Lowering the threshold\n"
-                    f"  • Listing available skills",
-                    title="[bold]Routing Result[/bold]",
-                    border_style="yellow",
-                )
-            )
+        )
 
     # Execute if --run flag is set and we have a match
     if run and result.has_match:
@@ -135,7 +134,7 @@ def route(
                 raise typer.Exit(1)
         except Exception as e:
             console.print(f"[red]Execution error: {e}[/red]")
-            raise typer.Exit(1)
+            raise typer.Exit(1) from e
 
 
 @app.command()
@@ -196,7 +195,7 @@ def record(
     helpful: bool = typer.Option(True, "--helpful/--not-helpful", "-h/-H"),
 ) -> None:
     """Record a skill selection for preference learning."""
-    router = SkillRouter()
+    router = UnifiedRouter()
     router.record_selection(skill_id, query, was_helpful=helpful)
 
     if helpful:
@@ -205,17 +204,13 @@ def record(
         console.print(
             f"[yellow]✓[/yellow] Recorded selection: [bold]{skill_id}[/bold] (not helpful)"
         )
-
-    score = router._preference_learner.get_preference_score(skill_id)  # type: ignore[reportPrivateUsage]
-    if score > 0:
-        console.print(f"   Preference score: {score:.2%}")
     console.print("   This will improve future recommendations.")
 
 
 @app.command("route-stats")
 def route_stats() -> None:
     """Show routing statistics."""
-    router = SkillRouter()
+    router = UnifiedRouter()
     stats = router.get_stats()
 
     console.print("[bold]📊 Routing Statistics[/bold]\n")
@@ -236,7 +231,7 @@ def route_stats() -> None:
 @app.command("preferences")
 def preferences() -> None:
     """Show preference learning statistics."""
-    router = SkillRouter()
+    router = UnifiedRouter()
     stats = router.get_preference_stats()
 
     console.print("[bold]📊 Preference Learning Statistics[/bold]\n")
@@ -257,7 +252,7 @@ def top_skills(
     limit: int = typer.Option(5, "--limit", "-l", min=1, max=10),
 ) -> None:
     """Show most preferred skills."""
-    router = SkillRouter()
+    router = UnifiedRouter()
     top = router.get_top_skills(limit=limit, min_selections=1)
 
     console.print(f"[bold]🏆 Top {len(top)} Preferred Skills[/bold]\n")

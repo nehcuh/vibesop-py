@@ -109,7 +109,7 @@ def execute(
         )
     except Exception as e:
         console.print(f"[red]Execution error: {e}[/red]")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from e
 
     duration_ms = (time.perf_counter() - start_time) * 1000
 

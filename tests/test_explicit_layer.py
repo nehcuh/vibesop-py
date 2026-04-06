@@ -46,6 +46,12 @@ def test_execute_verb_override(candidates):
     assert skill_id == "systematic-debugging"
 
 
+def test_try_verb_override(candidates):
+    """'try <skill>' should trigger override."""
+    skill_id, cleaned = check_explicit_override("try omx/deep-interview", candidates)
+    assert skill_id == "omx/deep-interview"
+
+
 def test_invalid_skill_no_override(candidates):
     """Non-existent skill should not trigger override."""
     skill_id, cleaned = check_explicit_override("!nonexistent-skill test", candidates)

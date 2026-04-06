@@ -14,11 +14,10 @@ from __future__ import annotations
 import re
 from typing import Any
 
-
 # Pattern: !skill_id at the start of query
 EXPLICIT_PREFIX_PATTERN = re.compile(r"^!(\S+)\s+(.*)")
 
-# Pattern: "use <skill_id>" or "run <skill_id>"
+# Pattern: verb followed by skill identifier
 EXPLICIT_VERB_PATTERN = re.compile(r"(?:use|run|execute|try)\s+([\w\-/]+)", re.IGNORECASE)
 
 # Pattern: skill_id anywhere in query (must look like a valid skill ID)
@@ -58,7 +57,4 @@ def check_explicit_override(
 
 def _is_valid_skill(skill_id: str, candidates: list[dict[str, Any]]) -> bool:
     """Check if skill_id exists in candidates."""
-    for candidate in candidates:
-        if candidate.get("id") == skill_id:
-            return True
-    return False
+    return any(candidate.get("id") == skill_id for candidate in candidates)

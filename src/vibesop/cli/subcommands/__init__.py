@@ -9,37 +9,99 @@ import typer
 
 from vibesop.cli.commands import (
     analyze as analyze_mod,
+)
+from vibesop.cli.commands import (
     auto as auto_mod,
+)
+from vibesop.cli.commands import (
     auto_analyze as auto_analyze_mod,
+)
+from vibesop.cli.commands import (
     autonomous_experiment as autonomous_experiment_mod,
+)
+from vibesop.cli.commands import (
     build as build_mod,
+)
+from vibesop.cli.commands import (
     cascade as cascade_mod,
+)
+from vibesop.cli.commands import (
     checkpoint as checkpoint_mod,
+)
+from vibesop.cli.commands import (
     config as config_mod,
+)
+from vibesop.cli.commands import (
     deploy as deploy_mod,
+)
+from vibesop.cli.commands import (
     detect as detect_mod,
+)
+from vibesop.cli.commands import (
     execute as execute_mod,
+)
+from vibesop.cli.commands import (
     experiment as experiment_mod,
+)
+from vibesop.cli.commands import (
     hooks as hooks_mod,
+)
+from vibesop.cli.commands import (
     import_rules as import_rules_mod,
+)
+from vibesop.cli.commands import (
     init as init_mod,
+)
+from vibesop.cli.commands import (
     inspect as inspect_mod,
+)
+from vibesop.cli.commands import (
     install as install_mod,
+)
+from vibesop.cli.commands import (
     instinct_new as instinct_mod,
+)
+from vibesop.cli.commands import (
     memory_cmd as memory_mod,
+)
+from vibesop.cli.commands import (
     omx as omx_mod,
+)
+from vibesop.cli.commands import (
     onboard as onboard_mod,
+)
+from vibesop.cli.commands import (
     quickstart as quickstart_mod,
+)
+from vibesop.cli.commands import (
     route_commands as route_mod,
+)
+from vibesop.cli.commands import (
     scan as scan_mod,
+)
+from vibesop.cli.commands import (
     skill_craft as skill_craft_mod,
+)
+from vibesop.cli.commands import (
     skills_cmd as skills_mod,
+)
+from vibesop.cli.commands import (
     switch as switch_mod,
+)
+from vibesop.cli.commands import (
     targets as targets_mod,
+)
+from vibesop.cli.commands import (
     toolchain as toolchain_mod,
+)
+from vibesop.cli.commands import (
     tools_cmd as tools_mod,
-    worktree as worktree_mod,
+)
+from vibesop.cli.commands import (
     workflow as workflow_mod,
+)
+from vibesop.cli.commands import (
+    worktree as worktree_mod,
 )
 
 # Sub-apps for grouped commands

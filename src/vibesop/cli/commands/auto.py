@@ -19,20 +19,20 @@ from __future__ import annotations
 import json
 import warnings
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import typer
 from rich.console import Console
 from rich.panel import Panel
 
-from vibesop.core.routing import UnifiedRouter, RoutingConfig
+from vibesop.core.routing import RoutingConfig, UnifiedRouter
 
 console = Console()
 
 
 def auto(
     query: str = typer.Argument(..., help="Natural language query describing what you want to do"),
-    input_data: Optional[str] = typer.Option(
+    input_data: str | None = typer.Option(
         None,
         "--input",
         "-i",
@@ -62,15 +62,15 @@ def auto(
         "-s",
         help="Enable semantic matching using sentence embeddings",
     ),
-    semantic_model: str = typer.Option(
+    semantic_model: str = typer.Option(  # noqa: ARG001
         "paraphrase-multilingual-MiniLM-L12-v2",
         "--semantic-model",
-        help="Semantic model name (default: paraphrase-multilingual-MiniLM-L12-v2)",
+        help="[DEPRECATED] Semantic model name (no longer used)",
     ),
-    semantic_threshold: float = typer.Option(
+    semantic_threshold: float = typer.Option(  # noqa: ARG001
         0.7,
         "--semantic-threshold",
-        help="Semantic similarity threshold (0.0 - 1.0, default: 0.7)",
+        help="[DEPRECATED] Semantic similarity threshold (no longer used)",
     ),
 ) -> None:
     """[DEPRECATED] Automatically detect intent and execute appropriate skill.
@@ -125,9 +125,9 @@ def auto(
     )
 
     console.print(
-        f"\n[yellow]⚠️  'vibe auto' is deprecated.[/yellow]\n"
-        f"  Use: [bold]vibe route <query> --run[/bold] (route + execute)\n"
-        f"  Or:  [bold]vibe execute <skill_id> <query>[/bold] (direct execution)\n"
+        "\n[yellow]⚠️  'vibe auto' is deprecated.[/yellow]\n"
+        "  Use: [bold]vibe route <query> --run[/bold] (route + execute)\n"
+        "  Or:  [bold]vibe execute <skill_id> <query>[/bold] (direct execution)\n"
     )
 
     _auto_impl(
@@ -137,20 +137,16 @@ def auto(
         dry_run=dry_run,
         verbose=verbose,
         enable_semantic=enable_semantic,
-        semantic_model=semantic_model,
-        semantic_threshold=semantic_threshold,
     )
 
 
 def _auto_impl(
     query: str,
-    input_data: Optional[str] = None,
+    input_data: str | None = None,
     min_confidence: float = 0.3,
     dry_run: bool = False,
     verbose: bool = False,
     enable_semantic: bool = False,
-    semantic_model: str = "paraphrase-multilingual-MiniLM-L12-v2",
-    semantic_threshold: float = 0.7,
 ) -> None:
     """Internal implementation using UnifiedRouter."""
     import asyncio
@@ -164,7 +160,7 @@ def _auto_impl(
             input_dict = json.loads(input_data)
         except json.JSONDecodeError as e:
             console.print(f"[red]✗ Invalid JSON input: {e}[/red]")
-            raise typer.Exit(1)
+            raise typer.Exit(1) from e
 
     # Show query
     console.print(f"[bold]Query:[/bold] {query}\n")
@@ -199,7 +195,7 @@ def _auto_impl(
         return
 
     # Execute
-    console.print(f"\n[bold]Executing...[/bold]\n")
+    console.print("\n[bold]Executing...[/bold]\n")
 
     try:
         # Execute the matched skill
@@ -210,7 +206,7 @@ def _auto_impl(
             manager.execute_skill(
                 result.primary.skill_id,
                 query,
-                context=input_dict,
+                **input_dict,
             )
         )
 
@@ -223,7 +219,7 @@ def _auto_impl(
             import traceback
 
             console.print(traceback.format_exc())
-        raise typer.Exit(1)
+        raise typer.Exit(1) from e
 
 
 def _show_match_details(result: Any, verbose: bool) -> None:
@@ -254,7 +250,7 @@ def _show_match_details(result: Any, verbose: bool) -> None:
     )
 
     if verbose and result.alternatives:
-        console.print(f"\n[bold]Alternatives:[/bold]")
+        console.print("\n[bold]Alternatives:[/bold]")
         for i, alt in enumerate(result.alternatives[:3], 1):
             console.print(f"  {i}. {alt.skill_id} - {alt.confidence:.1%}")
 
@@ -279,7 +275,7 @@ def _show_dry_run(result: Any, input_data: dict[str, Any]) -> None:
             f"  • Skill: {primary.skill_id}\n"
             f"  • Source: {primary.source}\n"
             + (f"  • Input: {json.dumps(input_data, indent=2)}\n" if input_data else "")
-            + f"\n[dim]Remove --dry-run to execute.[/dim]",
+            + "\n[dim]Remove --dry-run to execute.[/dim]",
             title="[bold]Preview[/bold]",
             border_style="yellow",
         )
@@ -307,7 +303,7 @@ def _show_execution_result(skill_result: Any, verbose: bool) -> None:
     if success:
         console.print(
             Panel(
-                f"[bold green]✓ Skill completed successfully[/bold green]\n\n"
+                "[bold green]✓ Skill completed successfully[/bold green]\n\n"
                 + (f"[bold]Result:[/bold]\n{result_data}\n" if result_data and verbose else ""),
                 title="[bold green]Success[/bold green]",
                 border_style="green",
@@ -327,13 +323,13 @@ def _show_execution_result(skill_result: Any, verbose: bool) -> None:
         )
 
 
-def _show_no_match_detected(query: str, min_confidence: float, verbose: bool) -> None:
+def _show_no_match_detected(query: str, min_confidence: float, _verbose: bool = False) -> None:
     """Show message when no pattern matches.
 
     Args:
         query: User query
         min_confidence: Confidence threshold used
-        verbose: Show detailed output
+        _verbose: Reserved for future use
     """
     console.print(
         Panel(
@@ -365,10 +361,13 @@ def _get_layer_emoji(layer: Any) -> str:
     from vibesop.core.routing import RoutingLayer
 
     emojis = {
-        RoutingLayer.AI: "🤖",
+        RoutingLayer.AI_TRIAGE: "🤖",
         RoutingLayer.EXPLICIT: "🎯",
         RoutingLayer.SCENARIO: "📋",
-        RoutingLayer.SEMANTIC: "🧠",
-        RoutingLayer.FUZZY: "🔍",
+        RoutingLayer.KEYWORD: "🔑",
+        RoutingLayer.TFIDF: "📊",
+        RoutingLayer.EMBEDDING: "🧠",
+        RoutingLayer.LEVENSHTEIN: "🔍",
+        RoutingLayer.NO_MATCH: "❓",
     }
     return emojis.get(layer, "📌")

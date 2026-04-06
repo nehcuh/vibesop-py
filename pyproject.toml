@@ -102,6 +102,7 @@ ignore = [
     "E501",   # line too long (handled by formatter)
     "PLR09",  # too many X
     "PLR2004",  # magic value comparison
+    "PLC0415",  # import not at top-level (intentional for lazy loading)
 ]
 unfixable = [
     "F401",   # don't remove unused imports
