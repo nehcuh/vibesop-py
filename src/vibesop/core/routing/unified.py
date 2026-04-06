@@ -16,6 +16,9 @@ Example:
 
 from __future__ import annotations
 
+import json
+import os
+import re
 import time
 from dataclasses import dataclass, field
 from enum import Enum
@@ -241,6 +244,134 @@ class UnifiedRouter:
         manager.set_cli_override("routing.use_cache", config.use_cache)
         return manager
 
+    def _ai_triage(
+        self,
+        query: str,
+        candidates: list[dict[str, Any]],
+    ) -> SkillRoute | None:
+        """Layer 0: AI semantic triage using LLM.
+
+        Sends the query + top 20 skill candidates to an LLM for classification.
+        Returns a SkillRoute with confidence=0.95 if the LLM selects a valid skill.
+
+        Cost: ~$0.001-0.005 per call (Haiku/gpt-4o-mini).
+        Cache: Results cached in .vibe/cache/ to avoid repeated calls.
+        """
+        if not self._config.enable_ai_triage:
+            return None
+
+        # Lazy-init LLM client
+        if not hasattr(self, "_llm"):
+            self._llm = self._init_llm_client()
+
+        if self._llm is None or not self._llm.configured():
+            return None
+
+        # Check cache
+        cache_key = f"ai_triage:{query}"
+        cached = self._get_cache(cache_key)
+        if cached:
+            return cached
+
+        # Build prompt with top 20 candidates
+        skills_summary = "\n".join(
+            f"- {c['id']}: {c.get('intent', c.get('description', 'N/A'))}" for c in candidates[:20]
+        )
+
+        prompt = (
+            f"Analyze the user request and select the most appropriate skill.\n\n"
+            f"User request: {query}\n\n"
+            f"Available skills:\n{skills_summary}\n\n"
+            f'Return ONLY the skill ID (e.g., "gstack/review" or "systematic-debugging"). '
+            f"Do not include any other text.\n\nSkill ID:"
+        )
+
+        try:
+            response = self._llm.call(prompt=prompt, max_tokens=50, temperature=0.1)
+            skill_id = self._parse_ai_triage_response(response.content)
+
+            if skill_id:
+                # Validate skill_id exists in candidates
+                candidate = next((c for c in candidates if c["id"] == skill_id), None)
+                if candidate:
+                    source = self._get_skill_source(skill_id, candidate.get("namespace", "builtin"))
+                    result = SkillRoute(
+                        skill_id=skill_id,
+                        confidence=0.95,
+                        layer=RoutingLayer.AI_TRIAGE,
+                        source=source,
+                        metadata={"ai_triage": True, "model": response.model},
+                    )
+                    self._set_cache(cache_key, result.to_dict())
+                    return result
+        except Exception:
+            pass  # Fall through to next layer
+
+        return None
+
+    def _init_llm_client(self):
+        """Initialize LLM client from environment."""
+        # Disable inside Claude Code by default (avoid recursive LLM calls)
+        if (
+            os.getenv("CLAUDECODE") == "1" or os.getenv("CLAUDE_CODE_ENTRYPOINT") == "cli"
+        ) and not os.getenv("VIBE_AI_TRIAGE_ENABLED"):
+            return None
+
+        try:
+            from vibesop.llm.factory import create_from_env
+
+            llm = create_from_env()
+            return llm if llm.configured() else None
+        except Exception:
+            return None
+
+    def _parse_ai_triage_response(self, response: str) -> str | None:
+        """Parse LLM response to extract skill ID."""
+        # Try code block format
+        if match := re.search(r"```(?:json)?\s*([\w/-]+)```", response):
+            return match.group(1).strip()
+        # Try first word that looks like a skill ID
+        if match := re.search(r"^[\w/-]{3,}", response.strip(), re.MULTILINE):
+            return match.group(0).strip()
+        return None
+
+    def _get_cache(self, key: str) -> SkillRoute | None:
+        """Get cached result."""
+        cache_dir = self.project_root / ".vibe" / "cache"
+        cache_file = cache_dir / f"{hash(key) % 100000}.json"
+        if cache_file.exists():
+            try:
+                with cache_file.open("r") as f:
+                    data = json.load(f)
+                # Simple TTL: 1 hour
+                import time as _time
+
+                if _time.time() - data.get("timestamp", 0) < 3600:
+                    return SkillRoute(
+                        skill_id=data["skill_id"],
+                        confidence=data["confidence"],
+                        layer=RoutingLayer(data["layer"]),
+                        source=data["source"],
+                        metadata=data.get("metadata", {}),
+                    )
+            except Exception:
+                pass
+        return None
+
+    def _set_cache(self, key: str, data: dict[str, Any]) -> None:
+        """Cache routing result."""
+        import time as _time
+
+        cache_dir = self.project_root / ".vibe" / "cache"
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        cache_file = cache_dir / f"{hash(key) % 100000}.json"
+        data["timestamp"] = _time.time()
+        try:
+            with cache_file.open("w") as f:
+                json.dump(data, f)
+        except Exception:
+            pass
+
     def route(
         self,
         query: str,
@@ -262,6 +393,18 @@ class UnifiedRouter:
         # Auto-discover candidates if not provided
         if candidates is None:
             candidates = self._get_candidates(query)
+
+        # === Layer 0: AI Triage ===
+        ai_result = self._ai_triage(query, candidates)
+        if ai_result:
+            duration_ms = (time.perf_counter() - start_time) * 1000
+            return RoutingResult(
+                primary=ai_result,
+                alternatives=[],
+                routing_path=[RoutingLayer.AI_TRIAGE],
+                query=query,
+                duration_ms=duration_ms,
+            )
 
         # === Layer 1: Explicit Override ===
         explicit_skill, cleaned_query = check_explicit_override(query, candidates)
