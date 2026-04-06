@@ -42,6 +42,8 @@ from vibesop.core.optimization import (
     PreferenceBooster,
     SkillClusterIndex,
 )
+from vibesop.core.routing.explicit_layer import check_explicit_override
+from vibesop.core.routing.scenario_layer import load_scenarios, match_scenario
 
 
 class RoutingLayer(str, Enum):
@@ -261,7 +263,74 @@ class UnifiedRouter:
         if candidates is None:
             candidates = self._get_candidates(query)
 
-        # === Pre-filtering (Layer 1) ===
+        # === Layer 1: Explicit Override ===
+        explicit_skill, cleaned_query = check_explicit_override(query, candidates)
+        if explicit_skill:
+            routing_path = [RoutingLayer.EXPLICIT]
+            duration_ms = (time.perf_counter() - start_time) * 1000
+            candidate = next((c for c in candidates if c["id"] == explicit_skill), None)
+            if candidate:
+                source = self._get_skill_source(
+                    explicit_skill, candidate.get("namespace", "builtin")
+                )
+                return RoutingResult(
+                    primary=SkillRoute(
+                        skill_id=explicit_skill,
+                        confidence=1.0,
+                        layer=RoutingLayer.EXPLICIT,
+                        source=source,
+                        metadata={"override": True, "cleaned_query": cleaned_query},
+                    ),
+                    alternatives=[],
+                    routing_path=routing_path,
+                    query=query,
+                    duration_ms=duration_ms,
+                )
+
+        # === Layer 2: Scenario Pattern ===
+        if not hasattr(self, "_scenarios"):
+            self._scenarios = load_scenarios(self.project_root / "core" / "registry.yaml")
+        scenario = match_scenario(query, self._scenarios)
+        if scenario:
+            routing_path = [RoutingLayer.SCENARIO]
+            primary_id = scenario.get("primary")
+            primary_candidate = next((c for c in candidates if c["id"] == primary_id), None)
+            if primary_candidate:
+                duration_ms = (time.perf_counter() - start_time) * 1000
+                source = self._get_skill_source(
+                    primary_id, primary_candidate.get("namespace", "builtin")
+                )
+                alternatives = []
+                for alt in scenario.get("alternatives", []):
+                    alt_id = alt.get("skill", "").lstrip("/")
+                    alt_candidate = next((c for c in candidates if c["id"] == alt_id), None)
+                    if alt_candidate:
+                        alternatives.append(
+                            SkillRoute(
+                                skill_id=alt_id,
+                                confidence=0.5,
+                                layer=RoutingLayer.SCENARIO,
+                                source=self._get_skill_source(
+                                    alt_id, alt_candidate.get("namespace", "builtin")
+                                ),
+                                metadata={"scenario": scenario.get("scenario")},
+                            )
+                        )
+                return RoutingResult(
+                    primary=SkillRoute(
+                        skill_id=primary_id,
+                        confidence=0.8,
+                        layer=RoutingLayer.SCENARIO,
+                        source=source,
+                        metadata={"scenario": scenario.get("scenario")},
+                    ),
+                    alternatives=alternatives,
+                    routing_path=routing_path,
+                    query=query,
+                    duration_ms=duration_ms,
+                )
+
+        # === Pre-filtering (Optimization Layer 1) ===
         if self._optimization_config.enabled and self._optimization_config.prefilter.enabled:
             candidates = self._prefilter.filter(query, candidates)
 
