@@ -30,17 +30,17 @@ from vibesop.hooks.points import (
 )
 
 __all__ = [
-    # Enums
-    "HookPoint",
     # Classes
     "Hook",
+    "HookInstaller",
+    # Enums
+    "HookPoint",
     "ScriptHook",
     "TemplateHook",
-    "HookInstaller",
     # Functions
     "create_hook",
     "get_hook_definitions",
     "is_hook_supported",
 ]
 
-from vibesop._version import __version__  # noqa: E402
+from vibesop._version import __version__

@@ -12,19 +12,19 @@ All external skills go through security validation before being loaded.
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass, field
-from enum import Enum
+from dataclasses import dataclass
+from enum import StrEnum
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any, ClassVar
 
-from pydantic import BaseModel, Field
-
-from vibesop.core.skills.base import SkillMetadata, SkillType
 from vibesop.core.skills.parser import SkillParser
-from vibesop.security import SkillSecurityAuditor, AuditResult
+from vibesop.security import AuditResult, SkillSecurityAuditor
+
+if TYPE_CHECKING:
+    from vibesop.core.skills.base import SkillMetadata
 
 
-class SkillSource(str, Enum):
+class SkillSource(StrEnum):
     """Sources of skills."""
 
     BUILTIN = "builtin"  # core/skills/
@@ -90,14 +90,14 @@ class ExternalSkillLoader:
     """
 
     # External skill search paths
-    EXTERNAL_PATHS = [
+    EXTERNAL_PATHS: ClassVar[list[Path]] = [
         Path.home() / ".claude" / "skills",
         Path.home() / ".config" / "skills",
         Path.home() / ".vibe" / "skills",
     ]
 
     # Trusted skill pack namespaces
-    TRUSTED_PACKS = {
+    TRUSTED_PACKS: ClassVar[dict[str, str]] = {
         "superpowers": "https://github.com/obra/superpowers",
         "gstack": "https://github.com/garrytan/gstack",
     }
@@ -267,10 +267,7 @@ class ExternalSkillLoader:
             List of unsafe skills
         """
         all_skills = self.discover_all()
-        return [
-            s for s in all_skills.values()
-            if not s.is_safe and s.audit_result is not None
-        ]
+        return [s for s in all_skills.values() if not s.is_safe and s.audit_result is not None]
 
     def _parse_and_audit(
         self,
@@ -309,10 +306,7 @@ class ExternalSkillLoader:
             pass
 
         # Determine source
-        if pack_name:
-            source = SkillSource.PACK
-        else:
-            source = SkillSource.EXTERNAL
+        source = SkillSource.PACK if pack_name else SkillSource.EXTERNAL
 
         return ExternalSkillMetadata(
             base_metadata=base_metadata,
@@ -324,7 +318,7 @@ class ExternalSkillLoader:
             is_trusted=is_trusted,
         )
 
-    def _get_pack_version(self, pack_path: Path, pack_name: str) -> str | None:
+    def _get_pack_version(self, pack_path: Path, _pack_name: str) -> str | None:
         """Get version of a skill pack.
 
         Args:
@@ -338,20 +332,20 @@ class ExternalSkillLoader:
         manifest_file = pack_path / "pack.json"
         if manifest_file.exists():
             try:
-                with open(manifest_file) as f:
+                with manifest_file.open() as f:
                     manifest = json.load(f)
                 return manifest.get("version")
-            except (json.JSONDecodeError, IOError):
+            except (OSError, json.JSONDecodeError):
                 pass
 
         # Check for package.json
         pkg_file = pack_path / "package.json"
         if pkg_file.exists():
             try:
-                with open(pkg_file) as f:
+                with pkg_file.open() as f:
                     pkg = json.load(f)
                 return pkg.get("version")
-            except (json.JSONDecodeError, IOError):
+            except (OSError, json.JSONDecodeError):
                 pass
 
         return None
@@ -385,7 +379,7 @@ class ExternalSkillLoader:
         self,
         pack_name: str,
         pack_url: str | None = None,
-        version: str | None = None,
+        _version: str | None = None,
     ) -> tuple[bool, str]:
         """Install a skill pack.
 
@@ -415,6 +409,7 @@ class ExternalSkillLoader:
 
                 # Extract
                 import tarfile
+
                 with tarfile.open(archive_path) as tar:
                     tar.extractall(tmpdir_path)
 
@@ -429,6 +424,7 @@ class ExternalSkillLoader:
 
                 # Copy files
                 import shutil
+
                 for extracted_dir in extracted_dirs:
                     for item in extracted_dir.iterdir():
                         dest = target_path / item.name
@@ -444,6 +440,7 @@ class ExternalSkillLoader:
 
 
 # Convenience functions
+
 
 def discover_external_skills(
     require_audit: bool = True,
@@ -478,9 +475,9 @@ def is_skill_safe(skill_id: str) -> bool:
 
 
 __all__ = [
-    "SkillSource",
-    "ExternalSkillMetadata",
     "ExternalSkillLoader",
+    "ExternalSkillMetadata",
+    "SkillSource",
     "discover_external_skills",
     "is_skill_safe",
 ]

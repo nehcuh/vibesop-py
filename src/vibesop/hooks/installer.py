@@ -4,13 +4,14 @@ This module provides a centralized hook installation system
 that manages hooks across all supported platforms.
 """
 
+import contextlib
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from jinja2 import Environment, FileSystemLoader
 
-from vibesop.hooks.points import HOOK_DEFINITIONS, HookPoint
 from vibesop.hooks.base import Hook
+from vibesop.hooks.points import HOOK_DEFINITIONS, HookPoint
 
 
 class HookInstaller:
@@ -27,7 +28,7 @@ class HookInstaller:
 
     def __init__(self) -> None:
         """Initialize the hook installer."""
-        self._template_env: Optional[Environment] = None
+        self._template_env: Environment | None = None
 
     @property
     def template_env(self) -> Environment:
@@ -49,8 +50,8 @@ class HookInstaller:
         self,
         platform: str,
         config_dir: Path,
-        hook_points: Optional[List[HookPoint]] = None,
-    ) -> Dict[str, bool]:
+        hook_points: list[HookPoint] | None = None,
+    ) -> dict[str, bool]:
         """Install hooks for a platform.
 
         Args:
@@ -61,7 +62,7 @@ class HookInstaller:
         Returns:
             Dictionary mapping hook names to installation status
         """
-        results: Dict[str, bool] = {}
+        results: dict[str, bool] = {}
 
         # Get hook definitions for platform
         definitions = HOOK_DEFINITIONS.get(platform, {})
@@ -72,7 +73,7 @@ class HookInstaller:
         # Determine which hooks to install
         if hook_points is None:
             # Install all supported hooks
-            hooks_to_install = [HookPoint(hook_name) for hook_name in definitions.keys()]
+            hooks_to_install = [HookPoint(hook_name) for hook_name in definitions]
         else:
             hooks_to_install = hook_points
 
@@ -94,8 +95,8 @@ class HookInstaller:
         self,
         platform: str,
         config_dir: Path,
-        hook_points: Optional[List[HookPoint]] = None,
-    ) -> Dict[str, bool]:
+        hook_points: list[HookPoint] | None = None,
+    ) -> dict[str, bool]:
         """Uninstall hooks for a platform.
 
         Args:
@@ -106,7 +107,7 @@ class HookInstaller:
         Returns:
             Dictionary mapping hook names to uninstallation status
         """
-        results: Dict[str, bool] = {}
+        results: dict[str, bool] = {}
 
         # Get hook definitions for platform
         definitions = HOOK_DEFINITIONS.get(platform, {})
@@ -116,7 +117,7 @@ class HookInstaller:
 
         # Determine which hooks to uninstall
         if hook_points is None:
-            hooks_to_uninstall = [HookPoint(hook_name) for hook_name in definitions.keys()]
+            hooks_to_uninstall = [HookPoint(hook_name) for hook_name in definitions]
         else:
             hooks_to_uninstall = hook_points
 
@@ -136,7 +137,7 @@ class HookInstaller:
         self,
         platform: str,
         config_dir: Path,
-    ) -> Dict[str, bool]:
+    ) -> dict[str, bool]:
         """Verify hook installation status.
 
         Args:
@@ -146,7 +147,7 @@ class HookInstaller:
         Returns:
             Dictionary mapping hook names to verification status
         """
-        results: Dict[str, bool] = {}
+        results: dict[str, bool] = {}
 
         # Get hook definitions for platform
         definitions = HOOK_DEFINITIONS.get(platform, {})
@@ -168,7 +169,7 @@ class HookInstaller:
         platform: str,
         hook_point: HookPoint,
         config_dir: Path,
-        hook_def: Dict[str, Any],
+        hook_def: dict[str, Any],
     ) -> bool:
         """Install a single hook.
 
@@ -204,13 +205,13 @@ class HookInstaller:
 
             return True
 
-        except (OSError, IOError):
+        except OSError:
             return False
 
     def _uninstall_single_hook(
         self,
         config_dir: Path,
-        hook_def: Dict[str, Any],
+        hook_def: dict[str, Any],
     ) -> bool:
         """Uninstall a single hook.
 
@@ -234,21 +235,18 @@ class HookInstaller:
                 hook_path.unlink()
 
                 # Try to remove parent directory if empty
-                try:
+                with contextlib.suppress(OSError):
                     hook_path.parent.rmdir()
-                except OSError:
-                    # Directory not empty, that's fine
-                    pass
 
             return True
 
-        except (OSError, IOError):
+        except OSError:
             return False
 
     def _verify_single_hook(
         self,
         config_dir: Path,
-        hook_def: Dict[str, Any],
+        hook_def: dict[str, Any],
     ) -> bool:
         """Verify a single hook installation.
 
@@ -277,7 +275,7 @@ class HookInstaller:
 
             return True
 
-        except (OSError, IOError):
+        except OSError:
             return False
 
     def _render_hook_template(
@@ -361,7 +359,7 @@ echo "[Hook] Session started for {platform}"
         hook_name: str,
         hook_point: HookPoint,
         template_path: Path,
-        template_vars: Optional[Dict[str, str]] = None,
+        template_vars: dict[str, str] | None = None,
     ) -> Hook:
         """Create a hook from a template.
 

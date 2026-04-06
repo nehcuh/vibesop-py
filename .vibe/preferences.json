@@ -377,6 +377,1740 @@
       "query": "test query",
       "timestamp": "2026-04-06T09:46:38.570594",
       "was_helpful": false
+    },
+    {
+      "skill_id": "gstack/review",
+      "query": "\u5e2e\u6211\u8bc4\u5ba1\u4ee3\u7801",
+      "timestamp": "2026-04-06T10:43:57.857563",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "/verification-before-completion",
+      "query": "review my code",
+      "timestamp": "2026-04-06T10:43:58.130599",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "gstack/review",
+      "query": "please review this",
+      "timestamp": "2026-04-06T10:43:58.133514",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "gstack/review",
+      "query": "help me review",
+      "timestamp": "2026-04-06T10:43:58.136315",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T10:44:14.236699",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T10:44:14.299479",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T10:44:14.362479",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "gstack/review",
+      "query": "\u5e2e\u6211\u8bc4\u5ba1\u4ee3\u7801",
+      "timestamp": "2026-04-06T11:21:00.656566",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "/verification-before-completion",
+      "query": "review my code",
+      "timestamp": "2026-04-06T11:21:00.947896",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "gstack/review",
+      "query": "please review this",
+      "timestamp": "2026-04-06T11:21:00.951052",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "gstack/review",
+      "query": "help me review",
+      "timestamp": "2026-04-06T11:21:00.953940",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T11:21:18.214738",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T11:21:18.282712",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T11:21:18.351319",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "gstack/review",
+      "query": "\u5e2e\u6211\u8bc4\u5ba1\u4ee3\u7801",
+      "timestamp": "2026-04-06T11:34:05.818863",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "/verification-before-completion",
+      "query": "review my code",
+      "timestamp": "2026-04-06T11:34:06.134386",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "gstack/review",
+      "query": "please review this",
+      "timestamp": "2026-04-06T11:34:06.137740",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "gstack/review",
+      "query": "help me review",
+      "timestamp": "2026-04-06T11:34:06.141013",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T11:34:23.327069",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T11:34:23.394862",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T11:34:23.462881",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "gstack/review",
+      "query": "\u5e2e\u6211\u8bc4\u5ba1\u4ee3\u7801",
+      "timestamp": "2026-04-06T11:34:54.846326",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "/verification-before-completion",
+      "query": "review my code",
+      "timestamp": "2026-04-06T11:34:55.141465",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "gstack/review",
+      "query": "please review this",
+      "timestamp": "2026-04-06T11:34:55.144890",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "gstack/review",
+      "query": "help me review",
+      "timestamp": "2026-04-06T11:34:55.148212",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T11:35:12.609843",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T11:35:12.678971",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T11:35:12.748033",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "gstack/review",
+      "query": "\u5e2e\u6211\u8bc4\u5ba1\u4ee3\u7801",
+      "timestamp": "2026-04-06T11:37:53.041775",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "/verification-before-completion",
+      "query": "review my code",
+      "timestamp": "2026-04-06T11:37:53.337581",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "gstack/review",
+      "query": "please review this",
+      "timestamp": "2026-04-06T11:37:53.341190",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "gstack/review",
+      "query": "help me review",
+      "timestamp": "2026-04-06T11:37:53.344667",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T11:38:10.539322",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T11:38:10.608657",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T11:38:10.677736",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "gstack/review",
+      "query": "\u5e2e\u6211\u8bc4\u5ba1\u4ee3\u7801",
+      "timestamp": "2026-04-06T13:04:04.065365",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "/verification-before-completion",
+      "query": "review my code",
+      "timestamp": "2026-04-06T13:04:04.346610",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "gstack/review",
+      "query": "please review this",
+      "timestamp": "2026-04-06T13:04:04.350169",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "gstack/review",
+      "query": "help me review",
+      "timestamp": "2026-04-06T13:04:04.353687",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T13:04:20.776165",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T13:04:20.843410",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T13:04:20.910699",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "gstack/review",
+      "query": "\u5e2e\u6211\u8bc4\u5ba1\u4ee3\u7801",
+      "timestamp": "2026-04-06T13:04:32.472175",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "/verification-before-completion",
+      "query": "review my code",
+      "timestamp": "2026-04-06T13:04:32.753896",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "gstack/review",
+      "query": "please review this",
+      "timestamp": "2026-04-06T13:04:32.757667",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "gstack/review",
+      "query": "help me review",
+      "timestamp": "2026-04-06T13:04:32.761283",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T13:04:49.354535",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T13:04:49.421932",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T13:04:49.489572",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "gstack/review",
+      "query": "\u5e2e\u6211\u8bc4\u5ba1\u4ee3\u7801",
+      "timestamp": "2026-04-06T13:08:03.762418",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "/verification-before-completion",
+      "query": "review my code",
+      "timestamp": "2026-04-06T13:08:04.041094",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "gstack/review",
+      "query": "please review this",
+      "timestamp": "2026-04-06T13:08:04.045122",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "gstack/review",
+      "query": "help me review",
+      "timestamp": "2026-04-06T13:08:04.048967",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T13:08:20.914376",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T13:08:20.982108",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T13:08:21.050037",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "gstack/review",
+      "query": "\u5e2e\u6211\u8bc4\u5ba1\u4ee3\u7801",
+      "timestamp": "2026-04-06T13:08:36.358911",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "/verification-before-completion",
+      "query": "review my code",
+      "timestamp": "2026-04-06T13:08:36.665784",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "gstack/review",
+      "query": "please review this",
+      "timestamp": "2026-04-06T13:08:36.669843",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "gstack/review",
+      "query": "help me review",
+      "timestamp": "2026-04-06T13:08:36.673708",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T13:08:53.790217",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T13:08:53.858586",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T13:08:53.927397",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "gstack/review",
+      "query": "\u5e2e\u6211\u8bc4\u5ba1\u4ee3\u7801",
+      "timestamp": "2026-04-06T13:12:44.887683",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "/verification-before-completion",
+      "query": "review my code",
+      "timestamp": "2026-04-06T13:12:45.170320",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "gstack/review",
+      "query": "please review this",
+      "timestamp": "2026-04-06T13:12:45.174681",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "gstack/review",
+      "query": "help me review",
+      "timestamp": "2026-04-06T13:12:45.178953",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T13:13:02.205534",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T13:13:02.281743",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T13:13:02.361730",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "gstack/review",
+      "query": "\u5e2e\u6211\u8bc4\u5ba1\u4ee3\u7801",
+      "timestamp": "2026-04-06T13:19:33.828633",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "/verification-before-completion",
+      "query": "review my code",
+      "timestamp": "2026-04-06T13:19:34.109046",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "gstack/review",
+      "query": "please review this",
+      "timestamp": "2026-04-06T13:19:34.113487",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "gstack/review",
+      "query": "help me review",
+      "timestamp": "2026-04-06T13:19:34.118004",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T13:19:52.417063",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T13:19:52.490000",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T13:19:52.561205",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "gstack/review",
+      "query": "\u5e2e\u6211\u8bc4\u5ba1\u4ee3\u7801",
+      "timestamp": "2026-04-06T13:23:04.610236",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "/verification-before-completion",
+      "query": "review my code",
+      "timestamp": "2026-04-06T13:23:04.893641",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "gstack/review",
+      "query": "please review this",
+      "timestamp": "2026-04-06T13:23:04.898287",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "gstack/review",
+      "query": "help me review",
+      "timestamp": "2026-04-06T13:23:04.902660",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T13:23:23.144259",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T13:23:23.215017",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T13:23:23.285443",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "gstack/review",
+      "query": "\u5e2e\u6211\u8bc4\u5ba1\u4ee3\u7801",
+      "timestamp": "2026-04-06T13:29:38.906798",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "/verification-before-completion",
+      "query": "review my code",
+      "timestamp": "2026-04-06T13:29:39.188539",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "gstack/review",
+      "query": "please review this",
+      "timestamp": "2026-04-06T13:29:39.193279",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "gstack/review",
+      "query": "help me review",
+      "timestamp": "2026-04-06T13:29:39.197729",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T13:29:57.387468",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T13:29:57.459263",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T13:29:57.531304",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "gstack/review",
+      "query": "\u5e2e\u6211\u8bc4\u5ba1\u4ee3\u7801",
+      "timestamp": "2026-04-06T13:43:06.128380",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "verification-before-completion",
+      "query": "review my code",
+      "timestamp": "2026-04-06T13:43:06.414467",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "gstack/review",
+      "query": "please review this",
+      "timestamp": "2026-04-06T13:43:06.419543",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "gstack/review",
+      "query": "help me review",
+      "timestamp": "2026-04-06T13:43:06.424367",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T13:43:24.743630",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T13:43:24.813983",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T13:43:24.883984",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "gstack/review",
+      "query": "\u5e2e\u6211\u8bc4\u5ba1\u4ee3\u7801",
+      "timestamp": "2026-04-06T13:43:54.973526",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "verification-before-completion",
+      "query": "review my code",
+      "timestamp": "2026-04-06T13:43:55.261714",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "gstack/review",
+      "query": "please review this",
+      "timestamp": "2026-04-06T13:43:55.266881",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "gstack/review",
+      "query": "help me review",
+      "timestamp": "2026-04-06T13:43:55.271925",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T13:44:13.741562",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T13:44:13.812502",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T13:44:13.884089",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "gstack/review",
+      "query": "\u5e2e\u6211\u8bc4\u5ba1\u4ee3\u7801",
+      "timestamp": "2026-04-06T13:45:49.348359",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "verification-before-completion",
+      "query": "review my code",
+      "timestamp": "2026-04-06T13:45:49.637429",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "gstack/review",
+      "query": "please review this",
+      "timestamp": "2026-04-06T13:45:49.642687",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "gstack/review",
+      "query": "help me review",
+      "timestamp": "2026-04-06T13:45:49.647993",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T13:46:07.933276",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T13:46:08.004637",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T13:46:08.075601",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "gstack/review",
+      "query": "\u5e2e\u6211\u8bc4\u5ba1\u4ee3\u7801",
+      "timestamp": "2026-04-06T13:49:06.633112",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "verification-before-completion",
+      "query": "review my code",
+      "timestamp": "2026-04-06T13:49:06.915391",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "gstack/review",
+      "query": "please review this",
+      "timestamp": "2026-04-06T13:49:06.920737",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "gstack/review",
+      "query": "help me review",
+      "timestamp": "2026-04-06T13:49:06.926134",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T13:49:25.119993",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T13:49:25.190416",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T13:49:25.260779",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "gstack/review",
+      "query": "\u5e2e\u6211\u8bc4\u5ba1\u4ee3\u7801",
+      "timestamp": "2026-04-06T13:50:49.596510",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "verification-before-completion",
+      "query": "review my code",
+      "timestamp": "2026-04-06T13:50:49.883230",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "gstack/review",
+      "query": "please review this",
+      "timestamp": "2026-04-06T13:50:49.888882",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "gstack/review",
+      "query": "help me review",
+      "timestamp": "2026-04-06T13:50:49.894407",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T13:51:08.262398",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T13:51:08.332774",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T13:51:08.403124",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "gstack/review",
+      "query": "\u5e2e\u6211\u8bc4\u5ba1\u4ee3\u7801",
+      "timestamp": "2026-04-06T13:51:53.788578",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "verification-before-completion",
+      "query": "review my code",
+      "timestamp": "2026-04-06T13:51:54.080840",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "gstack/review",
+      "query": "please review this",
+      "timestamp": "2026-04-06T13:51:54.086774",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "gstack/review",
+      "query": "help me review",
+      "timestamp": "2026-04-06T13:51:54.092509",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T13:52:12.271497",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T13:52:12.342305",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T13:52:12.413975",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "gstack/review",
+      "query": "\u5e2e\u6211\u8bc4\u5ba1\u4ee3\u7801",
+      "timestamp": "2026-04-06T13:52:41.504954",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "verification-before-completion",
+      "query": "review my code",
+      "timestamp": "2026-04-06T13:52:41.796596",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "gstack/review",
+      "query": "please review this",
+      "timestamp": "2026-04-06T13:52:41.802792",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "gstack/review",
+      "query": "help me review",
+      "timestamp": "2026-04-06T13:52:41.808920",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T13:53:00.241149",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T13:53:00.312638",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T13:53:00.384122",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "gstack/review",
+      "query": "\u5e2e\u6211\u8bc4\u5ba1\u4ee3\u7801",
+      "timestamp": "2026-04-06T13:53:35.436110",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "verification-before-completion",
+      "query": "review my code",
+      "timestamp": "2026-04-06T13:53:35.726226",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "gstack/review",
+      "query": "please review this",
+      "timestamp": "2026-04-06T13:53:35.732580",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "gstack/review",
+      "query": "help me review",
+      "timestamp": "2026-04-06T13:53:35.738696",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T13:53:54.191925",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T13:53:54.263854",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T13:53:54.335716",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "gstack/review",
+      "query": "\u5e2e\u6211\u8bc4\u5ba1\u4ee3\u7801",
+      "timestamp": "2026-04-06T14:20:33.921969",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "verification-before-completion",
+      "query": "review my code",
+      "timestamp": "2026-04-06T14:20:34.206491",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "gstack/review",
+      "query": "please review this",
+      "timestamp": "2026-04-06T14:20:34.213074",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "gstack/review",
+      "query": "help me review",
+      "timestamp": "2026-04-06T14:20:34.219221",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T14:20:52.344193",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T14:20:52.422538",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T14:20:52.500872",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "gstack/review",
+      "query": "\u5e2e\u6211\u8bc4\u5ba1\u4ee3\u7801",
+      "timestamp": "2026-04-06T14:21:30.396009",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "verification-before-completion",
+      "query": "review my code",
+      "timestamp": "2026-04-06T14:21:30.679748",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "gstack/review",
+      "query": "please review this",
+      "timestamp": "2026-04-06T14:21:30.686439",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "gstack/review",
+      "query": "help me review",
+      "timestamp": "2026-04-06T14:21:30.692975",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T14:21:49.013328",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T14:21:49.094239",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T14:21:49.170209",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "gstack/review",
+      "query": "\u5e2e\u6211\u8bc4\u5ba1\u4ee3\u7801",
+      "timestamp": "2026-04-06T14:22:47.716921",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "verification-before-completion",
+      "query": "review my code",
+      "timestamp": "2026-04-06T14:22:48.001307",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "gstack/review",
+      "query": "please review this",
+      "timestamp": "2026-04-06T14:22:48.008117",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "gstack/review",
+      "query": "help me review",
+      "timestamp": "2026-04-06T14:22:48.014744",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T14:23:06.364418",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T14:23:06.437660",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T14:23:06.511006",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "gstack/review",
+      "query": "\u5e2e\u6211\u8bc4\u5ba1\u4ee3\u7801",
+      "timestamp": "2026-04-06T14:23:52.046695",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "verification-before-completion",
+      "query": "review my code",
+      "timestamp": "2026-04-06T14:23:52.337278",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "gstack/review",
+      "query": "please review this",
+      "timestamp": "2026-04-06T14:23:52.344072",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "gstack/review",
+      "query": "help me review",
+      "timestamp": "2026-04-06T14:23:52.350958",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T14:24:10.526087",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T14:24:10.598324",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T14:24:10.670624",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "gstack/review",
+      "query": "\u5e2e\u6211\u8bc4\u5ba1\u4ee3\u7801",
+      "timestamp": "2026-04-06T14:24:56.295674",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "verification-before-completion",
+      "query": "review my code",
+      "timestamp": "2026-04-06T14:24:56.577507",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "gstack/review",
+      "query": "please review this",
+      "timestamp": "2026-04-06T14:24:56.584694",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "gstack/review",
+      "query": "help me review",
+      "timestamp": "2026-04-06T14:24:56.591592",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T14:25:15.023862",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T14:25:15.095949",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T14:25:15.168505",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "gstack/review",
+      "query": "\u5e2e\u6211\u8bc4\u5ba1\u4ee3\u7801",
+      "timestamp": "2026-04-06T14:36:12.791012",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "verification-before-completion",
+      "query": "review my code",
+      "timestamp": "2026-04-06T14:36:13.068220",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "gstack/review",
+      "query": "please review this",
+      "timestamp": "2026-04-06T14:36:13.075233",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "gstack/review",
+      "query": "help me review",
+      "timestamp": "2026-04-06T14:36:13.082171",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T14:36:30.897858",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T14:36:30.970315",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T14:36:31.042603",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "gstack/review",
+      "query": "\u5e2e\u6211\u8bc4\u5ba1\u4ee3\u7801",
+      "timestamp": "2026-04-06T14:37:31.876173",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "verification-before-completion",
+      "query": "review my code",
+      "timestamp": "2026-04-06T14:37:32.161211",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "gstack/review",
+      "query": "please review this",
+      "timestamp": "2026-04-06T14:37:32.168664",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "gstack/review",
+      "query": "help me review",
+      "timestamp": "2026-04-06T14:37:32.175844",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T14:37:50.341213",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T14:37:50.415002",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T14:37:50.487959",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "gstack/review",
+      "query": "\u5e2e\u6211\u8bc4\u5ba1\u4ee3\u7801",
+      "timestamp": "2026-04-06T14:44:41.251721",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "verification-before-completion",
+      "query": "review my code",
+      "timestamp": "2026-04-06T14:44:41.528525",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "gstack/review",
+      "query": "please review this",
+      "timestamp": "2026-04-06T14:44:41.536040",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "gstack/review",
+      "query": "help me review",
+      "timestamp": "2026-04-06T14:44:41.543320",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T14:44:59.374034",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T14:44:59.445788",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T14:44:59.518047",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "gstack/review",
+      "query": "\u5e2e\u6211\u8bc4\u5ba1\u4ee3\u7801",
+      "timestamp": "2026-04-06T14:55:28.783904",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "verification-before-completion",
+      "query": "review my code",
+      "timestamp": "2026-04-06T14:55:29.067349",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "gstack/review",
+      "query": "please review this",
+      "timestamp": "2026-04-06T14:55:29.075212",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "gstack/review",
+      "query": "help me review",
+      "timestamp": "2026-04-06T14:55:29.083091",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T14:55:47.105099",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T14:55:47.121006",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T14:55:47.137820",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "gstack/review",
+      "query": "\u5e2e\u6211\u8bc4\u5ba1\u4ee3\u7801",
+      "timestamp": "2026-04-06T14:56:34.740749",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "verification-before-completion",
+      "query": "review my code",
+      "timestamp": "2026-04-06T14:56:35.023599",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "gstack/review",
+      "query": "please review this",
+      "timestamp": "2026-04-06T14:56:35.031465",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "gstack/review",
+      "query": "help me review",
+      "timestamp": "2026-04-06T14:56:35.039458",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T14:56:53.161859",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T14:56:53.178904",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T14:56:53.196057",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T17:36:39.482429",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T17:36:39.499069",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T17:36:39.512866",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T18:09:11.514812",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T18:09:11.529041",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T18:09:11.543168",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T18:14:29.418692",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T18:14:29.432968",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T18:14:29.447071",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T18:31:23.486692",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T18:31:23.491185",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T18:31:23.495531",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T18:32:34.377358",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T18:32:34.382371",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T18:32:34.386815",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T20:01:22.399205",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T20:01:22.403566",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T20:01:22.407876",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T20:04:44.576114",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T20:04:44.589905",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T20:04:44.604018",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T20:53:27.662007",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T20:53:27.675985",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T20:53:27.690064",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T20:57:02.021926",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T20:57:02.036115",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T20:57:02.050340",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T20:57:36.545978",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T20:57:36.560367",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T20:57:36.574782",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T21:01:42.361179",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T21:01:42.375779",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T21:01:42.389868",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T21:03:23.929506",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T21:03:23.943949",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T21:03:23.958566",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T21:05:25.606329",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T21:05:25.621612",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T21:05:25.636155",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T21:09:12.379094",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T21:09:12.395605",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T21:09:12.411758",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T21:26:45.694548",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T21:26:45.709186",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T21:26:45.723789",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T21:27:37.188284",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T21:27:37.203103",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T21:27:37.217920",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T21:29:09.092979",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T21:29:09.108379",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T21:29:09.123435",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T21:29:53.047761",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T21:29:53.062875",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T21:29:53.077796",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T21:32:20.022116",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T21:32:20.037101",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T21:32:20.052013",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T21:33:24.108442",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T21:33:24.124011",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T21:33:24.138986",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T21:37:55.057091",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T21:37:55.061559",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T21:37:55.066092",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T21:39:41.591951",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T21:39:41.596776",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T21:39:41.601501",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T21:40:56.988066",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T21:40:56.992683",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T21:40:56.997077",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T22:34:41.700332",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T22:34:41.704962",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-06T22:34:41.709251",
+      "was_helpful": false
     }
   ],
   "skill_scores": {
@@ -459,36 +2193,44 @@
       "last_selected": "2026-04-05T15:56:47.322308"
     },
     "test-skill": {
-      "score": 0.4333051127543801,
-      "selection_count": 27,
-      "helpful_count": 9,
-      "last_selected": "2026-04-06T09:46:38.570594"
+      "score": 0.4815672547226222,
+      "selection_count": 192,
+      "helpful_count": 64,
+      "last_selected": "2026-04-06T22:34:41.709251"
     },
     "gstack/review": {
-      "score": 0.8333051127543801,
-      "selection_count": 27,
-      "helpful_count": 27,
-      "last_selected": "2026-04-06T09:46:23.263280"
+      "score": 0.8698947636399186,
+      "selection_count": 120,
+      "helpful_count": 120,
+      "last_selected": "2026-04-06T14:56:35.039458"
     },
     "/verification-before-completion": {
-      "score": 0.8075646273248511,
-      "selection_count": 9,
-      "helpful_count": 9,
-      "last_selected": "2026-04-06T09:46:23.258086"
+      "score": 0.8283873553982287,
+      "selection_count": 22,
+      "helpful_count": 22,
+      "last_selected": "2026-04-06T13:29:39.188539"
+    },
+    "verification-before-completion": {
+      "score": 0.823610974479161,
+      "selection_count": 18,
+      "helpful_count": 18,
+      "last_selected": "2026-04-06T14:56:35.023599"
     }
   },
   "word_associations": {
     "review": {
       "/review": 154,
       "/gstack/review": 63,
-      "gstack/review": 119,
-      "/verification-before-completion": 10
+      "gstack/review": 181,
+      "/verification-before-completion": 23,
+      "verification-before-completion": 18
     },
     "code": {
       "/review": 209,
       "/gstack/review": 126,
       "gstack/review": 33,
-      "/verification-before-completion": 10
+      "/verification-before-completion": 23,
+      "verification-before-completion": 18
     },
     "debug": {
       "/debug": 6
@@ -511,7 +2253,7 @@
       "/skill8": 1,
       "/skill9": 1,
       "/review": 64,
-      "test-skill": 141
+      "test-skill": 306
     },
     "query1": {
       "/review": 2
@@ -527,7 +2269,7 @@
     },
     "query": {
       "/review": 1,
-      "test-skill": 141
+      "test-skill": 306
     },
     "quality": {
       "/review": 1
@@ -543,16 +2285,16 @@
       "/debug": 64
     },
     "\u5e2e\u6211\u8bc4\u5ba1\u4ee3\u7801": {
-      "gstack/review": 51
+      "gstack/review": 82
     },
     "please": {
-      "gstack/review": 43
+      "gstack/review": 74
     },
     "this": {
-      "gstack/review": 43
+      "gstack/review": 74
     },
     "help": {
-      "gstack/review": 43
+      "gstack/review": 74
     }
   }
 }

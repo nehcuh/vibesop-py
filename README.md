@@ -1,12 +1,12 @@
 # VibeSOP - Python Edition
 
 > **Production-Grade AI-Assisted Development Workflow SOP**
-> **v3.0.0** - Unified architecture with consolidated matching and routing
+> **v4.0.0** - Intelligent routing engine with 5-layer matching
 
 [![Python](https://img.shields.io/badge/Python-3.12+-blue.svg)](https://www.python.org/downloads/)
 [![Ruff](https://img.shields.io/badge/Ruff-Enabled-black.svg)](https://github.com/astral-sh/ruff)
 [![Pyright](https://img.shields.io/badge/Pyright-Strict-blue.svg)](https://github.com/microsoft/pyright)
-[![Version](https://img.shields.io/badge/Version-3.0.0-green.svg)](https://github.com/nehcuh/vibesop-py)
+[![Version](https://img.shields.io/badge/Version-4.0.0-green.svg)](https://github.com/nehcuh/vibesop-py)
 
 ## 🚀 Quick Start
 

@@ -28,7 +28,6 @@ Examples:
 """
 
 from pathlib import Path
-from typing import Optional
 
 import typer
 from rich.console import Console
@@ -58,7 +57,7 @@ def stats() -> None:
     console.print(table)
 
     if stats_data["by_source"]:
-        console.print(f"\n[bold]By Source:[/bold]")
+        console.print("\n[bold]By Source:[/bold]")
         for source, count in stats_data["by_source"].items():
             console.print(f"  {source}: {count}")
 
@@ -66,8 +65,8 @@ def stats() -> None:
 def learn(
     pattern: str = typer.Argument(..., help="Pattern to match (what to look for)"),
     action: str = typer.Option(..., "--action", "-a", help="Action to take when pattern matches"),
-    context: Optional[str] = typer.Option(None, "--context", "-c", help="When this applies"),
-    tag: Optional[str] = typer.Option(None, "--tag", "-t", help="Tag for categorization"),
+    context: str | None = typer.Option(None, "--context", "-c", help="When this applies"),
+    tag: str | None = typer.Option(None, "--tag", "-t", help="Tag for categorization"),
 ) -> None:
     """Learn a new instinct."""
     learner = InstinctLearner()
@@ -96,7 +95,7 @@ def list_all(
     reliable_only: bool = typer.Option(
         False, "--reliable", "-r", help="Show only reliable instincts"
     ),
-    tag: Optional[str] = typer.Option(None, "--tag", "-t", help="Filter by tag"),
+    tag: str | None = typer.Option(None, "--tag", "-t", help="Filter by tag"),
 ) -> None:
     """List all instincts."""
     learner = InstinctLearner()
@@ -111,7 +110,7 @@ def list_all(
         title = "All Instincts"
 
     if not instincts:
-        console.print(f"[dim]No instincts found[/dim]")
+        console.print("[dim]No instincts found[/dim]")
         return
 
     console.print(f"\n[bold cyan]{title}[/bold cyan] ({len(instincts)})\n{'=' * 60}\n")
@@ -140,7 +139,7 @@ def list_all(
 
 def match(
     query: str = typer.Argument(..., help="Query to match against instincts"),
-    context: Optional[str] = typer.Option(None, "--context", "-c", help="Additional context"),
+    context: str | None = typer.Option(None, "--context", "-c", help="Additional context"),
     min_confidence: float = typer.Option(
         0.5, "--min-confidence", help="Minimum confidence threshold"
     ),
@@ -191,9 +190,7 @@ def record(
 
 
 def export(
-    output: Optional[str] = typer.Option(
-        None, "--output", "-o", help="Output file (default: stdout)"
-    ),
+    output: str | None = typer.Option(None, "--output", "-o", help="Output file (default: stdout)"),
 ) -> None:
     """Export instincts for routing."""
     import json

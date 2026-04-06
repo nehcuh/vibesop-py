@@ -4,9 +4,9 @@ This module provides installation and setup functionality
 for VibeSOP configurations.
 """
 
-from pathlib import Path
-from typing import Any, Dict, List, Optional
 import shutil
+from pathlib import Path
+from typing import Any
 
 
 class VibeSOPInstaller:
@@ -37,9 +37,9 @@ class VibeSOPInstaller:
     def install(
         self,
         platform: str,
-        config_dir: Optional[Path] = None,
+        config_dir: Path | None = None,
         force: bool = False,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Install VibeSOP configuration for a platform.
 
         Args:
@@ -50,7 +50,7 @@ class VibeSOPInstaller:
         Returns:
             Dictionary with installation result
         """
-        result: Dict[str, Any] = {
+        result: dict[str, Any] = {
             "success": False,
             "platform": platform,
             "config_dir": None,
@@ -85,8 +85,8 @@ class VibeSOPInstaller:
 
             # Install configuration
             from vibesop.builder import ConfigRenderer, QuickBuilder
-            from vibesop.hooks import HookInstaller
             from vibesop.core.skills import SkillStorage
+            from vibesop.hooks import HookInstaller
 
             # Create manifest
             manifest = QuickBuilder.default(platform=platform)
@@ -135,8 +135,8 @@ class VibeSOPInstaller:
     def uninstall(
         self,
         platform: str,
-        config_dir: Optional[Path] = None,
-    ) -> Dict[str, Any]:
+        config_dir: Path | None = None,
+    ) -> dict[str, Any]:
         """Uninstall VibeSOP configuration.
 
         Args:
@@ -146,7 +146,7 @@ class VibeSOPInstaller:
         Returns:
             Dictionary with uninstallation result
         """
-        result: Dict[str, Any] = {
+        result: dict[str, Any] = {
             "success": False,
             "platform": platform,
             "files_removed": [],
@@ -207,8 +207,8 @@ class VibeSOPInstaller:
     def verify(
         self,
         platform: str,
-        config_dir: Optional[Path] = None,
-    ) -> Dict[str, Any]:
+        config_dir: Path | None = None,
+    ) -> dict[str, Any]:
         """Verify VibeSOP installation.
 
         Args:
@@ -218,7 +218,7 @@ class VibeSOPInstaller:
         Returns:
             Dictionary with verification results
         """
-        result: Dict[str, Any] = {
+        result: dict[str, Any] = {
             "platform": platform,
             "installed": False,
             "config_valid": False,
@@ -228,7 +228,7 @@ class VibeSOPInstaller:
 
         try:
             # Get config directory
-            target_dir: Optional[Path] = None
+            target_dir: Path | None = None
             if config_dir is None:
                 platform_info = self._platforms.get(platform)
                 if platform_info is not None:
@@ -266,13 +266,13 @@ class VibeSOPInstaller:
 
         return result
 
-    def list_platforms(self) -> List[Dict[str, str]]:
+    def list_platforms(self) -> list[dict[str, str]]:
         """List supported platforms.
 
         Returns:
             List of platform information dictionaries
         """
-        platforms: List[Dict[str, str]] = []
+        platforms: list[dict[str, str]] = []
 
         for name, config in self._platforms.items():
             platforms.append(
@@ -296,7 +296,7 @@ class VibeSOPInstaller:
         for path in [current, current / "src", Path(__file__).parent.parent.parent]:
             if (path / "core" / "skills").exists():
                 return path.resolve()
-        return Path(".").resolve()
+        return Path().resolve()
 
     def _is_configured(self, config_dir: Path) -> bool:
         """Check if platform is configured.
@@ -323,7 +323,7 @@ class VibeSOPInstaller:
         self,
         platform: str,
         config_dir: Path,
-    ) -> List[str]:
+    ) -> list[str]:
         """Verify configuration files.
 
         Args:
@@ -333,7 +333,7 @@ class VibeSOPInstaller:
         Returns:
             List of issue descriptions (empty if all OK)
         """
-        issues: List[str] = []
+        issues: list[str] = []
 
         # Platform-specific verification
         if platform == "claude-code":

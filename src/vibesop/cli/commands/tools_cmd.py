@@ -18,8 +18,6 @@ Examples:
     vibe tools show uv
 """
 
-from typing import Optional
-
 import typer
 from rich.console import Console
 from rich.table import Table
@@ -31,7 +29,7 @@ console = Console()
 
 def tools(
     action: str = typer.Argument(..., help="Action: list, show, verify, check"),
-    tool: Optional[str] = typer.Argument(None, help="Tool name"),
+    tool: str | None = typer.Argument(None, help="Tool name"),
 ) -> None:
     """List and manage external tools.
 
@@ -76,10 +74,7 @@ def _do_list(detector: ExternalToolsDetector) -> None:
     Args:
         detector: ExternalToolsDetector instance
     """
-    console.print(
-        f"\n[bold cyan]🔧 External Tools[/bold cyan]"
-        f"\n{'=' * 40}\n"
-    )
+    console.print(f"\n[bold cyan]🔧 External Tools[/bold cyan]\n{'=' * 40}\n")
 
     tools_dict = detector.detect_all()
 
@@ -126,10 +121,7 @@ def _do_show(detector: ExternalToolsDetector, tool_name: str | None) -> None:
         console.print("[dim]Run 'vibe tools list' to see available tools[/dim]")
         raise typer.Exit(1)
 
-    console.print(
-        f"\n[bold cyan]🔧 {tool_info.name}[/bold cyan]"
-        f"\n{'=' * 40}\n"
-    )
+    console.print(f"\n[bold cyan]🔧 {tool_info.name}[/bold cyan]\n{'=' * 40}\n")
 
     # Show details
     status_icon = {
@@ -188,10 +180,7 @@ def _do_check(detector: ExternalToolsDetector) -> None:
     Args:
         detector: ExternalToolsDetector instance
     """
-    console.print(
-        f"\n[bold cyan]🔊 Checking Tools[/bold cyan]"
-        f"\n{'=' * 40}\n"
-    )
+    console.print(f"\n[bold cyan]🔊 Checking Tools[/bold cyan]\n{'=' * 40}\n")
 
     tools_dict = detector.detect_all()
 
@@ -203,7 +192,7 @@ def _do_check(detector: ExternalToolsDetector) -> None:
 
     all_ok = True
 
-    for tool_name, tool_info in tools_dict.items():
+    for _tool_name, tool_info in tools_dict.items():
         status_icon = {
             ToolStatus.AVAILABLE: "✅",
             ToolStatus.NOT_AVAILABLE: "❌",

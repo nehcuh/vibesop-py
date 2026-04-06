@@ -5,7 +5,7 @@ from GitHub, including repository cloning and symlink setup.
 """
 
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import ClassVar
 
 from vibesop.installer.base import GitBasedInstaller
 
@@ -17,13 +17,13 @@ class GstackInstaller(GitBasedInstaller):
     for different platforms.
     """
 
-    repo_urls = [
+    repo_urls: ClassVar[list[str]] = [
         "https://github.com/garrytan/gstack.git",
         "https://gitee.com/mirrors/gstack.git",
     ]
     repo_name = "gstack"
     unified_path = Path("~/.config/skills/gstack").expanduser()
-    platform_symlink_paths = {
+    platform_symlink_paths: ClassVar[dict[str, Path]] = {
         "claude-code": Path("~/.config/claude/skills"),
         "opencode": Path("~/.config/opencode/skills"),
     }

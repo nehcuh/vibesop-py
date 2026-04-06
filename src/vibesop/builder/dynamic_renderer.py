@@ -4,10 +4,9 @@ This module provides dynamic configuration generation
 based on configuration files and templates.
 """
 
-from pathlib import Path
-from typing import Dict, List, Optional, Any, cast
-
 from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, ClassVar, cast
 
 from jinja2 import Environment, FileSystemLoader
 from ruamel.yaml import YAML
@@ -30,7 +29,7 @@ class RenderRule:
     condition: str
     template: str
     output_path: str
-    context_vars: Dict[str, Any]
+    context_vars: dict[str, Any]
     enabled: bool = True
 
 
@@ -50,13 +49,13 @@ class ConfigDrivenRenderer:
 
     def __init__(self) -> None:
         """Initialize the config-driven renderer."""
-        self._env: Optional[Environment] = None
-        self._rules: List[RenderRule] = []
+        self._env: Environment | None = None
+        self._rules: list[RenderRule] = []
 
     def load_rules(
         self,
         rules_config: Path,
-    ) -> List[RenderRule]:
+    ) -> list[RenderRule]:
         """Load rendering rules from configuration.
 
         Args:
@@ -70,13 +69,13 @@ class ConfigDrivenRenderer:
 
         try:
             yaml_parser = YAML()
-            with open(rules_config, "r") as f:
+            with rules_config.open() as f:
                 config: dict[str, Any] = yaml_parser.load(f)  # pyright: ignore[reportUnknownVariableType,reportUnknownMemberType]
 
             rules: list[RenderRule] = []
             rules_list = config.get("rules", [])  # pyright: ignore[reportUnknownMemberType,reportUnknownVariableType]
             for rule_data in rules_list:  # pyright: ignore[reportUnknownVariableType]
-                rd = cast(dict[str, Any], rule_data)
+                rd = cast("dict[str, Any]", rule_data)
                 rule = RenderRule(
                     name=str(rd.get("name", "")),
                     condition=str(rd.get("condition", "")),
@@ -97,8 +96,8 @@ class ConfigDrivenRenderer:
         self,
         manifest: Any,
         output_dir: Path,
-        rules_config: Optional[Path] = None,
-    ) -> Dict[str, Any]:
+        rules_config: Path | None = None,
+    ) -> dict[str, Any]:
         """Render configuration with rules.
 
         Args:
@@ -109,7 +108,7 @@ class ConfigDrivenRenderer:
         Returns:
             RenderResult with files created
         """
-        result: Dict[str, Any] = {
+        result: dict[str, Any] = {
             "success": False,
             "files_created": [],
             "errors": [],
@@ -153,7 +152,7 @@ class ConfigDrivenRenderer:
 
         return result
 
-    def _get_default_rules(self, manifest: Any) -> List[RenderRule]:
+    def _get_default_rules(self, manifest: Any) -> list[RenderRule]:
         """Get default rendering rules.
 
         Args:
@@ -194,7 +193,7 @@ class ConfigDrivenRenderer:
         else:
             return []
 
-    _SAFE_VARIABLES: set[str] = {"platform", "version"}
+    _SAFE_VARIABLES: ClassVar[set[str]] = {"platform", "version"}
 
     def _evaluate_condition(self, condition: str, manifest: Any) -> bool:
         """Evaluate a rule condition safely.
@@ -215,7 +214,7 @@ class ConfigDrivenRenderer:
         condition = condition.strip()
 
         try:
-            context: Dict[str, Any] = {
+            context: dict[str, Any] = {
                 "platform": manifest.metadata.platform,
                 "version": manifest.metadata.version,
             }
@@ -225,7 +224,7 @@ class ConfigDrivenRenderer:
             return False
 
     @staticmethod
-    def _parse_simple_equality(condition: str, context: Dict[str, Any]) -> bool:
+    def _parse_simple_equality(condition: str, context: dict[str, Any]) -> bool:
         """Parse a simple equality condition: variable == 'value'.
 
         Args:
@@ -245,16 +244,17 @@ class ConfigDrivenRenderer:
         if left not in context:
             return False
 
-        if not right.startswith("'") or not right.endswith("'"):
-            if not right.startswith('"') or not right.endswith('"'):
-                return False
+        if (not right.startswith("'") or not right.endswith("'")) and (
+            not right.startswith('"') or not right.endswith('"')
+        ):
+            return False
 
         expected_value = right[1:-1]
         actual_value = str(context[left])
 
         return actual_value == expected_value
 
-    def _render_template(self, template_name: str, context: Dict[str, Any]) -> str:
+    def _render_template(self, template_name: str, context: dict[str, Any]) -> str:
         """Render a template.
 
         Args:
@@ -276,14 +276,14 @@ class ConfigDrivenRenderer:
             template = self._env.get_template(template_name)
             return template.render(**context)
         except Exception as e:
-            raise Exception(f"Template rendering failed: {e}")
+            raise Exception(f"Template rendering failed: {e}") from e
 
     def render_dynamic_config(
         self,
         manifest: Any,
-        config_spec: Dict[str, Any],
+        config_spec: dict[str, Any],
         output_dir: Path,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Render dynamic configuration based on spec.
 
         Args:
@@ -294,7 +294,7 @@ class ConfigDrivenRenderer:
         Returns:
             RenderResult
         """
-        result: Dict[str, Any] = {
+        result: dict[str, Any] = {
             "success": False,
             "files_created": [],
             "errors": [],
@@ -323,7 +323,7 @@ class ConfigDrivenRenderer:
 
         return result
 
-    def _should_generate_file(self, file_spec: Dict[str, Any], manifest: Any) -> bool:
+    def _should_generate_file(self, file_spec: dict[str, Any], manifest: Any) -> bool:
         """Check if file should be generated.
 
         Args:
@@ -334,7 +334,7 @@ class ConfigDrivenRenderer:
             True if file should be generated
         """
         # Check conditions
-        conditions: Dict[str, Any] = file_spec.get("conditions", {})
+        conditions: dict[str, Any] = file_spec.get("conditions", {})
         if conditions:
             platform = conditions.get("platform")
             if platform and platform != manifest.metadata.platform:
@@ -343,7 +343,7 @@ class ConfigDrivenRenderer:
         # Check if file is enabled
         return file_spec.get("enabled", True)
 
-    def _render_file_content(self, file_spec: Dict[str, Any], manifest: Any) -> str:
+    def _render_file_content(self, file_spec: dict[str, Any], manifest: Any) -> str:
         """Render file content.
 
         Args:

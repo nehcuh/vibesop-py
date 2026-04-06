@@ -23,7 +23,6 @@ Examples:
 """
 
 from pathlib import Path
-from typing import Optional
 
 import typer
 from rich.console import Console
@@ -31,7 +30,7 @@ from rich.panel import Panel
 from rich.table import Table
 
 from vibesop.installer.init_support import InitSupport
-from vibesop.integrations import IntegrationDetector, IntegrationManager, IntegrationStatus
+from vibesop.integrations import IntegrationManager, IntegrationStatus
 
 console = Console()
 
@@ -48,8 +47,8 @@ VALID_PLATFORMS = list(PLATFORM_LABELS.keys())
 
 
 def init(
-    project_path: Path = typer.Argument(
-        Path("."),
+    project_path: Path = typer.Argument(  # noqa: B008
+        Path(),
         help="Project path (default: current directory)",
         show_default=False,
     ),
@@ -133,7 +132,7 @@ def _verify_init(project_path: Path, platform_label: str) -> None:
     init_support = InitSupport()
     result = init_support.verify_init(project_path)
 
-    console.print(f"[bold]🔍 VibeSOP Initialization Status[/bold]\n")
+    console.print("[bold]🔍 VibeSOP Initialization Status[/bold]\n")
 
     # Create status table
     table = Table(show_header=False, box=None, padding=(0, 2))
@@ -152,19 +151,15 @@ def _verify_init(project_path: Path, platform_label: str) -> None:
     console.print(table)
 
     if result["initialized"]:
-        console.print(
-            f"\n[green]✓ Project is properly initialized for {platform_label}[/green]"
-        )
+        console.print(f"\n[green]✓ Project is properly initialized for {platform_label}[/green]")
         raise typer.Exit(0)
     else:
-        console.print(
-            "\n[yellow]⚠ Project is not fully initialized[/yellow]"
-        )
+        console.print("\n[yellow]⚠ Project is not fully initialized[/yellow]")
         console.print("  Run: [cyan]vibe init[/cyan] to initialize")
         raise typer.Exit(1)
 
 
-def _preview_init(project_path: Path, platform: str, platform_label: str) -> None:
+def _preview_init(project_path: Path, _platform: str, platform_label: str) -> None:
     """Preview what would be created during initialization.
 
     Args:
@@ -177,10 +172,10 @@ def _preview_init(project_path: Path, platform: str, platform_label: str) -> Non
 
     console.print(
         Panel(
-            f"[bold cyan]🔍 DRY RUN[/bold cyan]\n\n"
-            f"This is a preview of what would be created.\n"
-            f"No changes will be made.\n\n"
-            f"[dim]Run again without --dry-run to actually initialize.[/dim]",
+            "[bold cyan]🔍 DRY RUN[/bold cyan]\n\n"
+            "This is a preview of what would be created.\n"
+            "No changes will be made.\n\n"
+            "[dim]Run again without --dry-run to actually initialize.[/dim]",
             title="[bold]Preview Mode[/bold]",
             border_style="cyan",
         )
@@ -192,8 +187,8 @@ def _preview_init(project_path: Path, platform: str, platform_label: str) -> Non
     # Check if already initialized
     if vibe_dir.exists():
         console.print(
-            f"[yellow]⚠ .vibe directory already exists[/yellow]\n"
-            f"[dim]Use --force to overwrite[/dim]\n"
+            "[yellow]⚠ .vibe directory already exists[/yellow]\n"
+            "[dim]Use --force to overwrite[/dim]\n"
         )
 
     console.print("[bold]Files that would be created:[/bold]\n")
@@ -207,8 +202,8 @@ def _preview_init(project_path: Path, platform: str, platform_label: str) -> Non
     console.print("  📄 .gitignore (updated)\n")
 
     console.print(
-        f"[dim]To actually install, run:[/dim]\n"
-        f"  [cyan]vibe init[/cyan] [dim](or 'vibe init --force' to overwrite)[/dim]\n"
+        "[dim]To actually install, run:[/dim]\n"
+        "  [cyan]vibe init[/cyan] [dim](or 'vibe init --force' to overwrite)[/dim]\n"
     )
 
 
@@ -221,10 +216,7 @@ def _do_init(project_path: Path, platform: str, platform_label: str, force: bool
         platform_label: Platform name for display
         force: Whether to force re-initialization
     """
-    console.print(
-        f"\n[bold cyan]🚀 {platform_label} Initialization[/bold cyan]"
-        f"\n{'=' * 40}\n"
-    )
+    console.print(f"\n[bold cyan]🚀 {platform_label} Initialization[/bold cyan]\n{'=' * 40}\n")
 
     init_support = InitSupport()
     result = init_support.init_project(
@@ -270,10 +262,7 @@ def _do_init(project_path: Path, platform: str, platform_label: str, force: bool
         )
 
         # Auto-detect integrations
-        console.print(
-            f"\n[bold cyan]🔍 Detecting Integrations[/bold cyan]"
-            f"\n{'=' * 40}\n"
-        )
+        console.print(f"\n[bold cyan]🔍 Detecting Integrations[/bold cyan]\n{'=' * 40}\n")
         _detect_and_show_integrations()
 
         raise typer.Exit(0)
@@ -325,8 +314,7 @@ def _detect_and_show_integrations() -> None:
     # Show install suggestions if not all installed
     if installed_count < total_count:
         not_installed = [
-            i.name for i in all_integrations
-            if i.status != IntegrationStatus.INSTALLED
+            i.name for i in all_integrations if i.status != IntegrationStatus.INSTALLED
         ]
         if not_installed:
             console.print(

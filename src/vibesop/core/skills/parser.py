@@ -8,8 +8,10 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
-from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any, ClassVar
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 @dataclass
@@ -76,7 +78,7 @@ class SkillParser:
     FRONTMATTER_PATTERN = re.compile(r"^---\s*\n(.*?)\n---\s*\n", re.DOTALL)
 
     # Keyword extraction patterns
-    KEYWORD_PATTERNS = [
+    KEYWORD_PATTERNS: ClassVar[list[str]] = [
         r"\*\*([A-Z][A-Z_]+)\*\*",  # **KEYWORD** format
         r"`([A-Z][A-Z_]+)`",  # `KEYWORD` format
     ]

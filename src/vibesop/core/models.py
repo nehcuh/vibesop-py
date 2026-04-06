@@ -1,37 +1,70 @@
 """Core Pydantic models for VibeSOP.
 
 All data structures use Pydantic v2 for runtime validation and type safety.
+This module is the single source of truth for routing models.
 """
 
-from typing import Literal
+from enum import StrEnum
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class RoutingLayer(StrEnum):
+    """Routing layers in priority order."""
+
+    AI_TRIAGE = "ai_triage"
+    EXPLICIT = "explicit"
+    SCENARIO = "scenario"
+    KEYWORD = "keyword"
+    TFIDF = "tfidf"
+    EMBEDDING = "embedding"
+    LEVENSHTEIN = "levenshtein"
+    NO_MATCH = "no_match"
+
+    @property
+    def layer_number(self) -> int:
+        """Return numeric layer index for backward compatibility."""
+        mapping = {
+            RoutingLayer.AI_TRIAGE: 0,
+            RoutingLayer.EXPLICIT: 1,
+            RoutingLayer.SCENARIO: 2,
+            RoutingLayer.KEYWORD: 3,
+            RoutingLayer.TFIDF: 4,
+            RoutingLayer.EMBEDDING: 5,
+            RoutingLayer.LEVENSHTEIN: 6,
+            RoutingLayer.NO_MATCH: 7,
+        }
+        return mapping[self]
 
 
 class SkillRoute(BaseModel):
     """Result of skill routing operation.
 
     Attributes:
-        skill_id: Unique skill identifier (e.g., '/review')
+        skill_id: Unique skill identifier (e.g., 'gstack/review')
         confidence: Routing confidence (0.0 to 1.0)
-        layer: Routing layer that matched (0-4)
-        source: Skill pack source (e.g., 'builtin', 'gstack')
+        layer: Which routing layer made this decision
+        source: Skill pack source (e.g., 'builtin', 'gstack', 'external')
         metadata: Additional routing metadata
     """
 
+    model_config = {"arbitrary_types_allowed": True}
+
     skill_id: str = Field(..., min_length=1, description="Skill identifier")
     confidence: float = Field(
+        default=0.0,
         ge=0.0,
         le=1.0,
         description="Routing confidence score",
     )
-    layer: Literal[0, 1, 2, 3, 4] = Field(
+    layer: RoutingLayer = Field(
         ...,
-        description="Routing layer (0=AI, 1=Explicit, 2=Scenario, 3=Semantic, 4=Fuzzy)",
+        description="Routing layer that produced this match",
     )
-    source: str = Field(..., description="Skill pack source")
-    metadata: dict[str, str | int | float] = Field(
+    source: str = Field(default="builtin", description="Skill pack source")
+    metadata: dict[str, Any] = Field(
         default_factory=dict,
         description="Additional routing metadata",
     )
@@ -39,31 +72,20 @@ class SkillRoute(BaseModel):
     @field_validator("skill_id")
     @classmethod
     def validate_skill_id(cls, v: str) -> str:
-        """Validate skill ID format.
-
-        Accepts formats:
-        - /review (shorthand)
-        - gstack/review (namespaced)
-        - superpowers/refactor (namespaced)
-
-        For consistency, ensures shorthand forms have a leading slash.
-        """
+        """Validate skill ID format."""
         if not v:
             raise ValueError("skill_id cannot be empty")
-
-        # Allow namespaced IDs (gstack/review, superpowers/refactor)
-        if "/" in v and not v.startswith("/"):
-            # Namespaced ID, validate format
-            parts = v.split("/")
-            if len(parts) != 2 or not parts[0] or not parts[1]:
-                raise ValueError("skill_id must be in format 'namespace/skill' or '/skill'")
-            return v
-
-        # Shorthand ID (review), ensure leading slash
-        if not v.startswith("/"):
-            return f"/{v}"
-
         return v
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert to dictionary for serialization."""
+        return {
+            "skill_id": self.skill_id,
+            "confidence": self.confidence,
+            "layer": self.layer.value,
+            "source": self.source,
+            "metadata": self.metadata,
+        }
 
 
 class RoutingRequest(BaseModel):
@@ -85,20 +107,45 @@ class RoutingResult(BaseModel):
     """Result of skill routing operation.
 
     Attributes:
-        primary: Best matching skill
+        primary: Best matching skill (None if no match)
         alternatives: List of alternative matches
         routing_path: Which layers were consulted
+        query: The original query
+        duration_ms: How long routing took
     """
 
-    primary: SkillRoute
-    alternatives: list[SkillRoute] = Field(  # type: ignore[reportUnknownVariableType]
+    model_config = {"arbitrary_types_allowed": True}
+
+    primary: SkillRoute | None = Field(
+        default=None,
+        description="Primary skill match",
+    )
+    alternatives: list[SkillRoute] = Field(
         default_factory=list,
         description="Alternative skill matches",
     )
-    routing_path: list[Literal[0, 1, 2, 3, 4]] = Field(  # type: ignore[reportUnknownVariableType]
+    routing_path: list[RoutingLayer] = Field(
         default_factory=list,
         description="Layers consulted during routing",
     )
+    query: str = Field(default="", description="Original query")
+    duration_ms: float = Field(default=0.0, description="Routing duration in ms")
+
+    @property
+    def has_match(self) -> bool:
+        """Whether a match was found."""
+        return self.primary is not None
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert to dictionary for serialization."""
+        return {
+            "primary": self.primary.to_dict() if self.primary else None,
+            "alternatives": [a.to_dict() for a in self.alternatives],
+            "routing_path": [layer.value for layer in self.routing_path],
+            "query": self.query,
+            "duration_ms": self.duration_ms,
+            "has_match": self.has_match,
+        }
 
 
 class SkillDefinition(BaseModel):

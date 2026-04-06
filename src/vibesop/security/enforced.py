@@ -8,13 +8,13 @@ This is a critical security measure - all external content
 MUST be scanned before being used in the system.
 """
 
+from collections.abc import Callable
 from functools import wraps
 from pathlib import Path
-from typing import Callable, TypeVar, Union, Any, Optional
+from typing import Any, TypeVar
 
-from vibesop.security.scanner import SecurityScanner
 from vibesop.security.exceptions import SecurityError
-
+from vibesop.security.scanner import SecurityScanner
 
 T = TypeVar("T")
 
@@ -26,7 +26,7 @@ class SecurityEnforcementError(SecurityError):
 
 
 def require_safe_scan(
-    scanner: Optional[SecurityScanner] = None,
+    scanner: SecurityScanner | None = None,
     on_unsafe: str = "raise",  # "raise", "return_none", "return_default"
 ) -> Callable:
     """Decorator that enforces security scanning on function results.
@@ -100,7 +100,7 @@ def require_safe_scan(
 
 
 def scan_file_before_load(
-    scanner: Optional[SecurityScanner] = None,
+    scanner: SecurityScanner | None = None,
 ) -> Callable:
     """Decorator that scans a file path before loading.
 
@@ -139,7 +139,7 @@ def scan_file_before_load(
 
 def scan_string_input(
     arg_index: int = 0,
-    scanner: Optional[SecurityScanner] = None,
+    scanner: SecurityScanner | None = None,
 ) -> Callable:
     """Decorator that scans a string argument before function execution.
 
@@ -186,7 +186,7 @@ class SafeLoader:
         >>> # Content is guaranteed to be scanned
     """
 
-    def __init__(self, scanner: Optional[SecurityScanner] = None) -> None:
+    def __init__(self, scanner: SecurityScanner | None = None) -> None:
         """Initialize the safe loader.
 
         Args:
@@ -196,7 +196,7 @@ class SafeLoader:
 
     def load_text_file(
         self,
-        path: Union[Path, str],
+        path: Path | str,
         encoding: str = "utf-8",
     ) -> str:
         """Load text file with mandatory security scan.
@@ -222,7 +222,7 @@ class SafeLoader:
 
     def load_json_file(
         self,
-        path: Union[Path, str],
+        path: Path | str,
         encoding: str = "utf-8",
     ) -> dict:
         """Load JSON file with mandatory security scan.
@@ -259,7 +259,7 @@ class SafeLoader:
             raise SecurityEnforcementError(f"Content is unsafe: {scan_result.threats}")
         return content
 
-    def check_file_path(self, path: Union[Path, str]) -> Path:
+    def check_file_path(self, path: Path | str) -> Path:
         """Check file path and return if safe.
 
         Args:
@@ -282,7 +282,7 @@ class SafeLoader:
 _default_loader = SafeLoader()
 
 
-def load_text_file_safe(path: Union[Path, str], encoding: str = "utf-8") -> str:
+def load_text_file_safe(path: Path | str, encoding: str = "utf-8") -> str:
     """Convenience function for safe text file loading.
 
     Args:
@@ -298,7 +298,7 @@ def load_text_file_safe(path: Union[Path, str], encoding: str = "utf-8") -> str:
     return _default_loader.load_text_file(path, encoding)
 
 
-def load_json_file_safe(path: Union[Path, str], encoding: str = "utf-8") -> dict:
+def load_json_file_safe(path: Path | str, encoding: str = "utf-8") -> dict:
     """Convenience function for safe JSON file loading.
 
     Args:

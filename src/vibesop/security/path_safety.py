@@ -4,6 +4,7 @@ This module provides the PathSafety class that validates file paths
 to prevent directory traversal and other path-based attacks.
 """
 
+import os
 from pathlib import Path
 from typing import Final
 
@@ -112,12 +113,7 @@ class PathSafety:
         path_obj = Path(path)
         base_dir = Path(base_dir).resolve()
 
-        # Construct the full path
-        if path_obj.is_absolute():
-            full_path = path_obj
-        else:
-            # Join with base directory
-            full_path = base_dir / path_obj
+        full_path = path_obj if path_obj.is_absolute() else base_dir / path_obj
 
         # Normalize the path (resolve .. and . components)
         # Use resolve() but be aware it follows symlinks
@@ -217,8 +213,8 @@ class PathSafety:
         """
         output_path = Path(output_path).resolve()
 
-        for protected in protected_paths:
-            protected = Path(protected).resolve()
+        for raw_protected in protected_paths:
+            protected = Path(raw_protected).resolve()
 
             if self.check_overlap(output_path, protected):
                 msg = (
@@ -280,7 +276,3 @@ class PathSafety:
             raise ValueError(msg)
 
         return True
-
-
-# Import os for access checks
-import os

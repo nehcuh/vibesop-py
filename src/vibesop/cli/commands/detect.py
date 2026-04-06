@@ -16,14 +16,11 @@ Examples:
     vibe detect --verbose
 """
 
-from pathlib import Path
-
 import typer
 from rich.console import Console
 from rich.table import Table
-from rich.panel import Panel
 
-from vibesop.integrations import IntegrationManager, IntegrationDetector, IntegrationStatus
+from vibesop.integrations import IntegrationDetector, IntegrationManager, IntegrationStatus
 
 console = Console()
 
@@ -67,10 +64,7 @@ def detect(
         # Output as JSON
         vibe detect --json
     """
-    console.print(
-        f"\n[bold cyan]🔍 Detecting Integrations[/bold cyan]"
-        f"\n{'=' * 40}\n"
-    )
+    console.print(f"\n[bold cyan]🔍 Detecting Integrations[/bold cyan]\n{'=' * 40}\n")
 
     # Create detector and manager
     detector = IntegrationDetector()
@@ -81,10 +75,7 @@ def detect(
     if skills_path:
         console.print(f"[dim]Skills path: {skills_path}[/dim]\n")
     else:
-        console.print(
-            "[yellow]⚠ No skills path found[/yellow]\n"
-            "[dim]Expected locations:[/dim]"
-        )
+        console.print("[yellow]⚠ No skills path found[/yellow]\n[dim]Expected locations:[/dim]")
         for path in IntegrationDetector.SKILLS_BASE_PATHS:
             console.print(f"  [dim]  {path}[/dim]")
         console.print()
@@ -112,6 +103,7 @@ def detect(
     # JSON output
     if json_output:
         import json
+
         data = [info.to_dict() for info in integrations]
         console.print_json(json.dumps(data, indent=2))
         return
@@ -165,20 +157,15 @@ def detect(
     console.print(table)
 
     # Show summary
-    installed_count = sum(
-        1 for i in all_integrations if i.status == IntegrationStatus.INSTALLED
-    )
+    installed_count = sum(1 for i in all_integrations if i.status == IntegrationStatus.INSTALLED)
     total_count = len(all_integrations)
 
-    console.print(
-        f"\n[dim]Installed: {installed_count}/{total_count} integrations[/dim]"
-    )
+    console.print(f"\n[dim]Installed: {installed_count}/{total_count} integrations[/dim]")
 
     # Show install suggestions if not all installed
     if installed_count < total_count:
         not_installed = [
-            i.name for i in all_integrations
-            if i.status != IntegrationStatus.INSTALLED
+            i.name for i in all_integrations if i.status != IntegrationStatus.INSTALLED
         ]
         if not_installed:
             console.print(

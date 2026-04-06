@@ -13,17 +13,15 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
-from pydantic import BaseModel, Field
-
-from vibesop.security import SecurityScanner, PathSafety
-from vibesop.security.exceptions import UnsafeContentError, PathTraversalError
+from vibesop.security import PathSafety, SecurityScanner
+from vibesop.security.exceptions import PathTraversalError, UnsafeContentError
 
 
-class ThreatLevel(str, Enum):
+class ThreatLevel(StrEnum):
     """Severity level of security threats."""
 
     SAFE = "safe"
@@ -114,14 +112,14 @@ class SkillSecurityAuditor:
     """
 
     # Allowed skill directories (whitelist)
-    ALLOWED_BASE_PATHS = [
+    ALLOWED_BASE_PATHS: ClassVar[list[Path]] = [
         Path.home() / ".claude" / "skills",
         Path.home() / ".config" / "skills",
         Path.home() / ".vibe" / "skills",
     ]
 
     # Danger patterns (from SKILL-INJECT research)
-    THREAT_PATTERNS = [
+    THREAT_PATTERNS: ClassVar[list[ThreatPattern]] = [
         # Prompt injection patterns
         ThreatPattern(
             name="Ignore Instructions",
@@ -404,11 +402,10 @@ class SkillSecurityAuditor:
 
         # Check if path is within allowed directories
         is_allowed = False
-        for allowed_base in self._allowed_paths:
-            # Resolve allowed base
-            allowed_base = allowed_base.resolve()
+        for raw_allowed_base in self._allowed_paths:
+            resolved_base = raw_allowed_base.resolve()
             try:
-                path.relative_to(allowed_base)
+                path.relative_to(resolved_base)
                 is_allowed = True
                 break
             except ValueError:
@@ -483,6 +480,7 @@ class SkillSecurityAuditor:
 
 # Convenience functions
 
+
 def audit_skill(
     skill_path: Path | str,
     strict_mode: bool = True,
@@ -511,9 +509,9 @@ def audit_skill(
 
 
 __all__ = [
-    "ThreatLevel",
-    "ThreatPattern",
     "AuditResult",
     "SkillSecurityAuditor",
+    "ThreatLevel",
+    "ThreatPattern",
     "audit_skill",
 ]

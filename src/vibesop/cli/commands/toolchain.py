@@ -20,8 +20,6 @@ Examples:
     vibe toolchain install uv
 """
 
-from typing import Optional
-
 import typer
 from rich.console import Console
 from rich.table import Table
@@ -33,7 +31,7 @@ console = Console()
 
 def toolchain(
     action: str = typer.Argument(..., help="Action: list, verify, install, status"),
-    tool: Optional[str] = typer.Argument(None, help="Tool name"),
+    tool: str | None = typer.Argument(None, help="Tool name"),
     force: bool = typer.Option(
         False,
         "--force",
@@ -84,10 +82,7 @@ def _do_list(detector: ExternalToolsDetector) -> None:
     Args:
         detector: ExternalToolsDetector instance
     """
-    console.print(
-        f"\n[bold cyan]🔧 Development Tools[/bold cyan]"
-        f"\n{'=' * 40}\n"
-    )
+    console.print(f"\n[bold cyan]🔧 Development Tools[/bold cyan]\n{'=' * 40}\n")
 
     tools_dict = detector.detect_all()
 
@@ -98,7 +93,7 @@ def _do_list(detector: ExternalToolsDetector) -> None:
     table.add_column("Status")
     table.add_column("Required")
 
-    for tool_name, tool_info in tools_dict.items():
+    for _tool_name, tool_info in tools_dict.items():
         status_color = "green" if tool_info.status == ToolStatus.AVAILABLE else "red"
         status = tool_info.status.value
         required = "Yes" if not tool_info.optional else "No"
@@ -123,14 +118,11 @@ def _do_status(detector: ExternalToolsDetector) -> None:
     Args:
         detector: ExternalToolsDetector instance
     """
-    console.print(
-        f"\n[bold cyan]🔊 Toolchain Status[/bold cyan]"
-        f"\n{'=' * 40}\n"
-    )
+    console.print(f"\n[bold cyan]🔊 Toolchain Status[/bold cyan]\n{'=' * 40}\n")
 
     tools_dict = detector.detect_all()
 
-    for tool_name, tool_info in tools_dict.items():
+    for _tool_name, tool_info in tools_dict.items():
         status_icon = {
             ToolStatus.AVAILABLE: "✅",
             ToolStatus.NOT_AVAILABLE: "❌",
@@ -174,10 +166,7 @@ def _do_verify(detector: ExternalToolsDetector, tool_name: str | None) -> None:
         console.print("[dim]Run 'vibe toolchain list' to see available tools[/dim]")
         raise typer.Exit(1)
 
-    console.print(
-        f"\n[bold]Tool: {tool_info.name}[/bold]\n"
-        f"  Status: {tool_info.status.value}\n"
-    )
+    console.print(f"\n[bold]Tool: {tool_info.name}[/bold]\n  Status: {tool_info.status.value}\n")
 
     if tool_info.path:
         console.print(f"  Path: {tool_info.path}")
@@ -195,9 +184,9 @@ def _do_verify(detector: ExternalToolsDetector, tool_name: str | None) -> None:
 
 
 def _do_install(
-    detector: ExternalToolsDetector,
+    _detector: ExternalToolsDetector,
     tool_name: str | None,
-    force: bool,
+    _force: bool,
 ) -> None:
     """Install a tool.
 
@@ -225,9 +214,6 @@ def _do_install(
     command = install_commands.get(tool_name)
 
     if command:
-        console.print(
-            f"\n[dim]To install {tool_name}, run:[/dim]\n"
-            f"  [cyan]{command}[/cyan]\n"
-        )
+        console.print(f"\n[dim]To install {tool_name}, run:[/dim]\n  [cyan]{command}[/cyan]\n")
     else:
         console.print(f"[dim]No automatic installation available for {tool_name}[/dim]")

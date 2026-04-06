@@ -5,7 +5,7 @@ must implement to ensure compatibility with the configuration system.
 """
 
 from pathlib import Path
-from typing import Protocol, Any
+from typing import Any, Protocol
 
 from vibesop.adapters.models import Manifest, RenderResult
 

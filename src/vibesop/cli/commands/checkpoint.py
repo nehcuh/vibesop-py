@@ -22,7 +22,6 @@ Examples:
 """
 
 from pathlib import Path
-from typing import Optional
 
 import typer
 from rich.console import Console
@@ -36,14 +35,14 @@ console = Console()
 
 def checkpoint(
     action: str = typer.Argument(..., help="Action: save, restore, list, delete"),
-    name_or_id: Optional[str] = typer.Argument(None, help="Checkpoint name or ID"),
-    description: Optional[str] = typer.Option(
+    name_or_id: str | None = typer.Argument(None, help="Checkpoint name or ID"),
+    description: str | None = typer.Option(
         None,
         "--description",
         "-d",
         help="Checkpoint description",
     ),
-    tags: Optional[list[str]] = typer.Option(
+    tags: list[str] | None = typer.Option(  # noqa: B008
         None,
         "--tag",
         "-t",

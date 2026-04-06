@@ -2,7 +2,7 @@
 
 import pytest
 
-from vibesop.core.interview.ambiguity import (
+from vibesop.core.algorithms.interview.ambiguity import (
     WEIGHTS,
     AmbiguityResult,
     DimensionScore,

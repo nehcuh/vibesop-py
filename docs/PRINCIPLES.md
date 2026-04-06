@@ -1,8 +1,8 @@
 # VibeSOP Principles
 
-> **Version**: 3.0.0
+> **Version**: 4.0.0
 > **Status**: Mandatory (必须遵守)
-> **Last Updated**: 2026-04-05
+> **Last Updated**: 2026-04-06
 
 > **任何开发工作开始前，必须阅读并理解本文档。**
 > **所有设计决策、代码实现、功能添加都必须符合这些原则。**
@@ -13,67 +13,54 @@
 
 ### 一句话定义
 
-**VibeSOP 是一套 AI 辅助开发的标准工作流（SOP）——个人用它积累知识、加速开发，团队用它统一规范、沉淀经验。**
+**VibeSOP 是 AI 辅助开发的智能路由引擎 — 理解用户意图，发现最佳工作流，管理技能生态，让 AI 工具从"每次从零开始"变成"越用越聪明"。**
 
 ### 我们不是什么
 
-- **不是** AI 工具本身——VibeSOP 是工作流层，运行在 AI 工具之上
-- **不是** 配置模板集——VibeSOP 是可执行的框架，有 routing、memory、learning
-- **不是** 只服务于 Claude Code——Portable Core + Adapter 架构确保跨平台
+- **不是** 技能执行引擎 — 执行是 AI Agent（Claude Code / OpenCode）的事
+- **不是** 技能创造平台 — 技能以 SKILL.md 定义，VibeSOP 负责发现和路由
+- **不是** AI 工具本身 — VibeSOP 运行在 AI 工具之上，是工作流层
+- **不是** 配置模板集 — VibeSOP 是可执行的框架，有路由、记忆、学习
 
-### 核心痛点（我们解决什么）
+### 核心价值（我们解决什么）
 
-1. **每次会话从零开始** → 结构化配置 + 分层加载
-2. **重复犯同样的错误** → Memory + Instinct 系统
-3. **每个人都要重新摸索** → Skill 生态 + 智能路由
+1. **每次会话从零开始** → 智能路由 + 偏好学习，越用越准
+2. **不知道有什么工具可用** → 技能发现 + 安装 + 健康检查
+3. **工具散落各处无法统一** → 统一技能生态，任何 SKILL.md 都可接入
 
 ---
 
 ## Core Principles（核心原则）
 
-### 1. Production-First（生产优先）
+### 1. Discovery > Execution（发现优于执行）
 
-**宣言**: *Not a tutorial. Not a toy config. A production workflow that actually ships.*
+**宣言**: *Knowing what's available matters more than being able to execute it yourself.*
 
 **要求**:
-- ✅ 所有功能必须经过实战检验
-- ✅ 拒绝"演示级"代码，坚持"生产级"质量
-- ✅ 优先考虑稳定性而非新特性
-- ✅ 每个功能都必须有测试覆盖
-
-**检查清单**:
-- [ ] 这个功能在生产环境测试过吗？
-- [ ] 有全面的错误处理吗？
-- [ ] 边界条件考虑了吗？
-- [ ] 性能影响评估了吗？
+- ✅ VibeSOP 负责路由和发现，不负责技能执行
+- ✅ 执行是 AI Agent 的职责，VibeSOP 只推荐最佳技能
+- ✅ 所有外部技能包统一处理（superpowers/gstack/omx/自定义）
+- ✅ 智能安装器自动分析项目结构
 
 **反模式**:
-- ❌ "先做个简单的，以后再优化"
-- ❌ "演示可以用就行"
-- ❌ 没有测试就合并
+- ❌ 在 VibeSOP 中实现技能执行逻辑
+- ❌ 对某个外部技能包特殊对待
 
 ---
 
-### 2. Structure > Prompting（结构化优于提示）
+### 2. Matching > Guessing（匹配优于猜测）
 
-**宣言**: *A well-organized config file beats clever one-off prompts every time.*
+**宣言**: *Multi-layer matching beats keyword guessing every time.*
 
 **要求**:
-- ✅ 优先建立结构化的配置系统
-- ✅ 避免依赖聪明的单次提示
-- ✅ 建立可复用的规则和模板
-- ✅ 让 AI 通过读取配置而非记忆来工作
-
-**实践方式**:
-- 将规则写入 `rules/behaviors.md`
-- 将技能定义写入 `skills/*/SKILL.md`
-- 将项目信息写入 `memory/`
-- 使用 YAML/JSON 而非长文本提示
+- ✅ 多层匹配管道（keyword → TF-IDF → embedding → fuzzy）
+- ✅ 冲突解决机制
+- ✅ 偏好学习让路由越来越准
+- ✅ 路由效果追踪，持续优化
 
 **反模式**:
-- ❌ 写一个很长的提示期望 AI 记住
-- ❌ 每次会话都重新解释需求
-- ❌ 依赖 AI 的"理解"而非明确规则
+- ❌ 单层关键词匹配
+- ❌ 每次都重新推理，不利用历史
 
 ---
 
@@ -82,138 +69,144 @@
 **宣言**: *An AI that remembers your past mistakes is more valuable than a smarter AI that starts fresh each session.*
 
 **要求**:
-- ✅ 系统化记录经验教训
-- ✅ 建立可搜索的知识库
-- ✅ 自动保存工作进度
+- ✅ 系统化记录偏好和历史（instinct/memory/session_analyzer）
+- ✅ 路由决策参考历史选择
+- ✅ 自动发现重复模式，建议新技能
 - ✅ 让错误只犯一次
 
 **三层记忆架构**:
 ```
-memory/
-├── session.md           # Hot: 每日进度，活跃任务
-├── project-knowledge.md # Warm: 技术陷阱，模式
-└── overview.md          # Cold: 目标，基础设施
+core/
+├── instinct/         # 偏好学习：记录用户选择模式
+├── memory/           # 会话记忆：项目级知识持久化
+└── session_analyzer  # 模式发现：从重复行为中提取技能
 ```
-
-**关键实践**:
-- 使用 `session-end` 技能自动保存进度
-- 在 `memory/project-knowledge.md` 记录技术陷阱
-- 使用 `experience-evolution` 技能积累项目知识
-- 建立 SSOT（单源真理）防止信息重复
 
 ---
 
-### 4. Verification > Confidence（验证优于自信）
+### 4. Open > Closed（开放优于封闭）
+
+**宣言**: *Any skill that follows the SKILL.md spec can join the ecosystem.*
+
+**要求**:
+- ✅ 任何符合 SKILL.md 规范的技能都可以接入
+- ✅ 已知包直接安装，任意 URL 智能分析安装
+- ✅ 外部技能经过安全审计后可用
+- ✅ 技能包优先级：外部 > 内置 fallback
+
+**反模式**:
+- ❌ 只支持自家技能
+- ❌ 对外部技能包设置不合理的接入门槛
+
+---
+
+### 5. Production-First（生产优先）
+
+**宣言**: *Not a tutorial. Not a toy config. A production routing engine that actually ships.*
+
+**要求**:
+- ✅ 所有功能必须经过实战检验
+- ✅ 拒绝"演示级"代码，坚持"生产级"质量
+- ✅ 优先考虑稳定性而非新特性
+- ✅ 每个功能都必须有测试覆盖
+
+**反模式**:
+- ❌ "先做个简单的，以后再优化"
+- ❌ "演示可以用就行"
+- ❌ 没有测试就合并
+
+---
+
+### 6. Verification > Confidence（验证优于自信）
 
 **宣言**: *The cost of running `npm test` is always less than the cost of shipping a broken build.*
 
 **要求**:
 - ✅ 要求显式验证才能声称完成
 - ✅ 消除"应该可以了"的假设
-- ✅ 建立强制检查点
 - ✅ 让测试成为完成的定义
-
-**强制规则**:
-- 任何任务完成前必须运行验证命令
-- 必须阅读验证输出，不能假设通过
-- 使用 `verification-before-completion` 技能强制执行
+- ✅ 技能安装前必须通过安全审计
 
 **反模式**:
 - ❌ "应该可以工作了"
-- ❌ "我相信没问题"
 - ❌ 没有验证就声称完成
 
 ---
 
-### 5. Portable > Specific（可移植优于特定）
+### 7. Portable > Specific（可移植优于特定）
 
 **宣言**: *`core/` keeps the semantics portable, while adapters keep platforms productive right now.*
 
 **三层架构**:
 ```
 ┌─────────────────────────────────┐
-│  Portable Core                   │  ← 平台无关的语义层
-│  core/models, skills, policies    │
+│  CLI Layer                       │  vibe route/install/skills
 ├─────────────────────────────────┤
-│  Target Adapters                 │  ← 平台适配器
-│  claude-code, opencode, cursor    │
+│  Routing Engine (core)           │  平台无关的路由逻辑
 ├─────────────────────────────────┤
-│  Project Overlay                 │  ← 项目定制
-│  .vibe/overlay.yaml              │
+│  Skill Management                │  技能发现/安装/审计
+├─────────────────────────────────┤
+│  Adapter Layer                   │  claude-code / opencode
 └─────────────────────────────────┘
 ```
 
-**开发流程**:
-1. 在 `core/` 定义可移植语义
-2. 在 `adapters/` 添加适配器文档
-3. 在 `rules/`/`docs/` 同步 Claude Code 文件
-4. 最后扩展 `builder/` 生成器
-
 **反模式**:
-- ❌ 硬编码平台特定逻辑
-- ❌ 在 `core/` 中添加平台相关代码
-- ❌ 不使用配置就添加新功能
+- ❌ 在 core/ 中添加平台特定代码
+- ❌ 绑定某个 AI 工具的专有 API
 
 ---
 
-### 6. Security by Default（安全默认）
+### 8. Security by Default（安全默认）
 
 **宣言**: *External code must be audited before execution.*
 
 **要求**:
-- ✅ 所有外部内容扫描威胁
+- ✅ 所有外部技能加载前扫描威胁
 - ✅ 路径遍历攻击防护
-- ✅ SKILL-INJECT 防护机制
 - ✅ 白名单目录机制
-
-**安全策略**:
-- 外部技能必须通过安全审计
-- 只允许预定义的安全目录
-- 检测注入攻击模式
-- 原子文件操作防止损坏
-
----
-
-### 7. Progressive Disclosure（渐进式披露）
-
-**宣言**: *Show the right information at the right time.*
-
-**要求**:
-- ✅ 根据用户熟练度调整信息密度
-- ✅ 新手看到详细说明，专家看到极简提示
-- ✅ 按需加载文档和规则
-
-**熟练度级别**:
-```python
-class DisclosureLevel(Enum):
-    NOVICE = "novice"      # 新手：显示详细说明
-    INTERMEDIATE = "inter" # 中级：显示摘要
-    EXPERT = "expert"      # 专家：显示极简提示
-```
+- ✅ 智能安装器执行安全审计
 
 ---
 
 ## Architecture Principles（架构原则）
 
-### 三层运行时架构
+### 模块边界
 
-| Layer | What | Loaded | Location |
-|-------|------|--------|----------|
-| **0: Rules** | Core behavior rules | Always | `rules/` |
-| **1: Docs** | Reference guides | On demand | `docs/` |
-| **2: Memory** | Your project state | Session start | `memory/` |
+| 模块 | 职责 | 边界 |
+|---|---|---|
+| `core/routing/` | 路由决策 | 只做匹配和推荐，不执行 |
+| `core/matching/` | 匹配算法 | 纯计算，无副作用 |
+| `core/optimization/` | 偏好学习 | 基于历史数据优化路由 |
+| `core/algorithms/` | 可复用算法 | 纯数学/检测，任何技能可用 |
+| `core/skills/` | 技能管理 | 发现、加载、注册，不执行 |
+| `core/instinct/` | 偏好数据 | 路由的输入信号 |
+| `core/memory/` | 会话记忆 | 路由的上下文感知 |
+| `installer/` | 技能安装 | 检测、安装、版本管理 |
+| `security/` | 安全审计 | 外部技能加载前扫描 |
+| `adapters/` | 平台适配 | 配置渲染到目标平台 |
 
 ### SSOT - 单源真理（Single Source of Truth）
 
-**宣言**: *Every piece of information has ONE canonical location.*
-
 | 信息类型 | 权威位置 |
 |---------|---------|
-| 行为规则 | `rules/behaviors.md` |
-| 技能定义 | `skills/*/SKILL.md` + registry |
-| 能力层级 | `core/models/tiers.yaml` |
-| 项目状态 | `memory/session.md` |
-| 安全策略 | `core/security/policy.yaml` |
+| 路由决策 | `core/routing/unified.py` |
+| 技能定义 | `skills/*/SKILL.md` + `core/registry.yaml` |
+| 偏好数据 | `core/instinct/` + `.vibe/preferences.json` |
+| 项目状态 | `core/state/` + `.vibe/state/` |
+| 安全策略 | `security/` |
+
+---
+
+## 与参考项目的关系
+
+| 项目 | 它做什么 | VibeSOP 做什么 |
+|---|---|---|
+| superpowers | 7 个通用技能 | 发现、安装、路由这些技能 |
+| gstack | 19 个工程团队技能 | 同上 |
+| oh-my-codex | 7 种方法论 | 同上（含内置 fallback + 算法库支持） |
+| karpathy/autoresearch | 自主研究方法论 | 提供可复用算法作为参考 |
+
+**VibeSOP 不是技能的创造者，是技能的发现者、路由者和管理者。**
 
 ---
 
@@ -221,62 +214,21 @@ class DisclosureLevel(Enum):
 
 ### 当面临技术决策时，问自己：
 
-1. **这符合项目愿景吗？**
-   - 是否让工作流更结构化？
-   - 是否提升生产效率？
-   - 是否保持跨平台可移植性？
+1. **这符合路由引擎定位吗？**
+   - 是否增强了路由/发现/管理能力？
+   - 是否避免了越界到技能执行？
 
 2. **这遵循核心原则吗？**
-   - 是生产优先吗？
-   - 是结构化优于提示吗？
-   - 是记忆优于智能吗？
-   - 是验证优于自信吗？
-   - 是可移植优于特定吗？
-   - 是安全默认吗？
-   - 是渐进式披露吗？
+   - 发现 > 执行？匹配 > 猜测？记忆 > 智能？
+   - 开放 > 封闭？生产优先？可移植 > 特定？
 
 3. **这会增加技术债务吗？**
    - 是否引入不必要的复杂性？
-   - 是否破坏现有架构？
-   - 是否难以测试和维护？
+   - 是否破坏现有模块边界？
 
 4. **这对用户友好吗？**
-   - 是否易于理解和使用？
-   - 错误信息是否清晰？
-   - 是否有完善的文档？
-
----
-
-## Development Checklist（开发检查清单）
-
-### 开始开发前
-
-- [ ] 阅读并理解本文档
-- [ ] 确认功能符合项目愿景
-- [ ] 检查是否已有类似功能
-- [ ] 评估对现有功能的影响
-
-### 设计阶段
-
-- [ ] 设计符合三层架构
-- [ ] 确定 SSOT 位置
-- [ ] 考虑多平台支持
-- [ ] 评估性能影响
-
-### 实现阶段
-
-- [ ] 编写测试先（TDD）
-- [ ] 实现功能
-- [ ] 添加错误处理
-- [ ] 更新文档
-
-### 完成前
-
-- [ ] 所有测试通过
-- [ ] 代码审查完成
-- [ ] 文档更新完成
-- [ ] 性能测试通过
-- [ ] 向后兼容性验证
+   - 是否让技能安装更简单？
+   - 路由结果是否更准确？
 
 ---
 
@@ -284,26 +236,18 @@ class DisclosureLevel(Enum):
 
 ### 绝对禁止
 
-1. **破坏向后兼容性**（除非是主版本升级）
-2. **添加未经测试的功能**
-3. **在 core/ 中添加平台特定代码**
-4. **重复信息**（违反 SSOT）
-5. **添加"演示级"功能**
+1. **在 VibeSOP 中实现技能执行逻辑**（除非是纯可复用算法）
+2. **对某个外部技能包特殊对待**（所有包统一处理）
+3. **破坏向后兼容性**（除非是主版本升级）
+4. **添加未经测试的功能**
+5. **在 core/ 中添加平台特定代码**
 
 ### 强烈反对
 
 1. **增加不必要的依赖**
-2. **忽视性能**
-3. **硬编码敏感信息**
-4. **跳过安全审计**
-
----
-
-## Related Documents（相关文档）
-
-- [Architecture Overview](../docs/dev/architecture.md)
-- [Contributing Guide](../CONTRIBUTING.md)
-- [Security Policy](../core/security/policy.yaml)
+2. **忽视路由性能**
+3. **跳过安全审计**
+4. **不记录路由决策的依据**
 
 ---
 
@@ -311,6 +255,7 @@ class DisclosureLevel(Enum):
 
 | Version | Date | Changes | Author |
 |---------|------|---------|--------|
+| 4.0.0 | 2026-04-06 | 重新定位为智能路由引擎，移除执行逻辑，新增算法库 | @huchen |
 | 3.0.0 | 2026-04-05 | Python 版本，新增 Security by Default 和 Progressive Disclosure | @huchen |
 | 2.0.0 | 2026-03-29 | 明确项目愿景定位，新增双场景价值、整合过滤器 | @huchen |
 | 1.0.0 | 2026-03-12 | 初始版本 | @huchen |
@@ -319,4 +264,4 @@ class DisclosureLevel(Enum):
 
 **记住：这些原则不是建议，是要求。**
 
-**任何偏离这些原则的开发都必须通过整合过滤器检验。**
+**任何偏离这些原则的开发都必须通过决策框架检验。**

@@ -72,7 +72,7 @@ def test_get_cluster_members(sample_skills):
 def test_resolve_conflicts_no_conflict(sample_skills):
     index = SkillClusterIndex()
     index.build(sample_skills)
-    result = index.resolve_conflicts(query="debug this", matched_skills=["systematic-debugging"])
+    result = index.resolve_conflicts("", ["systematic-debugging"])
     assert result["primary"] == "systematic-debugging"
     assert result["alternatives"] == []
 
@@ -81,8 +81,8 @@ def test_resolve_conflicts_same_cluster(sample_skills):
     index = SkillClusterIndex()
     index.build(sample_skills)
     result = index.resolve_conflicts(
-        query="debug this",
-        matched_skills=["systematic-debugging", "gstack/investigate"],
+        "",
+        ["systematic-debugging", "gstack/investigate"],
         confidences={"systematic-debugging": 0.8, "gstack/investigate": 0.6},
     )
     assert result["primary"] == "systematic-debugging"
@@ -93,8 +93,8 @@ def test_resolve_conflicts_close_confidence(sample_skills):
     index = SkillClusterIndex()
     index.build(sample_skills)
     result = index.resolve_conflicts(
-        query="debug this",
-        matched_skills=["systematic-debugging", "gstack/investigate"],
+        "",
+        ["systematic-debugging", "gstack/investigate"],
         confidences={"systematic-debugging": 0.75, "gstack/investigate": 0.72},
         confidence_gap_threshold=0.1,
     )

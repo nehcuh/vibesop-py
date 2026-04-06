@@ -5,15 +5,15 @@ for better user experience during installation and configuration.
 """
 
 from vibesop.cli.interactive import (
+    InteractionMode,
+    ProgressBar,
     ProgressTracker,
     UserInteractor,
-    ProgressBar,
-    InteractionMode,
 )
 
 __all__ = [
+    "InteractionMode",
+    "ProgressBar",
     "ProgressTracker",
     "UserInteractor",
-    "ProgressBar",
-    "InteractionMode",
 ]

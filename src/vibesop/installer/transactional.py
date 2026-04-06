@@ -7,10 +7,11 @@ in a consistent state.
 
 import json
 import shutil
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Any, Callable
+from typing import Any
 
 
 @dataclass
@@ -26,8 +27,8 @@ class InstallationStep:
     """
 
     name: str
-    execute: Callable[[], Dict[str, Any]]
-    rollback: Optional[Callable[[], Dict[str, Any]]]
+    execute: Callable[[], dict[str, Any]]
+    rollback: Callable[[], dict[str, Any]] | None
     completed: bool = False
     rollback_completed: bool = False
 
@@ -46,11 +47,11 @@ class TransactionResult:
     """
 
     success: bool
-    completed_steps: List[str]
-    failed_at: Optional[str]
+    completed_steps: list[str]
+    failed_at: str | None
     rollback_completed: bool
-    error: Optional[str]
-    snapshot_id: Optional[str] = None
+    error: str | None
+    snapshot_id: str | None = None
 
 
 class TransactionalInstaller:
@@ -74,7 +75,7 @@ class TransactionalInstaller:
 
     def __init__(
         self,
-        snapshot_dir: Optional[Path] = None,
+        snapshot_dir: Path | None = None,
         auto_rollback: bool = True,
     ) -> None:
         """Initialize the transactional installer.
@@ -87,14 +88,14 @@ class TransactionalInstaller:
         self._snapshot_dir.mkdir(parents=True, exist_ok=True)
 
         self._auto_rollback = auto_rollback
-        self._steps: List[InstallationStep] = []
-        self._snapshot_id: Optional[str] = None
+        self._steps: list[InstallationStep] = []
+        self._snapshot_id: str | None = None
 
     def add_step(
         self,
         name: str,
-        execute: Callable[[], Dict[str, Any]],
-        rollback: Optional[Callable[[], Dict[str, Any]]] = None,
+        execute: Callable[[], dict[str, Any]],
+        rollback: Callable[[], dict[str, Any]] | None = None,
     ) -> None:
         """Add an installation step.
 
@@ -193,7 +194,7 @@ class TransactionalInstaller:
                 snapshot_id=self._snapshot_id,
             )
 
-    def rollback(self) -> Dict[str, Any]:
+    def rollback(self) -> dict[str, Any]:
         """Manually rollback the transaction.
 
         Returns:
@@ -205,7 +206,7 @@ class TransactionalInstaller:
         completed_steps = [s.name for s in self._steps if s.completed]
         return self._rollback(completed_steps)
 
-    def _rollback(self, completed_steps: List[str]) -> Dict[str, Any]:
+    def _rollback(self, completed_steps: list[str]) -> dict[str, Any]:
         """Internal rollback implementation.
 
         Args:
@@ -264,7 +265,7 @@ class TransactionalInstaller:
         }
 
         metadata_path = snapshot_path / "metadata.json"
-        with open(metadata_path, "w", encoding="utf-8") as f:
+        with metadata_path.open("w", encoding="utf-8") as f:
             json.dump(metadata, f, indent=2)
 
         return snapshot_id
@@ -287,7 +288,7 @@ class TransactionalInstaller:
         # Base implementation - just verify snapshot exists
         # Subclasses should override for actual restoration
 
-    def cleanup_snapshot(self, snapshot_id: Optional[str] = None) -> None:
+    def cleanup_snapshot(self, snapshot_id: str | None = None) -> None:
         """Clean up a snapshot.
 
         Args:
@@ -311,9 +312,9 @@ class FileTransactionalInstaller(TransactionalInstaller):
 
     def __init__(
         self,
-        snapshot_dir: Optional[Path] = None,
+        snapshot_dir: Path | None = None,
         auto_rollback: bool = True,
-        base_dir: Optional[Path] = None,
+        base_dir: Path | None = None,
     ) -> None:
         """Initialize the file transactional installer.
 
@@ -324,7 +325,7 @@ class FileTransactionalInstaller(TransactionalInstaller):
         """
         super().__init__(snapshot_dir, auto_rollback)
         self._base_dir = base_dir or Path.cwd()
-        self._tracked_files: Dict[str, bytes] = {}
+        self._tracked_files: dict[str, bytes] = {}
 
     def track_file(self, path: Path) -> None:
         """Track a file before modification.
@@ -353,7 +354,7 @@ class FileTransactionalInstaller(TransactionalInstaller):
             file_path.write_bytes(content)
 
         # Save file list
-        with open(files_dir / "files.json", "w", encoding="utf-8") as f:
+        with (files_dir / "files.json").open("w", encoding="utf-8") as f:
             json.dump(list(self._tracked_files.keys()), f, indent=2)
 
         return snapshot_id
@@ -367,7 +368,7 @@ class FileTransactionalInstaller(TransactionalInstaller):
         if not files_list.exists():
             return
 
-        with open(files_list, "r", encoding="utf-8") as f:
+        with files_list.open(encoding="utf-8") as f:
             tracked_files = json.load(f)
 
         # Restore each tracked file
@@ -382,7 +383,7 @@ class FileTransactionalInstaller(TransactionalInstaller):
 
 # Convenience functions
 def execute_transaction(
-    steps: List[tuple[str, Callable[[], Dict[str, Any]], Optional[Callable[[], Dict[str, Any]]]]],
+    steps: list[tuple[str, Callable[[], dict[str, Any]], Callable[[], dict[str, Any]] | None]],
     auto_rollback: bool = True,
 ) -> TransactionResult:
     """Execute a transaction with given steps.

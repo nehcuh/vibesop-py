@@ -6,8 +6,7 @@ import time
 
 import pytest
 
-from vibesop.core.models import RoutingRequest
-from vibesop.core.routing.engine import SkillRouter
+from vibesop.core.routing.unified import UnifiedRouter
 
 
 class TestRoutingPerformance:
@@ -15,15 +14,21 @@ class TestRoutingPerformance:
 
     @pytest.mark.benchmark
     def test_routing_latency_simple(self) -> None:
-        """Test routing latency for simple queries."""
-        router = SkillRouter()
+        """Test routing latency for simple queries.
+
+        Note: Warm-up cache first to measure typical latency (not cold-start).
+        In real CLI usage, the first call loads cache, subsequent calls are fast.
+        """
+        router = UnifiedRouter()
         queries = ["review", "debug", "test", "build", "deploy"]
+
+        # Warm up: Load candidate cache on first call
+        router.route("warmup")
 
         latencies: list[float] = []
         for query in queries:
-            request = RoutingRequest(query=query)
             start = time.perf_counter()
-            router.route(request)
+            router.route(query)
             elapsed = (time.perf_counter() - start) * 1000
             latencies.append(elapsed)
 
@@ -33,9 +38,12 @@ class TestRoutingPerformance:
     @pytest.mark.benchmark
     def test_routing_throughput(self) -> None:
         """Test routing throughput (queries per second)."""
-        router = SkillRouter()
-        query = RoutingRequest(query="review my code")
+        router = UnifiedRouter()
+        query = "review my code"
         count = 50
+
+        # Warm up: Load candidate cache first
+        router.route("warmup")
 
         start = time.perf_counter()
         for _ in range(count):

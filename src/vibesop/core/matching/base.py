@@ -5,12 +5,13 @@ along with the unified MatchResult model.
 """
 
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 from typing import Any, Protocol
+
 from pydantic import BaseModel, Field
 
 
-class SimilarityMetric(str, Enum):
+class SimilarityMetric(StrEnum):
     """Types of similarity metrics."""
 
     COSINE = "cosine"
@@ -21,7 +22,7 @@ class SimilarityMetric(str, Enum):
     LEVENSHTEIN = "levenshtein"
 
 
-class MatcherType(str, Enum):
+class MatcherType(StrEnum):
     """Types of matchers."""
 
     KEYWORD = "keyword"

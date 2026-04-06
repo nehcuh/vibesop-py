@@ -16,7 +16,7 @@ from vibesop.adapters.models import (
     SecurityPolicy,
     SkillDefinition,
 )
-from vibesop.core.config_module import ConfigLoader
+from vibesop.core.config import ConfigManager
 
 
 class ManifestBuilder:
@@ -41,7 +41,7 @@ class ManifestBuilder:
             project_root: Path to project root containing core/ directory
         """
         self.project_root = Path(project_root).resolve()
-        self.config_loader = ConfigLoader(project_root)
+        self.config_loader = ConfigManager(project_root)
 
     def build(
         self,
@@ -182,7 +182,7 @@ class ManifestBuilder:
             print(f"Warning: Failed to load skills from registry: {e}")
             return []
 
-    def _load_skill_description(self, skill_id: str, skill_dict: dict) -> str:
+    def _load_skill_description(self, skill_id: str, _skill_dict: dict) -> str:
         """Load skill description from skill file.
 
         Args:
@@ -208,10 +208,10 @@ class ManifestBuilder:
             ]
 
             for skill_path in external_paths:
-                skill_path = skill_path.expanduser()
-                if skill_path.exists():
+                expanded_path = skill_path.expanduser()
+                if expanded_path.exists():
                     try:
-                        content = skill_path.read_text(encoding="utf-8")
+                        content = expanded_path.read_text(encoding="utf-8")
 
                         # Extract description from YAML frontmatter
                         if content.startswith("---"):
@@ -228,12 +228,15 @@ class ManifestBuilder:
 
                         # If no frontmatter description, use first paragraph
                         lines = content.split("\n")
-                        for line in lines:
-                            line = line.strip()
-                            if line and not line.startswith("<!--") and not line.startswith("#"):
-                                # Return first substantial line
-                                if len(line) > 20:
-                                    return line
+                        for raw_line in lines:
+                            stripped = raw_line.strip()
+                            if (
+                                stripped
+                                and not stripped.startswith("<!--")
+                                and not stripped.startswith("#")
+                                and len(stripped) > 20
+                            ):
+                                return stripped
                     except Exception:
                         pass
 

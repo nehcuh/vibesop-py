@@ -4,13 +4,11 @@ This module provides the abstract base class that all platform
 adapters must inherit from, along with shared utility methods.
 """
 
-import tempfile
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any
 
 from vibesop.adapters.models import Manifest, RenderResult
-from vibesop.adapters.protocol import AdapterProtocol
 from vibesop.security import PathSafety, SecurityScanner
 
 
@@ -96,7 +94,7 @@ class PlatformAdapter(ABC):
         """
         ...
 
-    def install_hooks(self, config_dir: Path) -> dict[str, bool]:
+    def install_hooks(self, _config_dir: Path) -> dict[str, bool]:
         """Install platform-specific hooks.
 
         Default implementation does nothing. Override this method
@@ -198,10 +196,7 @@ class PlatformAdapter(ABC):
         path = Path(path).expanduser().resolve()
 
         # Determine base directory for safety check
-        if base_dir is None:
-            base_dir = path.parent
-        else:
-            base_dir = Path(base_dir).expanduser().resolve()
+        base_dir = path.parent if base_dir is None else Path(base_dir).expanduser().resolve()
 
         # Create parent directories if needed
         path.parent.mkdir(parents=True, exist_ok=True)

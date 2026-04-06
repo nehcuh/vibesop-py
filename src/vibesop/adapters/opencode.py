@@ -210,7 +210,7 @@ class OpenCodeAdapter(PlatformAdapter):
             "",
             "### Example",
             "```bash",
-            '# Step 1: Get recommendation\nvibe route "帮我评审当前项目，包括架构和实现"\n# Output: Matched skill: riper-workflow (95% confidence)',
+            '# Step 1: Get recommendation\nvibe route "帮我评审当前项目,包括架构和实现"\n# Output: Matched skill: riper-workflow (95% confidence)',
             "",
             "# Step 2: Read skill definition (MANDATORY)",
             "read skills/riper-workflow/SKILL.md",

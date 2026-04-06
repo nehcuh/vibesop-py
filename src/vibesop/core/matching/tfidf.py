@@ -10,11 +10,8 @@ The goal is to have ONE canonical TF-IDF calculator.
 import math
 from collections import Counter
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Protocol
-
-from pydantic import BaseModel, Field
-
-from vibesop.core.matching.tokenizers import tokenize
 
 
 @dataclass
@@ -56,10 +53,7 @@ class TFIDFVector:
     def dot_product(self, other: "TFIDFVector") -> float:
         """Calculate dot product with another vector."""
         all_terms = set(self.tfidf.keys()) | set(other.tfidf.keys())
-        return sum(
-            self.tfidf.get(term, 0) * other.tfidf.get(term, 0)
-            for term in all_terms
-        )
+        return sum(self.tfidf.get(term, 0) * other.tfidf.get(term, 0) for term in all_terms)
 
 
 class ITFIDFCalculator(Protocol):
@@ -156,7 +150,9 @@ class TFIDFCalculator:
         # Calculate IDF: log((N + smooth) / (df + smooth)) + 1
         # Add 1 to ensure non-negative
         for term, doc_count in self._term_doc_count.items():
-            self._idf[term] = math.log((self._doc_count + self._smooth) / (doc_count + self._smooth)) + 1
+            self._idf[term] = (
+                math.log((self._doc_count + self._smooth) / (doc_count + self._smooth)) + 1
+            )
 
         return self
 
@@ -235,12 +231,15 @@ class TFIDFCalculator:
         """
         import json
 
-        with open(path, "w") as f:
-            json.dump({
-                "idf": self._idf,
-                "doc_count": self._doc_count,
-                "term_doc_count": dict(self._term_doc_count),
-            }, f)
+        with Path(path).open("w") as f:
+            json.dump(
+                {
+                    "idf": self._idf,
+                    "doc_count": self._doc_count,
+                    "term_doc_count": dict(self._term_doc_count),
+                },
+                f,
+            )
 
     @classmethod
     def load(cls, path: str) -> "TFIDFCalculator":
@@ -254,7 +253,7 @@ class TFIDFCalculator:
         """
         import json
 
-        with open(path, "r") as f:
+        with Path(path).open() as f:
             data = json.load(f)
 
         calc = cls()
@@ -266,6 +265,7 @@ class TFIDFCalculator:
 
 
 # Convenience functions for backward compatibility
+
 
 def calculate_tf(tokens: list[str]) -> dict[str, float]:
     """Calculate term frequency (TF) for tokens.
@@ -342,10 +342,10 @@ def calculate_tfidf(tokens: list[str], idf: dict[str, float]) -> dict[str, float
 
 # Convenience exports
 __all__ = [
-    "TFIDFVector",
     "ITFIDFCalculator",
     "TFIDFCalculator",
-    "calculate_tf",
+    "TFIDFVector",
     "calculate_idf",
+    "calculate_tf",
     "calculate_tfidf",
 ]

@@ -18,34 +18,34 @@ Functions:
     - validate_overlay: Validate overlay files
 """
 
+from vibesop.builder.doc_generators import DocContentGenerator
+from vibesop.builder.doc_renderer import DocConfig, DocRenderer, DocSection
+from vibesop.builder.doc_templates import DocTemplates, DocType
+from vibesop.builder.dynamic_renderer import ConfigDrivenRenderer, RenderRule
 from vibesop.builder.manifest import ManifestBuilder, QuickBuilder
 from vibesop.builder.overlay import OverlayMerger, create_overlay, validate_overlay
 from vibesop.builder.renderer import ConfigRenderer, RenderProgressTracker
-from vibesop.builder.dynamic_renderer import ConfigDrivenRenderer, RenderRule
-from vibesop.builder.doc_renderer import DocRenderer, DocSection, DocConfig
-from vibesop.builder.doc_templates import DocType, DocTemplates
-from vibesop.builder.doc_generators import DocContentGenerator
 
 __all__ = [
-    # Manifest builders
-    "ManifestBuilder",
-    "QuickBuilder",
-    # Overlay management
-    "OverlayMerger",
-    "create_overlay",
-    "validate_overlay",
+    "ConfigDrivenRenderer",
     # Configuration rendering
     "ConfigRenderer",
-    "RenderProgressTracker",
-    "ConfigDrivenRenderer",
-    "RenderRule",
+    "DocConfig",
+    "DocContentGenerator",
     # Documentation
     "DocRenderer",
-    "DocTemplates",
-    "DocContentGenerator",
-    "DocType",
-    "DocConfig",
     "DocSection",
+    "DocTemplates",
+    "DocType",
+    # Manifest builders
+    "ManifestBuilder",
+    # Overlay management
+    "OverlayMerger",
+    "QuickBuilder",
+    "RenderProgressTracker",
+    "RenderRule",
+    "create_overlay",
+    "validate_overlay",
 ]
 
-from vibesop._version import __version__  # noqa: E402
+from vibesop._version import __version__

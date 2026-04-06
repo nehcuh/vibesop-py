@@ -22,15 +22,10 @@ Examples:
 """
 
 from pathlib import Path
-from typing import Optional
-
-from ruamel.yaml import YAML
 
 import typer
 from rich.console import Console
-
-from vibesop.cli.commands.build import build as build_cmd
-from vibesop.cli.commands.deploy import deploy as deploy_cmd
+from ruamel.yaml import YAML
 
 console = Console()
 
@@ -38,7 +33,7 @@ console = Console()
 VALID_TARGETS = ["claude-code", "opencode", "superpowers", "cursor"]
 
 
-def _get_configured_platform() -> Optional[str]:
+def _get_configured_platform() -> str | None:
     """Get platform from .vibe/config.yaml.
 
     Returns:
@@ -50,7 +45,7 @@ def _get_configured_platform() -> Optional[str]:
 
     try:
         yaml_parser = YAML()
-        with open(config_path) as f:
+        with config_path.open() as f:
             config = yaml_parser.load(f)
             return config.get("platform") if config else None
     except Exception:
@@ -61,7 +56,7 @@ def switch(
     platform: str = typer.Argument(
         None,
         help="Target platform (claude-code, opencode, superpowers, cursor). "
-             "Defaults to platform from config.yaml",
+        "Defaults to platform from config.yaml",
     ),
     profile: str = typer.Option(
         "default",
@@ -69,13 +64,13 @@ def switch(
         "-p",
         help="Build profile to use",
     ),
-    overlay: Optional[Path] = typer.Option(
+    overlay: Path | None = typer.Option(  # noqa: B008
         None,
         "--overlay",
         help="Overlay file to apply",
         exists=True,
     ),
-    destination: Optional[Path] = typer.Option(
+    destination: Path | None = typer.Option(  # noqa: B008
         None,
         "--destination",
         "-d",
@@ -133,10 +128,7 @@ def switch(
         )
         raise typer.Exit(1)
 
-    console.print(
-        f"\n[bold cyan]🔄 Switching to {platform}[/bold cyan]"
-        f"\n{'=' * 40}\n"
-    )
+    console.print(f"\n[bold cyan]🔄 Switching to {platform}[/bold cyan]\n{'=' * 40}\n")
 
     # Build phase
     if build:

@@ -4,9 +4,8 @@ This module provides utility functions that are used across
 multiple modules, promoting code reuse and consistency.
 """
 
-import os
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 from ruamel.yaml import YAML
 
@@ -41,7 +40,7 @@ def ensure_directory(path: Path) -> Path:
     return path
 
 
-def load_yaml_safe(path: Path) -> Dict[str, Any]:
+def load_yaml_safe(path: Path) -> dict[str, Any]:
     """Load a YAML file safely with error handling.
 
     Args:
@@ -64,18 +63,18 @@ def load_yaml_safe(path: Path) -> Dict[str, Any]:
 
     try:
         yaml_parser = YAML()
-        with open(path, "r", encoding=FileSystemSettings.DEFAULT_ENCODING) as f:
+        with path.open(encoding=FileSystemSettings.DEFAULT_ENCODING) as f:
             data = yaml_parser.load(f)
             return data if isinstance(data, dict) else {}
 
-    except (OSError, IOError) as e:
+    except OSError as e:
         raise OSError(f"Failed to read YAML file {path}: {e}") from e
 
     except Exception as e:
         raise ValueError(f"Failed to parse YAML file {path}: {e}") from e
 
 
-def write_yaml_safe(path: Path, data: Dict[str, Any]) -> None:
+def write_yaml_safe(path: Path, data: dict[str, Any]) -> None:
     """Write data to YAML file safely.
 
     Args:
@@ -143,7 +142,7 @@ def get_config_path(base_dir: Path, *path_parts: str) -> Path:
     return config_dir.joinpath(*path_parts)
 
 
-def merge_dicts(base: Dict[str, Any], overlay: Dict[str, Any]) -> Dict[str, Any]:
+def merge_dicts(base: dict[str, Any], overlay: dict[str, Any]) -> dict[str, Any]:
     """Deep merge two dictionaries.
 
     Args:

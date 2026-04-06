@@ -5,14 +5,12 @@ vibe auto and vibe route from v2.x.
 """
 
 from pathlib import Path
-from typing import Optional
 
 import typer
 from rich.console import Console
 from rich.table import Table
-from rich.prompt import Prompt
 
-from vibesop.core.routing import UnifiedRouter, RoutingLayer
+from vibesop.core.routing import UnifiedRouter
 
 console = Console()
 
@@ -64,6 +62,7 @@ def route(
     # Override min_confidence if specified
     if min_confidence is not None:
         from vibesop.core.config import RoutingConfig
+
         config = RoutingConfig(min_confidence=min_confidence)
         router = UnifiedRouter(project_root=Path.cwd(), config=config)
 
@@ -72,14 +71,12 @@ def route(
 
     if json_output:
         import json
+
         console.print(json.dumps(result.to_dict(), indent=2))
         return
 
     # Display results
-    console.print(
-        f"\n[bold cyan]🔀 Route: {query}[/bold cyan]"
-        f"\n{'=' * 40}\n"
-    )
+    console.print(f"\n[bold cyan]🔀 Route: {query}[/bold cyan]\n{'=' * 40}\n")
 
     if result.has_match:
         # Show primary match
@@ -111,11 +108,13 @@ def route(
             console.print(table)
     else:
         console.print("[yellow]No suitable match found[/yellow]")
-        console.print(f"[dim]Routing path: {' → '.join([l.value for l in result.routing_path])}[/dim]")
-        console.print(f"\n[dim]Try:[/dim]")
-        console.print(f"  [dim]- Lowering the threshold with --min-confidence[/dim]")
-        console.print(f"  [dim]- Using more specific keywords[/dim]")
-        console.print(f"  [dim]- Listing available skills with [cyan]vibe skills list[/cyan][/dim]")
+        console.print(
+            f"[dim]Routing path: {' → '.join([layer.value for layer in result.routing_path])}[/dim]"
+        )
+        console.print("\n[dim]Try:[/dim]")
+        console.print("  [dim]- Lowering the threshold with --min-confidence[/dim]")
+        console.print("  [dim]- Using more specific keywords[/dim]")
+        console.print("  [dim]- Listing available skills with [cyan]vibe skills list[/cyan][/dim]")
 
     console.print()
 
@@ -129,7 +128,7 @@ def route_select(
         "-n",
         help="Number of top matches to show",
     ),
-    auto: bool = typer.Option(
+    _auto: bool = typer.Option(
         False,
         "--auto",
         "-a",
@@ -142,6 +141,7 @@ def route_select(
     Use 'vibe route' for the same functionality.
     """
     import warnings
+
     warnings.warn(
         "route-select is deprecated. Use 'vibe route' instead.",
         DeprecationWarning,
@@ -166,7 +166,7 @@ def route_select(
             table.add_column("Skill", style="cyan")
             table.add_column("Confidence")
 
-            for i, alt in enumerate(result.alternatives[:top-1], 1):
+            for i, alt in enumerate(result.alternatives[: top - 1], 1):
                 table.add_row(str(i), alt.skill_id, f"{alt.confidence:.1%}")
 
             console.print(table)
@@ -212,10 +212,7 @@ def route_validate(
         # Show detailed output
         vibe route-validate --verbose
     """
-    console.print(
-        f"\n[bold cyan]✓ Route Validation[/bold cyan]"
-        f"\n{'=' * 40}\n"
-    )
+    console.print(f"\n[bold cyan]✓ Route Validation[/bold cyan]\n{'=' * 40}\n")
 
     router = UnifiedRouter(project_root=Path.cwd())
 
@@ -223,11 +220,11 @@ def route_validate(
     caps = router.get_capabilities()
     console.print("[dim]Router capabilities:[/dim]")
     console.print(f"  Matchers: {len(caps['matchers'])}")
-    for matcher_info in caps['matchers']:
+    for matcher_info in caps["matchers"]:
         console.print(f"    - {matcher_info['layer']}: {matcher_info['matcher']}")
 
-    config = caps.get('config', {})
-    console.print(f"\n[dim]Configuration:[/dim]")
+    config = caps.get("config", {})
+    console.print("\n[dim]Configuration:[/dim]")
     console.print(f"  min_confidence: {config.get('min_confidence', 0.3)}")
     console.print(f"  auto_select_threshold: {config.get('auto_select_threshold', 0.6)}")
     console.print(f"  enable_embedding: {config.get('enable_embedding', False)}")
@@ -241,18 +238,19 @@ def route_validate(
             console.print(f"  Primary: {result.primary.skill_id} ({result.primary.confidence:.0%})")
             console.print(f"  Layer: {result.primary.layer.value}")
         else:
-            console.print(f"  [yellow]No match found[/yellow]")
+            console.print("  [yellow]No match found[/yellow]")
 
         if verbose and result.alternatives:
-            console.print(f"\n[bold]Alternatives:[/bold]")
+            console.print("\n[bold]Alternatives:[/bold]")
             for i, alt in enumerate(result.alternatives[:5], 1):
                 console.print(f"  {i}. {alt.skill_id} - {alt.confidence:.0%}")
 
     # Validate all skills if requested
     if all_skills:
-        console.print(f"\n[bold]Validating all skills...[/bold]\n")
+        console.print("\n[bold]Validating all skills...[/bold]\n")
 
         from vibesop.core.skills import SkillManager
+
         manager = SkillManager()
         skills = manager.list_skills()
 
@@ -278,4 +276,4 @@ def route_validate(
         else:
             console.print(table)
 
-    console.print(f"\n[green]✓ Validation complete[/green]")
+    console.print("\n[green]✓ Validation complete[/green]")

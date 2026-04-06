@@ -21,7 +21,6 @@ Examples:
 """
 
 from pathlib import Path
-from typing import Optional
 
 import typer
 from rich.console import Console
@@ -37,7 +36,7 @@ def hooks(
         "install",
         help="Action: install, uninstall, verify, status",
     ),
-    platform: Optional[str] = typer.Argument(
+    platform: str | None = typer.Argument(
         None,
         help="Target platform (claude-code, opencode)",
         metavar="PLATFORM",
@@ -81,7 +80,7 @@ def hooks(
         raise typer.Exit(1)
 
 
-def _do_install(installer: VibeSOPInstaller, platform: Optional[str]) -> None:
+def _do_install(installer: VibeSOPInstaller, platform: str | None) -> None:
     """Install hooks for a platform.
 
     Args:
@@ -105,10 +104,7 @@ def _do_install(installer: VibeSOPInstaller, platform: Optional[str]) -> None:
         target_platforms = ["claude-code"]
 
     for plat in target_platforms:
-        console.print(
-            f"\n[bold cyan]🔧 Installing hooks for {plat}[/bold cyan]"
-            f"\n{'=' * 40}\n"
-        )
+        console.print(f"\n[bold cyan]🔧 Installing hooks for {plat}[/bold cyan]\n{'=' * 40}\n")
 
         # Get platform config directory
         platform_info = next(p for p in platforms if p["name"] == plat)
@@ -117,7 +113,7 @@ def _do_install(installer: VibeSOPInstaller, platform: Optional[str]) -> None:
         console.print(f"[dim]Target directory: {config_dir}[/dim]\n")
 
         # Install hooks
-        from vibesop.hooks import HookInstaller, HookPoint
+        from vibesop.hooks import HookInstaller
 
         hook_installer = HookInstaller()
         results = hook_installer.install_hooks(plat, config_dir)
@@ -142,15 +138,17 @@ def _do_install(installer: VibeSOPInstaller, platform: Optional[str]) -> None:
                 console.print(f"  • {hook_name}")
 
         if installed and not failed:
-            console.print(f"\n[green]✓ All hooks installed successfully![/green]")
+            console.print("\n[green]✓ All hooks installed successfully![/green]")
         elif installed:
-            console.print(f"\n[yellow]⚠ Partial installation: {len(installed)}/{len(results)}[/yellow]")
+            console.print(
+                f"\n[yellow]⚠ Partial installation: {len(installed)}/{len(results)}[/yellow]"
+            )
         else:
-            console.print(f"\n[red]✗ Hook installation failed[/red]")
+            console.print("\n[red]✗ Hook installation failed[/red]")
             raise typer.Exit(1)
 
 
-def _do_uninstall(installer: VibeSOPInstaller, platform: Optional[str]) -> None:
+def _do_uninstall(installer: VibeSOPInstaller, platform: str | None) -> None:
     """Uninstall hooks for a platform.
 
     Args:
@@ -174,10 +172,7 @@ def _do_uninstall(installer: VibeSOPInstaller, platform: Optional[str]) -> None:
         target_platforms = platform_names
 
     for plat in target_platforms:
-        console.print(
-            f"\n[bold cyan]🗑️  Uninstalling hooks for {plat}[/bold cyan]"
-            f"\n{'=' * 40}\n"
-        )
+        console.print(f"\n[bold cyan]🗑️  Uninstalling hooks for {plat}[/bold cyan]\n{'=' * 40}\n")
 
         # Get platform config directory
         platform_info = next(p for p in platforms if p["name"] == plat)
@@ -210,14 +205,14 @@ def _do_uninstall(installer: VibeSOPInstaller, platform: Optional[str]) -> None:
                 console.print(f"  • {hook_name}")
 
         if removed and not failed:
-            console.print(f"\n[green]✓ All hooks uninstalled successfully![/green]")
+            console.print("\n[green]✓ All hooks uninstalled successfully![/green]")
         elif removed:
             console.print(f"\n[yellow]⚠ Partial removal: {len(removed)}/{len(results)}[/yellow]")
         else:
-            console.print(f"\n[red]✗ Hook uninstallation failed[/red]")
+            console.print("\n[red]✗ Hook uninstallation failed[/red]")
 
 
-def _do_verify(installer: VibeSOPInstaller, platform: Optional[str]) -> None:
+def _do_verify(installer: VibeSOPInstaller, platform: str | None) -> None:
     """Verify hooks for a platform.
 
     Args:
@@ -241,10 +236,7 @@ def _do_verify(installer: VibeSOPInstaller, platform: Optional[str]) -> None:
         target_platforms = platform_names
 
     for plat in target_platforms:
-        console.print(
-            f"\n[bold cyan]🔍 Verifying hooks for {plat}[/bold cyan]"
-            f"\n{'=' * 40}\n"
-        )
+        console.print(f"\n[bold cyan]🔍 Verifying hooks for {plat}[/bold cyan]\n{'=' * 40}\n")
 
         # Get platform config directory
         platform_info = next(p for p in platforms if p["name"] == plat)
@@ -278,7 +270,7 @@ def _do_verify(installer: VibeSOPInstaller, platform: Optional[str]) -> None:
             status_text = "[green]Installed[/green]" if status else "[red]Missing[/red]"
 
             hook_path = config_dir / "hooks" / f"{hook_name}.sh"
-            path_text = str(hook_path) if status else f"dim]Not found[/dim]"
+            path_text = str(hook_path) if status else "dim]Not found[/dim]"
 
             table.add_row(hook_name, f"{status_icon} {status_text}", path_text)
 
@@ -291,11 +283,9 @@ def _do_verify(installer: VibeSOPInstaller, platform: Optional[str]) -> None:
         if installed_count == total_count:
             console.print(f"\n[green]✓ All {total_count} hooks installed and functional[/green]")
         elif installed_count > 0:
-            console.print(
-                f"\n[yellow]⚠ {installed_count}/{total_count} hooks installed[/yellow]"
-            )
+            console.print(f"\n[yellow]⚠ {installed_count}/{total_count} hooks installed[/yellow]")
         else:
-            console.print(f"\n[red]✗ No hooks installed[/red]")
+            console.print("\n[red]✗ No hooks installed[/red]")
 
 
 def _do_status(installer: VibeSOPInstaller) -> None:
@@ -304,10 +294,7 @@ def _do_status(installer: VibeSOPInstaller) -> None:
     Args:
         installer: VibeSOPInstaller instance
     """
-    console.print(
-        f"\n[bold cyan]📊 Hook Status Overview[/bold cyan]"
-        f"\n{'=' * 40}\n"
-    )
+    console.print(f"\n[bold cyan]📊 Hook Status Overview[/bold cyan]\n{'=' * 40}\n")
 
     platforms = installer.list_platforms()
 
@@ -364,9 +351,8 @@ def _do_status(installer: VibeSOPInstaller) -> None:
 
     # Overall summary
     total_platforms = len(platforms)
-    installed_platforms = sum(
-        1 for p in platforms
-        if installer.verify(p["name"])["installed"]
-    )
+    installed_platforms = sum(1 for p in platforms if installer.verify(p["name"])["installed"])
 
-    console.print(f"\n[dim]Summary: {installed_platforms}/{total_platforms} platforms installed[/dim]")
+    console.print(
+        f"\n[dim]Summary: {installed_platforms}/{total_platforms} platforms installed[/dim]"
+    )

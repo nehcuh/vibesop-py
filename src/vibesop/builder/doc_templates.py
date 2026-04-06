@@ -6,9 +6,10 @@ for generating various types of documentation.
 
 from datetime import datetime
 from enum import Enum
-from jinja2 import Environment, Template, FileSystemLoader
 from pathlib import Path
-from typing import Dict
+from typing import ClassVar
+
+from jinja2 import Environment, FileSystemLoader, Template
 
 
 class DocType(Enum):
@@ -39,7 +40,7 @@ class DocTemplates:
     """
 
     # Default documentation template paths
-    DEFAULT_TEMPLATES: Dict[DocType, str] = {
+    DEFAULT_TEMPLATES: ClassVar[dict[DocType, str]] = {
         DocType.README: "docs/templates/README.md.j2",
         DocType.API: "docs/templates/API.md.j2",
         DocType.GUIDE: "docs/templates/GUIDE.md.j2",

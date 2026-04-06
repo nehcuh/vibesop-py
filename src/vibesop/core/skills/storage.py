@@ -21,30 +21,33 @@ Architecture:
     └── ...
 """
 
-from pathlib import Path
-from typing import Optional
-from dataclasses import dataclass
-import shutil
-import urllib.request
-import json
 import hashlib
+import json
+import shutil
+import tempfile
+import urllib.request
+from dataclasses import dataclass
+from pathlib import Path
+from typing import ClassVar
 
-from vibesop.security.exceptions import PathTraversalError
 from vibesop.security import PathSafety
+from vibesop.security.exceptions import PathTraversalError
 
 
 @dataclass
 class SkillSource:
     """Source location for a skill."""
+
     type: str  # "local", "github", "registry"
     path: str  # Local path, GitHub repo, or registry URL
-    version: Optional[str] = None
-    ref: Optional[str] = None  # Git ref (branch/tag/commit)
+    version: str | None = None
+    ref: str | None = None  # Git ref (branch/tag/commit)
 
 
 @dataclass
 class SkillManifest:
     """Manifest for an installed skill."""
+
     id: str
     name: str
     description: str
@@ -82,7 +85,7 @@ class SkillStorage:
     CENTRAL_SKILLS_DIR = Path.home() / ".config" / "skills"
 
     # Platform skill directories
-    PLATFORM_SKILLS_DIRS = {
+    PLATFORM_SKILLS_DIRS: ClassVar[dict[str, Path]] = {
         "claude-code": Path.home() / ".claude" / "skills",
         "opencode": Path.home() / ".config" / "opencode" / "skills",
         "cursor": Path.home() / ".config" / "cursor" / "skills",
@@ -213,6 +216,7 @@ class SkillStorage:
 
                 # Extract
                 import tarfile
+
                 with tarfile.open(archive_path) as tar:
                     tar.extractall(tmpdir_path)
 
@@ -436,12 +440,11 @@ class SkillStorage:
             if success:
                 installed += 1
                 messages.append(f"✓ {msg}")
+            elif "already exists" in msg:
+                installed += 1
             else:
-                if "already exists" in msg:
-                    installed += 1
-                else:
-                    messages.append(f"✗ {msg}")
-                    continue
+                messages.append(f"✗ {msg}")
+                continue
 
             # Link to platform
             success, msg = self.link_to_platform(
@@ -506,10 +509,10 @@ class SkillStorage:
             "checksum": manifest.checksum,
         }
 
-        with open(metadata_path, "w") as f:
+        with metadata_path.open("w") as f:
             json.dump(manifest_dict, f, indent=2)
 
-    def _read_metadata(self, skill_id: str) -> Optional[SkillManifest]:
+    def _read_metadata(self, skill_id: str) -> SkillManifest | None:
         """Read skill metadata.
 
         Args:
@@ -525,7 +528,7 @@ class SkillStorage:
             return None
 
         try:
-            with open(metadata_path) as f:
+            with metadata_path.open() as f:
                 data = json.load(f)
 
             # Reconstruct SkillSource from dict

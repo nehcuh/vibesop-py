@@ -11,10 +11,10 @@ This module consolidates configuration from multiple sources:
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass, field
-from enum import Enum
+from dataclasses import dataclass
+from enum import StrEnum
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from pydantic import BaseModel, Field
 
@@ -22,7 +22,7 @@ if TYPE_CHECKING:
     from vibesop.core.config.optimization_config import OptimizationConfig
 
 
-class ConfigSourcePriority(str, Enum):
+class ConfigSourcePriority(StrEnum):
     """Configuration source priority levels (low to high)."""
 
     DEFAULTS = "defaults"  # 1. Built-in defaults
@@ -101,7 +101,7 @@ class ConfigSource:
         try:
             import yaml
 
-            with open(self.path, "r") as f:
+            with self.path.open() as f:
                 self.data = yaml.safe_load(f) or {}
         except Exception:
             self.data = {}
@@ -178,7 +178,7 @@ class ConfigManager:
     """
 
     # Default configuration
-    DEFAULT_CONFIG = {
+    DEFAULT_CONFIG: ClassVar[dict[str, Any]] = {
         "routing": {
             "min_confidence": 0.3,
             "auto_select_threshold": 0.6,
@@ -280,7 +280,7 @@ class ConfigManager:
         if preferences_path.exists():
             import json
 
-            with open(preferences_path, "r") as f:
+            with preferences_path.open() as f:
                 data = json.load(f)
 
             # Map legacy preferences to new structure
@@ -379,7 +379,7 @@ class ConfigManager:
         """
         return SemanticConfig(**self._get_section("semantic"))
 
-    def get_optimization_config(self) -> "OptimizationConfig":
+    def get_optimization_config(self) -> OptimizationConfig:
         """Get optimization configuration.
 
         Returns:
@@ -491,5 +491,121 @@ class ConfigManager:
 
         data[keys[-1]] = value
 
-        # Clear cache
+        self._cache.clear()
+
+    # --- Registry loading (migrated from ConfigLoader) ---
+
+    def load_registry(self, force_reload: bool = False) -> dict[str, Any]:
+        """Load skill registry from core/registry.yaml.
+
+        Args:
+            force_reload: Force reload even if cached
+
+        Returns:
+            Dictionary with registry data
+        """
+        cache_key = "_registry"
+        if not force_reload and cache_key in self._cache:
+            return self._cache[cache_key]
+
+        registry_path = self.project_root / "core" / "registry.yaml"
+
+        if not registry_path.exists():
+            return {"skills": [], "version": "1.0.0"}
+
+        try:
+            from ruamel.yaml import YAML
+
+            yaml = YAML()
+            with registry_path.open("r", encoding="utf-8") as f:
+                data = yaml.load(f) or {}
+
+            self._cache[cache_key] = data
+            return data
+        except Exception:
+            return {"skills": [], "version": "1.0.0"}
+
+    def get_all_skills(self, force_reload: bool = False) -> list[dict[str, Any]]:
+        """Get all skills from registry.
+
+        Args:
+            force_reload: Force reload even if cached
+
+        Returns:
+            List of skill definitions
+        """
+        registry = self.load_registry(force_reload=force_reload)
+        return registry.get("skills", [])
+
+    def get_skill_by_id(
+        self,
+        skill_id: str,
+        force_reload: bool = False,
+    ) -> dict[str, Any] | None:
+        """Get skill definition by ID.
+
+        Args:
+            skill_id: Skill identifier
+            force_reload: Force reload even if cached
+
+        Returns:
+            Skill definition or None if not found
+        """
+        skills = self.get_all_skills(force_reload=force_reload)
+
+        for skill in skills:
+            if skill.get("id") == skill_id:
+                return skill
+
+        if skill_id.startswith("/"):
+            shorthand = skill_id[1:]
+            for skill in skills:
+                sid = skill.get("id", "")
+                if sid.endswith(f"/{shorthand}") or sid.endswith(f"-{shorthand}"):
+                    return skill
+        else:
+            for skill in skills:
+                sid = skill.get("id", "")
+                if sid.endswith(f"/{skill_id}") or sid.endswith(f"-{skill_id}"):
+                    return skill
+
+        return None
+
+    def get_skills_by_namespace(
+        self,
+        namespace: str,
+        force_reload: bool = False,
+    ) -> list[dict[str, Any]]:
+        """Get all skills in a namespace.
+
+        Args:
+            namespace: Namespace to filter by
+            force_reload: Force reload even if cached
+
+        Returns:
+            List of skill definitions in namespace
+        """
+        skills = self.get_all_skills(force_reload=force_reload)
+        return [skill for skill in skills if skill.get("namespace") == namespace]
+
+    def search_skills(
+        self,
+        query: str,
+        force_reload: bool = False,
+    ) -> list[dict[str, Any]]:
+        """Search skills by keyword in intent or description.
+
+        Args:
+            query: Search query
+            force_reload: Force reload even if cached
+
+        Returns:
+            List of matching skills
+        """
+        skills = self.get_all_skills(force_reload=force_reload)
+        query_lower = query.lower()
+        return [skill for skill in skills if query_lower in skill.get("intent", "").lower()]
+
+    def clear_cache(self) -> None:
+        """Clear all cached data."""
         self._cache.clear()

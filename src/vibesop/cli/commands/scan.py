@@ -20,7 +20,6 @@ Examples:
 """
 
 from pathlib import Path
-from typing import Optional, List
 
 import typer
 from rich.console import Console
@@ -32,7 +31,7 @@ console = Console()
 
 
 def scan(
-    paths: List[Path] = typer.Argument(
+    paths: list[Path] = typer.Argument(  # noqa: B008
         ...,
         help="Paths to scan",
         exists=True,
@@ -43,13 +42,13 @@ def scan(
         "-a",
         help="Scan all files (not just code files)",
     ),
-    output: Optional[Path] = typer.Option(
+    output: Path | None = typer.Option(  # noqa: B008
         None,
         "--output",
         "-o",
         help="Output report to file",
     ),
-    min_severity: str = typer.Option(
+    _min_severity: str = typer.Option(
         "medium",
         "--min-severity",
         "-s",

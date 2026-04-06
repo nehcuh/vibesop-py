@@ -30,7 +30,7 @@ def onboard(
         "--skip-deploy",
         help="Skip deployment step (config already installed)",
     ),
-    skip_hooks: bool = typer.Option(
+    _skip_hooks: bool = typer.Option(
         False,
         "--skip-hooks",
         help="Skip hooks installation",
@@ -57,10 +57,7 @@ def onboard(
         # Minimal onboarding (no deploy, hooks, integrations)
         vibe onboard --skip-deploy --skip-hooks --skip-integrations
     """
-    console.print(
-        f"\n[bold cyan]👋 Welcome to VibeSOP![/bold cyan]"
-        f"\n{'=' * 40}\n"
-    )
+    console.print(f"\n[bold cyan]👋 Welcome to VibeSOP![/bold cyan]\n{'=' * 40}\n")
 
     console.print(
         Panel(
@@ -76,13 +73,13 @@ def onboard(
     )
 
     # Step 1: Initialize
-    console.print(f"\n[bold]Step 1: Initialize[/bold]\n")
+    console.print("\n[bold]Step 1: Initialize[/bold]\n")
     console.print("[dim]Creating .vibe directory structure...[/dim]")
 
     from vibesop.installer.init_support import InitSupport
 
     init_support = InitSupport()
-    result = init_support.init_project(Path("."), platform="claude-code")
+    result = init_support.init_project(Path(), platform="claude-code")
 
     if result.get("success"):
         console.print("[green]✓[/green] Initialized\n")
@@ -91,29 +88,29 @@ def onboard(
         raise typer.Exit(1)
 
     # Step 2: Build
-    console.print(f"[bold]Step 2: Build[/bold]\n")
+    console.print("[bold]Step 2: Build[/bold]\n")
     console.print("[dim]Generating configuration...[/dim]")
     console.print("[dim]Run 'vibe build' to generate platform config[/dim]\n")
 
     # Step 3: Deploy
     if not skip_deploy:
-        console.print(f"[bold]Step 3: Deploy[/bold]\n")
+        console.print("[bold]Step 3: Deploy[/bold]\n")
         console.print("[dim]To deploy configuration, run:[/dim]")
         console.print("  [cyan]vibe deploy claude-code[/cyan]\n")
     else:
-        console.print(f"[bold]Step 3: Deploy[/bold] [dim](skipped)[/dim]\n")
+        console.print("[bold]Step 3: Deploy[/bold] [dim](skipped)[/dim]\n")
 
     # Step 4: Integrations
     if not skip_integrations:
-        console.print(f"[bold]Step 4: Integrations[/bold]\n")
+        console.print("[bold]Step 4: Integrations[/bold]\n")
         console.print("[dim]Available integrations:[/dim]")
         console.print("  • gstack - Virtual engineering team")
         console.print("  • superpowers - Productivity skills\n")
     else:
-        console.print(f"[bold]Step 4: Integrations[/bold] [dim](skipped)[/dim]\n")
+        console.print("[bold]Step 4: Integrations[/bold] [dim](skipped)[/dim]\n")
 
     # Step 5: Verify
-    console.print(f"[bold]Step 5: Verify[/bold]\n")
+    console.print("[bold]Step 5: Verify[/bold]\n")
     console.print("[dim]Run 'vibe doctor' to verify your setup[/dim]\n")
 
     console.print(
@@ -123,7 +120,7 @@ def onboard(
             "  • Run [cyan]vibe build[/cyan] to generate config\n"
             "  • Run [cyan]vibe deploy[/cyan] to install\n"
             "  • Run [cyan]vibe doctor[/cyan] to verify\n"
-            "  • Run [cyan]vibe route \"help\"[/cyan] to find skills",
+            '  • Run [cyan]vibe route "help"[/cyan] to find skills',
             border_style="green",
         )
     )

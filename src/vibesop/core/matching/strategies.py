@@ -9,12 +9,10 @@ This module provides production-ready implementations of the IMatcher protocol:
 
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from vibesop.core.matching.base import (
-    IMatcher,
     MatchResult,
     MatcherType,
     RoutingContext,
@@ -22,7 +20,7 @@ from vibesop.core.matching.base import (
 )
 from vibesop.core.matching.similarity import SimilarityCalculator
 from vibesop.core.matching.tfidf import TFIDFCalculator
-from vibesop.core.matching.tokenizers import tokenize, TokenizerConfig
+from vibesop.core.matching.tokenizers import TokenizerConfig, tokenize
 
 if TYPE_CHECKING:
     import numpy as np
@@ -62,7 +60,7 @@ class KeywordMatcher:
         self,
         query: str,
         candidates: list[dict[str, any]],
-        context: RoutingContext | None = None,
+        _context: RoutingContext | None = None,
         top_k: int = 10,
     ) -> list[MatchResult]:
         """Match query against candidates using keyword detection."""
@@ -88,9 +86,7 @@ class KeywordMatcher:
                         confidence=score,
                         score_breakdown={"keyword_match": score},
                         matcher_type=MatcherType.KEYWORD,
-                        matched_keywords=self._get_matched_keywords(
-                            query_tokens, candidate
-                        ),
+                        matched_keywords=self._get_matched_keywords(query_tokens, candidate),
                         metadata={
                             "matcher": "keyword",
                             "namespace": candidate.get("namespace", "builtin"),
@@ -110,7 +106,7 @@ class KeywordMatcher:
         self,
         query: str,
         candidate: dict[str, any],
-        context: RoutingContext | None = None,
+        _context: RoutingContext | None = None,
     ) -> float:
         """Score a single candidate."""
         query_tokens = set(
@@ -184,9 +180,7 @@ class TFIDFMatcher:
     def __init__(self, config: MatcherConfig | None = None):
         self._config = config or MatcherConfig()
         self._tfidf_calc = TFIDFCalculator()
-        self._similarity_calc = SimilarityCalculator(
-            metric=SimilarityMetric.COSINE
-        )
+        self._similarity_calc = SimilarityCalculator(metric=SimilarityMetric.COSINE)
         self._fitted = False
         self._candidate_vectors: dict[str, dict[str, float]] = {}
 
@@ -210,7 +204,7 @@ class TFIDFMatcher:
         self,
         query: str,
         candidates: list[dict[str, any]],
-        context: RoutingContext | None = None,
+        _context: RoutingContext | None = None,
         top_k: int = 10,
     ) -> list[MatchResult]:
         """Match query against candidates using TF-IDF similarity."""
@@ -226,9 +220,7 @@ class TFIDFMatcher:
         for candidate in candidates:
             skill_id = candidate.get("id", "")
             candidate_text = self._candidate_to_text(candidate)
-            candidate_tokens = tokenize(
-                candidate_text, self._config.tokenizer_config
-            )
+            candidate_tokens = tokenize(candidate_text, self._config.tokenizer_config)
             candidate_vec = self._tfidf_calc.transform(candidate_tokens)
 
             # Calculate cosine similarity using TF-IDF vectors
@@ -256,7 +248,7 @@ class TFIDFMatcher:
         self,
         query: str,
         candidate: dict[str, any],
-        context: RoutingContext | None = None,
+        _context: RoutingContext | None = None,
     ) -> float:
         """Score a single candidate."""
         if not self._fitted:
@@ -321,12 +313,13 @@ class EmbeddingMatcher:
 
         try:
             from sentence_transformers import SentenceTransformer
+
             self._model = SentenceTransformer(self._model_name)
         except ImportError:
             raise ImportError(
                 "sentence-transformers is required for EmbeddingMatcher. "
                 "Install with: pip install sentence-transformers"
-            )
+            ) from None
 
     def fit(self, candidates: list[dict[str, any]]) -> None:
         """Pre-compute embeddings for all candidates."""
@@ -335,14 +328,11 @@ class EmbeddingMatcher:
 
         self._load_model()
 
-        texts = [
-            self._candidate_to_text(c) for c in candidates
-        ]
+        texts = [self._candidate_to_text(c) for c in candidates]
         embeddings = self._model.encode(texts)
 
         self._candidate_embeddings = {
-            c.get("id", ""): embeddings[i]
-            for i, c in enumerate(candidates)
+            c.get("id", ""): embeddings[i] for i, c in enumerate(candidates)
         }
         self._candidate_ids = [c.get("id", "") for c in candidates]
 
@@ -350,7 +340,7 @@ class EmbeddingMatcher:
         self,
         query: str,
         candidates: list[dict[str, any]],
-        context: RoutingContext | None = None,
+        _context: RoutingContext | None = None,
         top_k: int = 10,
     ) -> list[MatchResult]:
         """Match query using vector embeddings."""
@@ -378,11 +368,7 @@ class EmbeddingMatcher:
             # Calculate cosine similarity
             score = float(
                 np.dot(query_embedding, candidate_embedding)
-                / (
-                    np.linalg.norm(query_embedding)
-                    * np.linalg.norm(candidate_embedding)
-                    + 1e-10
-                )
+                / (np.linalg.norm(query_embedding) * np.linalg.norm(candidate_embedding) + 1e-10)
             )
 
             if score >= self._config.min_confidence:
@@ -480,7 +466,7 @@ class LevenshteinMatcher:
         self,
         query: str,
         candidate: dict[str, any],
-        context: RoutingContext | None = None,
+        _context: RoutingContext | None = None,
     ) -> float:
         """Score a single candidate using normalized Levenshtein."""
         text = self._candidate_to_text(candidate)
@@ -535,9 +521,9 @@ class LevenshteinMatcher:
 
 # Convenience exports
 __all__ = [
-    "MatcherConfig",
-    "KeywordMatcher",
-    "TFIDFMatcher",
     "EmbeddingMatcher",
+    "KeywordMatcher",
     "LevenshteinMatcher",
+    "MatcherConfig",
+    "TFIDFMatcher",
 ]

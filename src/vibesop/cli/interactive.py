@@ -4,9 +4,9 @@ This module provides interactive prompts, confirmations,
 and progress display for better user experience.
 """
 
-from typing import Any, Optional, Callable
-
+from collections.abc import Callable
 from enum import Enum
+from typing import Any
 
 from rich.console import Console
 from rich.prompt import Confirm
@@ -77,7 +77,7 @@ class UserInteractor:
     def ask_yes_no(
         self,
         question: str,
-        default: Optional[bool] = None,
+        default: bool | None = None,
         show_default: bool = True,
     ) -> bool:
         if self._mode == InteractionMode.SILENT:
@@ -112,7 +112,7 @@ class UserInteractor:
         self,
         question: str,
         options: list[str],
-        default: Optional[str] = None,
+        default: str | None = None,
     ) -> str:
         if self._mode == InteractionMode.SILENT:
             return default if default else options[0]
@@ -150,8 +150,8 @@ class UserInteractor:
     def ask_input(
         self,
         question: str,
-        default: Optional[str] = None,
-        validator: Optional[Callable[[str], bool]] = None,
+        default: str | None = None,
+        validator: Callable[[str], bool] | None = None,
     ) -> str:
         if self._mode == InteractionMode.SILENT:
             return default if default else ""
@@ -208,7 +208,7 @@ class UserInteractor:
 
     def show_info(self, message: str) -> None:
         if self._mode != InteractionMode.SILENT:
-            console.print(f"ℹ️  {message}")
+            console.print(f"\u2139\ufe0f  {message}")
 
     def show_success(self, message: str) -> None:
         if self._mode != InteractionMode.SILENT:
@@ -244,7 +244,7 @@ class UserInteractor:
     def confirm_action(
         self,
         action: str,
-        details: Optional[str] = None,
+        details: str | None = None,
         dangerous: bool = False,
     ) -> bool:
         if self._mode == InteractionMode.SILENT:
@@ -254,7 +254,7 @@ class UserInteractor:
         if dangerous:
             console.print(f"[bold red]⚠️  WARNING: {action}[/bold red]")
         else:
-            console.print(f"[bold]ℹ️  {action}[/bold]")
+            console.print(f"[bold]\u2139\ufe0f  {action}[/bold]")
 
         if details:
             console.print(f"{details}")
@@ -316,7 +316,7 @@ class ProgressBar:
     def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
         console.print()
 
-    def update(self, progress: int, message: str = "") -> None:
+    def update(self, progress: int, _message: str = "") -> None:
         self._progress = progress
 
     def increment(self, amount: int = 1, message: str = "") -> None:

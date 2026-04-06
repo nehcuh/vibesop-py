@@ -338,9 +338,7 @@ class ClaudeCodeAdapter(PlatformAdapter):
             manifest: Source manifest
             result: RenderResult to track files
         """
-        from vibesop.adapters.models import SkillDefinition
-
-        skill_id = skill.id if hasattr(skill, 'id') else skill.get('id', '')
+        skill_id = skill.id if hasattr(skill, "id") else skill.get("id", "")
         skill_output_path = skill_dir / "SKILL.md"
 
         # Try to find actual skill content from core/skills/

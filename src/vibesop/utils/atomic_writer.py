@@ -11,11 +11,8 @@ This is critical for configuration files to prevent
 corruption if the process is interrupted.
 """
 
-import os
-import tempfile
-from pathlib import Path
-from typing import Union, Optional
 from contextlib import contextmanager
+from pathlib import Path
 
 
 class AtomicWriteError(Exception):
@@ -38,7 +35,7 @@ class AtomicWriter:
         ...     f.write("content")
     """
 
-    def __init__(self, temp_dir: Optional[Path] = None) -> None:
+    def __init__(self, temp_dir: Path | None = None) -> None:
         """Initialize the atomic writer.
 
         Args:
@@ -49,7 +46,7 @@ class AtomicWriter:
 
     def write_text(
         self,
-        path: Union[Path, str],
+        path: Path | str,
         content: str,
         encoding: str = "utf-8",
         mkdir: bool = True,
@@ -86,7 +83,7 @@ class AtomicWriter:
 
     def write_bytes(
         self,
-        path: Union[Path, str],
+        path: Path | str,
         content: bytes,
         mkdir: bool = True,
     ) -> None:
@@ -117,9 +114,9 @@ class AtomicWriter:
     @contextmanager
     def atomic_open(
         self,
-        path: Union[Path, str],
+        path: Path | str,
         mode: str = "w",
-        encoding: Optional[str] = "utf-8",
+        encoding: str | None = "utf-8",
         mkdir: bool = True,
     ):
         """Context manager for atomic file operations.
@@ -152,16 +149,13 @@ class AtomicWriter:
             if "b" not in mode and encoding is not None:
                 open_kwargs["encoding"] = encoding
 
-            f = open(tmp_path, mode, **open_kwargs)
-            yield f
-            f.close()
+            with tmp_path.open(mode, **open_kwargs) as f:
+                yield f
 
             # Atomic rename
             self._atomic_replace(tmp_path, path)
 
         except Exception as e:
-            if f:
-                f.close()
             tmp_path.unlink(missing_ok=True)
             raise AtomicWriteError(f"Failed to write {path}: {e}") from e
 
@@ -191,21 +185,21 @@ class AtomicWriter:
             dst: Destination file path
 
         Note:
-            os.replace() is atomic on POSIX systems when
+            Path.replace() is atomic on POSIX systems when
             src and dst are on the same filesystem.
         """
         # Ensure destination directory exists
         dst.parent.mkdir(parents=True, exist_ok=True)
 
         # Atomic rename
-        os.replace(src, dst)
+        src.replace(dst)
 
 
 # Singleton instance for convenience
 _default_writer = AtomicWriter()
 
 
-def write_text(path: Union[Path, str], content: str, encoding: str = "utf-8") -> None:
+def write_text(path: Path | str, content: str, encoding: str = "utf-8") -> None:
     """Convenience function for atomic text writing.
 
     Args:
@@ -216,7 +210,7 @@ def write_text(path: Union[Path, str], content: str, encoding: str = "utf-8") ->
     _default_writer.write_text(path, content, encoding)
 
 
-def write_bytes(path: Union[Path, str], content: bytes) -> None:
+def write_bytes(path: Path | str, content: bytes) -> None:
     """Convenience function for atomic bytes writing.
 
     Args:
@@ -227,7 +221,7 @@ def write_bytes(path: Union[Path, str], content: bytes) -> None:
 
 
 @contextmanager
-def atomic_open(path: Union[Path, str], mode: str = "w", encoding: str = "utf-8"):
+def atomic_open(path: Path | str, mode: str = "w", encoding: str = "utf-8"):
     """Context manager for atomic file operations.
 
     Args:

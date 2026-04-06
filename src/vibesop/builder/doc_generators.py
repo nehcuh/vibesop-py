@@ -8,11 +8,11 @@ from source code and project metadata.
 import os
 import re
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
-from vibesop.builder.manifest import Manifest
+from vibesop.builder.doc_models import DocConfig, DocSection
 from vibesop.builder.doc_templates import DocType
-from vibesop.builder.doc_models import DocSection, DocConfig
+from vibesop.builder.manifest import Manifest
 
 
 class DocContentGenerator:
@@ -63,7 +63,7 @@ class DocContentGenerator:
         )
 
     @staticmethod
-    def prepare_context(config: DocConfig) -> Dict[str, Any]:
+    def prepare_context(config: DocConfig) -> dict[str, Any]:
         """Prepare template context.
 
         Args:
@@ -86,7 +86,7 @@ class DocContentGenerator:
         }
 
     @staticmethod
-    def scan_python_modules(source_dir: Path) -> List[Dict[str, Any]]:
+    def scan_python_modules(source_dir: Path) -> list[dict[str, Any]]:
         """Scan source directory for Python modules.
 
         Args:
@@ -147,7 +147,7 @@ class DocContentGenerator:
         return ""
 
     @staticmethod
-    def generate_modules_section(modules: List[Dict[str, Any]]) -> str:
+    def generate_modules_section(modules: list[dict[str, Any]]) -> str:
         """Generate markdown documentation for modules.
 
         Args:
@@ -171,7 +171,7 @@ class DocContentGenerator:
         return "\n".join(lines)
 
     @staticmethod
-    def create_quick_docs_sections(project_name: str) -> List[DocSection]:
+    def create_quick_docs_sections(project_name: str) -> list[DocSection]:
         """Create quick documentation sections.
 
         Args:

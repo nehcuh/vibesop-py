@@ -19,12 +19,9 @@ Examples:
 
 import shutil
 from pathlib import Path
-from typing import Optional
 
 import typer
 from rich.console import Console
-
-from vibesop.installer.installer import VibeSOPInstaller
 
 console = Console()
 
@@ -34,12 +31,12 @@ def deploy(
         "claude-code",
         help="Target platform (claude-code, opencode, superpowers, cursor)",
     ),
-    destination: Optional[Path] = typer.Argument(
+    destination: Path | None = typer.Argument(  # noqa: B008
         None,
         help="Destination directory (default: platform default)",
         show_default=False,
     ),
-    source: Optional[Path] = typer.Option(
+    source: Path | None = typer.Option(  # noqa: B008
         None,
         "--source",
         "-s",
@@ -95,8 +92,6 @@ def deploy(
     )
 
     # Show success message
-    from vibesop.installer.installer import VibeSOPInstaller
-    installer = VibeSOPInstaller()
     if destination is None:
         destination = _get_default_destination(target)
 
@@ -111,8 +106,8 @@ def deploy(
 
 def _execute_deploy(
     target: str,
-    destination: Optional[Path] = None,
-    source: Optional[Path] = None,
+    destination: Path | None = None,
+    source: Path | None = None,
     force: bool = False,
     backup: bool = True,
     dry_run: bool = False,
@@ -130,7 +125,6 @@ def _execute_deploy(
         backup: Backup existing files before overwriting
         dry_run: Preview deployment without making changes
     """
-    from vibesop.installer.installer import VibeSOPInstaller
 
     # Set default source directory
     if source is None:
@@ -145,16 +139,12 @@ def _execute_deploy(
         raise typer.Exit(1)
 
     # Get default destination
-    installer = VibeSOPInstaller()
     if destination is None:
         destination = _get_default_destination(target)
 
     destination = Path(destination).expanduser().resolve()
 
-    console.print(
-        f"\n[bold cyan]🚀 Deploying to {target}[/bold cyan]"
-        f"\n{'=' * 40}\n"
-    )
+    console.print(f"\n[bold cyan]🚀 Deploying to {target}[/bold cyan]\n{'=' * 40}\n")
 
     # Dry-run mode
     if dry_run:
@@ -203,7 +193,7 @@ def _execute_deploy(
                 console.print(f"[red]✗[/red] {rel_path}: {e}")
 
         # Show summary
-        console.print(f"\n[bold]Deployment Summary[/bold]\n")
+        console.print("\n[bold]Deployment Summary[/bold]\n")
         console.print(f"  [green]Copied:[/green] {copied} files")
         if skipped > 0:
             console.print(f"  [dim]Skipped:[/dim] {skipped} files (use --force to overwrite)")
@@ -216,7 +206,7 @@ def _execute_deploy(
 
     except Exception as e:
         console.print(f"[red]✗ Deployment failed: {e}[/red]")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from None
 
 
 def _get_default_destination(target: str) -> Path:
@@ -265,8 +255,8 @@ def _preview_deploy(source: Path, destination: Path, target: str) -> None:
         target: Target platform name
     """
     console.print(
-        f"[bold cyan]🔍 DRY RUN - Deployment Preview[/bold cyan]\n"
-        f"[dim]No changes will be made.[/dim]\n\n"
+        "[bold cyan]🔍 DRY RUN - Deployment Preview[/bold cyan]\n"
+        "[dim]No changes will be made.[/dim]\n\n"
     )
 
     console.print(f"[bold]Source:[/bold] {source}")
@@ -283,7 +273,7 @@ def _preview_deploy(source: Path, destination: Path, target: str) -> None:
     dirs = set()
     for f in source_files[:20]:  # Show first 20
         rel_path = f.relative_to(source)
-        if rel_path.parent != Path("."):
+        if rel_path.parent != Path():
             dirs.add(str(rel_path.parent))
 
     if dirs:
@@ -294,7 +284,4 @@ def _preview_deploy(source: Path, destination: Path, target: str) -> None:
     if len(source_files) > 20:
         console.print(f"  [dim]... and {len(source_files) - 20} more files[/dim]")
 
-    console.print(
-        f"\n[dim]To actually deploy, run:[/dim]\n"
-        f"  [cyan]vibe deploy {target}[/cyan]\n"
-    )
+    console.print(f"\n[dim]To actually deploy, run:[/dim]\n  [cyan]vibe deploy {target}[/cyan]\n")

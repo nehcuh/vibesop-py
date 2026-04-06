@@ -65,10 +65,10 @@ class TestConfigDrivenRenderer:
         rules = renderer.load_rules(Path("rules.yaml"))
         assert rules == []
 
-    @patch(
-        "builtins.open",
-        new_callable=mock_open,
-        read_data="""
+    def test_load_rules_valid_file(self, tmp_path: Path) -> None:
+        """Test loading valid rules file."""
+        rules_file = tmp_path / "rules.yaml"
+        rules_file.write_text("""
 rules:
   - name: test-rule
     condition: "platform == 'test'"
@@ -77,13 +77,9 @@ rules:
     context:
       key: value
     enabled: true
-""",
-    )
-    @patch("pathlib.Path.exists", return_value=True)
-    def test_load_rules_valid_file(self, mock_exists: MagicMock, mock_file: MagicMock) -> None:
-        """Test loading valid rules file."""
+""")
         renderer = ConfigDrivenRenderer()
-        rules = renderer.load_rules(Path("rules.yaml"))
+        rules = renderer.load_rules(rules_file)
         assert len(rules) == 1
         assert rules[0].name == "test-rule"
         assert rules[0].condition == "platform == 'test'"

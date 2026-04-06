@@ -5,7 +5,7 @@ with VibeSOP configuration.
 """
 
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 
 class InitSupport:
@@ -33,7 +33,7 @@ class InitSupport:
         platform: str = "claude-code",
         force: bool = False,
         create_skills_dir: bool = True,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Initialize a project with VibeSOP configuration.
 
         Args:
@@ -110,7 +110,7 @@ class InitSupport:
 
         return result
 
-    def verify_init(self, project_path: Path) -> Dict[str, Any]:
+    def verify_init(self, project_path: Path) -> dict[str, Any]:
         """Verify project initialization.
 
         Args:
@@ -235,7 +235,7 @@ For more information, see:
             content = gitignore_path.read_text()
             # Check if entries already exist
             if ".vibe/" not in content:
-                with open(gitignore_path, "a") as f:
+                with gitignore_path.open("a") as f:
                     f.write("\n" + "\n".join(vibe_entries) + "\n")
         else:
             # Create new .gitignore

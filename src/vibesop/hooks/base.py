@@ -6,9 +6,8 @@ must implement, along with utility functions.
 
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Dict, List, Optional
 
-from vibesop.hooks.points import HookPoint, is_hook_supported
+from vibesop.hooks.points import HookPoint
 
 
 class Hook(ABC):
@@ -182,7 +181,7 @@ class TemplateHook(Hook):
         hook_name: str,
         hook_point: HookPoint,
         template_path: Path,
-        template_vars: Dict[str, str] | None = None,
+        template_vars: dict[str, str] | None = None,
     ) -> None:
         """Initialize the template hook.
 

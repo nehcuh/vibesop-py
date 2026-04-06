@@ -25,7 +25,7 @@ console = Console()
 
 
 def import_rules(
-    file_path: Path = typer.Argument(
+    file_path: Path = typer.Argument(  # noqa: B008
         ...,
         help="Path to rules file to import",
         exists=True,
@@ -67,10 +67,7 @@ def import_rules(
         # Overwrite existing
         vibe import-rules rules.md --force
     """
-    console.print(
-        f"\n[bold cyan]📥 Import Rules[/bold cyan]"
-        f"\n{'=' * 40}\n"
-    )
+    console.print(f"\n[bold cyan]📥 Import Rules[/bold cyan]\n{'=' * 40}\n")
 
     # Read the input file
     content = file_path.read_text()
@@ -132,7 +129,7 @@ def _parse_rules(content: str) -> str:
         Converted VibeSOP format
     """
     # Simple conversion - add header
-    header = f"""# Imported Rules
+    header = """# Imported Rules
 
 This file contains rules imported from an external source.
 

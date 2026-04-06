@@ -284,7 +284,7 @@ class SecurityScanner:
                 return self.scan(content)
             except (OSError, PermissionError, ValueError) as e:
                 msg = f"Failed to read file: {e}"
-                raise IOError(msg) from e
+                raise OSError(msg) from e
 
     def scan_bang(self, text: str) -> ScanResult:
         """Scan text and raise exception if threats detected.

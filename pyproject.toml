@@ -1,7 +1,7 @@
 [project]
 name = "vibesop"
-version = "3.0.0"
-description = "A battle-tested, multi-platform workflow SOP for AI-assisted development"
+version = "4.0.0"
+description = "AI-assisted development intelligent routing engine - discover skills, manage workflows, learn preferences"
 readme = "README.md"
 requires-python = ">=3.12"
 license = { text = "MIT" }

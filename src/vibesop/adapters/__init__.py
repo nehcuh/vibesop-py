@@ -30,19 +30,19 @@ from vibesop.adapters.opencode import OpenCodeAdapter
 from vibesop.adapters.protocol import AdapterProtocol
 
 __all__ = [
-    # Base classes
-    "PlatformAdapter",
     "AdapterProtocol",
     # Adapters
     "ClaudeCodeAdapter",
-    "OpenCodeAdapter",
     # Models
     "Manifest",
     "ManifestMetadata",
+    "OpenCodeAdapter",
+    # Base classes
+    "PlatformAdapter",
     "PolicySet",
-    "SecurityPolicy",
-    "RoutingConfig",
     "RenderResult",
+    "RoutingConfig",
+    "SecurityPolicy",
 ]
 
-from vibesop._version import __version__  # noqa: E402
+from vibesop._version import __version__

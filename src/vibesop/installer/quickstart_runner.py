@@ -5,9 +5,9 @@ This module provides an interactive wizard for setting up
 VibeSOP configuration.
 """
 
-from pathlib import Path
-from typing import Any, Dict, List, Optional
 from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
 
 from vibesop.installer.init_support import InitSupport
 from vibesop.installer.installer import VibeSOPInstaller
@@ -26,8 +26,8 @@ class QuickstartConfig:
     """
 
     platform: str
-    install_integrations: Optional[bool]
-    install_hooks: Optional[bool]
+    install_integrations: bool | None
+    install_hooks: bool | None
     project_path: Path
     global_install: bool
 
@@ -56,7 +56,7 @@ class QuickstartRunner:
             "superpowers": "General-purpose productivity skills",
         }
 
-    def run(self, project_path: Optional[Path] = None) -> Dict[str, Any]:
+    def run(self, project_path: Path | None = None) -> dict[str, Any]:
         """Run the interactive quickstart wizard.
 
         Args:
@@ -65,7 +65,7 @@ class QuickstartRunner:
         Returns:
             Dictionary with setup results
         """
-        result: Dict[str, Any] = {
+        result: dict[str, Any] = {
             "success": False,
             "config": None,
             "steps_completed": [],
@@ -228,7 +228,7 @@ class QuickstartRunner:
 
             print("Please answer 'yes' or 'no'")
 
-    def _ask_choice(self, question: str, options: List[str], default: str) -> str:
+    def _ask_choice(self, question: str, options: list[str], default: str) -> str:
         """Ask user to choose from options.
 
         Args:
@@ -263,7 +263,7 @@ class QuickstartRunner:
         print(f"│ Type: {'Global' if config.global_install else 'Project':<20} │")
         print(f"│ Integrations: {'Yes' if config.install_integrations else 'No':<20} │")
         print(f"│ Hooks: {'Yes' if config.install_hooks else 'No':<20} │")
-        print(f"│ Location: {str(config.project_path):<20} │")
+        print(f"│ Location: {config.project_path!s:<20} │")
         print("└──────────────────────────────────────────┘")
 
     def _execute_installation(self, config: QuickstartConfig) -> bool:

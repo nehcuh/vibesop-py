@@ -5,7 +5,7 @@ Supports GPT-4o, GPT-4o-mini, and other OpenAI models.
 
 import os
 
-from openai import OpenAI, AsyncOpenAI
+from openai import AsyncOpenAI, OpenAI
 
 from vibesop.llm.base import LLMProvider, LLMResponse
 

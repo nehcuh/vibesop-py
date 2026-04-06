@@ -15,6 +15,9 @@ from pathlib import Path
 
 import typer
 
+from vibesop.cli.executor import execute_skill
+from vibesop.core.skills.manager import SkillManager
+
 app = typer.Typer(help="Execute a skill by ID with a query.")
 
 
@@ -101,7 +104,7 @@ def execute(
 
     try:
         result = asyncio.run(
-            manager.execute_skill(
+            execute_skill(
                 skill_id=skill_id,
                 query=query,
                 working_dir=work_path,

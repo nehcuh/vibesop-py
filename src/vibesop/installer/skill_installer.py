@@ -5,9 +5,9 @@ to projects, including dependency management and registry updates.
 """
 
 import shutil
-from pathlib import Path
-from typing import Any, Dict, List
 from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
 
 
 @dataclass
@@ -29,7 +29,7 @@ class SkillManifest:
     description: str
     version: str
     author: str
-    dependencies: List[str]
+    dependencies: list[str]
     trigger_when: str
 
     @classmethod
@@ -102,7 +102,7 @@ class SkillInstaller:
         skill_path: Path,
         project_path: Path,
         force: bool = False,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Install a skill to a project.
 
         Args:
@@ -113,7 +113,7 @@ class SkillInstaller:
         Returns:
             Dictionary with installation results
         """
-        result: Dict[str, Any] = {
+        result: dict[str, Any] = {
             "success": False,
             "skill_id": skill_path.name,
             "installed_path": "",
@@ -133,7 +133,7 @@ class SkillInstaller:
             result["skill_id"] = manifest.id
 
             # Check dependencies
-            dep_result: Dict[str, Any] = self._install_dependencies(
+            dep_result: dict[str, Any] = self._install_dependencies(
                 manifest.dependencies,
                 project_path,
             )
@@ -169,7 +169,7 @@ class SkillInstaller:
         self,
         skill_id: str,
         project_path: Path,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Uninstall a skill from a project.
 
         Args:
@@ -179,7 +179,7 @@ class SkillInstaller:
         Returns:
             Dictionary with uninstallation results
         """
-        result: Dict[str, Any] = {
+        result: dict[str, Any] = {
             "success": False,
             "skill_id": skill_id,
             "removed_files": [],
@@ -207,7 +207,7 @@ class SkillInstaller:
 
         return result
 
-    def list_skills(self, project_path: Path) -> List[Dict[str, Any]]:
+    def list_skills(self, project_path: Path) -> list[dict[str, Any]]:
         """List installed skills in a project.
 
         Args:
@@ -216,7 +216,7 @@ class SkillInstaller:
         Returns:
             List of skill information dictionaries
         """
-        skills: List[Dict[str, Any]] = []
+        skills: list[dict[str, Any]] = []
         skills_dir = project_path / self._skills_dir
 
         if not skills_dir.exists():
@@ -245,7 +245,7 @@ class SkillInstaller:
         self,
         skill_id: str,
         project_path: Path,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Verify a skill installation.
 
         Args:
@@ -255,7 +255,7 @@ class SkillInstaller:
         Returns:
             Dictionary with verification results
         """
-        result: Dict[str, Any] = {
+        result: dict[str, Any] = {
             "skill_id": skill_id,
             "installed": False,
             "files_present": False,
@@ -309,9 +309,9 @@ class SkillInstaller:
 
     def _install_dependencies(
         self,
-        dependencies: List[str],
+        dependencies: list[str],
         project_path: Path,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Install skill dependencies.
 
         Args:
@@ -321,7 +321,7 @@ class SkillInstaller:
         Returns:
             Dictionary with installation results
         """
-        result: Dict[str, Any] = {
+        result: dict[str, Any] = {
             "success": True,
             "installed": [],
             "errors": [],
@@ -329,7 +329,7 @@ class SkillInstaller:
 
         for dep_id in dependencies:
             # Check if dependency is already installed
-            dep_verify: Dict[str, Any] = self.verify_skill(dep_id, project_path)
+            dep_verify: dict[str, Any] = self.verify_skill(dep_id, project_path)
 
             if not dep_verify["installed"]:
                 # Dependency not installed
@@ -375,7 +375,7 @@ class SkillInstaller:
         else:
             content = registry_path.read_text()
             if manifest.id not in content:
-                with open(registry_path, "a") as f:
+                with registry_path.open("a") as f:
                     f.write(f"  - {manifest.id}\n")
 
     def _remove_from_registry(self, skill_id: str, project_path: Path) -> None:

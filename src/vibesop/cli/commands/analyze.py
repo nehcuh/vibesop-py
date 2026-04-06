@@ -13,7 +13,6 @@ Usage:
 """
 
 from pathlib import Path
-from typing import Optional
 
 import typer
 from rich.console import Console
@@ -27,7 +26,7 @@ console = Console()
 
 def analyze(
     action: str = typer.Argument(..., help="Action: session, patterns, suggestions"),
-    source: Optional[Path] = typer.Argument(
+    source: Path | None = typer.Argument(  # noqa: B008
         None,
         help="Source session file or directory",
         exists=True,
@@ -99,7 +98,7 @@ def analyze(
 
 def _do_analyze_session(
     analyzer: SessionAnalyzer,
-    source: Optional[Path],
+    source: Path | None,
 ) -> None:
     """Analyze a session file.
 
@@ -110,11 +109,7 @@ def _do_analyze_session(
     console.print(f"\n[bold cyan]🔍 Session Analysis[/bold cyan]\n{'=' * 40}\n")
 
     # Find session file
-    if source:
-        session_file = source
-    else:
-        # Try to find current session
-        session_file = _find_current_session()
+    session_file = source or _find_current_session()
 
     if not session_file or not session_file.exists():
         console.print("[yellow]No session file found[/yellow]")
@@ -139,7 +134,7 @@ def _do_analyze_session(
 
 def _do_analyze_patterns(
     analyzer: SessionAnalyzer,
-    source: Optional[Path],
+    source: Path | None,
 ) -> None:
     """Analyze patterns across multiple sessions.
 
@@ -179,7 +174,7 @@ def _do_analyze_patterns(
 
 def _do_suggest_skills(
     analyzer: SessionAnalyzer,
-    source: Optional[Path],
+    source: Path | None,
     auto_craft: bool,
     use_ai: bool = False,
 ) -> None:
@@ -233,8 +228,8 @@ def _do_suggest_skills(
     else:
         _display_enhanced_suggestions(to_display)
         console.print(
-            f"\n[dim]To auto-create these skills, run:[/dim]\n"
-            f"  [cyan]vibe analyze suggestions --auto-craft[/cyan]"
+            "\n[dim]To auto-create these skills, run:[/dim]\n"
+            "  [cyan]vibe analyze suggestions --auto-craft[/cyan]"
         )
 
 
@@ -418,7 +413,7 @@ def _display_enhanced_suggestions(
                     f"[dim]Trigger Conditions:[/dim]\n"
                     + "\n".join(f"  • {cond}" for cond in enhanced.trigger_conditions[:3])
                     + "\n\n"
-                    f"[dim]Example queries:[/dim]\n"
+                    "[dim]Example queries:[/dim]\n"
                     + "\n".join(f"  • {q[:60]}..." for q in enhanced.original.trigger_queries[:3]),
                     title=f"[bold]AI-Enhanced Suggestion {i}[/bold]",
                     border_style="cyan" if enhanced.confidence > 0.7 else "blue",

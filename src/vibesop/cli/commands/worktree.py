@@ -21,7 +21,6 @@ Examples:
 
 import subprocess
 from pathlib import Path
-from typing import Optional
 
 import typer
 from rich.console import Console
@@ -32,14 +31,14 @@ console = Console()
 
 def worktree(
     action: str = typer.Argument(..., help="Action: list, create, remove, cleanup, finish"),
-    name_or_branch: Optional[str] = typer.Argument(None, help="Branch name"),
+    name_or_branch: str | None = typer.Argument(None, help="Branch name"),
     base: str = typer.Option(
         "main",
         "--base",
         "-b",
         help="Base branch for new worktree",
     ),
-    location: Optional[Path] = typer.Option(
+    location: Path | None = typer.Option(  # noqa: B008
         None,
         "--location",
         "-l",
@@ -94,10 +93,7 @@ def worktree(
 
 def _do_list() -> None:
     """List all worktrees."""
-    console.print(
-        f"\n[bold cyan]🌳 Git Worktrees[/bold cyan]"
-        f"\n{'=' * 40}\n"
-    )
+    console.print(f"\n[bold cyan]🌳 Git Worktrees[/bold cyan]\n{'=' * 40}\n")
 
     try:
         # Get git worktree list
@@ -122,11 +118,13 @@ def _do_list() -> None:
                 continue
             parts = line.split(" ")
             if len(parts) >= 3:
-                worktrees.append({
-                    "commit": parts[0],
-                    "branch": parts[1].strip("[]"),
-                    "path": parts[2],
-                })
+                worktrees.append(
+                    {
+                        "commit": parts[0],
+                        "branch": parts[1].strip("[]"),
+                        "path": parts[2],
+                    }
+                )
 
         if not worktrees:
             console.print("[dim]No worktrees found[/dim]")
@@ -147,7 +145,7 @@ def _do_list() -> None:
                     display_path = f"[dim]{rel_path}[/dim]" if "/" in str(rel_path) else str(path)
                 else:
                     display_path = wt["path"]
-            except:
+            except Exception:
                 display_path = wt["path"]
 
             table.add_row(
@@ -163,7 +161,7 @@ def _do_list() -> None:
         console.print(f"[red]✗ Error listing worktrees: {e}[/red]")
 
 
-def _do_create(branch: str | None, base: str, location: Path | None) -> None:
+def _do_create(branch: str | None, _base: str, location: Path | None) -> None:
     """Create a new worktree.
 
     Args:
@@ -188,15 +186,15 @@ def _do_create(branch: str | None, base: str, location: Path | None) -> None:
 
     try:
         subprocess.run(cmd, check=True)
-        console.print(f"[green]✓ Worktree created[/green]\n")
+        console.print("[green]✓ Worktree created[/green]\n")
         console.print(f"  Branch: {branch}")
         if location:
             console.print(f"  Location: {location}")
-        console.print(f"\n[dim]To use the worktree:[/dim]")
+        console.print("\n[dim]To use the worktree:[/dim]")
         console.print(f"  [cyan]cd {location or f'.git/worktrees/{branch}'}[/cyan]")
     except subprocess.CalledProcessError as e:
         console.print(f"[red]✗ Failed to create worktree: {e}[/red]")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from None
 
 
 def _do_remove(branch: str | None, force: bool) -> None:
@@ -223,13 +221,13 @@ def _do_remove(branch: str | None, force: bool) -> None:
             ["git", "worktree", "remove", branch],
             check=True,
         )
-        console.print(f"[green]✓ Worktree removed[/green]")
+        console.print("[green]✓ Worktree removed[/green]")
     except subprocess.CalledProcessError as e:
         console.print(f"[red]✗ Failed to remove worktree: {e}[/red]")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from None
 
 
-def _do_cleanup(force: bool) -> None:
+def _do_cleanup(_force: bool) -> None:
     """Clean up finished/merged branches worktrees."""
     console.print("[dim]Cleaning up worktrees for merged branches...[/dim]")
 
@@ -267,11 +265,11 @@ def _do_cleanup(force: bool) -> None:
                     subprocess.run(
                         ["git", "worktree", "remove", branch],
                         capture_output=True,
+                        check=False,
                     )
                     count += 1
-            except:
+            except Exception:
                 pass
-
     console.print(f"[green]✓ Cleaned up {count} worktree(s)[/green]")
 
 

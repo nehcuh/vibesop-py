@@ -25,13 +25,12 @@ Examples:
 """
 
 from pathlib import Path
-from typing import Any, Optional, cast
-
-from ruamel.yaml import YAML
+from typing import Any, cast
 
 import typer
 from rich.console import Console
 from rich.panel import Panel
+from ruamel.yaml import YAML
 
 from vibesop.adapters.models import Manifest
 from vibesop.builder.manifest import ManifestBuilder
@@ -51,8 +50,8 @@ PROFILES: dict[str, str] = {
 def _execute_build(
     target: str,
     profile: str,
-    output: Optional[Path],
-    overlay: Optional[Path],
+    output: Path | None,
+    overlay: Path | None,
     verify: bool,
 ) -> None:
     """Execute build logic (reusable by other commands)."""
@@ -70,7 +69,7 @@ def _execute_build(
 
     try:
         console.print(f"[dim]Loading manifest for {target}...[/dim]")
-        builder = ManifestBuilder(project_root=Path("."))
+        builder = ManifestBuilder(project_root=Path())
 
         if overlay:
             console.print(f"[dim]Applying overlay: {overlay}[/dim]")
@@ -121,16 +120,16 @@ def _execute_build(
 
     except FileNotFoundError as e:
         console.print(f"[red]✗ File not found: {e}[/red]")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from None
     except ValueError as e:
         console.print(f"[red]✗ Configuration error: {e}[/red]")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from None
     except Exception as e:
         console.print(f"[red]✗ Build failed: {e}[/red]")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from None
 
 
-def _get_configured_platform() -> Optional[str]:
+def _get_configured_platform() -> str | None:
     """Get platform from .vibe/config.yaml."""
     config_path = Path(".vibe/config.yaml")
     if not config_path.exists():
@@ -138,15 +137,15 @@ def _get_configured_platform() -> Optional[str]:
 
     try:
         yaml_parser = YAML()
-        with open(config_path) as f:
-            config = cast(dict[str, Any], yaml_parser.load(f))  # type: ignore[reportUnknownMemberType,reportUnknownVariableType]
+        with config_path.open() as f:
+            config = cast("dict[str, Any]", yaml_parser.load(f))  # type: ignore[reportUnknownMemberType,reportUnknownVariableType]
             return config.get("platform") if config else None
     except Exception:
         return None
 
 
 def build(
-    target: Optional[str] = typer.Argument(
+    target: str | None = typer.Argument(
         None,
         help="Target platform (claude-code, opencode, superpowers, cursor). "
         "Defaults to platform from config.yaml or claude-code",
@@ -157,20 +156,20 @@ def build(
         "-p",
         help=f"Build profile: {', '.join(PROFILES.keys())}",
     ),
-    output: Optional[Path] = typer.Option(
+    output: Path | None = typer.Option(  # noqa: B008
         None,
         "--output",
         "-o",
         help="Output directory (default: .vibe/dist/<target>)",
         exists=False,
     ),
-    overlay: Optional[Path] = typer.Option(
+    overlay: Path | None = typer.Option(  # noqa: B008
         None,
         "--overlay",
         help="Path to overlay YAML file for customization",
         exists=True,
     ),
-    manifest_only: bool = typer.Option(
+    _manifest_only: bool = typer.Option(
         False,
         "--manifest-only",
         help="Only generate manifest, skip rendering",
@@ -208,7 +207,7 @@ def build(
 
 def _display_manifest_summary(manifest: Manifest) -> None:
     """Display manifest summary."""
-    console.print(f"\n[bold]Manifest Summary[/bold]\n")
+    console.print("\n[bold]Manifest Summary[/bold]\n")
     console.print(f"  Platform: {manifest.metadata.platform}")
     console.print(f"  Version: {manifest.metadata.version}")
     console.print(f"  Skills: {len(manifest.skills)}")

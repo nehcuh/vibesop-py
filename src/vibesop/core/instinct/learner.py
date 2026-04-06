@@ -10,8 +10,8 @@ from __future__ import annotations
 
 import json
 import re
-from dataclasses import asdict, dataclass, field
-from datetime import datetime, timedelta
+from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -136,13 +136,13 @@ class InstinctLearner:
         if not self.storage_path.exists():
             return
 
-        with open(self.storage_path) as f:
-            for line in f:
-                line = line.strip()
-                if not line:
+        with self.storage_path.open() as f:
+            for raw_line in f:
+                stripped = raw_line.strip()
+                if not stripped:
                     continue
                 try:
-                    data = json.loads(line)
+                    data = json.loads(stripped)
                     instinct = Instinct.from_dict(data)
                     self._instincts[instinct.id] = instinct
                 except (json.JSONDecodeError, KeyError):
@@ -150,7 +150,7 @@ class InstinctLearner:
 
     def _save(self) -> None:
         """Save instincts to storage."""
-        with open(self.storage_path, "w") as f:
+        with self.storage_path.open("w") as f:
             for instinct in self._instincts.values():
                 f.write(json.dumps(instinct.to_dict()) + "\n")
 

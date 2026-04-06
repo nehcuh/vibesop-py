@@ -6,8 +6,12 @@ for external skill pack integrations (Superpowers, gstack, etc.).
 
 from vibesop.integrations.detector import (
     IntegrationDetector,
-    IntegrationStatus,
     IntegrationInfo,
+    IntegrationStatus,
+)
+from vibesop.integrations.health_monitor import (
+    HealthStatus,
+    SkillHealthMonitor,
 )
 from vibesop.integrations.manager import IntegrationManager
 from vibesop.integrations.recommender import (
@@ -16,22 +20,24 @@ from vibesop.integrations.recommender import (
     RecommendationPriority,
 )
 from vibesop.integrations.verifier import (
+    IntegrationReport,
     IntegrationVerifier,
     VerificationResult,
     VerificationStatus,
-    IntegrationReport,
 )
 
 __all__ = [
+    "HealthStatus",
     "IntegrationDetector",
-    "IntegrationManager",
-    "IntegrationStatus",
     "IntegrationInfo",
+    "IntegrationManager",
     "IntegrationRecommender",
+    "IntegrationReport",
+    "IntegrationStatus",
+    "IntegrationVerifier",
     "Recommendation",
     "RecommendationPriority",
-    "IntegrationVerifier",
+    "SkillHealthMonitor",
     "VerificationResult",
     "VerificationStatus",
-    "IntegrationReport",
 ]

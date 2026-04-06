@@ -4,13 +4,12 @@ This module provides verification capabilities for installed
 integrations to ensure they are correctly set up and functional.
 """
 
-from pathlib import Path
-from typing import Any
-
 from dataclasses import dataclass
 from enum import Enum
+from pathlib import Path
+from typing import Any, ClassVar
 
-from vibesop.integrations import IntegrationManager, IntegrationInfo, IntegrationStatus
+from vibesop.integrations import IntegrationInfo, IntegrationManager, IntegrationStatus
 
 
 class VerificationStatus(Enum):
@@ -40,7 +39,7 @@ class IntegrationReport:
 
 
 class IntegrationVerifier:
-    VERIFICATION_CHECKS: dict[str, dict[str, Any]] = {
+    VERIFICATION_CHECKS: ClassVar[dict[str, dict[str, Any]]] = {
         "gstack": {
             "checks": [
                 "installation_exists",
@@ -414,7 +413,7 @@ class IntegrationVerifier:
 
     def _check_dependencies_met(
         self,
-        integration_id: str,
+        _integration_id: str,
     ) -> VerificationResult:
         import shutil
 

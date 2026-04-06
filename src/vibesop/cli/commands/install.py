@@ -21,12 +21,10 @@ Examples:
     vibe install --list
 """
 
-from typing import Optional
-
 import typer
 from rich.console import Console
+from rich.progress import BarColumn, Progress, SpinnerColumn, TaskProgressColumn, TextColumn
 from rich.table import Table
-from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
 
 from vibesop.installer import GstackInstaller, SuperpowersInstaller
 from vibesop.integrations import IntegrationManager, IntegrationStatus
@@ -38,7 +36,7 @@ VALID_INTEGRATIONS = ["gstack", "superpowers"]
 
 
 def install(
-    name: Optional[str] = typer.Argument(
+    name: str | None = typer.Argument(
         None,
         help="Integration name (gstack, superpowers)",
     ),
@@ -138,10 +136,7 @@ def install(
 
 def _list_available() -> None:
     """List available integrations."""
-    console.print(
-        f"\n[bold cyan]📦 Available Integrations[/bold cyan]"
-        f"\n{'=' * 40}\n"
-    )
+    console.print(f"\n[bold cyan]📦 Available Integrations[/bold cyan]\n{'=' * 40}\n")
 
     t = Table()
     t.add_column("Integration", style="cyan")
@@ -196,8 +191,7 @@ def _auto_install(force: bool, skip_verify: bool) -> None:
         skip_verify: Skip verification
     """
     console.print(
-        f"\n[bold cyan]🚀 Auto-Installing Recommended Integrations[/bold cyan]"
-        f"\n{'=' * 40}\n"
+        f"\n[bold cyan]🚀 Auto-Installing Recommended Integrations[/bold cyan]\n{'=' * 40}\n"
     )
 
     manager = IntegrationManager()
@@ -216,7 +210,7 @@ def _auto_install(force: bool, skip_verify: bool) -> None:
         results[name] = result
 
     # Summary
-    console.print(f"\n[bold]Summary[/bold]\n")
+    console.print("\n[bold]Summary[/bold]\n")
 
     for name, result in results.items():
         if result == "success":
@@ -247,10 +241,7 @@ def _install_integration(
         "success", "failed", or "skipped"
     """
     if not quiet:
-        console.print(
-            f"\n[bold cyan]📦 Installing {name}[/bold cyan]"
-            f"\n{'=' * 40}\n"
-        )
+        console.print(f"\n[bold cyan]📦 Installing {name}[/bold cyan]\n{'=' * 40}\n")
 
     # Get appropriate installer
     if name == "gstack":
@@ -319,9 +310,7 @@ def _install_integration(
     else:
         if not quiet:
             errors = result.get("errors", [])
-            console.print(
-                f"\n[red]✗ Failed to install {name}[/red]\n"
-            )
+            console.print(f"\n[red]✗ Failed to install {name}[/red]\n")
             for error in errors:
                 console.print(f"  [dim]{error}[/dim]")
             console.print()

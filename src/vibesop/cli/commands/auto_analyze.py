@@ -5,7 +5,6 @@ from hooks to automatically detect patterns and suggest improvements.
 """
 
 from pathlib import Path
-from typing import Optional
 
 import typer
 from rich.console import Console
@@ -16,7 +15,7 @@ console = Console()
 
 
 def auto_analyze_session(
-    session_file: Optional[Path] = typer.Argument(
+    session_file: Path | None = typer.Argument(  # noqa: B008
         None,
         help="Session file to analyze",
         exists=True,
@@ -110,7 +109,7 @@ def auto_analyze_session(
 
 
 def create_suggested_skills(
-    session_file: Path = typer.Argument(
+    session_file: Path = typer.Argument(  # noqa: B008
         ...,
         help="Session file to analyze",
         exists=True,

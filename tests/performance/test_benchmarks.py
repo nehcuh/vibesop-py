@@ -9,8 +9,7 @@ from typing import Dict, List
 
 import pytest
 
-from vibesop.core.routing.engine import SkillRouter
-from vibesop.core.models import RoutingRequest
+from vibesop.core.routing.unified import UnifiedRouter
 
 
 class RoutingBenchmarks:
@@ -24,18 +23,13 @@ class RoutingBenchmarks:
             - Median latency should be < 50ms
             - 99th percentile should be < 200ms
         """
-        router = SkillRouter()
+        router = UnifiedRouter()
 
         def route_request() -> None:
-            router.route(RoutingRequest(query="test query"))
+            router.route("test query")
 
         # Benchmark multiple iterations
-        result = benchmark.pedantic(
-            route_request,
-            iterations=100,
-            rounds=3,
-            warmup_rounds=1
-        )
+        result = benchmark.pedantic(route_request, iterations=100, rounds=3, warmup_rounds=1)
 
         # Assert reasonable performance
         assert result.median < 0.05, f"Baseline median {result.median:.3f}s too high"
@@ -96,29 +90,25 @@ class PerformanceBaselines:
         Fails if performance regresses more than 20% from baseline.
         """
         baseline = self.get_baseline_metrics()
-        router = SkillRouter()
+        router = UnifiedRouter()
 
         # Measure current performance
-        requests = [
-            RoutingRequest(query=f"test query {i}")
-            for i in range(100)
-        ]
+        queries = [f"test query {i}" for i in range(100)]
 
         start = time.perf_counter()
-        for req in requests:
-            router.route(req)
+        for query in queries:
+            router.route(query)
         end = time.perf_counter()
 
         total_time = end - start
-        avg_latency_ms = (total_time / len(requests)) * 1000
+        avg_latency_ms = (total_time / 100) * 1000
 
         # Compare with baseline (allow 20% regression)
         baseline_p50 = baseline["routing_p50_latency_ms"]
         max_acceptable = baseline_p50 * 1.2
 
         assert avg_latency_ms < max_acceptable, (
-            f"Performance regression: {avg_latency_ms:.1f}ms "
-            f"vs baseline {baseline_p50:.1f}ms"
+            f"Performance regression: {avg_latency_ms:.1f}ms vs baseline {baseline_p50:.1f}ms"
         )
 
 
@@ -126,27 +116,22 @@ class PerformanceBaselines:
 class BenchmarkComparison:
     """Compare different implementations."""
 
-    def test_layer_0_vs_layer_3_performance(self) -> None:
-        """Compare AI triage vs semantic matching performance.
+    def test_routing_pipeline_performance(self) -> None:
+        """Test full routing pipeline performance.
 
-        This test helps decide which routing layer to prioritize.
+        This test measures the complete routing pipeline speed,
+        including keyword, TF-IDF, and Levenshtein matching.
         """
-        router = SkillRouter()
+        router = UnifiedRouter()
 
-        # Test Layer 3 (semantic matching) - no LLM call
         query = "test query for comparison"
 
-        requests_layer_3 = [RoutingRequest(query=query) for _ in range(10)]
-
         start = time.perf_counter()
-        for req in requests_layer_3:
-            router._layer_3_semantic(router._normalize_input(query))
+        for _ in range(10):
+            router.route(query)
         end = time.perf_counter()
 
-        layer_3_time = end - start
+        pipeline_time = end - start
 
-        # Layer 3 should be fast (< 10ms for 10 requests)
-        assert layer_3_time < 0.01, f"Layer 3 too slow: {layer_3_time:.3f}s"
-
-        # Note: Layer 0 (AI triage) would be tested separately
-        # as it requires actual LLM calls
+        # Full pipeline should be fast (< 100ms for 10 requests)
+        assert pipeline_time < 0.1, f"Routing pipeline too slow: {pipeline_time:.3f}s"

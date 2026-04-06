@@ -4,12 +4,12 @@ This module provides intelligent recommendations for
 skill pack integrations based on user needs and context.
 """
 
-from pathlib import Path
-from typing import Any
 from dataclasses import dataclass
 from enum import Enum
+from pathlib import Path
+from typing import Any, ClassVar
 
-from vibesop.integrations import IntegrationManager, IntegrationInfo, IntegrationStatus
+from vibesop.integrations import IntegrationInfo, IntegrationManager, IntegrationStatus
 
 
 class RecommendationPriority(Enum):
@@ -63,7 +63,7 @@ class IntegrationRecommender:
     """
 
     # Recommendation rules
-    RECOMMENDATION_RULES: dict[str, dict[str, Any]] = {
+    RECOMMENDATION_RULES: ClassVar[dict[str, dict[str, Any]]] = {
         "software-development": {
             "integrations": ["gstack", "superpowers"],
             "priority": RecommendationPriority.HIGH,
@@ -97,7 +97,7 @@ class IntegrationRecommender:
     }
 
     # Skill compatibility matrix
-    SKILL_COMPATIBILITY = {
+    SKILL_COMPATIBILITY: ClassVar[dict[str, dict[str, list[str]]]] = {
         "gstack": {
             "compatible_with": ["claude-code", "opencode"],
             "conflicts_with": [],
@@ -236,7 +236,7 @@ class IntegrationRecommender:
         self,
         recommendations: list[Recommendation],
         platform: str,
-        output_dir: Path,
+        _output_dir: Path,
     ) -> dict[str, Any]:
         """Generate setup plan for integrations.
 
@@ -370,13 +370,11 @@ class IntegrationRecommender:
 
         # User preferences
         preferences = user_context.get("preferences", {})
-        if preferences.get("include_testing", False):
-            if integration_id == "gstack":  # Has testing skills
-                score += 0.3
+        if preferences.get("include_testing", False) and integration_id == "gstack":
+            score += 0.3
 
-        if preferences.get("include_brainstorming", False):
-            if integration_id == "superpowers":  # Has brainstorming
-                score += 0.3
+        if preferences.get("include_brainstorming", False) and integration_id == "superpowers":
+            score += 0.3
 
         return min(score, 1.0)
 

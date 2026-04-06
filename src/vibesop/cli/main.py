@@ -16,6 +16,7 @@ from rich.console import Console
 from rich.panel import Panel
 
 from vibesop import __version__
+from vibesop.cli.executor import execute_skill
 from vibesop.cli.subcommands import register
 from vibesop.core.routing import UnifiedRouter
 from vibesop.core.skills import SkillManager
@@ -102,11 +103,11 @@ def route(
         console.print(f"\n[bold cyan]Executing {result.primary.skill_id}...[/bold cyan]\n")
         start_time = time.perf_counter()
         try:
-            manager = SkillManager(project_root=Path.cwd())
             skill_result = asyncio.run(
-                manager.execute_skill(
+                execute_skill(
                     skill_id=result.primary.skill_id,
                     query=query,
+                    working_dir=Path.cwd(),
                 )
             )
             exec_duration = (time.perf_counter() - start_time) * 1000

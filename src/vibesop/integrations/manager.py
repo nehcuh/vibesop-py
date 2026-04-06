@@ -6,7 +6,7 @@ skill pack integrations.
 """
 
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from vibesop.integrations.detector import (
     IntegrationDetector,
@@ -34,12 +34,12 @@ class IntegrationManager:
     def __init__(self) -> None:
         """Initialize the integration manager."""
         self.detector = IntegrationDetector()
-        self._cache: Optional[List[IntegrationInfo]] = None
+        self._cache: list[IntegrationInfo] | None = None
 
     def list_integrations(
         self,
         refresh: bool = False,
-    ) -> List[IntegrationInfo]:
+    ) -> list[IntegrationInfo]:
         """List all known integrations.
 
         Args:
@@ -53,7 +53,7 @@ class IntegrationManager:
 
         return self._cache
 
-    def get_integration(self, name: str) -> Optional[IntegrationInfo]:
+    def get_integration(self, name: str) -> IntegrationInfo | None:
         """Get information about a specific integration.
 
         Args:
@@ -83,8 +83,8 @@ class IntegrationManager:
 
     def get_skills(
         self,
-        name: Optional[str] = None,
-    ) -> List[str]:
+        name: str | None = None,
+    ) -> list[str]:
         """Get skills from integrations.
 
         Args:
@@ -104,7 +104,7 @@ class IntegrationManager:
 
             return all_skills
 
-    def get_installed_integrations(self) -> List[IntegrationInfo]:
+    def get_installed_integrations(self) -> list[IntegrationInfo]:
         """Get list of installed integrations.
 
         Returns:
@@ -113,7 +113,7 @@ class IntegrationManager:
         integrations = self.list_integrations()
         return [info for info in integrations if info.status == IntegrationStatus.INSTALLED]
 
-    def get_compatible_integrations(self) -> List[IntegrationInfo]:
+    def get_compatible_integrations(self) -> list[IntegrationInfo]:
         """Get list of compatible integrations.
 
         Returns:
@@ -130,7 +130,7 @@ class IntegrationManager:
             ]
         ]
 
-    def get_summary(self) -> Dict[str, Any]:
+    def get_summary(self) -> dict[str, Any]:
         """Get summary of all integrations.
 
         Returns:
@@ -170,7 +170,7 @@ class IntegrationManager:
     def check_integration_compatibility(
         self,
         name: str,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Check integration compatibility.
 
         Args:
@@ -206,7 +206,7 @@ class IntegrationManager:
                 "reason": f"Incompatible: {info.status.value}",
             }
 
-    def get_integration_path(self, name: str) -> Optional[Path]:
+    def get_integration_path(self, name: str) -> Path | None:
         """Get the installation path for an integration.
 
         Args:
@@ -224,8 +224,8 @@ class IntegrationManager:
 
     def get_integration_registry(
         self,
-        name: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        name: str | None = None,
+    ) -> dict[str, Any]:
         """Get integration registry for manifest generation.
 
         Args:

@@ -26,7 +26,7 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
-from vibesop.core.config_module import ConfigLoader
+from vibesop.core.config import ConfigManager
 from vibesop.installer.init_support import InitSupport
 from vibesop.installer.installer import VibeSOPInstaller
 
@@ -34,8 +34,8 @@ console = Console()
 
 
 def inspect_cmd(
-    project_path: Path = typer.Option(
-        Path("."),
+    project_path: Path = typer.Option(  # noqa: B008
+        Path(),
         "--path",
         "-p",
         help="Project path to inspect",
@@ -112,7 +112,7 @@ def _show_config(project_path: Path, verbose: bool) -> None:
     console.print("\n[bold]⚙️  Configuration[/bold]\n")
 
     try:
-        loader = ConfigLoader(project_path)
+        loader = ConfigManager(project_path)
         config: dict[str, Any] = loader.load_registry()
 
         console.print(f"  Platform: [cyan]{config.get('platform', 'not set')}[/cyan]")
@@ -133,7 +133,7 @@ def _show_skills(project_path: Path, verbose: bool) -> None:
     console.print("\n[bold]📚 Skills[/bold]\n")
 
     try:
-        loader = ConfigLoader(project_path)
+        loader = ConfigManager(project_path)
         skills: list[dict[str, Any]] = loader.get_all_skills()
 
         console.print(f"  Total: [cyan]{len(skills)}[/cyan] skills")

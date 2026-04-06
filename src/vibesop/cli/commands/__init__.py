@@ -13,8 +13,6 @@ switch_module = importlib.import_module("vibesop.cli.commands.switch")
 inspect_module = importlib.import_module("vibesop.cli.commands.inspect")
 targets_module = importlib.import_module("vibesop.cli.commands.targets")
 checkpoint_module = importlib.import_module("vibesop.cli.commands.checkpoint")
-cascade_module = importlib.import_module("vibesop.cli.commands.cascade")
-experiment_module = importlib.import_module("vibesop.cli.commands.experiment")
 memory_module = importlib.import_module("vibesop.cli.commands.memory_cmd")
 instinct_module = importlib.import_module("vibesop.cli.commands.instinct_cmd")
 quickstart_module = importlib.import_module("vibesop.cli.commands.quickstart")
@@ -30,26 +28,24 @@ detect_module = importlib.import_module("vibesop.cli.commands.detect")
 install_module = importlib.import_module("vibesop.cli.commands.install")
 
 __all__ = [
-    "init_module",
     "build_module",
-    "deploy_module",
-    "switch_module",
-    "inspect_module",
-    "targets_module",
     "checkpoint_module",
-    "cascade_module",
-    "experiment_module",
-    "memory_module",
+    "deploy_module",
+    "detect_module",
+    "import_rules_module",
+    "init_module",
+    "inspect_module",
+    "install_module",
     "instinct_module",
-    "quickstart_module",
+    "memory_module",
     "onboard_module",
-    "toolchain_module",
+    "quickstart_module",
+    "route_commands_module",
     "scan_module",
     "skill_craft_module",
+    "switch_module",
+    "targets_module",
+    "toolchain_module",
     "tools_module",
     "worktree_module",
-    "route_commands_module",
-    "import_rules_module",
-    "detect_module",
-    "install_module",
 ]

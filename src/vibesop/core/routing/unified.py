@@ -19,6 +19,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import threading
 import time
 from pathlib import Path
 from typing import Any, ClassVar
@@ -144,6 +145,11 @@ class UnifiedRouter:
             storage_path=str(self.project_root / ".vibe" / "preferences.json"),
         )
 
+        # Preload candidates for performance optimization
+        # This avoids re-scanning skill directories on every route() call
+        self._candidates_cache: list[dict[str, Any]] | None = None
+        self._cache_lock = threading.Lock()  # Thread-safe cache loading
+
     def _create_config_manager_from_config(self, config: ConfigRoutingConfig) -> ConfigManager:
         """Create a ConfigManager wrapper for a RoutingConfig.
 
@@ -156,7 +162,7 @@ class UnifiedRouter:
             ConfigManager that wraps the RoutingConfig
         """
         manager = ConfigManager(project_root=self.project_root)
-        for field_name in config.model_fields:
+        for field_name in type(config).model_fields:
             value = getattr(config, field_name)
             manager.set_cli_override(f"routing.{field_name}", value)
         return manager
@@ -311,7 +317,7 @@ class UnifiedRouter:
 
         # Auto-discover candidates if not provided
         if candidates is None:
-            candidates = self._get_candidates(query)
+            candidates = self._get_cached_candidates()
 
         # === Layer 0: AI Triage ===
         ai_result = self._ai_triage(query, candidates)
@@ -607,6 +613,40 @@ class UnifiedRouter:
             )
 
         return candidates
+
+    def _get_cached_candidates(self) -> list[dict[str, Any]]:
+        """Get cached candidates, loading on first call.
+
+        This optimization avoids re-scanning skill directories on every route() call,
+        significantly improving routing performance.
+
+        Thread-safe: Uses double-checked locking for concurrent access.
+
+        Returns:
+            List of skill candidates
+        """
+        # Fast path: cache already loaded (no lock needed for read)
+        if self._candidates_cache is not None:
+            return self._candidates_cache
+
+        # Slow path: load cache with lock
+        with self._cache_lock:
+            # Double-check: another thread might have loaded it while we waited
+            if self._candidates_cache is None:
+                self._candidates_cache = self._get_candidates()
+            return self._candidates_cache
+
+    def reload_candidates(self) -> int:
+        """Reload skill candidates from disk.
+
+        This invalidates the cache and rescans all skill directories.
+        Call this after installing new skills or updating skill definitions.
+
+        Returns:
+            Number of candidates discovered
+        """
+        self._candidates_cache = None
+        return len(self._get_cached_candidates())
 
     def _get_skill_source(self, _skill_id: str, namespace: str) -> str:
         """Determine where a skill comes from."""

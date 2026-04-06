@@ -7,9 +7,9 @@ installers should inherit from.
 import shutil
 import subprocess
 import time
-from pathlib import Path
-from typing import Any, Dict, Optional
 from abc import ABC, abstractmethod
+from pathlib import Path
+from typing import Any, ClassVar
 
 
 class BaseInstaller(ABC):
@@ -25,9 +25,9 @@ class BaseInstaller(ABC):
     @abstractmethod
     def install(
         self,
-        platform: Optional[str] = None,
+        platform: str | None = None,
         force: bool = False,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Install the component.
 
         Args:
@@ -42,7 +42,7 @@ class BaseInstaller(ABC):
         return {"status": "not_implemented"}
 
     @abstractmethod
-    def uninstall(self) -> Dict[str, Any]:
+    def uninstall(self) -> dict[str, Any]:
         """Uninstall the component.
 
         Returns:
@@ -52,7 +52,7 @@ class BaseInstaller(ABC):
         return {"status": "not_implemented"}
 
     @abstractmethod
-    def verify(self) -> Dict[str, Any]:
+    def verify(self) -> dict[str, Any]:
         """Verify the installation.
 
         Returns:
@@ -116,8 +116,8 @@ class GitBasedInstaller(BaseInstaller):
 
     repo_urls: list[str]
     repo_name: str
-    unified_path: Path = Path(".")
-    platform_symlink_paths: dict[str, Path] = {}
+    unified_path: Path = Path()
+    platform_symlink_paths: ClassVar[dict[str, Path]] = {}
     clone_timeout: int = 300
     max_retries: int = 3
 
@@ -137,13 +137,13 @@ class GitBasedInstaller(BaseInstaller):
 
     def install(
         self,
-        platform: Optional[str] = None,
+        platform: str | None = None,
         force: bool = False,
-        progress: Optional[Any] = None,
-    ) -> Dict[str, Any]:
+        progress: Any | None = None,
+    ) -> dict[str, Any]:
         from vibesop.cli import ProgressTracker
 
-        result: Dict[str, Any] = {
+        result: dict[str, Any] = {
             "success": False,
             "installed_path": str(self.unified_path),
             "symlinks_created": [],
@@ -207,8 +207,8 @@ class GitBasedInstaller(BaseInstaller):
 
         return result
 
-    def uninstall(self) -> Dict[str, Any]:
-        result: Dict[str, Any] = {
+    def uninstall(self) -> dict[str, Any]:
+        result: dict[str, Any] = {
             "success": False,
             "removed_path": str(self.unified_path),
             "symlinks_removed": [],
@@ -244,8 +244,8 @@ class GitBasedInstaller(BaseInstaller):
 
         return result
 
-    def verify(self) -> Dict[str, Any]:
-        result: Dict[str, Any] = {
+    def verify(self) -> dict[str, Any]:
+        result: dict[str, Any] = {
             "installed": False,
             "path": str(self.unified_path),
             "git_repo": False,
@@ -266,7 +266,7 @@ class GitBasedInstaller(BaseInstaller):
 
         for platform, link_dir in self.platform_symlink_paths.items():
             symlink_dir = link_dir.expanduser()
-            platform_links: Dict[str, Any] = {
+            platform_links: dict[str, Any] = {
                 "directory_exists": symlink_dir.exists(),
                 "links": [],
                 "total_count": 0,
@@ -397,7 +397,7 @@ class GitBasedInstaller(BaseInstaller):
             return False
         return (self.unified_path / ".git").exists()
 
-    def get_status(self) -> Dict[str, Any]:
+    def get_status(self) -> dict[str, Any]:
         verify_result = self.verify()
         return {
             "installed": verify_result["installed"],
@@ -408,13 +408,14 @@ class GitBasedInstaller(BaseInstaller):
             "marker_files": verify_result["markers_present"],
         }
 
-    def _get_version(self) -> Optional[str]:
+    def _get_version(self) -> str | None:
         try:
             result = subprocess.run(
                 ["git", "describe", "--tags", "--always"],
                 cwd=self.unified_path,
                 capture_output=True,
                 text=True,
+                check=False,
             )
             if result.returncode == 0:
                 return result.stdout.strip()

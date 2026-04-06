@@ -10,7 +10,6 @@ Usage:
 """
 
 from pathlib import Path
-from typing import Optional
 
 import typer
 from rich.console import Console
@@ -28,7 +27,7 @@ def list(
         "-a",
         help="List all skills including details",
     ),
-    platform: Optional[str] = typer.Option(
+    platform: str | None = typer.Option(
         None,
         "--platform",
         "-p",
@@ -62,7 +61,6 @@ def list(
 
         if linked:
             for skill_id in linked:
-                skill_path = storage.get_skill_path(skill_id)
                 is_link = (storage.PLATFORM_SKILLS_DIRS[platform] / skill_id).is_symlink()
                 link_type = "[cyan]→[/cyan]" if is_link else "[dim]cp[/dim]"
                 console.print(f"  {link_type} {skill_id}")
@@ -97,7 +95,7 @@ def list(
     else:
         # Simple list
         skills = storage.list_skills()
-        console.print(f"\n[bold]Installed Skills:[/bold]")
+        console.print("\n[bold]Installed Skills:[/bold]")
         console.print(f"  {len(skills)} skills\n")
 
         for skill_id in skills:
@@ -106,13 +104,13 @@ def list(
 
 def install(
     skill_id: str = typer.Argument(..., help="Skill identifier"),
-    source: Optional[Path] = typer.Option(
+    source: Path | None = typer.Option(  # noqa: B008
         None,
         "--source",
         "-s",
         help="Local path to skill directory",
     ),
-    url: Optional[str] = typer.Option(
+    url: str | None = typer.Option(
         None,
         "--url",
         "-u",
@@ -151,12 +149,12 @@ def install(
         success, msg = storage.install_skill(skill_id, source, overwrite)
     else:
         # Try to find in project
-        project_skills = Path(".") / "core" / "skills" / skill_id
+        project_skills = Path("core") / "skills" / skill_id
         if project_skills.exists():
             success, msg = storage.install_skill(skill_id, project_skills, overwrite)
         else:
             console.print(f"[red]✗ Skill not found in project: {skill_id}[/red]")
-            console.print(f"[dim]Use --source or --url to specify location[/dim]")
+            console.print("[dim]Use --source or --url to specify location[/dim]")
             raise typer.Exit(1)
 
     if success:
@@ -272,8 +270,8 @@ def remove(
 
 def sync(
     platform: str = typer.Argument(..., help="Target platform"),
-    project_root: Path = typer.Option(
-        Path("."),
+    project_root: Path = typer.Option(  # noqa: B008
+        Path(),
         "--root",
         "-r",
         help="Project root directory",
@@ -311,7 +309,7 @@ def sync(
             total=100,
         )
 
-        installed, linked, messages = storage.sync_project_skills(
+        installed, linked, _messages = storage.sync_project_skills(
             project_root=project_root,
             platform=platform,
             force=force,
@@ -319,15 +317,13 @@ def sync(
 
         progress.update(task, completed=100)
 
-    console.print(f"\n[green]✓ Sync complete![/green]")
+    console.print("\n[green]✓ Sync complete![/green]")
     console.print(f"  [dim]Installed:[/dim] {installed} skills")
     console.print(f"  [dim]Linked:[/dim] {linked} skills")
 
 
 def status() -> None:
     """Show skill storage status."""
-    from rich.panel import Panel
-
     storage = SkillStorage()
 
     # Check central storage
@@ -342,10 +338,9 @@ def status() -> None:
             platform_info[platform_name] = {
                 "exists": True,
                 "linked": len(linked),
-                "symlinks": sum(
-                    1 for s in platform_dir.iterdir()
-                    if s.is_symlink()
-                ) if platform_dir.exists() else 0,
+                "symlinks": sum(1 for s in platform_dir.iterdir() if s.is_symlink())
+                if platform_dir.exists()
+                else 0,
             }
         else:
             platform_info[platform_name] = {

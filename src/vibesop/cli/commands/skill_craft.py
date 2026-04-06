@@ -21,7 +21,7 @@ Examples:
 
 import json
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import typer
 from rich.console import Console
@@ -32,24 +32,24 @@ console = Console()
 
 def skill_craft(
     action: str = typer.Argument(..., help="Action: create, from, templates"),
-    source: Optional[Path] = typer.Argument(
+    source: Path | None = typer.Argument(  # noqa: B008
         None,
         help="Source session file",
         exists=True,
     ),
-    name: Optional[str] = typer.Option(
+    name: str | None = typer.Option(
         None,
         "--name",
         "-n",
         help="Skill name",
     ),
-    description: Optional[str] = typer.Option(
+    description: str | None = typer.Option(
         None,
         "--description",
         "-d",
         help="Skill description",
     ),
-    output: Optional[Path] = typer.Option(
+    output: Path | None = typer.Option(  # noqa: B008
         None,
         "--output",
         "-o",
@@ -90,7 +90,7 @@ def skill_craft(
 
 
 def _do_create(
-    source: Path | None,
+    _source: Path | None,
     name: str | None,
     description: str | None,
     output: Path | None,
@@ -164,16 +164,16 @@ def _do_create(
 
     console.print(f"\n[green]✓ Skill created[/green]\n  [dim]File:[/dim] {skill_file}\n")
     console.print(
-        f"\n[dim]Edit the skill file to customize behavior.[/dim]\n"
-        f"[dim]After editing, run [cyan]vibe build[/cyan] to include it.[/dim]"
+        "\n[dim]Edit the skill file to customize behavior.[/dim]\n"
+        "[dim]After editing, run [cyan]vibe build[/cyan] to include it.[/dim]"
     )
 
 
 def _do_from(
     source: Path | None,
-    name: str | None,
-    description: str | None,
-    output: Path | None,
+    _name: str | None,
+    _description: str | None,
+    _output: Path | None,
 ) -> None:
     """Create skill from source file.
 
@@ -197,11 +197,11 @@ def _do_from(
         content = source.read_text()
         session: dict[str, Any] = json.loads(content)
 
-        console.print(f"[green]✓ Loaded session[/green]")
+        console.print("[green]✓ Loaded session[/green]")
         console.print(f"  Messages: {len(session.get('messages', []))}")
 
         # Extract patterns
-        console.print(f"\n[dim]Analyzing patterns...[/dim]")
+        console.print("\n[dim]Analyzing patterns...[/dim]")
 
         # Basic pattern extraction
         patterns = _extract_session_patterns(session)
@@ -212,16 +212,16 @@ def _do_from(
                 console.print(f"  {i}. [cyan]{pattern.get('name', 'Unnamed')}[/cyan]")
                 console.print(f"     {pattern.get('description', '')[:80]}")
         else:
-            console.print(f"\n[dim]No clear patterns detected[/dim]")
-            console.print(f"\n[dim]Use --name and --description to create manually:[/dim]")
+            console.print("\n[dim]No clear patterns detected[/dim]")
+            console.print("\n[dim]Use --name and --description to create manually:[/dim]")
             console.print(f"  [cyan]vibe skill-craft from {source} --name 'my-skill'[/cyan]")
 
     except json.JSONDecodeError:
-        console.print(f"[red]✗ Invalid JSON file[/red]")
-        raise typer.Exit(1)
+        console.print("[red]✗ Invalid JSON file[/red]")
+        raise typer.Exit(1) from None
     except Exception as e:
         console.print(f"[red]✗ Error: {e}[/red]")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from None
 
 
 def _do_templates() -> None:
@@ -241,7 +241,7 @@ def _do_templates() -> None:
         console.print(f"    [dim]{description}[/dim]\n")
 
     console.print(
-        f"\n[dim]Use: [cyan]vibe skill-craft create --name <name> --template <template>[/cyan][/dim]"
+        "\n[dim]Use: [cyan]vibe skill-craft create --name <name> --template <template>[/cyan][/dim]"
     )
 
 

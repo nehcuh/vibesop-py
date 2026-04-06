@@ -5,6 +5,7 @@ from pydantic import ValidationError
 
 from vibesop.core.models import (
     AppSettings,
+    RoutingLayer,
     RoutingRequest,
     RoutingResult,
     SkillRoute,
@@ -19,60 +20,79 @@ class TestSkillRoute:
         route = SkillRoute(
             skill_id="/review",
             confidence=0.95,
-            layer=0,
+            layer=RoutingLayer.AI_TRIAGE,
             source="builtin",
         )
         assert route.skill_id == "/review"
         assert route.confidence == 0.95
-        assert route.layer == 0
+        assert route.layer == RoutingLayer.AI_TRIAGE
         assert route.source == "builtin"
 
     def test_skill_id_valid_formats(self) -> None:
         """Test that skill_id accepts valid formats."""
-        # Shorthand with leading slash
         route1 = SkillRoute(
             skill_id="/review",
             confidence=0.95,
-            layer=0,
+            layer=RoutingLayer.AI_TRIAGE,
             source="builtin",
         )
         assert route1.skill_id == "/review"
 
-        # Namespaced format
         route2 = SkillRoute(
             skill_id="gstack/review",
             confidence=0.95,
-            layer=0,
+            layer=RoutingLayer.AI_TRIAGE,
             source="gstack",
         )
         assert route2.skill_id == "gstack/review"
 
-        # Shorthand without leading slash gets normalized
         route3 = SkillRoute(
             skill_id="review",
             confidence=0.95,
-            layer=0,
+            layer=RoutingLayer.AI_TRIAGE,
             source="builtin",
         )
-        assert route3.skill_id == "/review"
+        assert route3.skill_id == "review"
 
     def test_confidence_must_be_between_0_and_1(self) -> None:
         """Test confidence validation."""
         with pytest.raises(ValidationError):
             SkillRoute(
                 skill_id="/review",
-                confidence=1.5,  # Too high
-                layer=0,
+                confidence=1.5,
+                layer=RoutingLayer.AI_TRIAGE,
                 source="builtin",
             )
 
         with pytest.raises(ValidationError):
             SkillRoute(
                 skill_id="/review",
-                confidence=-0.1,  # Too low
-                layer=0,
+                confidence=-0.1,
+                layer=RoutingLayer.AI_TRIAGE,
                 source="builtin",
             )
+
+    def test_to_dict(self) -> None:
+        """Test to_dict serialization."""
+        route = SkillRoute(
+            skill_id="gstack/review",
+            confidence=0.9,
+            layer=RoutingLayer.SCENARIO,
+            source="external",
+            metadata={"key": "value"},
+        )
+        d = route.to_dict()
+        assert d["skill_id"] == "gstack/review"
+        assert d["layer"] == "scenario"
+        assert d["metadata"] == {"key": "value"}
+
+    def test_layer_number_property(self) -> None:
+        """Test RoutingLayer.layer_number property."""
+        assert RoutingLayer.AI_TRIAGE.layer_number == 0
+        assert RoutingLayer.EXPLICIT.layer_number == 1
+        assert RoutingLayer.SCENARIO.layer_number == 2
+        assert RoutingLayer.KEYWORD.layer_number == 3
+        assert RoutingLayer.LEVENSHTEIN.layer_number == 6
 
 
 class TestRoutingRequest:
@@ -106,7 +126,7 @@ class TestRoutingResult:
         primary = SkillRoute(
             skill_id="/review",
             confidence=0.95,
-            layer=0,
+            layer=RoutingLayer.AI_TRIAGE,
             source="builtin",
         )
         result = RoutingResult(primary=primary)
@@ -114,20 +134,21 @@ class TestRoutingResult:
         assert result.primary.skill_id == "/review"
         assert result.alternatives == []
         assert result.routing_path == []
+        assert result.has_match is True
 
     def test_routing_result_with_alternatives(self) -> None:
         """Test routing result with alternatives."""
         primary = SkillRoute(
             skill_id="/review",
             confidence=0.95,
-            layer=0,
+            layer=RoutingLayer.AI_TRIAGE,
             source="builtin",
         )
         alternatives = [
             SkillRoute(
                 skill_id="/codex",
                 confidence=0.80,
-                layer=0,
+                layer=RoutingLayer.AI_TRIAGE,
                 source="gstack",
             ),
         ]
@@ -135,11 +156,31 @@ class TestRoutingResult:
         result = RoutingResult(
             primary=primary,
             alternatives=alternatives,
-            routing_path=[0, 3],
+            routing_path=[RoutingLayer.AI_TRIAGE, RoutingLayer.KEYWORD],
         )
 
         assert len(result.alternatives) == 1
-        assert result.routing_path == [0, 3]
+        assert len(result.routing_path) == 2
+
+    def test_no_match_result(self) -> None:
+        """Test result with no match."""
+        result = RoutingResult()
+        assert result.primary is None
+        assert result.has_match is False
+
+    def test_to_dict(self) -> None:
+        """Test to_dict serialization."""
+        primary = SkillRoute(
+            skill_id="gstack/review",
+            confidence=0.9,
+            layer=RoutingLayer.SCENARIO,
+            source="external",
+        )
+        result = RoutingResult(primary=primary, query="test query", duration_ms=12.5)
+        d = result.to_dict()
+        assert d["primary"]["skill_id"] == "gstack/review"
+        assert d["has_match"] is True
+        assert d["duration_ms"] == 12.5
 
 
 class TestAppSettings:

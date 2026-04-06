@@ -16,6 +16,7 @@ __license__ = "MIT"
 
 # Core public API
 from vibesop.core.models import (
+    RoutingLayer,
     RoutingRequest,
     RoutingResult,
     SkillRegistry,
@@ -23,6 +24,7 @@ from vibesop.core.models import (
 )
 
 __all__ = [
+    "RoutingLayer",
     "RoutingRequest",
     "RoutingResult",
     "SkillRegistry",

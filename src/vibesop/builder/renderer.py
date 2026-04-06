@@ -5,8 +5,10 @@ configurations from manifests, with automatic platform detection
 and enhanced error handling.
 """
 
+from collections.abc import Callable
+from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, ClassVar
 
 from vibesop.adapters import (
     ClaudeCodeAdapter,
@@ -35,7 +37,7 @@ class ConfigRenderer:
     """
 
     # Platform adapter registry
-    _adapters: dict[str, type[PlatformAdapter]] = {
+    _adapters: ClassVar[dict[str, type[PlatformAdapter]]] = {
         "claude-code": ClaudeCodeAdapter,
         "opencode": OpenCodeAdapter,
     }
@@ -161,7 +163,9 @@ class ConfigRenderer:
             output_dir = output_base_dir / platform
 
             percent = int((i / len(manifests)) * 100)
-            self._notify_progress("batch", f"Rendering {platform} ({i+1}/{len(manifests)})", percent)
+            self._notify_progress(
+                "batch", f"Rendering {platform} ({i + 1}/{len(manifests)})", percent
+            )
 
             try:
                 result = self.render(manifest, output_dir)
@@ -208,10 +212,7 @@ class ConfigRenderer:
         """
         if platform not in self._adapters:
             supported = ", ".join(self.get_supported_platforms())
-            msg = (
-                f"Unsupported platform: {platform}. "
-                f"Supported platforms: {supported}"
-            )
+            msg = f"Unsupported platform: {platform}. Supported platforms: {supported}"
             raise ValueError(msg)
 
         adapter_class = self._adapters[platform]
@@ -251,6 +252,7 @@ class ConfigRenderer:
             Configured Manifest
         """
         from datetime import datetime
+
         from vibesop.adapters.models import ManifestMetadata, PolicySet
         from vibesop.core.models import SkillDefinition
 
@@ -314,12 +316,14 @@ class RenderProgressTracker:
         self.current_stage = stage
         self.current_percent = percent
 
-        self.stages.append({
-            "stage": stage,
-            "message": message,
-            "percent": percent,
-            "timestamp": datetime.now(),
-        })
+        self.stages.append(
+            {
+                "stage": stage,
+                "message": message,
+                "percent": percent,
+                "timestamp": datetime.now(),
+            }
+        )
 
     def get_summary(self) -> dict[str, Any]:
         """Get progress summary.
@@ -346,7 +350,3 @@ class RenderProgressTracker:
         """Print progress to console."""
         for stage_info in self.stages:
             print(f"[{stage_info['percent']}%] {stage_info['stage']}: {stage_info['message']}")
-
-
-# Import datetime for RenderProgressTracker
-from datetime import datetime

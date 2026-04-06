@@ -13,52 +13,52 @@ Example:
 from vibesop.core.matching.base import (
     IMatcher,
     MatchResult,
+    MatcherType,
     RoutingContext,
     SimilarityMetric,
-    MatcherType,
-)
-from vibesop.core.matching.tokenizers import (
-    tokenize,
-    TokenizerConfig,
-    TokenizerMode,
 )
 from vibesop.core.matching.similarity import (
     SimilarityCalculator,
     cosine_similarity,
 )
+from vibesop.core.matching.strategies import (
+    EmbeddingMatcher,
+    KeywordMatcher,
+    LevenshteinMatcher,
+    MatcherConfig,
+    TFIDFMatcher,
+)
 from vibesop.core.matching.tfidf import (
     TFIDFCalculator,
     TFIDFVector,
 )
-from vibesop.core.matching.strategies import (
-    KeywordMatcher,
-    TFIDFMatcher,
-    EmbeddingMatcher,
-    LevenshteinMatcher,
-    MatcherConfig,
+from vibesop.core.matching.tokenizers import (
+    TokenizerConfig,
+    TokenizerMode,
+    tokenize,
 )
 
 __all__ = [
+    "EmbeddingMatcher",
     # Base interfaces
     "IMatcher",
-    "MatchResult",
-    "RoutingContext",
-    "SimilarityMetric",
-    "MatcherType",
-    # Tokenizers
-    "tokenize",
-    "TokenizerConfig",
-    "TokenizerMode",
-    # Similarity
-    "SimilarityCalculator",
-    "cosine_similarity",
-    # TF-IDF
-    "TFIDFCalculator",
-    "TFIDFVector",
     # Strategies
     "KeywordMatcher",
-    "TFIDFMatcher",
-    "EmbeddingMatcher",
     "LevenshteinMatcher",
+    "MatchResult",
     "MatcherConfig",
+    "MatcherType",
+    "RoutingContext",
+    # Similarity
+    "SimilarityCalculator",
+    "SimilarityMetric",
+    # TF-IDF
+    "TFIDFCalculator",
+    "TFIDFMatcher",
+    "TFIDFVector",
+    "TokenizerConfig",
+    "TokenizerMode",
+    "cosine_similarity",
+    # Tokenizers
+    "tokenize",
 ]

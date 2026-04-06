@@ -5,7 +5,6 @@ This module contains data models for documentation generation.
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Optional
 
 from vibesop.builder.doc_templates import DocType
 
@@ -20,6 +19,7 @@ class DocSection:
         order: Display order
         enabled: Whether section is enabled
     """
+
     title: str
     content: str
     order: int
@@ -41,12 +41,13 @@ class DocConfig:
         sections: Documentation sections
         output_path: Output file path
     """
+
     project_name: str
     project_description: str
     version: str
     author: str
     license: str
-    repository: Optional[str]
+    repository: str | None
     doc_type: DocType
-    sections: List[DocSection]
+    sections: list[DocSection]
     output_path: Path

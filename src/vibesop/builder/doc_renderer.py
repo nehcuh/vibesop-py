@@ -5,12 +5,12 @@ for projects, including README, API docs, and guides.
 """
 
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 
-from vibesop.builder.manifest import Manifest
-from vibesop.builder.doc_templates import DocType, DocTemplates
-from vibesop.builder.doc_models import DocSection, DocConfig
 from vibesop.builder.doc_generators import DocContentGenerator
+from vibesop.builder.doc_models import DocConfig, DocSection
+from vibesop.builder.doc_templates import DocTemplates, DocType
+from vibesop.builder.manifest import Manifest
 from vibesop.security.path_safety import PathSafety
 
 
@@ -26,7 +26,7 @@ class DocRenderer:
         >>> result = renderer.render(config)
     """
 
-    def __init__(self, template_dir: Optional[Path] = None) -> None:
+    def __init__(self, template_dir: Path | None = None) -> None:
         """Initialize the documentation renderer.
 
         Args:
@@ -39,7 +39,7 @@ class DocRenderer:
     def render(
         self,
         config: DocConfig,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Render documentation.
 
         Args:
@@ -48,7 +48,7 @@ class DocRenderer:
         Returns:
             Result dictionary with success status and output path
         """
-        result: Dict[str, Any] = {
+        result: dict[str, Any] = {
             "success": False,
             "output_path": None,
             "errors": [],
@@ -82,7 +82,7 @@ class DocRenderer:
             result["success"] = True
             result["output_path"] = str(config.output_path)
 
-        except (OSError, IOError) as e:
+        except OSError as e:
             result["errors"].append(f"Failed to write documentation: {e}")
         except (ValueError, KeyError) as e:
             result["errors"].append(f"Rendering failed: {e}")
@@ -94,7 +94,7 @@ class DocRenderer:
         manifest: Manifest,
         output_dir: Path,
         doc_types: list[DocType] | None = None,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Render documentation from manifest.
 
         Args:
@@ -105,7 +105,7 @@ class DocRenderer:
         Returns:
             Result dictionary with success status and generated files
         """
-        result: Dict[str, Any] = {
+        result: dict[str, Any] = {
             "success": False,
             "generated": [],
             "errors": [],
@@ -156,7 +156,7 @@ class DocRenderer:
         return DocContentGenerator.extract_module_docstring(content)
 
     @staticmethod
-    def _scan_python_modules(source_dir: Path) -> list[Dict[str, Any]]:
+    def _scan_python_modules(source_dir: Path) -> list[dict[str, Any]]:
         """Scan source directory for Python modules.
 
         Args:
@@ -172,7 +172,7 @@ class DocRenderer:
         source_dir: Path,
         output_path: Path,
         project_name: str,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Generate API documentation from source code.
 
         Args:
@@ -183,7 +183,7 @@ class DocRenderer:
         Returns:
             Result dictionary
         """
-        result: Dict[str, Any] = {
+        result: dict[str, Any] = {
             "success": False,
             "output_path": None,
             "errors": [],
@@ -235,7 +235,7 @@ class DocRenderer:
         self,
         manifest: Manifest,
         output_dir: Path,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Generate all documentation types.
 
         Args:
@@ -245,7 +245,7 @@ class DocRenderer:
         Returns:
             Result dictionary with generation status
         """
-        result: Dict[str, Any] = {
+        result: dict[str, Any] = {
             "success": False,
             "generated": [],
             "errors": [],
@@ -292,7 +292,7 @@ class DocRenderer:
         self,
         project_dir: Path,
         project_name: str,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Create quick documentation for a project.
 
         Args:
@@ -302,7 +302,7 @@ class DocRenderer:
         Returns:
             Result dictionary
         """
-        result: Dict[str, Any] = {
+        result: dict[str, Any] = {
             "success": False,
             "created": [],
             "errors": [],

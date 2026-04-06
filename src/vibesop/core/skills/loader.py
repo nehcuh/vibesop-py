@@ -18,7 +18,7 @@ from vibesop.core.skills.base import (
     SkillType,
     WorkflowSkill,
 )
-from vibesop.core.skills.external_loader import ExternalSkillLoader, SkillSource
+from vibesop.core.skills.external_loader import ExternalSkillLoader
 
 
 @dataclass
@@ -175,10 +175,7 @@ class SkillLoader:
         base = ext_metadata.base_metadata
 
         # Build skill ID with namespace
-        if ext_metadata.pack_name:
-            skill_id = f"{ext_metadata.pack_name}/{base.id}"
-        else:
-            skill_id = base.id
+        skill_id = f"{ext_metadata.pack_name}/{base.id}" if ext_metadata.pack_name else base.id
 
         # Convert skill type string to enum
         skill_type_str = getattr(base, "skill_type", "prompt")

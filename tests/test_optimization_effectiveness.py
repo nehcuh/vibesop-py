@@ -345,8 +345,8 @@ def test_clustering_reduces_conflicts(full_candidates):
     index.build(full_candidates)
 
     result = index.resolve_conflicts(
-        query="debug this",
-        matched_skills=["systematic-debugging", "gstack/investigate", "superpowers/debug"],
+        "",
+        ["systematic-debugging", "gstack/investigate", "superpowers/debug"],
         confidences={
             "systematic-debugging": 0.8,
             "gstack/investigate": 0.6,

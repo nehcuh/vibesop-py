@@ -114,7 +114,7 @@ def targets(
 
     except Exception as e:
         console.print(f"[red]✗ Error: {e}[/red]")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from None
 
 
 def _output_table(platforms: list[dict[str, str]], verbose: bool, installed_only: bool) -> None:

@@ -4,13 +4,13 @@ This module provides capabilities for managing marker files
 that track installation state and metadata.
 """
 
-import json
 import hashlib
-from pathlib import Path
-from typing import Dict, Optional, Any
-from dataclasses import dataclass, asdict
+import json
+from dataclasses import asdict, dataclass
 from datetime import datetime
 from enum import Enum
+from pathlib import Path
+from typing import Any, ClassVar
 
 from vibesop.security.path_safety import PathSafety
 
@@ -49,13 +49,13 @@ class MarkerData:
 
     marker_type: str
     name: str
-    version: Optional[str]
+    version: str | None
     timestamp: str
     path: str
-    checksum: Optional[str]
-    metadata: Dict[str, Any]
+    checksum: str | None
+    metadata: dict[str, Any]
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary.
 
         Returns:
@@ -64,7 +64,7 @@ class MarkerData:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "MarkerData":
+    def from_dict(cls, data: dict[str, Any]) -> "MarkerData":
         """Create from dictionary.
 
         Args:
@@ -92,7 +92,7 @@ class MarkerFileManager:
     """
 
     # Standard marker file locations
-    MARKER_LOCATIONS = {
+    MARKER_LOCATIONS: ClassVar[dict[MarkerType, Path]] = {
         MarkerType.INSTALLATION: Path(".vibe/markers/installations"),
         MarkerType.CONFIGURATION: Path(".vibe/markers/configurations"),
         MarkerType.INTEGRATION: Path(".vibe/markers/integrations"),
@@ -100,7 +100,7 @@ class MarkerFileManager:
         MarkerType.HOOK: Path(".vibe/markers/hooks"),
     }
 
-    def __init__(self, base_path: Optional[Path] = None) -> None:
+    def __init__(self, base_path: Path | None = None) -> None:
         """Initialize the marker file manager.
 
         Args:
@@ -114,10 +114,10 @@ class MarkerFileManager:
         marker_type: MarkerType,
         name: str,
         install_path: Path,
-        version: Optional[str] = None,
-        checksum: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None,
-    ) -> Dict[str, Any]:
+        version: str | None = None,
+        checksum: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         """Write a marker file.
 
         Args:
@@ -165,7 +165,7 @@ class MarkerFileManager:
 
             # Write marker file
             marker_file = marker_dir / f"{name}.json"
-            with open(marker_file, "w", encoding="utf-8") as f:
+            with marker_file.open("w", encoding="utf-8") as f:
                 json.dump(marker_data.to_dict(), f, indent=2)
 
             result["success"] = True
@@ -180,7 +180,7 @@ class MarkerFileManager:
         self,
         marker_type: MarkerType,
         name: str,
-    ) -> Optional[MarkerData]:
+    ) -> MarkerData | None:
         """Read a marker file.
 
         Args:
@@ -196,7 +196,7 @@ class MarkerFileManager:
             if not marker_file.exists():
                 return None
 
-            with open(marker_file, "r", encoding="utf-8") as f:
+            with marker_file.open(encoding="utf-8") as f:
                 data = json.load(f)
 
             return MarkerData.from_dict(data)
@@ -208,7 +208,7 @@ class MarkerFileManager:
         self,
         marker_type: MarkerType,
         name: str,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Remove a marker file.
 
         Args:
@@ -237,8 +237,8 @@ class MarkerFileManager:
 
     def list_markers(
         self,
-        marker_type: Optional[MarkerType] = None,
-    ) -> Dict[str, MarkerData]:
+        marker_type: MarkerType | None = None,
+    ) -> dict[str, MarkerData]:
         """List all marker files.
 
         Args:
@@ -247,7 +247,7 @@ class MarkerFileManager:
         Returns:
             Dictionary mapping names to MarkerData
         """
-        markers: Dict[str, MarkerData] = {}
+        markers: dict[str, MarkerData] = {}
 
         types_to_check = [marker_type] if marker_type else list(MarkerType)
 
@@ -259,7 +259,7 @@ class MarkerFileManager:
 
             for marker_file in marker_dir.glob("*.json"):
                 try:
-                    with open(marker_file, "r", encoding="utf-8") as f:
+                    with marker_file.open(encoding="utf-8") as f:
                         data = json.load(f)
 
                     marker_data = MarkerData.from_dict(data)
@@ -275,7 +275,7 @@ class MarkerFileManager:
         self,
         marker_type: MarkerType,
         name: str,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Verify a marker file against current installation.
 
         Args:
@@ -328,8 +328,8 @@ class MarkerFileManager:
 
     def cleanup_markers(
         self,
-        marker_type: Optional[MarkerType] = None,
-    ) -> Dict[str, Any]:
+        marker_type: MarkerType | None = None,
+    ) -> dict[str, Any]:
         """Clean up orphaned marker files.
 
         Args:
@@ -391,7 +391,7 @@ class MarkerFileManager:
         sha256 = hashlib.sha256()
 
         if path.is_file():
-            with open(path, "rb") as f:
+            with path.open("rb") as f:
                 for chunk in iter(lambda: f.read(4096), b""):
                     sha256.update(chunk)
 
@@ -402,7 +402,7 @@ class MarkerFileManager:
                     relative_path = file_path.relative_to(path)
                     sha256.update(str(relative_path).encode())
 
-                    with open(file_path, "rb") as f:
+                    with file_path.open("rb") as f:
                         for chunk in iter(lambda: f.read(4096), b""):
                             sha256.update(chunk)
 
@@ -411,8 +411,8 @@ class MarkerFileManager:
     def export_markers(
         self,
         output_path: Path,
-        marker_type: Optional[MarkerType] = None,
-    ) -> Dict[str, Any]:
+        marker_type: MarkerType | None = None,
+    ) -> dict[str, Any]:
         """Export marker data to a file.
 
         Args:
@@ -436,7 +436,7 @@ class MarkerFileManager:
 
             # Write to file
             output_path.parent.mkdir(parents=True, exist_ok=True)
-            with open(output_path, "w", encoding="utf-8") as f:
+            with output_path.open("w", encoding="utf-8") as f:
                 json.dump(export_data, f, indent=2)
 
             result["success"] = True
@@ -451,7 +451,7 @@ class MarkerFileManager:
         self,
         input_path: Path,
         overwrite: bool = False,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Import marker data from a file.
 
         Args:
@@ -469,7 +469,7 @@ class MarkerFileManager:
         }
 
         try:
-            with open(input_path, "r", encoding="utf-8") as f:
+            with input_path.open(encoding="utf-8") as f:
                 import_data = json.load(f)
 
             for name, data in import_data.items():

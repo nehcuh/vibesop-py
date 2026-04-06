@@ -12,9 +12,9 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from typing import Protocol, Union, TYPE_CHECKING
+from typing import TYPE_CHECKING, Protocol
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 from vibesop.core.matching.base import SimilarityMetric
 
@@ -72,8 +72,8 @@ class ISimilarityCalculator(Protocol):
 
     def calculate_single(
         self,
-        vec1: "np.ndarray",
-        vec2: "np.ndarray",
+        vec1: np.ndarray,
+        vec2: np.ndarray,
     ) -> float:
         """Calculate similarity between two vectors.
 
@@ -119,8 +119,8 @@ class SimilarityCalculator:
 
     def calculate(
         self,
-        query: str | list[str] | "np.ndarray",
-        candidates: list[str] | list[list[str]] | "np.ndarray",
+        query: str | list[str] | np.ndarray,
+        candidates: list[str] | list[list[str]] | np.ndarray,
     ) -> list[float]:
         """Calculate similarity scores.
 
@@ -231,7 +231,9 @@ class SimilarityCalculator:
             # Batch cosine similarity
             norms = np.linalg.norm(candidates, axis=1)
             query_norm = np.linalg.norm(query)
-            scores = np.dot(candidates, query.T).flatten() / (norms * query_norm + self._config.epsilon)
+            scores = np.dot(candidates, query.T).flatten() / (
+                norms * query_norm + self._config.epsilon
+            )
             return scores.tolist()
         else:
             # For other metrics, calculate individually
@@ -330,9 +332,9 @@ def cosine_similarity(
 
 # Convenience exports
 __all__ = [
-    "SimilarityConfig",
-    "SimilarityResult",
     "ISimilarityCalculator",
     "SimilarityCalculator",
+    "SimilarityConfig",
+    "SimilarityResult",
     "cosine_similarity",
 ]

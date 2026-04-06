@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from pydantic import BaseModel, Field, field_validator
+
 from vibesop.core.models import SkillDefinition
 
 

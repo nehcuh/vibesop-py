@@ -155,7 +155,7 @@ class SkillClusterIndex:
 
     def resolve_conflicts(
         self,
-        query: str,
+        _query: str,
         matched_skills: list[str],
         confidences: dict[str, float] | None = None,
         confidence_gap_threshold: float = 0.1,

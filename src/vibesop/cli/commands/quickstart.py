@@ -40,7 +40,7 @@ def quickstart(
         "-p",
         help="Target platform (claude-code, opencode)",
     ),
-    global_install: bool = typer.Option(
+    _global_install: bool = typer.Option(
         False,
         "--global",
         "-g",
@@ -73,7 +73,7 @@ def quickstart(
     if force:
         # Non-interactive mode
         result = runner.run(
-            project_path=Path("."),
+            project_path=Path(),
         )
 
         if result.get("success"):
@@ -99,17 +99,17 @@ def quickstart(
         )
 
         result = runner.run(
-            project_path=Path("."),
+            project_path=Path(),
         )
 
         if result.get("success"):
             console.print(
-                f"\n[green]✓ Setup complete![/green]\n"
-                f"[dim]Next steps:[/dim]\n"
-                f"  1. Review .vibe/ directory\n"
-                f"  2. Run [cyan]vibe build[/cyan] to generate config\n"
-                f"  3. Run [cyan]vibe deploy[/cyan] to install\n"
+                "\n[green]✓ Setup complete![/green]\n"
+                "[dim]Next steps:[/dim]\n"
+                "  1. Review .vibe/ directory\n"
+                "  2. Run [cyan]vibe build[/cyan] to generate config\n"
+                "  3. Run [cyan]vibe deploy[/cyan] to install\n"
             )
         else:
-            console.print(f"\n[red]✗ Setup failed[/red]")
+            console.print("\n[red]✗ Setup failed[/red]")
             raise typer.Exit(1)

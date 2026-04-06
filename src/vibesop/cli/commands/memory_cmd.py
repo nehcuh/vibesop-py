@@ -24,13 +24,10 @@ Examples:
     vibe memory prune --days 30
 """
 
-from pathlib import Path
-from typing import Optional
-
 import typer
 from rich.console import Console
-from rich.table import Table
 from rich.panel import Panel
+from rich.table import Table
 
 from vibesop.core.memory.manager import MemoryManager
 
@@ -39,7 +36,7 @@ console = Console()
 
 def memory(
     action: str = typer.Argument(..., help="Action: list, show, search, prune, stats"),
-    id_or_query: Optional[str] = typer.Argument(None, help="Memory ID or search query"),
+    id_or_query: str | None = typer.Argument(None, help="Memory ID or search query"),
     limit: int = typer.Option(
         20,
         "--limit",
@@ -104,10 +101,7 @@ def _do_list(manager: MemoryManager, limit: int) -> None:
         manager: MemoryManager instance
         limit: Maximum entries to show
     """
-    console.print(
-        f"\n[bold cyan]🧠 Conversation Memory[/bold cyan]"
-        f"\n{'=' * 40}\n"
-    )
+    console.print(f"\n[bold cyan]🧠 Conversation Memory[/bold cyan]\n{'=' * 40}\n")
 
     conversations = manager.list_conversations(limit=limit)
 
@@ -166,8 +160,7 @@ def _do_show(manager: MemoryManager, memory_id: str | None) -> None:
 
     # Display conversation
     messages_preview = "\n".join(
-        f"  [{msg.role.value}] {msg.content[:50]}..."
-        for msg in (conv.messages or [])[:3]
+        f"  [{msg.role.value}] {msg.content[:50]}..." for msg in (conv.messages or [])[:3]
     )
 
     console.print(
@@ -184,7 +177,7 @@ def _do_show(manager: MemoryManager, memory_id: str | None) -> None:
     )
 
 
-def _do_search(manager: MemoryManager, query: str | None, limit: int) -> None:
+def _do_search(manager: MemoryManager, query: str | None, _limit: int) -> None:
     """Search memory entries.
 
     Args:
@@ -197,10 +190,7 @@ def _do_search(manager: MemoryManager, query: str | None, limit: int) -> None:
         console.print("[dim]Usage: vibe memory search QUERY[/dim]")
         raise typer.Exit(1)
 
-    console.print(
-        f"\n[bold cyan]🔍 Searching Memory[/bold cyan]"
-        f"\n{'=' * 40}\n"
-    )
+    console.print(f"\n[bold cyan]🔍 Searching Memory[/bold cyan]\n{'=' * 40}\n")
 
     console.print(f"[dim]Query: {query}[/dim]\n")
 
@@ -216,7 +206,7 @@ def _do_search(manager: MemoryManager, query: str | None, limit: int) -> None:
             continue
 
         # Search in messages
-        for msg in (conv.messages or []):
+        for msg in conv.messages or []:
             if query_lower in msg.content.lower():
                 results.append((conv, 0.8))
                 break
@@ -259,9 +249,8 @@ def _do_prune(manager: MemoryManager, days: int) -> None:
 
     count = 0
     for conv in all_convs:
-        if conv.created_at < cutoff:
-            if manager.delete_conversation(conv.id):
-                count += 1
+        if conv.created_at < cutoff and manager.delete_conversation(conv.id):
+            count += 1
 
     console.print(f"[green]✓ Pruned {count} old conversations[/green]")
 
@@ -272,10 +261,7 @@ def _do_stats(manager: MemoryManager) -> None:
     Args:
         manager: MemoryManager instance
     """
-    console.print(
-        f"\n[bold cyan]📊 Memory Statistics[/bold cyan]"
-        f"\n{'=' * 40}\n"
-    )
+    console.print(f"\n[bold cyan]📊 Memory Statistics[/bold cyan]\n{'=' * 40}\n")
 
     all_convs = manager.list_conversations(limit=1000)
 
@@ -291,7 +277,7 @@ def _do_stats(manager: MemoryManager) -> None:
         console.print(f"  [dim]Newest conversation:[/dim] {newest.created_at.strftime('%Y-%m-%d')}")
 
 
-def _do_clear(manager: MemoryManager) -> None:
+def _do_clear(_manager: MemoryManager) -> None:
     """Clear all memory entries.
 
     Args:

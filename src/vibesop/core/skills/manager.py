@@ -1,23 +1,49 @@
-"""High-level skill management API."""
+"""High-level skill management API.
+
+**⚠️ POSITIONING**: VibeSOP is a ROUTING ENGINE, not an execution engine.
+
+This module provides skill discovery and metadata access only:
+- list_skills(): Discover available skills
+- get_skill_info(): Get skill metadata
+- search_skills(): Search by keyword
+- get_skill_instance(): Get skill object for instantiation
+
+For routing (discovery), use UnifiedRouter.route() instead:
+    from vibesop.core.routing import UnifiedRouter
+    router = UnifiedRouter()
+    result = router.route("your query")
+"""
 
 from pathlib import Path
 from typing import Any
 
-from vibesop.core.config_module import ConfigLoader
-from vibesop.core.skills.base import Skill, SkillContext, SkillResult
+from vibesop.core.config import ConfigManager
+from vibesop.core.skills.base import Skill
 from vibesop.core.skills.loader import SkillLoader
 
 
 class SkillManager:
     """High-level API for skill management.
 
-    This class combines skill discovery, loading, and execution
-    into a simple interface.
+    **⚠️ POSITIONING**: VibeSOP is a routing engine, NOT an execution engine.
+
+    This class provides skill discovery and metadata access for the routing engine.
+
+    Core Functions:
+        • list_skills()     - Discover available skills
+        • get_skill_info()  - Get skill metadata
+        • search_skills()   - Search by keyword
+        • get_skill_instance() - Get skill object for instantiation
 
     Usage:
         manager = SkillManager()
         skills = manager.list_skills()
-        result = await manager.execute_skill("gstack/review", context)
+        info = manager.get_skill_info("systematic-debugging")
+
+    For routing (discovery), use UnifiedRouter instead:
+        from vibesop.core.routing import UnifiedRouter
+        router = UnifiedRouter()
+        result = router.route("debug this error")
     """
 
     def __init__(
@@ -31,7 +57,7 @@ class SkillManager:
         """
         self.project_root = Path(project_root).resolve()
         self._loader = SkillLoader(project_root=self.project_root)
-        self._config = ConfigLoader(project_root=self.project_root)
+        self._config = ConfigManager(project_root=self.project_root)
 
         # Discover skills on init
         self._loader.discover_all()
@@ -178,57 +204,6 @@ class SkillManager:
         """
         return self._loader.instantiate(skill_id)
 
-    async def execute_skill(
-        self,
-        skill_id: str,
-        query: str,
-        working_dir: str | Path | None = None,
-        **metadata: Any,
-    ) -> SkillResult:
-        """Execute a skill.
-
-        Args:
-            skill_id: Skill identifier
-            query: User's query/request
-            working_dir: Working directory (defaults to project root)
-            **metadata: Additional metadata
-
-        Returns:
-            Skill execution result
-        """
-        working_dir = self.project_root if working_dir is None else Path(working_dir)
-
-        context = SkillContext(
-            query=query,
-            working_dir=working_dir,
-            metadata=metadata,
-        )
-
-        skill = self.get_skill_instance(skill_id)
-        if not skill:
-            return SkillResult(
-                success=False,
-                output="",
-                error=f"Skill not found: {skill_id}",
-            )
-
-        if not skill.validate_context(context):
-            return SkillResult(
-                success=False,
-                output="",
-                error="Invalid context for skill execution",
-            )
-
-        # Execute the skill
-        result = await skill.execute(context)
-
-        # Auto-record successful skill executions for preference learning
-        # This helps improve routing accuracy over time
-        if result.success:
-            self._auto_record_selection(skill_id, query)
-
-        return result
-
     def reload_skills(self) -> int:
         """Reload all skills from disk.
 
@@ -274,36 +249,3 @@ class SkillManager:
             "by_type": by_type,
             "namespaces": sorted(by_namespace.keys()),
         }
-
-    def _auto_record_selection(
-        self,
-        skill_id: str,
-        query: str,
-    ) -> None:
-        """Automatically record skill selection for preference learning.
-
-        This method is called after every successful skill execution to
-        build a preference history that improves routing accuracy over time.
-
-        Args:
-            skill_id: The skill that was executed
-            query: The original query that triggered the skill
-        """
-        try:
-            from vibesop.core.preference import PreferenceLearner
-
-            # Initialize preference learner
-            preference_path = self.project_root / ".vibe" / "preferences.json"
-            learner = PreferenceLearner(
-                storage_path=preference_path,
-                decay_days=30,
-                min_samples=3,
-            )
-
-            # Record the selection
-            # Assume helpful=True for successful executions
-            learner.record_selection(skill_id, query, was_helpful=True)
-
-        except Exception:
-            # Silently fail - auto-recording should never break skill execution
-            pass

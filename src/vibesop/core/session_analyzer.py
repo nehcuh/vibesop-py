@@ -336,20 +336,7 @@ class SessionAnalyzer:
             "these",
             "those",
             "am",
-            "is",
-            "are",
-            "was",
-            "were",
-            "be",
-            "been",
-            "being",
-            "have",
-            "has",
-            "had",
             "having",
-            "do",
-            "does",
-            "did",
             "doing",
             "帮",
             "我",
@@ -367,11 +354,9 @@ class SessionAnalyzer:
 
         keywords: set[str] = set()
         for word in words:
-            # Remove punctuation
-            word = re.sub(r"[^\w\s]", "", word)
-            # Skip stopwords and short words
-            if word not in stopwords and len(word) > 2:
-                keywords.add(word)
+            clean_word = re.sub(r"[^\w\s]", "", word)
+            if clean_word not in stopwords and len(clean_word) > 2:
+                keywords.add(clean_word)
 
         return keywords
 

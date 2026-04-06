@@ -5,7 +5,7 @@ workflow where custom code can be executed.
 """
 
 from enum import Enum
-from typing import Any, Dict, List
+from typing import Any
 
 
 class HookPoint(Enum):
@@ -29,7 +29,7 @@ class HookPoint(Enum):
     POST_SESSION_START = "post-session-start"
 
     @classmethod
-    def get_all(cls) -> List["HookPoint"]:
+    def get_all(cls) -> list["HookPoint"]:
         """Get all defined hook points.
 
         Returns:
@@ -68,7 +68,7 @@ class HookPoint(Enum):
 
 
 # Hook definitions by platform
-HOOK_DEFINITIONS: Dict[str, Dict[str, Dict[str, Any]]] = {
+HOOK_DEFINITIONS: dict[str, dict[str, dict[str, Any]]] = {
     "claude-code": {
         "pre-session-end": {
             "file": "hooks/pre-session-end.sh",
@@ -92,7 +92,7 @@ HOOK_DEFINITIONS: Dict[str, Dict[str, Dict[str, Any]]] = {
 }
 
 
-def get_hook_definitions(platform: str) -> Dict[str, Dict[str, Any]]:
+def get_hook_definitions(platform: str) -> dict[str, dict[str, Any]]:
     """Get hook definitions for a platform.
 
     Args:

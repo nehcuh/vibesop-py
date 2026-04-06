@@ -16,8 +16,8 @@ Usage:
 from dataclasses import dataclass
 from typing import Any, cast
 
-from vibesop.llm import create_from_env
 from vibesop.core.session_analyzer import SkillSuggestion
+from vibesop.llm import create_from_env
 
 
 @dataclass
@@ -249,7 +249,7 @@ Return ONLY the JSON, no other text.
             "optimization": ["优化", "性能", "optimize", "performance", "improve"],
         }
 
-        category_scores: dict[str, int] = {cat: 0 for cat in category_keywords}
+        category_scores: dict[str, int] = dict.fromkeys(category_keywords, 0)
 
         for query in queries:
             query_lower = query.lower()
@@ -274,7 +274,7 @@ Return ONLY the JSON, no other text.
             tech_terms = re.findall(r"\b\w+(?:\.js|\.py|\.md|API|SQL|HTTP)\b", query)
             tags.update(tech_terms)
 
-        return sorted(list(tags))[:5]
+        return sorted(tags)[:5]
 
     def _calculate_confidence(self, data: dict[str, Any]) -> float:
         score = 0.0
@@ -302,19 +302,19 @@ Return ONLY the JSON, no other text.
 
         tags_val = data.get("tags")
         if isinstance(tags_val, list):
-            tags_list = cast(list[Any], tags_val)
+            tags_list = cast("list[Any]", tags_val)
             if len(tags_list) >= 3:
                 score += 0.2
 
         tc_val = data.get("trigger_conditions")
         if isinstance(tc_val, list):
-            tc_list = cast(list[Any], tc_val)
+            tc_list = cast("list[Any]", tc_val)
             if len(tc_list) >= 2:
                 score += 0.1
 
         steps_val = data.get("steps")
         if isinstance(steps_val, list):
-            steps_list = cast(list[Any], steps_val)
+            steps_list = cast("list[Any]", steps_val)
             if len(steps_list) >= 3:
                 score += 0.1
 

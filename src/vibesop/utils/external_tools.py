@@ -4,11 +4,11 @@ This module provides capabilities for detecting and verifying
 the availability of external tools required by VibeSOP.
 """
 
-import subprocess
 import shutil
-from typing import Any, Dict, List, Optional
+import subprocess
 from dataclasses import dataclass
 from enum import Enum
+from typing import Any, ClassVar
 
 from vibesop.security.scanner import SecurityScanner
 
@@ -48,12 +48,12 @@ class ToolInfo:
 
     name: str
     command: str
-    version_command: Optional[str]
-    min_version: Optional[str]
+    version_command: str | None
+    min_version: str | None
     optional: bool
     status: ToolStatus
-    version: Optional[str]
-    path: Optional[str]
+    version: str | None
+    path: str | None
 
 
 class ExternalToolsDetector:
@@ -70,7 +70,7 @@ class ExternalToolsDetector:
     """
 
     # Known tools and their detection methods
-    KNOWN_TOOLS: Dict[str, Dict[str, Any]] = {
+    KNOWN_TOOLS: ClassVar[dict[str, dict[str, Any]]] = {
         "git": {
             "command": "git",
             "version_command": "git --version",
@@ -147,13 +147,13 @@ class ExternalToolsDetector:
         """Initialize the external tools detector."""
         self._scanner = SecurityScanner()
 
-    def detect_all(self) -> Dict[str, ToolInfo]:
+    def detect_all(self) -> dict[str, ToolInfo]:
         """Detect all known tools.
 
         Returns:
             Dictionary mapping tool names to ToolInfo
         """
-        tools: Dict[str, ToolInfo] = {}
+        tools: dict[str, ToolInfo] = {}
 
         for tool_name, tool_config in self.KNOWN_TOOLS.items():
             tool_info = self._detect_tool(tool_name, tool_config)
@@ -161,7 +161,7 @@ class ExternalToolsDetector:
 
         return tools
 
-    def detect_tool(self, tool_name: str) -> Optional[ToolInfo]:
+    def detect_tool(self, tool_name: str) -> ToolInfo | None:
         """Detect a specific tool.
 
         Args:
@@ -178,8 +178,8 @@ class ExternalToolsDetector:
 
     def check_requirements(
         self,
-        required_tools: List[str],
-    ) -> Dict[str, Any]:
+        required_tools: list[str],
+    ) -> dict[str, Any]:
         """Check if required tools are available.
 
         Args:
@@ -188,7 +188,7 @@ class ExternalToolsDetector:
         Returns:
             Dictionary with check results
         """
-        result: Dict[str, Any] = {
+        result: dict[str, Any] = {
             "all_available": True,
             "missing_tools": [],
             "version_mismatches": [],
@@ -234,7 +234,7 @@ class ExternalToolsDetector:
     def get_installation_instructions(
         self,
         tool_name: str,
-    ) -> Optional[str]:
+    ) -> str | None:
         """Get installation instructions for a tool.
 
         Args:
@@ -258,7 +258,7 @@ class ExternalToolsDetector:
 
         return instructions.get(tool_name)
 
-    def _detect_tool(self, tool_name: str, tool_config: Dict[str, Any]) -> ToolInfo:
+    def _detect_tool(self, tool_name: str, tool_config: dict[str, Any]) -> ToolInfo:
         """Detect a single tool.
 
         Args:
@@ -299,15 +299,14 @@ class ExternalToolsDetector:
                     capture_output=True,
                     text=True,
                     timeout=5,
+                    check=False,
                 )
 
                 if result.returncode == 0:
                     version = self._parse_version(result.stdout)
 
-                    # Check minimum version if specified
-                    if min_version and version:
-                        if not self._check_version(version, min_version):
-                            status = ToolStatus.VERSION_MISMATCH
+                    if min_version and version and not self._check_version(version, min_version):
+                        status = ToolStatus.VERSION_MISMATCH
 
             except subprocess.TimeoutExpired:
                 status = ToolStatus.UNKNOWN
@@ -325,7 +324,7 @@ class ExternalToolsDetector:
             path=tool_path,
         )
 
-    def _parse_version(self, version_output: str) -> Optional[str]:
+    def _parse_version(self, version_output: str) -> str | None:
         """Parse version from command output.
 
         Args:
@@ -371,7 +370,7 @@ class ExternalToolsDetector:
             # Fallback: simple string comparison
             return current >= minimum
 
-    def get_tool_summary(self) -> Dict[str, Any]:
+    def get_tool_summary(self) -> dict[str, Any]:
         """Get a summary of all tools status.
 
         Returns:

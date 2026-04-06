@@ -5,9 +5,9 @@ This module detects external skill pack integrations
 like Superpowers and gstack.
 """
 
-from pathlib import Path
-from typing import Dict, List, Optional
 from enum import Enum
+from pathlib import Path
+from typing import ClassVar
 
 from pydantic import BaseModel, Field
 
@@ -43,11 +43,11 @@ class IntegrationInfo(BaseModel):
     name: str = Field(..., description="Integration name")
     description: str = Field(..., description="Human-readable description")
     status: IntegrationStatus = Field(..., description="Installation status")
-    version: Optional[str] = Field(default=None, description="Version string")
-    path: Optional[Path] = Field(default=None, description="Installation path")
-    skills: List[str] = Field(default_factory=list, description="List of skill IDs")
+    version: str | None = Field(default=None, description="Version string")
+    path: Path | None = Field(default=None, description="Installation path")
+    skills: list[str] = Field(default_factory=list, description="List of skill IDs")
 
-    def to_dict(self) -> Dict[str, object]:
+    def to_dict(self) -> dict[str, object]:
         """Convert to dictionary.
 
         Returns:
@@ -79,14 +79,14 @@ class IntegrationDetector:
     """
 
     # Known integration paths
-    SKILLS_BASE_PATHS = [
+    SKILLS_BASE_PATHS: ClassVar[list[Path]] = [
         Path.home() / ".config" / "claude" / "skills",
         Path.home() / ".config" / "skills",
         Path.home() / ".claude" / "skills",
     ]
 
     # Known integrations
-    KNOWN_INTEGRATIONS = {
+    KNOWN_INTEGRATIONS: ClassVar[dict[str, dict]] = {
         "superpowers": {
             "description": "General-purpose productivity skills",
             "paths": ["superpowers"],
@@ -118,10 +118,10 @@ class IntegrationDetector:
 
     def __init__(self) -> None:
         """Initialize the integration detector."""
-        self._skills_base_path: Optional[Path] = None
+        self._skills_base_path: Path | None = None
 
     @property
-    def skills_base_path(self) -> Optional[Path]:
+    def skills_base_path(self) -> Path | None:
         """Get the detected skills base path.
 
         Returns:
@@ -131,7 +131,7 @@ class IntegrationDetector:
             self._skills_base_path = self._find_skills_base_path()
         return self._skills_base_path
 
-    def detect_all(self) -> List[IntegrationInfo]:
+    def detect_all(self) -> list[IntegrationInfo]:
         """Detect all known integrations.
 
         Returns:
@@ -148,7 +148,7 @@ class IntegrationDetector:
     def detect_integration(
         self,
         name: str,
-        config: Optional[Dict] = None,
+        config: dict | None = None,
     ) -> IntegrationInfo:
         """Detect a specific integration.
 
@@ -192,7 +192,7 @@ class IntegrationDetector:
         info = self.detect_integration(name)
         return info.status == IntegrationStatus.INSTALLED
 
-    def get_integration_skills(self, name: str) -> List[str]:
+    def get_integration_skills(self, name: str) -> list[str]:
         """Get skills provided by an integration.
 
         Args:
@@ -205,7 +205,7 @@ class IntegrationDetector:
         skills = config.get("skills", [])
         return skills if isinstance(skills, list) else []
 
-    def _find_skills_base_path(self) -> Optional[Path]:
+    def _find_skills_base_path(self) -> Path | None:
         """Find the skills base directory.
 
         Returns:
@@ -218,8 +218,8 @@ class IntegrationDetector:
 
     def _check_integration_paths(
         self,
-        expected_paths: List[str],
-    ) -> tuple[Optional[Path], IntegrationStatus]:
+        expected_paths: list[str],
+    ) -> tuple[Path | None, IntegrationStatus]:
         """Check if integration paths exist.
 
         Args:
@@ -241,9 +241,9 @@ class IntegrationDetector:
 
     def _get_integration_version(
         self,
-        name: str,
-        path: Optional[Path],
-    ) -> Optional[str]:
+        _name: str,
+        path: Path | None,
+    ) -> str | None:
         """Get integration version.
 
         Args:

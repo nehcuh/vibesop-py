@@ -10,8 +10,7 @@ from typing import List
 
 import pytest
 
-from vibesop.core.routing.engine import SkillRouter
-from vibesop.core.models import RoutingRequest
+from vibesop.core.routing.unified import UnifiedRouter
 from vibesop.builder import ConfigRenderer, QuickBuilder
 
 
@@ -23,16 +22,16 @@ class TestRoutingPerformance:
 
         Routes 100 requests and verifies median latency is acceptable.
         """
-        router = SkillRouter()
+        router = UnifiedRouter()
 
         # Generate test requests
-        requests = [RoutingRequest(query=f"test query {i}") for i in range(100)]
+        queries = [f"test query {i}" for i in range(100)]
 
         # Measure latencies
         latencies = []
-        for req in requests:
+        for query in queries:
             start = time.perf_counter()
-            router.route(req)
+            router.route(query)
             end = time.perf_counter()
             latencies.append(end - start)
 
@@ -49,16 +48,16 @@ class TestRoutingPerformance:
 
         Routes 100 requests and verifies 99th percentile is acceptable.
         """
-        router = SkillRouter()
+        router = UnifiedRouter()
 
         # Generate test requests
-        requests = [RoutingRequest(query=f"test query {i}") for i in range(100)]
+        queries = [f"test query {i}" for i in range(100)]
 
         # Measure latencies
         latencies = []
-        for req in requests:
+        for query in queries:
             start = time.perf_counter()
-            router.route(req)
+            router.route(query)
             end = time.perf_counter()
             latencies.append(end - start)
 
@@ -102,17 +101,22 @@ class TestRoutingPerformance:
 
         Simulates concurrent routing requests to ensure
         thread safety and performance.
+
+        Note: Cache is warmed up before measuring to avoid cold-start overhead.
         """
         import threading
 
-        router = SkillRouter()
+        router = UnifiedRouter()
+
+        # Warm up: Load candidate cache before concurrent test
+        router.route("warmup")
+
         results = []
         errors = []
 
         def route_query(query_id: int) -> None:
             try:
-                req = RoutingRequest(query=f"concurrent test {query_id}")
-                result = router.route(req)
+                result = router.route(f"concurrent test {query_id}")
                 results.append(result)
             except Exception as e:
                 errors.append(e)
@@ -217,11 +221,11 @@ class TestMemoryEfficiency:
         initial_objects = len(gc.get_objects())
 
         # Create many routers
-        routers = [SkillRouter() for _ in range(10)]
+        routers = [UnifiedRouter() for _ in range(10)]
 
         # Use routers
         for router in routers:
-            router.route(RoutingRequest(query="test"))
+            router.route("test")
 
         # Delete routers
         del routers
@@ -244,13 +248,12 @@ class TestLoadPerformance:
 
         Routes 1000 requests continuously and verifies performance remains stable.
         """
-        router = SkillRouter()
+        router = UnifiedRouter()
 
         latencies = []
         for i in range(1000):
-            req = RoutingRequest(query=f"load test {i}")
             start = time.perf_counter()
-            router.route(req)
+            router.route(f"load test {i}")
             end = time.perf_counter()
             latencies.append(end - start)
 

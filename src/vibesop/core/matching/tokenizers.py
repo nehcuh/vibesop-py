@@ -8,13 +8,12 @@ The goal is to have ONE canonical tokenizer that serves all matchers.
 """
 
 import re
-from collections import Counter
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 from typing import Protocol
 
 
-class TokenizerMode(str, Enum):
+class TokenizerMode(StrEnum):
     """Tokenization modes."""
 
     SIMPLE = "simple"  # Basic whitespace splitting
@@ -25,11 +24,41 @@ class TokenizerMode(str, Enum):
 
 # Default stop words (English)
 DEFAULT_STOP_WORDS = {
-    "a", "an", "and", "are", "as", "at", "be", "by", "for", "from",
-    "has", "he", "in", "is", "it", "its", "of", "on", "that", "the",
-    "to", "was", "will", "with", "the", "this", "but", "they", "have",
+    "a",
+    "an",
+    "and",
+    "are",
+    "as",
+    "at",
+    "be",
+    "by",
+    "for",
+    "from",
+    "has",
+    "he",
+    "in",
+    "is",
+    "it",
+    "its",
+    "of",
+    "on",
+    "that",
+    "the",
+    "to",
+    "was",
+    "will",
+    "with",
+    "this",
+    "but",
+    "they",
+    "have",
     # Common programming stop words
-    "use", "can", "get", "make", "go", "do",
+    "use",
+    "can",
+    "get",
+    "make",
+    "go",
+    "do",
 }
 
 
@@ -41,7 +70,7 @@ class TokenizerConfig:
     lowercase: bool = True
     remove_punctuation: bool = True
     min_token_length: int = 1
-    stop_words: set[str] = field(default_factory=lambda: DEFAULT_STOP_WORDS.copy())
+    stop_words: set[str] = field(default_factory=DEFAULT_STOP_WORDS.copy)
     split_cjk: bool = True
     preserve_case: bool = False
 
@@ -110,10 +139,9 @@ def tokenize(
             continue
 
         # Handle CJK text
-        if config.mode == TokenizerMode.CJK or config.split_cjk:
-            if _contains_cjk(segment):
-                tokens.extend(_tokenize_cjk(segment, config))
-                continue
+        if (config.mode == TokenizerMode.CJK or config.split_cjk) and _contains_cjk(segment):
+            tokens.extend(_tokenize_cjk(segment, config))
+            continue
 
         # Non-CJK or simple mode
         tokens.append(segment)
@@ -130,7 +158,7 @@ def _contains_cjk(text: str) -> bool:
     return bool(re.search(r"[\u4e00-\u9fff\u3040-\u309f\u30a0-\u30ff]", text))
 
 
-def _tokenize_cjk(segment: str, config: TokenizerConfig) -> list[str]:
+def _tokenize_cjk(segment: str, _config: TokenizerConfig) -> list[str]:
     """Tokenize CJK text.
 
     For Chinese text, splits into 2-character words where possible,
@@ -197,9 +225,9 @@ class CachedTokenizer:
 
 # Convenience exports
 __all__ = [
-    "TokenizerMode",
-    "TokenizerConfig",
-    "tokenize",
-    "CachedTokenizer",
     "DEFAULT_STOP_WORDS",
+    "CachedTokenizer",
+    "TokenizerConfig",
+    "TokenizerMode",
+    "tokenize",
 ]
