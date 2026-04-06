@@ -27,6 +27,7 @@ from vibesop.cli.commands import (
     install as install_mod,
     instinct_new as instinct_mod,
     memory_cmd as memory_mod,
+    omx as omx_mod,
     onboard as onboard_mod,
     quickstart as quickstart_mod,
     route_commands as route_mod,
@@ -147,3 +148,6 @@ def register(app: typer.Typer) -> None:
     # Skill execution (top-level commands)
     app.command()(execute_mod.execute)
     app.command("execute-list")(execute_mod.list_available)
+
+    # omx/ engineering methodologies
+    app.add_typer(omx_mod.app, name="omx")
