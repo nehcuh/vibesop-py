@@ -43,6 +43,11 @@ namespaces:
     default_trust: local_review
     purpose: Project-specific skills layered on top of builtin or external packs.
 
+  omx:
+    owner: oh-my-codex
+    default_trust: reviewed
+    purpose: oh-my-codex engineering methodologies — deep-interview, ralph, ralplan, team, ultrawork, autopilot, ultraqa.
+
 merge_policy:
   precedence:
     - builtin
@@ -144,6 +149,63 @@ conflict_resolution:
           trigger: "架构审查"
       override_keywords:
         - "用 gstack"
+
+    # Requirements clarification: omx/deep-interview is primary
+    - scenario: requirements_clarification
+      primary: omx/deep-interview
+      primary_source: omx
+      alternatives:
+        - skill: gstack/office-hours
+          source: gstack
+          trigger: "产品头脑风暴"
+        - skill: superpowers/brainstorm
+          source: superpowers
+          trigger: "设计细化"
+
+    # Persistent execution: omx/ralph is primary
+    - scenario: persistent_execution
+      primary: omx/ralph
+      primary_source: omx
+      alternatives:
+        - skill: riper-workflow
+          source: builtin
+          trigger: "5 阶段开发"
+
+    # Structured planning: omx/ralplan is primary
+    - scenario: structured_planning
+      primary: omx/ralplan
+      primary_source: omx
+      alternatives:
+        - skill: planning-with-files
+          source: builtin
+          trigger: "文件规划"
+        - skill: gstack/plan-eng-review
+          source: gstack
+          trigger: "架构审查"
+
+    # Parallel execution: omx/team is primary
+    - scenario: parallel_execution
+      primary: omx/team
+      primary_source: omx
+      alternatives:
+        - skill: omx/ultrawork
+          source: omx
+          trigger: "纯并行执行"
+        - skill: using-git-worktrees
+          source: builtin
+          trigger: "工作树隔离"
+
+    # QA cycling: omx/ultraqa is primary
+    - scenario: qa_cycling
+      primary: omx/ultraqa
+      primary_source: omx
+      alternatives:
+        - skill: gstack/qa
+          source: gstack
+          trigger: "浏览器测试"
+        - skill: gstack/qa-only
+          source: gstack
+          trigger: "仅报告"
 
 # Skill detection and routing hints
 routing_hints:
