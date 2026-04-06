@@ -37,6 +37,11 @@ from vibesop.core.matching import (
     tokenize,
 )
 from vibesop.core.config import ConfigManager, RoutingConfig as ConfigRoutingConfig
+from vibesop.core.optimization import (
+    CandidatePrefilter,
+    PreferenceBooster,
+    SkillClusterIndex,
+)
 
 
 class RoutingLayer(str, Enum):
@@ -185,6 +190,7 @@ class UnifiedRouter:
         if self._config.enable_embedding:
             try:
                 from vibesop.core.matching import EmbeddingMatcher
+
                 self._matchers.append(
                     (RoutingLayer.EMBEDDING, EmbeddingMatcher(config=matcher_config))
                 )
@@ -192,8 +198,25 @@ class UnifiedRouter:
                 pass  # sentence-transformers not available
 
         # Always add Levenshtein as fallback
-        self._matchers.append(
-            (RoutingLayer.LEVENSHTEIN, LevenshteinMatcher(matcher_config))
+        self._matchers.append((RoutingLayer.LEVENSHTEIN, LevenshteinMatcher(matcher_config)))
+
+        # Initialize optimization layers
+        self._optimization_config = self._config_manager.get_optimization_config()
+
+        # Build cluster index
+        self._cluster_index = SkillClusterIndex()
+        self._cluster_built = False
+
+        # Initialize prefilter
+        self._prefilter = CandidatePrefilter(cluster_index=self._cluster_index)
+
+        # Initialize preference booster
+        pref_config = self._optimization_config.preference_boost
+        self._preference_booster = PreferenceBooster(
+            enabled=self._optimization_config.enabled and pref_config.enabled,
+            weight=pref_config.weight,
+            min_samples=pref_config.min_samples,
+            storage_path=str(self.project_root / ".vibe" / "preferences.json"),
         )
 
     def _create_config_manager_from_config(self, config: ConfigRoutingConfig) -> ConfigManager:
@@ -238,6 +261,20 @@ class UnifiedRouter:
         if candidates is None:
             candidates = self._get_candidates(query)
 
+        # === Pre-filtering (Layer 1) ===
+        if self._optimization_config.enabled and self._optimization_config.prefilter.enabled:
+            candidates = self._prefilter.filter(query, candidates)
+
+        # === Build cluster index (Layer 3, lazy) ===
+        if (
+            self._optimization_config.enabled
+            and self._optimization_config.clustering.enabled
+            and not self._cluster_built
+            and len(candidates) >= self._optimization_config.clustering.min_skills_for_clustering
+        ):
+            self._cluster_index.build(candidates)
+            self._cluster_built = True
+
         routing_path: list[RoutingLayer] = []
 
         # Try each matcher in priority order
@@ -257,20 +294,60 @@ class UnifiedRouter:
                 )
 
                 if matches and matches[0].confidence >= self._config.min_confidence:
+                    # === Preference boost (Layer 2) ===
+                    if (
+                        self._optimization_config.enabled
+                        and self._optimization_config.preference_boost.enabled
+                    ):
+                        matches = self._preference_booster.boost(matches, query)
+
+                    # === Cluster conflict resolution (Layer 3) ===
+                    if (
+                        self._optimization_config.enabled
+                        and self._optimization_config.clustering.enabled
+                        and self._optimization_config.clustering.auto_resolve
+                        and len(matches) > 1
+                    ):
+                        confidences = {m.skill_id: m.confidence for m in matches}
+                        match_ids = [m.skill_id for m in matches]
+                        conflict_result = self._cluster_index.resolve_conflicts(
+                            query,
+                            match_ids,
+                            confidences,
+                            self._optimization_config.clustering.confidence_gap_threshold,
+                        )
+                        if conflict_result["primary"]:
+                            primary_id = conflict_result["primary"]
+                            primary_match = next(
+                                (m for m in matches if m.skill_id == primary_id),
+                                matches[0],
+                            )
+                            alternatives = [m for m in matches if m.skill_id != primary_id][
+                                : self._config.max_candidates
+                            ]
+                        else:
+                            primary_match = matches[0]
+                            alternatives = matches[1 : self._config.max_candidates + 1]
+                    else:
+                        primary_match = matches[0]
+                        alternatives = matches[1 : self._config.max_candidates + 1]
+
                     # Found a good match
                     duration_ms = (time.perf_counter() - start_time) * 1000
 
                     # Get namespace from match metadata or infer from skill_id
-                    primary_namespace = matches[0].metadata.get("namespace", "builtin")
-                    primary_source = self._get_skill_source(matches[0].skill_id, primary_namespace)
+                    primary_namespace = primary_match.metadata.get("namespace", "builtin")
+                    primary_source = self._get_skill_source(
+                        primary_match.skill_id, primary_namespace
+                    )
 
                     return RoutingResult(
                         primary=SkillRoute(
-                            skill_id=matches[0].skill_id,
-                            confidence=matches[0].confidence,
+                            skill_id=primary_match.skill_id,
+                            confidence=primary_match.confidence,
                             layer=layer,
                             source=primary_source,
-                            metadata=matches[0].metadata,
+                            metadata=primary_match.metadata,
                         ),
                         alternatives=[
                             SkillRoute(
@@ -278,12 +355,11 @@ class UnifiedRouter:
                                 confidence=m.confidence,
                                 layer=layer,
                                 source=self._get_skill_source(
-                                    m.skill_id,
-                                    m.metadata.get("namespace", "builtin")
+                                    m.skill_id, m.metadata.get("namespace", "builtin")
                                 ),
                                 metadata=m.metadata,
                             )
-                            for m in matches[1 : self._config.max_candidates + 1]
+                            for m in alternatives
                         ],
                         routing_path=routing_path,
                         query=query,
@@ -424,8 +500,7 @@ class UnifiedRouter:
             "type": "unified",
             "layers": [l.value for l in self._LAYER_PRIORITY],
             "matchers": [
-                {"layer": l.value, "matcher": type(m).__name__}
-                for l, m in self._matchers
+                {"layer": l.value, "matcher": type(m).__name__} for l, m in self._matchers
             ],
             "config": {
                 "min_confidence": self._config.min_confidence,
