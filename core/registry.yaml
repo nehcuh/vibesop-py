@@ -536,3 +536,37 @@ skills:
       - Write
       - Bash
     safety_level: trusted_builtin
+
+  # omx/ skills — oh-my-codex engineering methodologies
+  - id: omx/deep-interview
+    namespace: omx
+    entrypoint: skills/omx/deep-interview/SKILL.md
+    intent: Socratic requirements clarification with mathematical ambiguity scoring.
+    trigger_mode: suggest
+    priority: P1
+    supported_targets:
+      claude-code: native-skill
+      opencode: native-skill
+    safety_level: trusted_builtin
+
+  - id: omx/ralph
+    namespace: omx
+    entrypoint: skills/omx/ralph/SKILL.md
+    intent: Persistent completion loop with mandatory deslop pass and tiered architect verification.
+    trigger_mode: suggest
+    priority: P1
+    supported_targets:
+      claude-code: native-skill
+      opencode: native-skill
+    safety_level: trusted_builtin
+
+  - id: omx/ralplan
+    namespace: omx
+    entrypoint: skills/omx/ralplan/SKILL.md
+    intent: Consensus planning with RALPLAN-DR structured deliberation and ADR output.
+    trigger_mode: suggest
+    priority: P1
+    supported_targets:
+      claude-code: native-skill
+      opencode: native-skill
+    safety_level: trusted_builtin
