@@ -1,8 +1,9 @@
 """Tests for state migration from legacy .vibe/ structure."""
 
 import json
+
 import pytest
-from pathlib import Path
+
 from vibesop.core.state.migration import migrate_legacy_state
 
 

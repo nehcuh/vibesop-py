@@ -1,6 +1,7 @@
 import pytest
-from vibesop.core.optimization.preference_boost import PreferenceBooster
+
 from vibesop.core.matching import MatchResult, MatcherType
+from vibesop.core.optimization.preference_boost import PreferenceBooster
 
 
 @pytest.fixture
@@ -74,5 +75,5 @@ def test_boost_respects_weight(booster, sample_matches):
 def test_disabled_booster(sample_matches):
     booster = PreferenceBooster(enabled=False)
     boosted = booster.boost(sample_matches, "query")
-    for orig, b in zip(sample_matches, boosted):
+    for orig, b in zip(sample_matches, boosted, strict=False):
         assert orig.confidence == b.confidence

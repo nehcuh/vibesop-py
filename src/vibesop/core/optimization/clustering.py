@@ -1,6 +1,7 @@
 """Semantic clustering of skills by intent similarity."""
 
 from __future__ import annotations
+
 from collections import defaultdict
 from typing import Any
 
@@ -40,10 +41,11 @@ class SkillClusterIndex:
 
     def _cluster_by_tfidf(self, skills: list[dict[str, Any]]) -> dict[str, list[str]]:
         try:
+            import numpy as np
+            from sklearn.cluster import KMeans
+
             from vibesop.core.matching.tfidf import TFIDFCalculator
             from vibesop.core.matching.tokenizers import tokenize
-            from sklearn.cluster import KMeans
-            import numpy as np
 
             tfidf = TFIDFCalculator()
             documents = []
@@ -140,7 +142,7 @@ class SkillClusterIndex:
     def get_relevant_clusters(self, query: str) -> list[str]:
         query_lower = query.lower()
         relevant = []
-        for cluster_id, skill_ids in self._clusters.items():
+        for cluster_id, _skill_ids in self._clusters.items():
             cluster_keywords = cluster_id.replace("_", " ").split()
             if any(kw in query_lower for kw in cluster_keywords):
                 relevant.append(cluster_id)
@@ -185,7 +187,7 @@ class SkillClusterIndex:
         alternatives = []
         needs_review = False
 
-        for cluster_id, skills_in_cluster in cluster_groups.items():
+        for _cluster_id, skills_in_cluster in cluster_groups.items():
             sorted_skills = sorted(
                 skills_in_cluster, key=lambda s: (confidences or {}).get(s, 0.0), reverse=True
             )

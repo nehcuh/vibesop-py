@@ -1,6 +1,7 @@
 """Preference learning integration with UnifiedRouter."""
 
 from __future__ import annotations
+
 from typing import TYPE_CHECKING
 
 from vibesop.core.matching import MatchResult
@@ -25,7 +26,7 @@ class PreferenceBooster:
         self._storage_path = storage_path
         self._learner: PreferenceLearner | None = None
 
-    def _get_learner(self) -> "PreferenceLearner":
+    def _get_learner(self) -> PreferenceLearner:
         if self._learner is None:
             from vibesop.core.preference import PreferenceLearner
 
@@ -45,7 +46,7 @@ class PreferenceBooster:
 
         skill_ids = [m.skill_id for m in matches]
         rankings = learner.get_personalized_rankings(skill_ids, query)
-        score_map = {sid: score for sid, score in rankings}
+        score_map = dict(rankings)
 
         boosted = []
         for match in matches:

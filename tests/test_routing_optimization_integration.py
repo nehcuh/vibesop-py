@@ -1,9 +1,9 @@
 """End-to-end tests for UnifiedRouter with optimization enabled."""
 
 import pytest
-from pathlib import Path
-from vibesop.core.routing.unified import UnifiedRouter, RoutingResult
+
 from vibesop.core.config.manager import ConfigManager
+from vibesop.core.routing.unified import RoutingResult, UnifiedRouter
 
 
 @pytest.fixture

@@ -1,4 +1,5 @@
 import pytest
+
 from vibesop.core.optimization.prefilter import CandidatePrefilter
 
 

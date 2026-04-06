@@ -1,8 +1,7 @@
 """Tests for unified state management."""
 
-import json
 import pytest
-from pathlib import Path
+
 from vibesop.core.state.manager import StateManager
 
 

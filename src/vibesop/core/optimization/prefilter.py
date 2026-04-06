@@ -1,6 +1,7 @@
 """Candidate pre-filtering for skill routing."""
 
 from __future__ import annotations
+
 from typing import Any
 
 COMPLEXITY_INDICATORS = [
@@ -66,9 +67,8 @@ class CandidatePrefilter:
             elif priority == "P1":
                 if is_complex or ns in triggered_ns:
                     result.append(candidate)
-            elif priority == "P2":
-                if ns in triggered_ns:
-                    result.append(candidate)
+            elif priority == "P2" and ns in triggered_ns:
+                result.append(candidate)
         return result
 
     def _filter_by_namespace(
