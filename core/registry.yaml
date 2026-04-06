@@ -570,3 +570,47 @@ skills:
       claude-code: native-skill
       opencode: native-skill
     safety_level: trusted_builtin
+
+  - id: omx/team
+    namespace: omx
+    entrypoint: skills/omx/team/SKILL.md
+    intent: Multi-agent parallel execution with Python asyncio runtime and file-based coordination.
+    trigger_mode: manual
+    priority: P1
+    supported_targets:
+      claude-code: native-skill
+      opencode: native-skill
+    safety_level: trusted_builtin
+
+  - id: omx/ultrawork
+    namespace: omx
+    entrypoint: skills/omx/ultrawork/SKILL.md
+    intent: Tier-aware parallel execution engine for independent tasks.
+    trigger_mode: manual
+    priority: P2
+    supported_targets:
+      claude-code: native-skill
+      opencode: native-skill
+    safety_level: trusted_builtin
+
+  - id: omx/autopilot
+    namespace: omx
+    entrypoint: skills/omx/autopilot/SKILL.md
+    intent: Full autonomous lifecycle from idea to verified code.
+    trigger_mode: manual
+    priority: P1
+    supported_targets:
+      claude-code: native-skill
+      opencode: native-skill
+    safety_level: trusted_builtin
+
+  - id: omx/ultraqa
+    namespace: omx
+    entrypoint: skills/omx/ultraqa/SKILL.md
+    intent: Autonomous QA cycling with architect diagnosis before fix.
+    trigger_mode: manual
+    priority: P1
+    supported_targets:
+      claude-code: native-skill
+      opencode: native-skill
+    safety_level: trusted_builtin
