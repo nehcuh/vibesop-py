@@ -41,12 +41,15 @@ def route(
         "-c",
         help="Minimum confidence threshold (0.0-1.0)",
     ),
+    run: bool = typer.Option(False, "--run", "-r", help="Execute the matched skill after routing"),
     json_output: bool = typer.Option(False, "--json", "-j", help="Output as JSON"),
 ) -> None:
     """Route a query to the appropriate skill using unified routing.
 
-    This replaces the old 'vibe auto' command.
+    Use --run to execute the matched skill immediately.
     """
+    import asyncio
+    import time
     from pathlib import Path
     from vibesop.core.routing import UnifiedRouter, RoutingConfig
 
@@ -61,6 +64,7 @@ def route(
 
     if json_output:
         import json
+
         console.print(json.dumps(result.to_dict(), indent=2))
     else:
         if result.has_match:
@@ -93,6 +97,45 @@ def route(
                     border_style="yellow",
                 )
             )
+
+    # Execute if --run flag is set and we have a match
+    if run and result.has_match:
+        console.print(f"\n[bold cyan]Executing {result.primary.skill_id}...[/bold cyan]\n")
+        start_time = time.perf_counter()
+        try:
+            manager = SkillManager(project_root=Path.cwd())
+            skill_result = asyncio.run(
+                manager.execute_skill(
+                    skill_id=result.primary.skill_id,
+                    query=query,
+                )
+            )
+            exec_duration = (time.perf_counter() - start_time) * 1000
+
+            if skill_result.success:
+                console.print(
+                    Panel(
+                        f"[bold green]✅ Execution successful[/bold green]\n"
+                        f"[dim]Duration:[/dim] {exec_duration:.0f}ms\n"
+                        f"\n[bold]Output:[/bold]\n{skill_result.output}",
+                        title="Execution Result",
+                        border_style="green",
+                    )
+                )
+            else:
+                console.print(
+                    Panel(
+                        f"[bold red]❌ Execution failed[/bold red]\n"
+                        f"[dim]Duration:[/dim] {exec_duration:.0f}ms\n"
+                        f"\n[bold red]Error:[/bold red] {skill_result.error}",
+                        title="Execution Result",
+                        border_style="red",
+                    )
+                )
+                raise typer.Exit(1)
+        except Exception as e:
+            console.print(f"[red]Execution error: {e}[/red]")
+            raise typer.Exit(1)
 
 
 @app.command()

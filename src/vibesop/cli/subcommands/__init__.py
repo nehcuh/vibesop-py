@@ -18,6 +18,7 @@ from vibesop.cli.commands import (
     config as config_mod,
     deploy as deploy_mod,
     detect as detect_mod,
+    execute as execute_mod,
     experiment as experiment_mod,
     hooks as hooks_mod,
     import_rules as import_rules_mod,
@@ -142,3 +143,7 @@ def register(app: typer.Typer) -> None:
     # Onboarding
     app.command()(quickstart_mod.quickstart)
     app.command()(onboard_mod.onboard)
+
+    # Skill execution (top-level commands)
+    app.command()(execute_mod.execute)
+    app.command("execute-list")(execute_mod.list_available)

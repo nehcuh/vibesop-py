@@ -75,19 +75,21 @@ def auto(
 ) -> None:
     """[DEPRECATED] Automatically detect intent and execute appropriate skill.
 
-    **DEPRECATED (v3.0.0)**: This command is deprecated. Use 'vibe route' instead.
-    The 'vibe auto' command will be removed in v4.0.0.
+    **DEPRECATED (v3.1.0)**: This command is deprecated. Use one of:
+    - `vibe route <query>` — Route only (shows matched skill)
+    - `vibe route <query> --run` — Route and execute
+    - `vibe execute <skill_id> <query>` — Execute a specific skill
 
     Migration:
         OLD: vibe auto "scan for security issues"
-        NEW: vibe route "scan for security issues"
+        NEW: vibe route "scan for security issues" --run
 
-    For automatic skill execution, use the skill directly:
-        OLD: vibe auto "debug error"  # (would auto-execute)
-        NEW: vibe skills execute systematic-debugging "debug error"
+    For automatic skill execution, use the execute command:
+        OLD: vibe auto "debug error"
+        NEW: vibe execute systematic-debugging "debug error"
 
     This command currently delegates to the new UnifiedRouter for backward
-    compatibility, but please migrate to 'vibe route' for future support.
+    compatibility, but please migrate to the new commands for future support.
 
     \\b
     Examples (deprecated):
@@ -117,14 +119,15 @@ def auto(
     """
     # Show deprecation warning
     warnings.warn(
-        "vibe auto is deprecated. Use 'vibe route' instead. "
-        "vibe auto will be removed in v4.0.0.",
+        "vibe auto is deprecated. Use 'vibe route --run' or 'vibe execute <skill_id> <query>' instead.",
         DeprecationWarning,
         stacklevel=2,
     )
 
     console.print(
-        f"\n[yellow]⚠️  'vibe auto' is deprecated. Use 'vibe route' instead.[/yellow]\n"
+        f"\n[yellow]⚠️  'vibe auto' is deprecated.[/yellow]\n"
+        f"  Use: [bold]vibe route <query> --run[/bold] (route + execute)\n"
+        f"  Or:  [bold]vibe execute <skill_id> <query>[/bold] (direct execution)\n"
     )
 
     _auto_impl(
@@ -167,9 +170,7 @@ def _auto_impl(
     console.print(f"[bold]Query:[/bold] {query}\n")
 
     if verbose:
-        console.print(
-            f"[dim]Routing query (min confidence: {min_confidence})...[/dim]\n"
-        )
+        console.print(f"[dim]Routing query (min confidence: {min_confidence})...[/dim]\n")
 
     # Initialize routing config
     config = RoutingConfig(
@@ -244,7 +245,9 @@ def _show_match_details(result: Any, verbose: bool) -> None:
             f"[dim]Confidence:[/dim] {primary.confidence:.2%}\n"
             f"[dim]Source:[/dim] {primary.source}\n"
             f"[dim]Duration:[/dim] {result.duration_ms:.1f}ms\n"
-            + (f"[dim]Metadata:[/dim] {primary.metadata}\n" if verbose and primary.metadata else ""),
+            + (
+                f"[dim]Metadata:[/dim] {primary.metadata}\n" if verbose and primary.metadata else ""
+            ),
             title="[bold green]✓ Intent Detected[/bold green]",
             border_style="green",
         )
@@ -305,11 +308,7 @@ def _show_execution_result(skill_result: Any, verbose: bool) -> None:
         console.print(
             Panel(
                 f"[bold green]✓ Skill completed successfully[/bold green]\n\n"
-                + (
-                    f"[bold]Result:[/bold]\n{result_data}\n"
-                    if result_data and verbose
-                    else ""
-                ),
+                + (f"[bold]Result:[/bold]\n{result_data}\n" if result_data and verbose else ""),
                 title="[bold green]Success[/bold green]",
                 border_style="green",
             )
@@ -321,8 +320,7 @@ def _show_execution_result(skill_result: Any, verbose: bool) -> None:
 
         console.print(
             Panel(
-                f"[bold red]✗ Execution failed[/bold red]\n\n"
-                f"[bold]Error:[/bold] {error}\n",
+                f"[bold red]✗ Execution failed[/bold red]\n\n[bold]Error:[/bold] {error}\n",
                 title="[bold red]Failure[/bold red]",
                 border_style="red",
             )
