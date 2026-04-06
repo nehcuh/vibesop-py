@@ -76,3 +76,4 @@ ruff.toml
 *.whl
 *.tar.gz
 .alma-snapshots
+.vibe/.vibe/
