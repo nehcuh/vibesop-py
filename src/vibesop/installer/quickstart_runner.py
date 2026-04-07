@@ -363,13 +363,24 @@ class QuickstartRunner:
         print("📚 Next Steps:")
         print()
 
+        # Platform to output directory mapping
+        platform_dirs = {
+            "claude-code": "~/.claude",
+            "opencode": "~/.continue",
+        }
+
         if config.global_install:
-            print("1. Restart your terminal/editor")
-            print("2. Run: vibe doctor")
+            output_dir = platform_dirs.get(config.platform)
+            if output_dir:
+                print(f"1. Run: [cyan]vibe build {config.platform} --output {output_dir}[/cyan]")
+            else:
+                print(f"1. Run: [cyan]vibe build {config.platform}[/cyan]")
+            print("2. Run: [cyan]vibe doctor[/cyan] to verify")
+            print("3. Run: [cyan]vibe route \"your query\"[/cyan] to find skills")
         else:
             print("1. Review .vibe/ directory")
             print("2. Add skills to .vibe/skills/")
-            print("3. Run: vibe build")
+            print(f"3. Run: [cyan]vibe build[/cyan]")
 
         print()
         print("📖 Documentation:")
