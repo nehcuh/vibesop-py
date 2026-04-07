@@ -6,6 +6,7 @@ that track installation state and metadata.
 
 import hashlib
 import json
+import logging
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from enum import Enum
@@ -13,6 +14,8 @@ from pathlib import Path
 from typing import Any, ClassVar
 
 from vibesop.security.path_safety import PathSafety
+
+logger = logging.getLogger(__name__)
 
 
 class MarkerType(Enum):
@@ -143,10 +146,10 @@ class MarkerFileManager:
                 if not self._path_safety.check_traversal(install_path, self._base_path):
                     result["errors"].append(f"Invalid installation path: {install_path}")
                     return result
-            except Exception:
+            except Exception as e:
                 # If validation fails, continue but log warning
                 # (Paths within temp directories might fail validation)
-                pass
+                logger.debug(f"Path validation failed: {e}")
 
             # Get marker directory
             marker_dir = self._base_path / self.MARKER_LOCATIONS[marker_type]
@@ -201,7 +204,8 @@ class MarkerFileManager:
 
             return MarkerData.from_dict(data)
 
-        except Exception:
+        except Exception as e:
+            logger.debug(f"Failed to read marker file {name}: {e}")
             return None
 
     def remove_marker(
@@ -265,8 +269,9 @@ class MarkerFileManager:
                     marker_data = MarkerData.from_dict(data)
                     markers[marker_file.stem] = marker_data
 
-                except Exception:
+                except Exception as e:
                     # Skip invalid marker files
+                    logger.debug(f"Failed to read marker file {marker_file}: {e}")
                     continue
 
         return markers

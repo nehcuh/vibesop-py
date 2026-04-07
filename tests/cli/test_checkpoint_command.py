@@ -1,8 +1,16 @@
-"""Tests for vibe checkpoint command."""
+"""Tests for vibe checkpoint command.
 
+Note: The checkpoint command is deprecated and moved to legacy.
+Tests require VIBESOP_ENABLE_LEGACY=1 to run.
+"""
+
+import os
 from typer.testing import CliRunner
 
 from vibesop.cli.main import app
+
+# Enable legacy commands for testing
+os.environ["VIBESOP_ENABLE_LEGACY"] = "1"
 
 runner = CliRunner()
 

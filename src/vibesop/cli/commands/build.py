@@ -24,6 +24,7 @@ Examples:
     vibe build
 """
 
+import logging
 from pathlib import Path
 from typing import Any, cast
 
@@ -37,6 +38,7 @@ from vibesop.builder.manifest import ManifestBuilder
 from vibesop.builder.renderer import ConfigRenderer
 
 console = Console()
+logger = logging.getLogger(__name__)
 
 VALID_TARGETS = ["claude-code", "opencode", "superpowers", "cursor"]
 
@@ -140,7 +142,8 @@ def _get_configured_platform() -> str | None:
         with config_path.open() as f:
             config = cast("dict[str, Any]", yaml_parser.load(f))  # type: ignore[reportUnknownMemberType,reportUnknownVariableType]
             return config.get("platform") if config else None
-    except Exception:
+    except Exception as e:
+        logger.debug(f"Failed to read config.yaml: {e}")
         return None
 
 

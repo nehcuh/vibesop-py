@@ -21,6 +21,7 @@ Examples:
     vibe switch
 """
 
+import logging
 from pathlib import Path
 
 import typer
@@ -28,6 +29,7 @@ from rich.console import Console
 from ruamel.yaml import YAML
 
 console = Console()
+logger = logging.getLogger(__name__)
 
 # Valid targets
 VALID_TARGETS = ["claude-code", "opencode", "superpowers", "cursor"]
@@ -48,7 +50,8 @@ def _get_configured_platform() -> str | None:
         with config_path.open() as f:
             config = yaml_parser.load(f)
             return config.get("platform") if config else None
-    except Exception:
+    except Exception as e:
+        logger.debug(f"Failed to read config.yaml: {e}")
         return None
 
 

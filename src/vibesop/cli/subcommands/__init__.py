@@ -1,6 +1,17 @@
 """CLI subcommand registration.
 
 Groups related commands into Typer sub-apps for better organization.
+
+Legacy Commands (deprecated):
+The following commands have been moved to the legacy package:
+- deploy: Use platform-specific installation methods
+- toolchain: Use your system package manager
+- worktree: Use native git worktree commands
+- checkpoint: Use git tags/branches for state management
+- hooks: Configure in platform-specific settings
+
+To enable legacy commands, install with extras: pip install vibesop[legacy]
+Or set environment variable: VIBESOP_ENABLE_LEGACY=1
 """
 
 from __future__ import annotations
@@ -17,22 +28,13 @@ from vibesop.cli.commands import (
     build as build_mod,
 )
 from vibesop.cli.commands import (
-    checkpoint as checkpoint_mod,
-)
-from vibesop.cli.commands import (
     config as config_mod,
-)
-from vibesop.cli.commands import (
-    deploy as deploy_mod,
 )
 from vibesop.cli.commands import (
     detect as detect_mod,
 )
 from vibesop.cli.commands import (
     execute as execute_mod,
-)
-from vibesop.cli.commands import (
-    hooks as hooks_mod,
 )
 from vibesop.cli.commands import (
     import_rules as import_rules_mod,
@@ -77,13 +79,7 @@ from vibesop.cli.commands import (
     targets as targets_mod,
 )
 from vibesop.cli.commands import (
-    toolchain as toolchain_mod,
-)
-from vibesop.cli.commands import (
     tools_cmd as tools_mod,
-)
-from vibesop.cli.commands import (
-    worktree as worktree_mod,
 )
 
 config_app = typer.Typer(help="Configuration management")
@@ -104,7 +100,6 @@ def register(app: typer.Typer) -> None:
 
     app.command()(init_mod.init)
     app.command()(build_mod.build)
-    app.command()(deploy_mod.deploy)
     app.command()(switch_mod.switch)
     app.command("inspect")(inspect_mod.inspect_cmd)
     app.command()(targets_mod.targets)
@@ -125,18 +120,10 @@ def register(app: typer.Typer) -> None:
     skills_app.command("status")(skills_mod.status)
 
     app.command("skill-craft")(skill_craft_mod.skill_craft)
-
-    app.command()(worktree_mod.worktree)
-
-    app.command()(toolchain_mod.toolchain)
     app.command()(tools_mod.tools)
 
     app.command("memory")(memory_mod.memory)
     app.add_typer(instinct_mod.app, name="instinct")
-
-    app.command()(checkpoint_mod.checkpoint)
-
-    app.command()(hooks_mod.hooks)
 
     app.command("import-rules")(import_rules_mod.import_rules)
 
@@ -145,3 +132,38 @@ def register(app: typer.Typer) -> None:
 
     app.command()(execute_mod.execute)
     app.command("execute-list")(execute_mod.list_available)
+
+    # Register legacy (deprecated) commands if enabled
+    _register_legacy_commands(app)
+
+
+def _register_legacy_commands(app: typer.Typer) -> None:
+    """Conditionally register legacy/deprecated commands.
+
+    These commands are deprecated and will be removed in v5.0.0.
+    They are only loaded if VIBESOP_ENABLE_LEGACY is set.
+
+    Args:
+        app: Main Typer application
+    """
+    import os
+
+    if os.getenv("VIBESOP_ENABLE_LEGACY", "0").lower() not in ("1", "true", "yes"):
+        return
+
+    try:
+        from vibesop.cli.legacy import (
+            checkpoint,
+            deploy,
+            hooks,
+            toolchain,
+            worktree,
+        )
+
+        app.command()(deploy.deploy)
+        app.command()(toolchain.toolchain)
+        app.command()(worktree.worktree)
+        app.command()(checkpoint.checkpoint)
+        app.command()(hooks.hooks)
+    except ImportError:
+        pass

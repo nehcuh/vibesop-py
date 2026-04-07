@@ -2165,6 +2165,78 @@
       "query": "test query",
       "timestamp": "2026-04-07T21:57:40.670242",
       "was_helpful": false
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-07T22:19:08.698727",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-07T22:19:08.703491",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-07T22:19:08.708019",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-07T22:20:02.772410",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-07T22:20:02.777005",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-07T22:20:02.781790",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-07T22:21:18.237257",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-07T22:21:18.242045",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-07T22:21:18.246624",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-07T22:22:56.529597",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-07T22:22:56.534204",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-07T22:22:56.538734",
+      "was_helpful": false
     }
   ],
   "skill_scores": {
@@ -2247,10 +2319,10 @@
       "last_selected": "2026-04-05T15:56:47.322308"
     },
     "test-skill": {
-      "score": 0.48270669243503017,
-      "selection_count": 201,
-      "helpful_count": 67,
-      "last_selected": "2026-04-07T21:57:40.670242"
+      "score": 0.4841494003755463,
+      "selection_count": 213,
+      "helpful_count": 71,
+      "last_selected": "2026-04-07T22:22:56.538734"
     },
     "gstack/review": {
       "score": 0.8648947636399186,
@@ -2307,7 +2379,7 @@
       "/skill8": 1,
       "/skill9": 1,
       "/review": 64,
-      "test-skill": 315
+      "test-skill": 327
     },
     "query1": {
       "/review": 2
@@ -2323,7 +2395,7 @@
     },
     "query": {
       "/review": 1,
-      "test-skill": 315
+      "test-skill": 327
     },
     "quality": {
       "/review": 1

@@ -1,11 +1,19 @@
-"""Tests for vibe deploy command."""
+"""Tests for vibe deploy command.
 
+Note: The deploy command is deprecated and moved to legacy.
+Tests require VIBESOP_ENABLE_LEGACY=1 to run.
+"""
+
+import os
 import tempfile
 from pathlib import Path
 
 from typer.testing import CliRunner
 
 from vibesop.cli.main import app
+
+# Enable legacy commands for testing
+os.environ["VIBESOP_ENABLE_LEGACY"] = "1"
 
 runner = CliRunner()
 

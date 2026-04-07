@@ -1,8 +1,17 @@
-"""Tests for Phase 3 commands (quickstart, onboard, toolchain, scan, skill-craft, tools)."""
+"""Tests for Phase 3 commands (quickstart, onboard, toolchain, scan, skill-craft, tools).
+
+Note: The toolchain command is deprecated and moved to legacy.
+Tests require VIBESOP_ENABLE_LEGACY=1 to run.
+"""
+
+import os
 
 from typer.testing import CliRunner
 
 from vibesop.cli.main import app
+
+# Enable legacy commands for testing
+os.environ["VIBESOP_ENABLE_LEGACY"] = "1"
 
 runner = CliRunner()
 

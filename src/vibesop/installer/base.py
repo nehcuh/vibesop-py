@@ -4,12 +4,15 @@ This module provides the BaseInstaller class that all
 installers should inherit from.
 """
 
+import logging
 import shutil
 import subprocess
 import time
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any, ClassVar
+
+logger = logging.getLogger(__name__)
 
 
 class BaseInstaller(ABC):
@@ -83,7 +86,8 @@ class BaseInstaller(ABC):
             if expanded_path.exists():
                 shutil.rmtree(expanded_path)
             return True
-        except Exception:
+        except Exception as e:
+            logger.debug(f"Failed to remove directory {path}: {e}")
             return False
 
     def _check_command_available(self, command: str) -> bool:
@@ -419,6 +423,6 @@ class GitBasedInstaller(BaseInstaller):
             )
             if result.returncode == 0:
                 return result.stdout.strip()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Failed to get git version: {e}")
         return None

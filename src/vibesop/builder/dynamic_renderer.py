@@ -4,12 +4,15 @@ This module provides dynamic configuration generation
 based on configuration files and templates.
 """
 
+import logging
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, ClassVar, cast
 
 from jinja2 import Environment, FileSystemLoader
 from ruamel.yaml import YAML
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -220,7 +223,8 @@ class ConfigDrivenRenderer:
             }
 
             return self._parse_simple_equality(condition, context)
-        except Exception:
+        except Exception as e:
+            logger.debug(f"Failed to evaluate condition '{condition}': {e}")
             return False
 
     @staticmethod

@@ -1993,7 +1993,7 @@ requires-dist = [
     { name = "vibesop", extras = ["dev"], marker = "extra == 'test'" },
     { name = "vibesop", extras = ["dev", "test", "semantic"], marker = "extra == 'all'" },
 ]
-provides-extras = ["dev", "test", "semantic", "all"]
+provides-extras = ["dev", "test", "semantic", "legacy", "all"]
 
 [[package]]
 name = "virtualenv"

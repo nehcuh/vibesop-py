@@ -4,12 +4,15 @@ This module contains template definitions and loading logic
 for generating various types of documentation.
 """
 
+import logging
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
 from typing import ClassVar
 
 from jinja2 import Environment, FileSystemLoader, Template
+
+logger = logging.getLogger(__name__)
 
 
 class DocType(Enum):
@@ -103,8 +106,8 @@ class DocTemplates:
         if env and template_name:
             try:
                 return env.get_template(template_name)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Failed to load template {template_name}: {e}")
 
         # Fallback to default template
         return self.get_default_template(doc_type)

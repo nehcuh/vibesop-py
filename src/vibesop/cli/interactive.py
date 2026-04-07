@@ -4,6 +4,7 @@ This module provides interactive prompts, confirmations,
 and progress display for better user experience.
 """
 
+import logging
 from collections.abc import Callable
 from enum import Enum
 from typing import Any
@@ -13,6 +14,7 @@ from rich.prompt import Confirm
 from rich.table import Table
 
 console = Console()
+logger = logging.getLogger(__name__)
 
 
 class InteractionMode(Enum):
@@ -94,7 +96,8 @@ class UserInteractor:
                 default=default,
             )
             return bool(result)
-        except Exception:
+        except Exception as e:
+            logger.debug(f"Rich prompt failed, falling back to basic input: {e}")
             prompt = f"{question} [{default_str}]: "
             while True:
                 response = input(prompt).strip().lower()
@@ -144,7 +147,8 @@ class UserInteractor:
 
                 console.print(f"[red]Please enter a number between 1 and {len(options)}[/red]")
 
-            except Exception:
+            except Exception as e:
+                logger.debug(f"Invalid choice input: {e}")
                 console.print("[red]Invalid input[/red]")
 
     def ask_input(
@@ -176,7 +180,8 @@ class UserInteractor:
                 else:
                     return response
 
-            except Exception:
+            except Exception as e:
+                logger.debug(f"Invalid input: {e}")
                 console.print("[red]Invalid input[/red]")
 
     def ask_password(self, question: str) -> str:
@@ -187,7 +192,8 @@ class UserInteractor:
 
         try:
             return getpass.getpass(question + ": ")
-        except Exception:
+        except Exception as e:
+            logger.debug(f"getpass failed, falling back to ask_input: {e}")
             return self.ask_input(question)
 
     def show_table(self, title: str, columns: list[str], rows: list[list[str]]) -> None:

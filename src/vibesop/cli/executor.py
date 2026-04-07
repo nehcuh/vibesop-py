@@ -9,11 +9,14 @@ This module is NOT part of VibeSOP's core functionality.
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import Any
 
 from vibesop.core.skills.base import SkillContext, SkillResult
 from vibesop.core.skills.loader import SkillLoader
+
+logger = logging.getLogger(__name__)
 
 
 async def execute_skill(
@@ -99,6 +102,6 @@ def _auto_record_selection(
 
         learner.record_selection(skill_id, query, was_helpful=True)
 
-    except Exception:
+    except Exception as e:
         # Silently fail - auto-recording should never break skill execution
-        pass
+        logger.debug(f"Failed to record preference for {skill_id}: {e}")

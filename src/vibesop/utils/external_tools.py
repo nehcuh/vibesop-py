@@ -4,6 +4,7 @@ This module provides capabilities for detecting and verifying
 the availability of external tools required by VibeSOP.
 """
 
+import logging
 import shutil
 import subprocess
 from dataclasses import dataclass
@@ -11,6 +12,8 @@ from enum import Enum
 from typing import Any, ClassVar
 
 from vibesop.security.scanner import SecurityScanner
+
+logger = logging.getLogger(__name__)
 
 
 class ToolStatus(Enum):
@@ -310,7 +313,8 @@ class ExternalToolsDetector:
 
             except subprocess.TimeoutExpired:
                 status = ToolStatus.UNKNOWN
-            except Exception:
+            except Exception as e:
+                logger.debug(f"Failed to detect tool {tool_name}: {e}")
                 status = ToolStatus.UNKNOWN
 
         return ToolInfo(
@@ -366,8 +370,9 @@ class ExternalToolsDetector:
 
             return pkg_version.parse(current) >= pkg_version.parse(minimum)
 
-        except Exception:
+        except Exception as e:
             # Fallback: simple string comparison
+            logger.debug(f"Failed to parse version '{current}' vs '{minimum}': {e}")
             return current >= minimum
 
     def get_tool_summary(self) -> dict[str, Any]:
