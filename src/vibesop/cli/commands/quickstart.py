@@ -26,6 +26,14 @@ from vibesop.installer.quickstart_runner import QuickstartRunner
 
 console = Console()
 
+# Platform to output directory mapping
+PLATFORM_OUTPUT_DIRS = {
+    "claude-code": "~/.claude",
+    "opencode": "~/.continue",
+    "cursor": "~/.cursor",
+    "superpowers": "~/.config/superpowers",
+}
+
 
 def quickstart(
     force: bool = typer.Option(
@@ -103,11 +111,14 @@ def quickstart(
         )
 
         if result.get("success"):
+            # Get output directory for selected platform
+            output_dir = PLATFORM_OUTPUT_DIRS.get(platform, "~/.claude")
+
             console.print(
                 "\n[green]✓ Setup complete![/green]\n"
                 "[dim]Next steps:[/dim]\n"
                 "  1. Review .vibe/ directory\n"
-                "  2. Run [cyan]vibe build --output ~/.claude[/cyan] to deploy\n"
+                f"  2. Run [cyan]vibe build --output {output_dir}[/cyan] to deploy\n"
                 "  3. Run [cyan]vibe route \"your query\"[/cyan] to route skills\n"
             )
         else:
