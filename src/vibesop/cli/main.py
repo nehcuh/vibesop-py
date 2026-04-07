@@ -43,10 +43,12 @@ def route(
     ),
     run: bool = typer.Option(False, "--run", "-r", help="Execute the matched skill after routing"),
     json_output: bool = typer.Option(False, "--json", "-j", help="Output as JSON"),
+    validate: bool = typer.Option(False, "--validate", "-V", help="Validate routing configuration"),
 ) -> None:
     """Route a query to the appropriate skill using unified routing.
 
     Use --run to execute the matched skill immediately.
+    Use --validate to test routing configuration.
     """
     import asyncio
     import time
@@ -97,6 +99,41 @@ def route(
                 border_style="yellow",
             )
         )
+
+    # Handle validation mode
+    if validate:
+        from rich.table import Table
+
+        console.print(f"\n[bold cyan]✓ Route Validation[/bold cyan]\n{'=' * 40}\n")
+
+        # Show router capabilities
+        caps = router.get_capabilities()
+        console.print("[dim]Router capabilities:[/dim]")
+        console.print(f"  Matchers: {len(caps['matchers'])}")
+        for matcher_info in caps["matchers"]:
+            console.print(f"    - {matcher_info['layer']}: {matcher_info['matcher']}")
+
+        config = caps.get("config", {})
+        console.print("\n[dim]Configuration:[/dim]")
+        console.print(f"  min_confidence: {config.get('min_confidence', 0.3)}")
+        console.print(f"  auto_select_threshold: {config.get('auto_select_threshold', 0.6)}")
+        console.print(f"  enable_embedding: {config.get('enable_embedding', False)}")
+
+        # Test the query
+        console.print(f"\n[bold]Testing query:[/bold] {query}\n")
+        if result.has_match:
+            console.print(f"  Primary: {result.primary.skill_id} ({result.primary.confidence:.0%})")
+            console.print(f"  Layer: {result.primary.layer.value}")
+        else:
+            console.print("  [yellow]No match found[/yellow]")
+
+        if result.alternatives:
+            console.print("\n[bold]Alternatives:[/bold]")
+            for i, alt in enumerate(result.alternatives[:5], 1):
+                console.print(f"  {i}. {alt.skill_id} - {alt.confidence:.0%}")
+
+        console.print("\n[green]✓ Validation complete[/green]")
+        raise typer.Exit(0)
 
     # Execute if --run flag is set and we have a match
     if run and result.has_match:

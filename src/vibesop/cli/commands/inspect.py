@@ -60,6 +60,7 @@ def inspect_cmd(
         help="Show only configuration",
     ),
 ) -> None:
+    """Inspect current VibeSOP configuration and installation status."""
     project_path = project_path.expanduser().resolve()
 
     if skills_only:

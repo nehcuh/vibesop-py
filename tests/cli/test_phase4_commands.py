@@ -1,7 +1,11 @@
-"""Tests for Phase 4 commands (worktree, route-select, route-validate, import-rules).
+"""Tests for Phase 4 commands (worktree, route validation, import-rules).
 
-Note: The worktree command is deprecated and moved to legacy.
-Tests require VIBESOP_ENABLE_LEGACY=1 to run.
+Note:
+- The worktree command is deprecated and moved to legacy.
+- route-select was removed in v4.0.0 (use 'vibe route' instead).
+- route-cmd validate is now 'vibe route --validate'.
+
+Tests require VIBESOP_ENABLE_LEGACY=1 to run legacy command tests.
 """
 
 import os
@@ -32,37 +36,32 @@ class TestWorktreeCommand:
 
 
 class TestRouteSelectCommand:
-    """Test suite for route-select command."""
+    """Test suite for route-select command (deprecated)."""
 
-    def test_route_select_help(self) -> None:
-        """Test route-select help output."""
+    def test_route_select_removed(self) -> None:
+        """Test that route-select command was removed."""
         result = runner.invoke(app, ["route-cmd", "select", "--help"])
-        assert result.exit_code == 0
-        assert "select" in result.stdout.lower()
-
-    def test_route_select_with_query(self) -> None:
-        """Test route-select with query."""
-        result = runner.invoke(app, ["route-cmd", "select", "test query"])
-        assert result.exit_code == 0
+        # Command should not exist anymore (exit code 2 for typer usage error)
+        assert result.exit_code != 0
 
 
 class TestRouteValidateCommand:
-    """Test suite for route-validate command."""
+    """Test suite for route validation (now via --validate flag)."""
 
     def test_route_validate_help(self) -> None:
-        """Test route-validate help output."""
-        result = runner.invoke(app, ["route-cmd", "validate", "--help"])
+        """Test route --validate help output."""
+        result = runner.invoke(app, ["route", "--help"])
         assert result.exit_code == 0
         assert "validate" in result.stdout.lower()
 
     def test_route_validate_default(self) -> None:
-        """Test route-validate default."""
-        result = runner.invoke(app, ["route-cmd", "validate"])
+        """Test route --validate with query."""
+        result = runner.invoke(app, ["route", "test query", "--validate"])
         assert result.exit_code == 0
 
-    def test_route_validate_with_pattern(self) -> None:
-        """Test route-validate with pattern."""
-        result = runner.invoke(app, ["route-cmd", "validate", "--pattern", "test"])
+    def test_route_validate_short_flag(self) -> None:
+        """Test route --validate with short flag."""
+        result = runner.invoke(app, ["route", "test", "-V"])
         assert result.exit_code == 0
 
 

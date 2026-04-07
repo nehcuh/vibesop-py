@@ -61,9 +61,6 @@ from vibesop.cli.commands import (
     quickstart as quickstart_mod,
 )
 from vibesop.cli.commands import (
-    route_commands as route_mod,
-)
-from vibesop.cli.commands import (
     scan as scan_mod,
 )
 from vibesop.cli.commands import (
@@ -83,20 +80,15 @@ from vibesop.cli.commands import (
 )
 
 config_app = typer.Typer(help="Configuration management")
-route_app = typer.Typer(help="Route management")
 skills_app = typer.Typer(help="Skill storage management")
 
 
 def register(app: typer.Typer) -> None:
     """Register all subcommands with the main app."""
     app.add_typer(config_app, name="config")
-    app.add_typer(route_app, name="route-cmd")
     app.add_typer(skills_app, name="skills")
 
     config_app.command()(config_mod.config)
-
-    route_app.command("select")(route_mod.route_select)
-    route_app.command("validate")(route_mod.route_validate)
 
     app.command()(init_mod.init)
     app.command()(build_mod.build)

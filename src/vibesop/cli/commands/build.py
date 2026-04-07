@@ -8,17 +8,17 @@ Usage:
     vibe build --help
 
 Examples:
-    # Build for Claude Code
+    # Build for Claude Code (outputs to .vibe/dist/claude-code)
     vibe build claude-code
+
+    # Build and deploy directly to Claude Code config
+    vibe build claude-code --output ~/.claude
 
     # Build with specific profile
     vibe build claude-code --profile minimal
 
-    # Build with overlay
+    # Build with overlay customization
     vibe build claude-code --overlay .vibe/overlay.yaml
-
-    # Build to custom output
-    vibe build claude-code --output ./dist
 
     # Build using configured platform (from config.yaml)
     vibe build
@@ -112,11 +112,18 @@ def _execute_build(
                 rel_path = Path(file_path).relative_to(Path.cwd())
                 console.print(f"  📄 {rel_path}")
 
-        console.print(
-            f"\n[dim]Next steps:[/dim]\n"
-            f"  1. Review generated files in [cyan]{output_dir}[/cyan]\n"
-            f"  2. Run [cyan]vibe deploy {target}[/cyan] to install\n"
-        )
+        # Suggest deployment based on output location
+        if str(output_dir) == str(Path.home() / ".claude"):
+            console.print(
+                f"\n[dim]✓ Deployed to Claude Code config directory[/dim]\n"
+                f"[dim]Restart Claude Code to apply changes.[/dim]\n"
+            )
+        else:
+            console.print(
+                f"\n[dim]Next steps:[/dim]\n"
+                f"  1. Review generated files in [cyan]{output_dir}[/cyan]\n"
+                f"  2. For deployment, use: [cyan]vibe build {target} --output ~/.claude[/cyan]\n"
+            )
 
         return
 
@@ -163,7 +170,7 @@ def build(
         None,
         "--output",
         "-o",
-        help="Output directory (default: .vibe/dist/<target>)",
+        help="Output directory (default: .vibe/dist/<target>). Use ~/.claude to deploy directly.",
         exists=False,
     ),
     overlay: Path | None = typer.Option(  # noqa: B008

@@ -1,6 +1,6 @@
 # VibeSOP - Python 版本
 
-> **现代化 Python 实现** 的久经考验的 AI 辅助开发工作流 SOP。
+> **现代化 Python 实现** 的 AI 辅助开发工作流 SOP。
 
 [![Python](https://img.shields.io/badge/Python-3.12+-blue.svg)](https://www.python.org/downloads/)
 [![Ruff](https://img.shields.io/badge/Ruff-Enabled-black.svg)](https://github.com/astral-sh/ruff)
