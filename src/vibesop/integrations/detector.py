@@ -5,11 +5,14 @@ This module detects external skill pack integrations
 like Superpowers and gstack.
 """
 
+import logging
 from enum import Enum
 from pathlib import Path
 from typing import ClassVar
 
 from pydantic import BaseModel, Field
+
+logger = logging.getLogger(__name__)
 
 
 class IntegrationStatus(Enum):
@@ -275,7 +278,8 @@ class IntegrationDetector:
                         return data.get("version")
                     else:
                         return content.strip()
-                except Exception:
+                except Exception as e:
+                    logger.debug(f"Failed to read version from {version_file}: {e}")
                     continue
 
         return None

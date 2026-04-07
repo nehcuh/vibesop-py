@@ -20,7 +20,7 @@ VibeSOP is a **routing engine** that connects natural language queries to the ap
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────────┐  │
 │  │ CLI Layer   │  │ UnifiedRouter│  │ Skill Management       │  │
 │  │             │  │             │  │                         │  │
-│  │ vibe route  │──│ 5-Layer     │──│ Discovery → Security    │  │
+│  │ vibe route  │──│ 7-Layer     │──│ Discovery → Security    │  │
 │  │ vibe execute│  │ Pipeline    │  │ Audit → Metadata        │  │
 │  │ vibe install│  │             │  │                         │  │
 │  └─────────────┘  └─────────────┘  └─────────────────────────┘  │
@@ -63,7 +63,7 @@ vibe skills list                  → SkillManager.list_skills()
 
 ### 2. Routing Engine (`src/vibesop/core/routing/`)
 
-The heart of VibeSOP — routes queries to skills using a 5-layer pipeline.
+The heart of VibeSOP — routes queries to skills using a 7-layer pipeline.
 
 #### UnifiedRouter
 
@@ -78,7 +78,7 @@ result = router.route("debug this error")
 # result.routing_path = [RoutingLayer.KEYWORD]
 ```
 
-**5-Layer Matching Pipeline**:
+**7-Layer Matching Pipeline**:
 
 | Layer | Strategy | Speed | When Used |
 |-------|----------|-------|-----------|
@@ -215,7 +215,7 @@ User Query
          │
          ▼
 ┌─────────────────┐
-│ UnifiedRouter   │  → 5-layer matching pipeline
+│ UnifiedRouter   │  → 7-layer matching pipeline
 │   .route()      │
 └────────┬────────┘
          │
@@ -381,7 +381,7 @@ tests/
 3. **Portable** — Works across AI tools
 4. **Human Readable** — Easy to understand
 
-### Why 5-Layer Pipeline?
+### Why 7-Layer Pipeline?
 
 1. **Accuracy** — Multiple strategies catch different patterns
 2. **Performance** — Fast layers first, slow layers as fallback

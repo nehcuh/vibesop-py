@@ -2111,6 +2111,60 @@
       "query": "test query",
       "timestamp": "2026-04-06T22:34:41.709251",
       "was_helpful": false
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-07T21:55:49.933437",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-07T21:55:49.951572",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-07T21:55:49.967228",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-07T21:56:59.643161",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-07T21:56:59.658621",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-07T21:56:59.674788",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-07T21:57:40.638721",
+      "was_helpful": true
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-07T21:57:40.654373",
+      "was_helpful": false
+    },
+    {
+      "skill_id": "test-skill",
+      "query": "test query",
+      "timestamp": "2026-04-07T21:57:40.670242",
+      "was_helpful": false
     }
   ],
   "skill_scores": {
@@ -2193,25 +2247,25 @@
       "last_selected": "2026-04-05T15:56:47.322308"
     },
     "test-skill": {
-      "score": 0.4815672547226222,
-      "selection_count": 192,
-      "helpful_count": 64,
-      "last_selected": "2026-04-06T22:34:41.709251"
+      "score": 0.48270669243503017,
+      "selection_count": 201,
+      "helpful_count": 67,
+      "last_selected": "2026-04-07T21:57:40.670242"
     },
     "gstack/review": {
-      "score": 0.8698947636399186,
+      "score": 0.8648947636399186,
       "selection_count": 120,
       "helpful_count": 120,
       "last_selected": "2026-04-06T14:56:35.039458"
     },
     "/verification-before-completion": {
-      "score": 0.8283873553982287,
+      "score": 0.8233873553982287,
       "selection_count": 22,
       "helpful_count": 22,
       "last_selected": "2026-04-06T13:29:39.188539"
     },
     "verification-before-completion": {
-      "score": 0.823610974479161,
+      "score": 0.818610974479161,
       "selection_count": 18,
       "helpful_count": 18,
       "last_selected": "2026-04-06T14:56:35.023599"
@@ -2253,7 +2307,7 @@
       "/skill8": 1,
       "/skill9": 1,
       "/review": 64,
-      "test-skill": 306
+      "test-skill": 315
     },
     "query1": {
       "/review": 2
@@ -2269,7 +2323,7 @@
     },
     "query": {
       "/review": 1,
-      "test-skill": 306
+      "test-skill": 315
     },
     "quality": {
       "/review": 1

@@ -1,7 +1,8 @@
 """VibeSOP toolchain command - Manage development toolchain.
 
-This command manages the development tools used by VibeSOP
-such as uv, ruff, pyright, etc.
+.. deprecated:: 4.1.0
+    The `vibe toolchain` command is deprecated and will be removed in v5.0.0.
+    Development tool management is out of scope for a routing engine.
 
 Usage:
     vibe toolchain list
@@ -27,6 +28,15 @@ from rich.table import Table
 from vibesop.utils.external_tools import ExternalToolsDetector, ToolStatus
 
 console = Console()
+
+
+def _show_deprecation_warning():
+    """Show deprecation warning for this command."""
+    console.print(
+        "[yellow]⚠️  Warning:[/] The 'vibe toolchain' command is deprecated and will be removed in v5.0.0.",
+        "Development tool management is out of scope for a routing engine.",
+    )
+    console.print("Use your system package manager or tool-specific installation methods instead.\n")
 
 
 def toolchain(

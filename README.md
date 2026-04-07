@@ -101,7 +101,7 @@ info = manager.get_skill_info("systematic-debugging")
 
 ## How It Works
 
-### 5-Layer Routing Pipeline
+### 7-Layer Routing Pipeline
 
 VibeSOP tries multiple matching strategies in order:
 
@@ -176,7 +176,7 @@ Knowing which skill to use is more valuable than being able to execute it. VibeS
 
 ### Matching > Guessing
 
-5-layer matching pipeline ensures accurate routing. No more "Did you mean...?"
+7-layer matching pipeline ensures accurate routing. No more "Did you mean...?"
 
 ### Memory > Intelligence
 
@@ -188,7 +188,7 @@ Any skill following the SKILL.md specification can integrate. No vendor lock-in.
 
 ## Roadmap
 
-- [x] v4.0.0: Core routing engine with 5-layer pipeline
+- [x] v4.0.0: Core routing engine with 7-layer pipeline
 - [ ] v4.1.0: AI Triage production readiness
 - [ ] v4.2.0: Skill health monitoring
 - [ ] v5.0.0: Plugin system for custom matchers

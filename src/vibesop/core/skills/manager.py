@@ -14,12 +14,15 @@ For routing (discovery), use UnifiedRouter.route() instead:
     result = router.route("your query")
 """
 
+import logging
 from pathlib import Path
 from typing import Any
 
 from vibesop.core.config import ConfigManager
 from vibesop.core.skills.base import Skill
 from vibesop.core.skills.loader import SkillLoader
+
+logger = logging.getLogger(__name__)
 
 
 class SkillManager:
@@ -115,8 +118,8 @@ class SkillManager:
                                 "source": "registry",
                             }
                         )
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Failed to load registry skills: {e}")
 
         return skills
 

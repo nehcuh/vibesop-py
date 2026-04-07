@@ -13,11 +13,14 @@ Usage:
     print(enhanced.description)
 """
 
+import logging
 from dataclasses import dataclass
 from typing import Any, cast
 
 from vibesop.core.session_analyzer import SkillSuggestion
 from vibesop.llm import create_from_env
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -53,7 +56,8 @@ class AIEnhancer:
 
             return enhanced
 
-        except Exception:
+        except Exception as e:
+            logger.debug(f"AI enhancement failed, using fallback: {e}")
             return self._fallback_enhancement(suggestion)
 
     def enhance_batch(
@@ -66,7 +70,8 @@ class AIEnhancer:
             try:
                 enhanced = self.enhance_suggestion(suggestion)
                 enhanced_skills.append(enhanced)
-            except Exception:
+            except Exception as e:
+                logger.debug(f"AI enhancement failed for suggestion, using fallback: {e}")
                 enhanced_skills.append(self._fallback_enhancement(suggestion))
 
         return enhanced_skills
@@ -152,7 +157,8 @@ Return ONLY the JSON, no other text.
                 confidence=confidence,
             )
 
-        except Exception:
+        except Exception as e:
+            logger.debug(f"AI enhancement failed, using fallback: {e}")
             return self._fallback_enhancement(original)
 
     def _fallback_enhancement(

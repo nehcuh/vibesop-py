@@ -13,12 +13,15 @@ Usage:
 
 from __future__ import annotations
 
+import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 
 from vibesop.core.matching import MatchResult
+
+logger = logging.getLogger(__name__)
 
 
 class ConflictReason(Enum):
@@ -228,7 +231,8 @@ class RecencyStrategy(ResolutionStrategy):
 
             self._recent_skills = recent
             return recent
-        except Exception:
+        except Exception as e:
+            logger.debug(f"Failed to load recent skills from storage: {e}")
             self._recent_skills = {}
             return {}
 

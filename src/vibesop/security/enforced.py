@@ -111,8 +111,8 @@ def scan_file_before_load(
 
     Example:
         >>> @scan_file_before_load()
-        ... def load_skill(path: Path) -> SkillDefinition:
-        ...     return SkillDefinition.from_file(path)
+        ... def load_skill(path: Path) -> LoadedSkill:
+        ...     return LoadedSkill.from_file(path)
     """
 
     def decorator(func: Callable[..., T]) -> Callable[..., T]:

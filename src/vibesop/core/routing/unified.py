@@ -17,12 +17,15 @@ Example:
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 import threading
 import time
 from pathlib import Path
 from typing import Any, ClassVar
+
+logger = logging.getLogger(__name__)
 
 from vibesop.core.config import ConfigManager
 from vibesop.core.config import RoutingConfig as ConfigRoutingConfig
@@ -40,6 +43,7 @@ from vibesop.core.optimization import (
     PreferenceBooster,
     SkillClusterIndex,
 )
+from vibesop.core.routing.cache import CacheManager
 from vibesop.core.routing.explicit_layer import check_explicit_override
 from vibesop.core.routing.scenario_layer import load_scenarios, match_scenario
 
@@ -60,12 +64,15 @@ class UnifiedRouter:
         ...     print(f"Matched: {result.primary.skill_id}")
     """
 
-    # Layer priority (fastest first, then more accurate)
+    # Layer priority (all 7 layers in execution order)
     _LAYER_PRIORITY: ClassVar[list[RoutingLayer]] = [
-        RoutingLayer.KEYWORD,
-        RoutingLayer.TFIDF,
-        RoutingLayer.EMBEDDING,
-        RoutingLayer.LEVENSHTEIN,
+        RoutingLayer.AI_TRIAGE,     # Layer 0: AI semantic classification
+        RoutingLayer.EXPLICIT,      # Layer 1: Direct command override
+        RoutingLayer.SCENARIO,      # Layer 2: Predefined scenario patterns
+        RoutingLayer.KEYWORD,       # Layer 3: Fast keyword matching
+        RoutingLayer.TFIDF,         # Layer 4: TF-IDF semantic similarity
+        RoutingLayer.EMBEDDING,     # Layer 5: Deep vector embeddings
+        RoutingLayer.LEVENSHTEIN,   # Layer 6: Fuzzy typo tolerance
     ]
 
     def __init__(
@@ -143,6 +150,11 @@ class UnifiedRouter:
             weight=pref_config.weight,
             min_samples=pref_config.min_samples,
             storage_path=str(self.project_root / ".vibe" / "preferences.json"),
+        )
+
+        # Initialize cache manager (unified caching with memory + file backing)
+        self._cache_manager = CacheManager(
+            cache_dir=self.project_root / ".vibe" / "cache",
         )
 
         # Preload candidates for performance optimization
@@ -227,8 +239,9 @@ class UnifiedRouter:
                     )
                     self._set_cache(cache_key, result.to_dict())
                     return result
-        except Exception:
-            pass  # Fall through to next layer
+        except Exception as e:
+            logger.debug(f"AI triage failed, falling through to next layer: {e}")
+            # Fall through to next layer
 
         return None
 
@@ -245,7 +258,8 @@ class UnifiedRouter:
 
             llm = create_from_env()
             return llm if llm.configured() else None
-        except Exception:
+        except Exception as e:
+            logger.debug(f"Failed to initialize LLM client: {e}")
             return None
 
     def _parse_ai_triage_response(self, response: str) -> str | None:
@@ -259,41 +273,24 @@ class UnifiedRouter:
         return None
 
     def _get_cache(self, key: str) -> SkillRoute | None:
-        """Get cached result."""
-        cache_dir = self.project_root / ".vibe" / "cache"
-        cache_file = cache_dir / f"{hash(key) % 100000}.json"
-        if cache_file.exists():
+        """Get cached result using CacheManager."""
+        data = self._cache_manager.get(key)
+        if data:
             try:
-                with cache_file.open("r") as f:
-                    data = json.load(f)
-                # Simple TTL: 1 hour
-                import time as _time
-
-                if _time.time() - data.get("timestamp", 0) < 3600:
-                    return SkillRoute(
-                        skill_id=data["skill_id"],
-                        confidence=data["confidence"],
-                        layer=RoutingLayer(data["layer"]),
-                        source=data["source"],
-                        metadata=data.get("metadata", {}),
-                    )
-            except Exception:
-                pass
+                return SkillRoute(
+                    skill_id=data["skill_id"],
+                    confidence=data["confidence"],
+                    layer=RoutingLayer(data["layer"]),
+                    source=data["source"],
+                    metadata=data.get("metadata", {}),
+                )
+            except (KeyError, TypeError) as e:
+                logger.debug(f"Failed to deserialize cached SkillRoute: {e}")
         return None
 
     def _set_cache(self, key: str, data: dict[str, Any]) -> None:
-        """Cache routing result."""
-        import time as _time
-
-        cache_dir = self.project_root / ".vibe" / "cache"
-        cache_dir.mkdir(parents=True, exist_ok=True)
-        cache_file = cache_dir / f"{hash(key) % 100000}.json"
-        data["timestamp"] = _time.time()
-        try:
-            with cache_file.open("w") as f:
-                json.dump(data, f)
-        except Exception:
-            pass
+        """Cache routing result using CacheManager."""
+        self._cache_manager.set(key, data, ttl=3600)
 
     def route(
         self,
@@ -508,7 +505,8 @@ class UnifiedRouter:
                         duration_ms=duration_ms,
                     )
 
-            except Exception:
+            except Exception as e:
+                logger.debug(f"Matcher {type(matcher).__name__} failed: {e}, trying next matcher")
                 # Try next matcher on error
                 continue
 
@@ -539,7 +537,8 @@ class UnifiedRouter:
         for _, matcher in self._matchers:
             try:
                 return matcher.score(query, candidate, context)
-            except Exception:
+            except Exception as e:
+                logger.debug(f"Matcher {type(matcher).__name__}.score() failed: {e}, trying next")
                 continue
 
         return 0.0

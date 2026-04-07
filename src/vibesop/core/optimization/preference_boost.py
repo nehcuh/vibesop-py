@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING
 
 from vibesop.core.matching import MatchResult
 
 if TYPE_CHECKING:
     from vibesop.core.preference import PreferenceLearner
+
+logger = logging.getLogger(__name__)
 
 
 class PreferenceBooster:
@@ -41,7 +44,8 @@ class PreferenceBooster:
             return list(matches)
         try:
             learner = self._get_learner()
-        except Exception:
+        except Exception as e:
+            logger.debug(f"Preference learner not available: {e}")
             return list(matches)
 
         skill_ids = [m.skill_id for m in matches]
@@ -80,5 +84,5 @@ class PreferenceBooster:
         try:
             learner = self._get_learner()
             learner.record_selection(skill_id, query, was_helpful=helpful)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Failed to record preference: {e}")

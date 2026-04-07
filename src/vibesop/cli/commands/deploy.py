@@ -1,6 +1,8 @@
 """VibeSOP deploy command - Deploy configuration to platform.
 
-This command installs generated configuration to the target platform.
+.. deprecated:: 4.1.0
+    The `vibe deploy` command is deprecated and will be removed in v5.0.0.
+    This functionality is out of scope for a routing engine.
 
 Usage:
     vibe deploy TARGET [DESTINATION]
@@ -24,6 +26,15 @@ import typer
 from rich.console import Console
 
 console = Console()
+
+
+def _show_deprecation_warning():
+    """Show deprecation warning for this command."""
+    console.print(
+        "[yellow]⚠️  Warning:[/] The 'vibe deploy' command is deprecated and will be removed in v5.0.0.",
+        "This functionality is out of scope for a routing engine.",
+    )
+    console.print("Consider using platform-specific installation methods instead.\n")
 
 
 def deploy(
@@ -82,6 +93,7 @@ def deploy(
         # Preview what would be deployed
         vibe deploy claude-code --dry-run
     """
+    _show_deprecation_warning()
     _execute_deploy(
         target=target,
         destination=destination,

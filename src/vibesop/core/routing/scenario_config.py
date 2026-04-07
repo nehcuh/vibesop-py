@@ -8,6 +8,7 @@ Project-level overrides can be specified in .vibe/skill-routing.yaml
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import Any
 
@@ -15,6 +16,8 @@ from ruamel.yaml import YAML
 
 yaml = YAML()
 yaml.preserve_quotes = True
+
+logger = logging.getLogger(__name__)
 
 # Fallback scenarios if YAML file is not found
 DEFAULT_SCENARIOS: list[dict[str, Any]] = [
@@ -94,7 +97,8 @@ def load_scenarios(project_root: str | Path = ".") -> list[dict[str, Any]]:
 
         return scenarios if scenarios else DEFAULT_SCENARIOS
 
-    except Exception:
+    except (OSError, Exception) as e:
+        logger.debug(f"Failed to load scenario config from {config_path}: {e}")
         return DEFAULT_SCENARIOS
 
 
@@ -121,5 +125,6 @@ def get_routing_hints(project_root: str | Path = ".") -> list[dict[str, Any]]:
 
         return data.get("routing_hints", [])
 
-    except Exception:
+    except (OSError, Exception) as e:
+        logger.debug(f"Failed to load routing hints from {config_path}: {e}")
         return []

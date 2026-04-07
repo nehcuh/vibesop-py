@@ -8,7 +8,7 @@
 The routing system is VibeSOP's core component. It takes user queries and returns the most appropriate skill(s) to handle them.
 
 ```
-Query → UnifiedRouter → 5-Layer Pipeline → RoutingResult
+Query → UnifiedRouter → 7-Layer Pipeline → RoutingResult
 ```
 
 ## UnifiedRouter
@@ -29,7 +29,7 @@ class UnifiedRouter:
         """Route query to best matching skill."""
 ```
 
-## 5-Layer Pipeline
+## 7-Layer Pipeline
 
 Layers are tried in priority order. First match wins (except for alternatives).
 
@@ -51,12 +51,22 @@ Layers are tried in priority order. First match wins (except for alternatives).
 │ • Latency: <0.1ms                                           │
 │ • Use when: Common scenarios (debug, review, deploy)        │
 ├─────────────────────────────────────────────────────────────┤
-│ Layer 3: Keyword/TF-IDF Matching                            │
-│ • Token-based lexical and semantic matching                 │
+│ Layer 3: Keyword Matching                                   │
+│ • Exact token-based matching                                │
+│ • Latency: <0.1ms                                           │
+│ • Use when: Direct keyword matches                          │
+├─────────────────────────────────────────────────────────────┤
+│ Layer 4: TF-IDF Semantic Matching                           │
+│ • Cosine similarity on term vectors                         │
 │ • Latency: ~5-10ms                                          │
 │ • Use when: General queries                                 │
 ├─────────────────────────────────────────────────────────────┤
-│ Layer 4: Fuzzy Fallback                                     │
+│ Layer 5: Embedding-Based Matching                           │
+│ • Vector similarity for semantic understanding              │
+│ • Latency: ~10-20ms                                         │
+│ • Use when: Semantic meaning > exact keywords               │
+├─────────────────────────────────────────────────────────────┤
+│ Layer 6: Fuzzy Fallback                                     │
 │ • Levenshtein distance for typos                            │
 │ • Latency: ~10-20ms                                         │
 │ • Use when: No matches in upper layers                      │
@@ -114,21 +124,47 @@ scenarios:
 
 **Returns**: confidence=0.8
 
-### Layer 3: Keyword/TF-IDF
+### Layer 3: Keyword Matching
 
-**Implementation**: `KeywordMatcher` and `TFIDFMatcher`
+**Implementation**: `KeywordMatcher`
 
 **Flow**:
 1. **Prefilter**: Exclude irrelevant namespaces
-2. **Keyword Match**: Exact token matching
-3. **TF-IDF**: Cosine similarity on term vectors
-4. **Confidence Threshold**: Default 0.6 (configurable)
+2. **Exact Match**: Direct token matching
+3. **Confidence Threshold**: Default 0.6 (configurable)
 
 **Performance**:
-- P50: 0.06ms
-- P95: 0.08ms (with cache)
+- P50: 0.03ms
+- P95: 0.05ms
 
-### Layer 4: Fuzzy Fallback
+### Layer 4: TF-IDF Semantic Matching
+
+**Implementation**: `TFIDFMatcher`
+
+**Flow**:
+1. **Vectorize**: Convert query and candidates to TF-IDF vectors
+2. **Similarity**: Cosine similarity computation
+3. **Confidence Threshold**: Default 0.6 (configurable)
+
+**Performance**:
+- P50: 6.0ms
+- P95: 7.0ms (with cache)
+
+### Layer 5: Embedding-Based Matching
+
+**Implementation**: `EmbeddingMatcher` (optional)
+
+**Flow**:
+1. **Encode**: Convert query to vector embedding
+2. **Similarity**: Vector similarity computation
+3. **Confidence Threshold**: Default 0.6 (configurable)
+
+**Use When**:
+- Semantic understanding needed
+- Cross-language queries
+- Concept-based matching
+
+### Layer 6: Fuzzy Fallback
 
 **Implementation**: `LevenshteinMatcher`
 
@@ -140,7 +176,7 @@ scenarios:
 
 ## Optimization Layer
 
-After the 5-layer pipeline, optimization is applied:
+After the 7-layer matching pipeline, optimization is applied:
 
 ### Preference Boost
 

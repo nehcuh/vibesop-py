@@ -1,6 +1,8 @@
 """VibeSOP worktree command - Git worktree management.
 
-This command manages git worktrees for isolated development.
+.. deprecated:: 4.1.0
+    The `vibe worktree` command is deprecated and will be removed in v5.0.0.
+    Git worktree management should use native git commands or external tools.
 
 Usage:
     vibe worktree list
@@ -27,6 +29,15 @@ from rich.console import Console
 from rich.table import Table
 
 console = Console()
+
+
+def _show_deprecation_warning():
+    """Show deprecation warning for this command."""
+    console.print(
+        "[yellow]⚠️  Warning:[/] The 'vibe worktree' command is deprecated and will be removed in v5.0.0.",
+        "Git worktree management is out of scope for a routing engine.",
+    )
+    console.print("Use native git commands: git worktree list/add/remove\n")
 
 
 def worktree(

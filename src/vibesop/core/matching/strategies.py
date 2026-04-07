@@ -10,7 +10,7 @@ This module provides production-ready implementations of the IMatcher protocol:
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from vibesop.core.matching.base import (
     MatchResult,
@@ -59,7 +59,7 @@ class KeywordMatcher:
     def match(
         self,
         query: str,
-        candidates: list[dict[str, any]],
+        candidates: list[dict[str, Any]],
         _context: RoutingContext | None = None,
         top_k: int = 10,
     ) -> list[MatchResult]:
@@ -105,7 +105,7 @@ class KeywordMatcher:
     def score(
         self,
         query: str,
-        candidate: dict[str, any],
+        candidate: dict[str, Any],
         _context: RoutingContext | None = None,
     ) -> float:
         """Score a single candidate."""
@@ -116,7 +116,7 @@ class KeywordMatcher:
         )
         return self._score(query_tokens, candidate)
 
-    def _score(self, query_tokens: set[str], candidate: dict[str, any]) -> float:
+    def _score(self, query_tokens: set[str], candidate: dict[str, Any]) -> float:
         """Calculate keyword match score."""
         # Get text fields from candidate
         text_fields = [
@@ -141,7 +141,7 @@ class KeywordMatcher:
     def _get_matched_keywords(
         self,
         query_tokens: set[str],
-        candidate: dict[str, any],
+        candidate: dict[str, Any],
     ) -> list[str]:
         """Get list of matched keywords."""
         text_fields = [
@@ -155,7 +155,7 @@ class KeywordMatcher:
 
         return list(query_tokens & candidate_tokens)
 
-    def get_capabilities(self) -> dict[str, any]:
+    def get_capabilities(self) -> dict[str, Any]:
         """Return matcher capabilities."""
         return {
             "type": "keyword",
@@ -184,7 +184,7 @@ class TFIDFMatcher:
         self._fitted = False
         self._candidate_vectors: dict[str, dict[str, float]] = {}
 
-    def fit(self, candidates: list[dict[str, any]]) -> None:
+    def fit(self, candidates: list[dict[str, Any]]) -> None:
         """Fit TF-IDF calculator on candidate corpus."""
         # Collect all documents
         documents = []
@@ -203,7 +203,7 @@ class TFIDFMatcher:
     def match(
         self,
         query: str,
-        candidates: list[dict[str, any]],
+        candidates: list[dict[str, Any]],
         _context: RoutingContext | None = None,
         top_k: int = 10,
     ) -> list[MatchResult]:
@@ -247,7 +247,7 @@ class TFIDFMatcher:
     def score(
         self,
         query: str,
-        candidate: dict[str, any],
+        candidate: dict[str, Any],
         _context: RoutingContext | None = None,
     ) -> float:
         """Score a single candidate."""
@@ -264,7 +264,7 @@ class TFIDFMatcher:
 
         return query_vec.dot_product(candidate_vec)
 
-    def _candidate_to_text(self, candidate: dict[str, any]) -> str:
+    def _candidate_to_text(self, candidate: dict[str, Any]) -> str:
         """Convert candidate to searchable text."""
         fields = [
             candidate.get("name", ""),
@@ -275,7 +275,7 @@ class TFIDFMatcher:
         ]
         return " ".join(fields)
 
-    def get_capabilities(self) -> dict[str, any]:
+    def get_capabilities(self) -> dict[str, Any]:
         """Return matcher capabilities."""
         return {
             "type": "tfidf",
@@ -304,7 +304,7 @@ class EmbeddingMatcher:
         self._config = config or MatcherConfig()
         self._model_name = model_name
         self._model = None
-        self._candidate_embeddings: dict[str, any] = None
+        self._candidate_embeddings: dict[str, Any] = None
 
     def _load_model(self) -> None:
         """Lazy load the embedding model."""
@@ -321,7 +321,7 @@ class EmbeddingMatcher:
                 "Install with: pip install sentence-transformers"
             ) from None
 
-    def fit(self, candidates: list[dict[str, any]]) -> None:
+    def fit(self, candidates: list[dict[str, Any]]) -> None:
         """Pre-compute embeddings for all candidates."""
         if np is None:
             raise ImportError("numpy is required for EmbeddingMatcher")
@@ -339,7 +339,7 @@ class EmbeddingMatcher:
     def match(
         self,
         query: str,
-        candidates: list[dict[str, any]],
+        candidates: list[dict[str, Any]],
         _context: RoutingContext | None = None,
         top_k: int = 10,
     ) -> list[MatchResult]:
@@ -393,14 +393,14 @@ class EmbeddingMatcher:
     def score(
         self,
         query: str,
-        candidate: dict[str, any],
+        candidate: dict[str, Any],
         context: RoutingContext | None = None,
     ) -> float:
         """Score a single candidate."""
         results = self.match(query, [candidate], context, top_k=1)
         return results[0].confidence if results else 0.0
 
-    def _candidate_to_text(self, candidate: dict[str, any]) -> str:
+    def _candidate_to_text(self, candidate: dict[str, Any]) -> str:
         """Convert candidate to searchable text."""
         fields = [
             candidate.get("name", ""),
@@ -409,7 +409,7 @@ class EmbeddingMatcher:
         ]
         return " ".join(f for f in fields if f)
 
-    def get_capabilities(self) -> dict[str, any]:
+    def get_capabilities(self) -> dict[str, Any]:
         """Return matcher capabilities."""
         return {
             "type": "embedding",
@@ -435,7 +435,7 @@ class LevenshteinMatcher:
     def match(
         self,
         query: str,
-        candidates: list[dict[str, any]],
+        candidates: list[dict[str, Any]],
         context: RoutingContext | None = None,
         top_k: int = 10,
     ) -> list[MatchResult]:
@@ -465,7 +465,7 @@ class LevenshteinMatcher:
     def score(
         self,
         query: str,
-        candidate: dict[str, any],
+        candidate: dict[str, Any],
         _context: RoutingContext | None = None,
     ) -> float:
         """Score a single candidate using normalized Levenshtein."""
@@ -505,11 +505,11 @@ class LevenshteinMatcher:
 
         return previous_row[-1]
 
-    def _candidate_to_text(self, candidate: dict[str, any]) -> str:
+    def _candidate_to_text(self, candidate: dict[str, Any]) -> str:
         """Convert candidate to searchable text."""
         return candidate.get("name", "") + " " + candidate.get("description", "")
 
-    def get_capabilities(self) -> dict[str, any]:
+    def get_capabilities(self) -> dict[str, Any]:
         """Return matcher capabilities."""
         return {
             "type": "levenshtein",

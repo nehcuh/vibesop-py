@@ -9,7 +9,7 @@ Procedures) for AI-assisted development. It is NOT a consumer of the skills it p
 
 **VibeSOP (this project)** — The "skill factory":
 - Discovers skills from filesystem (gstack, superpowers, builtin)
-- Routes natural language queries to the right skill (5-layer routing)
+- Routes natural language queries to the right skill (7-layer routing)
 - Generates platform configuration (Claude Code, OpenCode)
 - Installs hooks, integrations, and workflows
 
@@ -28,10 +28,10 @@ AI assistants help you write code — not for the tool's own development.
 
 - `vibe skills` — Lists all skills VibeSOP can route to (discovery)
 - `vibe install <platform>` — Generates config with those skills for a target project
-- `vibe route "query"` — Routes a query to the best skill (uses 5-layer system)
+- `vibe route "query"` — Routes a query to the best skill (uses 7-layer system)
 - `vibe auto "query"` — Detects intent + auto-executes the matched skill
 
-### 5-Layer Routing Architecture
+### 7-Layer Routing Architecture
 
 ```
 User Query → Layer 0: AI Triage (LLM)
@@ -40,9 +40,13 @@ User Query → Layer 0: AI Triage (LLM)
               ↓ (no match)
             Layer 2: Scenario (debug/test/review/refactor keywords)
               ↓ (no match)
-            Layer 3: Semantic (TF-IDF + cosine similarity)
+            Layer 3: Keyword (exact token matching)
               ↓ (no match)
-            Layer 4: Fuzzy (Levenshtein distance)
+            Layer 4: TF-IDF Semantic (cosine similarity)
+              ↓ (no match)
+            Layer 5: Embedding (vector-based semantic)
+              ↓ (no match)
+            Layer 6: Fuzzy (Levenshtein distance)
               ↓ (no match)
             Fallback: riper-workflow
 ```
@@ -52,7 +56,7 @@ interface, registered in the `SkillRouter` handler chain.
 
 ### Key Modules
 
-- `core/routing/` — 5-layer routing engine with pluggable handlers
+- `core/routing/` — 7-layer routing engine with pluggable handlers
 - `triggers/` — Intent detection (keywords, regex, semantic)
 - `semantic/` — Sentence transformer-based semantic matching
 - `cli/` — Typer-based CLI with subcommand groups

@@ -8,10 +8,13 @@ Scenarios are defined in core/registry.yaml under conflict_resolution.strategies
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import Any
 
 from ruamel.yaml import YAML
+
+logger = logging.getLogger(__name__)
 
 
 def load_scenarios(registry_path: str | Path = "core/registry.yaml") -> list[dict[str, Any]]:
@@ -39,7 +42,8 @@ def load_scenarios(registry_path: str | Path = "core/registry.yaml") -> list[dic
             return []
 
         return cr.get("strategies", [])
-    except Exception:
+    except Exception as e:
+        logger.debug(f"Failed to load scenarios from {registry_path}: {e}")
         return []
 
 

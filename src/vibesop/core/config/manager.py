@@ -10,6 +10,7 @@ This module consolidates configuration from multiple sources:
 
 from __future__ import annotations
 
+import logging
 import os
 from dataclasses import dataclass
 from enum import StrEnum
@@ -17,6 +18,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from pydantic import BaseModel, Field
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from vibesop.core.config.optimization_config import OptimizationConfig
@@ -103,7 +106,8 @@ class ConfigSource:
 
             with self.path.open() as f:
                 self.data = yaml.safe_load(f) or {}
-        except Exception:
+        except Exception as e:
+            logger.debug(f"Failed to load config from {self.path}: {e}")
             self.data = {}
 
 
@@ -522,7 +526,8 @@ class ConfigManager:
 
             self._cache[cache_key] = data
             return data
-        except Exception:
+        except Exception as e:
+            logger.debug(f"Failed to load registry from {registry_path}: {e}")
             return {"skills": [], "version": "1.0.0"}
 
     def get_all_skills(self, force_reload: bool = False) -> list[dict[str, Any]]:

@@ -19,7 +19,7 @@ VibeSOP is an **intelligent routing engine** for AI-assisted development. It dis
 │                      Routing Engine                             │
 │  ┌─────────────────┐  ┌─────────────────┐  ┌──────────────┐   │
 │  │ UnifiedRouter   │  │ Layer Pipeline  │  │ Optimization │   │
-│  │ (Single Entry)  │  │ (5-Layer Match) │  │ (Pref/Learn) │   │
+│  │ (Single Entry)  │  │ (7-Layer Match) │  │ (Pref/Learn) │   │
 │  └─────────────────┘  └─────────────────┘  └──────────────┘   │
 ├─────────────────────────────────────────────────────────────────┤
 │                    Core Services                                │
@@ -45,7 +45,7 @@ VibeSOP is an **intelligent routing engine** for AI-assisted development. It dis
 **Purpose**: Single entry point for all routing operations
 
 **Responsibilities**:
-- Coordinate 5-layer matching pipeline
+- Coordinate 7-layer matching pipeline
 - Apply preference learning
 - Return routing results with confidence scores
 

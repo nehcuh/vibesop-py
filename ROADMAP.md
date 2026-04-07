@@ -10,7 +10,7 @@
 
 ### ✅ Completed
 
-- [x] Core routing engine with 5-layer pipeline
+- [x] Core routing engine with 7-layer pipeline
 - [x] Unified skill management (builtin + external + custom)
 - [x] Security auditing for external skills
 - [x] Preference learning system
@@ -217,7 +217,7 @@ See something missing? Want to accelerate a feature?
 
 ### v4.0.0 (2026-04-06)
 - Initial stable release
-- 5-layer routing pipeline
+- 7-layer routing pipeline
 - Unified architecture
 - Security auditing
 - Performance optimization

@@ -29,7 +29,7 @@ This directory contains comprehensive architecture documentation for VibeSOP.
 **Core Component** - Routing system deep dive
 
 - UnifiedRouter interface
-- 5-layer routing pipeline
+- 7-layer routing pipeline
 - Layer-by-layer breakdown
 - Performance optimization
 - Caching strategies
@@ -67,7 +67,7 @@ This directory contains comprehensive architecture documentation for VibeSOP.
          │
          ▼
 ┌─────────────────┐
-│  UnifiedRouter  │ ← 5-Layer Pipeline
+│  UnifiedRouter  │ ← 7-Layer Pipeline
 └────────┬────────┘
          │
          ▼

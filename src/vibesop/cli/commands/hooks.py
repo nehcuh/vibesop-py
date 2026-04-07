@@ -1,7 +1,8 @@
 """VibeSOP hooks command - Manage platform hooks.
 
-This command provides functionality for managing platform-specific hooks
-that trigger at key points during AI sessions.
+.. deprecated:: 4.1.0
+    The `vibe hooks` command is deprecated and will be removed in v5.0.0.
+    Platform hooks should be configured through platform-specific mechanisms.
 
 Usage:
     vibe hooks install PLATFORM
@@ -27,6 +28,17 @@ from rich.console import Console
 from rich.table import Table
 
 from vibesop.installer.installer import VibeSOPInstaller
+
+console = Console()
+
+
+def _show_deprecation_warning():
+    """Show deprecation warning for this command."""
+    console.print(
+        "[yellow]⚠️  Warning:[/] The 'vibe hooks' command is deprecated and will be removed in v5.0.0.",
+        "Platform hooks are an advanced feature and should be configured manually.",
+    )
+    console.print("Use platform-specific configuration files instead.\n")
 
 console = Console()
 

@@ -4,10 +4,13 @@ This module provides the adapter for generating Claude Code
 configuration files from a manifest.
 """
 
+import logging
 from pathlib import Path
 from typing import Any
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
+
+logger = logging.getLogger(__name__)
 
 from vibesop.adapters.base import PlatformAdapter
 from vibesop.adapters.models import Manifest, RenderResult
@@ -385,8 +388,8 @@ class ClaudeCodeAdapter(PlatformAdapter):
             if skill_path.exists():
                 try:
                     return skill_path.read_text(encoding="utf-8")
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug(f"Failed to read skill file {skill_path}: {e}")
 
         return None
 
@@ -520,7 +523,8 @@ fi
             hook_path.chmod(0o755)
 
             results["pre-session-end"] = True
-        except Exception:
+        except Exception as e:
+            logger.debug(f"Failed to install pre-session-end hook: {e}")
             results["pre-session-end"] = False
             # Note: error but don't fail
 

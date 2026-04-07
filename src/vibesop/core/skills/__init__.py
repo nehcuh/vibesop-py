@@ -46,7 +46,7 @@ from vibesop.core.skills.external_loader import (
 from vibesop.core.skills.external_loader import (
     SkillSource as ExternalSkillSource,
 )
-from vibesop.core.skills.loader import SkillDefinition, SkillLoader
+from vibesop.core.skills.loader import LoadedSkill, SkillLoader
 from vibesop.core.skills.manager import SkillManager
 from vibesop.core.skills.storage import (
     SkillManifest,
@@ -67,7 +67,7 @@ __all__ = [
     "Skill",
     "SkillContext",
     # Loader and manager
-    "SkillDefinition",
+    "LoadedSkill",
     "SkillLoader",
     "SkillManager",
     "SkillManifest",

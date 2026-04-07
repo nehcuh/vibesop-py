@@ -6,6 +6,7 @@ on top of the global core/policies/task-routing.yaml configuration.
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import Any
 
@@ -15,6 +16,8 @@ from vibesop.core.routing.scenario_config import load_scenarios
 
 yaml = YAML()
 yaml.preserve_quotes = True
+
+logger = logging.getLogger(__name__)
 
 # Default project-level routing configuration
 DEFAULT_PROJECT_ROUTING = """# Project-Level Skill Routing Configuration
@@ -95,7 +98,8 @@ def load_project_routing(project_root: str | Path = ".") -> dict[str, Any]:
 
         return data if isinstance(data, dict) else {}
 
-    except Exception:
+    except (OSError, Exception) as e:
+        logger.debug(f"Failed to load project routing config from {config_path}: {e}")
         return {}
 
 

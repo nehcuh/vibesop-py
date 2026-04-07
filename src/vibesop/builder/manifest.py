@@ -5,8 +5,11 @@ This module provides functionality for building Manifest objects
 from various sources including registry files, policy files, and overlays.
 """
 
+import logging
 from pathlib import Path
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 from vibesop.adapters.models import (
     Manifest,
@@ -237,8 +240,8 @@ class ManifestBuilder:
                                 and len(stripped) > 20
                             ):
                                 return stripped
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        logger.debug(f"Failed to extract description from {skill_path}: {e}")
 
         return ""
 

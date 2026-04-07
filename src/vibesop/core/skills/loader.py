@@ -5,11 +5,14 @@ This module provides unified skill loading from both project-local skills
 and external skill packs (superpowers, gstack, etc.).
 """
 
+import logging
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from ruamel.yaml import YAML
+
+logger = logging.getLogger(__name__)
 
 from vibesop.core.skills.base import (
     PromptSkill,
@@ -22,7 +25,7 @@ from vibesop.core.skills.external_loader import ExternalSkillLoader
 
 
 @dataclass
-class SkillDefinition:
+class LoadedSkill:
     """A skill definition loaded from a file.
 
     Attributes:
@@ -74,7 +77,7 @@ class SkillLoader:
         if search_paths:
             self._search_paths.extend([Path(p) for p in search_paths])
 
-        self._skill_cache: dict[str, SkillDefinition] = {}
+        self._skill_cache: dict[str, LoadedSkill] = {}
         self._enable_external = enable_external
         self._require_audit = require_audit
         self._external_loader: ExternalSkillLoader | None = None
@@ -97,7 +100,7 @@ class SkillLoader:
             self.project_root / ".vibe" / "skills",
         ]
 
-    def discover_all(self, force_reload: bool = False) -> dict[str, SkillDefinition]:
+    def discover_all(self, force_reload: bool = False) -> dict[str, LoadedSkill]:
         """Discover all available skills.
 
         Args:
@@ -158,14 +161,14 @@ class SkillLoader:
             if definition:
                 self._skill_cache[skill_id] = definition
 
-    def _convert_external_skill(self, ext_metadata: Any) -> SkillDefinition | None:
-        """Convert external skill metadata to internal SkillDefinition.
+    def _convert_external_skill(self, ext_metadata: Any) -> LoadedSkill | None:
+        """Convert external skill metadata to internal LoadedSkill.
 
         Args:
             ext_metadata: ExternalSkillMetadata from ExternalSkillLoader
 
         Returns:
-            SkillDefinition or None if conversion failed
+            LoadedSkill or None if conversion failed
         """
         from vibesop.core.skills.external_loader import ExternalSkillMetadata
 
@@ -213,7 +216,7 @@ class SkillLoader:
                 except (OSError, UnicodeDecodeError):
                     pass
 
-        return SkillDefinition(
+        return LoadedSkill(
             metadata=metadata,
             content=content,
             source_file=ext_metadata.install_path / "SKILL.md"
@@ -222,7 +225,7 @@ class SkillLoader:
             external_metadata=ext_metadata,
         )
 
-    def get_skill(self, skill_id: str) -> SkillDefinition | None:
+    def get_skill(self, skill_id: str) -> LoadedSkill | None:
         """Get a skill definition by ID.
 
         Args:
@@ -239,7 +242,7 @@ class SkillLoader:
     def list_skills(
         self,
         namespace: str | None = None,
-    ) -> list[SkillDefinition]:
+    ) -> list[LoadedSkill]:
         """List all discovered skills.
 
         Args:
@@ -336,12 +339,13 @@ class SkillLoader:
                         try:
                             workflow = yaml_parser.load(body)
                             content = workflow if isinstance(workflow, dict) else body
-                        except Exception:
+                        except Exception as e:
+                            logger.debug(f"Failed to parse workflow YAML in {file_path.name}: {e}")
                             content = body
                     else:
                         content = body
 
-                    definition = SkillDefinition(
+                    definition = LoadedSkill(
                         metadata=metadata,
                         content=content,
                         source_file=file_path,
@@ -349,8 +353,8 @@ class SkillLoader:
 
                     self._skill_cache[metadata.id] = definition
 
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug(f"Failed to load skill from {file_path}: {e}")
 
     def _load_yaml_skill(self, file_path: Path) -> None:
         """Load a skill from a YAML file.
@@ -372,7 +376,7 @@ class SkillLoader:
             # Remaining data is the content
             content = {k: v for k, v in data.items() if k not in self._metadata_keys()}
 
-            definition = SkillDefinition(
+            definition = LoadedSkill(
                 metadata=metadata,
                 content=content,
                 source_file=file_path,

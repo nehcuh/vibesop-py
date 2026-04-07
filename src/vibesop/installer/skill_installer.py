@@ -4,10 +4,13 @@ This module handles installation of individual skills
 to projects, including dependency management and registry updates.
 """
 
+import logging
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -235,8 +238,9 @@ class SkillInstaller:
                             "path": str(skill_path),
                         }
                     )
-                except Exception:
+                except Exception as e:
                     # Skip invalid skills
+                    logger.debug(f"Failed to load skill manifest from {skill_path}: {e}")
                     continue
 
         return skills
@@ -275,7 +279,11 @@ class SkillInstaller:
 
         # Check for required files
         skill_md = skill_dir / "SKILL.md"
-        result["files_present"] = skill_md.exists()
+        try:
+            result["files_present"] = skill_md.exists()
+        except Exception as e:
+            logger.debug(f"Failed to check skill files: {e}")
+            result["files_present"] = False
 
         # Check registry
         result["in_registry"] = self._check_registry(skill_id, project_path)

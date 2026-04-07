@@ -1,7 +1,8 @@
 """VibeSOP checkpoint command - Manage work state checkpoints.
 
-This command allows creating, restoring, listing, and managing
-checkpoints for saving and restoring work state.
+.. deprecated:: 4.1.0
+    The `vibe checkpoint` command is deprecated and will be removed in v5.0.0.
+    Session state management should be handled by skills or external tools.
 
 Usage:
     vibe checkpoint save NAME
@@ -31,6 +32,15 @@ from vibesop.core.checkpoint.base import CheckpointStatus
 from vibesop.core.checkpoint.manager import CheckpointManager
 
 console = Console()
+
+
+def _show_deprecation_warning():
+    """Show deprecation warning for this command."""
+    console.print(
+        "[yellow]⚠️  Warning:[/] The 'vibe checkpoint' command is deprecated and will be removed in v5.0.0.",
+        "Session state management is out of scope for a routing engine.",
+    )
+    console.print("Consider using external session management tools or skill-specific state handling.\n")
 
 
 def checkpoint(

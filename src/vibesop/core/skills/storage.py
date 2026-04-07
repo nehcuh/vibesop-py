@@ -23,6 +23,7 @@ Architecture:
 
 import hashlib
 import json
+import logging
 import shutil
 import tempfile
 import urllib.request
@@ -32,6 +33,8 @@ from typing import ClassVar
 
 from vibesop.security import PathSafety
 from vibesop.security.exceptions import PathTraversalError
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -542,7 +545,8 @@ class SkillStorage:
                 )
 
             return SkillManifest(**data)
-        except Exception:
+        except Exception as e:
+            logger.debug(f"Failed to parse skill manifest from {path}: {e}")
             return None
 
 
