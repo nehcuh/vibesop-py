@@ -107,8 +107,8 @@ def quickstart(
                 "\n[green]✓ Setup complete![/green]\n"
                 "[dim]Next steps:[/dim]\n"
                 "  1. Review .vibe/ directory\n"
-                "  2. Run [cyan]vibe build[/cyan] to generate config\n"
-                "  3. Run [cyan]vibe deploy[/cyan] to install\n"
+                "  2. Run [cyan]vibe build --output ~/.claude[/cyan] to deploy\n"
+                "  3. Run [cyan]vibe route \"your query\"[/cyan] to route skills\n"
             )
         else:
             console.print("\n[red]✗ Setup failed[/red]")

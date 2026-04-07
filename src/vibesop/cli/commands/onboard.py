@@ -96,7 +96,7 @@ def onboard(
     if not skip_deploy:
         console.print("[bold]Step 3: Deploy[/bold]\n")
         console.print("[dim]To deploy configuration, run:[/dim]")
-        console.print("  [cyan]vibe deploy claude-code[/cyan]\n")
+        console.print("  [cyan]vibe build claude-code --output ~/.claude[/cyan]\n")
     else:
         console.print("[bold]Step 3: Deploy[/bold] [dim](skipped)[/dim]\n")
 
@@ -117,8 +117,7 @@ def onboard(
         Panel(
             "[bold green]✓ Onboarding complete![/bold green]\n\n"
             "[dim]Next steps:[/dim]\n"
-            "  • Run [cyan]vibe build[/cyan] to generate config\n"
-            "  • Run [cyan]vibe deploy[/cyan] to install\n"
+            "  • Run [cyan]vibe build --output ~/.claude[/cyan] to deploy\n"
             "  • Run [cyan]vibe doctor[/cyan] to verify\n"
             '  • Run [cyan]vibe route "help"[/cyan] to find skills',
             border_style="green",
