@@ -1,264 +1,210 @@
-# VibeSOP - Python Edition
+# VibeSOP
 
-> **Production-Grade AI-Assisted Development Workflow SOP**
-> **v4.0.0** - Intelligent routing engine with 5-layer matching
+> **AI-Native Workflow Router for Developer Tools**
+> 
+> Route natural language to the right skill. No more "How do I...?" — just say what you want.
 
 [![Python](https://img.shields.io/badge/Python-3.12+-blue.svg)](https://www.python.org/downloads/)
 [![Ruff](https://img.shields.io/badge/Ruff-Enabled-black.svg)](https://github.com/astral-sh/ruff)
-[![Pyright](https://img.shields.io/badge/Pyright-Strict-blue.svg)](https://github.com/microsoft/pyright)
+[![Coverage](https://img.shields.io/badge/Coverage-65.8%25-green.svg)]()
 [![Version](https://img.shields.io/badge/Version-4.0.0-green.svg)](https://github.com/nehcuh/vibesop-py)
 
-## 🚀 Quick Start
+## The Problem
+
+You're using AI-powered developer tools (Claude Code, OpenCode, etc.) and you want to:
+
+- "Debug this error" → Which debugging skill should I use?
+- "Review my code" → Where's the code review skill?
+- "Deploy to production" → What's the deployment workflow?
+
+**Current state**: You memorize commands, search docs, or guess.
+
+**With VibeSOP**: Just say what you want. VibeSOP routes your intent to the right skill.
 
 ```bash
-# Clone and setup
-git clone https://github.com/nehcuh/vibesop-py.git && cd vibesop-py
+# Instead of memorizing commands
+vibe route "debug this database error"
+# → Routes to: systematic-debugging
 
-# Using uv (recommended)
+vibe route "帮我扫描安全漏洞"
+# → Routes to: gstack/cso
+
+vibe route "review my PR"
+# → Routes to: gstack/review
+```
+
+## What is VibeSOP?
+
+VibeSOP is a **routing engine** that:
+
+1. **Understands intent** — Natural language → skill matching
+2. **Manages skills** — Discovery, installation, security auditing
+3. **Learns preferences** — Routes better the more you use it
+
+**VibeSOP is NOT:**
+- ❌ An AI tool itself (it works with Claude Code, OpenCode, etc.)
+- ❌ A skill executor (it tells you which skill to use)
+- ❌ A prompt library (skills define their own prompts)
+
+## Quick Start
+
+### Installation
+
+```bash
+# Clone repository
+git clone https://github.com/nehcuh/vibesop-py.git
+cd vibesop-py
+
+# Install with uv (recommended)
 uv sync
 
-# Run CLI
-vibe --help
+# Or with pip
+pip install -e ".[dev]"
 ```
 
-## ✨ What's New in v3.0.0
-
-### 🏗️ Unified Architecture
-
-**v3.0** is a major refactor that consolidates duplicate abstractions and provides a clean, unified interface:
-
-- **UnifiedRouter**: Single entry point for all routing operations
-- **Matching Infrastructure**: Consolidated tokenization, similarity, and TF-IDF
-- **ConfigManager**: Multi-source configuration with clear priority
-- **Deprecated**: `vibesop.triggers` (use `vibesop.core.matching` instead)
-
-### 🔀 Unified Routing
+### Basic Usage
 
 ```bash
-# One command for all routing (replaces vibe auto)
+# Route a query
 vibe route "debug this error"
-
-# With options
-vibe route "help me plan" --min-confidence 0.2
-vibe route "review code" --json
-
-# Chinese support
 vibe route "扫描安全漏洞"
-```
 
-**Routing Layers** (tried in priority order):
-1. **Keyword** (<1ms): Fast keyword matching
-2. **TF-IDF** (~5ms): Semantic similarity
-3. **Embedding** (~20ms): Vector matching (optional)
-4. **Levenshtein** (~10ms): Fuzzy matching fallback
+# Execute a skill directly
+vibe execute systematic-debugging "database connection failed"
 
-## 📚 Core Concepts
-
-### Principles
-
-VibeSOP is built on these principles:
-
-1. **Production-First**: Every feature is validated in real projects
-2. **Structure > Prompting**: Configuration over prompt engineering
-3. **Memory > Intelligence**: Record solutions, avoid repeating mistakes
-4. **Verification > Confidence**: Don't claim done without proof
-5. **Portable > Specific**: Core is portable, adapters for platforms
-
-### Architecture
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                      UnifiedRouter                          │
-│  (Single entry point for all routing operations)            │
-├─────────────────────────────────────────────────────────────┤
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐  │
-│  │   Keyword   │  │   TF-IDF    │  │   Embedding (opt)   │  │
-│  │   Matcher   │  │   Matcher   │  │     Matcher         │  │
-│  └─────────────┘  └─────────────┘  └─────────────────────┘  │
-├─────────────────────────────────────────────────────────────┤
-│              Matching Infrastructure                        │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐  │
-│  │ Tokenizers  │  │ Similarity  │  │      TF-IDF         │  │
-│  │  (CJK, etc) │  │  (Cosine)   │  │   Calculator        │  │
-│  └─────────────┘  └─────────────┘  └─────────────────────┘  │
-├─────────────────────────────────────────────────────────────┤
-│                   ConfigManager                             │
-│  (defaults → global → project → env → cli)                 │
-└─────────────────────────────────────────────────────────────┘
-```
-
-## 🛠️ Usage
-
-### Basic Routing
-
-```bash
-# Find the best skill for your query
-vibe route "help me debug this error"
-
-# Show more alternatives
-vibe route "deploy" --top 5
-
-# Lower confidence threshold
-vibe route "test" --min-confidence 0.2
-
-# JSON output
-vibe route "review" --json
-```
-
-### Configuration
-
-Configuration is loaded from multiple sources (priority order):
-
-1. **Built-in defaults**: `vibesop/core/config/manager.py`
-2. **Global config**: `~/.vibe/config.yaml`
-3. **Project config**: `.vibe/config.yaml`
-4. **Environment**: `VIBE_ROUTING_MIN_CONFIDENCE=0.2`
-5. **CLI**: `--min-confidence 0.2`
-
-Example `~/.vibe/config.yaml`:
-
-```yaml
-routing:
-  min_confidence: 0.3
-  enable_embedding: false
-  use_cache: true
-
-security:
-  scan_external: true
-  require_audit: true
-
-semantic:
-  enabled: false
-  model: "paraphrase-multilingual-MiniLM-L12-v2"
-```
-
-### Skills
-
-Skills are discovered from:
-- Built-in: `core/skills/`
-- Project: `.vibe/skills/`
-- External: `~/.claude/skills/`, `~/.config/skills/`
-
-```bash
 # List available skills
 vibe skills list
 
-# Show skill details
-vibe skills show systematic-debugging
+# Install external skill packs
+vibe install https://github.com/gstack/gstack-skills
 ```
+
+### In Your Project
+
+```python
+from vibesop.core.routing import UnifiedRouter
+
+router = UnifiedRouter()
+
+# Route natural language to skill
+result = router.route("debug this error")
+print(result.primary.skill_id)  # "systematic-debugging"
+print(result.primary.confidence)  # 0.95
+
+# Get skill information
+from vibesop.core.skills import SkillManager
+
+manager = SkillManager()
+skills = manager.list_skills()
+info = manager.get_skill_info("systematic-debugging")
+```
+
+## How It Works
+
+### 5-Layer Routing Pipeline
+
+VibeSOP tries multiple matching strategies in order:
+
+| Layer | Strategy | Speed | Use Case |
+|-------|----------|-------|----------|
+| 0 | AI Triage | ~100ms | Complex queries, semantic understanding |
+| 1 | Explicit Override | <1ms | Direct commands like `/review` |
+| 2 | Scenario Pattern | <1ms | Predefined scenarios (debug, test, review) |
+| 3 | Keyword Matching | <1ms | Direct keyword hits |
+| 4 | TF-IDF | ~5ms | Semantic similarity |
+| 5 | Embedding | ~20ms | Deep semantic matching (optional) |
+| 6 | Fuzzy Matching | ~10ms | Typo tolerance |
+
+**Performance**: P95 latency < 50ms (with caching)
+
+### Skill Discovery
+
+VibeSOP discovers skills from multiple sources:
+
+1. **Built-in skills** — Core routing and utility skills
+2. **External packs** — Installable skill collections
+3. **Project skills** — Project-specific `.vibe/skills/`
+4. **User skills** — Personal `~/.config/skills/`
 
 ### Security
 
-External skills are automatically audited before loading:
+Every external skill is audited before loading:
 
-```python
-from vibesop.security import SkillSecurityAuditor
+- Prompt injection detection
+- Command injection detection
+- Role hijacking detection
+- Privilege escalation detection
 
-auditor = SkillSecurityAuditor()
-result = auditor.audit_skill_file(path/to/skill.md)
-
-if result.is_safe:
-    print("Safe to load")
-else:
-    print(f"Blocked: {result.reason}")
-```
-
-**Threat Detection**:
-- Prompt injection ("ignore all instructions")
-- Role hijacking ("you are now admin")
-- Command injection (`<|system.exec()`)
-- Instruction override
-- Privilege escalation
-- Data exfiltration attempts
-
-## 🧩 Development
-
-### Project Structure
+## Architecture
 
 ```
-src/vibesop/
-├── core/
-│   ├── matching/        # Unified matching infrastructure
-│   │   ├── base.py      # Protocols and models
-│   │   ├── tokenizers.py
-│   │   ├── similarity.py
-│   │   ├── tfidf.py
-│   │   └── strategies.py
-│   ├── routing/
-│   │   └── unified.py   # UnifiedRouter
-│   ├── config/
-│   │   └── manager.py   # ConfigManager
-│   └── skills/          # Skill management
-├── cli/                 # CLI commands
-└── adapters/            # Platform adapters
+┌─────────────────────────────────────────────────────────┐
+│                    CLI Layer                             │
+│  vibe route │ vibe execute │ vibe install │ vibe skills  │
+└─────────────────────────────────────────────────────────┘
+                           │
+┌─────────────────────────────────────────────────────────┐
+│                UnifiedRouter                             │
+│  AI Triage → Explicit → Scenario → Keyword → TF-IDF    │
+│                    ↓                                    │
+│  [Optimization: Prefilter → Preference Boost → Cluster] │
+└─────────────────────────────────────────────────────────┘
+                           │
+┌─────────────────────────────────────────────────────────┐
+│              Skill Management                            │
+│  Discovery → Loading → Security Audit → Metadata        │
+└─────────────────────────────────────────────────────────┘
+                           │
+┌─────────────────────────────────────────────────────────┐
+│              Integration Layer                           │
+│  Superpowers │ GStack │ OMX │ Custom Skill Packs       │
+└─────────────────────────────────────────────────────────┘
 ```
 
-### Testing
+## Documentation
 
-```bash
-# Run all tests
-uv run pytest
+- [Architecture Overview](docs/architecture/README.md)
+- [Routing System](docs/architecture/routing-system.md)
+- [Positioning & Philosophy](docs/POSITIONING.md)
+- [Contributing Guide](CONTRIBUTING.md)
 
-# Run specific test
-uv run pytest tests/unit/matching/test_matchers.py
+## Philosophy
 
-# With coverage
-uv run pytest --cov=vibesop --cov-report=html
-```
+### Discovery > Execution
 
-## 📖 Migration Guide (v2.x → v3.0)
+Knowing which skill to use is more valuable than being able to execute it. VibeSOP focuses on routing, not execution.
 
-### Breaking Changes
+### Matching > Guessing
 
-| v2.x | v3.0 |
-|------|------|
-| `vibe auto "query"` | `vibe route "query"` |
-| `from vibesop.triggers` | `from vibesop.core.matching` |
-| `KeywordDetector` | `KeywordMatcher` |
-| `SkillRouter` | `UnifiedRouter` |
+5-layer matching pipeline ensures accurate routing. No more "Did you mean...?"
 
-### Code Migration
+### Memory > Intelligence
 
-```python
-# Old (v2.x)
-from vibesop.triggers import KeywordDetector
-from vibesop.core.routing.engine import SkillRouter
+Remembering what worked is more valuable than being smart. Preference learning improves routing over time.
 
-detector = KeywordDetector()
-router = SkillRouter()
+### Open > Closed
 
-# New (v3.0)
-from vibesop.core.matching import KeywordMatcher
-from vibesop.core.routing import UnifiedRouter
+Any skill following the SKILL.md specification can integrate. No vendor lock-in.
 
-matcher = KeywordMatcher()
-router = UnifiedRouter()
-result = router.route("query")
-```
+## Roadmap
 
-### Deprecated Modules
+- [x] v4.0.0: Core routing engine with 5-layer pipeline
+- [ ] v4.1.0: AI Triage production readiness
+- [ ] v4.2.0: Skill health monitoring
+- [ ] v5.0.0: Plugin system for custom matchers
 
-- `vibesop.triggers` → Use `vibesop.core.matching`
-- `vibesop.semantic` → Use `vibesop.core.matching.EmbeddingMatcher`
+## License
 
-These will be removed in v4.0.0.
+MIT License - see [LICENSE](LICENSE) file.
 
-## 🤝 Contributing
+## Acknowledgments
 
-Contributions are welcome! Please read our contributing guidelines and submit PRs.
+VibeSOP is inspired by the gstack project, but is an independent implementation with:
+- Clean architecture (65% code reduction)
+- Unified routing pipeline
+- Production-ready security auditing
+- Preference learning system
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests
-5. Submit a PR
+---
 
-## 📄 License
-
-MIT License - see LICENSE file for details
-
-## 🙏 Acknowledgments
-
-- Original VibeSOP concept and Ruby implementation
-- Inspiration from [obra/superpowers](https://github.com/obra/superpowers)
-- Inspiration from [garrytan/gstack](https://github.com/garrytan/gstack)
+**Built with ❤️ for AI-native developer workflows**

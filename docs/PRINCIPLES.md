@@ -197,16 +197,21 @@ core/
 
 ---
 
-## 与参考项目的关系
+## Relationship with Other Projects
 
-| 项目 | 它做什么 | VibeSOP 做什么 |
-|---|---|---|
-| superpowers | 7 个通用技能 | 发现、安装、路由这些技能 |
-| gstack | 19 个工程团队技能 | 同上 |
-| oh-my-codex | 7 种方法论 | 同上（含内置 fallback + 算法库支持） |
-| karpathy/autoresearch | 自主研究方法论 | 提供可复用算法作为参考 |
+VibeSOP is designed to work with existing skill ecosystems, not compete with them:
 
-**VibeSOP 不是技能的创造者，是技能的发现者、路由者和管理者。**
+| Project | Role | VibeSOP's Role |
+|---------|------|----------------|
+| **Claude Code / OpenCode** | AI agents that execute skills | Provides routing to help these agents find the right skill |
+| **superpowers** | Skill pack with 7 general-purpose skills | Discovers, installs, and routes to these skills |
+| **gstack** | Skill pack with 19 engineering team skills | Discovers, installs, and routes to these skills |
+| **oh-my-codex** | Methodology framework | Provides algorithm library support and routing |
+| **SKILL.md ecosystem** | Skill definition standard | Any SKILL.md-compatible skill can be routed |
+
+**VibeSOP is the routing layer that connects AI agents to skills.**
+
+It doesn't create skills — it makes skills discoverable and accessible.
 
 ---
 
