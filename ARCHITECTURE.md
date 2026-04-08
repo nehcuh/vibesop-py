@@ -47,17 +47,19 @@ User-facing commands that interact with the routing engine.
 ```python
 # Entry points
 vibe route "debug this"           → UnifiedRouter.route()
-vibe execute <skill> "query"      → execute_skill()
+vibe skills available             → SkillManager.list_skills()
 vibe install <url>                → SkillInstaller.install()
-vibe skills list                  → SkillManager.list_skills()
+vibe analyze session              → SessionAnalyzer.analyze()
 ```
 
 **Key Files**:
-- `main.py` — Main CLI entry point
-- `commands/route_commands.py` — `vibe route` implementation
-- `commands/execute.py` — `vibe execute` implementation
-- `commands/skills_cmd.py` — `vibe skills` subcommands
-- `executor.py` — Skill execution utility (CLI-only)
+- `main.py` — Main CLI entry point with core commands (route, doctor, version, etc.)
+- `subcommands/__init__.py` — Subcommand registration
+- `commands/skills_cmd.py` — `vibe skills` subcommands (list, available, info, install, link, etc.)
+- `commands/analyze.py` — Unified `vibe analyze` command (session, security, integrations)
+- `commands/quickstart.py` — Interactive setup wizard
+- `commands/install.py` — Skill pack installation
+- `executor.py` — Internal skill execution utility (not exposed as CLI command)
 
 ---
 

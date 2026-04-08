@@ -208,7 +208,7 @@ $ vibe route "help me debug this error"
 ### 2. List Available Skills
 
 ```bash
-$ vibe skills list
+$ vibe skills available
 
 📚 Available Skills (45 total)
 
@@ -234,7 +234,7 @@ superpowers (7 skills)
 ### 3. Get Skill Details
 
 ```bash
-$ vibe skill-info systematic-debugging
+$ vibe skills info systematic-debugging
 
 ╭──────────────────────────────────────────────╮
 │ Systematic Debugging                          │
@@ -269,8 +269,86 @@ vibe install https://github.com/anthropics/gstack
    Continue? [Y/n]
 
 ✅ gstack installed successfully
-   Run 'vibe skills list --namespace gstack' to see skills
+   Run 'vibe skills available --namespace gstack' to see skills
 ```
+
+---
+
+## CLI Reference
+
+### Core Commands
+
+| Command | Description | Example |
+|---------|-------------|---------|
+| `vibe route <query>` | Route query to best skill | `vibe route "debug this error"` |
+| `vibe skills available` | List all available skills | `vibe skills available -v` |
+| `vibe skills info <id>` | Show skill details | `vibe skills info gstack/review` |
+| `vibe install <url>` | Install skill pack | `vibe install gstack` |
+| `vibe doctor` | Check environment | `vibe doctor` |
+
+### Skills Management
+
+```bash
+# List installed skills
+vibe skills list
+
+# List all available skills (including builtin and installed packs)
+vibe skills available
+
+# Show detailed skill information
+vibe skills info <skill-id>
+
+# Install from URL or name
+vibe install gstack
+vibe install https://github.com/user/skills
+
+# Link skill to platform
+vibe skills link <skill-id> claude-code
+
+# Sync project skills to platform
+vibe skills sync claude-code
+```
+
+### Project Setup
+
+```bash
+# Initialize project
+vibe init
+
+# Build configuration for platform
+vibe build claude-code
+
+# Interactive quickstart
+vibe quickstart
+```
+
+### Analysis Commands
+
+```bash
+# Analyze session for patterns
+vibe analyze session
+
+# Security scan
+vibe analyze security .
+
+# Detect integrations
+vibe analyze integrations
+```
+
+### Preference Learning
+
+```bash
+# Show preference statistics
+vibe preferences
+
+# Record skill selection feedback
+vibe record <skill-id> <query> --helpful
+
+# Show top preferred skills
+vibe top-skills
+```
+
+See [CLI_REFERENCE.md](CLI_REFERENCE.md) for complete documentation.
 
 ---
 
