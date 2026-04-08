@@ -1,6 +1,10 @@
 """VibeSOP CLI - Main entry point.
 
 Built with Typer for modern CLI UX.
+
+Note: v4.1.0 removed the `execute` command and `--run` flag from `route`.
+Skills should be executed by AI Agents (Claude Code, OpenCode), not VibeSOP.
+VibeSOP is a routing engine, not an executor.
 """
 
 from __future__ import annotations
@@ -16,7 +20,6 @@ from rich.console import Console
 from rich.panel import Panel
 
 from vibesop import __version__
-from vibesop.cli.executor import execute_skill
 from vibesop.cli.subcommands import register
 from vibesop.core.routing import UnifiedRouter
 from vibesop.core.skills import SkillManager
@@ -41,17 +44,17 @@ def route(
         "-c",
         help="Minimum confidence threshold (0.0-1.0)",
     ),
-    run: bool = typer.Option(False, "--run", "-r", help="Execute the matched skill after routing"),
     json_output: bool = typer.Option(False, "--json", "-j", help="Output as JSON"),
     validate: bool = typer.Option(False, "--validate", "-V", help="Validate routing configuration"),
 ) -> None:
     """Route a query to the appropriate skill using unified routing.
 
-    Use --run to execute the matched skill immediately.
+    VibeSOP is a routing engine - it tells you which skill to use,
+    but does not execute skills. Use your AI Agent (Claude Code, OpenCode)
+    to execute the recommended skill.
+
     Use --validate to test routing configuration.
     """
-    import asyncio
-    import time
     from pathlib import Path
 
     from vibesop.core.routing import RoutingConfig, UnifiedRouter
@@ -134,45 +137,6 @@ def route(
 
         console.print("\n[green]✓ Validation complete[/green]")
         raise typer.Exit(0)
-
-    # Execute if --run flag is set and we have a match
-    if run and result.has_match:
-        console.print(f"\n[bold cyan]Executing {result.primary.skill_id}...[/bold cyan]\n")
-        start_time = time.perf_counter()
-        try:
-            skill_result = asyncio.run(
-                execute_skill(
-                    skill_id=result.primary.skill_id,
-                    query=query,
-                    working_dir=Path.cwd(),
-                )
-            )
-            exec_duration = (time.perf_counter() - start_time) * 1000
-
-            if skill_result.success:
-                console.print(
-                    Panel(
-                        f"[bold green]✅ Execution successful[/bold green]\n"
-                        f"[dim]Duration:[/dim] {exec_duration:.0f}ms\n"
-                        f"\n[bold]Output:[/bold]\n{skill_result.output}",
-                        title="Execution Result",
-                        border_style="green",
-                    )
-                )
-            else:
-                console.print(
-                    Panel(
-                        f"[bold red]❌ Execution failed[/bold red]\n"
-                        f"[dim]Duration:[/dim] {exec_duration:.0f}ms\n"
-                        f"\n[bold red]Error:[/bold red] {skill_result.error}",
-                        title="Execution Result",
-                        border_style="red",
-                    )
-                )
-                raise typer.Exit(1)
-        except Exception as e:
-            console.print(f"[red]Execution error: {e}[/red]")
-            raise typer.Exit(1) from e
 
 
 @app.command()
@@ -305,84 +269,8 @@ def top_skills(
             f"Helpful: {pref.helpful_count}x"
         )
 
-
-@app.command("skills")
-def skills_list(
-    namespace: str | None = typer.Option(None, "--namespace", "-n", help="Filter by namespace"),
-    verbose: bool = typer.Option(False, "--verbose", "-v", help="Show detailed information"),
-) -> None:
-    """List all available skills."""
-    manager = SkillManager()
-    all_skills = manager.list_skills(namespace=namespace)
-
-    if not all_skills:
-        console.print("[yellow]No skills found.[/yellow]")
-        raise typer.Exit(0)
-
-    console.print(f"[bold]📚 Available Skills[/bold] ({len(all_skills)} total)\n")
-
-    by_namespace: dict[str, list[dict[str, Any]]] = {}
-    for skill in all_skills:
-        ns = skill.get("namespace", "builtin")
-        if ns not in by_namespace:
-            by_namespace[ns] = []
-        by_namespace[ns].append(skill)
-
-    for ns in sorted(by_namespace.keys()):
-        ns_skills = by_namespace[ns]
-        console.print(f"[bold cyan]{ns}[/bold cyan] ({len(ns_skills)} skills)")
-        for skill in ns_skills:
-            sid: str = skill.get("id", "unknown")
-            name: str = skill.get("name", sid)
-            desc: str = skill.get("description", "")
-            stype: str = skill.get("type", "prompt")
-            if verbose:
-                console.print(
-                    f"  • [bold]{sid}[/bold] ([dim]{stype}[/dim])\n"
-                    f"    Name: {name}\n"
-                    f"    Description: {desc}\n"
-                    f"    Tags: {skill.get('tags', [])}\n"
-                    f"    Source: {skill.get('source', 'unknown')}"
-                )
-            else:
-                console.print(f"  • [bold]{sid}[/bold] - {desc}")
-        console.print()
-
-    stats = manager.get_stats()
-    console.print(f"[dim]Namespaces: {', '.join(stats['namespaces'])}[/dim]")
-
-
-@app.command("skill-info")
-def skill_info(
-    skill_id: str = typer.Argument(..., help="Skill ID (e.g., gstack/review)"),
-) -> None:
-    """Show detailed information about a skill."""
-    manager = SkillManager()
-    info = manager.get_skill_info(skill_id)
-
-    if not info:
-        console.print(f"[red]Skill not found: {skill_id}[/red]")
-        raise typer.Exit(1)
-
-    console.print(
-        Panel.fit(
-            f"[bold]{info.get('name', info['id'])}[/bold]\n\n"
-            f"[dim]ID:[/dim] {info['id']}\n"
-            f"[dim]Type:[/dim] {info.get('type', 'prompt')}\n"
-            f"[dim]Namespace:[/dim] {info.get('namespace', 'builtin')}\n"
-            f"[dim]Version:[/dim] {info.get('version', '1.0.0')}\n"
-            f"[dim]Author:[/dim] {info.get('author', 'N/A')}\n"
-            f"[dim]Source:[/dim] {info.get('source', 'unknown')}\n"
-            f"\n[bold]Description[/bold]\n"
-            f"{info.get('description', 'No description')}\n"
-            f"\n[bold]Intent[/bold]\n"
-            f"{info.get('intent', 'No intent specified')}\n"
-            f"\n[bold]Tags[/bold]\n"
-            f"{', '.join(info.get('tags') or []) or 'None'}",
-            title="[bold]Skill Info[/bold]",
-            border_style="blue",
-        )
-    )
+    # Note: skills and skill-info commands moved to skills subcommand
+    # Use: vibe skills list, vibe skills info <id>
     if info.get("source_file"):
         console.print(f"\n[dim]Source file: {info['source_file']}[/dim]")
 

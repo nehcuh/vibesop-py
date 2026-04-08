@@ -2,6 +2,10 @@
 
 Groups related commands into Typer sub-apps for better organization.
 
+Removed Commands (v4.1.0):
+- execute: Removed as it violated the "router not executor" principle.
+  Skills should be executed by AI Agents, not VibeSOP.
+
 Legacy Commands (deprecated):
 The following commands have been moved to the legacy package:
 - deploy: Use platform-specific installation methods
@@ -32,9 +36,6 @@ from vibesop.cli.commands import (
 )
 from vibesop.cli.commands import (
     detect as detect_mod,
-)
-from vibesop.cli.commands import (
-    execute as execute_mod,
 )
 from vibesop.cli.commands import (
     import_rules as import_rules_mod,
@@ -104,6 +105,8 @@ def register(app: typer.Typer) -> None:
     app.command("create-suggested-skills")(auto_analyze_mod.create_suggested_skills)
 
     skills_app.command()(skills_mod.list)
+    skills_app.command("available")(skills_mod.available)
+    skills_app.command("info")(skills_mod.info)
     skills_app.command("install")(skills_mod.install)
     skills_app.command("link")(skills_mod.link)
     skills_app.command("unlink")(skills_mod.unlink)
@@ -122,8 +125,8 @@ def register(app: typer.Typer) -> None:
     app.command()(quickstart_mod.quickstart)
     app.command()(onboard_mod.onboard)
 
-    app.command()(execute_mod.execute)
-    app.command("execute-list")(execute_mod.list_available)
+    # Note: execute command removed in v4.1.0
+    # Skills should be executed by AI Agents, not VibeSOP
 
     # Register legacy (deprecated) commands if enabled
     _register_legacy_commands(app)
