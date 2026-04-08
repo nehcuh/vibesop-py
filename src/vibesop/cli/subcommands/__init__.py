@@ -7,6 +7,9 @@ Removed Commands (v4.1.0):
   Skills should be executed by AI Agents, not VibeSOP.
 - memory: Internalized. Session memory management is handled automatically by the routing engine.
 - instinct: Internalized. Instinct learning works automatically without manual CLI management.
+- scan: Merged into `analyze security` subcommand.
+- detect: Merged into `analyze integrations` subcommand.
+- auto-analyze: Merged into `analyze session --auto`.
 
 Legacy Commands (deprecated):
 The following commands have been moved to the legacy package:
@@ -28,16 +31,10 @@ from vibesop.cli.commands import (
     analyze as analyze_mod,
 )
 from vibesop.cli.commands import (
-    auto_analyze as auto_analyze_mod,
-)
-from vibesop.cli.commands import (
     build as build_mod,
 )
 from vibesop.cli.commands import (
     config as config_mod,
-)
-from vibesop.cli.commands import (
-    detect as detect_mod,
 )
 from vibesop.cli.commands import (
     import_rules as import_rules_mod,
@@ -56,9 +53,6 @@ from vibesop.cli.commands import (
 )
 from vibesop.cli.commands import (
     quickstart as quickstart_mod,
-)
-from vibesop.cli.commands import (
-    scan as scan_mod,
 )
 from vibesop.cli.commands import (
     skill_craft as skill_craft_mod,
@@ -97,8 +91,18 @@ def register(app: typer.Typer) -> None:
     app.command()(scan_mod.scan)
     app.command()(detect_mod.detect)
     app.command()(analyze_mod.analyze)
-    app.command()(auto_analyze_mod.auto_analyze_session)
-    app.command("create-suggested-skills")(auto_analyze_mod.create_suggested_skills)
+
+    app.command()(init_mod.init)
+    app.command()(build_mod.build)
+    app.command()(switch_mod.switch)
+    app.command("inspect")(inspect_mod.inspect_cmd)
+    app.command()(targets_mod.targets)
+    app.command()(install_mod.install)
+
+    # Note: scan, detect, and auto-analyze merged into analyze in v4.1.0
+    # - vibe scan → vibe analyze security
+    # - vibe detect → vibe analyze integrations
+    # - vibe auto-analyze-session → vibe analyze session
 
     skills_app.command()(skills_mod.list)
     skills_app.command("available")(skills_mod.available)
