@@ -5,6 +5,8 @@ Groups related commands into Typer sub-apps for better organization.
 Removed Commands (v4.1.0):
 - execute: Removed as it violated the "router not executor" principle.
   Skills should be executed by AI Agents, not VibeSOP.
+- memory: Internalized. Session memory management is handled automatically by the routing engine.
+- instinct: Internalized. Instinct learning works automatically without manual CLI management.
 
 Legacy Commands (deprecated):
 The following commands have been moved to the legacy package:
@@ -48,12 +50,6 @@ from vibesop.cli.commands import (
 )
 from vibesop.cli.commands import (
     install as install_mod,
-)
-from vibesop.cli.commands import (
-    instinct_new as instinct_mod,
-)
-from vibesop.cli.commands import (
-    memory_cmd as memory_mod,
 )
 from vibesop.cli.commands import (
     onboard as onboard_mod,
@@ -117,8 +113,8 @@ def register(app: typer.Typer) -> None:
     app.command("skill-craft")(skill_craft_mod.skill_craft)
     app.command()(tools_mod.tools)
 
-    app.command("memory")(memory_mod.memory)
-    app.add_typer(instinct_mod.app, name="instinct")
+    # Note: memory and instinct commands removed in v4.1.0
+    # These are internal routing engine features, not user-facing CLI commands
 
     app.command("import-rules")(import_rules_mod.import_rules)
 
