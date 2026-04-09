@@ -2,8 +2,15 @@
 
 This package contains all CLI command implementations.
 
-.. deprecated:: 4.1.0
-    The following commands have been moved to vibesop.cli.legacy:
+Removed Commands (v4.1.0):
+    - execute: Removed as it violated the "router not executor" principle
+    - memory: Internalized as routing engine feature
+    - instinct: Internalized as automatic learning
+    - scan: Merged into analyze security
+    - detect: Merged into analyze integrations
+    - auto-analyze: Merged into analyze session
+
+Legacy Commands (deprecated, moved to vibesop.cli.legacy):
     - deploy (use platform-specific installation)
     - toolchain (use system package manager)
     - worktree (use git worktree commands)
@@ -14,50 +21,32 @@ To enable legacy commands, set VIBESOP_ENABLE_LEGACY=1 or install with:
     pip install vibesop[legacy]
 """
 
-import importlib
-
 # Import command modules (not functions) to avoid naming conflicts
-init_module = importlib.import_module("vibesop.cli.commands.init")
-build_module = importlib.import_module("vibesop.cli.commands.build")
-switch_module = importlib.import_module("vibesop.cli.commands.switch")
-inspect_module = importlib.import_module("vibesop.cli.commands.inspect")
-targets_module = importlib.import_module("vibesop.cli.commands.targets")
-memory_module = importlib.import_module("vibesop.cli.commands.memory_cmd")
-instinct_module = importlib.import_module("vibesop.cli.commands.instinct_cmd")
-quickstart_module = importlib.import_module("vibesop.cli.commands.quickstart")
-onboard_module = importlib.import_module("vibesop.cli.commands.onboard")
-scan_module = importlib.import_module("vibesop.cli.commands.scan")
-skill_craft_module = importlib.import_module("vibesop.cli.commands.skill_craft")
-tools_module = importlib.import_module("vibesop.cli.commands.tools_cmd")
-route_commands_module = importlib.import_module("vibesop.cli.commands.route_commands")
-import_rules_module = importlib.import_module("vibesop.cli.commands.import_rules")
-detect_module = importlib.import_module("vibesop.cli.commands.detect")
-install_module = importlib.import_module("vibesop.cli.commands.install")
-analyze_module = importlib.import_module("vibesop.cli.commands.analyze")
-auto_analyze_module = importlib.import_module("vibesop.cli.commands.auto_analyze")
-config_module = importlib.import_module("vibesop.cli.commands.config")
-execute_module = importlib.import_module("vibesop.cli.commands.execute")
-skills_cmd_module = importlib.import_module("vibesop.cli.commands.skills_cmd")
-instinct_new_module = importlib.import_module("vibesop.cli.commands.instinct_new")
+from vibesop.cli.commands import analyze as analyze_module
+from vibesop.cli.commands import build as build_module
+from vibesop.cli.commands import config as config_module
+from vibesop.cli.commands import import_rules as import_rules_module
+from vibesop.cli.commands import init as init_module
+from vibesop.cli.commands import inspect as inspect_module
+from vibesop.cli.commands import install as install_module
+from vibesop.cli.commands import onboard as onboard_module
+from vibesop.cli.commands import quickstart as quickstart_module
+from vibesop.cli.commands import skill_craft as skill_craft_module
+from vibesop.cli.commands import skills_cmd as skills_cmd_module
+from vibesop.cli.commands import switch as switch_module
+from vibesop.cli.commands import targets as targets_module
+from vibesop.cli.commands import tools_cmd as tools_module
 
 __all__ = [
     "analyze_module",
-    "auto_analyze_module",
     "build_module",
     "config_module",
-    "detect_module",
-    "execute_module",
     "import_rules_module",
     "init_module",
     "inspect_module",
     "install_module",
-    "instinct_module",
-    "instinct_new_module",
-    "memory_module",
     "onboard_module",
     "quickstart_module",
-    "route_commands_module",
-    "scan_module",
     "skill_craft_module",
     "skills_cmd_module",
     "switch_module",
@@ -70,7 +59,7 @@ def _get_legacy_module(name: str):
     """Lazy import for legacy command modules.
 
     Args:
-        name: Module name (without 'vibesop.cli.commands.' prefix)
+        name: Module name (without 'vibesop.cli.legacy.' prefix)
 
     Returns:
         Module object or None if not available
@@ -81,7 +70,7 @@ def _get_legacy_module(name: str):
         return None
 
     try:
-        return importlib.import_module(f"vibesop.cli.legacy.{name}")
+        return __import__(f"vibesop.cli.legacy.{name}", fromlist=[name])
     except ImportError:
         return None
 

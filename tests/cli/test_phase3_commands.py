@@ -69,18 +69,13 @@ class TestToolchainCommand:
 
 
 class TestScanCommand:
-    """Test suite for scan command."""
+    """Test suite for scan command (now merged into analyze security)."""
 
     def test_scan_help(self) -> None:
-        """Test scan help output."""
-        result = runner.invoke(app, ["scan", "--help"])
+        """Test analyze security help output (scan command merged here)."""
+        result = runner.invoke(app, ["analyze", "security", "--help"])
         assert result.exit_code == 0
         assert "security" in result.stdout.lower()
-
-    def test_scan_no_paths(self) -> None:
-        """Test scan without paths (should fail)."""
-        result = runner.invoke(app, ["scan"])
-        assert result.exit_code != 0  # Typer requires paths
 
 
 class TestSkillCraftCommand:

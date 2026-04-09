@@ -172,18 +172,18 @@ class TestSkillsCommand:
 
 
 class TestSkillInfoCommand:
-    """Test skill-info command."""
+    """Test skills info command (moved from skill-info)."""
 
     def test_skill_info_command(self) -> None:
-        """Test skill-info command."""
-        result = runner.invoke(app, ["skill-info", "systematic-debugging"])
+        """Test skills info command."""
+        result = runner.invoke(app, ["skills", "info", "systematic-debugging"])
 
         # May fail if skill not found
         assert result.exit_code in (0, 1)
 
     def test_skill_info_not_found(self) -> None:
-        """Test skill-info with non-existent skill."""
-        result = runner.invoke(app, ["skill-info", "non-existent-skill-xyz"])
+        """Test skills info with non-existent skill."""
+        result = runner.invoke(app, ["skills", "info", "non-existent-skill-xyz"])
 
         assert result.exit_code == 1
         assert "not found" in result.stdout.lower()

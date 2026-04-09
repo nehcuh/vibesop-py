@@ -36,7 +36,7 @@ console = Console()
 def analyze(
     target: str = typer.Argument(
         ...,
-        help="Analysis target: session, security, integrations",
+        help="Analysis target: session, patterns, security, integrations",
     ),
     source: Path | None = typer.Argument(
         None,
@@ -112,7 +112,7 @@ def analyze(
         # Show all available integrations
         vibe analyze integrations --verbose
     """
-    if target == "session":
+    if target in ("session", "patterns"):
         _analyze_session(source, min_frequency, min_confidence, auto_craft)
     elif target == "security":
         _analyze_security(source or Path("."), all_files, json_output)
@@ -121,7 +121,7 @@ def analyze(
     else:
         console.print(
             f"[red]✗ Unknown analysis target: {target}[/red]\n"
-            f"[dim]Valid targets: session, security, integrations[/dim]"
+            f"[dim]Valid targets: session, patterns, security, integrations[/dim]"
         )
         raise typer.Exit(1)
 
@@ -132,22 +132,54 @@ def _analyze_session(
     min_confidence: float,
     auto_craft: bool,
 ) -> None:
-    """Analyze session file for patterns and skill suggestions.
+    """Analyze session file or directory for patterns and skill suggestions.
 
     Args:
-        source: Session file path
+        source: Session file path or directory
         min_frequency: Minimum pattern frequency
         min_confidence: Minimum confidence threshold
         auto_craft: Whether to auto-create skills
     """
     from vibesop.core.session_analyzer import SessionAnalyzer
 
-    console.print(f"\n[bold cyan]🔍 Session Analysis[/bold cyan]\n{'=' * 40}\n")
-
     analyzer = SessionAnalyzer(
         min_frequency=min_frequency,
         min_confidence=min_confidence,
     )
+
+    # Handle directory vs file
+    if source and source.is_dir():
+        # Analyze directory (patterns mode)
+        console.print(f"\n[bold cyan]📊 Pattern Analysis[/bold cyan]\n{'=' * 40}\n")
+        console.print(f"[dim]Scanning directory: {source}[/dim]\n")
+
+        # Find all session files in directory
+        session_files = list(source.rglob("*.jsonl"))
+        if not session_files:
+            console.print("[yellow]No session files found[/yellow]")
+            return
+
+        console.print(f"[dim]Found {len(session_files)} session files[/dim]\n")
+
+        # Analyze all files and collect suggestions
+        all_suggestions = []
+        for session_file in session_files:
+            try:
+                suggestions = analyzer.analyze_session_file(session_file)
+                all_suggestions.extend(suggestions)
+            except Exception:
+                continue
+
+        if not all_suggestions:
+            console.print("[green]✓ No strong patterns detected[/green]")
+            return
+
+        console.print(f"[green]Found patterns across {len(session_files)} files[/green]\n")
+        _display_suggestions(all_suggestions)
+        return
+
+    # Single file analysis (session mode)
+    console.print(f"\n[bold cyan]🔍 Session Analysis[/bold cyan]\n{'=' * 40}\n")
 
     # Find session file
     session_file = source or _find_current_session()
@@ -169,35 +201,7 @@ def _analyze_session(
 
     # Show summary
     console.print(f"[green]Found {len(suggestions)} potential skills[/green]\n")
-
-    # Display suggestions
-    for i, suggestion in enumerate(suggestions, 1):
-        value_color = {
-            "high": "green",
-            "medium": "yellow",
-            "low": "dim",
-        }.get(suggestion.estimated_value, "dim")
-
-        console.print(
-            f"{i}. [cyan]{suggestion.skill_name}[/cyan]\n"
-            f"   [dim]Frequency:[/dim] {suggestion.frequency} queries  "
-            f"[dim]Confidence:[/dim] {suggestion.confidence:.0%}  "
-            f"[dim]Value:[/dim] [{value_color}]{suggestion.estimated_value}[/{value_color}]\n"
-            f"   [dim]Example:[/dim] {suggestion.trigger_queries[0][:50]}...\n"
-        )
-
-    if auto_craft:
-        console.print("\n[cyan]Auto-creating skills...[/cyan]\n")
-        _auto_create_skills(suggestions)
-        console.print(
-            f"\n[green]✓ Created skills[/green]\n"
-            "[dim]Run [cyan]vibe build[/cyan] to include them in your configuration.[/dim]"
-        )
-    else:
-        console.print(
-            f"\n[dim]To create these skills, run:[/dim]\n"
-            f"  [cyan]vibe analyze session {session_file} --auto-craft[/cyan]\n"
-        )
+    _display_suggestions(suggestions)
 
 
 def _analyze_security(
@@ -465,3 +469,25 @@ def _auto_create_skills(suggestions: list[Any]) -> None:
 
     if created > 0:
         console.print(f"\n[green]✓ Created {created} skills[/green]")
+
+
+def _display_suggestions(suggestions: list[Any]) -> None:
+    """Display skill suggestions.
+
+    Args:
+        suggestions: List of skill suggestions
+    """
+    for i, suggestion in enumerate(suggestions, 1):
+        value_color = {
+            "high": "green",
+            "medium": "yellow",
+            "low": "dim",
+        }.get(suggestion.estimated_value, "dim")
+
+        console.print(
+            f"{i}. [cyan]{suggestion.skill_name}[/cyan]\n"
+            f"   [dim]Frequency:[/dim] {suggestion.frequency} queries  "
+            f"[dim]Confidence:[/dim] {suggestion.confidence:.0%}  "
+            f"[dim]Value:[/dim] [{value_color}]{suggestion.estimated_value}[/{value_color}]\n"
+            f"   [dim]Example:[/dim] {suggestion.trigger_queries[0][:50] if suggestion.trigger_queries else 'N/A'}...\n"
+        )

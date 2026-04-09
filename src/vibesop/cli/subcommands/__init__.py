@@ -81,6 +81,7 @@ def register(app: typer.Typer) -> None:
 
     config_app.command()(config_mod.config)
 
+    # Core commands
     app.command()(init_mod.init)
     app.command()(build_mod.build)
     app.command()(switch_mod.switch)
@@ -88,22 +89,13 @@ def register(app: typer.Typer) -> None:
     app.command()(targets_mod.targets)
     app.command()(install_mod.install)
 
-    app.command()(scan_mod.scan)
-    app.command()(detect_mod.detect)
+    # Unified analyze command (replaces scan, detect, auto-analyze)
+    # - vibe analyze session - Session analysis
+    # - vibe analyze security - Security scanning (was: vibe scan)
+    # - vibe analyze integrations - Integration detection (was: vibe detect)
     app.command()(analyze_mod.analyze)
 
-    app.command()(init_mod.init)
-    app.command()(build_mod.build)
-    app.command()(switch_mod.switch)
-    app.command("inspect")(inspect_mod.inspect_cmd)
-    app.command()(targets_mod.targets)
-    app.command()(install_mod.install)
-
-    # Note: scan, detect, and auto-analyze merged into analyze in v4.1.0
-    # - vibe scan → vibe analyze security
-    # - vibe detect → vibe analyze integrations
-    # - vibe auto-analyze-session → vibe analyze session
-
+    # Skills management subcommands
     skills_app.command()(skills_mod.list)
     skills_app.command("available")(skills_mod.available)
     skills_app.command("info")(skills_mod.info)
@@ -114,19 +106,14 @@ def register(app: typer.Typer) -> None:
     skills_app.command("sync")(skills_mod.sync)
     skills_app.command("status")(skills_mod.status)
 
+    # Experimental commands
     app.command("skill-craft")(skill_craft_mod.skill_craft)
     app.command()(tools_mod.tools)
-
-    # Note: memory and instinct commands removed in v4.1.0
-    # These are internal routing engine features, not user-facing CLI commands
-
     app.command("import-rules")(import_rules_mod.import_rules)
 
+    # Project setup
     app.command()(quickstart_mod.quickstart)
     app.command()(onboard_mod.onboard)
-
-    # Note: execute command removed in v4.1.0
-    # Skills should be executed by AI Agents, not VibeSOP
 
     # Register legacy (deprecated) commands if enabled
     _register_legacy_commands(app)

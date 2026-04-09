@@ -1,7 +1,10 @@
-"""Tests for vibe checkpoint command.
+"""Tests for checkpoint command - DEPRECATED.
 
 Note: The checkpoint command is deprecated and moved to legacy.
 Tests require VIBESOP_ENABLE_LEGACY=1 to run.
+
+Note: Memory and instinct commands were completely removed in v4.1.0.
+These features are now internal to the routing engine.
 """
 
 import os
@@ -16,7 +19,7 @@ runner = CliRunner()
 
 
 class TestCheckpointCommand:
-    """Test suite for checkpoint command."""
+    """Test suite for checkpoint command (legacy)."""
 
     def test_checkpoint_help(self) -> None:
         """Test checkpoint help output."""
@@ -34,47 +37,20 @@ class TestCheckpointCommand:
         result = runner.invoke(app, ["checkpoint", "save"])
         assert result.exit_code == 1
 
-    def test_checkpoint_restore_no_id(self) -> None:
-        """Test checkpoint restore without id."""
-        result = runner.invoke(app, ["checkpoint", "restore"])
-        assert result.exit_code == 1
-
 
 class TestMemoryCommand:
-    """Test suite for memory command."""
+    """Memory command tests - REMOVED in v4.1.0."""
 
-    def test_memory_help(self) -> None:
-        """Test memory help output."""
-        result = runner.invoke(app, ["memory", "--help"])
-        assert result.exit_code == 0
-        assert "Manage conversation memory" in result.stdout
-
-    def test_memory_list(self) -> None:
-        """Test memory list action."""
-        result = runner.invoke(app, ["memory", "list"])
-        assert result.exit_code == 0
-
-    def test_memory_stats(self) -> None:
-        """Test memory stats action."""
-        result = runner.invoke(app, ["memory", "stats"])
-        assert result.exit_code == 0
+    def test_memory_command_removed(self) -> None:
+        """Test that memory command no longer exists."""
+        result = runner.invoke(app, ["memory"])
+        assert result.exit_code != 0
 
 
 class TestInstinctCommand:
-    """Test suite for instinct command."""
+    """Instinct command tests - REMOVED in v4.1.0."""
 
-    def test_instinct_help(self) -> None:
-        """Test instinct help output."""
-        result = runner.invoke(app, ["instinct", "--help"])
-        assert result.exit_code == 0
-        assert "instinct" in result.stdout.lower()
-
-    def test_instinct_stats(self) -> None:
-        """Test instinct stats action."""
-        result = runner.invoke(app, ["instinct", "stats"])
-        assert result.exit_code == 0
-
-    def test_instinct_learn_no_context(self) -> None:
-        """Test instinct learn without context."""
-        result = runner.invoke(app, ["instinct", "learn"])
-        assert result.exit_code == 2  # Typer returns 2 for missing arguments
+    def test_instinct_command_removed(self) -> None:
+        """Test that instinct command no longer exists."""
+        result = runner.invoke(app, ["instinct"])
+        assert result.exit_code != 0

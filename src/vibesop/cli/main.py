@@ -269,11 +269,6 @@ def top_skills(
             f"Helpful: {pref.helpful_count}x"
         )
 
-    # Note: skills and skill-info commands moved to skills subcommand
-    # Use: vibe skills list, vibe skills info <id>
-    if info.get("source_file"):
-        console.print(f"\n[dim]Source file: {info['source_file']}[/dim]")
-
 
 # -- Health check helpers --
 

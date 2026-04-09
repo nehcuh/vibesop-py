@@ -290,28 +290,41 @@ class TestCompleteLearningLoop:
 
     def test_phase4_ai_enhancement(self, learning_environment: dict[str, Any]) -> None:
         """Test Phase 4: AI enhancement."""
+        from vibesop.core.ai_enhancer import AIEnhancer, EnhancedSkill
+        from vibesop.core.session_analyzer import SessionAnalyzer
+
         analyzer = SessionAnalyzer(min_frequency=3, min_confidence=0.3)
         suggestions = analyzer.analyze_session_file(learning_environment["session_file"])
 
-        with patch("vibesop.cli.commands.analyze._ai_enhance_suggestions") as mock_ai:
-            from vibesop.core.ai_enhancer import EnhancedSkill
+        # Mock the LLM call in AIEnhancer
+        enhancer = AIEnhancer()
+        mock_response = Mock()
+        mock_response.content = """```json
+{
+  "name": "Code Performance Optimization",
+  "description": "Optimize code for better performance",
+  "category": "optimization",
+  "tags": ["optimization", "performance"],
+  "trigger_conditions": ["User asks about optimization"],
+  "steps": ["Analyze", "Optimize", "Verify"]
+}
+```"""
 
-            mock_enhanced = EnhancedSkill(
-                name="Code Performance Optimization",
-                description="Optimize code for better performance",
-                category="optimization",
-                tags=["optimization", "performance"],
-                trigger_conditions=["User asks about optimization"],
-                steps=["Analyze", "Optimize", "Verify"],
-                original=suggestions[0] if suggestions else None,
-                confidence=0.85,
-            )
-
-            mock_ai.return_value = [mock_enhanced] if suggestions else []
-            assert True
+        with patch.object(enhancer._llm, "call", return_value=mock_response):
+            if suggestions:
+                enhanced = enhancer.enhance_suggestion(suggestions[0])
+                assert enhanced.name == "Code Performance Optimization"
+                assert enhanced.category == "optimization"
+                assert "optimization" in enhanced.tags
+                assert enhanced.confidence > 0.6
+            else:
+                # If no suggestions, the test passes as Phase 4 doesn't apply
+                assert True
 
     def test_complete_loop(self, learning_environment: dict[str, Any]) -> None:
         """Test complete learning loop from start to finish."""
+        from vibesop.core.ai_enhancer import AIEnhancer
+
         learner = PreferenceLearner(storage_path=learning_environment["preferences_file"])
         learner.record_selection("optimization/skill", "请帮我优化代码性能", was_helpful=True)
 
@@ -319,22 +332,25 @@ class TestCompleteLearningLoop:
         suggestions = analyzer.analyze_session_file(learning_environment["session_file"])
         assert len(suggestions) >= 1
 
-        with patch("vibesop.cli.commands.analyze._ai_enhance_suggestions") as mock_ai:
-            from vibesop.core.ai_enhancer import EnhancedSkill
+        # Phase 4: AI Enhancement
+        enhancer = AIEnhancer()
+        mock_response = Mock()
+        mock_response.content = """```json
+{
+  "name": "Code Performance Optimization",
+  "description": "Optimize code for better performance",
+  "category": "optimization",
+  "tags": ["optimization"],
+  "trigger_conditions": ["User asks about optimization"],
+  "steps": ["Optimize"]
+}
+```"""
 
-            mock_enhanced = EnhancedSkill(
-                name="Code Performance Optimization",
-                description="Optimize code for better performance",
-                category="optimization",
-                tags=["optimization"],
-                trigger_conditions=["User asks about optimization"],
-                steps=["Optimize"],
-                original=suggestions[0],
-                confidence=0.85,
-            )
-
-            mock_ai.return_value = [mock_enhanced]
-            assert True
+        with patch.object(enhancer._llm, "call", return_value=mock_response):
+            enhanced = enhancer.enhance_suggestion(suggestions[0])
+            assert enhanced.name == "Code Performance Optimization"
+            assert enhanced.category == "optimization"
+            assert enhanced.confidence > 0.6
 
 
 class TestRealWorldScenarios:
@@ -405,7 +421,7 @@ class TestRealWorldScenarios:
 
         session_file.write_text("\n".join(lines))
 
-        result = runner.invoke(app, ["auto-analyze-session", str(session_file), "--quiet"])
+        result = runner.invoke(app, ["analyze", "session", str(session_file)])
         assert result.exit_code == 0 or "Found" in result.stdout
 
 
