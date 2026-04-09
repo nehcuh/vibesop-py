@@ -1,17 +1,11 @@
-"""Tests for Phase 3 commands (quickstart, onboard, toolchain, scan, skill-craft, tools).
+"""Tests for Phase 3 commands (quickstart, onboard, scan, skill-craft, tools).
 
-Note: The toolchain command is deprecated and moved to legacy.
-Tests require VIBESOP_ENABLE_LEGACY=1 to run.
+Note: The toolchain command has been removed in v4.1.0.
 """
-
-import os
 
 from typer.testing import CliRunner
 
 from vibesop.cli.main import app
-
-# Enable legacy commands for testing
-os.environ["VIBESOP_ENABLE_LEGACY"] = "1"
 
 runner = CliRunner()
 
@@ -41,31 +35,6 @@ class TestOnboardCommand:
             app, ["onboard", "--skip-deploy", "--skip-hooks", "--skip-integrations"]
         )
         assert result.exit_code == 0
-
-
-class TestToolchainCommand:
-    """Test suite for toolchain command."""
-
-    def test_toolchain_help(self) -> None:
-        """Test toolchain help output."""
-        result = runner.invoke(app, ["toolchain", "--help"])
-        assert result.exit_code == 0
-        assert "toolchain" in result.stdout.lower()
-
-    def test_toolchain_list(self) -> None:
-        """Test toolchain list action."""
-        result = runner.invoke(app, ["toolchain", "list"])
-        assert result.exit_code == 0
-
-    def test_toolchain_status(self) -> None:
-        """Test toolchain status action."""
-        result = runner.invoke(app, ["toolchain", "status"])
-        assert result.exit_code == 0
-
-    def test_toolchain_verify_no_tool(self) -> None:
-        """Test toolchain verify without tool."""
-        result = runner.invoke(app, ["toolchain", "verify"])
-        assert result.exit_code == 1
 
 
 class TestScanCommand:

@@ -1,26 +1,6 @@
 """CLI subcommand registration.
 
 Groups related commands into Typer sub-apps for better organization.
-
-Removed Commands (v4.1.0):
-- execute: Removed as it violated the "router not executor" principle.
-  Skills should be executed by AI Agents, not VibeSOP.
-- memory: Internalized. Session memory management is handled automatically by the routing engine.
-- instinct: Internalized. Instinct learning works automatically without manual CLI management.
-- scan: Merged into `analyze security` subcommand.
-- detect: Merged into `analyze integrations` subcommand.
-- auto-analyze: Merged into `analyze session --auto`.
-
-Legacy Commands (deprecated):
-The following commands have been moved to the legacy package:
-- deploy: Use platform-specific installation methods
-- toolchain: Use your system package manager
-- worktree: Use native git worktree commands
-- checkpoint: Use git tags/branches for state management
-- hooks: Configure in platform-specific settings
-
-To enable legacy commands, install with extras: pip install vibesop[legacy]
-Or set environment variable: VIBESOP_ENABLE_LEGACY=1
 """
 
 from __future__ import annotations
@@ -89,10 +69,7 @@ def register(app: typer.Typer) -> None:
     app.command()(targets_mod.targets)
     app.command()(install_mod.install)
 
-    # Unified analyze command (replaces scan, detect, auto-analyze)
-    # - vibe analyze session - Session analysis
-    # - vibe analyze security - Security scanning (was: vibe scan)
-    # - vibe analyze integrations - Integration detection (was: vibe detect)
+    # Unified analyze command
     app.command()(analyze_mod.analyze)
 
     # Skills management subcommands
@@ -114,38 +91,3 @@ def register(app: typer.Typer) -> None:
     # Project setup
     app.command()(quickstart_mod.quickstart)
     app.command()(onboard_mod.onboard)
-
-    # Register legacy (deprecated) commands if enabled
-    _register_legacy_commands(app)
-
-
-def _register_legacy_commands(app: typer.Typer) -> None:
-    """Conditionally register legacy/deprecated commands.
-
-    These commands are deprecated and will be removed in v5.0.0.
-    They are only loaded if VIBESOP_ENABLE_LEGACY is set.
-
-    Args:
-        app: Main Typer application
-    """
-    import os
-
-    if os.getenv("VIBESOP_ENABLE_LEGACY", "0").lower() not in ("1", "true", "yes"):
-        return
-
-    try:
-        from vibesop.cli.legacy import (
-            checkpoint,
-            deploy,
-            hooks,
-            toolchain,
-            worktree,
-        )
-
-        app.command()(deploy.deploy)
-        app.command()(toolchain.toolchain)
-        app.command()(worktree.worktree)
-        app.command()(checkpoint.checkpoint)
-        app.command()(hooks.hooks)
-    except ImportError:
-        pass

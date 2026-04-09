@@ -610,30 +610,6 @@ vibe import-rules <file> [options]
 
 ---
 
-## Legacy Commands
-
-⚠️ These commands are deprecated and will be removed in v5.0.0.
-
-To enable legacy commands:
-```bash
-export VIBESOP_ENABLE_LEGACY=1
-```
-
-Or install with legacy extras:
-```bash
-pip install vibesop[legacy]
-```
-
-### Legacy Commands List
-
-- `vibe deploy` - Deploy configuration (use platform-specific methods instead)
-- `vibe toolchain` - Manage development tools (use system package manager)
-- `vibe worktree` - Manage git worktrees (use native git commands)
-- `vibe checkpoint` - Session state management (use git tags/branches)
-- `vibe hooks` - Hook configuration (configure in platform settings)
-
----
-
 ## Command Summary
 
 ### Quick Reference
@@ -664,7 +640,11 @@ The following commands were removed:
 | `vibe scan` | `vibe analyze security` | Merged into unified analyze |
 | `vibe detect` | `vibe analyze integrations` | Merged into unified analyze |
 | `vibe skill-info` | `vibe skills info` | Moved to skills subcommand |
-| `vibe skills` (bare) | `vibe skills available` | Unified under skills command |
+| `vibe deploy` | N/A | Out of scope for routing engine |
+| `vibe toolchain` | N/A | Out of scope for routing engine |
+| `vibe worktree` | N/A | Out of scope for routing engine |
+| `vibe checkpoint` | N/A | Out of scope for routing engine |
+| `vibe hooks` | N/A | Out of scope for routing engine |
 
 ---
 

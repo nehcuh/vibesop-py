@@ -1,38 +1,16 @@
-"""Tests for Phase 4 commands (worktree, route validation, import-rules).
+"""Tests for Phase 4 commands (route validation, import-rules).
 
 Note:
-- The worktree command is deprecated and moved to legacy.
+- The worktree command has been removed in v4.1.0.
 - route-select was removed in v4.0.0 (use 'vibe route' instead).
 - route-cmd validate is now 'vibe route --validate'.
-
-Tests require VIBESOP_ENABLE_LEGACY=1 to run legacy command tests.
 """
-
-import os
 
 from typer.testing import CliRunner
 
 from vibesop.cli.main import app
 
-# Enable legacy commands for testing
-os.environ["VIBESOP_ENABLE_LEGACY"] = "1"
-
 runner = CliRunner()
-
-
-class TestWorktreeCommand:
-    """Test suite for worktree command."""
-
-    def test_worktree_help(self) -> None:
-        """Test worktree help output."""
-        result = runner.invoke(app, ["worktree", "--help"])
-        assert result.exit_code == 0
-        assert "worktree" in result.stdout.lower()
-
-    def test_worktree_list(self) -> None:
-        """Test worktree list action."""
-        result = runner.invoke(app, ["worktree", "list"])
-        assert result.exit_code == 0  # May fail if no git, but command runs
 
 
 class TestRouteSelectCommand:

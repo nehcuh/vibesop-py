@@ -53,12 +53,6 @@ semantic = [
     "numpy>=1.24.0,<2.0.0",
 ]
 
-# Legacy/deprecated commands (deploy, toolchain, worktree, checkpoint, hooks)
-# These will be removed in v5.0.0. Use VIBESOP_ENABLE_LEGACY=1 instead.
-legacy = [
-    # No additional dependencies - commands are included but disabled by default
-]
-
 all = [
     "vibesop[dev,test,semantic]",
 ]
