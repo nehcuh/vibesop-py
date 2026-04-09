@@ -109,8 +109,13 @@ def _execute_build(
         if result.files_created:
             console.print("[bold]Files created:[/bold]")
             for file_path in result.files_created:
-                rel_path = Path(file_path).relative_to(Path.cwd())
-                console.print(f"  📄 {rel_path}")
+                # Handle paths outside current directory (e.g., ~/.claude)
+                try:
+                    rel_path = Path(file_path).relative_to(Path.cwd())
+                    console.print(f"  📄 {rel_path}")
+                except ValueError:
+                    # Path is outside current directory, show absolute path
+                    console.print(f"  📄 {file_path}")
 
         # Suggest deployment based on output location
         if str(output_dir) == str(Path.home() / ".claude"):
