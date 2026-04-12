@@ -102,8 +102,8 @@ class ConfidenceGapStrategy(ResolutionStrategy):
     def resolve(
         self,
         matches: list[MatchResult],
-        _query: str,
-        _context: dict[str, Any] | None = None,
+        query: str,
+        context: dict[str, Any] | None = None,
     ) -> ConflictResolution | None:
         if len(matches) < 2:
             return None
@@ -131,15 +131,14 @@ class ConfidenceGapStrategy(ResolutionStrategy):
 class NamespacePriorityStrategy(ResolutionStrategy):
     """Resolve conflicts by preferring certain namespaces.
 
-    Built-in skills are preferred over external ones.
+    Project skills > external skills > built-in fallback.
+    Any unknown namespace is treated as external (priority 80).
     """
 
     # Default namespace priorities
     DEFAULT_PRIORITIES: ClassVar[dict[str, int]] = {
-        "builtin": 100,
-        "superpowers": 80,
-        "gstack": 70,
-        "omx": 60,
+        "project": 100,
+        "builtin": 60,
     }
 
     def __init__(self, priorities: dict[str, int] | None = None):
@@ -153,8 +152,8 @@ class NamespacePriorityStrategy(ResolutionStrategy):
     def resolve(
         self,
         matches: list[MatchResult],
-        _query: str,
-        _context: dict[str, Any] | None = None,
+        query: str,
+        context: dict[str, Any] | None = None,
     ) -> ConflictResolution | None:
         if len(matches) < 2:
             return None
@@ -162,17 +161,17 @@ class NamespacePriorityStrategy(ResolutionStrategy):
         # Group by namespace
         by_namespace: dict[str, list[MatchResult]] = {}
         for match in matches:
-            namespace = match.metadata.get("namespace", "other")
+            namespace = str(match.metadata.get("namespace", "other"))
             if namespace not in by_namespace:
                 by_namespace[namespace] = []
             by_namespace[namespace].append(match)
 
-        # Find highest priority namespace
-        top_namespace = max(by_namespace.keys(), key=lambda ns: self.priorities.get(ns, 50))
+        # Find highest priority namespace (unknown namespaces default to external: 80)
+        top_namespace = max(by_namespace.keys(), key=lambda ns: self.priorities.get(ns, 80))
 
         # If there's a clear priority winner, use it
-        top_priority = self.priorities.get(top_namespace, 50)
-        other_priorities = [self.priorities.get(ns, 50) for ns in by_namespace if ns != top_namespace]
+        top_priority = self.priorities.get(top_namespace, 80)
+        other_priorities = [self.priorities.get(ns, 80) for ns in by_namespace if ns != top_namespace]
 
         if top_priority > max(other_priorities, default=0) + 10:
             top_matches = by_namespace[top_namespace]
@@ -240,8 +239,8 @@ class RecencyStrategy(ResolutionStrategy):
     def resolve(
         self,
         matches: list[MatchResult],
-        _query: str,
-        _context: dict[str, Any] | None = None,
+        query: str,
+        context: dict[str, Any] | None = None,
     ) -> ConflictResolution | None:
         if len(matches) < 2:
             return None
@@ -295,7 +294,7 @@ class ExplicitOverrideStrategy(ResolutionStrategy):
         self,
         matches: list[MatchResult],
         query: str,
-        _context: dict[str, Any] | None = None,
+        context: dict[str, Any] | None = None,
     ) -> ConflictResolution | None:
         import re
 
@@ -331,8 +330,8 @@ class FallbackStrategy(ResolutionStrategy):
     def resolve(
         self,
         matches: list[MatchResult],
-        _query: str,
-        _context: dict[str, Any] | None = None,
+        query: str,
+        context: dict[str, Any] | None = None,
     ) -> ConflictResolution | None:
         if not matches:
             return ConflictResolution(

@@ -67,7 +67,7 @@ class KeywordMatcher:
         self,
         query: str,
         candidates: list[SkillCandidateDict],
-        _context: RoutingContext | None = None,
+        context: RoutingContext | None = None,
         top_k: int = 10,
     ) -> list[MatchResult]:
         """Match query against candidates using keyword detection."""
@@ -89,7 +89,7 @@ class KeywordMatcher:
             if score >= self._config.min_confidence:
                 results.append(
                     MatchResult(
-                        skill_id=candidate.get("id", ""),
+                        skill_id=str(candidate.get("id", "")),
                         confidence=score,
                         score_breakdown={"keyword_match": score},
                         matcher_type=MatcherType.KEYWORD,
@@ -113,7 +113,7 @@ class KeywordMatcher:
         self,
         query: str,
         candidate: SkillCandidateDict,
-        _context: RoutingContext | None = None,
+        context: RoutingContext | None = None,
     ) -> ConfidenceScore:
         """Score a single candidate."""
         query_tokens = set(
@@ -125,12 +125,14 @@ class KeywordMatcher:
 
     def _score(self, query_tokens: set[str], candidate: SkillCandidateDict) -> ConfidenceScore:
         """Calculate keyword match score."""
+        _tmp_keywords = candidate.get("keywords", [])
+        keywords_list = _tmp_keywords if isinstance(_tmp_keywords, list) else []
         # Get text fields from candidate
         text_fields = [
-            candidate.get("name", ""),
-            candidate.get("description", ""),
-            candidate.get("intent", ""),
-            " ".join(candidate.get("keywords", [])),
+            str(candidate.get("name", "")),
+            str(candidate.get("description", "")),
+            str(candidate.get("intent", "")),
+            " ".join(str(k) for k in keywords_list),
         ]
 
         combined_text = " ".join(text_fields).lower()
@@ -151,10 +153,12 @@ class KeywordMatcher:
         candidate: SkillCandidateDict,
     ) -> list[str]:
         """Get list of matched keywords."""
+        _tmp_keywords = candidate.get("keywords", [])
+        keywords_list = _tmp_keywords if isinstance(_tmp_keywords, list) else []
         text_fields = [
-            candidate.get("name", ""),
-            candidate.get("description", ""),
-            " ".join(candidate.get("keywords", [])),
+            str(candidate.get("name", "")),
+            str(candidate.get("description", "")),
+            " ".join(str(k) for k in keywords_list),
         ]
 
         combined_text = " ".join(text_fields).lower()
@@ -211,7 +215,7 @@ class TFIDFMatcher:
         self,
         query: str,
         candidates: list[SkillCandidateDict],
-        _context: RoutingContext | None = None,
+        context: RoutingContext | None = None,
         top_k: int = 10,
     ) -> list[MatchResult]:
         """Match query against candidates using TF-IDF similarity."""
@@ -225,7 +229,7 @@ class TFIDFMatcher:
         results: list[MatchResult] = []
 
         for candidate in candidates:
-            skill_id = candidate.get("id", "")
+            skill_id = str(candidate.get("id", ""))
             candidate_text = self._candidate_to_text(candidate)
             candidate_tokens = tokenize(candidate_text, self._config.tokenizer_config)
             candidate_vec = self._tfidf_calc.transform(candidate_tokens)
@@ -255,7 +259,7 @@ class TFIDFMatcher:
         self,
         query: str,
         candidate: SkillCandidateDict,
-        _context: RoutingContext | None = None,
+        context: RoutingContext | None = None,
     ) -> ConfidenceScore:
         """Score a single candidate."""
         if not self._fitted:
@@ -273,12 +277,16 @@ class TFIDFMatcher:
 
     def _candidate_to_text(self, candidate: SkillCandidateDict) -> str:
         """Convert candidate to searchable text."""
+        _tmp_keywords = candidate.get("keywords", [])
+        keywords_list = _tmp_keywords if isinstance(_tmp_keywords, list) else []
+        _tmp_triggers = candidate.get("triggers", [])
+        triggers_list = _tmp_triggers if isinstance(_tmp_triggers, list) else []
         fields = [
-            candidate.get("name", ""),
-            candidate.get("description", ""),
-            candidate.get("intent", ""),
-            " ".join(candidate.get("keywords", [])),
-            " ".join(candidate.get("triggers", [])),
+            str(candidate.get("name", "")),
+            str(candidate.get("description", "")),
+            str(candidate.get("intent", "")),
+            " ".join(str(k) for k in keywords_list),
+            " ".join(str(t) for t in triggers_list),
         ]
         return " ".join(fields)
 
@@ -336,6 +344,7 @@ class EmbeddingMatcher:
         self._load_model()
 
         texts = [self._candidate_to_text(c) for c in candidates]
+        assert self._model is not None
         embeddings = self._model.encode(texts)
 
         self._candidate_embeddings = {
@@ -347,7 +356,7 @@ class EmbeddingMatcher:
         self,
         query: str,
         candidates: list[SkillCandidateDict],
-        _context: RoutingContext | None = None,
+        context: RoutingContext | None = None,
         top_k: int = 10,
     ) -> list[MatchResult]:
         """Match query using vector embeddings."""
@@ -361,12 +370,14 @@ class EmbeddingMatcher:
             self.fit(candidates)
 
         # Encode query
+        assert self._model is not None
         query_embedding = self._model.encode([query])[0]
 
         results: list[MatchResult] = []
 
+        assert self._candidate_embeddings is not None
         for candidate in candidates:
-            skill_id = candidate.get("id", "")
+            skill_id = str(candidate.get("id", ""))
             if skill_id not in self._candidate_embeddings:
                 continue
 
@@ -400,7 +411,7 @@ class EmbeddingMatcher:
     def score(
         self,
         query: str,
-        candidate: dict[str, Any],
+        candidate: SkillCandidateDict,
         context: RoutingContext | None = None,
     ) -> float:
         """Score a single candidate."""
@@ -410,11 +421,11 @@ class EmbeddingMatcher:
     def _candidate_to_text(self, candidate: SkillCandidateDict) -> str:
         """Convert candidate to searchable text."""
         fields = [
-            candidate.get("name", ""),
-            candidate.get("description", ""),
-            candidate.get("intent", ""),
+            str(candidate.get("name", "")),
+            str(candidate.get("description", "")),
+            str(candidate.get("intent", "")),
         ]
-        return " ".join(f for f in fields if f)
+        return " ".join(str(f) for f in fields if f)
 
     def get_capabilities(self) -> MatcherCapabilitiesDict:
         """Return matcher capabilities."""
@@ -455,7 +466,7 @@ class LevenshteinMatcher:
             if score >= self._config.min_confidence:
                 results.append(
                     MatchResult(
-                        skill_id=candidate.get("id", ""),
+                        skill_id=str(candidate.get("id", "")),
                         confidence=score,
                         score_breakdown={"levenshtein": score},
                         matcher_type=MatcherType.LEVENSHTEIN,
@@ -473,7 +484,7 @@ class LevenshteinMatcher:
         self,
         query: str,
         candidate: SkillCandidateDict,
-        _context: RoutingContext | None = None,
+        context: RoutingContext | None = None,
     ) -> ConfidenceScore:
         """Score a single candidate using token-aware Levenshtein similarity.
 
@@ -505,7 +516,7 @@ class LevenshteinMatcher:
             return 0.0
 
         # Also include a bonus for exact name match
-        name = candidate.get("name", "").lower()
+        name = str(str(candidate.get("name", ""))).lower()
         name_bonus = 0.0
         if any(qt == name for qt in query_tokens):
             name_bonus = 0.15
@@ -537,12 +548,12 @@ class LevenshteinMatcher:
         for key in ("name", "keywords", "tags"):
             value = candidate.get(key)
             if isinstance(value, str):
-                tokens.update(self._tokenize(value))
+                tokens.update(self._tokenize(str(value)))
             elif isinstance(value, list):
                 for item in value:
                     tokens.update(self._tokenize(str(item)))
         # Include skill ID parts as tokens
-        skill_id = candidate.get("id", "")
+        skill_id = str(candidate.get("id", ""))
         tokens.update(skill_id.replace("/", " ").replace("-", " ").lower().split())
         return list(tokens)
 
@@ -572,7 +583,7 @@ class LevenshteinMatcher:
 
     def _candidate_to_text(self, candidate: SkillCandidateDict) -> str:
         """Convert candidate to searchable text."""
-        return candidate.get("name", "") + " " + candidate.get("description", "")
+        return str(str(candidate.get("name", ""))) + " " + str(str(candidate.get("description", "")))
 
     def get_capabilities(self) -> MatcherCapabilitiesDict:
         """Return matcher capabilities."""

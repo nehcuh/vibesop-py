@@ -24,6 +24,20 @@ class TriagePromptRegistry:
             "Available skills:\n{skills_summary}\n\n"
             "Return ONLY the skill ID (e.g., gstack/review or systematic-debugging):\n"
         ),
+        "v2": (
+            "You are a skill routing assistant. Your job is to select the single most appropriate "
+            "skill for the user's request.\n\n"
+            "Instructions:\n"
+            "1. Read the user request carefully.\n"
+            "2. Consider the intent, not just keywords.\n"
+            "3. Select the skill that best matches the request from the available skills.\n"
+            "4. Respond with a JSON object containing ONLY the selected skill_id.\n"
+            "5. If no skill matches well, use skill_id: null\n\n"
+            "User request: {query}\n\n"
+            "Available skills:\n{skills_summary}\n\n"
+            "Return JSON in this exact format (no markdown, no explanation):\n"
+            '{{"skill_id": "<selected-skill-id>"}}\n'
+        ),
     }
 
     DEFAULT_VERSION = "v1"

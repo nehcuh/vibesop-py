@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import ClassVar
+from typing import Any, ClassVar
 
 
 @dataclass
@@ -44,7 +44,7 @@ class ColdStartStrategy:
 
     # Built-in mappings for common queries
     # These are used when no other routing information is available
-    _BUILTIN_MAPPINGS: ClassVar[list[dict]] = [
+    _BUILTIN_MAPPINGS: ClassVar[list[dict[str, Any]]] = [
         # Debugging scenarios
         {
             "pattern": "debug",

@@ -316,21 +316,43 @@ class InstinctLearner:
         return f"instinct_{hash_obj.hexdigest()[:12]}"
 
     def _match_score(self, pattern: str, text: str) -> float:
-        """Calculate match score between pattern and text."""
-        pattern_words = set(re.findall(r"\w+", pattern.lower()))
-        text_words = set(re.findall(r"\w+", text.lower()))
+        """Calculate match score between pattern and text.
+
+        Uses a hybrid of Jaccard similarity and containment with bigram overlap,
+        plus proper CJK tokenization via the project's tokenizer.
+        """
+        from vibesop.core.matching.tokenizers import tokenize
+
+        pattern_tokens = tokenize(pattern)
+        text_tokens = tokenize(text)
+
+        pattern_words = set(pattern_tokens)
+        text_words = set(text_tokens)
 
         if not pattern_words:
             return 0.0
 
         # Jaccard similarity
-        intersection = len(pattern_words & text_words)
-        union = len(pattern_words | text_words)
+        intersection = pattern_words & text_words
+        union = pattern_words | text_words
+        jaccard = len(intersection) / len(union) if union else 0.0
 
-        if union == 0:
-            return 0.0
+        # Containment: how much of the pattern is found in the text
+        containment = len(intersection) / len(pattern_words) if pattern_words else 0.0
 
-        return intersection / union
+        # Bigram overlap for phrase-level matching
+        def _bigrams(tokens: list[str]) -> set[str]:
+            return {f"{tokens[i]} {tokens[i + 1]}" for i in range(len(tokens) - 1)}
+
+        pattern_bigrams = _bigrams(pattern_tokens)
+        text_bigrams = _bigrams(text_tokens)
+        if pattern_bigrams:
+            bigram_overlap = len(pattern_bigrams & text_bigrams) / len(pattern_bigrams)
+        else:
+            bigram_overlap = 0.0
+
+        # Weighted combination: containment matters more than Jaccard for short queries
+        return 0.4 * jaccard + 0.4 * containment + 0.2 * bigram_overlap
 
     def get_stats(self) -> dict[str, Any]:
         """Get statistics about instincts."""

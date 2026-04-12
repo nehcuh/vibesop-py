@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from vibesop.core.optimization.clustering import SkillClusterIndex
+
 COMPLEXITY_INDICATORS = [
     "复杂",
     "很多",
@@ -33,7 +35,7 @@ NAMESPACE_KEYWORDS = {
 class CandidatePrefilter:
     """Pre-filter skill candidates before matching."""
 
-    def __init__(self, cluster_index=None):
+    def __init__(self, cluster_index: SkillClusterIndex | None = None):
         self._cluster_index = cluster_index
 
     def filter(self, query: str, candidates: list[dict[str, Any]]) -> list[dict[str, Any]]:

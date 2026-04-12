@@ -50,7 +50,7 @@ class PreferenceBooster:
         self._storage_path = storage_path
         self._learner: PreferenceLearner | None = None
 
-    def _get_learner(self) -> PreferenceLearner:
+    def get_learner(self) -> PreferenceLearner:
         if self._learner is None:
             from vibesop.core.preference import PreferenceLearner
 
@@ -64,16 +64,16 @@ class PreferenceBooster:
         if not self.enabled or not matches:
             return list(matches)
         try:
-            learner = self._get_learner()
+            learner = self.get_learner()
         except Exception as e:
             logger.debug(f"Preference learner not available: {e}")
             return list(matches)
 
         skill_ids = [m.skill_id for m in matches]
-        rankings = learner.get_personalized_rankings(skill_ids, query)
-        score_map = dict(rankings)
+        rankings: list[tuple[str, float]] = learner.get_personalized_rankings(skill_ids, query)
+        score_map: dict[str, float] = dict(rankings)
 
-        boosted = []
+        boosted: list[MatchResult] = []
         for match in matches:
             pref_score = score_map.get(match.skill_id, 0.0)
             new_confidence = self._blend_confidence(match.confidence, pref_score)
@@ -112,7 +112,7 @@ class PreferenceBooster:
         if not self.enabled:
             return
         try:
-            learner = self._get_learner()
+            learner = self.get_learner()
             learner.record_selection(skill_id, query, was_helpful=helpful)
         except Exception as e:
             logger.debug(f"Failed to record preference: {e}")

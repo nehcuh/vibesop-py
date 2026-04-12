@@ -300,34 +300,57 @@ class MemoryManager:
         query: str,
         limit: int = 10,
     ) -> list[Conversation]:
-        """Search conversations by content.
+        """Search conversations by semantic token overlap.
+
+        Uses token-based similarity instead of naive substring matching
+        to support CJK languages and multi-word intent matching.
 
         Args:
             query: Search query
             limit: Maximum results
 
         Returns:
-            List of matching conversations
+            List of matching conversations ranked by relevance
         """
-        query_lower = query.lower()
-        results = []
+        from vibesop.core.matching.tokenizers import tokenize
+
+        query_tokens = set(tokenize(query))
+        if not query_tokens:
+            return []
+
+        scored_results: list[tuple[float, Conversation]] = []
 
         for conv in self._storage.list_all():
-            # Search in title
-            if query_lower in conv.title.lower():
-                results.append(conv)
-                continue
+            scores: list[float] = []
 
-            # Search in messages
+            # Score title
+            title_tokens = set(tokenize(conv.title))
+            if title_tokens:
+                intersection = query_tokens & title_tokens
+                union = query_tokens | title_tokens
+                scores.append(len(intersection) / len(union) if union else 0.0)
+
+            # Score messages (best message match)
+            best_msg_score = 0.0
             for msg in conv.messages:
-                if query_lower in msg.content.lower():
-                    results.append(conv)
-                    break
+                msg_tokens = set(tokenize(msg.content))
+                if msg_tokens:
+                    intersection = query_tokens & msg_tokens
+                    union = query_tokens | msg_tokens
+                    score = len(intersection) / len(union) if union else 0.0
+                    if score > best_msg_score:
+                        best_msg_score = score
+            if best_msg_score > 0:
+                scores.append(best_msg_score)
 
-            if len(results) >= limit:
-                break
+            if scores:
+                avg_score = sum(scores) / len(scores)
+                if avg_score > 0.1:  # Minimum relevance threshold
+                    scored_results.append((avg_score, conv))
 
-        return results
+        # Sort by relevance descending
+        scored_results.sort(key=lambda x: x[0], reverse=True)
+        return [conv for _score, conv in scored_results[:limit]]
 
     def get_active_conversation_id(self) -> str | None:
         """Get the active conversation ID.

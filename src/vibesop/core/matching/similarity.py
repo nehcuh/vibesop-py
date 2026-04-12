@@ -111,8 +111,12 @@ class SimilarityCalculator:
         normalize: bool = True,
         epsilon: float = 1e-10,
     ):
+        if isinstance(metric, SimilarityMetric):
+            _metric = metric
+        else:
+            _metric = SimilarityMetric(metric)
         self._config = SimilarityConfig(
-            metric=SimilarityMetric(metric) if isinstance(metric, str) else metric,
+            metric=_metric,
             normalize=normalize,
             epsilon=epsilon,
         )
@@ -137,7 +141,8 @@ class SimilarityCalculator:
         # Detect input types and dispatch
         if isinstance(query, dict):
             # Dictionary-based TF-IDF vectors (triggers/utils.py style)
-            return self._calculate_dict_query(query, candidates)
+            dict_candidates = [c for c in candidates if isinstance(c, dict)]
+            return self._calculate_dict_query(query, dict_candidates)
 
         # Check if numpy is available for vector operations
         if np is not None and isinstance(query, np.ndarray):
@@ -164,7 +169,7 @@ class SimilarityCalculator:
         # Calculate using dict method
         query_scores = []
         for cand_vec in candidate_vecs:
-            score = self._cosine_similarity_dict(query_vec, cand_vec)
+            score = self.cosine_similarity_dict(query_vec, cand_vec)
             query_scores.append(score)
 
         return query_scores
@@ -212,7 +217,7 @@ class SimilarityCalculator:
         """Calculate similarity for dict-based TF-IDF vectors."""
         scores = []
         for candidate in candidates:
-            score = self._cosine_similarity_dict(query, candidate)
+            score = self.cosine_similarity_dict(query, candidate)
             scores.append(score)
         return scores
 
@@ -244,7 +249,7 @@ class SimilarityCalculator:
             return scores
 
     @staticmethod
-    def _cosine_similarity_dict(vec1: dict[str, float], vec2: dict[str, float]) -> float:
+    def cosine_similarity_dict(vec1: dict[str, float], vec2: dict[str, float]) -> float:
         """Calculate cosine similarity for dict-based vectors.
 
         This is the original implementation from triggers/utils.py,
@@ -320,7 +325,7 @@ def cosine_similarity(
     calc = SimilarityCalculator(metric=SimilarityMetric.COSINE)
 
     if isinstance(vec1, dict) and isinstance(vec2, dict):
-        return calc._cosine_similarity_dict(vec1, vec2)
+        return calc.cosine_similarity_dict(vec1, vec2)
     else:
         # Convert to numpy if needed
         if not isinstance(vec1, np.ndarray):

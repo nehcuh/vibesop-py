@@ -4,6 +4,7 @@ Supports Claude 3.5 Haiku, Sonnet, and Opus models.
 """
 
 import os
+from typing import cast
 
 import anthropic
 from anthropic import Anthropic, AsyncAnthropic
@@ -98,7 +99,7 @@ class AnthropicProvider(LLMProvider):
                 messages=[{"role": "user", "content": prompt}],
             )
 
-            content = response.content[0].text
+            content = cast(str, response.content[0].text)  # type: ignore[reportAttributeAccessIssue]
             input_tokens = response.usage.input_tokens
             output_tokens = response.usage.output_tokens
             tokens_used = input_tokens + output_tokens
@@ -114,9 +115,8 @@ class AnthropicProvider(LLMProvider):
                 output_tokens=output_tokens,
             )
 
-        except anthropic.APIError as e:
-            msg = f"Anthropic API error: {e}"
-            raise anthropic.APIError(msg) from e
+        except anthropic.APIError:
+            raise
 
     def _is_configured(self) -> bool:
         """Check if Anthropic API key is valid.
@@ -163,7 +163,7 @@ class AnthropicProvider(LLMProvider):
                     messages=[{"role": "user", "content": prompt}],
                 )
 
-                content = response.content[0].text  # type: ignore[reportUnknownVariableType]
+                content = cast(str, response.content[0].text)  # type: ignore[reportAttributeAccessIssue]
                 input_tokens = response.usage.input_tokens
                 output_tokens = response.usage.output_tokens
                 tokens_used = input_tokens + output_tokens
@@ -179,6 +179,5 @@ class AnthropicProvider(LLMProvider):
                     output_tokens=output_tokens,
                 )
 
-        except anthropic.APIError as e:
-            msg = f"Anthropic API error: {e}"
-            raise anthropic.APIError(msg) from e  # type: ignore[reportUnknownArgumentType]
+        except anthropic.APIError:
+            raise

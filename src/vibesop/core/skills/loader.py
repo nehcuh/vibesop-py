@@ -8,6 +8,7 @@ and external skill packs (superpowers, gstack, etc.).
 import logging
 from dataclasses import dataclass
 from pathlib import Path
+from collections.abc import Sequence
 from typing import Any
 
 from ruamel.yaml import YAML
@@ -61,7 +62,7 @@ class SkillLoader:
     def __init__(
         self,
         project_root: str | Path = ".",
-        search_paths: list[str] | None = None,
+        search_paths: Sequence[str | Path] | None = None,
         enable_external: bool = True,
         require_audit: bool = True,
     ) -> None:
