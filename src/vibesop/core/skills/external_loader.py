@@ -381,7 +381,7 @@ class ExternalSkillLoader:
         pack_url: str | None = None,
         _version: str | None = None,
     ) -> tuple[bool, str]:
-        """Install a skill pack.
+        """Install a skill pack from a Git URL using intelligent analysis.
 
         Args:
             pack_name: Name of the pack (e.g., "superpowers")
@@ -391,52 +391,61 @@ class ExternalSkillLoader:
         Returns:
             Tuple of (success, message)
         """
-        import tempfile
-        import urllib.request
+        import shutil
+
+        from vibesop.installer.analyzer import RepoAnalyzer
+        from vibesop.installer.planner import InstallPlanner
 
         pack_url = pack_url or self.TRUSTED_PACKS.get(pack_name)
         if not pack_url:
             return False, f"Unknown pack: {pack_name}"
 
-        # Create temp directory for download
-        with tempfile.TemporaryDirectory() as tmpdir:
-            tmpdir_path = Path(tmpdir)
+        # Analyze repository
+        analyzer = RepoAnalyzer()
+        analysis = analyzer.analyze(pack_url, pack_name)
 
-            # Download pack
-            try:
-                archive_path = tmpdir_path / f"{pack_name}.tar.gz"
-                urllib.request.urlretrieve(pack_url, archive_path)
+        if analysis.errors:
+            return False, analysis.errors[0]
 
-                # Extract
-                import tarfile
+        if not analysis.skill_files:
+            return False, f"No SKILL.md files found in {pack_name} repository"
 
-                with tarfile.open(archive_path) as tar:
-                    tar.extractall(tmpdir_path)
+        # Generate install plan
+        target_base = self._external_paths[0]
+        planner = InstallPlanner(base_target=target_base)
+        plan = planner.plan(analysis)
 
-                # Find extracted directory
-                extracted_dirs = [d for d in tmpdir_path.iterdir() if d.is_dir()]
-                if not extracted_dirs:
-                    return False, "No directory found in archive"
+        # Execute installation
+        try:
+            target_path = plan.target_path
+            target_path.mkdir(parents=True, exist_ok=True)
 
-                # Install to first external path
-                target_path = self._external_paths[0] / pack_name
-                target_path.mkdir(parents=True, exist_ok=True)
+            # For git-cloned repos, we need the actual repo root on disk.
+            # Re-clone directly to target to avoid temp-dir lifetime issues.
+            clone_ok = analyzer._git_clone(pack_url, target_path)
+            if not clone_ok:
+                return False, f"Failed to clone {pack_url} to {target_path}"
 
-                # Copy files
-                import shutil
+            # Optionally remove .git to save space
+            git_dir = target_path / ".git"
+            if git_dir.exists():
+                shutil.rmtree(git_dir)
 
-                for extracted_dir in extracted_dirs:
-                    for item in extracted_dir.iterdir():
-                        dest = target_path / item.name
-                        if item.is_dir():
-                            shutil.copytree(item, dest, dirs_exist_ok=True)
-                        else:
-                            shutil.copy2(item, dest)
+            # Audit installed skills
+            audit_results = []
+            for skill_file in analysis.skill_files:
+                audit = self._auditor.audit_skill_file(skill_file)
+                audit_results.append(f"{skill_file.parent.name}: {'PASS' if audit.is_safe else 'WARN'}")
 
-                return True, f"Installed {pack_name} to {target_path}"
+            msg = (
+                f"Installed {pack_name} to {target_path}\n"
+                f"Skills found: {analysis.skill_count}\n"
+                f"Audit: {', '.join(audit_results)}"
+            )
+            return True, msg
 
-            except Exception as e:
-                return False, f"Failed to install {pack_name}: {e}"
+        except Exception as e:
+            return False, f"Failed to install {pack_name}: {e}"
 
 
 # Convenience functions

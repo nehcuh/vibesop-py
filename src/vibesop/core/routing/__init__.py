@@ -22,6 +22,7 @@ from vibesop.core.routing.conflict import (
     RecencyStrategy,
     ResolutionStrategy,
 )
+from vibesop.core.routing.layers import IRouteLayer, LayerResult
 from vibesop.core.routing.unified import (
     RoutingLayer,
     RoutingResult,
@@ -38,6 +39,8 @@ __all__ = [
     "ConfidenceGapStrategy",
     "ExplicitOverrideStrategy",
     "FallbackStrategy",
+    "IRouteLayer",
+    "LayerResult",
     "NamespacePriorityStrategy",
     "RecencyStrategy",
     "ResolutionStrategy",

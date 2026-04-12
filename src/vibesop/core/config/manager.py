@@ -125,10 +125,12 @@ class RoutingConfig(BaseModel):
 
     min_confidence: float = Field(default=0.3, ge=0.0, le=1.0)
     auto_select_threshold: float = Field(default=0.6, ge=0.0, le=1.0)
-    enable_ai_triage: bool = False
+    enable_ai_triage: bool = True
     enable_embedding: bool = False
     max_candidates: int = Field(default=3, ge=1, le=10)
     use_cache: bool = True
+    ai_triage_max_skills: int = Field(default=20, ge=5, le=50)
+    ai_triage_max_tokens: int = Field(default=100, ge=50, le=500)
 
 
 class SecurityConfig(BaseModel):

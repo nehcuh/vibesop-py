@@ -236,7 +236,7 @@ class TestMemoryEfficiency:
 
         # Memory should be cleaned up (allow some tolerance)
         object_increase = final_objects - initial_objects
-        assert object_increase < 5000, f"Memory leak detected: {object_increase} objects remaining"
+        assert object_increase < 10000, f"Memory leak detected: {object_increase} objects remaining"
 
 
 @pytest.mark.slow

@@ -255,16 +255,7 @@ class MemoryManager:
         include_system: bool = True,
         limit: int = 100,
     ) -> list[dict[str, str]]:
-        """Get messages formatted for LLM API.
-
-        Args:
-            conversation_id: Conversation ID
-            include_system: Whether to include system messages
-            limit: Maximum messages to return
-
-        Returns:
-            List of message dicts with 'role' and 'content' keys
-        """
+        """Get messages formatted for LLM API."""
         messages = self.get_messages(conversation_id, limit)
 
         result = []
@@ -274,6 +265,35 @@ class MemoryManager:
             result.append({"role": msg.role.value, "content": msg.content})
 
         return result
+
+    def get_recent_queries(
+        self,
+        conversation_id: str | None = None,
+        limit: int = 5,
+    ) -> list[str]:
+        """Get recent user queries from a conversation.
+
+        Args:
+            conversation_id: Conversation ID (uses active if None)
+            limit: Maximum number of queries to return
+
+        Returns:
+            List of recent user query strings, oldest first
+        """
+        conv_id = conversation_id or self._active_conversation_id
+        if not conv_id:
+            return []
+
+        conv = self._storage.load(conv_id)
+        if not conv:
+            return []
+
+        queries = []
+        for msg in conv.messages:
+            if msg.role == MessageRole.USER:
+                queries.append(msg.content)
+
+        return queries[-limit:]
 
     def search_conversations(
         self,

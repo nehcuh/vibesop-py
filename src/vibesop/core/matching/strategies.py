@@ -23,6 +23,13 @@ from vibesop.core.matching.tfidf import TFIDFCalculator
 from vibesop.core.matching.tokenizers import TokenizerConfig, tokenize
 
 if TYPE_CHECKING:
+    from vibesop.core.types import (
+        ConfidenceScore,
+        MatcherCapabilitiesDict,
+        SkillCandidateDict,
+    )
+
+if TYPE_CHECKING:
     import numpy as np
 else:
     try:
@@ -59,7 +66,7 @@ class KeywordMatcher:
     def match(
         self,
         query: str,
-        candidates: list[dict[str, Any]],
+        candidates: list[SkillCandidateDict],
         _context: RoutingContext | None = None,
         top_k: int = 10,
     ) -> list[MatchResult]:
@@ -105,9 +112,9 @@ class KeywordMatcher:
     def score(
         self,
         query: str,
-        candidate: dict[str, Any],
+        candidate: SkillCandidateDict,
         _context: RoutingContext | None = None,
-    ) -> float:
+    ) -> ConfidenceScore:
         """Score a single candidate."""
         query_tokens = set(
             tokenize(query, self._config.tokenizer_config)
@@ -116,7 +123,7 @@ class KeywordMatcher:
         )
         return self._score(query_tokens, candidate)
 
-    def _score(self, query_tokens: set[str], candidate: dict[str, Any]) -> float:
+    def _score(self, query_tokens: set[str], candidate: SkillCandidateDict) -> ConfidenceScore:
         """Calculate keyword match score."""
         # Get text fields from candidate
         text_fields = [
@@ -141,7 +148,7 @@ class KeywordMatcher:
     def _get_matched_keywords(
         self,
         query_tokens: set[str],
-        candidate: dict[str, Any],
+        candidate: SkillCandidateDict,
     ) -> list[str]:
         """Get list of matched keywords."""
         text_fields = [
@@ -155,7 +162,7 @@ class KeywordMatcher:
 
         return list(query_tokens & candidate_tokens)
 
-    def get_capabilities(self) -> dict[str, Any]:
+    def get_capabilities(self) -> MatcherCapabilitiesDict:
         """Return matcher capabilities."""
         return {
             "type": "keyword",
@@ -203,7 +210,7 @@ class TFIDFMatcher:
     def match(
         self,
         query: str,
-        candidates: list[dict[str, Any]],
+        candidates: list[SkillCandidateDict],
         _context: RoutingContext | None = None,
         top_k: int = 10,
     ) -> list[MatchResult]:
@@ -247,9 +254,9 @@ class TFIDFMatcher:
     def score(
         self,
         query: str,
-        candidate: dict[str, Any],
+        candidate: SkillCandidateDict,
         _context: RoutingContext | None = None,
-    ) -> float:
+    ) -> ConfidenceScore:
         """Score a single candidate."""
         if not self._fitted:
             # Single candidate fit
@@ -264,7 +271,7 @@ class TFIDFMatcher:
 
         return query_vec.dot_product(candidate_vec)
 
-    def _candidate_to_text(self, candidate: dict[str, Any]) -> str:
+    def _candidate_to_text(self, candidate: SkillCandidateDict) -> str:
         """Convert candidate to searchable text."""
         fields = [
             candidate.get("name", ""),
@@ -275,7 +282,7 @@ class TFIDFMatcher:
         ]
         return " ".join(fields)
 
-    def get_capabilities(self) -> dict[str, Any]:
+    def get_capabilities(self) -> MatcherCapabilitiesDict:
         """Return matcher capabilities."""
         return {
             "type": "tfidf",
@@ -304,7 +311,7 @@ class EmbeddingMatcher:
         self._config = config or MatcherConfig()
         self._model_name = model_name
         self._model = None
-        self._candidate_embeddings: dict[str, Any] = None
+        self._candidate_embeddings: dict[str, Any] | None = None
 
     def _load_model(self) -> None:
         """Lazy load the embedding model."""
@@ -339,7 +346,7 @@ class EmbeddingMatcher:
     def match(
         self,
         query: str,
-        candidates: list[dict[str, Any]],
+        candidates: list[SkillCandidateDict],
         _context: RoutingContext | None = None,
         top_k: int = 10,
     ) -> list[MatchResult]:
@@ -400,7 +407,7 @@ class EmbeddingMatcher:
         results = self.match(query, [candidate], context, top_k=1)
         return results[0].confidence if results else 0.0
 
-    def _candidate_to_text(self, candidate: dict[str, Any]) -> str:
+    def _candidate_to_text(self, candidate: SkillCandidateDict) -> str:
         """Convert candidate to searchable text."""
         fields = [
             candidate.get("name", ""),
@@ -409,7 +416,7 @@ class EmbeddingMatcher:
         ]
         return " ".join(f for f in fields if f)
 
-    def get_capabilities(self) -> dict[str, Any]:
+    def get_capabilities(self) -> MatcherCapabilitiesDict:
         """Return matcher capabilities."""
         return {
             "type": "embedding",
@@ -465,21 +472,79 @@ class LevenshteinMatcher:
     def score(
         self,
         query: str,
-        candidate: dict[str, Any],
+        candidate: SkillCandidateDict,
         _context: RoutingContext | None = None,
-    ) -> float:
-        """Score a single candidate using normalized Levenshtein."""
-        text = self._candidate_to_text(candidate)
+    ) -> ConfidenceScore:
+        """Score a single candidate using token-aware Levenshtein similarity.
 
-        # Calculate Levenshtein distance
-        distance = self._levenshtein_distance(query, text)
+        Instead of comparing the entire query against the full description,
+        we tokenize the query and match each token against the candidate's
+        name and keywords. This avoids pathologically low scores for long
+        queries against short skill descriptions.
+        """
+        query_tokens = self._tokenize(query)
+        candidate_tokens = self._candidate_tokens(candidate)
 
-        # Normalize to 0-1 score
-        max_len = max(len(query), len(text))
+        if not query_tokens or not candidate_tokens:
+            # Fallback to full-string comparison for very short inputs
+            text = self._candidate_to_text(candidate)
+            return self._normalized_similarity(query, text)
+
+        # Score each query token against the best-matching candidate token
+        token_scores = []
+        for qt in query_tokens:
+            if len(qt) <= 2:
+                continue  # Skip very short tokens
+            best = max(
+                self._normalized_similarity(qt, ct)
+                for ct in candidate_tokens
+            )
+            token_scores.append(best)
+
+        if not token_scores:
+            return 0.0
+
+        # Also include a bonus for exact name match
+        name = candidate.get("name", "").lower()
+        name_bonus = 0.0
+        if any(qt == name for qt in query_tokens):
+            name_bonus = 0.15
+
+        avg_score = sum(token_scores) / len(token_scores)
+        return min(1.0, avg_score + name_bonus)
+
+    def _normalized_similarity(self, s1: str, s2: str) -> float:
+        """Normalized Levenshtein similarity (0-1)."""
+        distance = self._levenshtein_distance(s1, s2)
+        max_len = max(len(s1), len(s2))
         if max_len == 0:
             return 1.0
-
         return 1.0 - (distance / max_len)
+
+    def _tokenize(self, text: str) -> list[str]:
+        """Simple whitespace and punctuation tokenizer."""
+        import re
+
+        return [
+            t.lower()
+            for t in re.findall(r"[a-zA-Z0-9\u4e00-\u9fff]+", text)
+            if len(t) > 1
+        ]
+
+    def _candidate_tokens(self, candidate: SkillCandidateDict) -> list[str]:
+        """Extract searchable tokens from a candidate."""
+        tokens: set[str] = set()
+        for key in ("name", "keywords", "tags"):
+            value = candidate.get(key)
+            if isinstance(value, str):
+                tokens.update(self._tokenize(value))
+            elif isinstance(value, list):
+                for item in value:
+                    tokens.update(self._tokenize(str(item)))
+        # Include skill ID parts as tokens
+        skill_id = candidate.get("id", "")
+        tokens.update(skill_id.replace("/", " ").replace("-", " ").lower().split())
+        return list(tokens)
 
     def _levenshtein_distance(self, s1: str, s2: str) -> int:
         """Calculate Levenshtein distance between two strings."""
@@ -505,11 +570,11 @@ class LevenshteinMatcher:
 
         return previous_row[-1]
 
-    def _candidate_to_text(self, candidate: dict[str, Any]) -> str:
+    def _candidate_to_text(self, candidate: SkillCandidateDict) -> str:
         """Convert candidate to searchable text."""
         return candidate.get("name", "") + " " + candidate.get("description", "")
 
-    def get_capabilities(self) -> dict[str, Any]:
+    def get_capabilities(self) -> MatcherCapabilitiesDict:
         """Return matcher capabilities."""
         return {
             "type": "levenshtein",

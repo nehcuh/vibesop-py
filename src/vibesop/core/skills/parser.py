@@ -7,210 +7,152 @@ It supports the frontmatter format used by VibeSOP skills.
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, ClassVar
+from pathlib import Path  # noqa: TC003
+from typing import Any
 
-if TYPE_CHECKING:
-    from pathlib import Path
+from ruamel.yaml import YAML
+
+from vibesop.core.skills.base import SkillMetadata, SkillType
 
 
-@dataclass
-class SkillMetadata:
-    """Metadata extracted from a SKILL.md file.
+def parse_skill_md(skill_path: Path) -> SkillMetadata | None:
+    """Parse a SKILL.md file and extract metadata using ruamel.yaml.
 
-    Attributes:
-        id: Skill identifier (directory name)
-        name: Display name from frontmatter
-        description: Short description from frontmatter
-        keywords: Extracted keywords for matching
-        triggers: Specific trigger phrases
-        intent: High-level intent category
-        path: Path to SKILL.md file
-        source: Where this skill came from (builtin, project, external)
-        version: Skill version
-        author: Skill author
-        namespace: Skill namespace
-        skill_type: Type of skill (prompt, workflow, etc.)
-        trigger_when: When to trigger this skill
+    Args:
+        skill_path: Path to the skill directory or SKILL.md file
+
+    Returns:
+        SkillMetadata if parsing succeeded, None otherwise
     """
+    skill_file = skill_path if skill_path.is_file() else skill_path / "SKILL.md"
+    if not skill_file.exists():
+        return None
 
-    id: str
-    name: str
-    description: str
-    keywords: list[str] = field(default_factory=list)
-    triggers: list[str] = field(default_factory=list)
-    intent: str = ""
-    path: Path | None = None
-    source: str = "builtin"
-    version: str = "1.0.0"
-    author: str = ""
-    namespace: str = "external"
-    skill_type: str = "prompt"
-    trigger_when: str = ""
-    tags: list[str] = field(default_factory=list)
+    skill_id = skill_file.parent.name if skill_path.is_file() else skill_path.name
+    content = skill_file.read_text(encoding="utf-8")
 
-    def to_dict(self) -> dict[str, Any]:
-        """Convert to dictionary for matcher consumption."""
-        return {
-            "id": self.id,
-            "name": self.name,
-            "description": self.description,
-            "keywords": self.keywords,
-            "triggers": self.triggers,
-            "intent": self.intent,
-            "version": self.version,
-            "author": self.author,
-            "namespace": self.namespace,
-            "skill_type": self.skill_type,
-        }
+    frontmatter, _ = _extract_frontmatter(content)
+    if frontmatter is None:
+        return None
+
+    return _build_metadata(frontmatter, skill_id, skill_file)
 
 
-class SkillParser:
-    """Parser for SKILL.md files.
+def _extract_frontmatter(content: str) -> tuple[dict[str, Any] | None, str]:
+    """Extract YAML frontmatter from markdown content.
 
-    Example:
-        >>> parser = SkillParser()
-        >>> metadata = parser.parse(Path("core/skills/debug/SKILL.md"))
-        >>> print(metadata.name)  # "systematic-debugging"
+    Returns:
+        Tuple of (frontmatter dict, body content). If no valid frontmatter,
+        returns (None, original content).
     """
+    if not content.startswith("---"):
+        return None, content
 
-    # Frontmatter pattern
-    FRONTMATTER_PATTERN = re.compile(r"^---\s*\n(.*?)\n---\s*\n", re.DOTALL)
+    parts = content.split("---", 2)
+    if len(parts) < 3:
+        return None, content
 
-    # Keyword extraction patterns
-    KEYWORD_PATTERNS: ClassVar[list[str]] = [
-        r"\*\*([A-Z][A-Z_]+)\*\*",  # **KEYWORD** format
-        r"`([A-Z][A-Z_]+)`",  # `KEYWORD` format
+    yaml_text = parts[1]
+    body = parts[2].strip()
+
+    try:
+        yaml_parser = YAML()
+        data = yaml_parser.load(yaml_text)
+        if not isinstance(data, dict):
+            return None, content
+        return data, body
+    except Exception:
+        return None, content
+
+
+def _build_metadata(
+    data: dict[str, Any],
+    skill_id: str,
+    skill_file: Path,
+) -> SkillMetadata:
+    """Build SkillMetadata from parsed frontmatter."""
+    description = data.get("description", "")
+    skill_type_str = data.get("type", "prompt")
+    try:
+        skill_type = SkillType(skill_type_str)
+    except ValueError:
+        skill_type = SkillType.PROMPT
+
+    tags = data.get("tags") or data.get("keywords") or []
+    if isinstance(tags, str):
+        tags = [t.strip() for t in tags.split(",") if t.strip()]
+
+    triggers = data.get("triggers") or []
+    if isinstance(triggers, str):
+        triggers = [t.strip() for t in triggers.split(",") if t.strip()]
+
+    trigger_when = data.get("trigger_when", "")
+    if not trigger_when and description:
+        trigger_when = _extract_trigger_from_description(description)
+
+    source = _infer_source(skill_file)
+
+    return SkillMetadata(
+        id=data.get("id", skill_id),
+        name=data.get("name", skill_id),
+        description=description,
+        intent=data.get("intent", description),
+        namespace=data.get("namespace", source),
+        version=data.get("version", "1.0.0"),
+        author=data.get("author", ""),
+        tags=tags,
+        skill_type=skill_type,
+        trigger_when=trigger_when,
+    )
+
+
+def _extract_trigger_from_description(description: str) -> str:
+    """Extract trigger conditions from skill description."""
+    if not description:
+        return ""
+
+    patterns = [
+        (r"Use when asked to ([^.]+)",),
+        (r"Triggered when ([^.]+)",),
+        (r"Auto-trigger on ([^.]+)",),
+        (r"Proactively suggest when ([^.]+)",),
     ]
 
+    for pattern in patterns:
+        match = re.search(pattern[0], description, re.IGNORECASE)
+        if match:
+            return match.group(1).strip()
+
+    return ""
+
+
+def _infer_source(skill_path: Path) -> str:
+    """Infer skill source from path."""
+    path_str = str(skill_path)
+    if ".claude/skills" in path_str or ".config/skills" in path_str:
+        return "external"
+    if ".vibe/skills" in path_str:
+        return "project"
+    return "builtin"
+
+
+def _infer_skill_id(skill_path: Path) -> str:
+    """Infer skill ID from SKILL.md path."""
+    return skill_path.parent.name if skill_path.is_file() else skill_path.name
+
+
+# Legacy class for backward compatibility during migration.
+# TODO: Remove once all callers migrate to parse_skill_md().
+class SkillParser:
+    """Parser for SKILL.md files (legacy wrapper around parse_skill_md)."""
+
     def parse(self, skill_path: Path) -> SkillMetadata | None:
-        """Parse a SKILL.md file and extract metadata.
-
-        Args:
-            skill_path: Path to the skill directory or SKILL.md file
-
-        Returns:
-            SkillMetadata if parsing succeeded, None otherwise
-        """
-        # Resolve path
-        if skill_path.is_dir():
-            skill_file = skill_path / "SKILL.md"
-            skill_id = skill_path.name
-        else:
-            skill_file = skill_path
-            skill_id = skill_path.parent.name
-
-        if not skill_file.exists():
-            return None
-
-        content = skill_file.read_text()
-
-        # Extract frontmatter
-        frontmatter = self._extract_frontmatter(content)
-        if not frontmatter:
-            return None
-
-        # Parse frontmatter
-        metadata = SkillMetadata(
-            id=skill_id,
-            name=frontmatter.get("name", skill_id),
-            description=frontmatter.get("description", ""),
-            keywords=frontmatter.get("keywords", []),
-            triggers=frontmatter.get("triggers", []),
-            intent=frontmatter.get("intent", self._infer_intent(content)),
-            path=skill_file,
-            source=self._infer_source(skill_file),
-        )
-
-        # Auto-extract keywords if not provided
-        if not metadata.keywords:
-            metadata.keywords = self._extract_keywords(content)
-
-        return metadata
-
-    def _extract_frontmatter(self, content: str) -> dict[str, Any] | None:
-        """Extract YAML frontmatter from content."""
-        match = self.FRONTMATTER_PATTERN.match(content)
-        if not match:
-            return None
-
-        frontmatter_text = match.group(1)
-
-        # Simple YAML parsing (no external dependency for basic keys)
-        frontmatter: dict[str, Any] = {}
-        for line in frontmatter_text.split("\n"):
-            if ":" in line:
-                key, value = line.split(":", 1)
-                key = key.strip()
-                value = value.strip()
-
-                # Handle different value types
-                if value.startswith("[") and value.endswith("]"):
-                    # List
-                    value = [v.strip() for v in value[1:-1].split(",") if v.strip()]
-                elif value.lower() in ("true", "yes"):
-                    value = True
-                elif value.lower() in ("false", "no"):
-                    value = False
-
-                frontmatter[key] = value
-
-        return frontmatter
-
-    def _extract_keywords(self, content: str) -> list[str]:
-        """Extract keywords from skill content."""
-        keywords = set()
-
-        # Extract from headings
-        for match in re.finditer(r"^#+\s*(.*?)$", content, re.MULTILINE):
-            heading = match.group(1).strip()
-            # Split heading into words
-            words = re.findall(r"\b[A-Za-z][A-Za-z-]+\b", heading)
-            keywords.update(words.lower() for words in words)
-
-        # Extract from emphasized text
-        for pattern in self.KEYWORD_PATTERNS:
-            for match in re.finditer(pattern, content):
-                keyword = match.group(1).lower()
-                if len(keyword) > 2:  # Skip very short keywords
-                    keywords.add(keyword)
-
-        return sorted(keywords)
-
-    def _infer_intent(self, content: str) -> str:
-        """Infer intent category from content."""
-        content_lower = content.lower()
-
-        intent_keywords = {
-            "debug": ["debug", "error", "bug", "fix", "issue", "problem"],
-            "test": ["test", "testing", "coverage", "spec", "tdd"],
-            "refactor": ["refactor", "clean", "simplify", "restructure"],
-            "review": ["review", "audit", "check", "inspect"],
-            "document": ["document", "doc", "readme", "comment"],
-            "optimize": ["optimize", "performance", "speed", "efficient"],
-            "plan": ["plan", "design", "architecture", "structure"],
-        }
-
-        for intent, keywords in intent_keywords.items():
-            if any(kw in content_lower for kw in keywords):
-                return intent
-
-        return "general"
-
-    def _infer_source(self, skill_path: Path) -> str:
-        """Infer skill source from path."""
-        path_str = str(skill_path)
-
-        if "external" in path_str or ".claude/skills" in path_str:
-            return "external"
-        elif ".vibe/skills" in path_str or "project" in path_str:
-            return "project"
-        else:
-            return "builtin"
+        """Parse a SKILL.md file and extract metadata."""
+        return parse_skill_md(skill_path)
 
 
-# Convenience exports
 __all__ = [
     "SkillMetadata",
     "SkillParser",
+    "parse_skill_md",
 ]

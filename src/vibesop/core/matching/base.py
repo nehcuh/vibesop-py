@@ -6,9 +6,16 @@ along with the unified MatchResult model.
 
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import Any, Protocol
+from typing import Protocol
 
 from pydantic import BaseModel, Field
+
+from vibesop.core.types import (
+    ConfidenceScore,
+    MatcherCapabilitiesDict,
+    RoutingMetadataDict,
+    SkillCandidateDict,
+)
 
 
 class SimilarityMetric(StrEnum):
@@ -43,6 +50,8 @@ class RoutingContext:
         recent_files: List of recently accessed files
         project_type: Detected project type (e.g., "python", "rust")
         user_skill_level: User's proficiency level (novice/intermediate/expert)
+        conversation_id: Active conversation ID for memory lookup
+        recent_queries: Recent user queries from conversation history
     """
 
     file_type: str | None = None
@@ -50,8 +59,10 @@ class RoutingContext:
     recent_files: list[str] = field(default_factory=list)
     project_type: str | None = None
     user_skill_level: str = "intermediate"
+    conversation_id: str | None = None
+    recent_queries: list[str] = field(default_factory=list)
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> dict[str, str | int | list[str] | None]:
         """Convert to dictionary for serialization."""
         return {
             "file_type": self.file_type,
@@ -59,7 +70,14 @@ class RoutingContext:
             "recent_files": self.recent_files,
             "project_type": self.project_type,
             "user_skill_level": self.user_skill_level,
+            "conversation_id": self.conversation_id,
+            "recent_queries": self.recent_queries,
         }
+
+    @property
+    def has_memory(self) -> bool:
+        """Whether memory context is available."""
+        return bool(self.conversation_id or self.recent_queries)
 
 
 class MatchResult(BaseModel):
@@ -107,7 +125,7 @@ class MatchResult(BaseModel):
         le=1.0,
         description="Semantic similarity score",
     )
-    metadata: dict[str, Any] = Field(
+    metadata: RoutingMetadataDict = Field(
         default_factory=dict,
         description="Additional matcher-specific data",
     )
@@ -153,9 +171,9 @@ class IMatcher(Protocol):
     def score(
         self,
         query: str,
-        candidate: dict[str, Any],
+        candidate: SkillCandidateDict,
         context: RoutingContext | None = None,
-    ) -> float:
+    ) -> ConfidenceScore:
         """Score a single candidate against the query.
 
         Args:
@@ -171,7 +189,7 @@ class IMatcher(Protocol):
     def match(
         self,
         query: str,
-        candidates: list[dict[str, Any]],
+        candidates: list[SkillCandidateDict],
         context: RoutingContext | None = None,
         top_k: int = 10,
     ) -> list[MatchResult]:
@@ -188,7 +206,7 @@ class IMatcher(Protocol):
         """
         ...
 
-    def get_capabilities(self) -> dict[str, Any]:
+    def get_capabilities(self) -> MatcherCapabilitiesDict:
         """Return information about this matcher's capabilities.
 
         Returns:
