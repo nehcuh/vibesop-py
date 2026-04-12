@@ -7,6 +7,8 @@ namespace: omx
 version: 1.0.0
 type: prompt
 trigger_when: asked to clarify requirements, understand a task, or figure out what to build
+algorithms:
+  - interview/compute_ambiguity
 ---
 
 # Deep Interview

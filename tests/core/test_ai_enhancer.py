@@ -405,10 +405,9 @@ class TestIntegration:
         )
 
         # Mock LLM initialization error
-        with patch('vibesop.core.ai_enhancer.create_from_env', side_effect=ImportError):
+        with patch('vibesop.core.ai_enhancer.create_from_env', side_effect=ImportError), pytest.raises(ImportError):
             # AIEnhancer.__init__ will fail, which is expected
-            with pytest.raises(ImportError):
-                enhancer = AIEnhancer()
+            enhancer = AIEnhancer()
 
         # Test that fallback enhancement method works
         # Create a real AIEnhancer (outside the mock context)

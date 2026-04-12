@@ -6,12 +6,11 @@ the system meets performance requirements.
 
 import time
 from pathlib import Path
-from typing import List
 
 import pytest
 
-from vibesop.core.routing.unified import UnifiedRouter
 from vibesop.builder import ConfigRenderer, QuickBuilder
+from vibesop.core.routing.unified import UnifiedRouter
 
 
 class TestRoutingPerformance:
@@ -214,7 +213,6 @@ class TestMemoryEfficiency:
         Creates many objects and verifies they are garbage collected.
         """
         import gc
-        import sys
 
         # Get initial memory
         gc.collect()

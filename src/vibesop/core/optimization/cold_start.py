@@ -15,6 +15,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import ClassVar
 
 
 @dataclass
@@ -43,7 +44,7 @@ class ColdStartStrategy:
 
     # Built-in mappings for common queries
     # These are used when no other routing information is available
-    _BUILTIN_MAPPINGS: list[dict] = [
+    _BUILTIN_MAPPINGS: ClassVar[list[dict]] = [
         # Debugging scenarios
         {
             "pattern": "debug",
@@ -107,7 +108,7 @@ class ColdStartStrategy:
 
     # Default confidence weights for each matcher type
     # Used when no historical data suggests otherwise
-    _DEFAULT_MATCHER_WEIGHTS: dict[str, float] = {
+    _DEFAULT_MATCHER_WEIGHTS: ClassVar[dict[str, float]] = {
         "keyword": 1.0,  # Trust exact keyword matches
         "scenario": 0.95,  # High trust in predefined scenarios
         "tfidf": 0.85,  # Good for semantic similarity
@@ -116,14 +117,14 @@ class ColdStartStrategy:
     }
 
     # Priority skills to always include in candidate set
-    _P0_SKILLS: list[str] = [
+    _P0_SKILLS: ClassVar[list[str]] = [
         "systematic-debugging",
         "verification-before-completion",
         "session-end",
     ]
 
     # Default namespace priorities when query is ambiguous
-    _NAMESPACE_PRIORITIES: dict[str, int] = {
+    _NAMESPACE_PRIORITIES: ClassVar[dict[str, int]] = {
         "builtin": 100,  # Highest priority
         "superpowers": 80,
         "gstack": 70,
@@ -234,10 +235,6 @@ class ColdStartStrategy:
         return not prefs_path.exists()
 
 
-# Convenience function for quick access
-_default_strategy: ColdStartStrategy | None = None
-
-
 def get_cold_start_strategy(project_root: str | Path = ".") -> ColdStartStrategy:
     """Get or create the default cold start strategy.
 
@@ -247,10 +244,11 @@ def get_cold_start_strategy(project_root: str | Path = ".") -> ColdStartStrategy
     Returns:
         ColdStartStrategy instance
     """
-    global _default_strategy
-    if _default_strategy is None:
-        _default_strategy = ColdStartStrategy(project_root)
-    return _default_strategy
+    strategy = getattr(get_cold_start_strategy, "_strategy", None)
+    if strategy is None:
+        strategy = ColdStartStrategy(project_root)
+        get_cold_start_strategy._strategy = strategy  # type: ignore[attr-defined]
+    return strategy
 
 
 __all__ = [

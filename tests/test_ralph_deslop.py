@@ -1,8 +1,10 @@
 """Tests for ralph deslop engine."""
 
-import pytest
-from pathlib import Path
-from vibesop.core.algorithms.ralph.deslop import SLOP_PATTERNS, SlopPattern, SlopReport, scan_file, scan_files
+from vibesop.core.algorithms.ralph.deslop import (
+    SLOP_PATTERNS,
+    scan_file,
+    scan_files,
+)
 
 
 def test_scan_clean_file(tmp_path):

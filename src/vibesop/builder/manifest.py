@@ -9,8 +9,6 @@ import logging
 from pathlib import Path
 from typing import Any
 
-logger = logging.getLogger(__name__)
-
 from vibesop.adapters.models import (
     Manifest,
     ManifestMetadata,
@@ -20,6 +18,8 @@ from vibesop.adapters.models import (
     SkillDefinition,
 )
 from vibesop.core.config import ConfigManager
+
+logger = logging.getLogger(__name__)
 
 
 class ManifestBuilder:

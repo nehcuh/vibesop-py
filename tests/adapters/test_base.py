@@ -1,7 +1,8 @@
 """Tests for PlatformAdapter base class."""
 
-import pytest
 from pathlib import Path
+
+import pytest
 
 from vibesop.adapters.base import PlatformAdapter
 from vibesop.adapters.models import (
@@ -25,7 +26,7 @@ class DummyAdapter(PlatformAdapter):
     def config_dir(self) -> Path:
         return Path("~/.dummy").expanduser()
 
-    def render_config(self, manifest: Manifest, output_dir: Path) -> RenderResult:
+    def render_config(self, _manifest: Manifest, _output_dir: Path) -> RenderResult:
         # Simple implementation for testing
         return RenderResult(success=True)
 

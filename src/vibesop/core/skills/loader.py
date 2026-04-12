@@ -200,7 +200,9 @@ class SkillLoader:
             tags=getattr(base, "tags", None),
             skill_type=skill_type,
             trigger_when=getattr(base, "trigger_when", ""),
+            algorithms=getattr(base, "algorithms", None),
         )
+        self._validate_algorithms(metadata)
 
         # Read skill content from source file
         content = ""
@@ -327,6 +329,7 @@ class SkillLoader:
                 except Exception as e:
                     logger.debug(f"Failed to parse workflow YAML in {file_path.name}: {e}")
 
+            self._validate_algorithms(metadata)
             definition = LoadedSkill(
                 metadata=metadata,
                 content=skill_content,
@@ -353,6 +356,7 @@ class SkillLoader:
             )
             content = {k: v for k, v in data.items() if k not in self._metadata_keys()}
 
+            self._validate_algorithms(metadata)
             definition = LoadedSkill(
                 metadata=metadata,
                 content=content,
@@ -362,6 +366,18 @@ class SkillLoader:
 
         except (OSError, Exception):
             pass
+
+    def _validate_algorithms(self, metadata: SkillMetadata) -> None:
+        """Warn if a skill declares algorithms that are not registered."""
+        if not metadata.algorithms:
+            return
+        from vibesop.core.algorithms import AlgorithmRegistry
+
+        for algo in metadata.algorithms:
+            if not AlgorithmRegistry.is_registered(algo):
+                logger.warning(
+                    f"Skill '{metadata.id}' declares unknown algorithm: {algo}"
+                )
 
     def _parse_metadata(
         self,

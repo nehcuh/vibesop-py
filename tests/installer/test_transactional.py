@@ -1,8 +1,7 @@
 """Tests for transactional installer."""
 
-import pytest
-from pathlib import Path
 import tempfile
+from pathlib import Path
 
 from vibesop.installer.transactional import (
     InstallationStep,

@@ -55,6 +55,7 @@ htmlcov/
 .vibe/preferences.json
 .vibe/skills/
 .vibe/instincts/
+.vibe/instincts.jsonl
 .vibe/snapshots/
 .vibe/cache/
 .vibe/dist/

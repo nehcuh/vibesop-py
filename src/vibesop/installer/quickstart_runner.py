@@ -55,9 +55,15 @@ class QuickstartRunner:
             "opencode": "OpenCode CLI",
         }
 
+        from vibesop.core.skills.external_loader import ExternalSkillLoader
+
         self._available_integrations = {
-            "gstack": "Virtual engineering team skills",
-            "superpowers": "General-purpose productivity skills",
+            name: desc
+            for name, desc in [
+                ("gstack", "Virtual engineering team skills"),
+                ("superpowers", "General-purpose productivity skills"),
+            ]
+            if name in ExternalSkillLoader.TRUSTED_PACKS
         }
 
     def run(self, project_path: Path | None = None) -> dict[str, Any]:
@@ -336,39 +342,23 @@ class QuickstartRunner:
             console.print(f"❌ Installation failed: {e}")
             return False
 
-    def _install_integration(self, integration: str, platform: str) -> None:
+    def _install_integration(self, integration: str, _platform: str) -> None:
         """Install a skill pack integration.
 
         Args:
             integration: Integration name (gstack, superpowers)
-            platform: Target platform
+            _platform: Target platform (unused, kept for signature compatibility)
         """
         try:
-            if integration == "gstack":
-                from vibesop.installer.gstack_installer import GstackInstaller
+            from vibesop.core.skills.external_loader import ExternalSkillLoader
 
-                installer = GstackInstaller()
-                result = installer.install(platform)
+            loader = ExternalSkillLoader()
+            success, msg = loader.install_pack(integration)
 
-                if result.get("success"):
-                    console.print(f"[green]✓[/green] {integration} installed")
-                else:
-                    errors = result.get("errors", ["Unknown error"])
-                    console.print(f"[yellow]⊘[/yellow] {integration} installation failed: {errors}")
-
-            elif integration == "superpowers":
-                from vibesop.installer.superpowers_installer import SuperpowersInstaller
-
-                installer = SuperpowersInstaller()
-                result = installer.install(platform)
-
-                if result.get("success"):
-                    console.print(f"[green]✓[/green] {integration} installed")
-                else:
-                    errors = result.get("errors", ["Unknown error"])
-                    console.print(f"[yellow]⊘[/yellow] {integration} installation failed: {errors}")
+            if success:
+                console.print(f"[green]✓[/green] {integration} installed")
             else:
-                console.print(f"[yellow]⊘[/yellow] Unknown integration: {integration}")
+                console.print(f"[yellow]⊘[/yellow] {integration} installation failed: {msg}")
 
         except Exception as e:
             console.print(f"[yellow]⊘[/yellow] {integration} installation failed: {e}")

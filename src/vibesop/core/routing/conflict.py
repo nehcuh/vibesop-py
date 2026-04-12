@@ -17,9 +17,10 @@ import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any
+from typing import TYPE_CHECKING, Any, ClassVar
 
-from vibesop.core.matching import MatchResult
+if TYPE_CHECKING:
+    from vibesop.core.matching import MatchResult
 
 logger = logging.getLogger(__name__)
 
@@ -101,8 +102,8 @@ class ConfidenceGapStrategy(ResolutionStrategy):
     def resolve(
         self,
         matches: list[MatchResult],
-        query: str,
-        context: dict[str, Any] | None = None,
+        _query: str,
+        _context: dict[str, Any] | None = None,
     ) -> ConflictResolution | None:
         if len(matches) < 2:
             return None
@@ -134,7 +135,7 @@ class NamespacePriorityStrategy(ResolutionStrategy):
     """
 
     # Default namespace priorities
-    DEFAULT_PRIORITIES: dict[str, int] = {
+    DEFAULT_PRIORITIES: ClassVar[dict[str, int]] = {
         "builtin": 100,
         "superpowers": 80,
         "gstack": 70,
@@ -152,8 +153,8 @@ class NamespacePriorityStrategy(ResolutionStrategy):
     def resolve(
         self,
         matches: list[MatchResult],
-        query: str,
-        context: dict[str, Any] | None = None,
+        _query: str,
+        _context: dict[str, Any] | None = None,
     ) -> ConflictResolution | None:
         if len(matches) < 2:
             return None
@@ -239,8 +240,8 @@ class RecencyStrategy(ResolutionStrategy):
     def resolve(
         self,
         matches: list[MatchResult],
-        query: str,
-        context: dict[str, Any] | None = None,
+        _query: str,
+        _context: dict[str, Any] | None = None,
     ) -> ConflictResolution | None:
         if len(matches) < 2:
             return None
@@ -284,7 +285,7 @@ class ExplicitOverrideStrategy(ResolutionStrategy):
     Patterns like "/review" or "use tdd" indicate explicit choice.
     """
 
-    OVERRIDE_PATTERNS = [
+    OVERRIDE_PATTERNS: ClassVar[list[tuple[str, str]]] = [
         (r"^/(\w+(?:/\w+)*)$", "slash"),  # /review, /gstack/review
         (r"^(?:use|using|调用)\s+(\w+(?:/\w+)*)", "use"),  # use tdd
         (r"^(?:run|execute)\s+(\w+(?:/\w+)*)", "run"),  # run review
@@ -294,7 +295,7 @@ class ExplicitOverrideStrategy(ResolutionStrategy):
         self,
         matches: list[MatchResult],
         query: str,
-        context: dict[str, Any] | None = None,
+        _context: dict[str, Any] | None = None,
     ) -> ConflictResolution | None:
         import re
 
@@ -330,8 +331,8 @@ class FallbackStrategy(ResolutionStrategy):
     def resolve(
         self,
         matches: list[MatchResult],
-        query: str,
-        context: dict[str, Any] | None = None,
+        _query: str,
+        _context: dict[str, Any] | None = None,
     ) -> ConflictResolution | None:
         if not matches:
             return ConflictResolution(
@@ -431,13 +432,13 @@ class ConflictResolver:
 
 
 __all__ = [
+    "ConfidenceGapStrategy",
     "ConflictReason",
     "ConflictResolution",
     "ConflictResolver",
-    "ResolutionStrategy",
-    "ConfidenceGapStrategy",
-    "NamespacePriorityStrategy",
-    "RecencyStrategy",
     "ExplicitOverrideStrategy",
     "FallbackStrategy",
+    "NamespacePriorityStrategy",
+    "RecencyStrategy",
+    "ResolutionStrategy",
 ]

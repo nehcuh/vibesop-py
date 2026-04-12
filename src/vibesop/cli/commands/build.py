@@ -120,8 +120,8 @@ def _execute_build(
         # Suggest deployment based on output location
         if str(output_dir) == str(Path.home() / ".claude"):
             console.print(
-                f"\n[dim]✓ Deployed to Claude Code config directory[/dim]\n"
-                f"[dim]Restart Claude Code to apply changes.[/dim]\n"
+                "\n[dim]✓ Deployed to Claude Code config directory[/dim]\n"
+                "[dim]Restart Claude Code to apply changes.[/dim]\n"
             )
         else:
             console.print(

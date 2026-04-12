@@ -7,8 +7,8 @@ from vibesop.adapters.models import (
     Manifest,
     ManifestMetadata,
     PolicySet,
-    SecurityPolicy,
     RoutingConfig,
+    SecurityPolicy,
 )
 from vibesop.core.models import SkillDefinition
 

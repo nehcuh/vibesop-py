@@ -131,6 +131,9 @@ class RoutingConfig(BaseModel):
     use_cache: bool = True
     ai_triage_max_skills: int = Field(default=20, ge=5, le=50)
     ai_triage_max_tokens: int = Field(default=100, ge=50, le=500)
+    ai_triage_prompt_version: str = Field(default="v1")
+    ai_triage_budget_monthly: float = Field(default=5.0, ge=0.0)
+    ai_triage_log_calls: bool = True
 
 
 class SecurityConfig(BaseModel):

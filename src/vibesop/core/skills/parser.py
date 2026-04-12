@@ -90,6 +90,10 @@ def _build_metadata(
     if not trigger_when and description:
         trigger_when = _extract_trigger_from_description(description)
 
+    algorithms = data.get("algorithms") or []
+    if isinstance(algorithms, str):
+        algorithms = [a.strip() for a in algorithms.split(",") if a.strip()]
+
     source = _infer_source(skill_file)
 
     return SkillMetadata(
@@ -103,6 +107,7 @@ def _build_metadata(
         tags=tags,
         skill_type=skill_type,
         trigger_when=trigger_when,
+        algorithms=algorithms,
     )
 
 
@@ -141,18 +146,7 @@ def _infer_skill_id(skill_path: Path) -> str:
     return skill_path.parent.name if skill_path.is_file() else skill_path.name
 
 
-# Legacy class for backward compatibility during migration.
-# TODO: Remove once all callers migrate to parse_skill_md().
-class SkillParser:
-    """Parser for SKILL.md files (legacy wrapper around parse_skill_md)."""
-
-    def parse(self, skill_path: Path) -> SkillMetadata | None:
-        """Parse a SKILL.md file and extract metadata."""
-        return parse_skill_md(skill_path)
-
-
 __all__ = [
     "SkillMetadata",
-    "SkillParser",
     "parse_skill_md",
 ]

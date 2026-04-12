@@ -8,20 +8,18 @@ Tests cover:
 """
 
 from vibesop.core.matching import (
-    tokenize,
+    KeywordMatcher,
+    LevenshteinMatcher,
+    MatchResult,
+    MatcherConfig,
+    RoutingContext,
+    TFIDFCalculator,
+    TFIDFMatcher,
+    TFIDFVector,
     TokenizerConfig,
     TokenizerMode,
-    SimilarityCalculator,
-    SimilarityMetric,
     cosine_similarity,
-    TFIDFCalculator,
-    TFIDFVector,
-    KeywordMatcher,
-    TFIDFMatcher,
-    LevenshteinMatcher,
-    MatcherConfig,
-    MatchResult,
-    RoutingContext,
+    tokenize,
 )
 
 

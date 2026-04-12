@@ -1,7 +1,7 @@
 """Tests for HookInstaller."""
 
-from pathlib import Path
 import stat
+from pathlib import Path
 
 from vibesop.hooks import HookInstaller, HookPoint
 

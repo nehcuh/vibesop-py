@@ -4,7 +4,6 @@ This fixture ensures the environment is set up before tests run.
 """
 
 import os
-import sys
 
 # Set environment variables before any imports happen
 os.environ["VIBESOP_ENABLE_LEGACY"] = "1"

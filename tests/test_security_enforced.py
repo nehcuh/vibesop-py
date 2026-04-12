@@ -1,17 +1,18 @@
 """Tests for enforced security scanning."""
 
-import pytest
 import tempfile
 from pathlib import Path
+
+import pytest
 
 from vibesop.security import (
     SafeLoader,
     SecurityEnforcementError,
+    load_json_file_safe,
+    load_text_file_safe,
     require_safe_scan,
     scan_file_before_load,
     scan_string_input,
-    load_text_file_safe,
-    load_json_file_safe,
 )
 
 

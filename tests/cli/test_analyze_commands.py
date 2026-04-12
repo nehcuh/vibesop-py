@@ -5,9 +5,6 @@ Tests session analysis, pattern detection, and security scanning commands.
 
 # pyright: reportPrivateUsage=none, reportUnknownMemberType=none, reportUnknownVariableType=none, reportUnknownArgumentType=none, reportUnknownParameterType=none, reportMissingParameterType=none
 
-from pathlib import Path
-from unittest.mock import patch
-
 import pytest
 from typer.testing import CliRunner
 

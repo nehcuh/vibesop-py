@@ -4,7 +4,6 @@ import pytest
 
 from vibesop.core.algorithms.interview.ambiguity import (
     WEIGHTS,
-    AmbiguityResult,
     DimensionScore,
     compute_ambiguity,
 )

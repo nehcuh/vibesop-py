@@ -3,9 +3,9 @@
 from pathlib import Path
 
 import pytest
-from vibesop.builder import ConfigRenderer, RenderProgressTracker
-from vibesop.builder import QuickBuilder
+
 from vibesop.adapters.models import ManifestMetadata
+from vibesop.builder import ConfigRenderer, QuickBuilder, RenderProgressTracker
 
 
 class TestConfigRenderer:
@@ -56,7 +56,7 @@ class TestConfigRenderer:
         assert result.success
         assert (tmp_path / "output" / "config.yaml").exists()
 
-    def test_render_with_default_output_dir(self, tmp_path: Path) -> None:
+    def test_render_with_default_output_dir(self, tmp_path: Path) -> None:  # noqa: ARG002
         renderer = ConfigRenderer()
         _metadata = ManifestMetadata(platform="opencode")
         manifest = QuickBuilder.minimal(platform="opencode")
@@ -181,7 +181,7 @@ class TestRenderProgressTracker:
         assert summary["percent"] == 0
         assert not summary["complete"]
 
-    def test_print_progress(self, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_print_progress(self, capsys: pytest.CaptureFixture[str]) -> None:  # noqa: ARG002
         """Test printing progress."""
         tracker = RenderProgressTracker()
 

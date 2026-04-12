@@ -17,7 +17,7 @@ from enum import StrEnum
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar
 
-from vibesop.core.skills.parser import SkillParser
+from vibesop.core.skills.parser import parse_skill_md
 from vibesop.security import AuditResult, SkillSecurityAuditor
 
 if TYPE_CHECKING:
@@ -122,7 +122,6 @@ class ExternalSkillLoader:
         self._strict_mode = strict_mode
 
         # Initialize components
-        self._parser = SkillParser()
         self._auditor = SkillSecurityAuditor(
             strict_mode=strict_mode,
             project_root=project_root or Path.cwd(),
@@ -290,7 +289,7 @@ class ExternalSkillLoader:
             ExternalSkillMetadata or None if parsing failed
         """
         # Parse skill file
-        base_metadata = self._parser.parse(skill_file)
+        base_metadata = parse_skill_md(skill_file)
         if not base_metadata:
             return None
 
@@ -431,15 +430,16 @@ class ExternalSkillLoader:
             if git_dir.exists():
                 shutil.rmtree(git_dir)
 
-            # Audit installed skills
+            # Audit installed skills (scan target path, not temp dir)
             audit_results = []
-            for skill_file in analysis.skill_files:
+            installed_skill_files = list(target_path.rglob("SKILL.md"))
+            for skill_file in installed_skill_files:
                 audit = self._auditor.audit_skill_file(skill_file)
                 audit_results.append(f"{skill_file.parent.name}: {'PASS' if audit.is_safe else 'WARN'}")
 
             msg = (
                 f"Installed {pack_name} to {target_path}\n"
-                f"Skills found: {analysis.skill_count}\n"
+                f"Skills found: {len(installed_skill_files)}\n"
                 f"Audit: {', '.join(audit_results)}"
             )
             return True, msg

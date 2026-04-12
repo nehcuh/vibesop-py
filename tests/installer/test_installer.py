@@ -1,8 +1,7 @@
 """Tests for VibeSOP installer."""
 
-import pytest
-from pathlib import Path
 import tempfile
+from pathlib import Path
 
 from vibesop.installer import VibeSOPInstaller
 

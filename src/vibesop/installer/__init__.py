@@ -1,28 +1,22 @@
 """Installation system for VibeSOP.
 
 This module provides installation and setup capabilities
-for VibeSOP configurations, including platform adapters,
-skill packs, and project initialization.
+for VibeSOP configurations and skill packs.
 """
 
-from vibesop.installer.gstack_installer import GstackInstaller
 from vibesop.installer.init_support import InitSupport
 from vibesop.installer.installer import VibeSOPInstaller
 from vibesop.installer.quickstart_runner import QuickstartConfig, QuickstartRunner
 from vibesop.installer.skill_installer import SkillInstaller
-from vibesop.installer.superpowers_installer import SuperpowersInstaller
 
 __all__ = [
-    # Skill pack installers
-    "GstackInstaller",
     # Project initialization
     "InitSupport",
     "QuickstartConfig",
     # Quickstart wizard
     "QuickstartRunner",
-    # Skill installer
+    # Skill installer (individual skills)
     "SkillInstaller",
-    "SuperpowersInstaller",
-    # Main installer
+    # Platform configuration installer
     "VibeSOPInstaller",
 ]

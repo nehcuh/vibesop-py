@@ -546,7 +546,7 @@ class SkillStorage:
 
             return SkillManifest(**data)
         except Exception as e:
-            logger.debug(f"Failed to parse skill manifest from {path}: {e}")
+            logger.debug(f"Failed to parse skill manifest from {metadata_path}: {e}")
             return None
 
 

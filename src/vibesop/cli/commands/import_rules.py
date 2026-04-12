@@ -154,7 +154,7 @@ def _parse_rules(content: str) -> str:
     lines = content.split("\n")
 
     # Add VibeSOP header
-    result = ["# Imported Rules", "", f"> Source: External rule file", "", "---", ""]
+    result = ["# Imported Rules", "", "> Source: External rule file", "", "---", ""]
 
     # Add original content
     result.extend(lines)

@@ -7,6 +7,8 @@ namespace: omx
 version: 1.0.0
 type: prompt
 trigger_when: asked to implement something with guaranteed completion, never give up
+algorithms:
+  - ralph/scan_file
 ---
 
 # Ralph — Persistent Completion Loop

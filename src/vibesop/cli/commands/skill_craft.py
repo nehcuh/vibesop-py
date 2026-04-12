@@ -61,69 +61,6 @@ def skill_craft(
         "-d",
         help="Skill description",
     ),
-    _verbose: bool = typer.Option(
-        False,
-        "--verbose",
-        "-v",
-        help="Verbose output",
-    ),
-) -> None:
-    """Create skills from session history (experimental).
-
-    .. warning::
-        This is an experimental feature. The interface may change.
-
-    This command analyzes conversation history and creates
-    reusable skill definitions that can be used by the router.
-
-    \b
-    Examples:
-        # Create skill from current session
-        vibe skill-craft create
-
-        # Create skill from specific session file
-        vibe skill-craft from session.jsonl
-
-        # List available templates
-        vibe skill-craft templates
-
-        # Create with custom name
-        vibe skill-craft create --name "my-custom-skill"
-    """
-    # Show experimental warning
-    _show_experimental_warning()
-
-
-import json
-from pathlib import Path
-from typing import Any
-
-import typer
-from rich.console import Console
-from rich.panel import Panel
-
-console = Console()
-
-
-def skill_craft(
-    action: str = typer.Argument(..., help="Action: create, from, templates"),
-    source: Path | None = typer.Argument(  # noqa: B008
-        None,
-        help="Source session file",
-        exists=True,
-    ),
-    name: str | None = typer.Option(
-        None,
-        "--name",
-        "-n",
-        help="Skill name",
-    ),
-    description: str | None = typer.Option(
-        None,
-        "--description",
-        "-d",
-        help="Skill description",
-    ),
     output: Path | None = typer.Option(  # noqa: B008
         None,
         "--output",

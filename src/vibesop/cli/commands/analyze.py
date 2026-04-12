@@ -27,7 +27,6 @@ from typing import Any
 
 import typer
 from rich.console import Console
-from rich.panel import Panel
 from rich.table import Table
 
 console = Console()
@@ -38,7 +37,7 @@ def analyze(
         ...,
         help="Analysis target: session, patterns, security, integrations",
     ),
-    source: Path | None = typer.Argument(
+    source: Path | None = typer.Argument(  # noqa: B008
         None,
         help="Source file or directory to analyze",
         exists=True,
@@ -55,7 +54,7 @@ def analyze(
         "-c",
         help="Minimum confidence threshold",
     ),
-    auto_craft: bool = typer.Option(
+    _auto_craft: bool = typer.Option(
         False,
         "--auto-craft",
         "-a",
@@ -113,9 +112,9 @@ def analyze(
         vibe analyze integrations --verbose
     """
     if target in ("session", "patterns"):
-        _analyze_session(source, min_frequency, min_confidence, auto_craft)
+        _analyze_session(source, min_frequency, min_confidence, _auto_craft)
     elif target == "security":
-        _analyze_security(source or Path("."), all_files, json_output)
+        _analyze_security(source or Path(), all_files, json_output)
     elif target == "integrations":
         _analyze_integrations(verbose, json_output)
     else:
@@ -130,7 +129,7 @@ def _analyze_session(
     source: Path | None,
     min_frequency: int,
     min_confidence: float,
-    auto_craft: bool,
+    _auto_craft: bool,
 ) -> None:
     """Analyze session file or directory for patterns and skill suggestions.
 

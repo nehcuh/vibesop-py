@@ -1,11 +1,11 @@
 """Tests for PathSafety."""
 
-import os
-import pytest
 from pathlib import Path
 
+import pytest
+
 from vibesop.security import PathSafety
-from vibesop.security.exceptions import PathTraversalError, PathOverlapError
+from vibesop.security.exceptions import PathOverlapError, PathTraversalError
 
 
 class TestPathSafety:
@@ -360,10 +360,10 @@ class TestPathSafetyEdgeCases:
         nonexistent = tmp_path / "nonexistent"
 
         # Should still work for validation
-        result = safety.check_traversal("file.txt", nonexistent)
+        safety.check_traversal("file.txt", nonexistent)
         # Result depends on implementation
 
-    def test_unicode_filename(self, tmp_path: Path) -> None:
+    def test_unicode_filename(self, tmp_path: Path) -> None:  # noqa: ARG002
         """Test validate_filename with unicode characters."""
         safety = PathSafety()
 
@@ -372,7 +372,7 @@ class TestPathSafetyEdgeCases:
         assert safety.validate_filename("файл.txt")
         assert safety.validate_filename("datei.txt")
 
-    def test_very_long_filename(self, tmp_path: Path) -> None:
+    def test_very_long_filename(self, tmp_path: Path) -> None:  # noqa: ARG002
         """Test validate_filename with very long filename."""
         safety = PathSafety()
 
@@ -380,7 +380,7 @@ class TestPathSafetyEdgeCases:
         long_name = "a" * 200 + ".txt"
         assert safety.validate_filename(long_name)
 
-    def test_dot_files(self, tmp_path: Path) -> None:
+    def test_dot_files(self, tmp_path: Path) -> None:  # noqa: ARG002
         """Test handling of dot files."""
         safety = PathSafety()
 
@@ -392,7 +392,7 @@ class TestPathSafetyEdgeCases:
         with pytest.raises(ValueError):
             safety.validate_filename("..")
 
-    def test_windows_style_paths(self, tmp_path: Path) -> None:
+    def test_windows_style_paths(self, tmp_path: Path) -> None:  # noqa: ARG002
         """Test Windows-style path separators on Unix."""
         safety = PathSafety()
 

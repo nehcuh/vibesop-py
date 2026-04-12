@@ -9,10 +9,10 @@ from pathlib import Path
 
 import pytest
 
-from vibesop.core.routing.unified import UnifiedRouter
-from vibesop.core.models import RoutingLayer
-from vibesop.builder import ConfigRenderer, ManifestBuilder, QuickBuilder
 from vibesop.adapters import Manifest, ManifestMetadata
+from vibesop.builder import ConfigRenderer, ManifestBuilder, QuickBuilder
+from vibesop.core.models import RoutingLayer
+from vibesop.core.routing.unified import UnifiedRouter
 from vibesop.security import SecurityScanner
 
 

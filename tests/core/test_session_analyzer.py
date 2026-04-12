@@ -4,15 +4,11 @@ Tests session analysis, pattern detection, and skill suggestion
 generation functionality.
 """
 
-import json
-from pathlib import Path
-
 import pytest
 
 from vibesop.core.session_analyzer import (
     QueryPattern,
     SessionAnalyzer,
-    SkillSuggestion,
 )
 
 

@@ -1,13 +1,11 @@
-"""Tests for all installers."""
+"""Tests for installers."""
 
 from pathlib import Path
 
 from vibesop.installer import (
-    GstackInstaller,
-    SuperpowersInstaller,
-    SkillInstaller,
     InitSupport,
     QuickstartRunner,
+    SkillInstaller,
 )
 
 
@@ -77,44 +75,6 @@ class TestInitSupport:
         assert result["config_exists"]
 
 
-class TestGstackInstaller:
-    """Test GstackInstaller functionality."""
-
-    def test_create_installer(self) -> None:
-        """Test creating gstack installer."""
-        installer = GstackInstaller()
-        assert installer is not None
-
-    def test_verify_not_installed(self) -> None:
-        """Test verifying gstack installation status."""
-        installer = GstackInstaller()
-        result = installer.verify()
-
-        # May be installed or not - just verify structure
-        assert result["path"] is not None
-        assert isinstance(result["installed"], bool)
-        assert "git_repo" in result
-
-
-class TestSuperpowersInstaller:
-    """Test SuperpowersInstaller functionality."""
-
-    def test_create_installer(self) -> None:
-        """Test creating superpowers installer."""
-        installer = SuperpowersInstaller()
-        assert installer is not None
-
-    def test_verify_not_installed(self) -> None:
-        """Test verifying superpowers installation status."""
-        installer = SuperpowersInstaller()
-        result = installer.verify()
-
-        # May be installed or not - just verify structure
-        assert result["path"] is not None
-        assert isinstance(result["installed"], bool)
-        assert "git_repo" in result
-
-
 class TestQuickstartRunner:
     """Test QuickstartRunner functionality."""
 
@@ -129,13 +89,6 @@ class TestQuickstartRunner:
 
         assert "claude-code" in runner._supported_platforms  # type: ignore[attr-defined]
         assert "opencode" in runner._supported_platforms  # type: ignore[attr-defined]
-
-    def test_available_integrations(self) -> None:
-        """Test getting available integrations."""
-        runner = QuickstartRunner()
-
-        assert "gstack" in runner._available_integrations  # type: ignore[attr-defined]
-        assert "superpowers" in runner._available_integrations  # type: ignore[attr-defined]
 
 
 class TestInstallerIntegration:

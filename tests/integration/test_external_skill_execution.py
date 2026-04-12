@@ -4,12 +4,9 @@ Tests that external skills from superpowers, gstack, etc. can be
 loaded, instantiated, and executed through the SkillManager.
 """
 
-import pytest
-from pathlib import Path
-
-from vibesop.core.skills.manager import SkillManager
-from vibesop.core.skills.loader import SkillLoader
 from vibesop.core.skills.external_loader import ExternalSkillLoader
+from vibesop.core.skills.loader import SkillLoader
+from vibesop.core.skills.manager import SkillManager
 
 
 class TestExternalSkillIntegration:
@@ -158,7 +155,7 @@ class TestExternalSkillLoader:
         loader = ExternalSkillLoader()
         packs = loader.get_supported_packs()
 
-        print(f"\nSupported packs:")
+        print("\nSupported packs:")
         for name, info in packs.items():
             status = "installed" if info["installed"] else "not installed"
             print(f"  - {name}: {status}")

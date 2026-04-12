@@ -1,6 +1,6 @@
 """技能包健康度监控 - 本地检查为主.
 
-这个模块提供技能包的本地健康检查，无需 GitHub API。
+这个模块提供技能包的本地健康检查, 无需 GitHub API.
 
 Usage:
     from vibesop.integrations.health_monitor import SkillHealthMonitor
@@ -55,9 +55,9 @@ class HealthStatus:
 
 
 class SkillHealthMonitor:
-    """技能包健康度监控器。
+    """技能包健康度监控器.
 
-    提供本地健康检查，不需要 GitHub API 或外部服务。
+    提供本地健康检查, 不需要 GitHub API 或外部服务.
     """
 
     def __init__(self, project_root: str | Path = "."):
@@ -109,7 +109,7 @@ class SkillHealthMonitor:
         has_errors = False
         version = "unknown"
 
-        # 检查版本（从第一个 SKILL.md 读取）
+        # 检查版本 (从第一个 SKILL.md 读取)
         for skill_file in skill_files:
             try:
                 content = skill_file.read_text(encoding="utf-8")
@@ -135,7 +135,7 @@ class SkillHealthMonitor:
         for skill_file in skill_files:
             try:
                 content = skill_file.read_text(encoding="utf-8")
-                # 基本检查：文件不应为空
+                # 验证文件非空
                 if len(content.strip()) < 50:
                     reasons.append(f"{skill_file.name} 内容过短")
                     has_errors = True
@@ -174,7 +174,7 @@ class SkillHealthMonitor:
         """检查所有已安装技能包的本地健康度.
 
         Returns:
-            字典，键为技能包名称，值为 HealthStatus
+            字典, 键为技能包名称, 值为 HealthStatus
         """
         results = {}
 
@@ -202,7 +202,7 @@ class SkillHealthMonitor:
         """获取健康度摘要.
 
         Returns:
-            字典，包含各健康状态的计数
+            字典, 包含各健康状态的计数
         """
         all_status = self.check_all_local()
 

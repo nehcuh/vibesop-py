@@ -10,10 +10,10 @@ from typing import Any
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
-logger = logging.getLogger(__name__)
-
 from vibesop.adapters.base import PlatformAdapter
 from vibesop.adapters.models import Manifest, RenderResult
+
+logger = logging.getLogger(__name__)
 
 
 class ClaudeCodeAdapter(PlatformAdapter):

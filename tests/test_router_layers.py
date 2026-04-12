@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from vibesop.core.routing import UnifiedRouter, RoutingConfig, RoutingLayer
+from vibesop.core.routing import RoutingConfig, UnifiedRouter
 
 
 class TestLayer1Explicit:

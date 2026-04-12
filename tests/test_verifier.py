@@ -1,16 +1,13 @@
 """Tests for integration verification system."""
 
-import pytest
-from pathlib import Path
-import tempfile
 from unittest.mock import MagicMock, patch
 
 from vibesop.integrations import (
+    IntegrationReport,
+    IntegrationStatus,
     IntegrationVerifier,
     VerificationResult,
     VerificationStatus,
-    IntegrationReport,
-    IntegrationStatus,
 )
 
 
@@ -113,15 +110,12 @@ class TestIntegrationVerifier:
             verifier._manager,
             'list_integrations',
             return_value=[mock_integration],
-        ):
-            with patch("pathlib.Path.exists", return_value=True):
-                with patch("pathlib.Path.is_dir", return_value=True):
-                    with patch("shutil.which", return_value="/usr/bin/git"):
-                        report = verifier.verify_integration("gstack")
+        ), patch("pathlib.Path.exists", return_value=True), patch("pathlib.Path.is_dir", return_value=True), patch("shutil.which", return_value="/usr/bin/git"):
+            report = verifier.verify_integration("gstack")
 
-                        assert report.integration_id == "gstack"
-                        assert report.installed
-                        # May not be fully functional without all files
+            assert report.integration_id == "gstack"
+            assert report.installed
+                # May not be fully functional without all files
 
     def test_verify_integration_not_installed(self) -> None:
         """Test verifying not installed integration."""
@@ -168,13 +162,11 @@ class TestIntegrationVerifier:
             verifier._manager,
             'list_integrations',
             return_value=[mock_integration],
-        ):
-            with patch("pathlib.Path.exists", return_value=True):
-                with patch("pathlib.Path.is_dir", return_value=True):
-                    reports = verifier.verify_all()
+        ), patch("pathlib.Path.exists", return_value=True), patch("pathlib.Path.is_dir", return_value=True):
+            reports = verifier.verify_all()
 
-                    assert "gstack" in reports
-                    assert isinstance(reports["gstack"], IntegrationReport)
+            assert "gstack" in reports
+            assert isinstance(reports["gstack"], IntegrationReport)
 
     def test_get_quick_check_not_found(self) -> None:
         """Test quick check for non-existent integration."""
@@ -231,14 +223,12 @@ class TestIntegrationVerifier:
             verifier._manager,
             'list_integrations',
             return_value=[mock_integration],
-        ):
-            with patch("pathlib.Path.__truediv__", return_value=mock_skills_dir):
-                with patch("pathlib.Path.glob", return_value=[]):
-                    result = verifier.get_quick_check("gstack")
+        ), patch("pathlib.Path.__truediv__", return_value=mock_skills_dir), patch("pathlib.Path.glob", return_value=[]):
+            result = verifier.get_quick_check("gstack")
 
-                    assert result["integration_id"] == "gstack"
-                    assert result["installed"]
-                    # May or may not be functional depending on skills
+            assert result["integration_id"] == "gstack"
+            assert result["installed"]
+                # May or may not be functional depending on skills
 
     def test_check_installation_exists_pass(self) -> None:
         """Test installation exists check passes."""
@@ -248,12 +238,11 @@ class TestIntegrationVerifier:
         mock_integration.path = "/tmp/test"
         mock_integration.name = "test"
 
-        with patch("pathlib.Path.exists", return_value=True):
-            with patch("pathlib.Path.is_dir", return_value=True):
-                result = verifier._check_installation_exists(mock_integration)
+        with patch("pathlib.Path.exists", return_value=True), patch("pathlib.Path.is_dir", return_value=True):
+            result = verifier._check_installation_exists(mock_integration)
 
-                assert result.status == VerificationStatus.PASSED
-                assert "exists" in result.message.lower()
+            assert result.status == VerificationStatus.PASSED
+            assert "exists" in result.message.lower()
 
     def test_check_installation_exists_not_exists(self) -> None:
         """Test installation exists check fails."""
@@ -278,12 +267,11 @@ class TestIntegrationVerifier:
         mock_integration.path = "/tmp/test_file"
         mock_integration.name = "test"
 
-        with patch("pathlib.Path.exists", return_value=True):
-            with patch("pathlib.Path.is_dir", return_value=False):
-                result = verifier._check_installation_exists(mock_integration)
+        with patch("pathlib.Path.exists", return_value=True), patch("pathlib.Path.is_dir", return_value=False):
+            result = verifier._check_installation_exists(mock_integration)
 
-                assert result.status == VerificationStatus.FAILED
-                assert "not a directory" in result.message.lower()
+            assert result.status == VerificationStatus.FAILED
+            assert "not a directory" in result.message.lower()
 
     def test_determine_overall_status_all_passed(self) -> None:
         """Test overall status with all passed."""

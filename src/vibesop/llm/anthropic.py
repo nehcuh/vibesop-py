@@ -99,7 +99,9 @@ class AnthropicProvider(LLMProvider):
             )
 
             content = response.content[0].text
-            tokens_used = response.usage.input_tokens + response.usage.output_tokens
+            input_tokens = response.usage.input_tokens
+            output_tokens = response.usage.output_tokens
+            tokens_used = input_tokens + output_tokens
 
             self._record_call(tokens_used)
 
@@ -108,6 +110,8 @@ class AnthropicProvider(LLMProvider):
                 model=model,
                 provider=self.provider_name,
                 tokens_used=tokens_used,
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
             )
 
         except anthropic.APIError as e:
@@ -160,7 +164,9 @@ class AnthropicProvider(LLMProvider):
                 )
 
                 content = response.content[0].text  # type: ignore[reportUnknownVariableType]
-                tokens_used = response.usage.input_tokens + response.usage.output_tokens
+                input_tokens = response.usage.input_tokens
+                output_tokens = response.usage.output_tokens
+                tokens_used = input_tokens + output_tokens
 
                 self._record_call(tokens_used)
 
@@ -169,6 +175,8 @@ class AnthropicProvider(LLMProvider):
                     model=model,
                     provider=self.provider_name,
                     tokens_used=tokens_used,
+                    input_tokens=input_tokens,
+                    output_tokens=output_tokens,
                 )
 
         except anthropic.APIError as e:

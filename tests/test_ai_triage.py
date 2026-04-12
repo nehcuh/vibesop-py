@@ -1,11 +1,10 @@
 """Tests for AI Triage Layer (Layer 0)."""
 
-import json
-import os
+from unittest.mock import MagicMock
+
 import pytest
-from pathlib import Path
-from unittest.mock import MagicMock, patch
-from vibesop.core.routing.unified import UnifiedRouter, RoutingLayer, RoutingResult
+
+from vibesop.core.routing.unified import RoutingLayer, RoutingResult, UnifiedRouter
 
 
 @pytest.fixture
@@ -17,6 +16,8 @@ def mock_llm():
         content="systematic-debugging",
         model="claude-3-5-haiku-20241022",
         tokens_used=50,
+        input_tokens=40,
+        output_tokens=10,
     )
     return llm
 
@@ -82,6 +83,8 @@ def test_ai_triage_handles_invalid_response(tmp_path, mock_llm):
         content="this is not a valid skill id at all and has no pattern match",
         model="claude-3-5-haiku-20241022",
         tokens_used=100,
+        input_tokens=80,
+        output_tokens=20,
     )
 
     (tmp_path / ".vibe").mkdir()
@@ -147,7 +150,8 @@ def test_ai_triage_explicit_disable(tmp_path, monkeypatch):
 
 def test_parse_ai_triage_response():
     """Test parsing various LLM response formats."""
-    (tmp_path := __import__("tempfile").mkdtemp())
+    import tempfile
+    tmp_path = tempfile.mkdtemp()
     from vibesop.core.config.manager import ConfigManager
 
     manager = ConfigManager(project_root=tmp_path)

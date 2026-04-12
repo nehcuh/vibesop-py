@@ -50,6 +50,8 @@ from vibesop.core.routing.cache import CacheManager
 from vibesop.core.routing.explicit_layer import check_explicit_override
 from vibesop.core.routing.layers import LayerResult
 from vibesop.core.routing.scenario_layer import load_scenarios, match_scenario
+from vibesop.llm.cost_tracker import TriageCostTracker
+from vibesop.llm.triage_prompts import TriagePromptRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -139,6 +141,8 @@ class UnifiedRouter:
         self._cache_manager = CacheManager(cache_dir=self.project_root / ".vibe" / "cache")
         self._candidates_cache: list[dict[str, Any]] | None = None
         self._cache_lock = threading.Lock()
+
+        self._cost_tracker = TriageCostTracker(storage_dir=self.project_root / ".vibe")
 
         self._total_routes = 0
         self._layer_distribution: dict[str, int] = {}
@@ -240,6 +244,20 @@ class UnifiedRouter:
         if self._llm is None or not self._llm.configured():
             return None
 
+        # Budget enforcement
+        budget = getattr(self._config, "ai_triage_budget_monthly", 5.0)
+        if budget > 0:
+            monthly_cost = self._cost_tracker.get_monthly_cost()
+            if monthly_cost >= budget:
+                logger.debug(
+                    f"AI triage skipped: monthly budget exhausted ({monthly_cost:.4f}/{budget:.4f} USD)"
+                )
+                return None
+            if monthly_cost >= budget * 0.9:
+                logger.warning(
+                    f"AI triage budget at {monthly_cost:.4f}/{budget:.4f} USD (90%+)"
+                )
+
         # Cost control: limit candidates sent to LLM
         max_skills = self._config.ai_triage_max_skills
         triage_candidates = candidates[:max_skills]
@@ -275,6 +293,28 @@ class UnifiedRouter:
             )
             skill_id = self._parse_ai_triage_response(response.content)
 
+            # Record cost if enabled
+            log_calls = getattr(self._config, "ai_triage_log_calls", True)
+            if log_calls:
+                input_tokens = getattr(response, "input_tokens", None)
+                output_tokens = getattr(response, "output_tokens", None)
+                tokens_used = getattr(response, "tokens_used", None)
+                if not isinstance(input_tokens, int) or not isinstance(output_tokens, int):
+                    # Fallback to tokens_used if split counts aren't available
+                    if isinstance(tokens_used, int):
+                        input_tokens = tokens_used
+                        output_tokens = 0
+                    else:
+                        input_tokens = 0
+                        output_tokens = 0
+                self._cost_tracker.record(
+                    model=getattr(response, "model", "unknown"),
+                    input_tokens=input_tokens,
+                    output_tokens=output_tokens,
+                    query=query,
+                    selected_skill=skill_id,
+                )
+
             if skill_id:
                 candidate = next((c for c in candidates if c["id"] == skill_id), None)
                 if candidate:
@@ -298,18 +338,12 @@ class UnifiedRouter:
         return None
 
     def _build_ai_triage_prompt(self, query: str, skills_summary: str) -> str:
-        """Build a structured prompt for AI triage with reasoning guidance."""
-        return (
-            "You are a skill routing assistant. Your job is to select the single most appropriate "
-            "skill for the user's request.\n\n"
-            "Instructions:\n"
-            "1. Read the user request carefully.\n"
-            "2. Consider the intent, not just keywords.\n"
-            "3. Select the skill that best matches the request.\n"
-            "4. Return ONLY the skill ID. No explanation. No markdown.\n\n"
-            f"User request: {query}\n\n"
-            f"Available skills:\n{skills_summary}\n\n"
-            "Return ONLY the skill ID (e.g., gstack/review or systematic-debugging):\n"
+        """Build a structured prompt for AI triage."""
+        version = getattr(self._config, "ai_triage_prompt_version", "v1")
+        return TriagePromptRegistry.render(
+            query=query,
+            skills_summary=skills_summary,
+            version=version,
         )
 
     def _init_llm_client(self):
@@ -779,11 +813,22 @@ class UnifiedRouter:
         with self._stats_lock:
             self._layer_distribution[layer.value] = self._layer_distribution.get(layer.value, 0) + 1
 
-    def get_stats(self) -> dict[str, int | dict[str, int] | str]:
+    def get_stats(self) -> dict[str, Any]:
         return {
             "total_routes": self._total_routes,
             "layer_distribution": dict(self._layer_distribution),
             "cache_dir": str(self.project_root / ".vibe" / "cache"),
+            "ai_triage": self.get_ai_triage_stats(),
+        }
+
+    def get_ai_triage_stats(self) -> dict[str, Any]:
+        """Get AI Triage usage and cost statistics."""
+        stats = self._cost_tracker.get_stats(days=30)
+        budget = getattr(self._config, "ai_triage_budget_monthly", 5.0)
+        return {
+            **stats,
+            "budget_monthly_usd": budget,
+            "budget_remaining_usd": round(max(0.0, budget - stats["total_cost_usd"]), 6),
         }
 
     def record_selection(self, skill_id: str, query: str, was_helpful: bool = True) -> None:

@@ -22,7 +22,6 @@ from rich.panel import Panel
 from vibesop import __version__
 from vibesop.cli.subcommands import register
 from vibesop.core.routing import UnifiedRouter
-from vibesop.core.skills import SkillManager
 
 app = typer.Typer(
     name="vibe",
@@ -105,8 +104,6 @@ def route(
 
     # Handle validation mode
     if validate:
-        from rich.table import Table
-
         console.print(f"\n[bold cyan]✓ Route Validation[/bold cyan]\n{'=' * 40}\n")
 
         # Show router capabilities

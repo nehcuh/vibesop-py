@@ -1,6 +1,5 @@
 """Tests for integration management."""
 
-import pytest
 from pathlib import Path
 
 from vibesop.integrations import (
@@ -249,7 +248,7 @@ class TestIntegrationManager:
         assert "gstack" in registry
 
         # Check structure
-        for name, data in registry.items():
+        for _name, data in registry.items():
             assert "description" in data
             assert "skills" in data
             assert "installed" in data
@@ -311,7 +310,7 @@ class TestIntegrationManagementIntegration:
             "gstack/qa",
         ]
 
-        for skill in known_skills:
+        for _skill in known_skills:
             # Skills might not be available if integrations not installed
             # but they should be defined in the registry
             pass  # Just verify the list is populated

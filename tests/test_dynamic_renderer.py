@@ -1,12 +1,10 @@
 """Tests for config-driven rendering system."""
 
-import pytest
-from pathlib import Path
 import tempfile
-from unittest.mock import patch, MagicMock, mock_open
+from pathlib import Path
+from unittest.mock import MagicMock, mock_open, patch
 
 from vibesop.builder import ConfigDrivenRenderer, RenderRule
-from vibesop.adapters import Manifest, ManifestMetadata
 
 
 class TestRenderRule:
@@ -59,7 +57,7 @@ class TestConfigDrivenRenderer:
 
     @patch("builtins.open", new_callable=mock_open, read_data="rules: []")
     @patch("pathlib.Path.exists", return_value=True)
-    def test_load_rules_empty_file(self, mock_exists: MagicMock, mock_file: MagicMock) -> None:
+    def test_load_rules_empty_file(self, _mock_exists: MagicMock, _mock_file: MagicMock) -> None:
         """Test loading empty rules file."""
         renderer = ConfigDrivenRenderer()
         rules = renderer.load_rules(Path("rules.yaml"))
@@ -200,7 +198,7 @@ rules:
                 ]
             }
             yaml = YAML()
-            with open(rules_file, "w") as f:
+            with rules_file.open("w") as f:
                 yaml.dump(rules_config, f)
 
             manifest = MagicMock()
