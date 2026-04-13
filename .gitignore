@@ -78,3 +78,7 @@ ruff.toml
 *.tar.gz
 .alma-snapshots
 .vibe/.vibe/
+
+# Runtime generated directories
+.vibe/core/
+.vibe/rules/
