@@ -292,3 +292,18 @@ skills:
         errors = validate_overlay(overlay_file)
 
         assert len(errors) > 0
+
+    def test_build_from_file_invalid_yaml(self, tmp_path: Path) -> None:
+        """Test build_from_file with invalid YAML."""
+        manifest_file = tmp_path / "manifest.yaml"
+        manifest_file.write_text("not: valid: yaml: [")
+
+        builder = ManifestBuilder(project_root=tmp_path)
+        with pytest.raises(ValueError, match="Failed to load manifest"):
+            builder.build_from_file(manifest_file)
+
+    def test_extract_trigger_empty_description(self, tmp_path: Path) -> None:  # noqa: ARG002
+        """Test _extract_trigger_from_description with empty input."""
+        builder = ManifestBuilder(project_root=Path("."))
+        assert builder._extract_trigger_from_description("") == ""
+        assert builder._extract_trigger_from_description("No trigger here.") == ""
