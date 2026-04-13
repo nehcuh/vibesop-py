@@ -7,6 +7,7 @@ from typer.testing import CliRunner
 
 from vibesop.cli.main import app
 from vibesop.integrations import IntegrationStatus
+from vibesop.integrations import IntegrationStatus
 
 runner = CliRunner()
 
@@ -128,7 +129,11 @@ class TestInitCommand:
         mock_support_cls.return_value = mock_support
 
         mock_mgr = MagicMock()
-        mock_mgr.list_integrations.return_value = []
+        integration = MagicMock()
+        integration.name = "gstack"
+        integration.status = IntegrationStatus.NOT_INSTALLED
+        integration.description = "Virtual team"
+        mock_mgr.list_integrations.return_value = [integration]
         mock_mgr_cls.return_value = mock_mgr
 
         result = runner.invoke(app, ["init"])
@@ -155,3 +160,24 @@ class TestInitCommand:
         result = runner.invoke(app, ["init"])
         assert result.exit_code == 0
         assert "Initialization complete" in result.stdout
+
+    @patch("vibesop.cli.commands.init.InitSupport")
+    @patch("vibesop.cli.commands.init.IntegrationManager")
+    def test_init_all_integrations_installed(self, mock_mgr_cls, mock_support_cls, monkeypatch, tmp_path) -> None:
+        """Test init when all integrations are already installed."""
+        monkeypatch.chdir(tmp_path)
+        mock_support = MagicMock()
+        mock_support.init_project.return_value = {"success": True}
+        mock_support_cls.return_value = mock_support
+
+        mock_mgr = MagicMock()
+        integration = MagicMock()
+        integration.name = "gstack"
+        integration.status = IntegrationStatus.INSTALLED
+        integration.description = "Virtual team"
+        mock_mgr.list_integrations.return_value = [integration]
+        mock_mgr_cls.return_value = mock_mgr
+
+        result = runner.invoke(app, ["init"])
+        assert result.exit_code == 0
+        assert "All recommended integrations installed" in result.stdout
