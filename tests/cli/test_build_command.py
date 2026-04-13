@@ -173,3 +173,66 @@ class TestBuildCommand:
         assert result.exit_code == 0
         assert "Using configured platform: opencode" in result.stdout
         mock_builder.build_from_registry.assert_called_once_with(platform="opencode")
+
+    @patch("vibesop.cli.commands.build.ConfigRenderer")
+    @patch("vibesop.cli.commands.build.ManifestBuilder")
+    def test_build_file_outside_cwd(self, mock_builder_cls, mock_renderer_cls, monkeypatch, tmp_path) -> None:
+        """Test build when created file is outside current directory."""
+        monkeypatch.chdir(tmp_path)
+        manifest = _make_manifest()
+        mock_builder = MagicMock()
+        mock_builder.build_from_registry.return_value = manifest
+        mock_builder_cls.return_value = mock_builder
+
+        mock_renderer = MagicMock()
+        mock_renderer.render.return_value = MagicMock(files_created=["/absolute/path/to/file.md"])
+        mock_renderer_cls.return_value = mock_renderer
+
+        result = runner.invoke(app, ["build", "claude-code"])
+        assert result.exit_code == 0
+        assert "/absolute/path/to/file.md" in result.stdout
+
+    @patch("vibesop.cli.commands.build.ConfigRenderer")
+    @patch("vibesop.cli.commands.build.ManifestBuilder")
+    def test_build_deploy_to_claude_dir(self, mock_builder_cls, mock_renderer_cls, monkeypatch, tmp_path) -> None:
+        """Test build when output is ~/.claude."""
+        monkeypatch.chdir(tmp_path)
+        manifest = _make_manifest()
+        mock_builder = MagicMock()
+        mock_builder.build_from_registry.return_value = manifest
+        mock_builder_cls.return_value = mock_builder
+
+        mock_renderer = MagicMock()
+        mock_renderer.render.return_value = MagicMock(files_created=[])
+        mock_renderer_cls.return_value = mock_renderer
+
+        claude_dir = tmp_path / "home" / ".claude"
+        claude_dir.mkdir(parents=True)
+        # Patch Path.home to return our temp home
+        monkeypatch.setattr(Path, "home", lambda: tmp_path / "home")
+
+        result = runner.invoke(app, ["build", "claude-code", "--output", str(claude_dir)])
+        assert result.exit_code == 0
+        assert "Deployed to Claude Code" in result.stdout
+
+    @patch("vibesop.cli.commands.build.ManifestBuilder")
+    def test_build_generic_exception(self, mock_builder_cls, monkeypatch, tmp_path) -> None:
+        """Test build when generic exception is raised."""
+        monkeypatch.chdir(tmp_path)
+        mock_builder = MagicMock()
+        mock_builder.build_from_registry.side_effect = RuntimeError("Unexpected failure")
+        mock_builder_cls.return_value = mock_builder
+
+        result = runner.invoke(app, ["build", "claude-code"])
+        assert result.exit_code == 1
+        assert "Build failed" in result.stdout
+
+    def test_get_configured_platform_from_config(self, monkeypatch, tmp_path) -> None:
+        """Test _get_configured_platform reads config.yaml."""
+        monkeypatch.chdir(tmp_path)
+        config_dir = tmp_path / ".vibe"
+        config_dir.mkdir()
+        (config_dir / "config.yaml").write_text("platform: opencode\n")
+
+        from vibesop.cli.commands.build import _get_configured_platform
+        assert _get_configured_platform() == "opencode"
