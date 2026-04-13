@@ -102,3 +102,52 @@ class TestInstallCommand:
         result = runner.invoke(app, ["install", "--auto"])
         assert result.exit_code == 0
         mock_loader.install_pack.assert_called_once_with("gstack", None)
+
+    @patch("vibesop.cli.commands.install.ExternalSkillLoader")
+    def test_install_auto_skips_installed(self, mock_loader_cls) -> None:
+        mock_loader = MagicMock()
+        mock_loader.TRUSTED_PACKS = {
+            "gstack": "https://github.com/garrytan/gstack",
+            "superpowers": "https://github.com/obra/superpowers",
+        }
+        mock_loader.get_supported_packs.return_value = {
+            "gstack": {"installed": True},
+            "superpowers": {"installed": True},
+        }
+        mock_loader_cls.return_value = mock_loader
+
+        result = runner.invoke(app, ["install", "--auto"])
+        assert result.exit_code == 0
+        assert "already installed, skipping" in result.output
+        mock_loader.install_pack.assert_not_called()
+
+    @patch("vibesop.cli.commands.install.ExternalSkillLoader")
+    def test_install_no_args(self, mock_loader_cls) -> None:
+        result = runner.invoke(app, ["install"])
+        assert result.exit_code == 1
+        assert "No pack name or URL specified" in result.output
+
+    @patch("vibesop.cli.commands.install.ExternalSkillLoader")
+    def test_install_failure(self, mock_loader_cls) -> None:
+        mock_loader = MagicMock()
+        mock_loader.install_pack.return_value = (False, "Network error")
+        mock_loader.get_supported_packs.return_value = {}
+        mock_loader_cls.return_value = mock_loader
+
+        result = runner.invoke(app, ["install", "gstack"])
+        assert result.exit_code == 1
+        assert "Failed to install" in result.output
+
+    @patch("vibesop.cli.commands.install.ExternalSkillLoader")
+    def test_install_verify_no_skills(self, mock_loader_cls) -> None:
+        mock_loader = MagicMock()
+        mock_loader.install_pack.return_value = (True, "Installed gstack")
+        mock_loader.get_supported_packs.return_value = {}
+        mock_loader.external_paths = [MagicMock()]
+        mock_loader.discover_from_pack.return_value = []
+        mock_loader_cls.return_value = mock_loader
+
+        result = runner.invoke(app, ["install", "gstack"])
+        assert result.exit_code == 0
+        assert "gstack installed successfully" in result.output
+        assert "No skills discovered" in result.output

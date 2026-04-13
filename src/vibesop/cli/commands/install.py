@@ -240,4 +240,5 @@ def _install_pack(
         for line in msg.split("\n"):
             console.print(f"  [dim]{line}[/dim]")
         console.print()
+        raise typer.Exit(1)
     return "failed"
