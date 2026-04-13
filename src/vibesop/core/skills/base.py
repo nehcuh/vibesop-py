@@ -142,7 +142,7 @@ class Skill(ABC):
         Returns:
             True if valid, False otherwise
         """
-        return context.query is not None
+        return bool(context.query)
 
     def get_prompt_template(self) -> str | None:
         """Get the prompt template for this skill.

@@ -34,14 +34,6 @@ from rich.panel import Panel
 console = Console()
 
 
-def _show_experimental_warning() -> None:
-    """Show experimental feature warning."""
-    console.print(
-        "[yellow]⚠️  Experimental Feature[/yellow]\n"
-        "[dim]This command is experimental and may change in future versions.[/dim]\n"
-    )
-
-
 def skill_craft(
     action: str = typer.Argument(..., help="Action: create, from, templates"),
     source: Path | None = typer.Argument(  # noqa: B008

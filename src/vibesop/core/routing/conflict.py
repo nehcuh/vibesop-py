@@ -105,6 +105,7 @@ class ConfidenceGapStrategy(ResolutionStrategy):
         query: str,
         context: dict[str, Any] | None = None,
     ) -> ConflictResolution | None:
+        _ = query, context  # Protocol requirement
         if len(matches) < 2:
             return None
 
@@ -155,6 +156,7 @@ class NamespacePriorityStrategy(ResolutionStrategy):
         query: str,
         context: dict[str, Any] | None = None,
     ) -> ConflictResolution | None:
+        _ = query, context  # Protocol requirement
         if len(matches) < 2:
             return None
 

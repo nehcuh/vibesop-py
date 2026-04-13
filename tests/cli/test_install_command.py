@@ -28,7 +28,7 @@ class TestInstallCommand:
     @patch("vibesop.installer.analyzer.RepoAnalyzer")
     def test_install_from_url(self, mock_analyzer_cls, mock_loader_cls) -> None:
         mock_analyzer = MagicMock()
-        mock_analyzer._infer_pack_name.return_value = "my-skills"
+        mock_analyzer.infer_pack_name.return_value = "my-skills"
         mock_analyzer_cls.return_value = mock_analyzer
 
         mock_loader = MagicMock()

@@ -338,8 +338,7 @@ class MemoryManager:
                     intersection = query_tokens & msg_tokens
                     union = query_tokens | msg_tokens
                     score = len(intersection) / len(union) if union else 0.0
-                    if score > best_msg_score:
-                        best_msg_score = score
+                    best_msg_score = max(best_msg_score, score)
             if best_msg_score > 0:
                 scores.append(best_msg_score)
 

@@ -192,7 +192,7 @@ class CheckpointManager:
 
         # Filter by tag
         if tag:
-            all_checkpoints = [cp for cp in all_checkpoints if tag in cp.tags]
+            all_checkpoints = [cp for cp in all_checkpoints if tag in (cp.tags or [])]
 
         return all_checkpoints[:limit]
 
@@ -329,7 +329,7 @@ class CheckpointManager:
             True if file was added
         """
         checkpoint = self._storage.load(checkpoint_id)
-        if not checkpoint:
+        if checkpoint is None:
             return False
 
         full_path = Path(working_dir) / file_path

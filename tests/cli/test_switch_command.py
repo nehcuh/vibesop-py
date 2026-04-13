@@ -1,9 +1,7 @@
 """Tests for vibe switch command."""
 
 import sys
-import tempfile
 import types
-from pathlib import Path
 from unittest.mock import MagicMock
 
 from typer.testing import CliRunner
@@ -47,7 +45,7 @@ class TestSwitchCommand:
 
         # Mock build
         mock_build = MagicMock()
-        monkeypatch.setattr("vibesop.cli.commands.build._execute_build", mock_build)
+        monkeypatch.setattr("vibesop.cli.commands.build.execute_build", mock_build)
 
         # Mock deploy module since it may not exist
         fake_deploy = types.ModuleType("vibesop.cli.commands.deploy")
@@ -85,7 +83,7 @@ class TestSwitchCommand:
     def test_switch_build_output_missing(self, monkeypatch, tmp_path) -> None:
         """Test switch when build output is missing."""
         mock_build = MagicMock()
-        monkeypatch.setattr("vibesop.cli.commands.build._execute_build", mock_build)
+        monkeypatch.setattr("vibesop.cli.commands.build.execute_build", mock_build)
 
         fake_deploy = types.ModuleType("vibesop.cli.commands.deploy")
         fake_deploy._execute_deploy = MagicMock()

@@ -53,9 +53,9 @@ def test_repo_analysis_skill_ids_fallback():
 
 def test_infer_pack_name():
     analyzer = RepoAnalyzer()
-    assert analyzer._infer_pack_name("https://github.com/user/superpowers") == "superpowers"
-    assert analyzer._infer_pack_name("https://github.com/user/superpowers.git") == "superpowers"
-    assert analyzer._infer_pack_name("superpowers") == "superpowers"
+    assert analyzer.infer_pack_name("https://github.com/user/superpowers") == "superpowers"
+    assert analyzer.infer_pack_name("https://github.com/user/superpowers.git") == "superpowers"
+    assert analyzer.infer_pack_name("superpowers") == "superpowers"
 
 
 def test_extract_install_hint_from_section(tmp_path):
@@ -85,12 +85,14 @@ def test_extract_install_hint_no_instructions(tmp_path):
 
 def test_analyze_repo(fake_repo):
     analyzer = RepoAnalyzer()
-    with patch("tempfile.TemporaryDirectory") as mock_tmp:
+    with (
+        patch("tempfile.TemporaryDirectory") as mock_tmp,
+        patch.object(analyzer, "git_clone", return_value=True),
+        patch("vibesop.installer.analyzer.parse_skill_md", return_value=MagicMock(namespace="testpack")),
+    ):
         mock_tmp.return_value.__enter__ = MagicMock(return_value=str(fake_repo))
         mock_tmp.return_value.__exit__ = MagicMock(return_value=False)
-        with patch.object(analyzer, "_git_clone", return_value=True):
-            with patch("vibesop.installer.analyzer.parse_skill_md", return_value=MagicMock(namespace="testpack")):
-                result = analyzer.analyze("https://github.com/user/testpack")
+        result = analyzer.analyze("https://github.com/user/testpack")
 
     assert result.pack_name == "testpack"
     assert result.skill_count == 1
@@ -101,7 +103,7 @@ def test_analyze_repo(fake_repo):
 
 def test_analyze_repo_clone_failure():
     analyzer = RepoAnalyzer()
-    with patch.object(analyzer, "_git_clone", return_value=False):
+    with patch.object(analyzer, "git_clone", return_value=False):
         result = analyzer.analyze("https://github.com/user/nonexistent")
     assert result.errors
     assert "Failed to clone" in result.errors[0]

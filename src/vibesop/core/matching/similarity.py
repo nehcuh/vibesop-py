@@ -111,10 +111,7 @@ class SimilarityCalculator:
         normalize: bool = True,
         epsilon: float = 1e-10,
     ):
-        if isinstance(metric, SimilarityMetric):
-            _metric = metric
-        else:
-            _metric = SimilarityMetric(metric)
+        _metric = metric if isinstance(metric, SimilarityMetric) else SimilarityMetric(metric)
         self._config = SimilarityConfig(
             metric=_metric,
             normalize=normalize,

@@ -71,6 +71,7 @@ class KeywordMatcher:
         top_k: int = 10,
     ) -> list[MatchResult]:
         """Match query against candidates using keyword detection."""
+        _ = context  # Protocol requirement; not used in keyword matching
         cache_key = f"keyword:{query}"
         if self._config.use_cache and cache_key in self._cache:
             return self._cache[cache_key][:top_k]
@@ -116,6 +117,7 @@ class KeywordMatcher:
         context: RoutingContext | None = None,
     ) -> ConfidenceScore:
         """Score a single candidate."""
+        _ = context  # Protocol requirement
         query_tokens = set(
             tokenize(query, self._config.tokenizer_config)
             if not self._config.case_sensitive
@@ -219,6 +221,7 @@ class TFIDFMatcher:
         top_k: int = 10,
     ) -> list[MatchResult]:
         """Match query against candidates using TF-IDF similarity."""
+        _ = context  # Protocol requirement
         if not self._fitted:
             self.fit(candidates)
 
@@ -262,6 +265,7 @@ class TFIDFMatcher:
         context: RoutingContext | None = None,
     ) -> ConfidenceScore:
         """Score a single candidate."""
+        _ = context  # Protocol requirement
         if not self._fitted:
             # Single candidate fit
             self.fit([candidate])
@@ -360,6 +364,7 @@ class EmbeddingMatcher:
         top_k: int = 10,
     ) -> list[MatchResult]:
         """Match query using vector embeddings."""
+        _ = context  # Protocol requirement
         if np is None:
             return []
 
@@ -493,6 +498,7 @@ class LevenshteinMatcher:
         name and keywords. This avoids pathologically low scores for long
         queries against short skill descriptions.
         """
+        _ = context  # Protocol requirement
         query_tokens = self._tokenize(query)
         candidate_tokens = self._candidate_tokens(candidate)
 

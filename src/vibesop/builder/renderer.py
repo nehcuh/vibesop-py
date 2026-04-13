@@ -37,7 +37,7 @@ class ConfigRenderer:
     """
 
     # Platform adapter registry
-    _adapters: ClassVar[dict[str, type[PlatformAdapter]]] = {
+    _adapters: ClassVar[dict[str, Callable[..., PlatformAdapter]]] = {
         "claude-code": ClaudeCodeAdapter,
         "opencode": OpenCodeAdapter,
     }

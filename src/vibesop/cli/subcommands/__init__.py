@@ -79,7 +79,7 @@ def register(app: typer.Typer) -> None:
     app.command()(analyze_mod.analyze)
 
     # Skills management subcommands
-    skills_app.command()(skills_mod.list)
+    skills_app.command("list")(skills_mod.list_skills)
     skills_app.command("available")(skills_mod.available)
     skills_app.command("info")(skills_mod.info)
     skills_app.command("install")(skills_mod.install)

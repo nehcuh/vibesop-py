@@ -37,7 +37,7 @@ console = Console()
 @app.command()
 def route(
     query: str = typer.Argument(..., help="Natural language query to route"),
-    min_confidence: float = typer.Option(
+    min_confidence: float | None = typer.Option(
         None,
         "--min-confidence",
         "-c",
@@ -71,13 +71,14 @@ def route(
         import json
 
         console.print(json.dumps(result.to_dict(), indent=2))
-    elif result.has_match:
+    elif result.primary is not None:
+        primary = result.primary
         console.print(
             Panel(
-                f"[bold green]✅ Matched:[/bold green] {result.primary.skill_id}\n"
-                f"[dim]Confidence:[/dim] {result.primary.confidence:.0%}\n"
-                f"[dim]Layer:[/dim] {result.primary.layer.value}\n"
-                f"[dim]Source:[/dim] {result.primary.source}\n"
+                f"[bold green]✅ Matched:[/bold green] {primary.skill_id}\n"
+                f"[dim]Confidence:[/dim] {primary.confidence:.0%}\n"
+                f"[dim]Layer:[/dim] {primary.layer.value}\n"
+                f"[dim]Source:[/dim] {primary.source}\n"
                 f"[dim]Duration:[/dim] {result.duration_ms:.1f}ms",
                 title="[bold]Routing Result[/bold]",
                 border_style="blue",
@@ -121,7 +122,7 @@ def route(
 
         # Test the query
         console.print(f"\n[bold]Testing query:[/bold] {query}\n")
-        if result.has_match:
+        if result.primary is not None:
             console.print(f"  Primary: {result.primary.skill_id} ({result.primary.confidence:.0%})")
             console.print(f"  Layer: {result.primary.layer.value}")
         else:
@@ -238,9 +239,10 @@ def preferences() -> None:
     console.print(f"Helpful rate: {stats['helpful_rate']:.1%}")
     console.print(f"Unique skills: {stats['unique_skills']}")
 
-    if stats["top_skills"]:
+    top_skills = stats.get("top_skills")
+    if isinstance(top_skills, list) and top_skills:
         console.print("\n[bold]Top Skills:[/bold]")
-        for skill_id, count in stats["top_skills"][:5]:
+        for skill_id, count in top_skills[:5]:
             console.print(f"  • {skill_id}: {count} selections")
 
     console.print(f"\nStorage: {stats['storage_path']}")

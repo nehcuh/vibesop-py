@@ -86,7 +86,10 @@ class DocTemplates:
             loader=FileSystemLoader(template_dir),
             autoescape=False,
         )
-        self._env.globals["now"] = lambda fmt="%Y-%m-%d": datetime.now().strftime(fmt)
+        def _now(fmt: str = "%Y-%m-%d") -> str:
+            return datetime.now().strftime(fmt)
+
+        self._env.globals["now"] = _now  # type: ignore[index]
         return self._env
 
     def get_template(self, doc_type: DocType) -> Template:
@@ -123,7 +126,10 @@ class DocTemplates:
             Jinja2 template
         """
         env = Environment()
-        env.globals["now"] = lambda fmt="%Y-%m-%d": datetime.now().strftime(fmt)
+        def _now(fmt: str = "%Y-%m-%d") -> str:
+            return datetime.now().strftime(fmt)
+
+        env.globals["now"] = _now  # type: ignore[index]
 
         if doc_type == DocType.README:
             template_str = """# {{ project_name }}

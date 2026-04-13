@@ -172,7 +172,7 @@ def _install_pack(
         from vibesop.installer.analyzer import RepoAnalyzer
 
         analyzer = RepoAnalyzer()
-        pack_name = analyzer._infer_pack_name(name_or_url)
+        pack_name = analyzer.infer_pack_name(name_or_url)
         pack_url = name_or_url
     else:
         pack_name = name_or_url
@@ -225,7 +225,7 @@ def _install_pack(
             if not skip_verify:
                 console.print("[dim]Verifying installation...[/dim]")
                 discovered = loader.discover_from_pack(
-                    pack_name, loader._external_paths[0] / pack_name
+                    pack_name, loader.external_paths[0] / pack_name
                 )
                 if discovered:
                     console.print(

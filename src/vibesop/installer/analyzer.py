@@ -64,12 +64,12 @@ class RepoAnalyzer:
         Returns:
             RepoAnalysis with discovered information
         """
-        inferred_name = pack_name or self._infer_pack_name(url)
+        inferred_name = pack_name or self.infer_pack_name(url)
         result = RepoAnalysis(pack_name=inferred_name, source_url=url)
 
         with tempfile.TemporaryDirectory(prefix="vibe-install-") as tmpdir:
             tmpdir_path = Path(tmpdir)
-            clone_ok = self._git_clone(url, tmpdir_path)
+            clone_ok = self.git_clone(url, tmpdir_path)
             if not clone_ok:
                 result.errors.append(f"Failed to clone repository: {url}")
                 return result
@@ -100,7 +100,7 @@ class RepoAnalyzer:
 
         return result
 
-    def _git_clone(self, url: str, dest: Path) -> bool:
+    def git_clone(self, url: str, dest: Path) -> bool:
         """Shallow clone a Git repository."""
         try:
             # Support both git URLs and HTTPS URLs
@@ -124,7 +124,7 @@ class RepoAnalyzer:
             logger.debug(f"Git clone timed out for {url}")
             return False
 
-    def _infer_pack_name(self, url: str) -> str:
+    def infer_pack_name(self, url: str) -> str:
         """Infer pack name from URL."""
         # Remove trailing .git and trailing slash
         clean = url.rstrip("/").removesuffix(".git")

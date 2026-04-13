@@ -434,7 +434,7 @@ class SkillSecurityAuditor:
             # Strict mode: any threat is unsafe
             return risk_level == ThreatLevel.SAFE
 
-    def _risk_level_from_scan(self, scan_risk) -> ThreatLevel:
+    def _risk_level_from_scan(self, scan_risk: Any) -> ThreatLevel:
         """Convert scanner risk level to ThreatLevel.
 
         Args:

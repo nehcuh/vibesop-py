@@ -410,66 +410,6 @@ def _find_current_session() -> Path | None:
     return None
 
 
-def _auto_create_skills(suggestions: list[Any]) -> None:
-    """Auto-create skills from suggestions.
-
-    Args:
-        suggestions: List of skill suggestions
-    """
-    from pathlib import Path
-
-    created = 0
-    output_dir = Path(".vibe/skills")
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    for suggestion in suggestions:
-        if suggestion.estimated_value not in ("high", "medium"):
-            continue
-
-        # Generate skill content
-        skill_content = f"""# {suggestion.skill_name}
-
-{suggestion.description}
-
-## Intent
-
-{suggestion.description}
-
-## Trigger When
-
-{suggestion.trigger_pattern}
-
-## Steps
-
-1. Identify the user's need based on the trigger pattern
-2. Provide assistance based on the context
-
-## Examples
-
-### Example 1
-
-**User**: {suggestion.trigger_queries[0] if suggestion.trigger_queries else "help me"}
-
-**Action**: Provide assistance based on the query context
-
----
-
-*Created by VibeSOP Session Analysis*
-*Based on {suggestion.frequency} similar queries*
-"""
-
-        # Write skill file
-        safe_name = suggestion.skill_name.lower().replace(" ", "-").replace("/", "-")
-        skill_file = output_dir / f"{safe_name}.md"
-        skill_file.write_text(skill_content)
-
-        console.print(f"[green]✓ Created:[/green] {skill_file}")
-        created += 1
-
-    if created > 0:
-        console.print(f"\n[green]✓ Created {created} skills[/green]")
-
-
 def _display_suggestions(suggestions: list[Any]) -> None:
     """Display skill suggestions.
 

@@ -31,14 +31,14 @@ def parse_skill_md(skill_path: Path) -> SkillMetadata | None:
     skill_id = skill_file.parent.name if skill_path.is_file() else skill_path.name
     content = skill_file.read_text(encoding="utf-8")
 
-    frontmatter, _ = _extract_frontmatter(content)
+    frontmatter, _ = extract_frontmatter(content)
     if frontmatter is None:
         return None
 
-    return _build_metadata(frontmatter, skill_id, skill_file)
+    return build_metadata(frontmatter, skill_id, skill_file)
 
 
-def _extract_frontmatter(content: str) -> tuple[dict[str, Any] | None, str]:
+def extract_frontmatter(content: str) -> tuple[dict[str, Any] | None, str]:
     """Extract YAML frontmatter from markdown content.
 
     Returns:
@@ -65,7 +65,7 @@ def _extract_frontmatter(content: str) -> tuple[dict[str, Any] | None, str]:
         return None, content
 
 
-def _build_metadata(
+def build_metadata(
     data: dict[str, Any],
     skill_id: str,
     skill_file: Path,
@@ -88,13 +88,13 @@ def _build_metadata(
 
     trigger_when = data.get("trigger_when", "")
     if not trigger_when and description:
-        trigger_when = _extract_trigger_from_description(description)
+        trigger_when = extract_trigger_from_description(description)
 
     algorithms = data.get("algorithms") or []
     if isinstance(algorithms, str):
         algorithms = [a.strip() for a in algorithms.split(",") if a.strip()]
 
-    source = _infer_source(skill_file)
+    source = infer_source(skill_file)
 
     return SkillMetadata(
         id=data.get("id", skill_id),
@@ -111,7 +111,7 @@ def _build_metadata(
     )
 
 
-def _extract_trigger_from_description(description: str) -> str:
+def extract_trigger_from_description(description: str) -> str:
     """Extract trigger conditions from skill description."""
     if not description:
         return ""
@@ -131,7 +131,7 @@ def _extract_trigger_from_description(description: str) -> str:
     return ""
 
 
-def _infer_source(skill_path: Path) -> str:
+def infer_source(skill_path: Path) -> str:
     """Infer skill source from path."""
     path_str = str(skill_path)
     if ".claude/skills" in path_str or ".config/skills" in path_str:
@@ -141,12 +141,17 @@ def _infer_source(skill_path: Path) -> str:
     return "builtin"
 
 
-def _infer_skill_id(skill_path: Path) -> str:
+def infer_skill_id(skill_path: Path) -> str:
     """Infer skill ID from SKILL.md path."""
     return skill_path.parent.name if skill_path.is_file() else skill_path.name
 
 
 __all__ = [
     "SkillMetadata",
+    "build_metadata",
+    "extract_frontmatter",
+    "extract_trigger_from_description",
+    "infer_skill_id",
+    "infer_source",
     "parse_skill_md",
 ]

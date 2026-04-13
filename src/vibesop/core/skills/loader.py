@@ -309,14 +309,14 @@ class SkillLoader:
         except (OSError, UnicodeDecodeError):
             return
 
-        frontmatter, body = skill_parser._extract_frontmatter(content)
+        frontmatter, body = skill_parser.extract_frontmatter(content)
         if frontmatter is None:
             return
 
         try:
-            metadata = skill_parser._build_metadata(
+            metadata = skill_parser.build_metadata(
                 frontmatter,
-                skill_parser._infer_skill_id(file_path),
+                skill_parser.infer_skill_id(file_path),
                 file_path,
             )
 
@@ -350,7 +350,7 @@ class SkillLoader:
             if not isinstance(data, dict):
                 return
 
-            metadata = skill_parser._build_metadata(
+            metadata = skill_parser.build_metadata(
                 data,
                 self._generate_id_from_path(file_path),
                 file_path,
@@ -387,7 +387,7 @@ class SkillLoader:
     ) -> SkillMetadata:
         """Parse skill metadata from dictionary (delegates to unified parser)."""
         skill_id = data.get("id", self._generate_id_from_path(source_file))
-        return skill_parser._build_metadata(data, skill_id, source_file or Path())
+        return skill_parser.build_metadata(data, skill_id, source_file or Path())
 
     def _generate_id_from_path(self, path: Path | None) -> str:
         """Generate a skill ID from file path.
@@ -425,7 +425,7 @@ class SkillLoader:
 
     def _extract_trigger_from_description(self, description: str) -> str:
         """Extract trigger conditions from skill description (delegates to parser)."""
-        return skill_parser._extract_trigger_from_description(description)
+        return skill_parser.extract_trigger_from_description(description)
 
     def _metadata_keys(self) -> set[str]:
         """Get keys that are part of metadata.

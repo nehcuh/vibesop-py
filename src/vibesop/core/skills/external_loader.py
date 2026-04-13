@@ -117,7 +117,7 @@ class ExternalSkillLoader:
             strict_mode: Whether to use strict security mode
             project_root: Project root (for including project skills)
         """
-        self._external_paths = external_paths or self.EXTERNAL_PATHS.copy()
+        self.external_paths = external_paths or self.EXTERNAL_PATHS.copy()
         self._require_audit = require_audit
         self._strict_mode = strict_mode
 
@@ -128,7 +128,7 @@ class ExternalSkillLoader:
         )
 
         # Add external paths to auditor's allowed paths
-        for path in self._external_paths:
+        for path in self.external_paths:
             if path.exists():
                 self._auditor.add_allowed_path(path)
 
@@ -150,7 +150,7 @@ class ExternalSkillLoader:
         skills = {}
 
         # Discover from each external path
-        for search_path in self._external_paths:
+        for search_path in self.external_paths:
             if not search_path.exists():
                 continue
 
@@ -360,7 +360,7 @@ class ExternalSkillLoader:
         for pack_name, url in self.TRUSTED_PACKS.items():
             # Check if pack is installed
             pack_path = None
-            for search_path in self._external_paths:
+            for search_path in self.external_paths:
                 potential_path = search_path / pack_name
                 if potential_path.exists():
                     pack_path = potential_path
@@ -410,7 +410,7 @@ class ExternalSkillLoader:
             return False, f"No SKILL.md files found in {pack_name} repository"
 
         # Generate install plan
-        target_base = self._external_paths[0]
+        target_base = self.external_paths[0]
         planner = InstallPlanner(base_target=target_base)
         plan = planner.plan(analysis)
 
@@ -421,7 +421,7 @@ class ExternalSkillLoader:
 
             # For git-cloned repos, we need the actual repo root on disk.
             # Re-clone directly to target to avoid temp-dir lifetime issues.
-            clone_ok = analyzer._git_clone(pack_url, target_path)
+            clone_ok = analyzer.git_clone(pack_url, target_path)
             if not clone_ok:
                 return False, f"Failed to clone {pack_url} to {target_path}"
 

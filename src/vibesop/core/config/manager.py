@@ -97,10 +97,13 @@ class ConfigSource:
     def reload(self) -> None:
         """Reload configuration from file."""
         if self.path and self.path.exists():
-            self._load_from_file()
+            self.load_from_file()
 
-    def _load_from_file(self) -> None:
+    def load_from_file(self) -> None:
         """Load configuration from file."""
+        if self.path is None:
+            self.data = {}
+            return
         try:
             import yaml
 
@@ -270,7 +273,7 @@ class ConfigManager:
                 data={},
                 path=global_config_path,
             )
-            source._load_from_file()
+            source.load_from_file()
             self._sources[ConfigSourcePriority.GLOBAL] = source
 
         # 3. Project config (.vibe/config.yaml)
@@ -281,7 +284,7 @@ class ConfigManager:
                 data={},
                 path=project_config_path,
             )
-            source._load_from_file()
+            source.load_from_file()
             self._sources[ConfigSourcePriority.PROJECT] = source
 
         # 4. Legacy preferences (.vibe/preferences.json)
@@ -397,6 +400,19 @@ class ConfigManager:
         from vibesop.core.config.optimization_config import OptimizationConfig
 
         return OptimizationConfig(**self._get_section("optimization"))
+
+    def load_policy(self) -> dict[str, Any]:
+        """Load full policy configuration.
+
+        Returns:
+            Dictionary with security, routing, behavior, and custom sections
+        """
+        return {
+            "security": self._get_section("security"),
+            "routing": self._get_section("routing"),
+            "behavior": self._get_section("behavior"),
+            "custom": self._get_section("custom"),
+        }
 
     def _get_section(self, section: str) -> dict[str, Any]:
         """Get a complete configuration section merged from all sources.

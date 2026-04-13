@@ -15,6 +15,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 from vibesop.core.skills.loader import SkillLoader
 
@@ -41,7 +42,7 @@ class HealthStatus:
     has_errors: bool = False
     skills_count: int = 0
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """转换为字典."""
         return {
             "name": self.name,

@@ -49,7 +49,7 @@ PROFILES: dict[str, str] = {
 }
 
 
-def _execute_build(
+def execute_build(
     target: str,
     profile: str,
     output: Path | None,
@@ -211,7 +211,7 @@ def build(
         )
         raise typer.Exit(1)
 
-    _execute_build(
+    execute_build(
         target=target,
         profile=profile,
         output=output,
