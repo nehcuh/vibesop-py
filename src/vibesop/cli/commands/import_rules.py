@@ -114,8 +114,8 @@ def import_rules(
         output_dir = Path(".vibe/rules")
         output_file = output_dir / "imported-rules.md"
     else:
-        output_dir = Path(".vibe/core")
-        output_file = output_dir / "policies" / "imported.yaml"
+        output_dir = Path(".vibe/core/policies")
+        output_file = output_dir / "imported.yaml"
 
     output_dir.mkdir(parents=True, exist_ok=True)
 
