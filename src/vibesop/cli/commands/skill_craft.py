@@ -127,7 +127,7 @@ def _do_create(
         console.print("\n[dim]Skipping interactive mode - provide --name[/dim]")
         console.print("\n[dim]Example:[/dim]")
         console.print(
-            "  [cyan]vibe skill-craft create --name 'my-skill' --description 'My custom skill'[/dim]"
+            "  [cyan]vibe skill-craft create --name 'my-skill' --description 'My custom skill'[/cyan]"
         )
         raise typer.Exit(0)
 
