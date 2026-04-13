@@ -1,6 +1,5 @@
 """Tests for Anthropic LLM provider."""
 
-import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import anthropic

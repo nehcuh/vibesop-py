@@ -2,8 +2,6 @@
 
 from pathlib import Path
 
-import pytest
-
 from vibesop.core.exceptions import (
     CacheError,
     ConfigurationError,

@@ -61,8 +61,8 @@ class ResolutionStrategy(ABC):
     def resolve(
         self,
         matches: list[MatchResult],
-        query: str,
-        context: dict[str, Any] | None = None,
+        _query: str,
+        _context: dict[str, Any] | None = None,
     ) -> ConflictResolution | None:
         """Resolve conflicts among matched skills.
 
@@ -153,10 +153,10 @@ class NamespacePriorityStrategy(ResolutionStrategy):
     def resolve(
         self,
         matches: list[MatchResult],
-        query: str,
-        context: dict[str, Any] | None = None,
+        _query: str,
+        _context: dict[str, Any] | None = None,
     ) -> ConflictResolution | None:
-        _ = query, context  # Protocol requirement
+        _ = _query, _context  # Protocol requirement
         if len(matches) < 2:
             return None
 
@@ -241,8 +241,8 @@ class RecencyStrategy(ResolutionStrategy):
     def resolve(
         self,
         matches: list[MatchResult],
-        query: str,
-        context: dict[str, Any] | None = None,
+        _query: str,
+        _context: dict[str, Any] | None = None,
     ) -> ConflictResolution | None:
         if len(matches) < 2:
             return None
@@ -296,7 +296,7 @@ class ExplicitOverrideStrategy(ResolutionStrategy):
         self,
         matches: list[MatchResult],
         query: str,
-        context: dict[str, Any] | None = None,
+        _context: dict[str, Any] | None = None,
     ) -> ConflictResolution | None:
         import re
 
@@ -332,8 +332,8 @@ class FallbackStrategy(ResolutionStrategy):
     def resolve(
         self,
         matches: list[MatchResult],
-        query: str,
-        context: dict[str, Any] | None = None,
+        _query: str,
+        _context: dict[str, Any] | None = None,
     ) -> ConflictResolution | None:
         if not matches:
             return ConflictResolution(

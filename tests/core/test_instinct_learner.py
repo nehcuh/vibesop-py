@@ -2,7 +2,7 @@
 
 import tempfile
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -38,7 +38,7 @@ class TestInstinctLearnerMatchScore:
         learner._embedding_model = fake_model
 
         # Mock _compute_embedding_similarity to return high semantic score
-        monkeypatch.setattr(learner, "_compute_embedding_similarity", lambda p, t: 0.82)
+        monkeypatch.setattr(learner, "_compute_embedding_similarity", lambda _p, _t: 0.82)
 
         # Pattern with low lexical overlap but high semantic similarity
         score = learner._match_score("fix bug", "debug failure")

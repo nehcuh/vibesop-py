@@ -1,7 +1,5 @@
 """Tests for AI Triage prefiltering and structured parsing."""
 
-import pytest
-
 from vibesop.core.routing.unified import UnifiedRouter
 
 

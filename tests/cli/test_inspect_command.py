@@ -1,6 +1,5 @@
 """Tests for vibe inspect command."""
 
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from typer.testing import CliRunner
@@ -16,7 +15,7 @@ class TestInspectCommand:
     @patch("vibesop.cli.commands.inspect.VibeSOPInstaller")
     @patch("vibesop.cli.commands.inspect.ConfigManager")
     @patch("vibesop.cli.commands.inspect.InitSupport")
-    def test_inspect_full(self, mock_init_cls, mock_config_cls, mock_installer_cls, monkeypatch, tmp_path) -> None:
+    def test_inspect_full(self, _mock_init_cls, mock_config_cls, mock_installer_cls, monkeypatch, tmp_path) -> None:
         """Test full inspect output."""
         monkeypatch.chdir(tmp_path)
         mock_init = MagicMock()
@@ -25,7 +24,7 @@ class TestInspectCommand:
             "config_exists": True,
             "skills_dir_exists": True,
         }
-        mock_init_cls.return_value = mock_init
+        _mock_init_cls.return_value = mock_init
 
         mock_config = MagicMock()
         mock_config.load_registry.return_value = {
@@ -50,7 +49,7 @@ class TestInspectCommand:
 
     @patch("vibesop.cli.commands.inspect.ConfigManager")
     @patch("vibesop.cli.commands.inspect.InitSupport")
-    def test_inspect_skills_only(self, mock_init_cls, mock_config_cls, monkeypatch, tmp_path) -> None:
+    def test_inspect_skills_only(self, _mock_init_cls, mock_config_cls, monkeypatch, tmp_path) -> None:
         """Test inspect --skills."""
         monkeypatch.chdir(tmp_path)
         mock_config = MagicMock()
@@ -65,7 +64,7 @@ class TestInspectCommand:
 
     @patch("vibesop.cli.commands.inspect.ConfigManager")
     @patch("vibesop.cli.commands.inspect.InitSupport")
-    def test_inspect_config_only(self, mock_init_cls, mock_config_cls, monkeypatch, tmp_path) -> None:
+    def test_inspect_config_only(self, _mock_init_cls, mock_config_cls, monkeypatch, tmp_path) -> None:
         """Test inspect --config."""
         monkeypatch.chdir(tmp_path)
         mock_config = MagicMock()
@@ -78,7 +77,7 @@ class TestInspectCommand:
 
     @patch("vibesop.cli.commands.inspect.ConfigManager")
     @patch("vibesop.cli.commands.inspect.InitSupport")
-    def test_inspect_verbose(self, mock_init_cls, mock_config_cls, monkeypatch, tmp_path) -> None:
+    def test_inspect_verbose(self, _mock_init_cls, mock_config_cls, monkeypatch, tmp_path) -> None:
         """Test inspect --verbose."""
         monkeypatch.chdir(tmp_path)
         mock_config = MagicMock()
@@ -99,7 +98,7 @@ class TestInspectCommand:
 
     @patch("vibesop.cli.commands.inspect.ConfigManager")
     @patch("vibesop.cli.commands.inspect.InitSupport")
-    def test_inspect_config_error(self, mock_init_cls, mock_config_cls, monkeypatch, tmp_path) -> None:
+    def test_inspect_config_error(self, _mock_init_cls, mock_config_cls, monkeypatch, tmp_path) -> None:
         """Test inspect when config loading fails."""
         monkeypatch.chdir(tmp_path)
         mock_config = MagicMock()
@@ -112,7 +111,7 @@ class TestInspectCommand:
 
     @patch("vibesop.cli.commands.inspect.ConfigManager")
     @patch("vibesop.cli.commands.inspect.InitSupport")
-    def test_inspect_skills_error(self, mock_init_cls, mock_config_cls, monkeypatch, tmp_path) -> None:
+    def test_inspect_skills_error(self, _mock_init_cls, mock_config_cls, monkeypatch, tmp_path) -> None:
         """Test inspect when skills loading fails."""
         monkeypatch.chdir(tmp_path)
         mock_config = MagicMock()
@@ -126,12 +125,12 @@ class TestInspectCommand:
     @patch("vibesop.cli.commands.inspect.VibeSOPInstaller")
     @patch("vibesop.cli.commands.inspect.ConfigManager")
     @patch("vibesop.cli.commands.inspect.InitSupport")
-    def test_inspect_installer_error(self, mock_init_cls, mock_config_cls, mock_installer_cls, monkeypatch, tmp_path) -> None:
+    def test_inspect_installer_error(self, _mock_init_cls, mock_config_cls, mock_installer_cls, monkeypatch, tmp_path) -> None:
         """Test inspect when installer check fails."""
         monkeypatch.chdir(tmp_path)
         mock_init = MagicMock()
         mock_init.verify_init.return_value = {}
-        mock_init_cls.return_value = mock_init
+        _mock_init_cls.return_value = mock_init
 
         mock_config = MagicMock()
         mock_config.load_registry.return_value = {}

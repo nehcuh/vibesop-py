@@ -304,6 +304,6 @@ skills:
 
     def test_extract_trigger_empty_description(self, tmp_path: Path) -> None:  # noqa: ARG002
         """Test _extract_trigger_from_description with empty input."""
-        builder = ManifestBuilder(project_root=Path("."))
+        builder = ManifestBuilder(project_root=Path())
         assert builder._extract_trigger_from_description("") == ""
         assert builder._extract_trigger_from_description("No trigger here.") == ""

@@ -3,12 +3,9 @@
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-import pytest
-
-from vibesop.builder.doc_models import DocConfig, DocSection
+from vibesop.builder.doc_models import DocConfig
 from vibesop.builder.doc_renderer import DocRenderer
 from vibesop.builder.doc_templates import DocType
-from vibesop.builder.manifest import Manifest
 
 
 class TestDocRenderer:

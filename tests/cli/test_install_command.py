@@ -122,7 +122,7 @@ class TestInstallCommand:
         mock_loader.install_pack.assert_not_called()
 
     @patch("vibesop.cli.commands.install.ExternalSkillLoader")
-    def test_install_no_args(self, mock_loader_cls) -> None:
+    def test_install_no_args(self, _mock_loader_cls) -> None:
         result = runner.invoke(app, ["install"])
         assert result.exit_code == 1
         assert "No pack name or URL specified" in result.output

@@ -1,12 +1,10 @@
 """Tests for vibe init command."""
 
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from typer.testing import CliRunner
 
 from vibesop.cli.main import app
-from vibesop.integrations import IntegrationStatus
 from vibesop.integrations import IntegrationStatus
 
 runner = CliRunner()

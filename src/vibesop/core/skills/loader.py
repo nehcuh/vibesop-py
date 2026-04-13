@@ -6,9 +6,9 @@ and external skill packs (superpowers, gstack, etc.).
 """
 
 import logging
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from collections.abc import Sequence
 from typing import Any
 
 from ruamel.yaml import YAML

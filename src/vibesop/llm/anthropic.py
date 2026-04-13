@@ -99,7 +99,7 @@ class AnthropicProvider(LLMProvider):
                 messages=[{"role": "user", "content": prompt}],
             )
 
-            content = cast(str, response.content[0].text)  # type: ignore[reportAttributeAccessIssue]
+            content = cast("str", response.content[0].text)  # type: ignore[reportAttributeAccessIssue]
             input_tokens = response.usage.input_tokens
             output_tokens = response.usage.output_tokens
             tokens_used = input_tokens + output_tokens
@@ -163,7 +163,7 @@ class AnthropicProvider(LLMProvider):
                     messages=[{"role": "user", "content": prompt}],
                 )
 
-                content = cast(str, response.content[0].text)  # type: ignore[reportAttributeAccessIssue]
+                content = cast("str", response.content[0].text)  # type: ignore[reportAttributeAccessIssue]
                 input_tokens = response.usage.input_tokens
                 output_tokens = response.usage.output_tokens
                 tokens_used = input_tokens + output_tokens

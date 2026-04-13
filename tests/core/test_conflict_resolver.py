@@ -1,7 +1,5 @@
 """Tests for the production ConflictResolver framework."""
 
-import pytest
-
 from vibesop.core.matching import MatchResult, MatcherType
 from vibesop.core.routing.conflict import (
     ConfidenceGapStrategy,
@@ -9,7 +7,6 @@ from vibesop.core.routing.conflict import (
     ExplicitOverrideStrategy,
     FallbackStrategy,
     NamespacePriorityStrategy,
-    RecencyStrategy,
 )
 
 

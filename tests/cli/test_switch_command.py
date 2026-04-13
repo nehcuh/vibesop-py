@@ -26,6 +26,41 @@ class TestSwitchCommand:
         assert result.exit_code == 1
         assert "Invalid platform" in result.stdout
 
+    def test_get_configured_platform_success(self, tmp_path, monkeypatch) -> None:
+        """Test _get_configured_platform reads existing config."""
+        from vibesop.cli.commands import switch as switch_mod
+
+        monkeypatch.chdir(tmp_path)
+        config_path = tmp_path / ".vibe" / "config.yaml"
+        config_path.parent.mkdir(parents=True)
+        config_path.write_text("platform: opencode\n", encoding="utf-8")
+        result = switch_mod._get_configured_platform()
+        assert result == "opencode"
+
+    def test_get_configured_platform_missing_file(self, tmp_path, monkeypatch) -> None:
+        """Test _get_configured_platform returns None when file missing."""
+        from vibesop.cli.commands import switch as switch_mod
+
+        monkeypatch.chdir(tmp_path)
+        result = switch_mod._get_configured_platform()
+        assert result is None
+
+    def test_get_configured_platform_read_error(self, tmp_path, monkeypatch) -> None:
+        """Test _get_configured_platform handles read errors gracefully."""
+        from vibesop.cli.commands import switch as switch_mod
+
+        monkeypatch.chdir(tmp_path)
+        config_path = tmp_path / ".vibe" / "config.yaml"
+        config_path.parent.mkdir(parents=True)
+        config_path.write_text("platform: cursor\n", encoding="utf-8")
+
+        def raise_error(*args, **kwargs):
+            raise RuntimeError("boom")
+
+        monkeypatch.setattr("ruamel.yaml.main.YAML.load", raise_error)
+        result = switch_mod._get_configured_platform()
+        assert result is None
+
     def test_switch_no_platform_and_no_config(self, monkeypatch) -> None:
         """Test switch without platform and no config file."""
         monkeypatch.setattr(

@@ -35,12 +35,12 @@ from vibesop.core.matching import (
     IMatcher,
     KeywordMatcher,
     LevenshteinMatcher,
+    MatchResult,
     MatcherConfig,
     RoutingContext,
     TFIDFMatcher,
 )
 from vibesop.core.memory import MemoryManager
-from vibesop.core.matching import MatchResult
 from vibesop.core.models import RoutingLayer, RoutingResult, SkillRoute
 from vibesop.core.optimization import (
     CandidatePrefilter,
@@ -49,8 +49,8 @@ from vibesop.core.optimization import (
 )
 from vibesop.core.routing.cache import CacheManager
 from vibesop.core.routing.conflict import (
-    ConflictResolver,
     ConfidenceGapStrategy,
+    ConflictResolver,
     ExplicitOverrideStrategy,
     FallbackStrategy,
     NamespacePriorityStrategy,
@@ -463,7 +463,7 @@ class UnifiedRouter:
             try:
                 data = json.loads(cleaned)
                 if isinstance(data, dict):
-                    data = cast(dict[str, Any], data)
+                    data = cast("dict[str, Any]", data)
                     result["skill_id"] = data.get("skill_id") if isinstance(data.get("skill_id"), str) else None
                     result["confidence"] = data.get("confidence")
                     result["structured"] = True
