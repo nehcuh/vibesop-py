@@ -62,7 +62,7 @@ def register(app: typer.Typer) -> None:
     app.add_typer(config_app, name="config")
     app.add_typer(skills_app, name="skills")
 
-    config_app.command()(config_mod.config)
+    config_app.callback(invoke_without_command=True)(config_mod.config)
 
     # Core commands
     app.command()(init_mod.init)
