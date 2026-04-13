@@ -1,7 +1,7 @@
 # Session Memory - VibeSOP 系统化代码加固
 
 **会话日期**: 2026-04-12
-**会话状态**: 进行中
+**会话状态**: 已完成
 **项目路径**: /Users/huchen/Projects/vibesop-py
 **分支**: `feature/systematic-optimization-refactor`
 
@@ -27,10 +27,23 @@
 - `tests/llm/test_llm_factory.py` — 12 例测试
 - 修复 `anthropic.py` 中 APIError 二次构造的 TypeError 生产 bug
 
-### 4. 类型清理 ✅
-- `scenario_config.py` / `scenario_layer.py` / `project_config.py` — 消除 `ruamel.yaml` 无 stub 导致的 basedpyright 警告
-- `unified.py` — 修复 `json possibly unbound` 错误
-- `llm/anthropic.py` — 修复 `reportAttributeAccessIssue` 与 `reportUnknownArgumentType`
+### 4. CLI 覆盖盲区补齐 ✅
+- `tests/cli/test_algorithms_command.py` — `vibe algorithms` 命令测试
+- `tests/cli/test_quickstart_command.py` — `vibe quickstart` mock 测试
+- `tests/cli/test_import_rules_command.py` — `vibe import-rules` 含 bug 修复验证
+- `tests/cli/test_switch_command.py` — `vibe switch` build/deploy mock 测试
+- 修复 `import_rules.py` 中 `behavior-policies` 目标路径的 `FileNotFoundError`
+
+### 5. Coverage 阈值升级 ✅
+- `pyproject.toml`: `fail_under = 55` → `fail_under = 75`
+- 当前总覆盖率稳定在 **75%+
+
+### 6. InstinctLearner 语义化升级 ✅
+- `InstinctLearner._match_score()` 从纯 Jaccard 词匹配升级为 **lexical + embedding 混合语义匹配**
+- 使用 `paraphrase-multilingual-MiniLM-L12-v2` 模型（与 `EmbeddingMatcher` 一致），支持中英文语义理解
+- **Embedding 缓存机制**：pattern/query 级 embedding cache，在 `learn()` / `_load()` 后自动失效
+- **Graceful Fallback**：当 `sentence-transformers` 或 `numpy` 未安装时，自动回退到原有 Jaccard + containment + bigram 混合逻辑
+- 新增 `tests/core/test_instinct_learner.py` — 13 例测试覆盖 embedding 路径、fallback 路径、缓存失效
 
 ---
 
@@ -38,8 +51,8 @@
 
 ```bash
 $ .venv/bin/python -m pytest tests/ -q
-1081 passed, 1 skipped in ~31s
-Coverage: 74.16% (threshold 55.0%)
+1113 passed, 1 skipped in ~32s
+Coverage: 75.34% (threshold 75.0%)
 ```
 
 **关键模块覆盖率**:
@@ -48,6 +61,7 @@ Coverage: 74.16% (threshold 55.0%)
 - `llm/openai.py`: **82.35%** ✅
 - `core/routing/conflict.py`: 已集成并测试 ✅
 - `core/routing/unified.py`: 0 basedpyright errors ✅
+- `core/instinct/learner.py`: 语义化升级 + 13 例新测试 ✅
 
 ---
 
@@ -61,25 +75,18 @@ Coverage: 74.16% (threshold 55.0%)
 - ✅ AI Triage 防御式解析
 - ✅ Installer 测试覆盖补齐
 - ✅ LLM Provider 测试覆盖补齐
-- ✅ Routing/Matching/LLM basedpyright 清零
+- ✅ CLI 覆盖盲区补齐 + bug 修复
+- ✅ Coverage 阈值锁定 75%
+- ✅ InstinctLearner 语义化升级
+- ✅ Routing/Matching/LLM/Instinct basedpyright 清零
 
-### 剩余活跃问题
-1. **CLI 覆盖盲区** — `switch.py` / `quickstart.py` / `import_rules.py` / `algorithms.py` 仍 < 35%
-2. **Coverage 阈值** — 需从 55% 上调至 75%+ 以匹配 "Production-First" 原则
-3. **学习系统深度** — `InstinctLearner` 仍使用 Jaccard 词匹配而非语义 embedding（战略性债务）
+### 剩余可优化方向
+1. **更高覆盖率模块**
+   - `builder/*`, `hooks/*`, `constants.py` 等模块仍有提升空间
+   - 目标：总覆盖率 80%+
 
----
+2. **Adapters 测试**
+   - `adapters/claude_code.py`, `adapters/opencode.py` 以集成测试为主
 
-## 下次会话建议
-
-1. **CLI 命令测试冲刺**
-   - 使用 Typer/Rich 的 runner 模式做集成测试
-   - 目标：CLI 盲区模块覆盖率 ≥ 60%
-
-2. **Coverage 阈值升级**
-   - `pyproject.toml` fail-under 从 55% 调至 75%
-   - 针对剩余低覆盖模块（builder, hooks, constants）补测试
-
-3. **InstinctLearner 语义化**
-   - 接入 sentence-transformers 做 embedding 匹配
-   - 保持 Jaccard fallback 用于无 embedding 依赖环境
+3. **Integration / E2E**
+   - 完整的 `vibe route` → `vibe build` → `vibe switch` 端到端链路验证
