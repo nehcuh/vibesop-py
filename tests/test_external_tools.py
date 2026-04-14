@@ -1,8 +1,6 @@
 """Tests for external tools detection system."""
 
-import pytest
-from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 from vibesop.utils import (
     ExternalToolsDetector,
@@ -141,13 +139,13 @@ class TestExternalToolsDetector:
         detector = ExternalToolsDetector()
 
         # Test with packaging library if available
-        try:
-            from packaging import version as pkg_version
+        from importlib.util import find_spec
 
+        if find_spec("packaging") is not None:
             assert detector._check_version("2.0.0", "1.0.0") is True
             assert detector._check_version("1.0.0", "2.0.0") is False
             assert detector._check_version("1.5.0", "1.5.0") is True
-        except ImportError:
+        else:
             # Fallback to string comparison
             assert detector._check_version("2.0.0", "1.0.0") is True
             assert detector._check_version("1.0.0", "2.0.0") is False

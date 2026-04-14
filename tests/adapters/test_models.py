@@ -1,8 +1,9 @@
 """Tests for adapter data models."""
 
-import pytest
 from datetime import datetime
 from pathlib import Path
+
+import pytest
 from pydantic import ValidationError
 
 from vibesop.adapters.models import (

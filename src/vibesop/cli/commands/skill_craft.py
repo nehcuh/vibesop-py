@@ -34,77 +34,6 @@ from rich.panel import Panel
 console = Console()
 
 
-def _show_experimental_warning() -> None:
-    """Show experimental feature warning."""
-    console.print(
-        "[yellow]⚠️  Experimental Feature[/yellow]\n"
-        "[dim]This command is experimental and may change in future versions.[/dim]\n"
-    )
-
-
-def skill_craft(
-    action: str = typer.Argument(..., help="Action: create, from, templates"),
-    source: Path | None = typer.Argument(  # noqa: B008
-        None,
-        help="Source session file",
-        exists=True,
-    ),
-    name: str | None = typer.Option(
-        None,
-        "--name",
-        "-n",
-        help="Skill name",
-    ),
-    description: str | None = typer.Option(
-        None,
-        "--description",
-        "-d",
-        help="Skill description",
-    ),
-    _verbose: bool = typer.Option(
-        False,
-        "--verbose",
-        "-v",
-        help="Verbose output",
-    ),
-) -> None:
-    """Create skills from session history (experimental).
-
-    .. warning::
-        This is an experimental feature. The interface may change.
-
-    This command analyzes conversation history and creates
-    reusable skill definitions that can be used by the router.
-
-    \b
-    Examples:
-        # Create skill from current session
-        vibe skill-craft create
-
-        # Create skill from specific session file
-        vibe skill-craft from session.jsonl
-
-        # List available templates
-        vibe skill-craft templates
-
-        # Create with custom name
-        vibe skill-craft create --name "my-custom-skill"
-    """
-    # Show experimental warning
-    _show_experimental_warning()
-
-
-import json
-from pathlib import Path
-from typing import Any
-
-import typer
-from rich.console import Console
-from rich.panel import Panel
-
-console = Console()
-
-
 def skill_craft(
     action: str = typer.Argument(..., help="Action: create, from, templates"),
     source: Path | None = typer.Argument(  # noqa: B008
@@ -198,7 +127,7 @@ def _do_create(
         console.print("\n[dim]Skipping interactive mode - provide --name[/dim]")
         console.print("\n[dim]Example:[/dim]")
         console.print(
-            "  [cyan]vibe skill-craft create --name 'my-skill' --description 'My custom skill'[/dim]"
+            "  [cyan]vibe skill-craft create --name 'my-skill' --description 'My custom skill'[/cyan]"
         )
         raise typer.Exit(0)
 

@@ -8,6 +8,9 @@ from __future__ import annotations
 import typer
 
 from vibesop.cli.commands import (
+    algorithms as algorithms_mod,
+)
+from vibesop.cli.commands import (
     analyze as analyze_mod,
 )
 from vibesop.cli.commands import (
@@ -59,7 +62,7 @@ def register(app: typer.Typer) -> None:
     app.add_typer(config_app, name="config")
     app.add_typer(skills_app, name="skills")
 
-    config_app.command()(config_mod.config)
+    config_app.callback(invoke_without_command=True)(config_mod.config)
 
     # Core commands
     app.command()(init_mod.init)
@@ -69,11 +72,14 @@ def register(app: typer.Typer) -> None:
     app.command()(targets_mod.targets)
     app.command()(install_mod.install)
 
+    # Algorithm library
+    app.command("algorithms")(algorithms_mod.algorithms_list)
+
     # Unified analyze command
     app.command()(analyze_mod.analyze)
 
     # Skills management subcommands
-    skills_app.command()(skills_mod.list)
+    skills_app.command("list")(skills_mod.list_skills)
     skills_app.command("available")(skills_mod.available)
     skills_app.command("info")(skills_mod.info)
     skills_app.command("install")(skills_mod.install)

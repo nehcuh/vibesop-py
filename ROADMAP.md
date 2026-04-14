@@ -14,7 +14,7 @@
 - [x] Unified skill management (builtin + external + custom)
 - [x] Security auditing for external skills
 - [x] Preference learning system
-- [x] CLI with route/execute/install/skills commands
+- [x] CLI with route/install/skills commands
 - [x] Performance optimization (candidate caching, <50ms P95)
 - [x] Architecture cleanup (65% code reduction)
 - [x] Documentation overhaul
@@ -24,7 +24,7 @@
 | Metric | Current | Target |
 |--------|---------|--------|
 | Code Lines | ~13,000 | ~13,000 ✅ |
-| Test Coverage | 65.8% | >60% ✅ |
+| Test Coverage | ~80% | >75% ✅ |
 | Routing P95 | ~45ms | <50ms ✅ |
 | Skills Supported | 44+ | 40+ ✅ |
 
@@ -33,7 +33,7 @@
 ## v4.1.0 — AI Triage Production (Q2 2026)
 
 ### Goals
-Make AI Triage (Layer 0) production-ready with real LLM integration.
+Make AI Triage (Layer 2) production-ready with real LLM integration.
 
 ### Features
 

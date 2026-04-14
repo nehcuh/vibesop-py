@@ -238,7 +238,7 @@ class Manifest(BaseModel):
 
     @field_validator("overlay")
     @classmethod
-    def validate_overlay(cls, v: dict[str, Any] | None) -> dict[str, Any] | None:
+    def validate_overlay(cls, v: Any) -> dict[str, Any] | None:
         """Validate overlay structure.
 
         Args:

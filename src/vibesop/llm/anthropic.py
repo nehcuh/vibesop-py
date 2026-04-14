@@ -4,6 +4,7 @@ Supports Claude 3.5 Haiku, Sonnet, and Opus models.
 """
 
 import os
+from typing import cast
 
 import anthropic
 from anthropic import Anthropic, AsyncAnthropic
@@ -98,8 +99,10 @@ class AnthropicProvider(LLMProvider):
                 messages=[{"role": "user", "content": prompt}],
             )
 
-            content = response.content[0].text
-            tokens_used = response.usage.input_tokens + response.usage.output_tokens
+            content = cast("str", response.content[0].text)  # type: ignore[reportAttributeAccessIssue]
+            input_tokens = response.usage.input_tokens
+            output_tokens = response.usage.output_tokens
+            tokens_used = input_tokens + output_tokens
 
             self._record_call(tokens_used)
 
@@ -108,11 +111,12 @@ class AnthropicProvider(LLMProvider):
                 model=model,
                 provider=self.provider_name,
                 tokens_used=tokens_used,
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
             )
 
-        except anthropic.APIError as e:
-            msg = f"Anthropic API error: {e}"
-            raise anthropic.APIError(msg) from e
+        except anthropic.APIError:
+            raise
 
     def _is_configured(self) -> bool:
         """Check if Anthropic API key is valid.
@@ -159,8 +163,10 @@ class AnthropicProvider(LLMProvider):
                     messages=[{"role": "user", "content": prompt}],
                 )
 
-                content = response.content[0].text  # type: ignore[reportUnknownVariableType]
-                tokens_used = response.usage.input_tokens + response.usage.output_tokens
+                content = cast("str", response.content[0].text)  # type: ignore[reportAttributeAccessIssue]
+                input_tokens = response.usage.input_tokens
+                output_tokens = response.usage.output_tokens
+                tokens_used = input_tokens + output_tokens
 
                 self._record_call(tokens_used)
 
@@ -169,8 +175,9 @@ class AnthropicProvider(LLMProvider):
                     model=model,
                     provider=self.provider_name,
                     tokens_used=tokens_used,
+                    input_tokens=input_tokens,
+                    output_tokens=output_tokens,
                 )
 
-        except anthropic.APIError as e:
-            msg = f"Anthropic API error: {e}"
-            raise anthropic.APIError(msg) from e  # type: ignore[reportUnknownArgumentType]
+        except anthropic.APIError:
+            raise

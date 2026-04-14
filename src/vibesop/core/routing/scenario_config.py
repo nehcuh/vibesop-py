@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from ruamel.yaml import YAML
 
@@ -66,18 +66,20 @@ def load_scenarios(project_root: str | Path = ".") -> list[dict[str, Any]]:
 
     try:
         with config_path.open("r", encoding="utf-8") as f:
-            data = yaml.load(f)
+            data = cast("Any", yaml.load(f))  # type: ignore[reportUnknownMemberType]
 
         if not isinstance(data, dict):
             return DEFAULT_SCENARIOS
 
+        data = cast("dict[str, Any]", data)
         patterns = data.get("scenario_patterns", [])
-        scenarios = []
+        scenarios: list[dict[str, Any]] = []
 
         for pattern in patterns:
             if not isinstance(pattern, dict):
                 continue
 
+            pattern = cast("dict[str, Any]", pattern)
             scenario = {
                 "id": pattern.get("id", "unknown"),
                 "name": pattern.get("name", pattern.get("id", "unknown")),
@@ -118,12 +120,13 @@ def get_routing_hints(project_root: str | Path = ".") -> list[dict[str, Any]]:
 
     try:
         with config_path.open("r", encoding="utf-8") as f:
-            data = yaml.load(f)
+            data = cast("Any", yaml.load(f))  # type: ignore[reportUnknownMemberType]
 
         if not isinstance(data, dict):
             return []
 
-        return data.get("routing_hints", [])
+        data = cast("dict[str, Any]", data)
+        return list(data.get("routing_hints", []))
 
     except (OSError, Exception) as e:
         logger.debug(f"Failed to load routing hints from {config_path}: {e}")

@@ -17,9 +17,10 @@ import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any
+from typing import TYPE_CHECKING, Any, ClassVar
 
-from vibesop.core.matching import MatchResult
+if TYPE_CHECKING:
+    from vibesop.core.matching import MatchResult
 
 logger = logging.getLogger(__name__)
 
@@ -60,8 +61,8 @@ class ResolutionStrategy(ABC):
     def resolve(
         self,
         matches: list[MatchResult],
-        query: str,
-        context: dict[str, Any] | None = None,
+        _query: str,
+        _context: dict[str, Any] | None = None,
     ) -> ConflictResolution | None:
         """Resolve conflicts among matched skills.
 
@@ -104,6 +105,7 @@ class ConfidenceGapStrategy(ResolutionStrategy):
         query: str,
         context: dict[str, Any] | None = None,
     ) -> ConflictResolution | None:
+        _ = query, context  # Protocol requirement
         if len(matches) < 2:
             return None
 
@@ -130,15 +132,14 @@ class ConfidenceGapStrategy(ResolutionStrategy):
 class NamespacePriorityStrategy(ResolutionStrategy):
     """Resolve conflicts by preferring certain namespaces.
 
-    Built-in skills are preferred over external ones.
+    Project skills > external skills > built-in fallback.
+    Any unknown namespace is treated as external (priority 80).
     """
 
     # Default namespace priorities
-    DEFAULT_PRIORITIES: dict[str, int] = {
-        "builtin": 100,
-        "superpowers": 80,
-        "gstack": 70,
-        "omx": 60,
+    DEFAULT_PRIORITIES: ClassVar[dict[str, int]] = {
+        "project": 100,
+        "builtin": 60,
     }
 
     def __init__(self, priorities: dict[str, int] | None = None):
@@ -152,26 +153,27 @@ class NamespacePriorityStrategy(ResolutionStrategy):
     def resolve(
         self,
         matches: list[MatchResult],
-        query: str,
-        context: dict[str, Any] | None = None,
+        _query: str,
+        _context: dict[str, Any] | None = None,
     ) -> ConflictResolution | None:
+        _ = _query, _context  # Protocol requirement
         if len(matches) < 2:
             return None
 
         # Group by namespace
         by_namespace: dict[str, list[MatchResult]] = {}
         for match in matches:
-            namespace = match.metadata.get("namespace", "other")
+            namespace = str(match.metadata.get("namespace", "other"))
             if namespace not in by_namespace:
                 by_namespace[namespace] = []
             by_namespace[namespace].append(match)
 
-        # Find highest priority namespace
-        top_namespace = max(by_namespace.keys(), key=lambda ns: self.priorities.get(ns, 50))
+        # Find highest priority namespace (unknown namespaces default to external: 80)
+        top_namespace = max(by_namespace.keys(), key=lambda ns: self.priorities.get(ns, 80))
 
         # If there's a clear priority winner, use it
-        top_priority = self.priorities.get(top_namespace, 50)
-        other_priorities = [self.priorities.get(ns, 50) for ns in by_namespace if ns != top_namespace]
+        top_priority = self.priorities.get(top_namespace, 80)
+        other_priorities = [self.priorities.get(ns, 80) for ns in by_namespace if ns != top_namespace]
 
         if top_priority > max(other_priorities, default=0) + 10:
             top_matches = by_namespace[top_namespace]
@@ -239,8 +241,8 @@ class RecencyStrategy(ResolutionStrategy):
     def resolve(
         self,
         matches: list[MatchResult],
-        query: str,
-        context: dict[str, Any] | None = None,
+        _query: str,
+        _context: dict[str, Any] | None = None,
     ) -> ConflictResolution | None:
         if len(matches) < 2:
             return None
@@ -284,7 +286,7 @@ class ExplicitOverrideStrategy(ResolutionStrategy):
     Patterns like "/review" or "use tdd" indicate explicit choice.
     """
 
-    OVERRIDE_PATTERNS = [
+    OVERRIDE_PATTERNS: ClassVar[list[tuple[str, str]]] = [
         (r"^/(\w+(?:/\w+)*)$", "slash"),  # /review, /gstack/review
         (r"^(?:use|using|调用)\s+(\w+(?:/\w+)*)", "use"),  # use tdd
         (r"^(?:run|execute)\s+(\w+(?:/\w+)*)", "run"),  # run review
@@ -294,7 +296,7 @@ class ExplicitOverrideStrategy(ResolutionStrategy):
         self,
         matches: list[MatchResult],
         query: str,
-        context: dict[str, Any] | None = None,
+        _context: dict[str, Any] | None = None,
     ) -> ConflictResolution | None:
         import re
 
@@ -330,8 +332,8 @@ class FallbackStrategy(ResolutionStrategy):
     def resolve(
         self,
         matches: list[MatchResult],
-        query: str,
-        context: dict[str, Any] | None = None,
+        _query: str,
+        _context: dict[str, Any] | None = None,
     ) -> ConflictResolution | None:
         if not matches:
             return ConflictResolution(
@@ -431,13 +433,13 @@ class ConflictResolver:
 
 
 __all__ = [
+    "ConfidenceGapStrategy",
     "ConflictReason",
     "ConflictResolution",
     "ConflictResolver",
-    "ResolutionStrategy",
-    "ConfidenceGapStrategy",
-    "NamespacePriorityStrategy",
-    "RecencyStrategy",
     "ExplicitOverrideStrategy",
     "FallbackStrategy",
+    "NamespacePriorityStrategy",
+    "RecencyStrategy",
+    "ResolutionStrategy",
 ]

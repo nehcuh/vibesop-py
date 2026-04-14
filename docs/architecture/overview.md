@@ -101,9 +101,9 @@ User Query
 │   UnifiedRouter     │
 ├─────────────────────┤
 │ 1. Load Candidates  │ ← Cached after first call
-│ 2. Try Layer 0      │ ← AI Triage (optional)
-│ 3. Try Layer 1      │ ← Explicit override
-│ 4. Try Layer 2      │ ← Scenario patterns
+│ 2. Try Layer 0      │ ← Explicit override
+│ 3. Try Layer 1      │ ← Scenario patterns
+│ 4. Try Layer 2      │ ← AI Triage (optional)
 │ 5. Try Layer 3      │ ← Keyword/TF-IDF
 │ 6. Try Layer 4      │ ← Fuzzy fallback
 │ 7. Apply Boost      │ ← Preference learning

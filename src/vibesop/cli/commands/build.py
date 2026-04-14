@@ -49,7 +49,7 @@ PROFILES: dict[str, str] = {
 }
 
 
-def _execute_build(
+def execute_build(
     target: str,
     profile: str,
     output: Path | None,
@@ -120,8 +120,8 @@ def _execute_build(
         # Suggest deployment based on output location
         if str(output_dir) == str(Path.home() / ".claude"):
             console.print(
-                f"\n[dim]✓ Deployed to Claude Code config directory[/dim]\n"
-                f"[dim]Restart Claude Code to apply changes.[/dim]\n"
+                "\n[dim]✓ Deployed to Claude Code config directory[/dim]\n"
+                "[dim]Restart Claude Code to apply changes.[/dim]\n"
             )
         else:
             console.print(
@@ -211,7 +211,7 @@ def build(
         )
         raise typer.Exit(1)
 
-    _execute_build(
+    execute_build(
         target=target,
         profile=profile,
         output=output,

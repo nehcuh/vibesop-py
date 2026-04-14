@@ -42,7 +42,7 @@ class CheckpointManager:
             max_checkpoints: Maximum checkpoints to keep
             max_age_days: Maximum age in days before auto-cleanup
         """
-        self._storage = CheckpointStorage(storage_dir)
+        self._storage: CheckpointStorage = CheckpointStorage(storage_dir)
         self._max_checkpoints = max_checkpoints
         self._max_age_days = max_age_days
 
@@ -192,7 +192,7 @@ class CheckpointManager:
 
         # Filter by tag
         if tag:
-            all_checkpoints = [cp for cp in all_checkpoints if tag in cp.tags]
+            all_checkpoints = [cp for cp in all_checkpoints if tag in (cp.tags or [])]
 
         return all_checkpoints[:limit]
 
@@ -329,7 +329,7 @@ class CheckpointManager:
             True if file was added
         """
         checkpoint = self._storage.load(checkpoint_id)
-        if not checkpoint:
+        if checkpoint is None:
             return False
 
         full_path = Path(working_dir) / file_path
@@ -339,7 +339,7 @@ class CheckpointManager:
         try:
             content = full_path.read_text(encoding="utf-8")
             content_hash = self._storage.save_file(checkpoint_id, file_path, content)
-            checkpoint.files[file_path] = content_hash
+            checkpoint.files[file_path] = content_hash  # type: ignore[reportOptionalSubscript]
             self._storage.save(checkpoint)
             return True
         except (OSError, UnicodeDecodeError):

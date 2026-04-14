@@ -178,7 +178,8 @@ version: 1.0.0
 
 **Usage**:
 ```bash
-vibe skills health
+# 🚧 v4.2.0 计划实现
+# vibe skills health
 # Output:
 # superpowers ✅ v1.2.0 (7 skills)
 # gstack ✅ v2.0.1 (19 skills)

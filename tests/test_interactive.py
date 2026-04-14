@@ -1,14 +1,10 @@
 """Tests for CLI interactive utilities."""
 
-import pytest
-from io import StringIO
-from unittest.mock import patch, mock_open
-
 from vibesop.cli import (
+    InteractionMode,
+    ProgressBar,
     ProgressTracker,
     UserInteractor,
-    ProgressBar,
-    InteractionMode,
 )
 
 

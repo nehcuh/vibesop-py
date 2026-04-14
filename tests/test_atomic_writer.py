@@ -1,15 +1,16 @@
 """Tests for atomic file writer."""
 
-import pytest
 import tempfile
 from pathlib import Path
 
+import pytest
+
 from vibesop.utils.atomic_writer import (
-    AtomicWriter,
     AtomicWriteError,
-    write_text,
-    write_bytes,
+    AtomicWriter,
     atomic_open,
+    write_bytes,
+    write_text,
 )
 
 
@@ -33,7 +34,7 @@ class TestAtomicWriter:
             writer = AtomicWriter()
             path = Path(tmpdir) / "test_utf8.txt"
 
-            content = "你好，世界！"
+            content = "你好, 世界!"
             writer.write_text(path, content, encoding="utf-8")
 
             assert path.read_text(encoding="utf-8") == content
@@ -124,12 +125,11 @@ class TestAtomicWriter:
             path.write_text("existing")
 
             # Try to overwrite with invalid unicode that will cause error
-            with pytest.raises(AtomicWriteError):
+            with pytest.raises(AtomicWriteError), writer.atomic_open(path, "w", encoding="utf-8") as f:
                 # Using atomic_open with invalid content
-                with writer.atomic_open(path, "w", encoding="utf-8") as f:
-                    f.write("valid")
-                    # Force an error
-                    raise ValueError("Simulated error")
+                f.write("valid")
+                # Force an error
+                raise ValueError("Simulated error")
 
             # Original content should be preserved
             assert path.read_text() == "existing"

@@ -12,6 +12,7 @@ class SkillClusterIndex:
     def __init__(self):
         self._clusters: dict[str, list[str]] = {}
         self._skill_to_cluster: dict[str, str] = {}
+        self._cluster_intents: dict[str, list[str]] = {}
         self._built = False
 
     def build(self, skills: list[dict[str, Any]]) -> dict[str, list[str]]:

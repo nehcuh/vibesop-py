@@ -1,14 +1,11 @@
 """Tests for marker file management system."""
 
-import pytest
-import json
 import tempfile
 from pathlib import Path
-from datetime import datetime
 
 from vibesop.utils import (
-    MarkerFileManager,
     MarkerData,
+    MarkerFileManager,
     MarkerType,
 )
 

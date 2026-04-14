@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from ruamel.yaml import YAML
 
@@ -32,11 +32,12 @@ def load_scenarios(registry_path: str | Path = "core/registry.yaml") -> list[dic
 
     try:
         with registry_path.open("r") as f:
-            data = YAML().load(f)
+            data = cast("Any", YAML().load(f))  # type: ignore[reportUnknownMemberType]
 
         if not data:
             return []
 
+        data = cast("dict[str, Any]", data)
         cr = data.get("conflict_resolution", {})
         if not cr.get("enabled", False):
             return []

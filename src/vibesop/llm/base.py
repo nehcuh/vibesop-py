@@ -15,13 +15,17 @@ class LLMResponse:
         content: Response text content
         model: Model used for generation
         provider: Provider name
-        tokens_used: Number of tokens used (if available)
+        tokens_used: Total number of tokens used (if available)
+        input_tokens: Number of input/prompt tokens (if available)
+        output_tokens: Number of output/completion tokens (if available)
     """
 
     content: str
     model: str
     provider: str
     tokens_used: int | None = None
+    input_tokens: int | None = None
+    output_tokens: int | None = None
 
 
 @dataclass

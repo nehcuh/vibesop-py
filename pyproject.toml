@@ -152,11 +152,13 @@ reportMissingParameterType = "error"
 reportMissingReturnType = "error"
 reportMissingTypeArgument = "error"
 
-# Unknown types
-reportUnknownMemberType = "error"
-reportUnknownVariableType = "error"
-reportUnknownArgumentType = "error"
-reportUnknownParameterType = "error"
+# Unknown types — warning instead of error because third-party libs
+# (numpy, sklearn, ruamel.yaml) lack stubs and produce noise in strict mode.
+reportUnknownMemberType = "warning"
+reportUnknownVariableType = "warning"
+reportUnknownArgumentType = "warning"
+reportUnknownParameterType = "warning"
+reportUnknownLambdaType = "warning"
 
 # Unused code
 reportUnusedImport = "error"
@@ -213,7 +215,7 @@ omit = [
 ]
 
 [tool.coverage.report]
-fail_under = 55
+fail_under = 75
 precision = 2
 show_missing = true
 skip_covered = false

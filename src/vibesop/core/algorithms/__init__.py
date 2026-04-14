@@ -1,50 +1,26 @@
-"""Reusable algorithm library for skill support.
+"""Reusable algorithm library for VibeSOP skills.
 
-This package provides pure algorithm implementations that can be used
-by any skill, not limited to omx skills.
-
-**@experimental**: This is a new feature (v4.0). The API may change.
-
-**Documentation**: See docs/algorithms-guide.md for complete usage guide
-and integration examples.
-
-Quick Start:
-    from vibesop.core.algorithms import compute_ambiguity
-
-    result = compute_ambiguity(
-        DimensionScore(score=0.8),
-        DimensionScore(score=0.5),
-        DimensionScore(score=0.6),
-        DimensionScore(score=0.4),
-        DimensionScore(score=0.7),
-    )
-    print(f"Ambiguity: {result.ambiguity:.2f}")
-
-Available Algorithms:
-    • compute_ambiguity() - Multi-dimensional ambiguity scoring
-    • scan_file() / scan_files() - AI slop detection in code
-
-Status: Infrastructure awaiting skill integration. Contributions welcome!
+Algorithms declared in a skill's frontmatter can be resolved via AlgorithmRegistry.
 """
 
-from vibesop.core.algorithms.interview.ambiguity import (
-    AmbiguityResult,
-    DimensionScore,
+from vibesop.core.algorithms.interview.ambiguity import compute_ambiguity
+from vibesop.core.algorithms.ralph.deslop import scan_file, scan_files
+from vibesop.core.algorithms.registry import AlgorithmRegistry
+
+AlgorithmRegistry.register(
+    "interview/compute_ambiguity",
     compute_ambiguity,
+    description="Mathematical ambiguity scoring for requirements clarification",
 )
-from vibesop.core.algorithms.ralph.deslop import (
-    SlopPattern,
-    SlopReport,
+AlgorithmRegistry.register(
+    "ralph/scan_file",
     scan_file,
+    description="AI slop detection for a single file",
+)
+AlgorithmRegistry.register(
+    "ralph/scan_files",
     scan_files,
+    description="Batch AI slop detection across multiple files",
 )
 
-__all__ = [
-    "AmbiguityResult",
-    "DimensionScore",
-    "SlopPattern",
-    "SlopReport",
-    "compute_ambiguity",
-    "scan_file",
-    "scan_files",
-]
+__all__ = ["AlgorithmRegistry"]

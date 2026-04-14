@@ -1,12 +1,15 @@
 """Unified router - single entry point for all skill routing.
 
-This module consolidates routing logic from:
-- triggers/ (keyword detection)
-- core/routing/engine.py (skill routing)
-- semantic/ (semantic matching)
+The UnifiedRouter delegates to independent layer handlers, each implementing
+one matching strategy. Layers execute in priority order; the first confident
+match wins.
 
-The UnifiedRouter provides ONE canonical way to route queries to skills,
-automatically selecting the best matching strategy.
+Architecture:
+    route() → [_try_explicit, _try_scenario, _try_ai_triage, _try_matchers]
+                                                        ↓
+                              matcher loop: keyword → tfidf → embedding → levenshtein
+                                                        ↓
+                              optimization: prefilter → preference_boost → conflict_resolution
 
 Example:
     >>> router = UnifiedRouter(project_root=".")
@@ -16,19 +19,16 @@ Example:
 
 from __future__ import annotations
 
-import json
 import logging
-import os
-import re
 import threading
 import time
 from pathlib import Path
 from typing import Any, ClassVar
 
-logger = logging.getLogger(__name__)
-
 from vibesop.core.config import ConfigManager
 from vibesop.core.config import RoutingConfig as ConfigRoutingConfig
+from vibesop.core.exceptions import MatcherError
+from vibesop.core.instinct import InstinctLearner
 from vibesop.core.matching import (
     IMatcher,
     KeywordMatcher,
@@ -37,6 +37,7 @@ from vibesop.core.matching import (
     RoutingContext,
     TFIDFMatcher,
 )
+from vibesop.core.memory import MemoryManager
 from vibesop.core.models import RoutingLayer, RoutingResult, SkillRoute
 from vibesop.core.optimization import (
     CandidatePrefilter,
@@ -44,18 +45,30 @@ from vibesop.core.optimization import (
     SkillClusterIndex,
 )
 from vibesop.core.routing.cache import CacheManager
+from vibesop.core.routing.conflict import (
+    ConfidenceGapStrategy,
+    ConflictResolver,
+    ExplicitOverrideStrategy,
+    FallbackStrategy,
+    NamespacePriorityStrategy,
+    RecencyStrategy,
+)
 from vibesop.core.routing.explicit_layer import check_explicit_override
+from vibesop.core.routing.layers import LayerResult
+from vibesop.core.routing.matcher_pipeline import MatcherPipeline
+from vibesop.core.routing.optimization_service import OptimizationService
 from vibesop.core.routing.scenario_layer import load_scenarios, match_scenario
+from vibesop.core.routing.triage_service import TriageService
+from vibesop.llm.cost_tracker import TriageCostTracker
+
+logger = logging.getLogger(__name__)
 
 
 class UnifiedRouter:
     """Unified router for skill selection.
 
-    This is the single entry point for all routing operations.
-    It automatically selects the best strategy based on:
-    1. Available candidates
-    2. Query characteristics
-    3. Configuration settings
+    Single entry point for all routing operations.
+    Each layer is a clearly separated service that returns a LayerResult | None.
 
     Example:
         >>> router = UnifiedRouter()
@@ -64,15 +77,14 @@ class UnifiedRouter:
         ...     print(f"Matched: {result.primary.skill_id}")
     """
 
-    # Layer priority (all 7 layers in execution order)
     _LAYER_PRIORITY: ClassVar[list[RoutingLayer]] = [
-        RoutingLayer.AI_TRIAGE,     # Layer 0: AI semantic classification
-        RoutingLayer.EXPLICIT,      # Layer 1: Direct command override
-        RoutingLayer.SCENARIO,      # Layer 2: Predefined scenario patterns
-        RoutingLayer.KEYWORD,       # Layer 3: Fast keyword matching
-        RoutingLayer.TFIDF,         # Layer 4: TF-IDF semantic similarity
-        RoutingLayer.EMBEDDING,     # Layer 5: Deep vector embeddings
-        RoutingLayer.LEVENSHTEIN,   # Layer 6: Fuzzy typo tolerance
+        RoutingLayer.EXPLICIT,
+        RoutingLayer.SCENARIO,
+        RoutingLayer.AI_TRIAGE,
+        RoutingLayer.KEYWORD,
+        RoutingLayer.TFIDF,
+        RoutingLayer.EMBEDDING,
+        RoutingLayer.LEVENSHTEIN,
     ]
 
     def __init__(
@@ -80,43 +92,27 @@ class UnifiedRouter:
         project_root: str | Path = ".",
         config: ConfigRoutingConfig | ConfigManager | None = None,
     ):
-        """Initialize the unified router.
-
-        Args:
-            project_root: Path to project root
-            config: Routing configuration (RoutingConfig, ConfigManager, or None to auto-load)
-        """
         self.project_root = Path(project_root).resolve()
 
-        # Initialize ConfigManager if config is not provided
         if isinstance(config, ConfigManager):
             self._config_manager = config
         elif config is None:
             self._config_manager = ConfigManager(project_root=self.project_root)
         else:
-            # RoutingConfig provided - create a simple ConfigManager wrapper
             self._config_manager = self._create_config_manager_from_config(config)
 
-        # Get routing config
-        self._config = (
-            self._config_manager.get_routing_config()
-            if isinstance(self._config_manager, ConfigManager)
-            else config
-        )
+        self._config: ConfigRoutingConfig = self._config_manager.get_routing_config()
 
-        # Create matcher config from routing config
         matcher_config = MatcherConfig(
             min_confidence=self._config.min_confidence,
             use_cache=self._config.use_cache,
         )
 
-        # Initialize matchers in priority order
         self._matchers: list[tuple[RoutingLayer, IMatcher]] = [
             (RoutingLayer.KEYWORD, KeywordMatcher(matcher_config)),
             (RoutingLayer.TFIDF, TFIDFMatcher(matcher_config)),
         ]
 
-        # Optional matchers (require dependencies or explicit enable)
         if self._config.enable_embedding:
             try:
                 from vibesop.core.matching import EmbeddingMatcher
@@ -125,25 +121,30 @@ class UnifiedRouter:
                     (RoutingLayer.EMBEDDING, EmbeddingMatcher(config=matcher_config))
                 )
             except ImportError:
-                pass  # sentence-transformers not available
+                pass
 
-        # Always add Levenshtein as fallback
         self._matchers.append((RoutingLayer.LEVENSHTEIN, LevenshteinMatcher(matcher_config)))
 
-        # Initialize optimization layers
         self._optimization_config = self._config_manager.get_optimization_config()
-
-        # Build cluster index
         self._cluster_index = SkillClusterIndex()
-        self._cluster_built = False
-
-        # Initialize prefilter
         self._prefilter = CandidatePrefilter(cluster_index=self._cluster_index)
 
-        self._total_routes = 0
-        self._layer_distribution: dict[str, int] = {}
+        # Production-grade conflict resolver
+        self._conflict_resolver = ConflictResolver()
+        self._conflict_resolver.add_strategy(ExplicitOverrideStrategy())
+        self._conflict_resolver.add_strategy(
+            ConfidenceGapStrategy(
+                gap_threshold=self._optimization_config.clustering.confidence_gap_threshold,
+            ),
+        )
+        self._conflict_resolver.add_strategy(NamespacePriorityStrategy())
+        self._conflict_resolver.add_strategy(
+            RecencyStrategy(
+                storage_path=str(self.project_root / ".vibe" / "preferences.json"),
+            ),
+        )
+        self._conflict_resolver.add_strategy(FallbackStrategy())
 
-        # Initialize preference booster
         pref_config = self._optimization_config.preference_boost
         self._preference_booster = PreferenceBooster(
             enabled=self._optimization_config.enabled and pref_config.enabled,
@@ -152,145 +153,60 @@ class UnifiedRouter:
             storage_path=str(self.project_root / ".vibe" / "preferences.json"),
         )
 
-        # Initialize cache manager (unified caching with memory + file backing)
-        self._cache_manager = CacheManager(
-            cache_dir=self.project_root / ".vibe" / "cache",
+        # Memory and instinct systems for context-aware routing (lazy init)
+        self._memory_manager: MemoryManager | None = None
+        self._instinct_learner: InstinctLearner | None = None
+
+        self._cache_manager = CacheManager(cache_dir=self.project_root / ".vibe" / "cache")
+        self._candidates_cache: list[dict[str, Any]] | None = None
+        self._cache_lock = threading.Lock()
+
+        self._cost_tracker = TriageCostTracker(storage_dir=self.project_root / ".vibe")
+
+        # Explicitly init _llm for type checker and test mocking
+        self._llm: Any | None = None
+
+        # Build sub-services
+        self._optimization_service = OptimizationService(
+            config=self._config,
+            optimization_config=self._optimization_config,
+            preference_booster=self._preference_booster,
+            cluster_index=self._cluster_index,
+            conflict_resolver=self._conflict_resolver,
+            get_instinct_learner=self._get_instinct_learner,
         )
 
-        # Preload candidates for performance optimization
-        # This avoids re-scanning skill directories on every route() call
-        self._candidates_cache: list[dict[str, Any]] | None = None
-        self._cache_lock = threading.Lock()  # Thread-safe cache loading
+        self._triage_service = TriageService(
+            config=self._config,
+            cost_tracker=self._cost_tracker,
+            prefilter=self._prefilter,
+            cache_manager=self._cache_manager,
+            get_skill_source=self._get_skill_source,
+        )
+
+        self._matcher_pipeline = MatcherPipeline(
+            matchers=self._matchers,
+            config=self._config,
+            optimization_config=self._optimization_config,
+            prefilter=self._prefilter,
+            optimization_service=self._optimization_service,
+            get_skill_source=self._get_skill_source,
+        )
+
+        self._total_routes = 0
+        self._layer_distribution: dict[str, int] = {}
+        self._stats_lock = threading.Lock()
 
     def _create_config_manager_from_config(self, config: ConfigRoutingConfig) -> ConfigManager:
-        """Create a ConfigManager wrapper for a RoutingConfig.
-
-        Uses dynamic field reflection so new fields are automatically adapted.
-
-        Args:
-            config: RoutingConfig instance
-
-        Returns:
-            ConfigManager that wraps the RoutingConfig
-        """
         manager = ConfigManager(project_root=self.project_root)
         for field_name in type(config).model_fields:
             value = getattr(config, field_name)
             manager.set_cli_override(f"routing.{field_name}", value)
         return manager
 
-    def _ai_triage(
-        self,
-        query: str,
-        candidates: list[dict[str, Any]],
-    ) -> SkillRoute | None:
-        """Layer 0: AI semantic triage using LLM.
-
-        Sends the query + top 20 skill candidates to an LLM for classification.
-        Returns a SkillRoute with confidence=0.95 if the LLM selects a valid skill.
-
-        Cost: ~$0.001-0.005 per call (Haiku/gpt-4o-mini).
-        Cache: Results cached in .vibe/cache/ to avoid repeated calls.
-        """
-        if not self._config.enable_ai_triage:
-            return None
-
-        # Lazy-init LLM client
-        if not hasattr(self, "_llm"):
-            self._llm = self._init_llm_client()
-
-        if self._llm is None or not self._llm.configured():
-            return None
-
-        # Check cache
-        cache_key = f"ai_triage:{query}"
-        cached = self._get_cache(cache_key)
-        if cached:
-            return cached
-
-        # Build prompt with top 20 candidates
-        skills_summary = "\n".join(
-            f"- {c['id']}: {c.get('intent', c.get('description', 'N/A'))}" for c in candidates[:20]
-        )
-
-        prompt = (
-            f"Analyze the user request and select the most appropriate skill.\n\n"
-            f"User request: {query}\n\n"
-            f"Available skills:\n{skills_summary}\n\n"
-            f'Return ONLY the skill ID (e.g., "gstack/review" or "systematic-debugging"). '
-            f"Do not include any other text.\n\nSkill ID:"
-        )
-
-        try:
-            response = self._llm.call(prompt=prompt, max_tokens=50, temperature=0.1)
-            skill_id = self._parse_ai_triage_response(response.content)
-
-            if skill_id:
-                # Validate skill_id exists in candidates
-                candidate = next((c for c in candidates if c["id"] == skill_id), None)
-                if candidate:
-                    source = self._get_skill_source(skill_id, candidate.get("namespace", "builtin"))
-                    result = SkillRoute(
-                        skill_id=skill_id,
-                        confidence=0.95,
-                        layer=RoutingLayer.AI_TRIAGE,
-                        source=source,
-                        metadata={"ai_triage": True, "model": response.model},
-                    )
-                    self._set_cache(cache_key, result.to_dict())
-                    return result
-        except Exception as e:
-            logger.debug(f"AI triage failed, falling through to next layer: {e}")
-            # Fall through to next layer
-
-        return None
-
-    def _init_llm_client(self):
-        """Initialize LLM client from environment."""
-        # Disable inside Claude Code by default (avoid recursive LLM calls)
-        if (
-            os.getenv("CLAUDECODE") == "1" or os.getenv("CLAUDE_CODE_ENTRYPOINT") == "cli"
-        ) and not os.getenv("VIBE_AI_TRIAGE_ENABLED"):
-            return None
-
-        try:
-            from vibesop.llm.factory import create_from_env
-
-            llm = create_from_env()
-            return llm if llm.configured() else None
-        except Exception as e:
-            logger.debug(f"Failed to initialize LLM client: {e}")
-            return None
-
-    def _parse_ai_triage_response(self, response: str) -> str | None:
-        """Parse LLM response to extract skill ID."""
-        # Try code block format
-        if match := re.search(r"```(?:json)?\s*([\w/-]+)```", response):
-            return match.group(1).strip()
-        # Try first word that looks like a skill ID
-        if match := re.search(r"^[\w/-]{3,}", response.strip(), re.MULTILINE):
-            return match.group(0).strip()
-        return None
-
-    def _get_cache(self, key: str) -> SkillRoute | None:
-        """Get cached result using CacheManager."""
-        data = self._cache_manager.get(key)
-        if data:
-            try:
-                return SkillRoute(
-                    skill_id=data["skill_id"],
-                    confidence=data["confidence"],
-                    layer=RoutingLayer(data["layer"]),
-                    source=data["source"],
-                    metadata=data.get("metadata", {}),
-                )
-            except (KeyError, TypeError) as e:
-                logger.debug(f"Failed to deserialize cached SkillRoute: {e}")
-        return None
-
-    def _set_cache(self, key: str, data: dict[str, Any]) -> None:
-        """Cache routing result using CacheManager."""
-        self._cache_manager.set(key, data, ttl=3600)
+    # ================================================================
+    # Main routing entry point
+    # ================================================================
 
     def route(
         self,
@@ -300,220 +216,244 @@ class UnifiedRouter:
     ) -> RoutingResult:
         """Route a query to the best matching skill.
 
-        Args:
-            query: User's natural language query
-            candidates: List of skill candidates (auto-discovered if None)
-            context: Additional routing context
-
-        Returns:
-            RoutingResult with primary skill and alternatives
+        Executes layers in priority order. The first confident match wins.
+        Integrates memory and instinct for context-aware routing.
+        Records the full routing path for observability and debugging.
         """
         start_time = time.perf_counter()
-
         self._total_routes += 1
 
-        # Auto-discover candidates if not provided
+        # Enrich context with memory if available
+        context = self._enrich_context(context)
+
         if candidates is None:
             candidates = self._get_cached_candidates()
 
-        # === Layer 0: AI Triage ===
-        ai_result = self._ai_triage(query, candidates)
-        if ai_result:
-            duration_ms = (time.perf_counter() - start_time) * 1000
-            self._record_layer(RoutingLayer.AI_TRIAGE)
-            return RoutingResult(
-                primary=ai_result,
-                alternatives=[],
-                routing_path=[RoutingLayer.AI_TRIAGE],
-                query=query,
-                duration_ms=duration_ms,
-            )
-
-        # === Layer 1: Explicit Override ===
-        explicit_skill, cleaned_query = check_explicit_override(query, candidates)
-        if explicit_skill:
-            routing_path = [RoutingLayer.EXPLICIT]
-            duration_ms = (time.perf_counter() - start_time) * 1000
-            candidate = next((c for c in candidates if c["id"] == explicit_skill), None)
-            if candidate:
-                source = self._get_skill_source(
-                    explicit_skill, candidate.get("namespace", "builtin")
-                )
-                self._record_layer(RoutingLayer.EXPLICIT)
-                return RoutingResult(
-                    primary=SkillRoute(
-                        skill_id=explicit_skill,
-                        confidence=1.0,
-                        layer=RoutingLayer.EXPLICIT,
-                        source=source,
-                        metadata={"override": True, "cleaned_query": cleaned_query},
-                    ),
-                    alternatives=[],
-                    routing_path=routing_path,
-                    query=query,
-                    duration_ms=duration_ms,
-                )
-
-        # === Layer 2: Scenario Pattern ===
-        if not hasattr(self, "_scenarios"):
-            self._scenarios = load_scenarios(self.project_root / "core" / "registry.yaml")
-        scenario = match_scenario(query, self._scenarios)
-        if scenario:
-            routing_path = [RoutingLayer.SCENARIO]
-            primary_id = scenario.get("primary")
-            primary_candidate = next((c for c in candidates if c["id"] == primary_id), None)
-            if primary_candidate:
-                duration_ms = (time.perf_counter() - start_time) * 1000
-                source = self._get_skill_source(
-                    primary_id, primary_candidate.get("namespace", "builtin")
-                )
-                alternatives = []
-                for alt in scenario.get("alternatives", []):
-                    alt_id = alt.get("skill", "").lstrip("/")
-                    alt_candidate = next((c for c in candidates if c["id"] == alt_id), None)
-                    if alt_candidate:
-                        alternatives.append(
-                            SkillRoute(
-                                skill_id=alt_id,
-                                confidence=0.5,
-                                layer=RoutingLayer.SCENARIO,
-                                source=self._get_skill_source(
-                                    alt_id, alt_candidate.get("namespace", "builtin")
-                                ),
-                                metadata={"scenario": scenario.get("scenario")},
-                            )
-                        )
-                self._record_layer(RoutingLayer.SCENARIO)
-                return RoutingResult(
-                    primary=SkillRoute(
-                        skill_id=primary_id,
-                        confidence=0.8,
-                        layer=RoutingLayer.SCENARIO,
-                        source=source,
-                        metadata={"scenario": scenario.get("scenario")},
-                    ),
-                    alternatives=alternatives,
-                    routing_path=routing_path,
-                    query=query,
-                    duration_ms=duration_ms,
-                )
-
-        # === Pre-filtering (Optimization Layer 1) ===
-        if self._optimization_config.enabled and self._optimization_config.prefilter.enabled:
-            candidates = self._prefilter.filter(query, candidates)
-
-        # === Build cluster index (Layer 3, lazy) ===
-        if (
-            self._optimization_config.enabled
-            and self._optimization_config.clustering.enabled
-            and not self._cluster_built
-            and len(candidates) >= self._optimization_config.clustering.min_skills_for_clustering
-        ):
-            self._cluster_index.build(candidates)
-            self._cluster_built = True
-
         routing_path: list[RoutingLayer] = []
-
-        # Try each matcher in priority order
-        for layer, matcher in self._matchers:
-            routing_path.append(layer)
-
-            # Skip disabled layers
-            if layer == RoutingLayer.EMBEDDING and not self._config.enable_embedding:
-                continue
-
-            try:
-                matches = matcher.match(
-                    query,
-                    candidates,
-                    context,
-                    top_k=self._config.max_candidates + 1,
+        for layer_result in self._execute_layers(query, candidates, context):
+            routing_path.append(layer_result.layer)
+            if layer_result.match is not None:
+                self._record_layer(layer_result.layer)
+                # Record this routing decision for memory/learning
+                self._record_routing_decision(query, layer_result.match, context)
+                return self._build_result(
+                    query=query,
+                    primary=layer_result.match,
+                    alternatives=layer_result.alternatives,
+                    routing_path=routing_path,
+                    start_time=start_time,
                 )
 
-                if matches and matches[0].confidence >= self._config.min_confidence:
-                    # === Preference boost (Layer 2) ===
-                    if (
-                        self._optimization_config.enabled
-                        and self._optimization_config.preference_boost.enabled
-                    ):
-                        matches = self._preference_booster.boost(matches, query)
-
-                    # === Cluster conflict resolution (Layer 3) ===
-                    if (
-                        self._optimization_config.enabled
-                        and self._optimization_config.clustering.enabled
-                        and self._optimization_config.clustering.auto_resolve
-                        and len(matches) > 1
-                    ):
-                        confidences = {m.skill_id: m.confidence for m in matches}
-                        match_ids = [m.skill_id for m in matches]
-                        conflict_result = self._cluster_index.resolve_conflicts(
-                            query,
-                            match_ids,
-                            confidences,
-                            self._optimization_config.clustering.confidence_gap_threshold,
-                        )
-                        if conflict_result["primary"]:
-                            primary_id = conflict_result["primary"]
-                            primary_match = next(
-                                (m for m in matches if m.skill_id == primary_id),
-                                matches[0],
-                            )
-                            alternatives = [m for m in matches if m.skill_id != primary_id][
-                                : self._config.max_candidates
-                            ]
-                        else:
-                            primary_match = matches[0]
-                            alternatives = matches[1 : self._config.max_candidates + 1]
-                    else:
-                        primary_match = matches[0]
-                        alternatives = matches[1 : self._config.max_candidates + 1]
-
-                    # Found a good match
-                    duration_ms = (time.perf_counter() - start_time) * 1000
-
-                    # Get namespace from match metadata or infer from skill_id
-                    primary_namespace = primary_match.metadata.get("namespace", "builtin")
-                    primary_source = self._get_skill_source(
-                        primary_match.skill_id, primary_namespace
-                    )
-
-                    self._record_layer(layer)
-
-                    return RoutingResult(
-                        primary=SkillRoute(
-                            skill_id=primary_match.skill_id,
-                            confidence=primary_match.confidence,
-                            layer=layer,
-                            source=primary_source,
-                            metadata=primary_match.metadata,
-                        ),
-                        alternatives=[
-                            SkillRoute(
-                                skill_id=m.skill_id,
-                                confidence=m.confidence,
-                                layer=layer,
-                                source=self._get_skill_source(
-                                    m.skill_id, m.metadata.get("namespace", "builtin")
-                                ),
-                                metadata=m.metadata,
-                            )
-                            for m in alternatives
-                        ],
-                        routing_path=routing_path,
-                        query=query,
-                        duration_ms=duration_ms,
-                    )
-
-            except Exception as e:
-                logger.debug(f"Matcher {type(matcher).__name__} failed: {e}, trying next matcher")
-                # Try next matcher on error
-                continue
-
-        # No match found
         duration_ms = (time.perf_counter() - start_time) * 1000
         self._record_layer(RoutingLayer.NO_MATCH)
-        return self._no_match_result(query, routing_path, duration_ms)
+        return RoutingResult(
+            primary=None,
+            alternatives=[],
+            routing_path=routing_path,
+            query=query,
+            duration_ms=duration_ms,
+        )
+
+    def _execute_layers(
+        self,
+        query: str,
+        candidates: list[dict[str, Any]],
+        context: RoutingContext | None,
+    ):
+        """Generator that yields LayerResults from each layer in priority order.
+
+        Always yields a LayerResult so that route() can track the full decision path.
+        """
+        # Layer 0: Explicit Override
+        yield self._try_explicit(query, candidates) or LayerResult(
+            layer=RoutingLayer.EXPLICIT
+        )
+
+        # Layer 1: Scenario Pattern
+        yield self._try_scenario(query, candidates) or LayerResult(
+            layer=RoutingLayer.SCENARIO
+        )
+
+        # Layer 2: AI Triage
+        yield self._try_ai_triage(query, candidates, context) or LayerResult(
+            layer=RoutingLayer.AI_TRIAGE
+        )
+
+        # Layers 3-6: Matcher pipeline (keyword, tfidf, embedding, levenshtein)
+        matcher_result = self._try_matcher_pipeline(query, candidates, context)
+        yield matcher_result or LayerResult(layer=RoutingLayer.LEVENSHTEIN)
+
+    # ================================================================
+    # Layer 0: Explicit Override
+    # ================================================================
+
+    def _try_explicit(
+        self,
+        query: str,
+        candidates: list[dict[str, Any]],
+    ) -> LayerResult | None:
+        explicit_skill, cleaned_query = check_explicit_override(query, candidates)
+        if not explicit_skill:
+            return None
+
+        candidate = next((c for c in candidates if c["id"] == explicit_skill), None)
+        if not candidate:
+            return None
+
+        source = self._get_skill_source(explicit_skill, candidate.get("namespace", "builtin"))
+        return LayerResult(
+            match=SkillRoute(
+                skill_id=explicit_skill,
+                confidence=1.0,
+                layer=RoutingLayer.EXPLICIT,
+                source=source,
+                metadata={"override": True, "cleaned_query": cleaned_query},
+            ),
+            layer=RoutingLayer.EXPLICIT,
+        )
+
+    # ================================================================
+    # Layer 1: Scenario Pattern
+    # ================================================================
+
+    def _try_scenario(
+        self,
+        query: str,
+        candidates: list[dict[str, Any]],
+    ) -> LayerResult | None:
+        scenarios = load_scenarios(self.project_root)
+        scenario = match_scenario(query, scenarios)
+        if not scenario:
+            return None
+
+        target_skill = scenario.get("skill")
+        if not target_skill:
+            return None
+
+        candidate = next((c for c in candidates if c["id"] == target_skill), None)
+        if not candidate:
+            return None
+
+        # Build alternatives from related skills in the same scenario
+        alternatives: list[SkillRoute] = []
+        related = scenario.get("related_skills", [])
+        for rid in related:
+            rel = next((c for c in candidates if c["id"] == rid), None)
+            if rel:
+                alternatives.append(
+                    SkillRoute(
+                        skill_id=rid,
+                        confidence=0.75,
+                        layer=RoutingLayer.SCENARIO,
+                        source=self._get_skill_source(rid, rel.get("namespace", "builtin")),
+                        metadata={"scenario": scenario.get("scenario")},
+                    )
+                )
+
+        return LayerResult(
+            match=SkillRoute(
+                skill_id=target_skill,
+                confidence=0.9,
+                layer=RoutingLayer.SCENARIO,
+                source=self._get_skill_source(
+                    target_skill, candidate.get("namespace", "builtin")
+                ),
+                metadata={"scenario": scenario.get("scenario")},
+            ),
+            alternatives=alternatives,
+            layer=RoutingLayer.SCENARIO,
+        )
+
+    # ================================================================
+    # Memory and instinct helpers
+    # ================================================================
+
+    def _get_memory_manager(self) -> MemoryManager:
+        if self._memory_manager is None:
+            self._memory_manager = MemoryManager(
+                storage_dir=self.project_root / ".vibe" / "memory"
+            )
+        return self._memory_manager
+
+    def _get_instinct_learner(self) -> InstinctLearner:
+        if self._instinct_learner is None:
+            self._instinct_learner = InstinctLearner(
+                storage_path=self.project_root / ".vibe" / "instincts.jsonl"
+            )
+        return self._instinct_learner
+
+    def _enrich_context(self, context: RoutingContext | None) -> RoutingContext:
+        """Enrich routing context with memory and recent conversation history."""
+        if context is None:
+            context = RoutingContext()
+
+        # If no conversation_id set, try to use active conversation from memory
+        if not context.conversation_id:
+            active_id = self._get_memory_manager().get_active_conversation_id()
+            if active_id:
+                context.conversation_id = active_id
+
+        # Load recent queries from memory if not already provided
+        if context.conversation_id and not context.recent_queries:
+            context.recent_queries = self._get_memory_manager().get_recent_queries(
+                context.conversation_id, limit=3
+            )
+
+        return context
+
+    def _record_routing_decision(
+        self,
+        query: str,
+        match: SkillRoute,
+        context: RoutingContext | None,
+    ) -> None:
+        """Record successful routing decision to memory and instinct systems."""
+        try:
+            # Add to memory conversation if available
+            if context and context.conversation_id:
+                self._get_memory_manager().add_assistant_message(
+                    context.conversation_id,
+                    f"Routed to {match.skill_id} (confidence: {match.confidence:.2f})",
+                    metadata={"skill_id": match.skill_id, "layer": match.layer.value},
+                )
+
+            # Extract a simple instinct: query pattern -> skill suggestion
+            # Only record if query is non-trivial and confidence is high
+            if match.confidence >= 0.7 and len(query) > 5:
+                self._get_instinct_learner().learn(
+                    pattern=query.lower(),
+                    action=f"suggest {match.skill_id} skill",
+                    context=match.layer.value,
+                    tags=["routing", "auto_extracted"],
+                    source="auto_routing",
+                )
+        except (OSError, ValueError, RuntimeError) as e:
+            logger.debug(f"Failed to record routing decision: {e}")
+
+    # ================================================================
+    # Result building
+    # ================================================================
+
+    def _build_result(
+        self,
+        query: str,
+        primary: SkillRoute,
+        alternatives: list[SkillRoute],
+        routing_path: list[RoutingLayer],
+        start_time: float,
+    ) -> RoutingResult:
+        duration_ms = (time.perf_counter() - start_time) * 1000
+        return RoutingResult(
+            primary=primary,
+            alternatives=alternatives,
+            routing_path=routing_path,
+            query=query,
+            duration_ms=duration_ms,
+        )
+
+    # ================================================================
+    # Candidate management
+    # ================================================================
 
     def score(
         self,
@@ -522,80 +462,34 @@ class UnifiedRouter:
         candidate: dict[str, Any],
         context: RoutingContext | None = None,
     ) -> float:
-        """Score a single candidate against the query.
-
-        Args:
-            query: User's natural language query
-            _skill_id: The skill identifier (unused, for API compatibility)
-            candidate: Skill candidate data
-            context: Additional routing context
-
-        Returns:
-            Confidence score (0.0 to 1.0)
-        """
-        # Use the first available matcher
+        """Score a specific candidate against a query using the matcher pipeline."""
         for _, matcher in self._matchers:
             try:
                 return matcher.score(query, candidate, context)
-            except Exception as e:
+            except (OSError, ValueError, KeyError, MatcherError) as e:
                 logger.debug(f"Matcher {type(matcher).__name__}.score() failed: {e}, trying next")
                 continue
-
         return 0.0
 
-    def get_candidates(
-        self,
-        _query: str = "",
-    ) -> list[dict[str, Any]]:
-        """Get all available skill candidates.
-
-        Args:
-            _query: Optional query to filter candidates (reserved for future use)
-
-        Returns:
-            List of skill candidates
-        """
+    def get_candidates(self, _query: str = "") -> list[dict[str, Any]]:
         return self._get_candidates(_query)
 
-    def _get_candidates(
-        self,
-        _query: str = "",
-    ) -> list[dict[str, Any]]:
-        """Get skill candidates from all sources.
-
-        This integrates:
-        - Built-in skills (core/skills/)
-        - External skills (~/.claude/skills/)
-        - Project-specific skills (.vibe/skills/)
-
-        Args:
-            _query: Optional query for filtering (reserved for future use)
-
-        Returns:
-            List of skill candidates
-        """
-        # Lazy import to avoid circular dependency
+    def _get_candidates(self, _query: str = "") -> list[dict[str, Any]]:
         from vibesop.core.skills import SkillLoader
 
-        # Initialize loader if needed
         if not hasattr(self, "_skill_loader"):
-            # Search in multiple locations
             search_paths = [
-                self.project_root / "core" / "skills",  # Built-in
-                self.project_root / ".vibe" / "skills",  # Project
-                Path.home() / ".claude" / "skills",  # External
-                Path.home() / ".config" / "skills",  # Central storage
+                self.project_root / "core" / "skills",
+                self.project_root / ".vibe" / "skills",
+                Path.home() / ".config" / "skills",
             ]
             self._skill_loader = SkillLoader(
                 project_root=self.project_root,
                 search_paths=search_paths,
             )
 
-        # Discover all skills
         definitions = self._skill_loader.discover_all()
-
-        # Convert to candidate format for matchers
-        candidates = []
+        candidates: list[dict[str, Any]] = []
         for _skill_id, definition in definitions.items():
             metadata = definition.metadata
             candidates.append(
@@ -610,68 +504,37 @@ class UnifiedRouter:
                     "source": self._get_skill_source(metadata.id, metadata.namespace),
                 }
             )
-
         return candidates
 
     def _get_cached_candidates(self) -> list[dict[str, Any]]:
-        """Get cached candidates, loading on first call.
-
-        This optimization avoids re-scanning skill directories on every route() call,
-        significantly improving routing performance.
-
-        Thread-safe: Uses double-checked locking for concurrent access.
-
-        Returns:
-            List of skill candidates
-        """
-        # Fast path: cache already loaded (no lock needed for read)
         if self._candidates_cache is not None:
             return self._candidates_cache
-
-        # Slow path: load cache with lock
         with self._cache_lock:
-            # Double-check: another thread might have loaded it while we waited
             if self._candidates_cache is None:
                 self._candidates_cache = self._get_candidates()
             return self._candidates_cache
 
     def reload_candidates(self) -> int:
-        """Reload skill candidates from disk.
-
-        This invalidates the cache and rescans all skill directories.
-        Call this after installing new skills or updating skill definitions.
-
-        Returns:
-            Number of candidates discovered
-        """
         self._candidates_cache = None
         return len(self._get_cached_candidates())
 
+    # ================================================================
+    # Utilities
+    # ================================================================
+
     def _get_skill_source(self, _skill_id: str, namespace: str) -> str:
-        """Determine where a skill comes from."""
-        if namespace in ("superpowers", "gstack"):
-            return "external"
+        """Determine skill source based on namespace.
+
+        Project skills > external skills > built-in fallback.
+        No hardcoded pack names — any unknown namespace is external.
+        """
         if namespace == "project":
             return "project"
-        return "builtin"
-
-    def _no_match_result(
-        self,
-        query: str,
-        path: list[RoutingLayer],
-        duration_ms: float,
-    ) -> RoutingResult:
-        """Create a result when no match is found."""
-        return RoutingResult(
-            primary=None,
-            alternatives=[],
-            routing_path=path,
-            query=query,
-            duration_ms=duration_ms,
-        )
+        if namespace == "builtin":
+            return "builtin"
+        return "external"
 
     def get_capabilities(self) -> dict[str, Any]:
-        """Return router capabilities."""
         return {
             "type": "unified",
             "layers": [layer.value for layer in self._LAYER_PRIORITY],
@@ -686,44 +549,114 @@ class UnifiedRouter:
             },
         }
 
-    # -- Routing stats --
-
     def _record_layer(self, layer: RoutingLayer) -> None:
-        key = layer.value
-        self._layer_distribution[key] = self._layer_distribution.get(key, 0) + 1
+        with self._stats_lock:
+            self._layer_distribution[layer.value] = self._layer_distribution.get(layer.value, 0) + 1
 
     def get_stats(self) -> dict[str, Any]:
-        """Get routing statistics including total routes and layer distribution."""
         return {
             "total_routes": self._total_routes,
             "layer_distribution": dict(self._layer_distribution),
             "cache_dir": str(self.project_root / ".vibe" / "cache"),
+            "ai_triage": self.get_ai_triage_stats(),
         }
 
-    # -- Preference learning API --
+    def get_ai_triage_stats(self) -> dict[str, Any]:
+        """Get AI Triage usage and cost statistics."""
+        stats = self._cost_tracker.get_stats(days=30)
+        budget = getattr(self._config, "ai_triage_budget_monthly", 5.0)
+        return {
+            **stats,
+            "budget_monthly_usd": budget,
+            "budget_remaining_usd": round(max(0.0, budget - stats["total_cost_usd"]), 6),
+        }
 
     def record_selection(self, skill_id: str, query: str, was_helpful: bool = True) -> None:
-        """Record a skill selection for preference learning."""
-        learner = self._preference_booster._get_learner()
+        learner = self._preference_booster.get_learner()
         learner.record_selection(skill_id, query, was_helpful)
 
-    def get_preference_stats(self) -> dict[str, Any]:
-        """Get preference learning statistics."""
-        learner = self._preference_booster._get_learner()
+    def get_preference_stats(self) -> dict[str, int | float | str]:
+        learner = self._preference_booster.get_learner()
         return learner.get_stats()
 
     def get_top_skills(self, limit: int = 5, min_selections: int = 2) -> list[Any]:
-        """Get top preferred skills based on user history."""
-        learner = self._preference_booster._get_learner()
+        learner = self._preference_booster.get_learner()
         return learner.get_top_skills(limit, min_selections)
 
     def clear_old_preferences(self, days: int = 90) -> int:
-        """Clear old preference data."""
-        learner = self._preference_booster._get_learner()
+        learner = self._preference_booster.get_learner()
         return learner.clear_old_data(days)
 
+    # ================================================================
+    # Backward compatibility proxies for extracted services
+    # ================================================================
 
-# Convenience exports
+    def _try_ai_triage(
+        self,
+        query: str,
+        candidates: list[dict[str, Any]],
+        context: RoutingContext | None = None,
+    ) -> Any:
+        # Sync mock LLM set by tests
+        if self._llm is not None:  # type: ignore[reportPrivateUsage]
+            self._triage_service._llm = self._llm  # type: ignore[reportPrivateUsage]
+        return self._triage_service.try_ai_triage(query, candidates, context)
+
+    def _prefilter_ai_triage_candidates(
+        self,
+        query: str,
+        candidates: list[dict[str, Any]],
+        max_skills: int,
+    ) -> list[dict[str, Any]]:
+        return self._triage_service.prefilter_ai_triage_candidates(query, candidates, max_skills)
+
+    def _build_ai_triage_prompt(self, query: str, skills_summary: str) -> str:
+        return self._triage_service.build_ai_triage_prompt(query, skills_summary)
+
+    def _init_llm_client(self) -> Any:
+        return self._triage_service.init_llm_client()
+
+    def _parse_ai_triage_response(self, response: str) -> dict[str, Any]:
+        return self._triage_service.parse_ai_triage_response(response)
+
+    def _try_matcher_pipeline(
+        self,
+        query: str,
+        candidates: list[dict[str, Any]],
+        context: RoutingContext | None,
+    ) -> Any:
+        return self._matcher_pipeline.try_matcher_pipeline(query, candidates, context)
+
+    def _apply_prefilter(
+        self,
+        query: str,
+        candidates: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        return self._matcher_pipeline.apply_prefilter(query, candidates)
+
+    def _apply_optimizations(
+        self,
+        matches: Any,
+        query: str,
+        context: RoutingContext | None = None,
+    ) -> Any:
+        return self._optimization_service.apply_optimizations(matches, query, context)
+
+    def _resolve_conflicts(self, matches: Any, query: str) -> Any:
+        return self._optimization_service.resolve_conflicts(matches, query)
+
+    def _apply_instinct_boost(
+        self,
+        matches: Any,
+        query: str,
+        context: RoutingContext | None,
+    ) -> Any:
+        return self._optimization_service.apply_instinct_boost(matches, query, context)
+
+    def _ensure_cluster_index(self, candidates: list[dict[str, Any]]) -> None:
+        self._optimization_service.ensure_cluster_index(candidates)
+
+
 __all__ = [
     "RoutingLayer",
     "RoutingResult",

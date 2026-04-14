@@ -9,15 +9,9 @@ These tests verify the end-to-end functionality of:
 
 from pathlib import Path
 
-from vibesop.core.routing import UnifiedRouter, RoutingConfig, RoutingLayer
-from vibesop.core.config import ConfigManager, RoutingConfig as ConfigRoutingConfig
-from vibesop.core.matching import (
-    KeywordMatcher,
-    TFIDFMatcher,
-    LevenshteinMatcher,
-    MatcherConfig,
-)
-from vibesop.security import SkillSecurityAuditor, audit_skill
+from vibesop.core.config import ConfigManager
+from vibesop.core.routing import RoutingConfig, UnifiedRouter
+from vibesop.security import SkillSecurityAuditor
 
 
 class TestUnifiedRouterIntegration:
@@ -220,7 +214,7 @@ class TestExternalSkillLoaderIntegration:
 
         # Check that skills with audit results are safe
         unsafe_count = 0
-        for skill_id, skill_meta in skills.items():
+        for _skill_id, skill_meta in skills.items():
             if skill_meta.audit_result and not skill_meta.is_safe:
                 unsafe_count += 1
 

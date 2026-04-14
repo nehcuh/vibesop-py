@@ -129,6 +129,15 @@ class InstinctLearner:
         self.storage_path.parent.mkdir(parents=True, exist_ok=True)
 
         self._instincts: dict[str, Instinct] = {}
+        self._embedding_model_name = "paraphrase-multilingual-MiniLM-L12-v2"
+        self._embedding_model: Any | None = None
+        self._embedding_cache: dict[str, Any] = {}
+        try:
+            import numpy as np  # type: ignore[import-untyped]
+
+            self._numpy = np
+        except ImportError:
+            self._numpy = None
         self._load()
 
     def _load(self) -> None:
@@ -147,6 +156,7 @@ class InstinctLearner:
                     self._instincts[instinct.id] = instinct
                 except (json.JSONDecodeError, KeyError):
                     continue
+        self._embedding_cache.clear()
 
     def _save(self) -> None:
         """Save instincts to storage."""
@@ -194,7 +204,7 @@ class InstinctLearner:
                 tags=tags or [],
             )
             self._instincts[instinct_id] = instinct
-
+        self._embedding_cache.clear()
         self._save()
         return instinct
 
@@ -315,22 +325,94 @@ class InstinctLearner:
         hash_obj = hashlib.md5(normalized.encode())
         return f"instinct_{hash_obj.hexdigest()[:12]}"
 
+    def _embedding_enabled(self) -> bool:
+        """Check if sentence-transformers embedding model is available."""
+        if self._numpy is None:
+            return False
+        if self._embedding_model is not None:
+            return True
+        try:
+            from sentence_transformers import SentenceTransformer
+
+            self._embedding_model = SentenceTransformer(self._embedding_model_name)
+            return True
+        except Exception:
+            return False
+
+    def _get_embedding(self, text: str) -> Any:
+        """Get embedding vector for text (with caching)."""
+        if text in self._embedding_cache:
+            return self._embedding_cache[text]
+        if not self._embedding_enabled():
+            raise RuntimeError("Embedding model not available")
+        assert self._embedding_model is not None
+        emb = self._embedding_model.encode([text])[0]
+        self._embedding_cache[text] = emb
+        return emb
+
+    def _compute_embedding_similarity(self, pattern: str, text: str) -> float:
+        """Compute cosine similarity between pattern and text embeddings."""
+        try:
+            pattern_emb = self._get_embedding(pattern)
+            text_emb = self._get_embedding(text)
+            np = self._numpy
+            assert np is not None
+            return float(
+                np.dot(pattern_emb, text_emb)
+                / (np.linalg.norm(pattern_emb) * np.linalg.norm(text_emb) + 1e-10)
+            )
+        except Exception:
+            return 0.0
+
     def _match_score(self, pattern: str, text: str) -> float:
-        """Calculate match score between pattern and text."""
-        pattern_words = set(re.findall(r"\w+", pattern.lower()))
-        text_words = set(re.findall(r"\w+", text.lower()))
+        """Calculate match score between pattern and text.
+
+        Uses a hybrid of lexical overlap (Jaccard + containment + bigrams)
+        and optional sentence-transformer embeddings for semantic matching.
+        When embeddings are available they bridge vocabulary gaps that pure
+        lexical methods miss (e.g. "debug" vs "fix error").
+        """
+        from vibesop.core.matching.tokenizers import tokenize
+
+        pattern_tokens = tokenize(pattern)
+        text_tokens = tokenize(text)
+
+        pattern_words = set(pattern_tokens)
+        text_words = set(text_tokens)
 
         if not pattern_words:
             return 0.0
 
         # Jaccard similarity
-        intersection = len(pattern_words & text_words)
-        union = len(pattern_words | text_words)
+        intersection = pattern_words & text_words
+        union = pattern_words | text_words
+        jaccard = len(intersection) / len(union) if union else 0.0
 
-        if union == 0:
-            return 0.0
+        # Containment: how much of the pattern is found in the text
+        containment = len(intersection) / len(pattern_words) if pattern_words else 0.0
 
-        return intersection / union
+        # Bigram overlap for phrase-level matching
+        def _bigrams(tokens: list[str]) -> set[str]:
+            return {f"{tokens[i]} {tokens[i + 1]}" for i in range(len(tokens) - 1)}
+
+        pattern_bigrams = _bigrams(pattern_tokens)
+        text_bigrams = _bigrams(text_tokens)
+        if pattern_bigrams:
+            bigram_overlap = len(pattern_bigrams & text_bigrams) / len(pattern_bigrams)
+        else:
+            bigram_overlap = 0.0
+
+        lexical_score = 0.4 * jaccard + 0.4 * containment + 0.2 * bigram_overlap
+
+        # Semantic boost via embeddings when available
+        embedding_score = 0.0
+        if self._numpy is not None:
+            try:
+                embedding_score = self._compute_embedding_similarity(pattern, text)
+            except Exception:
+                embedding_score = 0.0
+
+        return max(lexical_score, embedding_score)
 
     def get_stats(self) -> dict[str, Any]:
         """Get statistics about instincts."""
@@ -372,7 +454,7 @@ def learn_instinct(
     pattern: str,
     action: str,
     storage_path: Path | None = None,
-    **kwargs,
+    **kwargs: Any,
 ) -> Instinct:
     """Convenience function to learn a single instinct.
 

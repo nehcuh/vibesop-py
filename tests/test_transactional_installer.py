@@ -1,13 +1,13 @@
 """Tests for transactional installation."""
 
 import tempfile
-from typing import Any
 from pathlib import Path
+from typing import Any
 
 from vibesop.installer.transactional import (
-    TransactionalInstaller,
     FileTransactionalInstaller,
     TransactionResult,
+    TransactionalInstaller,
     execute_transaction,
 )
 

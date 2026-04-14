@@ -6,14 +6,14 @@ and external skill packs (superpowers, gstack, etc.).
 """
 
 import logging
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from ruamel.yaml import YAML
 
-logger = logging.getLogger(__name__)
-
+from vibesop.core.skills import parser as skill_parser
 from vibesop.core.skills.base import (
     PromptSkill,
     Skill,
@@ -22,6 +22,8 @@ from vibesop.core.skills.base import (
     WorkflowSkill,
 )
 from vibesop.core.skills.external_loader import ExternalSkillLoader
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -60,7 +62,7 @@ class SkillLoader:
     def __init__(
         self,
         project_root: str | Path = ".",
-        search_paths: list[str] | None = None,
+        search_paths: Sequence[str | Path] | None = None,
         enable_external: bool = True,
         require_audit: bool = True,
     ) -> None:
@@ -199,7 +201,9 @@ class SkillLoader:
             tags=getattr(base, "tags", None),
             skill_type=skill_type,
             trigger_when=getattr(base, "trigger_when", ""),
+            algorithms=getattr(base, "algorithms", None),
         )
+        self._validate_algorithms(metadata)
 
         # Read skill content from source file
         content = ""
@@ -299,69 +303,45 @@ class SkillLoader:
         return None
 
     def _load_markdown_skill(self, file_path: Path) -> None:
-        """Load a skill from a markdown file.
-
-        Markdown files can have YAML frontmatter:
-        ---
-        id: gstack/review
-        name: Code Review
-        ...
-        ---
-
-        Prompt content here.
-
-        Args:
-            file_path: Path to markdown file
-        """
+        """Load a skill from a markdown file."""
         try:
             content = file_path.read_text(encoding="utf-8")
         except (OSError, UnicodeDecodeError):
             return
 
-        # Check for YAML frontmatter
-        if content.startswith("---"):
-            parts = content.split("---", 2)
-            if len(parts) >= 3:
-                frontmatter = parts[1]
-                body = parts[2].strip()
+        frontmatter, body = skill_parser.extract_frontmatter(content)
+        if frontmatter is None:
+            return
 
+        try:
+            metadata = skill_parser.build_metadata(
+                frontmatter,
+                skill_parser.infer_skill_id(file_path),
+                file_path,
+            )
+
+            # Determine skill type from content or metadata
+            skill_content: str | dict[str, Any] = body
+            if metadata.skill_type == SkillType.WORKFLOW:
                 try:
                     yaml_parser = YAML()
-                    metadata_dict = yaml_parser.load(frontmatter)
-                    if not isinstance(metadata_dict, dict):
-                        return
-
-                    metadata = self._parse_metadata(metadata_dict, file_path)
-
-                    # Determine skill type from content or metadata
-                    if metadata.skill_type == SkillType.WORKFLOW:
-                        # Parse workflow from YAML content in body
-                        try:
-                            workflow = yaml_parser.load(body)
-                            content = workflow if isinstance(workflow, dict) else body
-                        except Exception as e:
-                            logger.debug(f"Failed to parse workflow YAML in {file_path.name}: {e}")
-                            content = body
-                    else:
-                        content = body
-
-                    definition = LoadedSkill(
-                        metadata=metadata,
-                        content=content,
-                        source_file=file_path,
-                    )
-
-                    self._skill_cache[metadata.id] = definition
-
+                    workflow = yaml_parser.load(body)
+                    skill_content = workflow if isinstance(workflow, dict) else body
                 except Exception as e:
-                    logger.debug(f"Failed to load skill from {file_path}: {e}")
+                    logger.debug(f"Failed to parse workflow YAML in {file_path.name}: {e}")
+
+            self._validate_algorithms(metadata)
+            definition = LoadedSkill(
+                metadata=metadata,
+                content=skill_content,
+                source_file=file_path,
+            )
+            self._skill_cache[metadata.id] = definition
+        except Exception as e:
+            logger.debug(f"Failed to load skill from {file_path}: {e}")
 
     def _load_yaml_skill(self, file_path: Path) -> None:
-        """Load a skill from a YAML file.
-
-        Args:
-            file_path: Path to YAML file
-        """
+        """Load a skill from a YAML file."""
         try:
             yaml_parser = YAML()
             with file_path.open("r", encoding="utf-8") as f:
@@ -370,64 +350,44 @@ class SkillLoader:
             if not isinstance(data, dict):
                 return
 
-            # Extract metadata
-            metadata = self._parse_metadata(data, file_path)
-
-            # Remaining data is the content
+            metadata = skill_parser.build_metadata(
+                data,
+                self._generate_id_from_path(file_path),
+                file_path,
+            )
             content = {k: v for k, v in data.items() if k not in self._metadata_keys()}
 
+            self._validate_algorithms(metadata)
             definition = LoadedSkill(
                 metadata=metadata,
                 content=content,
                 source_file=file_path,
             )
-
             self._skill_cache[metadata.id] = definition
 
         except (OSError, Exception):
             pass
+
+    def _validate_algorithms(self, metadata: SkillMetadata) -> None:
+        """Warn if a skill declares algorithms that are not registered."""
+        if not metadata.algorithms:
+            return
+        from vibesop.core.algorithms import AlgorithmRegistry
+
+        for algo in metadata.algorithms:
+            if not AlgorithmRegistry.is_registered(algo):
+                logger.warning(
+                    f"Skill '{metadata.id}' declares unknown algorithm: {algo}"
+                )
 
     def _parse_metadata(
         self,
         data: dict[str, Any],
         source_file: Path | None = None,
     ) -> SkillMetadata:
-        """Parse skill metadata from dictionary.
-
-        Args:
-            data: Metadata dictionary
-            source_file: Optional source file path
-
-        Returns:
-            SkillMetadata instance
-        """
+        """Parse skill metadata from dictionary (delegates to unified parser)."""
         skill_id = data.get("id", self._generate_id_from_path(source_file))
-
-        # Parse skill type
-        skill_type_str = data.get("type", "prompt")
-        try:
-            skill_type = SkillType(skill_type_str)
-        except ValueError:
-            skill_type = SkillType.PROMPT
-
-        # Extract description
-        description = data.get("description", "")
-
-        # Extract trigger_when from description
-        trigger_when = self._extract_trigger_from_description(description)
-
-        return SkillMetadata(
-            id=skill_id,
-            name=data.get("name", skill_id),
-            description=description,
-            intent=data.get("intent", description),
-            namespace=data.get("namespace", "project"),
-            version=data.get("version", "1.0.0"),
-            author=data.get("author", ""),
-            tags=data.get("tags"),
-            skill_type=skill_type,
-            trigger_when=trigger_when,
-        )
+        return skill_parser.build_metadata(data, skill_id, source_file or Path())
 
     def _generate_id_from_path(self, path: Path | None) -> str:
         """Generate a skill ID from file path.
@@ -451,8 +411,10 @@ class SkillLoader:
         parts = rel_path.parts
         if parts[-1].endswith(".md"):
             name = parts[-1][:-3]
-        elif parts[-1].endswith((".yaml", ".yml")):
-            name = parts[-1][5:]
+        elif parts[-1].endswith(".yaml"):
+            name = parts[-1][:-5]
+        elif parts[-1].endswith(".yml"):
+            name = parts[-1][:-4]
         else:
             name = parts[-1]
 
@@ -464,45 +426,8 @@ class SkillLoader:
         return f"project/{name}"
 
     def _extract_trigger_from_description(self, description: str) -> str:
-        """Extract trigger conditions from skill description.
-
-        Looks for patterns like:
-        - "Use when asked to X, Y, Z"
-        - "Triggered when X"
-        - "Auto-trigger on X"
-
-        Args:
-            description: Skill description text
-
-        Returns:
-            Extracted trigger conditions (empty string if none found)
-        """
-        if not description:
-            return ""
-
-        import re
-
-        # Pattern 1: "Use when asked to X, Y, Z"
-        match = re.search(r"Use when asked to ([^.]+)", description, re.IGNORECASE)
-        if match:
-            return match.group(1).strip()
-
-        # Pattern 2: "Triggered when X"
-        match = re.search(r"Triggered when ([^.]+)", description, re.IGNORECASE)
-        if match:
-            return match.group(1).strip()
-
-        # Pattern 3: "Auto-trigger on X"
-        match = re.search(r"Auto-trigger on ([^.]+)", description, re.IGNORECASE)
-        if match:
-            return match.group(1).strip()
-
-        # Pattern 4: "Proactively suggest when X"
-        match = re.search(r"Proactively suggest when ([^.]+)", description, re.IGNORECASE)
-        if match:
-            return match.group(1).strip()
-
-        return ""
+        """Extract trigger conditions from skill description (delegates to parser)."""
+        return skill_parser.extract_trigger_from_description(description)
 
     def _metadata_keys(self) -> set[str]:
         """Get keys that are part of metadata.

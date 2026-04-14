@@ -9,6 +9,8 @@ from typing import Any
 
 from ruamel.yaml import YAML
 
+from vibesop.constants import FileSystemSettings
+
 
 def normalize_path(path: Path) -> Path:
     """Normalize a file path.
@@ -57,8 +59,6 @@ def load_yaml_safe(path: Path) -> dict[str, Any]:
     path = normalize_path(path)
 
     if not path.exists():
-        from vibesop.constants import FileSystemSettings
-
         raise FileNotFoundError(f"YAML file not found: {path}")
 
     try:
@@ -98,7 +98,7 @@ def write_yaml_safe(path: Path, data: dict[str, Any]) -> None:
 
         yaml_parser = YAML()
         yaml_parser.default_flow_style = False
-        yaml_parser.sort_keys = False
+        yaml_parser.representer.sort_base_mapping_type_on_output = False  # type: ignore[attr-defined]
 
         string_stream = StringIO()
         yaml_parser.dump(data, string_stream)

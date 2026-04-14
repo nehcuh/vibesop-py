@@ -1,6 +1,7 @@
 """Tests for scenario pattern layer."""
 
 import pytest
+
 from vibesop.core.routing.scenario_layer import load_scenarios, match_scenario
 
 

@@ -1,6 +1,7 @@
 """Tests for explicit override layer."""
 
 import pytest
+
 from vibesop.core.routing.explicit_layer import check_explicit_override
 
 
@@ -30,25 +31,25 @@ def test_explicit_prefix_with_namespace(candidates):
 
 def test_use_verb_override(candidates):
     """'use <skill>' should trigger override."""
-    skill_id, cleaned = check_explicit_override("use omx/ralph to implement this", candidates)
+    skill_id, _cleaned = check_explicit_override("use omx/ralph to implement this", candidates)
     assert skill_id == "omx/ralph"
 
 
 def test_run_verb_override(candidates):
     """'run <skill>' should trigger override."""
-    skill_id, cleaned = check_explicit_override("run gstack/qa on my site", candidates)
+    skill_id, _cleaned = check_explicit_override("run gstack/qa on my site", candidates)
     assert skill_id == "gstack/qa"
 
 
 def test_execute_verb_override(candidates):
     """'execute <skill>' should trigger override."""
-    skill_id, cleaned = check_explicit_override("execute systematic-debugging", candidates)
+    skill_id, _cleaned = check_explicit_override("execute systematic-debugging", candidates)
     assert skill_id == "systematic-debugging"
 
 
 def test_try_verb_override(candidates):
     """'try <skill>' should trigger override."""
-    skill_id, cleaned = check_explicit_override("try omx/deep-interview", candidates)
+    skill_id, _cleaned = check_explicit_override("try omx/deep-interview", candidates)
     assert skill_id == "omx/deep-interview"
 
 

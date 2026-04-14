@@ -255,18 +255,18 @@ vibe skills show systematic-debugging
 vibe skills stats
 # 输出: total: 45, builtin: 12, superpowers: 7, gstack: 19, omx: 7
 
-# 检查技能健康
-vibe skills health
+# 检查技能健康 (🚧 v4.2.0 计划实现)
+# vibe skills health
 # 输出: superpowers ✅ v1.2.0, gstack ✅ v2.0.1, omx ✅ v0.3.0
 
 # 搜索技能
 vibe skills search "debug"
 
-# 卸载技能包
-vibe uninstall superpowers
+# 卸载技能包 (🚧 v4.2.0 计划实现)
+# vibe uninstall superpowers
 
-# 更新技能包
-vibe update superpowers
+# 更新技能包 (🚧 v4.2.0 计划实现)
+# vibe update superpowers
 ```
 
 ### 4. 路由
@@ -497,9 +497,11 @@ SKILL.md 中可以通过代码块引用算法库（可选的高级功能）：
 
 ---
 
-## 八、清理计划
+## 八、历史清理记录（v3.0-v4.0 已完成）
 
-### 立即删除（v4.0）
+> 以下清理工作已在 v3.0.0 至 v4.0.0 的重构中完成。本文档保留此记录以供追溯，**不再是待办事项**。
+
+### 已在 v4.0 完成删除
 
 | 模块 | 原因 |
 |---|---|
@@ -512,7 +514,7 @@ SKILL.md 中可以通过代码块引用算法库（可选的高级功能）：
 | `workflow/` | 路由引擎不执行工作流 |
 | `workflow/experiment.py` | A/B 测试不是路由引擎职责 |
 
-### 重构（v4.0）
+### 已在 v4.0 完成重构
 
 | 模块 | 动作 | 原因 |
 |---|---|---|

@@ -37,39 +37,26 @@ class SkillManifest:
 
     @classmethod
     def from_file(cls, path: Path) -> "SkillManifest":
-        """Load skill manifest from file.
+        """Load skill manifest from SKILL.md using unified parser."""
+        from vibesop.core.skills.parser import parse_skill_md
 
-        Args:
-            path: Path to SKILL.md file
-
-        Returns:
-            SkillManifest instance
-        """
-        # Parse SKILL.md format
-        content = path.read_text()
-
-        # Extract metadata from frontmatter or headers
         id_ = path.parent.name
         name = id_.replace("-", " ").title()
         description = ""
         version = "1.0.0"
         author = "Unknown"
-        dependencies = []
+        dependencies: list[str] = []
         trigger_when = "Manual"
 
-        # Simple parsing (can be enhanced)
-        for line in content.split("\n"):
-            if line.startswith("# Description:"):
-                description = line.replace("# Description:", "").strip()
-            elif line.startswith("# Version:"):
-                version = line.replace("# Version:", "").strip()
-            elif line.startswith("# Author:"):
-                author = line.replace("# Author:", "").strip()
-            elif line.startswith("# Depends:"):
-                deps = line.replace("# Depends:", "").strip()
-                dependencies = [d.strip() for d in deps.split(",") if d.strip()]
-            elif line.startswith("# Trigger:"):
-                trigger_when = line.replace("# Trigger:", "").strip()
+        meta = parse_skill_md(path)
+        if meta:
+            id_ = meta.id or id_
+            name = meta.name or name
+            description = meta.description or description
+            version = meta.version or version
+            author = meta.author or author
+            trigger_when = meta.trigger_when or trigger_when
+            # Dependencies are not yet part of base SkillMetadata; keep empty.
 
         return cls(
             id=id_,

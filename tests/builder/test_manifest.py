@@ -3,14 +3,15 @@
 from pathlib import Path
 
 import pytest
+
+from vibesop.adapters.models import Manifest, ManifestMetadata
 from vibesop.builder import (
     ManifestBuilder,
-    QuickBuilder,
     OverlayMerger,
+    QuickBuilder,
     create_overlay,
     validate_overlay,
 )
-from vibesop.adapters.models import Manifest, ManifestMetadata
 
 
 class TestManifestBuilder:
@@ -20,7 +21,7 @@ class TestManifestBuilder:
         """Test creating ManifestBuilder."""
         builder = ManifestBuilder()
         assert builder.config_loader is not None
-        assert builder.project_root == Path(".").resolve()
+        assert builder.project_root == Path().resolve()
 
     def test_build_from_registry(self, tmp_path: Path) -> None:
         """Test building manifest from registry."""
@@ -44,7 +45,7 @@ skills:
         assert manifest.metadata.platform == "claude-code"
         assert len(manifest.skills) > 0
 
-    def test_build_with_custom_platform(self, tmp_path: Path) -> None:
+    def test_build_with_custom_platform(self, tmp_path: Path) -> None:  # noqa: ARG002
         """Test building with custom platform."""
         builder = ManifestBuilder()
         manifest = builder.build(platform="custom-platform")
@@ -163,7 +164,7 @@ class TestOverlayMerger:
 
     def test_merge_overlay(self, tmp_path: Path) -> None:
         """Test merging overlay with manifest."""
-        from vibesop.adapters.models import Manifest, ManifestMetadata
+        from vibesop.adapters.models import Manifest
 
         # Create base manifest
         metadata = ManifestMetadata(platform="test-platform")
@@ -187,7 +188,7 @@ metadata:
 
     def test_merge_overlay_not_found(self, tmp_path: Path) -> None:
         """Test merging with non-existent overlay."""
-        from vibesop.adapters.models import Manifest, ManifestMetadata
+        from vibesop.adapters.models import Manifest
 
         metadata = ManifestMetadata(platform="test")
         manifest = Manifest(metadata=metadata)
@@ -196,7 +197,7 @@ metadata:
         with pytest.raises(FileNotFoundError):
             merger.merge(manifest, tmp_path / "does_not_exist.yaml")
 
-    def test_deep_merge(self, tmp_path: Path) -> None:
+    def test_deep_merge(self, tmp_path: Path) -> None:  # noqa: ARG002
         """Test deep merge functionality."""
         merger = OverlayMerger()
 
@@ -291,3 +292,18 @@ skills:
         errors = validate_overlay(overlay_file)
 
         assert len(errors) > 0
+
+    def test_build_from_file_invalid_yaml(self, tmp_path: Path) -> None:
+        """Test build_from_file with invalid YAML."""
+        manifest_file = tmp_path / "manifest.yaml"
+        manifest_file.write_text("not: valid: yaml: [")
+
+        builder = ManifestBuilder(project_root=tmp_path)
+        with pytest.raises(ValueError, match="Failed to load manifest"):
+            builder.build_from_file(manifest_file)
+
+    def test_extract_trigger_empty_description(self, tmp_path: Path) -> None:  # noqa: ARG002
+        """Test _extract_trigger_from_description with empty input."""
+        builder = ManifestBuilder(project_root=Path())
+        assert builder._extract_trigger_from_description("") == ""
+        assert builder._extract_trigger_from_description("No trigger here.") == ""

@@ -5,7 +5,6 @@ These tests establish performance baselines and detect regressions.
 
 import time
 from pathlib import Path
-from typing import Dict, List
 
 import pytest
 
@@ -68,7 +67,7 @@ class PerformanceBaselines:
     BASELINE_FILE = Path(__file__).parent / "benchmarks" / "baseline.json"
 
     @staticmethod
-    def get_baseline_metrics() -> Dict[str, float]:
+    def get_baseline_metrics() -> dict[str, float]:
         """Get baseline performance metrics.
 
         Returns:

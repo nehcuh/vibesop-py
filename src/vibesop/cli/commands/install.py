@@ -1,23 +1,24 @@
-"""VibeSOP install command - Install skill pack integrations.
+"""VibeSOP install command - Install skill packs from trusted names or URLs.
 
-This command installs skill pack integrations like Superpowers and gstack.
+This command discovers, analyzes, and installs skill packs using the
+unified intelligent installer.
 
 Usage:
-    vibe install <NAME>
+    vibe install <NAME|URL>
     vibe install --auto
     vibe install --list
 
 Examples:
-    # Install gstack skill pack
+    # Install a trusted skill pack
     vibe install gstack
 
-    # Install superpowers skill pack
-    vibe install superpowers
+    # Install from any Git URL
+    vibe install https://github.com/obra/superpowers
 
-    # Auto-install recommended integrations
+    # Auto-install all recommended packs
     vibe install --auto
 
-    # List available integrations
+    # List available/trusted packs
     vibe install --list
 """
 
@@ -26,31 +27,27 @@ from rich.console import Console
 from rich.progress import BarColumn, Progress, SpinnerColumn, TaskProgressColumn, TextColumn
 from rich.table import Table
 
-from vibesop.installer import GstackInstaller, SuperpowersInstaller
-from vibesop.integrations import IntegrationManager, IntegrationStatus
+from vibesop.core.skills.external_loader import ExternalSkillLoader
 
 console = Console()
 
-# Valid integrations
-VALID_INTEGRATIONS = ["gstack", "superpowers"]
-
 
 def install(
-    name: str | None = typer.Argument(
+    name_or_url: str | None = typer.Argument(
         None,
-        help="Integration name (gstack, superpowers)",
+        help="Trusted pack name (gstack, superpowers) or Git URL",
     ),
     auto: bool = typer.Option(
         False,
         "--auto",
         "-a",
-        help="Auto-install recommended integrations",
+        help="Auto-install recommended skill packs",
     ),
     list_available: bool = typer.Option(
         False,
         "--list",
         "-l",
-        help="List available integrations",
+        help="List available skill packs",
     ),
     force: bool = typer.Option(
         False,
@@ -61,31 +58,10 @@ def install(
     skip_verify: bool = typer.Option(
         False,
         "--skip-verify",
-        help="Skip verification after installation",
+        help="Skip post-install verification",
     ),
 ) -> None:
-    """Install skill pack integrations.
-
-    This command installs external skill pack integrations
-    like gstack and Superpowers from their GitHub repositories.
-
-    \b
-    Examples:
-        # Install gstack skill pack
-        vibe install gstack
-
-        # Install superpowers skill pack
-        vibe install superpowers
-
-        # Auto-install recommended integrations
-        vibe install --auto
-
-        # List available integrations
-        vibe install --list
-
-        # Force reinstall
-        vibe install gstack --force
-    """
+    """Install skill packs from trusted names or arbitrary Git URLs."""
     # List mode
     if list_available:
         _list_available()
@@ -96,122 +72,77 @@ def install(
         _auto_install(force, skip_verify)
         return
 
-    # Manual mode - require name
-    if not name:
+    # Manual mode - require name_or_url
+    if not name_or_url:
         console.print(
-            "[red]✗ No integration specified[/red]\n"
-            "[dim]Specify an integration:[/dim]\n"
+            "[red]✗ No pack name or URL specified[/red]\n"
+            "[dim]Examples:[/dim]\n"
             "  [cyan]vibe install gstack[/cyan]\n"
             "  [cyan]vibe install superpowers[/cyan]\n"
+            "  [cyan]vibe install https://github.com/user/skills[/cyan]\n"
             "\n"
             "[dim]Or use:[/dim]\n"
-            "  [cyan]vibe install --auto[/cyan] [dim]to install recommended integrations[/dim]\n"
-            "  [cyan]vibe install --list[/cyan] [dim]to see available integrations[/dim]\n"
+            "  [cyan]vibe install --auto[/cyan] [dim]to install recommended packs[/dim]\n"
+            "  [cyan]vibe install --list[/cyan] [dim]to see available packs[/dim]\n"
         )
         raise typer.Exit(1)
 
-    # Validate name
-    if name not in VALID_INTEGRATIONS:
-        console.print(
-            f"[red]✗ Unknown integration: {name}[/red]\n"
-            f"[dim]Valid integrations: {', '.join(VALID_INTEGRATIONS)}[/dim]"
-        )
-        raise typer.Exit(1)
-
-    # Check if already installed
-    manager = IntegrationManager()
-    integration = manager.get_integration(name)
-
-    if integration and integration.status == IntegrationStatus.INSTALLED and not force:
-        console.print(
-            f"[yellow]⚠ {name} is already installed[/yellow]\n"
-            f"[dim]Path: {integration.path}[/dim]\n"
-            "[dim]Use --force to reinstall[/dim]"
-        )
-        return
-
-    # Install
-    _install_integration(name, force, skip_verify)
+    _install_pack(name_or_url, force, skip_verify)
 
 
 def _list_available() -> None:
-    """List available integrations."""
-    console.print(f"\n[bold cyan]📦 Available Integrations[/bold cyan]\n{'=' * 40}\n")
+    """List available skill packs."""
+    loader = ExternalSkillLoader()
+    trusted = loader.TRUSTED_PACKS
+    supported = loader.get_supported_packs()
+
+    console.print(f"\n[bold cyan]📦 Available Skill Packs[/bold cyan]\n{'=' * 40}\n")
 
     t = Table()
-    t.add_column("Integration", style="cyan")
-    t.add_column("Description")
-    t.add_column("Skills")
+    t.add_column("Pack", style="cyan")
+    t.add_column("Source URL")
     t.add_column("Status", style="bold")
 
-    manager = IntegrationManager()
-
-    for name in VALID_INTEGRATIONS:
-        integration = manager.get_integration(name)
-
-        if integration:
-            if integration.status == IntegrationStatus.INSTALLED:
-                status = "[green]✓ Installed[/green]"
-            else:
-                status = "[dim]⊘ Not installed[/dim]"
-            skills = ", ".join(integration.skills[:3])
-            if len(integration.skills) > 3:
-                skills += f" [+{len(integration.skills) - 3}]"
+    for name, url in trusted.items():
+        info = supported.get(name, {})
+        if info.get("installed"):
+            status = "[green]✓ Installed[/green]"
         else:
             status = "[dim]⊘ Not installed[/dim]"
-            skills = "-"
-
-        # Get description
-        if name == "gstack":
-            description = "Virtual engineering team skills"
-            skill_count = "9 skills"
-        elif name == "superpowers":
-            description = "General-purpose productivity skills"
-            skill_count = "7 skills"
-        else:
-            description = "-"
-            skill_count = "-"
-
-        t.add_row(name, description, skill_count, status)
+        t.add_row(name, url, status)
 
     console.print(t)
-
     console.print(
-        "\n[dim]To install an integration:[/dim]\n"
-        "  [cyan]vibe install <name>[/cyan]\n"
-        "  [cyan]vibe install --auto[/cyan] [dim]to install all recommended[/dim]\n"
+        "\n[dim]Install a pack:[/dim]\n"
+        "  [cyan]vibe install <pack-name>[/cyan]\n"
+        "  [cyan]vibe install <git-url>[/cyan]\n"
     )
 
 
 def _auto_install(force: bool, skip_verify: bool) -> None:
-    """Auto-install recommended integrations.
-
-    Args:
-        force: Force reinstall
-        skip_verify: Skip verification
-    """
+    """Auto-install recommended skill packs."""
     console.print(
-        f"\n[bold cyan]🚀 Auto-Installing Recommended Integrations[/bold cyan]\n{'=' * 40}\n"
+        f"\n[bold cyan]🚀 Auto-Installing Recommended Packs[/bold cyan]\n{'=' * 40}\n"
     )
 
-    manager = IntegrationManager()
-    results = {}
+    loader = ExternalSkillLoader()
+    trusted = loader.TRUSTED_PACKS
+    supported = loader.get_supported_packs()
+    results: dict[str, str] = {}
 
-    for name in VALID_INTEGRATIONS:
-        integration = manager.get_integration(name)
-
-        if integration and integration.status == IntegrationStatus.INSTALLED and not force:
+    for name in trusted:
+        info = supported.get(name, {})
+        if info.get("installed") and not force:
             console.print(f"[dim]⊘ {name}: already installed, skipping[/dim]")
             results[name] = "skipped"
             continue
 
         console.print(f"[dim]Installing {name}...[/dim]")
-        result = _install_integration(name, force, skip_verify, quiet=True)
+        result = _install_pack(name, force, skip_verify, quiet=True)
         results[name] = result
 
     # Summary
     console.print("\n[bold]Summary[/bold]\n")
-
     for name, result in results.items():
         if result == "success":
             console.print(f"  [green]✓ {name}[/green]")
@@ -219,45 +150,56 @@ def _auto_install(force: bool, skip_verify: bool) -> None:
             console.print(f"  [dim]⊘ {name} (already installed)[/dim]")
         else:
             console.print(f"  [red]✗ {name}[/red]")
-
     console.print()
 
 
-def _install_integration(
-    name: str,
+def _install_pack(
+    name_or_url: str,
     force: bool,
     skip_verify: bool,
     quiet: bool = False,
 ) -> str:
-    """Install a specific integration.
-
-    Args:
-        name: Integration name
-        force: Force reinstall
-        skip_verify: Skip verification
-        quiet: Suppress progress output
+    """Install a skill pack by name or URL.
 
     Returns:
         "success", "failed", or "skipped"
     """
+    # Determine if this is a URL or a pack name
+    is_url = name_or_url.startswith(("http://", "https://", "git@"))
+
+    if is_url:
+        # Infer pack name from URL
+        from vibesop.installer.analyzer import RepoAnalyzer
+
+        analyzer = RepoAnalyzer()
+        pack_name = analyzer.infer_pack_name(name_or_url)
+        pack_url = name_or_url
+    else:
+        pack_name = name_or_url
+        pack_url = None  # ExternalSkillLoader will look up TRUSTED_PACKS
+
     if not quiet:
-        console.print(f"\n[bold cyan]📦 Installing {name}[/bold cyan]\n{'=' * 40}\n")
+        source = pack_url or pack_name
+        console.print(f"\n[bold cyan]📦 Installing {pack_name}[/bold cyan]\n{'=' * 40}\n")
+        console.print(f"[dim]Source:[/dim] {source}\n")
 
-    # Get appropriate installer
-    if name == "gstack":
-        installer = GstackInstaller()
-    elif name == "superpowers":
-        installer = SuperpowersInstaller()
-    else:
-        console.print(f"[red]✗ Unknown integration: {name}[/red]")
-        return "failed"
+    loader = ExternalSkillLoader()
 
-    # Install with progress
+    # Check if already installed (unless force)
+    if not force and pack_url is None:
+        supported = loader.get_supported_packs()
+        if supported.get(pack_name, {}).get("installed"):
+            if not quiet:
+                console.print(
+                    f"[yellow]⚠ {pack_name} is already installed[/yellow]\n"
+                    "[dim]Use --force to reinstall[/dim]\n"
+                )
+            return "skipped"
+
+    # Execute installation with progress bar
     if quiet:
-        # Simple install without progress
-        result = installer.install(platform=None, force=force)
+        success, msg = loader.install_pack(pack_name, pack_url)
     else:
-        # Install with progress bar
         with Progress(
             SpinnerColumn(),
             TextColumn("[progress.description]{task.description}"),
@@ -265,54 +207,38 @@ def _install_integration(
             TaskProgressColumn(),
             console=console,
         ) as progress:
-            task = progress.add_task(f"Installing {name}...", total=100)
+            task = progress.add_task(f"Installing {pack_name}...", total=100)
 
-            # Create progress tracker
-            from vibesop.cli import ProgressTracker
+            # The loader does the heavy lifting; we just show completion
+            # since install_pack doesn't expose incremental progress.
+            progress.update(task, completed=30, description="Analyzing repository...")
+            success, msg = loader.install_pack(pack_name, pack_url)
+            progress.update(task, completed=100, description="Installation complete")
 
-            progress_tracker = ProgressTracker(
-                f"Installing {name}",
-            )
-            progress_tracker._started = False  # Prevent auto-start
-
-            result = installer.install(platform=None, force=force, progress=progress_tracker)
-
-            progress.update(task, completed=100)
-
-    # Check result
-    if result.get("success"):
+    if success:
         if not quiet:
-            console.print(
-                f"\n[green]✓ {name} installed successfully![/green]\n"
-                f"[dim]Path: {result.get('installed_path', 'N/A')}[/dim]\n"
-            )
-
-            # Show symlinks if any
-            symlinks = result.get("symlinks_created", [])
-            if symlinks:
-                console.print("[bold]Symlinks created:[/bold]")
-                for symlink in symlinks:
-                    console.print(f"  📎 {symlink}")
-                console.print()
-
-            # Verify
-            if not skip_verify:
-                if not quiet:
-                    console.print("[dim]Verifying installation...[/dim]")
-
-                verify_result = installer.verify()
-                if verify_result.get("installed"):
-                    console.print("[green]✓ Installation verified[/green]\n")
-                else:
-                    console.print("[yellow]⚠ Verification failed[/yellow]\n")
-
-        return "success"
-    else:
-        if not quiet:
-            errors = result.get("errors", [])
-            console.print(f"\n[red]✗ Failed to install {name}[/red]\n")
-            for error in errors:
-                console.print(f"  [dim]{error}[/dim]")
+            console.print(f"\n[green]✓ {pack_name} installed successfully![/green]\n")
+            for line in msg.split("\n"):
+                console.print(f"[dim]{line}[/dim]")
             console.print()
 
-        return "failed"
+            if not skip_verify:
+                console.print("[dim]Verifying installation...[/dim]")
+                discovered = loader.discover_from_pack(
+                    pack_name, loader.external_paths[0] / pack_name
+                )
+                if discovered:
+                    console.print(
+                        f"[green]✓ {len(discovered)} skill(s) discovered and ready[/green]\n"
+                    )
+                else:
+                    console.print("[yellow]⚠ No skills discovered after install[/yellow]\n")
+        return "success"
+
+    if not quiet:
+        console.print(f"\n[red]✗ Failed to install {pack_name}[/red]\n")
+        for line in msg.split("\n"):
+            console.print(f"  [dim]{line}[/dim]")
+        console.print()
+        raise typer.Exit(1)
+    return "failed"

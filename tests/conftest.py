@@ -1,8 +1,8 @@
 """Root conftest with shared fixtures for all tests."""
 
+from collections.abc import Generator
 from pathlib import Path
-from typing import Any, Generator
-from unittest.mock import AsyncMock, Mock, patch
+from unittest.mock import Mock, patch
 
 import pytest
 

@@ -1,11 +1,10 @@
-"""Tests for AI Triage Layer (Layer 0)."""
+"""Tests for AI Triage Layer (Layer 2)."""
 
-import json
-import os
+from unittest.mock import MagicMock
+
 import pytest
-from pathlib import Path
-from unittest.mock import MagicMock, patch
-from vibesop.core.routing.unified import UnifiedRouter, RoutingLayer, RoutingResult
+
+from vibesop.core.routing.unified import RoutingLayer, RoutingResult, UnifiedRouter
 
 
 @pytest.fixture
@@ -17,6 +16,8 @@ def mock_llm():
         content="systematic-debugging",
         model="claude-3-5-haiku-20241022",
         tokens_used=50,
+        input_tokens=40,
+        output_tokens=10,
     )
     return llm
 
@@ -25,7 +26,12 @@ def mock_llm():
 def router_with_llm(tmp_path, mock_llm):
     """Router with mocked LLM client."""
     (tmp_path / ".vibe").mkdir()
-    (tmp_path / "core" / "skills").mkdir(parents=True)
+    skill_dir = tmp_path / "core" / "skills" / "systematic-debugging"
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text(
+        "---\nname: systematic-debugging\n---\n# Systematic Debugging\n",
+        encoding="utf-8",
+    )
 
     from vibesop.core.config.manager import ConfigManager
 
@@ -41,10 +47,11 @@ def test_ai_triage_returns_skill_route(router_with_llm):
     """AI triage should return a SkillRoute when LLM responds."""
     result = router_with_llm.route("帮我调试数据库错误")
     assert isinstance(result, RoutingResult)
-    # AI triage should be Layer 0
-    assert result.routing_path[0] == RoutingLayer.AI_TRIAGE
+    # AI triage should be in routing path after explicit/scenario attempts
+    assert RoutingLayer.AI_TRIAGE in result.routing_path
     assert result.primary.skill_id == "systematic-debugging"
-    assert result.primary.confidence == 0.95
+    # Confidence is dynamic: fallback parsing gets ~0.82, structured JSON gets ~0.88
+    assert 0.8 <= result.primary.confidence <= 0.92
     assert result.primary.metadata.get("ai_triage") is True
 
 
@@ -82,6 +89,8 @@ def test_ai_triage_handles_invalid_response(tmp_path, mock_llm):
         content="this is not a valid skill id at all and has no pattern match",
         model="claude-3-5-haiku-20241022",
         tokens_used=100,
+        input_tokens=80,
+        output_tokens=20,
     )
 
     (tmp_path / ".vibe").mkdir()
@@ -98,8 +107,10 @@ def test_ai_triage_handles_invalid_response(tmp_path, mock_llm):
     # Should fall through to next layer
     result = router.route("debug this")
     assert isinstance(result, RoutingResult)
-    # Should NOT be AI_TRIAGE since response was invalid
-    assert result.routing_path[0] != RoutingLayer.AI_TRIAGE
+    # AI Triage was attempted but failed; it should appear in the full routing
+    # path for observability, but the final match (if any) comes from later layers.
+    assert RoutingLayer.AI_TRIAGE in result.routing_path
+    assert result.routing_path[-1] != RoutingLayer.AI_TRIAGE
 
 
 def test_ai_triage_handles_llm_error(tmp_path):
@@ -125,10 +136,9 @@ def test_ai_triage_handles_llm_error(tmp_path):
     assert isinstance(result, RoutingResult)
 
 
-def test_ai_triage_disabled_in_claude_code(tmp_path, monkeypatch):
-    """AI triage should be disabled inside Claude Code by default."""
-    monkeypatch.setenv("CLAUDECODE", "1")
-    monkeypatch.delenv("VIBE_AI_TRIAGE_ENABLED", raising=False)
+def test_ai_triage_explicit_disable(tmp_path, monkeypatch):
+    """AI triage can be explicitly disabled via env var."""
+    monkeypatch.setenv("VIBE_AI_TRIAGE_ENABLED", "0")
 
     (tmp_path / ".vibe").mkdir()
     (tmp_path / "core" / "skills").mkdir(parents=True)
@@ -139,30 +149,48 @@ def test_ai_triage_disabled_in_claude_code(tmp_path, monkeypatch):
     manager.set_cli_override("routing.enable_ai_triage", True)
 
     router = UnifiedRouter(project_root=tmp_path, config=manager)
-    # _init_llm_client should return None
+    # _init_llm_client should return None when explicitly disabled
     assert router._init_llm_client() is None
 
 
 def test_parse_ai_triage_response():
     """Test parsing various LLM response formats."""
-    (tmp_path := __import__("tempfile").mkdtemp())
+    import tempfile
+    tmp_path = tempfile.mkdtemp()
     from vibesop.core.config.manager import ConfigManager
 
     manager = ConfigManager(project_root=tmp_path)
     router = UnifiedRouter(project_root=tmp_path, config=manager)
 
-    # Code block format
-    assert router._parse_ai_triage_response("```systematic-debugging```") == "systematic-debugging"
-    # JSON code block
-    assert (
-        router._parse_ai_triage_response("```json\nsystematic-debugging\n```")
-        == "systematic-debugging"
-    )
-    # Plain text
-    assert router._parse_ai_triage_response("gstack/qa") == "gstack/qa"
-    # With namespace
-    assert router._parse_ai_triage_response("omx/deep-interview") == "omx/deep-interview"
+    # Structured JSON response (preferred)
+    parsed = router._parse_ai_triage_response('{"skill_id": "systematic-debugging"}')
+    assert parsed["skill_id"] == "systematic-debugging"
+    assert parsed["structured"] is True
+
+    # JSON inside markdown code block
+    parsed = router._parse_ai_triage_response('```json\n{"skill_id": "gstack/qa"}\n```')
+    assert parsed["skill_id"] == "gstack/qa"
+    assert parsed["structured"] is True
+
+    # Legacy code block format (regex fallback)
+    parsed = router._parse_ai_triage_response("```systematic-debugging```")
+    assert parsed["skill_id"] == "systematic-debugging"
+    assert parsed["structured"] is False
+
+    # Plain text (regex fallback)
+    parsed = router._parse_ai_triage_response("gstack/qa")
+    assert parsed["skill_id"] == "gstack/qa"
+    assert parsed["structured"] is False
+
+    # With namespace (regex fallback)
+    parsed = router._parse_ai_triage_response("omx/deep-interview")
+    assert parsed["skill_id"] == "omx/deep-interview"
+    assert parsed["structured"] is False
+
     # Empty response
-    assert router._parse_ai_triage_response("") is None
+    parsed = router._parse_ai_triage_response("")
+    assert parsed["skill_id"] is None
+
     # Random text
-    assert router._parse_ai_triage_response("I don't know") is None
+    parsed = router._parse_ai_triage_response("I don't know")
+    assert parsed["skill_id"] is None

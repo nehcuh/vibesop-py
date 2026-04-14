@@ -58,23 +58,19 @@ from vibesop.core.skills.storage import (
 )
 
 __all__ = [
-    # External loading
     "ExternalSkillLoader",
     "ExternalSkillMetadata",
     "ExternalSkillSource",
-    # Base classes
+    "LoadedSkill",
     "PromptSkill",
     "Skill",
     "SkillContext",
-    # Loader and manager
-    "LoadedSkill",
     "SkillLoader",
     "SkillManager",
     "SkillManifest",
     "SkillMetadata",
     "SkillResult",
     "SkillSource",
-    # Storage
     "SkillStorage",
     "SkillType",
     "WorkflowSkill",

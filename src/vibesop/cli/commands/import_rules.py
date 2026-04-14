@@ -114,8 +114,8 @@ def import_rules(
         output_dir = Path(".vibe/rules")
         output_file = output_dir / "imported-rules.md"
     else:
-        output_dir = Path(".vibe/core")
-        output_file = output_dir / "policies" / "imported.yaml"
+        output_dir = Path(".vibe/core/policies")
+        output_file = output_dir / "imported.yaml"
 
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -154,7 +154,7 @@ def _parse_rules(content: str) -> str:
     lines = content.split("\n")
 
     # Add VibeSOP header
-    result = ["# Imported Rules", "", f"> Source: External rule file", "", "---", ""]
+    result = ["# Imported Rules", "", "> Source: External rule file", "", "---", ""]
 
     # Add original content
     result.extend(lines)

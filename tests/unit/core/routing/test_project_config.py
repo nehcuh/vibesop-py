@@ -3,8 +3,6 @@
 import tempfile
 from pathlib import Path
 
-import pytest
-
 from vibesop.core.routing.project_config import (
     create_default_project_routing,
     load_merged_scenarios,

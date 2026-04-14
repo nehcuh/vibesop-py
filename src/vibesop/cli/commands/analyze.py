@@ -27,7 +27,6 @@ from typing import Any
 
 import typer
 from rich.console import Console
-from rich.panel import Panel
 from rich.table import Table
 
 console = Console()
@@ -38,7 +37,7 @@ def analyze(
         ...,
         help="Analysis target: session, patterns, security, integrations",
     ),
-    source: Path | None = typer.Argument(
+    source: Path | None = typer.Argument(  # noqa: B008
         None,
         help="Source file or directory to analyze",
         exists=True,
@@ -55,7 +54,7 @@ def analyze(
         "-c",
         help="Minimum confidence threshold",
     ),
-    auto_craft: bool = typer.Option(
+    _auto_craft: bool = typer.Option(
         False,
         "--auto-craft",
         "-a",
@@ -113,9 +112,9 @@ def analyze(
         vibe analyze integrations --verbose
     """
     if target in ("session", "patterns"):
-        _analyze_session(source, min_frequency, min_confidence, auto_craft)
+        _analyze_session(source, min_frequency, min_confidence, _auto_craft)
     elif target == "security":
-        _analyze_security(source or Path("."), all_files, json_output)
+        _analyze_security(source or Path(), all_files, json_output)
     elif target == "integrations":
         _analyze_integrations(verbose, json_output)
     else:
@@ -130,7 +129,7 @@ def _analyze_session(
     source: Path | None,
     min_frequency: int,
     min_confidence: float,
-    auto_craft: bool,
+    _auto_craft: bool,
 ) -> None:
     """Analyze session file or directory for patterns and skill suggestions.
 
@@ -409,66 +408,6 @@ def _find_current_session() -> Path | None:
             return path
 
     return None
-
-
-def _auto_create_skills(suggestions: list[Any]) -> None:
-    """Auto-create skills from suggestions.
-
-    Args:
-        suggestions: List of skill suggestions
-    """
-    from pathlib import Path
-
-    created = 0
-    output_dir = Path(".vibe/skills")
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    for suggestion in suggestions:
-        if suggestion.estimated_value not in ("high", "medium"):
-            continue
-
-        # Generate skill content
-        skill_content = f"""# {suggestion.skill_name}
-
-{suggestion.description}
-
-## Intent
-
-{suggestion.description}
-
-## Trigger When
-
-{suggestion.trigger_pattern}
-
-## Steps
-
-1. Identify the user's need based on the trigger pattern
-2. Provide assistance based on the context
-
-## Examples
-
-### Example 1
-
-**User**: {suggestion.trigger_queries[0] if suggestion.trigger_queries else "help me"}
-
-**Action**: Provide assistance based on the query context
-
----
-
-*Created by VibeSOP Session Analysis*
-*Based on {suggestion.frequency} similar queries*
-"""
-
-        # Write skill file
-        safe_name = suggestion.skill_name.lower().replace(" ", "-").replace("/", "-")
-        skill_file = output_dir / f"{safe_name}.md"
-        skill_file.write_text(skill_content)
-
-        console.print(f"[green]✓ Created:[/green] {skill_file}")
-        created += 1
-
-    if created > 0:
-        console.print(f"\n[green]✓ Created {created} skills[/green]")
 
 
 def _display_suggestions(suggestions: list[Any]) -> None:

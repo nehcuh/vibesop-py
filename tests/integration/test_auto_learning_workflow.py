@@ -13,9 +13,9 @@ import pytest
 from typer.testing import CliRunner
 
 from vibesop.cli.main import app
+from vibesop.core.ai_enhancer import AIEnhancer
 from vibesop.core.preference import PreferenceLearner
 from vibesop.core.session_analyzer import SessionAnalyzer
-from vibesop.core.ai_enhancer import AIEnhancer
 
 runner = CliRunner()
 
@@ -70,7 +70,7 @@ class TestPreferenceRecordingWorkflow:
         )
 
         learner = PreferenceLearner(storage_path=preferences_file)
-        score = learner.get_preference_score("code-review/skill")
+        learner.get_preference_score("code-review/skill")
 
         assert "code-review/skill" in learner._storage.skill_scores  # type: ignore[reportPrivateUsage]
 
@@ -154,7 +154,6 @@ class TestAIEnhancementWorkflow:
     def test_ai_enhancement_with_mock_llm(self) -> None:
         """Test AI enhancement with mocked LLM."""
         from vibesop.core.session_analyzer import SkillSuggestion
-        from vibesop.core.ai_enhancer import EnhancedSkill
 
         suggestion = SkillSuggestion(
             skill_name="请帮我优化代码性能",
@@ -205,8 +204,8 @@ class TestAIEnhancementWorkflow:
 
     def test_fallback_when_llm_unavailable(self) -> None:
         """Test fallback enhancement when LLM is unavailable."""
-        from vibesop.core.session_analyzer import SkillSuggestion
         from vibesop.core.ai_enhancer import EnhancedSkill
+        from vibesop.core.session_analyzer import SkillSuggestion
 
         suggestion = SkillSuggestion(
             skill_name="请帮我优化代码性能",
@@ -272,7 +271,7 @@ class TestCompleteLearningLoop:
         data: dict[str, Any] = json.loads(learning_environment["preferences_file"].read_text())
         assert len(data["selections"]) == 3
 
-        score = learner.get_preference_score("optimization/skill")
+        learner.get_preference_score("optimization/skill")
         assert "optimization/skill" in learner._storage.skill_scores  # type: ignore[reportPrivateUsage]
 
     def test_phase2_pattern_detection(self, learning_environment: dict[str, Any]) -> None:
@@ -290,7 +289,7 @@ class TestCompleteLearningLoop:
 
     def test_phase4_ai_enhancement(self, learning_environment: dict[str, Any]) -> None:
         """Test Phase 4: AI enhancement."""
-        from vibesop.core.ai_enhancer import AIEnhancer, EnhancedSkill
+        from vibesop.core.ai_enhancer import AIEnhancer
         from vibesop.core.session_analyzer import SessionAnalyzer
 
         analyzer = SessionAnalyzer(min_frequency=3, min_confidence=0.3)
@@ -461,7 +460,7 @@ class TestErrorRecovery:
 
         session_file.write_text("\n".join(lines))
 
-        with patch("vibesop.core.ai_enhancer.AIEnhancer") as mock_enhancer:
+        with patch("vibesop.core.ai_enhancer.AIEnhancer"):
             mock_instance = Mock()
             mock_instance.enhance_suggestion.side_effect = Exception("LLM down")
             mock_instance._fallback_enhancement = Mock(return_value=None)

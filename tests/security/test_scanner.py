@@ -1,13 +1,14 @@
 """Tests for SecurityScanner."""
 
-import pytest
 from pathlib import Path
 
+import pytest
+
 from vibesop.security import (
-    SecurityScanner,
-    ScanResult,
-    ThreatType,
     RiskLevel,
+    ScanResult,
+    SecurityScanner,
+    ThreatType,
     UnsafeContentError,
 )
 
@@ -253,7 +254,7 @@ This is safe again on line 4."""
         scanner = SecurityScanner()
 
         # Create custom rule
-        from vibesop.security.rules import PatternRule, ThreatType, RiskLevel
+        from vibesop.security.rules import PatternRule, RiskLevel, ThreatType
 
         custom_rule = PatternRule(
             threat_type=ThreatType.INDIRECT_INJECTION,

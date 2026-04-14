@@ -7,6 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [4.0.0] - 2026-04-12
+
+### Major Release - Systematic Optimization Refactor
+
+This is an **aggressive refactor** that unifies the installer architecture, productionizes AI Triage, and introduces a central algorithm registry. **This release contains breaking changes.**
+
+### Added
+- **Unified Installation CLI**: `vibe install` now uses a single generic flow via `ExternalSkillLoader` + `RepoAnalyzer` + `InstallPlanner`
+  - Supports installing by pack name, Git URL, or `--auto` recommended packs
+  - New `vibe install --list` to show available trusted packs
+- **AI Triage Productionization**:
+  - `TriagePromptRegistry`: versioned prompt templates for A/B testing and production management
+  - `TriageCostTracker`: token usage and cost tracking with JSONL logging
+  - Budget enforcement and 90% budget warnings in `UnifiedRouter`
+- **Algorithm Registry**: `vibesop.core.algorithms.registry.AlgorithmRegistry`
+  - Central registry for reusable algorithms (e.g., ambiguity scoring, slop detection)
+  - Skills can declare algorithm dependencies via the `algorithms:` frontmatter field
+  - New CLI command: `vibe algorithms list`
+- **New Tests**: `tests/cli/test_install_command.py`, `tests/core/routing/test_ai_triage_production.py`, `tests/core/algorithms/test_registry.py`
+
+### Changed
+- **CLI**: `vibe install` completely rewritten; old hardcoded gstack/superpowers installers removed
+- **SKILL.md Parser**: now extracts the `algorithms:` frontmatter field
+- **LLM Providers**: `AnthropicProvider` and `OpenAIProvider` now return `input_tokens` and `output_tokens` in `LLMResponse`
+
+### Removed
+- `GitBasedInstaller`, `GstackInstaller`, `SuperpowersInstaller` classes and modules
+- `_DEPRECATED_CLASSES` and `__getattr__` compatibility shim from `vibesop.core.routing.__init__`
+- Legacy `SkillParser` wrapper class (callers now use `parse_skill_md` directly)
+
+### Fixed
+- AI Triage no longer silently fails when token fields are missing from LLM responses
+- Resolved 215+ lint errors across the entire codebase (`src/` and `tests/`)
+
+---
+
 ## [3.0.0] - 2026-04-05
 
 ### Major Release - Unified Architecture

@@ -38,8 +38,8 @@ class PlatformAdapter(ABC):
     """
 
     # Safety validators
-    _path_safety: PathSafety | None = None
-    _security_scanner: SecurityScanner | None = None
+    _path_safety: PathSafety
+    _security_scanner: SecurityScanner
 
     def __init__(self) -> None:
         """Initialize the platform adapter."""

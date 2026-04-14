@@ -27,9 +27,9 @@ class RoutingLayer(StrEnum):
     def layer_number(self) -> int:
         """Return numeric layer index for backward compatibility."""
         mapping = {
-            RoutingLayer.AI_TRIAGE: 0,
-            RoutingLayer.EXPLICIT: 1,
-            RoutingLayer.SCENARIO: 2,
+            RoutingLayer.EXPLICIT: 0,
+            RoutingLayer.SCENARIO: 1,
+            RoutingLayer.AI_TRIAGE: 2,
             RoutingLayer.KEYWORD: 3,
             RoutingLayer.TFIDF: 4,
             RoutingLayer.EMBEDDING: 5,

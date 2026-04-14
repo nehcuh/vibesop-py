@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from ruamel.yaml import YAML
 
@@ -94,9 +94,9 @@ def load_project_routing(project_root: str | Path = ".") -> dict[str, Any]:
 
     try:
         with config_path.open("r", encoding="utf-8") as f:
-            data = yaml.load(f)
+            data = cast("Any", yaml.load(f))  # type: ignore[reportUnknownMemberType]
 
-        return data if isinstance(data, dict) else {}
+        return cast("dict[str, Any]", data) if isinstance(data, dict) else {}
 
     except (OSError, Exception) as e:
         logger.debug(f"Failed to load project routing config from {config_path}: {e}")
@@ -134,6 +134,7 @@ def merge_scenarios(
         if not isinstance(override, dict):
             continue
 
+        override = cast("dict[str, Any]", override)
         scenario_id = override.get("id")
         if not scenario_id:
             continue
@@ -152,7 +153,7 @@ def merge_scenarios(
     project_scenarios = project_routing.get("scenario_patterns", [])
     for scenario in project_scenarios:
         if isinstance(scenario, dict) and "id" in scenario:
-            merged.append(scenario)
+            merged.append(cast("dict[str, Any]", scenario))
 
     return merged
 

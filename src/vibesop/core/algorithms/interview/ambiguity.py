@@ -43,7 +43,7 @@ class AmbiguityResult:
             "constraints": self.constraints.score,
             "success": self.success.score,
         }
-        return min(scores, key=scores.get)
+        return min(scores, key=lambda k: scores[k])
 
     def to_dict(self) -> dict[str, Any]:
         return {

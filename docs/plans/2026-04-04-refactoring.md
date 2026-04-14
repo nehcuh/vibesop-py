@@ -1,5 +1,16 @@
 # VibeSOP-Py Refactoring Plan
 
+> ⚠️ **SUPERSEDED** — This plan was superseded by the VibeSOP v4.0 aggressive refactor (April 2026). The actual implementation took a more aggressive approach:
+> - Removed `GitBasedInstaller`, `GstackInstaller`, and `SuperpowersInstaller` entirely
+> - Replaced them with a unified `ExternalSkillLoader` + `RepoAnalyzer` + `InstallPlanner` architecture
+> - Productionized AI Triage with cost tracking, budget enforcement, and versioned prompts
+> - Introduced the `AlgorithmRegistry` for reusable algorithms
+> - Cleaned all deprecated compatibility shims from `routing/__init__.py`
+>
+> The document below is retained for historical context only.
+
+---
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Fix critical bugs, eliminate code duplication, correct false documentation claims, and establish a solid foundation for future development.

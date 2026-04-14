@@ -13,7 +13,7 @@ class SlopPattern:
     """A pattern that indicates AI-generated slop."""
 
     name: str
-    pattern: re.Pattern
+    pattern: re.Pattern[str]
     severity: str  # low, medium, high
 
 

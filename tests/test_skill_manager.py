@@ -255,7 +255,7 @@ class TestSkillLoader:
 
         # Create temp directory and chroot to it
         tmpdir = Path(tempfile.mkdtemp())
-        original_dir = os.getcwd()
+        original_dir = str(Path.cwd())
 
         try:
             os.chdir(tmpdir)

@@ -43,10 +43,13 @@ class SkillMetadata:
     tags: list[str] | None = None
     skill_type: SkillType = SkillType.PROMPT
     trigger_when: str = ""
+    algorithms: list[str] | None = None
 
     def __post_init__(self) -> None:
         if self.tags is None:
             self.tags = []
+        if self.algorithms is None:
+            self.algorithms = []
 
 
 @dataclass
@@ -139,7 +142,7 @@ class Skill(ABC):
         Returns:
             True if valid, False otherwise
         """
-        return context.query is not None
+        return bool(context.query)
 
     def get_prompt_template(self) -> str | None:
         """Get the prompt template for this skill.

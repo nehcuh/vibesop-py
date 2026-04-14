@@ -22,7 +22,6 @@ from rich.panel import Panel
 from vibesop import __version__
 from vibesop.cli.subcommands import register
 from vibesop.core.routing import UnifiedRouter
-from vibesop.core.skills import SkillManager
 
 app = typer.Typer(
     name="vibe",
@@ -38,7 +37,7 @@ console = Console()
 @app.command()
 def route(
     query: str = typer.Argument(..., help="Natural language query to route"),
-    min_confidence: float = typer.Option(
+    min_confidence: float | None = typer.Option(
         None,
         "--min-confidence",
         "-c",
@@ -46,6 +45,7 @@ def route(
     ),
     json_output: bool = typer.Option(False, "--json", "-j", help="Output as JSON"),
     validate: bool = typer.Option(False, "--validate", "-V", help="Validate routing configuration"),
+    explain: bool = typer.Option(False, "--explain", "-e", help="Explain routing decision (alias for --validate)"),
 ) -> None:
     """Route a query to the appropriate skill using unified routing.
 
@@ -53,7 +53,7 @@ def route(
     but does not execute skills. Use your AI Agent (Claude Code, OpenCode)
     to execute the recommended skill.
 
-    Use --validate to test routing configuration.
+    Use --validate or --explain to inspect routing details.
     """
     from pathlib import Path
 
@@ -72,13 +72,14 @@ def route(
         import json
 
         console.print(json.dumps(result.to_dict(), indent=2))
-    elif result.has_match:
+    elif result.primary is not None:
+        primary = result.primary
         console.print(
             Panel(
-                f"[bold green]✅ Matched:[/bold green] {result.primary.skill_id}\n"
-                f"[dim]Confidence:[/dim] {result.primary.confidence:.0%}\n"
-                f"[dim]Layer:[/dim] {result.primary.layer.value}\n"
-                f"[dim]Source:[/dim] {result.primary.source}\n"
+                f"[bold green]✅ Matched:[/bold green] {primary.skill_id}\n"
+                f"[dim]Confidence:[/dim] {primary.confidence:.0%}\n"
+                f"[dim]Layer:[/dim] {primary.layer.value}\n"
+                f"[dim]Source:[/dim] {primary.source}\n"
                 f"[dim]Duration:[/dim] {result.duration_ms:.1f}ms",
                 title="[bold]Routing Result[/bold]",
                 border_style="blue",
@@ -103,11 +104,10 @@ def route(
             )
         )
 
-    # Handle validation mode
-    if validate:
-        from rich.table import Table
-
-        console.print(f"\n[bold cyan]✓ Route Validation[/bold cyan]\n{'=' * 40}\n")
+    # Handle validation / explanation mode
+    if validate or explain:
+        title = "Routing Explanation" if explain else "Route Validation"
+        console.print(f"\n[bold cyan]✓ {title}[/bold cyan]\n{'=' * 40}\n")
 
         # Show router capabilities
         caps = router.get_capabilities()
@@ -124,7 +124,7 @@ def route(
 
         # Test the query
         console.print(f"\n[bold]Testing query:[/bold] {query}\n")
-        if result.has_match:
+        if result.primary is not None:
             console.print(f"  Primary: {result.primary.skill_id} ({result.primary.confidence:.0%})")
             console.print(f"  Layer: {result.primary.layer.value}")
         else:
@@ -241,9 +241,10 @@ def preferences() -> None:
     console.print(f"Helpful rate: {stats['helpful_rate']:.1%}")
     console.print(f"Unique skills: {stats['unique_skills']}")
 
-    if stats["top_skills"]:
+    top_skills = stats.get("top_skills")
+    if isinstance(top_skills, list) and top_skills:
         console.print("\n[bold]Top Skills:[/bold]")
-        for skill_id, count in stats["top_skills"][:5]:
+        for skill_id, count in top_skills[:5]:
             console.print(f"  • {skill_id}: {count} selections")
 
     console.print(f"\nStorage: {stats['storage_path']}")

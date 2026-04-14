@@ -97,10 +97,13 @@ class ConfigSource:
     def reload(self) -> None:
         """Reload configuration from file."""
         if self.path and self.path.exists():
-            self._load_from_file()
+            self.load_from_file()
 
-    def _load_from_file(self) -> None:
+    def load_from_file(self) -> None:
         """Load configuration from file."""
+        if self.path is None:
+            self.data = {}
+            return
         try:
             import yaml
 
@@ -125,10 +128,15 @@ class RoutingConfig(BaseModel):
 
     min_confidence: float = Field(default=0.3, ge=0.0, le=1.0)
     auto_select_threshold: float = Field(default=0.6, ge=0.0, le=1.0)
-    enable_ai_triage: bool = False
+    enable_ai_triage: bool = True
     enable_embedding: bool = False
     max_candidates: int = Field(default=3, ge=1, le=10)
     use_cache: bool = True
+    ai_triage_max_skills: int = Field(default=20, ge=5, le=50)
+    ai_triage_max_tokens: int = Field(default=100, ge=50, le=500)
+    ai_triage_prompt_version: str = Field(default="v1")
+    ai_triage_budget_monthly: float = Field(default=5.0, ge=0.0)
+    ai_triage_log_calls: bool = True
 
 
 class SecurityConfig(BaseModel):
@@ -265,7 +273,7 @@ class ConfigManager:
                 data={},
                 path=global_config_path,
             )
-            source._load_from_file()
+            source.load_from_file()
             self._sources[ConfigSourcePriority.GLOBAL] = source
 
         # 3. Project config (.vibe/config.yaml)
@@ -276,7 +284,7 @@ class ConfigManager:
                 data={},
                 path=project_config_path,
             )
-            source._load_from_file()
+            source.load_from_file()
             self._sources[ConfigSourcePriority.PROJECT] = source
 
         # 4. Legacy preferences (.vibe/preferences.json)
@@ -392,6 +400,19 @@ class ConfigManager:
         from vibesop.core.config.optimization_config import OptimizationConfig
 
         return OptimizationConfig(**self._get_section("optimization"))
+
+    def load_policy(self) -> dict[str, Any]:
+        """Load full policy configuration.
+
+        Returns:
+            Dictionary with security, routing, behavior, and custom sections
+        """
+        return {
+            "security": self._get_section("security"),
+            "routing": self._get_section("routing"),
+            "behavior": self._get_section("behavior"),
+            "custom": self._get_section("custom"),
+        }
 
     def _get_section(self, section: str) -> dict[str, Any]:
         """Get a complete configuration section merged from all sources.

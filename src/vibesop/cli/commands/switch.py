@@ -56,7 +56,7 @@ def _get_configured_platform() -> str | None:
 
 
 def switch(
-    platform: str = typer.Argument(
+    platform: str | None = typer.Argument(
         None,
         help="Target platform (claude-code, opencode, superpowers, cursor). "
         "Defaults to platform from config.yaml",
@@ -141,7 +141,7 @@ def switch(
         from vibesop.cli.commands import build as build_module
 
         # Call build logic (will raise typer.Exit on failure)
-        build_module._execute_build(
+        build_module.execute_build(
             target=platform,
             profile=profile,
             output=None,  # Use default output

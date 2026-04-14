@@ -9,10 +9,10 @@ from pathlib import Path
 
 import pytest
 
-from vibesop.core.routing.unified import UnifiedRouter
-from vibesop.core.models import RoutingLayer
-from vibesop.builder import ConfigRenderer, ManifestBuilder, QuickBuilder
 from vibesop.adapters import Manifest, ManifestMetadata
+from vibesop.builder import ConfigRenderer, ManifestBuilder, QuickBuilder
+from vibesop.core.models import RoutingLayer
+from vibesop.core.routing.unified import UnifiedRouter
 from vibesop.security import SecurityScanner
 
 
@@ -204,10 +204,11 @@ class TestSkillExecution:
         router = UnifiedRouter()
 
         # Simulate multiple selections
+        # Use builtin skill queries to avoid depending on external packs
         queries = [
-            "review my code",
-            "please review this",
-            "help me review",
+            "debug this error",
+            "help me fix this bug",
+            "this code has a bug",
         ]
 
         for query in queries:

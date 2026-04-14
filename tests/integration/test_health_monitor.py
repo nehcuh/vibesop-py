@@ -1,7 +1,5 @@
 """Tests for SkillHealthMonitor."""
 
-from pathlib import Path
-
 import pytest
 
 from vibesop.integrations import SkillHealthMonitor
@@ -26,13 +24,13 @@ class TestSkillHealthMonitor:
         assert len(status.reasons) > 0
 
     def test_check_builtin_pack(self):
-        """测试检查 builtin 技能包（如果存在）。"""
+        """测试检查 builtin 技能包(如果存在)."""
         monitor = SkillHealthMonitor()
 
-        # builtin 可能不存在，这是一个软测试
+        # builtin 可能不存在, 这是一个软测试
         status = monitor.check_local_health("builtin")
 
-        # 如果不是 critical，说明找到了一些技能
+        # 如果不是 critical, 说明找到了一些技能
         if status.health != "critical":
             assert status.skills_count >= 0
 
@@ -61,5 +59,5 @@ class TestSkillHealthMonitorIntegration:
         assert len(results) >= 0
 
         # 所有状态应该是有效的
-        for name, status in results.items():
+        for _name, status in results.items():
             assert status.health in ("healthy", "warning", "critical", "unknown")

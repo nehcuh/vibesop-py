@@ -98,7 +98,14 @@ class OpenAIProvider(LLMProvider):
             )
 
             content = response.choices[0].message.content or ""
-            tokens_used = response.usage.total_tokens if response.usage else None
+            if response.usage:
+                input_tokens = response.usage.prompt_tokens
+                output_tokens = response.usage.completion_tokens
+                tokens_used = response.usage.total_tokens
+            else:
+                input_tokens = None
+                output_tokens = None
+                tokens_used = None
 
             self._record_call(tokens_used)
 
@@ -107,6 +114,8 @@ class OpenAIProvider(LLMProvider):
                 model=model,
                 provider=self.provider_name,
                 tokens_used=tokens_used,
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
             )
 
         except Exception as e:
@@ -159,7 +168,14 @@ class OpenAIProvider(LLMProvider):
                 )
 
                 content = response.choices[0].message.content or ""
-                tokens_used = response.usage.total_tokens if response.usage else None
+                if response.usage:
+                    input_tokens = response.usage.prompt_tokens
+                    output_tokens = response.usage.completion_tokens
+                    tokens_used = response.usage.total_tokens
+                else:
+                    input_tokens = None
+                    output_tokens = None
+                    tokens_used = None
 
                 self._record_call(tokens_used)
 
@@ -168,6 +184,8 @@ class OpenAIProvider(LLMProvider):
                     model=model,
                     provider=self.provider_name,
                     tokens_used=tokens_used,
+                    input_tokens=input_tokens,
+                    output_tokens=output_tokens,
                 )
 
         except Exception as e:

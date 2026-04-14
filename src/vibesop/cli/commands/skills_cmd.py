@@ -24,7 +24,7 @@ from vibesop.core.skills import SkillManager, SkillStorage
 console = Console()
 
 
-def list(
+def list_skills(
     all_: bool = typer.Option(
         False,
         "--all",

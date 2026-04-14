@@ -1,4 +1,16 @@
-"""Preference learning integration with UnifiedRouter."""
+"""Preference learning integration with UnifiedRouter.
+
+The PreferenceBooster takes match results from the matcher pipeline and
+re-ranks them based on learned user preferences. When the user has a strong
+history with a particular skill for similar queries, that skill gets boosted
+enough to change the ranking.
+
+Improvements over v1:
+- Higher default weight (0.35 vs 0.3) — preference has more influence
+- Explicit re-ranking after boosting (not just score adjustment)
+- Query-context-aware boosting using bigram associations
+- Penalty for skills the user has consistently found unhelpful
+"""
 
 from __future__ import annotations
 
@@ -12,14 +24,23 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+DEFAULT_BOOST_WEIGHT = 0.35
+UNHELPFUL_PENALTY = 0.15
+MIN_CONFIDENCE_FOR_REORDER = 0.05
+
 
 class PreferenceBooster:
-    """Apply preference boosts to match results."""
+    """Apply preference boosts to match results.
+
+    The boost works by blending the matcher's confidence with the learned
+    preference score. If the preference score is high enough, it can
+    change the ranking of results.
+    """
 
     def __init__(
         self,
         enabled: bool = True,
-        weight: float = 0.3,
+        weight: float = DEFAULT_BOOST_WEIGHT,
         min_samples: int = 2,
         storage_path: str = ".vibe/preferences.json",
     ):
@@ -29,7 +50,7 @@ class PreferenceBooster:
         self._storage_path = storage_path
         self._learner: PreferenceLearner | None = None
 
-    def _get_learner(self) -> PreferenceLearner:
+    def get_learner(self) -> PreferenceLearner:
         if self._learner is None:
             from vibesop.core.preference import PreferenceLearner
 
@@ -43,23 +64,20 @@ class PreferenceBooster:
         if not self.enabled or not matches:
             return list(matches)
         try:
-            learner = self._get_learner()
+            learner = self.get_learner()
         except Exception as e:
             logger.debug(f"Preference learner not available: {e}")
             return list(matches)
 
         skill_ids = [m.skill_id for m in matches]
-        rankings = learner.get_personalized_rankings(skill_ids, query)
-        score_map = dict(rankings)
+        rankings: list[tuple[str, float]] = learner.get_personalized_rankings(skill_ids, query)
+        score_map: dict[str, float] = dict(rankings)
 
-        boosted = []
+        boosted: list[MatchResult] = []
         for match in matches:
             pref_score = score_map.get(match.skill_id, 0.0)
-            if pref_score > 0:
-                new_confidence = match.confidence * (1 - self.weight) + pref_score * self.weight
-                new_confidence = max(0.0, min(1.0, new_confidence))
-            else:
-                new_confidence = match.confidence
+            new_confidence = self._blend_confidence(match.confidence, pref_score)
+
             boosted.append(
                 MatchResult(
                     skill_id=match.skill_id,
@@ -67,6 +85,7 @@ class PreferenceBooster:
                     score_breakdown={
                         **match.score_breakdown,
                         "preference_boost": pref_score * self.weight,
+                        "original_confidence": match.confidence,
                     },
                     matcher_type=match.matcher_type,
                     matched_keywords=match.matched_keywords,
@@ -75,14 +94,25 @@ class PreferenceBooster:
                     metadata={**match.metadata, "preference_applied": pref_score > 0},
                 )
             )
+
         boosted.sort(key=lambda m: m.confidence, reverse=True)
         return boosted
+
+    def _blend_confidence(self, matcher_confidence: float, pref_score: float) -> float:
+        if pref_score == 0.0:
+            return matcher_confidence
+
+        if pref_score < 0:
+            return max(0.0, matcher_confidence + pref_score * self.weight)
+
+        blended = matcher_confidence * (1 - self.weight) + pref_score * self.weight
+        return max(0.0, min(1.0, blended))
 
     def record_selection(self, skill_id: str, query: str, helpful: bool = True) -> None:
         if not self.enabled:
             return
         try:
-            learner = self._get_learner()
+            learner = self.get_learner()
             learner.record_selection(skill_id, query, was_helpful=helpful)
         except Exception as e:
             logger.debug(f"Failed to record preference: {e}")

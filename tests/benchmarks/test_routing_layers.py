@@ -1,6 +1,6 @@
 """路由管道性能基准测试.
 
-评估 5 层路由管道的命中率和延迟：
+评估 5 层路由管道的命中率和延迟:
 - Layer 0: AI Triage (optional, LLM call)
 - Layer 1: Explicit Override (/skill, 使用 skill)
 - Layer 2: Scenario Pattern (预定义场景)
@@ -9,12 +9,13 @@
 """
 
 import time
+
 import pytest
 
-from vibesop.core.routing import UnifiedRouter
 from vibesop.core.models import RoutingLayer
+from vibesop.core.routing import UnifiedRouter
 
-# 真实查询样本（扩展到 100+）
+# 真实查询样本(扩展到 100+)
 QUERY_SAMPLES = [
     # Explicit override patterns
     "/review",
@@ -77,7 +78,7 @@ def test_routing_layer_distribution():
     router = UnifiedRouter()
 
     # 使用 RoutingLayer 枚举作为 key
-    layer_hits = {layer: 0 for layer in RoutingLayer}
+    layer_hits = dict.fromkeys(RoutingLayer, 0)
     layer_times = {layer: [] for layer in RoutingLayer}
 
     total_time = 0.0
@@ -116,7 +117,7 @@ def test_routing_layer_distribution():
 
 @pytest.mark.benchmark
 def test_ai_triage_impact():
-    """评估 AI Triage 层的影响（如果启用）"""
+    """评估 AI Triage 层的影响(如果启用)"""
     router = UnifiedRouter()
 
     # 检查是否启用 AI Triage
@@ -126,7 +127,7 @@ def test_ai_triage_impact():
     if not ai_enabled:
         pytest.skip("AI Triage not enabled, set VIBE_ROUTING_AI_TRIAGE=1 to test")
 
-    # 测试少量查询（AI Triage 有成本）
+    # 测试少量查询(AI Triage 有成本)
     sample_queries = QUERY_SAMPLES[:10]
 
     hits = 0
@@ -137,7 +138,7 @@ def test_ai_triage_impact():
         elapsed = (time.perf_counter() - start) * 1000
         total_time += elapsed
 
-        if result.routing_path and result.routing_path[0] == RoutingLayer.AI_TRIAGE:
+        if result.primary and result.primary.layer == RoutingLayer.AI_TRIAGE:
             hits += 1
 
     print(f"\n=== AI Triage 分析 (n={len(sample_queries)}) ===")
@@ -176,10 +177,10 @@ def test_confidence_distribution():
     print(f"低置信度 (<0.5): {low_conf} ({low_conf/total*100:.1f}%)")
     print(f"无匹配: {no_match} ({no_match/total*100:.1f}%)")
 
-    # 注意：min_confidence 默认 0.6，所以很多匹配会被过滤
-    # 这个测试用于记录当前状态，不设严格断言
+    # 注意: min_confidence 默认 0.6, 所以很多匹配会被过滤
+    # 这个测试用于记录当前状态, 不设严格断言
     print(f"\n提示: min_confidence={router._config.min_confidence}")
-    print(f"如需提高匹配率，可降低 min_confidence 阈值")
+    print("如需提高匹配率, 可降低 min_confidence 阈值")
 
 
 @pytest.mark.benchmark
@@ -199,7 +200,7 @@ def test_latency_percentiles():
     p95 = latencies[int(len(latencies)*0.95)]
     p99 = latencies[-1]
 
-    print(f"\n=== 延迟分布 ===")
+    print("\n=== 延迟分布 ===")
     print(f"P50: {p50:.2f}ms")
     print(f"P95: {p95:.2f}ms")
     print(f"P99: {p99:.2f}ms")
