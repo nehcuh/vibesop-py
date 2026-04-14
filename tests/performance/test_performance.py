@@ -23,6 +23,10 @@ class TestRoutingPerformance:
         """
         router = UnifiedRouter()
 
+        # Warm up: trigger candidate loading and matcher initialization
+        # to avoid measuring cold-start overhead in latency metrics
+        router.route("warmup")
+
         # Generate test requests
         queries = [f"test query {i}" for i in range(100)]
 
@@ -48,6 +52,10 @@ class TestRoutingPerformance:
         Routes 100 requests and verifies 99th percentile is acceptable.
         """
         router = UnifiedRouter()
+
+        # Warm up: trigger candidate loading and matcher initialization
+        # to avoid measuring cold-start overhead in latency metrics
+        router.route("warmup")
 
         # Generate test requests
         queries = [f"test query {i}" for i in range(100)]

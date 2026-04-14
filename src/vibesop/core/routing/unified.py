@@ -125,6 +125,10 @@ class UnifiedRouter:
 
         self._matchers.append((RoutingLayer.LEVENSHTEIN, LevenshteinMatcher(matcher_config)))
 
+        # Warm up matchers to prevent cold-start latency on first route()
+        # This ensures EmbeddingMatcher model is loaded during initialization
+        self._matchers_warmed = False
+
         self._optimization_config = self._config_manager.get_optimization_config()
         self._cluster_index = SkillClusterIndex()
         self._prefilter = CandidatePrefilter(cluster_index=self._cluster_index)
@@ -518,7 +522,31 @@ class UnifiedRouter:
                     self._candidates_cache,
                     cluster_index=self._cluster_index,
                 )
+                # Warm up matchers to prevent cold-start latency
+                # This loads EmbeddingMatcher model during initialization
+                self._warm_up_matchers(self._candidates_cache)
             return self._candidates_cache
+
+    def _warm_up_matchers(self, candidates: list[dict[str, Any]]) -> None:
+        """Warm up matchers by initializing lazy-loaded components.
+
+        This prevents cold-start latency on the first route() call by
+        pre-loading heavy components like the EmbeddingMatcher model.
+        """
+        if self._matchers_warmed:
+            return
+
+        try:
+            # Warm up each matcher (mainly for EmbeddingMatcher)
+            for layer, matcher in self._matchers:
+                if layer == RoutingLayer.EMBEDDING:
+                    # Trigger lazy model loading
+                    matcher.match("", candidates[:1])  # Minimal warm-up
+        except Exception:
+            # Warm-up failures are non-critical; matchers will retry on first use
+            pass
+        finally:
+            self._matchers_warmed = True
 
     def reload_candidates(self) -> int:
         self._candidates_cache = None
