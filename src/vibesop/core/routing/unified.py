@@ -512,6 +512,12 @@ class UnifiedRouter:
         with self._cache_lock:
             if self._candidates_cache is None:
                 self._candidates_cache = self._get_candidates()
+                # Initialize prefilter with dynamic namespace discovery
+                # This eliminates hardcoded NAMESPACE_KEYWORDS limitation
+                self._prefilter = CandidatePrefilter.from_candidates(
+                    self._candidates_cache,
+                    cluster_index=self._cluster_index,
+                )
             return self._candidates_cache
 
     def reload_candidates(self) -> int:
