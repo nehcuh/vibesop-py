@@ -70,10 +70,11 @@ class TestOpenCodeAdapter:
         result = adapter.render_config(manifest, tmp_path)
 
         assert result.success
-        assert result.file_count == 3  # config.yaml + README.md + llm-config.json
+        assert result.file_count == 4  # config.yaml + README.md + llm-config.json + skill
         assert (tmp_path / "config.yaml").exists()
         assert (tmp_path / "README.md").exists()
         assert (tmp_path / "llm-config.json").exists()
+        assert (tmp_path / "skills" / "test-skill" / "SKILL.md").exists()
 
     def test_config_yaml_content(self, tmp_path: Path) -> None:
         """Test config.yaml content."""
@@ -121,6 +122,10 @@ class TestOpenCodeAdapter:
         assert "## Skills" in readme
         assert "test-skill" in readme
         assert "Test Skill" in readme
+        # Should include correct 7-layer routing description
+        assert "7-Layer Routing System" in readme
+        assert "Layer 0**: Explicit override" in readme
+        assert "Layer 2**: AI Semantic Triage" in readme
 
     def test_render_config_with_custom_policies(self, tmp_path: Path) -> None:
         """Test rendering with custom policies."""
@@ -192,6 +197,47 @@ class TestOpenCodeAdapter:
         config_yaml = (tmp_path / "config.yaml").read_text()
         assert "- id: skill-1" in config_yaml
         assert "- id: skill-2" in config_yaml
+
+        # Skills should be rendered to skills/ directory
+        assert (tmp_path / "skills" / "skill-1" / "SKILL.md").exists()
+        assert (tmp_path / "skills" / "skill-2" / "SKILL.md").exists()
+
+    def test_render_config_only(self, tmp_path: Path) -> None:
+        """Test render_config_only does not create skills directory."""
+        adapter = OpenCodeAdapter()
+        metadata = ManifestMetadata(platform="opencode")
+
+        skill = SkillDefinition(
+            id="test-skill",
+            name="Test Skill",
+            description="A test skill",
+            trigger_when="Testing scenario",
+        )
+
+        manifest = Manifest(
+            metadata=metadata,
+            skills=[skill],
+        )
+
+        result = adapter.render_config_only(manifest, tmp_path)
+
+        assert result.success
+        assert result.file_count == 3  # config.yaml + README.md + llm-config.json
+        assert (tmp_path / "config.yaml").exists()
+        assert (tmp_path / "README.md").exists()
+        assert not (tmp_path / "skills").exists()
+
+    def test_render_config_only_without_skills(self, tmp_path: Path) -> None:
+        """Test render_config_only with no skills."""
+        adapter = OpenCodeAdapter()
+        metadata = ManifestMetadata(platform="opencode")
+        manifest = Manifest(metadata=metadata, skills=[])
+
+        result = adapter.render_config_only(manifest, tmp_path)
+
+        assert result.success
+        assert result.file_count == 2  # config.yaml + llm-config.json
+        assert not (tmp_path / "README.md").exists()
 
     def test_install_hooks_default(self, tmp_path: Path) -> None:
         """Test default hook installation."""

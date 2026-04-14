@@ -50,7 +50,7 @@ def _show_general_config() -> None:
             f"  Keyword, TF-IDF, Fuzzy (built-in)\n\n"
             f"[bold]For skill management, use:[/bold]\n"
             f"  vibe skills list\n"
-            f"  vibe skills health",
+            f"  vibe skills status",
             title="[bold]Configuration[/bold]",
             border_style="blue",
         )

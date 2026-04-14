@@ -411,8 +411,10 @@ class SkillLoader:
         parts = rel_path.parts
         if parts[-1].endswith(".md"):
             name = parts[-1][:-3]
-        elif parts[-1].endswith((".yaml", ".yml")):
-            name = parts[-1][5:]
+        elif parts[-1].endswith(".yaml"):
+            name = parts[-1][:-5]
+        elif parts[-1].endswith(".yml"):
+            name = parts[-1][:-4]
         else:
             name = parts[-1]
 

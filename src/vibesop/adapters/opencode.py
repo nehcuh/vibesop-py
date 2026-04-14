@@ -29,9 +29,14 @@ class OpenCodeAdapter(PlatformAdapter):
         >>> print(f"Created {result.file_count} files")
     """
 
-    def __init__(self) -> None:
-        """Initialize the OpenCode adapter."""
+    def __init__(self, project_root: str | Path = ".") -> None:
+        """Initialize the OpenCode adapter.
+
+        Args:
+            project_root: Path to VibeSOP project root (contains core/skills/)
+        """
         super().__init__()
+        self._project_root = Path(project_root).resolve()
 
     @property
     def platform_name(self) -> str:
@@ -51,10 +56,15 @@ class OpenCodeAdapter(PlatformAdapter):
         """
         return Path("~/.opencode").expanduser()
 
-    def render_config(self, manifest: Manifest, output_dir: Path) -> RenderResult:
-        """Render OpenCode configuration from manifest.
+    def render_config_only(
+        self,
+        manifest: Manifest,
+        output_dir: Path,
+    ) -> RenderResult:
+        """Render configuration without skills.
 
-        Generates a single config.yaml file with all settings.
+        This renders config.yaml, README.md, and llm-config.json
+        but NOT the skills/ directory. Skills are managed separately.
 
         Args:
             manifest: Configuration manifest
@@ -66,7 +76,6 @@ class OpenCodeAdapter(PlatformAdapter):
         result = self.create_render_result(success=True)
 
         try:
-            # Validate manifest
             errors = self.validate_manifest(manifest)
             if errors:
                 for error in errors:
@@ -74,18 +83,15 @@ class OpenCodeAdapter(PlatformAdapter):
                 result.success = False
                 return result
 
-            # Ensure output directory exists
             output_dir = self.ensure_output_dir(output_dir)
 
             # Generate configuration content
             config_content = self._generate_config(manifest)
-
-            # Write config.yaml
             config_path = output_dir / "config.yaml"
             self.write_file_atomic(
                 config_path,
                 config_content,
-                validate_security=False,  # YAML is safe
+                validate_security=False,
             )
             result.add_file(config_path)
 
@@ -112,6 +118,39 @@ class OpenCodeAdapter(PlatformAdapter):
 
         except Exception as e:
             result.add_error(f"Failed to render configuration: {e}")
+            result.success = False
+
+        return result
+
+    def render_config(self, manifest: Manifest, output_dir: Path) -> RenderResult:
+        """Render OpenCode configuration from manifest.
+
+        Generates config.yaml, README.md, llm-config.json,
+        and copies skill definitions to skills/ directory.
+
+        Args:
+            manifest: Configuration manifest
+            output_dir: Directory to write configuration files
+
+        Returns:
+            RenderResult with list of created files and any warnings/errors
+        """
+        result = self.render_config_only(manifest, output_dir)
+        if not result.success:
+            return result
+
+        try:
+            # Render skill definitions
+            skills_dir = output_dir / "skills"
+            skills_dir.mkdir(parents=True, exist_ok=True)
+
+            for skill in manifest.skills:
+                skill_dir = skills_dir / skill.id
+                skill_dir.mkdir(parents=True, exist_ok=True)
+                self._render_skill_content(skill, skill_dir, result)
+
+        except Exception as e:
+            result.add_error(f"Failed to render skills: {e}")
             result.success = False
 
         return result
@@ -169,6 +208,90 @@ class OpenCodeAdapter(PlatformAdapter):
         yaml.dump(config, stream)
         return stream.getvalue()
 
+    def _render_skill_content(
+        self,
+        skill: Any,
+        skill_dir: Path,
+        result: RenderResult,
+    ) -> None:
+        """Render skill content from actual skill file.
+
+        Args:
+            skill: Skill definition from manifest
+            skill_dir: Directory to write skill files
+            result: RenderResult to track files
+        """
+        skill_id = skill.id if hasattr(skill, "id") else skill.get("id", "")
+        skill_output_path = skill_dir / "SKILL.md"
+
+        # Try to find actual skill content from core/skills/
+        skill_content = self._find_skill_content(skill_id)
+
+        if skill_content:
+            self.write_file_atomic(skill_output_path, skill_content, validate_security=False)
+            result.add_file(skill_output_path)
+        else:
+            # Fallback: generate minimal skill definition
+            fallback_content = self._generate_fallback_skill_content(skill)
+            self.write_file_atomic(skill_output_path, fallback_content, validate_security=False)
+            result.add_file(skill_output_path)
+
+    def _find_skill_content(self, skill_id: str) -> str | None:
+        """Find and read actual skill content from core/skills/.
+
+        Args:
+            skill_id: Skill identifier (e.g., "systematic-debugging" or "gstack/review")
+
+        Returns:
+            Skill file content or None if not found
+        """
+        if "/" in skill_id:
+            # External skill like "gstack/review" or "superpowers/tdd"
+            # These don't have local content, return None to use fallback
+            return None
+
+        # Built-in skill - try to find in core/skills/
+        skill_paths = [
+            self._project_root / "core" / "skills" / skill_id / "SKILL.md",
+            self._project_root / "skills" / skill_id / "SKILL.md",
+            Path(__file__).parent.parent.parent / "core" / "skills" / skill_id / "SKILL.md",
+        ]
+
+        for skill_path in skill_paths:
+            if skill_path.exists():
+                try:
+                    return skill_path.read_text(encoding="utf-8")
+                except Exception as e:
+                    import logging
+
+                    logging.getLogger(__name__).debug(f"Failed to read skill file {skill_path}: {e}")
+
+        return None
+
+    def _generate_fallback_skill_content(self, skill: Any) -> str:
+        """Generate minimal fallback SKILL.md for external skills."""
+        skill_id = skill.id if hasattr(skill, "id") else skill.get("id", "")
+        name = skill.name if hasattr(skill, "name") else skill.get("name", skill_id)
+        description = skill.description if hasattr(skill, "description") else skill.get("description", "")
+        trigger = skill.trigger_when if hasattr(skill, "trigger_when") else skill.get("trigger_when", "")
+
+        lines = [
+            "---",
+            f"id: {skill_id}",
+            f"name: {name}",
+            f"description: {description}",
+            "---",
+            "",
+            f"# {name}",
+            "",
+            f"{description}",
+            "",
+        ]
+        if trigger:
+            lines.extend(["## Trigger", "", f"{trigger}", ""])
+        lines.extend(["", "*External skill — install the source pack for full content.*", ""])
+        return "\n".join(lines)
+
     def _generate_readme(self, manifest: Manifest) -> str:
         """Generate README content.
 
@@ -210,30 +333,31 @@ class OpenCodeAdapter(PlatformAdapter):
             "",
             "### Example",
             "```bash",
-            '# Step 1: Get recommendation\nvibe route "帮我评审当前项目,包括架构和实现"\n# Output: Matched skill: riper-workflow (95% confidence)',
+            '# Step 1: Get recommendation\nvibe route "帮我调试这个 bug"\n# Output: Matched skill: systematic-debugging (95% confidence)',
             "",
             "# Step 2: Read skill definition (MANDATORY)",
-            "read skills/riper-workflow/SKILL.md",
+            "read skills/systematic-debugging/SKILL.md",
             "",
-            "# Step 3: Follow RIPER workflow",
-            "# Research → Innovate → Plan → Execute → Review",
+            "# Step 3: Follow systematic debugging workflow",
+            "# Gather info → Identify patterns → Form hypotheses → Test → Fix root cause",
             "",
             "# Step 4: Run verification",
             "```",
             "",
             "**Why use AI routing?**",
-            "- ✅ **95% accuracy** vs 70% for keyword matching",
+            "- ✅ **Multi-layer matching** - keyword, TF-IDF, embedding, fuzzy",
             "- ✅ **Semantic understanding** - understands intent, not just keywords",
-            "- ✅ **Multi-provider support** - Claude Haiku or OpenAI GPT",
-            "- ✅ **Context-aware** - considers file types, errors, recent work",
-            "- ✅ **~$0.11/month** - cost-effective with 70%+ cache hit rate",
+            "- ✅ **Preference learning** - gets better the more you use it",
+            "- ✅ **Context-aware** - considers conversation history and recent work",
             "",
-            "**5-Layer Routing System:**",
-            "- **Layer 0**: AI Semantic Triage (Haiku/GPT, 95% accuracy)",
-            "- **Layer 1**: Explicit overrides (user-specified)",
-            "- **Layer 2**: Scenario patterns (predefined cases)",
-            "- **Layer 3**: Semantic matching (TF-IDF + cosine similarity)",
-            "- **Layer 4**: Fuzzy matching (Levenshtein distance)",
+            "**7-Layer Routing System:**",
+            "- **Layer 0**: Explicit override (`/review`, `use tdd`)",
+            "- **Layer 1**: Scenario patterns (debug, review, refactor, etc.)",
+            "- **Layer 2**: AI Semantic Triage (Haiku/GPT, optional)",
+            "- **Layer 3**: Keyword matching (exact token matching)",
+            "- **Layer 4**: TF-IDF semantic matching (cosine similarity)",
+            "- **Layer 5**: Embedding-based matching (vector similarity)",
+            "- **Layer 6**: Fuzzy matching (Levenshtein distance for typos)",
             "",
             "## Configuration",
             "",

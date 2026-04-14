@@ -154,14 +154,9 @@ class ExternalSkillLoader:
             if not search_path.exists():
                 continue
 
-            # Search for skill directories (containing SKILL.md)
-            for skill_dir in search_path.iterdir():
-                if not skill_dir.is_dir():
-                    continue
-
-                skill_file = skill_dir / "SKILL.md"
-                if not skill_file.exists():
-                    continue
+            # Search for skill directories (containing SKILL.md) recursively
+            for skill_file in search_path.rglob("SKILL.md"):
+                skill_dir = skill_file.parent
 
                 # Parse and audit the skill
                 metadata = self._parse_and_audit(skill_dir, skill_file)
@@ -195,13 +190,8 @@ class ExternalSkillLoader:
         # Check if pack is trusted
         is_trusted = pack_name in self.TRUSTED_PACKS
 
-        for skill_dir in pack_path.iterdir():
-            if not skill_dir.is_dir():
-                continue
-
-            skill_file = skill_dir / "SKILL.md"
-            if not skill_file.exists():
-                continue
+        for skill_file in pack_path.rglob("SKILL.md"):
+            skill_dir = skill_file.parent
 
             metadata = self._parse_and_audit(
                 skill_dir,

@@ -1,6 +1,6 @@
 # VibeSOP-Py Roadmap Index
 
-> **Current Status**: v2.2.0 in development
+> **Current Status**: v4.0.0 released
 
 ## Historical Note
 

@@ -65,7 +65,7 @@ When a user says "结束了" or "That's all for now":
 
 2. **Shell Level** (Claude Code only):
    - `pre-session-end` shell hook executes
-   - Can run `vibe memory flush` CLI command
+   - Can run `vibe memory flush` CLI command *(🚧 未来版本实现)*
    - Performs additional cleanup
 
 ### Dual-Layer Protection
@@ -80,7 +80,7 @@ AI Layer (all platforms):
     ↓
 Shell Layer (Claude Code only):
     ├─ Executes pre-session-end.sh
-    ├─ Runs vibe memory flush
+    ├─ Runs vibe memory flush *(🚧 未来版本实现)*
     └─ Performs cleanup
 ```
 

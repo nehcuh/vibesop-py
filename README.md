@@ -6,7 +6,7 @@
 
 [![Python](https://img.shields.io/badge/Python-3.12+-blue.svg)](https://www.python.org/downloads/)
 [![Ruff](https://img.shields.io/badge/Ruff-Enabled-black.svg)](https://github.com/astral-sh/ruff)
-[![Coverage](https://img.shields.io/badge/Coverage-65%25-green.svg)]()
+[![Coverage](https://img.shields.io/badge/Coverage-80%25-green.svg)]()
 [![Version](https://img.shields.io/badge/Version-4.0.0-green.svg)](https://github.com/nehcuh/vibesop-py)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
@@ -360,9 +360,9 @@ VibeSOP tries multiple matching strategies, fastest first:
 
 | Layer | Strategy | Speed | Accuracy | Use Case |
 |-------|----------|-------|----------|----------|
-| 0 | AI Triage | ~100ms | 95% | Complex queries, semantic understanding |
-| 1 | Explicit Override | <1ms | 100% | Direct commands like `/review` |
-| 2 | Scenario Pattern | <1ms | 90% | Predefined scenarios (debug, test, review) |
+| 0 | Explicit Override | <1ms | 100% | Direct commands like `/review` |
+| 1 | Scenario Pattern | <1ms | 90% | Predefined scenarios (debug, test, review) |
+| 2 | AI Triage | ~100ms | 95% | Complex queries, semantic understanding |
 | 3 | Keyword Matching | <1ms | 70% | Direct keyword hits |
 | 4 | TF-IDF | ~5ms | 75% | Semantic similarity |
 | 5 | Embedding | ~20ms | 85% | Deep semantic matching (optional) |

@@ -1,4 +1,4 @@
-"""Tests for AI Triage Layer (Layer 0)."""
+"""Tests for AI Triage Layer (Layer 2)."""
 
 from unittest.mock import MagicMock
 
@@ -26,7 +26,12 @@ def mock_llm():
 def router_with_llm(tmp_path, mock_llm):
     """Router with mocked LLM client."""
     (tmp_path / ".vibe").mkdir()
-    (tmp_path / "core" / "skills").mkdir(parents=True)
+    skill_dir = tmp_path / "core" / "skills" / "systematic-debugging"
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text(
+        "---\nname: systematic-debugging\n---\n# Systematic Debugging\n",
+        encoding="utf-8",
+    )
 
     from vibesop.core.config.manager import ConfigManager
 
@@ -42,8 +47,8 @@ def test_ai_triage_returns_skill_route(router_with_llm):
     """AI triage should return a SkillRoute when LLM responds."""
     result = router_with_llm.route("帮我调试数据库错误")
     assert isinstance(result, RoutingResult)
-    # AI triage should be Layer 0
-    assert result.routing_path[0] == RoutingLayer.AI_TRIAGE
+    # AI triage should be in routing path after explicit/scenario attempts
+    assert RoutingLayer.AI_TRIAGE in result.routing_path
     assert result.primary.skill_id == "systematic-debugging"
     # Confidence is dynamic: fallback parsing gets ~0.82, structured JSON gets ~0.88
     assert 0.8 <= result.primary.confidence <= 0.92

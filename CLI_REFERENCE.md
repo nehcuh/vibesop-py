@@ -34,6 +34,7 @@ vibe route <query> [options]
 - `--min-confidence, -c` - Minimum confidence threshold (0.0-1.0)
 - `--json, -j` - Output as JSON
 - `--validate, -V` - Validate routing configuration
+- `--explain, -e` - Explain routing decision (alias for `--validate`)
 
 **Examples:**
 ```bash
@@ -48,6 +49,9 @@ vibe route "test this" --json
 
 # Validate routing
 vibe route "debug" --validate
+
+# Explain routing decision
+vibe route "debug" --explain
 ```
 
 **Output:**

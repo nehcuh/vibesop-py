@@ -88,9 +88,9 @@ class TestSkillRoute:
 
     def test_layer_number_property(self) -> None:
         """Test RoutingLayer.layer_number property."""
-        assert RoutingLayer.AI_TRIAGE.layer_number == 0
-        assert RoutingLayer.EXPLICIT.layer_number == 1
-        assert RoutingLayer.SCENARIO.layer_number == 2
+        assert RoutingLayer.EXPLICIT.layer_number == 0
+        assert RoutingLayer.SCENARIO.layer_number == 1
+        assert RoutingLayer.AI_TRIAGE.layer_number == 2
         assert RoutingLayer.KEYWORD.layer_number == 3
         assert RoutingLayer.LEVENSHTEIN.layer_number == 6
 

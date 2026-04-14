@@ -138,7 +138,7 @@ def test_ai_triage_impact():
         elapsed = (time.perf_counter() - start) * 1000
         total_time += elapsed
 
-        if result.routing_path and result.routing_path[0] == RoutingLayer.AI_TRIAGE:
+        if result.primary and result.primary.layer == RoutingLayer.AI_TRIAGE:
             hits += 1
 
     print(f"\n=== AI Triage 分析 (n={len(sample_queries)}) ===")

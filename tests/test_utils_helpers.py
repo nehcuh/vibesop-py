@@ -2,6 +2,8 @@
 
 from pathlib import Path
 
+import pytest
+
 from vibesop.utils.helpers import (
     calculate_age,
     ensure_directory,
@@ -19,17 +21,16 @@ from vibesop.utils.helpers import (
 class TestNormalizePath:
     """Test suite for normalize_path."""
 
-    def test_expanduser(self, monkeypatch) -> None:
+    def test_expanduser(self) -> None:
         """Should expand ~ to home directory."""
-        import os
-        home = os.path.expanduser("~")
+        home = Path("~").expanduser()
         result = normalize_path(Path("~/docs"))
-        assert str(result).startswith(home)
+        assert str(result).startswith(str(home))
         assert "docs" in str(result)
 
     def test_resolve_relative(self) -> None:
         """Should resolve relative paths to absolute."""
-        result = normalize_path(Path("."))
+        result = normalize_path(Path())
         assert result.is_absolute()
 
 
@@ -230,4 +231,3 @@ class TestCalculateAge:
         assert "2 days ago" in result
 
 
-import pytest

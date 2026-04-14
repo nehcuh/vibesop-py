@@ -84,9 +84,9 @@ result = router.route("debug this error")
 
 | Layer | Strategy | Speed | When Used |
 |-------|----------|-------|-----------|
-| 0 | AI Triage | ~100ms | Complex semantic queries |
-| 1 | Explicit Override | <1ms | Direct commands like `/review` |
-| 2 | Scenario Pattern | <1ms | Predefined scenarios |
+| 0 | Explicit Override | <1ms | Direct commands like `/review` |
+| 1 | Scenario Pattern | <1ms | Predefined scenarios |
+| 2 | AI Triage | ~100ms | Complex semantic queries |
 | 3 | Keyword Matching | <1ms | Direct keyword hits |
 | 4 | TF-IDF | ~5ms | Semantic similarity |
 | 5 | Embedding | ~20ms | Deep semantic (optional) |

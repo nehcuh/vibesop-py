@@ -99,7 +99,7 @@ scenario_patterns:
         scenarios = load_scenarios(tmp_path)
         assert scenarios == DEFAULT_SCENARIOS
 
-    def test_load_yaml_parsing_exception(self, tmp_path, monkeypatch) -> None:
+    def test_load_yaml_parsing_exception(self, tmp_path) -> None:
         """Should fallback on YAML parsing exception."""
         config_path = tmp_path / "core" / "policies" / "task-routing.yaml"
         config_path.parent.mkdir(parents=True)

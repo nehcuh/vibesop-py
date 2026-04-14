@@ -35,21 +35,21 @@ Layers are tried in priority order. First match wins (except for alternatives).
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│ Layer 0: AI Triage (Optional)                               │
-│ • Uses LLM for semantic classification                      │
-│ • Cost: ~$0.001/call                                        │
-│ • Latency: ~100-500ms                                      │
-│ • Use when: High-stakes decisions, complex intent           │
-├─────────────────────────────────────────────────────────────┤
-│ Layer 1: Explicit Override                                  │
+│ Layer 0: Explicit Override                                  │
 │ • Detects /skill or "use skill" patterns                    │
 │ • Latency: <0.1ms                                           │
 │ • Use when: User explicitly chooses a skill                 │
 ├─────────────────────────────────────────────────────────────┤
-│ Layer 2: Scenario Patterns                                  │
+│ Layer 1: Scenario Patterns                                  │
 │ • Predefined situation → skill mappings                     │
 │ • Latency: <0.1ms                                           │
 │ • Use when: Common scenarios (debug, review, deploy)        │
+├─────────────────────────────────────────────────────────────┤
+│ Layer 2: AI Triage (Optional)                               │
+│ • Uses LLM for semantic classification                      │
+│ • Cost: ~$0.001/call                                        │
+│ • Latency: ~100-500ms                                      │
+│ • Use when: High-stakes decisions, complex intent           │
 ├─────────────────────────────────────────────────────────────┤
 │ Layer 3: Keyword Matching                                   │
 │ • Exact token-based matching                                │
@@ -75,7 +75,35 @@ Layers are tried in priority order. First match wins (except for alternatives).
 
 ## Layer Details
 
-### Layer 0: AI Triage
+### Layer 0: Explicit Override
+
+**Implementation**: `check_explicit_override()` in `explicit_layer.py`
+
+**Patterns Detected**:
+- `/review` → `gstack/review`
+- `use tdd` → `superpowers/tdd`
+- `调用 debug` → `systematic-debugging`
+
+**Returns**: confidence=1.0 (user's explicit choice)
+
+### Layer 1: Scenario Patterns
+
+**Implementation**: `match_scenario()` in `scenario_layer.py`
+
+**Loaded From**: `core/registry.yaml`
+
+**Example Scenarios**:
+```yaml
+scenarios:
+  - trigger: "test failure"
+    primary: "systematic-debugging"
+    alternatives:
+      - skill: "gstack/investigate"
+```
+
+**Returns**: confidence=0.8
+
+### Layer 2: AI Triage
 
 **Implementation**: `_ai_triage()` method
 
@@ -95,34 +123,6 @@ Layers are tried in priority order. First match wins (except for alternatives).
 - CLI usage (latency matters)
 - Cost-sensitive environments
 - Simple queries
-
-### Layer 1: Explicit Override
-
-**Implementation**: `check_explicit_override()` in `explicit_layer.py`
-
-**Patterns Detected**:
-- `/review` → `gstack/review`
-- `use tdd` → `superpowers/tdd`
-- `调用 debug` → `systematic-debugging`
-
-**Returns**: confidence=1.0 (user's explicit choice)
-
-### Layer 2: Scenario Patterns
-
-**Implementation**: `match_scenario()` in `scenario_layer.py`
-
-**Loaded From**: `core/registry.yaml`
-
-**Example Scenarios**:
-```yaml
-scenarios:
-  - trigger: "test failure"
-    primary: "systematic-debugging"
-    alternatives:
-      - skill: "gstack/investigate"
-```
-
-**Returns**: confidence=0.8
 
 ### Layer 3: Keyword Matching
 

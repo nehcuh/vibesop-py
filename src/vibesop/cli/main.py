@@ -45,6 +45,7 @@ def route(
     ),
     json_output: bool = typer.Option(False, "--json", "-j", help="Output as JSON"),
     validate: bool = typer.Option(False, "--validate", "-V", help="Validate routing configuration"),
+    explain: bool = typer.Option(False, "--explain", "-e", help="Explain routing decision (alias for --validate)"),
 ) -> None:
     """Route a query to the appropriate skill using unified routing.
 
@@ -52,7 +53,7 @@ def route(
     but does not execute skills. Use your AI Agent (Claude Code, OpenCode)
     to execute the recommended skill.
 
-    Use --validate to test routing configuration.
+    Use --validate or --explain to inspect routing details.
     """
     from pathlib import Path
 
@@ -103,9 +104,10 @@ def route(
             )
         )
 
-    # Handle validation mode
-    if validate:
-        console.print(f"\n[bold cyan]✓ Route Validation[/bold cyan]\n{'=' * 40}\n")
+    # Handle validation / explanation mode
+    if validate or explain:
+        title = "Routing Explanation" if explain else "Route Validation"
+        console.print(f"\n[bold cyan]✓ {title}[/bold cyan]\n{'=' * 40}\n")
 
         # Show router capabilities
         caps = router.get_capabilities()

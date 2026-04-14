@@ -7,11 +7,11 @@ Procedures) for AI-assisted development. It is NOT a consumer of the skills it p
 
 ### Two Roles
 
-**VibeSOP (this project)** — The "skill factory":
+**VibeSOP (this project)** — The "skill router":
 - Discovers skills from filesystem (gstack, superpowers, builtin)
 - Routes natural language queries to the right skill (7-layer routing)
 - Generates platform configuration (Claude Code, OpenCode)
-- Installs hooks, integrations, and workflows
+- Manages skill installations and integrations
 
 **Your project** — The "skill consumer":
 - Run `vibe install claude-code` to generate `.claude/` config
@@ -29,16 +29,16 @@ AI assistants help you write code — not for the tool's own development.
 - `vibe skills` — Lists all skills VibeSOP can route to (discovery)
 - `vibe install <platform>` — Generates config with those skills for a target project
 - `vibe route "query"` — Routes a query to the best skill (uses 7-layer system)
-- `vibe auto "query"` — Detects intent + auto-executes the matched skill
+- `vibe route --validate` — Shows routing decision path and diagnostics
 
 ### 7-Layer Routing Architecture
 
 ```
-User Query → Layer 0: AI Triage (LLM)
+User Query → Layer 0: Explicit (/review, 使用 review)
               ↓ (no match)
-            Layer 1: Explicit (/review, 使用 review)
+            Layer 1: Scenario (debug/test/review/refactor keywords)
               ↓ (no match)
-            Layer 2: Scenario (debug/test/review/refactor keywords)
+            Layer 2: AI Triage (LLM, optional)
               ↓ (no match)
             Layer 3: Keyword (exact token matching)
               ↓ (no match)
@@ -48,7 +48,7 @@ User Query → Layer 0: AI Triage (LLM)
               ↓ (no match)
             Layer 6: Fuzzy (Levenshtein distance)
               ↓ (no match)
-            Fallback: riper-workflow
+            Fallback: systematic-debugging workflow
 ```
 
 Each layer is implemented as a separate `RoutingHandler` class with a common
@@ -57,13 +57,11 @@ interface, registered in the `SkillRouter` handler chain.
 ### Key Modules
 
 - `core/routing/` — 7-layer routing engine with pluggable handlers
-- `triggers/` — Intent detection (keywords, regex, semantic)
-- `semantic/` — Sentence transformer-based semantic matching
+- `core/matching/` — Matching algorithms (keyword, TF-IDF, embedding, fuzzy)
+- `core/optimization/` — Preference boost, instinct learning, conflict resolution
 - `cli/` — Typer-based CLI with subcommand groups
-- `workflow/` — Multi-stage workflow orchestration
 - `security/` — Threat detection and path safety
 - `adapters/` — Platform adapters (Claude Code, OpenCode)
 - `builder/` — Configuration generation and rendering
-- `hooks/` — Hook system for pre/post session events
 - `integrations/` — External skill pack integration
 - `installer/` — Installation and verification

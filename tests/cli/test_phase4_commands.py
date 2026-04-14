@@ -42,6 +42,18 @@ class TestRouteValidateCommand:
         result = runner.invoke(app, ["route", "test", "-V"])
         assert result.exit_code == 0
 
+    def test_route_explain_flag(self) -> None:
+        """Test route --explain alias for validation."""
+        result = runner.invoke(app, ["route", "test query", "--explain"])
+        assert result.exit_code == 0
+        assert "Routing Explanation" in result.stdout
+
+    def test_route_explain_short_flag(self) -> None:
+        """Test route --explain with short flag."""
+        result = runner.invoke(app, ["route", "test", "-e"])
+        assert result.exit_code == 0
+        assert "Routing Explanation" in result.stdout
+
 
 class TestImportRulesCommand:
     """Test suite for import-rules command."""
