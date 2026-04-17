@@ -302,9 +302,13 @@ class QuickstartRunner:
 
             # Step 2: Install configuration
             installer = VibeSOPInstaller()
+            if config.global_install:
+                install_target: Path | None = None
+            else:
+                install_target = config.project_path / ".vibe" / "dist" / config.platform
             install_result = installer.install(
                 config.platform,
-                config.project_path,
+                install_target,
                 force=False,
             )
 
@@ -323,7 +327,10 @@ class QuickstartRunner:
 
             # Step 4: Install hooks (if requested)
             if config.install_hooks:
-                hooks_result = installer.verify(config.platform, config.project_path)
+                hooks_verify_target = (
+                    None if config.global_install else install_target
+                )
+                hooks_result = installer.verify(config.platform, hooks_verify_target)
                 hooks_installed = sum(
                     1 for v in hooks_result.get("hooks_installed", {}).values() if v
                 )
@@ -350,10 +357,10 @@ class QuickstartRunner:
             _platform: Target platform (unused, kept for signature compatibility)
         """
         try:
-            from vibesop.core.skills.external_loader import ExternalSkillLoader
+            from vibesop.installer.pack_installer import PackInstaller
 
-            loader = ExternalSkillLoader()
-            success, msg = loader.install_pack(integration)
+            installer = PackInstaller()
+            success, msg = installer.install_pack(integration)
 
             if success:
                 console.print(f"[green]✓[/green] {integration} installed")
