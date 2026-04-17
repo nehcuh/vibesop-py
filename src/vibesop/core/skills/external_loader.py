@@ -156,21 +156,27 @@ class ExternalSkillLoader:
             for skill_file in search_path.rglob("SKILL.md"):
                 skill_dir = skill_file.parent
 
-                # Infer pack name from directory structure
+                # Infer pack name from directory structure.
+                # Only treat as a pack if the skill is nested inside a pack
+                # directory (depth >= 3). Direct installs at depth == 2 are
+                # standalone external skills with no pack namespace.
                 # e.g., ~/.config/skills/awesome-skills/skills/my-audit/SKILL.md
-                # -> pack_name = "awesome-skills"
+                #       -> pack_name = "awesome-skills"
+                # e.g., ~/.config/skills/systematic-debugging/SKILL.md
+                #       -> pack_name = None
                 try:
                     rel_path = skill_file.relative_to(search_path)
-                    pack_name = rel_path.parts[0] if rel_path.parts else None
+                    pack_name = rel_path.parts[0] if len(rel_path.parts) >= 3 else None
                 except ValueError:
                     pack_name = None
 
                 # Parse and audit the skill
-                metadata = self._parse_and_audit(
-                    skill_dir, skill_file, pack_name=pack_name
-                )
+                metadata = self._parse_and_audit(skill_dir, skill_file, pack_name=pack_name)
                 if metadata:
-                    skills[metadata.base_metadata.id] = metadata
+                    skill_key = metadata.base_metadata.id
+                    if pack_name:
+                        skill_key = f"{pack_name}/{skill_key}"
+                    skills[skill_key] = metadata
 
         self._cache = skills
         return skills

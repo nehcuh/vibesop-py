@@ -42,13 +42,9 @@ class TestThirdPartySkillPack:
             "This is a custom third-party skill.\n"
         )
 
-        (repo_dir / "README.md").write_text(
-            "# Awesome Skills\n\nA third-party skill pack.\n"
-        )
+        (repo_dir / "README.md").write_text("# Awesome Skills\n\nA third-party skill pack.\n")
 
-        subprocess.run(
-            ["git", "init"], cwd=repo_dir, check=True, capture_output=True
-        )
+        subprocess.run(["git", "init"], cwd=repo_dir, check=True, capture_output=True)
         subprocess.run(
             ["git", "config", "user.email", "test@test.com"],
             cwd=repo_dir,
@@ -61,9 +57,7 @@ class TestThirdPartySkillPack:
             check=True,
             capture_output=True,
         )
-        subprocess.run(
-            ["git", "add", "."], cwd=repo_dir, check=True, capture_output=True
-        )
+        subprocess.run(["git", "add", "."], cwd=repo_dir, check=True, capture_output=True)
         subprocess.run(
             ["git", "commit", "-m", "init"],
             cwd=repo_dir,
@@ -95,11 +89,12 @@ class TestThirdPartySkillPack:
             # 3. Verify ExternalSkillLoader discovers the new skill
             loader = ExternalSkillLoader(external_paths=[config_skills])
             skills = loader.discover_all()
-            assert "my-audit" in skills, (
-                f"Skill 'my-audit' not found. Discovered: {list(skills.keys())}"
+            skill_key = "awesome-skills/my-audit"
+            assert skill_key in skills, (
+                f"Skill '{skill_key}' not found. Discovered: {list(skills.keys())}"
             )
 
-            skill = skills["my-audit"]
+            skill = skills[skill_key]
             assert skill.base_metadata.namespace == "awesome-skills"
             assert skill.is_safe is True
 
@@ -119,9 +114,7 @@ class TestThirdPartySkillPack:
             finally:
                 ExternalSkillLoader.EXTERNAL_PATHS = original_paths
 
-            assert result.primary is not None, (
-                f"No routing match. Path: {result.routing_path}"
-            )
+            assert result.primary is not None, f"No routing match. Path: {result.routing_path}"
             assert result.primary.skill_id == "awesome-skills/my-audit", (
                 f"Expected 'awesome-skills/my-audit', got {result.primary.skill_id}"
             )
