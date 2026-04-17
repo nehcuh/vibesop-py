@@ -96,6 +96,10 @@ class MatcherPipeline:
 
         return None
 
+    def set_prefilter(self, prefilter: CandidatePrefilter) -> None:
+        """Replace the candidate prefilter (used when candidates are reloaded)."""
+        self._prefilter = prefilter
+
     def apply_prefilter(
         self,
         query: str,

@@ -522,6 +522,9 @@ class UnifiedRouter:
                     self._candidates_cache,
                     cluster_index=self._cluster_index,
                 )
+                # Sync the updated prefilter into the matcher pipeline so
+                # that apply_prefilter uses the dynamically discovered namespaces.
+                self._matcher_pipeline.set_prefilter(self._prefilter)
                 # Warm up matchers to prevent cold-start latency
                 # This loads EmbeddingMatcher model during initialization
                 self._warm_up_matchers(self._candidates_cache)
@@ -537,14 +540,15 @@ class UnifiedRouter:
             return
 
         try:
-            # Warm up each matcher (mainly for EmbeddingMatcher)
-            for layer, matcher in self._matchers:
-                if layer == RoutingLayer.EMBEDDING:
-                    # Trigger lazy model loading
-                    matcher.match("", candidates[:1])  # Minimal warm-up
-        except Exception:
-            # Warm-up failures are non-critical; matchers will retry on first use
-            pass
+            for _layer, matcher in self._matchers:
+                try:
+                    matcher.warm_up(candidates)
+                except Exception as e:
+                    logger.warning(
+                        "Matcher %s warm-up failed: %s",
+                        type(matcher).__name__,
+                        e,
+                    )
         finally:
             self._matchers_warmed = True
 

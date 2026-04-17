@@ -199,19 +199,15 @@ class TestSkillExecution:
         assert result is not None
         assert isinstance(result.routing_path, list)
 
-    def test_preference_learning_workflow(self, project_root: Path) -> None:
+    def test_preference_learning_workflow(self, temp_project_dir: Path) -> None:
         """Test complete preference learning workflow.
 
         Tests the preference recording and statistics mechanism.
-        Note: May not find matches if skill metadata lacks keywords.
-        The test validates the mechanism works, not that routing succeeds.
+        Uses an isolated temporary directory to avoid state pollution.
         """
-        # Use project_root to access built-in skills
-        # clean_preferences fixture ensures clean state
-        router = UnifiedRouter(project_root=project_root)
+        router = UnifiedRouter(project_root=temp_project_dir)
 
         # Simulate multiple selections - record directly to test mechanism
-        # We use explicit skill IDs to test preference learning independent of routing
         skill_id = "test-skill"
         queries = [
             "test query one",

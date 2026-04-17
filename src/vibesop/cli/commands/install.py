@@ -27,7 +27,9 @@ from rich.console import Console
 from rich.progress import BarColumn, Progress, SpinnerColumn, TaskProgressColumn, TextColumn
 from rich.table import Table
 
+from vibesop.constants import TRUSTED_PACKS
 from vibesop.core.skills.external_loader import ExternalSkillLoader
+from vibesop.installer.pack_installer import PackInstaller
 
 console = Console()
 
@@ -93,7 +95,6 @@ def install(
 def _list_available() -> None:
     """List available skill packs."""
     loader = ExternalSkillLoader()
-    trusted = loader.TRUSTED_PACKS
     supported = loader.get_supported_packs()
 
     console.print(f"\n[bold cyan]📦 Available Skill Packs[/bold cyan]\n{'=' * 40}\n")
@@ -103,7 +104,7 @@ def _list_available() -> None:
     t.add_column("Source URL")
     t.add_column("Status", style="bold")
 
-    for name, url in trusted.items():
+    for name, url in TRUSTED_PACKS.items():
         info = supported.get(name, {})
         if info.get("installed"):
             status = "[green]✓ Installed[/green]"
@@ -126,11 +127,10 @@ def _auto_install(force: bool, skip_verify: bool) -> None:
     )
 
     loader = ExternalSkillLoader()
-    trusted = loader.TRUSTED_PACKS
     supported = loader.get_supported_packs()
     results: dict[str, str] = {}
 
-    for name in trusted:
+    for name in TRUSTED_PACKS:
         info = supported.get(name, {})
         if info.get("installed") and not force:
             console.print(f"[dim]⊘ {name}: already installed, skipping[/dim]")
@@ -183,6 +183,7 @@ def _install_pack(
         console.print(f"\n[bold cyan]📦 Installing {pack_name}[/bold cyan]\n{'=' * 40}\n")
         console.print(f"[dim]Source:[/dim] {source}\n")
 
+    installer = PackInstaller()
     loader = ExternalSkillLoader()
 
     # Check if already installed (unless force)
@@ -198,7 +199,7 @@ def _install_pack(
 
     # Execute installation with progress bar
     if quiet:
-        success, msg = loader.install_pack(pack_name, pack_url)
+        success, msg = installer.install_pack(pack_name, pack_url)
     else:
         with Progress(
             SpinnerColumn(),
@@ -209,10 +210,10 @@ def _install_pack(
         ) as progress:
             task = progress.add_task(f"Installing {pack_name}...", total=100)
 
-            # The loader does the heavy lifting; we just show completion
+            # The installer does the heavy lifting; we just show completion
             # since install_pack doesn't expose incremental progress.
             progress.update(task, completed=30, description="Analyzing repository...")
-            success, msg = loader.install_pack(pack_name, pack_url)
+            success, msg = installer.install_pack(pack_name, pack_url)
             progress.update(task, completed=100, description="Installation complete")
 
     if success:

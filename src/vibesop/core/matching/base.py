@@ -206,6 +206,17 @@ class IMatcher(Protocol):
         """
         ...
 
+    def warm_up(self, candidates: list[SkillCandidateDict]) -> None:
+        """Warm up matcher by initializing lazy-loaded components.
+
+        This prevents cold-start latency on the first route() call by
+        pre-loading heavy components like embedding models.
+
+        Args:
+            candidates: List of skill candidates to use for warm-up
+        """
+        ...
+
     def get_capabilities(self) -> MatcherCapabilitiesDict:
         """Return information about this matcher's capabilities.
 

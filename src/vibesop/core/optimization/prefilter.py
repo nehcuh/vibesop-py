@@ -212,7 +212,15 @@ class CandidatePrefilter:
             cluster_skills.update(self._cluster_index.get_cluster_members(cluster_id))
         p0_ids = {c["id"] for c in candidates if c.get("priority") == "P0"}
         allowed_ids = cluster_skills | p0_ids
-        return [c for c in candidates if c["id"] in allowed_ids]
+        triggered_ns = self._get_triggered_namespaces(query)
+        # Allow cluster members, P0 skills, and skills whose namespace was
+        # dynamically triggered (e.g. newly installed third-party packs not yet
+        # present in the cluster index).
+        return [
+            c
+            for c in candidates
+            if c["id"] in allowed_ids or c.get("namespace") in triggered_ns
+        ]
 
     @staticmethod
     def _discover_namespace_keywords(
@@ -254,8 +262,8 @@ class CandidatePrefilter:
                 parts = ns.split("_")
                 namespace_keywords[ns].add(" ".join(parts))
 
-            # Extract from tags
-            tags = candidate.get("tags", [])
+            # Extract from tags/keywords
+            tags = candidate.get("keywords", []) or candidate.get("tags", [])
             if tags:
                 for tag in tags:
                     if isinstance(tag, str):

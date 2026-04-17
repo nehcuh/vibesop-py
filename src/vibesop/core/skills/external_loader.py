@@ -17,6 +17,7 @@ from enum import StrEnum
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar
 
+from vibesop.constants import TRUSTED_PACKS
 from vibesop.core.skills.parser import parse_skill_md
 from vibesop.security import AuditResult, SkillSecurityAuditor
 
@@ -96,11 +97,8 @@ class ExternalSkillLoader:
         Path.home() / ".vibe" / "skills",
     ]
 
-    # Trusted skill pack namespaces
-    TRUSTED_PACKS: ClassVar[dict[str, str]] = {
-        "superpowers": "https://github.com/obra/superpowers",
-        "gstack": "https://github.com/garrytan/gstack",
-    }
+    # Trusted skill pack namespaces (canonical source in vibesop.constants)
+    TRUSTED_PACKS: ClassVar[dict[str, str]] = TRUSTED_PACKS
 
     def __init__(
         self,
@@ -158,8 +156,19 @@ class ExternalSkillLoader:
             for skill_file in search_path.rglob("SKILL.md"):
                 skill_dir = skill_file.parent
 
+                # Infer pack name from directory structure
+                # e.g., ~/.config/skills/awesome-skills/skills/my-audit/SKILL.md
+                # -> pack_name = "awesome-skills"
+                try:
+                    rel_path = skill_file.relative_to(search_path)
+                    pack_name = rel_path.parts[0] if rel_path.parts else None
+                except ValueError:
+                    pack_name = None
+
                 # Parse and audit the skill
-                metadata = self._parse_and_audit(skill_dir, skill_file)
+                metadata = self._parse_and_audit(
+                    skill_dir, skill_file, pack_name=pack_name
+                )
                 if metadata:
                     skills[metadata.base_metadata.id] = metadata
 
@@ -347,7 +356,7 @@ class ExternalSkillLoader:
         """
         packs = {}
 
-        for pack_name, url in self.TRUSTED_PACKS.items():
+        for pack_name, url in TRUSTED_PACKS.items():
             # Check if pack is installed
             pack_path = None
             for search_path in self.external_paths:
@@ -363,79 +372,6 @@ class ExternalSkillLoader:
             }
 
         return packs
-
-    def install_pack(
-        self,
-        pack_name: str,
-        pack_url: str | None = None,
-        _version: str | None = None,
-    ) -> tuple[bool, str]:
-        """Install a skill pack from a Git URL using intelligent analysis.
-
-        Args:
-            pack_name: Name of the pack (e.g., "superpowers")
-            pack_url: URL to install from (optional)
-            version: Specific version to install (optional)
-
-        Returns:
-            Tuple of (success, message)
-        """
-        import shutil
-
-        from vibesop.installer.analyzer import RepoAnalyzer
-        from vibesop.installer.planner import InstallPlanner
-
-        pack_url = pack_url or self.TRUSTED_PACKS.get(pack_name)
-        if not pack_url:
-            return False, f"Unknown pack: {pack_name}"
-
-        # Analyze repository
-        analyzer = RepoAnalyzer()
-        analysis = analyzer.analyze(pack_url, pack_name)
-
-        if analysis.errors:
-            return False, analysis.errors[0]
-
-        if not analysis.skill_files:
-            return False, f"No SKILL.md files found in {pack_name} repository"
-
-        # Generate install plan
-        target_base = self.external_paths[0]
-        planner = InstallPlanner(base_target=target_base)
-        plan = planner.plan(analysis)
-
-        # Execute installation
-        try:
-            target_path = plan.target_path
-            target_path.mkdir(parents=True, exist_ok=True)
-
-            # For git-cloned repos, we need the actual repo root on disk.
-            # Re-clone directly to target to avoid temp-dir lifetime issues.
-            clone_ok = analyzer.git_clone(pack_url, target_path)
-            if not clone_ok:
-                return False, f"Failed to clone {pack_url} to {target_path}"
-
-            # Optionally remove .git to save space
-            git_dir = target_path / ".git"
-            if git_dir.exists():
-                shutil.rmtree(git_dir)
-
-            # Audit installed skills (scan target path, not temp dir)
-            audit_results = []
-            installed_skill_files = list(target_path.rglob("SKILL.md"))
-            for skill_file in installed_skill_files:
-                audit = self._auditor.audit_skill_file(skill_file)
-                audit_results.append(f"{skill_file.parent.name}: {'PASS' if audit.is_safe else 'WARN'}")
-
-            msg = (
-                f"Installed {pack_name} to {target_path}\n"
-                f"Skills found: {len(installed_skill_files)}\n"
-                f"Audit: {', '.join(audit_results)}"
-            )
-            return True, msg
-
-        except Exception as e:
-            return False, f"Failed to install {pack_name}: {e}"
 
 
 # Convenience functions

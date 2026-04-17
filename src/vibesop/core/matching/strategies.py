@@ -168,6 +168,9 @@ class KeywordMatcher:
 
         return list(query_tokens & candidate_tokens)
 
+    def warm_up(self, candidates: list[SkillCandidateDict]) -> None:
+        """No-op for keyword matcher — it has no lazy-loaded components."""
+
     def get_capabilities(self) -> MatcherCapabilitiesDict:
         """Return matcher capabilities."""
         return {
@@ -293,6 +296,11 @@ class TFIDFMatcher:
             " ".join(str(t) for t in triggers_list),
         ]
         return " ".join(fields)
+
+    def warm_up(self, candidates: list[SkillCandidateDict]) -> None:
+        """Pre-fit TF-IDF calculator on the candidate corpus."""
+        if candidates:
+            self.fit(candidates)
 
     def get_capabilities(self) -> MatcherCapabilitiesDict:
         """Return matcher capabilities."""
@@ -431,6 +439,14 @@ class EmbeddingMatcher:
             str(candidate.get("intent", "")),
         ]
         return " ".join(str(f) for f in fields if f)
+
+    def warm_up(self, candidates: list[SkillCandidateDict]) -> None:
+        """Pre-load embedding model and compute candidate embeddings."""
+        if np is None:
+            return
+        self._load_model()
+        if candidates and self._candidate_embeddings is None:
+            self.fit(candidates)
 
     def get_capabilities(self) -> MatcherCapabilitiesDict:
         """Return matcher capabilities."""
@@ -590,6 +606,9 @@ class LevenshteinMatcher:
     def _candidate_to_text(self, candidate: SkillCandidateDict) -> str:
         """Convert candidate to searchable text."""
         return str(str(candidate.get("name", ""))) + " " + str(str(candidate.get("description", "")))
+
+    def warm_up(self, candidates: list[SkillCandidateDict]) -> None:
+        """No-op for Levenshtein matcher — it has no lazy-loaded components."""
 
     def get_capabilities(self) -> MatcherCapabilitiesDict:
         """Return matcher capabilities."""

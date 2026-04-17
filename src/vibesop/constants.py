@@ -10,6 +10,14 @@ including version information, routing thresholds, cache settings, and LLM confi
 MANIFEST_VERSION = "1.0.0"
 PYTHON_MIN_VERSION = (3, 12)
 
+# ============================================
+# Trusted Skill Packs
+# ============================================
+TRUSTED_PACKS: dict[str, str] = {
+    "superpowers": "https://github.com/obra/superpowers",
+    "gstack": "https://github.com/garrytan/gstack",
+}
+
 
 # ============================================
 # Routing Configuration
