@@ -1,4 +1,4 @@
-# pyright: reportUnknownVariableType=false, reportUnknownMemberType=false, reportUnknownArgumentType=false, reportUnknownLambdaType=false, reportMissingTypeArgument=false, reportUnknownParameterType=false
+# pyright: reportMissingTypeArgument=false
 """VibeSOP init command - Initialize project with VibeSOP configuration.
 
 This command sets up the .vibe directory structure and creates

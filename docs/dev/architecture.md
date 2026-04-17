@@ -9,7 +9,7 @@ VibeSOP is a multi-platform workflow SOP system for AI-assisted development.
 ```
 ┌─────────────────────────────────────────────────────────┐
 │                        CLI Layer                         │
-│  Typer-based commands (30+ commands, grouped)            │
+│  Typer-based commands (~20 commands, grouped)            │
 ├─────────────────────────────────────────────────────────┤
 │                    Business Logic                         │
 │  ┌──────────┐  ┌──────────┐  ┌──────────┐              │

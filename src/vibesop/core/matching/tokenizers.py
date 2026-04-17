@@ -159,10 +159,11 @@ def _contains_cjk(text: str) -> bool:
 
 
 def _tokenize_cjk(segment: str, _config: TokenizerConfig) -> list[str]:
-    """Tokenize CJK text.
+    """Tokenize CJK text with overlapping 2-character tokens.
 
-    For Chinese text, splits into 2-character words where possible,
-    otherwise falls back to single characters.
+    Emits overlapping 2-character tokens so that 3-character segments
+    like "做实验" produce "做实", "实验", "验" instead of missing the
+    meaningful word "实验".
 
     Args:
         segment: Text segment containing CJK characters
@@ -180,7 +181,9 @@ def _tokenize_cjk(segment: str, _config: TokenizerConfig) -> list[str]:
             two_char = segment[i : i + 2]
             if re.match(r"[\u4e00-\u9fff]{2}", two_char):
                 tokens.append(two_char)
-                i += 2
+                # For CJK, advance by 1 instead of 2 to capture overlapping
+                # 2-character words (e.g., "做实验" -> "做实", "实验")
+                i += 1
                 continue
 
         # Single character token

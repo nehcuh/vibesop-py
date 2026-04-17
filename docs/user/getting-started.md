@@ -41,17 +41,14 @@ pip install -e "vibesop[dev]"
 vibe doctor
 
 # List available skills
-vibe skills
+vibe skills available
 
 # Route a query
 vibe route "review my code"
-
-# Auto-detect and execute
-vibe auto "scan for security issues"
 ```
 
 ## Next Steps
 
-- [CLI Reference](../user/cli-reference.md) — Complete command reference
-- [Semantic Matching Guide](../semantic/guide.md) — Enable semantic recognition
-- [Workflow Orchestration](workflows.md) — Multi-stage workflows
+- [CLI Reference](../../CLI_REFERENCE.md) — Complete command reference
+- [Troubleshooting](troubleshooting.md) — Common issues and solutions
+- [Workflow Orchestration](workflows.md) — How VibeSOP handles workflows

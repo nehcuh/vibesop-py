@@ -1,6 +1,7 @@
 ---
 name: session-end
 description: Session wrap-up - update handoff + commit + auto-record experience
+tags: [session, wrap, handoff, commit, summary, end, 会话, 结束, 总结]
 version: 2.1.0
 allowed-tools:
   - Read

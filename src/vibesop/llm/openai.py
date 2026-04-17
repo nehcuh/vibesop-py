@@ -5,8 +5,10 @@ Supports GPT-4o, GPT-4o-mini, and other OpenAI models.
 
 import os
 
+from openai import APIError as OpenAIAPIError
 from openai import AsyncOpenAI, OpenAI
 
+from vibesop.core.exceptions import LLMError
 from vibesop.llm.base import LLMProvider, LLMResponse
 
 
@@ -118,9 +120,9 @@ class OpenAIProvider(LLMProvider):
                 output_tokens=output_tokens,
             )
 
-        except Exception as e:
+        except (OpenAIAPIError, OSError, ValueError) as e:
             msg = f"OpenAI API error: {e}"
-            raise Exception(msg) from e
+            raise LLMError(self.provider_name, msg) from e
 
     def _is_configured(self) -> bool:
         """Check if OpenAI API key is valid.
@@ -188,6 +190,6 @@ class OpenAIProvider(LLMProvider):
                     output_tokens=output_tokens,
                 )
 
-        except Exception as e:
+        except (OpenAIAPIError, OSError, ValueError) as e:
             msg = f"OpenAI API error: {e}"
-            raise Exception(msg) from e
+            raise LLMError(self.provider_name, msg) from e

@@ -1,4 +1,4 @@
-# pyright: reportUnknownVariableType=false, reportUnknownMemberType=false, reportUnknownArgumentType=false, reportUnknownLambdaType=false, reportMissingTypeArgument=false, reportUnknownParameterType=false
+# pyright: reportMissingTypeArgument=false
 """Integration detection for VibeSOP.
 
 This module detects external skill pack integrations

@@ -1,6 +1,7 @@
 ---
 name: autonomous-experiment
 description: Autonomous experiment loop with predict-attribute cycle and multi-dimensional evaluation
+tags: [experiment, optimize, iteration, benchmark, evaluate, 实验, 优化, 迭代]
 version: "1.0.0"
 commands:
   - experiment

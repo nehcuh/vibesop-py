@@ -137,6 +137,10 @@ class RoutingConfig(BaseModel):
     ai_triage_prompt_version: str = Field(default="v1")
     ai_triage_budget_monthly: float = Field(default=5.0, ge=0.0)
     ai_triage_log_calls: bool = True
+    ai_triage_circuit_breaker_enabled: bool = True
+    ai_triage_circuit_breaker_failure_threshold: int = Field(default=3, ge=1, le=10)
+    ai_triage_circuit_breaker_latency_threshold_ms: float = Field(default=500.0, ge=100.0)
+    ai_triage_circuit_breaker_cooldown_seconds: int = Field(default=60, ge=10)
 
 
 class SecurityConfig(BaseModel):

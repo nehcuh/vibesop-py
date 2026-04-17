@@ -139,6 +139,9 @@ class NamespacePriorityStrategy(ResolutionStrategy):
     # Default namespace priorities
     DEFAULT_PRIORITIES: ClassVar[dict[str, int]] = {
         "project": 100,
+        "superpowers": 80,
+        "gstack": 70,
+        "omx": 60,
         "builtin": 60,
     }
 
@@ -168,14 +171,14 @@ class NamespacePriorityStrategy(ResolutionStrategy):
                 by_namespace[namespace] = []
             by_namespace[namespace].append(match)
 
-        # Find highest priority namespace (unknown namespaces default to external: 80)
-        top_namespace = max(by_namespace.keys(), key=lambda ns: self.priorities.get(ns, 80))
+        # Find highest priority namespace (unknown namespaces default to external: 50)
+        top_namespace = max(by_namespace.keys(), key=lambda ns: self.priorities.get(ns, 50))
 
         # If there's a clear priority winner, use it
-        top_priority = self.priorities.get(top_namespace, 80)
-        other_priorities = [self.priorities.get(ns, 80) for ns in by_namespace if ns != top_namespace]
+        top_priority = self.priorities.get(top_namespace, 50)
+        other_priorities = [self.priorities.get(ns, 50) for ns in by_namespace if ns != top_namespace]
 
-        if top_priority > max(other_priorities, default=0) + 10:
+        if top_priority > max(other_priorities, default=0) + 5:
             top_matches = by_namespace[top_namespace]
             best = max(top_matches, key=lambda m: m.confidence)
             return ConflictResolution(
@@ -376,7 +379,6 @@ class ConflictResolver:
 
     def _setup_default_strategies(self) -> None:
         """Set up default resolution strategies in priority order."""
-        self.add_strategy(ExplicitOverrideStrategy())
         self.add_strategy(ConfidenceGapStrategy())
         self.add_strategy(NamespacePriorityStrategy())
         self.add_strategy(RecencyStrategy())

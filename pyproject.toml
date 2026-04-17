@@ -152,13 +152,13 @@ reportMissingParameterType = "error"
 reportMissingReturnType = "error"
 reportMissingTypeArgument = "error"
 
-# Unknown types — warning instead of error because third-party libs
-# (numpy, sklearn, ruamel.yaml) lack stubs and produce noise in strict mode.
-reportUnknownMemberType = "warning"
-reportUnknownVariableType = "warning"
-reportUnknownArgumentType = "warning"
-reportUnknownParameterType = "warning"
-reportUnknownLambdaType = "warning"
+# Unknown types — disabled because third-party libs (numpy, sklearn, ruamel.yaml)
+# lack stubs and produce noise in strict mode. These are not code quality issues.
+reportUnknownMemberType = false
+reportUnknownVariableType = false
+reportUnknownArgumentType = false
+reportUnknownParameterType = false
+reportUnknownLambdaType = false
 
 # Unused code
 reportUnusedImport = "error"

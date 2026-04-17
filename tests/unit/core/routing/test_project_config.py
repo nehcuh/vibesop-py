@@ -5,8 +5,10 @@ from pathlib import Path
 
 from vibesop.core.routing.project_config import (
     create_default_project_routing,
+    load_merged_scenario_config,
     load_merged_scenarios,
     load_project_routing,
+    merge_scenario_keywords,
     merge_scenarios,
 )
 
@@ -90,19 +92,35 @@ class TestProjectRouting:
         assert result[0]["id"] == "global1"
         assert result[1]["id"] == "project1"
 
+    def test_merge_scenario_keywords(self):
+        """Test merging global keywords with project overrides."""
+        global_keywords = {"debugging": ["debug", "bug"], "planning": ["plan"]}
+        project_routing = {"scenario_keywords": {"debugging": ["crash", "segfault"], "new_scenario": ["deploy"]}}
+
+        result = merge_scenario_keywords(global_keywords, project_routing)
+
+        assert set(result["debugging"]) == {"debug", "bug", "crash", "segfault"}
+        assert result["planning"] == ["plan"]
+        assert set(result["new_scenario"]) == {"deploy"}
+
     def test_load_merged_scenarios(self):
         """Test loading merged scenarios."""
         with tempfile.TemporaryDirectory() as tmp:
-            # Create global config
-            core_dir = Path(tmp) / "core" / "policies"
+            # Create global registry config
+            core_dir = Path(tmp) / "core"
             core_dir.mkdir(parents=True)
-            global_config = core_dir / "task-routing.yaml"
+            global_config = core_dir / "registry.yaml"
             global_config.write_text("""
 schema_version: 1
-scenario_patterns:
-  - id: global_test
-    skill_id: global_skill
-    keywords: ["global"]
+conflict_resolution:
+  enabled: true
+  strategies:
+    - scenario: global_test
+      id: global_test
+      skill_id: global_skill
+      keywords: ["global"]
+  scenario_keywords:
+    global_test: ["global"]
 """)
 
             # Create project config
@@ -115,6 +133,9 @@ scenario_patterns:
   - id: project_test
     skill_id: project_skill
     keywords: ["project"]
+scenario_keywords:
+  global_test:
+    - "project_global"
 """)
 
             result = load_merged_scenarios(tmp)
@@ -123,3 +144,40 @@ scenario_patterns:
             ids = [s.get("id") for s in result]
             assert "global_test" in ids
             assert "project_test" in ids
+
+    def test_load_merged_scenario_config(self):
+        """Test loading merged scenario config including keywords."""
+        with tempfile.TemporaryDirectory() as tmp:
+            # Create global registry config
+            core_dir = Path(tmp) / "core"
+            core_dir.mkdir(parents=True)
+            global_config = core_dir / "registry.yaml"
+            global_config.write_text("""
+schema_version: 1
+conflict_resolution:
+  enabled: true
+  strategies:
+    - scenario: global_test
+      id: global_test
+      skill_id: global_skill
+  scenario_keywords:
+    global_test: ["global"]
+""")
+
+            # Create project config
+            vibe_dir = Path(tmp) / ".vibe"
+            vibe_dir.mkdir()
+            project_config = vibe_dir / "skill-routing.yaml"
+            project_config.write_text("""
+schema_version: 1
+scenario_keywords:
+  global_test:
+    - "project_global"
+""")
+
+            config = load_merged_scenario_config(tmp)
+
+            assert "strategies" in config
+            assert "keywords" in config
+            assert any(s.get("id") == "global_test" for s in config["strategies"])
+            assert set(config["keywords"]["global_test"]) == {"global", "project_global"}

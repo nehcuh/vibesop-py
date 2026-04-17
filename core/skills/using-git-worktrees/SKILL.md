@@ -1,6 +1,7 @@
 ---
 name: using-git-worktrees
 description: Parallel task isolation using git worktrees - create, manage, and clean up isolated branches
+tags: [git, worktree, branch, isolate, parallel, workspace, 创建, 独立, 分支, 隔离, 并行]
 version: 1.0.0
 commands:
   - worktree-create

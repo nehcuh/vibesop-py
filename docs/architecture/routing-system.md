@@ -254,7 +254,7 @@ class SkillRoute:
 **Key Config Options**:
 ```yaml
 routing:
-  enable_ai_triage: false        # Enable Layer 0
+  enable_ai_triage: false        # Enable Layer 2
   min_confidence: 0.6            # Minimum for match
   max_candidates: 3              # Alternatives to return
   use_cache: true                # Enable caching

@@ -1,6 +1,7 @@
 ---
 name: instinct-learning
 description: Automatic pattern learning system - extract reusable instincts from sessions
+tags: [instinct, pattern, learn, extract, habit, 本能, 模式, 学习]
 version: 1.0.0
 commands:
   - learn

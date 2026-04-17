@@ -1,4 +1,3 @@
-# pyright: reportUnknownVariableType=false, reportUnknownMemberType=false, reportUnknownArgumentType=false
 """Integration management for VibeSOP.
 
 This module provides management capabilities for external

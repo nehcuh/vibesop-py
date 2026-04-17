@@ -6,6 +6,14 @@
 
 ---
 
+> ⚠️ **DEPRECATION NOTICE**
+>
+> The `vibe auto` command documented in this guide was **removed in v4.1.0**.
+> VibeSOP is now a pure routing engine. Use `vibe route <query>` instead.
+> This document is kept for historical reference only.
+
+---
+
 ## Table of Contents
 
 1. [Overview](#overview)

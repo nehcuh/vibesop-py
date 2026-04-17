@@ -98,14 +98,16 @@ def test_fallback_strategy_needs_review_on_close_call():
     assert result.needs_review is True
 
 
-def test_conflict_resolver_uses_explicit_override_first():
+def test_conflict_resolver_fallback_without_explicit_override():
+    # ExplicitOverrideStrategy is handled at router Layer 0, not in ConflictResolver.
     resolver = ConflictResolver()
     matches = [
         _make_match("debug", 0.95),
         _make_match("review", 0.90),
     ]
     result = resolver.resolve(matches, "use review")
-    assert result.primary == "review"
+    # FallbackStrategy picks highest confidence when no earlier strategy applies
+    assert result.primary == "debug"
 
 
 def test_conflict_resolver_uses_confidence_gap_when_no_explicit():

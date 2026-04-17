@@ -1,7 +1,7 @@
 """Project-level routing configuration loader.
 
 Loads and merges project-specific routing overrides from .vibe/skill-routing.yaml
-on top of the global core/policies/task-routing.yaml configuration.
+on top of the global core/registry.yaml configuration.
 """
 
 from __future__ import annotations
@@ -12,7 +12,7 @@ from typing import Any, cast
 
 from ruamel.yaml import YAML
 
-from vibesop.core.routing.scenario_config import load_scenarios
+from vibesop.core.routing.scenario_layer import load_scenario_config as load_registry_scenario_config
 
 yaml = YAML()
 yaml.preserve_quotes = True
@@ -70,6 +70,13 @@ conflict_resolution:
   #     primary_source: project
   #     reason: "Use project-specific debugger"
 
+# Override or extend scenario keywords
+scenario_keywords:
+  # Example: Add project-specific keywords to an existing scenario
+  # debugging:
+  #   - "crashed"
+  #   - " segfault"
+
 # Override keywords
 override_keywords:
   # Example: Add project-specific override keywords
@@ -110,7 +117,7 @@ def merge_scenarios(
     """Merge global scenarios with project-specific overrides.
 
     Args:
-        global_scenarios: Scenarios from core/policies/task-routing.yaml
+        global_scenarios: Scenarios from core/registry.yaml
         project_routing: Project-specific routing configuration
 
     Returns:
@@ -158,6 +165,37 @@ def merge_scenarios(
     return merged
 
 
+def merge_scenario_keywords(
+    global_keywords: dict[str, list[str]],
+    project_routing: dict[str, Any],
+) -> dict[str, list[str]]:
+    """Merge global scenario keywords with project-specific overrides.
+
+    Project-level keywords are merged (union) with global keywords.
+
+    Args:
+        global_keywords: Keywords from core/registry.yaml
+        project_routing: Project-specific routing configuration
+
+    Returns:
+        Merged keyword mapping
+    """
+    merged = dict(global_keywords)
+
+    project_keywords = project_routing.get("scenario_keywords", {})
+    if not isinstance(project_keywords, dict):
+        return merged
+
+    for scenario_name, extra_keywords in project_keywords.items():
+        if not isinstance(extra_keywords, list):
+            continue
+        existing = set(merged.get(scenario_name, []))
+        existing.update(str(kw) for kw in extra_keywords)
+        merged[scenario_name] = list(existing)
+
+    return merged
+
+
 def get_project_routing_hints(project_root: str | Path = ".") -> list[dict[str, Any]]:
     """Get routing hints from project configuration.
 
@@ -192,10 +230,34 @@ def create_default_project_routing(project_root: str | Path = ".") -> Path | Non
     return config_path
 
 
+def load_merged_scenario_config(project_root: str | Path = ".") -> dict[str, Any]:
+    """Load scenarios and keywords with project-level overrides applied.
+
+    This is the main entry point for getting scenario configuration with overrides.
+
+    Args:
+        project_root: Path to project root directory
+
+    Returns:
+        Dictionary with "strategies" and "keywords" keys.
+    """
+    # Load global config from core/registry.yaml
+    global_config = load_registry_scenario_config(Path(project_root) / "core" / "registry.yaml")
+
+    # Load project routing
+    project_routing = load_project_routing(project_root)
+
+    # Merge configurations
+    merged_scenarios = merge_scenarios(global_config.get("strategies", []), project_routing)
+    merged_keywords = merge_scenario_keywords(global_config.get("keywords", {}), project_routing)
+
+    return {"strategies": merged_scenarios, "keywords": merged_keywords}
+
+
 def load_merged_scenarios(project_root: str | Path = ".") -> list[dict[str, Any]]:
     """Load scenarios with project-level overrides applied.
 
-    This is the main entry point for getting scenarios with overrides.
+    Backward-compatible wrapper that returns only the strategies list.
 
     Args:
         project_root: Path to project root directory
@@ -203,11 +265,4 @@ def load_merged_scenarios(project_root: str | Path = ".") -> list[dict[str, Any]
     Returns:
         List of scenarios with project overrides applied
     """
-    # Load global scenarios
-    global_scenarios = load_scenarios(project_root)
-
-    # Load project routing
-    project_routing = load_project_routing(project_root)
-
-    # Merge configurations
-    return merge_scenarios(global_scenarios, project_routing)
+    return load_merged_scenario_config(project_root).get("strategies", [])

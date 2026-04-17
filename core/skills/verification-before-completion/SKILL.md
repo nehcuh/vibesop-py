@@ -1,6 +1,7 @@
 ---
 name: verification-before-completion
 description: Verification before completion - must run verification commands before claiming done. Evidence before claims.
+tags: [verify, verification, complete, check, test, confirm, 验证, 检查, 确认]
 ---
 
 # Verification Before Completion

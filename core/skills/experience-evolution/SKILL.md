@@ -1,6 +1,7 @@
 ---
 name: experience-evolution
 description: Project knowledge accumulation system - learn from practice, avoid repeating mistakes
+tags: [experience, knowledge, learn, memory, pattern, 经验, 知识, 学习]
 version: 1.0.0
 mode: observe-only
 ---

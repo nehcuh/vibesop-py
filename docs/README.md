@@ -1,19 +1,21 @@
 # VibeSOP Documentation
 
-> **Version**: 2.2.0
+> **Version**: 4.0.0
 > **Repository**: https://github.com/nehcuh/vibesop-py
+
+---
 
 ## User Documentation
 
 - [Getting Started](user/getting-started.md) — Installation and quick start
-- [CLI Reference](user/cli-reference.md) — Complete command reference
-- [Semantic Matching Guide](semantic/guide.md) — Semantic recognition setup and usage
-- [Trigger Patterns](triggers/guide.md) — Intent detection patterns
-- [Workflow Orchestration](user/workflows.md) — Multi-stage workflow guide
+- [CLI Reference](../CLI_REFERENCE.md) — Complete command reference (root-level)
+- [Troubleshooting](user/troubleshooting.md) — Common issues and solutions
+- [Workflow Orchestration](user/workflows.md) — How VibeSOP handles workflows
 
 ## Developer Documentation
 
 - [Architecture](dev/architecture.md) — System design and components
+- [Architecture Overview](../ARCHITECTURE.md) — High-level architecture
 - [Contributing](../CONTRIBUTING.md) — How to contribute
 - [Testing Guide](dev/testing.md) — Running and writing tests
 - [Release Process](dev/releasing.md) — Versioning and releases
@@ -21,8 +23,8 @@
 
 ## API Reference
 
-- [Semantic API](semantic/api.md) — Semantic matching API
-- [Trigger API](triggers/api.md) — Trigger detection API
+- [Trigger API](triggers/api.md) — Trigger detection API (historical)
+- [Routing System](architecture/routing-system.md) — 7-layer routing pipeline deep dive
 
 ## Quick Links
 

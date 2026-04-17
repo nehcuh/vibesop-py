@@ -1,4 +1,4 @@
-# pyright: reportUnknownVariableType=false, reportUnknownMemberType=false, reportUnknownArgumentType=false, reportUnknownLambdaType=false, reportMissingTypeArgument=false, reportUnknownParameterType=false
+# pyright: reportMissingTypeArgument=false
 """Skill discovery and loading.
 
 This module provides unified skill loading from both project-local skills
@@ -77,7 +77,10 @@ class SkillLoader:
         self.project_root = Path(project_root).resolve()
         self._search_paths = self._default_search_paths()
         if search_paths:
-            self._search_paths.extend([Path(p) for p in search_paths])
+            for p in search_paths:
+                path = Path(p)
+                if path not in self._search_paths:
+                    self._search_paths.append(path)
 
         self._skill_cache: dict[str, LoadedSkill] = {}
         self._enable_external = enable_external
@@ -320,6 +323,10 @@ class SkillLoader:
                 file_path,
             )
 
+            # Preserve already-loaded skills so earlier search paths take precedence
+            if metadata.id in self._skill_cache:
+                return
+
             # Determine skill type from content or metadata
             skill_content: str | dict[str, Any] = body
             if metadata.skill_type == SkillType.WORKFLOW:
@@ -355,6 +362,11 @@ class SkillLoader:
                 self._generate_id_from_path(file_path),
                 file_path,
             )
+
+            # Preserve already-loaded skills so earlier search paths take precedence
+            if metadata.id in self._skill_cache:
+                return
+
             content = {k: v for k, v in data.items() if k not in self._metadata_keys()}
 
             self._validate_algorithms(metadata)

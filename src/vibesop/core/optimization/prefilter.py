@@ -143,9 +143,9 @@ class CandidatePrefilter:
     ) -> list[dict[str, Any]]:
         """Filter candidates by priority level.
 
-        P0 skills are always included.
-        P1 skills are included if query indicates complexity or namespace match.
-        P2 skills are included only if namespace matches.
+        P0 skills and builtin-namespace skills are always included (core
+        capabilities). External P2 skills are included only if namespace
+        matches or query indicates complexity.
 
         Args:
             query: The search query
@@ -160,12 +160,9 @@ class CandidatePrefilter:
         for candidate in candidates:
             priority = candidate.get("priority", "P2")
             ns = candidate.get("namespace")
-            if priority == "P0":
+            if priority == "P0" or ns == "builtin":
                 result.append(candidate)
-            elif priority == "P1":
-                if is_complex or ns in triggered_ns:
-                    result.append(candidate)
-            elif priority == "P2" and ns in triggered_ns:
+            elif is_complex or ns in triggered_ns:
                 result.append(candidate)
         return result
 
@@ -174,9 +171,13 @@ class CandidatePrefilter:
     ) -> list[dict[str, Any]]:
         """Filter candidates by namespace matching.
 
+        When a namespace is explicitly triggered by the query, further
+        narrow the candidate set to that namespace (plus P0 skills).
+        Otherwise, keep the candidates as-is from priority filtering.
+
         Args:
             query: The search query
-            candidates: List of skill candidates
+            candidates: List of skill candidates (already priority-filtered)
 
         Returns:
             Filtered list of candidates
@@ -244,7 +245,8 @@ class CandidatePrefilter:
 
         for candidate in candidates:
             ns = candidate.get("namespace", "")
-            if not ns or ns == "builtin":
+            # Skip generic namespaces that would match too broadly
+            if not ns or ns in ("builtin", "external", "project"):
                 continue
 
             if ns not in namespace_keywords:

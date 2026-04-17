@@ -63,6 +63,89 @@ conflict_resolution:
   enabled: true
   source: .vibe/skill-routing.yaml
 
+  # Scenario keyword mappings for the scenario layer (Layer 1).
+  # These map scenario names to trigger keywords. Project-level overrides
+  # can be provided in .vibe/skill-routing.yaml under scenario_keywords.
+  scenario_keywords:
+    debugging:
+      - "debug"
+      - "bug"
+      - "error"
+      - "崩溃"
+      - "报错"
+      - "调试"
+      - "fix"
+    code_review:
+      - "review"
+      - "审查"
+      - "pr"
+      - "merge"
+      - "land"
+    product_thinking:
+      - "product"
+      - "产品"
+      - "brainstorm"
+      - "头脑风暴"
+      - "idea"
+      - "想法"
+    planning:
+      - "plan"
+      - "规划"
+      - "design"
+      - "设计"
+      - "architect"
+      - "架构"
+    refactoring:
+      - "refactor"
+      - "重构"
+      - "clean"
+      - "整理"
+    architecture:
+      - "architecture"
+      - "架构"
+      - "system design"
+      - "系统设计"
+    requirements_clarification:
+      - "clarify"
+      - "澄清"
+      - "requirements"
+      - "需求"
+      - "understand"
+      - "理解"
+      - "figure out"
+      - "搞清楚"
+      - "what to build"
+      - "做什么"
+    persistent_execution:
+      - "persistent execution"
+      - "持久执行"
+      - "long running"
+      - "长时间运行"
+    structured_planning:
+      - "structured plan"
+      - "结构化规划"
+      - "consensus"
+      - "共识"
+      - "adr"
+      - "decision"
+      - "决策"
+    parallel_execution:
+      - "parallel"
+      - "并行"
+      - "multi-agent"
+      - "多代理"
+      - "ultrawork"
+      - "team execution"
+      - "团队执行"
+      - "distribute"
+      - "分发"
+    qa_cycling:
+      - "qa cycle"
+      - "quality cycle"
+      - "测试循环"
+      - "regression test"
+      - "回归测试"
+
   strategies:
     # Debugging: builtin systematic-debugging is P0 mandatory, always primary
     - scenario: debugging

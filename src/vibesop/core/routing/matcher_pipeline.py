@@ -48,6 +48,11 @@ class MatcherPipeline:
         filtered = self.apply_prefilter(query, candidates)
         self._optimization_service.ensure_cluster_index(filtered)
 
+        # Aggregate scores across all matchers so a strong TF-IDF match isn't
+        # blocked by a weak keyword match.
+        best_scores: dict[str, tuple[float, RoutingLayer, dict[str, Any]]] = {}
+        all_matches: list[Any] = []
+
         for layer, matcher in self._matchers:
             if layer == RoutingLayer.EMBEDDING and not self._config.enable_embedding:
                 continue
@@ -57,44 +62,61 @@ class MatcherPipeline:
                     query,
                     filtered,
                     context,
-                    top_k=self._config.max_candidates + 1,
+                    top_k=self._config.max_candidates + 2,
                 )
-
-                if not matches or matches[0].confidence < self._config.min_confidence:
-                    continue
-
-                primary_match, alternatives = self._optimization_service.apply_optimizations(
-                    matches, query, context
-                )
-
-                primary_namespace = str(primary_match.metadata.get("namespace", "builtin"))
-                return LayerResult(
-                    match=SkillRoute(
-                        skill_id=primary_match.skill_id,
-                        confidence=primary_match.confidence,
-                        layer=layer,
-                        source=self._get_skill_source(primary_match.skill_id, primary_namespace),
-                        metadata=primary_match.metadata,
-                    ),
-                    alternatives=[
-                        SkillRoute(
-                            skill_id=m.skill_id,
-                            confidence=m.confidence,
-                            layer=layer,
-                            source=self._get_skill_source(
-                                m.skill_id, str(m.metadata.get("namespace", "builtin"))
-                            ),
-                            metadata=m.metadata,
-                        )
-                        for m in alternatives
-                    ],
-                    layer=layer,
-                )
+                for m in matches:
+                    sid = m.skill_id
+                    existing = best_scores.get(sid)
+                    if existing is None or m.confidence > existing[0]:
+                        best_scores[sid] = (m.confidence, layer, m.metadata)
+                    # Keep all matches for optimization service
+                    all_matches.append(m)
             except (OSError, ValueError, KeyError, MatcherError) as e:
                 logger.debug(f"Matcher {type(matcher).__name__} failed: {e}, trying next matcher")
                 continue
 
-        return None
+        if not best_scores:
+            return None
+
+        # Deduplicate all_matches keeping highest confidence per skill
+        seen: dict[str, Any] = {}
+        for m in all_matches:
+            sid = m.skill_id
+            if sid not in seen or m.confidence > seen[sid].confidence:
+                seen[sid] = m
+        merged_matches = sorted(seen.values(), key=lambda x: x.confidence, reverse=True)
+
+        if not merged_matches or merged_matches[0].confidence < self._config.min_confidence:
+            return None
+
+        primary_match, alternatives = self._optimization_service.apply_optimizations(
+            merged_matches, query, context
+        )
+
+        primary_namespace = str(primary_match.metadata.get("namespace", "builtin"))
+        winning_layer = best_scores.get(primary_match.skill_id, (0.0, RoutingLayer.KEYWORD, {}))[1]
+        return LayerResult(
+            match=SkillRoute(
+                skill_id=primary_match.skill_id,
+                confidence=primary_match.confidence,
+                layer=winning_layer,
+                source=self._get_skill_source(primary_match.skill_id, primary_namespace),
+                metadata=primary_match.metadata,
+            ),
+            alternatives=[
+                SkillRoute(
+                    skill_id=m.skill_id,
+                    confidence=m.confidence,
+                    layer=best_scores.get(m.skill_id, (0.0, RoutingLayer.KEYWORD, {}))[1],
+                    source=self._get_skill_source(
+                        m.skill_id, str(m.metadata.get("namespace", "builtin"))
+                    ),
+                    metadata=m.metadata,
+                )
+                for m in alternatives
+            ],
+            layer=winning_layer,
+        )
 
     def set_prefilter(self, prefilter: CandidatePrefilter) -> None:
         """Replace the candidate prefilter (used when candidates are reloaded)."""

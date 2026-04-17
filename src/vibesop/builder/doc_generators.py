@@ -1,4 +1,4 @@
-# pyright: reportUnknownVariableType=false, reportUnknownMemberType=false, reportUnknownArgumentType=false, reportMissingTypeArgument=false
+# pyright: reportMissingTypeArgument=false
 """Documentation content generators for VibeSOP.
 
 This module contains utilities for generating documentation content

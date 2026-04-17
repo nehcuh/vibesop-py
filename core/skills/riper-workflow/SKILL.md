@@ -1,6 +1,7 @@
 ---
 name: riper-workflow
 description: Structured 5-phase development workflow - Research, Innovate, Plan, Execute, Review
+tags: [riper, workflow, research, plan, execute, review, develop, 工作流, 研发, 规划]
 version: 1.0.0
 commands:
   - riper-research

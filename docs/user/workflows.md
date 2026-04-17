@@ -1,54 +1,54 @@
 # Workflow Orchestration
 
-VibeSOP v2.0+ supports multi-stage workflow execution with dependency management.
+> **Version**: v4.0.0+  
+> **Last Updated**: 2026-04-17
 
-## Running a Workflow
+---
+
+## Current Status
+
+**Workflow CLI commands are not exposed in VibeSOP v4.0.0.**
+
+VibeSOP has transitioned to a pure **routing engine** philosophy. As of v4.1.0, the following commands were removed:
+
+- ❌ `vibe workflow run`
+- ❌ `vibe workflow list`
+- ❌ `vibe workflow resume`
+- ❌ `vibe workflow validate`
+
+This aligns with the core principle that VibeSOP **routes** queries to the right skill (via `SKILL.md` definitions), but does **not** execute them. Execution is the responsibility of your AI Agent (Claude Code, OpenCode, Cursor, etc.).
+
+---
+
+## What You Can Do Instead
+
+### 1. Use Skill-Based Workflows
+Many skills in the ecosystem define multi-step workflows directly inside their `SKILL.md` files. For example:
+
+- `riper-workflow` — Structured 5-phase development workflow
+- `systematic-debugging` — Step-by-step debugging methodology
+- `session-end` — Wrap-up and handoff procedures
+
+Simply route to the skill and let your AI Agent execute the steps:
 
 ```bash
-# Run a workflow from YAML file
-vibe workflow run my-workflow.yaml
-
-# List available workflows
-vibe workflow list
-
-# Resume an interrupted workflow
-vibe workflow resume <workflow-id>
-
-# Validate a workflow definition
-vibe workflow validate my-workflow.yaml
+vibe route "start a new project with planning"
+# → Matched: riper-workflow
 ```
 
-## Workflow Definition
-
-Workflows are defined in YAML format:
+### 2. Preference Learning
+VibeSOP learns from your routing history. Enable it in `.vibe/config.yaml`:
 
 ```yaml
-name: my-workflow
-strategy: sequential  # sequential, parallel, or pipeline
+routing:
+  enable_ai_triage: true
 
-stages:
-  - id: validate
-    name: Validate Input
-    handler: validate_handler
-    depends_on: []
-
-  - id: process
-    name: Process Data
-    handler: process_handler
-    depends_on: [validate]
-
-  - id: report
-    name: Generate Report
-    handler: report_handler
-    depends_on: [process]
+preferences:
+  learning_enabled: true
 ```
 
-## Execution Strategies
+See [Troubleshooting](troubleshooting.md) and [CLI Reference](../../CLI_REFERENCE.md) for more details.
 
-- **Sequential**: Stage-by-stage execution (default)
-- **Parallel**: Concurrent stage execution where dependencies allow
-- **Pipeline**: Adaptive streaming with progress callbacks
+---
 
-## State Management
-
-Workflow state is persisted to `.vibe/state/workflows/` and can be resumed after interruption.
+*If you need programmatic pipeline orchestration, consider using the underlying Python APIs in `src/vibesop/core/` or external tools like `make`, `just`, or CI/CD pipelines.*

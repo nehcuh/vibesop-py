@@ -1,4 +1,4 @@
-# pyright: reportUnknownVariableType=false, reportUnknownMemberType=false, reportUnknownArgumentType=false, reportUnknownLambdaType=false, reportMissingTypeArgument=false, reportUnknownParameterType=false
+# pyright: reportMissingTypeArgument=false
 """Quickstart runner for interactive installation.
 
 This module provides an interactive wizard for setting up

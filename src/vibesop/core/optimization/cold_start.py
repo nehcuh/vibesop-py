@@ -129,6 +129,7 @@ class ColdStartStrategy:
         "superpowers": 80,
         "gstack": 70,
         "omx": 60,
+        "external": 50,
     }
 
     def __init__(self, project_root: str | Path = "."):

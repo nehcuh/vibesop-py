@@ -1,4 +1,4 @@
-# pyright: reportUnknownVariableType=false, reportUnknownMemberType=false, reportUnknownArgumentType=false, reportPrivateUsage=false, reportUnnecessaryIsInstance=false
+# pyright: reportPrivateUsage=false, reportUnnecessaryIsInstance=false
 """Overlay merging utilities for customizing manifests.
 
 This module provides functionality for merging overlay configurations

@@ -4,9 +4,11 @@ import tempfile
 from pathlib import Path
 
 from vibesop.installer.transactional import (
+    FileTransactionalInstaller,
     InstallationStep,
     TransactionResult,
     TransactionalInstaller,
+    execute_transaction,
 )
 
 
@@ -222,6 +224,106 @@ class TestTransactionalInstaller:
             assert result.success
             assert len(result.completed_steps) == 0
 
+    def test_execute_with_exception_in_step(self) -> None:
+        """Test transaction when a step raises an exception."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            installer = TransactionalInstaller(snapshot_dir=Path(tmpdir))
+
+            def step1():
+                return {"success": True}
+
+            def bad_step():
+                raise ValueError("Boom")
+
+            installer.add_step("step1", step1, lambda: {"success": True})
+            installer.add_step("bad_step", bad_step, lambda: {"success": True})
+
+            result = installer.execute()
+
+            assert not result.success
+            assert result.error == "Boom"
+            assert result.failed_at is None  # exception path doesn't set failed_at
+            assert result.rollback_completed
+
+    def test_manual_rollback_without_snapshot(self) -> None:
+        """Test manual rollback when no snapshot exists."""
+        installer = TransactionalInstaller()
+        result = installer.rollback()
+        assert result["success"] is False
+        assert "No snapshot" in result["error"]
+
+    def test_manual_rollback_success(self) -> None:
+        """Test manual rollback after a successful transaction."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            installer = TransactionalInstaller(snapshot_dir=Path(tmpdir))
+            rollback_called = []
+
+            def step1():
+                return {"success": True}
+
+            def rollback1():
+                rollback_called.append("rollback1")
+                return {"success": True}
+
+            installer.add_step("step1", step1, rollback1)
+            result = installer.execute()
+            assert result.success
+
+            rollback_result = installer.rollback()
+            assert rollback_result["success"] is True
+            assert "rollback1" in rollback_called
+
+    def test_cleanup_snapshot(self) -> None:
+        """Test cleaning up snapshots."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            installer = TransactionalInstaller(snapshot_dir=Path(tmpdir))
+            installer.add_step("step1", lambda: {"success": True})
+            result = installer.execute()
+
+            snapshot_id = result.snapshot_id
+            snapshot_path = Path(tmpdir) / snapshot_id
+            assert snapshot_path.exists()
+
+            installer.cleanup_snapshot(snapshot_id)
+            assert not snapshot_path.exists()
+
+    def test_cleanup_snapshot_no_id(self) -> None:
+        """Test cleanup when no snapshot ID is provided."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            installer = TransactionalInstaller(snapshot_dir=Path(tmpdir))
+            # Should not raise
+            installer.cleanup_snapshot()
+            installer.cleanup_snapshot(None)
+
+    def test_rollback_function_failure(self) -> None:
+        """Test _rollback when a rollback function returns failure."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            installer = TransactionalInstaller(snapshot_dir=Path(tmpdir))
+
+            def step1():
+                return {"success": True}
+
+            def bad_rollback():
+                return {"success": False, "error": "rollback failed"}
+
+            installer.add_step("step1", step1, bad_rollback)
+            result = installer.execute()
+            assert result.success
+
+            rollback_result = installer.rollback()
+            assert rollback_result["success"] is False
+            assert any("Rollback failed for step1" in e for e in rollback_result["errors"])
+
+    def test_execute_transaction_helper(self) -> None:
+        """Test the execute_transaction convenience function."""
+        steps = [
+            ("step1", lambda: {"success": True}, lambda: {"success": True}),
+            ("step2", lambda: {"success": True}, None),
+        ]
+        result = execute_transaction(steps)
+        assert result.success
+        assert result.completed_steps == ["step1", "step2"]
+
 
 class TestTransactionalInstallerEdgeCases:
     """Test edge cases for TransactionalInstaller."""
@@ -268,3 +370,76 @@ class TestTransactionalInstallerEdgeCases:
             # Snapshots should have different IDs (based on timestamps)
             assert result1.snapshot_id is not None
             assert result2.snapshot_id is not None
+
+
+class TestFileTransactionalInstaller:
+    """Tests for FileTransactionalInstaller."""
+
+    def test_track_file_and_snapshot(self) -> None:
+        """Test tracking files and creating snapshots."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            base_dir = Path(tmpdir) / "project"
+            base_dir.mkdir()
+            snapshot_dir = Path(tmpdir) / "snapshots"
+
+            file_path = base_dir / "config.yaml"
+            file_path.write_text("original")
+
+            installer = FileTransactionalInstaller(
+                snapshot_dir=snapshot_dir,
+                base_dir=base_dir,
+            )
+            installer.track_file(file_path)
+            installer.add_step("modify", lambda: {"success": True})
+            result = installer.execute()
+
+            assert result.success
+            snapshot_path = snapshot_dir / result.snapshot_id
+            assert (snapshot_path / "files" / "config.yaml").read_text() == "original"
+
+    def test_restore_tracked_files(self) -> None:
+        """Test restoring tracked files from snapshot."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            base_dir = Path(tmpdir) / "project"
+            base_dir.mkdir()
+            snapshot_dir = Path(tmpdir) / "snapshots"
+
+            file_path = base_dir / "config.yaml"
+            file_path.write_text("original")
+
+            installer = FileTransactionalInstaller(
+                snapshot_dir=snapshot_dir,
+                base_dir=base_dir,
+            )
+            installer.track_file(file_path)
+            installer.add_step("modify", lambda: {"success": True})
+            result = installer.execute()
+
+            # Modify file after snapshot
+            file_path.write_text("modified")
+
+            # Restore snapshot
+            installer._restore_snapshot(result.snapshot_id)
+            assert file_path.read_text() == "original"
+
+    def test_restore_missing_snapshot(self) -> None:
+        """Test restoring from non-existent snapshot does nothing in FileTransactionalInstaller."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            installer = FileTransactionalInstaller(
+                snapshot_dir=Path(tmpdir),
+                base_dir=Path(tmpdir),
+            )
+            # FileTransactionalInstaller._restore_snapshot returns early if files.json missing
+            installer._restore_snapshot("missing")  # should not raise
+
+    def test_track_file_already_tracked(self) -> None:
+        """Test tracking same file twice only stores once."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            file_path = Path(tmpdir) / "file.txt"
+            file_path.write_text("content")
+
+            installer = FileTransactionalInstaller(base_dir=Path(tmpdir))
+            installer.track_file(file_path)
+            installer.track_file(file_path)
+
+            assert len(installer._tracked_files) == 1

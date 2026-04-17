@@ -476,8 +476,9 @@ platform: claude-code
 
 routing:
   min_confidence: 0.6
-  enable_fuzzy: true
-  semantic_threshold: 0.75
+  enable_ai_triage: false
+  enable_embedding: false
+  max_candidates: 3
 
 security:
   threat_level: medium
@@ -500,12 +501,11 @@ default_platform: claude-code
 llm_provider: anthropic  # or openai
 
 routing:
-  ai_triage_enabled: true
-  cache_enabled: true
+  enable_ai_triage: true
+  use_cache: true
 
 preferences:
   learning_enabled: true
-  instinct_enabled: true
 ```
 
 ---

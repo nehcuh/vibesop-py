@@ -56,7 +56,7 @@ class OptimizationService:
         matches = self.apply_instinct_boost(matches, query, context)
 
         if len(matches) <= 1:
-            return matches[0], [] if len(matches) <= 1 else matches[1 : self._config.max_candidates + 1]
+            return matches[0], []
 
         return self.resolve_conflicts(matches, query)
 

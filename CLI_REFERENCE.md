@@ -359,6 +359,88 @@ vibe onboard [path]
 
 ---
 
+## Platform & Utility Commands
+
+### `vibe switch`
+
+Switch the active platform configuration.
+
+```bash
+vibe switch <platform>
+```
+
+**Arguments:**
+- `platform` - Target platform (`claude-code`, `opencode`, `cursor`, `superpowers`)
+
+**Example:**
+```bash
+vibe switch claude-code
+```
+
+---
+
+### `vibe targets`
+
+List supported build and installation targets.
+
+```bash
+vibe targets
+```
+
+**Output:**
+- Platform name
+- Config directory path
+- Installation status
+
+---
+
+### `vibe algorithms`
+
+List available algorithm utilities in the VibeSOP algorithm library.
+
+```bash
+vibe algorithms [options]
+```
+
+**Options:**
+- `--verbose, -v` - Show detailed descriptions
+
+---
+
+### `vibe tools`
+
+List available platform tools and integrations.
+
+```bash
+vibe tools [options]
+```
+
+**Options:**
+- `--platform, -p` - Filter by platform
+
+---
+
+### `vibe inspect`
+
+Inspect project configuration, routing state, or skill details.
+
+```bash
+vibe inspect <target> [options]
+```
+
+**Targets:**
+- `config` - Show merged configuration
+- `route <query>` - Show routing trace for a query
+- `skill <id>` - Show raw skill metadata
+
+**Example:**
+```bash
+vibe inspect config
+vibe inspect route "debug this error"
+```
+
+---
+
 ## Analysis Commands
 
 ### `vibe analyze`
@@ -630,6 +712,11 @@ vibe import-rules <file> [options]
 | `vibe analyze <target>` | Analyze sessions/security/integrations |
 | `vibe preferences` | Show preference statistics |
 | `vibe quickstart` | Interactive setup |
+| `vibe switch <platform>` | Switch active platform |
+| `vibe targets` | List supported targets |
+| `vibe algorithms` | List algorithm utilities |
+| `vibe tools` | List available tools |
+| `vibe inspect <target>` | Inspect config/route/skill |
 | `vibe version` | Show version |
 
 ### Removed Commands (v4.1.0)

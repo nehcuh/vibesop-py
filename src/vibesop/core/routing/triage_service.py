@@ -7,6 +7,7 @@ import os
 from typing import TYPE_CHECKING, Any
 
 from vibesop.core.models import RoutingLayer, SkillRoute
+from vibesop.core.routing.circuit_breaker import TriageCircuitBreaker
 from vibesop.core.routing.layers import LayerResult
 from vibesop.llm.factory import create_provider
 from vibesop.llm.triage_prompts import TriagePromptRegistry
@@ -39,6 +40,16 @@ class TriageService:
         self._cache_manager = cache_manager
         self._get_skill_source = get_skill_source
         self._llm: Any | None = None
+        self._circuit_breaker = TriageCircuitBreaker(
+            enabled=getattr(config, "ai_triage_circuit_breaker_enabled", True),
+            failure_threshold=getattr(config, "ai_triage_circuit_breaker_failure_threshold", 3),
+            latency_threshold_ms=getattr(
+                config, "ai_triage_circuit_breaker_latency_threshold_ms", 500.0
+            ),
+            cooldown_seconds=getattr(
+                config, "ai_triage_circuit_breaker_cooldown_seconds", 60
+            ),
+        )
 
     def try_ai_triage(
         self,
@@ -63,10 +74,16 @@ class TriageService:
                 logger.debug(
                     f"AI triage skipped: monthly budget exhausted ({monthly_cost:.4f}/{budget:.4f} USD)"
                 )
+                self._circuit_breaker.trip("budget_exhausted")
                 return None
             if monthly_cost >= budget * 0.9:
                 logger.warning(
                     f"AI triage budget at {monthly_cost:.4f}/{budget:.4f} USD (90%+)")
+
+        # Circuit breaker: fast-fail if recent calls have been slow or failing
+        if not self._circuit_breaker.can_execute():
+            logger.debug("AI triage skipped: circuit breaker is open")
+            return None
 
         # Cost control: pre-filter candidates with keyword matcher before sending to LLM
         max_skills = self._config.ai_triage_max_skills
@@ -95,12 +112,17 @@ class TriageService:
 
         prompt = self.build_ai_triage_prompt(augmented_query, skills_summary)
 
+        import time
+
+        start_time = time.perf_counter()
         try:
             response = self._llm.call(
                 prompt=prompt,
                 max_tokens=self._config.ai_triage_max_tokens,
                 temperature=0.1,
             )
+            latency_ms = (time.perf_counter() - start_time) * 1000
+
             parsed = self.parse_ai_triage_response(response.content)
             skill_id = parsed.get("skill_id")
             parsed_confidence = parsed.get("confidence")
@@ -127,6 +149,10 @@ class TriageService:
                     selected_skill=skill_id,
                 )
 
+            # Record success for circuit breaker
+            self._circuit_breaker.record_success(latency_ms)
+            self._circuit_breaker.maybe_trip_on_latency()
+
             if skill_id:
                 candidate = next((c for c in candidates if c["id"] == skill_id), None)
                 if candidate:
@@ -152,7 +178,9 @@ class TriageService:
                     self._set_cache(cache_key, result.to_dict())
                     return LayerResult(match=result, layer=RoutingLayer.AI_TRIAGE)
         except Exception as e:
+            latency_ms = (time.perf_counter() - start_time) * 1000
             logger.debug(f"AI triage failed, falling through to next layer: {e}")
+            self._circuit_breaker.record_failure(latency_ms, reason=str(e))
 
         return None
 
@@ -246,9 +274,12 @@ class TriageService:
         if match := re.search(r"```(?:json)?\s*([\w/-]+)```", response):
             result["skill_id"] = match.group(1).strip()
             return result
-        if match := re.search(r"^[\w/-]{3,}", response.strip(), re.MULTILINE):
-            result["skill_id"] = match.group(0).strip()
-            return result
+        _MARKDOWN_FENCE_KEYWORDS = {"json", "yaml", "yml", "python", "py", "text", "markdown", "md"}
+        if match := re.search(r"^[\w/-]{3,}$", response.strip(), re.MULTILINE):
+            candidate = match.group(0).strip()
+            if candidate.lower() not in _MARKDOWN_FENCE_KEYWORDS:
+                result["skill_id"] = candidate
+                return result
 
         return result
 

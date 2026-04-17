@@ -1,4 +1,4 @@
-# pyright: reportUnknownVariableType=false, reportUnknownMemberType=false, reportUnknownArgumentType=false, reportUnknownLambdaType=false, reportMissingTypeArgument=false, reportUnknownParameterType=false
+# pyright: reportMissingTypeArgument=false
 """Manifest builder for creating configuration manifests.
 
 This module provides functionality for building Manifest objects

@@ -57,7 +57,8 @@ from vibesop.core.routing.explicit_layer import check_explicit_override
 from vibesop.core.routing.layers import LayerResult
 from vibesop.core.routing.matcher_pipeline import MatcherPipeline
 from vibesop.core.routing.optimization_service import OptimizationService
-from vibesop.core.routing.scenario_layer import load_scenarios, match_scenario
+from vibesop.core.routing.project_config import load_merged_scenario_config
+from vibesop.core.routing.scenario_layer import match_scenario
 from vibesop.core.routing.triage_service import TriageService
 from vibesop.llm.cost_tracker import TriageCostTracker
 
@@ -201,6 +202,8 @@ class UnifiedRouter:
         self._layer_distribution: dict[str, int] = {}
         self._stats_lock = threading.Lock()
 
+        self._scenario_cache: dict[str, Any] | None = None
+
     def _create_config_manager_from_config(self, config: ConfigRoutingConfig) -> ConfigManager:
         manager = ConfigManager(project_root=self.project_root)
         for field_name in type(config).model_fields:
@@ -325,12 +328,15 @@ class UnifiedRouter:
         query: str,
         candidates: list[dict[str, Any]],
     ) -> LayerResult | None:
-        scenarios = load_scenarios(self.project_root)
-        scenario = match_scenario(query, scenarios)
+        if self._scenario_cache is None:
+            self._scenario_cache = load_merged_scenario_config(self.project_root)
+        scenarios = self._scenario_cache.get("strategies", [])
+        keywords = self._scenario_cache.get("keywords", {})
+        scenario = match_scenario(query, scenarios, keywords)
         if not scenario:
             return None
 
-        target_skill = scenario.get("skill")
+        target_skill = scenario.get("skill") or scenario.get("primary") or scenario.get("skill_id")
         if not target_skill:
             return None
 
@@ -479,33 +485,45 @@ class UnifiedRouter:
         return self._get_candidates(_query)
 
     def _get_candidates(self, _query: str = "") -> list[dict[str, Any]]:
+        from vibesop.core.optimization.cold_start import get_cold_start_strategy
         from vibesop.core.skills import SkillLoader
+        import vibesop
 
         if not hasattr(self, "_skill_loader"):
+            # Always include VibeSOP's built-in skills regardless of project root
+            builtin_skills_path = Path(vibesop.__file__).parent.parent.parent / "core" / "skills"
             search_paths = [
-                self.project_root / "core" / "skills",
                 self.project_root / ".vibe" / "skills",
                 Path.home() / ".config" / "skills",
             ]
+            if builtin_skills_path.exists() and builtin_skills_path not in search_paths:
+                search_paths.insert(0, builtin_skills_path)
             self._skill_loader = SkillLoader(
                 project_root=self.project_root,
                 search_paths=search_paths,
             )
 
         definitions = self._skill_loader.discover_all()
+        cold_start = get_cold_start_strategy(self.project_root)
+        p0_skills = set(cold_start.get_p0_skills())
         candidates: list[dict[str, Any]] = []
         for _skill_id, definition in definitions.items():
             metadata = definition.metadata
+            tags = metadata.tags or []
+            # Auto-generate keywords from skill name when tags are empty
+            if not tags:
+                tags = _extract_name_keywords(metadata.name)
             candidates.append(
                 {
                     "id": metadata.id,
                     "name": metadata.name,
                     "description": metadata.description,
                     "intent": metadata.intent,
-                    "keywords": metadata.tags or [],
+                    "keywords": tags,
                     "triggers": [metadata.trigger_when] if metadata.trigger_when else [],
                     "namespace": metadata.namespace,
                     "source": self._get_skill_source(metadata.id, metadata.namespace),
+                    "priority": "P0" if metadata.id in p0_skills else "P2",
                 }
             )
         return candidates
@@ -543,7 +561,7 @@ class UnifiedRouter:
             for _layer, matcher in self._matchers:
                 try:
                     matcher.warm_up(candidates)
-                except Exception as e:
+                except (OSError, RuntimeError, ValueError, ImportError) as e:
                     logger.warning(
                         "Matcher %s warm-up failed: %s",
                         type(matcher).__name__,
@@ -693,6 +711,24 @@ class UnifiedRouter:
 
     def _ensure_cluster_index(self, candidates: list[dict[str, Any]]) -> None:
         self._optimization_service.ensure_cluster_index(candidates)
+
+
+def _extract_name_keywords(name: str) -> list[str]:
+    """Extract searchable keywords from a skill name.
+
+    Splits on common delimiters (hyphen, underscore, slash) and
+    filters out very short tokens.
+    """
+    import re
+
+    # Split on delimiters
+    parts = re.split(r"[-_/]", name)
+    keywords: list[str] = []
+    for part in parts:
+        part = part.strip()
+        if len(part) > 1:
+            keywords.append(part)
+    return keywords
 
 
 __all__ = [

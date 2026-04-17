@@ -288,11 +288,20 @@ def test_prefilter_reduces_debug_query(full_candidates):
     assert any(c["id"] == "systematic-debugging" for c in result)
 
 
-def test_prefilter_reduces_planning_query(full_candidates):
-    """Planning query should reduce candidates significantly."""
+def test_prefilter_preserves_builtin_filters_external_p2(full_candidates):
+    """Builtin skills are always preserved; external P2 skills are filtered
+    unless a namespace is triggered or the query indicates complexity."""
     prefilter = CandidatePrefilter()
-    result = prefilter.filter("这个功能怎么设计", full_candidates)
-    assert len(result) < len(full_candidates)
+    # Simple query with no complexity indicators and no namespace triggers
+    result = prefilter.filter("hello", full_candidates)
+    builtin_ids = {c["id"] for c in full_candidates if c.get("namespace") == "builtin"}
+    result_builtin_ids = {c["id"] for c in result if c.get("namespace") == "builtin"}
+    assert result_builtin_ids == builtin_ids
+    # External P2 skills should be excluded
+    external_p2_in_result = [
+        c for c in result if c.get("namespace") != "builtin" and c.get("priority") == "P2"
+    ]
+    assert len(external_p2_in_result) == 0
 
 
 def test_prefilter_reduces_qa_query(full_candidates):

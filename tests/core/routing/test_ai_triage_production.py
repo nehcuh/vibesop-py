@@ -12,6 +12,57 @@ from vibesop.llm.cost_tracker import TriageCostTracker
 from vibesop.llm.triage_prompts import TriagePromptRegistry
 
 
+class TestTriageResponseParsing:
+    """Test AI Triage response parsing edge cases."""
+
+    def test_parse_ai_triage_response_rejects_json_fence(self, tmp_path):
+        from vibesop.core.routing.triage_service import TriageService
+        from vibesop.llm.cost_tracker import TriageCostTracker
+        from vibesop.core.routing.cache import CacheManager
+        from vibesop.core.optimization import CandidatePrefilter
+
+        config = RoutingConfig(enable_ai_triage=True)
+        cost_tracker = TriageCostTracker(storage_dir=tmp_path)
+        cache_manager = CacheManager(cache_dir=tmp_path)
+        prefilter = CandidatePrefilter()
+
+        service = TriageService(
+            config=config,
+            cost_tracker=cost_tracker,
+            prefilter=prefilter,
+            cache_manager=cache_manager,
+            get_skill_source=lambda _sid, ns: ns,
+        )
+
+        # Markdown fence starting with json should not be parsed as skill_id
+        response = "```json\n{}\n```"
+        parsed = service.parse_ai_triage_response(response)
+        assert parsed["skill_id"] is None
+
+    def test_parse_ai_triage_response_accepts_valid_skill_id(self, tmp_path):
+        from vibesop.core.routing.triage_service import TriageService
+        from vibesop.llm.cost_tracker import TriageCostTracker
+        from vibesop.core.routing.cache import CacheManager
+        from vibesop.core.optimization import CandidatePrefilter
+
+        config = RoutingConfig(enable_ai_triage=True)
+        cost_tracker = TriageCostTracker(storage_dir=tmp_path)
+        cache_manager = CacheManager(cache_dir=tmp_path)
+        prefilter = CandidatePrefilter()
+
+        service = TriageService(
+            config=config,
+            cost_tracker=cost_tracker,
+            prefilter=prefilter,
+            cache_manager=cache_manager,
+            get_skill_source=lambda _sid, ns: ns,
+        )
+
+        response = "systematic-debugging"
+        parsed = service.parse_ai_triage_response(response)
+        assert parsed["skill_id"] == "systematic-debugging"
+
+
 class TestTriagePromptRegistry:
     """Test prompt template registry."""
 

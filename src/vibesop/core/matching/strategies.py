@@ -126,28 +126,64 @@ class KeywordMatcher:
         return self._score(query_tokens, candidate)
 
     def _score(self, query_tokens: set[str], candidate: SkillCandidateDict) -> ConfidenceScore:
-        """Calculate keyword match score."""
+        """Calculate keyword match score with substring and prefix bonuses."""
         _tmp_keywords = candidate.get("keywords", [])
         keywords_list = _tmp_keywords if isinstance(_tmp_keywords, list) else []
         # Get text fields from candidate
-        text_fields = [
-            str(candidate.get("name", "")),
-            str(candidate.get("description", "")),
-            str(candidate.get("intent", "")),
-            " ".join(str(k) for k in keywords_list),
-        ]
+        name = str(candidate.get("name", "")).lower()
+        description = str(candidate.get("description", "")).lower()
+        intent = str(candidate.get("intent", "")).lower()
+        keywords_text = " ".join(str(k).lower() for k in keywords_list)
+        text_fields = [name, description, intent, keywords_text]
 
-        combined_text = " ".join(text_fields).lower()
+        combined_text = " ".join(text_fields)
         candidate_tokens = set(tokenize(combined_text))
 
         # Calculate Jaccard similarity
-        intersection = query_tokens & candidate_tokens
         union = query_tokens | candidate_tokens
-
         if not union:
             return 0.0
 
-        return len(intersection) / len(union)
+        exact_matches = query_tokens & candidate_tokens
+        base_score = len(exact_matches) / len(union)
+
+        def _is_meaningful_token(token: str) -> bool:
+            # CJK characters are meaningful even as 2-character tokens;
+            # Latin tokens need at least 3 characters.
+            if any("\u4e00" <= ch <= "\u9fff" for ch in token):
+                return len(token) >= 2
+            return len(token) >= 3
+
+        # Bonus for prefix/substring matches (e.g., "debug" matches "debugging")
+        partial_bonus = 0.0
+        for qt in query_tokens:
+            if not _is_meaningful_token(qt) or qt in exact_matches:
+                continue
+            for ct in candidate_tokens:
+                if ct in exact_matches:
+                    continue
+                if qt.startswith(ct) or ct.startswith(qt):
+                    partial_bonus += 0.15
+                elif qt in ct or ct in qt:
+                    partial_bonus += 0.08
+
+        # Exact substring match in name or keywords gets strong bonus
+        substring_bonus = 0.0
+        for qt in query_tokens:
+            if _is_meaningful_token(qt) and (qt in name or qt in keywords_text):
+                substring_bonus += 0.25
+
+        # Exact name match (full query contained in name or vice versa)
+        name_bonus = 0.0
+        query_lower = " ".join(query_tokens)
+        if (
+            name
+            and _is_meaningful_token(query_lower)
+            and (query_lower in name or name in query_lower)
+        ):
+            name_bonus = 0.4
+
+        return min(1.0, base_score + min(partial_bonus, 0.4) + min(substring_bonus, 0.5) + name_bonus)
 
     def _get_matched_keywords(
         self,
@@ -283,17 +319,24 @@ class TFIDFMatcher:
         return query_vec.dot_product(candidate_vec)
 
     def _candidate_to_text(self, candidate: SkillCandidateDict) -> str:
-        """Convert candidate to searchable text."""
+        """Convert candidate to searchable text with field weighting.
+
+        Higher-weight fields are repeated so TF-IDF gives them more importance.
+        """
         _tmp_keywords = candidate.get("keywords", [])
         keywords_list = _tmp_keywords if isinstance(_tmp_keywords, list) else []
         _tmp_triggers = candidate.get("triggers", [])
         triggers_list = _tmp_triggers if isinstance(_tmp_triggers, list) else []
         fields = [
             str(candidate.get("name", "")),
-            str(candidate.get("description", "")),
+            str(candidate.get("name", "")),
+            str(candidate.get("name", "")),
+            str(candidate.get("intent", "")),
             str(candidate.get("intent", "")),
             " ".join(str(k) for k in keywords_list),
+            " ".join(str(k) for k in keywords_list),
             " ".join(str(t) for t in triggers_list),
+            str(candidate.get("description", "")),
         ]
         return " ".join(fields)
 
@@ -509,10 +552,9 @@ class LevenshteinMatcher:
     ) -> ConfidenceScore:
         """Score a single candidate using token-aware Levenshtein similarity.
 
-        Instead of comparing the entire query against the full description,
-        we tokenize the query and match each token against the candidate's
-        name and keywords. This avoids pathologically low scores for long
-        queries against short skill descriptions.
+        Only counts high-similarity token pairs (≥0.7) to avoid false
+        positives where unrelated words happen to have moderate character
+        overlap (e.g., "create" vs "completion").
         """
         _ = context  # Protocol requirement
         query_tokens = self._tokenize(query)
@@ -523,7 +565,9 @@ class LevenshteinMatcher:
             text = self._candidate_to_text(candidate)
             return self._normalized_similarity(query, text)
 
-        # Score each query token against the best-matching candidate token
+        # Score each query token against the best-matching candidate token,
+        # but only keep high-similarity matches (typo-level)
+        SIMILARITY_THRESHOLD = 0.7
         token_scores = []
         for qt in query_tokens:
             if len(qt) <= 2:
@@ -532,13 +576,14 @@ class LevenshteinMatcher:
                 self._normalized_similarity(qt, ct)
                 for ct in candidate_tokens
             )
-            token_scores.append(best)
+            if best >= SIMILARITY_THRESHOLD:
+                token_scores.append(best)
 
         if not token_scores:
             return 0.0
 
         # Also include a bonus for exact name match
-        name = str(str(candidate.get("name", ""))).lower()
+        name = str(candidate.get("name", "")).lower()
         name_bonus = 0.0
         if any(qt == name for qt in query_tokens):
             name_bonus = 0.15

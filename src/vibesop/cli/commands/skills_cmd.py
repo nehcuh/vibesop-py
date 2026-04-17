@@ -327,7 +327,7 @@ def sync(
 
 
 def status() -> None:
-    """Show skill storage status."""
+    """Show skill storage and health status."""
     storage = SkillStorage()
 
     # Check central storage
@@ -372,6 +372,31 @@ def status() -> None:
             console.print(f"  {platform_name}: [dim]not created[/dim]")
 
     console.print("")
+
+    # Health check
+    try:
+        from vibesop.integrations.health_monitor import SkillHealthMonitor
+
+        monitor = SkillHealthMonitor()
+        all_health = monitor.check_all_local()
+
+        if all_health:
+            console.print("[bold]Skill Pack Health:[/bold]\n")
+            for pack_name, health in all_health.items():
+                icon = {
+                    "healthy": "[green]✓[/green]",
+                    "warning": "[yellow]⚠[/yellow]",
+                    "critical": "[red]✗[/red]",
+                }.get(health.health, "[dim]?[/dim]")
+                console.print(
+                    f"  {icon} {pack_name}: {health.health} "
+                    f"([dim]{health.skills_count} skills[/dim])"
+                )
+                for reason in health.reasons:
+                    console.print(f"      [dim]- {reason}[/dim]")
+            console.print("")
+    except Exception as e:
+        console.print(f"[yellow]⚠ Could not check skill health: {e}[/yellow]\n")
 
 
 def available(

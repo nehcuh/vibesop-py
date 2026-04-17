@@ -19,6 +19,34 @@ scenario_patterns:
     priority: P1
     message: "VibeSOP 开发建议使用 RIPER 工作流进行系统性改进"
 
+  - id: gstack_browser
+    name: "GStack Browser QA"
+    trigger_mode: suggest
+    description: "Browser testing and screenshot via GStack"
+    keywords:
+      - "take a screenshot"
+      - "screenshot"
+      - "browser test"
+      - "headless browser"
+      - "chromium"
+      - "测试网站"
+      - "截图"
+    skill_id: "gstack"
+    priority: P1
+    message: "建议使用 GStack 进行浏览器测试和截图"
+
+  - id: gstack_qa
+    name: "GStack QA"
+    trigger_mode: suggest
+    description: "QA testing with GStack"
+    keywords:
+      - "qa test"
+      - "browser qa"
+      - "网站测试"
+    skill_id: "gstack/qa"
+    priority: P1
+    message: "建议使用 GStack QA 进行浏览器测试"
+
 # Project-specific routing hints
 routing_hints:
   - keywords: ["模板", "template", "CLAUDE.md", "配置生成"]

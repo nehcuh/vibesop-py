@@ -1,6 +1,7 @@
 ---
 name: systematic-debugging
 description: Systematic debugging - five-phase process, find root cause before fixing
+tags: [debug, bug, error, fix, test, failure, 调试, 崩溃, 报错]
 ---
 
 # Systematic Debugging

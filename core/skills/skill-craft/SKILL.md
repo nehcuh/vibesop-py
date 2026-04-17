@@ -1,6 +1,7 @@
 ---
 name: skill-craft
 description: Craft personal skills from session history - extract patterns, generate reusable skills
+tags: [skill, craft, generate, template, 技能, 生成]
 version: 1.0.0
 commands:
   - skill-craft

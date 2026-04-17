@@ -151,6 +151,7 @@ def doctor() -> None:
         ("LLM Provider", _check_llm_provider()),
         ("Platform Integrations", _check_integrations()),
         ("Hook Status", _check_hooks()),
+        ("Skill Health", _check_skill_health()),
     ]
 
     for name, (status, message) in checks:
@@ -317,6 +318,26 @@ def _check_integrations() -> tuple[bool, str]:
             names = [info.name for info in installed]
             return True, f"{len(installed)}/{total} installed ({', '.join(names)})"
         return False, f"No integrations installed (0/{total})"
+    except Exception as e:
+        return False, f"Failed to check: {e}"
+
+
+def _check_skill_health() -> tuple[bool, str]:
+    try:
+        from vibesop.integrations.health_monitor import SkillHealthMonitor
+
+        monitor = SkillHealthMonitor()
+        summary = monitor.get_health_summary()
+        total = summary.get("total", 0)
+        healthy = summary.get("healthy", 0)
+        critical = summary.get("critical", 0)
+        total_skills = summary.get("total_skills", 0)
+
+        if critical > 0:
+            return False, f"{healthy}/{total} packs healthy, {critical} critical ({total_skills} skills)"
+        if healthy == 0 and total == 0:
+            return False, "No skill packs detected"
+        return True, f"{healthy}/{total} packs healthy ({total_skills} skills)"
     except Exception as e:
         return False, f"Failed to check: {e}"
 

@@ -6,7 +6,6 @@ against malicious content and path traversal attacks.
 Public API:
     - SecurityScanner: Scan text/files for security threats
     - PathSafety: Validate paths and prevent traversal attacks
-    - SafeLoader: Load external content with mandatory scanning
     - SecurityError: Base security exception
     - PathTraversalError: Path traversal attack detected
     - UnsafeContentError: Unsafe content detected
@@ -16,7 +15,7 @@ Public API:
     - ThreatType: Type of security threat
 
 Example:
-    >>> from vibesop.security import SecurityScanner, PathSafety, SafeLoader
+    >>> from vibesop.security import SecurityScanner, PathSafety
     >>>
     >>> # Scan for threats
     >>> scanner = SecurityScanner()
@@ -27,21 +26,8 @@ Example:
     >>> # Validate paths
     >>> safety = PathSafety()
     >>> safe_path = safety.ensure_safe_output_path("output.txt", Path("/tmp"))
-    >>>
-    >>> # Load content safely
-    >>> loader = SafeLoader()
-    >>> content = loader.load_text_file(path)  # Always scanned
 """
 
-from vibesop.security.enforced import (
-    SafeLoader,
-    SecurityEnforcementError,
-    load_json_file_safe,
-    load_text_file_safe,
-    require_safe_scan,
-    scan_file_before_load,
-    scan_string_input,
-)
 from vibesop.security.exceptions import (
     PathOverlapError,
     PathTraversalError,
@@ -68,11 +54,7 @@ __all__ = [
     "PathSafety",
     "PathTraversalError",
     "RiskLevel",
-    # Enforcement
-    "SafeLoader",
     "ScanResult",
-    "SecurityEnforcementError",
-    # Exceptions
     "SecurityError",
     # Scanner
     "SecurityScanner",
@@ -85,11 +67,6 @@ __all__ = [
     "ThreatType",
     "UnsafeContentError",
     "audit_skill",
-    "load_json_file_safe",
-    "load_text_file_safe",
-    "require_safe_scan",
-    "scan_file_before_load",
-    "scan_string_input",
 ]
 
 from vibesop._version import __version__
