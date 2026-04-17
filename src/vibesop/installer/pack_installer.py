@@ -102,6 +102,11 @@ class PackInstaller:
             target_path = plan.target_path
             target_path.mkdir(parents=True, exist_ok=True)
 
+            # git clone cannot target an existing non-empty directory.
+            # Remove the old directory if it already exists and has contents.
+            if target_path.exists() and any(target_path.iterdir()):
+                shutil.rmtree(target_path)
+
             # For git-cloned repos, we need the actual repo root on disk.
             # Re-clone directly to target to avoid temp-dir lifetime issues.
             clone_ok = analyzer.git_clone(pack_url, target_path)

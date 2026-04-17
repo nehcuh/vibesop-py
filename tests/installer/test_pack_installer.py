@@ -123,11 +123,14 @@ class TestPackInstaller:
 
         with tempfile.TemporaryDirectory() as tmpdir:
             target_path = Path(tmpdir) / "test-pack"
-            target_path.mkdir()
-            # Create a fake SKILL.md
-            (target_path / "SKILL.md").write_text("# Test Skill\n")
 
             installer = PackInstaller(external_paths=[Path(tmpdir)])
+
+            def _mock_clone(url: str, dest: Path) -> bool:
+                """Simulate git clone by creating the skill file."""
+                dest.mkdir(parents=True, exist_ok=True)
+                (dest / "SKILL.md").write_text("# Test Skill\n")
+                return True
 
             with patch("vibesop.installer.pack_installer.RepoAnalyzer") as mock_cls:
                 mock_analyzer = MagicMock()
@@ -135,7 +138,7 @@ class TestPackInstaller:
                     errors=[],
                     skill_files=[target_path / "SKILL.md"],
                 )
-                mock_analyzer.git_clone.return_value = True
+                mock_analyzer.git_clone.side_effect = _mock_clone
                 mock_cls.return_value = mock_analyzer
 
                 with patch("vibesop.installer.pack_installer.InstallPlanner") as planner_cls:
