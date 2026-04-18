@@ -82,10 +82,12 @@ class IntegrationDetector:
     """
 
     # Known integration paths
+    # IMPORTANT: Order matters! We prioritize paths that contain actual skill pack directories
+    # (gstack/, superpowers/) over paths with fine-grained symlinks (gstack-browse/, etc.)
     SKILLS_BASE_PATHS: ClassVar[list[Path]] = [
-        Path.home() / ".config" / "claude" / "skills",
-        Path.home() / ".config" / "skills",
-        Path.home() / ".claude" / "skills",
+        Path.home() / ".config" / "skills",      # ← Contains gstack/, superpowers/ dirs
+        Path.home() / ".claude" / "skills",       # ← Contains gstack/, superpowers/ symlinks
+        Path.home() / ".config" / "claude" / "skills",  # ← Contains fine-grained symlinks (gstack-browse/, etc.)
     ]
 
     # Known integrations
