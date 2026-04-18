@@ -169,6 +169,23 @@ $ vibe doctor
 ✅ LLM Provider: Anthropic (API key found)
 ```
 
+### Check Integrations
+
+```bash
+$ vibe init
+✓ Initialization complete!
+
+🔍 Detecting Integrations
+┌─────────────────┬───────────────┬──────────────────┐
+│ Integration     │ Status        │ Description      │
+├─────────────────┼───────────────┼──────────────────┤
+│ gstack          │ ✓ Installed   │ Engineering team│
+│ superpowers     │ ✓ Installed   │ Productivity     │
+└─────────────────┴───────────────┴──────────────────┘
+
+✓ All recommended integrations installed!
+```
+
 ### Optional: AI-Powered Routing
 
 For best routing accuracy, set up an LLM provider:
@@ -212,7 +229,7 @@ $ vibe skills available
 
 📚 Available Skills (45 total)
 
-builtin (12 skills)
+builtin (17 skills)
   • systematic-debugging - Find root cause before attempting fixes
   • verification-before-completion - Require verification before claiming done
   • planning-with-files - Use persistent files for complex tasks
@@ -644,7 +661,11 @@ uv run pytest --cov=src/vibesop --cov-report=html
 ## Roadmap
 
 - [x] v4.0.0: Core routing engine with 7-layer pipeline
-- [ ] v4.1.0: AI Triage production readiness
+- [ ] v4.1.0: AI Triage production readiness (in progress)
+  - [x] TriageService implementation
+  - [x] Cost tracking and budget management
+  - [x] Intelligent candidate prefiltering
+  - [ ] Production testing and validation
 - [ ] v4.2.0: Skill health monitoring
 - [ ] v5.0.0: Plugin system for custom matchers
 
