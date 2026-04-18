@@ -106,6 +106,12 @@ class SkillHealthMonitor:
         skill_files = list(pack_dir.glob("*/SKILL.md"))
         skill_files.extend(list(pack_dir.glob("SKILL.md")))
 
+        # For superpowers, also check skills/ subdirectory
+        if skill_pack == "superpowers":
+            skills_subdir = pack_dir / "skills"
+            if skills_subdir.exists():
+                skill_files.extend(list(skills_subdir.glob("*/SKILL.md")))
+
         reasons = []
         has_errors = False
         version = "unknown"
@@ -136,6 +142,20 @@ class SkillHealthMonitor:
         for skill_file in skill_files:
             try:
                 content = skill_file.read_text(encoding="utf-8")
+
+                # 尝试转换外部格式
+                try:
+                    from vibesop.core.skills import FormatConverterRegistry
+
+                    converter = FormatConverterRegistry()
+                    if converter.can_convert(content):
+                        # 转换内容并使用转换后的版本进行检查
+                        converted_content, _ = converter.convert(content, skill_file)
+                        content = converted_content
+                except Exception:
+                    # 转换失败，使用原始内容
+                    pass
+
                 # 验证文件非空
                 if len(content.strip()) < 50:
                     reasons.append(f"{skill_file.name} 内容过短")

@@ -46,6 +46,12 @@ from vibesop.core.skills.external_loader import (
 from vibesop.core.skills.external_loader import (
     SkillSource as ExternalSkillSource,
 )
+from vibesop.core.skills.format_converter import (
+    FormatConverterRegistry,
+    GstackConverter,
+    SkillFormatConverter,
+    SuperpowersConverter,
+)
 from vibesop.core.skills.loader import LoadedSkill, SkillLoader
 from vibesop.core.skills.manager import SkillManager
 from vibesop.core.skills.storage import (
@@ -61,10 +67,13 @@ __all__ = [
     "ExternalSkillLoader",
     "ExternalSkillMetadata",
     "ExternalSkillSource",
+    "FormatConverterRegistry",
+    "GstackConverter",
     "LoadedSkill",
     "PromptSkill",
     "Skill",
     "SkillContext",
+    "SkillFormatConverter",
     "SkillLoader",
     "SkillManager",
     "SkillManifest",
@@ -72,6 +81,7 @@ __all__ = [
     "SkillResult",
     "SkillSource",
     "SkillStorage",
+    "SuperpowersConverter",
     "SkillType",
     "WorkflowSkill",
     "discover_external_skills",
