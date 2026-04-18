@@ -1,4 +1,5 @@
 ---
+id: builtin/session-end
 name: session-end
 description: Session wrap-up - update handoff + commit + auto-record experience
 tags: [session, wrap, handoff, commit, summary, end, 会话, 结束, 总结]
@@ -8,6 +9,10 @@ allowed-tools:
   - Write
   - Edit
   - Bash
+intent: wrap-up
+namespace: builtin
+version: 2.1.0
+type: prompt
 ---
 
 # Session End — Wrap-up Workflow

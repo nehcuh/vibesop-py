@@ -1,4 +1,5 @@
 ---
+id: builtin/autonomous-experiment
 name: autonomous-experiment
 description: Autonomous experiment loop with predict-attribute cycle and multi-dimensional evaluation
 tags: [experiment, optimize, iteration, benchmark, evaluate, 实验, 优化, 迭代]
@@ -13,6 +14,10 @@ allowed-tools:
   - Grep
   - Glob
 user-invocable: true
+intent: experimentation
+namespace: builtin
+version: 1.0.0
+type: prompt
 ---
 
 # Autonomous Experiment

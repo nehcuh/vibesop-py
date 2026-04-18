@@ -1,4 +1,5 @@
 ---
+id: builtin/skill-craft
 name: skill-craft
 description: Craft personal skills from session history - extract patterns, generate reusable skills
 tags: [skill, craft, generate, template, 技能, 生成]
@@ -14,6 +15,10 @@ allowed-tools:
   - Bash
   - Glob
   - Grep
+intent: authoring
+namespace: builtin
+version: 1.0.0
+type: prompt
 ---
 
 # Skill Craft — Personal Skill Generation System

@@ -1,4 +1,5 @@
 ---
+id: builtin/planning-with-files
 name: planning-with-files
 version: "1.0.0"
 description: File-based planning for complex tasks. Creates task_plan.md, findings.md, and progress.md. Use for multi-step tasks requiring >5 tool calls.
@@ -13,6 +14,10 @@ allowed-tools:
   - Grep
   - WebFetch
   - WebSearch
+intent: planning
+namespace: builtin
+version: 1.0.0
+type: prompt
 ---
 
 # Planning with Files

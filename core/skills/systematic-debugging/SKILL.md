@@ -1,7 +1,12 @@
 ---
+id: builtin/systematic-debugging
 name: systematic-debugging
 description: Systematic debugging - five-phase process, find root cause before fixing
 tags: [debug, bug, error, fix, test, failure, 调试, 崩溃, 报错]
+intent: debugging
+namespace: builtin
+version: 1.0.0
+type: prompt
 ---
 
 # Systematic Debugging

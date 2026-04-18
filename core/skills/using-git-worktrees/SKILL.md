@@ -1,4 +1,5 @@
 ---
+id: builtin/using-git-worktrees
 name: using-git-worktrees
 description: Parallel task isolation using git worktrees - create, manage, and clean up isolated branches
 tags: [git, worktree, branch, isolate, parallel, workspace, 创建, 独立, 分支, 隔离, 并行]
@@ -11,6 +12,10 @@ commands:
   - worktree-cleanup
   - cascade-run
   - cascade-plan
+intent: workflow
+namespace: builtin
+version: 1.0.0
+type: prompt
 ---
 
 # Git Worktrees & Cascade Execution

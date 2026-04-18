@@ -1,4 +1,5 @@
 ---
+id: builtin/instinct-learning
 name: instinct-learning
 description: Automatic pattern learning system - extract reusable instincts from sessions
 tags: [instinct, pattern, learn, extract, habit, 本能, 模式, 学习]
@@ -10,6 +11,10 @@ commands:
   - instinct-export
   - instinct-import
   - evolve
+intent: learning
+namespace: builtin
+version: 1.0.0
+type: prompt
 ---
 
 # Instinct Learning System

@@ -1,7 +1,12 @@
 ---
+id: builtin/verification-before-completion
 name: verification-before-completion
 description: Verification before completion - must run verification commands before claiming done. Evidence before claims.
 tags: [verify, verification, complete, check, test, confirm, 验证, 检查, 确认]
+intent: verification
+namespace: builtin
+version: 1.0.0
+type: prompt
 ---
 
 # Verification Before Completion

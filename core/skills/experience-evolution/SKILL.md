@@ -1,9 +1,14 @@
 ---
+id: builtin/experience-evolution
 name: experience-evolution
 description: Project knowledge accumulation system - learn from practice, avoid repeating mistakes
 tags: [experience, knowledge, learn, memory, pattern, 经验, 知识, 学习]
 version: 1.0.0
 mode: observe-only
+intent: learning
+namespace: builtin
+version: 1.0.0
+type: prompt
 ---
 
 # Experience Evolution — Knowledge Accumulation System
