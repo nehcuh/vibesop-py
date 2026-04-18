@@ -152,12 +152,12 @@ class IntegrationRecommender:
         for integration_id, score in sorted_integrations[:max_recommendations]:
             info = available[integration_id]
 
-            # Determine priority
-            if score >= 0.8:
+            # Determine priority (use threshold that handles floating point precision)
+            if score >= 0.75:  # HIGH: score >= 0.75
                 priority = RecommendationPriority.HIGH
-            elif score >= 0.5:
+            elif score >= 0.5:  # MEDIUM: score >= 0.5
                 priority = RecommendationPriority.MEDIUM
-            else:
+            else:  # LOW: score < 0.5
                 priority = RecommendationPriority.LOW
 
             recommendation = Recommendation(
@@ -345,36 +345,36 @@ class IntegrationRecommender:
         """
         score = 0.0
 
-        # Base score for being installed
-        if info.status == IntegrationStatus.INSTALLED:
-            score += 0.1
-        else:
-            score += 0.3  # Preference for new installations
-
-        # Use case matching
+        # Use case matching (this is the primary factor)
         use_case = user_context.get("use_case", "")
         if use_case in self.RECOMMENDATION_RULES:
             rule = self.RECOMMENDATION_RULES[use_case]
             if integration_id in rule["integrations"]:
                 if rule["priority"] == RecommendationPriority.HIGH:
-                    score += 0.5
+                    score += 0.7  # High priority use case gets 0.7
                 elif rule["priority"] == RecommendationPriority.MEDIUM:
-                    score += 0.3
+                    score += 0.5  # Medium priority use case gets 0.5
+
+        # Installation status is secondary
+        if info.status == IntegrationStatus.INSTALLED:
+            score += 0.1  # Small bonus for already being installed
+        else:
+            score += 0.2  # Slightly higher for new installations (encourage adoption)
 
         # Platform preference
         preferred_platform = user_context.get("platform", "")
         if preferred_platform:
             compat_info = self.SKILL_COMPATIBILITY.get(integration_id, {})
             if preferred_platform.lower() in compat_info.get("compatible_with", []):
-                score += 0.2
+                score += 0.1
 
         # User preferences
         preferences = user_context.get("preferences", {})
         if preferences.get("include_testing", False) and integration_id == "gstack":
-            score += 0.3
+            score += 0.2
 
         if preferences.get("include_brainstorming", False) and integration_id == "superpowers":
-            score += 0.3
+            score += 0.2
 
         return min(score, 1.0)
 

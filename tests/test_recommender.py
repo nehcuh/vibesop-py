@@ -126,11 +126,11 @@ class TestIntegrationRecommender:
         )
 
         for rec in recommendations:
-            if rec.confidence >= 0.8:
+            if rec.confidence >= 0.75:  # HIGH: score >= 0.75
                 assert rec.priority == RecommendationPriority.HIGH
-            elif rec.confidence >= 0.5:
+            elif rec.confidence >= 0.5:  # MEDIUM: score >= 0.5
                 assert rec.priority == RecommendationPriority.MEDIUM
-            else:
+            else:  # LOW: score < 0.5
                 assert rec.priority == RecommendationPriority.LOW
 
     def test_get_compatibility_report_empty(self) -> None:
