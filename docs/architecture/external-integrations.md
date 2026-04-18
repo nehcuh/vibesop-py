@@ -1,6 +1,6 @@
 # External Tool Integration
 
-> **Version**: 4.0.0
+> **Version**: 4.1.0
 > **Last Updated**: 2026-04-18
 
 ## Overview

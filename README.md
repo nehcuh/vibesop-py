@@ -661,11 +661,11 @@ uv run pytest --cov=src/vibesop --cov-report=html
 ## Roadmap
 
 - [x] v4.0.0: Core routing engine with 7-layer pipeline
-- [ ] v4.1.0: AI Triage production readiness (in progress)
+- [x] v4.1.0: AI Triage production readiness
   - [x] TriageService implementation
   - [x] Cost tracking and budget management
   - [x] Intelligent candidate prefiltering
-  - [ ] Production testing and validation
+  - [x] Production testing and validation (20 tests, all passing)
 - [ ] v4.2.0: Skill health monitoring
 - [ ] v5.0.0: Plugin system for custom matchers
 
