@@ -268,6 +268,38 @@ vibe skills status
 
 ---
 
+#### `vibe skills health`
+
+Check skill pack health status.
+
+```bash
+# Check all skill packs
+vibe skills health
+
+# Check specific pack
+vibe skills health --pack gstack
+
+# Show detailed information
+vibe skills health --verbose
+```
+
+**Options**:
+- `--pack`, `-p`: Check specific skill pack only
+- `--verbose`, `-v`: Show detailed health information
+
+**Health Status**:
+- ✓ **healthy**: All checks passed
+- ⚠ **warning**: Minor issues (e.g., fewer skills than expected)
+- ✗ **critical**: Major issues (e.g., missing files, missing required fields)
+
+**Checks Performed**:
+- SKILL.md file presence
+- Required fields (id, name, description, intent)
+- File integrity (encoding, size)
+- Version consistency
+
+---
+
 ## Project Setup
 
 ### `vibe init`

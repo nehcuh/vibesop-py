@@ -666,7 +666,11 @@ uv run pytest --cov=src/vibesop --cov-report=html
   - [x] Cost tracking and budget management
   - [x] Intelligent candidate prefiltering
   - [x] Production testing and validation (20 tests, all passing)
-- [ ] v4.2.0: Skill health monitoring
+- [x] v4.2.0: Skill health monitoring
+  - [x] SkillHealthMonitor implementation
+  - [x] Local health checks (file integrity, required fields)
+  - [x] CLI command (`vibe skills health`)
+  - [x] Health status reporting (healthy/warning/critical)
 - [ ] v5.0.0: Plugin system for custom matchers
 
 ---

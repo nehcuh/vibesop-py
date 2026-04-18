@@ -373,30 +373,119 @@ def status() -> None:
 
     console.print("")
 
-    # Health check
+    # Health check (summary only)
     try:
         from vibesop.integrations.health_monitor import SkillHealthMonitor
 
         monitor = SkillHealthMonitor()
-        all_health = monitor.check_all_local()
+        summary = monitor.get_health_summary()
 
-        if all_health:
-            console.print("[bold]Skill Pack Health:[/bold]\n")
-            for pack_name, health in all_health.items():
-                icon = {
-                    "healthy": "[green]✓[/green]",
-                    "warning": "[yellow]⚠[/yellow]",
-                    "critical": "[red]✗[/red]",
-                }.get(health.health, "[dim]?[/dim]")
-                console.print(
-                    f"  {icon} {pack_name}: {health.health} "
-                    f"([dim]{health.skills_count} skills[/dim])"
-                )
-                for reason in health.reasons:
-                    console.print(f"      [dim]- {reason}[/dim]")
-            console.print("")
+        # Display brief health summary
+        console.print("[bold]Skill Pack Health:[/bold]\n")
+        console.print(f"  Total: {summary['total']} packs, {summary['total_skills']} skills")
+        console.print(
+            f"  [green]✓ Healthy: {summary['healthy']}[/green] | "
+            f"[yellow]⚠ Warning: {summary['warning']}[/yellow] | "
+            f"[red]✗ Critical: {summary['critical']}[/red]"
+        )
+        console.print("\n[dim]Tip: Run 'vibe skills health' for detailed health check[/dim]\n")
     except Exception as e:
         console.print(f"[yellow]⚠ Could not check skill health: {e}[/yellow]\n")
+
+
+def health(
+    pack: str | None = typer.Option(
+        None,
+        "--pack",
+        "-p",
+        help="Check specific skill pack only",
+    ),
+    verbose: bool = typer.Option(
+        False,
+        "--verbose",
+        "-v",
+        help="Show detailed health information",
+    ),
+) -> None:
+    """Check skill pack health status.
+
+    \b
+    Examples:
+        # Check all skill packs
+        vibe skills health
+
+        # Check specific pack
+        vibe skills health --pack gstack
+
+        # Show detailed information
+        vibe skills health --verbose
+    """
+    from vibesop.integrations.health_monitor import SkillHealthMonitor
+
+    monitor = SkillHealthMonitor()
+
+    if pack:
+        # Check single pack
+        status = monitor.check_local_health(pack)
+        _display_health_status(status, verbose=verbose)
+    else:
+        # Check all packs
+        all_health = monitor.check_all_local()
+
+        if not all_health:
+            console.print("[yellow]No skill packs found[/yellow]")
+            return
+
+        # Show summary
+        summary = monitor.get_health_summary()
+        console.print("\n[bold]Skill Pack Health Check[/bold]\n")
+        console.print(
+            f"Total: [bold]{summary['total']}[/bold] packs | "
+            f"[green]✓ {summary['healthy']} healthy[/green] | "
+            f"[yellow]⚠ {summary['warning']} warnings[/yellow] | "
+            f"[red]✗ {summary['critical']} critical[/red]\n"
+        )
+
+        # Show details for each pack
+        for pack_name, health_status in sorted(all_health.items()):
+            _display_health_status(health_status, verbose=verbose)
+
+
+def _display_health_status(health_status, verbose: bool = False) -> None:
+    """Display health status for a single pack.
+
+    Args:
+        health_status: HealthStatus object
+        verbose: Show detailed information
+    """
+    from vibesop.integrations.health_monitor import HealthStatus
+
+    # Determine icon and color
+    icon_map = {
+        "healthy": ("✓", "green"),
+        "warning": ("⚠", "yellow"),
+        "critical": ("✗", "red"),
+        "unknown": ("?", "dim"),
+    }
+
+    icon, color = icon_map.get(health_status.health, ("?", "dim"))
+
+    # Display pack status
+    console.print(
+        f"[{color}]{icon}[/{color}] {health_status.name}: "
+        f"[bold {color}]{health_status.health}[/bold {color}] "
+        f"([dim]{health_status.skills_count} skills[/dim])"
+    )
+
+    if verbose and health_status.version != "unknown":
+        console.print(f"  [dim]Version: {health_status.version}[/dim]")
+
+    # Display reasons if verbose or if not healthy
+    if verbose or health_status.health != "healthy":
+        for reason in health_status.reasons:
+            console.print(f"  [dim]• {reason}[/dim]")
+
+    console.print("")
 
 
 def available(
