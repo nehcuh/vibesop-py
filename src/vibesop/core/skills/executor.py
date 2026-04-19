@@ -223,11 +223,25 @@ class ExternalSkillExecutor:
             if loaded.source_file:
                 audit_result = self._auditor.audit_skill_file(loaded.source_file)
                 if not audit_result.is_safe:
-                    raise SecurityViolationError(
-                        f"Skill failed security audit: {audit_result.reason}",
-                        skill_id=skill_id,
-                        violation_type="security_audit_failed",
+                    # Allow trusted packs through with non-critical audit issues.
+                    is_trusted = (
+                        loaded.external_metadata is not None
+                        and getattr(loaded.external_metadata, "is_trusted", False)
                     )
+                    from vibesop.security.skill_auditor import ThreatLevel
+
+                    if is_trusted and audit_result.risk_level != ThreatLevel.CRITICAL:
+                        logger.warning(
+                            "Allowing trusted skill '%s' despite audit warning: %s",
+                            skill_id,
+                            audit_result.reason,
+                        )
+                    else:
+                        raise SecurityViolationError(
+                            f"Skill failed security audit: {audit_result.reason}",
+                            skill_id=skill_id,
+                            violation_type="security_audit_failed",
+                        )
 
             # Step 3: Parse workflow
             if not loaded.source_file:

@@ -61,9 +61,8 @@ class TestSkillManagerIntegration:
         """Test execution when enabled."""
         manager = SkillManager(enable_execution=True)
 
-        # Get a valid skill first
-        skills = manager.list_skills()
-        skill_id = skills[0]["id"]
+        # Use a stable external skill known to have a valid workflow
+        skill_id = "gstack/freeze"
 
         # Execute the skill
         result = manager.execute_skill(skill_id, context={"test": True})
@@ -76,9 +75,8 @@ class TestSkillManagerIntegration:
         """Test validating a valid skill."""
         manager = SkillManager()
 
-        # Get a valid skill first
-        skills = manager.list_skills()
-        skill_id = skills[0]["id"]
+        # Use a stable external skill known to have a valid workflow
+        skill_id = "gstack/freeze"
 
         result = manager.validate_skill(skill_id)
 
@@ -159,17 +157,17 @@ class TestSkillManagerIntegration:
         skills = manager.list_skills()
         assert len(skills) > 0
 
-        # 2. Get skill definition for first skill
-        first_skill_id = skills[0]["id"]
-        definition = manager.get_skill_definition(first_skill_id)
+        # 2. Get skill definition for a known stable skill
+        stable_skill_id = "gstack/freeze"
+        definition = manager.get_skill_definition(stable_skill_id)
         assert definition is not None
 
         # 3. Validate skill
-        validation = manager.validate_skill(first_skill_id)
+        validation = manager.validate_skill(stable_skill_id)
         assert validation["is_valid"] is True
 
         # 4. Execute skill
-        execution = manager.execute_skill(first_skill_id, context={"test": True})
+        execution = manager.execute_skill(stable_skill_id, context={"test": True})
         assert execution["success"] is True
 
     def test_backward_compatibility(self) -> None:

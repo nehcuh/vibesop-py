@@ -171,7 +171,10 @@ class ExternalSkillLoader:
                     pack_name = None
 
                 # Parse and audit the skill
-                metadata = self._parse_and_audit(skill_dir, skill_file, pack_name=pack_name)
+                is_trusted = pack_name in self.TRUSTED_PACKS if pack_name else False
+                metadata = self._parse_and_audit(
+                    skill_dir, skill_file, pack_name=pack_name, is_trusted=is_trusted
+                )
                 if metadata:
                     skill_key = metadata.base_metadata.id
                     if pack_name:

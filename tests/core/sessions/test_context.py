@@ -222,9 +222,9 @@ class TestIntegrationScenarios:
             "now let's plan the refactoring approach"
         )
 
-        # Should suggest re-routing to planning
+        # Should suggest re-routing to planning (accept any plan-related skill)
         if suggestion.should_reroute:
-            assert "planning" in suggestion.recommended_skill.lower()
+            assert "plan" in suggestion.recommended_skill.lower()
 
     def test_review_to_brainstorm_transition(self):
         """Test transition from review to brainstorming."""

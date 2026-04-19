@@ -33,7 +33,6 @@ class TestRealExternalSkills:
         steps = definition["workflow"]["steps"]
         assert len(steps) > 0
 
-    @pytest.mark.skip(reason="gstack skills have complex preamble structures not yet fully supported")
     def test_load_gstack_review_skill(self) -> None:
         """Test loading the real gstack review skill."""
         manager = SkillManager()
