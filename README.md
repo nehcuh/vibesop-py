@@ -55,7 +55,7 @@ VibeSOP 提供**智能路由**和**轻量级技能执行**：
 **注意**: 复杂生产场景推荐使用原生 AI Agent（如 Claude Code、Cursor、Continue.dev）。
 **Note**: For complex production scenarios, use native AI agents (Claude Code, Cursor, Continue.dev).
 
-📖 **Read our philosophy**: [PHILOSOPHY.md](PHILOSOPHY.md) | [中文版](PHILOSOPHY.md)
+📖 **Read our philosophy**: [docs/PHILOSOPHY.md](docs/PHILOSOPHY.md) | [中文版](docs/PHILOSOPHY.md)
 
 ---
 
@@ -396,8 +396,8 @@ vibe session check-reroute "design new architecture" --skill "systematic-debuggi
 vibe session summary
 ```
 
-完整命令参考: [CLI_REFERENCE.md](CLI_REFERENCE.md)
-Full CLI reference: [CLI_REFERENCE.md](CLI_REFERENCE.md)
+完整命令参考: [docs/user/CLI_REFERENCE.md](docs/user/CLI_REFERENCE.md)
+Full CLI reference: [docs/user/CLI_REFERENCE.md](docs/user/CLI_REFERENCE.md)
 
 ---
 
@@ -515,23 +515,28 @@ Detailed architecture docs: [docs/architecture/](docs/architecture/)
 
 ## 文档 Documentation
 
+**📚 完整文档索引 Complete Documentation Index**: [docs/INDEX.md](docs/INDEX.md)
+
 ### 核心文档 Core Documentation
 
-- [PHILOSOPHY.md](PHILOSOPHY.md) - 核心哲学和使命 / Core philosophy and mission
-- [ARCHITECTURE.md](docs/architecture/README.md) - 系统架构 / System architecture
-- [SKILL_SPEC.md](docs/SKILL_SPEC.md) - SKILL.md 规范 / SKILL.md specification
+- [docs/PHILOSOPHY.md](docs/PHILOSOPHY.md) - 核心哲学和使命 / Core philosophy and mission
+- [docs/architecture/ARCHITECTURE.md](docs/architecture/ARCHITECTURE.md) - 系统架构 / System architecture
+- [docs/PROJECT_CONTEXT.md](docs/PROJECT_CONTEXT.md) - 项目背景 / Project context
+- [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md) - 项目状态 / Project status
 
 ### 用户指南 User Guides
 
-- [GETTING_STARTED.md](docs/user/GETTING_STARTED.md) - 快速入门 / Quick start guide
-- [SESSION_INTELLIGENT_ROUTING.md](docs/user/session-intelligent-routing.md) - 会话智能路由 / Session intelligent routing
-- [EXTERNAL_SKILLS_GUIDE.md](docs/EXTERNAL_SKILLS_GUIDE.md) - 外部技能开发 / External skill development
+- [docs/QUICKSTART_USERS.md](docs/QUICKSTART_USERS.md) - 用户快速入门 / User quick start
+- [docs/QUICKSTART_DEVELOPERS.md](docs/QUICKSTART_DEVELOPERS.md) - 开发者快速入门 / Developer quick start
+- [docs/user/CLI_REFERENCE.md](docs/user/CLI_REFERENCE.md) - CLI 命令参考 / CLI command reference
+- [docs/EXTERNAL_SKILLS_GUIDE.md](docs/EXTERNAL_SKILLS_GUIDE.md) - 外部技能开发 / External skill development
 
 ### 开发者文档 Developer Documentation
 
-- [CONTRIBUTING.md](CONTRIBUTING.md) - 贡献指南 / Contributing guide
-- [ARCHITECTURE_DECISIONS.md](docs/architecture/decisions.md) - 架构决策记录 / Architecture decision records
-- [API_REFERENCE.md](docs/api/README.md) - API 参考 / API reference
+- [docs/dev/CONTRIBUTING.md](docs/dev/CONTRIBUTING.md) - 贡献指南 / Contributing guide
+- [docs/ROADMAP.md](docs/ROADMAP.md) - 路线图 / Roadmap
+- [docs/CODE_OF_CONDUCT.md](docs/CODE_OF_CONDUCT.md) - 行为准则 / Code of conduct
+- [docs/SECURITY.md](docs/SECURITY.md) - 安全政策 / Security policy
 
 ---
 
