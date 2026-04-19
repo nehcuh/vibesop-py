@@ -22,6 +22,12 @@ These files remain in the project root for discoverability and tool integration:
 
 ### Getting Started
 
+- **🆕 [Skills Ecosystem Guide](SKILLS_GUIDE.md)** - Complete guide to the VibeSOP skills ecosystem
+  - 50+ skills explained (builtin, superpowers, gstack, omx)
+  - 7-layer routing system详解
+  - Priority decision mechanism
+  - How to switch between skills
+  - Scenario-based selection guide
 - **[Quick Start - Users](QUICKSTART_USERS.md)** - User-facing installation and basic usage
 - **[Quick Start - Developers](QUICKSTART_DEVELOPERS.md)** - Developer setup and contribution workflow
 - **[Cold Start Guide](cold-start-guide.md)** - First-time configuration guide
@@ -60,7 +66,13 @@ These files remain in the project root for discoverability and tool integration:
 
 ### External Skills
 
-- **[OMX Guide](OMX_GUIDE.md)** - 🆕 Complete guide to oh-my-codex (OMX) skill pack
+- **🆕 [Skills Ecosystem Guide](SKILLS_GUIDE.md)** - Complete guide to all 50+ skills
+  - Builtin, Superpowers, GStack, OMX skills explained
+  - 7-layer routing system详解
+  - Priority decision mechanism
+  - How to switch between skills manually
+  - Scenario-based selection guide with decision tree
+- **[OMX Guide](OMX_GUIDE.md)** - Complete guide to oh-my-codex (OMX) skill pack
   - deep-interview, ralph, ralplan, team, ultrawork, autopilot, ultraqa
   - Usage scenarios and best practices
   - Comparison with other skill packs

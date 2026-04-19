@@ -526,10 +526,21 @@ Detailed architecture docs: [docs/architecture/](docs/architecture/)
 
 ### 用户指南 User Guides
 
+- **🆕 [docs/SKILLS_GUIDE.md](docs/SKILLS_GUIDE.md)** - 技能生态系统完整指南 / Complete skills ecosystem guide
+  - 50+ 个技能详解 / All skills explained
+  - 7 层路由系统 / 7-layer routing system
+  - 优先级决策机制 / Priority decision mechanism
+  - 手动切换技能 / How to switch skills
 - [docs/QUICKSTART_USERS.md](docs/QUICKSTART_USERS.md) - 用户快速入门 / User quick start
 - [docs/QUICKSTART_DEVELOPERS.md](docs/QUICKSTART_DEVELOPERS.md) - 开发者快速入门 / Developer quick start
 - [docs/user/CLI_REFERENCE.md](docs/user/CLI_REFERENCE.md) - CLI 命令参考 / CLI command reference
 - [docs/EXTERNAL_SKILLS_GUIDE.md](docs/EXTERNAL_SKILLS_GUIDE.md) - 外部技能开发 / External skill development
+
+### 技能包指南 Skill Pack Guides
+
+- **[docs/OMX_GUIDE.md](docs/OMX_GUIDE.md)** - oh-my-codex (OMX) 完整指南 / Complete OMX guide
+  - deep-interview, ralph, ralplan, team, ultrawork, autopilot, ultraqa
+  - 使用场景和最佳实践 / Usage scenarios and best practices
 
 ### 开发者文档 Developer Documentation
 
