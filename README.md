@@ -373,6 +373,15 @@ vibe feedback report
 
 ### 会话智能路由 Session Intelligent Routing
 
+> **⚠️ Opt-in 设计**：会话智能追踪默认**关闭**（`VIBESOP_CONTEXT_TRACKING=false`），这是有意的设计选择。
+>
+> **为什么默认关闭？**
+> - **性能**：零开销，不影响正常使用
+> - **隐私**：不记录工具使用历史
+> - **控制**：完全由用户决定是否启用
+>
+> 需要手动启用才能使用此功能。
+
 ```bash
 # Enable tracking (Claude Code)
 vibe session enable-tracking

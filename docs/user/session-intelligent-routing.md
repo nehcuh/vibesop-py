@@ -5,6 +5,24 @@
 > **Purpose**: Enable AI agents to intelligently suggest skill switches during ongoing conversations
 > **Platforms**: Claude Code (hooks), OpenCode (CLI), Generic (CLI)
 
+---
+
+## ⚠️ Opt-In Design
+
+**会话智能追踪默认关闭（`VIBESOP_CONTEXT_TRACKING=false`）**，这是有意的设计选择。
+
+### Why Disabled by Default?
+
+- **🚀 Performance**: Zero overhead when disabled - no impact on normal usage
+- **🔒 Privacy**: No tool usage history is recorded without explicit consent
+- **🎛️ User Control**: Fully opt-in - you decide when to enable this feature
+
+### How to Enable?
+
+See platform-specific instructions below to enable session tracking.
+
+---
+
 ## Overview
 
 VibeSOP's Session Intelligent Routing monitors conversation context and suggests when to switch skills, enabling AI agents across multiple platforms to provide adaptive workflow guidance.
