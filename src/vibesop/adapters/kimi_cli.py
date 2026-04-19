@@ -187,6 +187,7 @@ class KimiCliAdapter(PlatformAdapter):
             "default_plan_mode = false",
             "",
             "[models.kimi-for-coding]",
+            'provider = "moonshot"',
             'model = "kimi-for-coding"',
             "max_context_size = 262144",
             "",
