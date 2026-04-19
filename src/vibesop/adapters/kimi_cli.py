@@ -81,6 +81,11 @@ class KimiCliAdapter(PlatformAdapter):
         This renders config.toml and README.md but NOT the skills/
         directory. Skills are managed separately.
 
+        Note: For Kimi CLI, this generates a VibeSOP configuration fragment
+        that should be merged with the auto-generated Kimi CLI config.
+        Users should run 'kimi' first to create the default config,
+        then use '/login' to authenticate.
+
         Args:
             manifest: Configuration manifest
             output_dir: Directory to write configuration files
@@ -100,7 +105,7 @@ class KimiCliAdapter(PlatformAdapter):
 
             output_dir = self.ensure_output_dir(output_dir)
 
-            # Generate configuration content
+            # Generate VibeSOP configuration fragment
             config_content = self._generate_config(manifest)
             config_path = output_dir / "config.toml"
             self.write_file_atomic(
@@ -109,6 +114,14 @@ class KimiCliAdapter(PlatformAdapter):
                 validate_security=False,
             )
             result.add_file(config_path)
+
+            # Add warning about manual merge required
+            result.add_warning(
+                "Kimi CLI requires manual setup: "
+                "1. Run 'kimi' to generate default config, "
+                "2. Run '/login' to authenticate, "
+                "3. Merge this VibeSOP config fragment"
+            )
 
             # Generate README if skills exist
             if manifest.skills:
@@ -175,41 +188,27 @@ class KimiCliAdapter(PlatformAdapter):
             f"# Version: {manifest.metadata.version}",
             f"# Platform: {manifest.metadata.platform}",
             "",
-            "# Merge skills from all brand directories (kimi, claude, codex)",
-            "merge_all_available_skills = true",
+            "# ==============================================",
+            "# IMPORTANT: Authentication Required",
+            "# ==============================================",
+            "#",
+            "# This configuration requires API authentication.",
+            "# Choose ONE of the following methods:",
+            "#",
+            "# Method 1: Use /login command (Recommended)",
+            "#   1. Run: kimi",
+            "#   2. Type: /login",
+            "#   3. Follow browser authentication",
+            "#",
+            "# Method 2: Set environment variable",
+            "#   export KIMI_API_KEY=\"sk-your-api-key\"",
+            "#",
+            "# Method 3: Add api_key manually (Not recommended)",
+            "#   [providers.kimi-for-coding]",
+            "#   api_key = \"sk-your-api-key\"",
+            "#",
+            "# ==============================================",
             "",
-            "# Default model for coding tasks",
-            'default_model = "kimi-for-coding"',
-            "",
-            "# Default settings",
-            "default_thinking = false",
-            "default_yolo = false",
-            "default_plan_mode = false",
-            "",
-            "# Provider configuration",
-            "# Note: You need to configure your API key",
-            "[providers.kimi-for-coding]",
-            'type = "kimi"',
-            'base_url = "https://api.kimi.com/coding/v1"',
-            '# api_key = "sk-xxx"  # Configure your API key here',
-            "",
-            "# Model configuration",
-            "[models.kimi-for-coding]",
-            'provider = "kimi-for-coding"',
-            'model = "kimi-for-coding"',
-            "max_context_size = 262144",
-            "",
-            "[loop_control]",
-            "max_steps_per_turn = 500",
-            "max_retries_per_step = 3",
-            "max_ralph_iterations = 0",
-            "reserved_context_size = 50000",
-            "compaction_trigger_ratio = 0.85",
-            "",
-            "[background]",
-            "max_running_tasks = 4",
-            "keep_alive_on_exit = false",
-            "agent_task_timeout_s = 900",
             "",
         ]
 
