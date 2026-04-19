@@ -7,6 +7,151 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [4.1.0] - 2026-04-19
+
+### Production Ready Release 🎉
+
+This is a **milestone release** that brings VibeSOP to production-ready status with comprehensive security improvements, cross-platform compatibility, and intelligent session routing. **This release is backward-compatible.**
+
+### Added
+
+#### Security & Safety 🔒
+- **AST Safe Evaluation**: Replaced unsafe `eval()` with secure AST parsing
+  - Whitelist-based node type validation (25+ allowed node types)
+  - Built-in function sandboxing (len, min, max, sum, any, all, isinstance, etc.)
+  - Special attribute access blocking (`__class__`, `__bases__`, `__dict__`, etc.)
+  - **17 security tests** with 100% pass rate
+- **getattr Protection**: Fixed critical indirect variable bypass vulnerability
+  - Strict literal-only requirement for 2nd parameter
+  - Blocks both direct calls (`getattr(obj, "__class__")`) and variable bypasses (`getattr(obj, attr_name)`)
+  - Discovered by KIMI deep review (Round 2)
+
+#### Cross-Platform Compatibility 🌍
+- **ThreadPoolExecutor**: Replaced `signal.SIGALRM` for Windows compatibility
+  - Works on Windows, macOS, Linux
+  - Best-effort cancellation (documented limitation)
+  - No more signal handler conflicts
+- **Platform Abstraction Layer**: Session tracking across platforms
+  - `HookBasedSessionTracker` for Claude Code (automatic via hooks)
+  - `GenericSessionTracker` for OpenCode/others (manual via CLI)
+  - Auto-detection of available platform
+
+#### Session Intelligent Routing 🧠
+- **SessionContext** class: Tool usage tracking and context change detection
+  - Configurable tool usage window (default: 10 events)
+  - Context change levels: NONE, MODERATE, SIGNIFICANT
+  - Phase transition detection (debugging → planning → review → testing)
+  - Smart re-routing suggestions with confidence scoring
+  - Configurable thresholds and cooldown periods
+- **CLI Commands**: `vibe session record-tool`, `vibe session check-reroute`, `vibe session summary`, `vibe session set-skill`, `vibe session enable/disable-tracking`
+- **Hooks Integration**: Enhanced pre-tool-use hook with automatic tracking and re-routing checks
+
+#### Architecture Improvements 🏗️
+- **Dependency Injection**: SkillLoader, UnifiedRouter injectable for testability
+  - Eliminated duplicate SkillLoader instances
+  - Improved separation of concerns
+  - Better test coverage with mock objects
+- **Clear Positioning**: "Intelligent Routing + Lightweight Execution"
+  - Core philosophy documented in PHILOSOPHY.md
+  - Positioning consistent across all modules
+
+#### Documentation 📚
+- **PHILOSOPHY.md**: Core philosophy, mission, vision, design principles
+- **QUICKSTART_DEVELOPERS.md**: Developer-focused 5-minute setup guide
+- **QUICKSTART_USERS.md**: User-focused getting started guide
+- **EXTERNAL_SKILLS_GUIDE.md**: Complete external skills specification
+- **KIMI_FINAL_FIX_COMPLETE.md**: Detailed security fix report
+- **Archive Organization**: Historical documents moved to `docs/archive/`
+
+### Changed
+
+#### Security Enhancements
+- **Workflow Engine**: Replaced `eval()` with `ast.parse()` + whitelist validation
+- **Timeout Handling**: Replaced signal-based timeout with ThreadPoolExecutor
+- **Test Coverage**: Increased from ~75% to 80.23% (exceeds requirement)
+
+#### Architecture
+- **ExternalSkillExecutor**: Added loader parameter for dependency injection
+- **SkillManager**: Injects shared loader instance into executor
+- **SessionContext**: Added router parameter for dependency injection
+
+#### CLI
+- **execute Command**: Restored as v4.1.0 feature (was removed in v4.0.0 refactor)
+- **session Subcommand**: New session management commands added
+
+### Fixed
+
+#### KIMI Review Issues (Round 1)
+- ✅ **CLI Regression**: `test_execute_command_removed` → `test_execute_command_exists`
+- ✅ **Parser Regression**: Fixed overly aggressive `_detect_step_type()` with regex pattern matching
+- ✅ **getattr Direct Call**: Blocked `getattr(obj, "__class__")` direct access
+
+#### KIMI Review Issues (Round 2)
+- ✅ **Indirect getattr Bypass**: Blocked `getattr(obj, attr_name)` variable bypass
+- ✅ **False-Positive Test**: Fixed test with missing assert statement
+
+#### Other Fixes
+- Test state pollution: Implemented conditional routing patterns for better isolation
+- P99 latency: Resolved cold startup bottleneck with warm-up solution
+- Font configuration: Corrected Ghostty keybind format errors (unrelated)
+
+### Test Results
+
+- **1501/1502 tests passing** (99.93% pass rate)
+- **80.23% code coverage** (exceeds 75% requirement)
+- **17/17 security tests passing** (100%)
+- **KIMI Review Score**: 46/50 (92%)
+
+### Performance
+
+- Cold startup latency: Reduced from P99 level with warm-up solution
+- Test isolation: Improved with conditional routing patterns
+- Memory efficiency: Eliminated duplicate loader instances
+
+### Security
+
+- **Zero eval() usage**: All replaced with AST parsing
+- **Whitelist validation**: 25+ allowed AST node types
+- **Special attribute blocking**: All `__attr__` patterns blocked
+- **Literal-only getattr**: Variable bypasses prevented
+
+### Documentation
+
+- **New Files**: 8 new documentation files
+- **Archive**: 26 historical documents organized in `docs/archive/`
+- **Translations**: Bilingual support (Chinese + English)
+- **Examples**: Practical usage examples in quick start guides
+
+### Contributors
+
+- **@nehcuh** - Project Lead & Architecture
+- **KIMI** - External Security Review (Deep Analysis)
+- **Claude Sonnet 4.6** - Implementation & Testing
+
+### Migration Guide
+
+**No migration needed** - This is a backward-compatible release.
+
+**New opt-in features**:
+```bash
+# Enable session tracking
+vibe session enable-tracking
+vibe build claude-code
+
+# Use external skills
+vibe skills install superpowers/tdd
+```
+
+### Links
+
+- [GitHub Release](https://github.com/nehcuh/vibesop-py/releases/tag/v4.1.0)
+- [PHILOSOPHY.md](https://github.com/nehcuh/vibesop-py/blob/main/PHILOSOPHY.md)
+- [Quick Start (Developers)](https://github.com/nehcuh/vibesop-py/blob/main/docs/QUICKSTART_DEVELOPERS.md)
+- [Quick Start (Users)](https://github.com/nehcuh/vibesop-py/blob/main/docs/QUICKSTART_USERS.md)
+- [KIMI Review Report](https://github.com/nehcuh/vibesop-py/blob/main/docs/KIMI_FINAL_FIX_COMPLETE.md)
+
+---
+
 ## [4.0.0] - 2026-04-12
 
 ### Major Release - Systematic Optimization Refactor
