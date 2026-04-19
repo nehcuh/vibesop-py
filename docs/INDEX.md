@@ -60,6 +60,10 @@ These files remain in the project root for discoverability and tool integration:
 
 ### External Skills
 
+- **[OMX Guide](OMX_GUIDE.md)** - 🆕 Complete guide to oh-my-codex (OMX) skill pack
+  - deep-interview, ralph, ralplan, team, ultrawork, autopilot, ultraqa
+  - Usage scenarios and best practices
+  - Comparison with other skill packs
 - **[External Skills Guide](EXTERNAL_SKILLS_GUIDE.md)** - Creating and integrating custom skills
 - **[External Skills Examples](EXTERNAL_SKILLS_EXAMPLES.md)** - Sample implementations
 

@@ -630,21 +630,80 @@ MIT License - see [LICENSE](LICENSE) file.
 
 ## 致谢 Acknowledgments
 
-VibeSOP 站在巨人的肩膀上：
+VibeSOP 站在巨人的肩膀上，整合了社区优秀的 AI 工程实践：
 
-VibeSOP stands on the shoulders of giants:
+VibeSOP stands on the shoulders of giants, integrating excellent AI engineering practices from the community:
 
-- **[gstack](https://github.com/anthropics/gstack)** - 工程技能和浏览器自动化 Engineering skills and browser automation
-- **[superpowers](https://github.com/obra/superpowers)** - 基础开发工作流 Foundational development workflows
-- **[oh-my-codex](https://github.com/mill173/omx)** - 面试技术和验证 Interview techniques and verification
-- **[Claude Code](https://github.com/anthropics/claude-code)** - SKILL.md 规范 SKILL.md specification
+### 🔗 社区项目集成 Community Integration
 
-VibeSOP 是一个独立实现，具有：
-VibeSOP is an independent implementation with:
-- 清晰的架构 (相比 Ruby 版本减少 65% 代码) Clean architecture (65% code reduction vs Ruby version)
-- 统一的路由 pipeline Unified routing pipeline
-- 生产就绪的安全审计 Production-ready security auditing
-- 偏好学习系统 Preference learning system
+VibeSOP 内置了对以下社区技能包的支持，并提供统一的智能路由：
+
+VibeSOP provides built-in support and intelligent routing for the following community skill packs:
+
+- **[gstack](https://github.com/anthropics/gstack)** by [@brandonrobertz](https://github.com/brandonrobertz)
+  - 🎯 **定位**: 虚拟工程团队 - 工程技能和浏览器自动化
+  - 📦 **技能数**: 19 个技能 (review, qa, ship, office-hours, browse, etc.)
+  - 🎨 **特点**: 角色-based 技能 (产品、工程、设计、QA)
+  - 📖 **文档**: [OMX_GUIDE.md](docs/OMX_GUIDE.md) (参见对比章节)
+
+- **[superpowers](https://github.com/obra/superpowers)** by [@obra](https://github.com/obra)
+  - 🎯 **定位**: 基础开发工作流 - TDD、重构、调试、优化
+  - 📦 **技能数**: 7 个技能 (tdd, refactor, debug, optimize, architect, review, brainstorm)
+  - 🎨 **特点**: 开发最佳实践，red-green-refactor 循环
+  - 💡 **适用**: 日常开发任务，个人工作流优化
+
+- **[oh-my-codex (OMX)](https://github.com/mill173/omx)** by [@mill173](https://github.com/mill173)
+  - 🎯 **定位**: 高级工程方法论 - 结构化思维和系统化执行
+  - 📦 **技能数**: 7 个技能 (deep-interview, ralph, ralplan, team, ultrawork, autopilot, ultraqa)
+  - 🎨 **特点**: 需求澄清、持久执行、共识规划、多代理并行
+  - 📖 **文档**: [OMX_GUIDE.md](docs/OMX_GUIDE.md) (完整使用指南)
+
+### 🏗️ 核心技术基础 Core Technologies
+
+- **[Claude Code](https://github.com/anthropics/claude-code)** by Anthropic
+  - 📋 **贡献**: SKILL.md 规范标准
+  - 🔧 **集成**: VibeSOP 完全兼容 SKILL.md 规范
+  - 📚 **文档**: [SKILL.md Specification](docs/EXTERNAL_SKILLS_GUIDE.md)
+
+### 🎯 VibeSOP 独特价值 VibeSOP Unique Value
+
+VibeSOP 不仅仅是这些技能包的集合，而是一个**统一的智能路由层**：
+
+VibeSOP is not just a collection of these skill packs, but a **unified intelligent routing layer**:
+
+- 🧠 **智能路由** (94% 准确率) - 自动选择最合适的技能
+- 🔄 **统一管理** - 一个工具管理所有技能包
+- 🛡️ **安全审计** - 所有外部技能经过安全扫描
+- 📚 **跨平台** - 在 Claude Code、Cursor、Continue.dev 等平台使用
+- 🎓 **偏好学习** - 记住你的选择，越来越准确
+
+### 📊 技能选择指南 Skill Selection Guide
+
+**详细对比**: 请参考 [OMX_GUIDE.md](docs/OMX_GUIDE.md#与其他技能包的区别)
+
+```
+需求不明确？ → OMX deep-interview (深度澄清)
+产品头脑风暴？ → GStack office-hours (重新框定)
+TDD 开发？ → Superpowers tdd (red-green-refactor)
+代码审查？ → GStack review (SQL 安全 + 自动修复)
+调试错误？ → Systematic debugging (内置，根因分析)
+完整实现？ → OMX ralph (持久执行 + deslop)
+团队决策？ → OMX ralplan (共识规划 + ADR)
+并行任务？ → OMX team (多代理协作)
+QA 测试？ → GStack qa (浏览器自动化) 或 OMX ultraqa (架构驱动)
+准备发布？ → GStack ship (完整发布流程)
+```
+
+### 💬 致谢社区 Thanks to the Community
+
+感谢以下项目的作者和维护者，他们的工作让 AI 原生开发更加强大：
+
+Thanks to the authors and maintainers of these projects for making AI-native development more powerful:
+
+- [@brandonrobertz](https://github.com/brandonrobertz) - gstack
+- [@obra](https://github.com/obra) - superpowers
+- [@mill173](https://github.com/mill173) - oh-my-codex (OMX)
+- Anthropic Team - Claude Code
 
 ---
 
