@@ -247,6 +247,69 @@ class ConfigManager:
     # Environment variable prefix
     ENV_PREFIX = "VIBE_"
 
+    @staticmethod
+    def deep_merge_configs(*configs: dict[str, Any]) -> dict[str, Any]:
+        """Deep merge multiple configuration dictionaries.
+
+        Later configs override earlier configs. Nested dictionaries are
+        merged recursively rather than replaced.
+
+        Priority order (lowest to highest):
+            1. Built-in defaults
+            2. Global config (~/.vibe/config.yaml)
+            3. Project config (.vibe/config.yaml)
+            4. Environment variables (VIBE_*)
+            5. CLI arguments
+
+        Args:
+            *configs: Configuration dictionaries to merge
+
+        Returns:
+            Merged configuration dictionary
+
+        Example:
+            >>> defaults = {"routing": {"min_confidence": 0.3, "cache": True}}
+            >>> project = {"routing": {"min_confidence": 0.5}}
+            >>> cli = {"routing": {"cache": False}}
+            >>> merged = ConfigManager.deep_merge_configs(defaults, project, cli)
+            >>> assert merged["routing"]["min_confidence"] == 0.5
+            >>> assert merged["routing"]["cache"] is False
+        """
+        if not configs:
+            return {}
+
+        # Start with first config
+        result = configs[0].copy()
+
+        # Merge each subsequent config
+        for config in configs[1:]:
+            result = ConfigManager._deep_merge_dicts(result, config)
+
+        return result
+
+    @staticmethod
+    def _deep_merge_dicts(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
+        """Deep merge two dictionaries.
+
+        Args:
+            base: Base dictionary
+            override: Override dictionary (takes precedence)
+
+        Returns:
+            Merged dictionary
+        """
+        result = base.copy()
+
+        for key, value in override.items():
+            if key in result and isinstance(result[key], dict) and isinstance(value, dict):
+                # Recursively merge nested dictionaries
+                result[key] = ConfigManager._deep_merge_dicts(result[key], value)
+            else:
+                # Override with new value
+                result[key] = value
+
+        return result
+
     def __init__(self, project_root: str | Path = "."):
         """Initialize the configuration manager.
 
@@ -427,24 +490,34 @@ class ConfigManager:
         Returns:
             Merged configuration dictionary
         """
-        # Start with defaults
-        result = self.DEFAULT_CONFIG.get(section, {}).copy()
+        # Collect all sources that have this section
+        configs_to_merge = []
 
-        # Merge from each source in priority order
+        # 1. Built-in defaults
+        if section in self.DEFAULT_CONFIG:
+            configs_to_merge.append({section: self.DEFAULT_CONFIG[section]})
+
+        # 2-6. Other sources in priority order
         for priority in ConfigSourcePriority:
             if priority in self._sources:
                 source = self._sources[priority]
                 if section in source.data:
-                    result.update(source.data[section])
+                    configs_to_merge.append({section: source.data[section]})
 
-        # Check environment variables for this section
+        # Deep merge all configs
+        merged = self.deep_merge_configs(*configs_to_merge)
+
+        # 7. Environment variables (highest priority per-key)
         prefix = f"{self.ENV_PREFIX}{section.upper()}_"
         for key, value in os.environ.items():
             if key.startswith(prefix):
                 config_key = key[len(prefix) :].lower()
-                result[config_key] = self._parse_env_value(value)
+                # Apply env var overrides
+                if section not in merged:
+                    merged[section] = {}
+                merged[section][config_key] = self._parse_env_value(value)
 
-        return result
+        return merged.get(section, {})
 
     def _key_to_env(self, key: str) -> str:
         """Convert configuration key to environment variable name.

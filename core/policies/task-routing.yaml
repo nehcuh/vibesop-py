@@ -181,6 +181,243 @@ scenario_patterns:
     priority: P1
     message: "代码审查建议使用 /review"
 
+  # 新增场景 - 代码审查变体
+  - id: code_review_variants
+    name: "Code Review Variants"
+    trigger_mode: suggest
+    description: "Various ways users ask for code review"
+    keywords:
+      - "帮我 review"
+      - "code review"
+      - "检查这个 PR"
+      - "review 代码"
+      - "review code"
+      - "代码质量检查"
+      - "检查代码质量"
+      - "PR review"
+      - "pull request review"
+    skill_id: "superpowers/review"
+    priority: P1
+    confidence: 0.95
+    message: "检测到代码审查请求"
+
+  # 新增场景 - 性能优化
+  - id: performance_optimization
+    name: "Performance Optimization"
+    trigger_mode: suggest
+    description: "User wants to optimize performance"
+    keywords:
+      - "优化性能"
+      - "性能优化"
+      - "optimize performance"
+      - "make it faster"
+      - "提升性能"
+      - "性能问题"
+      - "slow"
+      - "慢"
+      - "加速"
+      - "speed up"
+      - "性能调优"
+      - "profiling"
+      - "profile code"
+    skill_id: "superpowers/optimize"
+    priority: P1
+    confidence: 0.92
+    message: "检测到性能优化需求"
+
+  # 新增场景 - 测试相关
+  - id: testing_scenarios
+    name: "Testing Scenarios"
+    trigger_mode: suggest
+    description: "User wants to test functionality"
+    keywords:
+      - "测试这个功能"
+      - "test this feature"
+      - "测试应用"
+      - "test app"
+      - "QA 测试"
+      - "qa testing"
+      - "运行测试"
+      - "run tests"
+      - "test coverage"
+      - "测试覆盖率"
+      - "write tests"
+      - "写测试"
+      - "添加测试"
+      - "add tests"
+    skill_id: "gstack/qa"
+    priority: P1
+    confidence: 0.90
+    message: "检测到测试需求"
+
+  # 新增场景 - TDD
+  - id: tdd_workflow
+    name: "TDD Workflow"
+    trigger_mode: suggest
+    description: "Test-driven development workflow"
+    keywords:
+      - "tdd"
+      - "test driven"
+      - "测试驱动"
+      - "red green refactor"
+      - "先写测试"
+      - "write test first"
+      - "test-first"
+    skill_id: "superpowers/tdd"
+    priority: P1
+    confidence: 0.95
+    message: "检测到 TDD 工作流"
+
+  # 新增场景 - 架构设计
+  - id: architecture_design
+    name: "Architecture Design"
+    trigger_mode: suggest
+    description: "User wants to design architecture"
+    keywords:
+      - "设计架构"
+      - "architecture design"
+      - "system design"
+      - "架构设计"
+      - "设计系统"
+      - "design system"
+      - "架构评审"
+      - "architecture review"
+      - "tech design"
+      - "技术设计"
+      - "设计评审"
+    skill_id: "gstack/architect"
+    priority: P1
+    confidence: 0.93
+    message: "检测到架构设计需求"
+
+  # 新增场景 - 代码重构
+  - id: code_refactoring
+    name: "Code Refactoring"
+    trigger_mode: suggest
+    description: "User wants to refactor code"
+    keywords:
+      - "重构代码"
+      - "refactor code"
+      - "refactor this"
+      - "代码重构"
+      - "整理代码"
+      - "clean up code"
+      - "代码整理"
+      - "改善代码结构"
+      - "improve code structure"
+      - "重写"
+      - "rewrite"
+    skill_id: "superpowers/refactor"
+    priority: P1
+    confidence: 0.91
+    message: "检测到重构需求"
+
+  # 新增场景 - 头脑风暴
+  - id: brainstorming
+    name: "Brainstorming"
+    trigger_mode: suggest
+    description: "User wants to brainstorm ideas"
+    keywords:
+      - "brainstorm"
+      - "头脑风暴"
+      - "讨论想法"
+      - "discuss ideas"
+      - "think about"
+      - "思考一下"
+      - "帮我想想"
+      - "ideas"
+      - "想法"
+      - "创意"
+    skill_id: "superpowers/brainstorm"
+    priority: P1
+    confidence: 0.88
+    message: "检测到头脑风暴需求"
+
+  # 新增场景 - 文档编写
+  - id: documentation
+    name: "Documentation"
+    trigger_mode: suggest
+    description: "User wants to write documentation"
+    keywords:
+      - "写文档"
+      - "write docs"
+      - "documentation"
+      - "文档"
+      - "添加注释"
+      - "add comments"
+      - "update readme"
+      - "更新文档"
+      - "api docs"
+      - "API 文档"
+    skill_id: "riper-workflow"
+    priority: P2
+    confidence: 0.85
+    message: "检测到文档编写需求"
+
+  # 新增场景 - 会议/评审
+  - id: design_review
+    name: "Design Review"
+    trigger_mode: suggest
+    description: "User wants design review"
+    keywords:
+      - "设计评审"
+      - "design review"
+      - "review design"
+      - "评审设计"
+      - "design feedback"
+      - "设计反馈"
+      - "ux review"
+      - "UI review"
+      - "视觉评审"
+    skill_id: "gstack/plan-design-review"
+    priority: P1
+    confidence: 0.90
+    message: "检测到设计评审需求"
+
+  # 新增场景 - 深度调试
+  - id: deep_debugging
+    name: "Deep Debugging"
+    trigger_mode: suggest
+    description: "Complex debugging requiring investigation"
+    keywords:
+      - "深入调试"
+      - "deep debug"
+      - "investigate"
+      - "调查"
+      - "根因分析"
+      - "root cause"
+      - "找原因"
+      - "why broken"
+      - "为什么坏了"
+      - "复杂问题"
+      - "complex issue"
+      - "奇怪的问题"
+      - "weird issue"
+    skill_id: "gstack/investigate"
+    priority: P1
+    confidence: 0.92
+    message: "检测到深度调试需求"
+
+  # 新增场景 - 数据库
+  - id: database_work
+    name: "Database Work"
+    trigger_mode: suggest
+    description: "Database schema or query work"
+    keywords:
+      - "数据库"
+      - "database"
+      - "schema"
+      - "migration"
+      - "查询优化"
+      - "query optimization"
+      - "SQL"
+      - "数据模型"
+      - "data model"
+    skill_id: "riper-workflow"
+    priority: P2
+    confidence: 0.87
+    message: "检测到数据库相关工作"
+
 # Routing hints displayed to user
 routing_hints:
   - keywords: ["实验", "优化", "迭代", "autonomous", "experiment", "循环优化", "自主实验"]

@@ -38,6 +38,27 @@ class TriagePromptRegistry:
             "Return JSON in this exact format (no markdown, no explanation):\n"
             '{{"skill_id": "<selected-skill-id>"}}\n'
         ),
+        "v3": (
+            "You are an expert skill routing assistant. Your job is to select the most appropriate "
+            "skill for the user's request by analyzing semantic intent.\n\n"
+            "Guidelines:\n"
+            "1. Analyze the USER'S INTENT, not just keywords. What do they want to accomplish?\n"
+            "2. Consider the CONTEXT: Is this debugging, testing, reviewing, or planning?\n"
+            "3. Match to the skill whose PRIMARY PURPOSE aligns with the user's goal.\n"
+            "4. Prefer specific skills over general ones (e.g., 'gstack/qa' over 'superpowers/tdd' for testing).\n"
+            "5. If multiple skills could apply, choose the one that best matches the specific scenario.\n\n"
+            "Common patterns:\n"
+            "- 'review code', 'check PR' → gstack/review or superpowers/review\n"
+            "- 'test this', 'QA' → gstack/qa (for browser testing) or superpowers/tdd (for test-writing)\n"
+            "- 'optimize', 'slow' → superpowers/optimize (performance) or systematic-debugging (if investigating)\n"
+            "- 'design', 'architecture' → gstack/architect (system design) or gstack/plan-design-review (review)\n"
+            "- 'refactor', 'clean up' → superpowers/refactor\n"
+            "- 'debug', 'error', 'broken' → systematic-debugging or gstack/investigate (complex cases)\n\n"
+            "User request: {query}\n\n"
+            "Available skills:\n{skills_summary}\n\n"
+            "Respond with a JSON object (no markdown, no explanation):\n"
+            '{{"skill_id": "<selected-skill-id>", "confidence": <0.0-1.0>}}\n'
+        ),
     }
 
     DEFAULT_VERSION = "v1"

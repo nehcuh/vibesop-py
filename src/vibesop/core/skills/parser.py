@@ -2,10 +2,13 @@
 
 This module parses SKILL.md files and extracts metadata for routing.
 It supports the frontmatter format used by VibeSOP skills.
+
+Enhanced in v4.1.0 to support workflow parsing for external skill execution.
 """
 
 from __future__ import annotations
 
+import logging
 import re
 from pathlib import Path  # noqa: TC003
 from typing import Any
@@ -13,6 +16,9 @@ from typing import Any
 from ruamel.yaml import YAML
 
 from vibesop.core.skills.base import SkillMetadata, SkillType
+from vibesop.core.skills.workflow import Workflow, parse_workflow_from_markdown
+
+logger = logging.getLogger(__name__)
 
 
 def parse_skill_md(skill_path: Path) -> SkillMetadata | None:
@@ -146,8 +152,115 @@ def infer_skill_id(skill_path: Path) -> str:
     return skill_path.parent.name if skill_path.is_file() else skill_path.name
 
 
+class SkillParser:
+    """Enhanced skill parser with workflow support.
+
+    This class provides parsing capabilities for both metadata extraction
+    and workflow definition extraction from SKILL.md files.
+
+    Example:
+        >>> parser = SkillParser()
+        >>> metadata = parser.parse_metadata(skill_path)
+        >>> workflow = parser.parse_workflow(skill_path)
+    """
+
+    def __init__(self) -> None:
+        """Initialize the skill parser."""
+        self._yaml = YAML()
+
+    def parse_metadata(self, skill_path: Path) -> SkillMetadata | None:
+        """Parse skill metadata from SKILL.md file.
+
+        Args:
+            skill_path: Path to skill directory or SKILL.md file
+
+        Returns:
+            SkillMetadata if parsing succeeded, None otherwise
+        """
+        return parse_skill_md(skill_path)
+
+    def parse_workflow(self, skill_path: Path) -> Workflow:
+        """Parse workflow from SKILL.md file.
+
+        This method extracts the workflow definition from a SKILL.md file,
+        including steps, instructions, and metadata.
+
+        Args:
+            skill_path: Path to skill directory or SKILL.md file
+
+        Returns:
+            Parsed Workflow
+
+        Raises:
+            FileNotFoundError: If SKILL.md doesn't exist
+            ValueError: If workflow cannot be parsed
+
+        Example:
+            >>> parser = SkillParser()
+            >>> workflow = parser.parse_workflow(Path("skills/tdd/SKILL.md"))
+            >>> print(f"Workflow: {workflow.name}")
+            >>> for step in workflow.steps:
+            ...     print(f"  - {step.description}")
+        """
+        skill_file = skill_path if skill_path.is_file() else skill_path / "SKILL.md"
+
+        if not skill_file.exists():
+            raise FileNotFoundError(f"SKILL.md not found: {skill_file}")
+
+        skill_id = skill_file.parent.name if skill_path.is_file() else skill_path.name
+
+        # Read file content
+        try:
+            content = skill_file.read_text(encoding="utf-8")
+        except Exception as e:
+            raise ValueError(f"Failed to read SKILL.md: {e}") from e
+
+        # Parse workflow from markdown
+        try:
+            workflow = parse_workflow_from_markdown(content, skill_id)
+            logger.debug(f"Parsed workflow for {skill_id}: {len(workflow.steps)} steps")
+            return workflow
+        except Exception as e:
+            raise ValueError(f"Failed to parse workflow: {e}") from e
+
+    def parse_skill_file(
+        self,
+        skill_path: Path,
+    ) -> tuple[SkillMetadata | None, Workflow | None]:
+        """Parse both metadata and workflow from SKILL.md file.
+
+        Args:
+            skill_path: Path to skill directory or SKILL.md file
+
+        Returns:
+            Tuple of (metadata, workflow). Either can be None if parsing fails.
+
+        Example:
+            >>> parser = SkillParser()
+            >>> metadata, workflow = parser.parse_skill_file(Path("skills/tdd/SKILL.md"))
+            >>> if metadata:
+            ...     print(f"Skill: {metadata.name}")
+            >>> if workflow:
+            ...     print(f"Steps: {len(workflow.steps)}")
+        """
+        try:
+            metadata = self.parse_metadata(skill_path)
+        except Exception as e:
+            logger.debug(f"Failed to parse metadata: {e}")
+            metadata = None
+
+        try:
+            workflow = self.parse_workflow(skill_path)
+        except Exception as e:
+            logger.debug(f"Failed to parse workflow: {e}")
+            workflow = None
+
+        return metadata, workflow
+
+
 __all__ = [
     "SkillMetadata",
+    "SkillParser",
     "build_metadata",
     "extract_frontmatter",
     "extract_trigger_from_description",

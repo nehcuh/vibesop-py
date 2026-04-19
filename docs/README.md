@@ -26,6 +26,10 @@
 - [Trigger API](triggers/api.md) — Trigger detection API (historical)
 - [Routing System](architecture/routing-system.md) — 7-layer routing pipeline deep dive
 
+## Historical Archive
+
+- [Archive](archive/README.md) — Historical development documents, phase reports, and planning
+
 ## Quick Links
 
 - [GitHub Repository](https://github.com/nehcuh/vibesop-py)

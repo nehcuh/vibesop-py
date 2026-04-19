@@ -96,6 +96,21 @@ class SkillResult:
             self.metadata = {}
 
 
+@dataclass
+class SkillDefinition:
+    """Complete skill definition with metadata and source.
+
+    Attributes:
+        metadata: Skill metadata
+        source_file: Path to SKILL.md file (if external)
+        source: Source type (builtin, external, project)
+    """
+
+    metadata: SkillMetadata
+    source_file: Path | None = None
+    source: str = "builtin"
+
+
 class Skill(ABC):
     """Base class for all skills.
 

@@ -322,20 +322,45 @@ class TFIDFMatcher:
         """Convert candidate to searchable text with field weighting.
 
         Higher-weight fields are repeated so TF-IDF gives them more importance.
+
+        Optimized weights (v4.1.0):
+            name: 5x (weight: 1.5) - most direct match indicator
+            intent: 5x (weight: 1.5) - high semantic value
+            keywords: 3x (weight: 1.0) - good for specific scenarios
+            triggers: 2x (weight: 0.67) - useful for pattern matching
+            description: 1x (weight: 0.33) - noisy, downweighted
         """
         _tmp_keywords = candidate.get("keywords", [])
         keywords_list = _tmp_keywords if isinstance(_tmp_keywords, list) else []
         _tmp_triggers = candidate.get("triggers", [])
         triggers_list = _tmp_triggers if isinstance(_tmp_triggers, list) else []
+
+        # Optimized field weights based on failure analysis
         fields = [
+            # Name - highest weight (most direct indicator)
             str(candidate.get("name", "")),
             str(candidate.get("name", "")),
             str(candidate.get("name", "")),
+            str(candidate.get("name", "")),
+            str(candidate.get("name", "")),
+
+            # Intent - highest weight (semantic clarity)
             str(candidate.get("intent", "")),
             str(candidate.get("intent", "")),
+            str(candidate.get("intent", "")),
+            str(candidate.get("intent", "")),
+            str(candidate.get("intent", "")),
+
+            # Keywords - high weight (specific scenarios)
             " ".join(str(k) for k in keywords_list),
             " ".join(str(k) for k in keywords_list),
+            " ".join(str(k) for k in keywords_list),
+
+            # Triggers - medium weight (pattern matching)
             " ".join(str(t) for t in triggers_list),
+            " ".join(str(t) for t in triggers_list),
+
+            # Description - lowest weight (noisy, keep minimal)
             str(candidate.get("description", "")),
         ]
         return " ".join(fields)
