@@ -93,6 +93,13 @@ class SkillHealthMonitor:
                 pack_dir = path
                 break
 
+        # Special case: builtin skills live directly in core/skills/
+        # (each subdirectory is a skill, not under a builtin/ folder)
+        if not pack_dir and skill_pack == "builtin":
+            fallback = self.project_root / "core" / "skills"
+            if fallback.exists():
+                pack_dir = fallback
+
         if not pack_dir:
             return HealthStatus(
                 name=skill_pack,
@@ -111,6 +118,12 @@ class SkillHealthMonitor:
             skills_subdir = pack_dir / "skills"
             if skills_subdir.exists():
                 skill_files.extend(list(skills_subdir.glob("*/SKILL.md")))
+
+        # For builtin pack under core/skills/, exclude subdirectories that are
+        # themselves known packs (e.g., omx) to avoid double-counting.
+        if skill_pack == "builtin" and pack_dir == self.project_root / "core" / "skills":
+            known_pack_dirs = {"superpowers", "gstack", "omx"}
+            skill_files = [f for f in skill_files if f.parent.name not in known_pack_dirs]
 
         reasons = []
         has_errors = False
@@ -211,10 +224,23 @@ class SkillHealthMonitor:
             Path.home() / ".config" / "skills",
         ]
 
+        # Build set of builtin skill names to avoid double-counting individual
+        # skills that were synced to ~/.config/skills/.
+        builtin_skills_dir = self.project_root / "core" / "skills"
+        builtin_skill_names: set[str] = set()
+        if builtin_skills_dir.exists():
+            for d in builtin_skills_dir.iterdir():
+                if d.is_dir() and d.name not in known_packs:
+                    builtin_skill_names.add(d.name)
+
         for skills_dir in skills_dirs:
             if skills_dir.exists():
                 for pack_dir in skills_dir.iterdir():
-                    if pack_dir.is_dir() and pack_dir.name not in results:
+                    if (
+                        pack_dir.is_dir()
+                        and pack_dir.name not in results
+                        and pack_dir.name not in builtin_skill_names
+                    ):
                         results[pack_dir.name] = self.check_local_health(pack_dir.name)
 
         return results

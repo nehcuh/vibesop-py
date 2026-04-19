@@ -320,6 +320,7 @@ class VibeSOPInstaller:
             config_dir / "CLAUDE.md",
             config_dir / "config.yaml",
             config_dir / "settings.json",
+            config_dir / "config.toml",
         ]
 
         return any(f.exists() for f in key_files)

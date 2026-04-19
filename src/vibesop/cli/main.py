@@ -304,7 +304,9 @@ def _check_llm_provider() -> tuple[bool, str]:
         return True, "Anthropic (API key found)"
     if os.getenv("OPENAI_API_KEY"):
         return True, "OpenAI (API key found)"
-    return False, "No API key found (set ANTHROPIC_API_KEY or OPENAI_API_KEY)"
+    if os.getenv("KIMI_API_KEY"):
+        return True, "Kimi / Moonshot (API key found)"
+    return False, "No API key found (set ANTHROPIC_API_KEY, OPENAI_API_KEY, or KIMI_API_KEY)"
 
 
 def _check_integrations() -> tuple[bool, str]:
