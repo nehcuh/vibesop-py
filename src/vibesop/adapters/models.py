@@ -176,7 +176,7 @@ class ManifestMetadata(BaseModel):
     )
     platform: str = Field(
         ...,
-        description="Target platform (e.g., 'claude-code', 'opencode')",
+        description="Target platform (e.g., 'claude-code', 'kimi-cli', 'opencode')",
     )
     created_at: datetime = Field(
         default_factory=datetime.now,

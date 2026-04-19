@@ -38,7 +38,7 @@ def quickstart(
         "claude-code",
         "--platform",
         "-p",
-        help="Target platform (claude-code, opencode)",
+        help="Target platform (claude-code, kimi-cli, opencode)",
     ),
     _global_install: bool = typer.Option(
         False,

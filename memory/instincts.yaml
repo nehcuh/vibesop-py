@@ -1,0 +1,94 @@
+version: "1.0"
+instincts:
+  - id: "550e8400-doc-reorg-2026"
+    pattern: "当重组项目文档时，先分析并分类文件，使用 `git mv` 保留版本历史，然后创建索引文档，最后更新所有交叉引用并提交推送。"
+    confidence: 0.88
+    source_sessions: ["vibesop-py-doc-reorg-2026-04-19"]
+    usage_count: 11
+    success_rate: 1.0
+    tags: ["documentation", "refactoring", "git-workflow", "project-organization"]
+    status: "active"
+    context: |
+      适用场景：
+      - 项目根目录有大量文档文件（>10个）
+      - 已存在逻辑分类目录（如 docs/, guides/, dev/）
+      - 需要保持版本历史和跟踪变更
+
+      关键步骤：
+      1. 分析根目录和子目录的文件结构
+      2. 按用途分类：用户文档、开发者文档、架构文档
+      3. 使用 git mv 移动文件（保留历史）
+      4. 创建 INDEX.md 作为中心导航
+      5. 更新 README.md 和其他入口文档的引用
+      6. 提交变更并推送
+
+      成功指标：
+      - 所有文件移动成功
+      - 版本历史完整保留
+      - 无失效的交叉引用
+    created_at: "2026-04-19"
+    last_used: "2026-04-19"
+
+  - id: "550e8401-index-creation-2026"
+    pattern: "当文档超过 10 个文件时，创建 INDEX.md 作为中心导航，按角色（用户/开发者/贡献者）和用途分类，并提供快速查找指南和维护指南。"
+    confidence: 0.82
+    source_sessions: ["vibesop-py-doc-reorg-2026-04-19"]
+    usage_count: 1
+    success_rate: 1.0
+    tags: ["documentation", "organization", "ux", "navigation"]
+    status: "active"
+    context: |
+      适用场景：
+      - 单个目录包含 >10 个文档文件
+      - 需要按不同角色提供文档视图
+      - 新团队成员难以找到相关文档
+
+      INDEX.md 应包含：
+      1. 按角色分类的快速导航
+      2. 完整的文档目录结构
+      3. 快速链接部分（按类别）
+      4. 维护指南和审查计划
+      5. 外部资源链接
+
+      最佳实践：
+      - 使用表情符号增强可读性
+      - 提供多种导航方式（角色、类别、字母）
+      - 包含"最后更新"时间戳
+      - 添加维护指南确保文档持续更新
+    created_at: "2026-04-19"
+    last_used: "2026-04-19"
+
+  - id: "550e8402-crossref-update-2026"
+    pattern: "移动文档文件后，立即检查并更新所有相关文件中的交叉引用，特别是 README.md 和其他入口文档，确保所有链接指向新路径。"
+    confidence: 0.78
+    source_sessions: ["vibesop-py-doc-reorg-2026-04-19"]
+    usage_count: 2
+    success_rate: 1.0
+    tags: ["refactoring", "maintenance", "documentation", "quality-assurance"]
+    status: "active"
+    context: |
+      适用场景：
+      - 文件位置发生变化（移动、重命名）
+      - 文档间存在相互引用
+      - 需要保持文档可访问性
+
+      关键步骤：
+      1. 移动文件后立即搜索所有引用
+      2. 优先更新入口文档（README.md）
+      3. 使用精确替换（避免过度替换）
+      4. 验证更新后的链接
+      5. 检查是否有遗漏的引用
+
+      工具使用：
+      - 使用 Edit 工具进行精确替换
+      - 设置 replace_all=false 避免全局替换
+      - 使用 grep 搜索可能的引用
+      - 读取文件验证更新成功
+
+      验证检查：
+      - 所有 README.md 文件
+      - docs/README.md
+      - 其他入口文档
+      - CI/CD 配置文件中的文档链接
+    created_at: "2026-04-19"
+    last_used: "2026-04-19"

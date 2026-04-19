@@ -37,6 +37,7 @@ console = Console()
 # Platform labels for display
 PLATFORM_LABELS = {
     "claude-code": "Claude Code",
+    "kimi-cli": "Kimi Code CLI",
     "opencode": "OpenCode",
     "superpowers": "Superpowers",
     "cursor": "Cursor",

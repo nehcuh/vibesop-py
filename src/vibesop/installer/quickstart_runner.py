@@ -52,6 +52,7 @@ class QuickstartRunner:
         """Initialize the quickstart runner."""
         self._supported_platforms = {
             "claude-code": "Claude Code CLI",
+            "kimi-cli": "Kimi Code CLI",
             "opencode": "OpenCode CLI",
         }
 
@@ -163,7 +164,7 @@ class QuickstartRunner:
             QuickstartConfig with initial settings
         """
         console.print("What would you like to set up?")
-        console.print("1. Global configuration for Claude Code/OpenCode")
+        console.print("1. Global configuration for Claude Code/Kimi CLI/OpenCode")
         console.print("2. Project-specific configuration")
         console.print()
 
@@ -381,6 +382,7 @@ class QuickstartRunner:
         # Platform to output directory mapping
         platform_dirs = {
             "claude-code": "~/.claude",
+            "kimi-cli": "~/.kimi",
             "opencode": "~/.config/opencode",
         }
 

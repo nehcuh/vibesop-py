@@ -95,7 +95,7 @@ $ vibe doctor
 ✅ Configuration: Found at .vibe/
 ✅ LLM Provider: Anthropic (API key found)
 ⚠️  Platform Integrations: No integrations installed (0/5)
-⚠️  Hook Status: claude-code: 0/2; opencode: not installed
+⚠️  Hook Status: claude-code: 0/2; kimi-cli: not installed; opencode: not installed
 
 ⚠️  Some checks failed. Please fix the issues above.
 ```
@@ -334,7 +334,7 @@ vibe build [platform] [options]
 ```
 
 **Arguments:**
-- `platform` - Target platform (claude-code, opencode, cursor)
+- `platform` - Target platform (claude-code, kimi-cli, opencode, cursor)
 
 **Options:**
 - `--output, -o` - Output directory
@@ -402,7 +402,7 @@ vibe switch <platform>
 ```
 
 **Arguments:**
-- `platform` - Target platform (`claude-code`, `opencode`, `cursor`, `superpowers`)
+- `platform` - Target platform (`claude-code`, `kimi-cli`, `opencode`, `cursor`, `superpowers`)
 
 **Example:**
 ```bash

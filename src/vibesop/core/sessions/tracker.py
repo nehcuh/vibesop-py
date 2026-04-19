@@ -83,7 +83,7 @@ class SessionTracker(ABC):
         """Get platform identifier.
 
         Returns:
-            Platform name (e.g., 'claude-code', 'opencode')
+            Platform name (e.g., 'claude-code', 'kimi-cli', 'opencode')
         """
         pass
 
@@ -336,7 +336,7 @@ def get_tracker(
     """Get the appropriate session tracker for a platform.
 
     Args:
-        platform: Platform identifier ('auto', 'claude-code', 'opencode', 'generic')
+        platform: Platform identifier ('auto', 'claude-code', 'kimi-cli', 'opencode', 'generic')
         project_root: Path to VibeSOP project root
 
     Returns:
@@ -350,8 +350,8 @@ def get_tracker(
     if platform == "claude-code":
         return HookBasedSessionTracker(project_root=project_root, platform="claude-code")
 
-    # Use generic tracker for OpenCode and other platforms
-    # (they don't support hooks yet)
+    # Use generic tracker for OpenCode, Kimi CLI and other platforms
+    # (they don't support file-based hooks yet)
     return GenericSessionTracker(project_root=project_root)
 
 
@@ -368,6 +368,10 @@ def _detect_platform() -> str:
         ".claude"
     ).exists():
         return "claude-code"
+
+    # Check for Kimi Code CLI
+    if Path.home().joinpath(".kimi").exists():
+        return "kimi-cli"
 
     # Check for OpenCode
     if Path.home().joinpath(".opencode").exists():

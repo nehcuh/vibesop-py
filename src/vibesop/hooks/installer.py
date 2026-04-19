@@ -55,7 +55,7 @@ class HookInstaller:
         """Install hooks for a platform.
 
         Args:
-            platform: Platform identifier (e.g., "claude-code")
+            platform: Platform identifier (e.g., "claude-code", "kimi-cli")
             config_dir: Configuration directory
             hook_points: List of hook points to install (None = all supported)
 

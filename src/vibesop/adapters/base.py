@@ -52,7 +52,7 @@ class PlatformAdapter(ABC):
         """Platform identifier.
 
         Returns:
-            Unique platform name (e.g., 'claude-code', 'opencode')
+            Unique platform name (e.g., 'claude-code', 'kimi-cli', 'opencode')
         """
         ...
 

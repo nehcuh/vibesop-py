@@ -163,9 +163,10 @@ class KimiCliAdapter(PlatformAdapter):
             skills_dir.mkdir(parents=True, exist_ok=True)
 
             for skill in manifest.skills:
-                skill_dir = skills_dir / skill.id
+                dir_name = skill.id.replace("/", "-")
+                skill_dir = skills_dir / dir_name
                 skill_dir.mkdir(parents=True, exist_ok=True)
-                self._render_skill_content(skill, skill_dir, result)
+                self._render_skill_content(skill, skill_dir, result, dir_name=dir_name)
 
         except Exception as e:
             result.add_error(f"Failed to render skills: {e}")
@@ -242,29 +243,15 @@ class KimiCliAdapter(PlatformAdapter):
             "",
         ])
 
-        # Add skills catalog
+        # Add skills note
         if manifest.skills:
             lines.extend([
-                "# Skills configured by VibeSOP",
-                "# Skills are installed in ~/.kimi/skills/",
+                "# VibeSOP Skills",
+                f"# {len(manifest.skills)} skills configured.",
+                "# Install them to ~/.kimi/skills/ (or .kimi/skills/ for project-level)",
+                "# and set merge_all_available_skills = true to load from multiple sources.",
                 "",
-                "[[vibesop.skills]]",
             ])
-            for skill in manifest.skills:
-                # Escape quotes and remove newlines for TOML strings
-                safe_description = self._escape_toml_string(skill.description)
-                safe_trigger = self._escape_toml_string(skill.trigger_when)
-
-                lines.extend([
-                    f'id = "{skill.id}"',
-                    f'name = "{skill.name}"',
-                    f'description = "{safe_description}"',
-                    f'trigger = "{safe_trigger}"',
-                    "",
-                    "[[vibesop.skills]]",
-                ])
-            # Remove the last empty [[vibesop.skills]]
-            lines.pop()
 
         return "\n".join(lines)
 
@@ -299,6 +286,7 @@ class KimiCliAdapter(PlatformAdapter):
         skill: Any,
         skill_dir: Path,
         result: RenderResult,
+        dir_name: str | None = None,
     ) -> None:
         """Render skill content from actual skill file.
 
@@ -306,6 +294,7 @@ class KimiCliAdapter(PlatformAdapter):
             skill: Skill definition from manifest
             skill_dir: Directory to write skill files
             result: RenderResult to track files
+            dir_name: Flattened directory name used for the skill
         """
         skill_id = skill.id if hasattr(skill, "id") else skill.get("id", "")
         skill_output_path = skill_dir / "SKILL.md"
@@ -318,7 +307,7 @@ class KimiCliAdapter(PlatformAdapter):
             result.add_file(skill_output_path)
         else:
             # Fallback: generate minimal skill definition
-            fallback_content = self._generate_fallback_skill_content(skill)
+            fallback_content = self._generate_fallback_skill_content(skill, dir_name=dir_name)
             self.write_file_atomic(skill_output_path, fallback_content, validate_security=False)
             result.add_file(skill_output_path)
 
@@ -326,16 +315,11 @@ class KimiCliAdapter(PlatformAdapter):
         """Find and read actual skill content from core/skills/.
 
         Args:
-            skill_id: Skill identifier (e.g., "systematic-debugging" or "gstack/review")
+            skill_id: Skill identifier (e.g., "systematic-debugging" or "omx/deep-interview")
 
         Returns:
             Skill file content or None if not found
         """
-        if "/" in skill_id:
-            # External skill like "gstack/review" or "superpowers/tdd"
-            # These don't have local content, return None to use fallback
-            return None
-
         # Built-in skill - try to find in core/skills/
         skill_paths = [
             self._project_root / "core" / "skills" / skill_id / "SKILL.md",
@@ -354,16 +338,17 @@ class KimiCliAdapter(PlatformAdapter):
 
         return None
 
-    def _generate_fallback_skill_content(self, skill: Any) -> str:
+    def _generate_fallback_skill_content(
+        self, skill: Any, dir_name: str | None = None
+    ) -> str:
         """Generate minimal fallback SKILL.md for external skills."""
         skill_id = skill.id if hasattr(skill, "id") else skill.get("id", "")
-        name = skill.name if hasattr(skill, "name") else skill.get("name", skill_id)
+        name = dir_name or (skill.name if hasattr(skill, "name") else skill.get("name", skill_id))
         description = skill.description if hasattr(skill, "description") else skill.get("description", "")
         trigger = skill.trigger_when if hasattr(skill, "trigger_when") else skill.get("trigger_when", "")
 
         lines = [
             "---",
-            f"id: {skill_id}",
             f"name: {name}",
             f"description: {description}",
             "---",

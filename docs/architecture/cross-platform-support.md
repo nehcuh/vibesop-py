@@ -12,6 +12,7 @@ VibeSOP is designed to work across multiple AI coding platforms, not just Claude
 | Platform | Status | Auto-Routing | Hooks | Session Tracking |
 |----------|--------|--------------|-------|------------------|
 | **Claude Code** | ✅ Full Support | ✅ Yes | ✅ Yes | ✅ Automatic |
+| **Kimi Code CLI** | ✅ Full Support | ✅ Yes | ⚠️ Beta | ✅ Automatic |
 | **OpenCode** | ✅ Basic Support | ✅ Yes | ❌ No | ⚠️ Manual |
 | **Cursor** | 🚧 Planned | - | - | - |
 | **Continue.dev** | 🚧 Planned | - | - | - |
@@ -79,6 +80,7 @@ class PlatformAdapter(ABC):
 
 **Implementations**:
 - `ClaudeCodeAdapter` - Generates CLAUDE.md, rules/, skills/, hooks/
+- `KimiCliAdapter` - Generates config.toml, skills/
 - `OpenCodeAdapter` - Generates config.yaml, skills/
 - Future: `CursorAdapter`, `ContinueAdapter`, etc.
 
@@ -115,10 +117,14 @@ class SessionTracker(ABC):
    - No manual intervention required
    - In-memory state (current session only)
 
-2. **`GenericSessionTracker`** (OpenCode, Others)
+2. **`GenericSessionTracker`** (Kimi Code CLI, OpenCode, Others)
    - Uses CLI commands for manual tracking
    - User calls `vibe session record-tool`
    - Persistent state (saved to ~/.vibesop/session-state.json)
+
+   Note: Kimi Code CLI supports hooks via inline `[[hooks]]` arrays in
+   config.toml, but the current implementation uses the generic tracker
+   for simplicity. Future versions may add hook-based tracking.
 
 ### Auto-Detection
 
@@ -170,6 +176,39 @@ def get_tracker(platform: str = "auto") -> SessionTracker:
 vibe build claude-code
 vibe session enable-tracking  # Enable automatic tracking
 ```
+
+### Kimi Code CLI
+
+**Strengths**:
+- ✅ Agent Skills open standard compatible
+- ✅ Single TOML configuration file
+- ✅ Skills automatically discovered from ~/.kimi/skills/
+- ✅ Supports inline hooks via [[hooks]] arrays
+- ✅ Fast startup (minimal files)
+
+**Limitations**:
+- ⚠️ Hooks are inline in config.toml (different mechanism from file-based hooks)
+- ⚠️ No rich markdown rules system like Claude Code
+
+**Configuration Output**:
+```
+~/.kimi/
+├── config.toml            # Main configuration
+├── skills/                # Skill definitions
+│   ├── systematic-debugging/
+│   └── gstack/
+└── README.md              # Skill catalog
+```
+
+**Usage**:
+```bash
+vibe build kimi-cli
+vibe switch kimi-cli
+```
+
+Kimi Code CLI uses the Agent Skills open standard, making its skill format
+fully compatible with Claude Code skills. Skills are automatically loaded
+from `~/.kimi/skills/` at startup.
 
 ### OpenCode
 
@@ -253,12 +292,14 @@ def build(
 
 **Phase 1: Current Platforms** (v4.3.0)
 - ✅ Claude Code - Full support with hooks
+- ✅ Kimi Code CLI - Full support with inline hooks
 - ✅ OpenCode - Basic support, manual tracking
 
-**Phase 2: Enhanced OpenCode** (v4.4.0)
+**Phase 2: Enhanced Platforms** (v4.4.0)
+- [ ] Add Kimi Code CLI hook-based session tracking
 - [ ] Add OpenCode hooks support when available
 - [ ] Automatic session tracking for OpenCode
-- [ ] OpenCode-specific optimizations
+- [ ] Platform-specific optimizations
 
 **Phase 3: New Platforms** (v4.5.0+)
 - [ ] Cursor support
@@ -288,6 +329,9 @@ result = router.route("debug this error")  # Same everywhere
 # Claude Code
 vibe build claude-code  # → CLAUDE.md, rules/, hooks/
 
+# Kimi Code CLI
+vibe build kimi-cli     # → config.toml, skills/
+
 # OpenCode
 vibe build opencode     # → config.yaml, skills/
 
@@ -303,6 +347,11 @@ Users can easily switch between platforms:
 # Start with Claude Code
 vibe build claude-code
 # → Uses ~/.claude/
+
+# Switch to Kimi Code CLI
+vibe build kimi-cli
+# → Uses ~/.kimi/
+# → Same routing, same skills, different config format
 
 # Switch to OpenCode
 vibe build opencode
@@ -334,6 +383,7 @@ vibe build claude-code
 ## Related Documentation
 
 - [Claude Code Adapter](../adapters/claude_code.md)
+- [Kimi Code CLI Adapter](../adapters/kimi_cli.md)
 - [OpenCode Adapter](../adapters/opencode.md)
 - [Session Intelligent Routing](../user/session-intelligent-routing.md)
 - [Adapter Protocol](../dev/adapter-protocol.md)

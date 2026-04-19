@@ -176,7 +176,8 @@ class ClaudeCodeAdapter(PlatformAdapter):
 
             # Render skill definitions - copy actual content from core/skills/
             for skill in manifest.skills:
-                skill_dir = output_dir / "skills" / skill.id
+                dir_name = skill.id.replace("/", "-")
+                skill_dir = output_dir / "skills" / dir_name
                 skill_dir.mkdir(parents=True, exist_ok=True)
                 self._render_skill_content(skill, skill_dir, manifest, result)
 
@@ -371,12 +372,6 @@ class ClaudeCodeAdapter(PlatformAdapter):
         Returns:
             Skill file content or None if not found
         """
-        # Normalize skill_id - handle namespace prefixes
-        if "/" in skill_id:
-            # External skill like "gstack/review" or "superpowers/tdd"
-            # These don't have local content, return None to use template
-            return None
-
         # Built-in skill - try to find in core/skills/
         skill_paths = [
             self._project_root / "core" / "skills" / skill_id / "SKILL.md",

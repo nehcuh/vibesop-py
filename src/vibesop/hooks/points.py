@@ -86,6 +86,10 @@ HOOK_DEFINITIONS: dict[str, dict[str, dict[str, Any]]] = {
             "description": "Initialize session logging",
         },
     },
+    "kimi-cli": {
+        # Kimi Code CLI supports hooks via inline [[hooks]] arrays in config.toml,
+        # which is a different mechanism from file-based hooks
+    },
     "opencode": {
         # OpenCode doesn't support hooks yet
     },

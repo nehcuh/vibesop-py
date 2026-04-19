@@ -154,6 +154,12 @@ $ vibe route "review my code"
 vibe build claude-code --output ~/.claude
 ```
 
+### Kimi Code CLI
+
+```bash
+vibe build kimi-cli --output ~/.kimi
+```
+
 ### Cursor
 
 ```bash

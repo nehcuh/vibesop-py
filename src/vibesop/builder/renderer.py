@@ -12,6 +12,7 @@ from typing import Any, ClassVar
 
 from vibesop.adapters import (
     ClaudeCodeAdapter,
+    KimiCliAdapter,
     OpenCodeAdapter,
     PlatformAdapter,
 )
@@ -39,6 +40,7 @@ class ConfigRenderer:
     # Platform adapter registry
     _adapters: ClassVar[dict[str, Callable[..., PlatformAdapter]]] = {
         "claude-code": ClaudeCodeAdapter,
+        "kimi-cli": KimiCliAdapter,
         "opencode": OpenCodeAdapter,
     }
 
@@ -216,8 +218,8 @@ class ConfigRenderer:
             raise ValueError(msg)
 
         adapter_class = self._adapters[platform]
-        # Pass project_root to ClaudeCodeAdapter for skill content lookup
-        if platform == "claude-code":
+        # Pass project_root to adapters that need skill content lookup
+        if platform in ("claude-code", "kimi-cli"):
             return adapter_class(project_root=self._project_root)
         return adapter_class()
 

@@ -90,6 +90,7 @@ class SkillStorage:
     # Platform skill directories
     PLATFORM_SKILLS_DIRS: ClassVar[dict[str, Path]] = {
         "claude-code": Path.home() / ".claude" / "skills",
+        "kimi-cli": Path.home() / ".kimi" / "skills",
         "opencode": Path.home() / ".config" / "opencode" / "skills",
         "cursor": Path.home() / ".config" / "cursor" / "skills",
     }
@@ -119,7 +120,7 @@ class SkillStorage:
 
         Args:
             skill_id: Skill identifier
-            platform: Platform name (claude-code, opencode, etc.)
+            platform: Platform name (claude-code, kimi-cli, opencode, etc.)
 
         Returns:
             Path to skill directory in platform

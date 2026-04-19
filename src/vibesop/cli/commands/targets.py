@@ -36,6 +36,12 @@ PLATFORM_INFO = {
         "config_dir": "~/.claude",
         "status": "stable",
     },
+    "kimi-cli": {
+        "name": "Kimi Code CLI",
+        "description": "Moonshot AI's Kimi Code CLI",
+        "config_dir": "~/.kimi",
+        "status": "stable",
+    },
     "opencode": {
         "name": "OpenCode",
         "description": "OpenCode AI coding assistant",

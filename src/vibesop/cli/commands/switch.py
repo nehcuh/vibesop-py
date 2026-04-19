@@ -32,7 +32,7 @@ console = Console()
 logger = logging.getLogger(__name__)
 
 # Valid targets
-VALID_TARGETS = ["claude-code", "opencode", "superpowers", "cursor"]
+VALID_TARGETS = ["claude-code", "kimi-cli", "opencode", "superpowers", "cursor"]
 
 
 def _get_configured_platform() -> str | None:
@@ -58,7 +58,7 @@ def _get_configured_platform() -> str | None:
 def switch(
     platform: str | None = typer.Argument(
         None,
-        help="Target platform (claude-code, opencode, superpowers, cursor). "
+        help="Target platform (claude-code, kimi-cli, opencode, superpowers, cursor). "
         "Defaults to platform from config.yaml",
     ),
     profile: str = typer.Option(

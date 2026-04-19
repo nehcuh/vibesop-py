@@ -5,6 +5,7 @@ enabling generation of platform-specific configuration from a unified manifest.
 
 Available Adapters:
     - Claude Code
+    - Kimi Code CLI
     - OpenCode
 
 Example:
@@ -26,6 +27,7 @@ from vibesop.adapters.models import (
     RoutingConfig,
     SecurityPolicy,
 )
+from vibesop.adapters.kimi_cli import KimiCliAdapter
 from vibesop.adapters.opencode import OpenCodeAdapter
 from vibesop.adapters.protocol import AdapterProtocol
 
@@ -33,6 +35,7 @@ __all__ = [
     "AdapterProtocol",
     # Adapters
     "ClaudeCodeAdapter",
+    "KimiCliAdapter",
     # Models
     "Manifest",
     "ManifestMetadata",

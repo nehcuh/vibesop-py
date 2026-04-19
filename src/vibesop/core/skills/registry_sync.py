@@ -59,6 +59,7 @@ class RegistrySync:
                     "priority": "P1",
                     "supported_targets": {
                         "claude-code": "native-skill",
+                        "kimi-cli": "native-skill",
                         "opencode": "native-skill",
                     },
                     "safety_level": "trusted_builtin",

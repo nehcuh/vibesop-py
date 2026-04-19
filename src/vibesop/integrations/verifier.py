@@ -381,6 +381,10 @@ class IntegrationVerifier:
                 Path(".claude/skills"),
                 Path(".vibe/skills"),
             ],
+            "kimi-cli": [
+                Path(".kimi/skills"),
+                Path(".vibe/skills"),
+            ],
             "opencode": [
                 Path(".config/skills"),
             ],

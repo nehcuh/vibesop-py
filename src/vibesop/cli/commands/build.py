@@ -40,7 +40,7 @@ from vibesop.builder.renderer import ConfigRenderer
 console = Console()
 logger = logging.getLogger(__name__)
 
-VALID_TARGETS = ["claude-code", "opencode", "superpowers", "cursor"]
+VALID_TARGETS = ["claude-code", "kimi-cli", "opencode", "superpowers", "cursor"]
 
 PROFILES: dict[str, str] = {
     "default": "Full configuration with all skills",
@@ -123,6 +123,11 @@ def execute_build(
                 "\n[dim]✓ Deployed to Claude Code config directory[/dim]\n"
                 "[dim]Restart Claude Code to apply changes.[/dim]\n"
             )
+        elif str(output_dir) == str(Path.home() / ".kimi"):
+            console.print(
+                "\n[dim]✓ Deployed to Kimi Code CLI config directory[/dim]\n"
+                "[dim]Restart Kimi Code CLI to apply changes.[/dim]\n"
+            )
         else:
             console.print(
                 f"\n[dim]Next steps:[/dim]\n"
@@ -162,7 +167,7 @@ def _get_configured_platform() -> str | None:
 def build(
     target: str | None = typer.Argument(
         None,
-        help="Target platform (claude-code, opencode, superpowers, cursor). "
+        help="Target platform (claude-code, kimi-cli, opencode, superpowers, cursor). "
         "Defaults to platform from config.yaml or claude-code",
     ),
     profile: str = typer.Option(

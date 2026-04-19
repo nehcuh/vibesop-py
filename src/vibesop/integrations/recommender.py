@@ -99,11 +99,11 @@ class IntegrationRecommender:
     # Skill compatibility matrix
     SKILL_COMPATIBILITY: ClassVar[dict[str, dict[str, list[str]]]] = {
         "gstack": {
-            "compatible_with": ["claude-code", "opencode"],
+            "compatible_with": ["claude-code", "kimi-cli", "opencode"],
             "conflicts_with": [],
         },
         "superpowers": {
-            "compatible_with": ["claude-code", "opencode"],
+            "compatible_with": ["claude-code", "kimi-cli", "opencode"],
             "conflicts_with": [],
         },
     }

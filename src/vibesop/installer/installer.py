@@ -28,6 +28,10 @@ class VibeSOPInstaller:
                 "config_dir": Path.home() / ".claude",
                 "description": "Claude Code CLI",
             },
+            "kimi-cli": {
+                "config_dir": Path.home() / ".kimi",
+                "description": "Kimi Code CLI",
+            },
             "opencode": {
                 "config_dir": Path.home() / ".opencode",
                 "description": "OpenCode CLI",
@@ -182,6 +186,7 @@ class VibeSOPInstaller:
             # Remove VibeSOP files (keeping user data)
             files_to_remove = [
                 target_dir / "CLAUDE.md",
+                target_dir / "config.toml",
                 target_dir / "config.yaml",
                 target_dir / "settings.json",
                 target_dir / "rules",
@@ -346,6 +351,12 @@ class VibeSOPInstaller:
                 content = claude_md.read_text()
                 if "# VibeSOP" not in content and "## VibeSOP" not in content:
                     issues.append("CLAUDE.md missing VibeSOP configuration")
+
+        elif platform == "kimi-cli":
+            # Check for config.toml
+            config_toml = config_dir / "config.toml"
+            if not config_toml.exists():
+                issues.append("config.toml not found")
 
         elif platform == "opencode":
             # Check for config.yaml
