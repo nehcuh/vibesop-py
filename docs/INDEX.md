@@ -72,6 +72,11 @@ These files remain in the project root for discoverability and tool integration:
   - Priority decision mechanism
   - How to switch between skills manually
   - Scenario-based selection guide with decision tree
+- **🆕 [Kimi CLI Setup Guide](KIMI_CLI_SETUP.md)** - Complete guide to VibeSOP's Kimi CLI adapter
+  - Configuration generation (config.toml, skills/)
+  - Provider and model setup
+  - Troubleshooting common issues
+  - 44 skills deployment
 - **[OMX Guide](OMX_GUIDE.md)** - Complete guide to oh-my-codex (OMX) skill pack
   - deep-interview, ralph, ralplan, team, ultrawork, autopilot, ultraqa
   - Usage scenarios and best practices
