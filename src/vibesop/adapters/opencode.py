@@ -231,6 +231,10 @@ class OpenCodeAdapter(PlatformAdapter):
         skill_content = self._find_skill_content(skill_id)
 
         if skill_content:
+            # Normalize skill type for platform compatibility.
+            # VibeSOP uses "prompt" internally; convert to "standard" for
+            # platforms that only recognize "standard" and "flow" types.
+            skill_content = self._normalize_skill_type(skill_content)
             self.write_file_atomic(skill_output_path, skill_content, validate_security=False)
             result.add_file(skill_output_path)
         else:
@@ -265,6 +269,55 @@ class OpenCodeAdapter(PlatformAdapter):
                     logging.getLogger(__name__).debug(f"Failed to read skill file {skill_path}: {e}")
 
         return None
+
+    def _normalize_skill_type(self, content: str) -> str:
+        """Normalize skill type for platform compatibility.
+
+        Some platforms only recognize "standard" and "flow" skill types.
+        VibeSOP uses "prompt" internally, which may cause parsers to skip
+        the skill entirely. This method converts unsupported types to
+        "standard" while preserving all other frontmatter.
+
+        Args:
+            content: Original SKILL.md content
+
+        Returns:
+            Content with normalized type field
+        """
+        if not content.startswith("---"):
+            return content
+
+        parts = content.split("---", 2)
+        if len(parts) < 3:
+            return content
+
+        frontmatter_text = parts[1].strip()
+        if not frontmatter_text:
+            return content
+
+        try:
+            import yaml
+
+            frontmatter = yaml.safe_load(frontmatter_text)
+            if not isinstance(frontmatter, dict):
+                return content
+
+            skill_type = frontmatter.get("type")
+            if skill_type and skill_type not in ("standard", "flow"):
+                lines = frontmatter_text.splitlines()
+                new_lines = []
+                for line in lines:
+                    stripped = line.strip()
+                    if stripped.startswith("type:"):
+                        new_lines.append("type: standard")
+                    else:
+                        new_lines.append(line)
+                new_frontmatter = "\n".join(new_lines)
+                return f"---\n{new_frontmatter}\n---{parts[2]}"
+        except Exception:
+            pass
+
+        return content
 
     def _generate_fallback_skill_content(
         self, skill: Any, dir_name: str | None = None

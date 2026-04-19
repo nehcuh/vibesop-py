@@ -303,6 +303,9 @@ class KimiCliAdapter(PlatformAdapter):
         skill_content = self._find_skill_content(skill_id)
 
         if skill_content:
+            # Kimi CLI only supports "standard" and "flow" skill types.
+            # VibeSOP uses "prompt" internally; normalize for Kimi compatibility.
+            skill_content = self._normalize_skill_type(skill_content)
             self.write_file_atomic(skill_output_path, skill_content, validate_security=False)
             result.add_file(skill_output_path)
         else:
@@ -337,6 +340,58 @@ class KimiCliAdapter(PlatformAdapter):
                     logging.getLogger(__name__).debug(f"Failed to read skill file {skill_path}: {e}")
 
         return None
+
+    def _normalize_skill_type(self, content: str) -> str:
+        """Normalize skill type for Kimi CLI compatibility.
+
+        Kimi CLI only recognizes "standard" and "flow" skill types.
+        VibeSOP uses "prompt" internally, which causes Kimi CLI to skip
+        the skill entirely. This method converts unsupported types to
+        "standard" while preserving all other frontmatter.
+
+        Args:
+            content: Original SKILL.md content
+
+        Returns:
+            Content with normalized type field
+        """
+        if not content.startswith("---"):
+            return content
+
+        parts = content.split("---", 2)
+        if len(parts) < 3:
+            return content
+
+        frontmatter_text = parts[1].strip()
+        if not frontmatter_text:
+            return content
+
+        try:
+            import yaml
+
+            frontmatter = yaml.safe_load(frontmatter_text)
+            if not isinstance(frontmatter, dict):
+                return content
+
+            skill_type = frontmatter.get("type")
+            if skill_type and skill_type not in ("standard", "flow"):
+                # Replace the type line in the raw frontmatter text
+                # to preserve formatting and comments
+                lines = frontmatter_text.splitlines()
+                new_lines = []
+                for line in lines:
+                    stripped = line.strip()
+                    if stripped.startswith("type:"):
+                        new_lines.append("type: standard")
+                    else:
+                        new_lines.append(line)
+                new_frontmatter = "\n".join(new_lines)
+                return f"---\n{new_frontmatter}\n---{parts[2]}"
+        except Exception:
+            # If parsing fails, return original content unchanged
+            pass
+
+        return content
 
     def _generate_fallback_skill_content(
         self, skill: Any, dir_name: str | None = None
