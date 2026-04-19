@@ -1,148 +1,95 @@
 # VibeSOP
 
-> **AI-Native Workflow Router for Developer Tools**
+> **让 AI 辅助开发变得像对话一样自然**
 >
-> Understand what you want, route to the right skill — no memorization required.
+> **Make AI-assisted development as natural as conversation**
 
 [![Python](https://img.shields.io/badge/Python-3.12+-blue.svg)](https://www.python.org/downloads/)
 [![Ruff](https://img.shields.io/badge/Ruff-Enabled-black.svg)](https://github.com/astral-sh/ruff)
-[![Coverage](https://img.shields.io/badge/Coverage-82%25-green.svg)]()
-[![Version](https://img.shields.io/badge/Version-4.0.0-green.svg)](https://github.com/nehcuh/vibesop-py)
+[![Coverage](https://img.shields.io/badge/Coverage-94%25-green.svg)]()
+[![Version](https://img.shields.io/badge/Version-4.2.0-green.svg)](https://github.com/nehcuh/vibesop-py)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 ---
 
-## What is VibeSOP?
+## 愿景 Vision
 
-**VibeSOP is a routing engine for AI-powered developer tools.** It understands what you want to do and routes your intent to the right skill or workflow.
+**不再记忆命令，只需表达意图。**
+**不再猜测工具，智能匹配最佳。**
+**不再学习平台，一次掌握所有。**
 
-### The Problem
-
-AI coding tools (Claude Code, Cursor, Continue.dev, Aider) have powerful capabilities, but:
-
-- **"What command do I use for code review?"** → You have to remember
-- **"How do I debug this error?"** → You search through docs
-- **"Is there a skill for refactoring?"** → You don't know what's available
-
-**Current solution**: Memorize commands, search documentation, or guess.
-
-### The VibeSOP Solution
-
-```bash
-# Just say what you want
-vibe route "debug this database error"
-# → Routes to: systematic-debugging (95% confidence)
-
-vibe route "帮我扫描安全漏洞"
-# → Routes to: gstack/cso (88% confidence)
-
-vibe route "review my PR"
-# → Routes to: gstack/review (92% confidence)
-```
-
-VibeSOP:
-1. **Understands your intent** in natural language (English + Chinese)
-2. **Finds the right skill** from 45+ available skills
-3. **Learns your preferences** — routes better the more you use it
-4. **Works with any AI tool** — Claude Code, Cursor, Continue.dev, Aider, etc.
-
-### What VibeSOP is NOT
-
-| ❌ NOT | ✅ Instead |
-|--------|------------|
-| An AI coding tool | Works alongside AI tools |
-| A skill executor | Routes to skills, doesn't execute them |
-| A prompt library | Manages skills defined as SKILL.md |
-| Tied to one platform | Works across Claude Code, Cursor, etc. |
+**No more memorizing commands. Just express your intent.**
+**No more guessing tools. Intelligent matching finds the best.**
+**No more learning platforms. Master them all at once.**
 
 ---
 
-## Inspiration & References
+## 什么是 VibeSOP？ What is VibeSOP?
 
-VibeSOP draws from several excellent projects and concepts:
+VibeSOP 提供**智能路由**和**轻量级技能执行**：
 
-### Open Source Projects
+**VibeSOP provides intelligent ROUTING and lightweight EXECUTION:**
 
-| Project | What We Borrowed |
-|---------|------------------|
-| **[gstack](https://github.com/anthropics/gstack)** | 19 engineering skills (code review, debugging, QA, browser automation) |
-| **[superpowers](https://github.com/obra/superpowers)** | 7 foundational development skills (TDD, brainstorm, refactor, architect) |
-| **[oh-my-codex](https://github.com/mill173/omx)** | Interview techniques, slop detection, verification workflows |
-| **[Claude Code](https://github.com/anthropics/claude-code)** | SKILL.md specification, tool calling patterns |
+### 智能路由（核心功能）Intelligent Routing (Primary)
 
-### Academic & Industry Concepts
+- 理解你的意图（自然语言，支持中英文）
+  **Understand your intent** (natural language, English + Chinese)
 
-- **Information Retrieval**: TF-IDF, embedding-based semantic search, fuzzy matching
-- **Preference Learning**: Implicit feedback loops, collaborative filtering
-- **Multi-Armed Bandits**: Exploration vs exploitation in skill selection
-- **Intent Classification**: Multi-stage routing pipeline (7 layers)
+- 找到最合适的技能（从 45+ 技能中选择，94% 准确率）
+  **Find the best skill** (from 45+ skills, 94% accuracy)
 
-### How VibeSOP Differs
+- 学习你的偏好（越用越准确）
+  **Learn your preferences** (gets better over time)
 
-```
-┌─────────────────────────────────────────────────────┐
-│                  User Intent                        │
-│              "Help me debug this bug"                │
-└────────────────────┬────────────────────────────────┘
-                     │
-           ┌─────────▼──────────┐
-           │     VibeSOP        │ ← We're here
-           │  Routing Engine    │
-           │                    │
-           │  • Understands     │
-           │  • Matches Skills  │
-           │  • Learns          │
-           │  • Cross-Platform  │
-           └─────────┬──────────┘
-                     │
-      ┌──────────────┼──────────────┐
-      │              │              │
-┌─────▼─────┐  ┌────▼─────┐  ┌────▼─────┐
-│Claude Code│  │  Cursor  │  │ Continue │
-│(executes) │  │(executes)│  │(executes)│
-└─────┬─────┘  └────┬─────┘  └────┬─────┘
-      │              │              │
-      └──────────────┼──────────────┘
-                     │
-          ┌──────────▼──────────┐
-          │   Skill Ecosystem   │
-          │                     │
-          │ builtin │ gstack │  │
-          │  (12)    │  (19)   │  │
-          └─────────────────────┘
-```
+### 轻量级执行（辅助功能）Lightweight Execution (Secondary)
+
+- 快速验证技能是否适合当前任务
+  **Quick validation** - verify if a skill fits your current task
+
+- 本地测试和调试
+  **Local testing** - test and debug skills locally
+
+- CI/CD 自动化测试
+  **CI/CD automation** - automated testing in pipelines
+
+**注意**: 复杂生产场景推荐使用原生 AI Agent（如 Claude Code、Cursor、Continue.dev）。
+**Note**: For complex production scenarios, use native AI agents (Claude Code, Cursor, Continue.dev).
+
+📖 **Read our philosophy**: [PHILOSOPHY.md](PHILOSOPHY.md) | [中文版](PHILOSOPHY.md)
 
 ---
 
-## Comparison with Alternatives
+## 核心价值 Core Values
 
-| Feature | VibeSOP | Cursor | Continue.dev | Aider |
-|---------|---------|--------|--------------|-------|
-| **Routing** | 7-layer intelligent routing | Built-in commands | Extension-based | CLI flags |
-| **Skills** | 45+ cross-platform skills | Built-in features | Community extensions | Built-in workflows |
-| **Learning** | Preference learning | Fixed | No | No |
-| **Cross-Platform** | ✅ Works with any AI tool | ❌ Cursor only | ❌ Continue only | ❌ Aider only |
-| **Open Ecosystem** | ✅ Any SKILL.md | ❌ Closed | ⚠️ Extension API | ❌ Closed |
-| **Security Audit** | ✅ Before loading skills | N/A | ⚠️ User discretion | N/A |
+### Discovery over Execution (发现 > 执行)
 
-### Why Choose VibeSOP?
+找到正确的工具比执行更重要。AI 工具已经足够强大，真正的问题是：**找到正确的工具**。
 
-1. **Not tied to one tool** — Switch from Cursor to Claude Code? Your skills come with you
-2. **Discovers skills you didn't know existed** — "What can I do?" → `vibe skills list`
-3. **Gets smarter over time** — Remembers what worked for you
-4. **Open & extensible** — Create your own skills with a simple markdown file
+**Finding the right tool is more important than executing it.** AI tools are already powerful enough. The real problem is: **finding the right tool**.
+
+### Matching over Guessing (匹配 > 猜测)
+
+理解意图比记忆命令更重要。你记不住 45+ 个技能的命令，但你可以自然地表达你想做什么。
+
+**Understanding intent is more important than memorizing commands.** You can't remember 45+ skill commands, but you can naturally express what you want to do.
+
+### Memory over Intelligence (记忆 > 智能)
+
+记住有效选择比"更聪明"更重要。VibeSOP 会学习你的偏好，越用越准确。
+
+**Remembering what works is more important than being "smarter".** VibeSOP learns your preferences and gets more accurate over time.
+
+### Open over Closed (开放 > 封闭)
+
+开放生态比封闭系统更有价值。VibeSOP 不绑定任何平台，你可以使用任何 AI 工具。
+
+**An open ecosystem is more valuable than a closed system.** VibeSOP doesn't bind to any platform — you can use any AI tool.
 
 ---
 
-## Installation
+## 快速开始 Quick Start
 
-### Prerequisites
-
-- **Python 3.12+** — VibeSOP uses modern Python features
-- **Git** — For cloning skill repositories
-- **Optional: API Key** — For AI-powered routing (Anthropic/OpenAI)
-
-### Quick Install
+### 安装 Install
 
 ```bash
 # Clone the repository
@@ -156,62 +103,13 @@ uv sync
 pip install -e .
 ```
 
-### Verify Installation
+### 第一次使用 First Use
 
 ```bash
-$ vibe --help
-VibeSOP - AI-powered workflow SOP
+# Route your first query
+$ vibe route "帮我调试这个错误"
 
-$ vibe doctor
-✅ Python version: 3.12
-✅ Dependencies installed
-✅ Configuration found
-✅ LLM Provider: Anthropic (API key found)
-```
-
-### Check Integrations
-
-```bash
-$ vibe init
-✓ Initialization complete!
-
-🔍 Detecting Integrations
-┌─────────────────┬───────────────┬──────────────────┐
-│ Integration     │ Status        │ Description      │
-├─────────────────┼───────────────┼──────────────────┤
-│ gstack          │ ✓ Installed   │ Engineering team│
-│ superpowers     │ ✓ Installed   │ Productivity     │
-└─────────────────┴───────────────┴──────────────────┘
-
-✓ All recommended integrations installed!
-```
-
-### Optional: AI-Powered Routing
-
-For best routing accuracy, set up an LLM provider:
-
-```bash
-# Anthropic Claude (recommended)
-export ANTHROPIC_API_KEY="sk-ant-..."
-
-# Or OpenAI
-export OPENAI_API_KEY="sk-..."
-
-# VibeSOP will automatically use AI routing
-```
-
-**Without an API key**, VibeSOP still works with keyword/TF-IDF matching (just slightly less accurate).
-
----
-
-## Quick Start
-
-### 1. Route Your First Query
-
-```bash
-$ vibe route "help me debug this error"
-
-📥 Query: help me debug this error
+📥 Query: 帮我调试这个错误
 ✅ Matched: systematic-debugging
    Confidence: 95%
    Layer: scenario
@@ -222,240 +120,138 @@ $ vibe route "help me debug this error"
    • superpowers/debug (75%)
 ```
 
-### 2. List Available Skills
+**就这么简单！** VibeSOP 理解你的意图，并为你找到最合适的技能。
 
-```bash
-$ vibe skills available
-
-📚 Available Skills (45 total)
-
-builtin (17 skills)
-  • systematic-debugging - Find root cause before attempting fixes
-  • verification-before-completion - Require verification before claiming done
-  • planning-with-files - Use persistent files for complex tasks
-  ...
-
-gstack (19 skills)
-  • gstack/review - Pre-landing PR review
-  • gstack/qa - Systematically QA test and fix bugs
-  • gstack/browse - Fast headless browser for QA testing
-  ...
-
-superpowers (7 skills)
-  • tdd - Test-driven development workflow
-  • brainstorm - Structured brainstorming sessions
-  • refactor - Systematic code refactoring
-  ...
-```
-
-### 3. Get Skill Details
-
-```bash
-$ vibe skills info systematic-debugging
-
-╭──────────────────────────────────────────────╮
-│ Systematic Debugging                          │
-├──────────────────────────────────────────────┤
-│ ID: systematic-debugging                      │
-│ Type: prompt                                  │
-│ Namespace: builtin                            │
-│                                                │
-│ Description                                   │
-│ Find root cause before attempting fixes.     │
-│ Prevents jumping to solutions without        │
-│ proper diagnosis.                             │
-│                                                │
-│ Intent                                        │
-│ Use when:                                     │
-│ - Error messages appear                       │
-│ - Tests fail                                  │
-│ - "Something broke"                           │
-│ - Need root cause analysis                    │
-╰──────────────────────────────────────────────╯
-```
-
-### 4. Install External Skills
-
-```bash
-# Install gstack skills
-vibe install https://github.com/anthropics/gstack
-
-📦 Found skill pack: gstack
-   Skills discovered: 19
-   Install target: ~/.config/skills/gstack/
-   Continue? [Y/n]
-
-✅ gstack installed successfully
-   Run 'vibe skills available --namespace gstack' to see skills
-```
+**That's it!** VibeSOP understands your intent and finds the best skill for you.
 
 ---
 
-## CLI Reference
+## 为什么选择 VibeSOP？ Why VibeSOP?
 
-### Core Commands
+### 问题 The Problem
 
-| Command | Description | Example |
-|---------|-------------|---------|
-| `vibe route <query>` | Route query to best skill | `vibe route "debug this error"` |
-| `vibe skills available` | List all available skills | `vibe skills available -v` |
-| `vibe skills info <id>` | Show skill details | `vibe skills info gstack/review` |
-| `vibe install <url>` | Install skill pack | `vibe install gstack` |
-| `vibe doctor` | Check environment | `vibe doctor` |
+AI 辅助开发工具正在爆发：
+- Claude Code, Cursor, Continue.dev, Aider...
+- 每个工具都有自己的命令和技能
+- superpowers, gstack, omx 等技能包蓬勃发展
+- **你不知道该用哪个**
 
-### Skills Management
+AI-assisted development tools are exploding:
+- Claude Code, Cursor, Continue.dev, Aider...
+- Each tool has its own commands and skills
+- Skill packs like superpowers, gstack, omx are booming
+- **You don't know which one to use**
 
-```bash
-# List installed skills
-vibe skills list
-
-# List all available skills (including builtin and installed packs)
-vibe skills available
-
-# Show detailed skill information
-vibe skills info <skill-id>
-
-# Install from URL or name
-vibe install gstack
-vibe install https://github.com/user/skills
-
-# Link skill to platform
-vibe skills link <skill-id> claude-code
-
-# Sync project skills to platform
-vibe skills sync claude-code
-```
-
-### Project Setup
+### 解决方案 The Solution
 
 ```bash
-# Initialize project
-vibe init
+# Just say what you want (自然语言输入)
+vibe route "debug this database error"
+# → Routes to: systematic-debugging (95% confidence)
 
-# Build configuration for platform
-vibe build claude-code
+vibe route "帮我扫描安全漏洞"
+# → Routes to: gstack/cso (88% confidence)
 
-# Interactive quickstart
-vibe quickstart
+vibe route "review my PR"
+# → Routes to: gstack/review (92% confidence)
 ```
 
-### Analysis Commands
+VibeSOP:
+1. **理解你的意图** (自然语言，支持中英文)
+2. **找到正确的技能** (从 45+ 技能中选择)
+3. **学习你的偏好** (越用越准确)
+4. **跨平台通用** (Claude Code, Cursor, Continue.dev 等)
 
-```bash
-# Analyze session for patterns
-vibe analyze session
-
-# Security scan
-vibe analyze security .
-
-# Detect integrations
-vibe analyze integrations
-```
-
-### Preference Learning
-
-```bash
-# Show preference statistics
-vibe preferences
-
-# Record skill selection feedback
-vibe record <skill-id> <query> --helpful
-
-# Show top preferred skills
-vibe top-skills
-```
-
-See [CLI_REFERENCE.md](CLI_REFERENCE.md) for complete documentation.
+VibeSOP:
+1. **Understands your intent** (natural language, English + Chinese)
+2. **Finds the right skill** (from 45+ available skills)
+3. **Learns your preferences** (gets better over time)
+4. **Works with any AI tool** (Claude Code, Cursor, Continue.dev, etc.)
 
 ---
 
-## How It Works
+## 核心功能 Core Features
 
-### 7-Layer Routing Pipeline
+### 🎯 95% 路由准确率 (95% Routing Accuracy)
 
-VibeSOP tries multiple matching strategies, fastest first:
+基于 7 层路由 pipeline，结合 AI 语义分析和场景知识：
 
-| Layer | Strategy | Speed | Accuracy | Use Case |
-|-------|----------|-------|----------|----------|
-| 0 | Explicit Override | <1ms | 100% | Direct commands like `/review` |
-| 1 | Scenario Pattern | <1ms | 90% | Predefined scenarios (debug, test, review) |
-| 2 | AI Triage | ~100ms | 95% | Complex queries, semantic understanding |
-| 3 | Keyword Matching | <1ms | 70% | Direct keyword hits |
-| 4 | TF-IDF | ~5ms | 75% | Semantic similarity |
-| 5 | Embedding | ~20ms | 85% | Deep semantic matching (optional) |
-| 6 | Fuzzy Matching | ~10ms | 60% | Typo tolerance |
+Based on a 7-layer routing pipeline combining AI semantic analysis and scenario knowledge:
 
-**Result**: P95 latency < 50ms with caching.
+- **Layer 0**: AI Semantic Triage (95% accuracy)
+- **Layer 1**: Explicit overrides
+- **Layer 2**: Scenario patterns (90% accuracy)
+- **Layer 3**: Keyword matching (70% accuracy)
+- **Layer 4**: TF-IDF semantic similarity (75% accuracy)
+- **Layer 5**: Embedding-based matching (85% accuracy)
+- **Layer 6**: Fuzzy matching for typos (60% accuracy)
 
-### Preference Learning
+### 🧠 偏好学习 (Preference Learning)
 
-VibeSOP remembers what works:
+VibeSOP 会记住你的选择：
+
+VibeSOP remembers your choices:
 
 ```bash
-# First time you ask about debugging
+# First time
 $ vibe route "debug this"
-→ Matches: systematic-debugging (85%)
+→ systematic-debugging (85%)
 
 # You use it and it works
-$ vibe record systematic-debugging "debug this" --helpful
+$ vibe feedback record "debug this" "systematic-debugging" --correct
 
-# Next time, it ranks higher
+# Next time
 $ vibe route "debug this"
-→ Matches: systematic-debugging (92%) ← Boosted!
+→ systematic-debugging (92%) ← Boosted!
 ```
 
-### Skill Discovery Sources
+### 🔓 开放生态 (Open Ecosystem)
 
-Skills are discovered from multiple locations, in priority order:
+不绑定任何平台，支持所有 AI 工具：
 
-```
-Priority  Source                              Path
-────────  ─────────────────────────────────  ──────────────────────────────
-1         Project-specific skills            .vibe/skills/
-2         Shared project skills              skills/
-3         Claude Code native skills          ~/.claude/skills/
-4         External skill packs               ~/.config/skills/{pack}/
-5         VibeSOP global skills              ~/.vibe/skills/
-6         VibeSOP builtin skills             (included in code)
-```
+No platform lock-in, works with all AI tools:
+
+- ✅ Claude Code
+- ✅ Cursor
+- ✅ Continue.dev
+- ✅ Aider
+- ✅ Any tool that supports SKILL.md
+
+### 🛡️ 安全审计 (Security Audit)
+
+每个外部技能都会经过安全扫描：
+
+Every external skill is security-scanned:
+
+- ✅ Prompt injection detection
+- ✅ Command injection detection
+- ✅ Role hijacking detection
+- ✅ Privilege escalation detection
+- ✅ Path traversal protection
 
 ---
 
-## Usage Examples
+## 使用示例 Usage Examples
 
-### Debugging Errors
+### 调试错误 Debugging Errors
 
 ```bash
 $ vibe route "database connection failed after deployment"
 
 ✅ Matched: systematic-debugging
    Rationale: Error detected → Use debugging workflow
-
-# Read the skill
-cat ~/.claude/skills/systematic-debugging/SKILL.md
-
-# Follow the systematic debugging process
-1. Gather information
-2. Identify patterns
-3. Form hypotheses
-4. Test hypotheses
-5. Fix root cause
 ```
 
-### Code Review
+### 代码审查 Code Review
 
 ```bash
 $ vibe route "review my changes before pushing"
 
 ✅ Matched: gstack/review
    Confidence: 93%
-
-# Or use the explicit command
-$ vibe route "/review"
-✅ Matched: gstack/review (Layer 1: explicit override)
 ```
 
-### Chinese Queries
+### 中文查询 Chinese Queries
 
 ```bash
 $ vibe route "帮我重构这个函数"
@@ -469,7 +265,7 @@ $ vibe route "代码覆盖率太低怎么办"
    Confidence: 91%
 ```
 
-### Brainstorming
+### 头脑风暴 Brainstorming
 
 ```bash
 $ vibe route "I need ideas for a new feature"
@@ -481,11 +277,128 @@ $ vibe route "I need ideas for a new feature"
 
 ---
 
-## Configuration
+## 谁应该使用 VibeSOP？ Who Should Use VibeSOP?
 
-### Project-Level Config
+### 👨‍💻 开发者 Developers
 
-Create `.vibe/config.yaml` in your project:
+你正在使用 AI 辅助开发工具，但：
+
+You're using AI-assisted development tools, but:
+
+- ❌ 记不住那么多命令 / Can't remember all the commands
+- ❌ 不知道哪个技能最适合当前场景 / Don't know which skill fits the current scenario
+- ❌ 想要在不同工具间切换而不失去技能 / Want to switch tools without losing skills
+
+**VibeSOP 为你解决这些问题！**
+**VibeSOP solves these problems for you!**
+
+### 🏢 团队 Teams
+
+你们正在采用 AI 辅助开发，但：
+
+You're adopting AI-assisted development, but:
+
+- ❌ 团队成员使用不同的技能 / Team members use different skills
+- ❌ 缺乏统一的技能管理 / Lack unified skill management
+- ❌ 难以跟踪和分享最佳实践 / Hard to track and share best practices
+
+**VibeSOP 提供统一的技能管理和路由！**
+**VibeSOP provides unified skill management and routing!**
+
+### 🌐 开源社区 Open Source Community
+
+你正在维护 AI 辅助开发工具，但：
+
+You're maintaining AI-assisted development tools, but:
+
+- ❌ 技能格式不统一 / Inconsistent skill formats
+- ❌ 难以集成外部技能 / Hard to integrate external skills
+- ❌ 缺乏跨平台支持 / Lack cross-platform support
+
+**VibeSOP 提供标准的 SKILL.md 格式和跨平台支持！**
+**VibeSOP provides standard SKILL.md format and cross-platform support!**
+
+---
+
+## CLI 命令参考 CLI Reference
+
+### 核心命令 Core Commands
+
+```bash
+# Route query to best skill
+vibe route "<query>"
+
+# List all available skills
+vibe skills available
+
+# Show skill details
+vibe skills info <skill-id>
+
+# Install skill pack
+vibe install <url-or-name>
+
+# Check environment
+vibe doctor
+```
+
+### 技能管理 Skills Management
+
+```bash
+# List installed skills
+vibe skills list
+
+# Show detailed skill information
+vibe skills info <skill-id>
+
+# Install from URL or name
+vibe install gstack
+vibe install https://github.com/user/skills
+
+# Sync skills to platform
+vibe skills sync claude-code
+```
+
+### 反馈收集 Feedback Collection
+
+```bash
+# Record correct routing
+vibe feedback record "<query>" "<skill>" --correct
+
+# Record incorrect routing
+vibe feedback record "<query>" "<skill>" --wrong "<actual-skill>"
+
+# View feedback report
+vibe feedback report
+```
+
+### 会话智能路由 Session Intelligent Routing
+
+```bash
+# Enable tracking (Claude Code)
+vibe session enable-tracking
+
+# Record tool usage (manual)
+vibe session record-tool --tool "read" --skill "systematic-debugging"
+
+# Check for re-routing suggestions
+vibe session check-reroute "design new architecture" --skill "systematic-debugging"
+
+# View session summary
+vibe session summary
+```
+
+完整命令参考: [CLI_REFERENCE.md](CLI_REFERENCE.md)
+Full CLI reference: [CLI_REFERENCE.md](CLI_REFERENCE.md)
+
+---
+
+## 配置 Configuration
+
+### 项目级配置 Project-Level Config
+
+创建 `.vibe/config.yaml`：
+
+Create `.vibe/config.yaml`:
 
 ```yaml
 # .vibe/config.yaml
@@ -493,7 +406,7 @@ platform: claude-code
 
 routing:
   min_confidence: 0.6
-  enable_ai_triage: false
+  enable_ai_triage: true
   enable_embedding: false
   max_candidates: 3
 
@@ -508,7 +421,9 @@ skills:
     - superpowers
 ```
 
-### Global Config
+### 全局配置 Global Config
+
+创建 `~/.vibe/config.yaml`：
 
 Create `~/.vibe/config.yaml`:
 
@@ -527,9 +442,9 @@ preferences:
 
 ---
 
-## Integrations
+## 集成 Integrations
 
-### With Claude Code
+### Claude Code
 
 ```bash
 # Build and deploy to Claude Code
@@ -538,7 +453,7 @@ vibe build claude-code --output ~/.claude
 # Claude Code will now use VibeSOP for routing
 ```
 
-### With Cursor
+### Cursor
 
 ```bash
 # Build for Cursor
@@ -547,7 +462,7 @@ vibe build cursor --output ~/.cursor
 # Skills available in Cursor sessions
 ```
 
-### With Continue.dev
+### Continue.dev
 
 ```bash
 # Build for Continue
@@ -558,29 +473,7 @@ vibe build opencode --output ~/.continue
 
 ---
 
-## Security
-
-Every external skill is **audited before loading**:
-
-- ✅ Prompt injection detection
-- ✅ Command injection detection
-- ✅ Role hijacking detection
-- ✅ Privilege escalation detection
-- ✅ Path traversal protection
-
-```bash
-$ vibe install https://github.com/suspicious/skills
-
-⚠️  Security audit failed:
-   • Prompt injection detected in skills/evil/SKILL.md
-   • Unsafe path traversal attempt
-
-Installation blocked for your safety.
-```
-
----
-
-## Architecture
+## 架构 Architecture
 
 ```
 ┌─────────────────────────────────────────────────┐
@@ -590,9 +483,9 @@ Installation blocked for your safety.
                      │
 ┌────────────────────▼────────────────────────────┐
 │                 UnifiedRouter                   │
+│  7-Layer Pipeline:                              │
 │  AI Triage → Explicit → Scenario → Keyword      │
-│                    ↓                            │
-│  [Optimization: Prefilter → Preference → Cluster]│
+│  → TF-IDF → Embedding → Fuzzy                   │
 └────────────────────┬────────────────────────────┘
                      │
 ┌────────────────────▼────────────────────────────┐
@@ -606,38 +499,84 @@ Installation blocked for your safety.
 └─────────────────────────────────────────────────┘
 ```
 
----
-
-## Documentation
-
-- [Architecture Overview](docs/architecture/README.md) - System design and components
-- [Routing System](docs/architecture/routing-system.md) - 7-layer pipeline deep dive
-- [Positioning & Philosophy](docs/POSITIONING.md) - Why VibeSOP exists
-- [Contributing Guide](CONTRIBUTING.md) - How to contribute
+详细架构文档: [docs/architecture/](docs/architecture/)
+Detailed architecture docs: [docs/architecture/](docs/architecture/)
 
 ---
 
-## Philosophy
+## 文档 Documentation
 
-### Discovery > Execution
+### 核心文档 Core Documentation
 
-Knowing which skill to use is more valuable than being able to execute it. VibeSOP focuses on **routing**, not execution.
+- [PHILOSOPHY.md](PHILOSOPHY.md) - 核心哲学和使命 / Core philosophy and mission
+- [ARCHITECTURE.md](docs/architecture/README.md) - 系统架构 / System architecture
+- [SKILL_SPEC.md](docs/SKILL_SPEC.md) - SKILL.md 规范 / SKILL.md specification
 
-### Matching > Guessing
+### 用户指南 User Guides
 
-7-layer matching pipeline ensures accurate routing. No more "Did you mean...?"
+- [GETTING_STARTED.md](docs/user/GETTING_STARTED.md) - 快速入门 / Quick start guide
+- [SESSION_INTELLIGENT_ROUTING.md](docs/user/session-intelligent-routing.md) - 会话智能路由 / Session intelligent routing
+- [EXTERNAL_SKILLS_GUIDE.md](docs/EXTERNAL_SKILLS_GUIDE.md) - 外部技能开发 / External skill development
 
-### Memory > Intelligence
+### 开发者文档 Developer Documentation
 
-Remembering what worked is more valuable than being smart. Preference learning improves routing over time.
-
-### Open > Closed
-
-Any skill following the [SKILL.md](docs/SKILL_SPEC.md) specification can integrate. No vendor lock-in.
+- [CONTRIBUTING.md](CONTRIBUTING.md) - 贡献指南 / Contributing guide
+- [ARCHITECTURE_DECISIONS.md](docs/architecture/decisions.md) - 架构决策记录 / Architecture decision records
+- [API_REFERENCE.md](docs/api/README.md) - API 参考 / API reference
 
 ---
 
-## Development
+## 性能指标 Performance Metrics
+
+### 路由准确率 Routing Accuracy
+
+| 指标 Metric | 值 Value |
+|-----------|---------|
+| **总体准确率 Overall Accuracy** | **94%** |
+| **AI Triage 准确率 AI Triage Accuracy** | **95%** |
+| **场景匹配准确率 Scenario Matching Accuracy** | **90%** |
+| **语义歧义准确率 Semantic Ambiguity Accuracy** | **90%** |
+
+### 响应时间 Response Time
+
+| 操作 Operation | 时间 Time |
+|--------------|----------|
+| **简单路由 Simple Routing** (缓存命中) | ~10ms |
+| **复杂路由 Complex Routing** (多层) | ~270ms |
+| **AI Triage** | ~220ms |
+
+详见: [docs/benchmarks/routing-accuracy-benchmark.md](docs/benchmarks/routing-accuracy-benchmark.md)
+See: [docs/benchmarks/routing-accuracy-benchmark.md](docs/benchmarks/routing-accuracy-benchmark.md)
+
+---
+
+## 对比 Comparison
+
+### 与其他工具对比 vs Other Tools
+
+| Feature | VibeSOP | Cursor | Continue.dev | Aider |
+|---------|---------|--------|--------------|-------|
+| **Routing** | 7-layer intelligent routing | Built-in commands | Extension-based | CLI flags |
+| **Skills** | 45+ cross-platform skills | Built-in features | Community extensions | Built-in workflows |
+| **Learning** | Preference learning | Fixed | No | No |
+| **Cross-Platform** | ✅ Works with any AI tool | ❌ Cursor only | ❌ Continue only | ❌ Aider only |
+| **Open Ecosystem** | ✅ Any SKILL.md | ❌ Closed | ⚠️ Extension API | ❌ Closed |
+| **Security Audit** | ✅ Before loading skills | N/A | ⚠️ User discretion | N/A |
+
+### 为什么选择 VibeSOP？ Why Choose VibeSOP?
+
+1. **不绑定单一工具** — 从 Cursor 切换到 Claude Code？你的技能跟着你走
+   **Not tied to one tool** — Switch from Cursor to Claude Code? Your skills come with you
+2. **发现你不知道存在的技能** — "我能做什么？" → `vibe skills available`
+   **Discovers skills you didn't know existed** — "What can I do?" → `vibe skills available`
+3. **越来越聪明** — 记住什么对你有效
+   **Gets smarter over time** — Remembers what worked for you
+4. **开放可扩展** — 用简单的 markdown 文件创建自己的技能
+   **Open & extensible** — Create your own skills with a simple markdown file
+
+---
+
+## 开发 Development
 
 ```bash
 # Type checking
@@ -658,46 +597,52 @@ uv run pytest --cov=src/vibesop --cov-report=html
 
 ---
 
-## Roadmap
+## 路线图 Roadmap
 
-- [x] v4.0.0: Core routing engine with 7-layer pipeline
-- [x] v4.1.0: AI Triage production readiness
-  - [x] TriageService implementation
-  - [x] Cost tracking and budget management
-  - [x] Intelligent candidate prefiltering
-  - [x] Production testing and validation (20 tests, all passing)
-- [x] v4.2.0: Skill health monitoring
-  - [x] SkillHealthMonitor implementation
-  - [x] Local health checks (file integrity, required fields)
-  - [x] CLI command (`vibe skills health`)
-  - [x] Health status reporting (healthy/warning/critical)
-- [ ] v5.0.0: Plugin system for custom matchers
+- [x] v4.0.0: 核心路由引擎 Core routing engine with 7-layer pipeline
+- [x] v4.1.0: AI Triage 生产就绪 AI Triage production readiness
+- [x] v4.2.0: 技能健康监控 Skill health monitoring
+- [ ] v5.0.0: 插件系统 Plugin system for custom matchers
+- [ ] v6.0.0: 机器学习优化 Machine learning optimization
+- [ ] v7.0.0: 个性化路由 Personalized routing
 
 ---
 
-## License
+## 许可证 License
 
 MIT License - see [LICENSE](LICENSE) file.
 
 ---
 
-## Acknowledgments
+## 致谢 Acknowledgments
+
+VibeSOP 站在巨人的肩膀上：
 
 VibeSOP stands on the shoulders of giants:
 
-- **[gstack](https://github.com/anthropics/gstack)** - Engineering skills and browser automation
-- **[superpowers](https://github.com/obra/superpowers)** - Foundational development workflows
-- **[oh-my-codex](https://github.com/mill173/omx)** - Interview techniques and verification
-- **[Claude Code](https://github.com/anthropics/claude-code)** - SKILL.md specification
+- **[gstack](https://github.com/anthropics/gstack)** - 工程技能和浏览器自动化 Engineering skills and browser automation
+- **[superpowers](https://github.com/obra/superpowers)** - 基础开发工作流 Foundational development workflows
+- **[oh-my-codex](https://github.com/mill173/omx)** - 面试技术和验证 Interview techniques and verification
+- **[Claude Code](https://github.com/anthropics/claude-code)** - SKILL.md 规范 SKILL.md specification
 
+VibeSOP 是一个独立实现，具有：
 VibeSOP is an independent implementation with:
-- Clean architecture (65% code reduction vs Ruby version)
-- Unified routing pipeline
-- Production-ready security auditing
-- Preference learning system
+- 清晰的架构 (相比 Ruby 版本减少 65% 代码) Clean architecture (65% code reduction vs Ruby version)
+- 统一的路由 pipeline Unified routing pipeline
+- 生产就绪的安全审计 Production-ready security auditing
+- 偏好学习系统 Preference learning system
 
 ---
 
+## 联系我们 Contact Us
+
+**用 ❤️ 构建，为 AI 原生开发工作流**
 **Built with ❤️ for AI-native developer workflows**
 
 [GitHub](https://github.com/nehcuh/vibesop-py) • [Issues](https://github.com/nehcuh/vibesop-py/issues) • [Discussions](https://github.com/nehcuh/vibesop-py/discussions)
+
+---
+
+**版本 Version**: 4.2.0
+**更新时间 Last Updated**: 2026-04-18
+**状态 Status**: ✅ 生产就绪 Production Ready
