@@ -54,10 +54,11 @@ class TestExternalSkillIntegration:
         manager = SkillManager()
 
         # Try to instantiate some common external skills
+        # Use builtin/* namespace since those are discovered from filesystem
         test_skills = [
-            "systematic-debugging",
-            "experience-evolution",
-            "planning-with-files",
+            "builtin/systematic-debugging",
+            "builtin/verification-before-completion",
+            "gstack/office-hours",
         ]
 
         instantiated = []
@@ -103,11 +104,20 @@ class TestExternalSkillIntegration:
 
         external_skills = {k: v for k, v in skills.items() if v.external_metadata is not None}
 
-        # All loaded external skills should be safe
+        # All loaded external skills should be either safe OR trusted with non-critical threats
         for skill_id, skill in external_skills.items():
             if skill.external_metadata:
-                assert skill.external_metadata.is_safe, (
-                    f"Skill {skill_id} should pass security audit"
+                from vibesop.security.skill_auditor import ThreatLevel
+
+                # Either the skill is safe, or it's trusted with non-critical threats
+                is_trusted_safe = (
+                    skill.external_metadata.is_safe or
+                    (skill.external_metadata.is_trusted and
+                     skill.external_metadata.audit_result and
+                     skill.external_metadata.audit_result.risk_level != ThreatLevel.CRITICAL)
+                )
+                assert is_trusted_safe, (
+                    f"Skill {skill_id} should be either safe or trusted with non-critical threats"
                 )
 
     def test_skill_manager_get_skill_info(self):

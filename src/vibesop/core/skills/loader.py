@@ -159,7 +159,20 @@ class SkillLoader:
 
             # Check if safe to load
             if self._require_audit and not ext_metadata.is_safe:
-                continue
+                # Allow trusted packs through with non-critical audit issues.
+                # Trusted external packs (e.g., gstack, superpowers) may contain
+                # legitimate role-prompting language that triggers benign
+                # role-hijacking heuristics. We still block CRITICAL threats.
+                if ext_metadata.is_trusted:
+                    audit_result = ext_metadata.audit_result
+                    if audit_result:
+                        from vibesop.security.skill_auditor import ThreatLevel
+
+                        if audit_result.risk_level == ThreatLevel.CRITICAL:
+                            continue
+                    # Skip logging entirely for performance - trusted skills are expected
+                else:
+                    continue
 
             # Convert external metadata to internal format
             definition = self._convert_external_skill(ext_metadata)

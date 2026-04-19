@@ -162,13 +162,17 @@ PROMPT_LEAKAGE_PATTERNS = [
 
 ROLE_HIJACKING_PATTERNS = [
     # Attempts to change AI's behavior or role
+    # Note: We avoid overly broad patterns like r"you\s+(are|have\s+become)\s+(a|an)\s+"
+    # because legitimate skills commonly use "You are a [professional role]..." to set
+    # context (e.g., "You are a code reviewer"). The stricter check in
+    # skill_auditor.py THREAT_PATTERNS catches actual hijacking by requiring specific
+    # sensitive role nouns (developer, admin, root, god, assistant, ai, system).
     r"you\s+are\s+now\s+(a|an)\s+",
     r"act\s+as\s+(a|an)\s+",
     r"pretend\s+to\s+be\s+(a|an)\s+",
     r"role[- ]?play\s+as\s+(a|an)\s+",
     r"assume\s+the\s+role\s+of\s+(a|an)\s+",
     r"from\s+now\s+on\s+(you\s+are|you're)\s+(a|an)\s+",
-    r"you\s+(are|have\s+become)\s+(a|an)\s+",
     r"switch\s+your\s+persona\s+to\s+(a|an)\s+",
     r"ignore\s+your\s+(programming|training|instructions)\s+and\s+(act|behave)",
 ]
