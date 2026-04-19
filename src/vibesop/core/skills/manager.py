@@ -2,9 +2,11 @@
 
 **⚠️ POSITIONING**: VibeSOP is a ROUTING ENGINE, not an execution engine.
 
-This module provides skill discovery and metadata access only:
+This module provides skill discovery, metadata access, and workflow definitions:
 - list_skills(): Discover available skills
 - get_skill_info(): Get skill metadata
+- get_skill_definition(): Get workflow definition for AI agents
+- execute_skill(): Execute skill locally (for testing/validation)
 - search_skills(): Search by keyword
 - get_skill_instance(): Get skill object for instantiation
 
@@ -20,6 +22,7 @@ from typing import Any
 
 from vibesop.core.config import ConfigManager
 from vibesop.core.skills.base import Skill
+from vibesop.core.skills.executor import ExternalSkillExecutor
 from vibesop.core.skills.loader import SkillLoader
 
 logger = logging.getLogger(__name__)
@@ -52,15 +55,24 @@ class SkillManager:
     def __init__(
         self,
         project_root: str | Path = ".",
+        enable_execution: bool = True,
     ) -> None:
         """Initialize the skill manager.
 
         Args:
             project_root: Project root directory
+            enable_execution: Whether to enable local skill execution
         """
         self.project_root = Path(project_root).resolve()
         self._loader = SkillLoader(project_root=self.project_root)
         self._config = ConfigManager(project_root=self.project_root)
+
+        # Initialize executor for skill execution (inject loader to reuse instance)
+        self._executor = ExternalSkillExecutor(
+            project_root=self.project_root,
+            enable_execution=enable_execution,
+            loader=self._loader,  # Inject loader to avoid duplicate instances
+        )
 
         # Discover skills on init
         self._loader.discover_all()
@@ -227,6 +239,126 @@ class SkillManager:
         skills = self.list_skills()
         namespaces = {s.get("namespace", "builtin") for s in skills}
         return sorted(namespaces)
+
+    def get_skill_definition(
+        self,
+        skill_id: str,
+    ) -> dict[str, Any] | None:
+        """Get skill workflow definition for AI agent execution.
+
+        This method returns the workflow definition that AI agents can execute.
+        Use this to provide skill definitions to Claude Code, Cursor, etc.
+
+        Args:
+            skill_id: Skill identifier
+
+        Returns:
+            Dictionary with workflow definition, or None if not found
+
+        Example:
+            >>> manager = SkillManager()
+            >>> result = manager.get_skill_definition("systematic-debugging")
+            >>> if result:
+            ...     workflow = result["workflow"]
+            ...     for step in workflow["steps"]:
+            ...         print(f"Step: {step['description']}")
+        """
+        try:
+            result = self._executor.get_skill_definition(skill_id)
+
+            if result.success and result.workflow:
+                return {
+                    "skill_id": result.skill_id,
+                    "workflow": result.workflow.to_dict(),
+                    "execution_time_ms": result.execution_time,
+                }
+            else:
+                return None
+        except Exception:
+            # Skill not found or other error
+            return None
+
+    def execute_skill(
+        self,
+        skill_id: str,
+        context: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Execute skill locally (for testing/validation).
+
+        This method executes the skill workflow locally.
+        Primarily intended for:
+        - Testing skill definitions
+        - Validating workflow logic
+        - CI/CD automation
+
+        For production use, workflows should be executed by AI agents
+        (Claude Code, Cursor, etc.) using get_skill_definition() instead.
+
+        Args:
+            skill_id: Skill identifier
+            context: Execution context (variables, inputs, etc.)
+
+        Returns:
+            Dictionary with execution result
+
+        Example:
+            >>> manager = SkillManager()
+            >>> result = manager.execute_skill("superpowers/tdd", context={
+            ...     "feature": "authentication",
+            ... })
+            >>> if result["success"]:
+            ...     print(f"Output: {result['output']}")
+        """
+        if not self._executor.enable_execution:
+            return {
+                "success": False,
+                "skill_id": skill_id,
+                "error": "Skill execution is disabled. Enable by passing enable_execution=True.",
+                "output": None,
+            }
+
+        result = self._executor.execute_skill(skill_id, context=context)
+
+        return {
+            "success": result.success,
+            "skill_id": result.skill_id,
+            "output": result.output,
+            "error": result.error,
+            "execution_time_ms": result.execution_time,
+            "executed_steps": result.executed_steps,
+        }
+
+    def validate_skill(self, skill_id: str) -> dict[str, Any]:
+        """Validate skill without executing.
+
+        Checks:
+        - Skill exists
+        - SKILL.md is valid
+        - Workflow is well-formed
+        - Security audit passes
+
+        Args:
+            skill_id: Skill identifier
+
+        Returns:
+            Dictionary with validation results
+
+        Example:
+            >>> manager = SkillManager()
+            >>> result = manager.validate_skill("systematic-debugging")
+            >>> if result["is_valid"]:
+            ...     print("Skill is valid")
+            >>> else:
+            ...     for error in result["errors"]:
+            ...         print(f"Error: {error}")
+        """
+        is_valid, errors = self._executor.validate_skill(skill_id)
+
+        return {
+            "skill_id": skill_id,
+            "is_valid": is_valid,
+            "errors": errors,
+        }
 
     def get_stats(self) -> dict[str, Any]:
         """Get skill statistics.
