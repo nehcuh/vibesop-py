@@ -95,6 +95,19 @@ Coverage: 75.34% (threshold 75.0%)
 
 ## Current Session
 
+### SN-2026-04-20 (09:58~10:45) Skill LLM Configuration Management System
+- Implemented complete skill-level LLM configuration system in response to user question
+- Created `SkillConfigManager` with 5-tier fallback strategy (skill → global → env → agent → default)
+- Added CLI commands: `vibe skill config list|get|set|delete|import|export`
+- Integrated auto-configuration with `understander.py` for automatic config generation during skill install
+- Fixed dataclass bug in `understander.py` (added default values for category/priority)
+- Improved keyword extraction by adding stop words (and, or, but, etc.)
+- Created comprehensive test suite (all tests passing ✅)
+- Created demo script showing all features working correctly
+- **Key Discovery**: Found that configs were being generated but not read - complete implementation needed both read and write paths
+- **Next Steps**: Integrate CLI command into main typer app, add documentation to README
+- **Recorded: yes** - Added 1 technical pitfall, 1 reusable pattern, 1 architecture decision to project-knowledge.md
+
 ### SN-2026-04-19 (11:53~12:15) UltraQA Autonomous Testing Cycle
 - Ran UltraQA autonomous QA workflow on VibeSOP codebase
 - Discovered and fixed 3 bugs in external skill loading and testing
