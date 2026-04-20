@@ -9,11 +9,11 @@ Version Format: MAJOR.MINOR.PATCH
 - PATCH: Backwards-compatible bug fixes
 """
 
-__version__ = "4.0.0"
+__version__ = "4.2.0"
 
 # Version components
 MAJOR = 4
-MINOR = 0
+MINOR = 2
 PATCH = 0
 
 # Version metadata

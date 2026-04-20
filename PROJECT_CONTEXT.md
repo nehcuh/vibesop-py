@@ -3,6 +3,44 @@
 ## Session Handoff
 
 <!-- handoff:start -->
+### 2026-04-20 13:45
+
+**Session**: 代码评审与测试回归修复
+
+**Summary**:
+用户要求深入评审 VibeSOP 最新更新并修复代码问题。通过全面分析发现了多个接口不匹配和测试回归问题，已全部修复，1555 个测试通过。
+
+**Key Decisions**:
+1. **版本号同步**: 将 `pyproject.toml` 和 `_version.py` 从 4.0.0 更新到 4.2.0，与 README/CHANGELOG 保持一致。
+
+2. **Typer CLI 测试修复**: 测试必须导入 Typer app 实例而非命令函数。`runner.invoke(skills_app, ["add", "--help"])` 是正确的调用方式。
+
+3. **接口漂移修复**: 发现 `skill_add.py` 中存在 3 处接口不匹配（`SkillSecurityAuditor` 参数、`AuditResult` 属性、`SkillSuggestion` 字段、`UnifiedRouter` 参数），已全部同步。
+
+4. **集成测试 Mock 化**: `questionary` 交互式输入无法在 `CliRunner` 中工作，使用 `unittest.mock.patch` 将其 mock 为非交互式模式。
+
+**Files Modified**:
+- `pyproject.toml` - version 4.0.0 → 4.2.0
+- `src/vibesop/_version.py` - version 4.0.0 → 4.2.0
+- `src/vibesop/cli/commands/skill_add.py` - 修复 4 处接口不匹配
+- `tests/cli/test_skill_add_cmd.py` - 修复 CLI 测试导入
+- `tests/integration/test_skill_add_flow.py` - 修复命令名 + 添加 questionary mock
+- `tests/test_ai_triage.py` - 修复 mock 响应匹配实际内置技能
+
+**Next Steps**:
+- 无紧急任务，所有测试通过
+- 可考虑将 version bump 流程自动化（避免未来版本号不一致）
+
+**Technical Debt**:
+- `skill_add.py` 与核心模块的接口耦合较强，未来重构共享 dataclass 时需同步更新
+
+**Test Status**:
+```
+1555 passed, 1 skipped, 0 failed ✅
+```
+
+---
+
 ### 2026-04-20 10:45
 
 **Session**: Skill LLM Configuration Management System
@@ -48,44 +86,5 @@ Total: 1000+ lines new code, fully tested
 - Automatic configuration reduces setup time from 17-35 min to <10 sec
 - CLI commands provide easy config management (list, get, set, delete, import, export)
 - Python API available for programmatic access
-
----
-
-### 2026-04-19 12:15
-
-**Session**: UltraQA Autonomous Testing Cycle
-
-**Summary**:
-Ran autonomous QA testing on VibeSOP codebase using UltraQA workflow. Discovered and fixed 3 bugs in external skill loading and testing infrastructure. All tests now passing (1519/1522).
-
-**Key Decisions**:
-1. **Security Model Enhancement**: Allowed trusted external skill packs (gstack, superpowers) through security audit despite non-critical threats, while blocking CRITICAL threats. This reduces false positives for legitimate role-prompting language.
-
-2. **Performance Trade-off**: Accepted 8% performance regression (50 QPS → 44 QPS) in exchange for enhanced security. Optimized logging overhead by removing it entirely for expected trusted skill cases.
-
-3. **Test Expectations Update**: Modified tests to check that loaded skills are either safe OR trusted with non-critical threats, matching the new security model intent.
-
-**Files Modified**:
-- `src/vibesop/core/skills/loader.py` - Optimized trusted skill loading logic
-- `src/vibesop/security/rules.py` - Removed overly broad role-hijacking pattern
-- `tests/integration/test_external_skill_execution.py` - Fixed test data and expectations
-- `tests/benchmark/test_routing_performance.py` - Adjusted performance target to 40 QPS
-
-**Next Steps**:
-- Monitor performance in production to ensure 40+ QPS target is sustainable
-- Consider further optimizations if performance degrades below threshold
-- Update documentation to explain trusted skills security model to users
-
-**Technical Debt**:
-- Performance regression could be addressed with more aggressive caching if needed
-- Consider lazy loading for external skills to reduce startup overhead
-
-**Test Status**:
-```
-Integration Tests: 8/8 passed ✅
-Performance Tests: 2/2 passed ✅
-Total: 1519/1522 passed (3 bugs fixed)
-Coverage: 80.25%
-```
 
 <!-- handoff:end -->

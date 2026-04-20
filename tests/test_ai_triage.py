@@ -13,7 +13,7 @@ def mock_llm():
     llm = MagicMock()
     llm.configured.return_value = True
     llm.call.return_value = MagicMock(
-        content="systematic-debugging",
+        content="builtin/systematic-debugging",
         model="claude-3-5-haiku-20241022",
         tokens_used=50,
         input_tokens=40,
@@ -49,7 +49,7 @@ def test_ai_triage_returns_skill_route(router_with_llm):
     assert isinstance(result, RoutingResult)
     # AI triage should be in routing path after explicit/scenario attempts
     assert RoutingLayer.AI_TRIAGE in result.routing_path
-    assert result.primary.skill_id == "systematic-debugging"
+    assert result.primary.skill_id == "builtin/systematic-debugging"
     # Confidence is dynamic: fallback parsing gets ~0.82, structured JSON gets ~0.88
     assert 0.8 <= result.primary.confidence <= 0.92
     assert result.primary.metadata.get("ai_triage") is True

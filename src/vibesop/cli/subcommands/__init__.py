@@ -47,6 +47,9 @@ from vibesop.cli.commands import (
     skills_cmd as skills_mod,
 )
 from vibesop.cli.commands import (
+    skill_add as skill_add_mod,
+)
+from vibesop.cli.commands import (
     switch as switch_mod,
 )
 from vibesop.cli.commands import (
@@ -93,6 +96,7 @@ def register(app: typer.Typer) -> None:
     app.command()(analyze_mod.analyze)
 
     # Skills management subcommands
+    skills_app.command("add")(skill_add_mod.add)
     skills_app.command("list")(skills_mod.list_skills)
     skills_app.command("available")(skills_mod.available)
     skills_app.command("info")(skills_mod.info)

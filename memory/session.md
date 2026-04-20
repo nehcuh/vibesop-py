@@ -95,6 +95,23 @@ Coverage: 75.34% (threshold 75.0%)
 
 ## Current Session
 
+### SN-2026-04-20 (13:21~13:45) 代码评审与修复
+- 深入评审 VibeSOP v4.1.0/v4.2.0 最新更新，分析产品目标与实现
+- 修复测试回归: `test_help_output` Typer CLI 导入错误
+- 修复版本号不一致: `_version.py` + `pyproject.toml` 4.0.0 → 4.2.0
+- 修复 `skill_add.py` 多处接口不匹配:
+  - `SkillSecurityAuditor(require_signed=False)` → 使用正确的 `strict_mode` + `add_allowed_path()`
+  - `AuditResult.summary` → `AuditResult.reason`
+  - `SkillSuggestion` 字段同步 dataclass 变更
+  - `UnifiedRouter(project_path=...)` → `UnifiedRouter(project_root=...)`
+- 修复集成测试 `test_skill_add_flow.py`:
+  - 命令名 `skill` → `skills`
+  - 添加 `questionary` mock 支持非交互式测试
+- 修复 AI Triage 测试 `test_ai_triage.py`:
+  - mock LLM 响应改为 `builtin/systematic-debugging` 匹配实际环境
+- **测试结果**: 1555 passed, 1 skipped, 0 failed ✅
+- **Recorded: yes** - 新增 2 technical pitfalls, 1 reusable pattern
+
 ### SN-2026-04-20 (09:58~10:45) Skill LLM Configuration Management System
 - Implemented complete skill-level LLM configuration system in response to user question
 - Created `SkillConfigManager` with 5-tier fallback strategy (skill → global → env → agent → default)

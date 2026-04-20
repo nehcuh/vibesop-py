@@ -2,6 +2,44 @@
 
 ## Technical Pitfalls
 
+### Typer CLI Testing: Function vs App Instance (2026-04-20)
+
+**Issue**: `typer.testing.CliRunner.invoke()` requires a `typer.Typer` app instance or `click.Command`, not a decorated function. When tests import the command function directly from the module, `runner.invoke(func, ["--help"])` raises `AttributeError: 'function' object has no attribute '_add_completion'`.
+
+**Root Cause**: Typer commands are registered via `@app.command()` decorator at module import time. The decorated function loses its Typer metadata when imported directly. Tests must import the Typer app instance instead.
+
+**Solution**:
+```python
+# ❌ Wrong: Importing the function
+from vibesop.cli.commands.skill_add import add
+runner.invoke(add, ["--help"])  # AttributeError!
+
+# ✅ Correct: Import the Typer app
+from vibesop.cli.commands.skills import skills_app
+runner.invoke(skills_app, ["add", "--help"])
+```
+
+**File**: `tests/cli/test_skill_add_cmd.py`
+
+---
+
+### Dataclass Refactoring Cascade: Callers Not Updated (2026-04-20)
+
+**Issue**: When a dataclass like `SkillSuggestion` is refactored (fields renamed/removed), all call sites break with `TypeError: unexpected keyword argument`. In large codebases with many new files, these breakages are easy to miss.
+
+**Root Cause**: `skill_add.py` was created referencing an older version of `SkillSuggestion` with fields like `skill_id`, `examples`, `suggested_category`. After `session_analyzer.py` was refactored, these fields no longer existed.
+
+**Solution**:
+1. Use `dataclasses.fields()` to validate fields programmatically when interface changes
+2. Run full test suite after any shared dataclass change
+3. Prefer dataclass inheritance or `**kwargs` with validation for evolving interfaces
+
+**Files**:
+- `src/vibesop/core/session_analyzer.py` - `SkillSuggestion` dataclass
+- `src/vibesop/cli/commands/skill_add.py` - broken call site
+
+---
+
 ### Configuration Generated But Not Read (2026-04-20)
 
 **Issue**: Auto-configuration system generated skill LLM configs and saved them to `.vibe/skills/auto-config.yaml`, but no code existed to read and use these configurations.
@@ -93,6 +131,34 @@ if ext_metadata.audit_result.risk_level == ThreatLevel.CRITICAL:
 ---
 
 ## Reusable Patterns
+
+### Interface Drift Detection via Full Test Run (2026-04-20)
+
+**Pattern**: After refactoring shared classes/functions, always run the FULL test suite — not just the modified file's tests.
+
+**Problem**: Refactoring `SkillSuggestion` dataclass passes its own unit tests, but breaks `skill_add.py` which uses it. Similarly, changing `AuditResult` fields breaks `skill_add.py` security audit handling.
+
+**Detection Workflow**:
+```python
+# 1. Make the refactoring change
+@dataclass
+class SkillSuggestion:
+    skill_name: str
+    description: str
+    # Removed: skill_id, examples, suggested_category
+
+# 2. Run tests for the modified module ONLY (NOT enough)
+pytest tests/unit/test_session_analyzer.py  # Passes!
+
+# 3. Run FULL suite to catch drift (REQUIRED)
+pytest  # FAILS: skill_add.py uses removed fields
+```
+
+**Key Insight**: Interface changes are silent killers. Unit tests of the modified module pass, but integration points fail. Full suite execution is the only reliable detection method.
+
+**Automation**: Add pre-commit hook or CI check that runs full test suite on any `src/` file change.
+
+---
 
 ### Skill Auto-Configuration Pipeline (2026-04-20)
 
