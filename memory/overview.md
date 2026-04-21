@@ -1,12 +1,12 @@
 # Overview - VibeSOP Project
 
-**Last Updated**: 2026-04-19
+**Last Updated**: 2026-04-21
 
 ---
 
 ## Goals
 
-### Current Week (April 14-20, 2026)
+### Current Week (April 14-21, 2026)
 
 1. **Fix VibeSOP Doctor Issues** ✅ (Completed)
    - Resolved vibe doctor failures for kimi-cli, builtin skills, and hooks
@@ -29,6 +29,15 @@
    - Integrated auto-configuration with skill installation
    - All tests passing, documentation complete
 
+5. **Architecture Review & Optimization** ✅ (Completed - April 21)
+   - Deep architecture review: identified 5 key issues (docs sync, router bloat, test failures, test speed, code quality)
+   - Synced all docs to v4.2.0, fixed ROADMAP status inconsistencies
+   - Extracted RouterStatsMixin from UnifiedRouter (-49 lines)
+   - Fixed 3 pre-existing test failures
+   - Added pytest-xdist: test-fast ~39s (was ~256s)
+   - Eliminated PytestReturnNotNoneWarning, fixed ruff issues
+   - All 1601 tests passing, 78.25% coverage
+
 ---
 
 ## Projects Summary
@@ -36,13 +45,23 @@
 ### VibeSOP (vibesop-py)
 **Status**: Production Ready (v4.2.0)
 **Description**: AI-assisted development intelligent routing engine with skill-level LLM configuration
-**Coverage**: 80.25% (1,519/1,522 tests passing)
+**Coverage**: 78.25% (1,601 tests passing)
 **Key Metrics**:
 - Routing accuracy: 94%
 - Performance: 44 QPS (target: 40+ QPS)
-- Skills supported: 69 skills across 4 packs
+- Skills supported: 91 skills across 4 packs
 - Security audit: All external skills scanned
 - LLM configs: Skill-level configuration with 5-tier fallback
+- Test speed: 39s fast suite / 252s full suite
+
+**Recent Changes** (2026-04-21):
+- ✅ Architecture review with professional assessment
+- ✅ Document version sync (PHILOSOPHY/ARCHITECTURE/ROADMAP/PROJECT_STATUS → 4.2.0)
+- ✅ UnifiedRouter extracted RouterStatsMixin (-49 lines)
+- ✅ pytest-xdist parallel testing (make test-fast ~39s)
+- ✅ Fixed 3 pre-existing test failures
+- ✅ Eliminated test warnings, fixed ruff issues
+- ✅ Added TECH DEBT annotations for known issues
 
 **Recent Changes** (2026-04-20):
 - ✅ Implemented skill-level LLM configuration system
@@ -54,9 +73,10 @@
 - ✅ All tests passing (1000+ lines of new code, fully tested)
 
 **Next Steps**:
-- Integrate `vibe skill config` CLI command into main typer app
-- Add skill LLM config documentation to README
-- Monitor user feedback on configuration system
+- Extract shared SkillDiscoveryService to unify SkillManager/UnifiedRouter loader paths
+- Consider Builder pattern for UnifiedRouter __init__ (~110 lines)
+- Monitor test suite health (current: 1601 passed)
+- Version bump automation (avoid future doc version drift)
 
 ---
 

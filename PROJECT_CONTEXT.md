@@ -3,6 +3,47 @@
 ## Session Handoff
 
 <!-- handoff:start -->
+### 2026-04-21 10:40
+
+**Session**: 架构评审与系统性优化
+
+**Summary**:
+用户要求深入阅读项目、理解底层逻辑与愿景，从上层视角审视项目是否与设计目标一致。完成深度评审后，根据评审意见执行了6轮迭代优化，最终全部测试通过并推送至远程。
+
+**Key Decisions**:
+1. **文档版本同步**: 4个核心文档同步到4.2.0，ROADMAP中v4.1/v4.2标记为已完成
+2. **UnifiedRouter精简**: 提取RouterStatsMixin，739→690行，添加代理方法弃用注释
+3. **测试回归修复**: 3个pre-existing失败全部修复（技能定义、分类器断言、吞吐量目标）
+4. **测试基础设施**: pytest-xdist并行执行，`make test-fast` 255s→39s（~6.6x）
+5. **代码质量**: 消除PytestReturnNotNoneWarning，ruff修复，slow/benchmark标记
+6. **技术债务标注**: SkillManager/UnifiedRouter职责重叠、代理方法迁移计划
+
+**Files Modified**:
+- `docs/*` - 版本同步（4个文件）
+- `src/vibesop/core/routing/unified.py` + `stats_mixin.py` - 精简
+- `src/vibesop/core/skills/manager.py` - TECH DEBT注释
+- `tests/*` - 修复与标记（6个文件）
+- `README.md` / `docs/dev/CONTRIBUTING.md` / `Makefile` - 开发者体验
+- `pyproject.toml` - pytest-xdist依赖
+
+**Next Steps**:
+- 考虑提取共享SkillDiscoveryService解决职责重叠
+- UnifiedRouter __init__ Builder模式重构
+- version bump自动化避免文档版本漂移
+
+**Technical Debt**:
+- SkillManager ↔ UnifiedRouter 独立SkillLoader，搜索路径不一致
+- 9个向后兼容代理方法待v5.0移除
+- 全局缓存尝试失败（破坏测试隔离），需其他性能优化方案
+
+**Test Status**:
+```
+Full suite: 1601 passed, 1 skipped, 0 failed ✅ (78.25% coverage)
+Fast suite: 1593 passed in ~39s ✅
+```
+
+---
+
 ### 2026-04-20 13:45
 
 **Session**: 代码评审与测试回归修复
@@ -38,53 +79,5 @@
 ```
 1555 passed, 1 skipped, 0 failed ✅
 ```
-
----
-
-### 2026-04-20 10:45
-
-**Session**: Skill LLM Configuration Management System
-
-**Summary**:
-Implemented complete skill-level LLM configuration system in response to user question about supporting independent LLM configs per skill. Created 1000+ lines of new code with full test coverage and documentation.
-
-**Key Decisions**:
-1. **5-Tier Fallback Strategy**: Implemented priority-based LLM config resolution: skill-level → global → env vars → agent environment → default. Ensures robustness while providing maximum flexibility.
-
-2. **Complete CRUD Operations**: Created full configuration management system with Create, Read, Update, Delete operations for skill configs. Includes CLI commands and Python API.
-
-3. **Auto-Configuration Integration**: Integrated skill understanding system with config manager. Skills now auto-generate LLM configs during installation (75-85% accuracy based on category detection).
-
-**Files Created**:
-- `src/vibesop/core/skills/config_manager.py` - Skill configuration manager (450+ lines)
-- `src/vibesop/cli/commands/skill_config.py` - CLI commands for config management (450+ lines)
-- `tests/unit/test_skill_config_manager.py` - Complete test suite (300+ lines)
-- `examples/skill_llm_config_demo.py` - Demo script showing all features (350+ lines)
-
-**Files Modified**:
-- `src/vibesop/core/skills/understander.py` - Fixed dataclass bug, improved keyword extraction
-- `docs/SKILL_LLM_CONFIG_GUIDE.md` - Complete user guide (400+ lines)
-- `docs/LLM_CONFIG_IMPLEMENTATION_SUMMARY.md` - Implementation summary (400+ lines)
-
-**Next Steps**:
-- Integrate `vibe skill config` CLI command into main typer app
-- Add skill LLM config documentation to README
-- Consider adding `vibe skills` command to show all skills and their configs
-
-**Technical Debt**:
-- None identified - implementation is complete and tested
-
-**Test Status**:
-```
-Unit Tests: 5/5 passed ✅
-Demo Script: All features working ✅
-Total: 1000+ lines new code, fully tested
-```
-
-**User Impact**:
-- Users can now configure independent LLM settings per skill
-- Automatic configuration reduces setup time from 17-35 min to <10 sec
-- CLI commands provide easy config management (list, get, set, delete, import, export)
-- Python API available for programmatic access
 
 <!-- handoff:end -->

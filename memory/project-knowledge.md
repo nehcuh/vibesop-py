@@ -298,3 +298,109 @@ class SkillConfigManager:
 - `src/vibesop/core/skills/config_manager.py` (450+ lines)
 - `src/vibesop/cli/commands/skill_config.py` (450+ lines)
 - `src/vibesop/core/skills/understander.py` (auto-config integration)
+
+---
+
+### Class-Level Caching Breaks Test Isolation (2026-04-21)
+
+**Issue**: Adding a `_global_candidates_cache` class variable to `UnifiedRouter` to share loaded skill candidates across instances caused **48 test failures**.
+
+**Root Cause**: Tests that install/modify skills expect a fresh router with fresh candidates. When router instances share a global cache, tests see stale data from previous tests.
+
+**Example Failure**:
+```python
+# Test 1: Install a new skill
+vibe skill add my-skill
+router1 = UnifiedRouter()
+router1.route("my skill")  # Works (caches candidates)
+
+# Test 2: Check routing
+router2 = UnifiedRouter()
+router2.route("my skill")  # FAILS - uses Test 1's stale cache
+```
+
+**Solution**: Keep candidate caching at instance level only. For performance optimization:
+1. Accept slower tests (current: ~4 min for full suite)
+2. Use `pytest-xdist` for parallel execution (~39s with `-n auto`)
+3. Mark slow tests with `@pytest.mark.slow` and exclude from fast suite
+
+**Key Insight**: Global/mutable class-level state is almost always wrong in testable code. Prefer instance-level caching + external parallelization.
+
+**Files**: `src/vibesop/core/routing/unified.py` (reverted after 48 failures)
+
+---
+
+### Test Assumption: `skills[0]` is Fragile (2026-04-21)
+
+**Issue**: `test_get_skill_definition` used `skills[0]` assuming the first discovered skill has a workflow definition. When skills are loaded in different order (e.g., project-level YAML files added), the first skill may be a prompt type with no workflow, causing `get_skill_definition()` to return `None`.
+
+**Root Cause**: Test assumed stable skill ordering and type. Skill discovery order depends on filesystem traversal and search paths.
+
+**Solution**: Use a known stable skill with guaranteed workflow:
+```python
+# ❌ Fragile: assumes first skill has workflow
+skill_id = skills[0]["id"]
+result = manager.get_skill_definition(skill_id)
+assert result is not None  # FAILS if first skill is prompt type
+
+# ✅ Robust: use known skill with workflow
+skill_id = "gstack/freeze"  # Known to have workflow
+result = manager.get_skill_definition(skill_id)
+assert result is not None
+```
+
+**File**: `tests/core/skills/test_manager_integration.py`
+
+---
+
+## Reusable Patterns
+
+### Parallel Test Execution with pytest-xdist (2026-04-21)
+
+**Pattern**: Use `pytest-xdist` with `-n auto` for dramatically faster test feedback during development.
+
+**Before**: `uv run pytest` → 255s (~4 min)
+**After**: `uv run pytest -n auto --no-cov` → 39s (~6.6x faster)
+
+**Makefile Target**:
+```makefile
+test-fast:
+	uv run pytest -n auto --no-cov -q -m "not benchmark and not slow"
+```
+
+**Caveats**:
+1. Coverage collection doesn't work well with xdist (use `--no-cov` for fast runs)
+2. Benchmark tests may fail under parallel load (exclude with `-m "not benchmark"`)
+3. Tests that write to shared files may conflict (mark as `@pytest.mark.slow`)
+
+**Files**: `Makefile`, `pyproject.toml` (dev dependency)
+
+---
+
+### Backward-Compat Proxy Methods with Deprecation Notes (2026-04-21)
+
+**Pattern**: When extracting methods from a large class into sub-services, keep thin proxy methods with explicit deprecation notes instead of immediately removing them.
+
+**Why**: Tests and external callers may directly invoke these methods. Immediate removal causes widespread breakage.
+
+**Example**:
+```python
+class UnifiedRouter:
+    # Backward compatibility proxies for extracted services
+    # These thin wrappers are kept for test compatibility and will be
+    # removed in a future major version.
+
+    def _try_ai_triage(self, query, candidates, context=None):
+        """Proxy to TriageService (kept for backward compatibility)."""
+        if self._llm is not None:
+            self._triage_service._llm = self._llm
+        return self._triage_service.try_ai_triage(query, candidates, context)
+```
+
+**Migration Path**:
+1. Extract methods to sub-service
+2. Keep proxy methods with deprecation docstrings
+3. Update tests to call sub-service directly (gradual)
+4. Remove proxy methods in next major version
+
+**Files**: `src/vibesop/core/routing/unified.py`
