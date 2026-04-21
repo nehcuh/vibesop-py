@@ -26,7 +26,8 @@ uv run ruff check .
    uv run ruff check .        # Lint
    uv run ruff format .       # Format
    uv run pyright             # Type check
-   uv run pytest              # Test
+   make test-fast             # Test (fast, parallel, ~30s)
+   uv run pytest              # Test (full suite with coverage)
    ```
 4. **Commit**: Follow conventional commits (see below)
 5. **Push and PR**: Create pull request with description
@@ -65,10 +66,13 @@ Before contributing, read [docs/PRINCIPLES.md](docs/PRINCIPLES.md). Key points:
 ## Testing
 
 ```bash
-# Run all tests
+# Fast parallel test (~30s, recommended for development)
+make test-fast
+
+# Full test suite with coverage (~4 min, CI use)
 uv run pytest
 
-# With coverage
+# With coverage report
 uv run pytest --cov
 
 # Specific file
@@ -79,7 +83,7 @@ uv run pytest tests/benchmark/ -v
 ```
 
 **Requirements**:
-- Minimum coverage: 60% (current: 65.8%)
+- Minimum coverage: 75% (current: ~78%)
 - All tests must pass
 - New features need tests
 

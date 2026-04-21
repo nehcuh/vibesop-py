@@ -64,6 +64,10 @@ class SkillManager:
             enable_execution: Whether to enable local skill execution
         """
         self.project_root = Path(project_root).resolve()
+        # TECH DEBT: SkillManager and UnifiedRouter each create their own
+        # SkillLoader with different search paths. This can lead to inconsistent
+        # skill discovery between routing and management. Consider extracting a
+        # shared SkillDiscoveryService in a future refactor.
         self._loader = SkillLoader(project_root=self.project_root)
         self._config = ConfigManager(project_root=self.project_root)
 

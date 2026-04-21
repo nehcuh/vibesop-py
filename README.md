@@ -681,7 +681,10 @@ uv run ruff check
 # Formatting
 uv run ruff format
 
-# Testing
+# Testing (fast, parallel, ~30s)
+make test-fast
+
+# Full test suite with coverage (~4 min)
 uv run pytest
 
 # Test coverage

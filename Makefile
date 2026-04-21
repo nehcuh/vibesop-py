@@ -22,6 +22,9 @@ type-check: ## Run type checking
 test: ## Run tests
 	uv run pytest
 
+test-fast: ## Run tests in parallel (faster, no coverage, skip slow/benchmark)
+	uv run pytest -n auto --no-cov -q -m "not benchmark and not slow"
+
 test-cov: ## Run tests with coverage
 	uv run pytest --cov=src/vibesop --cov-report=html
 
@@ -36,7 +39,7 @@ clean: ## Clean up generated files
 check: lint type-check test ## Run all checks (lint, type-check, test)
 
 benchmark: ## Run performance benchmarks
-	uv run pytest tests/benchmark/ -v -m benchmark --no-cov
+	uv run pytest tests/benchmark/ tests/benchmarks/ -v -m benchmark --no-cov
 
 bootstrap: dev ## Bootstrap development environment
 	@echo "✨ Development environment ready!"

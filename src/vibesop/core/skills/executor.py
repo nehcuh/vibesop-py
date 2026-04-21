@@ -48,8 +48,8 @@ from vibesop.core.skills.workflow import (
     WorkflowEngine,
     WorkflowResult,
 )
-from vibesop.security.skill_auditor import SkillSecurityAuditor
 from vibesop.security.exceptions import SecurityError as AuditSecurityError
+from vibesop.security.skill_auditor import SkillSecurityAuditor
 
 logger = logging.getLogger(__name__)
 

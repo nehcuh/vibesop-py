@@ -1,7 +1,7 @@
 # VibeSOP Architecture
 
-> **Version**: 4.0.0
-> **Last Updated**: 2026-04-06
+> **Version**: 4.2.0
+> **Last Updated**: 2026-04-21
 
 ---
 
@@ -363,7 +363,7 @@ tests/
 └── security/         # Security tests
 ```
 
-**Coverage**: 65.8%
+**Coverage**: ~80%
 
 ---
 

@@ -203,41 +203,88 @@ class CategoryRules:
     CATEGORY_KEYWORDS = {
         "debugging": [
             "debug", "error", "bug", "fix", "troubleshoot", "diagnose",
-            "调试", "错误", "故障", "修复", "诊断"
+            "调试", "错误", "故障", "修复", "诊断", "breakpoint", "stacktrace",
         ],
         "testing": [
-            "test", "spec", "tdd", "verify", "check",
-            "测试", "验证", "检查", "用例"
+            "test", "spec", "tdd", "verify", "check", "coverage",
+            "测试", "验证", "检查", "用例", "单元测试", "回归",
         ],
         "review": [
-            "review", "audit", "quality", "inspect", "analyze",
-            "审查", "审计", "质量", "分析"
+            "review", "audit", "quality", "inspect", "analyze", "assess",
+            "审查", "审计", "质量", "分析", "评估", "code review",
         ],
         "documentation": [
-            "document", "doc", "readme", "guide", "tutorial",
-            "文档", "指南", "教程"
+            "document", "doc", "readme", "guide", "tutorial", "handbook",
+            "文档", "指南", "教程", "说明书", "手册",
         ],
         "deployment": [
-            "deploy", "release", "publish", "ship",
-            "部署", "发布", "上线"
+            "deploy", "release", "publish", "ship", "cd", "ci/cd",
+            "部署", "发布", "上线", "交付", "流水线",
         ],
         "security": [
-            "security", "vulnerability", "scan", "audit",
-            "安全", "漏洞", "扫描"
+            "security", "vulnerability", "scan", "audit", "exploit",
+            "安全", "漏洞", "扫描", "渗透", "加固",
         ],
         "brainstorming": [
-            "brainstorm", "idea", "creative", "innovate",
-            "头脑风暴", "创意", "创新"
+            "brainstorm", "idea", "creative", "innovate", "ideate",
+            "头脑风暴", "创意", "创新", "发散", "构思",
         ],
         "optimization": [
-            "optimize", "performance", "improve", "speed",
-            "优化", "性能", "改进"
+            "optimize", "performance", "improve", "speed", "efficient",
+            "优化", "性能", "改进", "提速", "效率",
         ],
+        "planning": [
+            "plan", "roadmap", "strategy", "estimate", "schedule",
+            "规划", "计划", "路线", "策略", "排期",
+        ],
+    }
+
+    # 基于技能 ID 前缀的类别映射（强信号）
+    ID_CATEGORY_PREFIXES = {
+        "debug": "debugging",
+        "error": "debugging",
+        "bug": "debugging",
+        "test": "testing",
+        "spec": "testing",
+        "tdd": "testing",
+        "qa": "testing",
+        "review": "review",
+        "audit": "review",
+        "inspect": "review",
+        "doc": "documentation",
+        "readme": "documentation",
+        "guide": "documentation",
+        "deploy": "deployment",
+        "release": "deployment",
+        "ship": "deployment",
+        "publish": "deployment",
+        "security": "security",
+        "vuln": "security",
+        "brainstorm": "brainstorming",
+        "idea": "brainstorming",
+        "optimize": "optimization",
+        "perf": "optimization",
+        "plan": "planning",
+        "roadmap": "planning",
+        "research": "development",
+        "refactor": "development",
+        "architect": "development",
+        "design": "development",
+        "investigate": "debugging",
     }
 
     @classmethod
     def infer_category(cls, metadata: SkillMetadata, content: str = "") -> str:
-        """从元数据推断类别"""
+        """从元数据推断类别
+
+        优先级: skill_id > tags > description/content > default
+        """
+        skill_id = metadata.id.lower()
+
+        # 0. 从 skill ID 推断（最强信号）
+        for prefix, category in cls.ID_CATEGORY_PREFIXES.items():
+            if prefix in skill_id:
+                return category
 
         # 1. 从 tags 推断
         if metadata.tags:
@@ -249,6 +296,8 @@ class CategoryRules:
                 "security": "security",
                 "doc": "documentation",
                 "brainstorm": "brainstorming",
+                "optimize": "optimization",
+                "plan": "planning",
             }
 
             for tag in metadata.tags:
@@ -283,8 +332,7 @@ class KeywordAnalyzer:
         "should", "may", "might", "must", "shall", "can", "need",
         "for", "with", "from", "this", "that", "these", "those",
         "use", "using", "get", "got", "make", "made", "take", "took",
-        "help", "user", "ask", "want", "like", "need",
-        "and", "or", "but", "not", "nor", "so", "yet", "after", "once",
+        "help", "user", "ask", "want", "like", "and", "or", "but", "not", "nor", "so", "yet", "after", "once",
         # 中文
         "用户", "帮助", "使用", "需要", "想要", "可以", "和", "或", "但是", "不",
     }
@@ -345,7 +393,11 @@ class KeywordAnalyzer:
                 analysis.complexity = complexity
                 break
 
-        # 4. 检测紧急性
+        # 4. 基于文件结构的启发式（phase/step 丰富的技能通常更复杂）
+        if "## phases" in text_lower or "## steps" in text_lower or "## workflow" in text_lower or "## process" in text_lower:
+            analysis.complexity = ComplexityLevel.HIGH
+
+        # 5. 检测紧急性
         for urgency, keywords in cls.URGENCY_KEYWORDS.items():
             if any(kw in text_lower for kw in keywords):
                 analysis.urgency = urgency

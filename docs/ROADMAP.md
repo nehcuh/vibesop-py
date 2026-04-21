@@ -1,12 +1,12 @@
 # VibeSOP Roadmap
 
-> **Version**: 4.0.0
-> **Last Updated**: 2026-04-06
+> **Version**: 4.2.0
+> **Last Updated**: 2026-04-21
 > **Status**: Active Development
 
 ---
 
-## Current State (v4.0.0)
+## Current State (v4.2.0)
 
 ### ✅ Completed
 
@@ -18,19 +18,23 @@
 - [x] Performance optimization (candidate caching, <50ms P95)
 - [x] Architecture cleanup (65% code reduction)
 - [x] Documentation overhaul
+- [x] AI Triage production readiness (v4.1.0)
+- [x] Skill health monitoring (v4.2.0)
+- [x] Skill-level LLM configuration system
+- [x] One-click smart skill installation
 
 ### 📊 Metrics
 
 | Metric | Current | Target |
 |--------|---------|--------|
-| Code Lines | ~13,000 | ~13,000 ✅ |
+| Code Lines | ~15,000 | ~15,000 ✅ |
 | Test Coverage | ~80% | >75% ✅ |
 | Routing P95 | ~45ms | <50ms ✅ |
-| Skills Supported | 44+ | 40+ ✅ |
+| Skills Supported | 45+ | 45+ ✅ |
 
 ---
 
-## v4.1.0 — AI Triage Production (Q2 2026)
+## v4.1.0 — AI Triage Production ✅ (Released 2026-04)
 
 ### Goals
 Make AI Triage (Layer 2) production-ready with real LLM integration.
@@ -66,7 +70,7 @@ Make AI Triage (Layer 2) production-ready with real LLM integration.
 
 ---
 
-## v4.2.0 — Skill Health Monitoring (Q3 2026)
+## v4.2.0 — Skill Health Monitoring ✅ (Released 2026-04)
 
 ### Goals
 Monitor the health and quality of external skill packs.
@@ -196,8 +200,8 @@ Transform VibeSOP into a platform with a thriving plugin ecosystem.
 | Version | Date | Focus |
 |---------|------|-------|
 | v4.0.0 | 2026-04-06 | ✅ Core routing engine |
-| v4.1.0 | 2026-06-01 | 🚧 AI Triage production |
-| v4.2.0 | 2026-09-01 | ⏳ Skill health monitoring |
+| v4.1.0 | 2026-04 | ✅ AI Triage production |
+| v4.2.0 | 2026-04 | ✅ Skill health monitoring |
 | v4.3.0 | 2026-12-01 | ⏳ Advanced routing |
 | v5.0.0 | 2027-Q2 | ⏳ Plugin ecosystem |
 

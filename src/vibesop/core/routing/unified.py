@@ -59,13 +59,14 @@ from vibesop.core.routing.matcher_pipeline import MatcherPipeline
 from vibesop.core.routing.optimization_service import OptimizationService
 from vibesop.core.routing.project_config import load_merged_scenario_config
 from vibesop.core.routing.scenario_layer import match_scenario
+from vibesop.core.routing.stats_mixin import RouterStatsMixin
 from vibesop.core.routing.triage_service import TriageService
 from vibesop.llm.cost_tracker import TriageCostTracker
 
 logger = logging.getLogger(__name__)
 
 
-class UnifiedRouter:
+class UnifiedRouter(RouterStatsMixin):
     """Unified router for skill selection.
 
     Single entry point for all routing operations.
@@ -485,11 +486,15 @@ class UnifiedRouter:
         return self._get_candidates(_query)
 
     def _get_candidates(self, _query: str = "") -> list[dict[str, Any]]:
+        import vibesop
         from vibesop.core.optimization.cold_start import get_cold_start_strategy
         from vibesop.core.skills import SkillLoader
-        import vibesop
 
         if not hasattr(self, "_skill_loader"):
+            # TECH DEBT: UnifiedRouter constructs its own SkillLoader with a
+            # different set of search paths than SkillManager. This means the
+            # router may discover a different skill set than the manager.
+            # A shared SkillDiscoveryService should be extracted in the future.
             # Always include VibeSOP's built-in skills regardless of project root
             builtin_skills_path = Path(vibesop.__file__).parent.parent.parent / "core" / "skills"
             search_paths = [
@@ -605,46 +610,12 @@ class UnifiedRouter:
             },
         }
 
-    def _record_layer(self, layer: RoutingLayer) -> None:
-        with self._stats_lock:
-            self._layer_distribution[layer.value] = self._layer_distribution.get(layer.value, 0) + 1
-
-    def get_stats(self) -> dict[str, Any]:
-        return {
-            "total_routes": self._total_routes,
-            "layer_distribution": dict(self._layer_distribution),
-            "cache_dir": str(self.project_root / ".vibe" / "cache"),
-            "ai_triage": self.get_ai_triage_stats(),
-        }
-
-    def get_ai_triage_stats(self) -> dict[str, Any]:
-        """Get AI Triage usage and cost statistics."""
-        stats = self._cost_tracker.get_stats(days=30)
-        budget = getattr(self._config, "ai_triage_budget_monthly", 5.0)
-        return {
-            **stats,
-            "budget_monthly_usd": budget,
-            "budget_remaining_usd": round(max(0.0, budget - stats["total_cost_usd"]), 6),
-        }
-
-    def record_selection(self, skill_id: str, query: str, was_helpful: bool = True) -> None:
-        learner = self._preference_booster.get_learner()
-        learner.record_selection(skill_id, query, was_helpful)
-
-    def get_preference_stats(self) -> dict[str, int | float | str]:
-        learner = self._preference_booster.get_learner()
-        return learner.get_stats()
-
-    def get_top_skills(self, limit: int = 5, min_selections: int = 2) -> list[Any]:
-        learner = self._preference_booster.get_learner()
-        return learner.get_top_skills(limit, min_selections)
-
-    def clear_old_preferences(self, days: int = 90) -> int:
-        learner = self._preference_booster.get_learner()
-        return learner.clear_old_data(days)
-
     # ================================================================
     # Backward compatibility proxies for extracted services
+    #
+    # These thin wrappers are kept for test compatibility and will be
+    # removed in a future major version. Callers should migrate to the
+    # underlying services directly (e.g. TriageService, MatcherPipeline).
     # ================================================================
 
     def _try_ai_triage(
@@ -653,16 +624,22 @@ class UnifiedRouter:
         candidates: list[dict[str, Any]],
         context: RoutingContext | None = None,
     ) -> Any:
-        # Sync mock LLM set by tests
+        """Proxy to TriageService (kept for backward compatibility)."""
         if self._llm is not None:  # type: ignore[reportPrivateUsage]
             self._triage_service._llm = self._llm  # type: ignore[reportPrivateUsage]
         return self._triage_service.try_ai_triage(query, candidates, context)
 
-    def _prefilter_ai_triage_candidates(
+    def _try_matcher_pipeline(
         self,
         query: str,
         candidates: list[dict[str, Any]],
-        max_skills: int,
+        context: RoutingContext | None,
+    ) -> Any:
+        """Proxy to MatcherPipeline (kept for backward compatibility)."""
+        return self._matcher_pipeline.try_matcher_pipeline(query, candidates, context)
+
+    def _prefilter_ai_triage_candidates(
+        self, query: str, candidates: list[dict[str, Any]], max_skills: int
     ) -> list[dict[str, Any]]:
         return self._triage_service.prefilter_ai_triage_candidates(query, candidates, max_skills)
 
@@ -675,38 +652,16 @@ class UnifiedRouter:
     def _parse_ai_triage_response(self, response: str) -> dict[str, Any]:
         return self._triage_service.parse_ai_triage_response(response)
 
-    def _try_matcher_pipeline(
-        self,
-        query: str,
-        candidates: list[dict[str, Any]],
-        context: RoutingContext | None,
-    ) -> Any:
-        return self._matcher_pipeline.try_matcher_pipeline(query, candidates, context)
-
-    def _apply_prefilter(
-        self,
-        query: str,
-        candidates: list[dict[str, Any]],
-    ) -> list[dict[str, Any]]:
+    def _apply_prefilter(self, query: str, candidates: list[dict[str, Any]]) -> list[dict[str, Any]]:
         return self._matcher_pipeline.apply_prefilter(query, candidates)
 
-    def _apply_optimizations(
-        self,
-        matches: Any,
-        query: str,
-        context: RoutingContext | None = None,
-    ) -> Any:
+    def _apply_optimizations(self, matches: Any, query: str, context: RoutingContext | None = None) -> Any:
         return self._optimization_service.apply_optimizations(matches, query, context)
 
     def _resolve_conflicts(self, matches: Any, query: str) -> Any:
         return self._optimization_service.resolve_conflicts(matches, query)
 
-    def _apply_instinct_boost(
-        self,
-        matches: Any,
-        query: str,
-        context: RoutingContext | None,
-    ) -> Any:
+    def _apply_instinct_boost(self, matches: Any, query: str, context: RoutingContext | None) -> Any:
         return self._optimization_service.apply_instinct_boost(matches, query, context)
 
     def _ensure_cluster_index(self, candidates: list[dict[str, Any]]) -> None:
@@ -724,10 +679,10 @@ def _extract_name_keywords(name: str) -> list[str]:
     # Split on delimiters
     parts = re.split(r"[-_/]", name)
     keywords: list[str] = []
-    for part in parts:
-        part = part.strip()
-        if len(part) > 1:
-            keywords.append(part)
+    for p in parts:
+        stripped = p.strip()
+        if len(stripped) > 1:
+            keywords.append(stripped)
     return keywords
 
 

@@ -16,6 +16,7 @@ from vibesop.core.routing.unified import UnifiedRouter
 class TestRoutingPerformance:
     """Performance tests for routing system."""
 
+    @pytest.mark.slow
     def test_routing_latency_p50(self) -> None:
         """Test routing latency P50 < 100ms.
 
@@ -46,6 +47,7 @@ class TestRoutingPerformance:
         # Assert P50 < 100ms
         assert p50_latency < 0.1, f"P50 latency {p50_latency:.3f}s exceeds 100ms"
 
+    @pytest.mark.slow
     def test_routing_latency_p99(self) -> None:
         """Test routing latency P99 < 500ms.
 
@@ -249,6 +251,7 @@ class TestMemoryEfficiency:
 class TestLoadPerformance:
     """Load performance tests."""
 
+    @pytest.mark.slow
     def test_sustained_load(self) -> None:
         """Test system under sustained load.
 

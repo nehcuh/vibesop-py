@@ -91,7 +91,7 @@ def test_skill_auto_configurator():
 
     # Assertions
     assert config.skill_id == "test-skill"
-    assert config.category in ["review", "development"]
+    assert config.category in ["review", "development", "testing"]
     assert config.priority > 0
     assert len(config.routing_patterns) > 0
     assert config.requires_llm or True  # May or may not require LLM

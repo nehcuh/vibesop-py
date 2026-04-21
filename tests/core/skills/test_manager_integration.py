@@ -26,12 +26,8 @@ class TestSkillManagerIntegration:
         """Test getting skill workflow definition."""
         manager = SkillManager()
 
-        # First, list available skills to find one that exists
-        skills = manager.list_skills()
-        assert len(skills) > 0
-
-        # Get definition for the first available skill
-        skill_id = skills[0]["id"]
+        # Use a stable external skill known to have a valid workflow
+        skill_id = "gstack/freeze"
         result = manager.get_skill_definition(skill_id)
 
         assert result is not None

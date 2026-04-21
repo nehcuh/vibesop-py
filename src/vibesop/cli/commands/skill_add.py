@@ -24,7 +24,6 @@ from rich.panel import Panel
 from vibesop.core.ai_enhancer import AIEnhancer
 from vibesop.core.llm_config import (
     LLMConfigResolver,
-    get_agent_llm_config,
     is_in_agent_environment,
 )
 from vibesop.core.routing.unified import UnifiedRouter
@@ -32,7 +31,7 @@ from vibesop.core.session_analyzer import SkillSuggestion
 from vibesop.core.skills import SkillManager
 from vibesop.core.skills.base import SkillMetadata
 from vibesop.core.skills.parser import parse_skill_md
-from vibesop.core.skills.understander import SkillAutoConfigurator
+from vibesop.core.skills.understander import SkillAutoConfigurator, understand_skill_from_file
 from vibesop.installer.skill_installer import SkillInstaller
 from vibesop.security.skill_auditor import SkillSecurityAuditor, ThreatLevel
 
@@ -324,76 +323,200 @@ def _auto_configure_skill(metadata: SkillMetadata, scope: str, source: str) -> N
 def _auto_configure_skill_with_llm(metadata: SkillMetadata, scope: str, skill_source: str) -> None:
     """Auto-configure skill using the understander module.
 
-    This function integrates with the SkillAutoConfigurator to provide
-    intelligent skill understanding and configuration.
+    When running inside an Agent environment (Claude Code, Kimi, Cursor, etc.),
+    this function skips external LLM calls and relies on the rule engine or
+    prompts the Agent itself for refinement. In standalone CLI mode, it falls
+    back to AIEnhancer for low-confidence results.
 
     Args:
         metadata: Skill metadata
         scope: Installation scope (project/global)
         skill_source: Original skill source path
     """
-    from vibesop.core.skills.understander import understand_skill_from_file
+    in_agent = is_in_agent_environment()
 
     try:
-        # Read the skill content
         skill_path = Path(skill_source)
-        if skill_path.suffix == ".skill":
-            # It's a .skill file/directory
-            skill_md = skill_path / "SKILL.md"
-        else:
-            # It's already a directory
-            skill_md = skill_path / "SKILL.md"
+        actual_path = skill_path.parent if skill_path.suffix == ".skill" else skill_path
+        skill_md = actual_path / "SKILL.md"
 
         if not skill_md.exists():
             console.print("[yellow]⚠ SKILL.md not found, using metadata only[/yellow]")
-            # Use rule-based configuration
-            _auto_configure_skill(metadata, scope, skill_source)
+            _fallback_auto_configure(metadata, scope, skill_source, in_agent)
             return
 
-        # Use the understander to generate config
-        config = understand_skill_from_file(skill_path.parent if skill_path.suffix == ".skill" else skill_path, scope)
+        # Phase 1: Rule-based understanding
+        config = understand_skill_from_file(actual_path, scope)
 
-        console.print(f"[green]✓ Category:[/green] {config.category}")
-        console.print(f"[green]✓ Priority:[/green] {config.priority}")
-
-        if config.routing_patterns:
-            patterns_str = ', '.join(config.routing_patterns[:3])
-            if len(config.routing_patterns) > 3:
-                patterns_str += f" ... ({len(config.routing_patterns)} total)"
-            console.print(f"[green]✓ Routing patterns:[/green] {patterns_str}")
-
-        if config.requires_llm and config.llm_config:
-            provider = config.llm_config.get("provider", "N/A")
-            models = config.llm_config.get("models", [])
-            model = models[0] if models else "N/A"
-            temperature = config.llm_config.get("temperature", "N/A")
-            console.print(f"[green]✓ LLM config:[/green] {provider} / {model} (temp: {temperature})")
-
-            # Check if LLM is available
-            resolver = LLMConfigResolver()
-            available_llm = resolver.resolve_llm_config(config.llm_config, prefer_agent=True)
-
-            if available_llm:
-                console.print(f"[dim]  ✓ LLM available: {available_llm.provider}/{available_llm.model}[/dim]")
-                console.print(f"[dim]  Source: {available_llm.source.value}[/dim]")
+        # Phase 2: Handle low confidence based on environment
+        if config.confidence < 0.7:
+            if in_agent:
+                console.print(
+                    f"[yellow]⚠ Rule engine confidence: {config.confidence:.1%} — "
+                    "requesting Agent review[/yellow]"
+                )
+                config = _prompt_agent_for_config(metadata, config, scope)
             else:
-                console.print("[yellow]  ⚠ No LLM configured - skill will work in limited mode[/yellow]")
-                console.print("[dim]    Configure LLM in .vibe/config.yaml or set environment variables[/dim]")
-        else:
-            console.print(f"[green]✓ LLM:[/green] Not required")
+                console.print(
+                    f"[dim]Rule engine confidence: {config.confidence:.1%} — "
+                    "using AI enhancement[/dim]"
+                )
+                _auto_configure_skill(metadata, scope, skill_source)
+                return
 
-        console.print(f"[dim]  Confidence: {config.confidence:.1%}[/dim]")
-
-        # Save the auto-generated config
-        configurator = SkillAutoConfigurator()
-        output_dir = Path(".vibe") / "skills"
-        config_file = configurator.save_config(config, output_dir)
-        console.print(f"[green]✓ Configuration saved:[/green] {config_file}")
+        _display_and_save_config(config)
 
     except Exception as e:
         console.print(f"[yellow]⚠ Auto-configuration with understander failed: {e}[/yellow]")
         console.print("[dim]Falling back to rule-based configuration[/dim]")
+        _fallback_auto_configure(metadata, scope, skill_source, in_agent)
+
+
+def _fallback_auto_configure(
+    metadata: SkillMetadata, scope: str, skill_source: str, in_agent: bool
+) -> None:
+    """Fallback configuration when understander fails or SKILL.md is missing.
+
+    Args:
+        metadata: Skill metadata
+        scope: Installation scope
+        skill_source: Original skill source path
+        in_agent: Whether running inside an Agent environment
+    """
+    if in_agent:
+        from vibesop.core.skills.understander import SkillAutoConfigurator, SkillAnalysis
+
+        configurator = SkillAutoConfigurator()
+        analysis = SkillAnalysis()
+        analysis.primary_category = "development"
+        config = configurator._generate_config(metadata, analysis, scope)
+        config = _prompt_agent_for_config(metadata, config, scope)
+        _display_and_save_config(config)
+    else:
         _auto_configure_skill(metadata, scope, skill_source)
+
+
+def _prompt_agent_for_config(
+    metadata: SkillMetadata,
+    config,
+    scope: str,
+):
+    """When running inside an Agent environment, emit a structured review prompt.
+
+    Instead of calling an external LLM API, we present the draft configuration
+    so the executing Agent itself can review and adjust if needed.
+
+    Args:
+        metadata: Skill metadata
+        config: Auto-generated configuration draft
+        scope: Installation scope
+
+    Returns:
+        The configuration (possibly adjusted by Agent input)
+    """
+    from vibesop.core.skills.understander import AutoGeneratedConfig
+
+    console.print("\n[bold cyan]🤖 Agent Configuration Review[/bold cyan]")
+    console.print(
+        "[dim]Running inside an Agent environment. Skipping external LLM call. "
+        "Please review the draft configuration below.[/dim]\n"
+    )
+
+    draft = {
+        "skill_id": config.skill_id,
+        "category": config.category,
+        "priority": config.priority,
+        "scope": scope,
+        "requires_llm": config.requires_llm,
+        "routing_patterns": config.routing_patterns,
+        "llm_config": config.llm_config,
+        "confidence": round(config.confidence, 2),
+    }
+
+    console.print("[bold]Draft Configuration:[/bold]")
+    console.print("```json")
+    console.print(json.dumps(draft, indent=2, ensure_ascii=False))
+    console.print("```")
+
+    console.print(
+        "\n[dim]If the draft looks correct, installation will continue. "
+        "To adjust later, modify .vibe/skills/auto-config.yaml or use --manual-config.[/dim]"
+    )
+
+    # In true Agent environments the Agent may supply adjustments via stdin.
+    # We attempt a non-blocking read so that headless usage is not blocked.
+    try:
+        adjust = questionary.confirm(
+            "Agent: Accept draft configuration?",
+            default=True,
+        ).ask()
+        if not adjust:
+            raw = questionary.text(
+                "Enter JSON adjustments (or empty to keep):",
+                default="",
+            ).ask()
+            if raw and raw.strip():
+                adjustments = json.loads(raw.strip())
+                if "category" in adjustments:
+                    config.category = adjustments["category"]
+                if "priority" in adjustments:
+                    config.priority = int(adjustments["priority"])
+                if "patterns" in adjustments:
+                    config.routing_patterns = adjustments["patterns"]
+                console.print("[green]✓ Adjustments applied[/green]")
+    except Exception:
+        # Non-interactive / headless — continue with draft
+        pass
+
+    return config
+
+
+def _display_and_save_config(config) -> None:
+    """Display configuration details and save to disk.
+
+    Args:
+        config: Auto-generated skill configuration
+    """
+    console.print(f"[green]✓ Category:[/green] {config.category}")
+    console.print(f"[green]✓ Priority:[/green] {config.priority}")
+
+    if config.routing_patterns:
+        patterns_str = ", ".join(config.routing_patterns[:3])
+        if len(config.routing_patterns) > 3:
+            patterns_str += f" ... ({len(config.routing_patterns)} total)"
+        console.print(f"[green]✓ Routing patterns:[/green] {patterns_str}")
+
+    if config.requires_llm and config.llm_config:
+        provider = config.llm_config.get("provider", "N/A")
+        models = config.llm_config.get("models", [])
+        model = models[0] if models else "N/A"
+        temperature = config.llm_config.get("temperature", "N/A")
+        console.print(f"[green]✓ LLM config:[/green] {provider} / {model} (temp: {temperature})")
+
+        resolver = LLMConfigResolver()
+        available_llm = resolver.resolve_llm_config(config.llm_config, prefer_agent=True)
+
+        if available_llm:
+            console.print(
+                f"[dim]  ✓ LLM available: {available_llm.provider}/{available_llm.model}[/dim]"
+            )
+            console.print(f"[dim]  Source: {available_llm.source.value}[/dim]")
+        else:
+            console.print(
+                "[yellow]  ⚠ No LLM configured - skill will work in limited mode[/yellow]"
+            )
+            console.print(
+                "[dim]    Configure LLM in .vibe/config.yaml or set environment variables[/dim]"
+            )
+    else:
+        console.print("[green]✓ LLM:[/green] Not required")
+
+    console.print(f"[dim]  Confidence: {config.confidence:.1%}[/dim]")
+
+    configurator = SkillAutoConfigurator()
+    output_dir = Path(".vibe") / "skills"
+    config_file = configurator.save_config(config, output_dir)
+    console.print(f"[green]✓ Configuration saved:[/green] {config_file}")
 
 
 def _manual_configure_skill(metadata: SkillMetadata, scope: str) -> None:
