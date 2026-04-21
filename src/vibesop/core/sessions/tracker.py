@@ -382,9 +382,9 @@ def _detect_platform() -> str:
 
 
 __all__ = [
-    "SessionTracker",
     "GenericSessionTracker",
     "HookBasedSessionTracker",
-    "get_tracker",
+    "SessionTracker",
     "_detect_platform",
+    "get_tracker",
 ]

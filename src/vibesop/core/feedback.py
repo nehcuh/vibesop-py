@@ -50,7 +50,7 @@ class FeedbackRecord:
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "FeedbackRecord":
+    def from_dict(cls, data: dict[str, Any]) -> FeedbackRecord:
         """Create from dictionary."""
         return cls(
             query=data.get("query", ""),

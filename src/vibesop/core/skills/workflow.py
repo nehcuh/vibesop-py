@@ -166,7 +166,7 @@ class Workflow(BaseModel):
         }
 
     @classmethod
-    def from_metadata(cls, definition: Any) -> "Workflow":
+    def from_metadata(cls, definition: Any) -> Workflow:
         """Create minimal workflow from skill metadata.
 
         Used for built-in skills that don't have SKILL.md files.
@@ -382,7 +382,8 @@ class WorkflowEngine:
             )
 
         # Use ThreadPoolExecutor to execute with timeout
-        from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
+        from concurrent.futures import ThreadPoolExecutor
+        from concurrent.futures import TimeoutError as FutureTimeoutError
 
         with ThreadPoolExecutor(max_workers=1) as executor:
             future = executor.submit(_execute_internal)
@@ -898,7 +899,7 @@ class WorkflowEngine:
         except (SyntaxError, ValueError, TypeError) as e:
             logger.debug(f"Could not evaluate condition '{condition}': {e}")
             return False
-        except Exception as e:
+        except Exception:
             logger.exception(f"Unexpected error evaluating condition '{condition}'")
             return False
 

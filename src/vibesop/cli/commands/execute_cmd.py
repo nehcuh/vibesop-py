@@ -104,7 +104,7 @@ def execute(
             console.print(f"[green]✓ Loaded skill:[/green] {workflow['name']}")
             console.print(f"[dim]ID: {workflow['skill_id']}[/dim]")
             console.print(f"[dim]Steps: {len(workflow['steps'])}[/dim]")
-            console.print(f"\n[bold]Workflow:[/bold]")
+            console.print("\n[bold]Workflow:[/bold]")
             for i, step in enumerate(workflow["steps"], 1):
                 console.print(f"{i}. [{step['type']}] {step['description']}")
 
@@ -126,22 +126,21 @@ def execute(
     # Output results
     if output_format == "json":
         console.print_json(json.dumps(result, indent=2))
+    elif result["success"]:
+        console.print("[green]✓ Success[/green]")
+        console.print(f"[dim]Skill: {result['skill_id']}[/dim]")
+        console.print(f"[dim]Steps executed: {result.get('executed_steps', 'N/A')}[/dim]")
+
+        if result.get("output"):
+            console.print("\n[bold]Output:[/bold]")
+            console.print(result["output"])
     else:
-        if result["success"]:
-            console.print(f"[green]✓ Success[/green]")
-            console.print(f"[dim]Skill: {result['skill_id']}[/dim]")
-            console.print(f"[dim]Steps executed: {result.get('executed_steps', 'N/A')}[/dim]")
+        console.print("[red]✗ Failed[/red]")
+        console.print(f"[dim]Skill: {result['skill_id']}[/dim]")
 
-            if result.get("output"):
-                console.print(f"\n[bold]Output:[/bold]")
-                console.print(result["output"])
-        else:
-            console.print(f"[red]✗ Failed[/red]")
-            console.print(f"[dim]Skill: {result['skill_id']}[/dim]")
-
-            if result.get("error"):
-                console.print(f"\n[red]Error:[/red]")
-                console.print(result["error"])
+        if result.get("error"):
+            console.print("\n[red]Error:[/red]")
+            console.print(result["error"])
 
 
 def _print_workflow_pretty(workflow: dict[str, Any]) -> None:

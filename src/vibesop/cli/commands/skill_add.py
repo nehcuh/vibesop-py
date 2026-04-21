@@ -134,7 +134,7 @@ def add(
     console.print(f"\n[dim]Phase 4: Installing {scope}...[/dim]")
     installer = SkillInstaller()
 
-    project_path = Path(".") if scope == "project" else Path.home() / ".vibe"
+    project_path = Path() if scope == "project" else Path.home() / ".vibe"
     install_result = installer.install_skill(
         skill_path=skill_path,
         project_path=project_path,
@@ -384,7 +384,7 @@ def _fallback_auto_configure(
         in_agent: Whether running inside an Agent environment
     """
     if in_agent:
-        from vibesop.core.skills.understander import SkillAutoConfigurator, SkillAnalysis
+        from vibesop.core.skills.understander import SkillAnalysis, SkillAutoConfigurator
 
         configurator = SkillAutoConfigurator()
         analysis = SkillAnalysis()
@@ -571,7 +571,7 @@ def _manual_configure_skill(metadata: SkillMetadata, scope: str) -> None:
 
     _save_auto_config(config)
 
-    console.print(f"[green]✓ Configuration saved[/green]")
+    console.print("[green]✓ Configuration saved[/green]")
 
 
 def _save_auto_config(config: dict[str, Any]) -> None:
@@ -645,7 +645,7 @@ def _verify_and_sync(skill_id: str, scope: str) -> None:
         scope: Installation scope
     """
     # Test routing
-    router = UnifiedRouter(project_root=Path("."))
+    router = UnifiedRouter(project_root=Path())
 
     # Try to route a query that should match this skill
     test_queries = [

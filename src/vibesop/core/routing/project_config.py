@@ -12,7 +12,9 @@ from typing import Any, cast
 
 from ruamel.yaml import YAML
 
-from vibesop.core.routing.scenario_layer import load_scenario_config as load_registry_scenario_config
+from vibesop.core.routing.scenario_layer import (
+    load_scenario_config as load_registry_scenario_config,
+)
 
 yaml = YAML()
 yaml.preserve_quotes = True

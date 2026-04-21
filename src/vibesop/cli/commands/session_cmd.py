@@ -113,7 +113,7 @@ def summary(
     if json_output:
         console.print(json.dumps(summary, indent=2))
     else:
-        console.print(f"[bold]Session Summary[/bold]\n")
+        console.print("[bold]Session Summary[/bold]\n")
 
         # Duration
         duration = summary["duration_seconds"]

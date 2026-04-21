@@ -19,6 +19,7 @@ Example:
 
 from vibesop.adapters.base import PlatformAdapter
 from vibesop.adapters.claude_code import ClaudeCodeAdapter
+from vibesop.adapters.kimi_cli import KimiCliAdapter
 from vibesop.adapters.models import (
     Manifest,
     ManifestMetadata,
@@ -27,7 +28,6 @@ from vibesop.adapters.models import (
     RoutingConfig,
     SecurityPolicy,
 )
-from vibesop.adapters.kimi_cli import KimiCliAdapter
 from vibesop.adapters.opencode import OpenCodeAdapter
 from vibesop.adapters.protocol import AdapterProtocol
 

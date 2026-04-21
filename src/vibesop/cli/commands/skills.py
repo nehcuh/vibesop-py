@@ -4,6 +4,7 @@ Enhanced skills CLI with smart installation.
 """
 
 import typer
+
 from vibesop.cli.commands.skill_add import add as skill_add
 from vibesop.cli.commands.skills_cmd import (
     available,
@@ -60,4 +61,4 @@ def skills(
 
 
 # Export for main.py
-__all__ = ["skills_app", "skills"]
+__all__ = ["skills", "skills_app"]

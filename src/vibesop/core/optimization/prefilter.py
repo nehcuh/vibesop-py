@@ -160,9 +160,7 @@ class CandidatePrefilter:
         for candidate in candidates:
             priority = candidate.get("priority", "P2")
             ns = candidate.get("namespace")
-            if priority == "P0" or ns == "builtin":
-                result.append(candidate)
-            elif is_complex or ns in triggered_ns:
+            if priority == "P0" or ns == "builtin" or is_complex or ns in triggered_ns:
                 result.append(candidate)
         return result
 

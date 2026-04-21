@@ -65,7 +65,7 @@ def report() -> None:
         return
 
     # Overall statistics
-    console.print(f"\n[bold]Feedback Report[/bold]")
+    console.print("\n[bold]Feedback Report[/bold]")
     console.print(f"Total records: {report.total_records}")
     console.print(f"Correct: {report.correct_count} ({report.correct_count / report.total_records * 100:.1f}%)")
     console.print(f"Incorrect: {report.incorrect_count} ({report.incorrect_count / report.total_records * 100:.1f}%)")
@@ -73,7 +73,7 @@ def report() -> None:
 
     # By skill breakdown
     if report.by_skill:
-        console.print(f"\n[bold]Accuracy by Skill:[/bold]")
+        console.print("\n[bold]Accuracy by Skill:[/bold]")
         table = Table(show_header=True, header_style="bold magenta")
         table.add_column("Skill", style="cyan")
         table.add_column("Correct", style="green")
@@ -94,7 +94,7 @@ def report() -> None:
 
     # By confidence breakdown
     if report.by_confidence:
-        console.print(f"\n[bold]Accuracy by Confidence:[/bold]")
+        console.print("\n[bold]Accuracy by Confidence:[/bold]")
         table = Table(show_header=True, header_style="bold magenta")
         table.add_column("Confidence", style="cyan")
         table.add_column("Correct", style="green")
@@ -115,7 +115,7 @@ def report() -> None:
 
     # Common errors
     if report.common_errors:
-        console.print(f"\n[bold]Most Common Errors:[/bold]")
+        console.print("\n[bold]Most Common Errors:[/bold]")
         for i, (error, count) in enumerate(report.common_errors[:10], 1):
             console.print(f"{i}. {error}: {count} times")
 

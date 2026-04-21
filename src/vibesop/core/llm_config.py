@@ -342,7 +342,7 @@ class LLMConfigResolver:
 
         # 简化版兼容性检查
         # 实际实现应该检查模型的能力
-        model_family = model.split("-")[0] if "-" in model else model
+        model_family = model.split("-", maxsplit=1)[0] if "-" in model else model
 
         for recommended in recommended_models:
             rec_family = recommended.split("-")[0] if "-" in recommended else recommended

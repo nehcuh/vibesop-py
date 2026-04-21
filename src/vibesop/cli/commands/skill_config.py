@@ -109,9 +109,9 @@ def get_config(skill_id: str) -> None:
     console.print(f"  Scope: {config.scope}")
 
     # 显示 LLM 配置
-    console.print(f"\n[bold]LLM Configuration:[/bold]")
+    console.print("\n[bold]LLM Configuration:[/bold]")
     if config.requires_llm:
-        console.print(f"  Requires LLM: Yes")
+        console.print("  Requires LLM: Yes")
         if config.llm_provider:
             console.print(f"  Provider: {config.llm_provider}")
         if config.llm_model:
@@ -130,12 +130,12 @@ def get_config(skill_id: str) -> None:
             console.print(f"[dim]  Source: {llm_config.source.value}[/dim]")
             console.print(f"[dim]  Confidence: {llm_config.confidence:.1%}[/dim]")
         else:
-            console.print(f"\n[yellow]  ⚠ No LLM available - check global configuration[/yellow]")
+            console.print("\n[yellow]  ⚠ No LLM available - check global configuration[/yellow]")
     else:
-        console.print(f"  Requires LLM: No")
+        console.print("  Requires LLM: No")
 
     # 显示路由配置
-    console.print(f"\n[bold]Routing Configuration:[/bold]")
+    console.print("\n[bold]Routing Configuration:[/bold]")
     if config.routing_patterns:
         console.print(f"  Patterns ({len(config.routing_patterns)}):")
         for pattern in config.routing_patterns[:5]:
@@ -143,10 +143,10 @@ def get_config(skill_id: str) -> None:
         if len(config.routing_patterns) > 5:
             console.print(f"    [dim]... and {len(config.routing_patterns) - 5} more[/dim]")
     else:
-        console.print(f"  Patterns: None")
+        console.print("  Patterns: None")
 
     # 显示元数据
-    console.print(f"\n[bold]Metadata:[/bold]")
+    console.print("\n[bold]Metadata:[/bold]")
     console.print(f"  Auto-configured: {'Yes' if config.auto_configured else 'No'}")
     console.print(f"  Confidence: {config.confidence:.1%}")
 
@@ -264,7 +264,7 @@ def set_config(
     # 保存配置
     SkillConfigManager.set_skill_llm_config(skill_id, llm_config)
 
-    console.print(f"\n[bold green]✓ Configuration saved[/bold green]")
+    console.print("\n[bold green]✓ Configuration saved[/bold green]")
 
     # 显示如何使用
     console.print(
@@ -302,8 +302,8 @@ def delete_config(skill_id: str) -> None:
     # 删除配置
     SkillConfigManager.delete_skill_config(skill_id)
 
-    console.print(f"\n[bold green]✓ Configuration deleted[/bold green]")
-    console.print(f"[dim]The skill will use global configuration from now on[/dim]")
+    console.print("\n[bold green]✓ Configuration deleted[/bold green]")
+    console.print("[dim]The skill will use global configuration from now on[/dim]")
 
 
 def import_config(
@@ -331,7 +331,7 @@ def import_config(
         config_file: Path to configuration file
     """
 
-    console.print(f"\n[bold cyan]📥 Import Configurations[/bold cyan]\n")
+    console.print("\n[bold cyan]📥 Import Configurations[/bold cyan]\n")
 
     # 读取配置文件
     if not config_file.exists():
@@ -361,7 +361,7 @@ def import_config(
             console.print(f"[yellow]⚠ Failed to import {skill_id}: {e}[/yellow]")
             failed += 1
 
-    console.print(f"\n[bold green]✓ Import complete[/bold green]")
+    console.print("\n[bold green]✓ Import complete[/bold green]")
     console.print(f"  [green]Imported:[/green] {imported}")
     if failed > 0:
         console.print(f"  [yellow]Failed:[/yellow] {failed}")
@@ -376,7 +376,7 @@ def export_config(
         output_file: Path to output file
     """
 
-    console.print(f"\n[bold cyan]📤 Export Configurations[/bold cyan]\n")
+    console.print("\n[bold cyan]📤 Export Configurations[/bold cyan]\n")
 
     # 获取所有配置
     skill_configs = list_skill_configs()

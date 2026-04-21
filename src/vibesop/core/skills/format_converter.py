@@ -293,8 +293,8 @@ class FormatConverterRegistry:
 
 
 __all__ = [
-    "SkillFormatConverter",
-    "GstackConverter",
-    "SuperpowersConverter",
     "FormatConverterRegistry",
+    "GstackConverter",
+    "SkillFormatConverter",
+    "SuperpowersConverter",
 ]

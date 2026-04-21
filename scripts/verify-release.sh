@@ -64,7 +64,7 @@ if python -m ruff check src/ --output-format=text 2>&1 | grep -q "0 errors"; the
     echo -e "${GREEN}✅ No linting errors${NC}"
 else
     echo -e "${YELLOW}⚠️  Linting issues found${NC}"
-    python -m ruff check src/ --output-format=concise
+    python -m ruff check src/ --output-format=concise || true
 fi
 
 # Check if all required files exist

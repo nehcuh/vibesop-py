@@ -23,6 +23,9 @@ from vibesop.cli.commands import (
     execute_cmd as execute_mod,
 )
 from vibesop.cli.commands import (
+    feedback_cmd as feedback_mod,
+)
+from vibesop.cli.commands import (
     import_rules as import_rules_mod,
 )
 from vibesop.cli.commands import (
@@ -41,13 +44,16 @@ from vibesop.cli.commands import (
     quickstart as quickstart_mod,
 )
 from vibesop.cli.commands import (
+    session_cmd as session_mod,
+)
+from vibesop.cli.commands import (
+    skill_add as skill_add_mod,
+)
+from vibesop.cli.commands import (
     skill_craft as skill_craft_mod,
 )
 from vibesop.cli.commands import (
     skills_cmd as skills_mod,
-)
-from vibesop.cli.commands import (
-    skill_add as skill_add_mod,
 )
 from vibesop.cli.commands import (
     switch as switch_mod,
@@ -57,12 +63,6 @@ from vibesop.cli.commands import (
 )
 from vibesop.cli.commands import (
     tools_cmd as tools_mod,
-)
-from vibesop.cli.commands import (
-    session_cmd as session_mod,
-)
-from vibesop.cli.commands import (
-    feedback_cmd as feedback_mod,
 )
 
 config_app = typer.Typer(help="Configuration management")
