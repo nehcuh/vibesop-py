@@ -64,7 +64,7 @@ def plan_show(
         console.print(f"[red]Plan {plan_id} not found[/red]")
         raise typer.Exit(1)
 
-    from vibesop.core.models import OrchestrationResult, OrchestrationMode
+    from vibesop.core.models import OrchestrationMode, OrchestrationResult
 
     result = OrchestrationResult(
         mode=OrchestrationMode.ORCHESTRATED,

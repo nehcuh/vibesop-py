@@ -1,9 +1,9 @@
 """技能配置管理器 - 管理技能级别的 LLM 和其他配置.
 
-该模块提供了：
+该模块提供了:
 1. 技能级别的 LLM 配置加载
 2. 全局配置与技能配置的合并
-3. 配置优先级：技能配置 > 全局配置 > 环境变量 > 默认值
+3. 配置优先级:技能配置 > 全局配置 > 环境变量 > 默认值
 
 使用方式:
     # 获取技能的 LLM 配置
@@ -37,12 +37,12 @@ console = Console()
 
 
 class SkillLifecycleState(StrEnum):
-    """技能生命周期状态 (v5.0 预埋，为 v5.1 淘汰机制准备).
+    """技能生命周期状态 (v5.0 预埋,为 v5.1 淘汰机制准备).
 
-    DRAFT:      新创建，未经验证
-    ACTIVE:     正常使用中（默认）
-    DEPRECATED: 已标记弃用，仍可用但会提示
-    ARCHIVED:   已归档，路由时自动排除
+    DRAFT:      新创建,未经验证
+    ACTIVE:     正常使用中(默认)
+    DEPRECATED: 已标记弃用,仍可用但会提示
+    ARCHIVED:   已归档,路由时自动排除
     """
 
     DRAFT = "draft"
@@ -105,7 +105,7 @@ class SkillConfigManager:
             skill_id: 技能 ID
 
         Returns:
-            技能配置对象，如果不存在则返回 None
+            技能配置对象,如果不存在则返回 None
         """
 
         # 1. 尝试从技能配置文件读取
@@ -113,7 +113,7 @@ class SkillConfigManager:
         if skill_config:
             return skill_config
 
-        # 2. 如果没有找到，返回默认配置
+        # 2. 如果没有找到,返回默认配置
         logger.debug(f"No config found for skill {skill_id}, using defaults")
         return SkillConfig(skill_id=skill_id)
 
@@ -121,9 +121,9 @@ class SkillConfigManager:
     def get_skill_llm_config(cls, skill_id: str) -> LLMConfig | None:
         """获取技能的 LLM 配置
 
-        优先级：
-        1. 技能级别的 LLM 配置（.vibe/skills/auto-config.yaml）
-        2. 全局 LLM 配置（.vibe/config.yaml）
+        优先级:
+        1. 技能级别的 LLM 配置(.vibe/skills/auto-config.yaml)
+        2. 全局 LLM 配置(.vibe/config.yaml)
         3. 环境变量
         4. Agent 环境
         5. 默认配置
@@ -173,11 +173,11 @@ class SkillConfigManager:
         Args:
             skill_id: 技能 ID
             llm_config: LLM 配置字典
-                - provider: 提供商（anthropic, openai, etc.）
+                - provider: 提供商(anthropic, openai, etc.)
                 - model: 模型名称
                 - temperature: 温度参数
-                - api_key: API 密钥（可选）
-                - api_base: API 基础 URL（可选）
+                - api_key: API 密钥(可选)
+                - api_base: API 基础 URL(可选)
         """
 
         # 加载现有配置
@@ -398,7 +398,7 @@ class SkillConfigManager:
 
 # 便捷函数
 def get_skill_llm_config(skill_id: str) -> LLMConfig | None:
-    """获取技能的 LLM 配置（便捷函数）
+    """获取技能的 LLM 配置(便捷函数)
 
     Args:
         skill_id: 技能 ID
@@ -410,7 +410,7 @@ def get_skill_llm_config(skill_id: str) -> LLMConfig | None:
 
 
 def set_skill_llm_config(skill_id: str, llm_config: dict[str, Any]) -> None:
-    """设置技能的 LLM 配置（便捷函数）
+    """设置技能的 LLM 配置(便捷函数)
 
     Args:
         skill_id: 技能 ID
@@ -420,7 +420,7 @@ def set_skill_llm_config(skill_id: str, llm_config: dict[str, Any]) -> None:
 
 
 def list_skill_configs() -> dict[str, SkillConfig]:
-    """列出所有技能配置（便捷函数）
+    """列出所有技能配置(便捷函数)
 
     Returns:
         技能 ID -> 技能配置的字典

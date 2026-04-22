@@ -10,9 +10,10 @@ import json
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from vibesop.core.models import RoutingResult
+if TYPE_CHECKING:
+    from vibesop.core.models import RoutingResult
 
 
 @dataclass
@@ -340,7 +341,7 @@ def collect_feedback(
         ...     was_correct=True,
         ... )
     """
-    global _collector_instance
+    global _collector_instance  # noqa: PLW0603
 
     if _collector_instance is None:
         _collector_instance = FeedbackCollector()
@@ -361,7 +362,7 @@ def get_feedback_report() -> FeedbackReport:
         >>> report = get_feedback_report()
         >>> print(f"Accuracy: {report.accuracy_rate:.1%}")
     """
-    global _collector_instance
+    global _collector_instance  # noqa: PLW0603
 
     if _collector_instance is None:
         _collector_instance = FeedbackCollector()

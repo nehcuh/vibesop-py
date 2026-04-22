@@ -8,17 +8,21 @@ Usage:
 from __future__ import annotations
 
 import json
-from pathlib import Path
 from typing import Any
 
 import typer
 from rich.console import Console
-from rich.panel import Panel
-from rich.syntax import Syntax
 
 from vibesop.core.skills import SkillManager
 
 console = Console()
+
+_CONTEXT_OPTION = typer.Option(
+    [],
+    "--context",
+    "-c",
+    help="Context variables as KEY=VALUE pairs",
+)
 
 
 def execute(
@@ -26,12 +30,7 @@ def execute(
         ...,
         help="Skill ID to execute (e.g., superpowers/test-driven-development)",
     ),
-    context: list[str] = typer.Option(
-        [],
-        "--context",
-        "-c",
-        help="Context variables as KEY=VALUE pairs",
-    ),
+    context: list[str] = _CONTEXT_OPTION,
     dry_run: bool = typer.Option(
         False,
         "--dry-run",

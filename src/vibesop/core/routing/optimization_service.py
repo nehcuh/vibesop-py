@@ -66,6 +66,9 @@ class OptimizationService:
         # Apply quality boost: favor high-grade skills based on evaluator data
         matches = self._apply_quality_boost(matches)
 
+        # Apply project context boost: favor skills matching detected project type/tech stack
+        matches = self._apply_project_context_boost(matches, context)
+
         if len(matches) <= 1:
             return matches[0], []
 
@@ -203,6 +206,62 @@ class OptimizationService:
                 boosted.append(m)
 
         # Re-sort by confidence after quality adjustments
+        boosted.sort(key=lambda x: x.confidence, reverse=True)
+        return boosted
+
+    def _apply_project_context_boost(
+        self,
+        matches: list[MatchResult],
+        context: RoutingContext | None,
+    ) -> list[MatchResult]:
+        """Boost skills that match the detected project type or tech stack.
+
+        Provides context-aware routing by slightly favoring skills
+        that are relevant to the user's project technology.
+        """
+        if not context or not context.project_type:
+            return matches
+
+        project_type = context.project_type
+        tech_stack = context.recent_files or []
+        boosted: list[MatchResult] = []
+
+        for m in matches:
+            boost = 0.0
+            skill_text = " ".join(m.matched_keywords or []).lower()
+
+            # Boost if skill keywords mention the project type
+            if project_type.lower() in skill_text:
+                boost += 0.04
+
+            # Boost if skill keywords mention any detected tech stack
+            for tech in tech_stack:
+                if tech.lower() in skill_text:
+                    boost += 0.02
+
+            if boost > 0.0:
+                boosted_match = MatchResult(
+                    skill_id=m.skill_id,
+                    confidence=min(m.confidence + boost, 1.0),
+                    score_breakdown={
+                        **m.score_breakdown,
+                        "project_context": boost,
+                    },
+                    matcher_type=m.matcher_type,
+                    matched_keywords=m.matched_keywords,
+                    matched_patterns=m.matched_patterns,
+                    semantic_score=m.semantic_score,
+                    metadata={
+                        **m.metadata,
+                        "project_type": project_type,
+                        "project_boost": True,
+                    },
+                )
+                boosted.append(boosted_match)
+            else:
+                boosted.append(m)
+
+        # Re-sort by confidence after project context adjustments
         boosted.sort(key=lambda x: x.confidence, reverse=True)
         return boosted
 

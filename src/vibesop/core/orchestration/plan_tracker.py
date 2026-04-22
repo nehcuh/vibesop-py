@@ -78,8 +78,8 @@ class PlanTracker:
         latest: dict[str, Any] | None = None
         try:
             with self.storage_path.open("r", encoding="utf-8") as f:
-                for line in f:
-                    line = line.strip()
+                for raw_line in f:
+                    line = raw_line.strip()
                     if not line:
                         continue
                     data = json.loads(line)
@@ -107,8 +107,8 @@ class PlanTracker:
                 lines = f.readlines()
 
             # Read from end to get latest first
-            for line in reversed(lines):
-                line = line.strip()
+            for raw_line in reversed(lines):
+                line = raw_line.strip()
                 if not line:
                     continue
                 try:

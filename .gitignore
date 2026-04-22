@@ -82,3 +82,4 @@ ruff.toml
 # Runtime generated directories
 .vibe/core/
 .vibe/rules/
+.vibe/conversations/

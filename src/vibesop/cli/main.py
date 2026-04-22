@@ -61,6 +61,12 @@ def route(
         "-s",
         help="Force execution strategy: auto, sequential, parallel, hybrid",
     ),
+    conversation_id: str | None = typer.Option(
+        None,
+        "--conversation",
+        "-C",
+        help="Conversation ID for multi-turn context (auto-generated if omitted)",
+    ),
 ) -> None:
     """Route a query to the appropriate skill using unified routing.
 
@@ -93,7 +99,20 @@ def route(
     else:
         router = UnifiedRouter(project_root=Path.cwd())
 
-    result = router.orchestrate(query)
+    # Build routing context with conversation ID for multi-turn support
+    from vibesop.core.matching import RoutingContext
+
+    context = RoutingContext()
+    if conversation_id:
+        context.conversation_id = conversation_id
+    elif not no_session:
+        # Auto-generate conversation ID from project path for continuity
+        import hashlib
+
+        project_hash = hashlib.sha256(str(Path.cwd()).encode()).hexdigest()[:8]
+        context.conversation_id = f"cli-{project_hash}"
+
+    result = router.orchestrate(query, context=context)
 
     # --explain mode: show full decision tree and exit
     if explain:
@@ -292,13 +311,7 @@ def _needs_confirmation(
     confirmation_mode = router._config.confirmation_mode
     if confirmation_mode == "never" or not sys.stdin.isatty():
         return False
-    if (
-        confirmation_mode == "ambiguous_only"
-        and result.primary
-        and result.primary.confidence >= router._config.auto_select_threshold
-    ):
-        return False
-    return True
+    return not (confirmation_mode == "ambiguous_only" and result.primary and result.primary.confidence >= router._config.auto_select_threshold)
 
 
 def _run_confirmation_flow(
@@ -383,8 +396,11 @@ def _render_match_panel(result: Any, console: Console) -> None:
         grade_colors = {"A": "green", "B": "green", "C": "yellow", "D": "yellow", "F": "red"}
         color = grade_colors.get(grade, "dim")
         quality_str = f"\n[dim]Quality:[/dim] [{color}]{grade}[/{color}]"
-    if primary.metadata.get("habit_boost"):
+    habit_boost = primary.metadata.get("habit_boost")
+    if habit_boost:
         quality_str += " [dim](habit)[/dim]"
+        # Show habit boost notice inline for user visibility
+        console.print("[dim]💡 Habit boost applied[/dim]")
 
     deprecated = primary.metadata.get("deprecated_warnings", [])
     if deprecated:

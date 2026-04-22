@@ -19,18 +19,19 @@ from __future__ import annotations
 
 import ast
 import logging
-import re
 from dataclasses import dataclass, field
-from enum import Enum
-from pathlib import Path
-from typing import Any
+from enum import StrEnum
+from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, Field, field_validator
+
+if TYPE_CHECKING:
+    import re
 
 logger = logging.getLogger(__name__)
 
 
-class StepType(str, Enum):
+class StepType(StrEnum):
     """Type of workflow step."""
 
     INSTRUCTION = "instruction"  # Text instruction for AI
@@ -91,9 +92,8 @@ class WorkflowStep:
             if not self.condition:
                 errors.append(f"Conditional step '{self.description}' missing condition")
 
-        elif self.type == StepType.LOOP:
-            if not self.max_iterations or self.max_iterations <= 0:
-                errors.append(f"Loop step '{self.description}' requires max_iterations > 0")
+        elif self.type == StepType.LOOP and (not self.max_iterations or self.max_iterations <= 0):
+            errors.append(f"Loop step '{self.description}' requires max_iterations > 0")
 
         return errors
 
@@ -311,7 +311,7 @@ class WorkflowEngine:
         value = context.get_variable(name, "<not set>")
         return f"{name} = {value}"
 
-    def _tool_log(self, message: str, **kwargs: Any) -> str:
+    def _tool_log(self, message: str, **_kwargs: Any) -> str:
         """Log tool."""
         logger.info(f"Workflow log: {message}")
         return f"Logged: {message}"
@@ -622,7 +622,6 @@ class WorkflowEngine:
         # e.g., "If x == 1, do something"
         import re
 
-        # Pattern: "If {var} {op} {value}, {action}"
         pattern = r"if\s+(\w+)\s*(==|!=|>|<|>=|<=)\s*(\S+),?\s*(.+)"
         match = re.search(pattern, instruction, re.IGNORECASE)
 
@@ -865,12 +864,9 @@ class WorkflowEngine:
                         return False
 
                 # Extra check for attribute access
-                if isinstance(node, ast.Attribute):
-                    # Block access to special attributes (__attr__)
-                    if isinstance(node.attr, str):
-                        if node.attr.startswith('__') and node.attr.endswith('__'):
-                            logger.error(f"Special attribute access not allowed: {node.attr}")
-                            return False
+                if isinstance(node, ast.Attribute) and isinstance(node.attr, str) and node.attr.startswith('__') and node.attr.endswith('__'):
+                    logger.error(f"Special attribute access not allowed: {node.attr}")
+                    return False
 
             # Prepare evaluation context
             eval_context = {
@@ -935,14 +931,14 @@ def parse_workflow_from_markdown(markdown_content: str, skill_id: str) -> Workfl
         try:
             from vibesop.core.skills.parser import extract_frontmatter
 
-            frontmatter, body = extract_frontmatter(markdown_content)
+            frontmatter, _body = extract_frontmatter(markdown_content)
             if frontmatter:
                 name = frontmatter.get("name", name)
                 description = frontmatter.get("description", "")
                 metadata.update(frontmatter)
         except (ValueError, TypeError, IndexError):
             # If frontmatter parsing fails, continue with body
-            body = markdown_content.split("---", 2)[-1] if "---" in markdown_content else markdown_content
+            markdown_content.split("---", 2)[-1] if "---" in markdown_content else markdown_content
 
     # Look for sections
     current_section = None
@@ -1013,8 +1009,8 @@ def parse_workflow_from_markdown(markdown_content: str, skill_id: str) -> Workfl
 
                 # Extract step description
                 step_desc = stripped
-                for i in range(1, 10):
-                    if step_desc.startswith(f"{i}."):
+                for num in range(1, 10):
+                    if step_desc.startswith(f"{num}."):
                         step_desc = step_desc[2:].strip()
                         break
                 current_step_content.append(step_desc)
@@ -1137,5 +1133,4 @@ def _detect_step_type(description: str, instruction: str) -> StepType:
     if any(pattern in text for pattern in ["verify that", "check that", "validate that", "ensure that"]):
         return StepType.VERIFICATION
 
-    # Default: instruction (safest)
     return StepType.INSTRUCTION

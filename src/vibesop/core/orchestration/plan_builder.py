@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from vibesop.core.models import (
@@ -87,13 +87,13 @@ class PlanBuilder:
             steps=steps,
             detected_intents=detected_intents,
             reasoning="; ".join(reasoning_parts) if reasoning_parts else "No decomposition reasoning",
-            created_at=datetime.now(timezone.utc).isoformat(),
+            created_at=datetime.now(UTC).isoformat(),
             status=PlanStatus.PENDING,
         )
 
     def _build_step_query(
         self,
-        original_query: str,
+        _original_query: str,
         sub_task_query: str,
         step_number: int,
         previous_steps: list[ExecutionStep],

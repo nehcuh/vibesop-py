@@ -1,0 +1,16 @@
+{
+  "session_id": "project-c8ea356b2cac",
+  "current_skill": "superpowers/test-driven-development",
+  "session_start_time": 1776870087.4201431,
+  "last_reroute_check": 0.0,
+  "last_activity": 1776870089.748919,
+  "tool_history": [],
+  "route_history": [
+    {
+      "query_pattern": "test",
+      "selected_skill": "superpowers/test-driven-development",
+      "timestamp": 1776870089.748845
+    }
+  ],
+  "habit_patterns": {}
+}

@@ -105,6 +105,7 @@ class TestRoutingPerformance:
         hit_rate = hits / total
         assert hit_rate > 0.8, f"Cache hit rate {hit_rate:.1%} is below 80%"
 
+    @pytest.mark.slow
     def test_concurrent_routing_performance(self) -> None:
         """Test concurrent routing performance.
 

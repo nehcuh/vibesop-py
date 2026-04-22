@@ -8,6 +8,7 @@ import contextlib
 from pathlib import Path
 from typing import Any
 
+import jinja2
 from jinja2 import Environment, FileSystemLoader
 
 from vibesop.hooks.base import Hook

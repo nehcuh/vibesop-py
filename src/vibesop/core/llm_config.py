@@ -1,22 +1,23 @@
 """VibeSOP LLM 配置管理 - 统一的 LLM 配置和降级策略.
 
-该模块提供了：
+该模块提供了:
 1. VibeSOP 配置文件中的 LLM 配置读取
-2. Agent 环境（Claude Code, Cursor 等）的 LLM 检测
+2. Agent 环境(Claude Code, Cursor 等)的 LLM 检测
 3. LLM 配置的优先级和降级策略
 
-优先级：
-1. Agent 环境的 LLM（最高优先级）
+优先级:
+1. Agent 环境的 LLM(最高优先级)
 2. VibeSOP 配置的 LLM
 3. 环境变量中的 LLM
-4. 默认配置（最低优先级）
+4. 默认配置(最低优先级)
 """
 
+import json
 import os
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 import yaml
 from rich.console import Console
@@ -49,7 +50,7 @@ class LLMConfig:
 class VibeSOPConfigManager:
     """VibeSOP 配置管理器"""
 
-    CONFIG_PATHS = [
+    CONFIG_PATHS: ClassVar[list[Path]] = [
         Path(".vibe/config.yaml"),
         Path(".vibe/llm.yaml"),
         Path.home() / ".vibe" / "config.yaml",
@@ -91,7 +92,7 @@ class VibeSOPConfigManager:
 class AgentEnvironmentDetector:
     """Agent 环境检测器"""
 
-    AGENT_CONFIGS = {
+    AGENT_CONFIGS: ClassVar[dict[str, dict[str, Any]]] = {
         "claude-code": {
             "name": "Claude Code",
             "config_files": [
@@ -187,19 +188,18 @@ class AgentEnvironmentDetector:
                     )
 
             # Continue.dev
-            elif agent_id == "continue-dev":
-                if isinstance(model, dict):
-                    provider = model.get("provider")
-                    model_id = model.get("model")
+            elif agent_id == "continue-dev" and isinstance(model, dict):
+                provider = model.get("provider")
+                model_id = model.get("model")
 
-                    if provider and model_id:
-                        return LLMConfig(
-                            provider=provider,
-                            model=model_id,
-                            api_key=None,  # Agent 会管理
-                            source=LLMSource.AGENT_ENV,
-                            confidence=0.90,
-                        )
+                if provider and model_id:
+                    return LLMConfig(
+                        provider=provider,
+                        model=model_id,
+                        api_key=None,  # Agent 会管理
+                        source=LLMSource.AGENT_ENV,
+                        confidence=0.90,
+                    )
 
         except Exception as e:
             console.print(f"[dim]Warning: Failed to read Agent config: {e}[/dim]")
@@ -252,14 +252,14 @@ class LLMConfigResolver:
         skill_requirements: dict[str, Any] | None = None,
         prefer_agent: bool = True
     ) -> LLMConfig | None:
-        """解析 LLM 配置（使用降级策略）
+        """解析 LLM 配置(使用降级策略)
 
         Args:
-            skill_requirements: 技能要求的 LLM 配置（可选）
-            prefer_agent: 是否优先使用 Agent 的 LLM（默认 True）
+            skill_requirements: 技能要求的 LLM 配置(可选)
+            prefer_agent: 是否优先使用 Agent 的 LLM(默认 True)
 
         Returns:
-            LLM 配置对象，如果没有任何配置则返回 None
+            LLM 配置对象,如果没有任何配置则返回 None
         """
 
         self.logger.print("[dim]Resolving LLM configuration...[/dim]")
@@ -296,7 +296,7 @@ class LLMConfigResolver:
             else:
                 self.logger.print("  ⚠ Environment config doesn't meet skill requirements")
 
-        # 优先级 4: 默认配置（不推荐用于生产）
+        # 优先级 4: 默认配置(不推荐用于生产)
         if skill_requirements:
             self.logger.print("  ⚠ No suitable LLM found, using defaults")
             return self._create_default_config(skill_requirements)
@@ -326,9 +326,9 @@ class LLMConfigResolver:
 
         # 检查上下文窗口
         if "min_requirements" in requirements:
-            min_req = requirements["min_requirements"]
+            requirements["min_requirements"]
             # TODO: 检查模型的实际能力
-            # 这里简化处理，假设常用模型都满足
+            # 这里简化处理,假设常用模型都满足
             pass
 
         return True
@@ -372,15 +372,14 @@ class LLMConfigResolver:
     def get_llm_for_understanding(self) -> LLMConfig | None:
         """获取用于技能理解的 LLM 配置
 
-        与 resolve_llm_config 不同，这个方法专注于理解阶段的 LLM 选择
-        理解阶段不需要太高的准确性，快速响应更重要
+        与 resolve_llm_config 不同,这个方法专注于理解阶段的 LLM 选择
+        理解阶段不需要太高的准确性,快速响应更重要
 
         Returns:
             LLM 配置对象
         """
 
-        # 理解阶段优先级：速度 > 准确性
-        # 1. Agent 环境（最快）
+        # 1. Agent 环境(最快)
         agent_config = AgentEnvironmentDetector.get_agent_llm_config()
         if agent_config:
             self.logger.print(f"[dim]  Using Agent's LLM for understanding: {agent_config.model}[/dim]")
@@ -398,7 +397,7 @@ class LLMConfigResolver:
             self.logger.print(f"[dim]  Using VibeSOP config for understanding: {vibesop_config.model}[/dim]")
             return vibesop_config
 
-        # 4. 默认（使用 Haiku - 快速且便宜）
+        # 4. 默认(使用 Haiku - 快速且便宜)
         self.logger.print("[dim]  Using default LLM (claude-3-haiku-20240307) for understanding[/dim]")
         return LLMConfig(
             provider="anthropic",
@@ -412,10 +411,10 @@ def get_llm_config(
     skill_requirements: dict[str, Any] | None = None,
     prefer_agent: bool = True
 ) -> LLMConfig | None:
-    """获取 LLM 配置（便捷函数）
+    """获取 LLM 配置(便捷函数)
 
     Args:
-        skill_requirements: 技能的 LLM 需求（可选）
+        skill_requirements: 技能的 LLM 需求(可选)
         prefer_agent: 是否优先使用 Agent 的 LLM
 
     Returns:
@@ -426,10 +425,10 @@ def get_llm_config(
 
 
 def get_agent_llm_config() -> LLMConfig | None:
-    """获取 Agent 环境的 LLM 配置（便捷函数）"""
+    """获取 Agent 环境的 LLM 配置(便捷函数)"""
     return AgentEnvironmentDetector.get_agent_llm_config()
 
 
 def is_in_agent_environment() -> bool:
-    """检查是否在 Agent 环境中（便捷函数）"""
+    """检查是否在 Agent 环境中(便捷函数)"""
     return AgentEnvironmentDetector.detect_agent() is not None

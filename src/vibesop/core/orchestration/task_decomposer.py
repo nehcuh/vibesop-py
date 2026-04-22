@@ -6,10 +6,7 @@ import json
 import logging
 import re
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
-
-if TYPE_CHECKING:
-    pass
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -115,7 +112,7 @@ class TaskDecomposer:
     def _fallback_decomposition(self, query: str) -> list[SubTask]:
         """Simple heuristic decomposition when LLM is unavailable."""
         # Split on common conjunctions
-        parts = re.split(r'[,，;；]|然后|之后|接着|and then|after that', query)
+        parts = re.split(r'[,;]|然后|之后|接着|and then|after that', query)
         parts = [p.strip() for p in parts if len(p.strip()) >= self.MIN_QUERY_LENGTH]
 
         if len(parts) <= 1:

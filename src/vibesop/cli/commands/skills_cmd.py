@@ -607,6 +607,21 @@ def _show_ecosystem_report(monitor: Any) -> None:
     console.print(f"  Packs: {summary.get('total', 0)} total, {summary.get('healthy', 0)} healthy")
     console.print()
 
+    # Badges
+    from vibesop.core.badges import BadgeTracker, get_badge_display
+
+    tracker = BadgeTracker()
+    badges = tracker.list_badges()
+    if badges:
+        console.print("[bold]🎖️  Earned Badges[/bold]")
+        for badge in badges:
+            meta = get_badge_display(badge.type)
+            console.print(f"  {meta['icon']} {meta['title']}")
+        console.print()
+    else:
+        console.print("[dim]No badges yet. Give feedback to earn your first one![/dim]")
+        console.print()
+
 
 def _display_health_status(health_status, verbose: bool = False) -> None:
     """Display health status for a single pack.
@@ -1034,6 +1049,17 @@ def feedback(
     if execution_success is not None:
         icon = "✅" if execution_success else "❌"
         console.print(f"  [dim]Execution: {icon}[/dim]")
+
+    # Check for newly earned badges
+    from vibesop.core.badges import BadgeTracker, get_badge_display
+
+    tracker = BadgeTracker()
+    new_badges = tracker.check_feedback_event()
+    for badge in new_badges:
+        meta = get_badge_display(badge.type)
+        console.print()
+        console.print(f"[bold yellow]{meta['icon']}  New Badge: {meta['title']}[/bold yellow]")
+        console.print(f"   [dim]{meta['description']}[/dim]")
 
 
 def create(
