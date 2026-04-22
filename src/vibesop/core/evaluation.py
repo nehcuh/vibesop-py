@@ -54,6 +54,27 @@ class SkillEvaluation:
             + self.avg_confidence * 0.2
         )
 
+    @property
+    def grade(self) -> str:
+        """Letter grade based on quality score (0-100 scale).
+
+        A: 90-100 (Excellent)
+        B: 75-89  (Good)
+        C: 60-74  (Acceptable)
+        D: 40-59  (Needs improvement)
+        F: 0-39   (Consider removal)
+        """
+        score = self.quality_score * 100
+        if score >= 90:
+            return "A"
+        if score >= 75:
+            return "B"
+        if score >= 60:
+            return "C"
+        if score >= 40:
+            return "D"
+        return "F"
+
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
@@ -64,6 +85,7 @@ class SkillEvaluation:
             "user_score": self.user_score,
             "last_used": self.last_used,
             "quality_score": self.quality_score,
+            "grade": self.grade,
         }
 
 

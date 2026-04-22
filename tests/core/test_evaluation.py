@@ -140,3 +140,22 @@ class TestRoutingEvaluator:
         report = evaluator.generate_report()
         assert report["total_skills_evaluated"] == 1
         assert report["avg_quality_score"] > 0
+
+
+class TestSkillGrade:
+    """Test letter grade computation."""
+
+    def test_grade_a(self):
+        """Score >= 90 should be grade A."""
+        eval = SkillEvaluation(skill_id="s", total_routes=10, success_rate=1.0, user_score=1.0, avg_confidence=1.0)
+        assert eval.grade == "A"
+
+    def test_grade_f(self):
+        """Score < 40 should be grade F."""
+        eval = SkillEvaluation(skill_id="s", total_routes=10, success_rate=0.0, user_score=0.0, avg_confidence=0.0)
+        assert eval.grade == "F"
+
+    def test_grade_no_routes(self):
+        """No routes should result in neutral grade (D, score = 0.5 * 100 = 50)."""
+        eval = SkillEvaluation(skill_id="s", total_routes=0)
+        assert eval.grade == "D"

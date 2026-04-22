@@ -668,3 +668,92 @@ def disable(
 
     SkillConfigManager.update_skill_config(skill_id, {"enabled": False})
     console.print(f"[yellow]✓ Skill '{skill_id}' disabled[/yellow]")
+
+
+def report(
+    grade: str | None = typer.Option(
+        None,
+        "--grade",
+        "-g",
+        help="Filter by grade (A, B, C, D, F)",
+    ),
+    suggest_removal: bool = typer.Option(
+        False,
+        "--suggest-removal",
+        help="Show only skills recommended for removal (grade F)",
+    ),
+) -> None:
+    """Show skill quality report with grades.
+
+    \b
+    Examples:
+        # Show all skills with grades
+        vibe skills report
+
+        # Show only skills needing attention
+        vibe skills report --grade D
+
+        # Show skills recommended for removal
+        vibe skills report --suggest-removal
+    """
+    from rich.table import Table
+
+    evaluator = RoutingEvaluator()
+    all_evals = evaluator.evaluate_all_skills()
+
+    if not all_evals:
+        console.print("[yellow]No evaluation data available.[/yellow]")
+        console.print("[dim]Use skills to generate feedback data.[/dim]")
+        raise typer.Exit(0)
+
+    # Filter
+    filtered = list(all_evals.values())
+    if suggest_removal:
+        filtered = [e for e in filtered if e.grade == "F"]
+    elif grade:
+        filtered = [e for e in filtered if e.grade == grade.upper()]
+
+    if not filtered:
+        console.print("[dim]No skills match the filter criteria.[/dim]")
+        raise typer.Exit(0)
+
+    # Sort by quality score descending
+    filtered.sort(key=lambda e: e.quality_score, reverse=True)
+
+    table = Table(title="Skill Quality Report")
+    table.add_column("Skill", style="cyan")
+    table.add_column("Grade", justify="center")
+    table.add_column("Score", justify="right")
+    table.add_column("Routes", justify="right")
+    table.add_column("Success", justify="right")
+    table.add_column("User Score", justify="right")
+
+    grade_colors = {
+        "A": "green",
+        "B": "green",
+        "C": "yellow",
+        "D": "yellow",
+        "F": "red",
+    }
+    grade_icons = {
+        "A": "✅",
+        "B": "✅",
+        "C": "✓",
+        "D": "⚠️",
+        "F": "🗑️",
+    }
+
+    for evaluation in filtered:
+        color = grade_colors.get(evaluation.grade, "dim")
+        icon = grade_icons.get(evaluation.grade, "")
+        table.add_row(
+            evaluation.skill_id,
+            f"[{color}]{evaluation.grade}[/{color}] {icon}",
+            f"{evaluation.quality_score:.0%}",
+            str(evaluation.total_routes),
+            f"{evaluation.success_rate:.0%}" if evaluation.total_routes > 0 else "—",
+            f"{evaluation.user_score:.2f}",
+        )
+
+    console.print(table)
+    console.print(f"\n[dim]Total: {len(filtered)} skills[/dim]")

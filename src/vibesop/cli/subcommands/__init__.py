@@ -109,6 +109,7 @@ def register(app: typer.Typer) -> None:
     skills_app.command("health")(skills_mod.health)
     skills_app.command("enable")(skills_mod.enable)
     skills_app.command("disable")(skills_mod.disable)
+    skills_app.command("report")(skills_mod.report)
 
     # Experimental commands
     app.command("skill-craft")(skill_craft_mod.skill_craft)
