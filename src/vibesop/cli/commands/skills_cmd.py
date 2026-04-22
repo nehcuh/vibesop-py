@@ -19,7 +19,9 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
+from vibesop.core.evaluation import RoutingEvaluator
 from vibesop.core.skills import SkillManager, SkillStorage
+from vibesop.core.skills.config_manager import SkillConfigManager
 
 console = Console()
 
@@ -588,3 +590,81 @@ def info(
     )
     if skill_info_data.get("source_file"):
         console.print(f"\n[dim]Source file: {skill_info_data['source_file']}[/dim]")
+
+    # Show evaluation metrics if available
+    try:
+        evaluator = RoutingEvaluator()
+        evaluation = evaluator.evaluate_skill(skill_id)
+        if evaluation and evaluation.total_routes > 0:
+            console.print(f"\n[bold]Quality Metrics[/bold]")
+            console.print(f"  [dim]Routes:[/dim] {evaluation.total_routes}")
+            console.print(f"  [dim]Success Rate:[/dim] {evaluation.success_rate:.0%}")
+            console.print(f"  [dim]Avg Confidence:[/dim] {evaluation.avg_confidence:.0%}")
+            console.print(f"  [dim]User Score:[/dim] {evaluation.user_score:.2f}")
+            quality_color = "green" if evaluation.quality_score >= 0.7 else "yellow" if evaluation.quality_score >= 0.4 else "red"
+            console.print(f"  [dim]Quality Score:[/dim] [{quality_color}]{evaluation.quality_score:.0%}[/{quality_color}]")
+            if evaluation.last_used:
+                console.print(f"  [dim]Last Used:[/dim] {evaluation.last_used[:10]}")
+    except Exception:
+        # Silently skip if evaluation data is not available
+        pass
+
+
+def enable(
+    skill_id: str = typer.Argument(..., help="Skill ID to enable"),
+) -> None:
+    """Enable a skill for routing.
+
+    \b
+    Examples:
+        # Enable a skill
+        vibe skills enable my-skill
+
+        # Enable a namespaced skill
+        vibe skills enable gstack/review
+    """
+    # Verify skill exists
+    manager = SkillManager()
+    skill_info_data = manager.get_skill_info(skill_id)
+    if not skill_info_data:
+        console.print(f"[red]✗ Skill not found: {skill_id}[/red]")
+        raise typer.Exit(1)
+
+    config = SkillConfigManager.get_skill_config(skill_id)
+    if config and config.enabled:
+        console.print(f"[yellow]⚠ Skill '{skill_id}' is already enabled[/yellow]")
+        return
+
+    SkillConfigManager.update_skill_config(skill_id, {"enabled": True})
+    console.print(f"[green]✓ Skill '{skill_id}' enabled[/green]")
+
+
+def disable(
+    skill_id: str = typer.Argument(..., help="Skill ID to disable"),
+) -> None:
+    """Disable a skill from routing.
+
+    Disabled skills are excluded from routing candidates but remain installed.
+
+    \b
+    Examples:
+        # Disable a skill
+        vibe skills disable my-skill
+
+        # Disable a namespaced skill
+        vibe skills disable gstack/review
+    """
+    # Verify skill exists
+    manager = SkillManager()
+    skill_info_data = manager.get_skill_info(skill_id)
+    if not skill_info_data:
+        console.print(f"[red]✗ Skill not found: {skill_id}[/red]")
+        raise typer.Exit(1)
+
+    config = SkillConfigManager.get_skill_config(skill_id)
+    if config and not config.enabled:
+        console.print(f"[yellow]⚠ Skill '{skill_id}' is already disabled[/yellow]")
+        return
+
+    SkillConfigManager.update_skill_config(skill_id, {"enabled": False})
+    console.print(f"[yellow]✓ Skill '{skill_id}' disabled[/yellow]")

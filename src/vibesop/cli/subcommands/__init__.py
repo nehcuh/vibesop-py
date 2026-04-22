@@ -107,6 +107,8 @@ def register(app: typer.Typer) -> None:
     skills_app.command("sync")(skills_mod.sync)
     skills_app.command("status")(skills_mod.status)
     skills_app.command("health")(skills_mod.health)
+    skills_app.command("enable")(skills_mod.enable)
+    skills_app.command("disable")(skills_mod.disable)
 
     # Experimental commands
     app.command("skill-craft")(skill_craft_mod.skill_craft)

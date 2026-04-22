@@ -8,6 +8,8 @@ import typer
 from vibesop.cli.commands.skill_add import add as skill_add
 from vibesop.cli.commands.skills_cmd import (
     available,
+    disable,
+    enable,
     health,
     info,
     install,
@@ -37,6 +39,8 @@ skills_app.command("sync")(sync)
 skills_app.command("status")(status)
 skills_app.command("health")(health)
 skills_app.command("available")(available)
+skills_app.command("enable")(enable)
+skills_app.command("disable")(disable)
 
 # Add alias for "skills" (plural form)
 def skills(

@@ -252,6 +252,24 @@ class UnifiedRouter(RouterStatsMixin):
         if candidates is None:
             candidates = self._get_cached_candidates()
 
+        # Filter by enablement and scope
+        # External callers can bypass by passing their own candidate list
+        filtered_candidates: list[dict[str, Any]] = []
+        for c in candidates:
+            if not c.get("enabled", True):
+                continue
+            scope = c.get("scope", "project")
+            if scope == "project":
+                source_file = c.get("source_file")
+                if source_file:
+                    try:
+                        Path(source_file).resolve().relative_to(self.project_root.resolve())
+                    except ValueError:
+                        # Skill is project-scoped but not from this project, skip
+                        continue
+            filtered_candidates.append(c)
+        candidates = filtered_candidates
+
         routing_path: list[RoutingLayer] = []
         for layer_result, layer_details in self._execute_layers(
             query, candidates, context
@@ -827,6 +845,7 @@ class UnifiedRouter(RouterStatsMixin):
         import vibesop
         from vibesop.core.optimization.cold_start import get_cold_start_strategy
         from vibesop.core.skills import SkillLoader
+        from vibesop.core.skills.config_manager import SkillConfigManager
 
         if not hasattr(self, "_skill_loader"):
             # TECH DEBT: UnifiedRouter constructs its own SkillLoader with a
@@ -856,6 +875,12 @@ class UnifiedRouter(RouterStatsMixin):
             # Auto-generate keywords from skill name when tags are empty
             if not tags:
                 tags = _extract_name_keywords(metadata.name)
+
+            # Load skill config for enablement/scope metadata
+            skill_config = SkillConfigManager.get_skill_config(_skill_id)
+            enabled = skill_config.enabled if skill_config else True
+            scope = skill_config.scope if skill_config else "project"
+
             candidates.append(
                 {
                     "id": metadata.id,
@@ -867,6 +892,9 @@ class UnifiedRouter(RouterStatsMixin):
                     "namespace": metadata.namespace,
                     "source": self._get_skill_source(metadata.id, metadata.namespace),
                     "priority": "P0" if metadata.id in p0_skills else "P2",
+                    "enabled": enabled,
+                    "scope": scope,
+                    "source_file": str(definition.source_file) if definition.source_file else None,
                 }
             )
         return candidates

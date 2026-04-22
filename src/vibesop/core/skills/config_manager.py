@@ -43,7 +43,7 @@ class SkillConfig:
     enabled: bool = True
     priority: int = 50
     category: str = "development"
-    scope: str = "project"
+    scope: str = "global"
 
     # LLM 配置
     requires_llm: bool = False
@@ -190,7 +190,7 @@ class SkillConfigManager:
                 enabled=skill_data.get("enabled", True),
                 priority=skill_data.get("priority", 50),
                 category=skill_data.get("category", "development"),
-                scope=skill_data.get("scope", "project"),
+                scope=skill_data.get("scope", "global"),
                 requires_llm=skill_data.get("requires_llm", False),
                 llm_provider=skill_data.get("llm", {}).get("provider"),
                 llm_model=skill_data.get("llm", {}).get("model"),
