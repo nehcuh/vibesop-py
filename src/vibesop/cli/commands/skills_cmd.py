@@ -19,7 +19,7 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
-from vibesop.core.evaluation import RoutingEvaluator
+from vibesop.core.skills.evaluator import RoutingEvaluator
 from vibesop.core.skills import SkillManager, SkillStorage
 from vibesop.core.skills.config_manager import SkillConfigManager
 
@@ -38,6 +38,16 @@ def list_skills(
         "--platform",
         "-p",
         help="Filter by platform",
+    ),
+    show_scope: bool = typer.Option(
+        False,
+        "--show-scope",
+        help="Show skill scope (global/project)",
+    ),
+    show_status: bool = typer.Option(
+        False,
+        "--show-status",
+        help="Show enabled/disabled status",
     ),
 ) -> None:
     """List installed skills.
@@ -71,7 +81,7 @@ def list_skills(
                 link_type = "[cyan]→[/cyan]" if is_link else "[dim]cp[/dim]"
                 console.print(f"  {link_type} {skill_id}")
 
-    elif all_:
+    elif all_ or show_scope or show_status:
         # Show detailed information
         skills = storage.list_skills()
 
@@ -79,6 +89,10 @@ def list_skills(
         table.add_column("ID", style="cyan")
         table.add_column("Name", style="green")
         table.add_column("Version", style="yellow")
+        if show_status:
+            table.add_column("Status", style="white")
+        if show_scope:
+            table.add_column("Scope", style="magenta")
         table.add_column("Source", style="dim")
         table.add_column("Installed", style="dim")
 
@@ -87,13 +101,22 @@ def list_skills(
             if manifest.source.version:
                 source_str += f"@{manifest.source.version}"
 
-            table.add_row(
+            row = [
                 skill_id,
                 manifest.name,
                 manifest.version,
-                source_str,
-                manifest.installed_at[:10],
-            )
+            ]
+            if show_status:
+                config = SkillConfigManager.get_skill_config(skill_id)
+                status = "[green]✓ enabled[/green]" if (config and config.enabled) else "[red]✗ disabled[/red]"
+                row.append(status)
+            if show_scope:
+                config = SkillConfigManager.get_skill_config(skill_id)
+                scope = config.scope if config else "global"
+                row.append(scope)
+            row.extend([source_str, manifest.installed_at[:10]])
+
+            table.add_row(*row)
 
         console.print(table)
         console.print(f"\n[dim]Total: {len(skills)} skills[/dim]")
@@ -452,6 +475,28 @@ def health(
         for pack_name, health_status in sorted(all_health.items()):
             _display_health_status(health_status, verbose=verbose)
 
+        # Show evaluation metrics (Phase 3)
+        try:
+            evaluator = RoutingEvaluator()
+            all_evals = evaluator.evaluate_all_skills()
+            if all_evals:
+                console.print("\n[bold]Skill Quality Overview[/bold]\n")
+                for skill_id, evaluation in sorted(
+                    all_evals.items(), key=lambda x: x[1].quality_score, reverse=True
+                )[:10]:
+                    grade_color = {
+                        "A": "green", "B": "green", "C": "yellow",
+                        "D": "yellow", "F": "red",
+                    }.get(evaluation.grade, "dim")
+                    icon = "✅" if evaluation.grade in ("A", "B") else "⚠️" if evaluation.grade in ("C", "D") else "🗑️"
+                    console.print(
+                        f"  {icon} [cyan]{skill_id}[/cyan] "
+                        f"[{grade_color}]{evaluation.grade} ({evaluation.quality_score:.0%})[/{grade_color}] "
+                        f"[dim]{evaluation.total_routes} uses[/dim]"
+                    )
+        except Exception:
+            pass
+
 
 def _display_health_status(health_status, verbose: bool = False) -> None:
     """Display health status for a single pack.
@@ -757,3 +802,112 @@ def report(
 
     console.print(table)
     console.print(f"\n[dim]Total: {len(filtered)} skills[/dim]")
+
+
+def scope(
+    skill_id: str = typer.Argument(..., help="Skill ID"),
+    set_scope: str = typer.Option(
+        None,
+        "--set",
+        help="Set scope: global, project, or session",
+    ),
+) -> None:
+    """Get or set a skill's scope.
+
+    \b
+    Examples:
+        # Show current scope
+        vibe skills scope my-skill
+
+        # Set to project scope
+        vibe skills scope my-skill --set project
+
+        # Set to global scope
+        vibe skills scope my-skill --set global
+    """
+    manager = SkillManager()
+    skill_info_data = manager.get_skill_info(skill_id)
+    if not skill_info_data:
+        console.print(f"[red]✗ Skill not found: {skill_id}[/red]")
+        raise typer.Exit(1)
+
+    config = SkillConfigManager.get_skill_config(skill_id)
+    current_scope = config.scope if config else "global"
+
+    if set_scope is None:
+        console.print(f"[dim]Current scope for '{skill_id}':[/dim] [cyan]{current_scope}[/cyan]")
+        return
+
+    if set_scope not in ("global", "project", "session"):
+        console.print(f"[red]✗ Invalid scope: {set_scope}. Must be global, project, or session.[/red]")
+        raise typer.Exit(1)
+
+    SkillConfigManager.set_scope(skill_id, set_scope)
+    console.print(f"[green]✓ Scope for '{skill_id}' set to {set_scope}[/green]")
+
+
+def feedback(
+    skill_id: str = typer.Option(..., "--skill", "-s", help="Skill ID"),
+    query: str = typer.Option(..., "--query", "-q", help="Original user query"),
+    helpful: str | None = typer.Option(
+        None,
+        "--helpful",
+        "-h",
+        help="Was the skill helpful? (yes/no)",
+    ),
+    success: str | None = typer.Option(
+        None,
+        "--success",
+        help="Did execution succeed? (yes/no)",
+    ),
+    execution_time: float | None = typer.Option(
+        None,
+        "--time",
+        "-t",
+        help="Execution time in milliseconds",
+    ),
+    notes: str | None = typer.Option(
+        None,
+        "--notes",
+        "-n",
+        help="Optional notes",
+    ),
+) -> None:
+    """Record post-execution feedback for a skill.
+
+    \b
+    Examples:
+        # Mark a skill as helpful
+        vibe skills feedback --skill gstack/review --query "review code" --helpful yes
+
+        # Report execution failure with notes
+        vibe skills feedback --skill gstack/review --query "review code" --success no --notes "missed edge case"
+    """
+    from vibesop.core.feedback import ExecutionFeedbackCollector
+
+    collector = ExecutionFeedbackCollector()
+
+    was_helpful = None
+    if helpful is not None:
+        was_helpful = helpful.lower() in ("yes", "true", "1", "y")
+
+    execution_success = None
+    if success is not None:
+        execution_success = success.lower() in ("yes", "true", "1", "y")
+
+    collector.collect(
+        skill_id=skill_id,
+        query=query,
+        was_helpful=was_helpful,
+        execution_success=execution_success,
+        execution_time_ms=execution_time,
+        notes=notes,
+    )
+
+    console.print(f"[green]✓ Feedback recorded for '{skill_id}'[/green]")
+    if was_helpful is not None:
+        icon = "👍" if was_helpful else "👎"
+        console.print(f"  [dim]Helpful: {icon}[/dim]")
+    if execution_success is not None:
+        icon = "✅" if execution_success else "❌"
+        console.print(f"  [dim]Execution: {icon}[/dim]")

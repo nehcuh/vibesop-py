@@ -110,6 +110,8 @@ def register(app: typer.Typer) -> None:
     skills_app.command("enable")(skills_mod.enable)
     skills_app.command("disable")(skills_mod.disable)
     skills_app.command("report")(skills_mod.report)
+    skills_app.command("scope")(skills_mod.scope)
+    skills_app.command("feedback")(skills_mod.feedback)
 
     # Experimental commands
     app.command("skill-craft")(skill_craft_mod.skill_craft)

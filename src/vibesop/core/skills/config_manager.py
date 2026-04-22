@@ -241,6 +241,26 @@ class SkillConfigManager:
         console.print(f"[green]✓ Config updated for skill: {skill_id}[/green]")
 
     @classmethod
+    def set_enabled(cls, skill_id: str, enabled: bool) -> None:
+        """设置技能的启用状态
+
+        Args:
+            skill_id: 技能 ID
+            enabled: 是否启用
+        """
+        cls.update_skill_config(skill_id, {"enabled": enabled})
+
+    @classmethod
+    def set_scope(cls, skill_id: str, scope: str) -> None:
+        """设置技能的作用域
+
+        Args:
+            skill_id: 技能 ID
+            scope: 作用域 ("global", "project", "session")
+        """
+        cls.update_skill_config(skill_id, {"scope": scope})
+
+    @classmethod
     def delete_skill_config(cls, skill_id: str) -> None:
         """删除技能配置
 

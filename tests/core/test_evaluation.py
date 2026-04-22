@@ -5,28 +5,30 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from vibesop.core.evaluation import RoutingEvaluator, SkillEvaluation
+from vibesop.core.skills.evaluator import RoutingEvaluator, SkillEvaluation
 
 
 class TestSkillEvaluation:
     """Test SkillEvaluation dataclass."""
 
     def test_quality_score_with_data(self):
-        """Quality score should combine success_rate, user_score, and confidence."""
+        """Quality score should combine all 5 dimensions with correct weights."""
         eval = SkillEvaluation(
             skill_id="test-skill",
             total_routes=10,
-            success_rate=1.0,
-            avg_confidence=0.8,
-            user_score=0.9,
+            routing_accuracy=1.0,
+            user_satisfaction=1.0,
+            execution_success=1.0,
+            usage_frequency=1.0,
+            health_score=1.0,
         )
-        # 1.0 * 0.4 + 0.9 * 0.4 + 0.8 * 0.2 = 0.4 + 0.36 + 0.16 = 0.92
-        assert eval.quality_score == pytest.approx(0.92, rel=1e-3)
+        # All 1.0 → 1.0 * (0.25 + 0.25 + 0.25 + 0.15 + 0.10) = 1.0
+        assert eval.quality_score == pytest.approx(1.0, rel=1e-3)
 
     def test_quality_score_no_routes(self):
         """Quality score should be neutral when no route data exists."""
         eval = SkillEvaluation(skill_id="test-skill", total_routes=0)
-        # 0.5 + (0.0 * 0.1) = 0.5
+        # 0.5 + (0.0 * 0.05) + (0.0 * 0.05) = 0.5
         assert eval.quality_score == pytest.approx(0.5, rel=1e-3)
 
     def test_to_dict(self):
@@ -34,14 +36,16 @@ class TestSkillEvaluation:
         eval = SkillEvaluation(
             skill_id="test-skill",
             total_routes=5,
-            success_rate=0.8,
-            avg_confidence=0.7,
-            user_score=0.6,
+            routing_accuracy=0.8,
+            user_satisfaction=0.7,
+            execution_success=0.6,
+            usage_frequency=0.5,
+            health_score=0.4,
         )
         d = eval.to_dict()
         assert d["skill_id"] == "test-skill"
         assert d["total_routes"] == 5
-        assert d["quality_score"] == pytest.approx(0.70, rel=1e-3)
+        assert d["grade"] == "C"
 
 
 class TestRoutingEvaluator:
@@ -69,6 +73,11 @@ class TestRoutingEvaluator:
         ]
         evaluator._feedback = mock_feedback
 
+        # Mock execution collector (no execution data)
+        mock_exec = MagicMock()
+        mock_exec.get_skill_summary.return_value = {"total": 0, "helpful_rate": None, "success_rate": None}
+        evaluator._execution = mock_exec
+
         # Mock preference learner
         mock_prefs = MagicMock()
         mock_prefs.get_preference_score.return_value = 0.75
@@ -77,7 +86,7 @@ class TestRoutingEvaluator:
         result = evaluator.evaluate_skill("my-skill")
         assert result is not None
         assert result.total_routes == 3
-        assert result.success_rate == pytest.approx(2 / 3, rel=1e-3)
+        assert result.routing_accuracy == pytest.approx(2 / 3, rel=1e-3)
         assert result.avg_confidence == pytest.approx(0.766, rel=1e-2)
         assert result.user_score == 0.75
         assert result.last_used == "2024-01-03T00:00:00"
@@ -91,6 +100,10 @@ class TestRoutingEvaluator:
             MagicMock(routed_skill="skill-a", was_correct=True, confidence=0.9, timestamp="2024-01-01T00:00:00"),
         ]
         evaluator._feedback = mock_feedback
+
+        mock_exec = MagicMock()
+        mock_exec.get_skill_summary.return_value = {"total": 0, "helpful_rate": None, "success_rate": None}
+        evaluator._execution = mock_exec
 
         mock_prefs = MagicMock()
         mock_prefs.get_preference_score.return_value = 0.5
@@ -115,6 +128,10 @@ class TestRoutingEvaluator:
         ]
         evaluator._feedback = mock_feedback
 
+        mock_exec = MagicMock()
+        mock_exec.get_skill_summary.return_value = {"total": 0, "helpful_rate": None, "success_rate": None}
+        evaluator._execution = mock_exec
+
         mock_prefs = MagicMock()
         mock_prefs.get_preference_score.return_value = 0.5
         evaluator._preferences = mock_prefs
@@ -133,6 +150,10 @@ class TestRoutingEvaluator:
         ]
         evaluator._feedback = mock_feedback
 
+        mock_exec = MagicMock()
+        mock_exec.get_skill_summary.return_value = {"total": 0, "helpful_rate": None, "success_rate": None}
+        evaluator._execution = mock_exec
+
         mock_prefs = MagicMock()
         mock_prefs.get_preference_score.return_value = 0.8
         evaluator._preferences = mock_prefs
@@ -147,12 +168,20 @@ class TestSkillGrade:
 
     def test_grade_a(self):
         """Score >= 90 should be grade A."""
-        eval = SkillEvaluation(skill_id="s", total_routes=10, success_rate=1.0, user_score=1.0, avg_confidence=1.0)
+        eval = SkillEvaluation(
+            skill_id="s", total_routes=10,
+            routing_accuracy=1.0, user_satisfaction=1.0,
+            execution_success=1.0, usage_frequency=1.0, health_score=1.0,
+        )
         assert eval.grade == "A"
 
     def test_grade_f(self):
         """Score < 40 should be grade F."""
-        eval = SkillEvaluation(skill_id="s", total_routes=10, success_rate=0.0, user_score=0.0, avg_confidence=0.0)
+        eval = SkillEvaluation(
+            skill_id="s", total_routes=10,
+            routing_accuracy=0.0, user_satisfaction=0.0,
+            execution_success=0.0, usage_frequency=0.0, health_score=0.0,
+        )
         assert eval.grade == "F"
 
     def test_grade_no_routes(self):

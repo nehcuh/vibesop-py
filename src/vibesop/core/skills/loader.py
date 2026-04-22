@@ -138,6 +138,16 @@ class SkillLoader:
         if self._enable_external and self._external_loader:
             self._load_external_skills()
 
+        # Filter out disabled skills at discovery time
+        from vibesop.core.skills.config_manager import SkillConfigManager
+
+        filtered: dict[str, LoadedSkill] = {}
+        for skill_id, definition in self._skill_cache.items():
+            config = SkillConfigManager.get_skill_config(skill_id)
+            if config is None or config.enabled:
+                filtered[skill_id] = definition
+        self._skill_cache = filtered
+
         return self._skill_cache
 
     def _load_external_skills(self) -> None:

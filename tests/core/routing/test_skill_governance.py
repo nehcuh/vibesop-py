@@ -42,23 +42,19 @@ class TestSkillEnablement:
     """Test enable/disable filtering in routing."""
 
     def test_disabled_skill_excluded_from_routing(self, router_with_skills, tmp_path):
-        """Skills with enabled=False should be excluded from candidates."""
+        """Skills with enabled=False should be excluded from candidates at discovery time."""
         # Disable the local skill
         SkillConfigManager.update_skill_config("my-local-skill", {"enabled": False})
 
-        # Verify the skill is in candidates before route-time filtering
-        raw_candidates = router_with_skills._get_candidates()
-        raw_ids = {c["id"] for c in raw_candidates}
-        assert "my-local-skill" in raw_ids
+        # Clear router cache so next route() reloads from SkillLoader
+        router_with_skills._candidates_cache = None
+        if hasattr(router_with_skills, "_skill_loader"):
+            router_with_skills._skill_loader._skill_cache = {}
 
-        # Route should filter it out
-        result = router_with_skills.route("run local task")
-        filtered_ids = {c["id"] for c in router_with_skills._get_cached_candidates()}
-
-        # After route(), cached candidates include all skills (filtering happens at route time)
-        # Check that the disabled skill was not matched
-        if result.primary:
-            assert result.primary.skill_id != "my-local-skill"
+        # SkillLoader.discover_all() filters out disabled skills;
+        # route() should therefore not match the disabled skill
+        result = router_with_skills.route("!my-local-skill run local task")
+        assert result.primary is None or result.primary.skill_id != "my-local-skill"
 
         # Clean up
         SkillConfigManager.update_skill_config("my-local-skill", {"enabled": True})
