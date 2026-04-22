@@ -1,7 +1,7 @@
 # Routing System Architecture
 
-> **Version**: 4.0.0
-> **Last Updated**: 2026-04-06
+> **Version**: 4.2.1+
+> **Last Updated**: 2026-04-21
 
 ## Overview
 
@@ -29,9 +29,11 @@ class UnifiedRouter:
         """Route query to best matching skill."""
 ```
 
-## 7-Layer Pipeline
+## 8-Layer Pipeline
 
 Layers are tried in priority order. First match wins (except for alternatives).
+
+> **v4.2.1+ update**: Added Layer 7 (Fallback LLM) and the Optimization Layer now includes quality boost, habit boost, and session stickiness.
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -176,11 +178,11 @@ scenarios:
 
 ## Optimization Layer
 
-After the 7-layer matching pipeline, optimization is applied:
+After the 8-layer matching pipeline, optimization is applied:
 
 ### Preference Boost
 
-**Location**: `core/optimization/`
+**Location**: `core/routing/optimization_service.py`
 
 **Purpose**: Learn from user's past choices
 
@@ -194,6 +196,44 @@ After the 7-layer matching pipeline, optimization is applied:
 ```
 boosted_confidence = base_confidence × (1 + preference_weight × score)
 ```
+
+### Session Stickiness (v4.2.1+)
+
+**Location**: `core/routing/optimization_service.py:_apply_session_stickiness()`
+
+**Purpose**: Maintain continuity across multi-turn conversations
+
+- Default boost: `0.03` (configurable `0.0–0.2`)
+- Applied when `routing.session_aware: true`
+- Disabled with `--no-session` CLI flag
+
+### Quality Boost (v4.2.1+)
+
+**Location**: `core/routing/optimization_service.py:_apply_quality_boost()`
+
+**Purpose**: Promote well-performing skills, demote poor ones
+
+| Grade | Adjustment | Condition |
+|-------|-----------|-----------|
+| A | +0.05 | `total_routes >= 3` |
+| B | +0.02 | `total_routes >= 3` |
+| C | 0 | `total_routes >= 3` |
+| D | -0.02 | `total_routes >= 3` |
+| F | -0.05 | `total_routes >= 3` |
+
+> **Protection**: Only applies when `total_routes >= 3` to avoid early misjudgment.
+> Disable with `routing.enable_quality_boost: false`.
+
+### Habit Boost (v4.2.1+)
+
+**Location**: `core/sessions/context.py:get_habit_boost()`
+
+**Purpose**: Recognize repeated query patterns and reinforce them
+
+- Pattern forms after **3 repetitions** of the same query → skill mapping
+- Boost: `0.08` confidence increase
+- Patterns tracked in last 50 route decisions
+- Embedding-based semantic similarity for pattern matching
 
 ### Candidate Prefilter
 
@@ -246,6 +286,7 @@ class SkillRoute:
     confidence: float              # 0.0-1.0
     layer: RoutingLayer            # Which layer matched
     source: str                    # Where skill was found
+    description: str               # Skill description for CLI display (v4.2.1+)
     metadata: dict                 # Additional info
 ```
 
@@ -258,6 +299,10 @@ routing:
   min_confidence: 0.6            # Minimum for match
   max_candidates: 3              # Alternatives to return
   use_cache: true                # Enable caching
+  session_aware: true            # Enable session-state-aware routing
+  session_stickiness_boost: 0.03 # Continuity boost (0.0–0.2)
+  fallback_mode: transparent     # transparent / silent / disabled
+  enable_quality_boost: true     # Grade-based confidence adjustment
 ```
 
 ## Extending the Router

@@ -98,8 +98,8 @@ class SecurityPolicy(BaseModel):
         return v
 
 
-class RoutingConfig(BaseModel):
-    """Routing configuration for skill selection.
+class RoutingPolicy(BaseModel):
+    """Routing policy for skill selection.
 
     Attributes:
         enable_ai_routing: Whether to use AI-powered semantic routing
@@ -148,8 +148,8 @@ class PolicySet(BaseModel):
         default_factory=dict,
         description="Behavioral rules",
     )
-    routing: RoutingConfig = Field(
-        default_factory=RoutingConfig,
+    routing: RoutingPolicy = Field(
+        default_factory=RoutingPolicy,
         description="Routing configuration",
     )
     custom: dict[str, Any] = Field(
@@ -223,7 +223,7 @@ class Manifest(BaseModel):
         default=None,
         description="Security policy (deprecated, use policies.security)",
     )
-    routing: RoutingConfig | None = Field(
+    routing: RoutingPolicy | None = Field(
         default=None,
         description="Routing configuration (deprecated, use policies.routing)",
     )
@@ -268,7 +268,7 @@ class Manifest(BaseModel):
             return self.security
         return self.policies.security
 
-    def get_effective_routing_config(self) -> RoutingConfig:
+    def get_effective_routing_policy(self) -> RoutingPolicy:
         """Get the effective routing config.
 
         Handles backward compatibility by using policies.routing

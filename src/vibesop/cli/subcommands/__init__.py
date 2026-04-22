@@ -112,6 +112,8 @@ def register(app: typer.Typer) -> None:
     skills_app.command("report")(skills_mod.report)
     skills_app.command("scope")(skills_mod.scope)
     skills_app.command("feedback")(skills_mod.feedback)
+    skills_app.command("create")(skills_mod.create)
+    skills_app.command("lifecycle")(skills_mod.lifecycle)
 
     # Experimental commands
     app.command("skill-craft")(skill_craft_mod.skill_craft)

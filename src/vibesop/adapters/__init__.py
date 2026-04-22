@@ -25,7 +25,7 @@ from vibesop.adapters.models import (
     ManifestMetadata,
     PolicySet,
     RenderResult,
-    RoutingConfig,
+    RoutingPolicy,
     SecurityPolicy,
 )
 from vibesop.adapters.opencode import OpenCodeAdapter
@@ -44,7 +44,7 @@ __all__ = [
     "PlatformAdapter",
     "PolicySet",
     "RenderResult",
-    "RoutingConfig",
+    "RoutingPolicy",
     "SecurityPolicy",
 ]
 

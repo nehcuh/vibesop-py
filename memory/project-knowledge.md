@@ -130,6 +130,53 @@ if ext_metadata.audit_result.risk_level == ThreatLevel.CRITICAL:
 
 ---
 
+### Narrowing Bare `except Exception` Safely (2026-04-21)
+
+**Pattern**: When replacing bare `except Exception` with specific types, always include custom exception classes in the catch tuple.
+
+**Problem**: Custom exceptions like `SkillNotFoundError` (inherits `VibeSOPError` → `Exception`) or `SkillExecutionError` (inherits `Exception`) are easy to miss when narrowing. Tests that relied on the broad catch will fail with uncaught exceptions.
+
+**Detection Workflow**:
+```python
+# ❌ Wrong: only catches built-in exceptions
+except (OSError, ValueError):
+    return None  # SkillNotFoundError escapes!
+
+# ✅ Correct: include custom exceptions explicitly
+except (SkillNotFoundError, KeyError, ValueError, OSError):
+    return None
+```
+
+**Key Insight**: After narrowing bare excepts, run the FULL test suite — not just the modified files. Custom exceptions often only surface in integration tests.
+
+**Files**: `src/vibesop/core/skills/manager.py`, `tests/integration/test_external_skills_real.py`
+
+---
+
+### Pydantic V2 `ConfigDict` Migration (2026-04-21)
+
+**Pattern**: When converting dataclasses to Pydantic V2 BaseModel, use `model_config = ConfigDict(...)` instead of nested `class Config:`.
+
+**Problem**: `class Config:` triggers `PydanticDeprecatedSince20` warning in V2 and will be removed in V3.
+
+**Example**:
+```python
+from pydantic import BaseModel, ConfigDict, Field
+
+# ❌ Deprecated
+class MyModel(BaseModel):
+    class Config:
+        frozen = False
+
+# ✅ Correct
+class MyModel(BaseModel):
+    model_config = ConfigDict(frozen=False)
+```
+
+**Files**: `src/vibesop/core/routing/layers.py`
+
+---
+
 ## Reusable Patterns
 
 ### Interface Drift Detection via Full Test Run (2026-04-20)
@@ -298,6 +345,39 @@ class SkillConfigManager:
 - `src/vibesop/core/skills/config_manager.py` (450+ lines)
 - `src/vibesop/cli/commands/skill_config.py` (450+ lines)
 - `src/vibesop/core/skills/understander.py` (auto-config integration)
+
+---
+
+### Lazy-Loaded Attributes and `hasattr()` Interaction (2026-04-21)
+
+**Issue**: Setting a lazy-loaded attribute to `None` in `__init__` breaks code that uses `hasattr()` or `getattr(obj, "attr", None)` for existence checks.
+
+**Root Cause**: When `self._skill_loader = None` is set in `__init__`, `hasattr(self, "_skill_loader")` returns `True`, causing the lazy-loading branch to be skipped. Later code tries to use `None._skill_cache` and fails.
+
+**Solution**: Do NOT set lazy-loaded attributes in `__init__` when the injected value is `None`. Let the attribute remain absent so `hasattr()` / `getattr()` fallbacks work correctly.
+
+```python
+# ❌ Wrong: breaks hasattr check
+class UnifiedRouter:
+    def __init__(self, skill_loader=None):
+        self._skill_loader = skill_loader  # None breaks hasattr!
+
+    def _get_candidates(self):
+        if self._skill_loader is None:  # AttributeError if not set
+            self._skill_loader = SkillLoader(...)
+
+# ✅ Correct: only set when actually provided
+class UnifiedRouter:
+    def __init__(self, skill_loader=None):
+        if skill_loader is not None:
+            self._skill_loader = skill_loader
+
+    def _get_candidates(self):
+        if getattr(self, "_skill_loader", None) is None:
+            self._skill_loader = SkillLoader(...)
+```
+
+**Files**: `src/vibesop/core/routing/unified.py`
 
 ---
 

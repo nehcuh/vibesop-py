@@ -12,7 +12,6 @@ from pathlib import Path
 import typer
 from rich.console import Console
 from rich.panel import Panel
-from rich.table import Table
 
 from vibesop.core.sessions import SessionContext
 
@@ -35,8 +34,6 @@ def record_tool(
 
     This is typically called by hooks, but can be used manually for testing.
     """
-    import os
-
     context_file = Path(context_file).expanduser()
 
     # For now, create a simple session context
@@ -55,7 +52,7 @@ def check_reroute(
         "~/.vibesop/session-context.json",
         "--context-file",
         "-c",
-        help="Path to context file",
+        help="Path to context file (legacy, sessions now auto-persist to .vibe/session/)",
     ),
 ) -> None:
     """Check if re-routing is suggested for a new message.
@@ -63,9 +60,9 @@ def check_reroute(
     This analyzes the conversation context and the new message
     to determine if a skill switch is recommended.
     """
-    context_file = Path(context_file).expanduser()
+    _ = Path(context_file).expanduser()  # legacy param, kept for CLI compatibility
 
-    ctx = SessionContext(project_root=Path.cwd())
+    ctx = SessionContext.load(project_root=Path.cwd())
     ctx.set_current_skill(current_skill)
 
     suggestion = ctx.check_reroute_needed(message)
@@ -100,14 +97,14 @@ def summary(
         "~/.vibesop/session-context.json",
         "--context-file",
         "-c",
-        help="Path to context file",
+        help="Path to context file (legacy, sessions now auto-persist to .vibe/session/)",
     ),
     json_output: bool = typer.Option(False, "--json", "-j", help="Output as JSON"),
 ) -> None:
     """Display session context summary."""
-    context_file = Path(context_file).expanduser()
+    _ = Path(context_file).expanduser()  # legacy param, kept for CLI compatibility
 
-    ctx = SessionContext(project_root=Path.cwd())
+    ctx = SessionContext.load(project_root=Path.cwd())
     summary = ctx.get_session_summary()
 
     if json_output:
@@ -117,10 +114,7 @@ def summary(
 
         # Duration
         duration = summary["duration_seconds"]
-        if duration < 60:
-            duration_str = f"{duration:.0f}s"
-        else:
-            duration_str = f"{duration/60:.1f}m"
+        duration_str = f"{duration:.0f}s" if duration < 60 else f"{duration / 60:.1f}m"
         console.print(f"Duration: {duration_str}")
 
         # Current skill
@@ -148,14 +142,15 @@ def set_skill(
         "~/.vibesop/session-context.json",
         "--context-file",
         "-c",
-        help="Path to context file",
+        help="Path to context file (legacy, sessions now auto-persist to .vibe/session/)",
     ),
 ) -> None:
     """Set the current active skill."""
-    context_file = Path(context_file).expanduser()
+    _ = Path(context_file).expanduser()  # legacy param, kept for CLI compatibility
 
-    ctx = SessionContext(project_root=Path.cwd())
+    ctx = SessionContext.load(project_root=Path.cwd())
     ctx.set_current_skill(skill_id)
+    ctx.save()
 
     console.print(f"[green]✓[/green] Current skill set to: {skill_id}")
 
@@ -166,8 +161,6 @@ def enable_tracking() -> None:
 
     This sets up the environment for intelligent re-routing.
     """
-    import os
-
     # Add to shell profile
     shell_profile = _get_shell_profile()
 
@@ -187,7 +180,7 @@ def enable_tracking() -> None:
             return
 
     # Append to profile
-    with open(shell_profile, "a") as f:
+    with shell_profile.open("a") as f:
         f.write(f"\n# VibeSOP session context tracking\n{export_line}\n")
 
     console.print(f"[green]✓[/green] Added to {shell_profile}")
@@ -198,8 +191,6 @@ def enable_tracking() -> None:
 @app.command()
 def disable_tracking() -> None:
     """Disable session context tracking."""
-    import os
-
     shell_profile = _get_shell_profile()
 
     if shell_profile is None or not shell_profile.exists():

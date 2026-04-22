@@ -6,7 +6,7 @@ along with the unified MatchResult model.
 
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import Protocol
+from typing import Any, Protocol
 
 from pydantic import BaseModel, Field
 
@@ -61,8 +61,10 @@ class RoutingContext:
     user_skill_level: str = "intermediate"
     conversation_id: str | None = None
     recent_queries: list[str] = field(default_factory=list)
+    current_skill: str | None = None
+    habit_boosts: dict[str, float] = field(default_factory=dict)
 
-    def to_dict(self) -> dict[str, str | int | list[str] | None]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization."""
         return {
             "file_type": self.file_type,
@@ -72,6 +74,7 @@ class RoutingContext:
             "user_skill_level": self.user_skill_level,
             "conversation_id": self.conversation_id,
             "recent_queries": self.recent_queries,
+            "current_skill": self.current_skill,
         }
 
     @property

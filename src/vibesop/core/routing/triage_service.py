@@ -168,6 +168,7 @@ class TriageService:
                         confidence=confidence,
                         layer=RoutingLayer.AI_TRIAGE,
                         source=source,
+                        description=str(candidate.get("description", "")),
                         metadata={
                             "ai_triage": True,
                             "structured": parsed.get("structured", False),
@@ -292,6 +293,7 @@ class TriageService:
                     confidence=data["confidence"],
                     layer=RoutingLayer(data["layer"]),
                     source=data["source"],
+                    description=data.get("description", ""),
                     metadata=data.get("metadata", {}),
                 )
             except (KeyError, TypeError) as e:

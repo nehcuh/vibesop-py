@@ -38,6 +38,16 @@
    - Eliminated PytestReturnNotNoneWarning, fixed ruff issues
    - All 1601 tests passing, 78.25% coverage
 
+6. **Code Review Optimization Plan** ✅ (Completed - April 21)
+   - P0-1: Split `_handle_single_result` God function (213 lines → 6 focused functions)
+   - P0-2: Cleaned 27 bare `except Exception` → specific exception types
+   - P0-3: `LayerResult` dataclass → Pydantic BaseModel with ConfigDict
+   - H1: Merged duplicate `RoutingConfig` (adapters → `RoutingPolicy`)
+   - H4: `UnifiedRouter` skill_loader injection support
+   - M3: `fallback_mode`/`default_strategy` Literal type validation
+   - M4: `_edit_execution_plan` empty steps guard
+   - 1687 tests passing, 0 failed
+
 ---
 
 ## Projects Summary
@@ -45,7 +55,7 @@
 ### VibeSOP (vibesop-py)
 **Status**: Production Ready (v4.2.1)
 **Description**: AI-assisted development intelligent routing engine with skill-level LLM configuration
-**Coverage**: 76.22% (1,642 tests passing)
+**Coverage**: 76.22% (1,687 tests passing)
 **Key Metrics**:
 - Routing accuracy: 94%
 - Performance: 44 QPS (target: 40+ QPS)
@@ -53,6 +63,16 @@
 - Security audit: All external skills scanned
 - LLM configs: Skill-level configuration with 5-tier fallback
 - Test speed: 39s fast suite / ~4.5min full suite
+
+**Recent Changes** (2026-04-21):
+- ✅ Code review optimization plan: P0-1/P0-2/P0-3/H1/H4/M3/M4 all complete
+- ✅ 27 bare `except Exception` narrowed to specific types
+- ✅ `LayerResult` unified to Pydantic BaseModel
+- ✅ Duplicate `RoutingConfig` resolved (adapters → `RoutingPolicy`)
+- ✅ `UnifiedRouter` supports `skill_loader` injection
+- ✅ `fallback_mode`/`default_strategy` now Literal-validated
+- ✅ `_edit_execution_plan` empty plan guard added
+- ✅ `_handle_single_result` split from 213 lines to 6 focused functions
 
 **Recent Changes** (2026-04-21):
 - ✅ Architecture review with professional assessment
@@ -73,9 +93,9 @@
 - ✅ All tests passing (1000+ lines of new code, fully tested)
 
 **Next Steps**:
-- Extract shared SkillDiscoveryService to unify SkillManager/UnifiedRouter loader paths
+- Use new `skill_loader` injection to unify SkillManager/UnifiedRouter loader paths
 - Consider Builder pattern for UnifiedRouter __init__ (~110 lines)
-- Monitor test suite health (current: 1601 passed)
+- Monitor test suite health (current: 1687 passed)
 - Version bump automation (avoid future doc version drift)
 
 ---

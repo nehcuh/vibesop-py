@@ -3,6 +3,48 @@
 ## Session Handoff
 
 <!-- handoff:start -->
+### 2026-04-21 10:20
+
+**Session**: 代码评审优化计划执行（P0/H/M 级别）
+
+**Summary**:
+用户要求根据代码审查意见执行系统性优化。完成 3 个 Critical + 4 个 High/Medium 优化项，全部通过 1687 个测试。
+
+**Key Decisions**:
+1. **P0-1 God Function 拆分**: `_handle_single_result`（213行）→ 6 个专注函数 + 删除 dead code validation 重复块
+2. **P0-2 裸 except 清理**: 27 处 `except Exception` → 具体异常类型。关键教训：自定义异常（SkillNotFoundError/SkillExecutionError）和第三方异常（YAMLError）容易遗漏
+3. **P0-3 LayerResult Pydantic 化**: dataclass → BaseModel，使用 ConfigDict 避免 V2 deprecation warning
+4. **H1 重复 RoutingConfig 合并**: adapters 层重命名为 `RoutingPolicy`，消除命名冲突
+5. **H4 SkillLoader 注入**: `UnifiedRouter` 新增可选 `skill_loader` 参数，支持外部注入复用
+6. **M3 Literal 类型验证**: `fallback_mode`/`default_strategy` 从 `str` 改为 `Literal`
+7. **M4 空计划保护**: `_edit_execution_plan` `done` 分支增加空 steps 检查
+
+**Files Modified**:
+- `src/vibesop/cli/main.py` - 拆分 + 空保护
+- `src/vibesop/core/routing/layers.py` - Pydantic BaseModel
+- `src/vibesop/core/routing/unified.py` - skill_loader 注入
+- `src/vibesop/core/config/manager.py` - Literal 验证
+- `src/vibesop/adapters/models.py`/`__init__.py`/`builder/*` - RoutingPolicy 重命名
+- `src/vibesop/cli/commands/*.py`/`core/**/*.py`/`tests/**/*.py` - 27处裸except清理
+- `memory/session.md`/`project-knowledge.md`/`instincts.yaml` - 经验记录
+
+**Next Steps**:
+- 无紧急任务
+- 所有测试通过（1687 passed）
+- 可考虑将 H4 的注入能力用于统一 SkillManager/UnifiedRouter 的 loader
+
+**Technical Debt** (remaining):
+- UnifiedRouter 仍是 1200+ 行 God class（P0-1 只拆分了 CLI 侧）
+- `_execute_layers()` 和 `_collect_layer_details()` 仍有重复逻辑
+- SkillManager/UnifiedRouter 虽然支持注入，但默认仍各自创建 loader
+
+**Test Status**:
+```
+1687 passed, 0 failed ✅
+```
+
+---
+
 ### 2026-04-22 11:00
 
 **Session**: 生产就绪状态评估
@@ -27,44 +69,6 @@
 ```
 Coverage: 76.22% ✅
 Tests: 1642 passed, 1 skipped ✅
-```
-
----
-
-### 2026-04-21 10:40
-
-**Session**: 代码评审与测试回归修复
-
-**Summary**:
-用户要求深入评审 VibeSOP 最新更新并修复代码问题。通过全面分析发现了多个接口不匹配和测试回归问题，已全部修复，1555 个测试通过。
-
-**Key Decisions**:
-1. **版本号同步**: 将 `pyproject.toml` 和 `_version.py` 从 4.0.0 更新到 4.2.0，与 README/CHANGELOG 保持一致。
-
-2. **Typer CLI 测试修复**: 测试必须导入 Typer app 实例而非命令函数。`runner.invoke(skills_app, ["add", "--help"])` 是正确的调用方式。
-
-3. **接口漂移修复**: 发现 `skill_add.py` 中存在 3 处接口不匹配（`SkillSecurityAuditor` 参数、`AuditResult` 属性、`SkillSuggestion` 字段、`UnifiedRouter` 参数），已全部同步。
-
-4. **集成测试 Mock 化**: `questionary` 交互式输入无法在 `CliRunner` 中工作，使用 `unittest.mock.patch` 将其 mock 为非交互式模式。
-
-**Files Modified**:
-- `pyproject.toml` - version 4.0.0 → 4.2.0
-- `src/vibesop/_version.py` - version 4.0.0 → 4.2.0
-- `src/vibesop/cli/commands/skill_add.py` - 修复 4 处接口不匹配
-- `tests/cli/test_skill_add_cmd.py` - 修复 CLI 测试导入
-- `tests/integration/test_skill_add_flow.py` - 修复命令名 + 添加 questionary mock
-- `tests/test_ai_triage.py` - 修复 mock 响应匹配实际内置技能
-
-**Next Steps**:
-- 无紧急任务，所有测试通过
-- 可考虑将 version bump 流程自动化（避免未来版本号不一致）
-
-**Technical Debt**:
-- `skill_add.py` 与核心模块的接口耦合较强，未来重构共享 dataclass 时需同步更新
-
-**Test Status**:
-```
-1555 passed, 1 skipped, 0 failed ✅
 ```
 
 <!-- handoff:end -->

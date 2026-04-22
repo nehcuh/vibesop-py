@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Any
 
 from vibesop.core.config import ConfigManager
+from vibesop.core.exceptions import SkillNotFoundError
 from vibesop.core.skills.base import Skill
 from vibesop.core.skills.executor import ExternalSkillExecutor
 from vibesop.core.skills.loader import SkillLoader
@@ -64,10 +65,6 @@ class SkillManager:
             enable_execution: Whether to enable local skill execution
         """
         self.project_root = Path(project_root).resolve()
-        # TECH DEBT: SkillManager and UnifiedRouter each create their own
-        # SkillLoader with different search paths. This can lead to inconsistent
-        # skill discovery between routing and management. Consider extracting a
-        # shared SkillDiscoveryService in a future refactor.
         self._loader = SkillLoader(project_root=self.project_root)
         self._config = ConfigManager(project_root=self.project_root)
 
@@ -278,7 +275,7 @@ class SkillManager:
                 }
             else:
                 return None
-        except Exception:
+        except (SkillNotFoundError, KeyError, ValueError, OSError):
             # Skill not found or other error
             return None
 

@@ -7,7 +7,7 @@ from vibesop.adapters.models import (
     Manifest,
     ManifestMetadata,
     PolicySet,
-    RoutingConfig,
+    RoutingPolicy,
     SecurityPolicy,
 )
 from vibesop.core.models import SkillDefinition
@@ -136,7 +136,7 @@ class TestOpenCodeAdapter:
             scan_external_content=False,
             max_file_size=1024 * 1024,
         )
-        routing = RoutingConfig(
+        routing = RoutingPolicy(
             enable_ai_routing=False,
             confidence_threshold=0.8,
         )

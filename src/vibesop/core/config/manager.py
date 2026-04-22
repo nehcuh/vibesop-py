@@ -15,7 +15,7 @@ import os
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar, Literal
 
 from pydantic import BaseModel, Field
 
@@ -149,6 +149,24 @@ class RoutingConfig(BaseModel):
     ai_triage_circuit_breaker_failure_threshold: int = Field(default=3, ge=1, le=10)
     ai_triage_circuit_breaker_latency_threshold_ms: float = Field(default=500.0, ge=100.0)
     ai_triage_circuit_breaker_cooldown_seconds: int = Field(default=60, ge=10)
+    session_aware: bool = Field(
+        default=True,
+        description="Enable session-state-aware routing for multi-turn conversations",
+    )
+    session_stickiness_boost: float = Field(
+        default=0.03,
+        ge=0.0,
+        le=0.2,
+        description="Confidence boost for current skill in multi-turn continuity",
+    )
+    fallback_mode: Literal["transparent", "silent", "disabled"] = Field(
+        default="transparent",
+        description="Behavior when no skill matches: transparent (explain + suggest), silent (quiet fallback), disabled (show 'no match')",
+    )
+    default_strategy: Literal["auto", "sequential", "parallel", "hybrid"] = Field(
+        default="auto",
+        description="Default execution strategy for multi-skill orchestration: auto, sequential, parallel, hybrid",
+    )
 
 
 class SecurityConfig(BaseModel):

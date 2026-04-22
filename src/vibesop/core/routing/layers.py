@@ -6,8 +6,9 @@ The UnifiedRouter executes layers in priority order and returns the first succes
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Protocol
+
+from pydantic import BaseModel, ConfigDict, Field
 
 from vibesop.core.models import RoutingLayer, SkillRoute
 
@@ -15,8 +16,7 @@ if TYPE_CHECKING:
     from vibesop.core.matching import RoutingContext
 
 
-@dataclass
-class LayerResult:
+class LayerResult(BaseModel):
     """Result from a single routing layer attempt.
 
     Attributes:
@@ -29,12 +29,14 @@ class LayerResult:
     """
 
     match: SkillRoute | None = None
-    alternatives: list[SkillRoute] = field(default_factory=list)
+    alternatives: list[SkillRoute] = Field(default_factory=list)
     layer: RoutingLayer = RoutingLayer.NO_MATCH
     should_stop: bool = True
     matched: bool = False
     reason: str = ""
-    diagnostics: dict[str, Any] = field(default_factory=dict)
+    diagnostics: dict[str, Any] = Field(default_factory=dict)
+
+    model_config = ConfigDict(frozen=False)
 
 
 class IRouteLayer(Protocol):

@@ -182,7 +182,7 @@ def set_config(
         skill_def = skill_manager.get_skill(skill_id)
         if skill_def:
             console.print(f"[dim]Skill found: {skill_def.metadata.name}[/dim]\n")
-    except Exception:
+    except (OSError, ValueError):
         console.print(f"[yellow]⚠ Warning: Skill '{skill_id}' not found in registry[/yellow]")
         console.print("[dim]Configuration will be saved, but skill may not be installed yet\n[/dim]")
 

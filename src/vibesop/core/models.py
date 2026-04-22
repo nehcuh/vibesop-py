@@ -22,6 +22,7 @@ class RoutingLayer(StrEnum):
     EMBEDDING = "embedding"
     LEVENSHTEIN = "levenshtein"
     NO_MATCH = "no_match"
+    FALLBACK_LLM = "fallback_llm"
 
     @property
     def layer_number(self) -> int:
@@ -35,6 +36,7 @@ class RoutingLayer(StrEnum):
             RoutingLayer.EMBEDDING: 5,
             RoutingLayer.LEVENSHTEIN: 6,
             RoutingLayer.NO_MATCH: 7,
+            RoutingLayer.FALLBACK_LLM: 8,
         }
         return mapping[self]
 
@@ -64,6 +66,10 @@ class SkillRoute(BaseModel):
         description="Routing layer that produced this match",
     )
     source: str = Field(default="builtin", description="Skill pack source")
+    description: str = Field(
+        default="",
+        description="Skill description for display in CLI",
+    )
     metadata: dict[str, Any] = Field(
         default_factory=dict,
         description="Additional routing metadata",
@@ -103,6 +109,36 @@ class RoutingRequest(BaseModel):
     )
 
 
+class RejectedCandidate(BaseModel):
+    """A candidate that was considered but rejected by a routing layer.
+
+    Attributes:
+        skill_id: The rejected skill identifier
+        confidence: Confidence score (below threshold)
+        layer: Which layer rejected this candidate
+        reason: Why it was rejected (e.g., "below threshold (0.6)")
+    """
+
+    model_config = {"arbitrary_types_allowed": True}
+
+    skill_id: str = Field(..., description="Rejected skill identifier")
+    confidence: float = Field(
+        ge=0.0,
+        le=1.0,
+        description="Confidence score below threshold",
+    )
+    layer: RoutingLayer = Field(..., description="Layer that rejected candidate")
+    reason: str = Field(default="", description="Rejection reason")
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "skill_id": self.skill_id,
+            "confidence": self.confidence,
+            "layer": self.layer.value,
+            "reason": self.reason,
+        }
+
+
 class LayerDetail(BaseModel):
     """Detailed diagnostic for a single routing layer attempt.
 
@@ -112,6 +148,7 @@ class LayerDetail(BaseModel):
         reason: Human-readable explanation of the layer's decision
         duration_ms: How long this layer took
         diagnostics: Layer-specific diagnostic data (scores, skip reasons, etc.)
+        rejected_candidates: Candidates that were close but didn't meet threshold
     """
 
     model_config = {"arbitrary_types_allowed": True}
@@ -124,6 +161,10 @@ class LayerDetail(BaseModel):
         default_factory=dict,
         description="Layer-specific diagnostic data",
     )
+    rejected_candidates: list[RejectedCandidate] = Field(
+        default_factory=list,
+        description="Candidates close to threshold but rejected",
+    )
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization."""
@@ -133,6 +174,7 @@ class LayerDetail(BaseModel):
             "reason": self.reason,
             "duration_ms": self.duration_ms,
             "diagnostics": self.diagnostics,
+            "rejected_candidates": [r.to_dict() for r in self.rejected_candidates],
         }
 
 
@@ -171,8 +213,8 @@ class RoutingResult(BaseModel):
 
     @property
     def has_match(self) -> bool:
-        """Whether a match was found."""
-        return self.primary is not None
+        """Whether a match was found (excluding fallback)."""
+        return self.primary is not None and self.primary.layer != RoutingLayer.FALLBACK_LLM
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization."""
@@ -323,8 +365,11 @@ class OrchestrationResult(BaseModel):
 
     @property
     def has_match(self) -> bool:
-        """Whether any match was found (single or orchestrated)."""
-        return self.primary is not None or (
+        """Whether any match was found (single or orchestrated), excluding fallback."""
+        return (
+            self.primary is not None
+            and self.primary.layer != RoutingLayer.FALLBACK_LLM
+        ) or (
             self.execution_plan is not None and len(self.execution_plan.steps) > 0
         )
 

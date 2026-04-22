@@ -263,7 +263,7 @@ class PlatformAdapter(ABC):
             "skills": manifest.skills,
             "policies": manifest.policies,
             "security": manifest.get_effective_security_policy(),
-            "routing": manifest.get_effective_routing_config(),
+            "routing": manifest.get_effective_routing_policy(),
             "metadata": manifest.metadata,
             "platform": self.platform_name,
             "version": manifest.metadata.version,

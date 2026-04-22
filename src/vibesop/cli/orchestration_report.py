@@ -27,7 +27,18 @@ def render_orchestration_result(
 
 def _render_single_result(result: OrchestrationResult, console: Console) -> None:
     """Render single-skill fallback."""
-    if result.primary:
+    if result.primary and result.primary.layer.value == "fallback_llm":
+        console.print(
+            Panel(
+                f"[bold yellow]🤖 Fallback Mode[/bold yellow]\n\n"
+                f"No installed skill confidently matched your query.\n"
+                f"[dim]Query:[/dim] {result.original_query}\n"
+                f"[dim]Layer:[/dim] {result.primary.layer.value}",
+                title="[bold]Single Skill Result[/bold]",
+                border_style="yellow",
+            )
+        )
+    elif result.primary:
         console.print(
             Panel(
                 f"[bold green]✅ Matched:[/bold green] {result.primary.skill_id}\n"
@@ -71,6 +82,36 @@ def _render_orchestrated_result(result: OrchestrationResult, console: Console) -
         )
     )
 
+    # Execution flow tree with data dependencies
+    flow_tree = Tree("[bold]Execution Flow[/bold]")
+    strategy_label = "Sequential"
+    if plan.steps and len(plan.steps) > 1:
+        # Simple heuristic: if all steps use previous output, it's sequential
+        has_dependencies = any(
+            i > 0 and step.output_as for i, step in enumerate(plan.steps)
+        )
+        if not has_dependencies:
+            strategy_label = "Parallel (no dependencies)"
+        else:
+            strategy_label = "Sequential (data flows between steps)"
+    flow_tree.add(f"[dim]Strategy:[/dim] {strategy_label}")
+    if plan.steps:
+        data_flow = flow_tree.add("[dim]Data Dependencies[/dim]")
+        for i, step in enumerate(plan.steps):
+            if i == 0:
+                data_flow.add(
+                    f"📥 Step {step.step_number}: [bold]{step.skill_id}[/bold] "
+                    f"→ output: [bold cyan]'{step.output_as}'[/bold cyan]"
+                )
+            else:
+                prev = plan.steps[i - 1]
+                data_flow.add(
+                    f"⬇️  Step {step.step_number}: [bold]{step.skill_id}[/bold]\n"
+                    f"   [dim]input:[/dim] [cyan]'{prev.output_as}'[/cyan] from Step {prev.step_number}"
+                )
+    console.print(flow_tree)
+    console.print()
+
     # Steps table
     table = Table(show_header=True, box=box.SIMPLE)
     table.add_column("Step", style="dim", justify="right")
@@ -108,7 +149,7 @@ def _render_orchestrated_result(result: OrchestrationResult, console: Console) -
 
     if result.single_fallback:
         console.print(
-            f"\n[dim]Fallback skill:[/dim] {result.single_fallback.skill_id} "
+            f"\n[dim]Single-skill fallback:[/dim] {result.single_fallback.skill_id} "
             f"({result.single_fallback.confidence:.0%})"
         )
 

@@ -153,7 +153,7 @@ class TestQuickBuilder:
         )
 
         security = manifest.get_effective_security_policy()
-        routing = manifest.get_effective_routing_config()
+        routing = manifest.get_effective_routing_policy()
 
         assert security.scan_external_content is False
         assert routing.confidence_threshold == 0.8

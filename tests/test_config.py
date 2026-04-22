@@ -43,6 +43,53 @@ class TestConfigLoader:
         assert config is not None
         assert hasattr(config, "enabled")
 
+    def test_routing_config_session_aware_default(self) -> None:
+        """Test that session_aware defaults to True."""
+        from vibesop.core.config import RoutingConfig
+
+        config = RoutingConfig()
+        assert config.session_aware is True
+
+    def test_routing_config_session_aware_override(self) -> None:
+        """Test that session_aware can be disabled."""
+        from vibesop.core.config import RoutingConfig
+
+        config = RoutingConfig(session_aware=False)
+        assert config.session_aware is False
+
+    def test_routing_config_stickiness_boost_default(self) -> None:
+        """Test that session_stickiness_boost defaults to 0.03."""
+        from vibesop.core.config import RoutingConfig
+
+        config = RoutingConfig()
+        assert config.session_stickiness_boost == 0.03
+
+    def test_routing_config_stickiness_boost_bounds(self) -> None:
+        """Test that session_stickiness_boost respects bounds."""
+        from pydantic import ValidationError
+
+        from vibesop.core.config import RoutingConfig
+
+        # Valid values
+        config = RoutingConfig(session_stickiness_boost=0.1)
+        assert config.session_stickiness_boost == 0.1
+
+        config_zero = RoutingConfig(session_stickiness_boost=0.0)
+        assert config_zero.session_stickiness_boost == 0.0
+
+        # Out of bounds
+        try:
+            RoutingConfig(session_stickiness_boost=0.5)
+            raise AssertionError("Should have raised ValidationError")
+        except ValidationError:
+            pass
+
+        try:
+            RoutingConfig(session_stickiness_boost=-0.1)
+            raise AssertionError("Should have raised ValidationError")
+        except ValidationError:
+            pass
+
     def test_get_with_default(self) -> None:
         """Test getting config value with default."""
         manager = ConfigManager(project_root=".")

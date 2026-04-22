@@ -204,3 +204,42 @@ Time: ~4min 37s
 ```
 
 **Recorded**: no - 评估活动，无新增技术决策
+
+### SN-2026-04-21 (09:28~10:20) 代码评审优化计划执行
+
+**Session**: 基于深度代码评审执行 P0/H/M 级别优化
+
+**Summary**:
+用户要求根据代码审查意见执行优化计划（Ralplan + Ralph 模式）。完成 P0-1/P0-2/P0-3 三个 Critical 项及 H1/H4/M3/M4 四个 High/Medium 项，全部通过测试。
+
+**Completed Tasks**:
+1. **P0-1**: 拆分 `_handle_single_result`（213行 God function → 6个专注函数）+ 删除 dead code validation 重复块
+2. **P0-2**: 清理 27 处裸 `except Exception` 为具体异常类型（OSError/ValueError/TypeError/RuntimeError/ImportError/JSONDecodeError/YAMLError 等）
+3. **P0-3**: `LayerResult` dataclass → Pydantic `BaseModel`，使用 `ConfigDict` 避免 V2 deprecation warning
+4. **H1**: 合并重复 `RoutingConfig` — adapters 层重命名为 `RoutingPolicy`，更新 `PolicySet`/`builder`/`tests`/`adapters/__init__` 全部引用
+5. **H4**: `UnifiedRouter` 支持 `skill_loader` 注入 — 添加可选参数，注入时复用，未注入时保持懒加载
+6. **M3**: `fallback_mode`/`default_strategy` 改为 `Literal` 类型验证
+7. **M4**: `_edit_execution_plan` 空保护 — `done` 分支增加 `if not steps:` 守卫
+
+**Key Discoveries**:
+- 裸 `except` 收窄时，自定义异常（`SkillNotFoundError`、`SkillExecutionError`）容易被遗漏
+- `ruamel.yaml.DuplicateKeyError` 不继承 `ValueError`，需显式捕获 `YAMLError`
+- `UnifiedRouter._skill_loader` 懒加载属性不能在 `__init__` 中设为 `None`（会破坏 `hasattr` 检查）
+- 重命名 public API 时，间接引用（如 `_dict_to_routing_config` 方法名）也需要全局更新
+
+**Files Modified**:
+- `src/vibesop/cli/main.py` - 拆分 `_handle_single_result` + 空保护
+- `src/vibesop/core/routing/layers.py` - LayerResult → Pydantic BaseModel
+- `src/vibesop/core/routing/unified.py` - skill_loader 注入支持
+- `src/vibesop/core/config/manager.py` - fallback_mode/default_strategy Literal
+- `src/vibesop/adapters/models.py` - RoutingConfig → RoutingPolicy
+- `src/vibesop/adapters/__init__.py` - 更新导出
+- `src/vibesop/builder/manifest.py`/`overlay.py` - 更新引用
+- `src/vibesop/cli/commands/*.py`/`core/**/*.py`/`tests/**/*.py` - 27处裸except清理
+
+**Test Status**:
+```
+1687 passed, 0 failed ✅
+```
+
+**Recorded**: yes - 3 technical pitfalls, 2 reusable patterns, 1 architecture decision

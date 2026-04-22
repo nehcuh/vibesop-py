@@ -165,7 +165,7 @@ class SkillHealthMonitor:
                         # 转换内容并使用转换后的版本进行检查
                         converted_content, _ = converter.convert(content, skill_file)
                         content = converted_content
-                except Exception:
+                except (ValueError, TypeError):
                     # 转换失败，使用原始内容
                     pass
 

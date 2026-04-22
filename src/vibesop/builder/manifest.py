@@ -13,7 +13,7 @@ from vibesop.adapters.models import (
     Manifest,
     ManifestMetadata,
     PolicySet,
-    RoutingConfig,
+    RoutingPolicy,
     SecurityPolicy,
     SkillDefinition,
 )
@@ -297,7 +297,7 @@ class ManifestBuilder:
 
             # Convert to PolicySet
             security = self._dict_to_security_policy(policy_dict.get("security", {}))
-            routing = self._dict_to_routing_config(policy_dict.get("routing", {}))
+            routing = self._dict_to_routing_policy(policy_dict.get("routing", {}))
             behavior = policy_dict.get("behavior", {})
             custom = policy_dict.get("custom", {})
 
@@ -328,19 +328,19 @@ class ManifestBuilder:
             require_signed_skills=data.get("require_signed_skills", False),
         )
 
-    def _dict_to_routing_config(self, data: dict[str, Any]) -> RoutingConfig:
-        """Convert dict to RoutingConfig.
+    def _dict_to_routing_policy(self, data: dict[str, Any]) -> RoutingPolicy:
+        """Convert dict to RoutingPolicy.
 
         Args:
             data: Dictionary with routing config values
 
         Returns:
-            RoutingConfig instance
+            RoutingPolicy instance
         """
         # Handle preference_learning
         preference_learning = data.get("preference_learning", {})
 
-        return RoutingConfig(
+        return RoutingPolicy(
             enable_ai_routing=data.get("enable_ai_routing", True),
             confidence_threshold=data.get("confidence_threshold", 0.6),
             max_candidates=data.get("max_candidates", 3),
@@ -382,7 +382,7 @@ class ManifestBuilder:
         policies_dict = data.get("policies", {})
         policies = PolicySet(
             security=self._dict_to_security_policy(policies_dict.get("security", {})),
-            routing=self._dict_to_routing_config(policies_dict.get("routing", {})),
+            routing=self._dict_to_routing_policy(policies_dict.get("routing", {})),
             behavior=policies_dict.get("behavior", {}),
             custom=policies_dict.get("custom", {}),
         )
@@ -486,7 +486,7 @@ class QuickBuilder:
                 setattr(policy, key, value)
 
         if routing:
-            config = base_manifest.get_effective_routing_config()
+            config = base_manifest.get_effective_routing_policy()
             for key, value in routing.items():
                 setattr(config, key, value)
 

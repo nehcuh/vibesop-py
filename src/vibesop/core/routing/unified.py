@@ -46,13 +46,13 @@ from vibesop.core.models import (
     RoutingResult,
     SkillRoute,
 )
-from vibesop.core.orchestration import MultiIntentDetector, PlanBuilder, PlanTracker
-from vibesop.core.orchestration.task_decomposer import TaskDecomposer
 from vibesop.core.optimization import (
     CandidatePrefilter,
     PreferenceBooster,
     SkillClusterIndex,
 )
+from vibesop.core.orchestration import MultiIntentDetector, PlanBuilder, PlanTracker
+from vibesop.core.orchestration.task_decomposer import TaskDecomposer
 from vibesop.core.routing.cache import CacheManager
 from vibesop.core.routing.conflict import (
     ConfidenceGapStrategy,
@@ -102,6 +102,7 @@ class UnifiedRouter(RouterStatsMixin):
         self,
         project_root: str | Path = ".",
         config: ConfigRoutingConfig | ConfigManager | None = None,
+        skill_loader: Any | None = None,
     ):
         self.project_root = Path(project_root).resolve()
 
@@ -113,6 +114,8 @@ class UnifiedRouter(RouterStatsMixin):
             self._config_manager = self._create_config_manager_from_config(config)
 
         self._config: ConfigRoutingConfig = self._config_manager.get_routing_config()
+        if skill_loader is not None:
+            self._skill_loader = skill_loader
 
         matcher_config = MatcherConfig(
             min_confidence=self._config.min_confidence,
@@ -220,6 +223,9 @@ class UnifiedRouter(RouterStatsMixin):
         self._plan_builder: PlanBuilder | None = None
         self._plan_tracker: PlanTracker | None = None
 
+        # Session context for multi-turn state persistence (lazy init)
+        self._session_context = None
+
     def _create_config_manager_from_config(self, config: ConfigRoutingConfig) -> ConfigManager:
         manager = ConfigManager(project_root=self.project_root)
         for field_name in type(config).model_fields:
@@ -246,18 +252,26 @@ class UnifiedRouter(RouterStatsMixin):
         start_time = time.perf_counter()
         self._total_routes += 1
 
-        # Enrich context with memory if available
-        context = self._enrich_context(context)
+        # Enrich context with memory and session state if available
+        context = self._enrich_context(context, query)
 
         if candidates is None:
             candidates = self._get_cached_candidates()
 
-        # Filter by enablement and scope
+        # Filter by enablement, scope, and lifecycle state
         # External callers can bypass by passing their own candidate list
         filtered_candidates: list[dict[str, Any]] = []
+        deprecated_warnings: list[str] = []
         for c in candidates:
             if not c.get("enabled", True):
                 continue
+            # Skip archived skills
+            lifecycle = c.get("lifecycle", "active")
+            if lifecycle == "archived":
+                continue
+            # Collect deprecated skills for warning
+            if lifecycle == "deprecated":
+                deprecated_warnings.append(str(c.get("id", "")))
             scope = c.get("scope", "project")
             if scope == "project":
                 source_file = c.get("source_file")
@@ -279,27 +293,61 @@ class UnifiedRouter(RouterStatsMixin):
                 self._record_layer(layer_result.layer)
                 # Record this routing decision for memory/learning
                 self._record_routing_decision(query, layer_result.match, context)
-                return self._build_result(
+                result = self._build_result(
                     query=query,
                     primary=layer_result.match,
                     alternatives=layer_result.alternatives,
                     routing_path=routing_path,
                     layer_details=layer_details,
                     start_time=start_time,
+                    deprecated_warnings=deprecated_warnings if deprecated_warnings else None,
                 )
+                # Persist session state with the selected skill
+                self._save_session_state(result, context)
+                return result
 
         duration_ms = (time.perf_counter() - start_time) * 1000
         self._record_layer(RoutingLayer.NO_MATCH)
         # Collect layer details even on no-match by running all layers
         layer_details = self._collect_layer_details(query, candidates, context)
-        return RoutingResult(
-            primary=None,
-            alternatives=[],
-            routing_path=routing_path,
-            layer_details=layer_details,
-            query=query,
-            duration_ms=duration_ms,
-        )
+
+        # Fallback mode: transparent or silent fallback to raw LLM
+        if self._config.fallback_mode == "disabled":
+            result = RoutingResult(
+                primary=None,
+                alternatives=[],
+                routing_path=routing_path,
+                layer_details=layer_details,
+                query=query,
+                duration_ms=duration_ms,
+            )
+        elif self._config.fallback_mode == "silent":
+            # Silent: return no-match but include nearest candidates as alternatives
+            nearest: list[SkillRoute] = []
+            try:
+                matcher_result = self._try_matcher_pipeline(query, candidates, context)
+                if matcher_result and matcher_result.match:
+                    nearest = [matcher_result.match, *matcher_result.alternatives]
+            except (RuntimeError, ValueError):
+                pass
+            result = RoutingResult(
+                primary=None,
+                alternatives=nearest,
+                routing_path=routing_path,
+                layer_details=layer_details,
+                query=query,
+                duration_ms=duration_ms,
+            )
+        else:
+            result = self._build_fallback_result(
+                query=query,
+                candidates=candidates,
+                routing_path=routing_path,
+                layer_details=layer_details,
+                duration_ms=duration_ms,
+            )
+        self._save_session_state(result, context)
+        return result
 
     def orchestrate(
         self,
@@ -497,7 +545,9 @@ class UnifiedRouter(RouterStatsMixin):
 
         # Layers 3-6: Matcher pipeline (keyword, tfidf, embedding, levenshtein)
         matcher_start = time.perf_counter()
-        matcher_result = self._try_matcher_pipeline(query, candidates, context)
+        matcher_result = self._try_matcher_pipeline(
+            query, candidates, context, collect_rejected=True
+        )
         matcher_duration_ms = (time.perf_counter() - matcher_start) * 1000
         if matcher_result is not None and matcher_result.match is not None:
             layer_details.append(
@@ -513,6 +563,17 @@ class UnifiedRouter(RouterStatsMixin):
             )
             yield matcher_result, layer_details
         else:
+            rejected = []
+            if matcher_result and matcher_result.diagnostics:
+                raw_rejected = matcher_result.diagnostics.get("rejected_candidates", [])
+                from vibesop.core.models import RejectedCandidate
+                for r in raw_rejected:
+                    rejected.append(RejectedCandidate(
+                        skill_id=r["skill_id"],
+                        confidence=r["confidence"],
+                        layer=RoutingLayer(r["layer"].value if hasattr(r["layer"], "value") else str(r["layer"])),
+                        reason=r.get("reason", ""),
+                    ))
             layer_details.append(
                 LayerDetail(
                     layer=RoutingLayer.LEVENSHTEIN,
@@ -520,6 +581,7 @@ class UnifiedRouter(RouterStatsMixin):
                     reason=matcher_result.reason if matcher_result else "No matcher produced a confident match",
                     duration_ms=matcher_duration_ms,
                     diagnostics=matcher_result.diagnostics if matcher_result else {},
+                    rejected_candidates=rejected,
                 )
             )
             yield matcher_result or LayerResult(
@@ -652,6 +714,7 @@ class UnifiedRouter(RouterStatsMixin):
                 confidence=1.0,
                 layer=RoutingLayer.EXPLICIT,
                 source=source,
+                description=str(candidate.get("description", "")),
                 metadata={"override": True, "cleaned_query": cleaned_query},
             ),
             layer=RoutingLayer.EXPLICIT,
@@ -704,6 +767,7 @@ class UnifiedRouter(RouterStatsMixin):
                         confidence=0.75,
                         layer=RoutingLayer.SCENARIO,
                         source=self._get_skill_source(rid, rel.get("namespace", "builtin")),
+                        description=str(rel.get("description", "")),
                         metadata={"scenario": scenario.get("scenario")},
                     )
                 )
@@ -717,6 +781,7 @@ class UnifiedRouter(RouterStatsMixin):
                 source=self._get_skill_source(
                     target_skill, candidate.get("namespace", "builtin")
                 ),
+                description=str(candidate.get("description", "")),
                 metadata={"scenario": scenario_name},
             ),
             alternatives=alternatives,
@@ -740,6 +805,33 @@ class UnifiedRouter(RouterStatsMixin):
             )
         return self._memory_manager
 
+    def _get_session_context(self):
+        """Lazy-load session context for multi-turn state persistence."""
+        if self._session_context is None:
+            from vibesop.core.sessions import SessionContext
+
+            self._session_context = SessionContext.load(
+                session_id="default",  # resolved internally via _resolve_session_id
+                project_root=str(self.project_root),
+                router=self,
+            )
+        return self._session_context
+
+    def _save_session_state(self, result: RoutingResult, _context: RoutingContext | None) -> None:
+        """Persist session state after routing."""
+        if not self._config.session_aware:
+            return
+
+        try:
+            session = self._get_session_context()
+            if result.has_match and result.primary is not None:
+                session.set_current_skill(result.primary.skill_id)
+                session.record_route_decision(result.query, result.primary.skill_id)
+            # Note: fallback/no-match does NOT erase current_skill — preserves context
+            session.save()
+        except (OSError, ValueError, RuntimeError) as e:
+            logger.debug(f"Failed to save session state: {e}")
+
     def _get_instinct_learner(self) -> InstinctLearner:
         if self._instinct_learner is None:
             self._instinct_learner = InstinctLearner(
@@ -747,8 +839,8 @@ class UnifiedRouter(RouterStatsMixin):
             )
         return self._instinct_learner
 
-    def _enrich_context(self, context: RoutingContext | None) -> RoutingContext:
-        """Enrich routing context with memory and recent conversation history."""
+    def _enrich_context(self, context: RoutingContext | None, query: str = "") -> RoutingContext:
+        """Enrich routing context with memory, session state, and recent conversation history."""
         if context is None:
             context = RoutingContext()
 
@@ -763,6 +855,16 @@ class UnifiedRouter(RouterStatsMixin):
             context.recent_queries = self._get_memory_manager().get_recent_queries(
                 context.conversation_id, limit=3
             )
+
+        # Load session state for multi-turn awareness
+        if self._config.session_aware:
+            session = self._get_session_context()
+            if session:
+                if not context.current_skill and session._current_skill:
+                    context.current_skill = session._current_skill
+                # Load habit boosts for learned patterns
+                if not context.habit_boosts and query:
+                    context.habit_boosts = session.get_habit_boost(query)
 
         return context
 
@@ -807,13 +909,62 @@ class UnifiedRouter(RouterStatsMixin):
         routing_path: list[RoutingLayer],
         layer_details: list[LayerDetail],
         start_time: float,
+        deprecated_warnings: list[str] | None = None,
     ) -> RoutingResult:
         duration_ms = (time.perf_counter() - start_time) * 1000
+        if deprecated_warnings and primary:
+            primary.metadata["deprecated_warnings"] = deprecated_warnings
         return RoutingResult(
             primary=primary,
             alternatives=alternatives,
             routing_path=routing_path,
             layer_details=layer_details,
+            query=query,
+            duration_ms=duration_ms,
+        )
+
+    def _build_fallback_result(
+        self,
+        query: str,
+        candidates: list[dict[str, Any]],
+        routing_path: list[RoutingLayer],
+        layer_details: list[LayerDetail],
+        duration_ms: float,
+    ) -> RoutingResult:
+        """Build a fallback result when no skill matches.
+
+        Returns a FALLBACK_LLM route with nearest candidates as alternatives.
+        """
+        # Find nearest candidates (even if below threshold) for suggestions
+        nearest: list[SkillRoute] = []
+        try:
+            matcher_result = self._try_matcher_pipeline(query, candidates, None)
+            if matcher_result and matcher_result.match:
+                nearest = [matcher_result.match, *matcher_result.alternatives]
+        except (RuntimeError, ValueError):
+            logger.debug("Failed to get nearest candidates for fallback")
+
+        fallback_layer_detail = LayerDetail(
+            layer=RoutingLayer.FALLBACK_LLM,
+            matched=True,
+            reason="No confident skill match; falling back to raw LLM",
+        )
+
+        return RoutingResult(
+            primary=SkillRoute(
+                skill_id="fallback-llm",
+                confidence=1.0,
+                layer=RoutingLayer.FALLBACK_LLM,
+                source="builtin",
+                metadata={
+                    "reason": "No skill matched query",
+                    "fallback_mode": self._config.fallback_mode,
+                    "candidate_count": len(candidates),
+                },
+            ),
+            alternatives=nearest,
+            routing_path=[*routing_path, RoutingLayer.FALLBACK_LLM],
+            layer_details=[*layer_details, fallback_layer_detail],
             query=query,
             duration_ms=duration_ms,
         )
@@ -847,11 +998,7 @@ class UnifiedRouter(RouterStatsMixin):
         from vibesop.core.skills import SkillLoader
         from vibesop.core.skills.config_manager import SkillConfigManager
 
-        if not hasattr(self, "_skill_loader"):
-            # TECH DEBT: UnifiedRouter constructs its own SkillLoader with a
-            # different set of search paths than SkillManager. This means the
-            # router may discover a different skill set than the manager.
-            # A shared SkillDiscoveryService should be extracted in the future.
+        if getattr(self, "_skill_loader", None) is None:
             # Always include VibeSOP's built-in skills regardless of project root
             builtin_skills_path = Path(vibesop.__file__).parent.parent.parent / "core" / "skills"
             search_paths = [
@@ -1000,9 +1147,12 @@ class UnifiedRouter(RouterStatsMixin):
         query: str,
         candidates: list[dict[str, Any]],
         context: RoutingContext | None,
+        collect_rejected: bool = False,
     ) -> Any:
         """Proxy to MatcherPipeline (kept for backward compatibility)."""
-        return self._matcher_pipeline.try_matcher_pipeline(query, candidates, context)
+        return self._matcher_pipeline.try_matcher_pipeline(
+            query, candidates, context, collect_rejected=collect_rejected
+        )
 
     def _prefilter_ai_triage_candidates(
         self, query: str, candidates: list[dict[str, Any]], max_skills: int

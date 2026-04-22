@@ -307,7 +307,7 @@ class FeedbackCollector:
                 with self._storage_path.open() as f:
                     data = json.load(f)
                     self._records = [FeedbackRecord.from_dict(r) for r in data]
-            except Exception:
+            except (json.JSONDecodeError, OSError, KeyError):
                 # If file is corrupted, start fresh
                 self._records = []
 
@@ -502,7 +502,7 @@ class ExecutionFeedbackCollector:
                 with self._storage_path.open() as f:
                     data = json.load(f)
                     self._records = [SkillExecutionFeedback.from_dict(r) for r in data]
-            except Exception:
+            except (json.JSONDecodeError, OSError, KeyError):
                 self._records = []
 
     def _save_records(self) -> None:

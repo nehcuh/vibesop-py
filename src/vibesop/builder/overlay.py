@@ -146,7 +146,7 @@ class OverlayMerger:
             Manifest,
             ManifestMetadata,
             PolicySet,
-            RoutingConfig,
+            RoutingPolicy,
             SecurityPolicy,
             SkillDefinition,
         )
@@ -162,7 +162,7 @@ class OverlayMerger:
         policies_dict = data.get("policies", {})
         policies = PolicySet(
             security=SecurityPolicy(**policies_dict.get("security", {})),
-            routing=RoutingConfig(**policies_dict.get("routing", {})),
+            routing=RoutingPolicy(**policies_dict.get("routing", {})),
             behavior=policies_dict.get("behavior", {}),
             custom=policies_dict.get("custom", {}),
         )

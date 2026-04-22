@@ -464,7 +464,7 @@ def _prompt_agent_for_config(
                 if "patterns" in adjustments:
                     config.routing_patterns = adjustments["patterns"]
                 console.print("[green]✓ Adjustments applied[/green]")
-    except Exception:
+    except (EOFError, KeyboardInterrupt, json.JSONDecodeError):
         # Non-interactive / headless — continue with draft
         pass
 

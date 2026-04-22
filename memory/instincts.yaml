@@ -92,3 +92,74 @@ instincts:
       - CI/CD 配置文件中的文档链接
     created_at: "2026-04-19"
     last_used: "2026-04-19"
+
+  - id: "550e8403-bare-except-narrowing-2026"
+    pattern: "清理裸 `except Exception` 时，先用 grep 找出所有位置，逐个分析上下文后替换为具体异常类型，最后运行完整测试套件验证。"
+    confidence: 0.92
+    source_sessions: ["vibesop-py-code-review-2026-04-21"]
+    usage_count: 1
+    success_rate: 1.0
+    tags: ["code-quality", "exception-handling", "refactoring", "testing"]
+    status: "active"
+    context: |
+      适用场景：
+      - 代码库中存在大量裸 `except Exception`
+      - 需要提高异常处理的精确性和可调试性
+      - 代码审查指出此问题
+
+      关键步骤：
+      1. 用 grep 找出所有裸 except 位置（包括 `except:` 和 `except Exception:`）
+      2. 逐个读取上下文，确定可能抛出的异常类型
+      3. 替换为具体异常元组，优先包含自定义异常类
+      4. 特别注意第三方库的异常（如 ruamel.yaml.YAMLError）
+      5. 运行完整测试套件（不只是修改的文件）
+      6. 修复因异常收窄导致的测试失败
+
+      常见映射：
+      - 文件 I/O → (OSError, FileNotFoundError)
+      - JSON 解析 → json.JSONDecodeError
+      - YAML 解析 → ruamel.yaml.YAMLError
+      - 导入/反射 → ImportError
+      - 网络 → (ConnectionError, TimeoutError)
+      - 自定义异常 → 显式加入捕获元组
+
+      陷阱：
+      - 自定义异常不继承 ValueError/TypeError，容易遗漏
+      - 第三方库的异常层次需要查阅文档
+      - 集成测试往往才能发现遗漏的异常类型
+    created_at: "2026-04-21"
+    last_used: "2026-04-21"
+
+  - id: "550e8404-god-function-split-2026"
+    pattern: "当遇到超过 150 行的 God function 时，按职责边界拆分为 3-5 个专注函数，保留原函数作为协调器，消除重复代码块。"
+    confidence: 0.90
+    source_sessions: ["vibesop-py-code-review-2026-04-21"]
+    usage_count: 1
+    success_rate: 1.0
+    tags: ["refactoring", "code-quality", "function-design", "readability"]
+    status: "active"
+    context: |
+      适用场景：
+      - 单个函数超过 150 行，处理多个职责
+      - 函数内部有多个独立的逻辑分支（渲染、验证、交互）
+      - 代码审查指出可读性问题
+
+      拆分策略：
+      1. 识别函数内的独立职责区块（如：条件判断、渲染、交互、格式化）
+      2. 每个职责提取为一个命名清晰的函数
+      3. 原函数保留为协调器（controller），按顺序调用子函数
+      4. 消除重复代码（如本例中重复的 validation 块）
+      5. 子函数接收所需参数，不依赖外部隐式状态
+
+      命名约定：
+      - 条件判断：`_needs_<action>()` → 返回 bool
+      - 交互流程：`_run_<flow>()` → 执行副作用
+      - 渲染输出：`_render_<type>()` → 输出到 console
+      - 格式化：`_format_<thing>()` → 返回字符串/数据结构
+
+      验证：
+      - 拆分后运行完整测试套件
+      - 确保没有行为变更（纯重构）
+      - 检查是否有遗漏的局部变量依赖
+    created_at: "2026-04-21"
+    last_used: "2026-04-21"

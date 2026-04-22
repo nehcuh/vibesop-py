@@ -217,7 +217,7 @@ class RoutingEvaluator:
             status = monitor.check_local_health(pack_name)
             health_map = {"healthy": 1.0, "warning": 0.6, "critical": 0.2, "unknown": 0.5}
             return health_map.get(status.health, 0.5)
-        except Exception:
+        except (OSError, ValueError, KeyError):
             return 0.5  # Neutral if health monitor unavailable
 
     def evaluate_all_skills(self) -> dict[str, SkillEvaluation]:

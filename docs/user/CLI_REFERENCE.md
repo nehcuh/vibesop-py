@@ -34,7 +34,8 @@ vibe route <query> [options]
 - `--min-confidence, -c` - Minimum confidence threshold (0.0-1.0)
 - `--json, -j` - Output as JSON
 - `--validate, -V` - Validate routing configuration
-- `--explain, -e` - Explain routing decision (alias for `--validate`)
+- `--explain, -e` - Explain full routing decision tree with per-layer diagnostics, multi-intent analysis, and execution flow
+- `--no-session` - Disable session-state-aware routing for this query
 
 **Examples:**
 ```bash
@@ -52,6 +53,9 @@ vibe route "debug" --validate
 
 # Explain routing decision
 vibe route "debug" --explain
+
+# Disable session awareness for one-off query
+vibe route "debug" --no-session
 ```
 
 **Output:**
@@ -60,10 +64,11 @@ vibe route "debug" --explain
    Confidence: 95%
    Layer: scenario
    Source: builtin
+   Quality: A
 
 💡 Alternatives:
-   • gstack/investigate (82%)
-   • superpowers/debug (75%)
+   • gstack/investigate (82%) — Investigate unknown issues
+   • superpowers/debug (75%) — Advanced debugging workflow
 ```
 
 ---
@@ -297,6 +302,104 @@ vibe skills health --verbose
 - Required fields (id, name, description, intent)
 - File integrity (encoding, size)
 - Version consistency
+
+---
+
+#### `vibe skills report`
+
+Show skill quality report with grades and routing impact.
+
+```bash
+vibe skills report [options]
+```
+
+**Options:**
+- `--grade, -g` - Filter by grade (A, B, C, D, F)
+- `--suggest-removal` - Show only skills recommended for removal (grade F)
+
+**Examples:**
+```bash
+# Show all skills with grades
+vibe skills report
+
+# Show only skills needing attention
+vibe skills report --grade D
+
+# Show skills recommended for removal
+vibe skills report --suggest-removal
+```
+
+**Output:**
+```
+┌─────────────────────┬───────┬───────┬────────┬─────────┬────────────┬────────────────┐
+│ Skill               │ Grade │ Score │ Routes │ Success │ User Score │ Routing Impact │
+├─────────────────────┼───────┼───────┼────────┼─────────┼────────────┼────────────────┤
+│ gstack/review       │ ✅ A  │  0.92 │     45 │   91.1% │       4.5  │ +0.05 boost    │
+│ systematic-debugging│ ✓ C   │  0.71 │     12 │   75.0% │       3.8  │ no change      │
+│ old-deploy-skill    │ 🗑️ F  │  0.31 │      3 │   33.3% │       1.2  │ -0.05 demote   │
+└─────────────────────┴───────┴───────┴────────┴─────────┴────────────┴────────────────┘
+```
+
+Grades affect routing confidence:
+- **A** (+0.05 boost): High-quality skills get priority
+- **B** (+0.02 boost): Slight preference
+- **C** (no change): Neutral
+- **D** (-0.02 demote): Slight deprioritization
+- **F** (-0.05 demote): Low-quality skills are avoided
+
+> **Note:** Impact only applies when a skill has `>= 3` total routes (insufficient data otherwise).
+
+---
+
+#### `vibe skills scope`
+
+Show or change the scope of a skill (global vs project).
+
+```bash
+vibe skills scope <skill-id> [options]
+```
+
+**Arguments:**
+- `skill-id` - Skill to modify
+
+**Options:**
+- `--set, -s` - Set scope to `global` or `project`
+
+**Examples:**
+```bash
+# Show current scope
+vibe skills scope gstack/review
+
+# Change to project-only
+vibe skills scope gstack/review --set project
+```
+
+---
+
+#### `vibe skills feedback`
+
+Record post-execution feedback for a skill to improve routing quality.
+
+```bash
+vibe skills feedback [options]
+```
+
+**Options:**
+- `--skill` - Skill ID (required)
+- `--query` - Original query that routed to this skill
+- `--helpful, -h` - Was the skill helpful? (`yes`/`no`)
+- `--success` - Did execution succeed? (`yes`/`no`)
+- `--time, -t` - Execution time in milliseconds
+- `--notes, -n` - Optional notes
+
+**Examples:**
+```bash
+# Mark as helpful
+vibe skills feedback --skill gstack/review --query "review code" --helpful yes
+
+# Report failure with details
+vibe skills feedback --skill gstack/review --query "review code" --success no --notes "missed edge case"
+```
 
 ---
 
@@ -777,6 +880,7 @@ The following commands were removed:
 |----------|-------------|
 | `ANTHROPIC_API_KEY` | API key for Anthropic Claude |
 | `OPENAI_API_KEY` | API key for OpenAI |
+| `VIBESOP_SESSION_ID` | Override session ID for multi-terminal isolation |
 | `VIBESOP_ENABLE_LEGACY` | Enable legacy/deprecated commands |
 | `VIBESOP_CONFIG_DIR` | Custom configuration directory |
 

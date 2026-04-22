@@ -142,5 +142,5 @@ class RetentionPolicy:
             last = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
             delta = datetime.now(last.tzinfo) - last
             return max(0, delta.days)
-        except Exception:
+        except (ValueError, TypeError):
             return None

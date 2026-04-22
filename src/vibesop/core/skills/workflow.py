@@ -899,8 +899,8 @@ class WorkflowEngine:
         except (SyntaxError, ValueError, TypeError) as e:
             logger.debug(f"Could not evaluate condition '{condition}': {e}")
             return False
-        except Exception:
-            logger.exception(f"Unexpected error evaluating condition '{condition}'")
+        except Exception as exc:
+            logger.exception(f"Unexpected error evaluating condition '{condition}': {exc}")
             return False
 
 
@@ -940,7 +940,7 @@ def parse_workflow_from_markdown(markdown_content: str, skill_id: str) -> Workfl
                 name = frontmatter.get("name", name)
                 description = frontmatter.get("description", "")
                 metadata.update(frontmatter)
-        except Exception:
+        except (ValueError, TypeError, IndexError):
             # If frontmatter parsing fails, continue with body
             body = markdown_content.split("---", 2)[-1] if "---" in markdown_content else markdown_content
 

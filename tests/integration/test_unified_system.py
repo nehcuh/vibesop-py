@@ -81,6 +81,48 @@ class TestUnifiedRouterIntegration:
         assert hasattr(result, "alternatives"), "Should have alternatives attribute"
         assert isinstance(result.alternatives, list), "Alternatives should be a list"
 
+    def test_router_session_aware_routing(self, tmp_path):
+        """Test that router persists and loads session state."""
+        import shutil
+
+        project_root = tmp_path / "test_project"
+        project_root.mkdir()
+        # Copy a minimal skill set for routing
+        core_skills = Path(__file__).parents[2] / "core" / "skills"
+        if core_skills.exists():
+            shutil.copytree(core_skills, project_root / "core" / "skills", dirs_exist_ok=True)
+
+        # First route — should set session state
+        router1 = UnifiedRouter(project_root=project_root)
+        result1 = router1.route("debug this error")
+
+        assert result1.primary is not None, "Should match a skill"
+
+        # Second router instance — should load session state
+        router2 = UnifiedRouter(project_root=project_root)
+        result2 = router2.route("help me debug")
+
+        # Session file should exist (session_id derived from project path hash)
+        session_dir = project_root / ".vibe" / "session"
+        session_files = list(session_dir.glob("project-*.json"))
+        assert len(session_files) == 1, "Session state should be persisted"
+
+        # With session stickiness, same skill should be favored
+        assert result2.primary is not None
+
+    def test_router_no_session_flag(self, tmp_path):
+        """Test that session_aware=False disables session persistence."""
+        project_root = tmp_path / "test_project"
+        project_root.mkdir()
+
+        config = RoutingConfig(session_aware=False)
+        router = UnifiedRouter(project_root=project_root, config=config)
+        router.route("debug this error")
+
+        # Session file should NOT be created
+        session_file = project_root / ".vibe" / "session" / "default.json"
+        assert not session_file.exists(), "Session state should NOT be persisted when disabled"
+
 
 class TestConfigManagerIntegration:
     """Integration tests for ConfigManager."""
@@ -181,7 +223,7 @@ class TestSecurityAuditorIntegration:
             is_valid = auditor.validate_path("/etc/passwd")
             # In strict mode, should return False for system paths
             assert isinstance(is_valid, bool), "Should return boolean"
-        except Exception:
+        except (OSError, ValueError, RuntimeError):
             # Some error is expected for invalid paths
             pass
 

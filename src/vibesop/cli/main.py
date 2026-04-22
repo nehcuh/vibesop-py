@@ -23,7 +23,7 @@ from rich.panel import Panel
 from vibesop import __version__
 from vibesop.cli.commands import plan_cmd
 from vibesop.cli.orchestration_report import render_orchestration_result
-from vibesop.cli.routing_report import render_compact_report, render_routing_report
+from vibesop.cli.routing_report import render_routing_report
 from vibesop.cli.subcommands import register
 from vibesop.core.routing import UnifiedRouter
 
@@ -54,6 +54,13 @@ def route(
     validate: bool = typer.Option(False, "--validate", "-V", help="Validate routing configuration"),
     explain: bool = typer.Option(False, "--explain", "-e", help="Explain routing decision with per-layer details"),
     yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation prompt (alias for confirmation_mode=never)"),
+    no_session: bool = typer.Option(False, "--no-session", help="Disable session-state-aware routing for this query"),
+    strategy: str | None = typer.Option(
+        None,
+        "--strategy",
+        "-s",
+        help="Force execution strategy: auto, sequential, parallel, hybrid",
+    ),
 ) -> None:
     """Route a query to the appropriate skill using unified routing.
 
@@ -71,9 +78,17 @@ def route(
 
     from vibesop.core.routing import RoutingConfig, UnifiedRouter
 
-    # Set up router with optional min_confidence override
+    # Set up router with optional overrides
+    routing_kwargs: dict[str, Any] = {}
     if min_confidence is not None:
-        config = RoutingConfig(min_confidence=min_confidence)
+        routing_kwargs["min_confidence"] = min_confidence
+    if no_session:
+        routing_kwargs["session_aware"] = False
+    if strategy is not None:
+        routing_kwargs["default_strategy"] = strategy
+
+    if routing_kwargs:
+        config = RoutingConfig(**routing_kwargs)
         router = UnifiedRouter(project_root=Path.cwd(), config=config)
     else:
         router = UnifiedRouter(project_root=Path.cwd())
@@ -107,6 +122,85 @@ def route(
     _handle_single_result(result, router, yes, json_output, validate, console)
 
 
+def _edit_execution_plan(
+    result: Any,
+    console: Console,
+) -> bool:
+    """Interactive execution plan editor.
+
+    Returns True if plan was modified, False otherwise.
+    """
+    plan = result.execution_plan
+    if plan is None or not plan.steps:
+        console.print("[yellow]No steps to edit.[/yellow]")
+        return False
+
+    steps = list(plan.steps)
+    while True:
+        console.print("\n[bold]✏️  Edit Execution Plan[/bold]\n")
+        for i, step in enumerate(steps, 1):
+            marker = "  "
+            console.print(f"  {marker}{i}. {step.skill_id} — {step.intent}")
+
+        action = questionary.select(
+            "Choose an action:",
+            choices=[
+                questionary.Choice("↑ Move step up", value="up"),
+                questionary.Choice("↓ Move step down", value="down"),
+                questionary.Choice("✗ Remove step", value="remove"),
+                questionary.Choice("✓ Done editing", value="done"),
+                questionary.Choice("↩️  Cancel", value="cancel"),
+            ],
+        ).ask()
+
+        if action in ("done", None):
+            if not steps:
+                console.print("[yellow]⚠️  Plan has no steps. Edit cancelled.[/yellow]")
+                return False
+            plan.steps = steps
+            # Re-number steps
+            for i, step in enumerate(steps, 1):
+                step.step_number = i
+            console.print("[green]✓ Plan updated[/green]")
+            return True
+        elif action == "cancel":
+            console.print("[dim]Edit cancelled.[/dim]")
+            return False
+        elif action == "up":
+            idx = questionary.select(
+                "Select step to move up:",
+                choices=[
+                    questionary.Choice(f"{s.step_number}. {s.skill_id}", value=i)
+                    for i, s in enumerate(steps)
+                ],
+            ).ask()
+            if idx is not None and idx > 0:
+                steps[idx - 1], steps[idx] = steps[idx], steps[idx - 1]
+        elif action == "down":
+            idx = questionary.select(
+                "Select step to move down:",
+                choices=[
+                    questionary.Choice(f"{s.step_number}. {s.skill_id}", value=i)
+                    for i, s in enumerate(steps)
+                ],
+            ).ask()
+            if idx is not None and idx < len(steps) - 1:
+                steps[idx + 1], steps[idx] = steps[idx], steps[idx + 1]
+        elif action == "remove":
+            idx = questionary.select(
+                "Select step to remove:",
+                choices=[
+                    questionary.Choice(f"{s.step_number}. {s.skill_id}", value=i)
+                    for i, s in enumerate(steps)
+                ],
+            ).ask()
+            if idx is not None and len(steps) > 1:
+                removed = steps.pop(idx)
+                console.print(f"[dim]Removed step: {removed.skill_id}[/dim]")
+            elif idx is not None:
+                console.print("[yellow]Cannot remove the last step.[/yellow]")
+
+
 def _handle_orchestrated_result(
     result: Any,
     router: Any,
@@ -129,6 +223,7 @@ def _handle_orchestrated_result(
 
         choices = [
             questionary.Choice("✅ Confirm execution plan", value="confirm"),
+            questionary.Choice("✏️  Edit steps", value="edit"),
             questionary.Choice(
                 f"🔀 Use single skill: {result.single_fallback.skill_id if result.single_fallback else 'none'}",
                 value="single",
@@ -141,7 +236,22 @@ def _handle_orchestrated_result(
             choices=choices,
         ).ask()
 
-        if choice == "single" and result.single_fallback:
+        if choice == "edit":
+            modified = _edit_execution_plan(result, console)
+            if modified:
+                # Re-render after edit
+                render_orchestration_result(result, console=console)
+                # Ask for confirmation again
+                confirm = questionary.confirm(
+                    "Proceed with updated plan?",
+                    default=True,
+                ).ask()
+                if not confirm:
+                    console.print("[dim]Plan editing cancelled.[/dim]")
+                    return
+            else:
+                return
+        elif choice == "single" and result.single_fallback:
             # Switch to single-skill mode
             console.print(
                 Panel(
@@ -155,7 +265,6 @@ def _handle_orchestrated_result(
         elif choice == "skip":
             console.print("[dim]Skipped. Using raw LLM.[/dim]")
             return
-        # else: confirm — proceed with plan output
 
     # Save plan to tracker
     tracker = router._get_plan_tracker()
@@ -167,7 +276,187 @@ def _handle_orchestrated_result(
         console.print(json.dumps(result.to_dict(), indent=2))
     else:
         render_orchestration_result(result, console=console)
-        console.print(f"\n[dim]Plan saved. Track with:[/dim] [bold]vibe plan status[/bold]")
+        console.print("\n[dim]Plan saved. Track with:[/dim] [bold]vibe plan status[/bold]")
+
+
+def _needs_confirmation(
+    result: Any,
+    router: Any,
+    yes: bool,
+    json_output: bool,
+    validate: bool,
+) -> bool:
+    """Determine if user confirmation is needed for a routing result."""
+    if yes or json_output or validate:
+        return False
+    confirmation_mode = router._config.confirmation_mode
+    if confirmation_mode == "never" or not sys.stdin.isatty():
+        return False
+    if (
+        confirmation_mode == "ambiguous_only"
+        and result.primary
+        and result.primary.confidence >= router._config.auto_select_threshold
+    ):
+        return False
+    return True
+
+
+def _run_confirmation_flow(
+    result: Any,
+    console: Console,
+) -> None:
+    """Interactive confirmation: confirm / alternative / skip."""
+    from vibesop.core.models import RoutingResult
+    routing_result = RoutingResult(
+        primary=result.primary,
+        alternatives=result.alternatives,
+        routing_path=result.routing_path,
+        layer_details=result.layer_details,
+        query=result.original_query,
+        duration_ms=result.duration_ms,
+    )
+    render_routing_report(routing_result, console=console)
+
+    choices = [
+        questionary.Choice("✅ Confirm selected skill", value="confirm"),
+        questionary.Choice("🔀 Choose a different skill", value="alternative"),
+        questionary.Choice("📝 Skip skill, use raw LLM", value="skip"),
+    ]
+    choice = questionary.select("How would you like to proceed?", choices=choices).ask()
+
+    if choice == "alternative" and result.alternatives:
+        alt_choices = [
+            questionary.Choice(
+                f"{alt.skill_id} ({alt.confidence:.0%} via {alt.layer.value})"
+                f"{(' — ' + alt.description[:40]) if alt.description else ''}",
+                value=alt.skill_id,
+            )
+            for alt in result.alternatives[:5]
+        ]
+        alt_choices.append(questionary.Choice("↩️  Back", value="back"))
+        alt_id = questionary.select("Select a skill:", choices=alt_choices).ask()
+
+        if alt_id == "back":
+            pass
+        elif alt_id:
+            for alt in result.alternatives:
+                if alt.skill_id == alt_id:
+                    result.primary = alt
+                    break
+    elif choice == "skip":
+        result.primary = None
+
+
+def _render_fallback_panel(result: Any, console: Console) -> None:
+    """Render fallback-llm routing result panel."""
+    alt_text = ""
+    if result.alternatives:
+        alt_text = "\n[bold]💡 Nearest installed skills:[/bold]\n"
+        for alt in result.alternatives[:3]:
+            desc = f" — {alt.description[:50]}" if alt.description else ""
+            alt_text += f"  • {alt.skill_id} ({alt.confidence:.0%}){desc}\n"
+    console.print(
+        Panel(
+            f"[bold yellow]🤖 Fallback Mode[/bold yellow]\n\n"
+            f"No installed skill confidently matched your query.\n"
+            f"[dim]Query:[/dim] {result.original_query}\n"
+            f"[dim]Routing path:[/dim] {' → '.join([layer.value for layer in result.routing_path])}\n"
+            f"{alt_text}\n"
+            f"[dim]VibeSOP is a routing engine, not an executor.[/dim]\n"
+            f"[dim]Your AI Agent can still process this request using raw LLM.[/dim]\n\n"
+            f"[dim]Try:[/dim]\n"
+            f"  • Using more specific keywords\n"
+            f"  • Browsing available skills: [bold]vibe skills list[/bold]\n"
+            f"  • Installing a relevant skill pack",
+            title="[bold]Routing Result[/bold]",
+            border_style="yellow",
+        )
+    )
+
+
+def _render_match_panel(result: Any, console: Console) -> None:
+    """Render normal skill match panel with quality indicators."""
+    primary = result.primary
+    quality_str = ""
+    grade = primary.metadata.get("grade")
+    if grade:
+        grade_colors = {"A": "green", "B": "green", "C": "yellow", "D": "yellow", "F": "red"}
+        color = grade_colors.get(grade, "dim")
+        quality_str = f"\n[dim]Quality:[/dim] [{color}]{grade}[/{color}]"
+    if primary.metadata.get("habit_boost"):
+        quality_str += " [dim](habit)[/dim]"
+
+    deprecated = primary.metadata.get("deprecated_warnings", [])
+    if deprecated:
+        console.print(
+            f"\n[yellow]⚠️  Deprecated skills in ecosystem:[/yellow] {', '.join(deprecated)}"
+        )
+
+    console.print(
+        Panel(
+            f"[bold green]✅ Matched:[/bold green] {primary.skill_id}\n"
+            f"[dim]Confidence:[/dim] {primary.confidence:.0%}\n"
+            f"[dim]Layer:[/dim] {primary.layer.value}\n"
+            f"[dim]Source:[/dim] {primary.source}{quality_str}\n"
+            f"[dim]Duration:[/dim] {result.duration_ms:.1f}ms",
+            title="[bold]Routing Result[/bold]",
+            border_style="blue",
+        )
+    )
+    if result.alternatives:
+        console.print("\n[bold]💡 Alternatives:[/bold]")
+        for alt in result.alternatives[:3]:
+            desc = f" — {alt.description[:50]}" if alt.description else ""
+            console.print(f"  • {alt.skill_id} ({alt.confidence:.0%}){desc}")
+
+
+def _render_no_match(result: Any, console: Console) -> None:
+    """Render no-match panel."""
+    console.print(
+        Panel(
+            f"[yellow]❓ No suitable match found[/yellow]\n\n"
+            f"[dim]Query:[/dim] {result.original_query}\n"
+            f"[dim]Routing path:[/dim] {' → '.join([layer.value for layer in result.routing_path])}\n\n"
+            f"[dim]Try:[/dim]\n"
+            f"  • Using more specific keywords\n"
+            f"  • Lowering the threshold\n"
+            f"  • Listing available skills",
+            title="[bold]Routing Result[/bold]",
+            border_style="yellow",
+        )
+    )
+
+
+def _render_validation(result: Any, router: Any, console: Console) -> None:
+    """Render validation output and exit."""
+    console.print(f"\n[bold cyan]✓ Route Validation[/bold cyan]\n{'=' * 40}\n")
+    caps = router.get_capabilities()
+    console.print("[dim]Router capabilities:[/dim]")
+    console.print(f"  Matchers: {len(caps['matchers'])}")
+    for matcher_info in caps["matchers"]:
+        console.print(f"    - {matcher_info['layer']}: {matcher_info['matcher']}")
+
+    config = caps.get("config", {})
+    console.print("\n[dim]Configuration:[/dim]")
+    console.print(f"  min_confidence: {config.get('min_confidence', 0.3)}")
+    console.print(f"  auto_select_threshold: {config.get('auto_select_threshold', 0.6)}")
+    console.print(f"  enable_embedding: {config.get('enable_embedding', False)}")
+
+    console.print(f"\n[bold]Testing query:[/bold] {result.original_query}\n")
+    if result.primary is not None:
+        console.print(f"  Primary: {result.primary.skill_id} ({result.primary.confidence:.0%})")
+        console.print(f"  Layer: {result.primary.layer.value}")
+    else:
+        console.print("  [yellow]No match found[/yellow]")
+
+    if result.alternatives:
+        console.print("\n[bold]Alternatives:[/bold]")
+        for i, alt in enumerate(result.alternatives[:5], 1):
+            desc = f" — {alt.description[:50]}" if alt.description else ""
+            console.print(f"  {i}. {alt.skill_id} - {alt.confidence:.0%}{desc}")
+
+    console.print("\n[green]✓ Validation complete[/green]")
+    raise typer.Exit(0)
 
 
 def _handle_single_result(
@@ -178,162 +467,36 @@ def _handle_single_result(
     validate: bool,
     console: Console,
 ) -> None:
-    """Handle single-skill routing result (existing logic)."""
-    from vibesop.core.models import RoutingResult
-    routing_result = RoutingResult(
-        primary=result.primary,
-        alternatives=result.alternatives,
-        routing_path=result.routing_path,
-        layer_details=result.layer_details,
-        query=result.original_query,
-        duration_ms=result.duration_ms,
-    )
+    """Handle single-skill routing result."""
+    # Validation mode
+    if validate:
+        _render_validation(result, router, console)
 
-    confirmation_mode = router._config.confirmation_mode
-    need_confirm = (
-        not yes
-        and not json_output
-        and not validate
-        and confirmation_mode != "never"
-        and sys.stdin.isatty()
-    )
+    # Confirmation flow
+    if _needs_confirmation(result, router, yes, json_output, validate):
+        _run_confirmation_flow(result, console)
 
-    if need_confirm and confirmation_mode == "ambiguous_only" and result.primary:
-        if result.primary.confidence >= router._config.auto_select_threshold:
-            need_confirm = False
-
-    if need_confirm:
-        render_routing_report(routing_result, console=console)
-
-        choices = [
-            questionary.Choice("✅ Confirm selected skill", value="confirm"),
-            questionary.Choice("🔀 Choose a different skill", value="alternative"),
-            questionary.Choice("📝 Skip skill, use raw LLM", value="skip"),
-        ]
-
-        choice = questionary.select(
-            "How would you like to proceed?",
-            choices=choices,
-        ).ask()
-
-        if choice == "alternative" and result.alternatives:
-            alt_choices = [
-                questionary.Choice(
-                    f"{alt.skill_id} ({alt.confidence:.0%} via {alt.layer.value})",
-                    value=alt.skill_id,
-                )
-                for alt in result.alternatives[:5]
-            ]
-            alt_choices.append(questionary.Choice("↩️  Back", value="back"))
-            alt_id = questionary.select("Select a skill:", choices=alt_choices).ask()
-
-            if alt_id == "back":
-                pass
-            elif alt_id:
-                for alt in result.alternatives:
-                    if alt.skill_id == alt_id:
-                        result.primary = alt
-                        break
-        elif choice == "skip":
-            result.primary = None
-
+    # Output rendering
     if json_output:
+        from vibesop.core.models import RoutingResult
+        routing_result = RoutingResult(
+            primary=result.primary,
+            alternatives=result.alternatives,
+            routing_path=result.routing_path,
+            layer_details=result.layer_details,
+            query=result.original_query,
+            duration_ms=result.duration_ms,
+        )
         import json
         console.print(json.dumps(routing_result.to_dict(), indent=2))
-    elif result.primary is not None:
-        primary = result.primary
-        console.print(
-            Panel(
-                f"[bold green]✅ Matched:[/bold green] {primary.skill_id}\n"
-                f"[dim]Confidence:[/dim] {primary.confidence:.0%}\n"
-                f"[dim]Layer:[/dim] {primary.layer.value}\n"
-                f"[dim]Source:[/dim] {primary.source}\n"
-                f"[dim]Duration:[/dim] {result.duration_ms:.1f}ms",
-                title="[bold]Routing Result[/bold]",
-                border_style="blue",
-            )
-        )
-        if result.alternatives:
-            console.print("\n[bold]💡 Alternatives:[/bold]")
-            for alt in result.alternatives[:3]:
-                console.print(f"  • {alt.skill_id} ({alt.confidence:.0%})")
+        return
+
+    if result.primary is None:
+        _render_no_match(result, console)
+    elif result.primary.layer.value == "fallback_llm":
+        _render_fallback_panel(result, console)
     else:
-        console.print(
-            Panel(
-                f"[yellow]❓ No suitable match found[/yellow]\n\n"
-                f"[dim]Query:[/dim] {result.original_query}\n"
-                f"[dim]Routing path:[/dim] {' → '.join([layer.value for layer in result.routing_path])}\n\n"
-                f"[dim]Try:[/dim]\n"
-                f"  • Using more specific keywords\n"
-                f"  • Lowering the threshold\n"
-                f"  • Listing available skills",
-                title="[bold]Routing Result[/bold]",
-                border_style="yellow",
-            )
-        )
-
-    if validate:
-        console.print(f"\n[bold cyan]✓ Route Validation[/bold cyan]\n{'=' * 40}\n")
-        caps = router.get_capabilities()
-        console.print("[dim]Router capabilities:[/dim]")
-        console.print(f"  Matchers: {len(caps['matchers'])}")
-        for matcher_info in caps["matchers"]:
-            console.print(f"    - {matcher_info['layer']}: {matcher_info['matcher']}")
-
-        config = caps.get("config", {})
-        console.print("\n[dim]Configuration:[/dim]")
-        console.print(f"  min_confidence: {config.get('min_confidence', 0.3)}")
-        console.print(f"  auto_select_threshold: {config.get('auto_select_threshold', 0.6)}")
-        console.print(f"  enable_embedding: {config.get('enable_embedding', False)}")
-
-        console.print(f"\n[bold]Testing query:[/bold] {result.original_query}\n")
-        if result.primary is not None:
-            console.print(f"  Primary: {result.primary.skill_id} ({result.primary.confidence:.0%})")
-            console.print(f"  Layer: {result.primary.layer.value}")
-        else:
-            console.print("  [yellow]No match found[/yellow]")
-
-        if result.alternatives:
-            console.print("\n[bold]Alternatives:[/bold]")
-            for i, alt in enumerate(result.alternatives[:5], 1):
-                console.print(f"  {i}. {alt.skill_id} - {alt.confidence:.0%}")
-
-        console.print("\n[green]✓ Validation complete[/green]")
-        raise typer.Exit(0)
-
-    # Handle validation mode (legacy, less detailed than --explain)
-    if validate:
-        console.print(f"\n[bold cyan]✓ Route Validation[/bold cyan]\n{'=' * 40}\n")
-
-        # Show router capabilities
-        caps = router.get_capabilities()
-        console.print("[dim]Router capabilities:[/dim]")
-        console.print(f"  Matchers: {len(caps['matchers'])}")
-        for matcher_info in caps["matchers"]:
-            console.print(f"    - {matcher_info['layer']}: {matcher_info['matcher']}")
-
-        config = caps.get("config", {})
-        console.print("\n[dim]Configuration:[/dim]")
-        console.print(f"  min_confidence: {config.get('min_confidence', 0.3)}")
-        console.print(f"  auto_select_threshold: {config.get('auto_select_threshold', 0.6)}")
-        console.print(f"  enable_embedding: {config.get('enable_embedding', False)}")
-
-        # Test the query
-        console.print(f"\n[bold]Testing query:[/bold] {query}\n")
-        if result.primary is not None:
-            console.print(f"  Primary: {result.primary.skill_id} ({result.primary.confidence:.0%})")
-            console.print(f"  Layer: {result.primary.layer.value}")
-        else:
-            console.print("  [yellow]No match found[/yellow]")
-
-        if result.alternatives:
-            console.print("\n[bold]Alternatives:[/bold]")
-            for i, alt in enumerate(result.alternatives[:5], 1):
-                console.print(f"  {i}. {alt.skill_id} - {alt.confidence:.0%}")
-
-        console.print("\n[green]✓ Validation complete[/green]")
-        raise typer.Exit(0)
-
+        _render_match_panel(result, console)
 
 @app.command()
 def doctor() -> None:

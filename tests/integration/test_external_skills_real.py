@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 from pathlib import Path
 
+from vibesop.core.skills.executor import SkillExecutionError
 from vibesop.core.skills.manager import SkillManager
 
 
@@ -211,7 +212,7 @@ class TestExternalSkillExecution:
             if result["success"]:
                 assert "executed_steps" in result
                 assert result["executed_steps"] >= 0
-        except Exception:
+        except (KeyError, ValueError, RuntimeError, SkillExecutionError):
             # Real-world skills might have validation issues
             # The test infrastructure is working if we get this far
             pass

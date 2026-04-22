@@ -14,6 +14,7 @@ Usage:
 from pathlib import Path
 from typing import Any
 
+import questionary
 import typer
 from rich.console import Console
 from rich.panel import Panel
@@ -93,13 +94,27 @@ def list_skills(
             table.add_column("Status", style="white")
         if show_scope:
             table.add_column("Scope", style="magenta")
+        table.add_column("Quality", justify="center")
         table.add_column("Source", style="dim")
         table.add_column("Installed", style="dim")
+
+        # Load evaluations once for quality warnings
+        from vibesop.core.skills.evaluator import RoutingEvaluator
+        evaluator = RoutingEvaluator()
+        evals = evaluator.evaluate_all_skills()
 
         for skill_id, manifest in skills.items():
             source_str = f"{manifest.source.type}"
             if manifest.source.version:
                 source_str += f"@{manifest.source.version}"
+
+            # Quality warning for low-grade skills
+            evaluation = evals.get(skill_id)
+            if evaluation and evaluation.total_routes >= 3:
+                grade_colors = {"A": "green", "B": "green", "C": "yellow", "D": "yellow", "F": "red"}
+                quality_str = f"[{grade_colors.get(evaluation.grade, 'dim')}]{evaluation.grade}[/{grade_colors.get(evaluation.grade, 'dim')}]"
+            else:
+                quality_str = "[dim]—[/dim]"
 
             row = [
                 skill_id,
@@ -114,7 +129,7 @@ def list_skills(
                 config = SkillConfigManager.get_skill_config(skill_id)
                 scope = config.scope if config else "global"
                 row.append(scope)
-            row.extend([source_str, manifest.installed_at[:10]])
+            row.extend([quality_str, source_str, manifest.installed_at[:10]])
 
             table.add_row(*row)
 
@@ -431,6 +446,12 @@ def health(
         "-v",
         help="Show detailed health information",
     ),
+    ecosystem: bool = typer.Option(
+        False,
+        "--ecosystem",
+        "-e",
+        help="Show gamified ecosystem health report",
+    ),
 ) -> None:
     """Check skill pack health status.
 
@@ -444,10 +465,18 @@ def health(
 
         # Show detailed information
         vibe skills health --verbose
+
+        # Show ecosystem health report
+        vibe skills health --ecosystem
     """
     from vibesop.integrations.health_monitor import SkillHealthMonitor
 
     monitor = SkillHealthMonitor()
+
+    # Ecosystem gamified report
+    if ecosystem:
+        _show_ecosystem_report(monitor)
+        return
 
     if pack:
         # Check single pack
@@ -494,8 +523,89 @@ def health(
                         f"[{grade_color}]{evaluation.grade} ({evaluation.quality_score:.0%})[/{grade_color}] "
                         f"[dim]{evaluation.total_routes} uses[/dim]"
                     )
-        except Exception:
+        except (OSError, ValueError):
             pass
+
+
+def _show_ecosystem_report(monitor: Any) -> None:
+    """Render gamified ecosystem health report."""
+    from datetime import datetime
+
+    console.print(f"\n[bold]📊 Your Skill Ecosystem Health[/bold] [dim]({datetime.now().strftime('%Y-%m-%d')})[/dim]\n")
+
+    # Gather data
+    summary = monitor.get_health_summary()
+    try:
+        evaluator = RoutingEvaluator()
+        all_evals = evaluator.evaluate_all_skills()
+    except (OSError, ImportError, ValueError):
+        all_evals = {}
+
+    if not all_evals:
+        console.print("[dim]No evaluation data yet. Use skills to generate feedback![/dim]")
+        return
+
+    # Group by grade
+    top_performers = []
+    needs_attention = []
+    at_risk = []
+    insufficient = []
+
+    for skill_id, ev in sorted(all_evals.items(), key=lambda x: x[1].quality_score, reverse=True):
+        if ev.total_routes < 3:
+            insufficient.append((skill_id, ev))
+        elif ev.grade in ("A", "B"):
+            top_performers.append((skill_id, ev))
+        elif ev.grade in ("C", "D"):
+            needs_attention.append((skill_id, ev))
+        else:
+            at_risk.append((skill_id, ev))
+
+    # Top Performers
+    if top_performers:
+        console.print("[bold green]🏆 Top Performers[/bold green]")
+        for sid, ev in top_performers[:5]:
+            bar = "█" * int(ev.quality_score * 10) + "░" * (10 - int(ev.quality_score * 10))
+            impact = "+0.05 boost" if ev.grade == "A" else "+0.02 boost"
+            console.print(
+                f"  [cyan]{sid:<30}[/cyan] {ev.grade}  {impact}  [dim]{bar}[/dim]  {ev.total_routes} routes"
+            )
+        console.print()
+
+    # Needs Attention
+    if needs_attention:
+        console.print("[bold yellow]⚠️  Needs Attention[/bold yellow]")
+        for sid, ev in needs_attention[:5]:
+            impact = "no change" if ev.grade == "C" else "-0.02 demote"
+            console.print(
+                f"  [cyan]{sid:<30}[/cyan] {ev.grade}  {impact}  [dim]{ev.total_routes} routes[/dim]"
+            )
+        console.print()
+
+    # At Risk
+    if at_risk:
+        console.print("[bold red]🗑️  At Risk[/bold red]")
+        for sid, ev in at_risk[:5]:
+            console.print(
+                f"  [cyan]{sid:<30}[/cyan] {ev.grade}  -0.05 demote  [dim]{ev.total_routes} routes[/dim]"
+            )
+        console.print("  [dim]Action: Run `vibe skills feedback --skill <id>` or `vibe skills disable <id>`[/dim]")
+        console.print()
+
+    # Insufficient Data
+    if insufficient:
+        console.print("[bold blue]💡 Feedback Opportunities[/bold blue]")
+        console.print(f"  [dim]{len(insufficient)} skills need more usage to reach reliable grading:[/dim]")
+        for sid, ev in insufficient[:3]:
+            needed = 3 - ev.total_routes
+            console.print(f"    • {sid}: {ev.total_routes}/3 routes (needs {needed} more)")
+        console.print()
+
+    # Summary stats
+    console.print("[bold]📈 Ecosystem Stats[/bold]")
+    console.print(f"  Total skills evaluated: {len(all_evals)}")
+    console.print(f"  Packs: {summary.get('total', 0)} total, {summary.get('healthy', 0)} healthy")
+    console.print()
 
 
 def _display_health_status(health_status, verbose: bool = False) -> None:
@@ -648,7 +758,7 @@ def info(
             console.print(f"  [dim]Quality Score:[/dim] [{quality_color}]{evaluation.quality_score:.0%}[/{quality_color}]")
             if evaluation.last_used:
                 console.print(f"  [dim]Last Used:[/dim] {evaluation.last_used[:10]}")
-    except Exception:
+    except (OSError, ValueError):
         # Silently skip if evaluation data is not available
         pass
 
@@ -770,6 +880,7 @@ def report(
     table.add_column("Routes", justify="right")
     table.add_column("Success", justify="right")
     table.add_column("User Score", justify="right")
+    table.add_column("Routing Impact", justify="center")
 
     grade_colors = {
         "A": "green",
@@ -785,10 +896,22 @@ def report(
         "D": "⚠️",
         "F": "🗑️",
     }
+    # Routing impact from quality_boost adjustments
+    impact_map = {
+        "A": "[green]+0.05 boost[/green]",
+        "B": "[green]+0.02 boost[/green]",
+        "C": "[dim]no change[/dim]",
+        "D": "[yellow]-0.02 demote[/yellow]",
+        "F": "[red]-0.05 demote[/red]",
+    }
 
     for evaluation in filtered:
         color = grade_colors.get(evaluation.grade, "dim")
         icon = grade_icons.get(evaluation.grade, "")
+        impact = impact_map.get(evaluation.grade, "—")
+        # Only show impact if sufficient data
+        if evaluation.total_routes < 3:
+            impact = "[dim]insufficient data[/dim]"
         table.add_row(
             evaluation.skill_id,
             f"[{color}]{evaluation.grade}[/{color}] {icon}",
@@ -796,10 +919,12 @@ def report(
             str(evaluation.total_routes),
             f"{evaluation.success_rate:.0%}" if evaluation.total_routes > 0 else "—",
             f"{evaluation.user_score:.2f}",
+            impact,
         )
 
     console.print(table)
     console.print(f"\n[dim]Total: {len(filtered)} skills[/dim]")
+    console.print("[dim]Routing impact only applies when total_routes >= 3[/dim]")
 
 
 def scope(
@@ -909,3 +1034,283 @@ def feedback(
     if execution_success is not None:
         icon = "✅" if execution_success else "❌"
         console.print(f"  [dim]Execution: {icon}[/dim]")
+
+
+def create(
+    name: str | None = typer.Option(None, help="Skill name (kebab-case)"),
+    description: str | None = typer.Option(None, help="What this skill does"),
+    from_template: str | None = typer.Option(None, "--from", help="Base on existing skill"),
+    namespace: str = typer.Option("custom", help="Skill namespace"),
+    interactive: bool = typer.Option(True, help="Use interactive wizard"),
+) -> None:
+    """Create a new skill from natural language or an existing template.
+
+    \b
+    Examples:
+        # Interactive wizard
+        vibe skills create
+
+        # Create from existing skill template
+        vibe skills create --from gstack/review --name my-review
+
+        # Non-interactive
+        vibe skills create --name security-audit --description "Scan for vulnerabilities"
+    """
+    manager = SkillManager()
+
+    # Copy from template if specified
+    if from_template:
+        template_info = manager.get_skill_info(from_template)
+        if not template_info:
+            console.print(f"[red]✗ Template skill not found: {from_template}[/red]")
+            raise typer.Exit(1)
+
+        if not name:
+            name = questionary.text(
+                "New skill name:",
+                default=f"my-{from_template.split('/')[-1]}",
+            ).ask()
+            if not name:
+                console.print("[yellow]Cancelled.[/yellow]")
+                return
+
+        skill_dir = Path.cwd() / ".vibe" / "skills" / name
+        skill_dir.mkdir(parents=True, exist_ok=True)
+
+        # Copy SKILL.md and modify header
+        template_path = template_info.get("source_file")
+        if template_path:
+            template_text = Path(template_path).read_text()
+            # Replace header fields
+            new_text = template_text.replace(
+                f"id: {from_template}",
+                f"id: {namespace}/{name}"
+            ).replace(
+                f"name: {from_template.split('/')[-1]}",
+                f"name: {name}"
+            )
+            if description:
+                new_text = new_text.replace(
+                    f"description: {template_info.get('description', '')}",
+                    f"description: {description}"
+                )
+            (skill_dir / "SKILL.md").write_text(new_text)
+        else:
+            # Generate minimal SKILL.md
+            _generate_skill_md(skill_dir, name, description or f"{name} skill", namespace)
+
+        console.print(f"[green]✓ Created skill from template:[/green] {skill_dir}")
+        console.print("[dim]Next steps:[/dim]")
+        console.print(f"  1. Edit {skill_dir}/SKILL.md")
+        console.print(f"  2. Run [bold]vibe skills validate {namespace}/{name}[/bold]")
+        console.print(f"  3. Run [bold]vibe skills enable {namespace}/{name}[/bold]")
+        return
+
+    # Interactive wizard (when no --from specified)
+    if interactive and not name:
+        console.print("[bold]✨ Skill Creation Wizard[/bold]\n")
+        name = questionary.text(
+            "Skill name (kebab-case):",
+            validate=lambda t: bool(t) or "Name is required",
+        ).ask()
+        if not name:
+            console.print("[yellow]Cancelled.[/yellow]")
+            return
+
+        description = questionary.text(
+            "What does this skill do?",
+            default=description or "",
+        ).ask()
+
+        keywords = questionary.text(
+            "Trigger keywords (comma-separated):",
+        ).ask()
+
+        namespace = questionary.text(
+            "Namespace:",
+            default=namespace,
+        ).ask() or namespace
+
+    if not name:
+        console.print("[red]✗ Skill name is required[/red]")
+        raise typer.Exit(1)
+
+    skill_dir = Path.cwd() / ".vibe" / "skills" / name
+    skill_dir.mkdir(parents=True, exist_ok=True)
+
+    _generate_skill_md(
+        skill_dir,
+        name,
+        description or f"{name} skill",
+        namespace,
+        keywords=keywords if interactive else None,
+    )
+
+    console.print(f"[green]✓ Created skill:[/green] {skill_dir}")
+    console.print("[dim]Next steps:[/dim]")
+    console.print(f"  1. Edit {skill_dir}/SKILL.md")
+    console.print(f"  2. Run [bold]vibe skills validate {namespace}/{name}[/bold]")
+    console.print(f"  3. Run [bold]vibe skills enable {namespace}/{name}[/bold]")
+
+
+def lifecycle(
+    skill_id: str = typer.Argument(..., help="Skill ID to inspect or modify"),
+    set_state: str | None = typer.Option(
+        None,
+        "--set",
+        help="Set lifecycle state: draft, active, deprecated, archived",
+    ),
+    reason: str | None = typer.Option(
+        None,
+        "--reason",
+        help="Reason for state change (used with --set deprecated)",
+    ),
+    auto_review: bool = typer.Option(
+        False,
+        "--auto-review",
+        help="Suggest lifecycle transitions based on evaluation data",
+    ),
+) -> None:
+    """Show or change a skill's lifecycle state.
+
+    \b
+    Examples:
+        # Show current lifecycle state
+        vibe skills lifecycle my-skill
+
+        # Mark as deprecated
+        vibe skills lifecycle my-skill --set deprecated --reason "Replaced by v2"
+
+        # Auto-review all skills
+        vibe skills lifecycle --auto-review
+    """
+    from vibesop.core.skills.config_manager import SkillConfigManager, SkillLifecycleState
+
+    if auto_review:
+        _lifecycle_auto_review()
+        return
+
+    config = SkillConfigManager.get_skill_config(skill_id)
+    if not config:
+        console.print(f"[red]✗ Skill not found: {skill_id}[/red]")
+        raise typer.Exit(1)
+
+    current_state = config.lifecycle
+
+    if set_state is None:
+        # Show current state
+        state_colors = {
+            "draft": "blue",
+            "active": "green",
+            "deprecated": "yellow",
+            "archived": "dim",
+        }
+        color = state_colors.get(current_state, "white")
+        console.print(f"[dim]Lifecycle state for '{skill_id}':[/dim] [{color}]{current_state}[/{color}]")
+        if current_state == "deprecated" and getattr(config, "deprecation_reason", None):
+            console.print(f"  [dim]Reason: {config.deprecation_reason}[/dim]")
+        return
+
+    # Validate state
+    valid_states = [s.value for s in SkillLifecycleState]
+    if set_state not in valid_states:
+        console.print(f"[red]✗ Invalid state: {set_state}. Must be one of: {', '.join(valid_states)}[/red]")
+        raise typer.Exit(1)
+
+    # Update state
+    config.lifecycle = set_state
+    if reason:
+        config.deprecation_reason = reason
+
+    SkillConfigManager.update_skill_config(skill_id, {
+        "lifecycle": set_state,
+        "deprecation_reason": reason,
+    })
+
+    state_colors = {
+        "draft": "blue",
+        "active": "green",
+        "deprecated": "yellow",
+        "archived": "dim",
+    }
+    color = state_colors.get(set_state, "white")
+    console.print(f"[green]✓[/green] Lifecycle state for '{skill_id}' set to [{color}]{set_state}[/{color}]")
+    if reason:
+        console.print(f"  [dim]Reason: {reason}[/dim]")
+
+
+def _lifecycle_auto_review() -> None:
+    """Suggest lifecycle transitions based on evaluation data."""
+    from vibesop.core.skills.config_manager import SkillConfigManager
+    from vibesop.core.skills.evaluator import RoutingEvaluator
+
+    try:
+        evaluator = RoutingEvaluator()
+        all_evals = evaluator.evaluate_all_skills()
+    except (OSError, ImportError, ValueError):
+        console.print("[yellow]No evaluation data available.[/yellow]")
+        return
+
+    suggestions = []
+    for skill_id, ev in all_evals.items():
+        config = SkillConfigManager.get_skill_config(skill_id)
+        current = config.lifecycle if config else "active"
+        if current == "archived":
+            continue
+        if ev.grade == "F" and ev.total_routes >= 10 and current == "active":
+            suggestions.append((skill_id, "deprecated", f"Grade F over {ev.total_routes} routes"))
+        elif ev.grade == "A" and current == "draft":
+            suggestions.append((skill_id, "active", "Grade A, ready for production"))
+
+    if not suggestions:
+        console.print("[dim]No lifecycle transitions suggested at this time.[/dim]")
+        return
+
+    console.print("[bold]🔍 Lifecycle Auto-Review[/bold]\n")
+    for skill_id, suggested_state, reason in suggestions:
+        console.print(f"  [cyan]{skill_id}[/cyan] → [yellow]{suggested_state}[/yellow] [dim]({reason})[/dim]")
+    console.print("\n[dim]Run `vibe skills lifecycle <skill> --set <state>` to apply.[/dim]")
+
+
+def _generate_skill_md(
+    skill_dir: Path,
+    name: str,
+    description: str,
+    namespace: str,
+    keywords: str | None = None,
+) -> None:
+    """Generate a minimal SKILL.md file."""
+    tags = ""
+    if keywords:
+        tag_list = [k.strip() for k in keywords.split(",") if k.strip()]
+        tags = f"\ntags: [{', '.join(tag_list)}]"
+
+    content = f"""---
+id: {namespace}/{name}
+name: {name}
+description: {description}{tags}
+intent: general
+namespace: {namespace}
+version: 1.0.0
+type: prompt
+---
+
+# {name.replace("-", " ").title()}
+
+## Overview
+
+{description}
+
+## Workflow
+
+1. Step one
+2. Step two
+3. Step three
+
+## Usage
+
+```bash
+vibe route "your query here"
+```
+"""
+    (skill_dir / "SKILL.md").write_text(content)
