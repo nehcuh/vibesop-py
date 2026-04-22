@@ -128,6 +128,10 @@ class RoutingConfig(BaseModel):
 
     min_confidence: float = Field(default=0.3, ge=0.0, le=1.0)
     auto_select_threshold: float = Field(default=0.6, ge=0.0, le=1.0)
+    confirmation_mode: str = Field(
+        default="always",
+        description="User confirmation mode: always (default), never, or ambiguous_only",
+    )
     enable_ai_triage: bool = True
     enable_embedding: bool = False
     max_candidates: int = Field(default=3, ge=1, le=10)
@@ -198,6 +202,7 @@ class ConfigManager:
         "routing": {
             "min_confidence": 0.3,
             "auto_select_threshold": 0.6,
+            "confirmation_mode": "always",
             "enable_ai_triage": False,
             "enable_embedding": False,
             "max_candidates": 3,

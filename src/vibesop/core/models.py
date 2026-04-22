@@ -103,6 +103,39 @@ class RoutingRequest(BaseModel):
     )
 
 
+class LayerDetail(BaseModel):
+    """Detailed diagnostic for a single routing layer attempt.
+
+    Attributes:
+        layer: Which routing layer this represents
+        matched: Whether this layer produced a match
+        reason: Human-readable explanation of the layer's decision
+        duration_ms: How long this layer took
+        diagnostics: Layer-specific diagnostic data (scores, skip reasons, etc.)
+    """
+
+    model_config = {"arbitrary_types_allowed": True}
+
+    layer: RoutingLayer = Field(..., description="Routing layer")
+    matched: bool = Field(default=False, description="Whether layer matched")
+    reason: str = Field(default="", description="Human-readable decision reason")
+    duration_ms: float = Field(default=0.0, description="Layer duration in ms")
+    diagnostics: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Layer-specific diagnostic data",
+    )
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert to dictionary for serialization."""
+        return {
+            "layer": self.layer.value,
+            "matched": self.matched,
+            "reason": self.reason,
+            "duration_ms": self.duration_ms,
+            "diagnostics": self.diagnostics,
+        }
+
+
 class RoutingResult(BaseModel):
     """Result of skill routing operation.
 
@@ -110,6 +143,7 @@ class RoutingResult(BaseModel):
         primary: Best matching skill (None if no match)
         alternatives: List of alternative matches
         routing_path: Which layers were consulted
+        layer_details: Per-layer diagnostic details for transparency
         query: The original query
         duration_ms: How long routing took
     """
@@ -128,6 +162,10 @@ class RoutingResult(BaseModel):
         default_factory=list,
         description="Layers consulted during routing",
     )
+    layer_details: list[LayerDetail] = Field(
+        default_factory=list,
+        description="Per-layer diagnostic details for transparency",
+    )
     query: str = Field(default="", description="Original query")
     duration_ms: float = Field(default=0.0, description="Routing duration in ms")
 
@@ -142,6 +180,7 @@ class RoutingResult(BaseModel):
             "primary": self.primary.to_dict() if self.primary else None,
             "alternatives": [a.to_dict() for a in self.alternatives],
             "routing_path": [layer.value for layer in self.routing_path],
+            "layer_details": [d.to_dict() for d in self.layer_details],
             "query": self.query,
             "duration_ms": self.duration_ms,
             "has_match": self.has_match,

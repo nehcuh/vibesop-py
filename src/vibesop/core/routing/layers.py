@@ -24,12 +24,17 @@ class LayerResult:
         alternatives: Alternative matches found by this layer
         layer: Which layer produced this result
         should_stop: Whether to stop trying further layers
+        reason: Human-readable explanation of this layer's decision
+        diagnostics: Layer-specific diagnostic data
     """
 
     match: SkillRoute | None = None
     alternatives: list[SkillRoute] = field(default_factory=list)
     layer: RoutingLayer = RoutingLayer.NO_MATCH
     should_stop: bool = True
+    matched: bool = False
+    reason: str = ""
+    diagnostics: dict[str, Any] = field(default_factory=dict)
 
 
 class IRouteLayer(Protocol):

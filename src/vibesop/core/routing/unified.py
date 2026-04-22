@@ -38,7 +38,7 @@ from vibesop.core.matching import (
     TFIDFMatcher,
 )
 from vibesop.core.memory import MemoryManager
-from vibesop.core.models import RoutingLayer, RoutingResult, SkillRoute
+from vibesop.core.models import LayerDetail, RoutingLayer, RoutingResult, SkillRoute
 from vibesop.core.optimization import (
     CandidatePrefilter,
     PreferenceBooster,
@@ -226,7 +226,7 @@ class UnifiedRouter(RouterStatsMixin):
 
         Executes layers in priority order. The first confident match wins.
         Integrates memory and instinct for context-aware routing.
-        Records the full routing path for observability and debugging.
+        Records the full routing path and per-layer diagnostics for transparency.
         """
         start_time = time.perf_counter()
         self._total_routes += 1
@@ -238,7 +238,9 @@ class UnifiedRouter(RouterStatsMixin):
             candidates = self._get_cached_candidates()
 
         routing_path: list[RoutingLayer] = []
-        for layer_result in self._execute_layers(query, candidates, context):
+        for layer_result, layer_details in self._execute_layers(
+            query, candidates, context
+        ):
             routing_path.append(layer_result.layer)
             if layer_result.match is not None:
                 self._record_layer(layer_result.layer)
@@ -249,15 +251,19 @@ class UnifiedRouter(RouterStatsMixin):
                     primary=layer_result.match,
                     alternatives=layer_result.alternatives,
                     routing_path=routing_path,
+                    layer_details=layer_details,
                     start_time=start_time,
                 )
 
         duration_ms = (time.perf_counter() - start_time) * 1000
         self._record_layer(RoutingLayer.NO_MATCH)
+        # Collect layer details even on no-match by running all layers
+        layer_details = self._collect_layer_details(query, candidates, context)
         return RoutingResult(
             primary=None,
             alternatives=[],
             routing_path=routing_path,
+            layer_details=layer_details,
             query=query,
             duration_ms=duration_ms,
         )
@@ -268,28 +274,229 @@ class UnifiedRouter(RouterStatsMixin):
         candidates: list[dict[str, Any]],
         context: RoutingContext | None,
     ):
-        """Generator that yields LayerResults from each layer in priority order.
+        """Generator that yields (LayerResult, list[LayerDetail]) tuples.
 
-        Always yields a LayerResult so that route() can track the full decision path.
+        Collects diagnostic details for each layer to enable routing transparency.
         """
+        layer_details: list[LayerDetail] = []
+
         # Layer 0: Explicit Override
-        yield self._try_explicit(query, candidates) or LayerResult(
-            layer=RoutingLayer.EXPLICIT
-        )
+        explicit = self._try_explicit(query, candidates)
+        if explicit is not None:
+            layer_details.append(
+                LayerDetail(
+                    layer=RoutingLayer.EXPLICIT,
+                    matched=explicit.match is not None,
+                    reason=explicit.reason or (
+                        f"Explicit override: @{explicit.match.skill_id}"
+                        if explicit.match else "No @skill_id syntax detected"
+                    ),
+                    diagnostics=explicit.diagnostics,
+                )
+            )
+            if explicit.match is not None:
+                yield explicit, layer_details
+                return
+            yield explicit, layer_details
+        else:
+            layer_details.append(
+                LayerDetail(
+                    layer=RoutingLayer.EXPLICIT,
+                    matched=False,
+                    reason="No @skill_id syntax detected",
+                )
+            )
+            yield LayerResult(layer=RoutingLayer.EXPLICIT), layer_details
 
         # Layer 1: Scenario Pattern
-        yield self._try_scenario(query, candidates) or LayerResult(
-            layer=RoutingLayer.SCENARIO
-        )
+        scenario = self._try_scenario(query, candidates)
+        if scenario is not None:
+            layer_details.append(
+                LayerDetail(
+                    layer=RoutingLayer.SCENARIO,
+                    matched=scenario.match is not None,
+                    reason=scenario.reason or (
+                        f"Scenario matched: {scenario.match.metadata.get('scenario', 'unknown')}"
+                        if scenario.match else "No scenario keywords matched"
+                    ),
+                    diagnostics=scenario.diagnostics,
+                )
+            )
+            if scenario.match is not None:
+                yield scenario, layer_details
+                return
+            yield scenario, layer_details
+        else:
+            layer_details.append(
+                LayerDetail(
+                    layer=RoutingLayer.SCENARIO,
+                    matched=False,
+                    reason="No scenario keywords matched",
+                )
+            )
+            yield LayerResult(layer=RoutingLayer.SCENARIO), layer_details
 
         # Layer 2: AI Triage
-        yield self._try_ai_triage(query, candidates, context) or LayerResult(
-            layer=RoutingLayer.AI_TRIAGE
-        )
+        triage_start = time.perf_counter()
+        triage = self._try_ai_triage(query, candidates, context)
+        triage_duration_ms = (time.perf_counter() - triage_start) * 1000
+        if triage is not None:
+            layer_details.append(
+                LayerDetail(
+                    layer=RoutingLayer.AI_TRIAGE,
+                    matched=triage.match is not None,
+                    reason=triage.reason or (
+                        f"AI triage selected '{triage.match.skill_id}' (confidence: {triage.match.confidence:.0%})"
+                        if triage.match else "AI triage did not select any skill"
+                    ),
+                    duration_ms=triage_duration_ms,
+                    diagnostics=triage.diagnostics,
+                )
+            )
+            if triage.match is not None:
+                yield triage, layer_details
+                return
+            yield triage, layer_details
+        else:
+            skip_reason = self._get_ai_triage_skip_reason()
+            layer_details.append(
+                LayerDetail(
+                    layer=RoutingLayer.AI_TRIAGE,
+                    matched=False,
+                    reason=skip_reason,
+                    duration_ms=triage_duration_ms,
+                )
+            )
+            yield LayerResult(layer=RoutingLayer.AI_TRIAGE), layer_details
 
         # Layers 3-6: Matcher pipeline (keyword, tfidf, embedding, levenshtein)
+        matcher_start = time.perf_counter()
         matcher_result = self._try_matcher_pipeline(query, candidates, context)
-        yield matcher_result or LayerResult(layer=RoutingLayer.LEVENSHTEIN)
+        matcher_duration_ms = (time.perf_counter() - matcher_start) * 1000
+        if matcher_result is not None and matcher_result.match is not None:
+            layer_details.append(
+                LayerDetail(
+                    layer=matcher_result.layer,
+                    matched=True,
+                    reason=matcher_result.reason or (
+                        f"Matcher selected '{matcher_result.match.skill_id}' (confidence: {matcher_result.match.confidence:.0%})"
+                    ),
+                    duration_ms=matcher_duration_ms,
+                    diagnostics=matcher_result.diagnostics,
+                )
+            )
+            yield matcher_result, layer_details
+        else:
+            layer_details.append(
+                LayerDetail(
+                    layer=RoutingLayer.LEVENSHTEIN,
+                    matched=False,
+                    reason=matcher_result.reason if matcher_result else "No matcher produced a confident match",
+                    duration_ms=matcher_duration_ms,
+                    diagnostics=matcher_result.diagnostics if matcher_result else {},
+                )
+            )
+            yield matcher_result or LayerResult(
+                layer=RoutingLayer.LEVENSHTEIN
+            ), layer_details
+
+    def _get_ai_triage_skip_reason(self) -> str:
+        """Determine why AI triage was skipped."""
+        if not self._config.enable_ai_triage:
+            return "AI triage disabled in config"
+        if getattr(self._triage_service, "_llm", None) is None:
+            return "LLM not initialized"
+        if getattr(self._triage_service, "_circuit_breaker", None) and not self._triage_service._circuit_breaker.can_execute():
+            return "Circuit breaker open (too many failures)"
+        monthly_cost = getattr(self._cost_tracker, "get_monthly_cost", lambda: 0.0)()
+        if monthly_cost >= self._config.ai_triage_budget_monthly:
+            return f"Monthly AI triage budget exhausted (${monthly_cost:.2f} / ${self._config.ai_triage_budget_monthly:.2f})"
+        return "AI triage did not produce a match"
+
+    def _collect_layer_details(
+        self,
+        query: str,
+        candidates: list[dict[str, Any]],
+        context: RoutingContext | None,
+    ) -> list[LayerDetail]:
+        """Collect layer details for no-match scenarios.
+
+        Runs all layers non-destructively to gather diagnostics.
+        """
+        layer_details: list[LayerDetail] = []
+
+        # Explicit
+        explicit = self._try_explicit(query, candidates)
+        layer_details.append(
+            LayerDetail(
+                layer=RoutingLayer.EXPLICIT,
+                matched=False,
+                reason=explicit.reason if explicit else "No @skill_id syntax detected",
+                diagnostics=explicit.diagnostics if explicit else {},
+            )
+        )
+
+        # Scenario
+        scenario = self._try_scenario(query, candidates)
+        layer_details.append(
+            LayerDetail(
+                layer=RoutingLayer.SCENARIO,
+                matched=False,
+                reason=scenario.reason if scenario else "No scenario keywords matched",
+                diagnostics=scenario.diagnostics if scenario else {},
+            )
+        )
+
+        # AI Triage
+        triage_start = time.perf_counter()
+        triage = self._try_ai_triage(query, candidates, context)
+        triage_duration_ms = (time.perf_counter() - triage_start) * 1000
+        if triage is not None:
+            layer_details.append(
+                LayerDetail(
+                    layer=RoutingLayer.AI_TRIAGE,
+                    matched=False,
+                    reason=triage.reason or "AI triage did not select any skill",
+                    duration_ms=triage_duration_ms,
+                    diagnostics=triage.diagnostics,
+                )
+            )
+        else:
+            layer_details.append(
+                LayerDetail(
+                    layer=RoutingLayer.AI_TRIAGE,
+                    matched=False,
+                    reason=self._get_ai_triage_skip_reason(),
+                    duration_ms=triage_duration_ms,
+                )
+            )
+
+        # Matchers
+        matcher_start = time.perf_counter()
+        matcher_result = self._try_matcher_pipeline(query, candidates, context)
+        matcher_duration_ms = (time.perf_counter() - matcher_start) * 1000
+        if matcher_result is not None and matcher_result.match is not None:
+            layer_details.append(
+                LayerDetail(
+                    layer=matcher_result.layer,
+                    matched=True,
+                    reason=matcher_result.reason or f"Matcher selected '{matcher_result.match.skill_id}'",
+                    duration_ms=matcher_duration_ms,
+                    diagnostics=matcher_result.diagnostics,
+                )
+            )
+        else:
+            layer_details.append(
+                LayerDetail(
+                    layer=RoutingLayer.LEVENSHTEIN,
+                    matched=False,
+                    reason=matcher_result.reason if matcher_result else "No matcher produced a confident match",
+                    duration_ms=matcher_duration_ms,
+                    diagnostics=matcher_result.diagnostics if matcher_result else {},
+                )
+            )
+
+        return layer_details
 
     # ================================================================
     # Layer 0: Explicit Override
@@ -306,7 +513,11 @@ class UnifiedRouter(RouterStatsMixin):
 
         candidate = next((c for c in candidates if c["id"] == explicit_skill), None)
         if not candidate:
-            return None
+            return LayerResult(
+                layer=RoutingLayer.EXPLICIT,
+                matched=False,
+                reason=f"@{explicit_skill} specified but skill not found in candidates",
+            )
 
         source = self._get_skill_source(explicit_skill, candidate.get("namespace", "builtin"))
         return LayerResult(
@@ -318,6 +529,8 @@ class UnifiedRouter(RouterStatsMixin):
                 metadata={"override": True, "cleaned_query": cleaned_query},
             ),
             layer=RoutingLayer.EXPLICIT,
+            reason=f"Explicit override: @{explicit_skill}",
+            diagnostics={"cleaned_query": cleaned_query},
         )
 
     # ================================================================
@@ -339,11 +552,19 @@ class UnifiedRouter(RouterStatsMixin):
 
         target_skill = scenario.get("skill") or scenario.get("primary") or scenario.get("skill_id")
         if not target_skill:
-            return None
+            return LayerResult(
+                layer=RoutingLayer.SCENARIO,
+                matched=False,
+                reason=f"Scenario '{scenario.get('scenario', 'unknown')}' matched but no target skill defined",
+            )
 
         candidate = next((c for c in candidates if c["id"] == target_skill), None)
         if not candidate:
-            return None
+            return LayerResult(
+                layer=RoutingLayer.SCENARIO,
+                matched=False,
+                reason=f"Scenario matched '{target_skill}' but skill not in candidates",
+            )
 
         # Build alternatives from related skills in the same scenario
         alternatives: list[SkillRoute] = []
@@ -361,6 +582,7 @@ class UnifiedRouter(RouterStatsMixin):
                     )
                 )
 
+        scenario_name = scenario.get("scenario", "unknown")
         return LayerResult(
             match=SkillRoute(
                 skill_id=target_skill,
@@ -369,10 +591,16 @@ class UnifiedRouter(RouterStatsMixin):
                 source=self._get_skill_source(
                     target_skill, candidate.get("namespace", "builtin")
                 ),
-                metadata={"scenario": scenario.get("scenario")},
+                metadata={"scenario": scenario_name},
             ),
             alternatives=alternatives,
             layer=RoutingLayer.SCENARIO,
+            reason=f"Scenario matched: '{scenario_name}'",
+            diagnostics={
+                "scenario": scenario_name,
+                "related_skills": related,
+                "alternatives_count": len(alternatives),
+            },
         )
 
     # ================================================================
@@ -451,6 +679,7 @@ class UnifiedRouter(RouterStatsMixin):
         primary: SkillRoute,
         alternatives: list[SkillRoute],
         routing_path: list[RoutingLayer],
+        layer_details: list[LayerDetail],
         start_time: float,
     ) -> RoutingResult:
         duration_ms = (time.perf_counter() - start_time) * 1000
@@ -458,6 +687,7 @@ class UnifiedRouter(RouterStatsMixin):
             primary=primary,
             alternatives=alternatives,
             routing_path=routing_path,
+            layer_details=layer_details,
             query=query,
             duration_ms=duration_ms,
         )

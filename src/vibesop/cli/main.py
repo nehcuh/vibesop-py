@@ -15,11 +15,13 @@ import sys
 from pathlib import Path
 from typing import Any
 
+import questionary
 import typer
 from rich.console import Console
 from rich.panel import Panel
 
 from vibesop import __version__
+from vibesop.cli.routing_report import render_compact_report, render_routing_report
 from vibesop.cli.subcommands import register
 from vibesop.core.routing import UnifiedRouter
 
@@ -45,7 +47,8 @@ def route(
     ),
     json_output: bool = typer.Option(False, "--json", "-j", help="Output as JSON"),
     validate: bool = typer.Option(False, "--validate", "-V", help="Validate routing configuration"),
-    explain: bool = typer.Option(False, "--explain", "-e", help="Explain routing decision (alias for --validate)"),
+    explain: bool = typer.Option(False, "--explain", "-e", help="Explain routing decision with per-layer details"),
+    yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation prompt (alias for confirmation_mode=never)"),
 ) -> None:
     """Route a query to the appropriate skill using unified routing.
 
@@ -53,7 +56,11 @@ def route(
     but does not execute skills. Use your AI Agent (Claude Code, OpenCode)
     to execute the recommended skill.
 
-    Use --validate or --explain to inspect routing details.
+    By default, VibeSOP asks for confirmation before selecting a skill.
+    Set routing.confirmation_mode to 'never' for automatic selection,
+    or use --yes to skip once.
+
+    Use --explain to inspect the full routing decision tree.
     """
     from pathlib import Path
 
@@ -68,6 +75,65 @@ def route(
 
     result = router.route(query)
 
+    # --explain mode: show full decision tree and exit
+    if explain:
+        render_routing_report(result, console=console)
+        raise typer.Exit(0)
+
+    # Determine if confirmation is needed
+    confirmation_mode = router._config.confirmation_mode
+    need_confirm = (
+        not yes
+        and not json_output
+        and not validate
+        and confirmation_mode != "never"
+        and sys.stdin.isatty()
+    )
+
+    # ambiguous_only: only confirm when confidence is below auto_select_threshold
+    if need_confirm and confirmation_mode == "ambiguous_only" and result.primary:
+        if result.primary.confidence >= router._config.auto_select_threshold:
+            need_confirm = False
+
+    # Show decision report and ask for confirmation
+    if need_confirm:
+        render_routing_report(result, console=console)
+
+        choices = [
+            questionary.Choice("✅ Confirm selected skill", value="confirm"),
+            questionary.Choice("🔀 Choose a different skill", value="alternative"),
+            questionary.Choice("📝 Skip skill, use raw LLM", value="skip"),
+        ]
+
+        choice = questionary.select(
+            "How would you like to proceed?",
+            choices=choices,
+        ).ask()
+
+        if choice == "alternative" and result.alternatives:
+            alt_choices = [
+                questionary.Choice(
+                    f"{alt.skill_id} ({alt.confidence:.0%} via {alt.layer.value})",
+                    value=alt.skill_id,
+                )
+                for alt in result.alternatives[:5]
+            ]
+            alt_choices.append(questionary.Choice("↩️  Back", value="back"))
+            alt_id = questionary.select("Select a skill:", choices=alt_choices).ask()
+
+            if alt_id == "back":
+                # Re-prompt (simplified: just confirm the original)
+                pass
+            elif alt_id:
+                # Update primary to selected alternative
+                for alt in result.alternatives:
+                    if alt.skill_id == alt_id:
+                        result.primary = alt
+                        break
+        elif choice == "skip":
+            result.primary = None  # Signal: no skill selected
+
+    # Output result
     if json_output:
         import json
 
@@ -104,10 +170,9 @@ def route(
             )
         )
 
-    # Handle validation / explanation mode
-    if validate or explain:
-        title = "Routing Explanation" if explain else "Route Validation"
-        console.print(f"\n[bold cyan]✓ {title}[/bold cyan]\n{'=' * 40}\n")
+    # Handle validation mode (legacy, less detailed than --explain)
+    if validate:
+        console.print(f"\n[bold cyan]✓ Route Validation[/bold cyan]\n{'=' * 40}\n")
 
         # Show router capabilities
         caps = router.get_capabilities()
