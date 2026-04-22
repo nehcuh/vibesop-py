@@ -1,52 +1,53 @@
 # Overview - VibeSOP Project
 
-**Last Updated**: 2026-04-21
+**Last Updated**: 2026-04-22
 
 ---
 
 ## Goals
 
-### Current Week (April 14-21, 2026)
+### Current Week (April 21-22, 2026)
 
-1. **Fix VibeSOP Doctor Issues** ✅ (Completed)
-   - Resolved vibe doctor failures for kimi-cli, builtin skills, and hooks
-   - Fixed configuration generation for Kimi CLI
+1. **Lint Sweep** ✅ (Completed - April 22)
+   - Fixed 133 lint errors across 20+ files
+   - Established 0-error baseline: `ruff check src/vibesop` → 0 errors
 
-2. **External Skills Security Audit Enhancement** ✅ (Completed)
-   - Implemented trusted external skills loading with non-critical threat tolerance
-   - Updated security rules to reduce false positives
-   - Fixed test expectations for new security model
+2. **Badge System MVP** ✅ (Completed - April 22)
+   - Implemented 4 badge types with lightweight tracking
+   - Integrated into feedback, health, and route commands
+   - 19 new tests
 
-3. **Performance Optimization** ✅ (Completed)
-   - Optimized logging overhead in skill loading (50 QPS → 44 QPS)
-   - Acceptable regression for enhanced security
-   - Performance target adjusted to 40 QPS (realistic)
+3. **UnifiedRouter Refactoring** ✅ (Completed - April 22)
+   - Extracted 8 mixins from 1210-line God Class → 506 lines (-58%)
+   - RouterExecutionMixin, RouterCandidateMixin, RouterTriageMixin,
+     RouterOptimizationMixin, RouterOrchestrationMixin, RouterMatcherMixin,
+     RouterContextMixin, RouterConfigMixin
+   - 1700+ tests pass
 
-4. **Skill LLM Configuration Management** ✅ (Completed - April 20)
-   - Implemented skill-level LLM configuration system
-   - Created 5-tier fallback strategy (skill → global → env → agent → default)
-   - Added CLI commands: `vibe skill config list|get|set|delete|import|export`
-   - Integrated auto-configuration with skill installation
-   - All tests passing, documentation complete
+4. **v4.3 Multi-Turn Support** ✅ (Completed - April 22)
+   - ConversationContext with follow-up detection (Chinese + English)
+   - Contextual query enrichment for continuation/retry/alternative/clarification
+   - CLI `--conversation` parameter
+   - 25 new tests
 
-5. **Architecture Review & Optimization** ✅ (Completed - April 21)
-   - Deep architecture review: identified 5 key issues (docs sync, router bloat, test failures, test speed, code quality)
-   - Synced all docs to v4.2.0, fixed ROADMAP status inconsistencies
-   - Extracted RouterStatsMixin from UnifiedRouter (-49 lines)
-   - Fixed 3 pre-existing test failures
-   - Added pytest-xdist: test-fast ~39s (was ~256s)
-   - Eliminated PytestReturnNotNoneWarning, fixed ruff issues
-   - All 1601 tests passing, 78.25% coverage
+5. **v4.3 Context-Aware Routing** ✅ (Completed - April 22)
+   - ProjectAnalyzer: 15+ project types, 13+ tech stacks detected
+   - Project context boost in optimization (+0.02~0.04 confidence)
+   - 21 new tests
 
-6. **Code Review Optimization Plan** ✅ (Completed - April 21)
-   - P0-1: Split `_handle_single_result` God function (213 lines → 6 focused functions)
-   - P0-2: Cleaned 27 bare `except Exception` → specific exception types
-   - P0-3: `LayerResult` dataclass → Pydantic BaseModel with ConfigDict
-   - H1: Merged duplicate `RoutingConfig` (adapters → `RoutingPolicy`)
-   - H4: `UnifiedRouter` skill_loader injection support
-   - M3: `fallback_mode`/`default_strategy` Literal type validation
-   - M4: `_edit_execution_plan` empty steps guard
-   - 1687 tests passing, 0 failed
+### Next Week (April 23-30, 2026)
+
+1. **Custom Matchers Plugin System** ⏳
+   - Allow users to register custom matcher functions
+   - Community matcher marketplace foundation
+
+2. **A/B Testing Framework** ⏳
+   - Route variant testing with automatic winner selection
+   - Performance comparison analytics
+
+3. **Fix Flaky Tests** ⏳
+   - `test_disabled_skill_excluded_from_routing` parallel isolation
+   - Mark remaining performance tests as `@pytest.mark.slow`
 
 ---
 

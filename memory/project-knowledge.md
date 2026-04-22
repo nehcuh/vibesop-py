@@ -484,3 +484,161 @@ class UnifiedRouter:
 4. Remove proxy methods in next major version
 
 **Files**: `src/vibesop/core/routing/unified.py`
+
+
+---
+
+### Flaky Tests Under pytest-xdist Parallel Execution (2026-04-22)
+
+**Issue**: Tests that modify global state (e.g., `SkillConfigManager.update_skill_config()`) or depend on system timing (performance tests) fail intermittently when run with `pytest-xdist -n auto`, but pass reliably when run sequentially.
+
+**Root Cause**:
+1. `test_disabled_skill_excluded_from_routing` disables a shared skill globally, affecting other parallel test processes
+2. `test_concurrent_routing_performance` asserts `total_time < 1.0s`, but under parallel CPU contention this threshold is unreliable
+
+**Solution**:
+```python
+# For state-mutating tests: mark as slow to exclude from parallel runs
+@pytest.mark.slow
+def test_disabled_skill_excluded_from_routing(...):
+    ...
+
+# For performance tests: mark as slow with realistic thresholds
+@pytest.mark.slow
+def test_concurrent_routing_performance(...):
+    # Or use relative benchmarking instead of absolute thresholds
+```
+
+**Makefile** already skips slow tests: `pytest -m "not benchmark and not slow"`
+
+**Files**: `tests/core/routing/test_skill_governance.py`, `tests/performance/test_performance.py`
+
+---
+
+### Mixin Extraction from God Class — Safe Workflow (2026-04-22)
+
+**Pattern**: Systematic extraction of methods from a large class into focused mixins without breaking tests.
+
+**Workflow**:
+1. Identify cohesive method group (e.g., all execution-related methods)
+2. Verify they only access `self` attributes set in `__init__` (no cross-calls to other extracted methods)
+3. Create `src/vibesop/core/routing/{name}_mixin.py`
+4. Add mixin to `UnifiedRouter` inheritance chain
+5. Remove methods from original class
+6. Run `make test-fast` — if any failure, revert and reassess dependencies
+7. Run `ruff check` — fix import ordering and type-checking issues
+
+**Key Insight**: Mixin methods access host class attributes naturally via `self`. No dependency injection needed within the same object hierarchy.
+
+**Result**: Extracted 8 mixins from 1210-line class → 506 lines. 1700+ tests pass throughout.
+
+**Files**: `src/vibesop/core/routing/*_mixin.py`
+
+---
+
+### Path.home() Mock in Tests — Subdirectory Trap (2026-04-22)
+
+**Issue**: When mocking `Path.home()` to return a temp directory for testing file paths under `~/.vibe/`, tests fail because the code expects `~/.vibe/execution_feedback.json` but the test creates `~/execution_feedback.json` (missing `.vibe/` subdirectory).
+
+**Root Cause**: The production code constructs paths as `Path.home() / ".vibe" / "file.json"`, but the test created `tmp_path / "file.json"` directly.
+
+**Solution**:
+```python
+# Correct: Create the full path including .vibe/ subdirectory
+vibe_dir = tmp_path / ".vibe"
+vibe_dir.mkdir()
+feedback_path = vibe_dir / "execution_feedback.json"
+
+with patch.object(Path, "home", return_value=tmp_path):
+    ...
+```
+
+**Files**: `tests/core/test_badges.py`
+
+---
+
+## Reusable Patterns
+
+### Follow-up Query Detection — Bilingual Pattern Matching (2026-04-22)
+
+**Pattern**: Detect conversational follow-ups using explicit keyword patterns + pronoun-based heuristics, supporting both English and Chinese.
+
+**Implementation**:
+```python
+FOLLOW_UP_PATTERNS = {
+    "continuation": ["继续", "go on", "continue", "next step"],
+    "retry": ["再试一次", "try again", "again"],
+    # ...
+}
+
+# Explicit pattern match
+for ftype, patterns in FOLLOW_UP_PATTERNS.items():
+    if any(p in query for p in patterns):
+        return True, ftype
+
+# Pronoun fallback (short query + pronoun)
+if len(words) <= 5 and any(p in words for p in ["it", "that", "它"]):
+    return True, "pronoun_reference"
+```
+
+**Why it works**: Explicit patterns catch clear intent, pronoun fallback catches implicit references. Both are lightweight (no LLM needed).
+
+**Files**: `src/vibesop/core/conversation.py`
+
+---
+
+### Project Type Detection via Marker Files + Content Checks (2026-04-22)
+
+**Pattern**: Detect project technology stack by checking for marker files, then validating with content keywords for precise tech stack identification.
+
+**Implementation**:
+```python
+# Phase 1: File existence (fast, no I/O beyond stat)
+for ptype, markers in PROJECT_TYPE_MARKERS.items():
+    score = sum(1 for m in markers if (root / m).exists())
+
+# Phase 2: Content validation (only for files that exist)
+for tech, checks in TECH_STACK_MARKERS.items():
+    for filename, keywords in checks.get("content_checks", {}).items():
+        content = (root / filename).read_text().lower()
+        if any(kw in content for kw in keywords):
+            detected.append(tech)
+```
+
+**Why it works**: File existence is O(1) per check. Content checks only run when files exist, keeping average case fast.
+
+**Files**: `src/vibesop/core/project_analyzer.py`
+
+---
+
+## Architecture Decisions
+
+### Badge Storage in Existing Config File (2026-04-22)
+
+**Decision**: Store earned badges in `~/.vibe/config.yaml` under `user.badges` instead of creating a separate badges database or JSON file.
+
+**Rationale**:
+- **Simplicity**: No new files, no new persistence layer
+- **Atomicity**: Badge updates happen atomically with other user config changes
+- **Migration**: If we later move to a dedicated store, YAML structure is easy to migrate
+- **Trade-off**: Config file grows slightly, but badges are small (<100 entries typical)
+
+**Alternative Considered**: Separate `~/.vibe/badges.json` — rejected to avoid file proliferation.
+
+**Files**: `src/vibesop/core/badges.py`
+
+---
+
+### ConversationContext as Independent Module (2026-04-22)
+
+**Decision**: Create `ConversationContext` as a standalone module, not nested inside `SessionContext`.
+
+**Rationale**:
+- **Single Responsibility**: `SessionContext` handles skill transitions and topic drift; `ConversationContext` handles multi-turn query enrichment
+- **Persistence Separation**: Conversations saved to `.vibe/conversations/`; session state saved elsewhere
+- **Testability**: Independent module can be tested without initializing full routing pipeline
+- **Reuse**: Conversation tracking could be used by other components (e.g., memory manager) without dragging in routing dependencies
+
+**Alternative Considered**: Extend `RoutingContext.recent_queries` — rejected because `RoutingContext` is recreated per route() call, not persisted across CLI invocations.
+
+**Files**: `src/vibesop/core/conversation.py`, `src/vibesop/core/sessions/context.py`

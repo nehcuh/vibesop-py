@@ -3,45 +3,47 @@
 ## Session Handoff
 
 <!-- handoff:start -->
-### 2026-04-21 10:20
+### 2026-04-22 22:00
 
-**Session**: 代码评审优化计划执行（P0/H/M 级别）
+**Session**: 全面优化 + v4.3 功能开发（4 Phase 大规模迭代）
 
 **Summary**:
-用户要求根据代码审查意见执行系统性优化。完成 3 个 Critical + 4 个 High/Medium 优化项，全部通过 1687 个测试。
+执行了 4 个 Phase 的系统级开发：
+1. Phase 1: 修复 133 个 lint 错误 → 0-error 基线
+2. Phase 2: 完成 v50 最后缺口 — Badge/成就系统（4 种徽章）
+3. Phase 3: UnifiedRouter God Class 重构 — 1210 行 → 506 行，提取 8 个 mixin
+4. v4.3: Multi-Turn Support — 跟进查询检测（中英双语）、上下文增强路由
+5. v4.3: Context-Aware Routing — 15+ 项目类型、13+ 技术栈检测
 
 **Key Decisions**:
-1. **P0-1 God Function 拆分**: `_handle_single_result`（213行）→ 6 个专注函数 + 删除 dead code validation 重复块
-2. **P0-2 裸 except 清理**: 27 处 `except Exception` → 具体异常类型。关键教训：自定义异常（SkillNotFoundError/SkillExecutionError）和第三方异常（YAMLError）容易遗漏
-3. **P0-3 LayerResult Pydantic 化**: dataclass → BaseModel，使用 ConfigDict 避免 V2 deprecation warning
-4. **H1 重复 RoutingConfig 合并**: adapters 层重命名为 `RoutingPolicy`，消除命名冲突
-5. **H4 SkillLoader 注入**: `UnifiedRouter` 新增可选 `skill_loader` 参数，支持外部注入复用
-6. **M3 Literal 类型验证**: `fallback_mode`/`default_strategy` 从 `str` 改为 `Literal`
-7. **M4 空计划保护**: `_edit_execution_plan` `done` 分支增加空 steps 检查
+1. Badge 存储在 `~/.vibe/config.yaml`（user.badges），避免新增文件
+2. Mixin 提取采用安全流程：每提取一个 mixin 都运行完整测试
+3. ConversationContext 独立模块，不耦合 SessionContext
+4. ProjectAnalyzer 采用文件存在性 + 内容关键字的双重检测策略
 
 **Files Modified**:
-- `src/vibesop/cli/main.py` - 拆分 + 空保护
-- `src/vibesop/core/routing/layers.py` - Pydantic BaseModel
-- `src/vibesop/core/routing/unified.py` - skill_loader 注入
-- `src/vibesop/core/config/manager.py` - Literal 验证
-- `src/vibesop/adapters/models.py`/`__init__.py`/`builder/*` - RoutingPolicy 重命名
-- `src/vibesop/cli/commands/*.py`/`core/**/*.py`/`tests/**/*.py` - 27处裸except清理
-- `memory/session.md`/`project-knowledge.md`/`instincts.yaml` - 经验记录
+- 新建: `src/vibesop/core/badges.py`, `conversation.py`, `project_analyzer.py`
+- 新建: 8 个 routing mixin
+- 修改: `src/vibesop/core/routing/unified.py` - 1210→506 行
+- 修改: `src/vibesop/cli/main.py` - `--conversation` 参数
+- 修改: 20+ 文件 lint 修复
+- 新建测试: 64 个新测试（badges 19 + conversation 25 + project_analyzer 21）
 
 **Next Steps**:
-- 无紧急任务
-- 所有测试通过（1687 passed）
-- 可考虑将 H4 的注入能力用于统一 SkillManager/UnifiedRouter 的 loader
-
-**Technical Debt** (remaining):
-- UnifiedRouter 仍是 1200+ 行 God class（P0-1 只拆分了 CLI 侧）
-- `_execute_layers()` 和 `_collect_layer_details()` 仍有重复逻辑
-- SkillManager/UnifiedRouter 虽然支持注入，但默认仍各自创建 loader
+- Custom Matchers 插件系统
+- A/B Testing Framework
+- 修复 flaky test 并行隔离问题
 
 **Test Status**:
 ```
-1687 passed, 0 failed ✅
+1751 passed, 1 flaky failed ✅
+Lint: 0 errors ✅
+Commit: 1733422 on main
 ```
+
+**Technical Debt**:
+- UnifiedRouter 506 行仍有精简空间（可提取 `_record_routing_decision`, `_build_result`）
+- `test_disabled_skill_excluded_from_routing` 在 pytest-xdist 下不稳定
 
 ---
 

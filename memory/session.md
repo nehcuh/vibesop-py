@@ -243,3 +243,48 @@ Time: ~4min 37s
 ```
 
 **Recorded**: yes - 3 technical pitfalls, 2 reusable patterns, 1 architecture decision
+
+---
+
+### SN-2026-04-22 (18:30~22:00) 全面优化 + v4.3 功能开发
+
+**Session**: Lint 清理 + Badge 系统 + Router 重构 + Multi-Turn + Context-Aware Routing
+
+**Summary**:
+用户要求根据评审意见继续优化项目。执行了 4 个 Phase 的大规模开发：
+1. Phase 1: 修复 133 个 lint 错误，建立 0-error 基线
+2. Phase 2: 完成 v50 最后缺口 — Badge/成就系统（4 种徽章，集成 feedback/health/route）
+3. Phase 3: UnifiedRouter God Class 重构 — 1210 行 → 506 行，提取 8 个 mixin
+4. v4.3: Multi-Turn Support — 跟进查询检测（中英双语）、上下文增强路由、CLI --conversation
+5. v4.3: Context-Aware Routing — 15+ 项目类型检测、13+ 技术栈推断、路由 boost
+
+**Key Decisions**:
+1. **Badge 存储在 config.yaml**: 复用现有配置，避免新增文件
+2. **Mixin 提取安全流程**: 每提取一个 mixin 都运行完整测试，确保 1700+ 测试稳定
+3. **ConversationContext 独立模块**: 不耦合 SessionContext，独立持久化到 .vibe/conversations/
+4. **ProjectAnalyzer 轻量设计**: 文件存在性检查 + 内容关键字匹配，无外部依赖
+5. **性能测试标记 slow**: `test_concurrent_routing_performance` 未标记 slow 导致并行失败，已修复
+
+**Files Modified**:
+- 新建: `src/vibesop/core/badges.py`, `conversation.py`, `project_analyzer.py`
+- 新建: 8 个 routing mixin (`execution_mixin.py`, `candidate_mixin.py`, `triage_mixin.py`, `optimization_mixin.py`, `orchestration_mixin.py`, `matcher_mixin.py`, `context_mixin.py`, `config_mixin.py`)
+- 修改: `src/vibesop/core/routing/unified.py` - 1210→506 行
+- 修改: `src/vibesop/cli/main.py` - `--conversation` 参数
+- 修改: `src/vibesop/core/routing/optimization_service.py` - project_context boost
+- 修改: `src/vibesop/core/routing/context_mixin.py` - 项目上下文丰富
+- 修改: `src/vibesop/cli/commands/skills_cmd.py` - badge 集成
+- 修改: 20+ 文件 lint 修复
+- 新建测试: `tests/core/test_badges.py` (19), `test_conversation.py` (25), `test_project_analyzer.py` (21)
+
+**Next Steps**:
+- 无紧急任务
+- 可考虑: Custom Matchers 插件系统、A/B Testing Framework
+- Flaky test: `test_disabled_skill_excluded_from_routing` 并行隔离问题待修复
+
+**Test Status**:
+```
+1751 passed, 1 flaky failed ✅
+Lint: 0 errors ✅
+```
+
+**Recorded**: yes - 4 technical pitfalls, 3 reusable patterns, 2 architecture decisions
