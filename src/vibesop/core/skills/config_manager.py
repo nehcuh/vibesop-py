@@ -18,7 +18,8 @@
 """
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from enum import Enum
 from pathlib import Path
 from typing import Any
 
@@ -35,6 +36,21 @@ logger = logging.getLogger(__name__)
 console = Console()
 
 
+class SkillLifecycleState(str, Enum):
+    """技能生命周期状态 (v5.0 预埋，为 v5.1 淘汰机制准备).
+
+    DRAFT:      新创建，未经验证
+    ACTIVE:     正常使用中（默认）
+    DEPRECATED: 已标记弃用，仍可用但会提示
+    ARCHIVED:   已归档，路由时自动排除
+    """
+
+    DRAFT = "draft"
+    ACTIVE = "active"
+    DEPRECATED = "deprecated"
+    ARCHIVED = "archived"
+
+
 @dataclass
 class SkillConfig:
     """技能配置"""
@@ -44,6 +60,18 @@ class SkillConfig:
     priority: int = 50
     category: str = "development"
     scope: str = "global"
+
+    # 生命周期状态 (v5.0 预埋)
+    lifecycle: str = "active"
+
+    # 使用统计预留字段 (v5.1 评估体系将填充)
+    usage_stats: dict[str, Any] = field(default_factory=dict)
+
+    # 版本历史预留字段 (v5.1 版本追踪将填充)
+    version_history: list[dict[str, Any]] = field(default_factory=list)
+
+    # 评估上下文扩展槽 (v5.1 评分维度将填充)
+    evaluation_context: dict[str, Any] = field(default_factory=dict)
 
     # LLM 配置
     requires_llm: bool = False
@@ -191,6 +219,10 @@ class SkillConfigManager:
                 priority=skill_data.get("priority", 50),
                 category=skill_data.get("category", "development"),
                 scope=skill_data.get("scope", "global"),
+                lifecycle=skill_data.get("lifecycle", "active"),
+                usage_stats=skill_data.get("usage_stats", {}),
+                version_history=skill_data.get("version_history", []),
+                evaluation_context=skill_data.get("evaluation_context", {}),
                 requires_llm=skill_data.get("requires_llm", False),
                 llm_provider=skill_data.get("llm", {}).get("provider"),
                 llm_model=skill_data.get("llm", {}).get("model"),
@@ -261,6 +293,18 @@ class SkillConfigManager:
         cls.update_skill_config(skill_id, {"scope": scope})
 
     @classmethod
+    def set_lifecycle(cls, skill_id: str, state: str) -> None:
+        """设置技能的生命周期状态
+
+        Args:
+            skill_id: 技能 ID
+            state: 生命周期状态 ("draft", "active", "deprecated", "archived")
+        """
+        if state not in (s.value for s in SkillLifecycleState):
+            raise ValueError(f"Invalid lifecycle state: {state}")
+        cls.update_skill_config(skill_id, {"lifecycle": state})
+
+    @classmethod
     def delete_skill_config(cls, skill_id: str) -> None:
         """删除技能配置
 
@@ -300,6 +344,10 @@ class SkillConfigManager:
             priority=skill_data.get("priority", 50),
             category=skill_data.get("category", "development"),
             scope=skill_data.get("scope", "project"),
+            lifecycle=skill_data.get("lifecycle", "active"),
+            usage_stats=skill_data.get("usage_stats", {}),
+            version_history=skill_data.get("version_history", []),
+            evaluation_context=skill_data.get("evaluation_context", {}),
             requires_llm=skill_data.get("requires_llm", False),
             llm_provider=llm_data.get("provider"),
             llm_model=llm_data.get("model"),
