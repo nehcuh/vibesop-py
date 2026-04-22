@@ -19,9 +19,9 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
-from vibesop.core.skills.evaluator import RoutingEvaluator
 from vibesop.core.skills import SkillManager, SkillStorage
 from vibesop.core.skills.config_manager import SkillConfigManager
+from vibesop.core.skills.evaluator import RoutingEvaluator
 
 console = Console()
 
@@ -472,7 +472,7 @@ def health(
         )
 
         # Show details for each pack
-        for pack_name, health_status in sorted(all_health.items()):
+        for _pack_name, health_status in sorted(all_health.items()):
             _display_health_status(health_status, verbose=verbose)
 
         # Show evaluation metrics (Phase 3)
@@ -505,8 +505,6 @@ def _display_health_status(health_status, verbose: bool = False) -> None:
         health_status: HealthStatus object
         verbose: Show detailed information
     """
-    from vibesop.integrations.health_monitor import HealthStatus
-
     # Determine icon and color
     icon_map = {
         "healthy": ("✓", "green"),
@@ -641,7 +639,7 @@ def info(
         evaluator = RoutingEvaluator()
         evaluation = evaluator.evaluate_skill(skill_id)
         if evaluation and evaluation.total_routes > 0:
-            console.print(f"\n[bold]Quality Metrics[/bold]")
+            console.print("\n[bold]Quality Metrics[/bold]")
             console.print(f"  [dim]Routes:[/dim] {evaluation.total_routes}")
             console.print(f"  [dim]Success Rate:[/dim] {evaluation.success_rate:.0%}")
             console.print(f"  [dim]Avg Confidence:[/dim] {evaluation.avg_confidence:.0%}")

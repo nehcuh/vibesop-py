@@ -19,7 +19,7 @@
 
 import logging
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
@@ -36,7 +36,7 @@ logger = logging.getLogger(__name__)
 console = Console()
 
 
-class SkillLifecycleState(str, Enum):
+class SkillLifecycleState(StrEnum):
     """技能生命周期状态 (v5.0 预埋，为 v5.1 淘汰机制准备).
 
     DRAFT:      新创建，未经验证

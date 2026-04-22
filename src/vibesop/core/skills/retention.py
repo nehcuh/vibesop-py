@@ -12,10 +12,10 @@ Policy rules (advisory only, no automatic removal):
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Any
 
-from vibesop.core.skills.evaluator import RoutingEvaluator, SkillEvaluation
+from vibesop.core.skills.evaluator import RoutingEvaluator
 
 
 @dataclass
