@@ -21,6 +21,8 @@ from rich.console import Console
 from rich.panel import Panel
 
 from vibesop import __version__
+from vibesop.cli.commands import plan_cmd
+from vibesop.cli.orchestration_report import render_orchestration_result
 from vibesop.cli.routing_report import render_compact_report, render_routing_report
 from vibesop.cli.subcommands import register
 from vibesop.core.routing import UnifiedRouter
@@ -31,6 +33,9 @@ app = typer.Typer(
     no_args_is_help=True,
 )
 console = Console()
+
+# Register subcommands
+app.add_typer(plan_cmd.app, name="plan")
 
 
 # -- Core routing commands --
@@ -73,14 +78,117 @@ def route(
     else:
         router = UnifiedRouter(project_root=Path.cwd())
 
-    result = router.route(query)
+    result = router.orchestrate(query)
 
     # --explain mode: show full decision tree and exit
     if explain:
-        render_routing_report(result, console=console)
+        if result.mode.value == "single":
+            # Reconstruct RoutingResult for explain rendering
+            from vibesop.core.models import RoutingResult
+            routing_result = RoutingResult(
+                primary=result.primary,
+                alternatives=result.alternatives,
+                routing_path=result.routing_path,
+                layer_details=result.layer_details,
+                query=result.original_query,
+                duration_ms=result.duration_ms,
+            )
+            render_routing_report(routing_result, console=console)
+        else:
+            render_orchestration_result(result, console=console)
         raise typer.Exit(0)
 
-    # Determine if confirmation is needed
+    # Handle orchestrated result (multi-step plan)
+    if result.mode.value == "orchestrated" and result.execution_plan:
+        _handle_orchestrated_result(result, router, yes, json_output, console)
+        return
+
+    # Handle single-skill result (existing logic)
+    _handle_single_result(result, router, yes, json_output, validate, console)
+
+
+def _handle_orchestrated_result(
+    result: Any,
+    router: Any,
+    yes: bool,
+    json_output: bool,
+    console: Console,
+) -> None:
+    """Handle multi-step orchestration result with confirmation."""
+    plan = result.execution_plan
+    confirmation_mode = router._config.confirmation_mode
+    need_confirm = (
+        not yes
+        and not json_output
+        and confirmation_mode != "never"
+        and sys.stdin.isatty()
+    )
+
+    if need_confirm:
+        render_orchestration_result(result, console=console)
+
+        choices = [
+            questionary.Choice("✅ Confirm execution plan", value="confirm"),
+            questionary.Choice(
+                f"🔀 Use single skill: {result.single_fallback.skill_id if result.single_fallback else 'none'}",
+                value="single",
+            ),
+            questionary.Choice("📝 Skip skills, use raw LLM", value="skip"),
+        ]
+
+        choice = questionary.select(
+            "How would you like to proceed?",
+            choices=choices,
+        ).ask()
+
+        if choice == "single" and result.single_fallback:
+            # Switch to single-skill mode
+            console.print(
+                Panel(
+                    f"[bold green]✅ Matched:[/bold green] {result.single_fallback.skill_id}\n"
+                    f"[dim]Confidence:[/dim] {result.single_fallback.confidence:.0%}",
+                    title="[bold]Single Skill Fallback[/bold]",
+                    border_style="blue",
+                )
+            )
+            return
+        elif choice == "skip":
+            console.print("[dim]Skipped. Using raw LLM.[/dim]")
+            return
+        # else: confirm — proceed with plan output
+
+    # Save plan to tracker
+    tracker = router._get_plan_tracker()
+    if plan:
+        tracker.create_plan(plan)
+
+    if json_output:
+        import json
+        console.print(json.dumps(result.to_dict(), indent=2))
+    else:
+        render_orchestration_result(result, console=console)
+        console.print(f"\n[dim]Plan saved. Track with:[/dim] [bold]vibe plan status[/bold]")
+
+
+def _handle_single_result(
+    result: Any,
+    router: Any,
+    yes: bool,
+    json_output: bool,
+    validate: bool,
+    console: Console,
+) -> None:
+    """Handle single-skill routing result (existing logic)."""
+    from vibesop.core.models import RoutingResult
+    routing_result = RoutingResult(
+        primary=result.primary,
+        alternatives=result.alternatives,
+        routing_path=result.routing_path,
+        layer_details=result.layer_details,
+        query=result.original_query,
+        duration_ms=result.duration_ms,
+    )
+
     confirmation_mode = router._config.confirmation_mode
     need_confirm = (
         not yes
@@ -90,14 +198,12 @@ def route(
         and sys.stdin.isatty()
     )
 
-    # ambiguous_only: only confirm when confidence is below auto_select_threshold
     if need_confirm and confirmation_mode == "ambiguous_only" and result.primary:
         if result.primary.confidence >= router._config.auto_select_threshold:
             need_confirm = False
 
-    # Show decision report and ask for confirmation
     if need_confirm:
-        render_routing_report(result, console=console)
+        render_routing_report(routing_result, console=console)
 
         choices = [
             questionary.Choice("✅ Confirm selected skill", value="confirm"),
@@ -122,22 +228,18 @@ def route(
             alt_id = questionary.select("Select a skill:", choices=alt_choices).ask()
 
             if alt_id == "back":
-                # Re-prompt (simplified: just confirm the original)
                 pass
             elif alt_id:
-                # Update primary to selected alternative
                 for alt in result.alternatives:
                     if alt.skill_id == alt_id:
                         result.primary = alt
                         break
         elif choice == "skip":
-            result.primary = None  # Signal: no skill selected
+            result.primary = None
 
-    # Output result
     if json_output:
         import json
-
-        console.print(json.dumps(result.to_dict(), indent=2))
+        console.print(json.dumps(routing_result.to_dict(), indent=2))
     elif result.primary is not None:
         primary = result.primary
         console.print(
@@ -159,7 +261,7 @@ def route(
         console.print(
             Panel(
                 f"[yellow]❓ No suitable match found[/yellow]\n\n"
-                f"[dim]Query:[/dim] {query}\n"
+                f"[dim]Query:[/dim] {result.original_query}\n"
                 f"[dim]Routing path:[/dim] {' → '.join([layer.value for layer in result.routing_path])}\n\n"
                 f"[dim]Try:[/dim]\n"
                 f"  • Using more specific keywords\n"
@@ -169,6 +271,35 @@ def route(
                 border_style="yellow",
             )
         )
+
+    if validate:
+        console.print(f"\n[bold cyan]✓ Route Validation[/bold cyan]\n{'=' * 40}\n")
+        caps = router.get_capabilities()
+        console.print("[dim]Router capabilities:[/dim]")
+        console.print(f"  Matchers: {len(caps['matchers'])}")
+        for matcher_info in caps["matchers"]:
+            console.print(f"    - {matcher_info['layer']}: {matcher_info['matcher']}")
+
+        config = caps.get("config", {})
+        console.print("\n[dim]Configuration:[/dim]")
+        console.print(f"  min_confidence: {config.get('min_confidence', 0.3)}")
+        console.print(f"  auto_select_threshold: {config.get('auto_select_threshold', 0.6)}")
+        console.print(f"  enable_embedding: {config.get('enable_embedding', False)}")
+
+        console.print(f"\n[bold]Testing query:[/bold] {result.original_query}\n")
+        if result.primary is not None:
+            console.print(f"  Primary: {result.primary.skill_id} ({result.primary.confidence:.0%})")
+            console.print(f"  Layer: {result.primary.layer.value}")
+        else:
+            console.print("  [yellow]No match found[/yellow]")
+
+        if result.alternatives:
+            console.print("\n[bold]Alternatives:[/bold]")
+            for i, alt in enumerate(result.alternatives[:5], 1):
+                console.print(f"  {i}. {alt.skill_id} - {alt.confidence:.0%}")
+
+        console.print("\n[green]✓ Validation complete[/green]")
+        raise typer.Exit(0)
 
     # Handle validation mode (legacy, less detailed than --explain)
     if validate:

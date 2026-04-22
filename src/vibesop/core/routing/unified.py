@@ -38,7 +38,16 @@ from vibesop.core.matching import (
     TFIDFMatcher,
 )
 from vibesop.core.memory import MemoryManager
-from vibesop.core.models import LayerDetail, RoutingLayer, RoutingResult, SkillRoute
+from vibesop.core.models import (
+    LayerDetail,
+    OrchestrationMode,
+    OrchestrationResult,
+    RoutingLayer,
+    RoutingResult,
+    SkillRoute,
+)
+from vibesop.core.orchestration import MultiIntentDetector, PlanBuilder, PlanTracker
+from vibesop.core.orchestration.task_decomposer import TaskDecomposer
 from vibesop.core.optimization import (
     CandidatePrefilter,
     PreferenceBooster,
@@ -205,6 +214,12 @@ class UnifiedRouter(RouterStatsMixin):
 
         self._scenario_cache: dict[str, Any] | None = None
 
+        # Orchestration components (lazy init)
+        self._multi_intent_detector: MultiIntentDetector | None = None
+        self._task_decomposer: TaskDecomposer | None = None
+        self._plan_builder: PlanBuilder | None = None
+        self._plan_tracker: PlanTracker | None = None
+
     def _create_config_manager_from_config(self, config: ConfigRoutingConfig) -> ConfigManager:
         manager = ConfigManager(project_root=self.project_root)
         for field_name in type(config).model_fields:
@@ -267,6 +282,99 @@ class UnifiedRouter(RouterStatsMixin):
             query=query,
             duration_ms=duration_ms,
         )
+
+    def orchestrate(
+        self,
+        query: str,
+        candidates: list[dict[str, Any]] | None = None,
+        context: RoutingContext | None = None,
+    ) -> OrchestrationResult:
+        """Orchestrate a query — detect multi-intent and build execution plan if needed.
+
+        Falls back to single-skill routing when:
+        - orchestration is disabled
+        - query is clearly single-intent
+        - decomposition fails
+        """
+        start_time = time.perf_counter()
+
+        # 1. Always do single-skill routing first (fast path)
+        single_result = self.route(query, candidates, context)
+
+        # 2. Check if orchestration is enabled
+        if not self._config.enable_orchestration:
+            return self._to_orchestration_result(single_result, query)
+
+        # 3. Multi-intent detection
+        detector = self._get_multi_intent_detector()
+        if not detector.should_decompose(query, single_result):
+            return self._to_orchestration_result(single_result, query)
+
+        # 4. Decompose into sub-tasks
+        decomposer = self._get_task_decomposer()
+        sub_tasks = decomposer.decompose(query)
+
+        if len(sub_tasks) <= 1:
+            # Decomposition produced nothing useful, fall back
+            return self._to_orchestration_result(single_result, query)
+
+        # 5. Build execution plan
+        builder = self._get_plan_builder()
+        plan = builder.build_plan(query, sub_tasks)
+
+        if not plan.steps:
+            # No valid steps could be built, fall back
+            return self._to_orchestration_result(single_result, query)
+
+        duration_ms = (time.perf_counter() - start_time) * 1000
+
+        return OrchestrationResult(
+            mode=OrchestrationMode.ORCHESTRATED,
+            original_query=query,
+            execution_plan=plan,
+            single_fallback=single_result.primary,
+            duration_ms=duration_ms,
+        )
+
+    def _to_orchestration_result(
+        self, result: RoutingResult, query: str
+    ) -> OrchestrationResult:
+        """Convert a single RoutingResult to OrchestrationResult."""
+        return OrchestrationResult(
+            mode=OrchestrationMode.SINGLE,
+            original_query=query,
+            primary=result.primary,
+            alternatives=result.alternatives,
+            routing_path=result.routing_path,
+            layer_details=result.layer_details,
+            duration_ms=result.duration_ms,
+        )
+
+    # ================================================================
+    # Orchestration component lazy initializers
+    # ================================================================
+
+    def _get_multi_intent_detector(self) -> MultiIntentDetector:
+        if self._multi_intent_detector is None:
+            self._multi_intent_detector = MultiIntentDetector()
+        return self._multi_intent_detector
+
+    def _get_task_decomposer(self) -> TaskDecomposer:
+        if self._task_decomposer is None:
+            # Share LLM with triage service if available
+            llm = getattr(self._triage_service, "_llm", None)
+            self._task_decomposer = TaskDecomposer(llm_client=llm)
+        return self._task_decomposer
+
+    def _get_plan_builder(self) -> PlanBuilder:
+        if self._plan_builder is None:
+            self._plan_builder = PlanBuilder(router=self)
+        return self._plan_builder
+
+    def _get_plan_tracker(self) -> PlanTracker:
+        if self._plan_tracker is None:
+            self._plan_tracker = PlanTracker(storage_dir=self.project_root / ".vibe")
+        return self._plan_tracker
 
     def _execute_layers(
         self,

@@ -132,6 +132,10 @@ class RoutingConfig(BaseModel):
         default="always",
         description="User confirmation mode: always (default), never, or ambiguous_only",
     )
+    enable_orchestration: bool = Field(
+        default=True,
+        description="Enable multi-skill orchestration for multi-intent queries",
+    )
     enable_ai_triage: bool = True
     enable_embedding: bool = False
     max_candidates: int = Field(default=3, ge=1, le=10)
@@ -203,6 +207,7 @@ class ConfigManager:
             "min_confidence": 0.3,
             "auto_select_threshold": 0.6,
             "confirmation_mode": "always",
+            "enable_orchestration": True,
             "enable_ai_triage": False,
             "enable_embedding": False,
             "max_candidates": 3,
