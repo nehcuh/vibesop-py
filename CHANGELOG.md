@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [4.2.1] - 2026-04-21
+
+### Fixed
+
+#### Missing Dependencies
+- **PyPI installation failed** due to undeclared core dependencies:
+  - Added `pyyaml>=6.0.0,<7.0.0` — required by `config_manager`, `llm_config`, `skill_add`, `skill_config`
+  - Added `numpy>=1.26.0,<3.0.0` — required by `matching/similarity`, `matching/strategies` on `UnifiedRouter` import path
+  - Added `packaging>=24.0.0,<25.0.0` — required by `utils/external_tools`
+
+---
+
 ## [4.2.0] - 2026-04-21
 
 ### Architecture Review & Optimization Release 🚀
