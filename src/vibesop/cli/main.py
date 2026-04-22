@@ -21,7 +21,7 @@ from rich.console import Console
 from rich.panel import Panel
 
 from vibesop import __version__
-from vibesop.cli.commands import plan_cmd
+from vibesop.cli.commands import experiment_cmd, matcher_cmd, plan_cmd
 from vibesop.cli.orchestration_report import render_orchestration_result
 from vibesop.cli.routing_report import render_routing_report
 from vibesop.cli.subcommands import register
@@ -36,6 +36,8 @@ console = Console()
 
 # Register subcommands
 app.add_typer(plan_cmd.app, name="plan")
+app.add_typer(matcher_cmd.app, name="matcher")
+app.add_typer(experiment_cmd.app, name="experiment")
 
 
 # -- Core routing commands --

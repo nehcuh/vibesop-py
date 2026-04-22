@@ -21,6 +21,7 @@ class RoutingLayer(StrEnum):
     TFIDF = "tfidf"
     EMBEDDING = "embedding"
     LEVENSHTEIN = "levenshtein"
+    CUSTOM = "custom"
     NO_MATCH = "no_match"
     FALLBACK_LLM = "fallback_llm"
 

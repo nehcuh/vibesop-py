@@ -38,6 +38,7 @@ class MatcherType(StrEnum):
     EMBEDDING = "embedding"
     LEVENSHTEIN = "levenshtein"
     AI_TRIAGE = "ai_triage"
+    CUSTOM = "custom"
 
 
 @dataclass

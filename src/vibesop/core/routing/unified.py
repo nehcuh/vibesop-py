@@ -145,6 +145,17 @@ class UnifiedRouter(RouterStatsMixin, RouterExecutionMixin, RouterCandidateMixin
 
         self._matchers.append((RoutingLayer.LEVENSHTEIN, LevenshteinMatcher(matcher_config)))
 
+        # Load custom matcher plugins from .vibe/matchers/
+        self._plugin_registry = None
+        try:
+            from vibesop.core.matching.plugin import MatcherPluginRegistry
+
+            self._plugin_registry = MatcherPluginRegistry(self.project_root)
+            for plugin in self._plugin_registry.list_plugins():
+                self._matchers.append((RoutingLayer.CUSTOM, plugin))
+        except ImportError:
+            pass
+
         # Warm up matchers to prevent cold-start latency on first route()
         # This ensures EmbeddingMatcher model is loaded during initialization
         self._matchers_warmed = False
