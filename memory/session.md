@@ -288,3 +288,43 @@ Lint: 0 errors ✅
 ```
 
 **Recorded**: yes - 4 technical pitfalls, 3 reusable patterns, 2 architecture decisions
+
+
+---
+
+### SN-2026-04-22 (22:30~23:30) v4.3 收尾 — Custom Matchers + A/B Testing
+
+**Session**: 完成 v4.3 最后两项功能并推送远程
+
+**Summary**:
+1. **Custom Matchers 插件系统**: MatcherPluginRegistry 扫描 `.vibe/matchers/` 目录，动态加载用户自定义 `match(query, candidate) -> float` 函数。PluginMatcher 自动包装为 IMatcher 接口。新增 CLI `vibe matcher list/register/remove/reload`。
+2. **A/B Testing Framework**: Experiment/VariantConfig/RouteMetrics 模型，ExperimentRunner 用相同查询集对不同变体运行路由，ExperimentAnalyzer 复合评分自动选择优胜者（match_rate*0.4 + confidence*0.3 + speed*0.1）。新增 CLI `vibe experiment create/run/analyze/list/delete`。
+3. 新增 `RoutingLayer.CUSTOM` 和 `MatcherType.CUSTOM`，集成到 UnifiedRouter pipeline。
+4. 提交并推送到 `feature/routing-transparency` 远程分支。
+
+**Key Decisions**:
+1. **Duck typing for custom matchers**: 不强制用户实现 Protocol，只需提供一个函数，系统自动包装
+2. **Config override for variants**: 实验变体是基线配置的增量覆盖，保持简洁
+3. **JSON file per experiment**: 人类可读、git friendly、零依赖
+
+**Files Modified**:
+- 新建: `src/vibesop/core/matching/plugin.py`, `src/vibesop/core/experiment.py`
+- 新建: `src/vibesop/cli/commands/matcher_cmd.py`, `experiment_cmd.py`
+- 修改: `src/vibesop/core/models.py` - RoutingLayer.CUSTOM
+- 修改: `src/vibesop/core/matching/base.py` - MatcherType.CUSTOM
+- 修改: `src/vibesop/core/routing/unified.py` - 自动加载自定义 matcher
+- 新建测试: `tests/core/test_matcher_plugin.py` (16), `test_experiment.py` (16)
+- 推送: bf82aa5 -> origin/feature/routing-transparency
+
+**Next Steps**:
+- v4.3 全部完成，可考虑发布 v4.3.0
+- 修复 flaky test 并行隔离问题
+- 类型检查清理
+
+**Test Status**:
+```
+1783 passed, 0 failed ✅
+Lint: 0 errors ✅
+```
+
+**Recorded**: yes - 3 technical pitfalls, 3 reusable patterns, 2 architecture decisions

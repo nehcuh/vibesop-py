@@ -642,3 +642,151 @@ for tech, checks in TECH_STACK_MARKERS.items():
 **Alternative Considered**: Extend `RoutingContext.recent_queries` — rejected because `RoutingContext` is recreated per route() call, not persisted across CLI invocations.
 
 **Files**: `src/vibesop/core/conversation.py`, `src/vibesop/core/sessions/context.py`
+
+
+---
+
+### Dynamic Module Loading Safety Boundaries (2026-04-22)
+
+**Issue**: Using `importlib.util.spec_from_file_location` + `exec_module` to load user-provided Python files (custom matcher plugins) can execute arbitrary code. If a plugin file contains malicious code, it runs with the same privileges as VibeSOP.
+
+**Root Cause**: `exec_module` has no sandbox. The loaded module can access `os`, `subprocess`, file system, etc.
+
+**Mitigation**: Current implementation only loads files from `.vibe/matchers/` (project-local, user-controlled). For production hardening:
+1. Validate plugin file syntax with `ast.parse()` before execution
+2. Restrict imports via import hooks
+3. Run plugins in a subprocess with limited privileges
+4. Add `vibe matcher validate <file>` command for pre-registration checks
+
+**Files**: `src/vibesop/core/matching/plugin.py`
+
+---
+
+### Pydantic StrEnum Extension Requires Multi-File Sync (2026-04-22)
+
+**Issue**: Adding a new enum value like `RoutingLayer.CUSTOM` seems trivial, but breaks tests in unexpected places because the value must be supported across multiple independent components.
+
+**Root Cause**: `RoutingLayer` is used in:
+- `layer_number` property mapping
+- `MatcherType` (which also needs a corresponding type)
+- Route result serialization
+- CLI output rendering
+- Test assertions that enumerate all expected layers
+
+**Solution**: When adding a new `StrEnum` value, grep for all usages of the enum across the codebase and update them atomically in a single commit.
+
+**Files**: `src/vibesop/core/models.py`, `src/vibesop/core/matching/base.py`
+
+---
+
+### Internal Import Mock Testing Trap (2026-04-22)
+
+**Issue**: `ExperimentRunner.run()` imports `UnifiedRouter` inside the method (to avoid circular imports). Mock tests using `patch("vibesop.core.experiment.UnifiedRouter")` fail with `AttributeError`.
+
+**Root Cause**: The module `vibesop.core.experiment` does not have `UnifiedRouter` as an attribute at module level. It must be patched at the actual import location: `vibesop.core.routing.UnifiedRouter`.
+
+**Solution**:
+```python
+# ❌ Wrong: patching the using module
+patch("vibesop.core.experiment.UnifiedRouter")
+
+# ✅ Correct: patching the defining module
+patch("vibesop.core.routing.UnifiedRouter")
+```
+
+**Files**: `tests/core/test_experiment.py`
+
+---
+
+## Reusable Patterns
+
+### Plugin System: Convention Over Configuration (2026-04-22)
+
+**Pattern**: Users register plugins by writing a simple function, not by inheriting classes or implementing protocols.
+
+**Implementation**:
+```python
+# .vibe/matchers/my_matcher.py
+NAME = "my_matcher"
+DESCRIPTION = "Custom logic"
+WEIGHT = 1.0
+
+def match(query: str, candidate: dict) -> float:
+    return 0.9 if "special" in query else 0.0
+```
+
+**Why it works**: Reduces cognitive load. Users don't need to understand the full `IMatcher` Protocol or `MatchResult` dataclass. The system wraps their function automatically.
+
+**Files**: `src/vibesop/core/matching/plugin.py`
+
+---
+
+### A/B Testing Composite Score Formula (2026-04-22)
+
+**Pattern**: Combine multiple metrics into a single composite score using weighted sum, avoiding single-metric optimization.
+
+**Implementation**:
+```python
+score = (
+    match_rate * 0.4 +
+    avg_confidence * 0.3 +
+    (1 - fallback_rate) * 0.2 +
+    speed_score * 0.1
+)
+```
+
+**Why it works**: Prevents over-optimizing one dimension at the expense of others. A variant with 100% match rate but 5-second latency should not win over a 95% match rate with 50ms latency.
+
+**Files**: `src/vibesop/core/experiment.py`
+
+---
+
+### Experiment Variant as Config Override (2026-04-22)
+
+**Pattern**: Experiment variants are not full configurations but delta/overrides applied to a baseline.
+
+**Implementation**:
+```python
+# Baseline config from project
+baseline = ConfigRoutingConfig()
+
+# Variant only specifies differences
+variant = VariantConfig(name="fast", overrides={"enable_embedding": False})
+```
+
+**Why it works**: Keeps variant definitions small and focused. Reduces duplication. Makes it easy to add new variants without copying entire configs.
+
+**Files**: `src/vibesop/core/experiment.py`
+
+---
+
+## Architecture Decisions
+
+### Custom Matcher Duck Typing with PluginMatcher Wrapper (2026-04-22)
+
+**Decision**: Do not force users to inherit from a class or implement a Protocol. Accept any callable `match(query, candidate) -> float` and wrap it with `PluginMatcher`.
+
+**Rationale**:
+- **Lower barrier**: Users write one function, not a class with 3 methods
+- **Backward compatible**: Existing plugins don't break when interface expands
+- **Testability**: Simple functions are easier to unit test than class instances
+
+**Trade-off**: Loses compile-time type checking for plugin interfaces. Runtime validation via `callable()` check is sufficient for this use case.
+
+**Files**: `src/vibesop/core/matching/plugin.py`
+
+---
+
+### Experiment Results as JSON Files (2026-04-22)
+
+**Decision**: Store experiment results as individual JSON files in `.vibe/experiments/` rather than in a single database or SQLite.
+
+**Rationale**:
+- **Human readable**: Users can `cat` experiment files to inspect results
+- **Git friendly**: JSON files diff well, enabling version-controlled experiment tracking
+- **No dependencies**: No SQLite or other DB library needed
+- **Simple backup**: Copy `.vibe/experiments/` to archive
+
+**Trade-off**: No querying capability (e.g., "find all experiments where variant X won"). For VibeSOP's scale (tens of experiments), linear scan is acceptable.
+
+**Files**: `src/vibesop/core/experiment.py`

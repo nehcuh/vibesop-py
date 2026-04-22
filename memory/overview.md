@@ -1,6 +1,6 @@
 # Overview - VibeSOP Project
 
-**Last Updated**: 2026-04-22
+**Last Updated**: 2026-04-22 (v4.3 Complete)
 
 ---
 
@@ -37,13 +37,17 @@
 
 ### Next Week (April 23-30, 2026)
 
-1. **Custom Matchers Plugin System** ⏳
-   - Allow users to register custom matcher functions
-   - Community matcher marketplace foundation
+1. **Custom Matchers Plugin System** ✅ (Completed - April 22)
+   - MatcherPluginRegistry scans `.vibe/matchers/` for Python plugins
+   - Duck typing: users provide `match(query, candidate) -> float` function
+   - CLI: `vibe matcher list/register/remove/reload`
+   - 16 new tests
 
-2. **A/B Testing Framework** ⏳
-   - Route variant testing with automatic winner selection
-   - Performance comparison analytics
+2. **A/B Testing Framework** ✅ (Completed - April 22)
+   - Experiment/VariantConfig/RouteMetrics model
+   - Composite scoring: match_rate*0.4 + confidence*0.3 + speed*0.1
+   - CLI: `vibe experiment create/run/analyze/list/delete`
+   - 16 new tests
 
 3. **Fix Flaky Tests** ⏳
    - `test_disabled_skill_excluded_from_routing` parallel isolation

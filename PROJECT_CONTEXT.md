@@ -3,6 +3,49 @@
 ## Session Handoff
 
 <!-- handoff:start -->
+### 2026-04-22 23:30
+
+**Session**: v4.3 收尾 — Custom Matchers + A/B Testing Framework
+
+**Summary**:
+完成 v4.3 最后两项功能并推送到远程：
+1. **Custom Matchers 插件系统**:
+   - MatcherPluginRegistry 扫描 `.vibe/matchers/` 动态加载插件
+   - Duck typing: 用户只需提供 `match(query, candidate) -> float` 函数
+   - CLI: `vibe matcher list/register/remove/reload`
+2. **A/B Testing Framework**:
+   - Experiment/VariantConfig/RouteMetrics 模型
+   - ExperimentRunner 对相同查询集运行不同变体
+   - ExperimentAnalyzer 复合评分自动选择优胜者
+   - CLI: `vibe experiment create/run/analyze/list/delete`
+3. 新增 `RoutingLayer.CUSTOM` 和 `MatcherType.CUSTOM`
+4. UnifiedRouter 自动加载 `.vibe/matchers/` 中的插件
+
+**Key Decisions**:
+1. **Duck typing for custom matchers**: 不强制 Protocol，函数即插件
+2. **Config override for variants**: 实验变体是基线配置的增量覆盖
+3. **JSON per experiment**: 人类可读、git friendly、零依赖
+
+**Files Modified**:
+- 新建: `src/vibesop/core/matching/plugin.py`, `src/vibesop/core/experiment.py`
+- 新建: `src/vibesop/cli/commands/matcher_cmd.py`, `experiment_cmd.py`
+- 修改: `src/vibesop/core/models.py`, `src/vibesop/core/matching/base.py`, `src/vibesop/core/routing/unified.py`
+- 新建测试: `tests/core/test_matcher_plugin.py` (16), `test_experiment.py` (16)
+- 推送: bf82aa5 -> origin/feature/routing-transparency
+
+**Next Steps**:
+- v4.3 全部完成，可考虑发布 v4.3.0
+- 修复 flaky test 并行隔离问题
+- 类型检查清理
+
+**Test Status**:
+```
+1783 passed, 0 failed ✅
+Lint: 0 errors ✅
+```
+
+---
+
 ### 2026-04-22 22:00
 
 **Session**: 全面优化 + v4.3 功能开发（4 Phase 大规模迭代）
@@ -27,7 +70,7 @@
 - 修改: `src/vibesop/core/routing/unified.py` - 1210→506 行
 - 修改: `src/vibesop/cli/main.py` - `--conversation` 参数
 - 修改: 20+ 文件 lint 修复
-- 新建测试: 64 个新测试（badges 19 + conversation 25 + project_analyzer 21）
+- 新建测试: 64 个新测试
 
 **Next Steps**:
 - Custom Matchers 插件系统
@@ -39,38 +82,6 @@
 1751 passed, 1 flaky failed ✅
 Lint: 0 errors ✅
 Commit: 1733422 on main
-```
-
-**Technical Debt**:
-- UnifiedRouter 506 行仍有精简空间（可提取 `_record_routing_decision`, `_build_result`）
-- `test_disabled_skill_excluded_from_routing` 在 pytest-xdist 下不稳定
-
----
-
-### 2026-04-22 11:00
-
-**Session**: 生产就绪状态评估
-
-**Summary**:
-用户质疑 KIMI 声称项目"生产就绪"的判断。执行全面评估后确认项目已达到生产标准。
-
-**Key Findings**:
-1. **测试覆盖率**: 76.22% (≥75% 要求) ✅ - 1642个测试全部通过
-2. **代码质量**: 160个lint错误（主要是中文引号），不影响功能
-3. **类型检查**: 50+错误（主要是第三方库缺少类型存根）
-4. **结论**: KIMI判断正确 - 核心功能已达到生产标准
-
-**Files Modified**:
-- `memory/session.md` - 添加会话记录
-
-**Next Steps**:
-- 无紧急任务
-- 工程债务（lint/类型检查）可在后续迭代清理
-
-**Test Status**:
-```
-Coverage: 76.22% ✅
-Tests: 1642 passed, 1 skipped ✅
 ```
 
 <!-- handoff:end -->
