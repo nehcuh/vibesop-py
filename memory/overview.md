@@ -43,16 +43,16 @@
 ## Projects Summary
 
 ### VibeSOP (vibesop-py)
-**Status**: Production Ready (v4.2.0)
+**Status**: Production Ready (v4.2.1)
 **Description**: AI-assisted development intelligent routing engine with skill-level LLM configuration
-**Coverage**: 78.25% (1,601 tests passing)
+**Coverage**: 76.22% (1,642 tests passing)
 **Key Metrics**:
 - Routing accuracy: 94%
 - Performance: 44 QPS (target: 40+ QPS)
 - Skills supported: 91 skills across 4 packs
 - Security audit: All external skills scanned
 - LLM configs: Skill-level configuration with 5-tier fallback
-- Test speed: 39s fast suite / 252s full suite
+- Test speed: 39s fast suite / ~4.5min full suite
 
 **Recent Changes** (2026-04-21):
 - ✅ Architecture review with professional assessment
