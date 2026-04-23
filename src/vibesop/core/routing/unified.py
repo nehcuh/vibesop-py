@@ -522,6 +522,26 @@ class UnifiedRouter(RouterStatsMixin, RouterExecutionMixin, RouterCandidateMixin
     # Utilities
     # ================================================================
 
+    def set_llm(self, llm_provider: Any) -> None:
+        """Inject an LLM provider for AI triage.
+
+        This allows the router to use an external LLM (e.g., Claude Code's
+        internal LLM) instead of requiring a separate API key configuration.
+
+        Args:
+            llm_provider: An object with a `call(prompt, max_tokens, temperature)` method
+                          that returns a response object with a `content` attribute.
+
+        Example:
+            >>> class AgentLLM:
+            ...     def call(self, prompt, max_tokens=100, temperature=0.1):
+            ...         return AgentResponse(content=agent_generate_text(prompt))
+            >>> router = UnifiedRouter()
+            >>> router.set_llm(AgentLLM())
+        """
+        self._llm = llm_provider
+        self._triage_service._llm = llm_provider
+
     def get_capabilities(self) -> dict[str, Any]:
         return {
             "type": "unified",

@@ -328,10 +328,10 @@ class QuickstartRunner:
 
             # Step 4: Install hooks (if requested)
             if config.install_hooks:
-                hooks_verify_target = (
-                    None if config.global_install else install_target
+                hooks_install_target = (
+                    Path.home() / ".claude" if config.global_install else install_target
                 )
-                hooks_result = installer.verify(config.platform, hooks_verify_target)
+                hooks_result = installer.install(config.platform, hooks_install_target)
                 hooks_installed = sum(
                     1 for v in hooks_result.get("hooks_installed", {}).values() if v
                 )
