@@ -84,3 +84,4 @@ ruff.toml
 .vibe/core/
 .vibe/rules/
 .vibe/conversations/
+.vibe/*.jsonl
