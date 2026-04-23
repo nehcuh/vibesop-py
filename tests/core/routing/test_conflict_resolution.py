@@ -2,11 +2,11 @@
 
 import pytest
 
+from vibesop.core.matching.base import MatchResult, MatcherType
 from vibesop.core.routing.conflict import (
     ConflictResolver,
     NamespacePriorityStrategy,
 )
-from vibesop.core.matching.base import MatchResult, MatcherType
 
 
 class TestNamespacePriorityStrategy:

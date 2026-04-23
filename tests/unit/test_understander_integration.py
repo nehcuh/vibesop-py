@@ -4,11 +4,11 @@
 import tempfile
 from pathlib import Path
 
+from vibesop.core.skills.parser import parse_skill_md
 from vibesop.core.skills.understander import (
     SkillAutoConfigurator,
     understand_skill_from_file,
 )
-from vibesop.core.skills.parser import parse_skill_md
 
 
 def test_understand_skill_from_file():

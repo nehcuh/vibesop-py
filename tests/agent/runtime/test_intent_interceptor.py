@@ -5,10 +5,10 @@ from __future__ import annotations
 import pytest
 
 from vibesop.agent.runtime.intent_interceptor import (
+    IntentInterceptor,
     InterceptionContext,
     InterceptionDecision,
     InterceptionMode,
-    IntentInterceptor,
 )
 
 

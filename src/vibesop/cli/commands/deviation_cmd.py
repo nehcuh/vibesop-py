@@ -14,10 +14,10 @@ from rich.panel import Panel
 from rich.table import Table
 
 from vibesop.cli.commands.deviation import (
+    REASON_CODES,
     analyze_deviations,
     get_deviation_summary,
     record_deviation,
-    REASON_CODES,
 )
 
 app = typer.Typer(
@@ -40,7 +40,7 @@ def record_cmd(
     storage_path: str = typer.Option(".vibe/memory/deviations.jsonl", "--path", "-p"),
 ) -> None:
     """Record a routing deviation."""
-    from vibesop.core.models import RoutingResult, RoutingLayer, SkillRoute
+    from vibesop.core.models import RoutingLayer, RoutingResult, SkillRoute
 
     # Reconstruct RoutingResult for recording
     try:

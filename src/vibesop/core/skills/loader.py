@@ -103,6 +103,7 @@ class SkillLoader:
         return [
             self.project_root / "skills",
             self.project_root / ".vibe" / "skills",
+            self.project_root / "core" / "skills",
         ]
 
     def discover_all(self, force_reload: bool = False) -> dict[str, LoadedSkill]:

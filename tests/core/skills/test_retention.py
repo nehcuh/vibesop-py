@@ -63,6 +63,7 @@ class TestRetentionPolicy:
     def test_highlight_for_grade_a(self):
         """Grade A + recent use should highlight."""
         from datetime import datetime
+
         from vibesop.core.skills.evaluator import SkillEvaluation
 
         policy = RetentionPolicy()

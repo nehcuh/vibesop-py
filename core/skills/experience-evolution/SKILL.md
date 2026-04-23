@@ -7,7 +7,6 @@ version: 1.0.0
 mode: observe-only
 intent: learning
 namespace: builtin
-version: 1.0.0
 type: prompt
 ---
 

@@ -2,7 +2,7 @@
 
 import pytest
 
-from vibesop.core.skills.workflow import WorkflowEngine, ExecutionContext
+from vibesop.core.skills.workflow import ExecutionContext, WorkflowEngine
 
 
 class TestGetattrSecurity:

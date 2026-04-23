@@ -11,7 +11,6 @@ allowed-tools:
   - Bash
 intent: wrap-up
 namespace: builtin
-version: 2.1.0
 type: prompt
 ---
 

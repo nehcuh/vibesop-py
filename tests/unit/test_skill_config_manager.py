@@ -8,8 +8,8 @@ from vibesop.core.skills.config_manager import (
     SkillConfig,
     SkillConfigManager,
     get_skill_llm_config,
-    set_skill_llm_config,
     list_skill_configs,
+    set_skill_llm_config,
 )
 
 
@@ -44,7 +44,7 @@ def test_set_and_get_skill_llm_config():
             # 获取技能配置
             config = SkillConfigManager.get_skill_config(skill_id)
 
-            print(f"\n✓ Retrieved config:")
+            print("\n✓ Retrieved config:")
             print(f"  Skill ID: {config.skill_id}")
             print(f"  Requires LLM: {config.requires_llm}")
             print(f"  Provider: {config.llm_provider}")
@@ -171,7 +171,7 @@ def test_update_skill_config():
             # 获取更新后的配置
             config = SkillConfigManager.get_skill_config(skill_id)
 
-            print(f"\n✓ Updated config:")
+            print("\n✓ Updated config:")
             print(f"  Provider: {config.llm_provider}")
             print(f"  Model: {config.llm_model}")
             print(f"  Temperature: {config.llm_temperature}")
@@ -250,7 +250,7 @@ def test_priority_fallback():
             skill_id = "priority-test"
 
             # 1. 技能级别配置
-            print(f"\n✓ Step 1: Set skill-level config")
+            print("\n✓ Step 1: Set skill-level config")
             SkillConfigManager.set_skill_llm_config(skill_id, {
                 "provider": "openai",
                 "model": "gpt-4",
@@ -267,7 +267,7 @@ def test_priority_fallback():
                 print("  ✓ Skill-level config used")
 
             # 2. 删除技能配置，应该回退到全局配置
-            print(f"\n✓ Step 2: Delete skill config (should fallback to global)")
+            print("\n✓ Step 2: Delete skill config (should fallback to global)")
             SkillConfigManager.delete_skill_config(skill_id)
 
             llm_config = get_skill_llm_config(skill_id)
@@ -276,8 +276,8 @@ def test_priority_fallback():
             print(f"  Source: {llm_config.source.value if llm_config else 'None'}")
 
             # 3. 如果没有全局配置，应该回退到环境变量或 Agent
-            print(f"\n✓ Step 3: Fallback to env/agent/default")
-            print(f"  Note: Will use Agent env if available, otherwise defaults")
+            print("\n✓ Step 3: Fallback to env/agent/default")
+            print("  Note: Will use Agent env if available, otherwise defaults")
 
             print("\n✅ Test PASSED!")
 

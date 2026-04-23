@@ -168,7 +168,7 @@ class ExternalSkillExecutor:
         # Initialize dependencies (use injected loader or create new one)
         self._loader = loader or SkillLoader(project_root=self.project_root)
         self._parser = SkillParser()
-        self._auditor = SkillSecurityAuditor()
+        self._auditor = SkillSecurityAuditor(project_root=self.project_root)
         self._workflow_engine: WorkflowEngine | None = None
 
         if enable_execution:

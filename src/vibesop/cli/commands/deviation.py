@@ -210,7 +210,7 @@ def get_deviation_summary(
         lines.append(f"- `{timestamp}` | **{skill}** | {reason} | \"{query}...\"")
 
     lines.append("")
-    lines.append(f"*Run `vibe analyze-deviations` for detailed analysis*")
+    lines.append("*Run `vibe analyze-deviations` for detailed analysis*")
     lines.append("")
 
     return "\n".join(lines)

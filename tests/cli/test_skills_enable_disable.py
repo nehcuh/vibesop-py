@@ -7,7 +7,6 @@ from typer.testing import CliRunner
 
 from vibesop.cli.main import app
 
-
 runner = CliRunner()
 
 

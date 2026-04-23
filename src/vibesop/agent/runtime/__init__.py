@@ -17,10 +17,10 @@ from vibesop.agent.runtime.decision_presenter import (
     PresentResult,
 )
 from vibesop.agent.runtime.intent_interceptor import (
+    IntentInterceptor,
     InterceptionContext,
     InterceptionDecision,
     InterceptionMode,
-    IntentInterceptor,
 )
 from vibesop.agent.runtime.plan_executor import (
     ExecutionGuide,
@@ -38,12 +38,12 @@ __all__ = [
     "ExecutionGuide",
     "InjectionMethod",
     "InjectionResult",
+    "IntentInterceptor",
     "InterceptionContext",
     "InterceptionDecision",
     "InterceptionMode",
-    "IntentInterceptor",
-    "PlatformType",
     "PlanExecutor",
+    "PlatformType",
     "PresentResult",
     "SkillInjector",
 ]

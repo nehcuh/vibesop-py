@@ -16,10 +16,10 @@ class TestTriageResponseParsing:
     """Test AI Triage response parsing edge cases."""
 
     def test_parse_ai_triage_response_rejects_json_fence(self, tmp_path):
+        from vibesop.core.optimization import CandidatePrefilter
+        from vibesop.core.routing.cache import CacheManager
         from vibesop.core.routing.triage_service import TriageService
         from vibesop.llm.cost_tracker import TriageCostTracker
-        from vibesop.core.routing.cache import CacheManager
-        from vibesop.core.optimization import CandidatePrefilter
 
         config = RoutingConfig(enable_ai_triage=True)
         cost_tracker = TriageCostTracker(storage_dir=tmp_path)
@@ -40,10 +40,10 @@ class TestTriageResponseParsing:
         assert parsed["skill_id"] is None
 
     def test_parse_ai_triage_response_accepts_valid_skill_id(self, tmp_path):
+        from vibesop.core.optimization import CandidatePrefilter
+        from vibesop.core.routing.cache import CacheManager
         from vibesop.core.routing.triage_service import TriageService
         from vibesop.llm.cost_tracker import TriageCostTracker
-        from vibesop.core.routing.cache import CacheManager
-        from vibesop.core.optimization import CandidatePrefilter
 
         config = RoutingConfig(enable_ai_triage=True)
         cost_tracker = TriageCostTracker(storage_dir=tmp_path)

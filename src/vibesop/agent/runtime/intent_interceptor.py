@@ -195,8 +195,8 @@ class IntentInterceptor:
 
 
 __all__ = [
+    "IntentInterceptor",
     "InterceptionContext",
     "InterceptionDecision",
     "InterceptionMode",
-    "IntentInterceptor",
 ]

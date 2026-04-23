@@ -13,7 +13,6 @@ commands:
   - evolve
 intent: learning
 namespace: builtin
-version: 1.0.0
 type: prompt
 ---
 

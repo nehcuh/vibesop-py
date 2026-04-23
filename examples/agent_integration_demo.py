@@ -10,7 +10,7 @@ Usage:
 
 from pathlib import Path
 
-from vibesop.agent import AgentRouter, SimpleResponse, SimpleLLM
+from vibesop.agent import AgentRouter, SimpleLLM, SimpleResponse
 
 
 class DemoAgentLLM(SimpleLLM):
@@ -75,7 +75,7 @@ def demo_basic_routing():
             print(f"  → Layer: {result.primary.layer.value}")
         else:
             print(f"\nQuery: {query}")
-            print(f"  → No match found")
+            print("  → No match found")
 
 
 def demo_multi_turn_reroute():

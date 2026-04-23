@@ -81,6 +81,22 @@ class RouterMatcherMixin:
 
         candidate = next((c for c in candidates if c["id"] == target_skill), None)
         if not candidate:
+            # Try matching with common namespace prefixes
+            # Some scenarios use short names (e.g., "systematic-debugging")
+            # while candidates use full IDs (e.g., "builtin/systematic-debugging")
+            candidate = next(
+                (c for c in candidates if c["id"].endswith(f"/{target_skill}")),
+                None,
+            )
+        if not candidate and target_skill.startswith("/"):
+            # Handle "/skill-name" format (common in gstack/superpowers)
+            # e.g., "/review" -> "gstack/review" or "superpowers/review"
+            short_name = target_skill[1:]  # Remove leading "/"
+            candidate = next(
+                (c for c in candidates if c["id"].endswith(f"/{short_name}")),
+                None,
+            )
+        if not candidate:
             return LayerResult(
                 layer=RoutingLayer.SCENARIO,
                 matched=False,

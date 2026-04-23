@@ -9,8 +9,8 @@ import pytest
 from vibesop.core.sessions import (
     GenericSessionTracker,
     HookBasedSessionTracker,
-    get_tracker,
     _detect_platform,
+    get_tracker,
 )
 from vibesop.core.sessions.context import RoutingSuggestion
 

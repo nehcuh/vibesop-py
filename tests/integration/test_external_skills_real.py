@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-import pytest
 from pathlib import Path
+
+import pytest
 
 from vibesop.core.skills.executor import SkillExecutionError
 from vibesop.core.skills.manager import SkillManager
