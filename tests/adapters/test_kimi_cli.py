@@ -46,8 +46,9 @@ class TestKimiCliAdapter:
         result = adapter.render_config(manifest, tmp_path)
 
         assert result.success
-        assert result.file_count == 1  # config.toml only
+        assert result.file_count == 2  # config.toml + AGENTS.md
         assert (tmp_path / "config.toml").exists()
+        assert (tmp_path / "AGENTS.md").exists()
 
     def test_render_config_with_skills(self, tmp_path: Path) -> None:
         """Test rendering with skills."""
@@ -69,9 +70,10 @@ class TestKimiCliAdapter:
         result = adapter.render_config(manifest, tmp_path)
 
         assert result.success
-        assert result.file_count == 3  # config.toml + README.md + skill
+        assert result.file_count == 4  # config.toml + README.md + skill + AGENTS.md
         assert (tmp_path / "config.toml").exists()
         assert (tmp_path / "README.md").exists()
+        assert (tmp_path / "AGENTS.md").exists()
         assert (tmp_path / "skills" / "test-skill" / "SKILL.md").exists()
 
     def test_config_toml_content(self, tmp_path: Path) -> None:
@@ -300,7 +302,7 @@ class TestKimiCliAdapterEdgeCases:
 
         result = adapter.render_config(manifest, tmp_path)
         assert result.success
-        assert result.file_count == 1  # config.toml only, no README
+        assert result.file_count == 2  # config.toml + AGENTS.md, no README
 
     def test_render_with_full_metadata(self, tmp_path: Path) -> None:
         """Test rendering with full metadata."""

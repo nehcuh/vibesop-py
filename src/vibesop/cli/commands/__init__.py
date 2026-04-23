@@ -25,6 +25,7 @@ To enable legacy commands, set VIBESOP_ENABLE_LEGACY=1 or install with:
 from vibesop.cli.commands import analyze as analyze_module
 from vibesop.cli.commands import build as build_module
 from vibesop.cli.commands import config as config_module
+from vibesop.cli.commands import deviation as deviation_module
 from vibesop.cli.commands import import_rules as import_rules_module
 from vibesop.cli.commands import init as init_module
 from vibesop.cli.commands import inspect as inspect_module
@@ -41,6 +42,7 @@ __all__ = [
     "analyze_module",
     "build_module",
     "config_module",
+    "deviation_module",
     "import_rules_module",
     "init_module",
     "inspect_module",

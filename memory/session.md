@@ -361,3 +361,65 @@ Lint: 0 errors ✅
 ```
 
 **Recorded**: yes - 2 technical pitfalls
+
+
+---
+
+## Current Session
+
+### S12 (2026-04-23 14:11~) Agent Runtime 层实现 + 平台适配 + E2E 验证
+
+- [x] **Agent Runtime 核心模块**（4 个模块，36 单元测试）
+  - `IntentInterceptor`: 意图拦截，支持短查询过滤、元查询检测、显式覆盖、多意图标记
+  - `SkillInjector`: 平台特定注入（Claude Code additionalContext / OpenCode system_prompt / Kimi CLI instruction）
+  - `DecisionPresenter`: 路由决策透明化展示（人类可读 + 结构化 JSON）
+  - `PlanExecutor`: 多步骤执行指南生成（并行/串行、依赖跟踪、完成标记）
+- [x] **Kimi CLI 平台适配**
+  - `render_config()` 生成 `AGENTS.md`，含强制路由规则、多意图处理、降级逻辑
+  - 修复 adapter 测试（file_count 断言更新）
+- [x] **Claude Code 平台适配**
+  - 新增 `hooks/vibesop-route.sh.j2`（UserPromptSubmit 路由 hook）
+  - 新增 `hooks/vibesop-track.sh.j2`（PreToolUse 跟踪 hook）
+  - `rules/routing.md.j2` 新增 Agent Runtime Rules（ACTIVE SKILL / EXECUTION PLAN / EXPLICIT SKILL）
+  - `install_hooks()` 部署全部 3 个 hook
+- [x] **OpenCode 平台适配**
+  - 创建 `templates/opencode/plugin/vibesop/index.ts` 参考模板
+  - 创建 `templates/opencode/plugin/vibesop/README.md` 文档
+- [x] **E2E 验证**
+  - 新建 `tests/e2e/test_agent_runtime.py`（13 个 E2E 测试）
+  - 覆盖：完整链路、平台适配器文件生成、跨平台一致性
+  - 发现并修复：`__init__.py` 导出缺失、Jinja2 `${#}` 冲突、方法名不匹配
+- [x] **Session wrap-up**（当前执行）
+
+**Key Decisions**:
+1. Claude Code hook 脚本作为文档/参考生成（标准 Claude Code 不支持 UserPromptSubmit/PreToolUse），用户可手动配置到支持扩展 hook 的版本
+2. OpenCode plugin 模板暂不接入 `render_config()`（API 标注 experimental），作为未来就绪的参考模板保留
+3. E2E 采用 Python 层模拟（不依赖真实 AI Agent 平台），确保 CI 可运行
+
+**Files Modified**:
+- 新建: `src/vibesop/agent/runtime/`（4 个核心模块 + `__init__.py`）
+- 新建: `tests/agent/runtime/`（4 个测试文件，36 测试）
+- 新建: `tests/e2e/test_agent_runtime.py`（13 个 E2E 测试）
+- 新建: `src/vibesop/adapters/templates/claude-code/hooks/`（2 个 hook 模板）
+- 新建: `src/vibesop/adapters/templates/opencode/plugin/vibesop/`（2 个 plugin 文件）
+- 修改: `src/vibesop/adapters/claude_code.py`（hook 生成 + install_hooks 更新）
+- 修改: `src/vibesop/adapters/kimi_cli.py`（AGENTS.md 生成）
+- 修改: `src/vibesop/adapters/templates/claude-code/rules/routing.md.j2`
+- 修改: `tests/adapters/test_kimi_cli.py`（file_count 断言更新）
+- 修改: `.vibe/plans/agent-runtime-platform-adaptation.md`
+
+**Test Status**:
+```
+139 passed, 0 failed ✅
+  - agent/runtime: 36 passed
+  - adapters: 90 passed
+  - e2e/agent_runtime: 13 passed
+```
+
+**Next Steps**:
+- Phase 3 E2E：在真实 Claude Code / Kimi CLI 环境中验证 hook 实际触发和 AGENTS.md 遵守率
+- CLI 集成：`vibe build --platform=all` 支持一次性构建所有平台配置
+- OpenCode plugin：待 API 稳定后接入 `render_config()`
+
+**Recorded**: yes — 3 technical pitfalls + 2 architecture decisions
+

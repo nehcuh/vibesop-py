@@ -790,3 +790,90 @@ variant = VariantConfig(name="fast", overrides={"enable_embedding": False})
 **Trade-off**: No querying capability (e.g., "find all experiments where variant X won"). For VibeSOP's scale (tens of experiments), linear scan is acceptable.
 
 **Files**: `src/vibesop/core/experiment.py`
+
+---
+
+### Jinja2 Template Conflicts with Shell `${#var}` Syntax (2026-04-23)
+
+**Issue**: Jinja2 parses `${#` as the start of a comment tag (`{# ... #}`). When writing shell script templates that use bash string length syntax `${#VAR}`, Jinja2 throws "Missing end of comment tag" during template rendering.
+
+**Root Cause**: Jinja2's lexer scans for `{#` anywhere in the template text, including inside shell script strings. The sequence `${#VAR}` contains `{#` which triggers Jinja2 comment parsing.
+
+**Solution**:
+```bash
+# ❌ Wrong: Jinja2 sees {# and tries to parse a comment
+if [ "${#QUERY}" -lt 10 ]; then
+
+# ✅ Correct: Use alternative length calculation
+if [ "$(printf '%s' "$QUERY" | wc -m | tr -d ' ')" -lt 10 ]; then
+```
+
+Alternative: Wrap entire shell script sections in `{% raw %}...{% endraw %}` if the template contains no Jinja2 variables.
+
+**Files**: `src/vibesop/adapters/templates/claude-code/hooks/vibesop-route.sh.j2`
+
+---
+
+### __init__.py Export Drift: Public API Breaks Without Error (2026-04-23)
+
+**Issue**: Classes defined in submodules but not added to `__init__.py`'s `__all__` or import list cause `ImportError` in downstream code (tests, E2E, other modules) with no warning during development.
+
+**Root Cause**: Python allows importing from any submodule path (`from vibesop.agent.runtime.skill_injector import InjectionMethod`), but the canonical public API is through `vibesop.agent.runtime`. When new types like `InterceptionMode` or `InjectionMethod` are added to submodules but forgotten in `__init__.py`, tests using the public API path fail at import time.
+
+**Solution**:
+1. Treat `__init__.py` as a public API contract — any new exported type MUST be added
+2. After creating a new class/dataclass/enum in a submodule, immediately update `__init__.py` imports + `__all__`
+3. Add E2E import smoke tests: `from vibesop.agent.runtime import X` for every public symbol
+
+**Files**:
+- `src/vibesop/agent/runtime/__init__.py`
+- `tests/e2e/test_agent_runtime.py`
+
+---
+
+## Architecture Decisions
+
+### Agent Runtime Layer: Platform-Capability-Driven Design (2026-04-23)
+
+**Decision**: Design Agent Runtime integration differently per platform based on their actual hook/plugin capabilities, not a unified abstraction.
+
+**Platform Strategies**:
+| Platform | Capability | Strategy |
+|----------|-----------|----------|
+| Claude Code | `additionalContext` injection via hooks | Hooks + rules hybrid |
+| OpenCode | `experimental.chat.system.transform` | Plugin (reference template) |
+| Kimi CLI | No hooks, no dynamic system prompt | Pure prompt downgrade (AGENTS.md) |
+
+**Rationale**:
+- **No false assumptions**: Don't design for `UserPromptSubmit` hook if standard Claude Code doesn't support it
+- **Graceful degradation**: Claude Code gets hooks as docs/reference; Kimi CLI gets mandatory prompt rules
+- **Future-proof**: When platforms add capabilities, existing templates can be activated
+
+**Trade-off**: Three different integration paths to maintain. Mitigated by shared core modules (IntentInterceptor, SkillInjector, DecisionPresenter, PlanExecutor).
+
+**Files**:
+- `src/vibesop/agent/runtime/` — Shared core modules
+- `src/vibesop/adapters/claude_code.py` — Hooks + rules
+- `src/vibesop/adapters/kimi_cli.py` — AGENTS.md downgrade
+- `src/vibesop/adapters/templates/opencode/plugin/vibesop/` — Reference plugin template
+
+---
+
+### E2E Tests for Agent Runtime as "Integration Simulation" (2026-04-23)
+
+**Decision**: E2E tests simulate the full Agent Runtime call chain in Python (without real AI Agent platforms) to verify module integration and platform adapter output correctness.
+
+**Test Coverage**:
+- Full chain: query → IntentInterceptor → SkillInjector → DecisionPresenter → PlanExecutor
+- Platform artifacts: Claude Code hooks, Kimi CLI AGENTS.md, OpenCode plugin templates
+- Cross-platform consistency: All adapters emit mandatory `vibe route` workflow
+
+**Rationale**:
+- **No external dependencies**: Tests run in CI without Claude Code / OpenCode / Kimi CLI installed
+- **Fast feedback**: ~1.4s for 13 E2E tests vs minutes for real platform integration
+- **Regression safety**: Any change to public API or adapter output breaks tests immediately
+
+**Trade-off**: Doesn't validate actual platform behavior (e.g., whether Claude Code really loads hooks). Platform-specific validation requires manual testing or platform simulators.
+
+**Files**: `tests/e2e/test_agent_runtime.py`
+

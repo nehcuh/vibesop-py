@@ -115,6 +115,29 @@ Each skill has a trigger mode:
 - **`suggest`**: Recommend to user, user decides
 - **`manual`**: Never auto-trigger, user must invoke
 
+## Agent Runtime Rules
+
+When VibeSOP Agent Runtime is active (via hooks or manual routing):
+
+### If [ACTIVE SKILL: xxx] is injected
+
+1. **You MUST read the skill's SKILL.md** before proceeding
+2. **Strictly follow** the workflow described in the skill
+3. **Do not skip** any steps or substeps
+4. **Report completion** using the skill's defined completion markers
+
+### If [EXECUTION PLAN] is injected
+
+1. **Follow the plan steps in order**
+2. **Read each step's SKILL.md** before executing that step
+3. **Report progress** after each step: "『步骤 N 完成』"
+4. **Wait for dependencies** — if a step depends on a previous step's output, do not start it until the dependency is complete
+5. **Parallel steps** may be executed simultaneously if marked as parallel
+
+### If [EXPLICIT SKILL: xxx] is injected
+
+The user has explicitly requested this skill. Load and follow it immediately without further routing.
+
 ## Override and Customization
 
 ### Adding Custom Routes

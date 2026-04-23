@@ -1,67 +1,44 @@
 # Overview - VibeSOP Project
 
-**Last Updated**: 2026-04-22 (v4.3.0 Released)
+**Last Updated**: 2026-04-23 (Agent Runtime + Platform Adaptation)
 
 ---
 
 ## Goals
 
-### Current Week (April 21-22, 2026)
+### Previous Week (April 21-22, 2026) — Completed
 
 1. **Lint Sweep** ✅ (Completed - April 22)
-   - Fixed 133 lint errors across 20+ files
-   - Established 0-error baseline: `ruff check src/vibesop` → 0 errors
-
 2. **Badge System MVP** ✅ (Completed - April 22)
-   - Implemented 4 badge types with lightweight tracking
-   - Integrated into feedback, health, and route commands
-   - 19 new tests
-
 3. **UnifiedRouter Refactoring** ✅ (Completed - April 22)
-   - Extracted 8 mixins from 1210-line God Class → 506 lines (-58%)
-   - RouterExecutionMixin, RouterCandidateMixin, RouterTriageMixin,
-     RouterOptimizationMixin, RouterOrchestrationMixin, RouterMatcherMixin,
-     RouterContextMixin, RouterConfigMixin
-   - 1700+ tests pass
-
 4. **v4.3 Multi-Turn Support** ✅ (Completed - April 22)
-   - ConversationContext with follow-up detection (Chinese + English)
-   - Contextual query enrichment for continuation/retry/alternative/clarification
-   - CLI `--conversation` parameter
-   - 25 new tests
-
 5. **v4.3 Context-Aware Routing** ✅ (Completed - April 22)
-   - ProjectAnalyzer: 15+ project types, 13+ tech stacks detected
-   - Project context boost in optimization (+0.02~0.04 confidence)
-   - 21 new tests
+6. **Custom Matchers Plugin System** ✅ (Completed - April 22)
+7. **A/B Testing Framework** ✅ (Completed - April 22)
+8. **Fix Flaky Tests + v4.3.0 Release** ✅ (Completed - April 22)
 
-### Next Week (April 23-30, 2026)
+### Current Week (April 23-30, 2026)
 
-1. **Custom Matchers Plugin System** ✅ (Completed - April 22)
-   - MatcherPluginRegistry scans `.vibe/matchers/` for Python plugins
-   - Duck typing: users provide `match(query, candidate) -> float` function
-   - CLI: `vibe matcher list/register/remove/reload`
-   - 16 new tests
+1. **Agent Runtime Layer** ✅ (Completed - April 23)
+   - 4 core modules: IntentInterceptor, SkillInjector, DecisionPresenter, PlanExecutor
+   - 36 unit tests, 13 E2E tests, all passing
+   - Platform adapters: Claude Code (hooks), Kimi CLI (AGENTS.md), OpenCode (plugin template)
 
-2. **A/B Testing Framework** ✅ (Completed - April 22)
-   - Experiment/VariantConfig/RouteMetrics model
-   - Composite scoring: match_rate*0.4 + confidence*0.3 + speed*0.1
-   - CLI: `vibe experiment create/run/analyze/list/delete`
-   - 16 new tests
+2. **v4.4 Platform Adaptation** 🔄 (In Progress)
+   - Phase 1-2 complete (core + adapters)
+   - Phase 3 pending: Real platform validation (Claude Code hook trigger, Kimi CLI AGENTS.md compliance)
 
-3. **Fix Flaky Tests** ✅ (Completed)
-   - `test_disabled_skill_excluded_from_routing` marked `@pytest.mark.slow`
-   - Type check: 1199 errors → 0 errors, 98 warnings
-   - v4.3.0 released (CHANGELOG + version bump)
+3. **CLI `vibe build --platform=all`** ⏳ (Pending)
+   - Support building all platform configs in one command
 
 ---
 
 ## Projects Summary
 
 ### VibeSOP (vibesop-py)
-**Status**: Production Ready (v4.3.0)
-**Description**: AI-assisted development intelligent routing engine with skill-level LLM configuration
-**Coverage**: 76.22% (1,782 tests passing)
+**Status**: v4.4 Agent Runtime Ready (v4.3.0 Released)
+**Description**: AI-assisted development intelligent routing engine with skill-level LLM configuration and Agent Runtime layer
+**Coverage**: 75%+ (1,782+ tests passing)
 **Key Metrics**:
 - Routing accuracy: 94%
 - Performance: 44 QPS (target: 40+ QPS)
@@ -69,6 +46,12 @@
 - Security audit: All external skills scanned
 - LLM configs: Skill-level configuration with 5-tier fallback
 - Test speed: 39s fast suite / ~4.5min full suite
+- Agent Runtime modules: 4/4 implemented, 36 unit + 13 E2E tests
+
+**Recent Changes** (2026-04-23):
+- ✅ Agent Runtime layer: IntentInterceptor + SkillInjector + DecisionPresenter + PlanExecutor
+- ✅ Platform adaptation: Claude Code (hooks), Kimi CLI (AGENTS.md), OpenCode (plugin template)
+- ✅ E2E validation: 13 tests covering full chain + platform artifacts + cross-platform consistency
 
 **Recent Changes** (2026-04-21):
 - ✅ Code review optimization plan: P0-1/P0-2/P0-3/H1/H4/M3/M4 all complete

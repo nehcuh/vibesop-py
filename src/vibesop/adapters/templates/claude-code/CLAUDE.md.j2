@@ -38,6 +38,30 @@ read skills/<matched-skill>/SKILL.md
 # Run appropriate verification commands as required by the skill
 ```
 
+### ⚠️ When Skipping Routing Recommendations
+
+If you choose NOT to follow a routing recommendation, you MUST record the deviation:
+
+```bash
+vibe deviation record "<query>" \
+  "<routed_skill>" \
+  <confidence> \
+  "<layer>" \
+  --reason <reason_code> \
+  --action "<what_you_did>" \
+  --justification "<why>"
+```
+
+**Available reason codes:**
+- `skill_mismatch`: Recommended skill doesn't match user's intent
+- `context_ignored`: Routing didn't consider conversation context
+- `execution_impossible`: Skill requires resources not available
+- `user_override`: User explicitly asked to ignore routing
+- `meta_question`: User is asking about the routing system itself
+- `duplicate_effort`: Agent already performing equivalent action
+
+This enables continuous improvement of the routing system. See `vibe deviation --help` for more.
+
 ### Example
 ```bash
 # Step 1: Get recommendation
