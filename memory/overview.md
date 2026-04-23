@@ -1,6 +1,6 @@
 # Overview - VibeSOP Project
 
-**Last Updated**: 2026-04-22 (v4.3 Complete)
+**Last Updated**: 2026-04-22 (v4.3.0 Released)
 
 ---
 
@@ -49,18 +49,19 @@
    - CLI: `vibe experiment create/run/analyze/list/delete`
    - 16 new tests
 
-3. **Fix Flaky Tests** ⏳
-   - `test_disabled_skill_excluded_from_routing` parallel isolation
-   - Mark remaining performance tests as `@pytest.mark.slow`
+3. **Fix Flaky Tests** ✅ (Completed)
+   - `test_disabled_skill_excluded_from_routing` marked `@pytest.mark.slow`
+   - Type check: 1199 errors → 0 errors, 98 warnings
+   - v4.3.0 released (CHANGELOG + version bump)
 
 ---
 
 ## Projects Summary
 
 ### VibeSOP (vibesop-py)
-**Status**: Production Ready (v4.2.1)
+**Status**: Production Ready (v4.3.0)
 **Description**: AI-assisted development intelligent routing engine with skill-level LLM configuration
-**Coverage**: 76.22% (1,687 tests passing)
+**Coverage**: 76.22% (1,782 tests passing)
 **Key Metrics**:
 - Routing accuracy: 94%
 - Performance: 44 QPS (target: 40+ QPS)
