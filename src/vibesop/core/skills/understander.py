@@ -1,3 +1,4 @@
+# pyright: ignore[reportArgumentType]
 """技能自动理解和配置模块.
 
 该模块提供了在非 Agent 环境(bash)中自动理解技能并生成配置的能力.

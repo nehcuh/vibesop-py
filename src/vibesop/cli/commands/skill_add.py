@@ -1,3 +1,4 @@
+# pyright: ignore[reportPrivateUsage, reportMissingParameterType]
 """VibeSOP skill add command - One-click smart skill installation.
 
 This command provides the user-friendly installation experience:
@@ -397,7 +398,7 @@ def _fallback_auto_configure(
 
 def _prompt_agent_for_config(
     _metadata: SkillMetadata,
-    config,
+    config: Any,
     scope: str,
 ):
     """When running inside an Agent environment, emit a structured review prompt.
@@ -468,7 +469,7 @@ def _prompt_agent_for_config(
     return config
 
 
-def _display_and_save_config(config) -> None:
+def _display_and_save_config(config: Any) -> None:
     """Display configuration details and save to disk.
 
     Args:

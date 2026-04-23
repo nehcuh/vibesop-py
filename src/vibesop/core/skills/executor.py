@@ -406,7 +406,7 @@ class ExternalSkillExecutor:
                 return False, errors
 
             # Validate workflow
-            workflow_errors = result.workflow.validate()
+            workflow_errors = result.workflow.validate_workflow()
             errors.extend(workflow_errors)
 
             return len(errors) == 0, errors

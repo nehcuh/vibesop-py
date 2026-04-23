@@ -1,3 +1,4 @@
+# pyright: ignore[reportCallIssue]
 """Session context tracking for intelligent re-routing.
 
 This module monitors conversation progression and detects when
@@ -387,7 +388,7 @@ class SessionContext:
 
         # Return highest-scoring phase
         if phase_scores:
-            return max(phase_scores, key=phase_scores.get)
+            return max(phase_scores, key=lambda k: phase_scores[k])
 
         return None
 

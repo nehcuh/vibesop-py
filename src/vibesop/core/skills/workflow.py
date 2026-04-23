@@ -139,7 +139,7 @@ class Workflow(BaseModel):
             raise ValueError("Workflow must have at least one step")
         return v
 
-    def validate(self) -> list[str]:
+    def validate_workflow(self) -> list[str]:
         """Validate workflow configuration.
 
         Returns:
@@ -344,7 +344,7 @@ class WorkflowEngine:
             ValueError: If workflow is invalid
         """
         # Validate workflow
-        errors = workflow.validate()
+        errors = workflow.validate_workflow()
         if errors:
             raise ValueError(f"Invalid workflow: {'; '.join(errors)}")
 
@@ -703,7 +703,7 @@ class WorkflowEngine:
             list_name = match.group(2)
             items = context.get_variable(list_name, [])
 
-            if not isinstance(items, list):
+            if not isinstance(items, list):  # pyright: ignore[reportUnnecessaryIsInstance]
                 return f"Error: {list_name} is not a list"
 
             # Simulate loop execution
@@ -736,7 +736,7 @@ class WorkflowEngine:
         """
         import re
 
-        def replace_var(match: re.Match) -> str:
+        def replace_var(match: re.Match[str]) -> str:
             var_name = match.group(1)
             value = context.get_variable(var_name, "")
             return str(value)
@@ -864,7 +864,7 @@ class WorkflowEngine:
                         return False
 
                 # Extra check for attribute access
-                if isinstance(node, ast.Attribute) and isinstance(node.attr, str) and node.attr.startswith('__') and node.attr.endswith('__'):
+                if isinstance(node, ast.Attribute) and node.attr.startswith('__') and node.attr.endswith('__'):
                     logger.error(f"Special attribute access not allowed: {node.attr}")
                     return False
 
@@ -947,7 +947,7 @@ def parse_workflow_from_markdown(markdown_content: str, skill_id: str) -> Workfl
     in_step = False
     last_step_was_numbered = False  # Track if last step was numbered
 
-    for i, line in enumerate(lines):
+    for _i, line in enumerate(lines):
         stripped = line.strip()
         original = line  # Keep original for indentation check
 

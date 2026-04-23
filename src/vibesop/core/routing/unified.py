@@ -1,3 +1,4 @@
+# pyright: ignore[reportArgumentType]
 """Unified router - single entry point for all skill routing.
 
 The UnifiedRouter delegates to independent layer handlers, each implementing

@@ -152,7 +152,7 @@ class TestWorkflow:
             ],
         )
 
-        errors = workflow.validate()
+        errors = workflow.validate_workflow()
         assert len(errors) == 0
 
     def test_validate_invalid_workflow(self) -> None:
@@ -170,7 +170,7 @@ class TestWorkflow:
             ],
         )
 
-        errors = workflow.validate()
+        errors = workflow.validate_workflow()
         assert len(errors) > 0
 
     def test_to_dict(self) -> None:

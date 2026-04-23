@@ -96,7 +96,7 @@ class ProjectProfile:
     confidence: float = 0.0
 
     def __post_init__(self) -> None:
-        if self.tech_stack is None:
+        if self.tech_stack is None:  # pyright: ignore[reportUnnecessaryComparison]
             self.tech_stack = []
 
     def to_dict(self) -> dict[str, Any]:

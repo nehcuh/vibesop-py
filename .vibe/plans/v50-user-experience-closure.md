@@ -92,10 +92,10 @@ Layers tried: explicit → scenario → ai_triage → keyword → tfidf → embe
 ```
 
 **验收标准**:
-- [ ] `--explain` 展示每层的 near-miss 候选（confidence < threshold 但 > threshold * 0.5）
-- [ ] 每个 rejected candidate 有明确原因（阈值/作用域/禁用/命名空间）
-- [ ] `--validate` 模式也展示 rejected candidates（帮助用户调试路由配置）
-- [ ] 测试覆盖：阈值过滤、作用域过滤、禁用过滤
+- [x] `--explain` 展示每层的 near-miss 候选（confidence < threshold 但 > threshold * 0.5）
+- [x] 每个 rejected candidate 有明确原因（阈值/作用域/禁用/命名空间）
+- [x] `--validate` 模式也展示 rejected candidates（帮助用户调试路由配置）
+- [x] 测试覆盖：阈值过滤、作用域过滤、禁用过滤
 
 **工作量**: 3-4 天
 
@@ -176,11 +176,11 @@ Execution Flow:
 ```
 
 **验收标准**:
-- [ ] 用户在确认弹窗中可选择"Edit steps"
-- [ ] 可删除、重排序步骤
-- [ ] `--strategy` CLI 选项有效
-- [ ] `--explain` 展示数据依赖箭头
-- [ ] 编辑后的 plan 可保存到 tracker
+- [x] 用户在确认弹窗中可选择"Edit steps"
+- [x] 可删除、重排序步骤
+- [x] `--strategy` CLI 选项有效
+- [x] `--explain` 展示数据依赖箭头
+- [x] 编辑后的 plan 可保存到 tracker
 
 **工作量**: 5-7 天
 
@@ -259,10 +259,10 @@ intent: {intent}
 ```
 
 **验收标准**:
-- [ ] `vibe skills create` 交互式向导可用
-- [ ] `vibe skills create --from <skill>` 可复制模板
-- [ ] 生成的 SKILL.md 符合格式规范
-- [ ] 创建后立即可用 `vibe skills validate` 测试
+- [x] `vibe skills create` 交互式向导可用
+- [x] `vibe skills create --from <skill>` 可复制模板
+- [x] 生成的 SKILL.md 符合格式规范
+- [x] 创建后立即可用 `vibe skills validate` 测试
 
 **工作量**: 4-5 天
 
@@ -323,10 +323,10 @@ console.print("✨  Quality Master: All your skills are performing well!")
 ```
 
 **验收标准**:
-- [ ] `vibe skills health --ecosystem` 输出游戏化报告
-- [ ] 首次 feedback 给予徽章提示
-- [ ] habit boost 在路由结果中可见
-- [ ] report 输出按 grade 分组（Top / Needs Attention / At Risk）
+- [x] `vibe skills health --ecosystem` 输出游戏化报告
+- [x] 首次 feedback 给予徽章提示
+- [x] habit boost 在路由结果中可见
+- [x] report 输出按 grade 分组（Top / Needs Attention / At Risk）
 
 **工作量**: 3-4 天
 
@@ -400,11 +400,11 @@ vibe skills lifecycle --auto-review
 - `ARCHIVED` 技能：不参与路由，但保留历史数据用于评估
 
 **验收标准**:
-- [ ] `SkillLifecycleState` 枚举定义完成
-- [ ] `SkillConfig` 增加 `lifecycle_state` 字段
-- [ ] `vibe skills lifecycle` 命令可用
-- [ ] 路由引擎自动跳过 `ARCHIVED` 技能
-- [ ] `DEPRECATED` 技能路由时展示警告
+- [x] `SkillLifecycleState` 枚举定义完成
+- [x] `SkillConfig` 增加 `lifecycle_state` 字段
+- [x] `vibe skills lifecycle` 命令可用
+- [x] 路由引擎自动跳过 `ARCHIVED` 技能
+- [x] `DEPRECATED` 技能路由时展示警告
 
 **工作量**: 4-5 天
 

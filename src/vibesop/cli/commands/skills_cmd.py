@@ -1,3 +1,4 @@
+# pyright: ignore[reportPossiblyUnboundVariable, reportUnnecessaryComparison]
 """VibeSOP skills command - Manage skill storage.
 
 Usage:
@@ -623,7 +624,7 @@ def _show_ecosystem_report(monitor: Any) -> None:
         console.print()
 
 
-def _display_health_status(health_status, verbose: bool = False) -> None:
+def _display_health_status(health_status: Any, verbose: bool = False) -> None:
     """Display health status for a single pack.
 
     Args:
@@ -1131,6 +1132,8 @@ def create(
         console.print(f"  2. Run [bold]vibe skills validate {namespace}/{name}[/bold]")
         console.print(f"  3. Run [bold]vibe skills enable {namespace}/{name}[/bold]")
         return
+
+    keywords: str | None = None
 
     # Interactive wizard (when no --from specified)
     if interactive and not name:

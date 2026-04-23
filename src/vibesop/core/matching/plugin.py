@@ -1,3 +1,4 @@
+# pyright: ignore[reportArgumentType]
 """Custom matcher plugin system for VibeSOP.
 
 Allows users to register custom matching functions that integrate

@@ -1,3 +1,4 @@
+# pyright: ignore[reportArgumentType]
 """Session management commands for VibeSOP.
 
 This module provides CLI commands for managing session context

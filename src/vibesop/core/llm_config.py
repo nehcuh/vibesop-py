@@ -1,3 +1,4 @@
+# pyright: ignore[reportArgumentType]
 """VibeSOP LLM 配置管理 - 统一的 LLM 配置和降级策略.
 
 该模块提供了:

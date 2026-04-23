@@ -11,6 +11,8 @@ from rich.panel import Panel
 from rich.table import Table
 from rich.tree import Tree
 
+from typing import Any
+
 from vibesop.core.models import RoutingLayer, RoutingResult
 
 
@@ -71,7 +73,7 @@ def render_routing_report(result: RoutingResult, console: Console | None = None)
     console.print(tree)
 
     # Rejected candidates (near-misses) per layer
-    rejected_by_layer: dict[str, list] = {}
+    rejected_by_layer: dict[str, list[Any]] = {}
     for detail in result.layer_details:
         if detail.rejected_candidates:
             rejected_by_layer[detail.layer.value] = detail.rejected_candidates

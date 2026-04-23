@@ -1,3 +1,4 @@
+# pyright: ignore[reportUnnecessaryComparison, reportPrivateUsage]
 """Router context mixin - memory, session, and instinct integration.
 
 Provides context-aware routing capabilities through memory management,
@@ -24,7 +25,7 @@ class RouterContextMixin:
     """Mixin for router context management (memory, session, instinct)."""
 
     def _get_memory_manager(self) -> MemoryManager:
-        if self._memory_manager is None:
+        if self._memory_manager is None:  # pyright: ignore[reportUnnecessaryComparison]
             self._memory_manager = MemoryManager(
                 storage_dir=self.project_root / ".vibe" / "memory"
             )

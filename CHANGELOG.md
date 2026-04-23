@@ -7,6 +7,84 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [4.3.0] - 2026-04-22
+
+### v5.0 User Experience Closure (T1–T5)
+
+This release completes the v5.0 "user-perceivable last mile" initiative — turning infrastructure into transparent, interactive, and gamified experiences.
+
+#### T1: Negative Routing Transparency
+- **`RejectedCandidate`** model — captures near-miss candidates with skill_id, confidence, layer, and reason
+- **`LayerDetail.rejected_candidates`** — per-layer rejected candidate collection
+- **Matcher pipeline** — `collect_rejected=True` gathers sub-threshold candidates
+- **CLI `--explain` / `--validate`** — "Why not these?" section showing near-misses with confidence and reasons
+
+#### T2: Orchestration Interaction Layer
+- **`--strategy=sequential|parallel|auto`** CLI option for multi-skill execution strategy
+- **✏️ Edit steps** interactive flow — move up/down, remove steps from execution plan
+- **Data dependency arrows** in `--explain` output showing step-to-step data flow
+- **Empty plan guard** — prevents saving an empty execution plan after editing
+
+#### T3: Skill Factory MVP
+- **`vibe skills create`** — interactive wizard for skill creation (name, description, keywords, namespace)
+- **`--from <skill>`** template copying — duplicate existing skills as starting points
+- **Auto-generated SKILL.md** — compliant frontmatter + minimal workflow
+
+#### T4: Ecosystem Health Gamification
+- **`vibe skills health --ecosystem`** — gamified report with:
+  - 🏆 Top Performers (Grade A/B skills)
+  - ⚠️ Needs Attention (Grade C/D)
+  - 🗑️ At Risk (Grade F)
+  - 💡 Feedback Opportunities (skills needing more routes)
+- **Badge system** — first feedback, skill champion, quality master achievements
+- **Habit boost visibility** — `💡 Habit boost applied` shown in routing output
+
+#### T5: Skill Lifecycle State Machine
+- **`SkillLifecycleState`** enum: `DRAFT → ACTIVE → DEPRECATED → ARCHIVED`
+- **`vibe skills lifecycle`** — view/set lifecycle state with transition validation
+- **`--auto-review`** — suggests transitions based on evaluation grades
+- **Routing impact** — ARCHIVED skills excluded from routing; DEPRECATED skills show yellow warning
+
+### v4.3 Context-Aware Routing + Badge System + Router Refactoring
+
+#### Context-Aware Routing
+- **Project type detection** — 15+ project types (Python, Node.js, Rust, Go, etc.) via file existence + content heuristics
+- **Tech stack inference** — 13+ stacks detected from dependency files
+- **Routing boost** — context-aware confidence adjustments via `OptimizationService`
+
+#### Multi-Turn Conversation Support
+- **Follow-up query detection** — Chinese/English implicit continuation patterns
+- **Context-enhanced routing** — conversation history influences skill selection
+- **`--conversation`** CLI flag — explicit multi-turn mode
+
+#### Router God-Class Refactoring
+- **UnifiedRouter**: 1210 lines → 506 lines (-58%)
+- **8 mixins extracted**: `execution`, `candidate`, `triage`, `optimization`, `orchestration`, `matcher`, `context`, `config`
+- Each mixin is independently testable and replaceable
+
+#### Custom Matchers Plugin System
+- **`.vibe/matchers/` directory** — auto-discovered custom matcher functions
+- **Duck-typing interface** — any `match(query, candidate) -> float` function works
+- **`vibe matcher list|register|remove|reload`** CLI commands
+- **`RoutingLayer.CUSTOM`** — custom matchers integrated into 8-layer pipeline
+
+#### A/B Testing Framework
+- **`vibe experiment create|run|analyze|list|delete`** CLI commands
+- **Variant configs** — incremental overrides of baseline routing config
+- **Composite scoring** — `match_rate*0.4 + confidence*0.3 + speed*0.1 + ...`
+- **Auto-winner selection** — ExperimentAnalyzer picks best variant automatically
+
+### Code Quality & Lint
+- **133 lint errors → 0 errors** — full ruff cleanup
+- **Type checking** — basedpyright src/ errors reduced to 0 (from 1199)
+
+### Test Results
+- **1783 passed, 0 failed** ✅
+- **Lint**: 0 errors ✅
+- **Type check**: 0 errors, 98 warnings (src/) ✅
+
+---
+
 ## [4.2.1] - 2026-04-21
 
 ### Added

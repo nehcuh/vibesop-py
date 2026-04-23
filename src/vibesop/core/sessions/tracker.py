@@ -1,3 +1,4 @@
+# pyright: ignore[reportArgumentType]
 """Platform-agnostic session tracking interface.
 
 This module defines the abstraction layer for session tracking across

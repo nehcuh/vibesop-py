@@ -230,11 +230,12 @@ class RoutingEvaluator:
         for record in self._execution.get_records():
             skill_ids.add(record.skill_id)
 
-        return {
-            skill_id: self.evaluate_skill(skill_id)
-            for skill_id in skill_ids
-            if self.evaluate_skill(skill_id) is not None
-        }
+        result: dict[str, SkillEvaluation] = {}
+        for skill_id in skill_ids:
+            evaluation = self.evaluate_skill(skill_id)
+            if evaluation is not None:
+                result[skill_id] = evaluation
+        return result
 
     def get_low_quality_skills(
         self,

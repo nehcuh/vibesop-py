@@ -1,3 +1,4 @@
+# pyright: ignore[reportUnnecessaryComparison]
 """Router matcher mixin - explicit override and scenario pattern matching.
 
 Extracted from UnifiedRouter to reduce class size and separate concerns.

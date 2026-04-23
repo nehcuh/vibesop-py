@@ -1,15 +1,15 @@
 {
   "session_id": "project-c8ea356b2cac",
-  "current_skill": "gstack/plan-eng-review",
-  "session_start_time": 1776900105.595415,
+  "current_skill": "superpowers/test-driven-development",
+  "session_start_time": 1776906529.906576,
   "last_reroute_check": 0.0,
-  "last_activity": 1776900108.086381,
+  "last_activity": 1776906531.490978,
   "tool_history": [],
   "route_history": [
     {
-      "query_pattern": "plan",
-      "selected_skill": "gstack/plan-eng-review",
-      "timestamp": 1776900108.086293
+      "query_pattern": "test",
+      "selected_skill": "superpowers/test-driven-development",
+      "timestamp": 1776906531.4909
     }
   ],
   "habit_patterns": {}

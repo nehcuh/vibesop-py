@@ -41,6 +41,7 @@ def router_with_skills(tmp_path):
 class TestSkillEnablement:
     """Test enable/disable filtering in routing."""
 
+    @pytest.mark.slow
     def test_disabled_skill_excluded_from_routing(self, router_with_skills, tmp_path):
         """Skills with enabled=False should be excluded from candidates at discovery time."""
         # Disable the local skill

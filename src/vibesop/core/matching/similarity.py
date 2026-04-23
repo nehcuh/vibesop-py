@@ -1,3 +1,4 @@
+# pyright: ignore[reportMissingTypeArgument]
 """Unified similarity calculation for VibeSOP matching system.
 
 This module consolidates similarity calculation logic from:

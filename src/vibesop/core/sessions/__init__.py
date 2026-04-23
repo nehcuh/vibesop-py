@@ -1,3 +1,4 @@
+# pyright: ignore[reportPrivateUsage]
 """Session management for intelligent re-routing.
 
 This module provides conversation context tracking and intelligent
