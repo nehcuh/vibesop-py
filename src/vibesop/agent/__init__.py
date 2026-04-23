@@ -23,7 +23,7 @@ Usage:
 
 from __future__ import annotations
 
-from pathlib import Path
+from pathlib import Path  # noqa: TC003
 from typing import Any
 
 
@@ -398,9 +398,119 @@ class AgentRouter:
 
         return None
 
+    # ================================================================
+    # Parallel Execution API - Execute plans with parallel steps
+    # ================================================================
+
+    def get_parallel_preview(self, plan: dict[str, Any]) -> dict[str, Any]:
+        """Get preview of parallel execution for a plan.
+
+        Args:
+            plan: Execution plan dictionary from build_plan()
+
+        Returns:
+            Dictionary with parallel execution preview:
+                - total_steps: int
+                - parallel_batches: int
+                - max_parallel_steps: int
+                - estimated_speedup: float
+                - batches: list[dict] - details of each batch
+        """
+        from vibesop.core.models import ExecutionPlan, ExecutionStep
+        from vibesop.core.orchestration.parallel_scheduler import ParallelScheduler
+
+        # Reconstruct ExecutionPlan from dict
+        execution_plan = ExecutionPlan(
+            plan_id=plan["plan_id"],
+            original_query=plan["original_query"],
+            steps=[
+                ExecutionStep(
+                    step_id=s["step_id"],
+                    step_number=s["step_number"],
+                    skill_id=s["skill_id"],
+                    intent=s["intent"],
+                    input_query=s["input_query"],
+                    output_as=s["output_as"],
+                    status=s["status"],
+                    dependencies=s.get("dependencies", []),
+                    can_parallel=s.get("can_parallel", True),
+                )
+                for s in plan["steps"]
+            ],
+            detected_intents=plan["detected_intents"],
+            reasoning=plan["reasoning"],
+            created_at=plan.get("created_at", ""),
+            status=plan.get("status", "pending"),
+            execution_mode=plan.get("execution_mode", "sequential"),
+        )
+
+        scheduler = ParallelScheduler()
+        return scheduler.get_execution_preview(execution_plan)
+
+    def execute_plan(
+        self,
+        plan: dict[str, Any],
+        step_executor: Any,
+        max_parallel: int = 5,
+    ) -> dict[str, Any]:
+        """Execute an execution plan with parallel step support.
+
+        Args:
+            plan: Execution plan dictionary from build_plan()
+            step_executor: Function to execute a single step.
+                          Called with ExecutionStep dict, should return result.
+            max_parallel: Maximum number of steps to run concurrently
+
+        Returns:
+            Dictionary with:
+                - results: List of step results in order
+                - duration_ms: Total execution time
+                - steps_executed: Number of steps executed
+                - parallel_batches: Number of parallel batches
+
+        Example:
+            >>> def my_executor(step):
+            ...     skill_id = step["skill_id"]
+            ...     query = step["input_query"]
+            ...     # Execute skill and return result
+            ...     return f"Executed {skill_id}"
+            >>> plan = router.build_plan("测试并审查")
+            >>> results = router.execute_plan(plan, my_executor)
+        """
+        from vibesop.core.models import ExecutionPlan, ExecutionStep
+        from vibesop.core.orchestration.parallel_scheduler import execute_plan_sync
+
+        # Reconstruct ExecutionPlan from dict
+        execution_plan = ExecutionPlan(
+            plan_id=plan["plan_id"],
+            original_query=plan["original_query"],
+            steps=[
+                ExecutionStep(
+                    step_id=s["step_id"],
+                    step_number=s["step_number"],
+                    skill_id=s["skill_id"],
+                    intent=s["intent"],
+                    input_query=s["input_query"],
+                    output_as=s["output_as"],
+                    status=s["status"],
+                    dependencies=s.get("dependencies", []),
+                    can_parallel=s.get("can_parallel", True),
+                )
+                for s in plan["steps"]
+            ],
+            detected_intents=plan["detected_intents"],
+            reasoning=plan["reasoning"],
+            created_at=plan.get("created_at", ""),
+            status=plan.get("status", "pending"),
+            execution_mode=plan.get("execution_mode", "sequential"),
+        )
+
+        # Execute the plan
+        return execute_plan_sync(execution_plan, step_executor, max_parallel)
+
 
 __all__ = [
     "AgentRouter",
-    "SimpleResponse",
     "SimpleLLM",
+    "SimpleResponse",
 ]

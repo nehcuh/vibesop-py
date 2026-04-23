@@ -245,6 +245,15 @@ class PlanStatus(StrEnum):
     PENDING = "pending"
     ACTIVE = "active"
     COMPLETED = "completed"
+    FAILED = "failed"
+
+
+class ExecutionMode(StrEnum):
+    """Execution mode for a plan."""
+
+    SEQUENTIAL = "sequential"  # Steps run one after another
+    PARALLEL = "parallel"      # Independent steps run concurrently
+    MIXED = "mixed"            # Automatically determine based on dependencies
 
 
 class ExecutionStep(BaseModel):
@@ -275,6 +284,18 @@ class ExecutionStep(BaseModel):
     result_summary: str | None = Field(default=None, description="Execution result summary")
     started_at: str | None = Field(default=None, description="Start timestamp")
     completed_at: str | None = Field(default=None, description="Completion timestamp")
+    dependencies: list[str] = Field(
+        default_factory=list,
+        description="Step IDs this step depends on (empty = can run in parallel)"
+    )
+    can_parallel: bool = Field(
+        default=True,
+        description="Whether this step can run in parallel with independent steps"
+    )
+    parallel_group: int | None = Field(
+        default=None,
+        description="Group ID for parallel execution (steps in same group run together)"
+    )
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization."""
@@ -289,6 +310,9 @@ class ExecutionStep(BaseModel):
             "result_summary": self.result_summary,
             "started_at": self.started_at,
             "completed_at": self.completed_at,
+            "dependencies": self.dependencies,
+            "can_parallel": self.can_parallel,
+            "parallel_group": self.parallel_group,
         }
 
 
@@ -314,6 +338,10 @@ class ExecutionPlan(BaseModel):
     reasoning: str = Field(default="", description="Decomposition reasoning")
     created_at: str = Field(default="", description="Creation timestamp")
     status: PlanStatus = Field(default=PlanStatus.PENDING, description="Plan status")
+    execution_mode: ExecutionMode = Field(
+        default=ExecutionMode.SEQUENTIAL,
+        description="How steps should be executed"
+    )
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization."""
@@ -325,6 +353,69 @@ class ExecutionPlan(BaseModel):
             "reasoning": self.reasoning,
             "created_at": self.created_at,
             "status": self.status.value,
+            "execution_mode": self.execution_mode.value,
+        }
+
+    def get_parallel_groups(self) -> list[list["ExecutionStep"]]:
+        """Group steps into parallel batches based on dependencies.
+
+        Returns:
+            List of step groups, where each group can run in parallel.
+            Example: [[step1], [step2, step3], [step4]] means:
+                - step1 runs first
+                - step2 and step3 run in parallel
+                - step4 runs after step2 and step3 complete
+        """
+        if not self.steps:
+            return []
+
+        # If no dependencies defined, treat as sequential
+        if not any(step.dependencies for step in self.steps):
+            return [[step] for step in self.steps]
+
+        # Build dependency graph and perform topological sort
+        step_map = {step.step_id: step for step in self.steps}
+        completed = set()
+        groups = []
+
+        while len(completed) < len(self.steps):
+            # Find all steps whose dependencies are satisfied
+            ready = [
+                step for step in self.steps
+                if step.step_id not in completed
+                and all(dep in completed for dep in step.dependencies)
+                and step.can_parallel
+            ]
+
+            if not ready:
+                # No progress - likely circular dependency or remaining non-parallel steps
+                remaining = [step for step in self.steps if step.step_id not in completed]
+                groups.append(remaining)
+                break
+
+            groups.append(ready)
+            completed.update(step.step_id for step in ready)
+
+        return groups
+
+    def get_execution_summary(self) -> dict[str, Any]:
+        """Get summary of execution plan including parallel groups."""
+        parallel_groups = self.get_parallel_groups()
+
+        return {
+            "plan_id": self.plan_id,
+            "total_steps": len(self.steps),
+            "execution_mode": self.execution_mode.value,
+            "parallel_groups": len(parallel_groups),
+            "max_parallel": max(len(g) for g in parallel_groups) if parallel_groups else 0,
+            "groups": [
+                {
+                    "group_number": i + 1,
+                    "step_count": len(group),
+                    "step_ids": [s.step_id for s in group],
+                }
+                for i, group in enumerate(parallel_groups)
+            ],
         }
 
 
