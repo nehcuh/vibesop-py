@@ -226,6 +226,178 @@ class AgentRouter:
         ctx = SessionContext.load(project_root=self._router.project_root)
         return ctx.get_session_summary()
 
+    # ================================================================
+    # Orchestration API - Multi-intent detection and task decomposition
+    # ================================================================
+
+    def detect_intents(self, query: str) -> dict[str, Any]:
+        """Detect if a query contains multiple distinct intents.
+
+        Args:
+            query: User query to analyze
+
+        Returns:
+            Dictionary with:
+                - is_multi_intent: bool
+                - confidence: float
+                - reason: str
+                - sub_queries: list[str] (if multi-intent detected)
+        """
+        from vibesop.core.orchestration import MultiIntentDetector
+
+        # First, get single routing result for context
+        single_result = self.route(query, enable_ai_triage=False)
+
+        # Initialize detector
+        detector = MultiIntentDetector()
+
+        # Check if should decompose
+        should_decompose = detector.should_decompose(query, single_result)
+
+        return {
+            "is_multi_intent": should_decompose,
+            "confidence": 0.8 if should_decompose else 0.2,
+            "reason": "Multiple intent keywords detected" if should_decompose else "Single intent detected",
+            "primary_skill": single_result.primary.skill_id if single_result.has_match else None,
+        }
+
+    def decompose(self, query: str) -> list[dict[str, str]]:
+        """Decompose a complex query into independent sub-tasks.
+
+        Args:
+            query: User query that may contain multiple intents
+
+        Returns:
+            List of sub-task dictionaries with:
+                - intent: str - brief description
+                - query: str - self-contained sub-query
+        """
+        from vibesop.core.orchestration import TaskDecomposer
+
+        # Initialize decomposer with injected LLM
+        decomposer = TaskDecomposer(llm_client=self._router._llm)
+
+        # Decompose query
+        sub_tasks = decomposer.decompose(query)
+
+        return [
+            {"intent": task.intent, "query": task.query}
+            for task in sub_tasks
+        ]
+
+    def build_plan(self, query: str, sub_tasks: list[dict[str, str]] | None = None) -> dict[str, Any]:
+        """Build an execution plan for a complex query.
+
+        Args:
+            query: Original user query
+            sub_tasks: Optional list of sub-tasks (if None, will auto-decompose)
+
+        Returns:
+            Dictionary with execution plan:
+                - plan_id: str
+                - original_query: str
+                - steps: list[dict] - execution steps
+                - detected_intents: list[str]
+                - reasoning: str
+        """
+        from vibesop.core.orchestration import PlanBuilder, SubTask, TaskDecomposer
+
+        # Auto-decompose if sub_tasks not provided
+        if sub_tasks is None:
+            decomposer = TaskDecomposer(llm_client=self._router._llm)
+            raw_sub_tasks = decomposer.decompose(query)
+            sub_tasks = [
+                {"intent": task.intent, "query": task.query}
+                for task in raw_sub_tasks
+            ]
+
+        # Convert to SubTask objects
+        sub_task_objects = [
+            SubTask(intent=t["intent"], query=t["query"])
+            for t in sub_tasks
+        ]
+
+        # Build plan
+        plan_builder = PlanBuilder(router=self._router)
+        plan = plan_builder.build_plan(query, sub_task_objects)
+
+        return {
+            "plan_id": plan.plan_id,
+            "original_query": plan.original_query,
+            "steps": [
+                {
+                    "step_id": step.step_id,
+                    "step_number": step.step_number,
+                    "skill_id": step.skill_id,
+                    "intent": step.intent,
+                    "input_query": step.input_query,
+                    "output_as": step.output_as,
+                    "status": step.status.value,
+                }
+                for step in plan.steps
+            ],
+            "detected_intents": plan.detected_intents,
+            "reasoning": plan.reasoning,
+            "status": plan.status.value,
+        }
+
+    def orchestrate(self, query: str) -> dict[str, Any]:
+        """Full orchestration: detect intents, decompose, and build plan.
+
+        This is the main entry point for complex multi-intent queries.
+
+        Args:
+            query: User query that may contain multiple intents
+
+        Returns:
+            Dictionary with:
+                - is_multi_intent: bool
+                - plan: dict (execution plan if multi-intent)
+                - single_result: dict (routing result if single-intent)
+        """
+        # Step 1: Detect intents
+        intent_detection = self.detect_intents(query)
+
+        if not intent_detection["is_multi_intent"]:
+            # Single intent - return routing result
+            single_result = self.route(query)
+            return {
+                "is_multi_intent": False,
+                "single_result": {
+                    "skill_id": single_result.primary.skill_id if single_result.has_match else None,
+                    "confidence": single_result.primary.confidence if single_result.has_match else 0.0,
+                    "layer": single_result.primary.layer.value if single_result.has_match else None,
+                },
+            }
+
+        # Step 2: Decompose and build plan
+        plan = self.build_plan(query)
+
+        return {
+            "is_multi_intent": True,
+            "plan": plan,
+        }
+
+    def load_skill(self, skill_id: str) -> str | None:
+        """Load a skill's content for execution.
+
+        Args:
+            skill_id: Skill identifier (e.g., "gstack/review", "systematic-debugging")
+
+        Returns:
+            Skill file content or None if not found
+        """
+        from vibesop.core.skills import SkillLoader
+
+        loader = SkillLoader(project_root=self._router.project_root)
+
+        # Get the skill definition
+        loaded_skill = loader.get_skill(skill_id)
+        if loaded_skill and loaded_skill.source_file:
+            return loaded_skill.source_file.read_text(encoding="utf-8")
+
+        return None
+
 
 __all__ = [
     "AgentRouter",
