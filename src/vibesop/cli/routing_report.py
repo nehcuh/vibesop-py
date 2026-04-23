@@ -5,13 +5,13 @@ Renders a human-readable routing decision report from RoutingResult.layer_detail
 
 from __future__ import annotations
 
+from typing import Any
+
 from rich import box
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 from rich.tree import Tree
-
-from typing import Any
 
 from vibesop.core.models import RoutingLayer, RoutingResult
 

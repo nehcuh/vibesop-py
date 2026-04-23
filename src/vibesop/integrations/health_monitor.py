@@ -161,9 +161,10 @@ class SkillHealthMonitor:
                     from vibesop.core.skills import FormatConverterRegistry
 
                     converter = FormatConverterRegistry()
-                    if converter.can_convert(content):
+                    result = converter.convert(content, skill_file)
+                    if result is not None:
                         # 转换内容并使用转换后的版本进行检查
-                        converted_content, _ = converter.convert(content, skill_file)
+                        converted_content, _ = result
                         content = converted_content
                 except (ValueError, TypeError):
                     # 转换失败,使用原始内容

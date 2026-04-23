@@ -52,6 +52,7 @@ htmlcov/
 # VibeSOP state
 .vibe/state/
 .vibe/sessions/
+.vibe/session/
 .vibe/preferences.json
 .vibe/skills/
 .vibe/instincts/
