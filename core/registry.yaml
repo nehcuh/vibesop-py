@@ -709,4 +709,89 @@ skills:
     supported_targets:
       claude-code: native-skill
       opencode: native-skill
+
+  # Slash Commands — explicit triggers for VibeSOP capabilities
+  - id: slash-route
+    namespace: builtin
+    entrypoint: vibesop.core.skills.slash_commands
+    intent: Force trigger routing decision with full transparency. Use when you want to explicitly route a query and see the decision process.
+    trigger_mode: manual
+    priority: P0
+    supported_targets:
+      claude-code: slash-command
+      opencode: slash-command
+    command: "/vibe-route"
+    safety_level: trusted_builtin
+
+  - id: slash-install
+    namespace: builtin
+    entrypoint: vibesop.core.skills.slash_commands
+    intent: Install skill pack to central storage with platform symlinks. Use when you need to add new skills.
+    trigger_mode: manual
+    priority: P0
+    supported_targets:
+      claude-code: slash-command
+      opencode: slash-command
+    command: "/vibe-install"
+    safety_level: trusted_builtin
+
+  - id: slash-analyze
+    namespace: builtin
+    entrypoint: vibesop.core.skills.slash_commands
+    intent: Deep project architecture and tech stack analysis. Use when you need to understand the project structure.
+    trigger_mode: manual
+    priority: P0
+    supported_targets:
+      claude-code: slash-command
+      opencode: slash-command
+    command: "/vibe-analyze"
+    safety_level: trusted_builtin
+
+  - id: slash-evaluate
+    namespace: builtin
+    entrypoint: vibesop.core.skills.slash_commands
+    intent: Evaluate skill quality and usage statistics. Use when you want to check skill performance.
+    trigger_mode: manual
+    priority: P0
+    supported_targets:
+      claude-code: slash-command
+      opencode: slash-command
+    command: "/vibe-evaluate"
+    safety_level: trusted_builtin
+
+  - id: slash-orchestrate
+    namespace: builtin
+    entrypoint: vibesop.core.skills.slash_commands
+    intent: Multi-skill orchestration for complex requests. Use when a task requires multiple skills in sequence or parallel.
+    trigger_mode: manual
+    priority: P0
+    supported_targets:
+      claude-code: slash-command
+      opencode: slash-command
+    command: "/vibe-orchestrate"
+    safety_level: trusted_builtin
+
+  - id: slash-list
+    namespace: builtin
+    entrypoint: vibesop.core.skills.slash_commands
+    intent: List installed skills and available packs. Use when you want to see what skills are available.
+    trigger_mode: manual
+    priority: P0
+    supported_targets:
+      claude-code: slash-command
+      opencode: slash-command
+    command: "/vibe-list"
+    safety_level: trusted_builtin
+
+  - id: slash-help
+    namespace: builtin
+    entrypoint: vibesop.core.skills.slash_commands
+    intent: Show all available slash commands and their usage. Use when you need help with VibeSOP commands.
+    trigger_mode: manual
+    priority: P0
+    supported_targets:
+      claude-code: slash-command
+      opencode: slash-command
+    command: "/vibe-help"
+    safety_level: trusted_builtin
     safety_level: trusted_builtin
