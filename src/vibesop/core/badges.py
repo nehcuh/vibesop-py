@@ -1,18 +1,17 @@
 """Lightweight badge/achievement system for VibeSOP skill ecosystem gamification.
 
-Badges are stored in ~/.vibe/config.yaml under user.badges.
+Badges are stored in ~/.vibe/badges.json.
 This is intentionally lightweight - no DB, no complex state machine.
 """
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
 from typing import Any
-
-import yaml
 
 
 class BadgeType(StrEnum):
@@ -86,47 +85,47 @@ def get_badge_display(badge_type: BadgeType) -> dict[str, str]:
 class BadgeTracker:
     """Track and award badges stored in user config.
 
-    Storage location: ~/.vibe/config.yaml -> user.badges
+    Storage location: ~/.vibe/badges.json
     """
 
-    def __init__(self, config_path: str | Path | None = None) -> None:
-        self._config_path = Path(
-            config_path or Path.home() / ".vibe" / "config.yaml",
+    def __init__(self, data_path: str | Path | None = None) -> None:
+        self._data_path = Path(
+            data_path or Path.home() / ".vibe" / "badges.json",
         )
         self._badges: list[Badge] = []
         self._load()
 
     def _load(self) -> None:
-        """Load badges from config file."""
-        if not self._config_path.exists():
+        """Load badges from data file."""
+        if not self._data_path.exists():
             return
         try:
-            with self._config_path.open(encoding="utf-8") as f:
-                data = yaml.safe_load(f) or {}
-        except (OSError, yaml.YAMLError):
+            with self._data_path.open(encoding="utf-8") as f:
+                data = json.load(f)
+        except (OSError, json.JSONDecodeError):
             return
-        user_data = data.get("user", {})
-        badge_list = user_data.get("badges", [])
+            
+        badge_list = data.get("badges", [])
         self._badges = [Badge.from_dict(b) for b in badge_list if isinstance(b, dict)]
 
     def _save(self) -> None:
-        """Save badges to config file."""
-        self._config_path.parent.mkdir(parents=True, exist_ok=True)
+        """Save badges to data file."""
+        self._data_path.parent.mkdir(parents=True, exist_ok=True)
 
-        data: dict[str, Any] = {}
-        if self._config_path.exists():
-            try:
-                with self._config_path.open(encoding="utf-8") as f:
-                    data = yaml.safe_load(f) or {}
-            except (OSError, yaml.YAMLError):
-                data = {}
+        data: dict[str, Any] = {
+            "badges": [b.to_dict() for b in self._badges]
+        }
 
-        if "user" not in data:
-            data["user"] = {}
-        data["user"]["badges"] = [b.to_dict() for b in self._badges]
-
-        with self._config_path.open("w", encoding="utf-8") as f:
-            yaml.dump(data, f, default_flow_style=False, sort_keys=False, allow_unicode=True)
+        # Atomic write to prevent corruption
+        import os
+        import tempfile
+        try:
+            fd, tmp_path = tempfile.mkstemp(dir=self._data_path.parent, prefix=".tmp_badges_")
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2)
+            os.replace(tmp_path, self._data_path)
+        except OSError:
+            pass
 
     # ------------------------------------------------------------------
     # Query

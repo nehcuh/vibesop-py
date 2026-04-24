@@ -28,6 +28,7 @@ from vibesop.agent.runtime import (
     PlanExecutor,
     PlatformType,
     SkillInjector,
+    SlashCommandExecutor,
 )
 from vibesop.core.models import (
     ExecutionMode,
@@ -381,6 +382,80 @@ class TestPlatformAdapterAgentRuntime:
         readme_content = readme_md.read_text()
         assert "VibeSOP" in readme_content
         assert "OpenCode" in readme_content
+
+
+class TestSlashCommandExecutionChain:
+    """E2E: Full slash command chain from detection to execution."""
+
+    def test_slash_command_help_full_chain(self) -> None:
+        """E2E: /vibe-help detected and executed through full chain."""
+        query = "/vibe-help"
+
+        # Step 1: IntentInterceptor detects slash command
+        interceptor = IntentInterceptor()
+        decision = interceptor.should_intercept(query)
+
+        assert decision.should_route is True
+        assert decision.mode == InterceptionMode.SLASH_COMMAND
+        assert "slash command" in decision.reason.lower()
+
+        # Step 2: SlashCommandExecutor executes the command
+        executor = SlashCommandExecutor()
+        result = executor.execute(decision)
+
+        assert result.success is True
+        assert result.command == "/vibe-help"
+        assert "/vibe-route" in result.message
+        assert "/vibe-install" in result.message
+        assert result.structured is not None
+        assert result.structured["command"] == "/vibe-help"
+
+    def test_slash_command_list_full_chain(self) -> None:
+        """E2E: /vibe-list detected and executed."""
+        interceptor = IntentInterceptor()
+        decision = interceptor.should_intercept("/vibe-list")
+
+        assert decision.mode == InterceptionMode.SLASH_COMMAND
+
+        executor = SlashCommandExecutor()
+        result = executor.execute(decision)
+
+        assert result.success is True
+        assert result.command == "/vibe-list"
+
+    def test_slash_command_unknown(self) -> None:
+        """E2E: Unknown /vibe-* command returns helpful error."""
+        interceptor = IntentInterceptor()
+        decision = interceptor.should_intercept("/vibe-unknown")
+
+        assert decision.mode == InterceptionMode.SLASH_COMMAND
+
+        executor = SlashCommandExecutor()
+        result = executor.execute(decision)
+
+        assert result.success is False
+        assert "Unknown command" in result.message
+        assert "/vibe-route" in result.message  # Suggests available commands
+
+    def test_slash_command_direct_query(self) -> None:
+        """E2E: Execute slash command directly without interceptor."""
+        executor = SlashCommandExecutor()
+        result = executor.execute_query("/vibe-help")
+
+        assert result.success is True
+        assert result.command == "/vibe-help"
+        assert "vibe-route" in result.message.lower()
+
+    def test_non_slash_command_rejected_by_executor(self) -> None:
+        """E2E: Non-slash decision rejected by executor."""
+        interceptor = IntentInterceptor()
+        decision = interceptor.should_intercept("review my code")
+
+        assert decision.mode != InterceptionMode.SLASH_COMMAND
+
+        executor = SlashCommandExecutor()
+        with pytest.raises(ValueError, match="SLASH_COMMAND"):
+            executor.execute(decision)
 
 
 class TestCrossPlatformConsistency:

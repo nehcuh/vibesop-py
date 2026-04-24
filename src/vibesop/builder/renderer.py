@@ -219,7 +219,8 @@ class ConfigRenderer:
 
         adapter_class = self._adapters[platform]
         # Pass project_root to adapters that need skill content lookup
-        if platform in ("claude-code", "kimi-cli"):
+        # or project-level config generation
+        if platform in ("claude-code", "kimi-cli", "opencode"):
             return adapter_class(project_root=self._project_root)
         return adapter_class()
 

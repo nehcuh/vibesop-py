@@ -474,7 +474,7 @@ class SessionContext:
             query_pattern = self._extract_pattern(query)
             skill = self._habit_patterns.get(query_pattern)
             if skill:
-                return {skill: 0.08}
+                return {skill: 0.12}
             return {}
 
     def _extract_pattern(self, query: str) -> str:

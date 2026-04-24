@@ -80,24 +80,22 @@ class TestBadgeTracker:
     """Test BadgeTracker persistence and logic."""
 
     def test_load_empty_config(self, tmp_path: Path) -> None:
-        config_path = tmp_path / "config.yaml"
-        tracker = BadgeTracker(config_path)
+        data_path = tmp_path / "badges.json"
+        tracker = BadgeTracker(data_path)
         assert tracker.list_badges() == []
         assert not tracker.has_badge(BadgeType.FIRST_FEEDBACK)
 
     def test_load_existing_badges(self, tmp_path: Path) -> None:
-        config_path = tmp_path / "config.yaml"
+        data_path = tmp_path / "badges.json"
         data = {
-            "user": {
-                "badges": [
-                    {"type": "first_feedback", "awarded_at": "2026-04-22T12:00:00+00:00"},
-                ],
-            },
+            "badges": [
+                {"type": "first_feedback", "awarded_at": "2026-04-22T12:00:00+00:00"},
+            ],
         }
-        with open(config_path, "w", encoding="utf-8") as f:
-            yaml.dump(data, f)
+        with open(data_path, "w", encoding="utf-8") as f:
+            json.dump(data, f)
 
-        tracker = BadgeTracker(config_path)
+        tracker = BadgeTracker(data_path)
         badges = tracker.list_badges()
         assert len(badges) == 1
         assert badges[0].type == BadgeType.FIRST_FEEDBACK
@@ -105,8 +103,8 @@ class TestBadgeTracker:
         assert not tracker.has_badge(BadgeType.SKILL_CHAMPION)
 
     def test_award_new_badge(self, tmp_path: Path) -> None:
-        config_path = tmp_path / "config.yaml"
-        tracker = BadgeTracker(config_path)
+        data_path = tmp_path / "badges.json"
+        tracker = BadgeTracker(data_path)
 
         badge = tracker.award(BadgeType.FIRST_FEEDBACK)
         assert badge is not None
@@ -114,13 +112,13 @@ class TestBadgeTracker:
         assert tracker.has_badge(BadgeType.FIRST_FEEDBACK)
 
         # Verify persistence
-        with open(config_path, encoding="utf-8") as f:
-            data = yaml.safe_load(f)
-        assert len(data["user"]["badges"]) == 1
+        with open(data_path, encoding="utf-8") as f:
+            data = json.load(f)
+        assert len(data["badges"]) == 1
 
     def test_award_duplicate_returns_none(self, tmp_path: Path) -> None:
-        config_path = tmp_path / "config.yaml"
-        tracker = BadgeTracker(config_path)
+        data_path = tmp_path / "badges.json"
+        tracker = BadgeTracker(data_path)
 
         tracker.award(BadgeType.FIRST_FEEDBACK)
         second = tracker.award(BadgeType.FIRST_FEEDBACK)
@@ -128,16 +126,16 @@ class TestBadgeTracker:
         assert len(tracker.list_badges()) == 1
 
     def test_award_with_skill_id(self, tmp_path: Path) -> None:
-        config_path = tmp_path / "config.yaml"
-        tracker = BadgeTracker(config_path)
+        data_path = tmp_path / "badges.json"
+        tracker = BadgeTracker(data_path)
 
         badge = tracker.award(BadgeType.SKILL_CHAMPION, skill_id="gstack/review")
         assert badge is not None
         assert badge.skill_id == "gstack/review"
 
     def test_check_feedback_event_first_feedback(self, tmp_path: Path) -> None:
-        config_path = tmp_path / "config.yaml"
-        tracker = BadgeTracker(config_path)
+        data_path = tmp_path / "badges.json"
+        tracker = BadgeTracker(data_path)
 
         new_badges = tracker.check_feedback_event()
         assert len(new_badges) == 1
@@ -145,8 +143,8 @@ class TestBadgeTracker:
 
     def test_check_feedback_event_ecosystem_guardian(self, tmp_path: Path, tmp_path_factory: Any) -> None:
         # Need to mock feedback file to have 5+ records
-        config_path = tmp_path / "config.yaml"
-        tracker = BadgeTracker(config_path)
+        data_path = tmp_path / "badges.json"
+        tracker = BadgeTracker(data_path)
 
         # Already has first_feedback
         tracker.award(BadgeType.FIRST_FEEDBACK)
@@ -162,8 +160,8 @@ class TestBadgeTracker:
             assert any(b.type == BadgeType.ECOSYSTEM_GUARDIAN for b in new_badges)
 
     def test_check_route_event_skill_champion(self, tmp_path: Path) -> None:
-        config_path = tmp_path / "config.yaml"
-        tracker = BadgeTracker(config_path)
+        data_path = tmp_path / "badges.json"
+        tracker = BadgeTracker(data_path)
 
         history = [{"skill_id": "gstack/review"} for _ in range(10)]
         new_badges = tracker.check_route_event("gstack/review", history)
@@ -173,16 +171,16 @@ class TestBadgeTracker:
         assert new_badges[0].skill_id == "gstack/review"
 
     def test_check_route_event_not_enough_routes(self, tmp_path: Path) -> None:
-        config_path = tmp_path / "config.yaml"
-        tracker = BadgeTracker(config_path)
+        data_path = tmp_path / "badges.json"
+        tracker = BadgeTracker(data_path)
 
         history = [{"skill_id": "gstack/review"} for _ in range(5)]
         new_badges = tracker.check_route_event("gstack/review", history)
         assert new_badges == []
 
     def test_check_quality_master(self, tmp_path: Path) -> None:
-        config_path = tmp_path / "config.yaml"
-        tracker = BadgeTracker(config_path)
+        data_path = tmp_path / "badges.json"
+        tracker = BadgeTracker(data_path)
 
         class MockEval:
             def __init__(self, grade: str) -> None:
@@ -198,8 +196,8 @@ class TestBadgeTracker:
         assert new_badges[0].type == BadgeType.QUALITY_MASTER
 
     def test_check_quality_master_with_low_grade(self, tmp_path: Path) -> None:
-        config_path = tmp_path / "config.yaml"
-        tracker = BadgeTracker(config_path)
+        data_path = tmp_path / "badges.json"
+        tracker = BadgeTracker(data_path)
 
         class MockEval:
             def __init__(self, grade: str) -> None:
@@ -213,27 +211,8 @@ class TestBadgeTracker:
         assert new_badges == []
 
     def test_check_quality_master_empty(self, tmp_path: Path) -> None:
-        config_path = tmp_path / "config.yaml"
-        tracker = BadgeTracker(config_path)
+        data_path = tmp_path / "badges.json"
+        tracker = BadgeTracker(data_path)
 
         new_badges = tracker.check_quality_master({})
         assert new_badges == []
-
-    def test_preserve_existing_config(self, tmp_path: Path) -> None:
-        config_path = tmp_path / "config.yaml"
-        data = {
-            "routing": {"confirmation_mode": "never"},
-            "user": {"name": "test"},
-        }
-        with open(config_path, "w", encoding="utf-8") as f:
-            yaml.dump(data, f)
-
-        tracker = BadgeTracker(config_path)
-        tracker.award(BadgeType.FIRST_FEEDBACK)
-
-        with open(config_path, encoding="utf-8") as f:
-            restored = yaml.safe_load(f)
-
-        assert restored["routing"]["confirmation_mode"] == "never"
-        assert restored["user"]["name"] == "test"
-        assert len(restored["user"]["badges"]) == 1

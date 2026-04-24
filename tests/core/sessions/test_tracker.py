@@ -39,7 +39,7 @@ class TestGenericSessionTracker:
         tracker = GenericSessionTracker(project_root=".", config_dir=tmp_path)
 
         # Create a state file first
-        state_file = tmp_path / "session-state.json"
+        state_file = tracker._state_file
         state_file.write_text("{}")
 
         result = tracker.disable()
@@ -77,7 +77,7 @@ class TestGenericSessionTracker:
         tracker.record_tool_use("read", skill="test-skill")
 
         # State should be saved
-        state_file = tmp_path / "session-state.json"
+        state_file = tracker._state_file
         assert state_file.exists()
 
         # Load state in new tracker

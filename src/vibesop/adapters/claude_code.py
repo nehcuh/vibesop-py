@@ -118,6 +118,9 @@ class ClaudeCodeAdapter(PlatformAdapter):
                 validate_security=False,
             )
 
+            # Write project-level CLAUDE.md (Claude Code reads ./CLAUDE.md with highest priority)
+            self._render_project_claude_md(manifest, result)
+
             # Render rules (always-loaded)
             self._render_and_write(
                 "rules/behaviors.md.j2",
@@ -232,6 +235,9 @@ class ClaudeCodeAdapter(PlatformAdapter):
                 result,
                 validate_security=False,
             )
+
+            # Write project-level CLAUDE.md (Claude Code reads ./CLAUDE.md with highest priority)
+            self._render_project_claude_md(manifest, result)
 
             # Render rules (always-loaded)
             self._render_and_write(
@@ -372,29 +378,32 @@ class ClaudeCodeAdapter(PlatformAdapter):
             )
 
     def _find_skill_content(self, skill_id: str) -> str | None:
-        """Find and read actual skill content from core/skills/.
+        from vibesop.adapters._shared import find_skill_content
+
+        return find_skill_content(skill_id, self._project_root)
+
+    def _render_project_claude_md(self, manifest: Manifest, result: RenderResult) -> None:
+        """Write project-level CLAUDE.md if it doesn't exist.
+
+        Claude Code reads CLAUDE.md from both ~/.claude/CLAUDE.md (global)
+        and ./CLAUDE.md (project-level, highest priority). Writing to the
+        project root ensures VibeSOP routing instructions are always loaded,
+        even when running Claude Code from different project directories.
 
         Args:
-            skill_id: Skill identifier (e.g., "systematic-debugging" or "gstack/review")
-
-        Returns:
-            Skill file content or None if not found
+            manifest: Configuration manifest
+            result: RenderResult to track files
         """
-        # Built-in skill - try to find in core/skills/
-        skill_paths = [
-            self._project_root / "core" / "skills" / skill_id / "SKILL.md",
-            self._project_root / "skills" / skill_id / "SKILL.md",
-            Path(__file__).parent.parent.parent / "core" / "skills" / skill_id / "SKILL.md",
-        ]
-
-        for skill_path in skill_paths:
-            if skill_path.exists():
-                try:
-                    return skill_path.read_text(encoding="utf-8")
-                except Exception as e:
-                    logger.debug(f"Failed to read skill file {skill_path}: {e}")
-
-        return None
+        project_path = self._project_root / "CLAUDE.md"
+        config_path = Path("~/.claude").expanduser() / "CLAUDE.md"
+        if project_path.resolve() != config_path.resolve() and not project_path.exists():
+            self._render_and_write(
+                "CLAUDE.md.j2",
+                project_path,
+                manifest,
+                result,
+                validate_security=False,
+            )
 
     def _render_settings_json(
         self,
@@ -497,21 +506,28 @@ class ClaudeCodeAdapter(PlatformAdapter):
         output_dir: Path,
         result: RenderResult,
     ) -> None:
-        """Render the vibesop-route.sh hook script.
+        """Render the vibesop-route.sh hook script using the shared template.
 
-        This script can be used as a UserPromptSubmit hook on platforms
-        that support it (e.g., Claude Code with hook extensions).
-        It calls `vibe route` to get skill recommendations and outputs
-        JSON that can be consumed by the hook system.
+        Delegates to ``render_route_hook()`` in ``_shared.py`` so that
+        Claude Code, OpenCode, and Kimi CLI all produce the same hook
+        script structure.
 
         Args:
             output_dir: Output directory (hooks/ will be created here)
             result: RenderResult to track files
         """
         try:
-            env = self._get_template_env()
-            template = env.get_template("hooks/vibesop-route.sh.j2")
-            hook_content = template.render(version="4.3.0")
+            from vibesop.adapters._shared import render_route_hook as _shared_route_hook
+
+            hook_content = _shared_route_hook(
+                platform="claude-code",
+                platform_name="Claude Code",
+                purpose="Trigger VibeSOP routing and inject skill context",
+                enable_explicit_overrides=True,
+                enable_orchestration=True,
+                include_additional_context=True,
+                no_match_message=True,
+            )
             hook_path = output_dir / "hooks" / "vibesop-route.sh"
             self.write_file_atomic(hook_path, hook_content, validate_security=False)
             hook_path.chmod(0o755)
@@ -586,12 +602,20 @@ fi
             results["pre-session-end"] = False
             # Note: error but don't fail
 
-        # Install Agent Runtime route hook
+        # Install Agent Runtime route hook (uses shared template)
         route_hook_path = config_dir / "hooks" / "vibesop-route.sh"
         try:
-            env = self._get_template_env()
-            template = env.get_template("hooks/vibesop-route.sh.j2")
-            route_content = template.render(version="4.3.0")
+            from vibesop.adapters._shared import render_route_hook as _shared_route_hook
+
+            route_content = _shared_route_hook(
+                platform="claude-code",
+                platform_name="Claude Code",
+                purpose="Trigger VibeSOP routing and inject skill context",
+                enable_explicit_overrides=True,
+                enable_orchestration=True,
+                include_additional_context=True,
+                no_match_message=True,
+            )
             route_hook_path.parent.mkdir(parents=True, exist_ok=True)
             self.write_file_atomic(route_hook_path, route_content, validate_security=False)
             route_hook_path.chmod(0o755)

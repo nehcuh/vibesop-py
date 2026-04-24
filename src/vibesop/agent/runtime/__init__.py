@@ -32,6 +32,10 @@ from vibesop.agent.runtime.skill_injector import (
     PlatformType,
     SkillInjector,
 )
+from vibesop.agent.runtime.slash_command_executor import (
+    SlashCommandExecutor,
+    SlashCommandResult,
+)
 
 __all__ = [
     "DecisionPresenter",
@@ -46,4 +50,6 @@ __all__ = [
     "PlatformType",
     "PresentResult",
     "SkillInjector",
+    "SlashCommandExecutor",
+    "SlashCommandResult",
 ]

@@ -154,7 +154,7 @@ class RoutingConfig(BaseModel):
         description="Enable session-state-aware routing for multi-turn conversations",
     )
     session_stickiness_boost: float = Field(
-        default=0.03,
+        default=0.08,
         ge=0.0,
         le=0.2,
         description="Confidence boost for current skill in multi-turn continuity",

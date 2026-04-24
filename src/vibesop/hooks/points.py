@@ -17,16 +17,19 @@ class HookPoint(Enum):
     - Telemetry
     - Custom notifications
     - Session logging
+    - Route interception
 
     Attributes:
         PRE_SESSION_END: Execute before session ends
         PRE_TOOL_USE: Execute before using a tool
         POST_SESSION_START: Execute after session starts
+        ROUTE_INTERCEPTOR: Intercept user prompt for VibeSOP routing
     """
 
     PRE_SESSION_END = "pre-session-end"
     PRE_TOOL_USE = "pre-tool-use"
     POST_SESSION_START = "post-session-start"
+    ROUTE_INTERCEPTOR = "route-interceptor"
 
     @classmethod
     def get_all(cls) -> list["HookPoint"]:
@@ -91,7 +94,11 @@ HOOK_DEFINITIONS: dict[str, dict[str, dict[str, Any]]] = {
         # which is a different mechanism from file-based hooks
     },
     "opencode": {
-        # OpenCode doesn't support hooks yet
+        "post-session-start": {
+            "file": "hooks/vibesop-route.sh",
+            "executable": True,
+            "description": "Intercept user prompts for VibeSOP route detection",
+        },
     },
 }
 

@@ -17,6 +17,7 @@ Example:
     >>> print(f"Created {result.file_count} files")
 """
 
+import re
 from pathlib import Path
 from typing import Any
 
@@ -108,20 +109,26 @@ class KimiCliAdapter(PlatformAdapter):
             # Generate VibeSOP configuration fragment
             config_content = self._generate_config(manifest)
             config_path = output_dir / "config.toml"
+
+            # Auto-merge with existing config if present (preserves auth/providers)
+            if config_path.exists():
+                config_content = self._merge_config_with_existing(
+                    config_path, config_content
+                )
+            else:
+                result.add_warning(
+                    "Kimi CLI first-time setup: "
+                    "1. Run 'kimi' to generate default config, "
+                    "2. Run '/login' to authenticate, "
+                    "3. Then run 'vibe switch kimi-cli -f' to add VibeSOP hooks"
+                )
+
             self.write_file_atomic(
                 config_path,
                 config_content,
                 validate_security=False,
             )
             result.add_file(config_path)
-
-            # Add warning about manual merge required
-            result.add_warning(
-                "Kimi CLI requires manual setup: "
-                "1. Run 'kimi' to generate default config, "
-                "2. Run '/login' to authenticate, "
-                "3. Merge this VibeSOP config fragment"
-            )
 
             # Generate README if skills exist
             if manifest.skills:
@@ -133,6 +140,9 @@ class KimiCliAdapter(PlatformAdapter):
                     validate_security=False,
                 )
                 result.add_file(readme_path)
+
+            # Render auto-routing hook script
+            self._render_route_hook(output_dir, result)
 
         except Exception as e:
             result.add_error(f"Failed to render configuration: {e}")
@@ -263,6 +273,28 @@ class KimiCliAdapter(PlatformAdapter):
                 "",
             ])
 
+        # Add hook configuration for automatic VibeSOP routing
+        lines.extend([
+            "# ==============================================",
+            "# VibeSOP Auto-Routing Hook",
+            "# ==============================================",
+            "#",
+            "# This hook automatically calls 'vibe route' before each user prompt",
+            "# to enable context-aware skill routing. Requires the hook script",
+            "# to be installed at ~/.kimi/hooks/vibesop-route.sh",
+            "#",
+            "# NOTE: Kimi CLI event names vary by version. Valid values:",
+            "#   - 'UserPromptSubmit' : before sending user message to AI",
+            "#   - 'PreToolUse'       : before tool execution",
+            "# Adjust the event below to match your Kimi CLI version.",
+            "",
+            "[[hooks]]",
+            'name = "vibesop-route"',
+            'event = "UserPromptSubmit"',
+            'command = "bash ~/.kimi/hooks/vibesop-route.sh"',
+            "",
+        ])
+
         return "\n".join(lines)
 
     def _escape_toml_string(self, text: str) -> str:
@@ -290,6 +322,49 @@ class KimiCliAdapter(PlatformAdapter):
         text = text.replace('"', '\\"')
 
         return text.strip()
+
+    def _merge_config_with_existing(self, config_path: Path, new_config: str) -> str:
+        """Merge new VibeSOP config fragment into existing config.toml.
+
+        Preserves all existing sections (providers, auth, etc.) while
+        adding or refreshing the [[hooks]] section from the new config.
+        This prevents auth tokens from being lost on re-deploy.
+
+        Args:
+            config_path: Path to existing config.toml
+            new_config: Fresh VibeSOP config content
+
+        Returns:
+            Merged config.toml content
+        """
+        existing = config_path.read_text()
+        lines = existing.split("\n")
+
+        # Remove existing [[hooks]] sections (line-based to preserve formatting)
+        result_lines = []
+        in_hooks_section = False
+        for line in lines:
+            if line.startswith("[[hooks]]"):
+                in_hooks_section = True
+                continue
+            if in_hooks_section:
+                if line.startswith("["):
+                    in_hooks_section = False
+                    result_lines.append(line)
+                continue
+            result_lines.append(line)
+
+        # Trim trailing blank lines
+        while result_lines and result_lines[-1].strip() == "":
+            result_lines.pop()
+
+        # Append fresh [[hooks]] section from new config
+        hooks_match = re.search(r"(\[\[hooks\]\].*)", new_config, flags=re.DOTALL)
+        if hooks_match:
+            hooks_section = hooks_match.group(1).rstrip()
+            result_lines.extend(["", "", hooks_section, ""])
+
+        return "\n".join(result_lines)
 
     def _render_skill_content(
         self,
@@ -325,108 +400,23 @@ class KimiCliAdapter(PlatformAdapter):
             result.add_file(skill_output_path)
 
     def _find_skill_content(self, skill_id: str) -> str | None:
-        """Find and read actual skill content from core/skills/.
+        from vibesop.adapters._shared import find_skill_content
 
-        Args:
-            skill_id: Skill identifier (e.g., "systematic-debugging" or "omx/deep-interview")
+        return find_skill_content(skill_id, self._project_root)
 
-        Returns:
-            Skill file content or None if not found
-        """
-        # Built-in skill - try to find in core/skills/
-        skill_paths = [
-            self._project_root / "core" / "skills" / skill_id / "SKILL.md",
-            self._project_root / "skills" / skill_id / "SKILL.md",
-            Path(__file__).parent.parent.parent / "core" / "skills" / skill_id / "SKILL.md",
-        ]
+    @staticmethod
+    def _normalize_skill_type(content: str) -> str:
+        from vibesop.adapters._shared import normalize_skill_type
 
-        for skill_path in skill_paths:
-            if skill_path.exists():
-                try:
-                    return skill_path.read_text(encoding="utf-8")
-                except Exception as e:
-                    import logging
+        return normalize_skill_type(content)
 
-                    logging.getLogger(__name__).debug(f"Failed to read skill file {skill_path}: {e}")
-
-        return None
-
-    def _normalize_skill_type(self, content: str) -> str:
-        """Normalize skill type for Kimi CLI compatibility.
-
-        Kimi CLI only recognizes "standard" and "flow" skill types.
-        VibeSOP uses "prompt" internally, which causes Kimi CLI to skip
-        the skill entirely. This method converts unsupported types to
-        "standard" while preserving all other frontmatter.
-
-        Args:
-            content: Original SKILL.md content
-
-        Returns:
-            Content with normalized type field
-        """
-        if not content.startswith("---"):
-            return content
-
-        parts = content.split("---", 2)
-        if len(parts) < 3:
-            return content
-
-        frontmatter_text = parts[1].strip()
-        if not frontmatter_text:
-            return content
-
-        try:
-            import yaml
-
-            frontmatter = yaml.safe_load(frontmatter_text)
-            if not isinstance(frontmatter, dict):
-                return content
-
-            skill_type = frontmatter.get("type")
-            if skill_type and skill_type not in ("standard", "flow"):
-                # Replace the type line in the raw frontmatter text
-                # to preserve formatting and comments
-                lines = frontmatter_text.splitlines()
-                new_lines = []
-                for line in lines:
-                    stripped = line.strip()
-                    if stripped.startswith("type:"):
-                        new_lines.append("type: standard")
-                    else:
-                        new_lines.append(line)
-                new_frontmatter = "\n".join(new_lines)
-                return f"---\n{new_frontmatter}\n---{parts[2]}"
-        except (ValueError, IndexError):
-            # If parsing fails, return original content unchanged
-            pass
-
-        return content
-
+    @staticmethod
     def _generate_fallback_skill_content(
-        self, skill: Any, dir_name: str | None = None
+        skill: Any, dir_name: str | None = None
     ) -> str:
-        """Generate minimal fallback SKILL.md for external skills."""
-        skill_id = skill.id if hasattr(skill, "id") else skill.get("id", "")
-        name = dir_name or (skill.name if hasattr(skill, "name") else skill.get("name", skill_id))
-        description = skill.description if hasattr(skill, "description") else skill.get("description", "")
-        trigger = skill.trigger_when if hasattr(skill, "trigger_when") else skill.get("trigger_when", "")
+        from vibesop.adapters._shared import generate_fallback_skill_content
 
-        lines = [
-            "---",
-            f"name: {name}",
-            f"description: {description}",
-            "---",
-            "",
-            f"# {name}",
-            "",
-            f"{description}",
-            "",
-        ]
-        if trigger:
-            lines.extend(["## Trigger", "", f"{trigger}", ""])
-        lines.extend(["", "*External skill — install the source pack for full content.*", ""])
-        return "\n".join(lines)
+        return generate_fallback_skill_content(skill, dir_name=dir_name)
 
     def _generate_readme(self, manifest: Manifest) -> str:
         """Generate README content.
@@ -498,6 +488,25 @@ class KimiCliAdapter(PlatformAdapter):
             "- The system will show the closest candidates",
             "- You may continue with raw LLM mode",
             "- NEVER guess skill rules — always read SKILL.md",
+            "",
+            "### Quick Commands (快捷命令)",
+            "",
+            "When a user types a `/vibe-*` command, execute it directly with `vibe route --slash`:",
+            '```bash',
+            'vibe route --slash "/vibe-help"',
+            'vibe route --slash "/vibe-list"',
+            'vibe route --slash "/vibe-analyze --deep"',
+            'vibe route --slash "/vibe-install gstack"',
+            '```',
+            "",
+            "Available quick commands:",
+            "- `/vibe-help` — Show all available commands",
+            "- `/vibe-list` — List installed skills and available packs",
+            "- `/vibe-route <query>` — Force trigger routing with transparency",
+            "- `/vibe-install <pack>` — Install a skill pack",
+            "- `/vibe-analyze [--deep]` — Analyze project architecture",
+            "- `/vibe-evaluate [--skill <id>]` — Evaluate skill quality",
+            "- `/vibe-orchestrate <query>` — Multi-skill orchestration",
             "",
             "### Example",
             "```bash",
@@ -659,6 +668,44 @@ class KimiCliAdapter(PlatformAdapter):
             "- 询问用户是否继续以普通模式处理",
             "- **不要**猜测或编造 skill 规则",
             "",
+            "## 快捷命令（Quick Commands）",
+            "",
+            "当用户输入 `/vibe-*` 命令时，直接使用 `vibe route --slash` 执行：",
+            '```bash',
+            'vibe route --slash "/vibe-help"',
+            'vibe route --slash "/vibe-list"',
+            'vibe route --slash "/vibe-analyze --deep"',
+            'vibe route --slash "/vibe-install gstack"',
+            '```',
+            "",
+            "可用快捷命令：",
+            "- `/vibe-help` — 显示所有可用命令",
+            "- `/vibe-list` — 列出已安装技能和可用包",
+            "- `/vibe-route <query>` — 强制触发路由并展示决策过程",
+            "- `/vibe-install <pack>` — 安装技能包",
+            "- `/vibe-analyze [--deep]` — 分析项目架构",
+            "- `/vibe-evaluate [--skill <id>]` — 评估技能质量",
+            "- `/vibe-orchestrate <query>` — 多技能编排",
+            "",
+            "## 上下文感知（Conversation Context）",
+            "",
+            "为了启用多轮对话上下文感知，你必须在同一个会话中保持稳定的 conversation ID：",
+            "",
+            '```bash',
+            '# 开始会话时生成一个稳定的 conversation ID（跨平台）',
+            'CONVERSATION_ID="kimi-$(python3 -c "import os, hashlib; print(hashlib.sha256(os.getcwd().encode()).hexdigest()[:16])")"',
+            '',
+            '# 每次调用 vibe route 时都传递这个 ID',
+            'vibe route --conversation "$CONVERSATION_ID" "<用户请求>"',
+            '```',
+            "",
+            "上下文感知会带来的效果：",
+            "- **Session Stickiness**：如果用户连续问相关问题，系统会优先保持当前 skill",
+            "- **Habit Learning**：同一查询模式多次使用后，系统会记住用户的偏好",
+            "- **Follow-up Detection**：用户说「继续」、「还是报错」等，系统会自动关联上一次的查询",
+            "",
+            "⚠️ **重要**：如果你不传递 `--conversation`，每次调用都是独立的，上下文感知将失效。",
+            "",
             "## 可用技能",
             "",
         ]
@@ -737,8 +784,36 @@ class KimiCliAdapter(PlatformAdapter):
             },
         }
 
-    # Note: install_hooks uses the default implementation from PlatformAdapter
-    # which returns an empty dict. Kimi Code CLI supports hooks via inline
-    # [[hooks]] arrays in config.toml, which is a different mechanism from
-    # Claude Code's file-based hooks. Future versions may implement config.toml
-    # hook injection.
+    def _render_route_hook(
+        self,
+        output_dir: Path,
+        result: RenderResult,
+    ) -> None:
+        """Render the vibesop-route.sh hook script using the shared template.
+
+        Delegates to ``render_route_hook()`` in ``_shared.py`` so that
+        all platform adapters share the same hook script structure.
+
+        Args:
+            output_dir: Output directory (hooks/ will be created here)
+            result: RenderResult to track files
+        """
+        try:
+            from vibesop.adapters._shared import render_route_hook as _shared_route_hook
+
+            hook_content = _shared_route_hook(
+                platform="kimi-cli",
+                platform_name="Kimi CLI",
+                purpose="Auto-routing via [[hooks]] in config.toml",
+                enable_explicit_overrides=False,
+                enable_orchestration=False,
+                include_additional_context=True,
+                no_match_message=True,
+            )
+            hook_path = output_dir / "hooks" / "vibesop-route.sh"
+            hook_path.parent.mkdir(parents=True, exist_ok=True)
+            self.write_file_atomic(hook_path, hook_content, validate_security=False)
+            hook_path.chmod(0o755)
+            result.add_file(hook_path)
+        except Exception as e:
+            result.add_warning(f"Failed to write vibesop-route.sh for Kimi CLI: {e}")

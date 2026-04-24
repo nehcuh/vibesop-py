@@ -58,9 +58,9 @@ vibe route --slash "/vibe-analyze --deep"
 - 三个 Adapter 的 `_generate_agents_md` 模板中统一措辞
 
 **验收标准**：
-- [ ] `vibe route --slash "/vibe-help"` 可正常工作
-- [ ] `README.md` 不再声称"斜线命令"
-- [ ] 三个平台的 AGENTS.md/CLAUDE.md 措辞一致
+- [x] `vibe route --slash "/vibe-help"` 可正常工作
+- [x] `README.md` 不再声称"斜线命令"
+- [x] 三个平台的 AGENTS.md/CLAUDE.md 措辞一致
 - [ ] 斜线命令测试从 "44 tests" → 增加端到端测试（模拟完整调用链）
 
 ---
@@ -89,9 +89,10 @@ def normalize_skill_type(content: str) -> str:
 - `adapters/kimi_cli.py:402-479` → 同上
 
 **验收标准**：
-- [ ] 三个 Adapter 不再有重复的 `_find_skill_content`
-- [ ] 三个 Adapter 不再有重复的 `_normalize_skill_type`
-- [ ] 所有现有测试通过
+- [x] 三个 Adapter 不再有重复的 `_find_skill_content`
+- [x] 三个 Adapter 不再有重复的 `_normalize_skill_type`
+- [x] 三个 Adapter 不再有重复的 `_generate_fallback_skill_content`
+- [x] 所有现有测试通过
 
 ---
 

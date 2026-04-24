@@ -31,7 +31,7 @@ class TestHabitLearning:
         ctx.record_route_decision("debug error", "systematic-debugging")
 
         boost = ctx.get_habit_boost("debug error")
-        assert boost == {"systematic-debugging": 0.08}
+        assert boost == {"systematic-debugging": 0.12}
 
     def test_habit_boost_for_different_query(self, tmp_path):
         """Test that habits don't apply to unrelated queries."""
@@ -56,7 +56,7 @@ class TestHabitLearning:
 
         restored = SessionContext.from_dict(data, project_root=str(tmp_path))
         boost = restored.get_habit_boost("debug error")
-        assert boost == {"systematic-debugging": 0.08}
+        assert boost == {"systematic-debugging": 0.12}
 
     def test_route_history_in_dict(self, tmp_path):
         """Test that route history is serialized."""

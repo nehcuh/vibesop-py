@@ -104,19 +104,27 @@ class GenericSessionTracker(SessionTracker):
 
         Args:
             project_root: Path to VibeSOP project root
-            config_dir: Directory for session state (defaults to ~/.vibesop/)
+            config_dir: Directory for session state (defaults to ~/.vibe/sessions)
         """
         from pathlib import Path
 
         self.project_root = Path(project_root).resolve()
-        self.config_dir = Path(config_dir or "~/.vibesop").expanduser()
+        
+        # Use proper standard directory structure
+        if config_dir:
+            self.config_dir = Path(config_dir).expanduser()
+        else:
+            self.config_dir = Path.home() / ".vibe" / "sessions"
+            
         self.config_dir.mkdir(parents=True, exist_ok=True)
 
         # Session context
         self._context = SessionContext(project_root=self.project_root)
 
-        # State file
-        self._state_file = self.config_dir / "session-state.json"
+        # State file (hash the project root to keep sessions separate per project)
+        import hashlib
+        project_hash = hashlib.md5(str(self.project_root).encode()).hexdigest()[:8]
+        self._state_file = self.config_dir / f"state_{project_hash}.json"
 
         # Load existing state if available
         self._load_state()
@@ -220,8 +228,13 @@ class GenericSessionTracker(SessionTracker):
             logger.warning(f"Failed to load session state: {e}")
 
     def _save_state(self) -> None:
-        """Save session state to file."""
+        """Save session state to file.
+        
+        Uses atomic file writing to prevent corruption on concurrent saves.
+        """
         import json
+        import os
+        import tempfile
 
         try:
             state = {
@@ -237,7 +250,14 @@ class GenericSessionTracker(SessionTracker):
                 ],
             }
 
-            self._state_file.write_text(json.dumps(state, indent=2))
+            # Atomic write pattern
+            self._state_file.parent.mkdir(parents=True, exist_ok=True)
+            fd, tmp_path = tempfile.mkstemp(dir=self._state_file.parent, prefix=".tmp_state_")
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                json.dump(state, f, indent=2)
+            
+            # Atomic replace
+            os.replace(tmp_path, self._state_file)
         except Exception as e:
             logger.warning(f"Failed to save session state: {e}")
 

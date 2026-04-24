@@ -45,23 +45,27 @@ class ConversationTurn:
 FOLLOW_UP_PATTERNS = {
     "continuation": [
         "继续", "go on", "continue", "proceed", "next step",
-        "接着", "然后", "下一步", "继续刚才的",
+        "接着", "然后", "下一步", "继续刚才的", "继续之前的",
+        "还没完", "还有问题", "后续", "follow up",
     ],
     "retry": [
         "再试一次", "retry", "try again", "再来一次", "again",
-        "重新", "重做", "再执行",
+        "重新", "重做", "再执行", "还是不行", "仍然报错",
+        "同样的错误", "还是报错", "依旧失败",
     ],
     "alternative": [
         "换个方法", "another way", "different approach", "alternatively",
-        "或者", "另一种", "其他方法",
+        "或者", "另一种", "其他方法", "还有别的办法吗",
     ],
     "clarification": [
         "什么意思", "what do you mean", "explain", " clarify",
         "不清楚", "不明白", "详细点", "说具体点",
+        "能再解释一下吗", "具体怎么做", "详细说明",
     ],
     "refinement": [
         "更具体", "more specific", "refine", "narrow down",
-        "更精确", "更准确", "限定一下",
+        "更精确", "更准确", "限定一下", "能不能更",
+        "再深入", "再细化",
     ],
 }
 
@@ -77,7 +81,7 @@ class ConversationContext:
         self,
         conversation_id: str | None = None,
         max_history: int = 10,
-        follow_up_timeout: float = 300.0,  # 5 minutes
+        follow_up_timeout: float = 900.0,  # 15 minutes
         storage_dir: str | Path = ".vibe/conversations",
     ) -> None:
         self.conversation_id = conversation_id or str(uuid.uuid4())[:8]
@@ -87,6 +91,11 @@ class ConversationContext:
         self._lock = threading.Lock()
         self._turns: list[ConversationTurn] = []
         self._last_activity = time.time()
+        # Reusable similarity calculator (cosine over term-frequency vectors)
+        from vibesop.core.matching.base import SimilarityMetric
+        from vibesop.core.matching.similarity import SimilarityCalculator
+
+        self._similarity_calc = SimilarityCalculator(metric=SimilarityMetric.COSINE)
         self._load()
 
     # ------------------------------------------------------------------
@@ -162,13 +171,28 @@ class ConversationContext:
     # Follow-up detection
     # ------------------------------------------------------------------
 
+    def _semantic_similarity(self, query: str, previous_query: str) -> float:
+        """Calculate semantic similarity using cosine over term-frequency vectors.
+
+        Replaces the previous Jaccard token-overlap approach, which only
+        considered binary term presence. Cosine similarity on TF vectors
+        is more nuanced: it accounts for term frequency and produces
+        smoother scores that better reflect topical overlap.
+        """
+        try:
+            scores = self._similarity_calc.calculate(query, [previous_query])
+            return scores[0]
+        except Exception:
+            return 0.0
+
     def is_follow_up(self, query: str) -> tuple[bool, str | None]:
         """Detect if a query is a follow-up to the previous turn.
 
         Returns:
             (is_follow_up, follow_up_type) where follow_up_type is one of:
             "continuation", "retry", "alternative", "clarification",
-            "refinement", or None if not a follow-up.
+            "refinement", "pronoun_reference", "semantic_continuation",
+            or None if not a follow-up.
         """
         # Check timeout - conversations expire after timeout
         if time.time() - self._last_activity > self._follow_up_timeout:
@@ -186,26 +210,43 @@ class ConversationContext:
                     return True, follow_up_type
 
         # Pronoun-based detection (e.g., "it", "that", "this")
-        # Only if there's recent history
-        if not self._turns:
-            return False, None
+        # Relaxed: no longer limited to 5 words — pronouns in short-to-medium
+        # queries often indicate referential continuity.
+        if self._turns:
+            pronoun_indicators = [
+                "it", "that", "this", "them", "those", "these",
+                "它", "这个", "那个", "它们", "那些",
+            ]
+            words = query_lower.split()
+            if len(words) <= 15 and any(p in words for p in pronoun_indicators):
+                return True, "pronoun_reference"
 
-        pronoun_indicators = [
-            "it", "that", "this", "them", "those", "these",
-            "它", "这个", "那个", "它们", "那些",
-        ]
-        words = query_lower.split()
-        if len(words) <= 5 and any(p in words for p in pronoun_indicators):
-            return True, "pronoun_reference"
+        # Semantic similarity: if the current query is topically similar
+        # to the previous one, treat it as a contextual continuation.
+        last_turn = self.get_last_turn()
+        if last_turn and last_turn.query:
+            sim = self._semantic_similarity(query, last_turn.query)
+            if sim >= 0.45:
+                return True, "semantic_continuation"
 
         return False, None
 
     def build_contextual_query(self, query: str) -> str | None:
-        """Build an enriched query by combining with conversation history.
+        """Build an enriched query by injecting missing context from history.
+
+        Instead of naively concatenating the full previous query (which
+        duplicates overlapping terms and introduces misleading template words
+        like "follow-up" that can confuse keyword matchers), we only append
+        terms from the previous query that are NOT already present in the
+        current query. This:
+          - Prevents TF-IDF dilution from duplicate terms
+          - Avoids keyword matcher confusion from template words
+          - Keeps the current query's intent primary while providing
+            disambiguating context from history
 
         Returns the enriched query if this is a follow-up, or None if not.
         """
-        is_follow, follow_type = self.is_follow_up(query)
+        is_follow, _follow_type = self.is_follow_up(query)
         if not is_follow:
             return None
 
@@ -213,17 +254,23 @@ class ConversationContext:
         if not last_turn:
             return None
 
-        # Build contextual query based on follow-up type
-        if follow_type in ("continuation", "retry"):
-            return f"{last_turn.query} (follow-up: {query})"
-        elif follow_type == "alternative":
-            return f"Alternative approach to: {last_turn.query} (user asks: {query})"
-        elif follow_type == "clarification":
-            return f"Clarify: {last_turn.query} (user asks: {query})"
-        elif follow_type == "refinement":
-            return f"Refine: {last_turn.query} (user asks: {query})"
-        else:
-            return f"Related to: {last_turn.query} (user asks: {query})"
+        from vibesop.core.matching.tokenizers import DEFAULT_STOP_WORDS, tokenize
+
+        current_tokens = set(tokenize(query))
+        previous_tokens = set(tokenize(last_turn.query))
+
+        # Only inject terms that provide new context (not already in current
+        # query) and are not stop words.
+        missing = previous_tokens - current_tokens - DEFAULT_STOP_WORDS
+
+        if not missing:
+            # Current query is self-contained; no enrichment needed
+            return query
+
+        # Append context terms without any template words that could mislead
+        # matchers.  The terms are sorted for deterministic output.
+        context_terms = " ".join(sorted(missing))
+        return f"{query} {context_terms}"
 
     # ------------------------------------------------------------------
     # Routing hints

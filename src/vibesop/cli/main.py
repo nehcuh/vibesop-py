@@ -21,7 +21,7 @@ from rich.console import Console
 from rich.panel import Panel
 
 from vibesop import __version__
-from vibesop.cli.commands import deviation_cmd, experiment_cmd, matcher_cmd, plan_cmd
+from vibesop.cli.commands import badges_cmd, deviation_cmd, experiment_cmd, matcher_cmd, plan_cmd
 from vibesop.cli.orchestration_report import render_orchestration_result
 from vibesop.cli.routing_report import render_routing_report
 from vibesop.cli.subcommands import register
@@ -39,6 +39,7 @@ app.add_typer(plan_cmd.app, name="plan")
 app.add_typer(matcher_cmd.app, name="matcher")
 app.add_typer(experiment_cmd.app, name="experiment")
 app.add_typer(deviation_cmd.app, name="deviation")
+app.add_typer(badges_cmd.app, name="badges")
 
 
 # -- Core routing commands --
@@ -54,6 +55,7 @@ def route(
         help="Minimum confidence threshold (0.0-1.0)",
     ),
     json_output: bool = typer.Option(False, "--json", "-j", help="Output as JSON"),
+    slash: bool = typer.Option(False, "--slash", help="Treat query as a quick command (e.g., --slash '/vibe-help')"),
     validate: bool = typer.Option(False, "--validate", "-V", help="Validate routing configuration"),
     explain: bool = typer.Option(False, "--explain", "-e", help="Explain routing decision with per-layer details"),
     yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation prompt (alias for confirmation_mode=never)"),
@@ -82,10 +84,48 @@ def route(
     or use --yes to skip once.
 
     Use --explain to inspect the full routing decision tree.
+    Use --slash to invoke a quick command explicitly (e.g., --slash '/vibe-help').
     """
     from pathlib import Path
 
     from vibesop.core.routing import RoutingConfig, UnifiedRouter
+
+    # -- Route through IntentInterceptor to respect full Agent Runtime logic --
+    from vibesop.agent.runtime import IntentInterceptor, InterceptionMode, SlashCommandExecutor
+
+    # When --slash is explicitly passed, treat as a CLI quick command
+    if slash:
+        executor = SlashCommandExecutor()
+        if query.strip().startswith("/vibe-"):
+            result = executor.execute_query(query)
+        else:
+            console.print("[bold red]✗[/bold red] Quick commands must start with /vibe-")
+            raise typer.Exit(1)
+
+        if json_output:
+            import json
+            console.print(json.dumps({"success": result.success, "message": result.message, "command": result.command}, indent=2))
+        elif result.success:
+            console.print(f"[bold green]✓[/bold green] {result.message}")
+        else:
+            console.print(f"[bold yellow]⚠[/bold yellow] {result.message}")
+        raise typer.Exit(0 if result.success else 1)
+
+    interceptor = IntentInterceptor()
+    decision = interceptor.should_intercept(query)
+
+    if decision.mode == InterceptionMode.SLASH_COMMAND:
+        executor = SlashCommandExecutor()
+        result = executor.execute(decision)
+
+        if json_output:
+            import json
+            console.print(json.dumps({"success": result.success, "message": result.message}, indent=2))
+        elif result.success:
+            console.print(f"[bold green]✓[/bold green] {result.message}")
+        else:
+            console.print(f"[bold yellow]⚠[/bold yellow] {result.message}")
+        raise typer.Exit(0 if result.success else 1)
 
     # Set up router with optional overrides
     routing_kwargs: dict[str, Any] = {}
@@ -130,7 +170,7 @@ def route(
                 query=result.original_query,
                 duration_ms=result.duration_ms,
             )
-            render_routing_report(routing_result, console=console)
+            render_routing_report(routing_result, console=console, context=context)
         else:
             render_orchestration_result(result, console=console)
         raise typer.Exit(0)
@@ -232,15 +272,9 @@ def _handle_orchestrated_result(
 ) -> None:
     """Handle multi-step orchestration result with confirmation."""
     plan = result.execution_plan
-    confirmation_mode = router._config.confirmation_mode
-    need_confirm = (
-        not yes
-        and not json_output
-        and confirmation_mode != "never"
-        and sys.stdin.isatty()
-    )
 
-    if need_confirm:
+    # Use unified confirmation check
+    if _needs_confirmation(result, router, yes, json_output, is_orchestrated=True):
         render_orchestration_result(result, console=console)
 
         choices = [
@@ -306,15 +340,44 @@ def _needs_confirmation(
     router: Any,
     yes: bool,
     json_output: bool,
-    validate: bool,
+    validate: bool = False,
+    is_orchestrated: bool = False,
 ) -> bool:
-    """Determine if user confirmation is needed for a routing result."""
+    """Determine if user confirmation is needed for a routing result.
+
+    Unified confirmation check for both single-skill and orchestrated results.
+
+    Args:
+        result: The routing result (single or orchestrated)
+        router: The router instance
+        yes: If True, skip confirmation
+        json_output: If True, skip confirmation (machine-readable output)
+        validate: If True, skip confirmation (validation mode)
+        is_orchestrated: If True, this is an orchestrated result
+
+    Returns:
+        True if user confirmation is needed
+    """
+    # Skip if explicitly requested or non-interactive
     if yes or json_output or validate:
         return False
+
     confirmation_mode = router._config.confirmation_mode
+
+    # Skip if confirmation disabled or not in a TTY
     if confirmation_mode == "never" or not sys.stdin.isatty():
         return False
-    return not (confirmation_mode == "ambiguous_only" and result.primary and result.primary.confidence >= router._config.auto_select_threshold)
+
+    # For orchestrated results, always confirm unless mode is 'never'
+    if is_orchestrated:
+        return True
+
+    # For single results, skip if high confidence and mode is 'ambiguous_only'
+    if confirmation_mode == "ambiguous_only":
+        if result.primary and result.primary.confidence >= router._config.auto_select_threshold:
+            return False
+
+    return True
 
 
 def _run_confirmation_flow(
@@ -491,8 +554,8 @@ def _handle_single_result(
     if validate:
         _render_validation(result, router, console)
 
-    # Confirmation flow
-    if _needs_confirmation(result, router, yes, json_output, validate):
+    # Confirmation flow (unified check)
+    if _needs_confirmation(result, router, yes, json_output, validate=validate, is_orchestrated=False):
         _run_confirmation_flow(result, console)
 
     # Output rendering

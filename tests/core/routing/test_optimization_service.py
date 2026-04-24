@@ -372,3 +372,365 @@ class TestHabitBoost:
         result = service._apply_habit_boost(matches, context)
 
         assert result[0].confidence == 0.70
+
+
+class TestProjectContextBoost:
+    """Test project context boosting in OptimizationService."""
+
+    def _make_service(self):
+        config = MagicMock()
+        config.min_confidence = 0.3
+        config.max_candidates = 3
+        config.session_stickiness_boost = 0.03
+
+        optimization_config = MagicMock()
+        optimization_config.enabled = False
+        optimization_config.preference_boost.enabled = False
+
+        preference_booster = MagicMock()
+        cluster_index = MagicMock()
+        conflict_resolver = MagicMock()
+
+        return OptimizationService(
+            config=config,
+            optimization_config=optimization_config,
+            preference_booster=preference_booster,
+            cluster_index=cluster_index,
+            conflict_resolver=conflict_resolver,
+            get_instinct_learner=MagicMock(),
+        )
+
+    def test_project_type_boost(self):
+        """Skills mentioning the project type get +0.04 boost."""
+        service = self._make_service()
+        matches = [
+            MatchResult(
+                skill_id="python-debug",
+                confidence=0.70,
+                matcher_type=RoutingLayer.KEYWORD,
+                matched_keywords=["python", "debug"],
+            ),
+        ]
+        context = RoutingContext(project_type="python")
+
+        result = service._apply_project_context_boost(matches, context)
+
+        assert result[0].confidence == pytest.approx(0.74)
+        assert result[0].score_breakdown["project_context"] == 0.04
+        assert result[0].metadata["project_boost"] is True
+
+    def test_tech_stack_boost(self):
+        """Skills mentioning detected tech stack get +0.02 per tech."""
+        service = self._make_service()
+        matches = [
+            MatchResult(
+                skill_id="django-test",
+                confidence=0.70,
+                matcher_type=RoutingLayer.KEYWORD,
+                matched_keywords=["django", "test"],
+            ),
+        ]
+        context = RoutingContext(project_type="python", recent_files=["django", "pytest"])
+
+        result = service._apply_project_context_boost(matches, context)
+
+        # project_type "python" does not match keywords, but "django" in recent_files matches → +0.02
+        assert result[0].confidence == pytest.approx(0.72)
+        assert result[0].score_breakdown["project_context"] == 0.02
+
+    def test_no_context_skips(self):
+        """Missing context skips project boost."""
+        service = self._make_service()
+        matches = [
+            MatchResult(skill_id="skill-a", confidence=0.70, matcher_type=RoutingLayer.KEYWORD),
+        ]
+
+        result = service._apply_project_context_boost(matches, context=None)
+        assert result[0].confidence == 0.70
+
+    def test_no_project_type_skips(self):
+        """Empty project_type skips project boost."""
+        service = self._make_service()
+        matches = [
+            MatchResult(skill_id="skill-a", confidence=0.70, matcher_type=RoutingLayer.KEYWORD),
+        ]
+        context = RoutingContext(project_type="")
+
+        result = service._apply_project_context_boost(matches, context)
+        assert result[0].confidence == 0.70
+
+
+class TestConflictResolution:
+    """Test conflict resolution in OptimizationService."""
+
+    def _make_service(self):
+        config = MagicMock()
+        config.min_confidence = 0.3
+        config.max_candidates = 3
+
+        optimization_config = MagicMock()
+        optimization_config.enabled = False
+        optimization_config.preference_boost.enabled = False
+
+        preference_booster = MagicMock()
+        cluster_index = MagicMock()
+        conflict_resolver = MagicMock()
+
+        return OptimizationService(
+            config=config,
+            optimization_config=optimization_config,
+            preference_booster=preference_booster,
+            cluster_index=cluster_index,
+            conflict_resolver=conflict_resolver,
+            get_instinct_learner=MagicMock(),
+        )
+
+    def test_resolve_with_primary(self):
+        """Conflict resolver returning a primary skill is honored."""
+        service = self._make_service()
+        matches = [
+            MatchResult(skill_id="skill-a", confidence=0.80, matcher_type=RoutingLayer.KEYWORD),
+            MatchResult(skill_id="skill-b", confidence=0.70, matcher_type=RoutingLayer.KEYWORD),
+        ]
+
+        resolution = MagicMock()
+        resolution.primary = "skill-b"
+        resolution.alternatives = ["skill-a"]
+        service._conflict_resolver.resolve = MagicMock(return_value=resolution)
+
+        primary, alternatives = service.resolve_conflicts(matches, "query")
+
+        assert primary.skill_id == "skill-b"
+        assert len(alternatives) == 1
+        assert alternatives[0].skill_id == "skill-a"
+
+    def test_resolve_failure_fallback(self):
+        """When conflict resolver throws, fall back to raw matches."""
+        service = self._make_service()
+        matches = [
+            MatchResult(skill_id="skill-a", confidence=0.80, matcher_type=RoutingLayer.KEYWORD),
+            MatchResult(skill_id="skill-b", confidence=0.70, matcher_type=RoutingLayer.KEYWORD),
+        ]
+
+        service._conflict_resolver.resolve = MagicMock(side_effect=ValueError("boom"))
+
+        primary, alternatives = service.resolve_conflicts(matches, "query")
+
+        assert primary.skill_id == "skill-a"
+        assert alternatives[0].skill_id == "skill-b"
+
+    def test_resolve_no_primary(self):
+        """When resolver returns no primary, use highest-confidence match."""
+        service = self._make_service()
+        matches = [
+            MatchResult(skill_id="skill-a", confidence=0.80, matcher_type=RoutingLayer.KEYWORD),
+            MatchResult(skill_id="skill-b", confidence=0.70, matcher_type=RoutingLayer.KEYWORD),
+        ]
+
+        resolution = MagicMock()
+        resolution.primary = None
+        resolution.alternatives = []
+        service._conflict_resolver.resolve = MagicMock(return_value=resolution)
+
+        primary, alternatives = service.resolve_conflicts(matches, "query")
+
+        assert primary.skill_id == "skill-a"
+        assert alternatives[0].skill_id == "skill-b"
+
+
+class TestInstinctBoost:
+    """Test instinct-based boosting in OptimizationService."""
+
+    def _make_service(self):
+        config = MagicMock()
+        config.min_confidence = 0.3
+        config.max_candidates = 3
+
+        optimization_config = MagicMock()
+        optimization_config.enabled = False
+        optimization_config.preference_boost.enabled = False
+
+        preference_booster = MagicMock()
+        cluster_index = MagicMock()
+        conflict_resolver = MagicMock()
+
+        return OptimizationService(
+            config=config,
+            optimization_config=optimization_config,
+            preference_booster=preference_booster,
+            cluster_index=cluster_index,
+            conflict_resolver=conflict_resolver,
+            get_instinct_learner=MagicMock(),
+        )
+
+    def test_instinct_boost_applied(self):
+        """Matching instinct action boosts the corresponding skill."""
+        service = self._make_service()
+        matches = [
+            MatchResult(skill_id="debug-skill", confidence=0.70, matcher_type=RoutingLayer.KEYWORD),
+        ]
+
+        instinct = MagicMock()
+        instinct.action = "suggest debug-skill"
+        instinct.confidence = 0.80
+        service._get_instinct_learner.return_value.find_matching = MagicMock(
+            return_value=[instinct]
+        )
+
+        result = service.apply_instinct_boost(matches, "fix bug", context=None)
+
+        # boost = 0.80 * 0.15 = 0.12
+        assert result[0].confidence == pytest.approx(0.82)
+        assert result[0].metadata.get("boost_source") == "instinct"
+
+    def test_instinct_lookup_failure_graceful(self):
+        """Instinct learner failure should not crash routing."""
+        service = self._make_service()
+        matches = [
+            MatchResult(skill_id="skill-a", confidence=0.70, matcher_type=RoutingLayer.KEYWORD),
+        ]
+
+        service._get_instinct_learner.return_value.find_matching = MagicMock(
+            side_effect=RuntimeError("instinct db locked")
+        )
+
+        result = service.apply_instinct_boost(matches, "query", context=None)
+
+        assert result[0].confidence == 0.70
+
+    def test_no_instincts_returns_unchanged(self):
+        """Empty instinct list returns matches unchanged."""
+        service = self._make_service()
+        matches = [
+            MatchResult(skill_id="skill-a", confidence=0.70, matcher_type=RoutingLayer.KEYWORD),
+        ]
+
+        service._get_instinct_learner.return_value.find_matching = MagicMock(return_value=[])
+
+        result = service.apply_instinct_boost(matches, "query", context=None)
+
+        assert result[0].confidence == 0.70
+
+    def test_empty_matches_returns_empty(self):
+        """Empty match list returns empty immediately."""
+        service = self._make_service()
+
+        result = service.apply_instinct_boost([], "query", context=None)
+
+        assert result == []
+
+
+class TestClusterIndex:
+    """Test cluster index initialization in OptimizationService."""
+
+    def _make_service(self):
+        config = MagicMock()
+        optimization_config = MagicMock()
+        optimization_config.enabled = True
+        optimization_config.clustering.enabled = True
+        optimization_config.clustering.min_skills_for_clustering = 3
+
+        return OptimizationService(
+            config=config,
+            optimization_config=optimization_config,
+            preference_booster=MagicMock(),
+            cluster_index=MagicMock(),
+            conflict_resolver=MagicMock(),
+            get_instinct_learner=MagicMock(),
+        )
+
+    def test_ensure_cluster_index_builds_once(self):
+        """Cluster index is built only once when conditions are met."""
+        service = self._make_service()
+        candidates = [{"id": "a"}, {"id": "b"}, {"id": "c"}]
+
+        service.ensure_cluster_index(candidates)
+        service._cluster_index.build.assert_called_once_with(candidates)
+
+        # Second call should not trigger build again
+        service._cluster_index.reset_mock()
+        service.ensure_cluster_index(candidates)
+        service._cluster_index.build.assert_not_called()
+
+    def test_ensure_cluster_index_disabled(self):
+        """When clustering is disabled, build is never called."""
+        service = self._make_service()
+        service._optimization_config.clustering.enabled = False
+        candidates = [{"id": "a"}, {"id": "b"}, {"id": "c"}]
+
+        service.ensure_cluster_index(candidates)
+        service._cluster_index.build.assert_not_called()
+
+    def test_ensure_cluster_index_not_enough_skills(self):
+        """When candidate count is below threshold, build is not called."""
+        service = self._make_service()
+        candidates = [{"id": "a"}, {"id": "b"}]
+
+        service.ensure_cluster_index(candidates)
+        service._cluster_index.build.assert_not_called()
+
+
+class TestApplyOptimizationsIntegration:
+    """Integration tests for the full apply_optimizations pipeline."""
+
+    def _make_service(self):
+        config = MagicMock()
+        config.min_confidence = 0.3
+        config.max_candidates = 3
+        config.session_stickiness_boost = 0.05
+
+        optimization_config = MagicMock()
+        optimization_config.enabled = True
+        optimization_config.preference_boost.enabled = True
+
+        preference_booster = MagicMock()
+        preference_booster.boost = MagicMock(
+            side_effect=lambda matches, _query: matches
+        )
+
+        cluster_index = MagicMock()
+        conflict_resolver = MagicMock()
+        conflict_resolver.resolve = MagicMock(
+            side_effect=lambda matches, _query, **_kw: MagicMock(
+                primary=matches[0].skill_id if matches else None,
+                alternatives=[m.skill_id for m in matches[1:3]],
+            )
+        )
+
+        return OptimizationService(
+            config=config,
+            optimization_config=optimization_config,
+            preference_booster=preference_booster,
+            cluster_index=cluster_index,
+            conflict_resolver=conflict_resolver,
+            get_instinct_learner=MagicMock(),
+        )
+
+    def test_single_match_returns_directly(self):
+        """With only one match, optimization returns it directly."""
+        service = self._make_service()
+        matches = [
+            MatchResult(skill_id="skill-a", confidence=0.80, matcher_type=RoutingLayer.KEYWORD),
+        ]
+
+        primary, alternatives = service.apply_optimizations(matches, "query")
+
+        assert primary.skill_id == "skill-a"
+        assert alternatives == []
+
+    def test_full_pipeline_with_context(self):
+        """Full optimization pipeline applies all boosts in order."""
+        service = self._make_service()
+        matches = [
+            MatchResult(skill_id="skill-a", confidence=0.70, matcher_type=RoutingLayer.KEYWORD),
+            MatchResult(skill_id="skill-b", confidence=0.75, matcher_type=RoutingLayer.KEYWORD),
+        ]
+        context = RoutingContext(current_skill="skill-a", habit_boosts={"skill-a": 0.10})
+
+        primary, alternatives = service.apply_optimizations(matches, "query", context)
+
+        # Preference booster was called
+        service._preference_booster.boost.assert_called_once()
+        # Primary should be skill-a (stickiness + habit boost overtakes skill-b)
+        assert primary.skill_id == "skill-a"
+        assert primary.confidence > 0.70

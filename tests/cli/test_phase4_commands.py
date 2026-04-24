@@ -55,6 +55,36 @@ class TestRouteValidateCommand:
         assert "Routing Decision Report" in result.stdout
 
 
+class TestRouteSlashCommands:
+    """Test suite for slash command handling in vibe route."""
+
+    def test_route_slash_help(self) -> None:
+        """Test /vibe-help executed via vibe route."""
+        result = runner.invoke(app, ["route", "/vibe-help"])
+        assert result.exit_code == 0
+        assert "/vibe-route" in result.stdout
+        assert "/vibe-install" in result.stdout
+
+    def test_route_slash_list(self) -> None:
+        """Test /vibe-list executed via vibe route."""
+        result = runner.invoke(app, ["route", "/vibe-list"])
+        assert result.exit_code == 0
+        assert "Installed Skills" in result.stdout or "No installed skills" in result.stdout
+
+    def test_route_slash_unknown(self) -> None:
+        """Test unknown /vibe-* command returns error."""
+        result = runner.invoke(app, ["route", "/vibe-unknown"])
+        assert result.exit_code == 1
+        assert "Unknown command" in result.stdout
+
+    def test_route_slash_help_json(self) -> None:
+        """Test /vibe-help with --json output."""
+        result = runner.invoke(app, ["route", "/vibe-help", "--json"])
+        assert result.exit_code == 0
+        assert '"success"' in result.stdout
+        assert '"message"' in result.stdout
+
+
 class TestImportRulesCommand:
     """Test suite for import-rules command."""
 

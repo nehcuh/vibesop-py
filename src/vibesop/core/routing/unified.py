@@ -33,7 +33,9 @@ from vibesop.core.matching import (
     IMatcher,
     KeywordMatcher,
     LevenshteinMatcher,
+    MatchResult,
     MatcherConfig,
+    MatcherType,
     RoutingContext,
     TFIDFMatcher,
 )
@@ -317,11 +319,53 @@ class UnifiedRouter(RouterStatsMixin, RouterExecutionMixin, RouterCandidateMixin
             routing_path.append(layer_result.layer)
             if layer_result.match is not None:
                 self._record_layer(layer_result.layer)
+
+                # Early-layer matches (EXPLICIT/SCENARIO/AI_TRIAGE) bypass the
+                # MatcherPipeline where OptimizationService normally runs.
+                # Apply optimizations here so session stickiness, habit boost,
+                # quality boost, and project context are consistent across
+                # all layers.
+                matcher_layers = {
+                    RoutingLayer.KEYWORD,
+                    RoutingLayer.TFIDF,
+                    RoutingLayer.EMBEDDING,
+                    RoutingLayer.LEVENSHTEIN,
+                }
+                primary_match = layer_result.match
+                if layer_result.layer not in matcher_layers:
+                    match_result = MatchResult(
+                        skill_id=primary_match.skill_id,
+                        confidence=primary_match.confidence,
+                        score_breakdown=primary_match.metadata.get(
+                            "score_breakdown", {}
+                        ),
+                        matcher_type=(
+                            MatcherType.AI_TRIAGE
+                            if layer_result.layer == RoutingLayer.AI_TRIAGE
+                            else MatcherType.CUSTOM
+                        ),
+                        matched_keywords=[],
+                        matched_patterns=[],
+                        semantic_score=None,
+                        metadata=primary_match.metadata,
+                    )
+                    optimized_primary, _ = self._apply_optimizations(
+                        [match_result], query, context
+                    )
+                    primary_match = SkillRoute(
+                        skill_id=optimized_primary.skill_id,
+                        confidence=optimized_primary.confidence,
+                        layer=layer_result.layer,
+                        source=primary_match.source,
+                        description=primary_match.description,
+                        metadata=optimized_primary.metadata,
+                    )
+
                 # Record this routing decision for memory/learning
-                self._record_routing_decision(query, layer_result.match, context)
+                self._record_routing_decision(query, primary_match, context)
                 result = self._build_result(
                     query=query,
-                    primary=layer_result.match,
+                    primary=primary_match,
                     alternatives=layer_result.alternatives,
                     routing_path=routing_path,
                     layer_details=layer_details,

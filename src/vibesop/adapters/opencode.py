@@ -25,7 +25,7 @@ class OpenCodeAdapter(PlatformAdapter):
         >>>
         >>> adapter = OpenCodeAdapter()
         >>> manifest = Manifest(...)
-        >>> result = adapter.render_config(manifest, Path("~/.opencode"))
+        >>> result = adapter.render_config(manifest, Path("~/.config/opencode"))
         >>> print(f"Created {result.file_count} files")
     """
 
@@ -51,10 +51,13 @@ class OpenCodeAdapter(PlatformAdapter):
     def config_dir(self) -> Path:
         """Get default configuration directory.
 
+        OpenCode reads from ~/.config/opencode/ by default.
+        The project-level AGENTS.md is generated in the project root.
+
         Returns:
-            Path to ~/.opencode
+            Path to ~/.config/opencode
         """
-        return Path("~/.opencode").expanduser()
+        return Path("~/.config/opencode").expanduser()
 
     def render_config_only(
         self,
@@ -115,6 +118,33 @@ class OpenCodeAdapter(PlatformAdapter):
                 validate_security=False,
             )
             result.add_file(llm_config_path)
+
+            # Generate AGENTS.md for OpenCode AI instructions
+            agents_content = self._generate_agents_md(manifest)
+            agents_path = output_dir / "AGENTS.md"
+            self.write_file_atomic(
+                agents_path,
+                agents_content,
+                validate_security=False,
+            )
+            result.add_file(agents_path)
+
+            # Also generate AGENTS.md at project root (highest priority for OpenCode)
+            project_agents_path = self._project_root / "AGENTS.md"
+            if project_agents_path.resolve() != agents_path.resolve():
+                if not project_agents_path.exists():
+                    self.write_file_atomic(
+                        project_agents_path,
+                        agents_content,
+                        validate_security=False,
+                    )
+                    result.add_file(project_agents_path)
+
+            # Generate VibeSOP environment setup script
+            self._render_env_script(output_dir, result)
+
+            # Generate route hook script for quick command support
+            self._render_route_hook(output_dir, result)
 
         except Exception as e:
             result.add_error(f"Failed to render configuration: {e}")
@@ -244,105 +274,23 @@ class OpenCodeAdapter(PlatformAdapter):
             result.add_file(skill_output_path)
 
     def _find_skill_content(self, skill_id: str) -> str | None:
-        """Find and read actual skill content from core/skills/.
+        from vibesop.adapters._shared import find_skill_content
 
-        Args:
-            skill_id: Skill identifier (e.g., "systematic-debugging" or "omx/deep-interview")
+        return find_skill_content(skill_id, self._project_root)
 
-        Returns:
-            Skill file content or None if not found
-        """
-        # Built-in skill - try to find in core/skills/
-        skill_paths = [
-            self._project_root / "core" / "skills" / skill_id / "SKILL.md",
-            self._project_root / "skills" / skill_id / "SKILL.md",
-            Path(__file__).parent.parent.parent / "core" / "skills" / skill_id / "SKILL.md",
-        ]
+    @staticmethod
+    def _normalize_skill_type(content: str) -> str:
+        from vibesop.adapters._shared import normalize_skill_type
 
-        for skill_path in skill_paths:
-            if skill_path.exists():
-                try:
-                    return skill_path.read_text(encoding="utf-8")
-                except Exception as e:
-                    import logging
+        return normalize_skill_type(content)
 
-                    logging.getLogger(__name__).debug(f"Failed to read skill file {skill_path}: {e}")
-
-        return None
-
-    def _normalize_skill_type(self, content: str) -> str:
-        """Normalize skill type for platform compatibility.
-
-        Some platforms only recognize "standard" and "flow" skill types.
-        VibeSOP uses "prompt" internally, which may cause parsers to skip
-        the skill entirely. This method converts unsupported types to
-        "standard" while preserving all other frontmatter.
-
-        Args:
-            content: Original SKILL.md content
-
-        Returns:
-            Content with normalized type field
-        """
-        if not content.startswith("---"):
-            return content
-
-        parts = content.split("---", 2)
-        if len(parts) < 3:
-            return content
-
-        frontmatter_text = parts[1].strip()
-        if not frontmatter_text:
-            return content
-
-        try:
-            import yaml
-
-            frontmatter = yaml.safe_load(frontmatter_text)
-            if not isinstance(frontmatter, dict):
-                return content
-
-            skill_type = frontmatter.get("type")
-            if skill_type and skill_type not in ("standard", "flow"):
-                lines = frontmatter_text.splitlines()
-                new_lines = []
-                for line in lines:
-                    stripped = line.strip()
-                    if stripped.startswith("type:"):
-                        new_lines.append("type: standard")
-                    else:
-                        new_lines.append(line)
-                new_frontmatter = "\n".join(new_lines)
-                return f"---\n{new_frontmatter}\n---{parts[2]}"
-        except (ValueError, IndexError):
-            pass
-
-        return content
-
+    @staticmethod
     def _generate_fallback_skill_content(
-        self, skill: Any, dir_name: str | None = None
+        skill: Any, dir_name: str | None = None
     ) -> str:
-        """Generate minimal fallback SKILL.md for external skills."""
-        skill_id = skill.id if hasattr(skill, "id") else skill.get("id", "")
-        name = dir_name or (skill.name if hasattr(skill, "name") else skill.get("name", skill_id))
-        description = skill.description if hasattr(skill, "description") else skill.get("description", "")
-        trigger = skill.trigger_when if hasattr(skill, "trigger_when") else skill.get("trigger_when", "")
+        from vibesop.adapters._shared import generate_fallback_skill_content
 
-        lines = [
-            "---",
-            f"name: {name}",
-            f"description: {description}",
-            "---",
-            "",
-            f"# {name}",
-            "",
-            f"{description}",
-            "",
-        ]
-        if trigger:
-            lines.extend(["## Trigger", "", f"{trigger}", ""])
-        lines.extend(["", "*External skill — install the source pack for full content.*", ""])
-        return "\n".join(lines)
+        return generate_fallback_skill_content(skill, dir_name=dir_name)
 
     def _generate_readme(self, manifest: Manifest) -> str:
         """Generate README content.
@@ -383,6 +331,29 @@ class OpenCodeAdapter(PlatformAdapter):
             "**Step 4**: Run verification after completion",
             "```bash\n# Run appropriate verification commands as required by the skill\n```",
             "",
+            "",
+            "### Quick Commands (快捷命令)",
+            "",
+            "VibeSOP provides CLI quick commands for common tasks. When the user's query starts with `/vibe-`, call `vibe route --json` or `vibe route --slash` to handle it:",
+            "",
+            "```bash",
+            '# Example: user types "/vibe-help"',
+            'vibe route --slash "/vibe-help"',
+            "",
+            '# Example: user types "/vibe-list --installed"',
+            'vibe route --json "/vibe-list --installed"',
+            "```",
+            "",
+            "**Available quick commands:**",
+            "- `/vibe-route <query>` — Force-trigger skill routing",
+            "- `/vibe-install <pack>` — Install a skill pack",
+            "- `/vibe-analyze [--deep]` — Analyze the current project",
+            "- `/vibe-evaluate [--skill <id>]` — Evaluate skill quality",
+            "- `/vibe-orchestrate <query>` — Multi-skill orchestration",
+            "- `/vibe-list [--installed|--available]` — List skills",
+            "- `/vibe-help [command]` — Show slash command help",
+            "",
+            "",
             "### Example",
             "```bash",
             '# Step 1: Get recommendation\nvibe route "帮我调试这个 bug"\n# Output: Matched skill: systematic-debugging (95% confidence)',
@@ -410,6 +381,43 @@ class OpenCodeAdapter(PlatformAdapter):
             "- **Layer 4**: TF-IDF semantic matching (cosine similarity)",
             "- **Layer 5**: Embedding-based matching (vector similarity)",
             "- **Layer 6**: Fuzzy matching (Levenshtein distance for typos)",
+            "",
+            "### Conversation Context (Multi-turn Awareness)",
+            "",
+            "To enable context-aware routing across multiple turns, use a stable conversation ID:",
+            '```bash',
+            '# Generate a stable conversation ID for this session (cross-platform)',
+            'export CONVERSATION_ID="opencode-$(python3 -c "import os, hashlib; print(hashlib.sha256(os.getcwd().encode()).hexdigest()[:16])")"',
+            '',
+            '# Pass it on every vibe route call',
+            'vibe route --conversation "$CONVERSATION_ID" "<user_request>"',
+            '```',
+            "",
+            "This enables:",
+            "- **Session stickiness**: consecutive related queries keep the same skill",
+            "- **Habit learning**: repeated query patterns get preferred skills boosted",
+            "- **Follow-up detection**: phrases like 'continue', 'try again', 'still broken' automatically link to previous queries",
+            "",
+            "",
+            "## Auto-Routing Setup (Recommended)",
+            "",
+            "OpenCode does not support automatic shell hooks like Claude Code.",
+            "To get automatic conversation tracking and simplified routing,",
+            "source the VibeSOP environment script before starting OpenCode:",
+            "",
+            '```bash',
+            'source ~/.config/opencode/vibesop-env.sh',
+            '# Then launch OpenCode normally',
+            'opencode',
+            '```',
+            "",
+            "This script does the following:",
+            "- Generates a stable `CONVERSATION_ID` for multi-turn context",
+            "- Wraps the `vibe` command so `--conversation` is passed automatically",
+            "- Ensures session stickiness and habit learning work correctly",
+            "",
+            "**Without this setup**, you must manually pass `--conversation` on every",
+            "`vibe route` call to enable context-aware routing.",
             "",
             "## Configuration",
             "",
@@ -451,6 +459,107 @@ class OpenCodeAdapter(PlatformAdapter):
                 "*Generated by VibeSOP*",
             ]
         )
+
+        return "\n".join(lines)
+
+    def _generate_agents_md(self, manifest: Manifest) -> str:
+        """Generate AGENTS.md for OpenCode AI instructions.
+
+        AGENTS.md is loaded by OpenCode as project-level system prompt context.
+        It contains VibeSOP routing rules and quick command descriptions.
+
+        Args:
+            manifest: Configuration manifest
+
+        Returns:
+            AGENTS.md content
+        """
+        lines = [
+            "# VibeSOP Configuration",
+            "",
+            f"> **Version**: {manifest.metadata.version}",
+            f"> **Generated**: {manifest.metadata.created_at.strftime('%Y-%m-%d %H:%M:%S')}",
+            "",
+            "## CRITICAL AGENT INSTRUCTION",
+            "",
+            "**Do NOT guess or hallucinate rules.** When you need information from any category below, you **MUST** use the `read` tool to fetch the file contents before proceeding.",
+            "",
+            "## AI-Powered Skill Routing",
+            "",
+            "**MANDATORY: ALWAYS call `vibe route` before starting ANY non-trivial task**",
+            "This is NOT optional — routing ensures the correct skill is loaded for the task.",
+            "",
+            "### Workflow",
+            "",
+            "**Step 1**: Call routing to get recommendations",
+            '```bash',
+            'vibe route "<user_request>"',
+            '```',
+            "",
+            "**Step 2**: Read the recommended skill file",
+            "```markdown",
+            "read skills/<matched-skill>/SKILL.md",
+            "```",
+            "",
+            "**Step 3**: Execute according to the skill's steps",
+            "",
+            "**Step 4**: Run verification after completion",
+            "",
+            "### 快捷命令 (Quick Commands)",
+            "",
+            "When the user types a `/vibe-*` command, execute it directly with `vibe route --slash`:",
+            "```bash",
+            'vibe route --slash "/vibe-help"',
+            'vibe route --slash "/vibe-list"',
+            'vibe route --slash "/vibe-analyze --deep"',
+            'vibe route --slash "/vibe-install gstack"',
+            "```",
+            "",
+            "Available quick commands:",
+            "- `/vibe-help` — Show all available commands",
+            "- `/vibe-list` — List installed skills and available packs",
+            "- `/vibe-route <query>` — Force trigger routing with transparency",
+            "- `/vibe-install <pack>` — Install a skill pack",
+            "- `/vibe-analyze [--deep]` — Analyze project architecture",
+            "- `/vibe-evaluate [--skill <id>]` — Evaluate skill quality",
+            "- `/vibe-orchestrate <query>` — Multi-skill orchestration",
+            "",
+            "### Conversation Context",
+            "",
+            "For multi-turn awareness, use a stable conversation ID:",
+            "```bash",
+            'export CONVERSATION_ID="opencode-$(python3 -c "import os, hashlib; print(hashlib.sha256(os.getcwd().encode()).hexdigest()[:16])")"',
+            'vibe route --conversation "$CONVERSATION_ID" "<user_request>"',
+            "```",
+            "",
+            "## Auto-Routing Setup",
+            "",
+            "Source the VibeSOP environment script before starting OpenCode:",
+            "```bash",
+            "source ~/.config/opencode/vibesop-env.sh",
+            "opencode",
+            "```",
+            "",
+        ]
+
+        if manifest.skills:
+            lines.extend([
+                "## Skills",
+                "",
+            ])
+            for skill in manifest.skills:
+                lines.extend([
+                    f"### {skill.id}",
+                    f"- **Name**: {skill.name}",
+                    f"- **Description**: {skill.description}",
+                    f"- **Trigger**: {skill.trigger_when}",
+                    "",
+                ])
+
+        lines.extend([
+            "---",
+            f"*Generated by VibeSOP v{manifest.metadata.version}*",
+        ])
 
         return "\n".join(lines)
 
@@ -567,3 +676,88 @@ class OpenCodeAdapter(PlatformAdapter):
             return "openai"
 
         return "anthropic"
+
+
+    def _render_route_hook(
+        self,
+        output_dir: Path,
+        result: RenderResult,
+    ) -> None:
+        """Render the vibesop-route.sh hook script using the shared template.
+
+        Delegates to ``render_route_hook()`` in ``_shared.py`` so that
+        all platform adapters share the same hook script structure.
+
+        Args:
+            output_dir: Output directory (hooks/ will be created here)
+            result: RenderResult to track files
+        """
+        try:
+            from vibesop.adapters._shared import render_route_hook as _shared_route_hook
+
+            hook_content = _shared_route_hook(
+                platform="opencode",
+                platform_name="OpenCode",
+                purpose="Quick command handling and auto-routing for OpenCode",
+                enable_explicit_overrides=False,
+                enable_orchestration=False,
+                include_additional_context=False,
+                no_match_message=False,
+            )
+            hook_path = output_dir / "hooks" / "vibesop-route.sh"
+            hook_path.parent.mkdir(parents=True, exist_ok=True)
+            self.write_file_atomic(hook_path, hook_content, validate_security=False)
+            hook_path.chmod(0o755)
+            result.add_file(hook_path)
+        except Exception as e:
+            result.add_warning(f"Failed to write vibesop-route.sh for OpenCode: {e}")
+
+    def _render_env_script(
+        self,
+        output_dir: Path,
+        result: RenderResult,
+    ) -> None:
+        """Render the vibesop-env.sh environment setup script for OpenCode.
+
+        OpenCode does not support traditional shell hooks. This script
+        provides the next-best thing: it sets up a stable CONVERSATION_ID
+        and wraps the `vibe` command so `--conversation` is always passed.
+
+        Users should source this file before starting OpenCode:
+            source ~/.config/opencode/vibesop-env.sh
+
+        Args:
+            output_dir: Output directory
+            result: RenderResult to track files
+        """
+        script_content = '''#!/bin/bash
+# VibeSOP Environment Setup for OpenCode
+# Generated by VibeSOP v4.3.0
+#
+# Usage: source ~/.config/opencode/vibesop-env.sh
+# Then launch OpenCode normally: opencode
+
+# Generate a stable conversation ID for this project session
+# Uses cross-platform Python fallback (works on macOS and Linux)
+if command -v python3 &> /dev/null; then
+    export CONVERSATION_ID="opencode-$(python3 -c "import os, hashlib; print(hashlib.sha256(os.getcwd().encode()).hexdigest()[:16])")"
+fi
+
+# Wrap the vibe command to automatically pass --conversation
+vibe() {
+    if [ -n "$CONVERSATION_ID" ]; then
+        command vibe --conversation "$CONVERSATION_ID" "$@"
+    else
+        command vibe "$@"
+    fi
+}
+
+export -f vibe 2>/dev/null || true
+'''
+        try:
+            script_path = output_dir / "vibesop-env.sh"
+            self.write_file_atomic(script_path, script_content, validate_security=False)
+            script_path.chmod(0o755)
+            result.add_file(script_path)
+        except Exception as e:
+            result.add_warning(f"Failed to write vibesop-env.sh for OpenCode: {e}")

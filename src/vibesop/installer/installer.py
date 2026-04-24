@@ -33,7 +33,7 @@ class VibeSOPInstaller:
                 "description": "Kimi Code CLI",
             },
             "opencode": {
-                "config_dir": Path.home() / ".opencode",
+                "config_dir": Path.home() / ".config" / "opencode",
                 "description": "OpenCode CLI",
             },
         }

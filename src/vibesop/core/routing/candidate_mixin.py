@@ -61,10 +61,11 @@ class RouterCandidateMixin:
             if not tags:
                 tags = _extract_name_keywords(metadata.name)
 
-            # Load skill config for enablement/scope metadata
+            # Load skill config for enablement/scope/lifecycle metadata
             skill_config = SkillConfigManager.get_skill_config(_skill_id)
             enabled = skill_config.enabled if skill_config else True
             scope = skill_config.scope if skill_config else "project"
+            lifecycle = skill_config.lifecycle if skill_config else "active"
 
             candidates.append(
                 {
@@ -79,6 +80,7 @@ class RouterCandidateMixin:
                     "priority": "P0" if metadata.id in p0_skills else "P2",
                     "enabled": enabled,
                     "scope": scope,
+                    "lifecycle": lifecycle,
                     "source_file": str(definition.source_file) if definition.source_file else None,
                 }
             )

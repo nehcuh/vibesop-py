@@ -200,18 +200,58 @@ class TestConversationContext:
         assert is_follow is True
         assert ftype == "pronoun_reference"
 
+    def test_follow_up_pronoun_relaxed_length(self, tmp_path: Path) -> None:
+        """Pronoun detection now works for queries up to 15 words."""
+        ctx = ConversationContext(storage_dir=tmp_path)
+        ctx.add_turn("review code", skill_id="review")
+
+        is_follow, ftype = ctx.is_follow_up("can you do it for me please")
+        assert is_follow is True
+        assert ftype == "pronoun_reference"
+
+    def test_follow_up_semantic_similarity(self, tmp_path: Path) -> None:
+        """Topically similar queries are detected as semantic continuation."""
+        ctx = ConversationContext(storage_dir=tmp_path)
+        ctx.add_turn("debug database connection error", skill_id="debug")
+
+        is_follow, ftype = ctx.is_follow_up("database connection keeps failing")
+        assert is_follow is True
+        assert ftype == "semantic_continuation"
+
+    def test_not_follow_up_semantically_different(self, tmp_path: Path) -> None:
+        """Unrelated queries are not follow-ups even with history."""
+        ctx = ConversationContext(storage_dir=tmp_path)
+        ctx.add_turn("debug database connection error", skill_id="debug")
+
+        is_follow, ftype = ctx.is_follow_up("deploy to production")
+        assert is_follow is False
+        assert ftype is None
+
+    def test_build_contextual_query_semantic(self, tmp_path: Path) -> None:
+        """Semantic follow-ups inject only missing context terms."""
+        ctx = ConversationContext(storage_dir=tmp_path)
+        ctx.add_turn("debug database connection", skill_id="debug")
+
+        enriched = ctx.build_contextual_query("database connection keeps failing")
+        assert enriched is not None
+        # "database" and "connection" already present in current query;
+        # only "debug" is injected from history.
+        assert enriched == "database connection keeps failing debug"
+
     # ------------------------------------------------------------------
     # Contextual query building
     # ------------------------------------------------------------------
 
     def test_build_contextual_query_continuation(self, tmp_path: Path) -> None:
+        """Continuation follow-ups inject only missing context terms."""
         ctx = ConversationContext(storage_dir=tmp_path)
         ctx.add_turn("review my code", skill_id="review")
 
         enriched = ctx.build_contextual_query("continue")
         assert enriched is not None
-        assert "review my code" in enriched
-        assert "continue" in enriched
+        # "continue" is the current query; missing terms from history are
+        # "code", "my", "review" (sorted alphabetically).
+        assert enriched == "continue code my review"
 
     def test_build_contextual_query_not_follow_up(self, tmp_path: Path) -> None:
         ctx = ConversationContext(storage_dir=tmp_path)

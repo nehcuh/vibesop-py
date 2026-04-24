@@ -46,9 +46,10 @@ class TestKimiCliAdapter:
         result = adapter.render_config(manifest, tmp_path)
 
         assert result.success
-        assert result.file_count == 2  # config.toml + AGENTS.md
+        assert result.file_count == 3  # config.toml + AGENTS.md + hook
         assert (tmp_path / "config.toml").exists()
         assert (tmp_path / "AGENTS.md").exists()
+        assert (tmp_path / "hooks" / "vibesop-route.sh").exists()
 
     def test_render_config_with_skills(self, tmp_path: Path) -> None:
         """Test rendering with skills."""
@@ -70,11 +71,12 @@ class TestKimiCliAdapter:
         result = adapter.render_config(manifest, tmp_path)
 
         assert result.success
-        assert result.file_count == 4  # config.toml + README.md + skill + AGENTS.md
+        assert result.file_count == 5  # config.toml + README.md + skill + AGENTS.md + hook
         assert (tmp_path / "config.toml").exists()
         assert (tmp_path / "README.md").exists()
         assert (tmp_path / "AGENTS.md").exists()
         assert (tmp_path / "skills" / "test-skill" / "SKILL.md").exists()
+        assert (tmp_path / "hooks" / "vibesop-route.sh").exists()
 
     def test_config_toml_content(self, tmp_path: Path) -> None:
         """Test config.toml content."""
@@ -231,9 +233,10 @@ class TestKimiCliAdapter:
         result = adapter.render_config_only(manifest, tmp_path)
 
         assert result.success
-        assert result.file_count == 2  # config.toml + README.md
+        assert result.file_count == 3  # config.toml + README.md + hook
         assert (tmp_path / "config.toml").exists()
         assert (tmp_path / "README.md").exists()
+        assert (tmp_path / "hooks" / "vibesop-route.sh").exists()
         assert not (tmp_path / "skills").exists()
 
     def test_render_config_only_without_skills(self, tmp_path: Path) -> None:
@@ -245,8 +248,9 @@ class TestKimiCliAdapter:
         result = adapter.render_config_only(manifest, tmp_path)
 
         assert result.success
-        assert result.file_count == 1  # config.toml only
+        assert result.file_count == 2  # config.toml + hook
         assert not (tmp_path / "README.md").exists()
+        assert (tmp_path / "hooks" / "vibesop-route.sh").exists()
 
     def test_install_hooks_default(self, tmp_path: Path) -> None:
         """Test default hook installation."""
@@ -255,6 +259,40 @@ class TestKimiCliAdapter:
         result = adapter.install_hooks(tmp_path)
 
         assert result == {}
+
+    def test_hook_script_content(self, tmp_path: Path) -> None:
+        """Generated hook script contains critical cross-platform logic."""
+        adapter = KimiCliAdapter()
+        metadata = ManifestMetadata(platform="kimi-cli")
+        manifest = Manifest(metadata=metadata)
+
+        result = adapter.render_config(manifest, tmp_path)
+        assert result.success
+
+        hook_path = tmp_path / "hooks" / "vibesop-route.sh"
+        assert hook_path.exists()
+        assert hook_path.stat().st_mode & 0o111  # executable
+
+        content = hook_path.read_text()
+        assert "shasum -a 256" in content, "macOS hash fallback missing"
+        assert "python3 -c" in content, "Python hash fallback missing"
+        assert "^/vibe-" in content, "Slash command detection missing"
+        assert "vibe route" in content, "vibe route call missing"
+
+    def test_config_toml_has_hooks_section(self, tmp_path: Path) -> None:
+        """config.toml includes [[hooks]] configuration for auto-routing."""
+        adapter = KimiCliAdapter()
+        metadata = ManifestMetadata(platform="kimi-cli")
+        manifest = Manifest(metadata=metadata)
+
+        result = adapter.render_config(manifest, tmp_path)
+        assert result.success
+
+        config_toml = (tmp_path / "config.toml").read_text()
+        assert "[[hooks]]" in config_toml
+        assert 'name = "vibesop-route"' in config_toml
+        assert 'event = "UserPromptSubmit"' in config_toml
+        assert 'command = "bash ~/.kimi/hooks/vibesop-route.sh"' in config_toml
         # Kimi Code CLI doesn't use file-based hooks
 
     def test_toml_is_valid(self, tmp_path: Path) -> None:
@@ -302,7 +340,7 @@ class TestKimiCliAdapterEdgeCases:
 
         result = adapter.render_config(manifest, tmp_path)
         assert result.success
-        assert result.file_count == 2  # config.toml + AGENTS.md, no README
+        assert result.file_count == 3  # config.toml + AGENTS.md + hook, no README
 
     def test_render_with_full_metadata(self, tmp_path: Path) -> None:
         """Test rendering with full metadata."""

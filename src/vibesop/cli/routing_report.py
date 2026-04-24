@@ -16,7 +16,11 @@ from rich.tree import Tree
 from vibesop.core.models import RoutingLayer, RoutingResult
 
 
-def render_routing_report(result: RoutingResult, console: Console | None = None) -> None:
+def render_routing_report(
+    result: RoutingResult,
+    console: Console | None = None,
+    context: Any | None = None,
+) -> None:
     """Render a full routing decision report to the console."""
     if console is None:
         console = Console()
@@ -47,6 +51,10 @@ def render_routing_report(result: RoutingResult, console: Console | None = None)
             box=box.ROUNDED,
         )
     )
+
+    # Context-awareness panel
+    if context is not None:
+        _render_context_panel(context, console)
 
     if not result.layer_details:
         console.print("[dim]No layer details available.[/dim]")
@@ -117,6 +125,44 @@ def render_routing_report(result: RoutingResult, console: Console | None = None)
             )
         console.print()
         console.print(alt_table)
+
+
+def _render_context_panel(context: Any, console: Console) -> None:
+    """Render context-awareness information."""
+    lines: list[str] = []
+
+    if getattr(context, "conversation_id", None):
+        lines.append(f"[dim]Conversation:[/dim] {context.conversation_id}")
+
+    if getattr(context, "current_skill", None):
+        lines.append(f"[dim]Current skill:[/dim] {context.current_skill}")
+
+    if getattr(context, "recent_queries", None):
+        recent = context.recent_queries
+        if recent:
+            lines.append(f"[dim]Recent queries:[/dim] {len(recent)} turn(s)")
+            for q in recent[-2:]:
+                lines.append(f"  [dim]•[/dim] {q[:50]}{'...' if len(q) > 50 else ''}")
+
+    if getattr(context, "habit_boosts", None):
+        boosts = context.habit_boosts
+        if boosts:
+            lines.append("[dim]Habit boosts:[/dim]")
+            for skill_id, boost in boosts.items():
+                lines.append(f"  [dim]•[/dim] {skill_id}: +{boost:.0%}")
+
+    if getattr(context, "project_type", None):
+        lines.append(f"[dim]Project type:[/dim] {context.project_type}")
+
+    if lines:
+        console.print(
+            Panel(
+                "\n".join(lines),
+                title="[bold blue]🧠 Context Awareness[/bold blue]",
+                border_style="blue",
+                box=box.ROUNDED,
+            )
+        )
 
 
 def render_compact_report(result: RoutingResult, console: Console | None = None) -> None:

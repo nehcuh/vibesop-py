@@ -1,7 +1,10 @@
 """Unit tests for routing layers (v3.0.0)."""
 
 from pathlib import Path
+from unittest.mock import patch
 
+from vibesop.core.matching import MatchResult, MatcherType
+from vibesop.core.models import RoutingLayer
 from vibesop.core.routing import RoutingConfig, UnifiedRouter
 
 
@@ -91,3 +94,67 @@ class TestLayer4Fuzzy:
 
         # Should still return a result
         assert result is not None
+
+
+class TestEarlyLayerOptimization:
+    """Test that EXPLICIT/SCENARIO/AI_TRIAGE matches also go through OptimizationService.
+
+    Before the fix, only MatcherPipeline (layers 3-6) applied optimizations
+    such as session stickiness, habit boost, and quality boost. Early-layer
+    matches bypassed OptimizationService entirely, causing inconsistent
+    multi-turn behavior.
+    """
+
+    def test_explicit_match_calls_optimizations(self) -> None:
+        """EXPLICIT layer match should trigger _apply_optimizations."""
+        router = UnifiedRouter(project_root=Path.cwd())
+        candidates = [
+            {"id": "test-skill", "description": "Test skill", "enabled": True}
+        ]
+
+        with patch.object(router, "_apply_optimizations") as mock_opt:
+            mock_opt.return_value = (
+                MatchResult(
+                    skill_id="test-skill",
+                    confidence=1.0,
+                    matcher_type=MatcherType.CUSTOM,
+                ),
+                [],
+            )
+
+            result = router.route("!test-skill hello", candidates=candidates)
+
+            assert mock_opt.called, (
+                "EXPLICIT layer match should call _apply_optimizations"
+            )
+            assert result.primary is not None
+            assert result.primary.skill_id == "test-skill"
+            assert result.primary.layer == RoutingLayer.EXPLICIT
+
+    def test_matcher_layer_skips_duplicate_optimizations(self) -> None:
+        """Matcher pipeline layers should NOT call _apply_optimizations again.
+
+        MatcherPipeline already applies optimizations internally; calling
+        them again in route() would double-count boosts.
+        """
+        router = UnifiedRouter(project_root=Path.cwd())
+        config = RoutingConfig(min_confidence=0.0)
+        router = UnifiedRouter(project_root=Path.cwd(), config=config)
+
+        with patch.object(router, "_apply_optimizations") as mock_opt:
+            # If matcher pipeline hits, _apply_optimizations should NOT be
+            # called from route() because MatcherPipeline already did it.
+            result = router.route("debug database connection")
+
+            # The mock on route()'s _apply_optimizations should NOT be called
+            # for matcher-pipeline layers; if it IS called, that means the
+            # duplicate-optimization guard failed.
+            if result.primary and result.primary.layer in {
+                RoutingLayer.KEYWORD,
+                RoutingLayer.TFIDF,
+                RoutingLayer.EMBEDDING,
+                RoutingLayer.LEVENSHTEIN,
+            }:
+                assert not mock_opt.called, (
+                    "Matcher pipeline layers must not trigger duplicate optimizations"
+                )

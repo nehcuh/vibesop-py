@@ -24,7 +24,7 @@ class TestOpenCodeAdapter:
     def test_config_dir(self) -> None:
         """Test config directory."""
         adapter = OpenCodeAdapter()
-        assert adapter.config_dir == Path("~/.opencode").expanduser()
+        assert adapter.config_dir == Path("~/.config/opencode").expanduser()
 
     def test_get_settings_schema(self) -> None:
         """Test settings schema generation."""
@@ -46,9 +46,11 @@ class TestOpenCodeAdapter:
         result = adapter.render_config(manifest, tmp_path)
 
         assert result.success
-        assert result.file_count == 2  # config.yaml + llm-config.json
+        assert result.file_count == 5  # config.yaml + llm-config.json + AGENTS.md + vibesop-env.sh + hooks/vibesop-route.sh
         assert (tmp_path / "config.yaml").exists()
         assert (tmp_path / "llm-config.json").exists()
+        assert (tmp_path / "vibesop-env.sh").exists()
+        assert (tmp_path / "hooks" / "vibesop-route.sh").exists()
 
     def test_render_config_with_skills(self, tmp_path: Path) -> None:
         """Test rendering with skills."""
@@ -70,10 +72,11 @@ class TestOpenCodeAdapter:
         result = adapter.render_config(manifest, tmp_path)
 
         assert result.success
-        assert result.file_count == 4  # config.yaml + README.md + llm-config.json + skill
+        assert result.file_count == 7  # config.yaml + README.md + llm-config.json + AGENTS.md + vibesop-env.sh + hooks/vibesop-route.sh + skill
         assert (tmp_path / "config.yaml").exists()
         assert (tmp_path / "README.md").exists()
         assert (tmp_path / "llm-config.json").exists()
+        assert (tmp_path / "vibesop-env.sh").exists()
         assert (tmp_path / "skills" / "test-skill" / "SKILL.md").exists()
 
     def test_config_yaml_content(self, tmp_path: Path) -> None:
@@ -222,9 +225,10 @@ class TestOpenCodeAdapter:
         result = adapter.render_config_only(manifest, tmp_path)
 
         assert result.success
-        assert result.file_count == 3  # config.yaml + README.md + llm-config.json
+        assert result.file_count == 6  # config.yaml + README.md + llm-config.json + AGENTS.md + vibesop-env.sh + hooks/vibesop-route.sh
         assert (tmp_path / "config.yaml").exists()
         assert (tmp_path / "README.md").exists()
+        assert (tmp_path / "vibesop-env.sh").exists()
         assert not (tmp_path / "skills").exists()
 
     def test_render_config_only_without_skills(self, tmp_path: Path) -> None:
@@ -236,7 +240,8 @@ class TestOpenCodeAdapter:
         result = adapter.render_config_only(manifest, tmp_path)
 
         assert result.success
-        assert result.file_count == 2  # config.yaml + llm-config.json
+        assert result.file_count == 5  # config.yaml + llm-config.json + AGENTS.md + vibesop-env.sh + hooks/vibesop-route.sh
+        assert (tmp_path / "vibesop-env.sh").exists()
         assert not (tmp_path / "README.md").exists()
 
     def test_install_hooks_default(self, tmp_path: Path) -> None:
@@ -246,6 +251,25 @@ class TestOpenCodeAdapter:
         result = adapter.install_hooks(tmp_path)
 
         assert result == {}
+
+    def test_env_script_content(self, tmp_path: Path) -> None:
+        """Generated vibesop-env.sh contains conversation ID setup."""
+        adapter = OpenCodeAdapter()
+        metadata = ManifestMetadata(platform="opencode")
+        manifest = Manifest(metadata=metadata)
+
+        result = adapter.render_config(manifest, tmp_path)
+        assert result.success
+
+        script_path = tmp_path / "vibesop-env.sh"
+        assert script_path.exists()
+        assert script_path.stat().st_mode & 0o111  # executable
+
+        content = script_path.read_text()
+        assert "CONVERSATION_ID" in content
+        assert "python3 -c" in content
+        assert "hashlib" in content
+        assert "command vibe" in content
         # OpenCode doesn't support hooks
 
 
@@ -263,7 +287,7 @@ class TestOpenCodeAdapterEdgeCases:
 
         result = adapter.render_config(manifest, tmp_path)
         assert result.success
-        assert result.file_count == 2  # config.yaml + llm-config.json, no README
+        assert result.file_count == 5  # config.yaml + llm-config.json + AGENTS.md + vibesop-env.sh + hooks/vibesop-route.sh, no README
 
     def test_render_with_full_metadata(self, tmp_path: Path) -> None:
         """Test rendering with full metadata."""

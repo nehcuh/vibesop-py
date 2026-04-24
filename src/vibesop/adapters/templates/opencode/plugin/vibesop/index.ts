@@ -10,7 +10,42 @@
 //   2. Install dependencies: npm install @opencode-ai/plugin
 //   3. Enable in OpenCode settings
 
+import * as fs from "fs";
+import * as path from "path";
+import { execSync } from "child_process";
 import type { Plugin } from "@opencode-ai/plugin";
+
+const OPCODE_DIR = path.join(require("os").homedir(), ".opencode");
+const STATE_FILE = path.join(OPCODE_DIR, ".vibesop-state.json");
+
+interface VibeSOPState {
+  activeSkill: Record<string, string>;
+  activePlan: Record<string, string>;
+  toolHistory: Record<string, Array<{ tool: string; args: any; timestamp: number }>>;
+}
+
+function readState(): VibeSOPState {
+  try {
+    if (fs.existsSync(STATE_FILE)) {
+      return JSON.parse(fs.readFileSync(STATE_FILE, "utf-8"));
+    }
+  } catch {}
+  return { activeSkill: {}, activePlan: {}, toolHistory: {} };
+}
+
+function writeState(state: VibeSOPState): void {
+  try {
+    fs.mkdirSync(path.dirname(STATE_FILE), { recursive: true });
+    fs.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2), "utf-8");
+  } catch {}
+}
+
+interface RouteResult {
+  mode?: string;
+  primary?: { skill_id?: string; confidence?: number };
+  execution_plan?: { steps?: Array<{ step_number: number; intent: string; skill_id: string; input_query?: string; dependencies?: string[] }>; original_query?: string };
+  message?: string;
+}
 
 /**
  * VibeSOP OpenCode Plugin
@@ -28,9 +63,11 @@ export default {
     const activeSkill = await getActiveSkill(sessionId);
     if (activeSkill) {
       const skillContent = await loadSkillContent(activeSkill);
-      output.system.push(
-        `<vibesop-skill id="${activeSkill}">\n${skillContent}\n</vibesop-skill>`
-      );
+      if (skillContent) {
+        output.system.push(
+          `<vibesop-skill id="${activeSkill}">\n${skillContent}\n</vibesop-skill>`
+        );
+      }
     }
 
     // Check if there's an active execution plan
@@ -91,37 +128,64 @@ export default {
 // ── Helper Functions ───────────────────────────────────────────────
 
 async function getActiveSkill(sessionId: string): Promise<string | null> {
-  // TODO: Implement session-level skill storage
-  // Could use a simple in-memory map or localStorage
-  return null;
+  const state = readState();
+  return state.activeSkill[sessionId] || null;
 }
 
 async function setActiveSkill(sessionId: string, skillId: string): Promise<void> {
-  // TODO: Implement session-level skill storage
+  const state = readState();
+  state.activeSkill[sessionId] = skillId;
+  writeState(state);
 }
 
-async function loadSkillContent(skillId: string): Promise<string> {
-  // TODO: Load from ~/.opencode/skills/<skillId>/SKILL.md
-  return `[Skill content for ${skillId}]`;
+async function loadSkillContent(skillId: string): Promise<string | null> {
+  const skillPaths = [
+    path.join(OPCODE_DIR, "skills", skillId, "SKILL.md"),
+    path.join(OPCODE_DIR, "skills", skillId.replace("/", "-"), "SKILL.md"),
+  ];
+  for (const p of skillPaths) {
+    try {
+      if (fs.existsSync(p)) {
+        return fs.readFileSync(p, "utf-8").slice(0, 3000);
+      }
+    } catch {}
+  }
+  return null;
 }
 
 async function getActivePlan(sessionId: string): Promise<string | null> {
-  // TODO: Implement session-level plan storage
-  return null;
+  const state = readState();
+  return state.activePlan[sessionId] || null;
 }
 
 async function setActivePlan(sessionId: string, plan: string): Promise<void> {
-  // TODO: Implement session-level plan storage
+  const state = readState();
+  state.activePlan[sessionId] = plan;
+  writeState(state);
 }
 
-async function routeWithVibeSOP(query: string, sessionId: string): Promise<any> {
-  // TODO: Call VibeSOP CLI or API
-  // Example: const result = await execa("vibe", ["route", "--json", query]);
-  return null;
+async function routeWithVibeSOP(query: string, sessionId: string): Promise<RouteResult | null> {
+  try {
+    const convArg = sessionId ? `--conversation "${sessionId.slice(0, 16)}"` : "";
+    const cmd = `vibe route ${convArg} --json "${query.replace(/"/g, '\\"')}" 2>/dev/null`;
+    const output = execSync(cmd, { timeout: 5000, encoding: "utf-8" });
+    return JSON.parse(output) as RouteResult;
+  } catch {
+    return null;
+  }
 }
 
 async function recordToolUse(sessionId: string, tool: string, args: any): Promise<void> {
-  // TODO: Record tool use for session context
+  const state = readState();
+  if (!state.toolHistory[sessionId]) {
+    state.toolHistory[sessionId] = [];
+  }
+  state.toolHistory[sessionId].push({ tool, args, timestamp: Date.now() });
+  // Keep last 100 entries per session
+  if (state.toolHistory[sessionId].length > 100) {
+    state.toolHistory[sessionId] = state.toolHistory[sessionId].slice(-100);
+  }
+  writeState(state);
 }
 
 function buildExecutionPlanPrompt(plan: any): string {

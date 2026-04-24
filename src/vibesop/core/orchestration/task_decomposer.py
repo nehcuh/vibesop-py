@@ -111,8 +111,13 @@ class TaskDecomposer:
 
     def _fallback_decomposition(self, query: str) -> list[SubTask]:
         """Simple heuristic decomposition when LLM is unavailable."""
-        # Split on common conjunctions
-        parts = re.split(r'[,;]|然后|之后|接着|and then|after that', query)
+        # Split on common conjunctions (Chinese + English)
+        parts = re.split(
+            r'[,;]|'
+            r'然后|之后|接着|并|并且|同时|另外|还有|以及|'
+            r'and then|after that|and also|plus|meanwhile',
+            query,
+        )
         parts = [p.strip() for p in parts if len(p.strip()) >= self.MIN_QUERY_LENGTH]
 
         if len(parts) <= 1:
