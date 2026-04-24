@@ -33,6 +33,22 @@ _KEYWORD_PATTERN = re.compile(
     re.IGNORECASE,
 )
 
+# Intent domain keywords — each tuple represents a distinct activity domain
+_INTENT_DOMAINS: list[tuple[str, list[str]]] = [
+    ("analyze", ["架构", "结构", "architecture", "分析", "analyze", "理解", "了解", "调研"]),
+    ("review", ["review", "评审", "审查", "检查", "代码质量", "audit"]),
+    ("debug", ["debug", "调试", "错误", "error", "bug", "修复", "fix", "排查"]),
+    ("optimize", ["优化", "optimize", "性能", "performance", "改进", "提升"]),
+    ("design", ["设计", "design", "规划", "plan", "方案", "思路", "架构"]),
+    ("implement", ["实现", "implement", "开发", "编写", "build", "写", "创建"]),
+    ("test", ["test", "测试", "coverage", "覆盖率", "单元", "集成测试"]),
+    ("deploy", ["deploy", "部署", "发布", "上线", "ship", "上线部署"]),
+    ("security", ["安全", "security", "漏洞", "vulnerability", "审计"]),
+    ("refactor", ["重构", "refactor", "重写", "整理", "调整"]),
+    ("document", ["文档", "document", "README", "说明", "记录", "撰写"]),
+    ("brainstorm", ["畅想", "brainstorm", "思路", "idea", "创意", "探索"]),
+]
+
 
 class MultiIntentDetector:
     """Detects whether a query contains multiple distinct intents.
@@ -87,6 +103,11 @@ class MultiIntentDetector:
         if len(query) >= self.min_query_length and self._has_conjunctions(query):
             return True
 
+        # Condition 1b: Multiple intent domains detected (even without conjunctions)
+        intent_domains = self._count_intent_domains(query)
+        if intent_domains >= 2 and len(query) >= self.min_query_length:
+            return True
+
         if single_result.primary is None:
             # No match at all — might be a complex multi-part request
             return len(query) >= self.min_query_length * 2
@@ -114,3 +135,12 @@ class MultiIntentDetector:
     def _has_conjunctions(self, query: str) -> bool:
         """Check if query contains multi-intent conjunctions."""
         return bool(_KEYWORD_PATTERN.search(query))
+
+    def _count_intent_domains(self, query: str) -> int:
+        """Count how many distinct intent domains appear in the query."""
+        query_lower = query.lower()
+        domains_found = 0
+        for _domain, keywords in _INTENT_DOMAINS:
+            if any(kw in query_lower for kw in keywords):
+                domains_found += 1
+        return domains_found
