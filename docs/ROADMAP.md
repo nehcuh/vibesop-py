@@ -240,41 +240,101 @@ Complete the skill ecosystem with discovery, community, and self-improvement.
 
 ---
 
-## v5.0.0 — Plugin Ecosystem (2026-Q3)
+## v5.0.0 — SkillRuntime: Scope + Lifecycle (2026-Q2/Q3)
+
+> **ADR**: [docs/version_05.md](docs/version_05.md) (Plan: VibeSOP Skill Ecosystem Evolution, approved 2026-04-21)
 
 ### Goals
-Transform VibeSOP into a platform with a thriving plugin ecosystem.
+Introduce scope isolation, skill enable/disable, and lifecycle state management.
 
 ### Features
 
-- [ ] **Plugin System**
-  - Matcher plugins (custom routing logic)
-  - Adapter plugins (new AI platforms)
-  - Hook system (pre/post routing events)
-  - Plugin sandbox for security
+- [ ] **SkillRuntime Core**
+  - Scope system: project-level vs global skills
+  - Skill enable/disable toggle (`vibe skill enable/disable <id>`)
+  - SkillLifecycleState machine (DRAFT → ACTIVE → DEPRECATED → ARCHIVED)
+  - Scope-aware config resolution (project `.vibe/` overrides global `~/.vibe/`)
 
-- [ ] **Marketplace v2**
-  - Plugin registry alongside skill registry
-  - One-command plugin install
-  - Plugin versioning and updates
+- [ ] **Data Pre-burial for v5.1**
+  - SkillConfig gains `usage_stats` field (call count, success rate, last used)
+  - SkillConfig gains `version_history` field (semver tracking)
+  - SkillConfig gains `evaluation_context` extension slot
 
-- [ ] **Developer SDK**
-  - `vibesop-dev` CLI for plugin development
-  - Local testing harness
-  - Auto-generated documentation
-  - Plugin template generator
-
-- [ ] **Enterprise Features**
-  - Private skill registries
-  - Team skill sharing and governance
-  - Audit logging and compliance
-  - SSO integration
+- [ ] **CLI Commands**
+  - `vibe skill enable <id>` / `vibe skill disable <id>`
+  - `vibe skill scope <id> --project` / `vibe skill scope <id> --global`
+  - `vibe skill lifecycle <id> --set deprecated`
 
 ### Success Metrics
 
-- Plugin ecosystem: 50+ plugins
-- Marketplace adoption: 1000+ users
-- Enterprise customers: 5+
+- Skill scope isolation: 100% (project skills invisible outside project root)
+- Toggle latency: <50ms
+- Lifecycle states: 4 (draft/active/deprecated/archived)
+- Backward compatibility: v4.x users smooth migration via config
+
+---
+
+## v5.1.0 — SkillMarket + Feedback Loop (2026-Q3/Q4)
+
+### Goals
+Complete the skill ecosystem with discovery, community, and self-improvement.
+
+### Features
+
+- [ ] **SkillMarket MVP**
+  - `vibe market search <query>` — keyword + tag search
+  - `vibe market info <skill>` — ratings, downloads, compatibility
+  - `vibe market install` — one-click from discovered skills
+  - GitHub topic crawling (`topic:vibesop-skill`)
+
+- [ ] **Autoresearch Feedback Loop**
+  - Analyze routing success/failure patterns
+  - Suggest keyword additions for missed queries
+  - Skill quality regression detection
+  - Auto-deprecate skills below quality threshold
+
+- [ ] **Skill Evaluation**
+  - Rating and reviews system
+  - Usage statistics (downloads, active users)
+  - Compatibility matrix (platform × version)
+  - Author trust scores
+
+### Success Metrics
+
+- SkillMarket: 50+ discoverable skill packs
+- Feedback loop: automatic keyword additions for 80%+ missed queries
+- Evaluation coverage: 100% of installed skills
+- Deprecation accuracy: <5% false positives
+
+---
+
+## v5.2.0 — Intelligent Ecosystem (2026-Q4/2027-Q1)
+
+### Goals
+Proactive skill recommendations, transparent fallback, active discovery.
+
+### Features
+
+- [ ] **Smart Recommendations**
+  - Project-type-based recommendations ("Python project → suggest tdd, review")
+  - "Users who installed X also installed Y"
+  - Missing skill detection for current project
+
+- [ ] **Transparent Auto-Degradation**
+  - When no skill matches, show: "I found no matching skill. Falling back to raw LLM."
+  - Route result includes `layer: FALLBACK_LLM` for visibility
+  - Config: `fallback.always_ask true` to require user confirmation
+
+- [ ] **Active Discovery**
+  - Periodically scan for new skills matching project tech stack
+  - Proactive suggestion with explicit opt-in
+  - One-command install from suggestion
+
+### Success Metrics
+
+- Recommendation click-through: >30%
+- Fallback awareness: 100% of fallbacks transparent to user
+- Active discovery: <5% false positive suggestions
 
 ---
 
@@ -282,12 +342,12 @@ Transform VibeSOP into a platform with a thriving plugin ecosystem.
 
 ### Nice to Have
 
-- [ ] Web UI for skill management
-- [ ] IDE integrations (VS Code, JetBrains)
-- [ ] Mobile app for skill discovery
-- [ ] Voice command support
-- [ ] Real-time collaboration
-- [ ] Skill execution (not just routing)
+- [ ] Web UI for skill management → **Deferred: post-v5.2 evaluation**
+- [ ] IDE integrations (VS Code, JetBrains) → **Deferred: post-v5.2 evaluation**
+- [ ] Mobile app for skill discovery → **Deferred: post-v5.2 evaluation**
+- [ ] Voice command support → **Deferred: post-v5.2 evaluation**
+- [ ] Real-time collaboration → **Deferred: post-v5.2 evaluation**
+- [ ] Skill execution (not just routing) → **Deferred: post-v5.2 evaluation**
 
 ### Technical Debt
 
@@ -306,7 +366,9 @@ Transform VibeSOP into a platform with a thriving plugin ecosystem.
 | v4.1.0 | 2026-04 | ✅ AI Triage production |
 | v4.2.0 | 2026-04 | ✅ Skill health monitoring |
 | v4.3.0 | 2026-04-24 | ✅ Context-aware routing + Agent Runtime |
-| v5.0.0 | 2027-Q2 | ⏳ Plugin ecosystem |
+| v5.0.0 | 2026-Q2/Q3 | ⏳ SkillRuntime: Scope + Lifecycle |
+| v5.1.0 | 2026-Q3/Q4 | 📋 SkillMarket + Feedback Loop |
+| v5.2.0 | 2026-Q4/2027-Q1 | 📋 Intelligent Ecosystem |
 
 ---
 
@@ -331,4 +393,12 @@ See something missing? Want to accelerate a feature?
 
 ---
 
-*Last updated: 2026-04-24 (v5 Quality Sprint — Phase 1-3 complete)*
+### v4.3.1 (2026-04-24)
+- Roadmap revised: v5.x unified with version_05.md ADR (layered evolution plan)
+- v5.0.0 redefined as SkillRuntime (scope + lifecycle), not Plugin Ecosystem
+- Added v5.1.0 (SkillMarket + Feedback Loop) and v5.2.0 (Intelligent Ecosystem)
+- Pre-v6.0 ideas deferred to post-v5.2 evaluation
+
+---
+
+*Last updated: 2026-04-24 (v5.x Roadmap aligned with ADR)*
