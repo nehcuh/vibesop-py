@@ -7,7 +7,7 @@
 [![Python](https://img.shields.io/badge/Python-3.12+-blue.svg)](https://www.python.org/downloads/)
 [![Ruff](https://img.shields.io/badge/Ruff-Enabled-black.svg)](https://github.com/astral-sh/ruff)
 [![Coverage](https://img.shields.io/badge/Coverage-94%25-green.svg)]()
-[![Version](https://img.shields.io/badge/Version-4.2.0-green.svg)](https://github.com/nehcuh/vibesop-py)
+[![Version](https://img.shields.io/badge/Version-4.3.0-green.svg)](https://github.com/nehcuh/vibesop-py)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 ---
@@ -723,9 +723,12 @@ uv run pytest --cov=src/vibesop --cov-report=html
 - [x] v4.0.0: 核心路由引擎 Core routing engine with 7-layer pipeline
 - [x] v4.1.0: AI Triage 生产就绪 AI Triage production readiness
 - [x] v4.2.0: 技能健康监控 Skill health monitoring
-- [ ] v5.0.0: 插件系统 Plugin system for custom matchers
-- [ ] v6.0.0: 机器学习优化 Machine learning optimization
-- [ ] v7.0.0: 个性化路由 Personalized routing
+- [x] v4.3.0: 上下文感知路由 + Agent Runtime Context-aware routing + Agent Runtime
+- [ ] v5.0.0: 技能运行时 SkillRuntime — 作用域 + 生命周期 + 启禁用
+- [ ] v5.1.0: 技能市场 + 反馈闭环 SkillMarket + Feedback Loop
+- [ ] v5.2.0: 智能生态系统 Intelligent Ecosystem — 推荐 + 退化 + 发现
+
+详见: [docs/ROADMAP.md](docs/ROADMAP.md) | [version_05.md ADR](docs/version_05.md)
 
 ---
 
@@ -865,6 +868,6 @@ vibe skill add code-reviewer
 
 ---
 
-**版本 Version**: 4.2.0
-**更新时间 Last Updated**: 2026-04-18
+**版本 Version**: 4.3.0
+**更新时间 Last Updated**: 2026-04-24
 **状态 Status**: ✅ 生产就绪 Production Ready
