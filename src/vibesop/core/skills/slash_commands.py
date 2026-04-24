@@ -91,6 +91,52 @@ class SlashCommand:
     examples: list[str] = field(default_factory=list)
     requires_confirmation: bool = False
 
+    def validate_args(self, args: list[str]) -> tuple[bool, str]:
+        """Validate arguments against args_schema.
+
+        Args:
+            args: Parsed argument list
+
+        Returns:
+            Tuple of (is_valid, error_message)
+        """
+        if not self.args_schema:
+            return True, ""
+
+        # Check for unknown flags
+        known_flags = {arg for arg in self.args_schema if arg.startswith("--")}
+        for arg in args:
+            if arg.startswith("--") and arg not in known_flags:
+                return False, f"Unknown flag: {arg}. Available: {', '.join(sorted(known_flags))}"
+
+        # Check required positional arguments
+        positional_schemas = [s for s in self.args_schema if not s.startswith("--")]
+        positional_args = [a for a in args if not a.startswith("--")]
+
+        if positional_schemas and not positional_args:
+            return False, f"Missing required argument: <{positional_schemas[0]}>"
+
+        return True, ""
+
+    def generate_help(self) -> str:
+        """Generate help text for this command."""
+        lines = [f"Usage: {self.name}"]
+
+        if self.args_schema:
+            args_str = " ".join(self.args_schema)
+            lines[0] += f" {args_str}"
+
+        lines.append("")
+        lines.append(self.description)
+
+        if self.examples:
+            lines.append("")
+            lines.append("Examples:")
+            for example in self.examples:
+                lines.append(f"  {example}")
+
+        return "\n".join(lines)
+
 
 class SlashCommandRegistry:
     """Registry of all slash commands."""
@@ -232,6 +278,12 @@ class SlashCommandHandler:
                 False,
                 f"Unknown command: {cmd_name}\nAvailable: {', '.join(available)}",
             )
+
+        # Validate arguments against schema
+        is_valid, error_msg = command.validate_args(args)
+        if not is_valid:
+            help_text = command.generate_help()
+            return False, f"{error_msg}\n\n{help_text}"
 
         logger.info(f"Executing slash command: {cmd_name} with args: {args}")
         return command.handler(*args)
@@ -416,6 +468,13 @@ class SlashCommandHandler:
 
     def _handle_help(self, *args: str) -> tuple[bool, str]:
         """Handle /vibe-help command."""
+        # Check if user wants help for a specific command
+        if args and args[0].startswith("/vibe-"):
+            cmd = self._registry.get(args[0])
+            if cmd:
+                return True, cmd.generate_help()
+            return False, f"Unknown command: {args[0]}"
+
         msg = "VibeSOP Slash Commands:\n\n"
         for cmd in self._registry.list_commands():
             msg += f"  {cmd.name}\n"
@@ -423,4 +482,7 @@ class SlashCommandHandler:
             if cmd.examples:
                 msg += f"    Example: {cmd.examples[0]}\n"
             msg += "\n"
+
+        msg += "Use /vibe-help <command> for detailed usage.\n"
+        msg += "Example: /vibe-help /vibe-route"
         return True, msg
