@@ -28,6 +28,51 @@ from typing import Any, Callable
 logger = logging.getLogger(__name__)
 
 
+def _extract_query_and_flags(
+    args: tuple[str, ...],
+    flag_names: set[str] | None = None,
+) -> tuple[str, dict[str, str | bool]]:
+    """Extract query text and flags from argument list.
+
+    Args:
+        args: Raw argument list from command parsing
+        flag_names: Set of flag names that take values (e.g., {"--strategy", "--platform"})
+
+    Returns:
+        Tuple of (query_text, flags_dict)
+        Flags without values are set to True
+        Flags with values store the value as string
+
+    Example:
+        >>> _extract_query_and_flags(
+        ...     ("--explain", "review", "code", "--strategy", "parallel"),
+        ...     {"--strategy"}
+        ... )
+        ('review code', {'--explain': True, '--strategy': 'parallel'})
+    """
+    flag_names = flag_names or set()
+    query_parts: list[str] = []
+    flags: dict[str, str | bool] = {}
+    skip_next = False
+
+    for i, arg in enumerate(args):
+        if skip_next:
+            skip_next = False
+            continue
+
+        if arg.startswith("--"):
+            if arg in flag_names and i + 1 < len(args):
+                flags[arg] = args[i + 1]
+                skip_next = True
+            else:
+                flags[arg] = True
+            continue
+
+        query_parts.append(arg)
+
+    return " ".join(query_parts), flags
+
+
 @dataclass
 class SlashCommand:
     """Definition of a slash command."""
@@ -182,26 +227,14 @@ class SlashCommandHandler:
     def _handle_route(self, *args: str) -> tuple[bool, str]:
         """Handle /vibe-route command."""
         if not args:
-            return False, "Usage: /vibe-route <query> [--explain]"
+            return False, "Usage: /vibe-route <query> [--explain] [--strategy <strategy>]"
 
-        explain = "--explain" in args
-
-        # Extract query
-        query_parts = []
-        skip_next = False
-        for i, arg in enumerate(args):
-            if skip_next:
-                skip_next = False
-                continue
-            if arg.startswith("--"):
-                if arg in ("--strategy",):
-                    skip_next = True
-                continue
-            query_parts.append(arg)
-
-        query = " ".join(query_parts)
+        query, flags = _extract_query_and_flags(args, {"--strategy"})
         if not query:
             return False, "Please provide a query"
+
+        explain = flags.get("--explain", False)
+        strategy = flags.get("--strategy")
 
         try:
             from vibesop.core.routing import UnifiedRouter
@@ -209,6 +242,10 @@ class SlashCommandHandler:
 
             router = UnifiedRouter(project_root=self.project_root)
             context = RoutingContext()
+
+            if strategy:
+                context.strategy_hint = strategy
+
             result = router.route(query, context=context)
 
             if explain:
@@ -225,7 +262,7 @@ class SlashCommandHandler:
             else:
                 return True, "No matching skill found"
 
-        except Exception as e:
+        except (OSError, ValueError, RuntimeError) as e:
             logger.error(f"Route command failed: {e}")
             return False, f"Routing failed: {e}"
 
@@ -246,7 +283,7 @@ class SlashCommandHandler:
             installer = PackInstaller()
             success, msg = installer.install_pack(pack_name=pack_name, platforms=platforms)
             return success, msg
-        except Exception as e:
+        except (OSError, ValueError, RuntimeError) as e:
             logger.error(f"Install command failed: {e}")
             return False, f"Installation failed: {e}"
 
@@ -267,7 +304,7 @@ class SlashCommandHandler:
                 msg += f"Code lines: {profile.code_lines}\n"
 
             return True, msg
-        except Exception as e:
+        except (OSError, ValueError, RuntimeError) as e:
             logger.error(f"Analyze command failed: {e}")
             return False, f"Analysis failed: {e}"
 
@@ -280,8 +317,8 @@ class SlashCommandHandler:
                 skill_id = args[idx + 1]
 
         try:
-            from vibesop.core.skills.evaluator import SkillEvaluator
-            evaluator = SkillEvaluator(project_root=self.project_root)
+            from vibesop.core.skills.evaluator import RoutingEvaluator
+            evaluator = RoutingEvaluator(project_root=self.project_root)
 
             if skill_id:
                 evaluation = evaluator.evaluate_skill(skill_id)
@@ -290,12 +327,12 @@ class SlashCommandHandler:
                         True,
                         f"Skill: {skill_id}\n"
                         f"Grade: {evaluation.grade}\n"
-                        f"Success rate: {evaluation.success_rate:.0%}\n"
+                        f"Quality: {evaluation.quality_score:.0%}\n"
                         f"Total uses: {evaluation.total_routes}",
                     )
                 return False, f"No evaluation data for {skill_id}"
 
-            all_evals = evaluator.evaluate_all()
+            all_evals = evaluator.evaluate_all_skills()
             if not all_evals:
                 return True, "No evaluation data yet"
 
@@ -303,7 +340,7 @@ class SlashCommandHandler:
             for sid, ev in all_evals.items():
                 msg += f"  {sid}: {ev.grade} ({ev.quality_score:.0%})\n"
             return True, msg
-        except Exception as e:
+        except (OSError, ValueError, RuntimeError) as e:
             logger.error(f"Evaluate command failed: {e}")
             return False, f"Evaluation failed: {e}"
 
@@ -312,27 +349,11 @@ class SlashCommandHandler:
         if not args:
             return False, "Usage: /vibe-orchestrate <query> [--strategy <sequential|parallel|hybrid>]"
 
-        strategy = None
-        if "--strategy" in args:
-            idx = args.index("--strategy")
-            if idx + 1 < len(args):
-                strategy = args[idx + 1]
-
-        query_parts = []
-        skip_next = False
-        for i, arg in enumerate(args):
-            if skip_next:
-                skip_next = False
-                continue
-            if arg.startswith("--"):
-                if arg == "--strategy":
-                    skip_next = True
-                continue
-            query_parts.append(arg)
-
-        query = " ".join(query_parts)
+        query, flags = _extract_query_and_flags(args, {"--strategy"})
         if not query:
             return False, "Please provide a query"
+
+        strategy = flags.get("--strategy")
 
         try:
             from vibesop.core.routing import UnifiedRouter
@@ -356,7 +377,7 @@ class SlashCommandHandler:
                     f"Single skill: {result.primary.skill_id} (confidence: {result.primary.confidence:.0%})",
                 )
             return True, "No matching skill found"
-        except Exception as e:
+        except (OSError, ValueError, RuntimeError) as e:
             logger.error(f"Orchestrate command failed: {e}")
             return False, f"Orchestration failed: {e}"
 
@@ -383,7 +404,7 @@ class SlashCommandHandler:
                     msg += f"  • {pack_name}\n"
 
             return True, msg
-        except Exception as e:
+        except (OSError, ValueError, RuntimeError) as e:
             logger.error(f"List command failed: {e}")
             return False, f"Failed to list: {e}"
 
