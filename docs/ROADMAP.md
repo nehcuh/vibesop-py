@@ -28,12 +28,15 @@
 
 ### 📊 Metrics
 
-| Metric | Current | Target |
-|--------|---------|--------|
-| Code Lines | ~15,000 | ~15,000 ✅ |
-| Test Coverage | ~80% | >75% ✅ |
-| Routing P95 | ~45ms | <50ms ✅ |
-| Skills Supported | 45+ | 45+ ✅ |
+| Metric | Current | Target | Status |
+|--------|---------|--------|--------|
+| Code Lines | ~47,000 | ~15,000 | ⚠️ 3× over (feature growth) |
+| Test Coverage | 74% | >75% | ⚠️ 0.63% below target |
+| Routing P95 | 354ms | <50ms | ❌ 7× over (needs optimization) |
+| Skills Supported | 45+ | 45+ | ✅ |
+| Lint Errors | 185 | 0 | ❌ Needs cleanup |
+| Slash Commands | 7 | 7 | ✅ |
+| Service Layer | 4 services | 4 services | ✅ |
 
 ---
 
@@ -109,10 +112,10 @@ Monitor the health and quality of external skill packs.
 
 ---
 
-## v4.3.0 — Context-Aware Routing ✅ (Released 2026-04-22)
+## v4.3.0 — Context-Aware Routing + Slash Commands ✅ (Released 2026-04-24)
 
 ### Goals
-Improve routing accuracy with context awareness, multi-turn conversations, and direct Agent integration.
+Improve routing accuracy with context awareness, multi-turn conversations, direct Agent integration, and explicit slash commands.
 
 ### Features
 
@@ -140,16 +143,103 @@ Improve routing accuracy with context awareness, multi-turn conversations, and d
   - 4 badge types: first_feedback, skill_champion, quality_master, ecosystem_guardian
   - Integrated into skills feedback, health check, and routing
 
+- [x] **Routing Transparency**
+  - `--explain` flag shows full routing decision tree
+  - `--validate` mode with rejected candidate display
+  - Per-layer diagnostics with timing and reasoning
+
+- [x] **Central Storage Architecture**
+  - Skill packs installed to `~/.config/skills/<pack>/`
+  - Platform directories receive symlinks (`~/.claude/skills/<pack>` → central)
+  - Unified management across all AI tools
+
+- [x] **Slash Commands**
+  - 7 built-in commands: `/vibe-route`, `/vibe-install`, `/vibe-analyze`, `/vibe-evaluate`, `/vibe-orchestrate`, `/vibe-list`, `/vibe-help`
+  - IntentInterceptor detects `/vibe-*` prefix automatically
+  - Argument validation with auto-generated help
+  - Shared service layer (RoutingService, InstallService, AnalysisService, EvaluationService)
+
+- [x] **Orchestration Interaction**
+  - `--strategy=sequential|parallel|auto` for multi-skill execution
+  - Interactive step editing (move/remove/reorder)
+  - Data dependency visualization
+
 ### Success Metrics
 
 - ✅ Routing accuracy improvement: +5% (with project context)
 - ✅ Multi-turn query support: 100%
 - ✅ Agent Runtime API stability: v1.0
-- ✅ Test count: 1751 (+64 from v4.2.0)
+- ✅ Slash command coverage: 7 commands, 44 tests
+- ✅ Service layer: 4 services, zero duplication with CLI
+- ✅ Test count: 1751+ (+64 from v4.2.0)
 
 ---
 
-## v5.0.0 — Plugin Ecosystem (2027)
+## v4.4.0 — SkillMarket + Feedback Loop (2026-Q2)
+
+### Goals
+Complete the skill ecosystem with discovery, community, and self-improvement.
+
+### Features
+
+#### SkillMarket (Highest Priority)
+- [ ] **Skill Discovery**
+  - Search skills by keywords, tags, project type
+  - Browse trending/popular skills
+  - GitHub topic-based skill crawling
+  - Custom registry URLs support
+
+- [ ] **Skill Metadata**
+  - Rating and reviews system
+  - Download statistics
+  - Compatibility matrix (platform × version)
+  - Author profiles and trust scores
+
+- [ ] **Smart Recommendations**
+  - Project-type-based recommendations
+  - "Users who installed X also installed Y"
+  - Missing skill detection for current project
+
+- [ ] **CLI Integration**
+  - `vibe market search <query>`
+  - `vibe market recommend`
+  - `vibe market info <skill>`
+  - `vibe market install --popular`
+
+#### Autoresearch Feedback Loop
+- [ ] **Automatic Skill Improvement**
+  - Analyze routing success/failure patterns
+  - Suggest keyword additions based on missed queries
+  - Auto-generate A/B test variants
+  - Skill quality regression detection
+
+- [ ] **Skill Evolution**
+  - Track skill effectiveness over time
+  - Auto-deprecate low-quality skills
+  - Suggest skill splits (too broad) or merges (too narrow)
+
+#### Performance Optimization
+- [ ] **Latency Reduction**
+  - Current P95: 354ms, Target: <100ms
+  - Router hot-path optimization
+  - Lazy loading for heavy dependencies
+  - Connection pooling for LLM clients
+
+- [ ] **Quality Gates**
+  - Fix 185 lint errors → 0
+  - Increase coverage from 74% → 80%
+  - Add performance regression CI
+
+### Success Metrics
+
+- SkillMarket: 50+ discoverable skill packs
+- Routing P95 latency: <100ms
+- Test coverage: >80%
+- Lint errors: 0
+
+---
+
+## v5.0.0 — Plugin Ecosystem (2026-Q3)
 
 ### Goals
 Transform VibeSOP into a platform with a thriving plugin ecosystem.
@@ -157,24 +247,27 @@ Transform VibeSOP into a platform with a thriving plugin ecosystem.
 ### Features
 
 - [ ] **Plugin System**
-  - Matcher plugins
-  - Adapter plugins
-  - Hook system
+  - Matcher plugins (custom routing logic)
+  - Adapter plugins (new AI platforms)
+  - Hook system (pre/post routing events)
+  - Plugin sandbox for security
 
-- [ ] **Marketplace**
-  - Skill pack registry
-  - Plugin registry
-  - Rating and reviews
+- [ ] **Marketplace v2**
+  - Plugin registry alongside skill registry
+  - One-command plugin install
+  - Plugin versioning and updates
 
-- [ ] **Developer Tools**
-  - SDK for plugin development
-  - Local testing tools
-  - Documentation generator
+- [ ] **Developer SDK**
+  - `vibesop-dev` CLI for plugin development
+  - Local testing harness
+  - Auto-generated documentation
+  - Plugin template generator
 
 - [ ] **Enterprise Features**
   - Private skill registries
-  - Team skill sharing
-  - Audit logging
+  - Team skill sharing and governance
+  - Audit logging and compliance
+  - SSO integration
 
 ### Success Metrics
 
@@ -193,13 +286,14 @@ Transform VibeSOP into a platform with a thriving plugin ecosystem.
 - [ ] Mobile app for skill discovery
 - [ ] Voice command support
 - [ ] Real-time collaboration
+- [ ] Skill execution (not just routing)
 
 ### Technical Debt
 
-- [ ] Increase test coverage to 80%
-- [ ] Performance benchmarks CI
-- [ ] Documentation translation (CN, JP)
-- [ ] API stability guarantees
+- [ ] Documentation translation (CN, JP, DE)
+- [ ] API stability guarantees (semver)
+- [ ] Migration guide for breaking changes
+- [ ] Benchmark suite and performance dashboard
 
 ---
 

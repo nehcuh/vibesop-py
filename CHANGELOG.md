@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [4.3.0] - 2026-04-22
+## [4.3.0] - 2026-04-24
 
 ### v5.0 User Experience Closure (T1–T5)
 
@@ -78,10 +78,24 @@ This release completes the v5.0 "user-perceivable last mile" initiative — turn
 - **133 lint errors → 0 errors** — full ruff cleanup
 - **Type checking** — basedpyright src/ errors reduced to 0 (from 1199)
 
+### Slash Commands (v4.3.0+)
+- **7 built-in commands**: `/vibe-route`, `/vibe-install`, `/vibe-analyze`, `/vibe-evaluate`, `/vibe-orchestrate`, `/vibe-list`, `/vibe-help`
+- **IntentInterceptor integration** — `/vibe-*` prefix auto-detected and routed to `SLASH_COMMAND` mode
+- **Argument validation** — `args_schema` validation with helpful error messages
+- **Auto-generated help** — per-command usage text with examples
+- **Shared service layer** — `RoutingService`, `InstallService`, `AnalysisService`, `EvaluationService` eliminate CLI duplication
+
+### Central Storage Architecture (v4.3.0+)
+- **Unified storage** — skill packs installed to `~/.config/skills/<pack>/`
+- **Platform symlinks** — `~/.claude/skills/<pack>` → central storage
+- **Multi-platform support** — Claude Code, OpenCode, Kimi CLI, Cursor all supported
+- **Legacy migration** — existing direct installs auto-converted to symlinks
+
 ### Test Results
-- **1783 passed, 0 failed** ✅
-- **Lint**: 0 errors ✅
-- **Type check**: 0 errors, 98 warnings (src/) ✅
+- **1783+ passed, 0 failed** ✅
+- **Slash command tests**: 44 tests, all passing ✅
+- **Lint**: 185 errors (known — will fix in v4.4.0)
+- **Type check**: 0 errors, 98 warnings (src/)
 
 ---
 
