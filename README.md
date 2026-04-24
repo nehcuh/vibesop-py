@@ -486,6 +486,7 @@ routing:
   enable_ai_triage: true
   enable_embedding: false
   max_candidates: 3
+  confirmation_mode: always  # always | never | ambiguous_only
 
 security:
   threat_level: medium
@@ -497,6 +498,30 @@ skills:
     - gstack
     - superpowers
 ```
+
+#### 用户确认模式 User Confirmation Mode
+
+默认情况下，VibeSOP 会在选择技能前展示路由决策报告并要求你确认：
+
+```bash
+$ vibe route "帮我 review 代码"
+╭────────── 🔍 Routing Decision Report ──────────╮
+│ Selected: gstack/review (confidence: 87%)      │
+│ ...                                            │
+╰────────────────────────────────────────────────╯
+How would you like to proceed?
+  ✅ Confirm selected skill
+  🔀 Choose a different skill
+  📝 Skip skill, use raw LLM
+```
+
+你可以通过以下方式关闭确认：
+
+- **临时跳过**：`vibe route "query" --yes` 或 `-y`
+- **全局关闭**：在 `~/.vibe/config.yaml` 中设置 `routing.confirmation_mode: never`
+- **仅低置信度时确认**：设置 `routing.confirmation_mode: ambiguous_only`
+
+> ⚠️ **注意**：确认模式默认开启 (`always`)，旨在让你了解 VibeSOP 的决策过程。关闭后将恢复为自动选择。
 
 ### 全局配置 Global Config
 

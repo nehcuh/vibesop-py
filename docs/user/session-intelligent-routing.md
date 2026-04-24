@@ -1,8 +1,8 @@
 # Session Intelligent Routing
 
-> **Feature**: v4.3.0
-> **Status**: Experimental
-> **Purpose**: Enable AI agents to intelligently suggest skill switches during ongoing conversations
+> **Feature**: v4.2.1+
+> **Status**: Stable
+> **Purpose**: Enable AI agents to intelligently suggest skill switches during ongoing conversations, with persistent session state across CLI invocations
 > **Platforms**: Claude Code (hooks), OpenCode (CLI), Generic (CLI)
 
 ---
@@ -169,6 +169,37 @@ No additional setup needed! The hook automatically:
 2. Detects context changes
 3. Suggests skill switches when appropriate
 
+### 5. Session State Persistence (Automatic)
+
+Starting from v4.2.1, session state is **automatically persisted** between CLI calls:
+
+```bash
+# Turn 1: route selects a skill
+$ vibe route "help me debug this error"
+→ systematic-debugging (confidence: 82%)
+# Session saved: current_skill = "systematic-debugging"
+
+# Turn 2: same project, next query — session loaded automatically
+$ vibe route "now test the fix"
+→ systematic-debugging (confidence: 85%, session stickiness applied)
+```
+
+Sessions are isolated per project (derived from project path hash). To isolate further:
+
+```bash
+# Terminal A
+$ VIBESOP_SESSION_ID=terminal-a vibe route "debug this"
+
+# Terminal B (same project, different session)
+$ VIBESOP_SESSION_ID=terminal-b vibe route "test that"
+```
+
+To disable session awareness for a single query:
+
+```bash
+$ vibe route "one-off query" --no-session
+```
+
 ## Manual Commands
 
 ### Record Tool Use
@@ -298,9 +329,19 @@ Claude: 💡 This looks like a design task. Would you like to switch to
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `VIBESOP_CONTEXT_TRACKING` | `false` | Enable/disable session tracking |
+| `VIBESOP_SESSION_ID` | `project-{hash}` | Override session ID for multi-terminal isolation |
 | `VIBESOP_REROUTE_CHECK_INTERVAL` | `5` | Check for re-routing every N tool uses |
 | `VIBESOP_REROUTE_THRESHOLD` | `0.7` | Confidence threshold for suggestions (0.0-1.0) |
 | `VIBESOP_CURRENT_SKILL` | `None` | Current active skill (set by Claude Code) |
+
+### Routing Config
+
+```yaml
+# .vibe/config.yaml
+routing:
+  session_aware: true              # Enable session-state-aware routing
+  session_stickiness_boost: 0.03   # Confidence boost for current skill (0.0–0.2)
+```
 
 ### SessionContext Parameters
 
@@ -447,8 +488,11 @@ class SessionContext:
     def __init__(
         self,
         project_root: str = ".",
+        router: UnifiedRouter | None = None,
         reroute_threshold: float = 0.7,
         tool_use_window: int = 10,
+        reroute_cooldown: float = 5.0,
+        session_id: str | None = None,  # Auto-derived from project hash if None
     )
 
     def record_tool_use(
@@ -463,6 +507,31 @@ class SessionContext:
     def check_reroute_needed(self, user_message: str) -> RoutingSuggestion
 
     def get_session_summary(self) -> dict[str, Any]
+
+    def record_route_decision(self, query: str, skill_id: str) -> None
+
+    def get_habit_boost(self, query: str) -> dict[str, float]
+
+    def to_dict(self) -> dict[str, Any]
+
+    @classmethod
+    def from_dict(
+        cls,
+        data: dict[str, Any],
+        project_root: str = ".",
+        router: UnifiedRouter | None = None,
+    ) -> SessionContext
+
+    def save(self, storage_dir: str | Path | None = None) -> Path
+
+    @classmethod
+    def load(
+        cls,
+        session_id: str = "default",
+        project_root: str = ".",
+        router: UnifiedRouter | None = None,
+        storage_dir: str | Path | None = None,
+    ) -> SessionContext
 ```
 
 ### RoutingSuggestion
@@ -477,24 +546,71 @@ class RoutingSuggestion:
     current_skill: str | None = None
 ```
 
+## Habit Learning
+
+### Query Pattern Recognition
+
+Starting from v4.2.1, VibeSOP learns from your routing decisions:
+
+**How it works**:
+1. Each `route()` call records the query pattern → selected skill mapping
+2. When the same pattern occurs **3+ times**, it becomes a "habit"
+3. Future queries matching that pattern receive a **+0.08 confidence boost**
+
+**Example**:
+```bash
+# Turn 1
+$ vibe route "deploy to staging" → deploy-k8s (habit recorded)
+
+# Turn 5 (same pattern, 3rd+ occurrence)
+$ vibe route "deploy to staging" → deploy-k8s (85% → 93% with habit boost)
+```
+
+**Pattern extraction**: Uses embedding-based semantic similarity (not just keyword matching) so "deploy to staging" and "push to k8s staging" can match the same habit.
+
+**Storage**: Habit patterns are persisted in the session file alongside `current_skill`.
+
+---
+
+## Quality-Based Routing
+
+### Grade Impact on Confidence
+
+Skill quality grades (from `vibe skills report`) directly affect routing:
+
+| Grade | Routing Impact |
+|-------|---------------|
+| A | +0.05 confidence boost |
+| B | +0.02 confidence boost |
+| C | No change |
+| D | -0.02 confidence demote |
+| F | -0.05 confidence demote |
+
+**Protection**: Only applies when a skill has `>= 3` total routes to avoid early misjudgment.
+
+**Disable**: Set `routing.enable_quality_boost: false` in config.
+
+---
+
 ## Limitations
 
 ### Platform-Specific
 
 **Claude Code**:
-- No persistent state (in-memory only for current session)
-- Doesn't track across multiple Claude Code sessions
+- Session state persists across CLI calls within the same project
+- Different projects are automatically isolated
+- Multiple Claude Code windows on the same project share state unless `VIBESOP_SESSION_ID` is used
 
 **OpenCode / Other Platforms**:
 - Manual tool usage recording required
 - No automatic tracking via hooks
-- Generic tracker has persistent state but limited functionality
+- Session state persists across CLI calls
 
 ### General
 
-- Cooldown period: Minimum 30 seconds between re-routing checks
+- Cooldown period: Minimum 5 seconds between re-routing checks
 - Confidence dependency: Only suggests when confidence > threshold
-- Learning limited to current session (no cross-session learning yet)
+- Cross-session learning limited (pattern recognition within single session only)
 
 ## Future Enhancements
 
@@ -507,7 +623,8 @@ class RoutingSuggestion:
 
 ### Features
 
-- [ ] Persistent session storage across restarts
+- [x] Persistent session storage across restarts (v4.2.1)
+- [ ] Session TTL — auto-reset stale sessions after inactivity
 - [ ] Multi-session pattern learning
 - [ ] User feedback integration (accept/reject suggestions)
 - [ ] Custom trigger rules per project
@@ -521,5 +638,5 @@ class RoutingSuggestion:
 
 ---
 
-**Status**: Experimental - API may change in future versions
+**Status**: Stable
 **Feedback**: Report issues at https://github.com/nehcuh/vibesop-py/issues

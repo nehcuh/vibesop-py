@@ -15,7 +15,7 @@ import os
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar, Literal
 
 from pydantic import BaseModel, Field
 
@@ -128,6 +128,14 @@ class RoutingConfig(BaseModel):
 
     min_confidence: float = Field(default=0.3, ge=0.0, le=1.0)
     auto_select_threshold: float = Field(default=0.6, ge=0.0, le=1.0)
+    confirmation_mode: str = Field(
+        default="always",
+        description="User confirmation mode: always (default), never, or ambiguous_only",
+    )
+    enable_orchestration: bool = Field(
+        default=True,
+        description="Enable multi-skill orchestration for multi-intent queries",
+    )
     enable_ai_triage: bool = True
     enable_embedding: bool = False
     max_candidates: int = Field(default=3, ge=1, le=10)
@@ -141,6 +149,24 @@ class RoutingConfig(BaseModel):
     ai_triage_circuit_breaker_failure_threshold: int = Field(default=3, ge=1, le=10)
     ai_triage_circuit_breaker_latency_threshold_ms: float = Field(default=500.0, ge=100.0)
     ai_triage_circuit_breaker_cooldown_seconds: int = Field(default=60, ge=10)
+    session_aware: bool = Field(
+        default=True,
+        description="Enable session-state-aware routing for multi-turn conversations",
+    )
+    session_stickiness_boost: float = Field(
+        default=0.03,
+        ge=0.0,
+        le=0.2,
+        description="Confidence boost for current skill in multi-turn continuity",
+    )
+    fallback_mode: Literal["transparent", "silent", "disabled"] = Field(
+        default="transparent",
+        description="Behavior when no skill matches: transparent (explain + suggest), silent (quiet fallback), disabled (show 'no match')",
+    )
+    default_strategy: Literal["auto", "sequential", "parallel", "hybrid"] = Field(
+        default="auto",
+        description="Default execution strategy for multi-skill orchestration: auto, sequential, parallel, hybrid",
+    )
 
 
 class SecurityConfig(BaseModel):
@@ -198,6 +224,8 @@ class ConfigManager:
         "routing": {
             "min_confidence": 0.3,
             "auto_select_threshold": 0.6,
+            "confirmation_mode": "always",
+            "enable_orchestration": True,
             "enable_ai_triage": False,
             "enable_embedding": False,
             "max_candidates": 3,

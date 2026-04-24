@@ -52,6 +52,7 @@ htmlcov/
 # VibeSOP state
 .vibe/state/
 .vibe/sessions/
+.vibe/session/
 .vibe/preferences.json
 .vibe/skills/
 .vibe/instincts/
@@ -82,3 +83,5 @@ ruff.toml
 # Runtime generated directories
 .vibe/core/
 .vibe/rules/
+.vibe/conversations/
+.vibe/*.jsonl

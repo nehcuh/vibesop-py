@@ -337,7 +337,7 @@ class TestDocRenderer:
             result = renderer.render(config)
             # May succeed or fail depending on security settings
             assert "success" in result
-        except Exception:
+        except (OSError, ValueError, RuntimeError):
             pass  # Expected in some environments
 
     def test_sections_sorted_by_order(self) -> None:

@@ -1,3 +1,4 @@
+# pyright: ignore[reportCallIssue]
 """Session context tracking for intelligent re-routing.
 
 This module monitors conversation progression and detects when
@@ -18,11 +19,15 @@ Usage:
 
 from __future__ import annotations
 
+import hashlib
+import json
 import logging
+import os
 import threading
 import time
 from dataclasses import dataclass, field
 from enum import Enum
+from pathlib import Path
 from typing import Any
 
 from vibesop.core.routing import UnifiedRouter
@@ -74,6 +79,21 @@ class ToolUseEvent:
     context: dict[str, Any] = field(default_factory=dict)
 
 
+@dataclass
+class RouteDecision:
+    """Record of a routing decision for habit learning.
+
+    Attributes:
+        query_pattern: Normalized query pattern
+        selected_skill: Skill chosen by the user/system
+        timestamp: When the decision was made
+    """
+
+    query_pattern: str
+    selected_skill: str
+    timestamp: float
+
+
 class SessionContext:
     """Tracks session context for intelligent re-routing.
 
@@ -92,7 +112,8 @@ class SessionContext:
         router: UnifiedRouter | None = None,
         reroute_threshold: float = 0.7,
         tool_use_window: int = 10,
-        reroute_cooldown: float = 30.0,
+        reroute_cooldown: float = 5.0,
+        session_id: str = "default",
     ):
         """Initialize session context tracker.
 
@@ -102,15 +123,16 @@ class SessionContext:
             reroute_threshold: Confidence threshold for re-routing suggestions
             tool_use_window: Number of recent tool uses to analyze
             reroute_cooldown: Seconds between re-routing checks
+            session_id: Unique identifier for this session. If "default", derives
+                from project path hash to auto-isolate per-project sessions.
         """
-        from pathlib import Path
-
         self.project_root = Path(project_root).resolve()
         # Use injected router or create new one (dependency injection)
         self._router = router or UnifiedRouter(project_root=self.project_root)
         self._reroute_threshold = reroute_threshold
         self._tool_use_window = tool_use_window
         self._reroute_cooldown = reroute_cooldown
+        self.session_id = self._resolve_session_id(session_id)
 
         # Thread-safe storage
         self._lock = threading.Lock()
@@ -118,6 +140,29 @@ class SessionContext:
         self._current_skill: str | None = None
         self._session_start_time = time.time()
         self._last_reroute_check = 0.0
+        self._route_history: list[RouteDecision] = []
+        self._habit_patterns: dict[str, str] = {}
+
+    def _resolve_session_id(self, session_id: str) -> str:
+        """Resolve session identifier.
+
+        Priority:
+        1. Explicit session_id if not "default"
+        2. VIBESOP_SESSION_ID environment variable
+        3. Project path hash (for auto-isolation per project)
+        """
+        if session_id != "default":
+            return session_id
+
+        env_id = os.environ.get("VIBESOP_SESSION_ID")
+        if env_id:
+            return env_id
+
+        # Derive from project path hash for per-project isolation
+        path_hash = hashlib.sha256(
+            str(self.project_root).encode("utf-8")
+        ).hexdigest()[:12]
+        return f"project-{path_hash}"
 
     def record_tool_use(
         self,
@@ -343,11 +388,11 @@ class SessionContext:
 
         # Return highest-scoring phase
         if phase_scores:
-            return max(phase_scores, key=phase_scores.get)
+            return max(phase_scores, key=lambda k: phase_scores[k])
 
         return None
 
-    def _has_mixed_signals(self, tools: list[ToolUseEvent], message: str) -> bool:
+    def _has_mixed_signals(self, _tools: list[ToolUseEvent], message: str) -> bool:
         """Check if there are mixed signals in the conversation.
 
         Args:
@@ -374,7 +419,7 @@ class SessionContext:
         context_change: ContextChange,
         current_skill: str | None,
         new_skill: str,
-        recent_tools: list[ToolUseEvent],
+        _recent_tools: list[ToolUseEvent],
     ) -> str:
         """Generate human-readable reason for re-routing suggestion.
 
@@ -398,6 +443,90 @@ class SessionContext:
 
         return f"Suggesting switch from {current_skill} to {new_skill} based on conversation context."
 
+    def record_route_decision(self, query: str, selected_skill: str) -> None:
+        """Record a routing decision for habit learning.
+
+        Args:
+            query: User query that led to the routing decision
+            selected_skill: Skill that was selected
+        """
+        with self._lock:
+            self._route_history.append(RouteDecision(
+                query_pattern=self._extract_pattern(query),
+                selected_skill=selected_skill,
+                timestamp=time.time(),
+            ))
+            self._update_habit_patterns()
+
+    def get_habit_boost(self, query: str) -> dict[str, float]:
+        """Return skill→boost mapping for learned habits.
+
+        If the user has consistently chosen the same skill for a
+        similar query pattern (3+ times), boost that skill.
+
+        Args:
+            query: Current user query
+
+        Returns:
+            Dictionary mapping skill_id to boost value
+        """
+        with self._lock:
+            query_pattern = self._extract_pattern(query)
+            skill = self._habit_patterns.get(query_pattern)
+            if skill:
+                return {skill: 0.08}
+            return {}
+
+    def _extract_pattern(self, query: str) -> str:
+        """Extract a normalized pattern from a query for habit matching.
+
+        Uses a simple keyword-based normalization:
+        - Lowercase
+        - Extract significant keywords (nouns/verbs)
+        - Sort alphabetically for canonical form
+
+        Args:
+            query: Raw user query
+
+        Returns:
+            Normalized pattern string
+        """
+        query_lower = query.lower()
+        # Simple keyword extraction: remove common stop words
+        stop_words = {
+            "帮我", "请", "一下", "这个", "那个", "的", "了", "在", "是",
+            "help", "me", "please", "the", "a", "an", "this", "that",
+            "with", "for", "to", "my", "can", "you", "i", "need",
+        }
+        words = []
+        for word in query_lower.split():
+            # Chinese: check 2-char segments
+            if any(ord(c) > 127 for c in word):
+                for i in range(len(word) - 1):
+                    seg = word[i : i + 2]
+                    if seg not in stop_words and len(seg) >= 2:
+                        words.append(seg)
+            elif word not in stop_words and len(word) >= 2:
+                words.append(word)
+
+        # Deduplicate and sort for canonical form
+        unique = sorted(set(words))
+        return " ".join(unique) if unique else query_lower[:20]
+
+    def _update_habit_patterns(self) -> None:
+        """Extract recurring query→skill patterns from route history."""
+        from collections import Counter
+
+        patterns: Counter[tuple[str, str]] = Counter()
+        for rd in self._route_history[-50:]:
+            patterns[(rd.query_pattern, rd.selected_skill)] += 1
+
+        # Keep only patterns that occurred 3+ times
+        self._habit_patterns = {
+            pattern: skill for (pattern, skill), count in patterns.items()
+            if count >= 3
+        }
+
     def get_session_summary(self) -> dict[str, Any]:
         """Get summary of current session.
 
@@ -417,6 +546,150 @@ class SessionContext:
                     for t in self._tool_history[-5:]
                 ],
             }
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize session state to dictionary.
+
+        Returns:
+            Dictionary representation of session state
+        """
+        with self._lock:
+            return {
+                "session_id": self.session_id,
+                "current_skill": self._current_skill,
+                "session_start_time": self._session_start_time,
+                "last_reroute_check": self._last_reroute_check,
+                "last_activity": time.time(),
+                "tool_history": [
+                    {
+                        "tool_name": t.tool_name,
+                        "timestamp": t.timestamp,
+                        "skill": t.skill,
+                        "context": t.context,
+                    }
+                    for t in self._tool_history
+                ],
+                "route_history": [
+                    {
+                        "query_pattern": r.query_pattern,
+                        "selected_skill": r.selected_skill,
+                        "timestamp": r.timestamp,
+                    }
+                    for r in self._route_history[-50:]
+                ],
+                "habit_patterns": self._habit_patterns,
+            }
+
+    @classmethod
+    def from_dict(
+        cls,
+        data: dict[str, Any],
+        project_root: str = ".",
+        router: UnifiedRouter | None = None,
+    ) -> SessionContext:
+        """Deserialize session state from dictionary.
+
+        Args:
+            data: Dictionary from to_dict()
+            project_root: Path to project root
+            router: Optional external UnifiedRouter instance
+
+        Returns:
+            Reconstructed SessionContext
+        """
+        ctx = cls(
+            project_root=project_root,
+            router=router,
+            session_id=data.get("session_id", "default"),
+        )
+        ctx._current_skill = data.get("current_skill")
+        ctx._session_start_time = data.get("session_start_time", time.time())
+        ctx._last_reroute_check = data.get("last_reroute_check", 0.0)
+        # last_activity is informational for TTL; not stored as instance state
+        ctx._tool_history = [
+            ToolUseEvent(
+                tool_name=t["tool_name"],
+                timestamp=t["timestamp"],
+                skill=t.get("skill"),
+                context=t.get("context", {}),
+            )
+            for t in data.get("tool_history", [])
+        ]
+        ctx._route_history = [
+            RouteDecision(
+                query_pattern=r["query_pattern"],
+                selected_skill=r["selected_skill"],
+                timestamp=r["timestamp"],
+            )
+            for r in data.get("route_history", [])
+        ]
+        ctx._habit_patterns = data.get("habit_patterns", {})
+        return ctx
+
+    def save(self, storage_dir: str | Path | None = None) -> Path:
+        """Persist session state to disk.
+
+        Args:
+            storage_dir: Directory to save session file. Defaults to
+                project_root / .vibe / session
+
+        Returns:
+            Path to saved file
+        """
+        if storage_dir is None:
+            storage_dir = self.project_root / ".vibe" / "session"
+        else:
+            storage_dir = Path(storage_dir)
+
+        storage_dir.mkdir(parents=True, exist_ok=True)
+        path = storage_dir / f"{self.session_id}.json"
+
+        with path.open("w", encoding="utf-8") as f:
+            json.dump(self.to_dict(), f, indent=2, ensure_ascii=False)
+
+        logger.debug(f"Session saved: {path}")
+        return path
+
+    @classmethod
+    def load(
+        cls,
+        session_id: str = "default",
+        project_root: str = ".",
+        router: UnifiedRouter | None = None,
+        storage_dir: str | Path | None = None,
+    ) -> SessionContext:
+        """Load session state from disk.
+
+        Args:
+            session_id: Session identifier
+            project_root: Path to project root
+            router: Optional external UnifiedRouter instance
+            storage_dir: Directory to load session file from. Defaults to
+                project_root / .vibe / session
+
+        Returns:
+            Loaded SessionContext, or fresh instance if no saved state exists
+        """
+        if storage_dir is None:
+            storage_dir = Path(project_root).resolve() / ".vibe" / "session"
+        else:
+            storage_dir = Path(storage_dir)
+
+        path = storage_dir / f"{session_id}.json"
+
+        if not path.exists():
+            logger.debug(f"No saved session found at {path}, creating fresh instance")
+            return cls(
+                project_root=project_root,
+                router=router,
+                session_id=session_id,
+            )
+
+        with path.open(encoding="utf-8") as f:
+            data = json.load(f)
+
+        logger.debug(f"Session loaded: {path}")
+        return cls.from_dict(data, project_root=project_root, router=router)
 
 
 __all__ = [

@@ -336,7 +336,7 @@ class InstinctLearner:
 
             self._embedding_model = SentenceTransformer(self._embedding_model_name)
             return True
-        except Exception:
+        except (ImportError, OSError, RuntimeError):
             return False
 
     def _get_embedding(self, text: str) -> Any:
@@ -361,7 +361,7 @@ class InstinctLearner:
                 np.dot(pattern_emb, text_emb)
                 / (np.linalg.norm(pattern_emb) * np.linalg.norm(text_emb) + 1e-10)
             )
-        except Exception:
+        except (ValueError, TypeError, RuntimeError):
             return 0.0
 
     def _match_score(self, pattern: str, text: str) -> float:
@@ -409,7 +409,7 @@ class InstinctLearner:
         if self._numpy is not None:
             try:
                 embedding_score = self._compute_embedding_similarity(pattern, text)
-            except Exception:
+            except (ValueError, TypeError, RuntimeError):
                 embedding_score = 0.0
 
         return max(lexical_score, embedding_score)

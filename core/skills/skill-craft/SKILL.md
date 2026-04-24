@@ -17,7 +17,6 @@ allowed-tools:
   - Grep
 intent: authoring
 namespace: builtin
-version: 1.0.0
 type: prompt
 ---
 

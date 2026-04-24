@@ -1,0 +1,94 @@
+# Rule Deviation Tracking Policy
+# Records when Agent chooses to skip routing recommendations
+# This enables transparency and continuous improvement of the routing system
+
+schema_version: 1
+
+policy_name: "rule_deviation_tracking"
+enabled: true
+
+# When Agent skips a routing recommendation, it MUST record:
+deviation_record:
+  required_fields:
+    - timestamp           # When the deviation occurred
+    - query              # Original user query
+    - routed_skill       # What VibeSOP recommended
+    - confidence         # Confidence score of recommendation
+    - layer              # Which routing layer made the match
+    - actual_action      # What Agent did instead
+    - reason_code        # Categorized reason for skipping
+    - justification      # Agent's explanation
+
+# Standardized reason codes for skipping
+reason_codes:
+  skill_mismatch:
+    description: "Recommended skill doesn't match user's intent"
+    example: "Routing suggested omx/team for 'analyze project' query"
+    severity: "high"  # Indicates routing problem
+
+  context_ignored:
+    description: "Routing didn't consider conversation context"
+    example: "Follow-up question treated as new query"
+    severity: "medium"
+
+  execution_impossible:
+    description: "Skill requires resources not available"
+    example: "Skill requires external tools not installed"
+    severity: "low"
+
+  user_override:
+    description: "User explicitly asked to ignore routing"
+    example: "User said 'skip the routing, just fix it'"
+    severity: "none"
+
+  meta_question:
+    description: "User is asking about the routing system itself"
+    example: "'Why did you route to this skill?'"
+    severity: "none"
+
+  duplicate_effort:
+    description: "Agent already performing equivalent action"
+    example: "Already debugging, routing suggests debugging"
+    severity: "low"
+
+# Where to store deviation records
+storage:
+  primary: ".vibe/memory/deviations.jsonl"
+  # Also summarized to session memory
+  session_summary: "memory/session.md"
+
+# Alert thresholds
+alerts:
+  # If same skill mismatch occurs N times, flag for review
+  skill_mismatch_threshold: 3
+
+  # If deviation rate exceeds X%, review routing config
+  high_deviation_rate: 0.30  # 30%
+
+  # Severity breakdown requires attention
+  require_review:
+    - "high"   # Routing system problem
+    - "medium" # Context awareness gap
+
+# Improvement loop
+improvement:
+  # How often to analyze deviation patterns
+  analysis_interval: "weekly"
+
+  # What to generate from analysis
+  outputs:
+    - "routing_accuracy_report.md"
+    - "suggested_keyword_adjustments.yaml"
+    - "context_gaps_report.md"
+
+# Agent instructions (included in CLAUDE.md)
+agent_instruction: |
+  ## When Skipping Routing Recommendations
+
+  If you choose not to follow a routing recommendation, you MUST record the deviation:
+
+  ```bash
+  echo "$(date -Iseconds) | QUERY: \"$QUERY\" | ROUTED: $SKILL ($CONFIDENCE) | REASON: $CODE | ACTION: $ACTION" >> .vibe/memory/deviations.jsonl
+  ```
+
+  This enables continuous improvement of the routing system.

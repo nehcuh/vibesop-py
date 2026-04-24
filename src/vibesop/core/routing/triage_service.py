@@ -168,6 +168,7 @@ class TriageService:
                         confidence=confidence,
                         layer=RoutingLayer.AI_TRIAGE,
                         source=source,
+                        description=str(candidate.get("description", "")),
                         metadata={
                             "ai_triage": True,
                             "structured": parsed.get("structured", False),
@@ -229,6 +230,21 @@ class TriageService:
         if os.getenv("VIBE_AI_TRIAGE_ENABLED", "").lower() in ("0", "false", "no"):
             return None
         try:
+            # Try to get LLM config from VibeSOP config file first
+            from vibesop.core.llm_config import VibeSOPConfigManager
+
+            llm_config = VibeSOPConfigManager.get_llm_config()
+            if llm_config and llm_config.api_key:
+                # Use config file settings
+                provider = create_provider(
+                    provider=llm_config.provider,  # type: ignore
+                    api_key=llm_config.api_key,
+                    base_url=llm_config.api_base,
+                )
+                logger.debug(f"Using LLM from config: {llm_config.provider}/{llm_config.model}")
+                return provider
+
+            # Fall back to environment detection
             provider = create_provider()
             return provider
         except (OSError, ValueError, RuntimeError) as e:
@@ -292,6 +308,7 @@ class TriageService:
                     confidence=data["confidence"],
                     layer=RoutingLayer(data["layer"]),
                     source=data["source"],
+                    description=data.get("description", ""),
                     metadata=data.get("metadata", {}),
                 )
             except (KeyError, TypeError) as e:

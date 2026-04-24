@@ -3,81 +3,92 @@
 ## Session Handoff
 
 <!-- handoff:start -->
-### 2026-04-21 10:40
+### 2026-04-23 16:30
 
-**Session**: 架构评审与系统性优化
+**Session**: Agent Runtime 层实现 + 平台适配 + E2E 验证
 
 **Summary**:
-用户要求深入阅读项目、理解底层逻辑与愿景，从上层视角审视项目是否与设计目标一致。完成深度评审后，根据评审意见执行了6轮迭代优化，最终全部测试通过并推送至远程。
+1. **Agent Runtime 核心模块**（4 个模块，36 单元测试，全部通过）
+   - `IntentInterceptor`: 意图拦截，支持短查询过滤、元查询检测、显式覆盖、多意图标记检测
+   - `SkillInjector`: 平台特定注入（Claude Code additionalContext / OpenCode system_prompt / Kimi CLI instruction）
+   - `DecisionPresenter`: 路由决策透明化（人类可读 + 结构化 JSON）
+   - `PlanExecutor`: 多步骤执行指南（并行/串行、依赖跟踪、完成标记 `步骤 N 完成`）
+2. **平台适配完成**:
+   - Claude Code: `hooks/vibesop-route.sh` + `vibesop-track.sh` + `rules/routing.md` Agent Runtime Rules
+   - Kimi CLI: `AGENTS.md` 强制路由规则 + 多意图处理 + 降级逻辑
+   - OpenCode: plugin 参考模板（index.ts + README.md，待 API 稳定后接入）
+3. **E2E 验证**: `tests/e2e/test_agent_runtime.py` 13 个测试全部通过
+   - 完整链路: query → Interceptor → Injector → Presenter → Executor
+   - 平台适配器文件生成验证
+   - 跨平台一致性验证
 
 **Key Decisions**:
-1. **文档版本同步**: 4个核心文档同步到4.2.0，ROADMAP中v4.1/v4.2标记为已完成
-2. **UnifiedRouter精简**: 提取RouterStatsMixin，739→690行，添加代理方法弃用注释
-3. **测试回归修复**: 3个pre-existing失败全部修复（技能定义、分类器断言、吞吐量目标）
-4. **测试基础设施**: pytest-xdist并行执行，`make test-fast` 255s→39s（~6.6x）
-5. **代码质量**: 消除PytestReturnNotNoneWarning，ruff修复，slow/benchmark标记
-6. **技术债务标注**: SkillManager/UnifiedRouter职责重叠、代理方法迁移计划
+1. Claude Code hook 脚本作为文档/参考生成（标准版不支持 UserPromptSubmit/PreToolUse）
+2. OpenCode plugin 模板暂不接入 render_config()（API 标注 experimental）
+3. E2E 采用 Python 层模拟（不依赖真实 AI Agent 平台），确保 CI 可运行
 
 **Files Modified**:
-- `docs/*` - 版本同步（4个文件）
-- `src/vibesop/core/routing/unified.py` + `stats_mixin.py` - 精简
-- `src/vibesop/core/skills/manager.py` - TECH DEBT注释
-- `tests/*` - 修复与标记（6个文件）
-- `README.md` / `docs/dev/CONTRIBUTING.md` / `Makefile` - 开发者体验
-- `pyproject.toml` - pytest-xdist依赖
-
-**Next Steps**:
-- 考虑提取共享SkillDiscoveryService解决职责重叠
-- UnifiedRouter __init__ Builder模式重构
-- version bump自动化避免文档版本漂移
-
-**Technical Debt**:
-- SkillManager ↔ UnifiedRouter 独立SkillLoader，搜索路径不一致
-- 9个向后兼容代理方法待v5.0移除
-- 全局缓存尝试失败（破坏测试隔离），需其他性能优化方案
+- 新建: `src/vibesop/agent/runtime/`（4 核心模块）
+- 新建: `tests/agent/runtime/`（36 单元测试）
+- 新建: `tests/e2e/test_agent_runtime.py`（13 E2E 测试）
+- 新建: `src/vibesop/adapters/templates/claude-code/hooks/`（2 hook 模板）
+- 新建: `src/vibesop/adapters/templates/opencode/plugin/vibesop/`（2 plugin 文件）
+- 修改: `src/vibesop/adapters/claude_code.py`, `src/vibesop/adapters/kimi_cli.py`
+- 修改: `src/vibesop/adapters/templates/claude-code/rules/routing.md.j2`
 
 **Test Status**:
 ```
-Full suite: 1601 passed, 1 skipped, 0 failed ✅ (78.25% coverage)
-Fast suite: 1593 passed in ~39s ✅
+139 passed, 0 failed ✅
+  - agent/runtime: 36 passed
+  - adapters: 90 passed
+  - e2e/agent_runtime: 13 passed
 ```
+
+**Next Steps**:
+- Phase 3: 真实平台验证（Claude Code hook 实际触发、Kimi CLI AGENTS.md 遵守率）
+- CLI: `vibe build --platform=all` 支持
+- OpenCode plugin: 待 API 稳定后接入 render_config()
 
 ---
 
-### 2026-04-20 13:45
+### 2026-04-23 14:11
 
-**Session**: 代码评审与测试回归修复
+**Session**: 并行执行实现 + LLM 配置修复
 
 **Summary**:
-用户要求深入评审 VibeSOP 最新更新并修复代码问题。通过全面分析发现了多个接口不匹配和测试回归问题，已全部修复，1555 个测试通过。
+1. **并行执行支持**: 实现了多技能编排的并行执行能力
+   - 新增 `ParallelScheduler` 类，支持 DAG 拓扑排序
+   - `ExecutionStep` 添加 `dependencies`、`can_parallel`、`parallel_group` 字段
+   - `ExecutionMode` 枚举 (SEQUENTIAL, PARALLEL, MIXED)
+   - `PlanBuilder._detect_execution_mode()` 自动检测"同时"、"parallel"等关键词
+   - `ExecutionPlan.get_parallel_groups()` 返回并行批次
+2. **AgentRouter API 扩展**:
+   - `get_parallel_preview(plan)` 预览并行执行情况
+   - `execute_plan(plan, executor, max_parallel)` 执行并行计划
+3. **LLM 配置修复**: `TriageService.init_llm_client()` 现在从配置文件读取 `api_base`
+4. **设计文档**: `docs/parallel-execution-design.md`, `docs/core-usecase-analysis.md`
 
 **Key Decisions**:
-1. **版本号同步**: 将 `pyproject.toml` 和 `_version.py` 从 4.0.0 更新到 4.2.0，与 README/CHANGELOG 保持一致。
-
-2. **Typer CLI 测试修复**: 测试必须导入 Typer app 实例而非命令函数。`runner.invoke(skills_app, ["add", "--help"])` 是正确的调用方式。
-
-3. **接口漂移修复**: 发现 `skill_add.py` 中存在 3 处接口不匹配（`SkillSecurityAuditor` 参数、`AuditResult` 属性、`SkillSuggestion` 字段、`UnifiedRouter` 参数），已全部同步。
-
-4. **集成测试 Mock 化**: `questionary` 交互式输入无法在 `CliRunner` 中工作，使用 `unittest.mock.patch` 将其 mock 为非交互式模式。
+1. **DAG 拓扑排序**: 使用依赖关系图确定并行批次
+2. **Semaphore 限流**: 避免过多并发步骤
+3. **配置优先级**: Agent环境 > 配置文件 > 环境变量 > 默认
 
 **Files Modified**:
-- `pyproject.toml` - version 4.0.0 → 4.2.0
-- `src/vibesop/_version.py` - version 4.0.0 → 4.2.0
-- `src/vibesop/cli/commands/skill_add.py` - 修复 4 处接口不匹配
-- `tests/cli/test_skill_add_cmd.py` - 修复 CLI 测试导入
-- `tests/integration/test_skill_add_flow.py` - 修复命令名 + 添加 questionary mock
-- `tests/test_ai_triage.py` - 修复 mock 响应匹配实际内置技能
-
-**Next Steps**:
-- 无紧急任务，所有测试通过
-- 可考虑将 version bump 流程自动化（避免未来版本号不一致）
-
-**Technical Debt**:
-- `skill_add.py` 与核心模块的接口耦合较强，未来重构共享 dataclass 时需同步更新
+- 新建: `src/vibesop/core/orchestration/parallel_scheduler.py`
+- 修改: `src/vibesop/core/models.py`, `src/vibesop/core/orchestration/plan_builder.py`
+- 修改: `src/vibesop/agent/__init__.py`, `src/vibesop/core/routing/triage_service.py`
+- 新建: `docs/parallel-execution-design.md`, `docs/core-usecase-analysis.md`
 
 **Test Status**:
 ```
-1555 passed, 1 skipped, 0 failed ✅
+Orchestration tests: 12/12 passed ✅
+Parallel execution: Working (1.5x speedup on 2+2+1 steps)
+Lint: All checks passed ✅
 ```
+
+**Next Steps**:
+- 添加并行执行的完整测试覆盖
+- 考虑添加 CLI 命令暴露编排功能
+- 提交并行执行实现
 
 <!-- handoff:end -->

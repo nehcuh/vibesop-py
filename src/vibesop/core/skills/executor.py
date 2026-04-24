@@ -39,16 +39,13 @@ from pathlib import Path
 from typing import Any
 
 from vibesop.core.exceptions import SkillNotFoundError
-from vibesop.core.skills.base import Skill
 from vibesop.core.skills.loader import SkillLoader
 from vibesop.core.skills.parser import SkillParser
 from vibesop.core.skills.workflow import (
     ExecutionContext,
     Workflow,
     WorkflowEngine,
-    WorkflowResult,
 )
-from vibesop.security.exceptions import SecurityError as AuditSecurityError
 from vibesop.security.skill_auditor import SkillSecurityAuditor
 
 logger = logging.getLogger(__name__)
@@ -171,7 +168,7 @@ class ExternalSkillExecutor:
         # Initialize dependencies (use injected loader or create new one)
         self._loader = loader or SkillLoader(project_root=self.project_root)
         self._parser = SkillParser()
-        self._auditor = SkillSecurityAuditor()
+        self._auditor = SkillSecurityAuditor(project_root=self.project_root)
         self._workflow_engine: WorkflowEngine | None = None
 
         if enable_execution:
@@ -409,7 +406,7 @@ class ExternalSkillExecutor:
                 return False, errors
 
             # Validate workflow
-            workflow_errors = result.workflow.validate()
+            workflow_errors = result.workflow.validate_workflow()
             errors.extend(workflow_errors)
 
             return len(errors) == 0, errors

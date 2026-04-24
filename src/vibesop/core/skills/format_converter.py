@@ -23,7 +23,7 @@ class SkillFormatConverter:
         """
         raise NotImplementedError
 
-    def convert(self, content: str, file_path: Path) -> tuple[str, dict[str, Any]]:
+    def convert(self, content: str, _file_path: Path) -> tuple[str, dict[str, Any]]:
         """Convert content to standardized format.
 
         Args:
@@ -98,10 +98,7 @@ class GstackConverter(SkillFormatConverter):
             name = skill_id
 
         # Use the full skill_id if it already includes namespace
-        if skill_id.startswith("gstack/"):
-            full_id = skill_id
-        else:
-            full_id = f"gstack/{name}"
+        full_id = skill_id if skill_id.startswith("gstack/") else f"gstack/{name}"
 
         # Infer intent from skill name or directory
         intent = self._infer_intent(name, file_path)
@@ -156,7 +153,7 @@ class GstackConverter(SkillFormatConverter):
 
         return "No description"
 
-    def _infer_intent(self, name: str, file_path: Path) -> str:
+    def _infer_intent(self, name: str, _file_path: Path) -> str:
         """Infer intent from skill name."""
         intent_map = {
             "review": "code-review",
@@ -204,7 +201,7 @@ class SuperpowersConverter(SkillFormatConverter):
         metadata = self._parse_yaml_front_matter(content)
         return "name" in metadata and "id" not in metadata
 
-    def convert(self, content: str, file_path: Path) -> tuple[str, dict[str, Any]]:
+    def convert(self, content: str, _file_path: Path) -> tuple[str, dict[str, Any]]:
         """Convert superpowers format to standard format."""
         metadata = self._parse_yaml_front_matter(content)
         name = metadata.get("name", "")

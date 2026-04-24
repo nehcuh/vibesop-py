@@ -1,58 +1,67 @@
 # Overview - VibeSOP Project
 
-**Last Updated**: 2026-04-21
+**Last Updated**: 2026-04-23 (Agent Runtime + Platform Adaptation)
 
 ---
 
 ## Goals
 
-### Current Week (April 14-21, 2026)
+### Previous Week (April 21-22, 2026) — Completed
 
-1. **Fix VibeSOP Doctor Issues** ✅ (Completed)
-   - Resolved vibe doctor failures for kimi-cli, builtin skills, and hooks
-   - Fixed configuration generation for Kimi CLI
+1. **Lint Sweep** ✅ (Completed - April 22)
+2. **Badge System MVP** ✅ (Completed - April 22)
+3. **UnifiedRouter Refactoring** ✅ (Completed - April 22)
+4. **v4.3 Multi-Turn Support** ✅ (Completed - April 22)
+5. **v4.3 Context-Aware Routing** ✅ (Completed - April 22)
+6. **Custom Matchers Plugin System** ✅ (Completed - April 22)
+7. **A/B Testing Framework** ✅ (Completed - April 22)
+8. **Fix Flaky Tests + v4.3.0 Release** ✅ (Completed - April 22)
 
-2. **External Skills Security Audit Enhancement** ✅ (Completed)
-   - Implemented trusted external skills loading with non-critical threat tolerance
-   - Updated security rules to reduce false positives
-   - Fixed test expectations for new security model
+### Current Week (April 23-30, 2026)
 
-3. **Performance Optimization** ✅ (Completed)
-   - Optimized logging overhead in skill loading (50 QPS → 44 QPS)
-   - Acceptable regression for enhanced security
-   - Performance target adjusted to 40 QPS (realistic)
+1. **Agent Runtime Layer** ✅ (Completed - April 23)
+   - 4 core modules: IntentInterceptor, SkillInjector, DecisionPresenter, PlanExecutor
+   - 36 unit tests, 13 E2E tests, all passing
+   - Platform adapters: Claude Code (hooks), Kimi CLI (AGENTS.md), OpenCode (plugin template)
 
-4. **Skill LLM Configuration Management** ✅ (Completed - April 20)
-   - Implemented skill-level LLM configuration system
-   - Created 5-tier fallback strategy (skill → global → env → agent → default)
-   - Added CLI commands: `vibe skill config list|get|set|delete|import|export`
-   - Integrated auto-configuration with skill installation
-   - All tests passing, documentation complete
+2. **v4.4 Platform Adaptation** 🔄 (In Progress)
+   - Phase 1-2 complete (core + adapters)
+   - Phase 3 pending: Real platform validation (Claude Code hook trigger, Kimi CLI AGENTS.md compliance)
 
-5. **Architecture Review & Optimization** ✅ (Completed - April 21)
-   - Deep architecture review: identified 5 key issues (docs sync, router bloat, test failures, test speed, code quality)
-   - Synced all docs to v4.2.0, fixed ROADMAP status inconsistencies
-   - Extracted RouterStatsMixin from UnifiedRouter (-49 lines)
-   - Fixed 3 pre-existing test failures
-   - Added pytest-xdist: test-fast ~39s (was ~256s)
-   - Eliminated PytestReturnNotNoneWarning, fixed ruff issues
-   - All 1601 tests passing, 78.25% coverage
+3. **CLI `vibe build --platform=all`** ⏳ (Pending)
+   - Support building all platform configs in one command
 
 ---
 
 ## Projects Summary
 
 ### VibeSOP (vibesop-py)
-**Status**: Production Ready (v4.2.0)
-**Description**: AI-assisted development intelligent routing engine with skill-level LLM configuration
-**Coverage**: 78.25% (1,601 tests passing)
+**Status**: v4.4 Agent Runtime Ready (v4.3.0 Released)
+**Description**: AI-assisted development intelligent routing engine with skill-level LLM configuration and Agent Runtime layer
+**Coverage**: 75%+ (1,782+ tests passing)
 **Key Metrics**:
 - Routing accuracy: 94%
 - Performance: 44 QPS (target: 40+ QPS)
 - Skills supported: 91 skills across 4 packs
 - Security audit: All external skills scanned
 - LLM configs: Skill-level configuration with 5-tier fallback
-- Test speed: 39s fast suite / 252s full suite
+- Test speed: 39s fast suite / ~4.5min full suite
+- Agent Runtime modules: 4/4 implemented, 36 unit + 13 E2E tests
+
+**Recent Changes** (2026-04-23):
+- ✅ Agent Runtime layer: IntentInterceptor + SkillInjector + DecisionPresenter + PlanExecutor
+- ✅ Platform adaptation: Claude Code (hooks), Kimi CLI (AGENTS.md), OpenCode (plugin template)
+- ✅ E2E validation: 13 tests covering full chain + platform artifacts + cross-platform consistency
+
+**Recent Changes** (2026-04-21):
+- ✅ Code review optimization plan: P0-1/P0-2/P0-3/H1/H4/M3/M4 all complete
+- ✅ 27 bare `except Exception` narrowed to specific types
+- ✅ `LayerResult` unified to Pydantic BaseModel
+- ✅ Duplicate `RoutingConfig` resolved (adapters → `RoutingPolicy`)
+- ✅ `UnifiedRouter` supports `skill_loader` injection
+- ✅ `fallback_mode`/`default_strategy` now Literal-validated
+- ✅ `_edit_execution_plan` empty plan guard added
+- ✅ `_handle_single_result` split from 213 lines to 6 focused functions
 
 **Recent Changes** (2026-04-21):
 - ✅ Architecture review with professional assessment
@@ -73,9 +82,9 @@
 - ✅ All tests passing (1000+ lines of new code, fully tested)
 
 **Next Steps**:
-- Extract shared SkillDiscoveryService to unify SkillManager/UnifiedRouter loader paths
+- Use new `skill_loader` injection to unify SkillManager/UnifiedRouter loader paths
 - Consider Builder pattern for UnifiedRouter __init__ (~110 lines)
-- Monitor test suite health (current: 1601 passed)
+- Monitor test suite health (current: 1687 passed)
 - Version bump automation (avoid future doc version drift)
 
 ---

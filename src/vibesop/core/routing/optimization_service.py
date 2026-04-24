@@ -6,13 +6,14 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 from vibesop.core.exceptions import MatcherError
+from vibesop.core.matching import MatchResult
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
     from vibesop.core.config import OptimizationConfig, RoutingConfig
     from vibesop.core.instinct import InstinctLearner
-    from vibesop.core.matching import MatchResult, RoutingContext
+    from vibesop.core.matching import RoutingContext
     from vibesop.core.optimization import PreferenceBooster, SkillClusterIndex
     from vibesop.core.routing.conflict import ConflictResolver
 
@@ -38,6 +39,7 @@ class OptimizationService:
         self._cluster_built = False
         self._conflict_resolver = conflict_resolver
         self._get_instinct_learner = get_instinct_learner
+        self._evaluator = None
 
     def apply_optimizations(
         self,
@@ -45,7 +47,7 @@ class OptimizationService:
         query: str,
         context: RoutingContext | None = None,
     ) -> tuple[MatchResult, list[MatchResult]]:
-        """Apply preference boost, instinct boost, and production conflict resolution."""
+        """Apply preference boost, instinct boost, session stickiness, and production conflict resolution."""
         if self._optimization_config.enabled and self._optimization_config.preference_boost.enabled:
             try:
                 matches = self._preference_booster.boost(matches, query)
@@ -55,10 +57,213 @@ class OptimizationService:
         # Apply instinct-based boosting
         matches = self.apply_instinct_boost(matches, query, context)
 
+        # Apply session stickiness: slight boost to current skill for continuity
+        matches = self._apply_session_stickiness(matches, context)
+
+        # Apply habit boost: favor skills the user consistently chooses
+        matches = self._apply_habit_boost(matches, context)
+
+        # Apply quality boost: favor high-grade skills based on evaluator data
+        matches = self._apply_quality_boost(matches)
+
+        # Apply project context boost: favor skills matching detected project type/tech stack
+        matches = self._apply_project_context_boost(matches, context)
+
         if len(matches) <= 1:
             return matches[0], []
 
         return self.resolve_conflicts(matches, query)
+
+    def _apply_session_stickiness(
+        self,
+        matches: list[MatchResult],
+        context: RoutingContext | None,
+    ) -> list[MatchResult]:
+        """Slight confidence boost to current skill for multi-turn continuity.
+
+        This provides continuity across CLI invocations by gently favoring
+        the skill selected in the previous turn, unless the new query clearly
+        indicates a different intent.
+        """
+        if not context or not context.current_skill:
+            return matches
+
+        current_skill = context.current_skill
+        stickiness_boost = getattr(self._config, "session_stickiness_boost", 0.03)
+
+        if stickiness_boost <= 0:
+            return matches
+
+        boosted: list[MatchResult] = []
+        for m in matches:
+            if m.skill_id == current_skill:
+                # Create a new MatchResult with boosted confidence
+                boosted_match = MatchResult(
+                    skill_id=m.skill_id,
+                    confidence=min(m.confidence + stickiness_boost, 1.0),
+                    score_breakdown={**m.score_breakdown, "session_stickiness": stickiness_boost},
+                    matcher_type=m.matcher_type,
+                    matched_keywords=m.matched_keywords,
+                    matched_patterns=m.matched_patterns,
+                    semantic_score=m.semantic_score,
+                    metadata={**m.metadata, "session_boost": True},
+                )
+                boosted.append(boosted_match)
+            else:
+                boosted.append(m)
+
+        # Re-sort by confidence after boosting
+        boosted.sort(key=lambda x: x.confidence, reverse=True)
+        return boosted
+
+    def _apply_habit_boost(
+        self,
+        matches: list[MatchResult],
+        context: RoutingContext | None,
+    ) -> list[MatchResult]:
+        """Boost skills that the user consistently chooses for similar queries.
+
+        Habit patterns are learned from session route history.
+        """
+        if not context or not context.habit_boosts:
+            return matches
+
+        boosted: list[MatchResult] = []
+        for m in matches:
+            boost = context.habit_boosts.get(m.skill_id, 0.0)
+            if boost > 0.0:
+                boosted_match = MatchResult(
+                    skill_id=m.skill_id,
+                    confidence=min(m.confidence + boost, 1.0),
+                    score_breakdown={**m.score_breakdown, "habit_boost": boost},
+                    matcher_type=m.matcher_type,
+                    matched_keywords=m.matched_keywords,
+                    matched_patterns=m.matched_patterns,
+                    semantic_score=m.semantic_score,
+                    metadata={**m.metadata, "habit_boost": True},
+                )
+                boosted.append(boosted_match)
+            else:
+                boosted.append(m)
+
+        boosted.sort(key=lambda x: x.confidence, reverse=True)
+        return boosted
+
+    def _apply_quality_boost(
+        self,
+        matches: list[MatchResult],
+    ) -> list[MatchResult]:
+        """Boost or demote skills based on evaluator quality scores.
+
+        Grade A skills receive a small boost; Grade F skills are demoted.
+        Only skills with sufficient usage history (>=3 routes) are adjusted
+        to avoid penalizing new skills.
+        """
+        if not matches:
+            return matches
+
+        try:
+            from vibesop.core.skills.evaluator import RoutingEvaluator
+        except ImportError:
+            return matches
+
+        if self._evaluator is None:
+            self._evaluator = RoutingEvaluator()
+        evaluator = self._evaluator
+        grade_adjustment = {"A": 0.05, "B": 0.02, "C": 0.0, "D": -0.02, "F": -0.05}
+
+        boosted: list[MatchResult] = []
+        for m in matches:
+            try:
+                evaluation = evaluator.evaluate_skill(m.skill_id)
+            except (OSError, ValueError, RuntimeError):
+                evaluation = None
+
+            if evaluation and evaluation.total_routes >= 3:
+                adjustment = grade_adjustment.get(evaluation.grade, 0.0)
+                if adjustment != 0.0:
+                    boosted_match = MatchResult(
+                        skill_id=m.skill_id,
+                        confidence=min(max(m.confidence + adjustment, 0.0), 1.0),
+                        score_breakdown={
+                            **m.score_breakdown,
+                            "quality_adjustment": adjustment,
+                        },
+                        matcher_type=m.matcher_type,
+                        matched_keywords=m.matched_keywords,
+                        matched_patterns=m.matched_patterns,
+                        semantic_score=m.semantic_score,
+                        metadata={
+                            **m.metadata,
+                            "quality_boost": True,
+                            "grade": evaluation.grade,
+                        },
+                    )
+                    boosted.append(boosted_match)
+                else:
+                    boosted.append(m)
+            else:
+                boosted.append(m)
+
+        # Re-sort by confidence after quality adjustments
+        boosted.sort(key=lambda x: x.confidence, reverse=True)
+        return boosted
+
+    def _apply_project_context_boost(
+        self,
+        matches: list[MatchResult],
+        context: RoutingContext | None,
+    ) -> list[MatchResult]:
+        """Boost skills that match the detected project type or tech stack.
+
+        Provides context-aware routing by slightly favoring skills
+        that are relevant to the user's project technology.
+        """
+        if not context or not context.project_type:
+            return matches
+
+        project_type = context.project_type
+        tech_stack = context.recent_files or []
+        boosted: list[MatchResult] = []
+
+        for m in matches:
+            boost = 0.0
+            skill_text = " ".join(m.matched_keywords or []).lower()
+
+            # Boost if skill keywords mention the project type
+            if project_type.lower() in skill_text:
+                boost += 0.04
+
+            # Boost if skill keywords mention any detected tech stack
+            for tech in tech_stack:
+                if tech.lower() in skill_text:
+                    boost += 0.02
+
+            if boost > 0.0:
+                boosted_match = MatchResult(
+                    skill_id=m.skill_id,
+                    confidence=min(m.confidence + boost, 1.0),
+                    score_breakdown={
+                        **m.score_breakdown,
+                        "project_context": boost,
+                    },
+                    matcher_type=m.matcher_type,
+                    matched_keywords=m.matched_keywords,
+                    matched_patterns=m.matched_patterns,
+                    semantic_score=m.semantic_score,
+                    metadata={
+                        **m.metadata,
+                        "project_type": project_type,
+                        "project_boost": True,
+                    },
+                )
+                boosted.append(boosted_match)
+            else:
+                boosted.append(m)
+
+        # Re-sort by confidence after project context adjustments
+        boosted.sort(key=lambda x: x.confidence, reverse=True)
+        return boosted
 
     def resolve_conflicts(
         self, matches: list[MatchResult], query: str

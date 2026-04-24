@@ -166,7 +166,7 @@ def _analyze_session(
             try:
                 suggestions = analyzer.analyze_session_file(session_file)
                 all_suggestions.extend(suggestions)
-            except Exception:
+            except (OSError, ValueError):
                 continue
 
         if not all_suggestions:

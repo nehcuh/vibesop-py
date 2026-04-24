@@ -9,8 +9,8 @@ from vibesop.core.skills.understander import (
     CategoryRules,
     ComplexityLevel,
     KeywordAnalyzer,
-    SkillAutoConfigurator,
     SkillAnalysis,
+    SkillAutoConfigurator,
     UrgencyLevel,
 )
 

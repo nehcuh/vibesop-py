@@ -13,7 +13,7 @@ import re
 from pathlib import Path  # noqa: TC003
 from typing import Any
 
-from ruamel.yaml import YAML
+from ruamel.yaml import YAML, YAMLError
 
 from vibesop.core.skills.base import SkillMetadata, SkillType
 from vibesop.core.skills.workflow import Workflow, parse_workflow_from_markdown
@@ -67,7 +67,7 @@ def extract_frontmatter(content: str) -> tuple[dict[str, Any] | None, str]:
         if not isinstance(data, dict):
             return None, content
         return data, body
-    except Exception:
+    except (YAMLError, ValueError, TypeError):
         return None, content
 
 

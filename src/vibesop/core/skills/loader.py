@@ -103,6 +103,7 @@ class SkillLoader:
         return [
             self.project_root / "skills",
             self.project_root / ".vibe" / "skills",
+            self.project_root / "core" / "skills",
         ]
 
     def discover_all(self, force_reload: bool = False) -> dict[str, LoadedSkill]:
@@ -137,6 +138,20 @@ class SkillLoader:
         # Load external skills from packs (superpowers, gstack, etc.)
         if self._enable_external and self._external_loader:
             self._load_external_skills()
+
+        # Filter out disabled and archived skills at discovery time
+        from vibesop.core.skills.config_manager import SkillConfigManager, SkillLifecycleState
+
+        filtered: dict[str, LoadedSkill] = {}
+        for skill_id, definition in self._skill_cache.items():
+            config = SkillConfigManager.get_skill_config(skill_id)
+            if config is not None:
+                if not config.enabled:
+                    continue
+                if config.lifecycle == SkillLifecycleState.ARCHIVED.value:
+                    continue
+            filtered[skill_id] = definition
+        self._skill_cache = filtered
 
         return self._skill_cache
 

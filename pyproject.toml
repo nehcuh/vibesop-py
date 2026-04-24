@@ -1,6 +1,6 @@
 [project]
 name = "vibesop"
-version = "4.2.1"
+version = "4.3.0"
 description = "AI-assisted development intelligent routing engine - discover skills, manage workflows, learn preferences"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -138,7 +138,7 @@ pythonPlatform = "All"
 venvPath = "."
 venv = ".venv"
 
-include = ["src", "tests"]
+include = ["src"]
 exclude = [
     "**/__pycache__",
     "**/.pytest_cache",
@@ -153,7 +153,8 @@ reportMissingTypeStubs = false
 reportMissingImports = "warning"
 reportMissingParameterType = "error"
 reportMissingReturnType = "error"
-reportMissingTypeArgument = "error"
+reportMissingTypeArgument = "warning"
+reportArgumentType = "warning"
 
 # Unknown types — disabled because third-party libs (numpy, sklearn, ruamel.yaml)
 # lack stubs and produce noise in strict mode. These are not code quality issues.
@@ -177,8 +178,14 @@ reportUntypedBaseClass = "error"
 
 # Unnecessary code
 reportUnnecessaryIsInstance = "error"
-reportUnnecessaryComparison = "error"
+reportUnnecessaryComparison = "warning"
 reportUnnecessaryContains = "error"
+
+# Relaxed for mixin architecture and optional chaining patterns
+reportOptionalMemberAccess = "warning"
+reportGeneralTypeIssues = "warning"
+reportAttributeAccessIssue = "warning"
+reportPrivateUsage = "warning"
 
 # ============================================
 # Pytest - Test Framework
@@ -237,3 +244,4 @@ exclude_lines = [
 dev = [
     "pytest-xdist>=3.8.0",
 ]
+

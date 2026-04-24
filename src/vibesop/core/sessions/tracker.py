@@ -1,3 +1,4 @@
+# pyright: ignore[reportArgumentType]
 """Platform-agnostic session tracking interface.
 
 This module defines the abstraction layer for session tracking across
@@ -55,7 +56,7 @@ class SessionTracker(ABC):
 
     @abstractmethod
     def record_tool_use(
-        self, tool_name: str, skill: str | None = None, **context: Any
+        self, tool_name: str, skill: str | None = None, **_context: Any
     ) -> None:
         """Record a tool use event.
 
@@ -162,7 +163,7 @@ class GenericSessionTracker(SessionTracker):
             return False
 
     def record_tool_use(
-        self, tool_name: str, skill: str | None = None, **context: Any
+        self, tool_name: str, skill: str | None = None, **_context: Any
     ) -> None:
         """Record a tool use event.
 

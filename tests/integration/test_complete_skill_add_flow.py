@@ -7,8 +7,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 
-from vibesop.core.skills.understander import understand_skill_from_file
 from vibesop.core.llm_config import LLMConfigResolver, is_in_agent_environment
+from vibesop.core.skills.understander import understand_skill_from_file
 
 
 def test_complete_skill_understanding_flow():
@@ -67,7 +67,7 @@ This skill provides a structured approach to debugging:
         print(f"✓ Config Source: {config.config_source}")
 
         if config.requires_llm and config.llm_config:
-            print(f"\n✓ LLM Configuration:")
+            print("\n✓ LLM Configuration:")
             llm = config.llm_config
             provider = llm.get("provider", "N/A")
             models = llm.get("models", [])
@@ -96,14 +96,14 @@ This skill provides a structured approach to debugging:
             )
 
             if llm_config:
-                print(f"  ✓ LLM Available!")
+                print("  ✓ LLM Available!")
                 print(f"    Provider: {llm_config.provider}")
                 print(f"    Model: {llm_config.model}")
                 print(f"    Source: {llm_config.source.value}")
                 print(f"    Confidence: {llm_config.confidence:.1%}")
             else:
-                print(f"  ⚠ No LLM configured")
-                print(f"    Skill will work in limited mode")
+                print("  ⚠ No LLM configured")
+                print("    Skill will work in limited mode")
         else:
             print("\n✓ Skill does not require LLM - ready to use!")
 
@@ -126,7 +126,7 @@ This skill provides a structured approach to debugging:
         with open(config_file) as f:
             saved_config = yaml.safe_load(f)
 
-        print(f"\n✓ Saved Configuration:")
+        print("\n✓ Saved Configuration:")
         print(f"  Skills: {list(saved_config.get('skills', {}).keys())}")
 
         if config.skill_id in saved_config.get('skills', {}):
@@ -158,7 +158,7 @@ This skill provides a structured approach to debugging:
             if llm_config:
                 print(f"  • LLM available: {llm_config.provider}/{llm_config.model}")
             else:
-                print(f"  • LLM available: No (will work in limited mode)")
+                print("  • LLM available: No (will work in limited mode)")
 
         # Flow completed successfully - assertions below verify key outcomes
         assert config.skill_id == "systematic-debugging"

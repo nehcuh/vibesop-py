@@ -26,6 +26,7 @@ class TestSkillAddCommand:
     def test_command_signature(self):
         """Test command signature has correct parameters."""
         import inspect
+
         from vibesop.cli.commands.skill_add import add
 
         sig = inspect.signature(add)
@@ -68,8 +69,9 @@ class TestSkillAddCommand:
 
     def test_save_auto_config(self, tmp_path):
         """Test auto-configuration file generation."""
-        from vibesop.cli.commands.skill_add import _save_auto_config
         import yaml
+
+        from vibesop.cli.commands.skill_add import _save_auto_config
 
         # Create test config
         config = {

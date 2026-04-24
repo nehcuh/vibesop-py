@@ -8,6 +8,7 @@ import contextlib
 from pathlib import Path
 from typing import Any
 
+import jinja2
 from jinja2 import Environment, FileSystemLoader
 
 from vibesop.hooks.base import Hook
@@ -301,7 +302,7 @@ class HookInstaller:
                 platform=platform,
                 hook_point=hook_point.value,
             )
-        except Exception:
+        except (jinja2.TemplateNotFound, jinja2.TemplateError):
             # Fallback to default hook content
             return self._get_default_hook_content(platform, hook_point)
 

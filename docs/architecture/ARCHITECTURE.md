@@ -1,7 +1,7 @@
 # VibeSOP Architecture
 
-> **Version**: 4.2.0
-> **Last Updated**: 2026-04-21
+> **Version**: 4.3.0
+> **Last Updated**: 2026-04-24
 
 ---
 
@@ -63,7 +63,48 @@ vibe analyze session              → SessionAnalyzer.analyze()
 
 ---
 
-### 2. Routing Engine (`src/vibesop/core/routing/`)
+### 2. Agent Runtime Layer (`src/vibesop/agent/`) ✨ v4.3.0
+
+Direct Python API for AI Agents to use VibeSOP routing with their internal LLM, without requiring external API key configuration.
+
+```python
+# Entry point for AI Agents
+from vibesop.agent import AgentRouter, SimpleLLM, SimpleResponse
+
+# Wrap Agent's internal LLM
+class AgentLLM(SimpleLLM):
+    def call(self, prompt, max_tokens=100, temperature=0.1):
+        # Use Agent's internal LLM here
+        response = agent_internal_llm(prompt)
+        return SimpleResponse(content=response)
+
+# Route with Agent's LLM
+router = AgentRouter()
+router.set_llm(AgentLLM())
+result = router.route("帮我审查代码质量")
+print(result.primary.skill_id)  # gstack/review
+```
+
+**Key Components**:
+- `AgentRouter` — UnifiedRouter wrapper for Agent integration
+- `SimpleLLM` — Base class for LLM wrapper
+- `SimpleResponse` — Response object matching TriageService interface
+
+**Runtime Services** (`runtime/`):
+- `skill_injector.py` — Inject skill definitions into Agent context
+- `decision_presenter.py` — Present routing decisions to Agent
+- `plan_executor.py` — Execute multi-step plans within Agent
+- `intent_interceptor.py` — Intercept and interpret complex intents
+
+**Why Agent Runtime?**
+- ✅ No external API key needed (uses Agent's internal LLM)
+- ✅ Direct Python API (no subprocess overhead)
+- ✅ Deep integration with Agent's session state
+- ✅ Platform adaptation (Claude Code, Cursor, Continue.dev)
+
+---
+
+### 3. Routing Engine (`src/vibesop/core/routing/`)
 
 The heart of VibeSOP — routes queries to skills using a 7-layer pipeline.
 
@@ -106,7 +147,7 @@ result = router.route("debug this error")
 
 ---
 
-### 3. Matching Infrastructure (`src/vibesop/core/matching/`)
+### 4. Matching Infrastructure (`src/vibesop/core/matching/`)
 
 Reusable matching algorithms used by the routing pipeline.
 
@@ -126,7 +167,7 @@ matches = matcher.match("debug error", candidates, top_k=3)
 
 ---
 
-### 4. Skill Management (`src/vibesop/core/skills/`)
+### 5. Skill Management (`src/vibesop/core/skills/`)
 
 Discovers, loads, and manages skills from multiple sources.
 
@@ -154,7 +195,7 @@ info = manager.get_skill_info("systematic-debugging")
 
 ---
 
-### 5. Security (`src/vibesop/security/`)
+### 6. Security (`src/vibesop/security/`)
 
 Audits external skills before loading to prevent malicious code.
 
@@ -183,7 +224,7 @@ result = auditor.audit_skill(skill_path)
 
 ---
 
-### 6. Configuration (`src/vibesop/core/config/`)
+### 7. Configuration (`src/vibesop/core/config/`)
 
 Multi-source configuration with clear priority.
 

@@ -23,13 +23,19 @@ from rich.panel import Panel
 from rich.table import Table
 
 from vibesop.core.skills.config_manager import (
-    SkillConfig,
     SkillConfigManager,
     list_skill_configs,
 )
 from vibesop.core.skills.manager import SkillManager
 
 console = Console()
+
+_IMPORT_CONFIG_ARGUMENT = typer.Argument(
+    ..., help="Path to configuration file (JSON or YAML)"
+)
+_EXPORT_CONFIG_ARGUMENT = typer.Argument(
+    ..., help="Output file path (JSON or YAML)"
+)
 
 
 def list_configs() -> None:
@@ -182,11 +188,11 @@ def set_config(
         skill_def = skill_manager.get_skill(skill_id)
         if skill_def:
             console.print(f"[dim]Skill found: {skill_def.metadata.name}[/dim]\n")
-    except Exception:
+    except (OSError, ValueError):
         console.print(f"[yellow]⚠ Warning: Skill '{skill_id}' not found in registry[/yellow]")
         console.print("[dim]Configuration will be saved, but skill may not be installed yet\n[/dim]")
 
-    # 如果没有提供参数，使用交互式模式
+    # 如果没有提供参数,使用交互式模式
     if not any([provider, model]):
         console.print("[dim]Interactive mode - answer the questions below[/dim]\n")
 
@@ -307,7 +313,7 @@ def delete_config(skill_id: str) -> None:
 
 
 def import_config(
-    config_file: Path = typer.Argument(..., help="Path to configuration file (JSON or YAML)"),
+    config_file: Path = _IMPORT_CONFIG_ARGUMENT,
 ) -> None:
     """Import skill configurations from a file.
 
@@ -347,7 +353,7 @@ def import_config(
                 configs = json.load(f)
     except Exception as e:
         console.print(f"[red]✗ Failed to load file: {e}[/red]")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from e
 
     # 导入配置
     imported = 0
@@ -368,7 +374,7 @@ def import_config(
 
 
 def export_config(
-    output_file: Path = typer.Argument(..., help="Output file path (JSON or YAML)"),
+    output_file: Path = _EXPORT_CONFIG_ARGUMENT,
 ) -> None:
     """Export all skill configurations to a file.
 
@@ -411,4 +417,4 @@ def export_config(
         console.print(f"  [dim]Output:[/dim] {output_file}")
     except Exception as e:
         console.print(f"[red]✗ Failed to save file: {e}[/red]")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from e

@@ -11,7 +11,7 @@ from vibesop.adapters.models import (
     ManifestMetadata,
     PolicySet,
     RenderResult,
-    RoutingConfig,
+    RoutingPolicy,
     SecurityPolicy,
 )
 from vibesop.core.models import SkillDefinition
@@ -61,12 +61,12 @@ class TestSecurityPolicy:
         assert SecurityPolicy(max_file_size=100).max_file_size == 100
 
 
-class TestRoutingConfig:
-    """Test RoutingConfig model."""
+class TestRoutingPolicy:
+    """Test RoutingPolicy model."""
 
     def test_create_default(self) -> None:
-        """Test creating RoutingConfig with defaults."""
-        config = RoutingConfig()
+        """Test creating RoutingPolicy with defaults."""
+        config = RoutingPolicy()
 
         assert config.enable_ai_routing is True
         assert config.confidence_threshold == 0.6
@@ -74,8 +74,8 @@ class TestRoutingConfig:
         assert config.enable_preference_learning is True
 
     def test_create_custom(self) -> None:
-        """Test creating RoutingConfig with custom values."""
-        config = RoutingConfig(
+        """Test creating RoutingPolicy with custom values."""
+        config = RoutingPolicy(
             enable_ai_routing=False,
             confidence_threshold=0.8,
             max_candidates=5,
@@ -91,29 +91,29 @@ class TestRoutingConfig:
         """Test confidence_threshold validation."""
         # Below minimum
         with pytest.raises(ValueError):
-            RoutingConfig(confidence_threshold=-0.1)
+            RoutingPolicy(confidence_threshold=-0.1)
 
         # Above maximum
         with pytest.raises(ValueError):
-            RoutingConfig(confidence_threshold=1.1)
+            RoutingPolicy(confidence_threshold=1.1)
 
         # Valid values
-        assert RoutingConfig(confidence_threshold=0.0).confidence_threshold == 0.0
-        assert RoutingConfig(confidence_threshold=1.0).confidence_threshold == 1.0
+        assert RoutingPolicy(confidence_threshold=0.0).confidence_threshold == 0.0
+        assert RoutingPolicy(confidence_threshold=1.0).confidence_threshold == 1.0
 
     def test_max_candidates_bounds(self) -> None:
         """Test max_candidates validation."""
         # Below minimum
         with pytest.raises(ValueError):
-            RoutingConfig(max_candidates=0)
+            RoutingPolicy(max_candidates=0)
 
         # Above maximum
         with pytest.raises(ValueError):
-            RoutingConfig(max_candidates=11)
+            RoutingPolicy(max_candidates=11)
 
         # Valid values
-        assert RoutingConfig(max_candidates=1).max_candidates == 1
-        assert RoutingConfig(max_candidates=10).max_candidates == 10
+        assert RoutingPolicy(max_candidates=1).max_candidates == 1
+        assert RoutingPolicy(max_candidates=10).max_candidates == 10
 
 
 class TestPolicySet:
@@ -124,14 +124,14 @@ class TestPolicySet:
         policies = PolicySet()
 
         assert isinstance(policies.security, SecurityPolicy)
-        assert isinstance(policies.routing, RoutingConfig)
+        assert isinstance(policies.routing, RoutingPolicy)
         assert policies.behavior == {}
         assert policies.custom == {}
 
     def test_create_with_values(self) -> None:
         """Test creating PolicySet with values."""
         security = SecurityPolicy(max_file_size=1024)
-        routing = RoutingConfig(confidence_threshold=0.8)
+        routing = RoutingPolicy(confidence_threshold=0.8)
         behavior = {"strict": True}
         custom = {"custom_key": "custom_value"}
 
@@ -204,7 +204,7 @@ class TestManifest:
         )
         metadata = ManifestMetadata(platform="test-platform")
         security = SecurityPolicy(max_file_size=1024)
-        routing = RoutingConfig(confidence_threshold=0.8)
+        routing = RoutingPolicy(confidence_threshold=0.8)
 
         manifest = Manifest(
             skills=[skill],
@@ -244,17 +244,17 @@ class TestManifest:
         effective2 = manifest2.get_effective_security_policy()
         assert effective2.max_file_size == 1024
 
-    def test_get_effective_routing_config(self) -> None:
-        """Test get_effective_routing_config method."""
+    def test_get_effective_routing_policy(self) -> None:
+        """Test get_effective_routing_policy method."""
         # With deprecated routing field
-        routing = RoutingConfig(confidence_threshold=0.8)
+        routing = RoutingPolicy(confidence_threshold=0.8)
         metadata = ManifestMetadata(platform="test-platform")
         manifest = Manifest(
             metadata=metadata,
             routing=routing,
         )
 
-        effective = manifest.get_effective_routing_config()
+        effective = manifest.get_effective_routing_policy()
         assert effective.confidence_threshold == 0.8
 
         # Without deprecated field
@@ -263,7 +263,7 @@ class TestManifest:
             policies=PolicySet(routing=routing),
         )
 
-        effective2 = manifest2.get_effective_routing_config()
+        effective2 = manifest2.get_effective_routing_policy()
         assert effective2.confidence_threshold == 0.8
 
     def test_overlay_validation(self) -> None:

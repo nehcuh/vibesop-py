@@ -13,7 +13,6 @@ commands:
   - riper-status
 intent: development
 namespace: builtin
-version: 1.0.0
 type: prompt
 ---
 

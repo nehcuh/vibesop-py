@@ -1,9 +1,9 @@
 """技能配置管理器 - 管理技能级别的 LLM 和其他配置.
 
-该模块提供了：
+该模块提供了:
 1. 技能级别的 LLM 配置加载
 2. 全局配置与技能配置的合并
-3. 配置优先级：技能配置 > 全局配置 > 环境变量 > 默认值
+3. 配置优先级:技能配置 > 全局配置 > 环境变量 > 默认值
 
 使用方式:
     # 获取技能的 LLM 配置
@@ -18,7 +18,8 @@
 """
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
@@ -35,6 +36,21 @@ logger = logging.getLogger(__name__)
 console = Console()
 
 
+class SkillLifecycleState(StrEnum):
+    """技能生命周期状态 (v5.0 预埋,为 v5.1 淘汰机制准备).
+
+    DRAFT:      新创建,未经验证
+    ACTIVE:     正常使用中(默认)
+    DEPRECATED: 已标记弃用,仍可用但会提示
+    ARCHIVED:   已归档,路由时自动排除
+    """
+
+    DRAFT = "draft"
+    ACTIVE = "active"
+    DEPRECATED = "deprecated"
+    ARCHIVED = "archived"
+
+
 @dataclass
 class SkillConfig:
     """技能配置"""
@@ -43,7 +59,19 @@ class SkillConfig:
     enabled: bool = True
     priority: int = 50
     category: str = "development"
-    scope: str = "project"
+    scope: str = "global"
+
+    # 生命周期状态 (v5.0 预埋)
+    lifecycle: str = "active"
+
+    # 使用统计预留字段 (v5.1 评估体系将填充)
+    usage_stats: dict[str, Any] = field(default_factory=dict)
+
+    # 版本历史预留字段 (v5.1 版本追踪将填充)
+    version_history: list[dict[str, Any]] = field(default_factory=list)
+
+    # 评估上下文扩展槽 (v5.1 评分维度将填充)
+    evaluation_context: dict[str, Any] = field(default_factory=dict)
 
     # LLM 配置
     requires_llm: bool = False
@@ -77,7 +105,7 @@ class SkillConfigManager:
             skill_id: 技能 ID
 
         Returns:
-            技能配置对象，如果不存在则返回 None
+            技能配置对象,如果不存在则返回 None
         """
 
         # 1. 尝试从技能配置文件读取
@@ -85,7 +113,7 @@ class SkillConfigManager:
         if skill_config:
             return skill_config
 
-        # 2. 如果没有找到，返回默认配置
+        # 2. 如果没有找到,返回默认配置
         logger.debug(f"No config found for skill {skill_id}, using defaults")
         return SkillConfig(skill_id=skill_id)
 
@@ -93,9 +121,9 @@ class SkillConfigManager:
     def get_skill_llm_config(cls, skill_id: str) -> LLMConfig | None:
         """获取技能的 LLM 配置
 
-        优先级：
-        1. 技能级别的 LLM 配置（.vibe/skills/auto-config.yaml）
-        2. 全局 LLM 配置（.vibe/config.yaml）
+        优先级:
+        1. 技能级别的 LLM 配置(.vibe/skills/auto-config.yaml)
+        2. 全局 LLM 配置(.vibe/config.yaml)
         3. 环境变量
         4. Agent 环境
         5. 默认配置
@@ -145,11 +173,11 @@ class SkillConfigManager:
         Args:
             skill_id: 技能 ID
             llm_config: LLM 配置字典
-                - provider: 提供商（anthropic, openai, etc.）
+                - provider: 提供商(anthropic, openai, etc.)
                 - model: 模型名称
                 - temperature: 温度参数
-                - api_key: API 密钥（可选）
-                - api_base: API 基础 URL（可选）
+                - api_key: API 密钥(可选)
+                - api_base: API 基础 URL(可选)
         """
 
         # 加载现有配置
@@ -190,7 +218,11 @@ class SkillConfigManager:
                 enabled=skill_data.get("enabled", True),
                 priority=skill_data.get("priority", 50),
                 category=skill_data.get("category", "development"),
-                scope=skill_data.get("scope", "project"),
+                scope=skill_data.get("scope", "global"),
+                lifecycle=skill_data.get("lifecycle", "active"),
+                usage_stats=skill_data.get("usage_stats", {}),
+                version_history=skill_data.get("version_history", []),
+                evaluation_context=skill_data.get("evaluation_context", {}),
                 requires_llm=skill_data.get("requires_llm", False),
                 llm_provider=skill_data.get("llm", {}).get("provider"),
                 llm_model=skill_data.get("llm", {}).get("model"),
@@ -241,6 +273,38 @@ class SkillConfigManager:
         console.print(f"[green]✓ Config updated for skill: {skill_id}[/green]")
 
     @classmethod
+    def set_enabled(cls, skill_id: str, enabled: bool) -> None:
+        """设置技能的启用状态
+
+        Args:
+            skill_id: 技能 ID
+            enabled: 是否启用
+        """
+        cls.update_skill_config(skill_id, {"enabled": enabled})
+
+    @classmethod
+    def set_scope(cls, skill_id: str, scope: str) -> None:
+        """设置技能的作用域
+
+        Args:
+            skill_id: 技能 ID
+            scope: 作用域 ("global", "project", "session")
+        """
+        cls.update_skill_config(skill_id, {"scope": scope})
+
+    @classmethod
+    def set_lifecycle(cls, skill_id: str, state: str) -> None:
+        """设置技能的生命周期状态
+
+        Args:
+            skill_id: 技能 ID
+            state: 生命周期状态 ("draft", "active", "deprecated", "archived")
+        """
+        if state not in (s.value for s in SkillLifecycleState):
+            raise ValueError(f"Invalid lifecycle state: {state}")
+        cls.update_skill_config(skill_id, {"lifecycle": state})
+
+    @classmethod
     def delete_skill_config(cls, skill_id: str) -> None:
         """删除技能配置
 
@@ -280,6 +344,10 @@ class SkillConfigManager:
             priority=skill_data.get("priority", 50),
             category=skill_data.get("category", "development"),
             scope=skill_data.get("scope", "project"),
+            lifecycle=skill_data.get("lifecycle", "active"),
+            usage_stats=skill_data.get("usage_stats", {}),
+            version_history=skill_data.get("version_history", []),
+            evaluation_context=skill_data.get("evaluation_context", {}),
             requires_llm=skill_data.get("requires_llm", False),
             llm_provider=llm_data.get("provider"),
             llm_model=llm_data.get("model"),
@@ -330,7 +398,7 @@ class SkillConfigManager:
 
 # 便捷函数
 def get_skill_llm_config(skill_id: str) -> LLMConfig | None:
-    """获取技能的 LLM 配置（便捷函数）
+    """获取技能的 LLM 配置(便捷函数)
 
     Args:
         skill_id: 技能 ID
@@ -342,7 +410,7 @@ def get_skill_llm_config(skill_id: str) -> LLMConfig | None:
 
 
 def set_skill_llm_config(skill_id: str, llm_config: dict[str, Any]) -> None:
-    """设置技能的 LLM 配置（便捷函数）
+    """设置技能的 LLM 配置(便捷函数)
 
     Args:
         skill_id: 技能 ID
@@ -352,7 +420,7 @@ def set_skill_llm_config(skill_id: str, llm_config: dict[str, Any]) -> None:
 
 
 def list_skill_configs() -> dict[str, SkillConfig]:
-    """列出所有技能配置（便捷函数）
+    """列出所有技能配置(便捷函数)
 
     Returns:
         技能 ID -> 技能配置的字典

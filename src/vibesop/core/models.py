@@ -21,7 +21,9 @@ class RoutingLayer(StrEnum):
     TFIDF = "tfidf"
     EMBEDDING = "embedding"
     LEVENSHTEIN = "levenshtein"
+    CUSTOM = "custom"
     NO_MATCH = "no_match"
+    FALLBACK_LLM = "fallback_llm"
 
     @property
     def layer_number(self) -> int:
@@ -35,6 +37,7 @@ class RoutingLayer(StrEnum):
             RoutingLayer.EMBEDDING: 5,
             RoutingLayer.LEVENSHTEIN: 6,
             RoutingLayer.NO_MATCH: 7,
+            RoutingLayer.FALLBACK_LLM: 8,
         }
         return mapping[self]
 
@@ -64,6 +67,10 @@ class SkillRoute(BaseModel):
         description="Routing layer that produced this match",
     )
     source: str = Field(default="builtin", description="Skill pack source")
+    description: str = Field(
+        default="",
+        description="Skill description for display in CLI",
+    )
     metadata: dict[str, Any] = Field(
         default_factory=dict,
         description="Additional routing metadata",
@@ -103,6 +110,75 @@ class RoutingRequest(BaseModel):
     )
 
 
+class RejectedCandidate(BaseModel):
+    """A candidate that was considered but rejected by a routing layer.
+
+    Attributes:
+        skill_id: The rejected skill identifier
+        confidence: Confidence score (below threshold)
+        layer: Which layer rejected this candidate
+        reason: Why it was rejected (e.g., "below threshold (0.6)")
+    """
+
+    model_config = {"arbitrary_types_allowed": True}
+
+    skill_id: str = Field(..., description="Rejected skill identifier")
+    confidence: float = Field(
+        ge=0.0,
+        le=1.0,
+        description="Confidence score below threshold",
+    )
+    layer: RoutingLayer = Field(..., description="Layer that rejected candidate")
+    reason: str = Field(default="", description="Rejection reason")
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "skill_id": self.skill_id,
+            "confidence": self.confidence,
+            "layer": self.layer.value,
+            "reason": self.reason,
+        }
+
+
+class LayerDetail(BaseModel):
+    """Detailed diagnostic for a single routing layer attempt.
+
+    Attributes:
+        layer: Which routing layer this represents
+        matched: Whether this layer produced a match
+        reason: Human-readable explanation of the layer's decision
+        duration_ms: How long this layer took
+        diagnostics: Layer-specific diagnostic data (scores, skip reasons, etc.)
+        rejected_candidates: Candidates that were close but didn't meet threshold
+    """
+
+    model_config = {"arbitrary_types_allowed": True}
+
+    layer: RoutingLayer = Field(..., description="Routing layer")
+    matched: bool = Field(default=False, description="Whether layer matched")
+    reason: str = Field(default="", description="Human-readable decision reason")
+    duration_ms: float = Field(default=0.0, description="Layer duration in ms")
+    diagnostics: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Layer-specific diagnostic data",
+    )
+    rejected_candidates: list[RejectedCandidate] = Field(
+        default_factory=list,
+        description="Candidates close to threshold but rejected",
+    )
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert to dictionary for serialization."""
+        return {
+            "layer": self.layer.value,
+            "matched": self.matched,
+            "reason": self.reason,
+            "duration_ms": self.duration_ms,
+            "diagnostics": self.diagnostics,
+            "rejected_candidates": [r.to_dict() for r in self.rejected_candidates],
+        }
+
+
 class RoutingResult(BaseModel):
     """Result of skill routing operation.
 
@@ -110,6 +186,7 @@ class RoutingResult(BaseModel):
         primary: Best matching skill (None if no match)
         alternatives: List of alternative matches
         routing_path: Which layers were consulted
+        layer_details: Per-layer diagnostic details for transparency
         query: The original query
         duration_ms: How long routing took
     """
@@ -128,13 +205,17 @@ class RoutingResult(BaseModel):
         default_factory=list,
         description="Layers consulted during routing",
     )
+    layer_details: list[LayerDetail] = Field(
+        default_factory=list,
+        description="Per-layer diagnostic details for transparency",
+    )
     query: str = Field(default="", description="Original query")
     duration_ms: float = Field(default=0.0, description="Routing duration in ms")
 
     @property
     def has_match(self) -> bool:
-        """Whether a match was found."""
-        return self.primary is not None
+        """Whether a match was found (excluding fallback)."""
+        return self.primary is not None and self.primary.layer != RoutingLayer.FALLBACK_LLM
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization."""
@@ -142,8 +223,260 @@ class RoutingResult(BaseModel):
             "primary": self.primary.to_dict() if self.primary else None,
             "alternatives": [a.to_dict() for a in self.alternatives],
             "routing_path": [layer.value for layer in self.routing_path],
+            "layer_details": [d.to_dict() for d in self.layer_details],
             "query": self.query,
             "duration_ms": self.duration_ms,
+            "has_match": self.has_match,
+        }
+
+
+class StepStatus(StrEnum):
+    """Status of an execution step."""
+
+    PENDING = "pending"
+    IN_PROGRESS = "in_progress"
+    COMPLETED = "completed"
+    SKIPPED = "skipped"
+
+
+class PlanStatus(StrEnum):
+    """Status of an execution plan."""
+
+    PENDING = "pending"
+    ACTIVE = "active"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+
+class ExecutionMode(StrEnum):
+    """Execution mode for a plan."""
+
+    SEQUENTIAL = "sequential"  # Steps run one after another
+    PARALLEL = "parallel"      # Independent steps run concurrently
+    MIXED = "mixed"            # Automatically determine based on dependencies
+
+
+class ExecutionStep(BaseModel):
+    """A single step in a multi-skill execution plan.
+
+    Attributes:
+        step_id: Unique identifier for this step
+        step_number: 1-based position in the plan
+        skill_id: Target skill to use
+        intent: Human-readable description of this step's intent
+        input_query: Query to send to the skill
+        output_as: Variable name for downstream steps to reference
+        status: Current execution status
+        result_summary: Brief result after execution (optional)
+        started_at: ISO timestamp when step started
+        completed_at: ISO timestamp when step completed
+    """
+
+    model_config = {"arbitrary_types_allowed": True}
+
+    step_id: str = Field(..., description="Step UUID")
+    step_number: int = Field(..., ge=1, description="Step position")
+    skill_id: str = Field(..., description="Target skill ID")
+    intent: str = Field(default="", description="Human-readable intent")
+    input_query: str = Field(default="", description="Query for this step")
+    output_as: str = Field(default="", description="Output variable name")
+    status: StepStatus = Field(default=StepStatus.PENDING, description="Step status")
+    result_summary: str | None = Field(default=None, description="Execution result summary")
+    started_at: str | None = Field(default=None, description="Start timestamp")
+    completed_at: str | None = Field(default=None, description="Completion timestamp")
+    dependencies: list[str] = Field(
+        default_factory=list,
+        description="Step IDs this step depends on (empty = can run in parallel)"
+    )
+    can_parallel: bool = Field(
+        default=True,
+        description="Whether this step can run in parallel with independent steps"
+    )
+    parallel_group: int | None = Field(
+        default=None,
+        description="Group ID for parallel execution (steps in same group run together)"
+    )
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert to dictionary for serialization."""
+        return {
+            "step_id": self.step_id,
+            "step_number": self.step_number,
+            "skill_id": self.skill_id,
+            "intent": self.intent,
+            "input_query": self.input_query,
+            "output_as": self.output_as,
+            "status": self.status.value,
+            "result_summary": self.result_summary,
+            "started_at": self.started_at,
+            "completed_at": self.completed_at,
+            "dependencies": self.dependencies,
+            "can_parallel": self.can_parallel,
+            "parallel_group": self.parallel_group,
+        }
+
+
+class ExecutionPlan(BaseModel):
+    """A multi-skill execution plan.
+
+    Attributes:
+        plan_id: Unique plan identifier
+        original_query: The user's original request
+        steps: Ordered list of execution steps
+        detected_intents: List of intents detected in the original query
+        reasoning: Why this decomposition was chosen
+        created_at: ISO timestamp when plan was created
+        status: Overall plan status
+    """
+
+    model_config = {"arbitrary_types_allowed": True}
+
+    plan_id: str = Field(..., description="Plan UUID")
+    original_query: str = Field(default="", description="Original user query")
+    steps: list[ExecutionStep] = Field(default_factory=list, description="Execution steps")
+    detected_intents: list[str] = Field(default_factory=list, description="Detected intents")
+    reasoning: str = Field(default="", description="Decomposition reasoning")
+    created_at: str = Field(default="", description="Creation timestamp")
+    status: PlanStatus = Field(default=PlanStatus.PENDING, description="Plan status")
+    execution_mode: ExecutionMode = Field(
+        default=ExecutionMode.SEQUENTIAL,
+        description="How steps should be executed"
+    )
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert to dictionary for serialization."""
+        return {
+            "plan_id": self.plan_id,
+            "original_query": self.original_query,
+            "steps": [s.to_dict() for s in self.steps],
+            "detected_intents": self.detected_intents,
+            "reasoning": self.reasoning,
+            "created_at": self.created_at,
+            "status": self.status.value,
+            "execution_mode": self.execution_mode.value,
+        }
+
+    def get_parallel_groups(self) -> list[list["ExecutionStep"]]:
+        """Group steps into parallel batches based on dependencies.
+
+        Returns:
+            List of step groups, where each group can run in parallel.
+            Example: [[step1], [step2, step3], [step4]] means:
+                - step1 runs first
+                - step2 and step3 run in parallel
+                - step4 runs after step2 and step3 complete
+        """
+        if not self.steps:
+            return []
+
+        # If no dependencies defined, treat as sequential
+        if not any(step.dependencies for step in self.steps):
+            return [[step] for step in self.steps]
+
+        # Build dependency graph and perform topological sort
+        step_map = {step.step_id: step for step in self.steps}
+        completed = set()
+        groups = []
+
+        while len(completed) < len(self.steps):
+            # Find all steps whose dependencies are satisfied
+            ready = [
+                step for step in self.steps
+                if step.step_id not in completed
+                and all(dep in completed for dep in step.dependencies)
+                and step.can_parallel
+            ]
+
+            if not ready:
+                # No progress - likely circular dependency or remaining non-parallel steps
+                remaining = [step for step in self.steps if step.step_id not in completed]
+                groups.append(remaining)
+                break
+
+            groups.append(ready)
+            completed.update(step.step_id for step in ready)
+
+        return groups
+
+    def get_execution_summary(self) -> dict[str, Any]:
+        """Get summary of execution plan including parallel groups."""
+        parallel_groups = self.get_parallel_groups()
+
+        return {
+            "plan_id": self.plan_id,
+            "total_steps": len(self.steps),
+            "execution_mode": self.execution_mode.value,
+            "parallel_groups": len(parallel_groups),
+            "max_parallel": max(len(g) for g in parallel_groups) if parallel_groups else 0,
+            "groups": [
+                {
+                    "group_number": i + 1,
+                    "step_count": len(group),
+                    "step_ids": [s.step_id for s in group],
+                }
+                for i, group in enumerate(parallel_groups)
+            ],
+        }
+
+
+class OrchestrationMode(StrEnum):
+    """Mode of orchestration result."""
+
+    SINGLE = "single"
+    ORCHESTRATED = "orchestrated"
+
+
+class OrchestrationResult(BaseModel):
+    """Result of orchestration — either single skill or multi-step plan.
+
+    This unifies single-skill routing and multi-skill orchestration
+    into one return type for consumers.
+    """
+
+    model_config = {"arbitrary_types_allowed": True}
+
+    mode: OrchestrationMode = Field(
+        default=OrchestrationMode.SINGLE,
+        description="Orchestration mode",
+    )
+    original_query: str = Field(default="", description="Original query")
+
+    # SINGLE mode fields
+    primary: SkillRoute | None = Field(default=None, description="Primary skill match")
+    alternatives: list[SkillRoute] = Field(default_factory=list, description="Alternative matches")
+    routing_path: list[RoutingLayer] = Field(default_factory=list, description="Routing path")
+    layer_details: list[LayerDetail] = Field(default_factory=list, description="Layer details")
+    duration_ms: float = Field(default=0.0, description="Routing duration in ms")
+
+    # ORCHESTRATED mode fields
+    execution_plan: ExecutionPlan | None = Field(default=None, description="Execution plan")
+    single_fallback: SkillRoute | None = Field(
+        default=None,
+        description="Best single skill if user rejects plan",
+    )
+
+    @property
+    def has_match(self) -> bool:
+        """Whether any match was found (single or orchestrated), excluding fallback."""
+        return (
+            self.primary is not None
+            and self.primary.layer != RoutingLayer.FALLBACK_LLM
+        ) or (
+            self.execution_plan is not None and len(self.execution_plan.steps) > 0
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert to dictionary for serialization."""
+        return {
+            "mode": self.mode.value,
+            "original_query": self.original_query,
+            "primary": self.primary.to_dict() if self.primary else None,
+            "alternatives": [a.to_dict() for a in self.alternatives],
+            "routing_path": [layer.value for layer in self.routing_path],
+            "layer_details": [d.to_dict() for d in self.layer_details],
+            "duration_ms": self.duration_ms,
+            "execution_plan": self.execution_plan.to_dict() if self.execution_plan else None,
+            "single_fallback": self.single_fallback.to_dict() if self.single_fallback else None,
             "has_match": self.has_match,
         }
 

@@ -73,6 +73,7 @@ def test_skill_add_with_auto_config(temp_skill_dir, monkeypatch):
         config_file = temp_skill_dir.parent / ".vibe" / "skills" / "auto-config.yaml"
         if config_file.exists():
             import json
+
             import yaml
 
             with open(config_file) as f:

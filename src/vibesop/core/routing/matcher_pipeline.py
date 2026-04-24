@@ -44,9 +44,16 @@ class MatcherPipeline:
         query: str,
         candidates: list[dict[str, Any]],
         context: RoutingContext | None,
+        collect_rejected: bool = False,
     ) -> LayerResult | None:
         filtered = self.apply_prefilter(query, candidates)
         self._optimization_service.ensure_cluster_index(filtered)
+
+        # Build skill_id -> description lookup from candidates
+        desc_map: dict[str, str] = {
+            str(c.get("id", "")): str(c.get("description", ""))
+            for c in filtered
+        }
 
         # Aggregate scores across all matchers so a strong TF-IDF match isn't
         # blocked by a weak keyword match.
@@ -93,6 +100,34 @@ class MatcherPipeline:
             merged_matches, query, context
         )
 
+        # Collect rejected candidates (near-misses) for transparency
+        rejected_candidates: list[dict[str, Any]] = []
+        if collect_rejected and filtered:
+            threshold = self._config.min_confidence
+            near_miss_threshold = threshold * 0.5
+            matched_ids = {m.skill_id for m in merged_matches}
+            # Use the first matcher (usually fast keyword matcher) to score rejects
+            if self._matchers:
+                first_layer, first_matcher = self._matchers[0]
+                for c in filtered:
+                    sid = str(c.get("id", ""))
+                    if sid in matched_ids or not sid:
+                        continue
+                    try:
+                        score = first_matcher.score(query, c, context)
+                        if near_miss_threshold <= score < threshold:
+                            rejected_candidates.append({
+                                "skill_id": sid,
+                                "confidence": score,
+                                "layer": first_layer,
+                                "reason": f"below threshold ({threshold:.2f})",
+                            })
+                    except (TypeError, ValueError):
+                        pass
+                # Sort by confidence desc and limit to top 5
+                rejected_candidates.sort(key=lambda x: x["confidence"], reverse=True)
+                rejected_candidates = rejected_candidates[:5]
+
         primary_namespace = str(primary_match.metadata.get("namespace", "builtin"))
         winning_layer = best_scores.get(primary_match.skill_id, (0.0, RoutingLayer.KEYWORD, {}))[1]
         return LayerResult(
@@ -101,6 +136,7 @@ class MatcherPipeline:
                 confidence=primary_match.confidence,
                 layer=winning_layer,
                 source=self._get_skill_source(primary_match.skill_id, primary_namespace),
+                description=desc_map.get(primary_match.skill_id, ""),
                 metadata=primary_match.metadata,
             ),
             alternatives=[
@@ -111,11 +147,13 @@ class MatcherPipeline:
                     source=self._get_skill_source(
                         m.skill_id, str(m.metadata.get("namespace", "builtin"))
                     ),
+                    description=desc_map.get(m.skill_id, ""),
                     metadata=m.metadata,
                 )
                 for m in alternatives
             ],
             layer=winning_layer,
+            diagnostics={"rejected_candidates": rejected_candidates} if rejected_candidates else {},
         )
 
     def set_prefilter(self, prefilter: CandidatePrefilter) -> None:

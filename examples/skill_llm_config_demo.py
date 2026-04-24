@@ -12,6 +12,9 @@
 """
 
 import json
+
+# 添加项目路径
+import sys
 import tempfile
 from pathlib import Path
 
@@ -19,15 +22,13 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
-# 添加项目路径
-import sys
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from vibesop.core.skills.config_manager import (
     SkillConfigManager,
     get_skill_llm_config,
-    set_skill_llm_config,
     list_skill_configs,
+    set_skill_llm_config,
 )
 
 console = Console()
@@ -205,7 +206,7 @@ def demo_priority_fallback():
                 console.print(f"    来源: {llm_config.source.value}")
 
             # 2. 删除技能配置
-            console.print(f"\n[bold]步骤 2: 删除技能配置[/bold]")
+            console.print("\n[bold]步骤 2: 删除技能配置[/bold]")
             SkillConfigManager.delete_skill_config(skill_id)
 
             llm_config = get_skill_llm_config(skill_id)
@@ -213,10 +214,10 @@ def demo_priority_fallback():
                 console.print(f"  ✓ 回退到: {llm_config.provider}/{llm_config.model}")
                 console.print(f"    来源: {llm_config.source.value}")
             else:
-                console.print(f"  ⚠ 未找到配置（使用默认值）")
+                console.print("  ⚠ 未找到配置（使用默认值）")
 
-            console.print(f"\n[dim]优先级顺序:[/dim]")
-            console.print(f"  [dim]1. 技能配置 → 2. 全局配置 → 3. 环境变量 → 4. Agent → 5. 默认值[/dim]")
+            console.print("\n[dim]优先级顺序:[/dim]")
+            console.print("  [dim]1. 技能配置 → 2. 全局配置 → 3. 环境变量 → 4. Agent → 5. 默认值[/dim]")
 
         finally:
             # 恢复原始路径
@@ -258,14 +259,14 @@ def demo_batch_import_export():
             console.print(f"  [dim]包含 {len(batch_config)} 个技能配置[/dim]")
 
             # 2. 导入配置
-            console.print(f"\n[bold]步骤 2: 导入配置[/bold]")
+            console.print("\n[bold]步骤 2: 导入配置[/bold]")
 
             for skill_id, llm_config in batch_config.items():
                 set_skill_llm_config(skill_id, llm_config)
                 console.print(f"  ✓ {skill_id}: {llm_config['provider']}/{llm_config['model']}")
 
             # 3. 导出配置
-            console.print(f"\n[bold]步骤 3: 导出配置[/bold]")
+            console.print("\n[bold]步骤 3: 导出配置[/bold]")
 
             all_configs = list_skill_configs()
             export_data = {}

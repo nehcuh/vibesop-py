@@ -1,3 +1,4 @@
+# pyright: ignore[reportPrivateUsage]
 """Session management for intelligent re-routing.
 
 This module provides conversation context tracking and intelligent
@@ -43,13 +44,13 @@ from vibesop.core.sessions.tracker import (
 __all__ = [
     # Core types
     "ContextChange",
-    "RoutingSuggestion",
-    "SessionContext",
-    "ToolUseEvent",
-    # Platform abstraction
-    "SessionTracker",
     "GenericSessionTracker",
     "HookBasedSessionTracker",
-    "get_tracker",
+    "RoutingSuggestion",
+    "SessionContext",
+    # Platform abstraction
+    "SessionTracker",
+    "ToolUseEvent",
     "_detect_platform",
+    "get_tracker",
 ]

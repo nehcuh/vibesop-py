@@ -174,6 +174,10 @@ class ClaudeCodeAdapter(PlatformAdapter):
             # Render settings.json
             self._render_settings_json(output_dir, manifest, result)
 
+            # Render Agent Runtime hook scripts
+            self._render_route_hook(output_dir, result)
+            self._render_track_hook(output_dir, result)
+
             # Render skill definitions - copy actual content from core/skills/
             for skill in manifest.skills:
                 dir_name = skill.id.replace("/", "-")
@@ -284,6 +288,10 @@ class ClaudeCodeAdapter(PlatformAdapter):
 
             # Render settings.json
             self._render_settings_json(output_dir, manifest, result)
+
+            # Render Agent Runtime hook scripts
+            self._render_route_hook(output_dir, result)
+            self._render_track_hook(output_dir, result)
 
         except Exception as e:
             result.add_error(f"Failed to render configuration: {e}")
@@ -483,10 +491,65 @@ class ClaudeCodeAdapter(PlatformAdapter):
             },
         }
 
+
+    def _render_route_hook(
+        self,
+        output_dir: Path,
+        result: RenderResult,
+    ) -> None:
+        """Render the vibesop-route.sh hook script.
+
+        This script can be used as a UserPromptSubmit hook on platforms
+        that support it (e.g., Claude Code with hook extensions).
+        It calls `vibe route` to get skill recommendations and outputs
+        JSON that can be consumed by the hook system.
+
+        Args:
+            output_dir: Output directory (hooks/ will be created here)
+            result: RenderResult to track files
+        """
+        try:
+            env = self._get_template_env()
+            template = env.get_template("hooks/vibesop-route.sh.j2")
+            hook_content = template.render(version="4.3.0")
+            hook_path = output_dir / "hooks" / "vibesop-route.sh"
+            self.write_file_atomic(hook_path, hook_content, validate_security=False)
+            hook_path.chmod(0o755)
+            result.add_file(hook_path)
+        except Exception as e:
+            result.add_warning(f"Failed to write vibesop-route.sh: {e}")
+
+    def _render_track_hook(
+        self,
+        output_dir: Path,
+        result: RenderResult,
+    ) -> None:
+        """Render the vibesop-track.sh hook script.
+
+        This script can be used as a PreToolUse hook on platforms
+        that support it. It tracks tool usage for session context.
+
+        Args:
+            output_dir: Output directory (hooks/ will be created here)
+            result: RenderResult to track files
+        """
+        try:
+            env = self._get_template_env()
+            template = env.get_template("hooks/vibesop-track.sh.j2")
+            hook_content = template.render(version="4.3.0")
+            hook_path = output_dir / "hooks" / "vibesop-track.sh"
+            self.write_file_atomic(hook_path, hook_content, validate_security=False)
+            hook_path.chmod(0o755)
+            result.add_file(hook_path)
+        except Exception as e:
+            result.add_warning(f"Failed to write vibesop-track.sh: {e}")
+
     def install_hooks(self, config_dir: Path) -> dict[str, bool]:
         """Install Claude Code hooks.
 
-        Installs the pre-session-end hook for memory flushing.
+        Installs the pre-session-end hook for memory flushing,
+        plus Agent Runtime hooks (vibesop-route.sh, vibesop-track.sh)
+        for platforms that support UserPromptSubmit / PreToolUse hooks.
 
         Args:
             config_dir: Configuration directory
@@ -522,5 +585,33 @@ fi
             logger.debug(f"Failed to install pre-session-end hook: {e}")
             results["pre-session-end"] = False
             # Note: error but don't fail
+
+        # Install Agent Runtime route hook
+        route_hook_path = config_dir / "hooks" / "vibesop-route.sh"
+        try:
+            env = self._get_template_env()
+            template = env.get_template("hooks/vibesop-route.sh.j2")
+            route_content = template.render(version="4.3.0")
+            route_hook_path.parent.mkdir(parents=True, exist_ok=True)
+            self.write_file_atomic(route_hook_path, route_content, validate_security=False)
+            route_hook_path.chmod(0o755)
+            results["vibesop-route"] = True
+        except Exception as e:
+            logger.debug(f"Failed to install vibesop-route hook: {e}")
+            results["vibesop-route"] = False
+
+        # Install Agent Runtime track hook
+        track_hook_path = config_dir / "hooks" / "vibesop-track.sh"
+        try:
+            env = self._get_template_env()
+            template = env.get_template("hooks/vibesop-track.sh.j2")
+            track_content = template.render(version="4.3.0")
+            track_hook_path.parent.mkdir(parents=True, exist_ok=True)
+            self.write_file_atomic(track_hook_path, track_content, validate_security=False)
+            track_hook_path.chmod(0o755)
+            results["vibesop-track"] = True
+        except Exception as e:
+            logger.debug(f"Failed to install vibesop-track hook: {e}")
+            results["vibesop-track"] = False
 
         return results

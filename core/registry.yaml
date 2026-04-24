@@ -78,6 +78,10 @@ conflict_resolution:
     code_review:
       - "review"
       - "审查"
+      - "评审"
+      - "code review"
+      - "代码审查"
+      - "代码评审"
       - "pr"
       - "merge"
       - "land"
@@ -91,6 +95,8 @@ conflict_resolution:
     planning:
       - "plan"
       - "规划"
+      - "计划"
+      - "方案"
       - "design"
       - "设计"
       - "architect"
@@ -98,11 +104,15 @@ conflict_resolution:
     refactoring:
       - "refactor"
       - "重构"
+      - "代码重构"
       - "clean"
       - "整理"
+      - "优化代码"
     architecture:
       - "architecture"
       - "架构"
+      - "架构设计"
+      - "系统架构"
       - "system design"
       - "系统设计"
     requirements_clarification:
@@ -140,6 +150,9 @@ conflict_resolution:
       - "distribute"
       - "分发"
     qa_cycling:
+      - "qa"
+      - "测试"
+      - "质量"
       - "qa cycle"
       - "quality cycle"
       - "测试循环"

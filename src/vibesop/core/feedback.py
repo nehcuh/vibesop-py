@@ -10,9 +10,10 @@ import json
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from vibesop.core.models import RoutingResult
+if TYPE_CHECKING:
+    from vibesop.core.models import RoutingResult
 
 
 @dataclass
@@ -307,7 +308,7 @@ class FeedbackCollector:
                 with self._storage_path.open() as f:
                     data = json.load(f)
                     self._records = [FeedbackRecord.from_dict(r) for r in data]
-            except Exception:
+            except (json.JSONDecodeError, OSError, KeyError):
                 # If file is corrupted, start fresh
                 self._records = []
 
@@ -340,7 +341,7 @@ def collect_feedback(
         ...     was_correct=True,
         ... )
     """
-    global _collector_instance
+    global _collector_instance  # noqa: PLW0603
 
     if _collector_instance is None:
         _collector_instance = FeedbackCollector()
@@ -361,9 +362,152 @@ def get_feedback_report() -> FeedbackReport:
         >>> report = get_feedback_report()
         >>> print(f"Accuracy: {report.accuracy_rate:.1%}")
     """
-    global _collector_instance
+    global _collector_instance  # noqa: PLW0603
 
     if _collector_instance is None:
         _collector_instance = FeedbackCollector()
 
     return _collector_instance.generate_report()
+
+
+@dataclass
+class SkillExecutionFeedback:
+    """Post-execution feedback for a skill.
+
+    Captures user satisfaction and execution quality beyond routing correctness.
+
+    Attributes:
+        skill_id: The skill that was executed
+        query: User's original query
+        was_helpful: User rating (thumbs up/down)
+        execution_success: Whether execution completed without errors
+        execution_time_ms: Execution duration in milliseconds
+        notes: Optional user notes
+        timestamp: When the feedback was collected
+    """
+
+    skill_id: str
+    query: str
+    was_helpful: bool | None = None
+    execution_success: bool | None = None
+    execution_time_ms: float | None = None
+    notes: str | None = None
+    timestamp: str = field(default_factory=lambda: datetime.now().isoformat())
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert to dictionary."""
+        return {
+            "skill_id": self.skill_id,
+            "query": self.query,
+            "was_helpful": self.was_helpful,
+            "execution_success": self.execution_success,
+            "execution_time_ms": self.execution_time_ms,
+            "notes": self.notes,
+            "timestamp": self.timestamp,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> SkillExecutionFeedback:
+        """Create from dictionary."""
+        return cls(
+            skill_id=data.get("skill_id", ""),
+            query=data.get("query", ""),
+            was_helpful=data.get("was_helpful"),
+            execution_success=data.get("execution_success"),
+            execution_time_ms=data.get("execution_time_ms"),
+            notes=data.get("notes"),
+            timestamp=data.get("timestamp", datetime.now().isoformat()),
+        )
+
+
+class ExecutionFeedbackCollector:
+    """Collect post-execution feedback for skills.
+
+    Stores execution feedback separately from routing feedback
+    to enable composite quality scoring.
+
+    Example:
+        >>> collector = ExecutionFeedbackCollector()
+        >>> collector.collect(
+        ...     skill_id="gstack/review",
+        ...     query="review my code",
+        ...     was_helpful=True,
+        ...     execution_success=True,
+        ...     execution_time_ms=1250.0,
+        ... )
+    """
+
+    def __init__(self, storage_path: str | Path = "~/.vibe/execution_feedback.json"):
+        self._storage_path = Path(storage_path).expanduser()
+        self._records: list[SkillExecutionFeedback] = []
+        self._load_records()
+
+    def collect(
+        self,
+        skill_id: str,
+        query: str,
+        was_helpful: bool | None = None,
+        execution_success: bool | None = None,
+        execution_time_ms: float | None = None,
+        notes: str | None = None,
+    ) -> None:
+        """Collect a post-execution feedback record."""
+        record = SkillExecutionFeedback(
+            skill_id=skill_id,
+            query=query,
+            was_helpful=was_helpful,
+            execution_success=execution_success,
+            execution_time_ms=execution_time_ms,
+            notes=notes,
+        )
+        self._records.append(record)
+        self._save_records()
+
+    def get_records(
+        self,
+        skill_id: str | None = None,
+        limit: int | None = None,
+    ) -> list[SkillExecutionFeedback]:
+        """Get execution feedback records."""
+        records = self._records
+        if skill_id:
+            records = [r for r in records if r.skill_id == skill_id]
+        if limit:
+            records = records[-limit:]
+        return records
+
+    def get_skill_summary(self, skill_id: str) -> dict[str, Any]:
+        """Get aggregated execution feedback for a skill."""
+        records = [r for r in self._records if r.skill_id == skill_id]
+        if not records:
+            return {"total": 0, "helpful_rate": None, "success_rate": None}
+
+        helpful = [r for r in records if r.was_helpful is not None]
+        success = [r for r in records if r.execution_success is not None]
+
+        return {
+            "total": len(records),
+            "helpful_rate": sum(1 for r in helpful if r.was_helpful) / len(helpful) if helpful else None,
+            "success_rate": sum(1 for r in success if r.execution_success) / len(success) if success else None,
+            "avg_execution_time_ms": sum(r.execution_time_ms for r in records if r.execution_time_ms is not None) / len([r for r in records if r.execution_time_ms is not None]) if any(r.execution_time_ms is not None for r in records) else None,
+        }
+
+    def clear_records(self) -> None:
+        """Clear all execution feedback records."""
+        self._records = []
+        self._save_records()
+
+    def _load_records(self) -> None:
+        if self._storage_path.exists():
+            try:
+                with self._storage_path.open() as f:
+                    data = json.load(f)
+                    self._records = [SkillExecutionFeedback.from_dict(r) for r in data]
+            except (json.JSONDecodeError, OSError, KeyError):
+                self._records = []
+
+    def _save_records(self) -> None:
+        self._storage_path.parent.mkdir(parents=True, exist_ok=True)
+        data = [record.to_dict() for record in self._records]
+        with self._storage_path.open("w") as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
