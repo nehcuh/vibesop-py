@@ -6,7 +6,7 @@ import json
 import logging
 import re
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, ClassVar
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +28,19 @@ class TaskDecomposer:
 
     MAX_SUB_TASKS: int = 5
     MIN_QUERY_LENGTH: int = 5
+
+    INTENT_PATTERNS: ClassVar[dict[str, list[str]]] = {
+        "analyze_architecture": ["架构", "结构", "architecture", "设计", "design"],
+        "code_review": ["review", "评审", "审查", "检查代码", "代码质量"],
+        "debug_error": ["debug", "调试", "错误", "error", "bug", "fix", "修复"],
+        "optimize": ["优化", "optimize", "性能", "performance", "改进"],
+        "test": ["test", "测试", "coverage", "覆盖率", "单元测试"],
+        "document": ["文档", "document", "README", "说明"],
+        "deploy": ["deploy", "部署", "发布", "上线", "ship"],
+        "brainstorm": ["畅想", "brainstorm", "思路", "idea", "创意"],
+        "security_audit": ["安全", "security", "vulnerability", "漏洞", "审计"],
+        "refactor": ["重构", "refactor", "重写"],
+    }
 
     def __init__(self, llm_client: Any | None = None):
         self._llm = llm_client
@@ -110,23 +123,60 @@ class TaskDecomposer:
         return tasks
 
     def _fallback_decomposition(self, query: str) -> list[SubTask]:
-        """Simple heuristic decomposition when LLM is unavailable."""
-        # Split on common conjunctions (Chinese + English)
-        parts = re.split(
-            r'[,;]|'
-            r'然后|之后|接着|并|并且|同时|另外|还有|以及|'
-            r'and then|after that|and also|plus|meanwhile',
-            query,
-        )
-        parts = [p.strip() for p in parts if len(p.strip()) >= self.MIN_QUERY_LENGTH]
+        """Rule-based intent decomposition when LLM is unavailable.
 
-        if len(parts) <= 1:
-            return [SubTask(intent="single task", query=query)]
-
-        return [
-            SubTask(intent=f"sub-task {i+1}", query=part)
-            for i, part in enumerate(parts[: self.MAX_SUB_TASKS])
+        v2: Uses intent keyword matching to detect distinct intents and
+        constructs self-contained sub-queries, rather than crude regex splitting.
+        """
+        # 1. Split on conjunctions to identify candidate segments
+        conjunctions = [
+            "然后", "之后", "接着", "并", "并且", "同时", "另外", "还有", "以及",
+            "先", "再", "最后",
+            "and then", "after that", "and also", "plus", "meanwhile",
+            "first", "second", "third",
         ]
+        pattern = "|".join(re.escape(c) for c in conjunctions)
+        segments = re.split(pattern, query)
+
+        # 2. For each segment, detect intent and create a sub-task
+        sub_tasks: list[SubTask] = []
+        for seg in segments:
+            cleaned = seg.strip().rstrip(".,，。；;")  # noqa: RUF001
+            if len(cleaned) < self.MIN_QUERY_LENGTH:
+                continue
+
+            intent = self._detect_intent(cleaned)
+            contextualized = self._contextualize_query(query, cleaned, intent)
+            sub_tasks.append(SubTask(intent=intent, query=contextualized))
+
+        if len(sub_tasks) <= 1:
+            intent = self._detect_intent(query)
+            return [SubTask(intent=intent, query=query)]
+
+        return sub_tasks[: self.MAX_SUB_TASKS]
+
+    def _detect_intent(self, text: str) -> str:
+        """Detect the primary intent of a text fragment using keyword matching."""
+        text_lower = text.lower()
+        best_intent = "single task"
+        best_score = 0
+        for intent, keywords in self.INTENT_PATTERNS.items():
+            score = sum(1 for kw in keywords if kw in text_lower)
+            if score > best_score:
+                best_score = score
+                best_intent = intent
+        return best_intent
+
+    def _contextualize_query(self, full_query: str, segment: str, intent: str) -> str:
+        """Construct a self-contained sub-query from a segment.
+
+        If the segment is too short relative to the full query, prepend context.
+        """
+        if len(segment) >= len(full_query) * 0.6:
+            return segment
+        if intent != "single task":
+            return f"[{intent}] {segment}"
+        return segment
 
     def _apply_guardrails(self, sub_tasks: list[SubTask]) -> list[SubTask]:
         """Apply guardrails to prevent over-decomposition."""
