@@ -289,9 +289,12 @@ class RouterExecutionMixin:
         # Find nearest candidates (even if below threshold) for suggestions
         nearest: list[SkillRoute] = []
         try:
-            matcher_result = self._try_matcher_pipeline(query, candidates, None)
-            if matcher_result and matcher_result.match:
-                nearest = [matcher_result.match, *matcher_result.alternatives]
+            from vibesop.core.routing import _pipeline
+            nearest_primary, nearest_alts, _ = _pipeline.run_matcher_pipeline(
+                self, query, candidates, None, collect_rejected=False
+            )
+            if nearest_primary:
+                nearest = [nearest_primary, *nearest_alts]
         except (RuntimeError, ValueError):
             logger.debug("Failed to get nearest candidates for fallback")
 
