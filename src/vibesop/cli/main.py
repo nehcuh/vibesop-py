@@ -23,7 +23,7 @@ from rich.panel import Panel
 from vibesop import __version__
 from vibesop.cli.commands import badges_cmd, deviation_cmd, experiment_cmd, matcher_cmd, plan_cmd
 from vibesop.cli.orchestration_report import render_orchestration_result
-from vibesop.cli.routing_report import render_routing_report
+from vibesop.cli.routing_report import render_compact_summary, render_routing_report
 from vibesop.cli.subcommands import register
 from vibesop.core.routing import UnifiedRouter
 
@@ -57,7 +57,8 @@ def route(
     json_output: bool = typer.Option(False, "--json", "-j", help="Output as JSON"),
     slash: bool = typer.Option(False, "--slash", help="Treat query as a quick command (e.g., --slash '/vibe-help')"),
     validate: bool = typer.Option(False, "--validate", "-V", help="Validate routing configuration"),
-    explain: bool = typer.Option(False, "--explain", "-e", help="Explain routing decision with per-layer details"),
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Show full routing decision tree with per-layer details"),
+    explain: bool = typer.Option(False, "--explain", "-e", help="Alias for --verbose (backward compatibility)"),
     yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation prompt (alias for confirmation_mode=never)"),
     no_session: bool = typer.Option(False, "--no-session", help="Disable session-state-aware routing for this query"),
     strategy: str | None = typer.Option(
@@ -83,7 +84,7 @@ def route(
     Set routing.confirmation_mode to 'never' for automatic selection,
     or use --yes to skip once.
 
-    Use --explain to inspect the full routing decision tree.
+    Use --verbose to inspect the full routing decision tree.
     Use --slash to invoke a quick command explicitly (e.g., --slash '/vibe-help').
     """
     from pathlib import Path
@@ -157,19 +158,37 @@ def route(
 
     result = router.orchestrate(query, context=context)
 
-    # --explain mode: show full decision tree and exit
-    if explain:
+    # Merge --explain alias into verbose flag for backward compatibility
+    verbose = verbose or explain
+
+    # Default: show compact routing summary (transparency by default)
+    from vibesop.core.models import RoutingResult
+    routing_result = RoutingResult(
+        primary=result.primary,
+        alternatives=result.alternatives,
+        routing_path=result.routing_path,
+        layer_details=result.layer_details,
+        query=result.original_query,
+        duration_ms=result.duration_ms,
+    )
+    if result.mode.value == "single":
+        render_compact_summary(
+            routing_result,
+            console=console,
+            mode="single",
+        )
+    else:
+        render_compact_summary(
+            routing_result,
+            console=console,
+            mode="orchestrated",
+            steps_count=len(result.execution_plan.steps) if result.execution_plan else None,
+            strategy=result.execution_plan.execution_mode.value if result.execution_plan else None,
+        )
+
+    # --verbose mode: show full decision tree and exit
+    if verbose:
         if result.mode.value == "single":
-            # Reconstruct RoutingResult for explain rendering
-            from vibesop.core.models import RoutingResult
-            routing_result = RoutingResult(
-                primary=result.primary,
-                alternatives=result.alternatives,
-                routing_path=result.routing_path,
-                layer_details=result.layer_details,
-                query=result.original_query,
-                duration_ms=result.duration_ms,
-            )
             render_routing_report(routing_result, console=console, context=context)
         else:
             render_orchestration_result(result, console=console)

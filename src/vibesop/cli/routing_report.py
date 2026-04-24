@@ -183,3 +183,61 @@ def render_compact_report(result: RoutingResult, console: Console | None = None)
             )
     else:
         console.print("[yellow]→ No match[/yellow]")
+
+
+def render_compact_summary(
+    result: RoutingResult,
+    console: Console | None = None,
+    mode: str = "single",
+    steps_count: int | None = None,
+    strategy: str | None = None,
+) -> None:
+    """Render a compact routing decision summary using Rich Table.
+
+    This is the default CLI output — shows the routing decision without
+    the full decision tree. Displayed before confirmation prompts.
+    """
+    if console is None:
+        console = Console()
+
+    table = Table(
+        title="[bold cyan]🔍 Routing Summary[/bold cyan]",
+        box=box.SIMPLE,
+        show_header=False,
+        padding=(0, 1),
+    )
+    table.add_column("Field", style="dim", justify="right")
+    table.add_column("Value", style="bold")
+
+    if result.primary:
+        if result.primary.layer == RoutingLayer.FALLBACK_LLM:
+            table.add_row("Selected", f"[yellow]{result.primary.skill_id}[/yellow]")
+            table.add_row("Status", "[yellow]Fallback (no skill matched)[/yellow]")
+        else:
+            table.add_row("Selected", f"[green]{result.primary.skill_id}[/green]")
+            table.add_row("Confidence", f"{result.primary.confidence:.0%}")
+            table.add_row("Layer", result.primary.layer.value)
+    else:
+        table.add_row("Selected", "[yellow]No match[/yellow]")
+
+    table.add_row("Duration", f"{result.duration_ms:.1f}ms")
+
+    # Show top 3 alternatives
+    if result.alternatives:
+        alt_lines = []
+        for alt in result.alternatives[:3]:
+            alt_lines.append(
+                f"  • {alt.skill_id} ({alt.confidence:.0%} via {alt.layer.value})"
+            )
+        table.add_row("Alternatives", "\n".join(alt_lines))
+
+    # Orchestration info
+    if mode == "orchestrated":
+        table.add_row("Mode", "[cyan]Orchestrated[/cyan]")
+        if steps_count is not None:
+            table.add_row("Steps", str(steps_count))
+        if strategy:
+            table.add_row("Strategy", strategy)
+
+    console.print(table)
+    console.print()

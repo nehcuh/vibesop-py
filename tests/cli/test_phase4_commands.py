@@ -42,17 +42,35 @@ class TestRouteValidateCommand:
         result = runner.invoke(app, ["route", "test", "-V"])
         assert result.exit_code == 0
 
-    def test_route_explain_flag(self) -> None:
-        """Test route --explain shows decision report."""
+    def test_route_verbose_flag(self) -> None:
+        """Test route --verbose shows full decision report."""
+        result = runner.invoke(app, ["route", "test query", "--verbose"])
+        assert result.exit_code == 0
+        assert "Routing Decision Report" in result.stdout
+
+    def test_route_verbose_short_flag(self) -> None:
+        """Test route --verbose with short flag."""
+        result = runner.invoke(app, ["route", "test", "-v"])
+        assert result.exit_code == 0
+        assert "Routing Decision Report" in result.stdout
+
+    def test_route_explain_backward_compat(self) -> None:
+        """Test route --explain still works as alias for --verbose."""
         result = runner.invoke(app, ["route", "test query", "--explain"])
         assert result.exit_code == 0
         assert "Routing Decision Report" in result.stdout
 
-    def test_route_explain_short_flag(self) -> None:
-        """Test route --explain with short flag."""
+    def test_route_explain_short_flag_backward_compat(self) -> None:
+        """Test route -e still works as alias for -v."""
         result = runner.invoke(app, ["route", "test", "-e"])
         assert result.exit_code == 0
         assert "Routing Decision Report" in result.stdout
+
+    def test_route_default_shows_compact_summary(self) -> None:
+        """Test that default route output shows compact summary (transparency by default)."""
+        result = runner.invoke(app, ["route", "test query"])
+        assert result.exit_code == 0
+        assert "Routing Summary" in result.stdout
 
 
 class TestRouteSlashCommands:

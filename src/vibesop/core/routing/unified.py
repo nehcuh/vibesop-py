@@ -363,10 +363,15 @@ class UnifiedRouter(RouterStatsMixin, RouterExecutionMixin, RouterCandidateMixin
 
                 # Record this routing decision for memory/learning
                 self._record_routing_decision(query, primary_match, context)
+                # Ensure alternatives are populated from layer_details even without --explain
+                alternatives = layer_result.alternatives
+                if not alternatives:
+                    alternatives = self._collect_alternatives_from_details(layer_details)
+
                 result = self._build_result(
                     query=query,
                     primary=primary_match,
-                    alternatives=layer_result.alternatives,
+                    alternatives=alternatives,
                     routing_path=routing_path,
                     layer_details=layer_details,
                     start_time=start_time,
@@ -542,6 +547,44 @@ class UnifiedRouter(RouterStatsMixin, RouterExecutionMixin, RouterCandidateMixin
     # ================================================================
     # Candidate management
     # ================================================================
+
+    def _collect_alternatives_from_details(
+        self,
+        layer_details: list[LayerDetail],
+    ) -> list[SkillRoute]:
+        """Extract rejected candidates from layer_details as alternative routes.
+
+        Collects candidates that were close but didn't meet the confidence
+        threshold, ordered by confidence descending. This ensures alternatives
+        are available even when --explain/--verbose is not used.
+        """
+        best_confidence: dict[str, float] = {}
+        best_layer: dict[str, RoutingLayer] = {}
+        best_reason: dict[str, str | None] = {}
+
+        for detail in layer_details:
+            for rejected in detail.rejected_candidates:
+                current = best_confidence.get(rejected.skill_id, -1.0)
+                if rejected.confidence > current:
+                    best_confidence[rejected.skill_id] = rejected.confidence
+                    best_layer[rejected.skill_id] = rejected.layer
+                    best_reason[rejected.skill_id] = rejected.reason
+
+        alternatives: list[SkillRoute] = []
+        for skill_id, confidence in best_confidence.items():
+            alternatives.append(
+                SkillRoute(
+                    skill_id=skill_id,
+                    confidence=confidence,
+                    layer=best_layer[skill_id],
+                    source="routing_rejected",
+                    metadata={"reason": best_reason[skill_id]},
+                )
+            )
+
+        # Sort by confidence descending
+        alternatives.sort(key=lambda x: x.confidence, reverse=True)
+        return alternatives
 
     def score(
         self,
