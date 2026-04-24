@@ -41,19 +41,22 @@ VibeSOP 提供**智能路由**和**轻量级技能执行**：
 - 学习你的偏好（越用越准确）
   **Learn your preferences** (gets better over time)
 
-### 轻量级执行（辅助功能）Lightweight Execution (Secondary)
+### 智能编排（辅助功能）Intelligent Orchestration (Secondary)
 
-- 快速验证技能是否适合当前任务
-  **Quick validation** - verify if a skill fits your current task
+- 多意图任务分解：将复杂请求拆分为子任务序列
+  **Multi-intent decomposition** - break complex requests into sub-task sequences
 
-- 本地测试和调试
-  **Local testing** - test and debug skills locally
+- 执行计划生成：自动决定串行/并行策略
+  **Execution planning** - automatically decide serial/parallel strategies
 
-- CI/CD 自动化测试
-  **CI/CD automation** - automated testing in pipelines
+- 技能组合：为多步骤工作流匹配最佳技能组合
+  **Skill composition** - match optimal skill combinations for multi-step workflows
 
-**注意**: 复杂生产场景推荐使用原生 AI Agent（如 Claude Code、Cursor、Continue.dev）。
-**Note**: For complex production scenarios, use native AI agents (Claude Code, Cursor, Continue.dev).
+**VibeSOP 定位**: VibeSOP 是路由引擎 + 编排层，它决定"用什么技能、以什么顺序"，
+但**不执行技能本身**。技能的实际执行由 AI Agent（Claude Code, Cursor, OpenCode）完成。
+
+**Note**: VibeSOP is a routing engine + orchestration layer. It decides "which skill and in what order",
+but **does not execute skills**. Actual skill execution is done by AI Agents (Claude Code, Cursor, OpenCode).
 
 📖 **Read our philosophy**: [docs/PHILOSOPHY.md](docs/PHILOSOPHY.md) | [中文版](docs/PHILOSOPHY.md)
 
