@@ -23,6 +23,7 @@ class InterceptionMode(StrEnum):
     NONE = "none"           # Don't route, let agent handle normally
     SINGLE = "single"       # Route to single best skill
     ORCHESTRATE = "orchestrate"  # Detect multi-intent and build execution plan
+    SLASH_COMMAND = "slash_command"  # Execute built-in slash command directly
 
 
 @dataclass
@@ -124,6 +125,15 @@ class IntentInterceptor:
             InterceptionDecision with routing recommendation
         """
         original_query = query.strip()
+
+        # 0. Check for VibeSOP slash commands → direct execution
+        if original_query.startswith("/vibe-"):
+            return InterceptionDecision(
+                should_route=True,
+                mode=InterceptionMode.SLASH_COMMAND,
+                reason=f"VibeSOP slash command detected: {original_query.split()[0]}",
+                query=original_query,
+            )
 
         # 1. Empty or too short → skip
         if len(original_query) < self.MIN_QUERY_LENGTH:
