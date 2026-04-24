@@ -1,7 +1,7 @@
 # VibeSOP Project Status
 
-> **Last Updated**: 2026-04-18 (Post KIMI Review Fixes)
-> **Version**: 4.2.0
+> **Last Updated**: 2026-04-24 (Post KIMI Review Fixes)
+> **Version**: 4.3.0
 > **Status**: 🟢 Production Ready (All P0/P1 Issues Fixed)
 
 ## Executive Summary
@@ -26,7 +26,7 @@ VibeSOP is a **battle-tested, production-ready** AI-powered workflow router for 
 - **94% Accuracy**: AI semantic triage with multi-layer fallback
 - **Multi-Language**: English + Chinese support
 - **Preference Learning**: Gets better with use
-- **7-Layer Pipeline**: AI → Explicit → Scenario → Keyword → TF-IDF → Embedding → Levenshtein
+- **8-Layer Pipeline**: AI → Explicit → Scenario → Keyword → TF-IDF → Embedding → Levenshtein → Fallback LLM
 
 ### 2. Lightweight Execution (Secondary Function)
 - **External Skills**: SKILL.md specification for reusable workflows
@@ -48,7 +48,7 @@ VibeSOP is a **battle-tested, production-ready** AI-powered workflow router for 
 3. **Integration Layer**: CLI adapters, configuration, hooks
 
 ### Key Components
-- **UnifiedRouter**: 7-layer routing pipeline with AI semantic triage
+- **UnifiedRouter**: 8-layer routing pipeline with AI semantic triage
 - **SkillManager**: High-level skill management API
 - **WorkflowEngine**: AST-based safe workflow execution
 - **ExternalSkillExecutor**: External skill execution with security audit
@@ -242,7 +242,7 @@ The combination of intelligent routing, secure execution, cross-platform compati
 
 ---
 
-**Version**: 4.1.0
+**Version**: 4.3.0
 **Status**: 🟢 Production Ready
-**Last Updated**: 2026-04-18
+**Last Updated**: 2026-04-24
 **Repository**: https://github.com/nehcuh/vibesop-py

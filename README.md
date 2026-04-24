@@ -242,17 +242,18 @@ vibe skill add code-reviewer
 
 ### 🎯 95% 路由准确率 (95% Routing Accuracy)
 
-基于 7 层路由 pipeline，结合 AI 语义分析和场景知识：
+基于 8 层路由 pipeline，结合 AI 语义分析和场景知识：
 
-Based on a 7-layer routing pipeline combining AI semantic analysis and scenario knowledge:
+Based on an 8-layer routing pipeline combining AI semantic analysis and scenario knowledge:
 
-- **Layer 0**: AI Semantic Triage (95% accuracy)
-- **Layer 1**: Explicit overrides
-- **Layer 2**: Scenario patterns (90% accuracy)
+- **Layer 0**: Explicit overrides
+- **Layer 1**: Scenario patterns (90% accuracy)
+- **Layer 2**: AI Semantic Triage (95% accuracy)
 - **Layer 3**: Keyword matching (70% accuracy)
 - **Layer 4**: TF-IDF semantic similarity (75% accuracy)
 - **Layer 5**: Embedding-based matching (85% accuracy)
 - **Layer 6**: Fuzzy matching for typos (60% accuracy)
+- **Layer 7**: Fallback LLM (last-resort routing)
 
 ### 🧠 偏好学习 (Preference Learning)
 
@@ -585,9 +586,9 @@ vibe build opencode --output ~/.continue
                      │
 ┌────────────────────▼────────────────────────────┐
 │                 UnifiedRouter                   │
-│  7-Layer Pipeline:                              │
-│  AI Triage → Explicit → Scenario → Keyword      │
-│  → TF-IDF → Embedding → Fuzzy                   │
+│  8-Layer Pipeline:                              │
+│  Explicit → Scenario → AI Triage → Keyword    │
+│  → TF-IDF → Embedding → Fuzzy → Fallback LLM    │
 └────────────────────┬────────────────────────────┘
                      │
 ┌────────────────────▼────────────────────────────┐
@@ -621,7 +622,7 @@ Detailed architecture docs: [docs/architecture/](docs/architecture/)
 
 - **🆕 [docs/SKILLS_GUIDE.md](docs/SKILLS_GUIDE.md)** - 技能生态系统完整指南 / Complete skills ecosystem guide
   - 50+ 个技能详解 / All skills explained
-  - 7 层路由系统 / 7-layer routing system
+  - 8 层路由系统 / 8-layer routing system
   - 优先级决策机制 / Priority decision mechanism
   - 手动切换技能 / How to switch skills
 - [docs/QUICKSTART_USERS.md](docs/QUICKSTART_USERS.md) - 用户快速入门 / User quick start
@@ -674,7 +675,7 @@ See: [docs/benchmarks/routing-accuracy-benchmark.md](docs/benchmarks/routing-acc
 
 | Feature | VibeSOP | Cursor | Continue.dev | Aider |
 |---------|---------|--------|--------------|-------|
-| **Routing** | 7-layer intelligent routing | Built-in commands | Extension-based | CLI flags |
+| **Routing** | 8-layer intelligent routing | Built-in commands | Extension-based | CLI flags |
 | **Skills** | 45+ cross-platform skills | Built-in features | Community extensions | Built-in workflows |
 | **Learning** | Preference learning | Fixed | No | No |
 | **Cross-Platform** | ✅ Works with any AI tool | ❌ Cursor only | ❌ Continue only | ❌ Aider only |
@@ -720,7 +721,7 @@ uv run pytest --cov=src/vibesop --cov-report=html
 
 ## 路线图 Roadmap
 
-- [x] v4.0.0: 核心路由引擎 Core routing engine with 7-layer pipeline
+- [x] v4.0.0: 核心路由引擎 Core routing engine with 8-layer pipeline
 - [x] v4.1.0: AI Triage 生产就绪 AI Triage production readiness
 - [x] v4.2.0: 技能健康监控 Skill health monitoring
 - [x] v4.3.0: 上下文感知路由 + Agent Runtime Context-aware routing + Agent Runtime
