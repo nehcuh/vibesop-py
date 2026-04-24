@@ -21,7 +21,7 @@ from rich.console import Console
 from rich.panel import Panel
 
 from vibesop import __version__
-from vibesop.cli.commands import badges_cmd, deviation_cmd, experiment_cmd, matcher_cmd, plan_cmd
+from vibesop.cli.commands import badges_cmd, deviation_cmd, experiment_cmd, market_cmd, matcher_cmd, plan_cmd
 from vibesop.cli.orchestration_report import render_orchestration_result
 from vibesop.cli.routing_report import render_compact_summary, render_routing_report
 from vibesop.cli.subcommands import register
@@ -40,6 +40,7 @@ app.add_typer(matcher_cmd.app, name="matcher")
 app.add_typer(experiment_cmd.app, name="experiment")
 app.add_typer(deviation_cmd.app, name="deviation")
 app.add_typer(badges_cmd.app, name="badges")
+app.add_typer(market_cmd.app, name="market")
 
 
 # -- Core routing commands --
