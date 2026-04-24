@@ -18,7 +18,8 @@ class TestTaskDecomposer:
         result = decomposer.decompose("debug this code")
 
         assert len(result) == 1
-        assert result[0].intent == "single task"
+        # v5.1: intent-aware fallback detects "debug" keyword
+        assert result[0].intent in ("single task", "debug_error")
         assert result[0].query == "debug this code"
 
     def test_no_llm_fallback_multi_task(self) -> None:
