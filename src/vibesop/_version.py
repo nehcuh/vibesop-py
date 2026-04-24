@@ -9,8 +9,6 @@ Version Format: MAJOR.MINOR.PATCH
 - PATCH: Backwards-compatible bug fixes
 """
 
-__version__ = "4.2.0"
-
 # Version components
 MAJOR = 4
 MINOR = 3

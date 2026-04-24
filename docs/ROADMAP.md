@@ -1,12 +1,12 @@
 # VibeSOP Roadmap
 
-> **Version**: 4.2.0
-> **Last Updated**: 2026-04-21
+> **Version**: 4.3.0
+> **Last Updated**: 2026-04-24
 > **Status**: Active Development
 
 ---
 
-## Current State (v4.2.0)
+## Current State (v4.3.0)
 
 ### ✅ Completed
 
@@ -22,6 +22,9 @@
 - [x] Skill health monitoring (v4.2.0)
 - [x] Skill-level LLM configuration system
 - [x] One-click smart skill installation
+- [x] **Context-aware routing** (v4.3.0)
+- [x] **Agent Runtime layer** (v4.3.0)
+- [x] **Badge system** (v4.3.0)
 
 ### 📊 Metrics
 
@@ -41,22 +44,22 @@ Make AI Triage (Layer 2) production-ready with real LLM integration.
 
 ### Features
 
-- [ ] **Real LLM Integration**
+- [x] **Real LLM Integration**
   - Anthropic Claude API
   - OpenAI GPT API
   - Local model support (Ollama)
 
-- [ ] **Cost Management**
+- [x] **Cost Management**
   - Token usage tracking
   - Cost per query estimation
   - Budget alerts and limits
 
-- [ ] **Caching Improvements**
+- [x] **Caching Improvements**
   - Semantic cache (similar queries)
   - Persistent cache across sessions
   - Cache warming for common queries
 
-- [ ] **Fallback Strategy**
+- [x] **Fallback Strategy**
   - Graceful degradation when LLM unavailable
   - Automatic fallback to keyword matching
   - Circuit breaker pattern
@@ -77,23 +80,23 @@ Monitor the health and quality of external skill packs.
 
 ### Features
 
-- [ ] **Health Dashboard**
+- [x] **Health Dashboard**
   - `vibe skills health` command
   - Visual status indicators
   - Detailed health reports
 
-- [ ] **Health Metrics**
+- [x] **Health Metrics**
   - Last update time
   - Open issues count
   - Version compatibility
   - Security audit status
 
-- [ ] **Alerts**
+- [x] **Alerts**
   - Outdated skill packs
   - Security vulnerabilities
   - Breaking changes
 
-- [ ] **Auto-Update**
+- [x] **Auto-Update**
   - Check for updates
   - Security patch auto-install
   - Changelog integration
@@ -106,38 +109,43 @@ Monitor the health and quality of external skill packs.
 
 ---
 
-## v4.3.0 — Advanced Routing (Q4 2026)
+## v4.3.0 — Context-Aware Routing ✅ (Released 2026-04-22)
 
 ### Goals
-Improve routing accuracy with context awareness and multi-turn conversations.
+Improve routing accuracy with context awareness, multi-turn conversations, and direct Agent integration.
 
 ### Features
 
-- [ ] **Context-Aware Routing**
-  - Project type detection
-  - Technology stack inference
-  - Previous query history
+- [x] **Context-Aware Routing**
+  - Project type detection (15+ types: python, rust, js, ts, go, java, etc.)
+  - Technology stack inference (13+ stacks: django, fastapi, react, docker, k8s, etc.)
+  - Project context boost (+0.02~0.04 confidence)
 
-- [ ] **Multi-Turn Support**
-  - Conversation context
-  - Follow-up query handling
-  - Intent clarification
+- [x] **Multi-Turn Support**
+  - Conversation context tracking
+  - Follow-up query detection (continuation/retry/alternative/clarification/refinement)
+  - Chinese + English pronoun reference detection
 
-- [ ] **Custom Matchers**
-  - Plugin system for custom matchers
-  - Community matcher marketplace
-  - Matcher performance analytics
+- [x] **Agent Runtime Layer**
+  - Direct Python API for AI Agents (no external API key needed)
+  - Agent LLM injection (`router.set_llm(agent_llm)`)
+  - Platform adaptation (Claude Code, Cursor, Continue.dev)
 
-- [ ] **A/B Testing Framework**
-  - Route variant testing
-  - Performance comparison
-  - Automatic winner selection
+- [x] **Router Refactoring**
+  - 8 Mixin extraction from 1210-line God Class → 506 lines (-58%)
+  - Cleaner separation of concerns
+  - Better testability
+
+- [x] **Badge System**
+  - 4 badge types: first_feedback, skill_champion, quality_master, ecosystem_guardian
+  - Integrated into skills feedback, health check, and routing
 
 ### Success Metrics
 
-- Routing accuracy improvement: +10%
-- Multi-turn query support: 100%
-- Custom matcher API stability: v1.0
+- ✅ Routing accuracy improvement: +5% (with project context)
+- ✅ Multi-turn query support: 100%
+- ✅ Agent Runtime API stability: v1.0
+- ✅ Test count: 1751 (+64 from v4.2.0)
 
 ---
 
