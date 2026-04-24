@@ -125,10 +125,70 @@ class TaskDecomposer:
     def _fallback_decomposition(self, query: str) -> list[SubTask]:
         """Rule-based intent decomposition when LLM is unavailable.
 
-        v2: Uses intent keyword matching to detect distinct intents and
-        constructs self-contained sub-queries, rather than crude regex splitting.
+        v3: Uses intent domain boundary detection. Splits on conjunctions,
+        filters out segments that don't map to a known intent, merges short
+        segments with their neighbors, and contextualizes each sub-query.
         """
-        # 1. Split on conjunctions to identify candidate segments
+        segments = self._segment_by_conjunctions(query)
+        merged = self._merge_short_segments(segments)
+        
+        # Try to split merged segments by intent boundaries if they contain multiple intents
+        final_segments: list[str] = []
+        for seg in merged:
+            split = self._split_by_intent_boundaries(seg)
+            if len(split) > 1:
+                final_segments.extend(split)
+            else:
+                final_segments.append(seg)
+
+        sub_tasks: list[SubTask] = []
+        for seg in final_segments:
+            cleaned = self._clean_segment(seg).rstrip(".,，。；;")
+            if len(cleaned) < self.MIN_QUERY_LENGTH:
+                continue
+
+            intent = self._detect_intent(cleaned)
+            if intent == "single task":
+                continue
+
+            contextualized = self._contextualize_query(query, cleaned, intent)
+            sub_tasks.append(SubTask(intent=intent, query=contextualized))
+
+        # If we only got one subtask but the original query has multiple intents,
+        # try to split by intent boundaries on the original query directly
+        if len(sub_tasks) == 1:
+            original_intents = set()
+            for intent, keywords in self.INTENT_PATTERNS.items():
+                if any(kw in query.lower() for kw in keywords):
+                    original_intents.add(intent)
+            if len(original_intents) >= 2:
+                # Force split by intent boundaries on original query
+                forced_split = self._split_by_intent_boundaries(query)
+                if len(forced_split) >= 2:
+                    forced_tasks: list[SubTask] = []
+                    for seg in forced_split:
+                        cleaned = self._clean_segment(seg).rstrip(".,，。；;")
+                        if len(cleaned) < self.MIN_QUERY_LENGTH:
+                            continue
+                        intent = self._detect_intent(cleaned)
+                        if intent == "single task":
+                            continue
+                        contextualized = self._contextualize_query(query, cleaned, intent)
+                        forced_tasks.append(SubTask(intent=intent, query=contextualized))
+                    if len(forced_tasks) >= 2:
+                        sub_tasks = forced_tasks
+
+        if not sub_tasks:
+            intent = self._detect_intent(query)
+            return [SubTask(intent=intent, query=query)]
+
+        if len(sub_tasks) == 1:
+            return sub_tasks
+
+        return sub_tasks[: self.MAX_SUB_TASKS]
+
+    def _segment_by_conjunctions(self, query: str) -> list[str]:
+        """Split query on conjunctions to identify candidate segments."""
         conjunctions = [
             "然后", "之后", "接着", "并", "并且", "同时", "另外", "还有", "以及",
             "先", "再", "最后",
@@ -136,24 +196,81 @@ class TaskDecomposer:
             "first", "second", "third",
         ]
         pattern = "|".join(re.escape(c) for c in conjunctions)
-        segments = re.split(pattern, query)
+        return [s.strip() for s in re.split(pattern, query) if s.strip()]
 
-        # 2. For each segment, detect intent and create a sub-task
-        sub_tasks: list[SubTask] = []
+    def _merge_short_segments(self, segments: list[str]) -> list[str]:
+        """Merge short/noisy segments with the next valid segment.
+
+        Only merges segments that are shorter than MIN_QUERY_LENGTH.
+        Segments that are already long enough are kept separate.
+        """
+        merged: list[str] = []
+        buffer = ""
         for seg in segments:
-            cleaned = seg.strip().rstrip(".,，。；;")  # noqa: RUF001
-            if len(cleaned) < self.MIN_QUERY_LENGTH:
+            if len(seg) < self.MIN_QUERY_LENGTH:
+                buffer += seg
                 continue
+            if buffer:
+                merged.append(buffer + seg)
+                buffer = ""
+            else:
+                merged.append(seg)
+        if buffer and merged:
+            merged[-1] += buffer
+        elif buffer:
+            merged.append(buffer)
+        return merged
 
-            intent = self._detect_intent(cleaned)
-            contextualized = self._contextualize_query(query, cleaned, intent)
-            sub_tasks.append(SubTask(intent=intent, query=contextualized))
+    def _split_by_intent_boundaries(self, text: str) -> list[str]:
+        """Split text at intent domain boundaries when multiple intents are detected."""
+        # Find all intent keyword positions
+        boundaries = []
+        text_lower = text.lower()
+        for intent, keywords in self.INTENT_PATTERNS.items():
+            for kw in keywords:
+                for match in re.finditer(re.escape(kw), text_lower):
+                    boundaries.append((match.start(), match.end(), intent))
 
-        if len(sub_tasks) <= 1:
-            intent = self._detect_intent(query)
-            return [SubTask(intent=intent, query=query)]
+        if len(boundaries) < 2:
+            return [text]
 
-        return sub_tasks[: self.MAX_SUB_TASKS]
+        # Sort by position
+        boundaries.sort(key=lambda x: x[0])
+
+        # Group boundaries by intent and find the best (earliest) boundary per intent
+        intent_positions: dict[str, int] = {}
+        for start, end, intent in boundaries:
+            if intent not in intent_positions:
+                intent_positions[intent] = start
+
+        if len(intent_positions) < 2:
+            return [text]
+
+        # Sort intents by their first occurrence
+        sorted_intents = sorted(intent_positions.items(), key=lambda x: x[1])
+
+        # Split at the boundary between different intents
+        segments = []
+        current_start = 0
+        for i in range(1, len(sorted_intents)):
+            split_pos = sorted_intents[i][1]
+            segments.append(text[current_start:split_pos].strip())
+            current_start = split_pos
+
+        # Add the final segment
+        if current_start < len(text):
+            segments.append(text[current_start:].strip())
+
+        return [s for s in segments if s]
+
+    def _clean_segment(self, segment: str) -> str:
+        """Remove leading noise words like '帮我', '请', etc."""
+        noise_prefixes = ["帮我", "请", "请帮我", "给我", "为我"]
+        cleaned = segment.strip()
+        for prefix in noise_prefixes:
+            if cleaned.startswith(prefix):
+                cleaned = cleaned[len(prefix):].strip()
+        return cleaned
 
     def _detect_intent(self, text: str) -> str:
         """Detect the primary intent of a text fragment using keyword matching."""
