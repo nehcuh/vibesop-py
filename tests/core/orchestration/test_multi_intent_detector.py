@@ -68,3 +68,23 @@ class TestMultiIntentDetector:
         assert detector.should_decompose(
             "同时评审代码质量和安全性，找出潜在漏洞", result
         )
+
+    def test_short_query_with_conjunction_single_domain_rejected(self) -> None:
+        detector = MultiIntentDetector(min_query_length=10)
+        result = RoutingResult()
+        assert not detector.should_decompose("分析并测试", result)
+
+    def test_long_query_with_conjunction_multiple_domains_accepted(self) -> None:
+        detector = MultiIntentDetector(min_query_length=10)
+        result = RoutingResult()
+        assert detector.should_decompose("分析项目架构，然后审查代码质量", result)
+
+    def test_long_single_domain_query_rejected(self) -> None:
+        detector = MultiIntentDetector(min_query_length=10)
+        result = RoutingResult()
+        assert not detector.should_decompose("帮我review这段代码", result)
+
+    def test_sequential_markers_multiple_domains_accepted(self) -> None:
+        detector = MultiIntentDetector(min_query_length=10)
+        result = RoutingResult()
+        assert detector.should_decompose("先review代码，再设计优化方案", result)

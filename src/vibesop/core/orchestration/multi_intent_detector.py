@@ -95,13 +95,15 @@ class MultiIntentDetector:
         """Fast heuristic check for multi-intent candidates.
 
         Returns True if ANY of the following conditions match:
-        - Query contains multi-intent conjunctions AND is long enough
+        - Query contains multi-intent conjunctions AND is long enough AND spans >= 2 intent domains
         - Single-skill confidence is low AND top alternatives are strong
         - Top two alternatives have close confidence scores
         """
-        # Condition 1: Conjunction-based
+        # Condition 1: Conjunction-based (requires >= 2 intent domains to reduce false positives)
         if len(query) >= self.min_query_length and self._has_conjunctions(query):
-            return True
+            intent_domains = self._count_intent_domains(query)
+            if intent_domains >= 2:
+                return True
 
         # Condition 1b: Multiple intent domains detected (even without conjunctions)
         intent_domains = self._count_intent_domains(query)
