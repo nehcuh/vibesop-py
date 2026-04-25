@@ -20,10 +20,11 @@ class TestHookPoint:
         all_points = HookPoint.get_all()
 
         assert isinstance(all_points, list)
-        assert len(all_points) == 3
+        assert len(all_points) == 4
         assert HookPoint.PRE_SESSION_END in all_points
         assert HookPoint.PRE_TOOL_USE in all_points
         assert HookPoint.POST_SESSION_START in all_points
+        assert HookPoint.ROUTE_INTERCEPTOR in all_points
 
     def test_get_description(self) -> None:
         """Test getting hook point descriptions."""
@@ -166,7 +167,8 @@ class TestGetHookDefinitions:
         definitions = get_hook_definitions("opencode")
 
         assert isinstance(definitions, dict)
-        assert len(definitions) == 0  # OpenCode doesn't support hooks
+        assert len(definitions) == 1  # OpenCode supports post-session-start for route interception
+        assert "post-session-start" in definitions
 
     def test_get_unknown_platform(self) -> None:
         """Test getting hooks for unknown platform."""

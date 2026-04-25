@@ -96,16 +96,16 @@ class TestSkillManagerIntegration:
 
         assert isinstance(skills, list)
         assert len(skills) > 0
-        assert any(s["id"] == "systematic-debugging" for s in skills)
+        assert any(s["id"].endswith("/systematic-debugging") for s in skills)
 
     def test_get_skill_info_still_works(self) -> None:
         """Test that get_skill_info still works."""
         manager = SkillManager()
 
-        info = manager.get_skill_info("systematic-debugging")
+        info = manager.get_skill_info("builtin/systematic-debugging")
 
         assert info is not None
-        assert info["id"] == "systematic-debugging"
+        assert info["id"] == "builtin/systematic-debugging"
         assert "name" in info
 
     def test_search_skills_still_works(self) -> None:
@@ -170,7 +170,7 @@ class TestSkillManagerIntegration:
 
         # All old methods should work
         skills = manager.list_skills()
-        info = manager.get_skill_info("systematic-debugging")
+        info = manager.get_skill_info("builtin/systematic-debugging")
         results = manager.search_skills("test")
         namespaces = manager.get_namespaces()
         stats = manager.get_stats()

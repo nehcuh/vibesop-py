@@ -9,20 +9,18 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from vibesop.core.exceptions import MatcherError
+from vibesop.core.matching import RoutingContext
 from vibesop.core.models import LayerDetail, RoutingLayer, SkillRoute
-
-if TYPE_CHECKING:
-    from vibesop.core.matching import RoutingContext
-    from vibesop.core.routing.unified import UnifiedRouter
+from vibesop.core.routing._protocols import RoutingCore
 
 logger = logging.getLogger(__name__)
 
 
 def run_matcher_pipeline(
-    router: UnifiedRouter,
+    router: RoutingCore,
     query: str,
     candidates: list[dict[str, Any]],
     context: RoutingContext | None,
@@ -164,7 +162,7 @@ def run_matcher_pipeline(
 
 
 def apply_optimizations(
-    router: UnifiedRouter,
+    router: RoutingCore,
     matches: list[Any],
     query: str,
     context: RoutingContext | None = None,

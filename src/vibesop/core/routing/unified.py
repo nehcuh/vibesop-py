@@ -100,6 +100,7 @@ class UnifiedRouter(RouterStatsMixin, RouterExecutionMixin, RouterOrchestrationM
         RoutingLayer.TFIDF,
         RoutingLayer.EMBEDDING,
         RoutingLayer.LEVENSHTEIN,
+        RoutingLayer.CUSTOM,
     ]
 
     def __init__(

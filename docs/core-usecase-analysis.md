@@ -175,26 +175,23 @@ if result["is_multi_intent"]:
 skill_content = router.load_skill("gstack/review")
 ```
 
-### ❌ 方案 B：添加编排 CLI 命令（待实现）
+### ✅ 方案 B：添加编排 CLI 命令（已实现）
 
 ```bash
-# 检测多意图
-vibe detect-intents "测试并审查代码"
-
 # 拆解任务
 vibe decompose "先设计，再实现，最后测试"
-
-# 构建执行计划
-vibe plan "重构并添加文档"
 
 # 完整编排
 vibe orchestrate "测试并审查代码"
 ```
 
-### ❌ 方案 C：执行计划 JSON 输出（待实现）
+> 注：`vibe detect-intents` 和 `vibe plan` 未作为独立 CLI 命令暴露，其功能已内置于 `vibe orchestrate` 和 `vibe decompose` 中。
+
+### ✅ 方案 C：执行计划 JSON 输出（已实现）
 
 ```bash
-vibe orchestrate "测试并审查代码" --format json
+vibe orchestrate "测试并审查代码" --json
+vibe decompose "测试并审查代码" --json
 ```
 
 输出：
@@ -217,8 +214,8 @@ vibe orchestrate "测试并审查代码" --format json
 |--------|------|--------|------|------|
 | P0 | AgentRouter 暴露编排 API | 中 | 核心 | ✅ 已完成 |
 | P0 | LLM 注入到所有编排组件 | 小 | 必须 | ✅ 已完成 |
-| P1 | 添加编排 CLI 命令 | 中 | 用户体验 | ⏳ 待实现 |
-| P1 | 执行计划 JSON 输出 | 小 | 集成 | ⏳ 待实现 |
+| P1 | 添加编排 CLI 命令 | 中 | 用户体验 | ✅ 已实现 |
+| P1 | 执行计划 JSON 输出 | 小 | 集成 | ✅ 已实现 |
 | P2 | 并行执行支持 | 大 | 高级场景 | ⏳ 待实现 |
 | P2 | 步骤执行器 | 大 | 完整方案 | ⏳ 待实现 |
 
@@ -229,9 +226,9 @@ vibe orchestrate "测试并审查代码" --format json
 **当前状态（更新后）**：
 - ✅ 路由引擎完整且强大
 - ✅ 编排能力已实现
-- ✅ **AgentRouter API 完整暴露**（新增）
-- ✅ **LLM 注入到所有组件**（新增）
-- ⏳ CLI 暴露不充分（待改进）
+- ✅ **AgentRouter API 完整暴露**
+- ✅ **LLM 注入到所有组件**
+- ✅ **CLI 编排命令已暴露**（`vibe orchestrate`、`vibe decompose`）
 
 **Agent 内部集成能力**：
 
@@ -246,7 +243,8 @@ vibe orchestrate "测试并审查代码" --format json
 | 并行处理 | ⏳ | 待实现 DAG 调度器 |
 
 **剩余差距**：
-1. CLI 暴露编排命令（用户体验）
-2. 执行计划 JSON 输出（集成）
+1. ~~CLI 暴露编排命令~~ ✅ 已完成（`vibe orchestrate`、`vibe decompose`）
+2. ~~执行计划 JSON 输出~~ ✅ 已完成（`--json` 支持）
+3. 并行执行 DAG 调度器（高级场景，部分实现）
 3. 并行执行支持（高级场景）
 4. 步骤执行器（完整自动化）

@@ -8,46 +8,20 @@ Uses a two-phase approach:
 from __future__ import annotations
 
 import logging
-import re
 from typing import TYPE_CHECKING
+
+from vibesop.core.orchestration.patterns import (
+    INTENT_DOMAINS,
+    MULTI_INTENT_REGEX,
+)
 
 if TYPE_CHECKING:
     from vibesop.core.models import RoutingResult
 
 logger = logging.getLogger(__name__)
 
-# Conjunctions that suggest multiple tasks in one query
-MULTI_INTENT_KEYWORDS = {
-    # Chinese
-    "并", "并且", "同时", "另外", "还有", "以及", "然后", "之后", "接着",
-    "先", "再", "最后", "第一步", "第二步", "第三步",
-    # English
-    "and then", "and also", "in addition", "additionally", "furthermore",
-    "meanwhile", "after that", "next", "firstly", "secondly", "thirdly",
-    "first", "second", "third", "then", "also", "plus",
-}
-
-# Regex pattern for quick keyword detection
-_KEYWORD_PATTERN = re.compile(
-    "|".join(re.escape(kw) for kw in MULTI_INTENT_KEYWORDS),
-    re.IGNORECASE,
-)
-
-# Intent domain keywords — each tuple represents a distinct activity domain
-_INTENT_DOMAINS: list[tuple[str, list[str]]] = [
-    ("analyze", ["架构", "结构", "architecture", "分析", "analyze", "理解", "了解", "调研"]),
-    ("review", ["review", "评审", "审查", "检查", "代码质量", "audit"]),
-    ("debug", ["debug", "调试", "错误", "error", "bug", "修复", "fix", "排查"]),
-    ("optimize", ["优化", "optimize", "性能", "performance", "改进", "提升"]),
-    ("design", ["设计", "design", "规划", "plan", "方案", "思路", "架构"]),
-    ("implement", ["实现", "implement", "开发", "编写", "build", "写", "创建"]),
-    ("test", ["test", "测试", "coverage", "覆盖率", "单元", "集成测试"]),
-    ("deploy", ["deploy", "部署", "发布", "上线", "ship", "上线部署"]),
-    ("security", ["安全", "security", "漏洞", "vulnerability", "审计"]),
-    ("refactor", ["重构", "refactor", "重写", "整理", "调整"]),
-    ("document", ["文档", "document", "README", "说明", "记录", "撰写"]),
-    ("brainstorm", ["畅想", "brainstorm", "思路", "idea", "创意", "探索"]),
-]
+_KEYWORD_PATTERN = MULTI_INTENT_REGEX
+_INTENT_DOMAINS = INTENT_DOMAINS
 
 
 class MultiIntentDetector:

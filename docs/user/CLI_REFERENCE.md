@@ -100,6 +100,66 @@ Plan:
 
 ---
 
+### `vibe orchestrate`
+
+Explicitly orchestrate a complex query into an execution plan.
+
+This is the explicit entry point for multi-intent orchestration. For simple queries, `vibe route` is sufficient and will auto-detect orchestration needs.
+
+```bash
+vibe orchestrate <query> [options]
+```
+
+**Arguments:**
+- `query` - Complex natural language query with multiple intents (required)
+
+**Options:**
+- `--json, -j` - Output as JSON
+- `--verbose, -v` - Show full decomposition and planning details
+- `--strategy, -s` - Force execution strategy: auto, sequential, parallel, hybrid
+- `--conversation, -C` - Conversation ID for multi-turn context
+
+**Examples:**
+```bash
+# Orchestrate a complex request
+vibe orchestrate "analyze architecture, review code, and write tests"
+
+# JSON output for scripting
+vibe orchestrate "refactor and add documentation" --json
+
+# Force sequential strategy
+vibe orchestrate "design API then implement endpoints" --strategy sequential
+```
+
+---
+
+### `vibe decompose`
+
+Decompose a query into sub-tasks without routing to skills.
+
+Shows detected intents and proposed sub-tasks, but does not match them to skills or build an execution plan. Useful for understanding how VibeSOP interprets complex queries.
+
+```bash
+vibe decompose <query> [options]
+```
+
+**Arguments:**
+- `query` - Natural language query to decompose (required)
+
+**Options:**
+- `--json, -j` - Output as JSON
+
+**Examples:**
+```bash
+# Decompose a query
+vibe decompose "先分析架构，再写测试，最后部署"
+
+# JSON output
+vibe decompose "review code and fix bugs" --json
+```
+
+---
+
 ### `vibe doctor`
 
 Check environment and configuration health.

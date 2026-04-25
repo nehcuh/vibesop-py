@@ -7,20 +7,18 @@ Each function returns (SkillRoute | None, LayerDetail).
 from __future__ import annotations
 
 import time
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
+from vibesop.core.matching import RoutingContext
 from vibesop.core.models import LayerDetail, RoutingLayer, SkillRoute
+from vibesop.core.routing._protocols import RoutingCore
 from vibesop.core.routing.explicit_layer import check_explicit_override
 from vibesop.core.routing.project_config import load_merged_scenario_config
 from vibesop.core.routing.scenario_layer import match_scenario
 
-if TYPE_CHECKING:
-    from vibesop.core.matching import RoutingContext
-    from vibesop.core.routing.unified import UnifiedRouter
-
 
 def try_explicit_layer(
-    router: UnifiedRouter,
+    router: RoutingCore,
     query: str,
     candidates: list[dict[str, Any]],
 ) -> tuple[SkillRoute | None, LayerDetail]:
@@ -60,7 +58,7 @@ def try_explicit_layer(
 
 
 def try_scenario_layer(
-    router: UnifiedRouter,
+    router: RoutingCore,
     query: str,
     candidates: list[dict[str, Any]],
 ) -> tuple[SkillRoute | None, LayerDetail]:
@@ -145,7 +143,7 @@ def try_scenario_layer(
 
 
 def try_ai_triage_layer(
-    router: UnifiedRouter,
+    router: RoutingCore,
     query: str,
     candidates: list[dict[str, Any]],
     context: RoutingContext | None,
@@ -186,7 +184,7 @@ def build_fallback_detail(_config: Any) -> LayerDetail:
     )
 
 
-def _get_ai_triage_skip_reason(router: UnifiedRouter) -> str:
+def _get_ai_triage_skip_reason(router: RoutingCore) -> str:
     """Determine why AI triage was skipped."""
     if not router._config.enable_ai_triage:
         return "AI triage disabled in config"

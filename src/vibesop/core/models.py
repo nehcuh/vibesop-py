@@ -36,8 +36,9 @@ class RoutingLayer(StrEnum):
             RoutingLayer.TFIDF: 4,
             RoutingLayer.EMBEDDING: 5,
             RoutingLayer.LEVENSHTEIN: 6,
-            RoutingLayer.NO_MATCH: 7,
-            RoutingLayer.FALLBACK_LLM: 8,
+            RoutingLayer.CUSTOM: 7,
+            RoutingLayer.NO_MATCH: 8,
+            RoutingLayer.FALLBACK_LLM: 9,
         }
         return mapping[self]
 

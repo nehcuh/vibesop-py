@@ -210,6 +210,102 @@ def route(
     _handle_single_result(result, router, yes, json_output, validate, console)
 
 
+@app.command()
+def orchestrate(
+    query: str = typer.Argument(..., help="Multi-intent query to orchestrate into sub-tasks"),
+    json_output: bool = typer.Option(False, "--json", "-j", help="Output as JSON"),
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Show full decomposition and planning details"),
+    strategy: str | None = typer.Option(
+        None,
+        "--strategy",
+        "-s",
+        help="Force execution strategy: auto, sequential, parallel, hybrid",
+    ),
+    conversation_id: str | None = typer.Option(
+        None,
+        "--conversation",
+        "-C",
+        help="Conversation ID for multi-turn context",
+    ),
+) -> None:
+    """Orchestrate a complex query into an execution plan.
+
+    Detects multiple intents, decomposes the query, and generates
+    a serial/parallel execution strategy.
+
+    This is an explicit entry point for orchestration mode.
+    For simple queries, use `vibe route` instead.
+    """
+    from pathlib import Path
+
+    from vibesop.core.matching import RoutingContext
+    from vibesop.core.routing import RoutingConfig, UnifiedRouter
+
+    routing_kwargs: dict[str, Any] = {}
+    if strategy is not None:
+        routing_kwargs["default_strategy"] = strategy
+
+    if routing_kwargs:
+        config = RoutingConfig(**routing_kwargs)
+        router = UnifiedRouter(project_root=Path.cwd(), config=config)
+    else:
+        router = UnifiedRouter(project_root=Path.cwd())
+
+    context = RoutingContext()
+    if conversation_id:
+        context.conversation_id = conversation_id
+    else:
+        import hashlib
+        project_hash = hashlib.sha256(str(Path.cwd()).encode()).hexdigest()[:8]
+        context.conversation_id = f"cli-{project_hash}"
+
+    result = router.orchestrate(query, context=context)
+
+    if json_output:
+        import json
+        console.print(json.dumps(result.model_dump(mode="json"), indent=2, default=str))
+    elif verbose:
+        render_orchestration_result(result, console=console)
+    else:
+        _render_compact_orchestration(result, console=console)
+
+
+@app.command()
+def decompose(
+    query: str = typer.Argument(..., help="Query to decompose into sub-tasks"),
+    json_output: bool = typer.Option(False, "--json", "-j", help="Output as JSON"),
+) -> None:
+    """Decompose a query into sub-tasks without routing.
+
+    Shows the detected intents and proposed sub-tasks,
+    but does not match them to skills or build an execution plan.
+    """
+    from pathlib import Path
+
+    from vibesop.core.orchestration import TaskDecomposer
+    from vibesop.core.routing import UnifiedRouter
+
+    router = UnifiedRouter(project_root=Path.cwd())
+    llm = getattr(router, "_llm", None)
+    decomposer = TaskDecomposer(llm_client=llm)
+    sub_tasks = decomposer.decompose(query)
+
+    if json_output:
+        import json
+        console.print(json.dumps(
+            {"query": query, "sub_tasks": [{"intent": t.intent, "query": t.query} for t in sub_tasks]},
+            indent=2,
+            ensure_ascii=False,
+        ))
+    else:
+        if not sub_tasks:
+            console.print("[yellow]No sub-tasks detected — query appears to be single intent.[/yellow]")
+            return
+        console.print(f"[bold]Decomposed '{query}' into {len(sub_tasks)} sub-tasks:[/bold]\n")
+        for i, task in enumerate(sub_tasks, 1):
+            console.print(f"  {i}. [cyan]{task.intent}[/cyan] — {task.query}")
+
+
 def _edit_execution_plan(
     result: Any,
     console: Console,
@@ -370,14 +466,18 @@ def _handle_orchestrated_result(
 
         # Collect user feedback for continuous improvement
         if sys.stdin.isatty() and not json_output:
-            _collect_feedback(result, console)
+            _collect_feedback(result, router, console)
 
 
 def _collect_feedback(
-    _result: OrchestrationResult,
+    result: OrchestrationResult,
+    router: Any,
     console: Console,
 ) -> None:
-    """Collect user satisfaction feedback after orchestration."""
+    """Collect user satisfaction feedback after orchestration.
+
+    Routes feedback into PreferenceBooster for closed-loop improvement.
+    """
     try:
         feedback = questionary.select(
             "Did this decomposition match your intent?",
@@ -398,7 +498,6 @@ def _collect_feedback(
         # Record feedback to analytics
         from vibesop.core.analytics import AnalyticsStore
         store = AnalyticsStore()
-        # Update the latest record with feedback
         records = store.list_records(limit=1)
         if records:
             record = records[0]
@@ -406,9 +505,15 @@ def _collect_feedback(
             record.user_modified = partial
             store.record(record)
 
+        # Closed loop: feed positive feedback into PreferenceBooster
+        if satisfied and result.execution_plan:
+            import contextlib
+            for step in result.execution_plan.steps:
+                with contextlib.suppress(Exception):
+                    router.record_selection(step.skill_id, result.original_query, was_helpful=True)
+
         if not satisfied:
             console.print("[dim]Thanks for the feedback. We'll use this to improve routing.[/dim]")
-            # Offer to record deviation
             record_deviation = questionary.confirm(
                 "Would you like to record this as a routing deviation for analysis?",
                 default=False,
@@ -416,7 +521,6 @@ def _collect_feedback(
             if record_deviation:
                 console.print("[dim]Use: vibe deviation record \"<query>\" \"<skill>\" <confidence> \"<layer>\"[/dim]")
     except Exception:
-        # Feedback collection is best-effort
         pass
 
 
@@ -453,8 +557,15 @@ def _needs_confirmation(
     if confirmation_mode == "never" or not sys.stdin.isatty():
         return False
 
-    # For orchestrated results, always confirm unless mode is 'never'
+    # For orchestrated results, confirm unless all steps are high confidence
     if is_orchestrated:
+        if confirmation_mode == "ambiguous_only" and result.execution_plan:
+            all_confident = all(
+                step.confidence >= router._config.auto_select_threshold
+                for step in result.execution_plan.steps
+                if hasattr(step, "confidence")
+            )
+            return not all_confident
         return True
 
     # For single results, skip if high confidence and mode is 'ambiguous_only'

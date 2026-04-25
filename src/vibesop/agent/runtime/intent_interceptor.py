@@ -16,6 +16,11 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Any
 
+from vibesop.core.orchestration.patterns import (
+    EXPLICIT_SKILL_PATTERNS,
+    MULTI_INTENT_REGEX_PATTERNS,
+)
+
 
 class InterceptionMode(StrEnum):
     """How to handle the intercepted message."""
@@ -94,42 +99,14 @@ class IntentInterceptor:
         r"explain\s+(?:the\s+)?routing",
     )
 
-    # Patterns that indicate explicit skill selection
-    EXPLICIT_SKILL_PATTERNS: tuple[str, ...] = (
-        r"^(\w+)",           # /review, /debug, etc.
-        r"use\s+(?:skill\s+)?([\w/-]+)",
-        r"调用\s*(?:技能\s+)?([\w/-]+)",
-        r"(?:用|使用)\s*([\w/-]+)\s*(?:技能|skill)?",
-    )
+    EXPLICIT_SKILL_PATTERNS: tuple[str, ...] = EXPLICIT_SKILL_PATTERNS
 
-    # Patterns that strongly suggest multi-intent
-    MULTI_INTENT_PATTERNS: tuple[str, ...] = (
-        r"(?:and\s+then|then\s+also|and\s+also|in\s+addition)",
-        r"(?:然后|接着|之后|另外|还有|以及|并|并且|同时)",
-        r"(?:first|second|third|firstly|secondly|thirdly)",
-        r"(?:第一步|第二步|第三步|先|再|最后)",
-    )
-
-    # Patterns that indicate explicit skill selection
-    EXPLICIT_SKILL_PATTERNS: tuple[str, ...] = (
-        r"^/(\w+)",           # /review, /debug, etc.
-        r"use\s+(?:skill\s+)?([\w/-]+)",
-        r"调用\s*(?:技能\s+)?([\w/-]+)",
-        r"(?:用|使用)\s*([\w/-]+)\s*(?:技能|skill)?",
-    )
-
-    # Patterns that strongly suggest multi-intent
-    MULTI_INTENT_PATTERNS: tuple[str, ...] = (
-        r"(?:and\s+then|then\s+also|and\s+also|in\s+addition)",
-        r"(?:然后|接着|之后|另外|还有|以及|并|并且|同时)",
-        r"(?:first|second|third|firstly|secondly|thirdly)",
-        r"(?:第一步|第二步|第三步|先|再|最后)",
-    )
+    MULTI_INTENT_PATTERNS: tuple[str, ...] = MULTI_INTENT_REGEX_PATTERNS
 
     def should_intercept(
         self,
         query: str,
-        _context: InterceptionContext | None = None,
+        context: InterceptionContext | None = None,  # noqa: ARG002
     ) -> InterceptionDecision:
         """Decide whether to intercept and route this message.
 

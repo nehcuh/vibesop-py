@@ -422,6 +422,12 @@ You're maintaining AI-assisted development tools, but:
 # Route query to best skill
 vibe route "<query>"
 
+# Orchestrate complex multi-intent query
+vibe orchestrate "<query>"
+
+# Decompose query into sub-tasks (without routing)
+vibe decompose "<query>"
+
 # List all available skills
 vibe skills available
 

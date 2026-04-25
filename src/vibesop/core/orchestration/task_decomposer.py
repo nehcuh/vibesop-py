@@ -6,7 +6,9 @@ import json
 import logging
 import re
 from dataclasses import dataclass
-from typing import Any, ClassVar
+from typing import Any
+
+from vibesop.core.orchestration.patterns import INTENT_DOMAIN_KEYWORDS
 
 logger = logging.getLogger(__name__)
 
@@ -17,6 +19,7 @@ class SubTask:
 
     intent: str
     query: str
+    source: str = "llm"  # "llm" | "rule_fallback" | "skill_name"
 
 
 class TaskDecomposer:
@@ -29,54 +32,7 @@ class TaskDecomposer:
     MAX_SUB_TASKS: int = 5
     MIN_QUERY_LENGTH: int = 5
 
-    INTENT_PATTERNS: ClassVar[dict[str, list[str]]] = {
-        # 架构与设计
-        "analyze_architecture": ["架构", "结构", "architecture", "设计", "design", "系统", "system", "模块", "module", "分层", "layer"],
-        "code_review": ["review", "评审", "审查", "检查代码", "代码质量", "code review", "cr", "pr review", "pull request", "代码审查"],
-        "api_design": ["api", "接口", "endpoint", "rest", "graphql", "swagger", "openapi", "契约", "contract"],
-
-        # 调试与修复
-        "debug_error": ["debug", "调试", "错误", "error", "bug", "排查", "troubleshoot", "问题", "issue", "异常", "exception", "崩溃", "crash"],
-        "fix_bug": ["fix", "修复", "解决", "resolve", "patch", "hotfix", "bugfix", "defect", "缺陷"],
-        "log_analysis": ["日志", "log", "排查", "trace", "监控", "monitor", "诊断", "diagnose"],
-
-        # 优化与性能
-        "optimize": ["优化", "optimize", "性能", "performance", "提速", "加速", "加速", "改进", "improve", "调优", "tuning"],
-        "profiling": ["profile", "剖析", "性能分析", "瓶颈", "bottleneck", "内存泄漏", "memory leak", "cpu", "慢", "slow"],
-
-        # 测试与质量
-        "test": ["test", "测试", "coverage", "覆盖率", "单元测试", "unittest", "集成测试", "integration", "e2e", "自动化测试", "auto test", "tdd"],
-        "type_checking": ["类型", "type", "类型检查", "mypy", "pyright", "typescript", "类型安全", "type safety"],
-
-        # 代码重构
-        "refactor": ["重构", "refactor", "重写", "rewrite", "清理", "cleanup", "简化", "simplify", "解耦", "decouple"],
-        "formatting": ["格式", "format", "代码风格", "style", "lint", "格式化", "排版", " prettier", "black", "ruff"],
-
-        # 文档与沟通
-        "document": ["文档", "document", "README", "说明", "注释", "comment", "wiki", "指南", "guide", "手册", "manual"],
-        "brainstorm": ["畅想", "brainstorm", "思路", "idea", "创意", "头脑风暴", "探索", "explore", "方案", "proposal"],
-
-        # 部署与运维
-        "deploy": ["deploy", "部署", "发布", "上线", "ship", "交付", "delivery", " rollout", "canary", "灰度"],
-        "ci_cd": ["ci", "cd", "pipeline", "持续集成", "github actions", "jenkins", "gitlab", "自动化", "workflow"],
-        "configuration": ["配置", "config", "环境变量", "env", "settings", "yaml", "json", "toml", "ini"],
-
-        # 安全
-        "security_audit": ["安全", "security", "vulnerability", "漏洞", "审计", "audit", "渗透", "pentest", "扫描", "scan", "合规", "compliance"],
-
-        # 数据库
-        "database": ["数据库", "database", "db", "sql", "迁移", "migration", "schema", "表", "table", "查询", "query", "索引", "index"],
-
-        # 依赖与构建
-        "dependency_management": ["依赖", "dependency", "包", "package", "requirements", "npm", "pip", "版本", "version", "升级", "upgrade", "兼容"],
-        "project_setup": ["初始化", "init", "setup", "安装", "install", "脚手架", "scaffold", "模板", "template", "新建项目", "bootstrap"],
-
-        # 实现与开发
-        "implement_feature": ["实现", "implement", "开发", "编写", "build", "写", "创建", "create", "添加", "add", "功能", "feature"],
-        "code_generation": ["生成", "generate", "代码生成", "脚手架", "scaffold", "模板", "template", "boilerplate", "stub"],
-        "code_explanation": ["解释", "explain", "说明", "原理", "原理", "怎么", "how", "为什么", "why", "理解", "understand"],
-        "learn_understand": ["学习", "learn", "了解", "熟悉", "掌握", "tutorial", "入门", "getting started", "示例", "example", "demo"],
-    }
+    INTENT_PATTERNS = INTENT_DOMAIN_KEYWORDS
 
     def __init__(self, llm_client: Any | None = None):
         self._llm = llm_client
@@ -188,7 +144,7 @@ class TaskDecomposer:
                 continue
 
             contextualized = self._contextualize_query(query, cleaned, intent)
-            sub_tasks.append(SubTask(intent=intent, query=contextualized))
+            sub_tasks.append(SubTask(intent=intent, query=contextualized, source="rule_fallback"))
 
         # If we only got one subtask but the original query has multiple intents,
         # try to split by intent boundaries on the original query directly
@@ -210,13 +166,13 @@ class TaskDecomposer:
                         if intent == "single task":
                             continue
                         contextualized = self._contextualize_query(query, cleaned, intent)
-                        forced_tasks.append(SubTask(intent=intent, query=contextualized))
+                        forced_tasks.append(SubTask(intent=intent, query=contextualized, source="rule_fallback"))
                     if len(forced_tasks) >= 2:
                         sub_tasks = forced_tasks
 
         if not sub_tasks:
             intent = self._detect_intent(query)
-            return [SubTask(intent=intent, query=query)]
+            return [SubTask(intent=intent, query=query, source="rule_fallback")]
 
         if len(sub_tasks) == 1:
             return sub_tasks
@@ -318,8 +274,28 @@ class TaskDecomposer:
         return cleaned
 
     def _detect_intent(self, text: str) -> str:
-        """Detect the primary intent of a text fragment using keyword matching."""
+        """Detect the primary intent of a text fragment using keyword matching.
+
+        Also checks for direct skill name mentions (e.g., 'use ralph',
+        'run benchmark') and maps them to the corresponding intent domain.
+        """
         text_lower = text.lower()
+
+        # Direct skill name → intent mapping (common skill IDs/names)
+        skill_name_mapping: dict[str, str] = {
+            "ralph": "code_review",
+            "benchmark": "benchmark_performance",
+            "review": "code_review",
+            "debug": "debug_error",
+            "test": "test_code",
+            "deploy": "deploy_application",
+            "security": "security_audit",
+            "retro": "retrospective",
+        }
+        for skill_name, intent in skill_name_mapping.items():
+            if skill_name in text_lower and intent in self.INTENT_PATTERNS:
+                return intent
+
         best_intent = "single task"
         best_score = 0
         for intent, keywords in self.INTENT_PATTERNS.items():

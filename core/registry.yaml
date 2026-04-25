@@ -794,4 +794,3 @@ skills:
       opencode: slash-command
     command: "/vibe-help"
     safety_level: trusted_builtin
-    safety_level: trusted_builtin

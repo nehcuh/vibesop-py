@@ -142,9 +142,13 @@ class TestEarlyLayerOptimization:
         router = UnifiedRouter(project_root=Path.cwd(), config=config)
 
         with patch.object(router, "_apply_optimizations") as mock_opt:
+            # Provide a return value so _build_match_result can unpack correctly
+            # when early layers (EXPLICIT/SCENARIO/AI_TRIAGE) call it.
+            mock_opt.return_value = (None, [])  # type: ignore[attr-defined]
+
             # If matcher pipeline hits, _apply_optimizations should NOT be
             # called from route() because MatcherPipeline already did it.
-            result = router.route("debug database connection")
+            result = router.route("optimize loop performance")
 
             # The mock on route()'s _apply_optimizations should NOT be called
             # for matcher-pipeline layers; if it IS called, that means the

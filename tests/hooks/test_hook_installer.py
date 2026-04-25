@@ -41,8 +41,9 @@ class TestHookInstaller:
 
         results = installer.install_hooks("opencode", tmp_path)
 
-        # OpenCode doesn't support hooks
-        assert len(results) == 0
+        # OpenCode supports post-session-start hook (route interception)
+        assert len(results) == 1
+        assert results.get("post-session-start") is True
 
     def test_install_hooks_specific(self, tmp_path: Path) -> None:
         """Test installing specific hooks."""
@@ -256,5 +257,6 @@ class TestHookInstallerIntegration:
         assert len(claude_results) == 3
         assert all(claude_results.values())
 
-        # OpenCode should have no hooks
-        assert len(opencode_results) == 0
+        # OpenCode should have 1 hook (post-session-start)
+        assert len(opencode_results) == 1
+        assert opencode_results.get("post-session-start") is True

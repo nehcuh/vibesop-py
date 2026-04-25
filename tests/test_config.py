@@ -62,7 +62,7 @@ class TestConfigLoader:
         from vibesop.core.config import RoutingConfig
 
         config = RoutingConfig()
-        assert config.session_stickiness_boost == 0.03
+        assert config.session_stickiness_boost == 0.08
 
     def test_routing_config_stickiness_boost_bounds(self) -> None:
         """Test that session_stickiness_boost respects bounds."""

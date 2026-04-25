@@ -1,0 +1,174 @@
+"""Shared pattern definitions for intent detection, decomposition, and interceptor.
+
+Single source of truth for:
+- Intent domain keyword mappings
+- Multi-intent conjunction detection
+- Explicit skill selection patterns
+
+Used by: TaskDecomposer, MultiIntentDetector, IntentInterceptor
+"""
+
+import re
+
+# ── Intent domain → keyword mapping ─────────────────────────────────────────
+
+INTENT_DOMAIN_KEYWORDS: dict[str, list[str]] = {
+    "analyze_architecture": [
+        "架构", "结构", "architecture", "设计", "design",
+        "系统", "system", "模块", "module", "分层", "layer",
+    ],
+    "code_review": [
+        "review", "评审", "审查", "检查代码", "代码质量",
+        "code review", "cr", "pr review", "pull request", "代码审查",
+    ],
+    "api_design": [
+        "api", "接口", "endpoint", "rest", "graphql",
+        "swagger", "openapi", "契约", "contract",
+    ],
+    "debug_error": [
+        "debug", "调试", "错误", "error", "bug", "排查",
+        "troubleshoot", "问题", "issue", "异常", "exception",
+        "崩溃", "crash",
+    ],
+    "fix_bug": [
+        "fix", "修复", "解决", "resolve", "patch",
+        "hotfix", "bugfix", "defect", "缺陷",
+    ],
+    "log_analysis": [
+        "日志", "log", "排查", "trace", "监控",
+        "monitor", "诊断", "diagnose",
+    ],
+    "optimize": [
+        "优化", "optimize", "性能", "performance", "提速",
+        "加速", "改进", "improve", "调优", "tuning",
+    ],
+    "profiling": [
+        "profile", "剖析", "性能分析", "瓶颈", "bottleneck",
+        "内存泄漏", "memory leak", "cpu", "慢", "slow",
+    ],
+    "test": [
+        "test", "测试", "coverage", "覆盖率", "单元测试",
+        "unittest", "集成测试", "integration", "e2e", "自动化测试",
+        "auto test", "tdd",
+    ],
+    "type_checking": [
+        "类型", "type", "类型检查", "mypy", "pyright",
+        "typescript", "类型安全", "type safety",
+    ],
+    "refactor": [
+        "重构", "refactor", "重写", "rewrite", "清理",
+        "cleanup", "简化", "simplify", "解耦", "decouple",
+    ],
+    "formatting": [
+        "格式", "format", "代码风格", "style", "lint",
+        "格式化", "排版", "prettier", "black", "ruff",
+    ],
+    "document": [
+        "文档", "document", "README", "说明", "注释",
+        "comment", "wiki", "指南", "guide", "手册", "manual",
+    ],
+    "brainstorm": [
+        "畅想", "brainstorm", "思路", "idea", "创意",
+        "头脑风暴", "探索", "explore", "方案", "proposal",
+    ],
+    "deploy": [
+        "deploy", "部署", "发布", "上线", "ship",
+        "交付", "delivery", "rollout", "canary", "灰度",
+    ],
+    "ci_cd": [
+        "ci", "cd", "pipeline", "持续集成", "github actions",
+        "jenkins", "gitlab", "自动化", "workflow",
+    ],
+    "configuration": [
+        "配置", "config", "环境变量", "env", "settings",
+        "yaml", "json", "toml", "ini",
+    ],
+    "security_audit": [
+        "安全", "security", "vulnerability", "漏洞", "审计",
+        "audit", "渗透", "pentest", "扫描", "scan",
+        "合规", "compliance",
+    ],
+    "database": [
+        "数据库", "database", "db", "sql", "迁移",
+        "migration", "schema", "表", "table", "查询",
+        "query", "索引", "index",
+    ],
+    "dependency_management": [
+        "依赖", "dependency", "包", "package", "requirements",
+        "npm", "pip", "版本", "version", "升级", "upgrade", "兼容",
+    ],
+    "project_setup": [
+        "初始化", "init", "setup", "安装", "install",
+        "脚手架", "scaffold", "模板", "template",
+        "新建项目", "bootstrap",
+    ],
+    "implement_feature": [
+        "实现", "implement", "开发", "编写", "build",
+        "写", "创建", "create", "添加", "add",
+        "功能", "feature",
+    ],
+    "code_generation": [
+        "生成", "generate", "代码生成", "脚手架", "scaffold",
+        "模板", "template", "boilerplate", "stub",
+    ],
+    "code_explanation": [
+        "解释", "explain", "说明", "原理", "怎么",
+        "how", "为什么", "why", "理解", "understand",
+    ],
+    "learn_understand": [
+        "学习", "learn", "了解", "熟悉", "掌握", "tutorial",
+        "入门", "getting started", "示例", "example", "demo",
+    ],
+}
+
+# ── Multi-intent conjunction keywords ───────────────────────────────────────
+
+MULTI_INTENT_CONJUNCTIONS: set[str] = {
+    # Chinese
+    "并", "并且", "同时", "另外", "还有", "以及",
+    "然后", "之后", "接着", "先", "再", "最后",
+    "第一步", "第二步", "第三步",
+    # English
+    "and then", "and also", "in addition", "additionally", "furthermore",
+    "meanwhile", "after that", "next", "firstly", "secondly", "thirdly",
+    "first", "second", "third", "then", "also", "plus",
+}
+
+# Compiled regex for quick multi-intent detection
+MULTI_INTENT_REGEX = re.compile(
+    "|".join(re.escape(kw) for kw in sorted(MULTI_INTENT_CONJUNCTIONS, key=len, reverse=True)),
+    re.IGNORECASE,
+)
+
+MULTI_INTENT_REGEX_PATTERNS: tuple[str, ...] = (
+    r"(?:and\s+then|then\s+also|and\s+also|in\s+addition)",
+    r"(?:然后|接着|之后|另外|还有|以及|并|并且|同时)",
+    r"(?:first|second|third|firstly|secondly|thirdly)",
+    r"(?:第一步|第二步|第三步|先|再|最后)",
+)
+
+# ── Explicit skill selection patterns ───────────────────────────────────────
+
+EXPLICIT_SKILL_PATTERNS: tuple[str, ...] = (
+    r"^/(\w+)",            # /review, /debug, etc.
+    r"use\s+(?:skill\s+)?([\w/-]+)",
+    r"调用\s*(?:技能\s+)?([\w/-]+)",
+    r"(?:用|使用)\s*([\w/-]+)\s*(?:技能|skill)?",
+)
+
+# ── Intent domain categories (for MultiIntentDetector) ──────────────────────
+
+INTENT_DOMAINS: list[tuple[str, list[str]]] = [
+    ("analyze", ["架构", "结构", "architecture", "分析", "analyze", "理解", "了解", "调研"]),
+    ("review", ["review", "评审", "审查", "检查", "代码质量", "audit"]),
+    ("debug", ["debug", "调试", "错误", "error", "bug", "排查", "异常", "exception"]),
+    ("optimize", ["优化", "optimize", "性能", "performance", "改进", "improve"]),
+    ("refactor", ["重构", "refactor", "重写", "清理", "cleanup", "简化", "simplify"]),
+    ("test", ["test", "测试", "coverage", "覆盖率", "单元测试", "集成测试"]),
+    ("implement", ["实现", "implement", "开发", "编写", "build", "创建", "create"]),
+    ("document", ["文档", "document", "README", "说明", "注释", "comment"]),
+    ("deploy", ["deploy", "部署", "发布", "上线", "ship", "交付"]),
+    ("security", ["安全", "security", "vulnerability", "漏洞", "审计", "audit", "渗透"]),
+    ("design", ["设计", "design", "架构", "architecture", "方案", "proposal"]),
+    ("brainstorm", ["畅想", "brainstorm", "思路", "idea", "创意", "探索", "explore"]),
+]
