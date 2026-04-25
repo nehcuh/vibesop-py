@@ -176,14 +176,14 @@ def build(
         "-p",
         help=f"Build profile: {', '.join(PROFILES.keys())}",
     ),
-    output: Path | None = typer.Option(  # noqa: B008
+    output: Path | None = typer.Option(
         None,
         "--output",
         "-o",
         help="Output directory (default: .vibe/dist/<target>). Use ~/.claude to deploy directly.",
         exists=False,
     ),
-    overlay: Path | None = typer.Option(  # noqa: B008
+    overlay: Path | None = typer.Option(
         None,
         "--overlay",
         help="Path to overlay YAML file for customization",

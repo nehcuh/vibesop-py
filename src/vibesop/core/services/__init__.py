@@ -14,11 +14,13 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from vibesop.core.matching import RoutingContext
-from vibesop.core.models import RoutingResult
 from vibesop.core.routing import UnifiedRouter
+
+if TYPE_CHECKING:
+    from vibesop.core.models import RoutingResult
 
 logger = logging.getLogger(__name__)
 

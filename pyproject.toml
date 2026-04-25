@@ -106,14 +106,19 @@ ignore = [
     "PLR09",  # too many X
     "PLR2004",  # magic value comparison
     "PLC0415",  # import not at top-level (intentional for lazy loading)
+    "RUF001", # ambiguous unicode char in strings (Chinese project)
+    "RUF002", # ambiguous unicode char in docstrings
+    "RUF003", # ambiguous unicode char in comments
+    "TC001",  # move import into type-checking block (false positives with __future__)
+    "TC003",  # move stdlib import into type-checking block
+    "B008",   # typer uses function calls in argument defaults
 ]
-unfixable = [
-    "F401",   # don't remove unused imports
-]
+unfixable = []
 
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401"]
-"tests/**/*.py" = ["ARG001", "PLR2004"]
+"tests/**/*.py" = ["ARG001", "ARG002", "ARG005", "PLR2004", "ERA001", "PTH", "SIM117"]
+"examples/**/*.py" = ["PTH", "ERA001"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["vibesop"]

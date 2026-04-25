@@ -1,8 +1,8 @@
 # VibeSOP Project Status
 
-> **Last Updated**: 2026-04-24 (Post KIMI Review Fixes)
+> **Last Updated**: 2026-04-25 (SkillOS Evolution Complete)
 > **Version**: 4.3.0
-> **Status**: 🟢 Production Ready (All P0/P1 Issues Fixed)
+> **Status**: 🟢 Production Ready (Context-Aware + Orchestration Preview)
 
 ## Executive Summary
 
@@ -22,19 +22,32 @@ VibeSOP is a **battle-tested, production-ready** AI-powered workflow router for 
 
 ## Core Capabilities
 
-### 1. Intelligent Routing (Primary Function)
+### 1. Intelligent Orchestration (Default Mode)
+- **Multi-Intent Detection**: Automatic detection of complex queries with multiple intents
+- **Task Decomposition**: LLM-based query splitting into independently executable sub-tasks
+- **Execution Planning**: Automatic serial/parallel strategy with dependency inference
+- **Streaming Progress**: Real-time phase-by-phase orchestration display
+- **Error Recovery**: Skip/retry/abort strategies per step
+
+### 2. Intelligent Routing (Foundation)
 - **94% Accuracy**: AI semantic triage with multi-layer fallback
 - **Multi-Language**: English + Chinese support
 - **Preference Learning**: Gets better with use
 - **8-Layer Pipeline**: AI → Explicit → Scenario → Keyword → TF-IDF → Embedding → Levenshtein → Fallback LLM
 
-### 2. Lightweight Execution (Secondary Function)
-- **External Skills**: SKILL.md specification for reusable workflows
-- **Security**: AST-based safe evaluation with whitelist validation
-- **Sandboxing**: Built-in function sandboxing, special attribute blocking
-- **Testing**: Comprehensive test suite (12 security tests)
+### 3. Skill Lifecycle Management
+- **Lifecycle States**: DRAFT → ACTIVE → DEPRECATED → ARCHIVED
+- **Scope System**: Project-level vs global skill isolation
+- **Enable/Disable**: Runtime skill toggling without uninstall
+- **Transition Validation**: Enforced valid state transitions
 
-### 3. Developer Experience
+### 4. Feedback Loop
+- **Usage Analytics**: JSONL storage of execution records
+- **Quality Assessment**: Skill satisfaction tracking and low-quality detection
+- **User Feedback**: Post-execution interactive satisfaction collection
+- **Continuous Improvement**: Data-driven routing optimization
+
+### 5. Developer Experience
 - **Quick Start**: Developer and user guides (5-minute setup)
 - **Clear Philosophy**: "Discovery > Execution" positioning
 - **Bilingual**: Chinese and English documentation
@@ -220,13 +233,23 @@ pytest tests/
 vibe build claude-code
 ```
 
+## Recent Improvements (Completed 2026-04-25)
+
+### Phase 5: SkillOS Evolution (In Progress — Target v4.4.0)
+- **Orchestration Preview**: Multi-intent detection + task decomposition (partial, CLI available)
+- **Streaming Progress**: Real-time phase display with Rich Live (implemented)
+- **Skill Lifecycle**: DRAFT → ACTIVE → DEPRECATED → ARCHIVED state machine (implemented)
+- **Scope System**: Project-level vs global skill isolation (implemented)
+- **Feedback Loop**: Usage analytics + interactive satisfaction collection (partial)
+- **CLI Commands**: `vibe skill list/enable/disable/status` (implemented)
+
 ## Future Roadmap
 
 ### Potential Enhancements
-1. **Performance Optimization**: Profile and optimize hot paths
-2. **Additional Tests**: Increase coverage beyond core skills
-3. **Plugin System**: Extend external skills with hooks
-4. **Analytics**: Add routing analytics and monitoring
+1. **Performance Optimization**: Reduce routing P95 from 225ms to <100ms
+2. **Additional Tests**: Increase coverage from 74% to 80%
+3. **Lint Cleanup**: Fix 157 lint errors
+4. **Plugin System**: Extend external skills with hooks
 
 ### Maintenance Priorities
 1. **Regular Testing**: Keep tests updated with new features
@@ -243,6 +266,6 @@ The combination of intelligent routing, secure execution, cross-platform compati
 ---
 
 **Version**: 4.3.0
-**Status**: 🟢 Production Ready
-**Last Updated**: 2026-04-24
+**Status**: 🟢 Production Ready (v4.4.0 in development)
+**Last Updated**: 2026-04-25
 **Repository**: https://github.com/nehcuh/vibesop-py

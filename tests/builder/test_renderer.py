@@ -56,7 +56,7 @@ class TestConfigRenderer:
         assert result.success
         assert (tmp_path / "output" / "config.yaml").exists()
 
-    def test_render_with_default_output_dir(self, tmp_path: Path) -> None:  # noqa: ARG002
+    def test_render_with_default_output_dir(self, tmp_path: Path) -> None:
         renderer = ConfigRenderer()
         _metadata = ManifestMetadata(platform="opencode")
         manifest = QuickBuilder.minimal(platform="opencode")
@@ -64,7 +64,7 @@ class TestConfigRenderer:
         result = renderer.render(manifest)
 
         assert result.success
-        assert "/.opencode" in str(result.files_created[0]) or ".opencode" in str(
+        assert ".config/opencode" in str(result.files_created[0]) or ".opencode" in str(
             result.files_created[0]
         )
 
@@ -181,7 +181,7 @@ class TestRenderProgressTracker:
         assert summary["percent"] == 0
         assert not summary["complete"]
 
-    def test_print_progress(self, capsys: pytest.CaptureFixture[str]) -> None:  # noqa: ARG002
+    def test_print_progress(self, capsys: pytest.CaptureFixture[str]) -> None:
         """Test printing progress."""
         tracker = RenderProgressTracker()
 

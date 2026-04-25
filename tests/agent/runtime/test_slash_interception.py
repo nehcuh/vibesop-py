@@ -1,6 +1,5 @@
 """Tests for IntentInterceptor slash command detection."""
 
-import pytest
 
 from vibesop.agent.runtime.intent_interceptor import (
     IntentInterceptor,
@@ -46,7 +45,7 @@ class TestIntentInterceptorSlashCommands:
         assert decision.mode != InterceptionMode.SLASH_COMMAND
 
     def test_slash_command_priority_over_explicit_skill(self) -> None:
-        """Slash commands take priority over explicit skill patterns.
+        r"""Slash commands take priority over explicit skill patterns.
 
         The pattern r"^/(\w+)" would match /vibe-route as explicit skill,
         but slash command check comes first.

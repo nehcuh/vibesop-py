@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+
 from typer.testing import CliRunner
 
 from vibesop.cli.main import app

@@ -273,13 +273,34 @@ You MUST follow this skill's workflow. Do not skip steps.
         """Format an execution plan for agent consumption.
 
         Groups steps by parallel batches and marks dependencies.
+        Includes reasoning transparency for debugging and user understanding.
         """
         lines = [
             f"# 执行计划: {plan.original_query}",
             "",
+        ]
+
+        # Transparency: show detected intents and reasoning
+        if plan.detected_intents:
+            lines.extend([
+                "## 检测到的意图",
+                ", ".join(f"- {intent}" for intent in plan.detected_intents),
+                "",
+            ])
+
+        if plan.reasoning:
+            lines.extend([
+                "## 分解理由",
+                plan.reasoning,
+                "",
+            ])
+
+        lines.extend([
+            f"## 执行模式: {plan.execution_mode.value}",
+            "",
             "你必须按以下步骤执行。每完成一步，报告结果后再继续下一步。",
             "",
-        ]
+        ])
 
         # Get parallel groups for visualization
         groups = plan.get_parallel_groups()

@@ -9,7 +9,6 @@ would orchestrate in production, without requiring actual AI Agent platform conn
 
 from __future__ import annotations
 
-import tempfile
 from pathlib import Path
 
 import pytest
@@ -17,7 +16,6 @@ import pytest
 from vibesop.adapters import Manifest, ManifestMetadata
 from vibesop.adapters.claude_code import ClaudeCodeAdapter
 from vibesop.adapters.kimi_cli import KimiCliAdapter
-from vibesop.adapters.models import PolicySet, RoutingPolicy, SecurityPolicy
 from vibesop.agent.runtime import (
     DecisionPresenter,
     ExecutionGuide,

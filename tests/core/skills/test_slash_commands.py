@@ -57,7 +57,7 @@ class TestSlashCommandHandler:
     def test_list_command_empty(self) -> None:
         """/vibe-list with no skills installed."""
         handler = SlashCommandHandler()
-        success, msg = handler.execute("/vibe-list")
+        success, _msg = handler.execute("/vibe-list")
 
         # May succeed but show no skills, or show installed skills
         assert success is True

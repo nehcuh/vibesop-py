@@ -4,13 +4,10 @@ from __future__ import annotations
 
 import io
 
-import pytest
 from rich.console import Console
 
 from vibesop.cli.routing_report import render_compact_summary
 from vibesop.core.models import (
-    LayerDetail,
-    RejectedCandidate,
     RoutingLayer,
     RoutingResult,
     SkillRoute,

@@ -2,11 +2,7 @@
 
 from __future__ import annotations
 
-import time
-
-import pytest
-
-from vibesop.core.routing.circuit_breaker import CircuitState, TriageCircuitBreaker
+from vibesop.core.routing.circuit_breaker import TriageCircuitBreaker
 
 
 class TestTriageCircuitBreaker:

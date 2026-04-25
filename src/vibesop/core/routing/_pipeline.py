@@ -12,9 +12,7 @@ import time
 from typing import TYPE_CHECKING, Any
 
 from vibesop.core.exceptions import MatcherError
-from vibesop.core.matching import MatchResult, MatcherType
 from vibesop.core.models import LayerDetail, RoutingLayer, SkillRoute
-from vibesop.core.routing.layers import LayerResult
 
 if TYPE_CHECKING:
     from vibesop.core.matching import RoutingContext
@@ -24,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 
 def run_matcher_pipeline(
-    router: "UnifiedRouter",
+    router: UnifiedRouter,
     query: str,
     candidates: list[dict[str, Any]],
     context: RoutingContext | None,
@@ -166,7 +164,7 @@ def run_matcher_pipeline(
 
 
 def apply_optimizations(
-    router: "UnifiedRouter",
+    router: UnifiedRouter,
     matches: list[Any],
     query: str,
     context: RoutingContext | None = None,

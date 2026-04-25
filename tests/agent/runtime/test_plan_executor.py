@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from vibesop.agent.runtime.plan_executor import PlanExecutor
 from vibesop.core.models import (
     ExecutionMode,

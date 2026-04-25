@@ -20,7 +20,7 @@ if TYPE_CHECKING:
 
 
 def try_explicit_layer(
-    router: "UnifiedRouter",
+    router: UnifiedRouter,
     query: str,
     candidates: list[dict[str, Any]],
 ) -> tuple[SkillRoute | None, LayerDetail]:
@@ -60,7 +60,7 @@ def try_explicit_layer(
 
 
 def try_scenario_layer(
-    router: "UnifiedRouter",
+    router: UnifiedRouter,
     query: str,
     candidates: list[dict[str, Any]],
 ) -> tuple[SkillRoute | None, LayerDetail]:
@@ -145,7 +145,7 @@ def try_scenario_layer(
 
 
 def try_ai_triage_layer(
-    router: "UnifiedRouter",
+    router: UnifiedRouter,
     query: str,
     candidates: list[dict[str, Any]],
     context: RoutingContext | None,
@@ -177,7 +177,7 @@ def try_ai_triage_layer(
     )
 
 
-def build_fallback_detail(config: Any) -> LayerDetail:
+def build_fallback_detail(_config: Any) -> LayerDetail:
     """Build fallback layer detail."""
     return LayerDetail(
         layer=RoutingLayer.FALLBACK_LLM,
@@ -186,7 +186,7 @@ def build_fallback_detail(config: Any) -> LayerDetail:
     )
 
 
-def _get_ai_triage_skip_reason(router: "UnifiedRouter") -> str:
+def _get_ai_triage_skip_reason(router: UnifiedRouter) -> str:
     """Determine why AI triage was skipped."""
     if not router._config.enable_ai_triage:
         return "AI triage disabled in config"

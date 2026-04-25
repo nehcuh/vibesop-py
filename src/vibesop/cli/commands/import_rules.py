@@ -37,7 +37,7 @@ def _show_experimental_warning() -> None:
 
 
 def import_rules(
-    file_path: Path = typer.Argument(  # noqa: B008
+    file_path: Path = typer.Argument(
         ...,
         help="Path to rules file to import",
         exists=True,

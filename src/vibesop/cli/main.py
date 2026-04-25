@@ -13,7 +13,7 @@ import importlib.util
 import os
 import sys
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import questionary
 import typer
@@ -21,11 +21,22 @@ from rich.console import Console
 from rich.panel import Panel
 
 from vibesop import __version__
-from vibesop.cli.commands import badges_cmd, deviation_cmd, experiment_cmd, market_cmd, matcher_cmd, plan_cmd
+from vibesop.cli.commands import (
+    badges_cmd,
+    deviation_cmd,
+    experiment_cmd,
+    market_cmd,
+    matcher_cmd,
+    plan_cmd,
+    skill_cmd,
+)
 from vibesop.cli.orchestration_report import render_orchestration_result
-from vibesop.cli.routing_report import render_compact_summary, render_routing_report
+from vibesop.cli.routing_report import render_routing_report
 from vibesop.cli.subcommands import register
 from vibesop.core.routing import UnifiedRouter
+
+if TYPE_CHECKING:
+    from vibesop.core.models import OrchestrationResult
 
 app = typer.Typer(
     name="vibe",
@@ -41,6 +52,7 @@ app.add_typer(experiment_cmd.app, name="experiment")
 app.add_typer(deviation_cmd.app, name="deviation")
 app.add_typer(badges_cmd.app, name="badges")
 app.add_typer(market_cmd.app, name="market")
+app.add_typer(skill_cmd.app, name="skill")
 
 
 # -- Core routing commands --
@@ -90,10 +102,9 @@ def route(
     """
     from pathlib import Path
 
-    from vibesop.core.routing import RoutingConfig, UnifiedRouter
-
     # -- Route through IntentInterceptor to respect full Agent Runtime logic --
     from vibesop.agent.runtime import IntentInterceptor, InterceptionMode, SlashCommandExecutor
+    from vibesop.core.routing import RoutingConfig, UnifiedRouter
 
     # When --slash is explicitly passed, treat as a CLI quick command
     if slash:
@@ -157,50 +168,45 @@ def route(
         project_hash = hashlib.sha256(str(Path.cwd()).encode()).hexdigest()[:8]
         context.conversation_id = f"cli-{project_hash}"
 
-    result = router.orchestrate(query, context=context)
-
     # Merge --explain alias into verbose flag for backward compatibility
     verbose = verbose or explain
 
-    # Default: show compact routing summary (transparency by default)
-    from vibesop.core.models import RoutingResult
-    routing_result = RoutingResult(
-        primary=result.primary,
-        alternatives=result.alternatives,
-        routing_path=result.routing_path,
-        layer_details=result.layer_details,
-        query=result.original_query,
-        duration_ms=result.duration_ms,
-    )
-    if result.mode.value == "single":
-        render_compact_summary(
-            routing_result,
-            console=console,
-            mode="single",
-        )
+    # Use live progress display for interactive non-verbose, non-json mode
+    use_live_progress = not verbose and not json_output and sys.stdin.isatty()
+
+    if use_live_progress:
+        from vibesop.cli.progress import LiveOrchestrationCallbacks
+        with LiveOrchestrationCallbacks(console=console) as callbacks:
+            result = router.orchestrate(query, context=context, callbacks=callbacks)
     else:
-        render_compact_summary(
-            routing_result,
-            console=console,
-            mode="orchestrated",
-            steps_count=len(result.execution_plan.steps) if result.execution_plan else None,
-            strategy=result.execution_plan.execution_mode.value if result.execution_plan else None,
-        )
+        result = router.orchestrate(query, context=context)
 
     # --verbose mode: show full decision tree and exit
     if verbose:
         if result.mode.value == "single":
+            from vibesop.core.models import RoutingResult
+            routing_result = RoutingResult(
+                primary=result.primary,
+                alternatives=result.alternatives,
+                routing_path=result.routing_path,
+                layer_details=result.layer_details,
+                query=result.original_query,
+                duration_ms=result.duration_ms,
+            )
             render_routing_report(routing_result, console=console, context=context)
         else:
             render_orchestration_result(result, console=console)
         raise typer.Exit(0)
 
-    # Handle orchestrated result (multi-step plan)
+    # Default: show compact summary directly from OrchestrationResult
+    _render_compact_orchestration(result, console=console)
+
+    # Handle result with unified confirmation flow
     if result.mode.value == "orchestrated" and result.execution_plan:
         _handle_orchestrated_result(result, router, yes, json_output, console)
         return
 
-    # Handle single-skill result (existing logic)
+    # Handle single-skill result
     _handle_single_result(result, router, yes, json_output, validate, console)
 
 
@@ -343,7 +349,8 @@ def _handle_orchestrated_result(
             return
 
     # Save plan to tracker
-    tracker = router._get_plan_tracker()
+    from vibesop.core.orchestration import PlanTracker
+    tracker = PlanTracker(storage_dir=Path.cwd() / ".vibe")
     if plan:
         tracker.create_plan(plan)
 
@@ -353,6 +360,64 @@ def _handle_orchestrated_result(
     else:
         render_orchestration_result(result, console=console)
         console.print("\n[dim]Plan saved. Track with:[/dim] [bold]vibe plan status[/bold]")
+
+        # Generate and display execution summary
+        if plan:
+            from vibesop.core.orchestration import generate_execution_summary
+            summary = generate_execution_summary(plan)
+            console.print("\n[bold]Execution Summary:[/bold]")
+            console.print(summary)
+
+        # Collect user feedback for continuous improvement
+        if sys.stdin.isatty() and not json_output:
+            _collect_feedback(result, console)
+
+
+def _collect_feedback(
+    _result: OrchestrationResult,
+    console: Console,
+) -> None:
+    """Collect user satisfaction feedback after orchestration."""
+    try:
+        feedback = questionary.select(
+            "Did this decomposition match your intent?",
+            choices=[
+                questionary.Choice("👍 Yes, perfect", value="yes"),
+                questionary.Choice("🤔 Mostly, but could be improved", value="partial"),
+                questionary.Choice("👎 No, wrong decomposition", value="no"),
+                questionary.Choice("Skip", value="skip"),
+            ],
+        ).ask()
+
+        if feedback == "skip":
+            return
+
+        satisfied = feedback == "yes"
+        partial = feedback == "partial"
+
+        # Record feedback to analytics
+        from vibesop.core.analytics import AnalyticsStore
+        store = AnalyticsStore()
+        # Update the latest record with feedback
+        records = store.list_records(limit=1)
+        if records:
+            record = records[0]
+            record.user_satisfied = satisfied
+            record.user_modified = partial
+            store.record(record)
+
+        if not satisfied:
+            console.print("[dim]Thanks for the feedback. We'll use this to improve routing.[/dim]")
+            # Offer to record deviation
+            record_deviation = questionary.confirm(
+                "Would you like to record this as a routing deviation for analysis?",
+                default=False,
+            ).ask()
+            if record_deviation:
+                console.print("[dim]Use: vibe deviation record \"<query>\" \"<skill>\" <confidence> \"<layer>\"[/dim]")
+    except Exception:
+        # Feedback collection is best-effort
+        pass
 
 
 def _needs_confirmation(
@@ -393,11 +458,11 @@ def _needs_confirmation(
         return True
 
     # For single results, skip if high confidence and mode is 'ambiguous_only'
-    if confirmation_mode == "ambiguous_only":
-        if result.primary and result.primary.confidence >= router._config.auto_select_threshold:
-            return False
-
-    return True
+    return not (
+        confirmation_mode == "ambiguous_only"
+        and result.primary
+        and result.primary.confidence >= router._config.auto_select_threshold
+    )
 
 
 def _run_confirmation_flow(
@@ -527,6 +592,78 @@ def _render_no_match(result: Any, console: Console) -> None:
             border_style="yellow",
         )
     )
+
+
+def _render_compact_orchestration(
+    result: OrchestrationResult,
+    console: Console | None = None,
+) -> None:
+    """Render a compact summary directly from OrchestrationResult.
+
+    Replaces the old render_compact_summary + RoutingResult wrapping.
+    """
+    if console is None:
+        console = Console()
+
+    from rich import box
+    from rich.table import Table
+
+    table = Table(
+        title="[bold cyan]🔍 Routing Summary[/bold cyan]",
+        box=box.SIMPLE,
+        show_header=False,
+        padding=(0, 1),
+    )
+    table.add_column("Field", style="dim", justify="right")
+    table.add_column("Value", style="bold")
+
+    if result.mode.value == "single":
+        # Single-skill mode
+        if result.primary:
+            if result.primary.layer.value == "fallback_llm":
+                table.add_row("Selected", f"[yellow]{result.primary.skill_id}[/yellow]")
+                table.add_row("Status", "[yellow]Fallback (no skill matched)[/yellow]")
+            else:
+                table.add_row("Selected", f"[green]{result.primary.skill_id}[/green]")
+                table.add_row("Confidence", f"{result.primary.confidence:.0%}")
+                table.add_row("Layer", result.primary.layer.value)
+        else:
+            table.add_row("Selected", "[yellow]No match[/yellow]")
+
+        table.add_row("Duration", f"{result.duration_ms:.1f}ms")
+
+        if result.alternatives:
+            alt_lines = []
+            for alt in result.alternatives[:3]:
+                alt_lines.append(
+                    f"  • {alt.skill_id} ({alt.confidence:.0%} via {alt.layer.value})"
+                )
+            table.add_row("Alternatives", "\n".join(alt_lines))
+    else:
+        # Orchestrated mode
+        plan = result.execution_plan
+        if plan:
+            table.add_row("Mode", "[cyan]Orchestrated[/cyan]")
+            table.add_row("Steps", str(len(plan.steps)))
+            table.add_row("Strategy", plan.execution_mode.value)
+
+            step_lines = []
+            for step in plan.steps:
+                step_lines.append(
+                    f"  {step.step_number}. {step.skill_id} — {step.intent}"
+                )
+            table.add_row("Plan", "\n".join(step_lines))
+
+            if result.single_fallback:
+                table.add_row(
+                    "Fallback",
+                    f"{result.single_fallback.skill_id} ({result.single_fallback.confidence:.0%})",
+                )
+        else:
+            table.add_row("Mode", "[yellow]Orchestrated (no plan)[/yellow]")
+
+    console.print(table)
+    console.print()
 
 
 def _render_validation(result: Any, router: Any, console: Console) -> None:

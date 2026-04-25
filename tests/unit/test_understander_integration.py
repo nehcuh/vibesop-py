@@ -4,7 +4,6 @@
 import tempfile
 from pathlib import Path
 
-from vibesop.core.skills.parser import parse_skill_md
 from vibesop.core.skills.understander import (
     SkillAutoConfigurator,
     understand_skill_from_file,
@@ -94,7 +93,7 @@ def test_skill_auto_configurator():
     assert config.category in ["review", "development", "testing"]
     assert config.priority > 0
     assert len(config.routing_patterns) > 0
-    assert config.requires_llm or True  # May or may not require LLM
+    assert True  # May or may not require LLM
 
     print("\n✓ All assertions passed!")
 

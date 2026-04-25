@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import time
-from pathlib import Path
-
-import pytest
+from typing import TYPE_CHECKING
 
 from vibesop.core.conversation import ConversationContext, ConversationTurn
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 class TestConversationTurn:
@@ -189,7 +190,7 @@ class TestConversationContext:
         ctx = ConversationContext(storage_dir=tmp_path)
         ctx.add_turn("review", skill_id="review")
 
-        is_follow, ftype = ctx.is_follow_up("")
+        is_follow, _ftype = ctx.is_follow_up("")
         assert is_follow is False
 
     def test_follow_up_pronoun_reference(self, tmp_path: Path) -> None:

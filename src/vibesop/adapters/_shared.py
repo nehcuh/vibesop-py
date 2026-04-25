@@ -210,7 +210,7 @@ def render_route_hook(
 
 __all__ = [
     "find_skill_content",
-    "normalize_skill_type",
     "generate_fallback_skill_content",
+    "normalize_skill_type",
     "render_route_hook",
 ]

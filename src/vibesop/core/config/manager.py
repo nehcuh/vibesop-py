@@ -226,7 +226,7 @@ class ConfigManager:
             "auto_select_threshold": 0.6,
             "confirmation_mode": "always",
             "enable_orchestration": True,
-            "enable_ai_triage": False,
+            "enable_ai_triage": True,
             "enable_embedding": False,
             "max_candidates": 3,
             "use_cache": True,

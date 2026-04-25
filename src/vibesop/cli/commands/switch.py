@@ -67,13 +67,13 @@ def switch(
         "-p",
         help="Build profile to use",
     ),
-    overlay: Path | None = typer.Option(  # noqa: B008
+    overlay: Path | None = typer.Option(
         None,
         "--overlay",
         help="Overlay file to apply",
         exists=True,
     ),
-    destination: Path | None = typer.Option(  # noqa: B008
+    destination: Path | None = typer.Option(
         None,
         "--destination",
         "-d",

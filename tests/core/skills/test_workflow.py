@@ -9,7 +9,6 @@ from vibesop.core.skills.workflow import (
     StepType,
     Workflow,
     WorkflowEngine,
-    WorkflowResult,
     WorkflowStep,
     parse_workflow_from_markdown,
 )

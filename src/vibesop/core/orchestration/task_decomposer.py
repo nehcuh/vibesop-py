@@ -30,16 +30,52 @@ class TaskDecomposer:
     MIN_QUERY_LENGTH: int = 5
 
     INTENT_PATTERNS: ClassVar[dict[str, list[str]]] = {
-        "analyze_architecture": ["架构", "结构", "architecture", "设计", "design"],
-        "code_review": ["review", "评审", "审查", "检查代码", "代码质量"],
-        "debug_error": ["debug", "调试", "错误", "error", "bug", "fix", "修复"],
-        "optimize": ["优化", "optimize", "性能", "performance", "改进"],
-        "test": ["test", "测试", "coverage", "覆盖率", "单元测试"],
-        "document": ["文档", "document", "README", "说明"],
-        "deploy": ["deploy", "部署", "发布", "上线", "ship"],
-        "brainstorm": ["畅想", "brainstorm", "思路", "idea", "创意"],
-        "security_audit": ["安全", "security", "vulnerability", "漏洞", "审计"],
-        "refactor": ["重构", "refactor", "重写"],
+        # 架构与设计
+        "analyze_architecture": ["架构", "结构", "architecture", "设计", "design", "系统", "system", "模块", "module", "分层", "layer"],
+        "code_review": ["review", "评审", "审查", "检查代码", "代码质量", "code review", "cr", "pr review", "pull request", "代码审查"],
+        "api_design": ["api", "接口", "endpoint", "rest", "graphql", "swagger", "openapi", "契约", "contract"],
+
+        # 调试与修复
+        "debug_error": ["debug", "调试", "错误", "error", "bug", "排查", "troubleshoot", "问题", "issue", "异常", "exception", "崩溃", "crash"],
+        "fix_bug": ["fix", "修复", "解决", "resolve", "patch", "hotfix", "bugfix", "defect", "缺陷"],
+        "log_analysis": ["日志", "log", "排查", "trace", "监控", "monitor", "诊断", "diagnose"],
+
+        # 优化与性能
+        "optimize": ["优化", "optimize", "性能", "performance", "提速", "加速", "加速", "改进", "improve", "调优", "tuning"],
+        "profiling": ["profile", "剖析", "性能分析", "瓶颈", "bottleneck", "内存泄漏", "memory leak", "cpu", "慢", "slow"],
+
+        # 测试与质量
+        "test": ["test", "测试", "coverage", "覆盖率", "单元测试", "unittest", "集成测试", "integration", "e2e", "自动化测试", "auto test", "tdd"],
+        "type_checking": ["类型", "type", "类型检查", "mypy", "pyright", "typescript", "类型安全", "type safety"],
+
+        # 代码重构
+        "refactor": ["重构", "refactor", "重写", "rewrite", "清理", "cleanup", "简化", "simplify", "解耦", "decouple"],
+        "formatting": ["格式", "format", "代码风格", "style", "lint", "格式化", "排版", " prettier", "black", "ruff"],
+
+        # 文档与沟通
+        "document": ["文档", "document", "README", "说明", "注释", "comment", "wiki", "指南", "guide", "手册", "manual"],
+        "brainstorm": ["畅想", "brainstorm", "思路", "idea", "创意", "头脑风暴", "探索", "explore", "方案", "proposal"],
+
+        # 部署与运维
+        "deploy": ["deploy", "部署", "发布", "上线", "ship", "交付", "delivery", " rollout", "canary", "灰度"],
+        "ci_cd": ["ci", "cd", "pipeline", "持续集成", "github actions", "jenkins", "gitlab", "自动化", "workflow"],
+        "configuration": ["配置", "config", "环境变量", "env", "settings", "yaml", "json", "toml", "ini"],
+
+        # 安全
+        "security_audit": ["安全", "security", "vulnerability", "漏洞", "审计", "audit", "渗透", "pentest", "扫描", "scan", "合规", "compliance"],
+
+        # 数据库
+        "database": ["数据库", "database", "db", "sql", "迁移", "migration", "schema", "表", "table", "查询", "query", "索引", "index"],
+
+        # 依赖与构建
+        "dependency_management": ["依赖", "dependency", "包", "package", "requirements", "npm", "pip", "版本", "version", "升级", "upgrade", "兼容"],
+        "project_setup": ["初始化", "init", "setup", "安装", "install", "脚手架", "scaffold", "模板", "template", "新建项目", "bootstrap"],
+
+        # 实现与开发
+        "implement_feature": ["实现", "implement", "开发", "编写", "build", "写", "创建", "create", "添加", "add", "功能", "feature"],
+        "code_generation": ["生成", "generate", "代码生成", "脚手架", "scaffold", "模板", "template", "boilerplate", "stub"],
+        "code_explanation": ["解释", "explain", "说明", "原理", "原理", "怎么", "how", "为什么", "why", "理解", "understand"],
+        "learn_understand": ["学习", "learn", "了解", "熟悉", "掌握", "tutorial", "入门", "getting started", "示例", "example", "demo"],
     }
 
     def __init__(self, llm_client: Any | None = None):
@@ -131,7 +167,7 @@ class TaskDecomposer:
         """
         segments = self._segment_by_conjunctions(query)
         merged = self._merge_short_segments(segments)
-        
+
         # Try to split merged segments by intent boundaries if they contain multiple intents
         final_segments: list[str] = []
         for seg in merged:
@@ -239,7 +275,7 @@ class TaskDecomposer:
 
         # Group boundaries by intent and find the best (earliest) boundary per intent
         intent_positions: dict[str, int] = {}
-        for start, end, intent in boundaries:
+        for start, _end, intent in boundaries:
             if intent not in intent_positions:
                 intent_positions[intent] = start
 
@@ -254,12 +290,21 @@ class TaskDecomposer:
         current_start = 0
         for i in range(1, len(sorted_intents)):
             split_pos = sorted_intents[i][1]
-            segments.append(text[current_start:split_pos].strip())
+            segment = text[current_start:split_pos].strip()
+            # Only keep segments that are long enough to be meaningful
+            if len(segment) >= self.MIN_QUERY_LENGTH:
+                segments.append(segment)
             current_start = split_pos
 
         # Add the final segment
         if current_start < len(text):
-            segments.append(text[current_start:].strip())
+            final_segment = text[current_start:].strip()
+            if len(final_segment) >= self.MIN_QUERY_LENGTH:
+                segments.append(final_segment)
+
+        # If splitting produced no valid segments, return original text
+        if not segments:
+            return [text]
 
         return [s for s in segments if s]
 

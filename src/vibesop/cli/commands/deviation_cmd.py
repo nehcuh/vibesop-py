@@ -5,12 +5,10 @@ Records and analyzes when Agent skips routing recommendations.
 
 import json
 import logging
-from datetime import UTC, datetime
 from pathlib import Path
 
 import typer
 from rich.console import Console
-from rich.panel import Panel
 from rich.table import Table
 
 from vibesop.cli.commands.deviation import (
@@ -148,12 +146,12 @@ def list_cmd(
     try:
         with storage_path.open("r", encoding="utf-8") as f:
             for line in f:
-                line = line.strip()
-                if line:
-                    records.append(json.loads(line))
+                stripped = line.strip()
+                if stripped:
+                    records.append(json.loads(stripped))
     except (OSError, ValueError, json.JSONDecodeError) as e:
         console.print(f"[red]Error reading deviation records: {e}[/red]")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from e
 
     if reason_filter:
         records = [r for r in records if r.get("reason_code") == reason_filter]

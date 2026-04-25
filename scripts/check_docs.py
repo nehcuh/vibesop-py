@@ -23,7 +23,7 @@ def check_broken_file_references() -> list[str]:
     for md_file in docs_dir.rglob("*.md"):
         content = md_file.read_text()
         for match in file_pattern.finditer(content):
-            link_text, link_path = match.groups()
+            _link_text, link_path = match.groups()
 
             if link_path.startswith("http") or link_path.startswith("#"):
                 continue
@@ -51,7 +51,7 @@ def check_readme_references() -> list[str]:
     file_pattern = re.compile(r"\[([^\]]+)\]\(([^)]+)\)")
 
     for match in file_pattern.finditer(content):
-        link_text, link_path = match.groups()
+        _link_text, link_path = match.groups()
 
         if link_path.startswith("http") or link_path.startswith("#"):
             continue

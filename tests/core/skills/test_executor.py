@@ -4,12 +4,11 @@ from __future__ import annotations
 
 import tempfile
 from pathlib import Path
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
 import pytest
 
 from vibesop.core.exceptions import SkillNotFoundError
-from vibesop.core.skills.base import SkillDefinition
 from vibesop.core.skills.executor import (
     ExternalSkillExecutor,
     SecurityViolationError,
@@ -17,7 +16,6 @@ from vibesop.core.skills.executor import (
     SkillResult,
 )
 from vibesop.core.skills.workflow import (
-    ExecutionContext,
     StepType,
     Workflow,
     WorkflowStep,

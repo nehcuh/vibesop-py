@@ -42,6 +42,20 @@ class RoutingLayer(StrEnum):
         return mapping[self]
 
 
+class SkillLifecycle(StrEnum):
+    """Lifecycle states for a skill.
+
+    State machine:
+        DRAFT → ACTIVE → DEPRECATED → ARCHIVED
+              ↘ ACTIVE (re-activation from deprecated)
+    """
+
+    DRAFT = "draft"
+    ACTIVE = "active"
+    DEPRECATED = "deprecated"
+    ARCHIVED = "archived"
+
+
 class SkillRoute(BaseModel):
     """Result of skill routing operation.
 
@@ -374,7 +388,7 @@ class ExecutionPlan(BaseModel):
             return [[step] for step in self.steps]
 
         # Build dependency graph and perform topological sort
-        step_map = {step.step_id: step for step in self.steps}
+        {step.step_id: step for step in self.steps}
         completed = set()
         groups = []
 
@@ -490,15 +504,35 @@ class SkillDefinition(BaseModel):
         description: Skill description
         trigger_when: When this skill should be triggered
         metadata: Additional metadata
+        lifecycle: Current lifecycle state (draft/active/deprecated/archived)
+        scope: Availability scope (global or project-specific)
+        enabled: Whether this skill is enabled for routing
+        version: Skill version string
     """
 
     id: str = Field(..., min_length=1, description="Skill ID")
     name: str = Field(..., min_length=1, description="Skill name")
     description: str = Field(..., description="Skill description")
     trigger_when: str = Field(..., description="Trigger condition")
-    metadata: dict[str, str | int | float | bool] = Field(
+    metadata: dict[str, Any] = Field(
         default_factory=dict,
         description="Additional metadata",
+    )
+    lifecycle: SkillLifecycle = Field(
+        default=SkillLifecycle.ACTIVE,
+        description="Lifecycle state: draft, active, deprecated, archived",
+    )
+    scope: str = Field(
+        default="global",
+        description="Scope: global (all projects) or project (specific project)",
+    )
+    enabled: bool = Field(
+        default=True,
+        description="Whether this skill is enabled for routing",
+    )
+    version: str = Field(
+        default="1.0.0",
+        description="Skill version",
     )
 
 

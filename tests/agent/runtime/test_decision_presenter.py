@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from vibesop.agent.runtime.decision_presenter import DecisionPresenter
 from vibesop.core.models import (
     ExecutionMode,

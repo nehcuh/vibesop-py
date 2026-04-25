@@ -5,6 +5,8 @@ Extracted from UnifiedRouter to reduce class size and separate concerns.
 
 from __future__ import annotations
 
+from typing import Any
+
 from vibesop.core.models import OrchestrationMode, OrchestrationResult, RoutingResult
 from vibesop.core.orchestration import MultiIntentDetector, PlanBuilder, PlanTracker
 from vibesop.core.orchestration.task_decomposer import TaskDecomposer
@@ -45,10 +47,38 @@ class RouterOrchestrationMixin:
 
     def _get_task_decomposer(self) -> TaskDecomposer:
         if self._task_decomposer is None:  # type: ignore[attr-defined]
-            # Share LLM with triage service if available
-            llm = getattr(self._triage_service, "_llm", None)  # type: ignore[attr-defined]
+            llm = self._init_decomposer_llm()  # type: ignore[attr-defined]
             self._task_decomposer = TaskDecomposer(llm_client=llm)  # type: ignore[attr-defined]
         return self._task_decomposer  # type: ignore[attr-defined]
+
+    def _init_decomposer_llm(self) -> Any | None:
+        """Initialize LLM client for TaskDecomposer, independent of TriageService.
+
+        Tries in order:
+        1. Agent Runtime LLM (set via set_llm())
+        2. TriageService's cached LLM
+        3. Direct provider creation from environment
+        """
+        # 1. Agent Runtime LLM
+        agent_llm = getattr(self, "_llm", None)  # type: ignore[attr-defined]
+        if agent_llm is not None:
+            return agent_llm
+
+        # 2. TriageService's cached LLM
+        triage_llm = getattr(self._triage_service, "_llm", None)  # type: ignore[attr-defined]
+        if triage_llm is not None:
+            return triage_llm
+
+        # 3. Direct provider from environment
+        try:
+            from vibesop.llm.factory import create_provider
+            provider = create_provider()
+            if provider.configured():
+                return provider
+        except Exception:
+            pass
+
+        return None
 
     def _get_plan_builder(self) -> PlanBuilder:
         if self._plan_builder is None:  # type: ignore[attr-defined]

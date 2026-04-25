@@ -85,35 +85,51 @@ class IntentInterceptor:
     MAX_SHORT_QUERY: int = 50
 
     # Patterns that indicate meta-queries about VibeSOP itself
-    META_PATTERNS: list[str] = [
+    META_PATTERNS: tuple[str, ...] = (
         r"vibe\s+(route|skill|config|build|install)",
         r"为什么.*(?:路由|技能|skill|route)",
         r"(?:技能|skill).*(?:怎么|如何|为什么|工作)",
         r"routing.*(?:work|how|why)",
         r"what\s+(?:is|does)\s+vibesop",
         r"explain\s+(?:the\s+)?routing",
-    ]
+    )
 
     # Patterns that indicate explicit skill selection
-    EXPLICIT_SKILL_PATTERNS: list[str] = [
-        r"^/(\w+)",           # /review, /debug, etc.
+    EXPLICIT_SKILL_PATTERNS: tuple[str, ...] = (
+        r"^(\w+)",           # /review, /debug, etc.
         r"use\s+(?:skill\s+)?([\w/-]+)",
         r"调用\s*(?:技能\s+)?([\w/-]+)",
         r"(?:用|使用)\s*([\w/-]+)\s*(?:技能|skill)?",
-    ]
+    )
 
     # Patterns that strongly suggest multi-intent
-    MULTI_INTENT_PATTERNS: list[str] = [
+    MULTI_INTENT_PATTERNS: tuple[str, ...] = (
         r"(?:and\s+then|then\s+also|and\s+also|in\s+addition)",
         r"(?:然后|接着|之后|另外|还有|以及|并|并且|同时)",
         r"(?:first|second|third|firstly|secondly|thirdly)",
         r"(?:第一步|第二步|第三步|先|再|最后)",
-    ]
+    )
+
+    # Patterns that indicate explicit skill selection
+    EXPLICIT_SKILL_PATTERNS: tuple[str, ...] = (
+        r"^/(\w+)",           # /review, /debug, etc.
+        r"use\s+(?:skill\s+)?([\w/-]+)",
+        r"调用\s*(?:技能\s+)?([\w/-]+)",
+        r"(?:用|使用)\s*([\w/-]+)\s*(?:技能|skill)?",
+    )
+
+    # Patterns that strongly suggest multi-intent
+    MULTI_INTENT_PATTERNS: tuple[str, ...] = (
+        r"(?:and\s+then|then\s+also|and\s+also|in\s+addition)",
+        r"(?:然后|接着|之后|另外|还有|以及|并|并且|同时)",
+        r"(?:first|second|third|firstly|secondly|thirdly)",
+        r"(?:第一步|第二步|第三步|先|再|最后)",
+    )
 
     def should_intercept(
         self,
         query: str,
-        context: InterceptionContext | None = None,
+        _context: InterceptionContext | None = None,
     ) -> InterceptionDecision:
         """Decide whether to intercept and route this message.
 
@@ -160,14 +176,16 @@ class IntentInterceptor:
             )
 
         # 4. Short, focused query → single routing (conservative)
-        if len(original_query) <= self.MAX_SHORT_QUERY:
-            if not self._has_multi_intent_markers(original_query):
-                return InterceptionDecision(
-                    should_route=True,
-                    mode=InterceptionMode.SINGLE,
-                    reason="Short focused query, likely single intent",
-                    query=original_query,
-                )
+        if (
+            len(original_query) <= self.MAX_SHORT_QUERY
+            and not self._has_multi_intent_markers(original_query)
+        ):
+            return InterceptionDecision(
+                should_route=True,
+                mode=InterceptionMode.SINGLE,
+                reason="Short focused query, likely single intent",
+                query=original_query,
+            )
 
         # 5. Default: orchestrate (let multi-intent detector decide)
         return InterceptionDecision(
@@ -180,10 +198,7 @@ class IntentInterceptor:
     def _is_meta_query(self, query: str) -> bool:
         """Check if query is about VibeSOP itself."""
         query_lower = query.lower()
-        for pattern in self.META_PATTERNS:
-            if re.search(pattern, query_lower, re.IGNORECASE):
-                return True
-        return False
+        return any(re.search(pattern, query_lower, re.IGNORECASE) for pattern in self.META_PATTERNS)
 
     def _extract_explicit_skill(self, query: str) -> str | None:
         """Extract explicitly mentioned skill ID from query."""

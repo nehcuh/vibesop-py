@@ -67,6 +67,7 @@ from vibesop.core.routing.optimization_service import OptimizationService
 from vibesop.core.routing.orchestration_mixin import RouterOrchestrationMixin
 from vibesop.core.routing.stats_mixin import RouterStatsMixin
 from vibesop.core.routing.triage_service import TriageService
+from vibesop.core.skills.lifecycle import SkillLifecycle, SkillLifecycleManager
 from vibesop.llm.cost_tracker import TriageCostTracker
 
 if TYPE_CHECKING:
@@ -244,18 +245,16 @@ class UnifiedRouter(RouterStatsMixin, RouterExecutionMixin, RouterOrchestrationM
     # Main routing entry point
     # ================================================================
 
-    def route(
+    def _route(
         self,
         query: str,
         candidates: list[dict[str, Any]] | None = None,
         context: RoutingContext | None = None,
     ) -> RoutingResult:
-        """Route a query to the best matching skill.
+        """Internal: route a query to the best matching skill (single-skill mode).
 
-        Executes layers in priority order. The first confident match wins.
-        Integrates memory and instinct for context-aware routing.
-        Records the full routing path and per-layer diagnostics for transparency.
-        Supports multi-turn conversation context for follow-up queries.
+        Prefer orchestrate() for the full multi-skill pipeline.
+        This method executes layers in priority order; the first confident match wins.
         """
         from vibesop.core.routing import _layers, _pipeline
 
@@ -289,12 +288,16 @@ class UnifiedRouter(RouterStatsMixin, RouterExecutionMixin, RouterOrchestrationM
         for c in candidates:
             if not c.get("enabled", True):
                 continue
-            # Skip archived skills
-            lifecycle = c.get("lifecycle", "active")
-            if lifecycle == "archived":
+            lifecycle_str = c.get("lifecycle", "active")
+            try:
+                lifecycle = SkillLifecycle(lifecycle_str)
+            except ValueError:
+                lifecycle = SkillLifecycle.ACTIVE
+            # Skip non-routable skills (archived, draft)
+            if not SkillLifecycleManager.is_routable(lifecycle):
                 continue
             # Collect deprecated skills for warning
-            if lifecycle == "deprecated":
+            if lifecycle == SkillLifecycle.DEPRECATED:
                 deprecated_warnings.append(str(c.get("id", "")))
             scope = c.get("scope", "project")
             if scope == "project":
@@ -424,7 +427,6 @@ class UnifiedRouter(RouterStatsMixin, RouterExecutionMixin, RouterOrchestrationM
         original_query: str,
     ) -> RoutingResult:
         """Build result for a successful match, applying optimizations for non-matcher layers."""
-        from vibesop.core.routing import _pipeline
 
         # Early-layer matches (EXPLICIT/SCENARIO/AI_TRIAGE) bypass the
         # MatcherPipeline where OptimizationService normally runs.
@@ -490,11 +492,25 @@ class UnifiedRouter(RouterStatsMixin, RouterExecutionMixin, RouterOrchestrationM
             )
         return result
 
+    def route(
+        self,
+        query: str,
+        candidates: list[dict[str, Any]] | None = None,
+        context: RoutingContext | None = None,
+    ) -> RoutingResult:
+        """Public wrapper for single-skill routing.
+
+        Prefer orchestrate() for the full multi-skill pipeline.
+        This method delegates to _route() for backward compatibility.
+        """
+        return self._route(query, candidates, context)
+
     def orchestrate(
         self,
         query: str,
         candidates: list[dict[str, Any]] | None = None,
         context: RoutingContext | None = None,
+        callbacks: Any | None = None,
     ) -> OrchestrationResult:
         """Orchestrate a query — detect multi-intent and build execution plan if needed.
 
@@ -502,46 +518,175 @@ class UnifiedRouter(RouterStatsMixin, RouterExecutionMixin, RouterOrchestrationM
         - orchestration is disabled
         - query is clearly single-intent
         - decomposition fails
+
+        Args:
+            query: User's natural language query
+            candidates: Optional skill candidates list
+            context: Optional routing context
+            callbacks: Optional orchestration callbacks for streaming progress
         """
+        from vibesop.core.orchestration.callbacks import (
+            ErrorPolicy,
+            NoOpCallbacks,
+            OrchestrationPhase,
+            PhaseInfo,
+        )
+
+        cb = callbacks if callbacks is not None else NoOpCallbacks()
         start_time = time.perf_counter()
 
-        # 1. Always do single-skill routing first (fast path)
-        single_result = self.route(query, candidates, context)
+        # 1. Single-skill routing (fast path)
+        cb.on_phase_start(PhaseInfo(
+            phase=OrchestrationPhase.ROUTING,
+            message="Analyzing query for skill match...",
+            progress=0.0,
+        ))
+        single_result = self._route(query, candidates, context)
+        cb.on_phase_complete(PhaseInfo(
+            phase=OrchestrationPhase.ROUTING,
+            message=f"Single-skill match: {single_result.primary.skill_id if single_result.primary else 'none'}",
+            progress=0.2,
+            metadata={"primary_confidence": single_result.primary.confidence if single_result.primary else 0.0},
+        ))
 
         # 2. Check if orchestration is enabled
         if not self._config.enable_orchestration:
             return self._to_orchestration_result(single_result, query)
 
         # 3. Multi-intent detection
+        cb.on_phase_start(PhaseInfo(
+            phase=OrchestrationPhase.DETECTION,
+            message="Detecting multiple intents...",
+            progress=0.2,
+        ))
         detector = self._get_multi_intent_detector()
-        if not detector.should_decompose(query, single_result):
+        should_decompose = detector.should_decompose(query, single_result)
+        cb.on_phase_complete(PhaseInfo(
+            phase=OrchestrationPhase.DETECTION,
+            message=f"Multi-intent detected: {should_decompose}",
+            progress=0.4,
+            metadata={"should_decompose": should_decompose},
+        ))
+
+        if not should_decompose:
             return self._to_orchestration_result(single_result, query)
 
         # 4. Decompose into sub-tasks
+        cb.on_phase_start(PhaseInfo(
+            phase=OrchestrationPhase.DECOMPOSITION,
+            message="Decomposing query into sub-tasks...",
+            progress=0.4,
+        ))
         decomposer = self._get_task_decomposer()
-        sub_tasks = decomposer.decompose(query)
+        try:
+            sub_tasks = decomposer.decompose(query)
+        except Exception as e:
+            policy = cb.on_phase_error(
+                PhaseInfo(
+                    phase=OrchestrationPhase.DECOMPOSITION,
+                    message="Task decomposition failed",
+                    progress=0.4,
+                ),
+                e,
+                ErrorPolicy.ABORT,
+            )
+            if policy == ErrorPolicy.ABORT:
+                return self._to_orchestration_result(single_result, query)
+            sub_tasks = []
+
+        cb.on_phase_complete(PhaseInfo(
+            phase=OrchestrationPhase.DECOMPOSITION,
+            message=f"Decomposed into {len(sub_tasks)} sub-tasks",
+            progress=0.6,
+            metadata={"sub_task_count": len(sub_tasks)},
+        ))
 
         if len(sub_tasks) <= 1:
-            # Decomposition produced nothing useful, fall back
             return self._to_orchestration_result(single_result, query)
 
         # 5. Build execution plan
+        cb.on_phase_start(PhaseInfo(
+            phase=OrchestrationPhase.PLAN_BUILDING,
+            message="Building execution plan...",
+            progress=0.6,
+        ))
         builder = self._get_plan_builder()
-        plan = builder.build_plan(query, sub_tasks)
+        try:
+            plan = builder.build_plan(query, sub_tasks)
+        except Exception as e:
+            policy = cb.on_phase_error(
+                PhaseInfo(
+                    phase=OrchestrationPhase.PLAN_BUILDING,
+                    message="Plan building failed",
+                    progress=0.6,
+                ),
+                e,
+                ErrorPolicy.ABORT,
+            )
+            if policy == ErrorPolicy.ABORT:
+                return self._to_orchestration_result(single_result, query)
+            plan = None  # type: ignore[assignment]
 
-        if not plan.steps:
-            # No valid steps could be built, fall back
+        if not plan or not plan.steps:
+            cb.on_phase_complete(PhaseInfo(
+                phase=OrchestrationPhase.PLAN_BUILDING,
+                message="No valid plan could be built, falling back to single skill",
+                progress=0.8,
+            ))
             return self._to_orchestration_result(single_result, query)
+
+        cb.on_phase_complete(PhaseInfo(
+            phase=OrchestrationPhase.PLAN_BUILDING,
+            message=f"Execution plan built with {len(plan.steps)} steps",
+            progress=0.9,
+            metadata={"step_count": len(plan.steps), "strategy": plan.execution_mode.value},
+        ))
 
         duration_ms = (time.perf_counter() - start_time) * 1000
 
-        return OrchestrationResult(
+        result = OrchestrationResult(
             mode=OrchestrationMode.ORCHESTRATED,
             original_query=query,
             execution_plan=plan,
             single_fallback=single_result.primary,
             duration_ms=duration_ms,
         )
+
+        # Record execution analytics
+        self._record_execution(query, result)
+
+        cb.on_plan_ready(plan)
+        cb.on_phase_complete(PhaseInfo(
+            phase=OrchestrationPhase.COMPLETE,
+            message="Orchestration complete",
+            progress=1.0,
+        ))
+
+        return result
+
+    def _record_execution(
+        self,
+        query: str,
+        result: OrchestrationResult,
+        user_modified: bool = False,
+        user_satisfied: bool | None = None,
+    ) -> None:
+        """Record execution to analytics store."""
+        from vibesop.core.analytics import AnalyticsStore, ExecutionRecord
+
+        store = AnalyticsStore(storage_dir=self.project_root / ".vibe")
+        record = ExecutionRecord(
+            query=query,
+            mode=result.mode.value,
+            primary_skill=result.primary.skill_id if result.primary else None,
+            plan_steps=[s.skill_id for s in result.execution_plan.steps] if result.execution_plan else [],
+            step_count=len(result.execution_plan.steps) if result.execution_plan else 0,
+            duration_ms=result.duration_ms,
+            user_modified=user_modified,
+            user_satisfied=user_satisfied,
+            routing_layers=[layer.value for layer in result.routing_path],
+        )
+        store.record(record)
 
     def _record_routing_decision(
         self,
@@ -569,6 +714,13 @@ class UnifiedRouter(RouterStatsMixin, RouterExecutionMixin, RouterOrchestrationM
                     tags=["routing", "auto_extracted"],
                     source="auto_routing",
                 )
+
+            # Record to preference learner for personalization
+            try:
+                learner = self._preference_booster.get_learner()
+                learner.record_selection(match.skill_id, query, was_helpful=True)
+            except Exception:
+                pass
         except (OSError, ValueError, RuntimeError) as e:
             logger.debug(f"Failed to record routing decision: {e}")
 
@@ -725,7 +877,7 @@ class UnifiedRouter(RouterStatsMixin, RouterExecutionMixin, RouterOrchestrationM
     # Context management (from former context_mixin)
     # ================================================================
 
-    def _get_memory_manager(self) -> "MemoryManager":
+    def _get_memory_manager(self) -> MemoryManager:
         if self._memory_manager is None:
             from vibesop.core.memory import MemoryManager
 
@@ -761,7 +913,7 @@ class UnifiedRouter(RouterStatsMixin, RouterExecutionMixin, RouterOrchestrationM
         except (OSError, ValueError, RuntimeError) as e:
             logger.debug(f"Failed to save session state: {e}")
 
-    def _get_instinct_learner(self) -> "InstinctLearner":
+    def _get_instinct_learner(self) -> InstinctLearner:
         if self._instinct_learner is None:
             from vibesop.core.instinct import InstinctLearner
 

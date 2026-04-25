@@ -149,7 +149,7 @@ def list_skills(
 
 def install(
     skill_id: str = typer.Argument(..., help="Skill identifier"),
-    source: Path | None = typer.Option(  # noqa: B008
+    source: Path | None = typer.Option(
         None,
         "--source",
         "-s",
@@ -315,7 +315,7 @@ def remove(
 
 def sync(
     platform: str = typer.Argument(..., help="Target platform"),
-    project_root: Path = typer.Option(  # noqa: B008
+    project_root: Path = typer.Option(
         Path(),
         "--root",
         "-r",

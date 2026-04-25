@@ -727,7 +727,7 @@ class TestApplyOptimizationsIntegration:
         ]
         context = RoutingContext(current_skill="skill-a", habit_boosts={"skill-a": 0.10})
 
-        primary, alternatives = service.apply_optimizations(matches, "query", context)
+        primary, _alternatives = service.apply_optimizations(matches, "query", context)
 
         # Preference booster was called
         service._preference_booster.boost.assert_called_once()

@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
-import pytest
-
-from vibesop.core.models import LayerDetail, RejectedCandidate, RoutingLayer, RoutingResult, SkillRoute
+from vibesop.core.models import (
+    LayerDetail,
+    RejectedCandidate,
+    RoutingLayer,
+    RoutingResult,
+)
 from vibesop.core.routing import UnifiedRouter
 
 

@@ -4,10 +4,7 @@ from __future__ import annotations
 
 import builtins
 from pathlib import Path
-from typing import Any
 from unittest.mock import patch
-
-import pytest
 
 from vibesop.installer.quickstart_runner import QuickstartConfig, QuickstartRunner
 

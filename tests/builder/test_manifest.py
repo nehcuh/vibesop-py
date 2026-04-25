@@ -45,7 +45,7 @@ skills:
         assert manifest.metadata.platform == "claude-code"
         assert len(manifest.skills) > 0
 
-    def test_build_with_custom_platform(self, tmp_path: Path) -> None:  # noqa: ARG002
+    def test_build_with_custom_platform(self, tmp_path: Path) -> None:
         """Test building with custom platform."""
         builder = ManifestBuilder()
         manifest = builder.build(platform="custom-platform")
@@ -197,7 +197,7 @@ metadata:
         with pytest.raises(FileNotFoundError):
             merger.merge(manifest, tmp_path / "does_not_exist.yaml")
 
-    def test_deep_merge(self, tmp_path: Path) -> None:  # noqa: ARG002
+    def test_deep_merge(self, tmp_path: Path) -> None:
         """Test deep merge functionality."""
         merger = OverlayMerger()
 
@@ -302,7 +302,7 @@ skills:
         with pytest.raises(ValueError, match="Failed to load manifest"):
             builder.build_from_file(manifest_file)
 
-    def test_extract_trigger_empty_description(self, tmp_path: Path) -> None:  # noqa: ARG002
+    def test_extract_trigger_empty_description(self, tmp_path: Path) -> None:
         """Test _extract_trigger_from_description with empty input."""
         builder = ManifestBuilder(project_root=Path())
         assert builder._extract_trigger_from_description("") == ""

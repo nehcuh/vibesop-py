@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from vibesop.core.skills.manager import SkillManager
 
 

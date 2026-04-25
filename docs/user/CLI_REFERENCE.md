@@ -21,7 +21,13 @@ Complete reference for all VibeSOP CLI commands.
 
 ### `vibe route`
 
-Route a natural language query to the appropriate skill.
+Route a natural language query to the appropriate skill(s).
+
+By default, VibeSOP will:
+1. Detect if your query contains multiple intents
+2. Decompose complex requests into sub-tasks
+3. Build an execution plan with optimal skill selection
+4. Show a summary for confirmation
 
 ```bash
 vibe route <query> [options]
@@ -36,11 +42,16 @@ vibe route <query> [options]
 - `--validate, -V` - Validate routing configuration
 - `--explain, -e` - Explain full routing decision tree with per-layer diagnostics, multi-intent analysis, and execution flow
 - `--no-session` - Disable session-state-aware routing for this query
+- `--yes, -y` - Skip confirmation prompt
+- `--strategy, -s` - Force execution strategy: auto, sequential, parallel, hybrid
 
 **Examples:**
 ```bash
-# Basic routing
+# Basic routing (auto-detects single vs multi-intent)
 vibe route "help me debug this error"
+
+# Multi-intent orchestration
+vibe route "analyze architecture and write tests"
 
 # With confidence threshold
 vibe route "review my code" --min-confidence 0.8
@@ -48,8 +59,8 @@ vibe route "review my code" --min-confidence 0.8
 # JSON output
 vibe route "test this" --json
 
-# Validate routing
-vibe route "debug" --validate
+# Skip confirmation
+vibe route "deploy to production" --yes
 
 # Explain routing decision
 vibe route "debug" --explain
@@ -58,17 +69,33 @@ vibe route "debug" --explain
 vibe route "debug" --no-session
 ```
 
-**Output:**
+**Single Intent Output:**
 ```
-✅ Matched: systematic-debugging
-   Confidence: 95%
-   Layer: scenario
-   Source: builtin
-   Quality: A
+🔍 Routing Summary
+─────────────────────────────
+Selected     systematic-debugging
+Confidence   95%
+Layer        scenario
+Duration     12.3ms
 
 💡 Alternatives:
-   • gstack/investigate (82%) — Investigate unknown issues
-   • superpowers/debug (75%) — Advanced debugging workflow
+   • gstack/investigate (82%)
+   • superpowers/debug (75%)
+```
+
+**Multi Intent Output:**
+```
+🔍 Routing Summary
+─────────────────────────────
+Mode         Orchestrated
+Steps        2
+Strategy     sequential
+
+Plan:
+  1. riper-workflow — architecture analysis
+  2. superpowers/test — test generation
+
+[✅ Confirm] [✏️ Edit] [🔀 Single skill] [📝 Skip]
 ```
 
 ---
@@ -399,6 +426,117 @@ vibe skills feedback --skill gstack/review --query "review code" --helpful yes
 
 # Report failure with details
 vibe skills feedback --skill gstack/review --query "review code" --success no --notes "missed edge case"
+```
+
+---
+
+### `vibe skill` (Lifecycle Management)
+
+Manage skill lifecycle states: enable, disable, and check status.
+
+#### `vibe skill list`
+
+List all skills with their lifecycle state.
+
+```bash
+vibe skill list [options]
+```
+
+**Options:**
+- `--all, -a` - Show all skills including archived
+- `--project, -p` - Show only project-scoped skills
+
+**Examples:**
+```bash
+# List active skills
+vibe skill list
+
+# Show all skills including archived
+vibe skill list --all
+
+# Show only project-scoped skills
+vibe skill list --project
+```
+
+**Output:**
+```
+┌──────────────────────┬─────────────────┬────────┬─────────┬─────────┐
+│ ID                   │ Name            │ State  │ Scope   │ Version │
+├──────────────────────┼─────────────────┼────────┼─────────┼─────────┤
+│ gstack/review        │ Code Review     │ active │ global  │ 2.1.0   │
+│ systematic-debugging │ Debug Workflow  │ active │ global  │ 1.5.0   │
+│ old-deploy-skill     │ Deploy Helper   │ deprecated│ global │ 0.9.0   │
+└──────────────────────┴─────────────────┴────────┴─────────┴─────────┘
+```
+
+---
+
+#### `vibe skill enable`
+
+Enable a skill for routing.
+
+```bash
+vibe skill enable <skill-id>
+```
+
+**Example:**
+```bash
+vibe skill enable gstack/review
+```
+
+**Output:**
+```
+✓ Skill 'gstack/review' enabled
+```
+
+---
+
+#### `vibe skill disable`
+
+Disable a skill from routing.
+
+```bash
+vibe skill disable <skill-id>
+```
+
+**Example:**
+```bash
+vibe skill disable old-deploy-skill
+```
+
+**Output:**
+```
+✓ Skill 'old-deploy-skill' disabled
+```
+
+---
+
+#### `vibe skill status`
+
+Show detailed status of a skill including lifecycle transitions.
+
+```bash
+vibe skill status <skill-id>
+```
+
+**Example:**
+```bash
+vibe skill status gstack/review
+```
+
+**Output:**
+```
+┌─────────────────────────────────────┐
+│ Skill Status: gstack/review         │
+├─────────────────────────────────────┤
+│ ID:           gstack/review         │
+│ Name:         Code Review Skill     │
+│ State:        active                │
+│ Enabled:      Yes                   │
+│ Scope:        global                │
+│ Version:      2.1.0                 │
+│ Valid transitions: deprecated       │
+└─────────────────────────────────────┘
 ```
 
 ---

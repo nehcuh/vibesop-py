@@ -10,8 +10,9 @@ Commands:
 
 from __future__ import annotations
 
-from datetime import UTC
+from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 import typer
 from rich.console import Console
@@ -56,8 +57,8 @@ def list_experiments() -> None:
 def create_experiment(
     name: str = _EXPERIMENT_NAME_ARG,
     description: str = typer.Option("", "--description", "-d", help="Experiment description"),
-    queries: list[str] = typer.Option([], "--query", "-q", help="Test queries (repeatable)"),  # noqa: B008
-    variant_names: list[str] = typer.Option([], "--variant", "-v", help="Variant names (repeatable)"),  # noqa: B008
+    queries: list[str] = typer.Option([], "--query", "-q", help="Test queries (repeatable)"),
+    variant_names: list[str] = typer.Option([], "--variant", "-v", help="Variant names (repeatable)"),
 ) -> None:
     """Create a new A/B testing experiment.
 
@@ -103,7 +104,7 @@ def create_experiment(
 @app.command("run")
 def run_experiment(
     name: str = _EXPERIMENT_NAME_ARG,
-    project_root: Path | None = typer.Option(None, "--project-root", help="Project root"),  # noqa: B008
+    project_root: Path | None = typer.Option(None, "--project-root", help="Project root"),
 ) -> None:
     """Run an experiment and collect metrics."""
     store = ExperimentStore()
@@ -186,6 +187,4 @@ def delete_experiment(
         console.print(f"[yellow]Experiment not found: {name}[/yellow]")
 
 
-# Need to import here to avoid circular import at module level
-from datetime import datetime  # noqa: E402
-from typing import Any  # noqa: E402
+

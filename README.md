@@ -30,7 +30,21 @@ VibeSOP 提供**智能路由**和**轻量级技能执行**：
 
 **VibeSOP provides intelligent ROUTING and lightweight EXECUTION:**
 
-### 智能路由（核心功能）Intelligent Routing (Primary)
+### 智能编排（默认行为）Intelligent Orchestration (Default)
+
+- **多意图检测**：自动识别复杂请求中的多个意图
+  **Multi-intent detection** - automatically identify multiple intents in complex requests
+
+- **任务分解**：将复杂请求拆分为可独立执行的子任务
+  **Task decomposition** - break complex requests into independently executable sub-tasks
+
+- **执行计划**：自动生成串行/并行执行策略
+  **Execution planning** - automatically generate serial/parallel execution strategies
+
+- **实时进度**：流式显示编排过程每一步
+  **Real-time progress** - streaming display of each orchestration step
+
+### 智能路由（底层能力）Intelligent Routing (Foundation)
 
 - 理解你的意图（自然语言，支持中英文）
   **Understand your intent** (natural language, English + Chinese)
@@ -41,22 +55,12 @@ VibeSOP 提供**智能路由**和**轻量级技能执行**：
 - 学习你的偏好（越用越准确）
   **Learn your preferences** (gets better over time)
 
-### 智能编排（辅助功能）Intelligent Orchestration (Secondary)
+**VibeSOP 定位**: VibeSOP 是技能操作系统。它理解你的意图、分解任务、规划执行顺序，
+并为你生成可执行的计划。技能的实际执行由 AI Agent（Claude Code, Cursor, OpenCode）完成。
 
-- 多意图任务分解：将复杂请求拆分为子任务序列
-  **Multi-intent decomposition** - break complex requests into sub-task sequences
-
-- 执行计划生成：自动决定串行/并行策略
-  **Execution planning** - automatically decide serial/parallel strategies
-
-- 技能组合：为多步骤工作流匹配最佳技能组合
-  **Skill composition** - match optimal skill combinations for multi-step workflows
-
-**VibeSOP 定位**: VibeSOP 是路由引擎 + 编排层，它决定"用什么技能、以什么顺序"，
-但**不执行技能本身**。技能的实际执行由 AI Agent（Claude Code, Cursor, OpenCode）完成。
-
-**Note**: VibeSOP is a routing engine + orchestration layer. It decides "which skill and in what order",
-but **does not execute skills**. Actual skill execution is done by AI Agents (Claude Code, Cursor, OpenCode).
+**Note**: VibeSOP is a Skill Operating System. It understands your intent, decomposes tasks,
+plans execution order, and generates executable plans. Actual skill execution is done by AI Agents
+(Claude Code, Cursor, OpenCode).
 
 📖 **Read our philosophy**: [docs/PHILOSOPHY.md](docs/PHILOSOPHY.md) | [中文版](docs/PHILOSOPHY.md)
 
@@ -137,23 +141,41 @@ pip install -e .
 ### 第一次使用 First Use
 
 ```bash
-# Route your first query
+# Single intent - routes to best skill
 $ vibe route "帮我调试这个错误"
 
-📥 Query: 帮我调试这个错误
-✅ Matched: systematic-debugging
-   Confidence: 95%
-   Layer: scenario
-   Source: builtin
+🔍 Routing Summary
+─────────────────────────────
+Selected     systematic-debugging
+Confidence   95%
+Layer        scenario
+Duration     12.3ms
 
 💡 Alternatives:
    • gstack/investigate (82%)
    • superpowers/debug (75%)
 ```
 
-**就这么简单！** VibeSOP 理解你的意图，并为你找到最合适的技能。
+```bash
+# Multi intent - automatically orchestrates
+$ vibe route "分析架构并生成测试"
 
-**That's it!** VibeSOP understands your intent and finds the best skill for you.
+🔍 Routing Summary
+─────────────────────────────
+Mode         Orchestrated
+Steps        2
+Strategy     sequential
+
+Plan:
+  1. riper-workflow — 架构分析
+  2. superpowers/test — 测试生成
+
+[✅ Confirm] [✏️ Edit] [🔀 Single skill] [📝 Skip]
+```
+
+**就这么简单！** VibeSOP 理解你的意图——无论是单一任务还是复杂多步骤请求。
+
+**That's it!** VibeSOP understands your intent — whether it's a single task or a complex multi-step request.
 
 ---
 

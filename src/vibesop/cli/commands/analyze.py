@@ -37,7 +37,7 @@ def analyze(
         ...,
         help="Analysis target: session, patterns, security, integrations",
     ),
-    source: Path | None = typer.Argument(  # noqa: B008
+    source: Path | None = typer.Argument(
         None,
         help="Source file or directory to analyze",
         exists=True,

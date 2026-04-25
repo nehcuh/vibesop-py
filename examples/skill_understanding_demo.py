@@ -11,24 +11,20 @@
     python examples/skill_understanding_demo.py
 """
 
-import json
 
 # 添加项目路径
 import sys
 from pathlib import Path
 
 from rich.console import Console
-from rich.panel import Panel
 from rich.table import Table
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from vibesop.core.skills.base import SkillMetadata
 from vibesop.core.skills.understander import (
     CategoryRules,
     KeywordAnalyzer,
     SkillAutoConfigurator,
-    SkillType,
     understand_skill_from_file,
 )
 

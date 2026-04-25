@@ -1,11 +1,9 @@
 """Tests for Skill Governance (Phase 3): enable/disable and scope enforcement."""
 
-from pathlib import Path
-from unittest.mock import MagicMock
 
 import pytest
 
-from vibesop.core.routing.unified import RoutingLayer, RoutingResult, UnifiedRouter
+from vibesop.core.routing.unified import UnifiedRouter
 from vibesop.core.skills.config_manager import SkillConfigManager
 
 
@@ -110,7 +108,7 @@ class TestSkillScope:
         router_b = UnifiedRouter(project_root=project_b, config=manager)
 
         raw_candidates = router_b._get_candidates()
-        raw_ids = {c["id"] for c in raw_candidates}
+        {c["id"] for c in raw_candidates}
 
         # The skill may be discovered (if SkillLoader searches broadly),
         # but should be filtered at route time

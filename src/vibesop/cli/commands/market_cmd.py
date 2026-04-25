@@ -99,7 +99,7 @@ def install(
 
     crawler = GitHubSkillCrawler()
     skill_repo = SkillRepo(
-        name=repo.split("/")[-1],
+        name=repo.rsplit("/", maxsplit=1)[-1],
         full_name=repo,
         description="",
         stars=0,
@@ -117,5 +117,5 @@ def install(
         raise typer.Exit(1)
 
     console.print(f"[green]✓ Repository '{repo}' is valid[/green]")
-    console.print(f"\n[bold]Install command:[/bold]")
+    console.print("\n[bold]Install command:[/bold]")
     console.print(f"  [cyan]vibe install https://github.com/{repo}[/cyan]")

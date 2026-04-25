@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """Integration test for skill add command with auto-configuration."""
 
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -199,7 +198,6 @@ def test_skill_add_force_reinstall(temp_skill_dir, monkeypatch, tmp_path):
 
 
 if __name__ == "__main__":
-    import sys
 
     # Run with verbose output
     pytest.main([__file__, "-v", "-s"])

@@ -48,7 +48,7 @@ VALID_PLATFORMS = list(PLATFORM_LABELS.keys())
 
 
 def init(
-    project_path: Path = typer.Argument(  # noqa: B008
+    project_path: Path = typer.Argument(
         Path(),
         help="Project path (default: current directory)",
         show_default=False,

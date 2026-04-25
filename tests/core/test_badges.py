@@ -7,9 +7,6 @@ from pathlib import Path
 from typing import Any
 from unittest.mock import patch
 
-import pytest
-import yaml
-
 from vibesop.core.badges import Badge, BadgeTracker, BadgeType, get_badge_display
 
 

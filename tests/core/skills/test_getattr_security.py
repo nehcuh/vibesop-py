@@ -1,6 +1,5 @@
 """Test getattr security fix - prevent special attribute access via getattr."""
 
-import pytest
 
 from vibesop.core.skills.workflow import ExecutionContext, WorkflowEngine
 
@@ -42,7 +41,7 @@ class TestGetattrSecurity:
 
         # Normal getattr should work (if the attribute exists)
         # For int objects, real and imag are normal attributes
-        result = engine._evaluate_condition('getattr(x, "real")', context)
+        engine._evaluate_condition('getattr(x, "real")', context)
         # This should return True (5.real is a valid attribute)
 
     def test_getattr_blocks_mixed_special_attributes(self) -> None:

@@ -2,9 +2,7 @@
 
 from unittest.mock import MagicMock
 
-import pytest
-
-from vibesop.core.skills.retention import RetentionPolicy, RetentionSuggestion
+from vibesop.core.skills.retention import RetentionPolicy
 
 
 class TestRetentionPolicy:

@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
-import pytest
+from typing import TYPE_CHECKING
 
 from vibesop.core.project_analyzer import ProjectAnalyzer, ProjectProfile
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 class TestProjectProfile:

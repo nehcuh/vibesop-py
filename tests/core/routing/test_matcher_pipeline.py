@@ -2,10 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
-from unittest.mock import MagicMock, Mock
-
-import pytest
+from unittest.mock import MagicMock
 
 from vibesop.core.exceptions import MatcherError
 from vibesop.core.models import RoutingLayer

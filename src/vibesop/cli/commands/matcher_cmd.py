@@ -51,7 +51,7 @@ def list_matchers(
 
 @app.command("register")
 def register_matcher(
-    file_path: Path = typer.Argument(..., help="Path to matcher Python file"),  # noqa: B008
+    file_path: Path = typer.Argument(..., help="Path to matcher Python file"),
     project_root: Path | None = _PROJECT_ROOT_OPTION,
 ) -> None:
     """Register a new custom matcher plugin from a Python file.

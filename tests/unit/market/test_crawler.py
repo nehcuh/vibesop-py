@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
-import httpx
+from typing import TYPE_CHECKING
+
 import pytest
-from pytest_mock import MockerFixture
 
 from vibesop.market.crawler import GitHubSkillCrawler, SkillRepo
+
+if TYPE_CHECKING:
+    from pytest_mock import MockerFixture
 
 
 @pytest.fixture

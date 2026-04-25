@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from vibesop.core.models import RoutingLayer, RoutingResult, SkillRoute
 from vibesop.core.orchestration.multi_intent_detector import MultiIntentDetector
 

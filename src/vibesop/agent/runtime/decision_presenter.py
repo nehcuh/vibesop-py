@@ -225,7 +225,7 @@ class DecisionPresenter:
             },
         )
 
-    def _format_header(self, primary, platform: str) -> list[str]:
+    def _format_header(self, primary, _platform: str) -> list[str]:
         """Format the match header."""
         if primary.layer.value == "fallback_llm":
             return [
@@ -315,9 +315,9 @@ class DecisionPresenter:
         if not near_misses:
             return []
 
-        return ["", "接近但未达阈值的候选:"] + near_misses[:5]
+        return ["", "接近但未达阈值的候选:", *near_misses[:5]]
 
-    def _present_no_match(self, result, platform: str) -> PresentResult:
+    def _present_no_match(self, result, _platform: str) -> PresentResult:
         """Present when no match is found."""
         lines = [
             "🤖 VibeSOP Fallback 模式",
@@ -339,7 +339,7 @@ class DecisionPresenter:
             actions=["continue", "browse_skills", "install_skill"],
         )
 
-    def _single_actions(self, platform: str) -> list[str]:
+    def _single_actions(self, _platform: str) -> list[str]:
         """Available actions for single-skill result."""
         return ["accept", "switch_alternative", "skip_skill"]
 

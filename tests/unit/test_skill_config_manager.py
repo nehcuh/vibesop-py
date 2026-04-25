@@ -5,11 +5,9 @@ import tempfile
 from pathlib import Path
 
 from vibesop.core.skills.config_manager import (
-    SkillConfig,
     SkillConfigManager,
     get_skill_llm_config,
     list_skill_configs,
-    set_skill_llm_config,
 )
 
 
@@ -53,7 +51,7 @@ def test_set_and_get_skill_llm_config():
 
             # 验证
             assert config.skill_id == skill_id
-            assert config.requires_llm == True
+            assert config.requires_llm
             assert config.llm_provider == "openai"
             assert config.llm_model == "gpt-4"
             assert config.llm_temperature == 0.7

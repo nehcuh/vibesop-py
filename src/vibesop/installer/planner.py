@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from vibesop.installer.analyzer import RepoAnalysis
 
-from vibesop.installer.analyzer import RepoAnalysis  # noqa: TC001
+from vibesop.installer.analyzer import RepoAnalysis
 
 
 @dataclass

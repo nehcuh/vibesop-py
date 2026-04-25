@@ -109,13 +109,13 @@ class GenericSessionTracker(SessionTracker):
         from pathlib import Path
 
         self.project_root = Path(project_root).resolve()
-        
+
         # Use proper standard directory structure
         if config_dir:
             self.config_dir = Path(config_dir).expanduser()
         else:
             self.config_dir = Path.home() / ".vibe" / "sessions"
-            
+
         self.config_dir.mkdir(parents=True, exist_ok=True)
 
         # Session context
@@ -229,11 +229,10 @@ class GenericSessionTracker(SessionTracker):
 
     def _save_state(self) -> None:
         """Save session state to file.
-        
+
         Uses atomic file writing to prevent corruption on concurrent saves.
         """
         import json
-        import os
         import tempfile
 
         try:
@@ -253,11 +252,11 @@ class GenericSessionTracker(SessionTracker):
             # Atomic write pattern
             self._state_file.parent.mkdir(parents=True, exist_ok=True)
             fd, tmp_path = tempfile.mkstemp(dir=self._state_file.parent, prefix=".tmp_state_")
-            with os.fdopen(fd, "w", encoding="utf-8") as f:
+            with open(fd, "w", encoding="utf-8", closefd=False) as f:
                 json.dump(state, f, indent=2)
-            
+
             # Atomic replace
-            os.replace(tmp_path, self._state_file)
+            Path(tmp_path).replace(self._state_file)
         except Exception as e:
             logger.warning(f"Failed to save session state: {e}")
 

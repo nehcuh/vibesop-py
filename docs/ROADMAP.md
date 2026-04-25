@@ -176,71 +176,89 @@ Improve routing accuracy with context awareness, multi-turn conversations, direc
 
 ---
 
-## v4.4.0 — SkillMarket + Feedback Loop (2026-Q2)
+## v4.4.0 — SkillOS: Orchestration + Lifecycle + Feedback (In Progress)
 
 ### Goals
-Complete the skill ecosystem with discovery, community, and self-improvement.
+Transform VibeSOP from a routing engine into a complete Skill Operating System.
 
 ### Features
 
-#### SkillMarket (Highest Priority)
-- [ ] **Skill Discovery**
-  - Search skills by keywords, tags, project type
-  - Browse trending/popular skills
-  - GitHub topic-based skill crawling
-  - Custom registry URLs support
+#### Orchestration (Default Mode)
+- [x] **Multi-Intent Detection**
+  - Automatic detection of complex queries with multiple intents
+  - Heuristic + LLM-based detection with zero-cost fast path
+  - Intent domain boundary detection
 
-- [ ] **Skill Metadata**
-  - Rating and reviews system
-  - Download statistics
-  - Compatibility matrix (platform × version)
-  - Author profiles and trust scores
+- [x] **Task Decomposition**
+  - LLM-based query decomposition into sub-tasks
+  - Fallback rule-based decomposition when LLM unavailable
+  - Guardrails to prevent over-decomposition
 
-- [ ] **Smart Recommendations**
-  - Project-type-based recommendations
-  - "Users who installed X also installed Y"
-  - Missing skill detection for current project
+- [x] **Execution Planning**
+  - Automatic serial/parallel strategy detection
+  - Dependency inference between steps
+  - Interactive plan editing (move/remove/reorder)
 
-- [ ] **CLI Integration**
-  - `vibe market search <query>`
-  - `vibe market recommend`
-  - `vibe market info <skill>`
-  - `vibe market install --popular`
+- [x] **Streaming Progress**
+  - Real-time orchestration progress display
+  - Phase-by-phase callbacks (routing → detection → decomposition → planning)
+  - Error recovery strategies (skip/retry/abort)
 
-#### Autoresearch Feedback Loop
-- [ ] **Automatic Skill Improvement**
-  - Analyze routing success/failure patterns
-  - Suggest keyword additions based on missed queries
-  - Auto-generate A/B test variants
-  - Skill quality regression detection
+#### Skill Lifecycle Management
+- [x] **SkillLifecycle State Machine**
+  - States: DRAFT → ACTIVE → DEPRECATED → ARCHIVED
+  - Valid transition enforcement
+  - Routability checks (archived/draft skills excluded)
 
-- [ ] **Skill Evolution**
-  - Track skill effectiveness over time
-  - Auto-deprecate low-quality skills
-  - Suggest skill splits (too broad) or merges (too narrow)
+- [x] **Scope System**
+  - Project-level vs global skills
+  - Scope-aware routing (project skills invisible outside project)
+  - `.vibe/skills/` project-local override
+
+- [x] **CLI Commands**
+  - `vibe skill list` — List skills with lifecycle state
+  - `vibe skill enable <id>` / `vibe skill disable <id>`
+  - `vibe skill status <id>` — Show skill details and valid transitions
+
+#### Feedback Loop
+- [x] **Usage Analytics**
+  - Execution record storage (`.vibe/analytics.jsonl`)
+  - Skill usage statistics (satisfaction rate, modification rate)
+  - Low-quality skill detection
+
+- [x] **User Feedback Collection**
+  - Post-execution satisfaction prompt
+  - Automatic deviation recording suggestion
+  - Feedback-driven routing improvement
+
+#### SkillMarket (Partial)
+- [x] **GitHub Topic Crawling**
+  - `vibe market search <query>` — Search by keywords
+  - `vibe market install <skill>` — Install from discovery
 
 #### Performance Optimization
-- [ ] **Latency Reduction**
+- [ ] **Latency Reduction** (In Progress)
   - Current P95: 354ms, Target: <100ms
   - Router hot-path optimization
   - Lazy loading for heavy dependencies
-  - Connection pooling for LLM clients
 
-- [ ] **Quality Gates**
-  - Fix 185 lint errors → 0
+- [ ] **Quality Gates** (In Progress)
+  - Fix 157 lint errors → 0
   - Increase coverage from 74% → 80%
-  - Add performance regression CI
 
 ### Success Metrics
 
-- SkillMarket: 50+ discoverable skill packs
-- Routing P95 latency: <100ms
-- Test coverage: >80%
-- Lint errors: 0
+- ✅ Orchestration: Multi-intent detection + task decomposition + execution planning
+- ✅ SkillLifecycle: 4 states with transition validation
+- ✅ Scope system: Project-level skill isolation
+- ✅ Feedback loop: Usage analytics + user satisfaction tracking
+- ⚠️ Routing P95 latency: 225ms (target <100ms)
+- ⚠️ Lint errors: 157 (target 0)
+- ⚠️ Test coverage: 74% (target >80%)
 
 ---
 
-## v5.0.0 — SkillRuntime: Scope + Lifecycle (2026-Q2/Q3)
+## v5.0.0 — SkillRuntime: Scope + Lifecycle (2026-Q2) ✅ IN PROGRESS
 
 > **ADR**: [docs/version_05.md](docs/version_05.md) (Plan: VibeSOP Skill Ecosystem Evolution, approved 2026-04-21)
 
@@ -249,18 +267,18 @@ Introduce scope isolation, skill enable/disable, and lifecycle state management.
 
 ### Features
 
-- [ ] **SkillRuntime Core**
+- [~] **SkillRuntime Core** (In Progress)
   - Scope system: project-level vs global skills
   - Skill enable/disable toggle (`vibe skill enable/disable <id>`)
   - SkillLifecycleState machine (DRAFT → ACTIVE → DEPRECATED → ARCHIVED)
   - Scope-aware config resolution (project `.vibe/` overrides global `~/.vibe/`)
 
-- [ ] **Data Pre-burial for v5.1**
+- [~] **Data Pre-burial for v5.1** (In Progress)
   - SkillConfig gains `usage_stats` field (call count, success rate, last used)
   - SkillConfig gains `version_history` field (semver tracking)
   - SkillConfig gains `evaluation_context` extension slot
 
-- [ ] **CLI Commands**
+- [~] **CLI Commands** (In Progress)
   - `vibe skill enable <id>` / `vibe skill disable <id>`
   - `vibe skill scope <id> --project` / `vibe skill scope <id> --global`
   - `vibe skill lifecycle <id> --set deprecated`
@@ -274,24 +292,26 @@ Introduce scope isolation, skill enable/disable, and lifecycle state management.
 
 ---
 
-## v5.1.0 — SkillMarket + Feedback Loop (2026-Q3/Q4)
+## v5.1.0 — SkillMarket + Feedback Loop (2026-Q2/Q3) ✅ IN PROGRESS
 
 ### Goals
 Complete the skill ecosystem with discovery, community, and self-improvement.
 
 ### Features
 
-- [ ] **SkillMarket MVP**
+- [~] **SkillMarket MVP** (In Progress)
   - `vibe market search <query>` — keyword + tag search
   - `vibe market info <skill>` — ratings, downloads, compatibility
   - `vibe market install` — one-click from discovered skills
   - GitHub topic crawling (`topic:vibesop-skill`)
 
-- [ ] **Autoresearch Feedback Loop**
+- [~] **Autoresearch Feedback Loop** (In Progress)
   - Analyze routing success/failure patterns
   - Suggest keyword additions for missed queries
   - Skill quality regression detection
   - Auto-deprecate skills below quality threshold
+  - User satisfaction tracking (`AnalyticsStore`)
+  - Interactive feedback collection after execution
 
 - [ ] **Skill Evaluation**
   - Rating and reviews system

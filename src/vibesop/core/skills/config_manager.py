@@ -19,7 +19,6 @@
 
 import logging
 from dataclasses import dataclass, field
-from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
@@ -31,24 +30,13 @@ from vibesop.core.llm_config import (
     LLMConfigResolver,
     LLMSource,
 )
+from vibesop.core.models import SkillLifecycle
 
 logger = logging.getLogger(__name__)
 console = Console()
 
-
-class SkillLifecycleState(StrEnum):
-    """技能生命周期状态 (v5.0 预埋,为 v5.1 淘汰机制准备).
-
-    DRAFT:      新创建,未经验证
-    ACTIVE:     正常使用中(默认)
-    DEPRECATED: 已标记弃用,仍可用但会提示
-    ARCHIVED:   已归档,路由时自动排除
-    """
-
-    DRAFT = "draft"
-    ACTIVE = "active"
-    DEPRECATED = "deprecated"
-    ARCHIVED = "archived"
+# Backward-compatible alias
+SkillLifecycleState = SkillLifecycle
 
 
 @dataclass
@@ -62,7 +50,7 @@ class SkillConfig:
     scope: str = "global"
 
     # 生命周期状态 (v5.0 预埋)
-    lifecycle: str = "active"
+    lifecycle: SkillLifecycle = field(default_factory=lambda: SkillLifecycle.ACTIVE)
 
     # 使用统计预留字段 (v5.1 评估体系将填充)
     usage_stats: dict[str, Any] = field(default_factory=dict)
@@ -219,7 +207,7 @@ class SkillConfigManager:
                 priority=skill_data.get("priority", 50),
                 category=skill_data.get("category", "development"),
                 scope=skill_data.get("scope", "global"),
-                lifecycle=skill_data.get("lifecycle", "active"),
+            lifecycle=SkillLifecycle(skill_data.get("lifecycle", "active")),
                 usage_stats=skill_data.get("usage_stats", {}),
                 version_history=skill_data.get("version_history", []),
                 evaluation_context=skill_data.get("evaluation_context", {}),
@@ -293,16 +281,16 @@ class SkillConfigManager:
         cls.update_skill_config(skill_id, {"scope": scope})
 
     @classmethod
-    def set_lifecycle(cls, skill_id: str, state: str) -> None:
+    def set_lifecycle(cls, skill_id: str, state: SkillLifecycle | str) -> None:
         """设置技能的生命周期状态
 
         Args:
             skill_id: 技能 ID
             state: 生命周期状态 ("draft", "active", "deprecated", "archived")
         """
-        if state not in (s.value for s in SkillLifecycleState):
-            raise ValueError(f"Invalid lifecycle state: {state}")
-        cls.update_skill_config(skill_id, {"lifecycle": state})
+        if isinstance(state, str):
+            state = SkillLifecycle(state)
+        cls.update_skill_config(skill_id, {"lifecycle": state.value})
 
     @classmethod
     def delete_skill_config(cls, skill_id: str) -> None:

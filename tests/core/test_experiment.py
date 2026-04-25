@@ -2,11 +2,8 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING
 from unittest.mock import MagicMock, patch
-
-import pytest
 
 from vibesop.core.experiment import (
     Experiment,
@@ -17,6 +14,9 @@ from vibesop.core.experiment import (
     VariantConfig,
     VariantResult,
 )
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 class TestVariantConfig:

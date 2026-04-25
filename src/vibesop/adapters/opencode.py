@@ -131,8 +131,10 @@ class OpenCodeAdapter(PlatformAdapter):
 
             # Also generate AGENTS.md at project root (highest priority for OpenCode)
             project_agents_path = self._project_root / "AGENTS.md"
-            if project_agents_path.resolve() != agents_path.resolve():
-                if not project_agents_path.exists():
+            if (
+                project_agents_path.resolve() != agents_path.resolve()
+                and not project_agents_path.exists()
+            ):
                     self.write_file_atomic(
                         project_agents_path,
                         agents_content,

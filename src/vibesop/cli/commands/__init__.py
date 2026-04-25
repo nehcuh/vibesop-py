@@ -30,13 +30,13 @@ from vibesop.cli.commands import import_rules as import_rules_module
 from vibesop.cli.commands import init as init_module
 from vibesop.cli.commands import inspect as inspect_module
 from vibesop.cli.commands import install as install_module
+from vibesop.cli.commands import market_cmd as market_cmd_module
 from vibesop.cli.commands import onboard as onboard_module
 from vibesop.cli.commands import quickstart as quickstart_module
 from vibesop.cli.commands import skill_craft as skill_craft_module
 from vibesop.cli.commands import skills_cmd as skills_cmd_module
 from vibesop.cli.commands import switch as switch_module
 from vibesop.cli.commands import targets as targets_module
-from vibesop.cli.commands import market_cmd as market_cmd_module
 from vibesop.cli.commands import tools_cmd as tools_module
 
 __all__ = [

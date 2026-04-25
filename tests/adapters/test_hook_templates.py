@@ -4,7 +4,6 @@ Verifies that ``render_route_hook()`` in ``_shared.py`` produces valid
 shell scripts for all three platform adapters.
 """
 
-import pytest
 
 from vibesop.adapters._shared import render_route_hook
 

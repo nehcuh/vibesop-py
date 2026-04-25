@@ -8,7 +8,6 @@ Usage:
     python examples/agent_integration_demo.py
 """
 
-from pathlib import Path
 
 from vibesop.agent import AgentRouter, SimpleLLM, SimpleResponse
 
@@ -30,7 +29,7 @@ class DemoAgentLLM(SimpleLLM):
             "optimize performance": '{"skill_id": "superpowers/optimize", "confidence": 0.85}',
         }
 
-    def call(self, prompt: str, max_tokens: int = 100, temperature: float = 0.1) -> SimpleResponse:
+    def call(self, prompt: str, _max_tokens: int = 100, _temperature: float = 0.1) -> SimpleResponse:
         """Simulate LLM call for routing.
 
         In production, this would call the Agent's actual LLM.

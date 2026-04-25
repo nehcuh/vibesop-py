@@ -23,7 +23,7 @@ import logging
 import shlex
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable
+from typing import TYPE_CHECKING
 
 from vibesop.core.services import (
     AnalysisService,
@@ -31,6 +31,9 @@ from vibesop.core.services import (
     InstallService,
     RoutingService,
 )
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -310,8 +313,9 @@ class SlashCommandHandler:
             result = self._routing_service.route(query, context=context)
 
             if explain:
-                from vibesop.cli.routing_report import render_routing_report
                 from rich.console import Console
+
+                from vibesop.cli.routing_report import render_routing_report
                 console = Console()
                 render_routing_report(result, console=console)
                 return True, "Routing decision displayed"

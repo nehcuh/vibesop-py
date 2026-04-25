@@ -225,7 +225,7 @@ class PackInstaller:
                 platform_path.symlink_to(central_path)
                 results.append((platform, f"Linked to {platform}"))
 
-            except OSError as e:
+            except OSError:
                 # Fallback: copy if symlinks not supported
                 try:
                     if platform_path.exists():

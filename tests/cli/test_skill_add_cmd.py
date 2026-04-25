@@ -1,6 +1,5 @@
 """Tests for vibe skill add command."""
 
-import json
 from pathlib import Path
 from typing import Any
 from unittest.mock import Mock, patch
@@ -40,7 +39,6 @@ class TestSkillAddCommand:
     @patch("vibesop.cli.commands.skill_add._detect_and_load_skill")
     def test_detect_skill_from_directory(self, mock_detect):
         """Test skill detection from directory."""
-        from vibesop.cli.commands.skill_add import _detect_and_load_skill
 
         # Mock return value
         mock_metadata = SkillMetadata(
@@ -69,7 +67,6 @@ class TestSkillAddCommand:
 
     def test_save_auto_config(self, tmp_path):
         """Test auto-configuration file generation."""
-        import yaml
 
         from vibesop.cli.commands.skill_add import _save_auto_config
 
@@ -87,8 +84,6 @@ class TestSkillAddCommand:
             _save_auto_config(config)
 
         # Verify file was created (this would need actual implementation)
-        # config_file = tmp_path / "auto-config.yaml"
-        # assert config_file.exists()
 
     @patch("vibesop.cli.commands.skill_add.questionary")
     @patch("vibesop.cli.commands.skill_add._detect_and_load_skill")
@@ -199,7 +194,7 @@ class TestConfigurationGeneration:
             "review": 50,
         }
 
-        for category, expected_priority in priority_map.items():
+        for _category, expected_priority in priority_map.items():
             # This would test the actual priority calculation logic
             assert isinstance(expected_priority, int)
             assert 0 <= expected_priority <= 100
@@ -222,7 +217,6 @@ class TestSecurityAudit:
     @patch("vibesop.cli.commands.skill_add.SkillSecurityAuditor")
     def test_safe_skill_passes_audit(self, mock_auditor):
         """Test that safe skills pass audit."""
-        from vibesop.cli.commands.skill_add import add
 
         mock_audit_result = Mock()
         mock_audit_result.risk_level = "safe"

@@ -95,9 +95,9 @@ def analyze_deviations(
     try:
         with storage_path.open("r", encoding="utf-8") as f:
             for line in f:
-                line = line.strip()
-                if line:
-                    records.append(json.loads(line))
+                stripped = line.strip()
+                if stripped:
+                    records.append(json.loads(stripped))
     except (OSError, ValueError, json.JSONDecodeError) as e:
         return {"error": f"Failed to read deviation records: {e}"}
 
@@ -171,9 +171,9 @@ def get_deviation_summary(
     try:
         with storage_path.open("r", encoding="utf-8") as f:
             for line in f:
-                line = line.strip()
-                if line:
-                    records.append(json.loads(line))
+                stripped = line.strip()
+                if stripped:
+                    records.append(json.loads(stripped))
     except (OSError, ValueError, json.JSONDecodeError):
         return "## Routing Deviations\n\nError reading deviation records.\n"
 

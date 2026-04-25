@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
-import pytest
+from typing import TYPE_CHECKING
 
 from vibesop.core.config.manager import RoutingConfig
 from vibesop.core.models import OrchestrationMode
 from vibesop.core.routing import UnifiedRouter
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 class TestOrchestrate:

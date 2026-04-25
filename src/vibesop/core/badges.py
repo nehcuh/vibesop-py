@@ -104,7 +104,7 @@ class BadgeTracker:
                 data = json.load(f)
         except (OSError, json.JSONDecodeError):
             return
-            
+
         badge_list = data.get("badges", [])
         self._badges = [Badge.from_dict(b) for b in badge_list if isinstance(b, dict)]
 
@@ -117,13 +117,12 @@ class BadgeTracker:
         }
 
         # Atomic write to prevent corruption
-        import os
         import tempfile
         try:
             fd, tmp_path = tempfile.mkstemp(dir=self._data_path.parent, prefix=".tmp_badges_")
-            with os.fdopen(fd, "w", encoding="utf-8") as f:
+            with open(fd, "w", encoding="utf-8", closefd=False) as f:
                 json.dump(data, f, indent=2)
-            os.replace(tmp_path, self._data_path)
+            Path(tmp_path).replace(self._data_path)
         except OSError:
             pass
 

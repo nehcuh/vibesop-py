@@ -36,7 +36,7 @@ console = Console()
 
 def skill_craft(
     action: str = typer.Argument(..., help="Action: create, from, templates"),
-    source: Path | None = typer.Argument(  # noqa: B008
+    source: Path | None = typer.Argument(
         None,
         help="Source session file",
         exists=True,
@@ -53,7 +53,7 @@ def skill_craft(
         "-d",
         help="Skill description",
     ),
-    output: Path | None = typer.Option(  # noqa: B008
+    output: Path | None = typer.Option(
         None,
         "--output",
         "-o",

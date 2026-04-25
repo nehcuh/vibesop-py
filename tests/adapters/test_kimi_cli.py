@@ -305,16 +305,7 @@ class TestKimiCliAdapter:
         assert result.success
 
         # Try to parse the TOML
-        import sys
-
-        if sys.version_info >= (3, 11):
-            import tomllib
-        else:
-            try:
-                import tomli as tomllib
-            except ImportError:
-                pytest.skip("tomli not installed")
-                return
+        import tomllib
 
         with (tmp_path / "config.toml").open("rb") as f:
             config: dict[str, object] = tomllib.load(f)

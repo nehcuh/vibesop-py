@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from vibesop.core.models import RoutingLayer  # noqa: TC001 (used at runtime in _record_layer)
+from vibesop.core.models import RoutingLayer
 
 
 class RouterStatsMixin:

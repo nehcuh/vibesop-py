@@ -34,7 +34,7 @@ console = Console()
 
 
 def inspect_cmd(
-    project_path: Path = typer.Option(  # noqa: B008
+    project_path: Path = typer.Option(
         Path(),
         "--path",
         "-p",

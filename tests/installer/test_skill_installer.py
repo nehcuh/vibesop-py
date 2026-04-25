@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-import tempfile
-from pathlib import Path
-
-import pytest
+from typing import TYPE_CHECKING
 
 from vibesop.installer.skill_installer import SkillInstaller, SkillManifest
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 class TestSkillManifest:

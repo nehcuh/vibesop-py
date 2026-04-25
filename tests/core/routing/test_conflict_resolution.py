@@ -1,6 +1,5 @@
 """Tests for conflict resolution framework."""
 
-import pytest
 
 from vibesop.core.matching.base import MatchResult, MatcherType
 from vibesop.core.routing.conflict import (
