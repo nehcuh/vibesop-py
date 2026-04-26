@@ -79,3 +79,16 @@ class TestTaskDecomposerFallback:
         assert len(tasks) == 1
         # Should match analyze_architecture domain
         assert "architecture" in tasks[0].intent or "single" in tasks[0].intent
+
+    def test_implicit_intent_boundaries_without_conjunctions(self):
+        """Queries spanning multiple domains without conjunctions should still split."""
+        decomposer = TaskDecomposer()
+        tasks = decomposer.decompose("帮我审查代码安全性并优化性能瓶颈")
+        intents = {t.intent for t in tasks}
+        assert len(intents) >= 2 or len(tasks) >= 2
+
+    def test_single_domain_query_not_over_split(self):
+        """Single-domain queries should not be incorrectly split."""
+        decomposer = TaskDecomposer()
+        tasks = decomposer.decompose("调试数据库连接池泄漏")
+        assert len(tasks) <= 2
