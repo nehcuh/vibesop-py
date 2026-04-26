@@ -403,50 +403,59 @@ class ClaudeCodeAdapter(PlatformAdapter):
     def _render_settings_json(
         self,
         output_dir: Path,
-        manifest: Manifest,
+        _manifest: Manifest,
         result: RenderResult,
     ) -> None:
-        """Render settings.json file.
+        """Render settings.json with actual configuration values.
 
-        Args:
-            output_dir: Output directory
-            manifest: Source manifest
-            result: RenderResult to track files
+        Generates a valid Claude Code settings file (not a JSON Schema),
+        including hook registration for VibeSOP auto-routing.
         """
         import json
 
-        settings = self.get_settings_schema()
+        hooks_dir = output_dir / "hooks"
+        hooks_dir.mkdir(parents=True, exist_ok=True)
 
-        # Apply manifest policies to settings
-        security_policy = manifest.get_effective_security_policy()
+        settings: dict[str, Any] = {}
 
-        # Update settings based on policies
-        if "allowedCommands" in settings:
-            # Configure command permissions based on security policy
-            if security_policy.enable_command_blocklist:
-                # Add blocked commands to settings
-                blocklist = security_policy.command_blocklist or []
-                settings["allowedCommands"] = [
-                    cmd for cmd in settings.get("allowedCommands", []) if cmd not in blocklist
-                ]
+        # Preserve existing env if already configured
+        existing_path = output_dir / "settings.json"
+        if existing_path.exists():
+            try:
+                existing = json.loads(existing_path.read_text())
+                if isinstance(existing, dict) and "env" in existing:
+                    settings["env"] = existing["env"]
+                if isinstance(existing, dict) and "model" in existing:
+                    settings["model"] = existing["model"]
+            except (json.JSONDecodeError, OSError):
+                pass
 
-            if security_policy.require_command_allowlist:
-                # Only allow explicitly permitted commands
-                allowlist = security_policy.command_allowlist or []
-                if allowlist:
-                    settings["allowedCommands"] = allowlist
+        # Permissions for vibe commands
+        settings["permissions"] = {
+            "allow": [
+                "Bash(vibe *)",
+                "Bash(vibe:* *)",
+                "Bash(~/.claude/hooks/*)",
+            ]
+        }
 
-        # Write settings.json
+        # Register the VibeSOP routing hook
+        settings["hooks"] = {
+            "UserPromptSubmit": [
+                {
+                    "matcher": "",
+                    "command": f"bash {hooks_dir}/vibesop-route.sh",
+                }
+            ]
+        }
+
         settings_path = output_dir / "settings.json"
-        try:
-            self.write_file_atomic(
-                settings_path,
-                json.dumps(settings, indent=2),
-                validate_security=False,  # JSON is safe
-            )
-            result.add_file(settings_path)
-        except Exception as e:
-            result.add_error(f"Failed to write settings.json: {e}")
+        self.write_file_atomic(
+            settings_path,
+            json.dumps(settings, indent=2),
+            validate_security=False,
+        )
+        result.add_file(settings_path)
 
     def get_settings_schema(self) -> dict[str, Any]:
         """Get the settings schema for Claude Code.
