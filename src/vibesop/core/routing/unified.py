@@ -53,6 +53,7 @@ from vibesop.core.optimization import (
     SkillClusterIndex,
 )
 from vibesop.core.routing.cache import CacheManager
+from vibesop.core.routing.candidate_manager import CandidateManager
 from vibesop.core.routing.conflict import (
     ConfidenceGapStrategy,
     ConflictResolver,
@@ -67,7 +68,6 @@ from vibesop.core.routing.optimization_service import OptimizationService
 from vibesop.core.routing.orchestration_mixin import RouterOrchestrationMixin
 from vibesop.core.routing.stats_mixin import RouterStatsMixin
 from vibesop.core.routing.triage_service import TriageService
-from vibesop.core.skills.lifecycle import SkillLifecycle, SkillLifecycleManager
 from vibesop.llm.cost_tracker import TriageCostTracker
 
 if TYPE_CHECKING:
@@ -192,8 +192,7 @@ class UnifiedRouter(RouterStatsMixin, RouterExecutionMixin, RouterOrchestrationM
         self._instinct_learner: InstinctLearner | None = None
 
         self._cache_manager = CacheManager(cache_dir=self.project_root / ".vibe" / "cache")
-        self._candidates_cache: list[dict[str, Any]] | None = None
-        self._cache_lock = threading.Lock()
+        self._candidate_manager = CandidateManager(self.project_root)
 
         self._cost_tracker = TriageCostTracker(storage_dir=self.project_root / ".vibe")
 
@@ -283,37 +282,11 @@ class UnifiedRouter(RouterStatsMixin, RouterExecutionMixin, RouterOrchestrationM
         context = self._enrich_context(context, query)
 
         if candidates is None:
-            candidates = self._get_cached_candidates()
+            candidates = self._candidate_manager.get_cached_candidates()
 
         # Filter by enablement, scope, and lifecycle state
         # External callers can bypass by passing their own candidate list
-        filtered_candidates: list[dict[str, Any]] = []
-        deprecated_warnings: list[str] = []
-        for c in candidates:
-            if not c.get("enabled", True):
-                continue
-            lifecycle_str = c.get("lifecycle", "active")
-            try:
-                lifecycle = SkillLifecycle(lifecycle_str)
-            except ValueError:
-                lifecycle = SkillLifecycle.ACTIVE
-            # Skip non-routable skills (archived, draft)
-            if not SkillLifecycleManager.is_routable(lifecycle):
-                continue
-            # Collect deprecated skills for warning
-            if lifecycle == SkillLifecycle.DEPRECATED:
-                deprecated_warnings.append(str(c.get("id", "")))
-            scope = c.get("scope", "project")
-            if scope == "project":
-                source_file = c.get("source_file")
-                if source_file:
-                    try:
-                        Path(source_file).resolve().relative_to(self.project_root.resolve())
-                    except ValueError:
-                        # Skill is project-scoped but not from this project, skip
-                        continue
-            filtered_candidates.append(c)
-        candidates = filtered_candidates
+        candidates, deprecated_warnings = self._candidate_manager.filter_routable(candidates)
 
         routing_path: list[RoutingLayer] = []
         layer_details: list[LayerDetail] = []
@@ -757,96 +730,25 @@ class UnifiedRouter(RouterStatsMixin, RouterExecutionMixin, RouterOrchestrationM
         )
 
     # ================================================================
-    # Candidate management (from former candidate_mixin)
+    # Candidate management (delegated to CandidateManager)
     # ================================================================
 
-    def _get_candidates(self, _query: str = "") -> list[dict[str, Any]]:
-        import vibesop
-
-        if getattr(self, "_skill_loader", None) is None:
-            # Always include VibeSOP's built-in skills regardless of project root
-            builtin_skills_path = Path(vibesop.__file__).parent.parent.parent / "core" / "skills"
-            search_paths = [
-                self.project_root / ".vibe" / "skills",
-                Path.home() / ".config" / "skills",
-            ]
-            if builtin_skills_path.exists() and builtin_skills_path not in search_paths:
-                search_paths.insert(0, builtin_skills_path)
-            from vibesop.core.skills import SkillLoader
-
-            self._skill_loader = SkillLoader(
-                project_root=self.project_root,
-                search_paths=search_paths,
+    def _get_cached_candidates(self) -> list[dict[str, Any]]:
+        """Get cached candidates, initializing prefilter and warming matchers on first call."""
+        candidates = self._candidate_manager.get_cached_candidates()
+        if not self._matchers_warmed:
+            self._prefilter = CandidatePrefilter.from_candidates(
+                candidates,
+                cluster_index=self._cluster_index,
             )
-
-        definitions = self._skill_loader.discover_all()
-        from vibesop.core.optimization.cold_start import get_cold_start_strategy
-        from vibesop.core.skills.config_manager import SkillConfigManager
-
-        cold_start = get_cold_start_strategy(self.project_root)
-        p0_skills = set(cold_start.get_p0_skills())
-        candidates: list[dict[str, Any]] = []
-        for _skill_id, definition in definitions.items():
-            metadata = definition.metadata
-            tags = metadata.tags or []
-            # Auto-generate keywords from skill name when tags are empty
-            if not tags:
-                tags = self._extract_name_keywords(metadata.name)
-
-            # Load skill config for enablement/scope/lifecycle metadata
-            skill_config = SkillConfigManager.get_skill_config(_skill_id)
-            enabled = skill_config.enabled if skill_config else True
-            scope = skill_config.scope if skill_config else "project"
-            lifecycle = skill_config.lifecycle if skill_config else "active"
-
-            candidates.append(
-                {
-                    "id": metadata.id,
-                    "name": metadata.name,
-                    "description": metadata.description,
-                    "intent": metadata.intent,
-                    "keywords": tags,
-                    "triggers": [metadata.trigger_when] if metadata.trigger_when else [],
-                    "namespace": metadata.namespace,
-                    "source": self._get_skill_source(metadata.id, metadata.namespace),
-                    "priority": "P0" if metadata.id in p0_skills else "P2",
-                    "enabled": enabled,
-                    "scope": scope,
-                    "lifecycle": lifecycle,
-                    "source_file": str(definition.source_file) if definition.source_file else None,
-                }
-            )
+            self._matcher_pipeline.set_prefilter(self._prefilter)
+            self._warm_up_matchers(candidates)
         return candidates
 
-    def _get_cached_candidates(self) -> list[dict[str, Any]]:
-        if self._candidates_cache is not None:
-            return self._candidates_cache
-        with self._cache_lock:
-            if self._candidates_cache is None:
-                self._candidates_cache = self._get_candidates()
-                # Initialize prefilter with dynamic namespace discovery
-                # This eliminates hardcoded NAMESPACE_KEYWORDS limitation
-                self._prefilter = CandidatePrefilter.from_candidates(
-                    self._candidates_cache,
-                    cluster_index=self._cluster_index,
-                )
-                # Sync the updated prefilter into the matcher pipeline so
-                # that apply_prefilter uses the dynamically discovered namespaces.
-                self._matcher_pipeline.set_prefilter(self._prefilter)
-                # Warm up matchers to prevent cold-start latency
-                # This loads EmbeddingMatcher model during initialization
-                self._warm_up_matchers(self._candidates_cache)
-            return self._candidates_cache
-
     def _warm_up_matchers(self, candidates: list[dict[str, Any]]) -> None:
-        """Warm up matchers by initializing lazy-loaded components.
-
-        This prevents cold-start latency on the first route() call by
-        pre-loading heavy components like the EmbeddingMatcher model.
-        """
+        """Warm up matchers by initializing lazy-loaded components."""
         if self._matchers_warmed:
             return
-
         try:
             for _layer, matcher in self._matchers:
                 try:
@@ -861,23 +763,14 @@ class UnifiedRouter(RouterStatsMixin, RouterExecutionMixin, RouterOrchestrationM
             self._matchers_warmed = True
 
     def reload_candidates(self) -> int:
-        self._candidates_cache = None
-        return len(self._get_cached_candidates())
+        return self._candidate_manager.reload()
 
     def invalidate_project_cache(self) -> None:
-        """Invalidate cached project analysis (type + tech stack).
-
-        Call this after adding/removing tech stack files (requirements.txt,
-        package.json, etc.) to ensure context-aware routing uses current data.
-        """
+        """Invalidate cached project analysis."""
         self._project_analyzer = None
 
     def _get_skill_source(self, _skill_id: str, namespace: str) -> str:
-        """Determine skill source based on namespace.
-
-        Project skills > external skills > built-in fallback.
-        No hardcoded pack names — any unknown namespace is external.
-        """
+        """Determine skill source based on namespace."""
         if namespace == "project":
             return "project"
         if namespace == "builtin":
@@ -885,7 +778,11 @@ class UnifiedRouter(RouterStatsMixin, RouterExecutionMixin, RouterOrchestrationM
         return "external"
 
     def get_candidates(self, _query: str = "") -> list[dict[str, Any]]:
-        return self._get_candidates(_query)
+        return self._candidate_manager.get_candidates()
+
+    def _get_candidates(self, _query: str = "") -> list[dict[str, Any]]:
+        """Backward-compatible alias for get_candidates."""
+        return self.get_candidates(_query)
 
     # ================================================================
     # Context management (from former context_mixin)
@@ -1047,23 +944,6 @@ class UnifiedRouter(RouterStatsMixin, RouterExecutionMixin, RouterOrchestrationM
                 continue
         return 0.0
 
-    @staticmethod
-    def _extract_name_keywords(name: str) -> list[str]:
-        """Extract searchable keywords from a skill name.
-
-        Splits on common delimiters (hyphen, underscore, slash) and
-        filters out very short tokens.
-        """
-        import re
-
-        parts = re.split(r"[-_/]", name)
-        keywords: list[str] = []
-        for p in parts:
-            stripped = p.strip()
-            if len(stripped) > 1:
-                keywords.append(stripped)
-        return keywords
-
     # ================================================================
     # Utilities
     # ================================================================
@@ -1102,6 +982,24 @@ class UnifiedRouter(RouterStatsMixin, RouterExecutionMixin, RouterOrchestrationM
                 "enable_embedding": self._config.enable_embedding,
             },
         }
+
+    def _apply_optimizations(self, matches: Any, query: str, context: Any = None) -> Any:
+        """Apply optimization strategies to match results."""
+        from vibesop.core.routing import _pipeline
+        return _pipeline.apply_optimizations(self, matches, query, context)
+
+    def _try_ai_triage(self, query: str, candidates: list[dict[str, Any]], context: Any = None):
+        """Backward-compatible proxy to TriageService.try_ai_triage."""
+        from vibesop.core.routing import _layers
+        match, _ = _layers.try_ai_triage_layer(self, query, candidates, context)
+        if match is None:
+            return None
+        from vibesop.core.routing.layers import LayerResult
+        return LayerResult(match=match, layer=match.layer)
+
+    def _build_ai_triage_prompt(self, query: str, skills_summary: str) -> str:
+        """Backward-compatible proxy to TriageService.build_ai_triage_prompt."""
+        return self._triage_service.build_ai_triage_prompt(query, skills_summary)
 
 __all__ = [
     "RoutingLayer",
