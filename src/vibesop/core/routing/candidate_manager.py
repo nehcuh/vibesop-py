@@ -5,6 +5,7 @@ Extracted from UnifiedRouter to reduce God Object size.
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import re
 import threading
@@ -125,10 +126,8 @@ class CandidateManager:
     def _cached_reload_locked(self) -> list[dict[str, Any]]:
         """Reload candidates.  Caller MUST hold _cache_lock."""
         marker = self.project_root / ".vibe" / ".skills_reload"
-        try:
+        with contextlib.suppress(OSError):
             marker.unlink()
-        except OSError:
-            pass
         self._candidates_cache = None
         self._candidates_cache = self.get_candidates()
         return self._candidates_cache

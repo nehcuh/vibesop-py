@@ -460,12 +460,58 @@ def _handle_single_result(
         console.print(json.dumps(routing_result.to_dict(), indent=2))
         return
 
-    if result.primary is None:
-        render_no_match(result, console)
-    elif result.primary.layer.value == "fallback_llm":
-        render_fallback_panel(result, console)
-    else:
-        render_match_panel(result, console)
+        if result.primary is None:
+            render_no_match(result, console)
+        elif result.primary.layer.value == "fallback_llm":
+            render_fallback_panel(result, console)
+        else:
+            render_match_panel(result, console)
+
+    # Post-route retention check (every 20 routes)
+    _check_stale_skills_post_route()
+
+
+def _check_stale_skills_post_route() -> None:
+    """Check for stale skills every N routes and prompt user if needed."""
+    import json
+    from pathlib import Path
+
+    counter_file = Path.cwd() / ".vibe" / "routing_counter.json"
+    counter: dict[str, Any] = {}
+    if counter_file.exists():
+        try:
+            counter = json.loads(counter_file.read_text())
+        except (json.JSONDecodeError, OSError):
+            counter = {}
+
+    routes_since = counter.get("routes_since_last_check", 0) + 1
+    counter["routes_since_last_check"] = routes_since
+    check_interval = counter.get("check_interval", 20)
+
+    counter_file.parent.mkdir(parents=True, exist_ok=True)
+    counter_file.write_text(json.dumps(counter, indent=2))
+
+    if routes_since < check_interval:
+        return
+
+    try:
+        from vibesop.core.skills.feedback_loop import FeedbackLoop
+        loop = FeedbackLoop()
+        suggestions = loop.analyze_all()
+        critical = [s for s in suggestions if s.action in ("deprecate", "archive")]
+
+        if critical:
+            console.print()
+            console.print(
+                f"[yellow]💡 Tip:[/yellow] You have [bold]{len(critical)}[/bold] unused or "
+                f"low-quality skills. Run [bold]vibe skill stale[/bold] to review."
+            )
+            console.print()
+
+        counter["routes_since_last_check"] = 0
+        counter_file.write_text(json.dumps(counter, indent=2))
+    except Exception:
+        pass
 
 @app.command()
 def doctor() -> None:

@@ -7,6 +7,7 @@ Policy rules (advisory only, no automatic removal):
 - Grade F for 30+ days with < 3 uses → suggest removal
 - Grade D for 60+ days with no improvement → warn
 - Grade A for 7+ consecutive days of active use → highlight as "recommended"
+- 90+ days unused with grade C/D/F → auto-archive
 """
 
 from __future__ import annotations
@@ -24,7 +25,7 @@ class RetentionSuggestion:
 
     Attributes:
         skill_id: Target skill
-        action: "remove" | "warn" | "highlight" | "none"
+        action: "remove" | "warn" | "highlight" | "archive" | "none"
         reason: Human-readable explanation
         grade: Current letter grade
         days_since_last_use: Number of days
@@ -32,7 +33,7 @@ class RetentionSuggestion:
     """
 
     skill_id: str
-    action: str  # remove, warn, highlight, none
+    action: str  # remove, warn, highlight, archive, none
     reason: str
     grade: str
     days_since_last_use: int | None
@@ -101,6 +102,17 @@ class RetentionPolicy:
                 total_uses=uses,
             )
 
+        # Rule: 90+ days unused with grade C/D/F → auto-archive
+        if days_since is not None and days_since >= 90 and grade in ("C", "D", "F"):
+            return RetentionSuggestion(
+                skill_id=skill_id,
+                action="archive",
+                reason=f"Unused for {days_since} days, grade {grade} — auto-archive candidate",
+                grade=grade,
+                days_since_last_use=days_since,
+                total_uses=uses,
+            )
+
         # Rule: Grade A for 7+ days of active use → highlight
         if grade == "A" and days_since is not None and days_since < 7:
             return RetentionSuggestion(
@@ -129,8 +141,8 @@ class RetentionPolicy:
             suggestion = self.analyze_skill(skill_id)
             if suggestion.action != "none":
                 suggestions.append(suggestion)
-        # Sort by severity: remove > warn > highlight
-        severity = {"remove": 0, "warn": 1, "highlight": 2}
+        # Sort by severity: archive > remove > warn > highlight
+        severity = {"archive": 0, "remove": 1, "warn": 2, "highlight": 3}
         suggestions.sort(key=lambda s: severity.get(s.action, 99))
         return suggestions
 

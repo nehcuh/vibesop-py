@@ -2,9 +2,11 @@
 
 Provides:
 - vibe skill list: List all skills with lifecycle state
-- vibe skill enable <id>: Enable a skill
-- vibe skill disable <id>: Disable a skill
+- vibe skill enable <id>: Enable a skill (delegates to SkillConfigManager)
+- vibe skill disable <id>: Disable a skill (delegates to SkillConfigManager)
 - vibe skill status <id>: Show skill details
+- vibe skill stale: Detect stale/underperforming skills
+- vibe skill end-check: Session-end retention + suggestion review
 """
 
 from __future__ import annotations
@@ -16,6 +18,7 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
+from vibesop.core.skills.config_manager import SkillConfigManager
 from vibesop.core.skills.lifecycle import SkillLifecycle, SkillLifecycleManager
 
 app = typer.Typer(name="skill", help="Manage skill lifecycle")
@@ -27,34 +30,6 @@ def _load_skills(project_root: str = ".") -> list[dict[str, Any]]:
     from vibesop.core.routing import UnifiedRouter
     router = UnifiedRouter(project_root=project_root)
     return router.get_candidates() or []
-
-
-def _save_skill_state(skill_id: str, enabled: bool | None = None, lifecycle: str | None = None) -> bool:
-    """Persist skill state change to .vibe/skills.json."""
-    from pathlib import Path
-
-    state_file = Path(".vibe") / "skills.json"
-    state: dict[str, Any] = {}
-
-    if state_file.exists():
-        import json
-        try:
-            state = json.loads(state_file.read_text())
-        except (json.JSONDecodeError, OSError):
-            state = {}
-
-    if skill_id not in state:
-        state[skill_id] = {}
-
-    if enabled is not None:
-        state[skill_id]["enabled"] = enabled
-    if lifecycle is not None:
-        state[skill_id]["lifecycle"] = lifecycle
-
-    state_file.parent.mkdir(parents=True, exist_ok=True)
-    import json
-    state_file.write_text(json.dumps(state, indent=2))
-    return True
 
 
 @app.command()
@@ -107,11 +82,21 @@ def enable(
     skill_id: str = typer.Argument(..., help="Skill ID to enable"),
 ) -> None:
     """Enable a skill for routing."""
-    if _save_skill_state(skill_id, enabled=True):
-        console.print(f"[green]✓[/green] Skill '{skill_id}' enabled")
-    else:
-        console.print(f"[red]✗[/red] Failed to enable skill '{skill_id}'")
+    from vibesop.core.skills import SkillManager
+
+    manager = SkillManager()
+    skill_info = manager.get_skill_info(skill_id)
+    if not skill_info:
+        console.print(f"[red]✗[/red] Skill '{skill_id}' not found")
         raise typer.Exit(1)
+
+    config = SkillConfigManager.get_skill_config(skill_id)
+    if config and config.enabled:
+        console.print(f"[yellow]⚠ Skill '{skill_id}' is already enabled[/yellow]")
+        return
+
+    SkillConfigManager.update_skill_config(skill_id, {"enabled": True})
+    console.print(f"[green]✓[/green] Skill '{skill_id}' enabled")
 
 
 @app.command()
@@ -119,11 +104,21 @@ def disable(
     skill_id: str = typer.Argument(..., help="Skill ID to disable"),
 ) -> None:
     """Disable a skill from routing."""
-    if _save_skill_state(skill_id, enabled=False):
-        console.print(f"[yellow]✓[/yellow] Skill '{skill_id}' disabled")
-    else:
-        console.print(f"[red]✗[/red] Failed to disable skill '{skill_id}'")
+    from vibesop.core.skills import SkillManager
+
+    manager = SkillManager()
+    skill_info = manager.get_skill_info(skill_id)
+    if not skill_info:
+        console.print(f"[red]✗[/red] Skill '{skill_id}' not found")
         raise typer.Exit(1)
+
+    config = SkillConfigManager.get_skill_config(skill_id)
+    if config and not config.enabled:
+        console.print(f"[yellow]⚠ Skill '{skill_id}' is already disabled[/yellow]")
+        return
+
+    SkillConfigManager.update_skill_config(skill_id, {"enabled": False})
+    console.print(f"[yellow]✓[/yellow] Skill '{skill_id}' disabled")
 
 
 @app.command()
@@ -194,7 +189,8 @@ def stale(
         console.print("[green]✓[/green] No stale or underperforming skills detected.")
         return
 
-    # Separate into deprecate/warn/boost categories
+    # Separate into deprecate/warn/boost/archive categories
+    to_archive = [s for s in suggestions if s.action == "archive"]
     to_deprecate = [s for s in suggestions if s.action == "deprecate"]
     to_warn = [s for s in suggestions if s.action == "warn"]
     to_boost = [s for s in suggestions if s.action == "boost"]
@@ -208,6 +204,7 @@ def stale(
     table.add_column("Reason", style="dim")
 
     action_styles = {
+        "archive": ("[red]ARCHIVE[/red]", "red"),
         "deprecate": ("[red]DEPRECATE[/red]", "red"),
         "warn": ("[yellow]WARN[/yellow]", "yellow"),
         "boost": ("[green]BOOST[/green]", "green"),
@@ -221,14 +218,60 @@ def stale(
     console.print(table)
 
     # Summary
-    console.print(
-        f"\n[bold]Summary:[/bold] "
-        f"[red]{len(to_deprecate)} to deprecate[/red], "
-        f"[yellow]{len(to_warn)} to warn[/yellow], "
-        f"[green]{len(to_boost)} performing well[/green]"
-    )
+    summary_parts = []
+    if to_archive:
+        summary_parts.append(f"[red]{len(to_archive)} to archive[/red]")
+    if to_deprecate:
+        summary_parts.append(f"[red]{len(to_deprecate)} to deprecate[/red]")
+    if to_warn:
+        summary_parts.append(f"[yellow]{len(to_warn)} to warn[/yellow]")
+    if to_boost:
+        summary_parts.append(f"[green]{len(to_boost)} performing well[/green]")
+    console.print(f"\n[bold]Summary:[/bold] {', '.join(summary_parts)}")
 
-    if to_deprecate and not auto_deprecate:
+    if (to_deprecate or to_archive) and not auto_deprecate:
         console.print(
-            "\n[dim]Run `vibe skill stale --auto` to apply deprecations automatically.[/dim]"
+            "\n[dim]Run `vibe skill stale --auto` to apply deprecations and archives automatically.[/dim]"
         )
+
+
+@app.command()
+def end_check(
+    json_output: bool = typer.Option(
+        False, "--json", "-j", help="Output as JSON"
+    ),
+) -> None:
+    """Run end-of-session checks: retention + skill suggestions.
+
+    Called automatically by the session-end hook, or manually
+    to review skill health and auto-detected patterns.
+
+    \b
+    Examples:
+        vibe skill end-check
+        vibe skill end-check --json
+    """
+    from vibesop.core.skills.feedback_loop import FeedbackLoop
+
+    loop = FeedbackLoop()
+    result = loop.end_of_session_check()
+
+    if json_output:
+        import json
+        console.print(json.dumps(result, indent=2, default=str))
+        return
+
+    retention = result.get("retention_actions", [])
+    if retention:
+        console.print(f"\n[yellow]Skill Health:[/yellow] [bold]{len(retention)}[/bold] action(s) suggested")
+        for r in retention:
+            console.print(f"  [dim]{r['skill_id']}:[/dim] {r['action']} — {r['reason']}")
+        console.print("  [dim]Run `vibe skill stale` for details.[/dim]")
+
+    if result.get("should_prompt_suggestions"):
+        pending = result.get("skill_suggestions_pending", 0)
+        console.print(f"\n[bold cyan]Skill Suggestions:[/bold cyan] [bold]{pending}[/bold] pattern(s) detected")
+        console.print("  [dim]Run `vibe skills suggestions` to review and create skills.[/dim]")
+
+    if not retention and not result.get("should_prompt_suggestions"):
+        console.print("[green]All skills healthy. No new pattern suggestions.[/green]")

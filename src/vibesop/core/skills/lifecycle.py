@@ -73,8 +73,12 @@ class SkillLifecycleManager:
 
     @classmethod
     def is_routable(cls, state: SkillLifecycle) -> bool:
-        """Check if a skill in this state can be routed to."""
-        return state in (SkillLifecycle.ACTIVE, SkillLifecycle.DEPRECATED)
+        """Check if a skill in this state can be routed to.
+
+        Only ACTIVE skills are routable.
+        DEPRECATED and ARCHIVED skills are excluded from routing.
+        """
+        return state == SkillLifecycle.ACTIVE
 
     @classmethod
     def is_enabled(cls, state: SkillLifecycle, explicit_enabled: bool | None = None) -> bool:

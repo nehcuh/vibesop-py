@@ -62,9 +62,9 @@ class TestSkillLifecycleManager:
             )
 
     def test_is_routable(self) -> None:
-        """Only ACTIVE and DEPRECATED skills are routable."""
+        """Only ACTIVE skills are routable."""
         assert SkillLifecycleManager.is_routable(SkillLifecycle.ACTIVE)
-        assert SkillLifecycleManager.is_routable(SkillLifecycle.DEPRECATED)
+        assert not SkillLifecycleManager.is_routable(SkillLifecycle.DEPRECATED)
         assert not SkillLifecycleManager.is_routable(SkillLifecycle.DRAFT)
         assert not SkillLifecycleManager.is_routable(SkillLifecycle.ARCHIVED)
 
@@ -77,7 +77,7 @@ class TestSkillLifecycleManager:
     def test_is_enabled_routable(self) -> None:
         """Routable skill without explicit disable is enabled."""
         assert SkillLifecycleManager.is_enabled(SkillLifecycle.ACTIVE)
-        assert SkillLifecycleManager.is_enabled(SkillLifecycle.DEPRECATED)
+        assert not SkillLifecycleManager.is_enabled(SkillLifecycle.DEPRECATED)
 
     def test_is_enabled_non_routable(self) -> None:
         """Non-routable skill is not enabled."""

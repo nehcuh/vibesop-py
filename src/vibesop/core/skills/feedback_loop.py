@@ -81,6 +81,8 @@ class FeedbackLoop:
 
             if auto_deprecate and suggestion.action == "deprecate":
                 self._apply_deprecation(skill_id, suggestion.reason)
+            elif auto_deprecate and suggestion.action == "archive":
+                self._apply_archive(skill_id, suggestion.reason)
             elif auto_deprecate and suggestion.action == "boost":
                 self._apply_boost(skill_id)
 
@@ -131,6 +133,18 @@ class FeedbackLoop:
                 quality_score=quality,
             )
 
+        # 90+ days unused with grade C/D/F → archive
+        if days_since is not None and days_since >= 90 and grade in ("C", "D", "F"):
+            return RetentionSuggestion(
+                skill_id=skill_id,
+                action="archive",
+                reason=f"Unused for {days_since}d, grade {grade} — auto-archive candidate",
+                grade=grade,
+                days_since_last_use=days_since,
+                total_routes=evaluation.total_routes,
+                quality_score=quality,
+            )
+
         # A-grade: boost
         if grade == "A" and evaluation.total_routes >= self.F_MIN_ROUTES:
             return RetentionSuggestion(
@@ -153,6 +167,14 @@ class FeedbackLoop:
         except (ValueError, OSError, KeyError, AttributeError):
             logger.warning("Failed to deprecate skill %s", skill_id)
 
+    def _apply_archive(self, skill_id: str, reason: str) -> None:
+        """Archive a stale skill."""
+        try:
+            SkillConfigManager.set_lifecycle(skill_id, "archived")
+            logger.info("Auto-archived skill %s: %s", skill_id, reason)
+        except (ValueError, OSError, KeyError, AttributeError):
+            logger.warning("Failed to archive skill %s", skill_id)
+
     def _apply_boost(self, skill_id: str) -> None:
         """Boost a high-quality skill — ensure it stays active if deprecated."""
         try:
@@ -168,6 +190,7 @@ class FeedbackLoop:
         suggestions = self.analyze_all()
         deprecate_count = sum(1 for s in suggestions if s.action == "deprecate")
         warn_count = sum(1 for s in suggestions if s.action == "warn")
+        archive_count = sum(1 for s in suggestions if s.action == "archive")
         boost_count = sum(1 for s in suggestions if s.action == "boost")
 
         return {
@@ -175,6 +198,7 @@ class FeedbackLoop:
             "actions": {
                 "deprecate": deprecate_count,
                 "warn": warn_count,
+                "archive": archive_count,
                 "boost": boost_count,
             },
             "suggestions": [
@@ -189,4 +213,38 @@ class FeedbackLoop:
                 }
                 for s in suggestions
             ],
+        }
+
+    def end_of_session_check(self) -> dict[str, Any]:
+        """Check for suggestions at session end.
+
+        Combines retention analysis (stale skills) with skill
+        suggestion detection (new patterns). Called by the
+        session-end hook or `vibe skill end-check`.
+
+        Returns:
+            Dict with retention and suggestion data for display/logging.
+        """
+        retention_suggestions = self.analyze_all()
+        retention_actions = [s for s in retention_suggestions if s.action != "none"]
+
+        suggestion_stats: dict[str, Any] = {"pending": 0, "should_prompt": False}
+        try:
+            from vibesop.core.skills.suggestion_collector import SkillSuggestionCollector
+            collector = SkillSuggestionCollector()
+            suggestion_stats = {
+                "pending": len(collector.get_pending()),
+                "should_prompt": collector.should_prompt(),
+            }
+        except (ImportError, OSError):
+            pass
+
+        return {
+            "retention_actions": [
+                {"skill_id": s.skill_id, "action": s.action, "reason": s.reason}
+                for s in retention_actions
+            ],
+            "skill_suggestions_pending": suggestion_stats["pending"],
+            "should_prompt_suggestions": suggestion_stats["should_prompt"],
+            "total_skills_analyzed": len(retention_suggestions),
         }

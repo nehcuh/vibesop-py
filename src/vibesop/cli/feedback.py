@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import contextlib
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import questionary
-from rich.console import Console
+
+if TYPE_CHECKING:
+    from rich.console import Console
 
 
 def _collect_feedback(result: Any, router: Any, console: Console) -> None:
@@ -78,11 +80,12 @@ def _sync_to_evaluator(result: Any, satisfied: bool) -> None:
     """
     try:
         from pathlib import Path
+
         from vibesop.core.feedback import ExecutionFeedbackCollector
 
         project_root = getattr(result, "project_root", None)
         if project_root is None:
-            project_root = Path(".")
+            project_root = Path()
         elif isinstance(project_root, str):
             project_root = Path(project_root)
         exec_path = project_root / ".vibe" / "execution_feedback.json"

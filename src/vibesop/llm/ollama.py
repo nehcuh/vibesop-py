@@ -11,8 +11,7 @@ Setup:
 
 import os
 
-from openai import APIError
-from openai import OpenAI
+from openai import APIError, OpenAI
 
 from vibesop.core.exceptions import LLMError
 from vibesop.llm.base import LLMProvider, LLMResponse

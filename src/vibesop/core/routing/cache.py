@@ -251,9 +251,8 @@ class CacheManager:
                 continue
 
             similarity = self._jaccard_similarity(query_bigrams, cached_bigrams)
-            if similarity >= similarity_threshold:
-                if best_match is None or similarity > best_match[1]:
-                    best_match = (cached_key, similarity)
+            if similarity >= similarity_threshold and (best_match is None or similarity > best_match[1]):
+                best_match = (cached_key, similarity)
 
         if best_match:
             cached_key, _similarity = best_match

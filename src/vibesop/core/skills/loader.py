@@ -75,6 +75,7 @@ class SkillLoader:
             require_audit: Whether to require security audit for external skills
         """
         self.project_root = Path(project_root).resolve()
+        self._project_hash = self._compute_project_hash()
         self._search_paths = self._default_search_paths()
         if search_paths:
             for p in search_paths:
@@ -105,6 +106,16 @@ class SkillLoader:
             self.project_root / ".vibe" / "skills",
             self.project_root / "core" / "skills",
         ]
+
+    def _compute_project_hash(self) -> str:
+        """Compute a stable project identity for scope isolation."""
+        import hashlib
+        return hashlib.md5(str(self.project_root).encode()).hexdigest()[:12]
+
+    @property
+    def project_hash(self) -> str:
+        """Get the current project hash."""
+        return self._project_hash
 
     def discover_all(self, force_reload: bool = False) -> dict[str, LoadedSkill]:
         """Discover all available skills.
@@ -139,7 +150,7 @@ class SkillLoader:
         if self._enable_external and self._external_loader:
             self._load_external_skills()
 
-        # Filter out disabled and archived skills at discovery time
+        # Filter out disabled, archived, and out-of-scope skills at discovery time
         from vibesop.core.skills.config_manager import SkillConfigManager, SkillLifecycleState
 
         filtered: dict[str, LoadedSkill] = {}
@@ -148,8 +159,29 @@ class SkillLoader:
             if config is not None:
                 if not config.enabled:
                     continue
+                # Auto-archive deprecated skills unused for 90+ days
+                if config.lifecycle == SkillLifecycleState.DEPRECATED.value:
+                    last_used = config.usage_stats.get("last_used")
+                    if last_used:
+                        try:
+                            from datetime import UTC, datetime
+                            last = datetime.fromisoformat(last_used.replace("Z", "+00:00"))
+                            now = datetime.now(UTC)
+                            days_since = (now - last).days
+                            if days_since >= 90:
+                                SkillConfigManager.set_lifecycle(
+                                    skill_id, SkillLifecycleState.ARCHIVED.value
+                                )
+                                continue
+                        except (ValueError, TypeError, OverflowError):
+                            pass
                 if config.lifecycle == SkillLifecycleState.ARCHIVED.value:
                     continue
+                # Scope isolation: project-scoped skills from other projects are hidden
+                if config.scope == "project":
+                    skill_project_hash = config.evaluation_context.get("project_hash")
+                    if skill_project_hash and skill_project_hash != self._project_hash:
+                        continue
             filtered[skill_id] = definition
         self._skill_cache = filtered
 

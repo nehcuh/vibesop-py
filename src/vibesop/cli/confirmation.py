@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import sys
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import questionary
-from rich.console import Console
+
+if TYPE_CHECKING:
+    from rich.console import Console
 
 from vibesop.cli.routing_report import render_routing_report
 from vibesop.core.models import RoutingResult
@@ -61,12 +63,12 @@ def _run_confirmation_flow(result: Any, console: Console) -> None:
     choice = questionary.select("How would you like to proceed?", choices=choices).ask()
 
     if choice == "alternative" and result.alternatives:
-        _choose_alternative(result, console)
+        _choose_alternative(result)
     elif choice == "skip":
         result.primary = None
 
 
-def _choose_alternative(result: Any, console: Console) -> None:
+def _choose_alternative(result: Any) -> None:
     """Let user choose from alternative skills."""
     alt_choices = [
         questionary.Choice(

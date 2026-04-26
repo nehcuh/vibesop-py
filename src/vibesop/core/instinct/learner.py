@@ -112,6 +112,56 @@ class Instinct:
         )
 
 
+@dataclass
+class SequencePattern:
+    """A detected repeatable sequence of actions that may become a skill."""
+
+    steps: list[str]
+    success_count: int = 0
+    total_count: int = 0
+    first_seen: datetime = field(default_factory=datetime.now)
+    last_seen: datetime = field(default_factory=datetime.now)
+    context_tags: list[str] = field(default_factory=list)
+
+    @property
+    def success_rate(self) -> float:
+        return self.success_count / self.total_count if self.total_count else 0.0
+
+    @property
+    def is_candidate(self) -> bool:
+        return (
+            self.total_count >= 5
+            and self.success_rate >= 0.8
+            and len(self.steps) >= 3
+        )
+
+    @property
+    def sequence_hash(self) -> str:
+        import hashlib
+        return hashlib.md5("→".join(self.steps).encode()).hexdigest()[:12]
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "steps": self.steps,
+            "success_count": self.success_count,
+            "total_count": self.total_count,
+            "first_seen": self.first_seen.isoformat(),
+            "last_seen": self.last_seen.isoformat(),
+            "context_tags": self.context_tags,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> SequencePattern:
+        return cls(
+            steps=data["steps"],
+            success_count=data.get("success_count", 0),
+            total_count=data.get("total_count", 0),
+            first_seen=datetime.fromisoformat(data["first_seen"]),
+            last_seen=datetime.fromisoformat(data["last_seen"]),
+            context_tags=data.get("context_tags", []),
+        )
+
+
 class InstinctLearner:
     """Learn and manage instincts from experience.
 
@@ -129,6 +179,7 @@ class InstinctLearner:
         self.storage_path.parent.mkdir(parents=True, exist_ok=True)
 
         self._instincts: dict[str, Instinct] = {}
+        self._sequences: dict[str, SequencePattern] = {}
         self._embedding_model_name = "paraphrase-multilingual-MiniLM-L12-v2"
         self._embedding_model: Any | None = None
         self._embedding_cache: dict[str, Any] = {}
@@ -157,12 +208,14 @@ class InstinctLearner:
                 except (json.JSONDecodeError, KeyError):
                     continue
         self._embedding_cache.clear()
+        self._load_sequences()
 
     def _save(self) -> None:
         """Save instincts to storage."""
         with self.storage_path.open("w") as f:
             for instinct in self._instincts.values():
                 f.write(json.dumps(instinct.to_dict()) + "\n")
+        self._save_sequences()
 
     def learn(
         self,
@@ -431,7 +484,90 @@ class InstinctLearner:
             "avg_confidence": sum(i.confidence for i in self._instincts.values()) / total
             if total > 0
             else 0,
+            "sequence_candidates": sum(
+                1 for s in self._sequences.values() if s.is_candidate
+            ),
         }
+
+    # --- Sequence Pattern Detection ---
+
+    def record_sequence(
+        self, steps: list[str], success: bool, context: str = ""
+    ) -> SequencePattern | None:
+        """Record a sequence of tool calls and detect repeatable patterns.
+
+        Args:
+            steps: Ordered list of tool call names (e.g. ["Bash:lint", "Edit:fix", "Bash:test"])
+            success: Whether the sequence led to a successful outcome
+            context: Context description (e.g. "fixing syntax errors")
+
+        Returns:
+            The SequencePattern if it became a candidate, else None
+        """
+        if len(steps) < 3:
+            return None
+
+        import hashlib
+        seq_hash = hashlib.md5("→".join(steps).encode()).hexdigest()[:12]
+
+        if seq_hash in self._sequences:
+            pattern = self._sequences[seq_hash]
+        else:
+            pattern = SequencePattern(steps=steps)
+            self._sequences[seq_hash] = pattern
+
+        pattern.total_count += 1
+        if success:
+            pattern.success_count += 1
+        pattern.last_seen = datetime.now()
+
+        if context:
+            context_lower = context.lower()
+            for tag in ("debugging", "testing", "linting", "deploying", "refactoring",
+                        "building", "security"):
+                if tag in context_lower and tag not in pattern.context_tags:
+                    pattern.context_tags.append(tag)
+
+        self._save_sequences()
+
+        if pattern.is_candidate:
+            return pattern
+        return None
+
+    def get_sequence_candidates(
+        self, min_confidence: float = 0.5
+    ) -> list[SequencePattern]:
+        """Get all sequence patterns that qualify as skill candidates."""
+        return [
+            s for s in self._sequences.values()
+            if s.is_candidate and s.success_rate >= min_confidence
+        ]
+
+    def _load_sequences(self) -> None:
+        """Load sequence patterns from storage."""
+        seq_path = self.storage_path.parent / "sequences.jsonl"
+        if not seq_path.exists():
+            return
+        self._sequences = {}
+        with seq_path.open() as f:
+            for raw_line in f:
+                stripped = raw_line.strip()
+                if not stripped:
+                    continue
+                try:
+                    data = json.loads(stripped)
+                    pattern = SequencePattern.from_dict(data)
+                    self._sequences[pattern.sequence_hash] = pattern
+                except (json.JSONDecodeError, KeyError):
+                    continue
+
+    def _save_sequences(self) -> None:
+        """Save sequence patterns to storage."""
+        seq_path = self.storage_path.parent / "sequences.jsonl"
+        seq_path.parent.mkdir(parents=True, exist_ok=True)
+        with seq_path.open("w") as f:
+            for pattern in self._sequences.values():
+                f.write(json.dumps(pattern.to_dict()) + "\n")
 
     def export_for_routing(self) -> list[dict[str, Any]]:
         """Export instincts in format suitable for routing."""

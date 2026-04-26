@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -56,8 +56,8 @@ class StepRunContext:
         if not self.dependency_outputs:
             return ""
         parts = ["\n\n## Previous Step Results\n"]
-        for step_id, output in self.dependency_outputs.items():
-            parts.append(f"### Result from previous step:")
+        for _step_id, output in self.dependency_outputs.items():
+            parts.append("### Result from previous step:")
             parts.append(output)
             parts.append("")
         return "\n".join(parts)
@@ -189,7 +189,7 @@ class StepRunner:
         """Mark a step as in-progress (for status visibility)."""
         from vibesop.core.models import StepStatus
         st = self._states[step.step_id]
-        st.started_at = datetime.now(timezone.utc).isoformat()
+        st.started_at = datetime.now(UTC).isoformat()
         step.status = StepStatus.IN_PROGRESS
         self._persist_step(step)
         logger.info("Starting step %s (%s): %s", step.step_number, step.step_id, step.skill_id)
@@ -206,7 +206,7 @@ class StepRunner:
         st = self._states[step.step_id]
         st.completed = True
         st.output = output
-        st.completed_at = datetime.now(timezone.utc).isoformat()
+        st.completed_at = datetime.now(UTC).isoformat()
         step.status = StepStatus.COMPLETED
         step.result_summary = output[:200] if output else ""
         self._persist_step(step)
@@ -223,7 +223,7 @@ class StepRunner:
         st = self._states[step.step_id]
         st.failed = True
         st.error = error
-        st.completed_at = datetime.now(timezone.utc).isoformat()
+        st.completed_at = datetime.now(UTC).isoformat()
         step.status = StepStatus.FAILED
         step.result_summary = f"Error: {error[:200]}"
         self._persist_step(step)
@@ -240,7 +240,7 @@ class StepRunner:
         st = self._states[step.step_id]
         st.completed = True
         st.output = f"[SKIPPED] {reason}" if reason else "[SKIPPED]"
-        st.completed_at = datetime.now(timezone.utc).isoformat()
+        st.completed_at = datetime.now(UTC).isoformat()
         step.status = StepStatus.SKIPPED
         step.result_summary = reason[:200] if reason else ""
         self._persist_step(step)
@@ -284,8 +284,6 @@ class StepRunner:
                 - skipped: int
                 - results: list[dict] with step_id, output, error per step
         """
-        from vibesop.core.orchestration.parallel_scheduler import ParallelScheduler
-        from vibesop.core.models import ExecutionStep
 
         results: list[dict[str, Any]] = []
 
@@ -306,10 +304,7 @@ class StepRunner:
                     results.append({"step_id": step.step_id, "output": output, "error": None, "status": "completed"})
                 except Exception as e:
                     self.mark_failed(step, str(e))
-                    if on_step_error:
-                        should_continue = on_step_error(step, e)
-                    else:
-                        should_continue = not fail_fast
+                    should_continue = on_step_error(step, e) if on_step_error else not fail_fast
                     results.append({"step_id": step.step_id, "output": None, "error": str(e), "status": "failed"})
                     if not should_continue or fail_fast:
                         break
@@ -335,8 +330,8 @@ class StepRunner:
                 # Use semaphore to limit concurrency
                 semaphore = asyncio.Semaphore(self._max_parallel)
 
-                async def limited_exec(s: ExecutionStep) -> tuple[ExecutionStep, str | Exception]:
-                    async with semaphore:
+                async def limited_exec(s: ExecutionStep, _sem: asyncio.Semaphore = semaphore) -> tuple[ExecutionStep, str | Exception]:
+                    async with _sem:
                         return await exec_step(s)
 
                 batch_results = loop.run_until_complete(

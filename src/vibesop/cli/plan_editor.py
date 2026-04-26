@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import questionary
-from rich.console import Console
+
+if TYPE_CHECKING:
+    from rich.console import Console
 
 
 def _edit_execution_plan(result: Any, console: Console) -> bool:

@@ -177,9 +177,8 @@ class RoutingEvaluator:
             config = SkillConfigManager.get_skill_config(skill_id)
             if config and config.usage_stats:
                 usage_last = config.usage_stats.get("last_used")
-                if usage_last:
-                    if last_used is None or usage_last > last_used:
-                        last_used = usage_last
+                if usage_last and (last_used is None or usage_last > last_used):
+                    last_used = usage_last
         except Exception:
             pass
 
@@ -203,6 +202,17 @@ class RoutingEvaluator:
 
         # 5. User preference score
         user_score = self._preferences.get_preference_score(skill_id)
+
+        # Blend community rating into satisfaction score if available
+        if user_satisfaction == 0.0:
+            try:
+                from vibesop.core.skills.ratings import SkillRatingStore
+                store = SkillRatingStore()
+                avg_rating = store.get_avg_score(skill_id)
+                if avg_rating is not None:
+                    user_satisfaction = avg_rating / 5.0
+            except (ImportError, OSError):
+                pass
 
         return SkillEvaluation(
             skill_id=skill_id,

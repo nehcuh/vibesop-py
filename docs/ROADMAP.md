@@ -29,6 +29,20 @@
 - [x] Skill lifecycle management (DRAFT → ACTIVE → DEPRECATED → ARCHIVED) (v4.4.0)
 - [x] Scope system (project-level vs global skill isolation) (v4.4.0)
 - [x] Feedback loop (usage analytics + satisfaction tracking) (v4.4.0)
+- [x] Scope-aware routing isolation — project skills invisible outside project (v5.1-dev)
+- [x] Retention system CLI visibility — `vibe skill stale` with archive detection (v5.1-dev)
+- [x] Auto-archive for 90+ day unused skills + archived skills excluded from routing (v5.1-dev)
+- [x] Post-route retention nudge every N routes (v5.1-dev)
+- [x] InstinctLearner sequence pattern detection for workflow-to-skill learning (v5.1-dev)
+- [x] SkillSuggestionCollector — bridge from pattern detection to one-click skill creation (v5.1-dev)
+- [x] `vibe skills suggestions` — view and create skills from auto-detected patterns (v5.1-dev)
+- [x] `vibe skill end-check` — session-end retention + suggestion review (v5.1-dev)
+- [x] Routing transparency — rejected candidates display with per-layer reasons (v5.1)
+- [x] Unified `orchestrate()` entry point with single-skill fallback (v5.1)
+- [x] Multi-intent detection — heuristic + LLM two-phase confirmation (v5.1)
+- [x] `SkillInjector` — full skill content injection for 3 platforms (v5.1)
+- [x] `SessionTracker` — file persistence with atomic writes (v5.1)
+- [x] `BadgeTracker` — persistent badge storage with no-duplicate logic (v5.1)
 
 ### 📊 Metrics
 
@@ -42,6 +56,9 @@
 | Lint Errors | 22 | 0 | ⚠️ |
 | Quick Commands | 7 | 7 | ✅ |
 | Service Layer | 4 services | 4 services | ✅ |
+| Rejected Candidates Display | ✅ | ✅ | ✅ |
+| Unified Orchestration Entry | ✅ | ✅ | ✅ |
+| LLM Multi-Intent Detection | ✅ | ✅ | ✅ |
 
 ---
 
@@ -262,7 +279,7 @@ Transform VibeSOP from a routing tool into a complete Skill Operating System.
 
 ---
 
-## v5.0.0 — SkillRuntime: Scope + Lifecycle (2026-Q2) ✅ IN PROGRESS
+## v5.0.0 — SkillRuntime: Scope + Lifecycle (2026-Q2) ✅ CLOSED (scope + lifecycle hardened in v5.1-dev)
 
 > **ADR**: [docs/version_05.md](docs/version_05.md) (Plan: VibeSOP Skill Ecosystem Evolution, approved 2026-04-21)
 
@@ -303,13 +320,13 @@ Complete the skill ecosystem with discovery, community, and self-improvement.
 
 ### Features
 
-- [~] **SkillMarket MVP** (In Progress)
+- [x] **SkillMarket MVP**
   - `vibe market search <query>` — keyword + tag search
   - `vibe market info <skill>` — ratings, downloads, compatibility
   - `vibe market install` — one-click from discovered skills
   - GitHub topic crawling (`topic:vibesop-skill`)
 
-- [~] **Autoresearch Feedback Loop** (In Progress)
+- [x] **Autoresearch Feedback Loop**
   - Analyze routing success/failure patterns
   - Suggest keyword additions for missed queries
   - Skill quality regression detection
@@ -317,7 +334,30 @@ Complete the skill ecosystem with discovery, community, and self-improvement.
   - User satisfaction tracking (`AnalyticsStore`)
   - Interactive feedback collection after execution
 
+- [x] **Retention System (CLI-visible)**
+  - `vibe skill stale` — detect stale/underperforming skills with archive actions
+  - 90-day auto-archive for unused C/D/F-grade skills
+  - Archived skills excluded from routing (`is_routable(ARCHIVED) = False`)
+  - Post-route retention nudge every 20 routes
+  - `vibe skill end-check` — session-end review command
+
+- [x] **Skill Learning → Creation → Registration Closed Loop**
+  - `InstinctLearner` sequence pattern detection (multi-step tool call patterns)
+  - `SkillSuggestionCollector` — candidate persistence + threshold triggering
+  - `vibe skills suggestions` — view auto-detected workflow patterns
+  - `vibe skills create --from-suggestion <id>` — one-click skill generation
+  - Auto-generated SKILL.md + `SkillAutoConfigurator` + registry registration
+
+- [x] **Scope-Aware Routing**
+  - Project hash binding for project-scoped skills
+  - Cross-project isolation via `SkillLoader` scope filtering
+  - `vibe skills scope <id> --set project` with project binding
+
 - [ ] **Skill Evaluation**
+  - Rating and reviews system
+  - Usage statistics (downloads, active users)
+  - Compatibility matrix (platform × version)
+  - Author trust scores
   - Rating and reviews system
   - Usage statistics (downloads, active users)
   - Compatibility matrix (platform × version)
@@ -332,24 +372,41 @@ Complete the skill ecosystem with discovery, community, and self-improvement.
 
 ---
 
-## v5.2.0 — Intelligent Ecosystem (2026-Q4/2027-Q1)
+## v5.2.0 — Intelligent Ecosystem (2026-Q4/2027-Q1) ✅ PARTIALLY COMPLETED
+
+> Core infrastructure (transparency, unified entry, LLM multi-intent) already shipped in v5.1.
 
 ### Goals
 Proactive skill recommendations, transparent fallback, active discovery.
 
 ### Features
 
-- [ ] **Smart Recommendations**
+- [x] **Routing Transparency — Rejected Candidates**
+  - `--explain` shows near-miss candidates with per-layer rejection reasons
+  - Rejected reasons: below threshold, scope mismatch, disabled
+  - Tested: `test_rejected_candidates.py` (21 tests passing)
+
+- [x] **Unified Orchestrate Entry Point**
+  - `orchestrate()` handles both single and multi-intent queries
+  - Single-skill is a degenerate 1-step execution plan
+  - `route()` preserved as legacy fast-path wrapper
+
+- [x] **Multi-Intent Semantic Detection**
+  - Two-phase: heuristic regex filter (zero cost) + LLM confirmation (~10 tokens)
+  - Guard words prevent false positives on short/verb queries
+  - Graceful LLM failure → trust heuristic
+
+- [ ] **Smart Recommendations** (remaining for v5.2-release)
   - Project-type-based recommendations ("Python project → suggest tdd, review")
   - "Users who installed X also installed Y"
   - Missing skill detection for current project
 
-- [ ] **Transparent Auto-Degradation**
+- [ ] **Transparent Auto-Degradation** (already available via FALLBACK_LLM)
   - When no skill matches, show: "I found no matching skill. Falling back to raw LLM."
   - Route result includes `layer: FALLBACK_LLM` for visibility
   - Config: `fallback.always_ask true` to require user confirmation
 
-- [ ] **Active Discovery**
+- [ ] **Active Discovery** (remaining for v5.2-release)
   - Periodically scan for new skills matching project tech stack
   - Proactive suggestion with explicit opt-in
   - One-command install from suggestion

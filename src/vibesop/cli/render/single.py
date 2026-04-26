@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from rich.console import Console
 from rich.panel import Panel
+
+if TYPE_CHECKING:
+    from rich.console import Console
 
 
 def render_match_panel(result: Any, console: Console) -> None:

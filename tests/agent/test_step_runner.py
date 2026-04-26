@@ -3,12 +3,11 @@
 from __future__ import annotations
 
 import uuid
-import time
 from pathlib import Path
 
 import pytest
 
-from vibesop.agent.step_runner import StepRunner, StepRunContext, PlanStepState
+from vibesop.agent.step_runner import StepRunner
 from vibesop.core.models import (
     ExecutionMode,
     ExecutionPlan,

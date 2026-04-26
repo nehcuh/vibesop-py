@@ -682,12 +682,20 @@ class SkillAutoConfigurator:
         if config.requires_llm and config.llm_config:
             config_data["skills"][config.skill_id]["llm"] = config.llm_config
 
-        # 添加元数据
-        config_data["skills"][config.skill_id]["metadata"] = {
+        # 添加元数据（包括项目 hash 用于 scope 隔离）
+        metadata: dict[str, Any] = {
             "auto_configured": True,
             "config_source": config.config_source,
             "confidence": config.confidence,
         }
+
+        if config.scope == "project":
+            import hashlib
+            metadata["project_hash"] = hashlib.md5(
+                str(Path.cwd().resolve()).encode()
+            ).hexdigest()[:12]
+
+        config_data["skills"][config.skill_id]["metadata"] = metadata
 
         # 写入文件
         config_file = output_dir / "auto-config.yaml"
