@@ -45,7 +45,7 @@ def test_detect_provider_explicit(monkeypatch):
 
 def test_detect_provider_explicit_invalid_defaults(monkeypatch):
     monkeypatch.setenv("VIBE_LLM_PROVIDER", "bogus")
-    assert detect_provider_from_env() == "anthropic"
+    assert detect_provider_from_env() == "ollama"
 
 
 def test_detect_provider_from_anthropic_key(monkeypatch):
@@ -66,7 +66,9 @@ def test_detect_provider_default(monkeypatch):
     monkeypatch.delenv("VIBE_LLM_PROVIDER", raising=False)
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-    assert detect_provider_from_env() == "anthropic"
+    monkeypatch.delenv("OLLAMA_BASE_URL", raising=False)
+    monkeypatch.delenv("OLLAMA_MODEL", raising=False)
+    assert detect_provider_from_env() == "ollama"
 
 
 def test_create_from_env_prefers_preferred_when_configured(monkeypatch):

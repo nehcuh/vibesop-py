@@ -1,13 +1,13 @@
 # VibeSOP
 
-> **让 AI 辅助开发变得像对话一样自然**
+> **AI 辅助开发的技能操作系统**
 >
-> **Make AI-assisted development as natural as conversation**
+> **The Skill Operating System for AI-assisted development**
 
 [![Python](https://img.shields.io/badge/Python-3.12+-blue.svg)](https://www.python.org/downloads/)
 [![Ruff](https://img.shields.io/badge/Ruff-Enabled-black.svg)](https://github.com/astral-sh/ruff)
-[![Coverage](https://img.shields.io/badge/Coverage-94%25-green.svg)]()
-[![Version](https://img.shields.io/badge/Version-4.3.0-green.svg)](https://github.com/nehcuh/vibesop-py)
+[![Coverage](https://img.shields.io/badge/Coverage->75%25-green.svg)]()
+[![Version](https://img.shields.io/badge/Version-4.4.0-green.svg)](https://github.com/nehcuh/vibesop-py)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 ---
@@ -26,40 +26,32 @@
 
 ## 什么是 VibeSOP？ What is VibeSOP?
 
-VibeSOP 提供**智能路由**和**轻量级技能执行**：
+VibeSOP 是 **SkillOS（技能操作系统）**——管理技能的全生命周期：
 
-**VibeSOP provides intelligent ROUTING and lightweight EXECUTION:**
+**VibeSOP is a Skill Operating System — managing the full lifecycle of skills:**
 
-### 智能编排（默认行为）Intelligent Orchestration (Default)
+### 技能全生命周期管理（SkillOS 定位）Skill Lifecycle Management
 
-- **多意图检测**：自动识别复杂请求中的多个意图
-  **Multi-intent detection** - automatically identify multiple intents in complex requests
+- **发现与安装**：一键安装技能，自动安全审计，零配置
+  **Discovery & Installation** — one-click install, auto security audit, zero config
 
-- **任务分解**：将复杂请求拆分为可独立执行的子任务
-  **Task decomposition** - break complex requests into independently executable sub-tasks
+- **智能路由**：理解意图，从 50+ 技能中匹配最佳
+  **Intelligent Routing** — understand intent, match the best from 50+ skills
 
-- **执行计划**：自动生成串行/并行执行策略
-  **Execution planning** - automatically generate serial/parallel execution strategies
+- **任务编排**：复杂请求自动分解，串行/并行执行计划
+  **Task Orchestration** — decompose complex requests, serial/parallel execution plans
 
-- **实时进度**：流式显示编排过程每一步
-  **Real-time progress** - streaming display of each orchestration step
+- **生命周期管理**：启禁用、作用域隔离、质量评估、自动淘汰
+  **Lifecycle Management** — enable/disable, scope isolation, quality evaluation, auto-deprecation
 
-### 智能路由（底层能力）Intelligent Routing (Foundation)
+- **跨平台适配**：一套技能定义，所有 AI Agent 通用
+  **Cross-Platform** — one skill definition, works with all AI Agents
 
-- 理解你的意图（自然语言，支持中英文）
-  **Understand your intent** (natural language, English + Chinese)
+**VibeSOP 定位**: VibeSOP 是 SkillOS。它管理技能的**全生命周期**：发现 → 安装 → 路由 → 编排 → 评估 → 保留/淘汰。
+技能的实际执行由 AI Agent（Claude Code, Cursor, OpenCode）完成。
 
-- 找到最合适的技能（从 45+ 技能中选择，94% 准确率）
-  **Find the best skill** (from 45+ skills, 94% accuracy)
-
-- 学习你的偏好（越用越准确）
-  **Learn your preferences** (gets better over time)
-
-**VibeSOP 定位**: VibeSOP 是技能操作系统。它理解你的意图、分解任务、规划执行顺序，
-并为你生成可执行的计划。技能的实际执行由 AI Agent（Claude Code, Cursor, OpenCode）完成。
-
-**Note**: VibeSOP is a Skill Operating System. It understands your intent, decomposes tasks,
-plans execution order, and generates executable plans. Actual skill execution is done by AI Agents
+**Note**: VibeSOP is a Skill Operating System. It manages the **full skill lifecycle**: discovery → installation → routing →
+orchestration → evaluation → retention/deprecation. Actual skill execution is done by AI Agents
 (Claude Code, Cursor, OpenCode).
 
 📖 **Read our philosophy**: [docs/PHILOSOPHY.md](docs/PHILOSOPHY.md) | [中文版](docs/PHILOSOPHY.md)
@@ -74,17 +66,23 @@ plans execution order, and generates executable plans. Actual skill execution is
 
 **Finding the right tool is more important than executing it.** AI tools are already powerful enough. The real problem is: **finding the right tool**.
 
+### Orchestration over Single-Skill (编排 > 单技能)
+
+真实世界的请求往往是复合的。VibeSOP 能够分解复杂意图，编排多个技能协同工作。
+
+**Real-world requests are composite.** VibeSOP decomposes complex intents and orchestrates multiple skills working together.
+
+### Lifecycle over Accumulation (生命周期 > 堆积)
+
+技能应该被管理，而不是无限堆积。启用/禁用、作用域隔离、质量评估、自动淘汰——让技能生态保持健康。
+
+**Skills should be managed, not infinitely accumulated.** Enable/disable, scope isolation, quality evaluation, auto-deprecation — keeping the skill ecosystem healthy.
+
 ### Matching over Guessing (匹配 > 猜测)
 
-理解意图比记忆命令更重要。你记不住 45+ 个技能的命令，但你可以自然地表达你想做什么。
+理解意图比记忆命令更重要。你记不住 50+ 个技能的命令，但你可以自然地表达你想做什么。
 
-**Understanding intent is more important than memorizing commands.** You can't remember 45+ skill commands, but you can naturally express what you want to do.
-
-### Memory over Intelligence (记忆 > 智能)
-
-记住有效选择比"更聪明"更重要。VibeSOP 会学习你的偏好，越用越准确。
-
-**Remembering what works is more important than being "smarter".** VibeSOP learns your preferences and gets more accurate over time.
+**Understanding intent is more important than memorizing commands.** You can't remember 50+ skill commands, but you can naturally express what you want to do.
 
 ### Open over Closed (开放 > 封闭)
 
@@ -611,25 +609,39 @@ vibe build opencode --output ~/.continue
 
 ```
 ┌─────────────────────────────────────────────────┐
-│                    CLI Layer                    │
-│  vibe route │ vibe skills │ vibe install        │
+│               AI Agent (执行层)                  │
+│    Claude Code / Cursor / OpenCode / etc.        │
 └────────────────────┬────────────────────────────┘
-                     │
+                     │ 执行技能
 ┌────────────────────▼────────────────────────────┐
-│                 UnifiedRouter                   │
-│  8-Layer Pipeline:                              │
-│  Explicit → Scenario → AI Triage → Keyword    │
-│  → TF-IDF → Embedding → Fuzzy → Fallback LLM    │
-└────────────────────┬────────────────────────────┘
-                     │
-┌────────────────────▼────────────────────────────┐
-│              Skill Management                   │
-│  Discovery → Loading → Audit → Metadata         │
-└────────────────────┬────────────────────────────┘
-                     │
-┌────────────────────▼────────────────────────────┐
-│            Integration Layer                    │
-│  Superpowers │ GStack │ OMX │ Custom Packs      │
+│              VibeSOP SkillOS                     │
+│                                                  │
+│  ┌──────────────────────────────────────────┐   │
+│  │         CLI / Agent Runtime Layer         │   │
+│  │   vibe route │ orchestrate │ skill mgmt   │   │
+│  └────────────────────┬─────────────────────┘   │
+│                       │                         │
+│  ┌────────────────────▼─────────────────────┐   │
+│  │          UnifiedRouter (路由层)           │   │
+│  │   10-Layer Pipeline:                      │   │
+│  │   AI Triage → Scenario → Keyword → TF-IDF │   │
+│  │   → Embedding → Levenshtein → Fallback    │   │
+│  └────────────────────┬─────────────────────┘   │
+│                       │                         │
+│  ┌────────────────────▼─────────────────────┐   │
+│  │       TaskOrchestrator (编排层)           │   │
+│  │   多意图检测 → 任务分解 → 执行计划生成    │   │
+│  └────────────────────┬─────────────────────┘   │
+│                       │                         │
+│  ┌────────────────────▼─────────────────────┐   │
+│  │      Skill Lifecycle Manager (管理层)      │   │
+│  │   启禁用 │ 作用域 │ 质量评估 │ 保留淘汰   │   │
+│  └────────────────────┬─────────────────────┘   │
+│                       │                         │
+│  ┌────────────────────▼─────────────────────┐   │
+│  │        Integration Layer (适配层)          │   │
+│  │   Claude Code │ OpenCode │ Kimi CLI       │   │
+│  └──────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────┘
 ```
 
@@ -706,8 +718,10 @@ See: [docs/benchmarks/routing-accuracy-benchmark.md](docs/benchmarks/routing-acc
 
 | Feature | VibeSOP | Cursor | Continue.dev | Aider |
 |---------|---------|--------|--------------|-------|
-| **Routing** | 8-layer intelligent routing | Built-in commands | Extension-based | CLI flags |
-| **Skills** | 45+ cross-platform skills | Built-in features | Community extensions | Built-in workflows |
+| **Routing** | 10-layer intelligent routing | Built-in commands | Extension-based | CLI flags |
+| **Orchestration** | Multi-skill composition | No | No | No |
+| **Lifecycle Mgmt** | Enable/disable, scope, evaluate | No | No | No |
+| **Skills** | 50+ cross-platform skills | Built-in features | Community extensions | Built-in workflows |
 | **Learning** | Preference learning | Fixed | No | No |
 | **Cross-Platform** | ✅ Works with any AI tool | ❌ Cursor only | ❌ Continue only | ❌ Aider only |
 | **Open Ecosystem** | ✅ Any SKILL.md | ❌ Closed | ⚠️ Extension API | ❌ Closed |
@@ -752,11 +766,12 @@ uv run pytest --cov=src/vibesop --cov-report=html
 
 ## 路线图 Roadmap
 
-- [x] v4.0.0: 核心路由引擎 Core routing engine with 8-layer pipeline
+- [x] v4.0.0: 核心路由引擎 Core routing engine with 10-layer pipeline
 - [x] v4.1.0: AI Triage 生产就绪 AI Triage production readiness
 - [x] v4.2.0: 技能健康监控 Skill health monitoring
 - [x] v4.3.0: 上下文感知路由 + Agent Runtime Context-aware routing + Agent Runtime
-- [ ] v5.0.0: 技能运行时 SkillRuntime — 作用域 + 生命周期 + 启禁用
+- [ ] v4.4.0: SkillOS 编排 + 生命周期 + 反馈闭环 SkillOS Orchestration + Lifecycle + Feedback Loop
+- [ ] v5.0.0: SkillRuntime — 作用域 + 生命周期 + 启禁用（质量收敛）
 - [ ] v5.1.0: 技能市场 + 反馈闭环 SkillMarket + Feedback Loop
 - [ ] v5.2.0: 智能生态系统 Intelligent Ecosystem — 推荐 + 退化 + 发现
 
@@ -900,6 +915,6 @@ vibe skill add code-reviewer
 
 ---
 
-**版本 Version**: 4.3.0
-**更新时间 Last Updated**: 2026-04-24
+**版本 Version**: 4.4.0
+**更新时间 Last Updated**: 2026-04-26
 **状态 Status**: ✅ 生产就绪 Production Ready

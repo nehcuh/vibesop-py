@@ -1,16 +1,16 @@
 # VibeSOP Roadmap
 
-> **Version**: 4.3.0
-> **Last Updated**: 2026-04-24 (Phase 3 complete)
+> **Version**: 4.4.0
+> **Last Updated**: 2026-04-26
 > **Status**: Active Development
 
 ---
 
-## Current State (v4.3.0)
+## Current State (v4.4.0)
 
 ### ✅ Completed
 
-- [x] Core routing engine with 7-layer pipeline
+- [x] Core SkillOS engine with 10-layer pipeline
 - [x] Unified skill management (builtin + external + custom)
 - [x] Security auditing for external skills
 - [x] Preference learning system
@@ -22,21 +22,25 @@
 - [x] Skill health monitoring (v4.2.0)
 - [x] Skill-level LLM configuration system
 - [x] One-click smart skill installation
-- [x] **Context-aware routing** (v4.3.0)
-- [x] **Agent Runtime layer** (v4.3.0)
-- [x] **Badge system** (v4.3.0)
+- [x] Context-aware routing (v4.3.0)
+- [x] Agent Runtime layer (v4.3.0)
+- [x] Badge system (v4.3.0)
+- [x] Multi-intent detection + task decomposition + execution planning (v4.4.0)
+- [x] Skill lifecycle management (DRAFT → ACTIVE → DEPRECATED → ARCHIVED) (v4.4.0)
+- [x] Scope system (project-level vs global skill isolation) (v4.4.0)
+- [x] Feedback loop (usage analytics + satisfaction tracking) (v4.4.0)
 
 ### 📊 Metrics
 
 | Metric | Current | Target | Status |
 |--------|---------|--------|--------|
 | Code Lines | ~49,000 | ~15,000 | ⚠️ 3× over (feature growth) |
-| Test Count | 1,951 | 2,000+ | ⚠️ On track |
+| Test Count | 2,044 | 2,000+ | ✅ |
 | Test Coverage | 74% (full run) | >75% | ⚠️ 1% below target |
-| Routing P95 | 354ms | <100ms | ⚠️ In progress (v4.4.0) |
+| Routing P95 | 225ms | <100ms | ⚠️ In progress |
 | Skills Supported | 45+ | 45+ | ✅ |
-| Lint Errors | 114 | 0 | ⚠️ Reduced from 185 |
-| Quick Commands | 7 | 7 | ⚠️ CLI ready, platform-dependent |
+| Lint Errors | 22 | 0 | ⚠️ |
+| Quick Commands | 7 | 7 | ✅ |
 | Service Layer | 4 services | 4 services | ✅ |
 
 ---
@@ -51,7 +55,7 @@ Make AI Triage (Layer 2) production-ready with real LLM integration.
 - [x] **Real LLM Integration**
   - Anthropic Claude API
   - OpenAI GPT API
-  - Local model support (Ollama)
+  - Local model support (Ollama, default provider in v4.4.0+)
 
 - [x] **Cost Management**
   - Token usage tracking
@@ -113,10 +117,10 @@ Monitor the health and quality of external skill packs.
 
 ---
 
-## v4.3.0 — Context-Aware Routing + Slash Commands ✅ (Released 2026-04-24)
+## v4.3.0 — Context-Aware Routing + Quick Commands ✅ (Released 2026-04-24)
 
 ### Goals
-Improve routing accuracy with context awareness, multi-turn conversations, direct Agent integration, and explicit slash commands.
+Improve routing accuracy with context awareness, multi-turn conversations, direct Agent integration, and CLI quick commands.
 
 ### Features
 
@@ -176,10 +180,10 @@ Improve routing accuracy with context awareness, multi-turn conversations, direc
 
 ---
 
-## v4.4.0 — SkillOS: Orchestration + Lifecycle + Feedback (In Progress)
+## v4.4.0 — SkillOS: Orchestration + Lifecycle + Feedback ✅ (Released 2026-04-26)
 
 ### Goals
-Transform VibeSOP from a routing engine into a complete Skill Operating System.
+Transform VibeSOP from a routing tool into a complete Skill Operating System.
 
 ### Features
 
@@ -237,13 +241,13 @@ Transform VibeSOP from a routing engine into a complete Skill Operating System.
   - `vibe market install <skill>` — Install from discovery
 
 #### Performance Optimization
-- [ ] **Latency Reduction** (In Progress)
-  - Current P95: 354ms, Target: <100ms
+- [ ] **Latency Reduction** (Ongoing)
+  - Current P95: 225ms, Target: <100ms
   - Router hot-path optimization
   - Lazy loading for heavy dependencies
 
-- [ ] **Quality Gates** (In Progress)
-  - Fix 157 lint errors → 0
+- [ ] **Quality Gates** (Ongoing)
+  - Fix remaining lint errors → 0
   - Increase coverage from 74% → 80%
 
 ### Success Metrics
@@ -253,7 +257,7 @@ Transform VibeSOP from a routing engine into a complete Skill Operating System.
 - ✅ Scope system: Project-level skill isolation
 - ✅ Feedback loop: Usage analytics + user satisfaction tracking
 - ⚠️ Routing P95 latency: 225ms (target <100ms)
-- ⚠️ Lint errors: 157 (target 0)
+- ⚠️ Lint errors: 22 (target 0)
 - ⚠️ Test coverage: 74% (target >80%)
 
 ---
@@ -382,11 +386,12 @@ Proactive skill recommendations, transparent fallback, active discovery.
 
 | Version | Date | Focus |
 |---------|------|-------|
-| v4.0.0 | 2026-04-06 | ✅ Core routing engine |
+| v4.0.0 | 2026-04-06 | ✅ Core SkillOS engine |
 | v4.1.0 | 2026-04 | ✅ AI Triage production |
 | v4.2.0 | 2026-04 | ✅ Skill health monitoring |
 | v4.3.0 | 2026-04-24 | ✅ Context-aware routing + Agent Runtime |
-| v5.0.0 | 2026-Q2/Q3 | ⏳ SkillRuntime: Scope + Lifecycle |
+| v4.4.0 | 2026-04-26 | ✅ SkillOS: Orchestration + Lifecycle + Feedback |
+| v5.0.0 | 2026-Q2/Q3 | 📋 SkillRuntime: Scope + Lifecycle (refined) |
 | v5.1.0 | 2026-Q3/Q4 | 📋 SkillMarket + Feedback Loop |
 | v5.2.0 | 2026-Q4/2027-Q1 | 📋 Intelligent Ecosystem |
 
@@ -421,4 +426,4 @@ See something missing? Want to accelerate a feature?
 
 ---
 
-*Last updated: 2026-04-24 (v5.x Roadmap aligned with ADR)*
+*Last updated: 2026-04-26 (v4.4.0 released; v5.x Roadmap aligned with ADR)*

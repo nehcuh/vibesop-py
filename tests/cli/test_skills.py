@@ -37,13 +37,11 @@ class TestSkillsCommand:
 class TestSkillsRemovedCommands:
     """Tests to ensure removed commands no longer exist."""
 
-    def test_execute_command_exists(self) -> None:
-        """Test that execute command exists (restored in v4.1.0)."""
+    def test_execute_command_removed(self) -> None:
+        """Test that execute command is removed (archived as dead code)."""
         result = runner.invoke(app, ["execute", "--help"])
-
-        # Should succeed (command exists)
-        assert result.exit_code == 0 or "execute" in result.output
-        assert "Usage: vibe execute" in result.output or "SKILL_ID" in result.output
+        # Should not exist
+        assert result.exit_code != 0
 
     def test_memory_command_removed(self) -> None:
         """Test that memory command no longer exists."""

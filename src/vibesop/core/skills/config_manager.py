@@ -258,7 +258,7 @@ class SkillConfigManager:
         # 保存配置
         cls._save_skill_config_file(config_data)
 
-        console.print(f"[green]✓ Config updated for skill: {skill_id}[/green]")
+        logger.debug("[dim]config updated for skill: %s[/dim]", skill_id)
 
     @classmethod
     def set_enabled(cls, skill_id: str, enabled: bool) -> None:

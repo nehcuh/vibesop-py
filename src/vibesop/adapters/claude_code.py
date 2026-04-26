@@ -377,11 +377,6 @@ class ClaudeCodeAdapter(PlatformAdapter):
                 validate_security=False,
             )
 
-    def _find_skill_content(self, skill_id: str) -> str | None:
-        from vibesop.adapters._shared import find_skill_content
-
-        return find_skill_content(skill_id, self._project_root)
-
     def _render_project_claude_md(self, manifest: Manifest, result: RenderResult) -> None:
         """Write project-level CLAUDE.md if it doesn't exist.
 

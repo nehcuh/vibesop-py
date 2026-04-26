@@ -170,6 +170,19 @@ class RoutingEvaluator:
             (r.timestamp for r in feedback_records), default=None
         )
 
+        # Merge with SkillConfig.usage_stats.last_used (written by record_usage)
+        # so the FeedbackLoop stale-skill detection can use usage data
+        try:
+            from vibesop.core.skills.config_manager import SkillConfigManager
+            config = SkillConfigManager.get_skill_config(skill_id)
+            if config and config.usage_stats:
+                usage_last = config.usage_stats.get("last_used")
+                if usage_last:
+                    if last_used is None or usage_last > last_used:
+                        last_used = usage_last
+        except Exception:
+            pass
+
         # 2. User satisfaction + execution success from ExecutionFeedbackCollector
         exec_summary = self._execution.get_skill_summary(skill_id)
         user_satisfaction = exec_summary.get("helpful_rate") or 0.0

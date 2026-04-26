@@ -13,7 +13,7 @@ import importlib.util
 import os
 import sys
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import questionary
 import typer
@@ -43,9 +43,6 @@ from vibesop.cli.render import (
 from vibesop.cli.routing_report import render_routing_report
 from vibesop.cli.subcommands import register
 from vibesop.core.routing import UnifiedRouter
-
-if TYPE_CHECKING:
-    from vibesop.core.models import OrchestrationResult
 
 app = typer.Typer(
     name="vibe",

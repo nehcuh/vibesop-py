@@ -601,6 +601,48 @@ vibe skill status gstack/review
 
 ---
 
+#### `vibe skill stale`
+
+Detect stale or underperforming skills. Analyzes usage statistics and quality
+scores to identify skills that may need deprecation, review, or are performing well.
+
+```bash
+vibe skill stale [options]
+```
+
+**Options:**
+- `--auto, -a` - Automatically deprecate F-grade skills
+- `--json, -j` - Output as machine-readable JSON
+
+**Examples:**
+```bash
+vibe skill stale               # Report only
+vibe skill stale --auto        # Auto-deprecate F-grade skills
+vibe skill stale --json        # Machine-readable output
+```
+
+**Output:**
+```
+┌──────────────────────────────────────────────────────┐
+│              Skill Health Analysis                    │
+├──────────────────┬─────────┬───────┬────────┬────────┤
+│ Skill ID         │ Action  │ Grade │ Unused │ Routes │
+├──────────────────┼─────────┼───────┼────────┼────────┤
+│ old-deploy-skill │ DEPRECATE│ F    │ 45d    │ 5      │
+│ slow-review      │ WARN    │ D    │ 15d    │ 8      │
+│ fast-builder     │ BOOST   │ A    │ 1d     │ 50     │
+└──────────────────┴─────────┴───────┴────────┴────────┘
+Summary: 1 to deprecate, 1 to warn, 1 performing well
+```
+
+**How it works:**
+- Reads `usage_stats` from `SkillConfig` (updated by each route via `record_usage()`)
+- Reads quality scores from `RoutingEvaluator` (A-F grades)
+- Skills unused >30 days or with F-grade are flagged for deprecation
+- `--auto` transitions flagged skills to DEPRECATED lifecycle state
+
+---
+
 ## Project Setup
 
 ### `vibe init`
@@ -888,6 +930,76 @@ vibe config list
 
 ---
 
+## LLM Configuration
+
+VibeSOP uses LLM for AI semantic triage (Layer 2 of the routing pipeline) and task decomposition.
+Configure the LLM provider to enable semantic understanding.
+
+### Quick Start
+
+```bash
+# Default: Ollama local (no API key needed)
+brew install ollama
+ollama pull qwen3:35b-a3b-mlx
+ollama serve
+
+# For cloud providers, set environment variables:
+export VIBE_LLM_PROVIDER=anthropic
+export ANTHROPIC_API_KEY=sk-ant-...
+```
+
+### Supported Providers
+
+| Provider | Setup | Best for |
+|----------|-------|----------|
+| `ollama` | Local, no API key. `brew install ollama && ollama serve` | Offline, privacy, zero cost |
+| `anthropic` | `export ANTHROPIC_API_KEY=sk-ant-...` | Best semantic accuracy |
+| `openai` | `export OPENAI_API_KEY=sk-...` | Broad model selection |
+
+### Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `VIBE_LLM_PROVIDER` | `ollama` | Provider: `ollama`, `anthropic`, or `openai` |
+| `OLLAMA_BASE_URL` | `http://localhost:11434/v1` | Ollama API endpoint |
+| `OLLAMA_MODEL` | `Qwen3.6-35B-A3B-mlx-mxfp8` | Default Ollama model |
+| `ANTHROPIC_API_KEY` | — | Anthropic API key |
+| `OPENAI_API_KEY` | — | OpenAI API key |
+
+### Provider Detection Priority
+
+When no `VIBE_LLM_PROVIDER` is set, VibeSOP auto-detects:
+
+1. `OLLAMA_BASE_URL` or `OLLAMA_MODEL` env var → `ollama`
+2. `ANTHROPIC_API_KEY` → `anthropic`
+3. `OPENAI_API_KEY` → `openai`
+4. Default → `ollama`
+
+### Configuration File
+
+```yaml
+# .vibe/config.yaml
+llm:
+  provider: ollama
+  model: Qwen3.6-35B-A3B-mlx-mxfp8
+  temperature: 0.3
+  max_tokens: 500
+```
+
+### Verifying LLM Configuration
+
+```bash
+# Check which provider is active
+vibe doctor
+
+# Test with a query that triggers semantic triage
+vibe route "analyze the architecture of my project" --verbose
+```
+
+---
+
+---
+
 ## Preference Learning
 
 ### `vibe preferences`
@@ -1058,17 +1170,13 @@ The following commands were removed:
 
 | Command | Replacement | Reason |
 |---------|-------------|--------|
-| `vibe execute` | N/A | Violated "router not executor" principle |
-| `vibe memory` | N/A | Internalized as routing engine feature |
-| `vibe instinct` | N/A | Internalized as automatic learning |
-| `vibe scan` | `vibe analyze security` | Merged into unified analyze |
-| `vibe detect` | `vibe analyze integrations` | Merged into unified analyze |
-| `vibe skill-info` | `vibe skills info` | Moved to skills subcommand |
-| `vibe deploy` | N/A | Out of scope for routing engine |
-| `vibe toolchain` | N/A | Out of scope for routing engine |
-| `vibe worktree` | N/A | Out of scope for routing engine |
-| `vibe checkpoint` | N/A | Out of scope for routing engine |
-| `vibe hooks` | N/A | Out of scope for routing engine |
+| `vibe execute` | N/A | Violated "management not execution" principle |
+| `vibe memory` | N/A | Internalized as SkillOS learning feature |
+| `vibe deploy` | N/A | Out of scope for SkillOS |
+| `vibe toolchain` | N/A | Out of scope for SkillOS |
+| `vibe worktree` | N/A | Out of scope for SkillOS |
+| `vibe checkpoint` | N/A | Out of scope for SkillOS |
+| `vibe hooks` | N/A | Out of scope for SkillOS |
 
 ---
 

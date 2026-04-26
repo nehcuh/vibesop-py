@@ -14,6 +14,9 @@ VibeSOP 采用清晰的三层架构，每层有明确的职责和边界。这种
 - **可维护性** - 清晰的依赖关系
 - **可测试性** - 每层可独立测试
 
+> **定位**: VibeSOP 是 SkillOS（技能操作系统）。三层架构分别负责：
+> 构建 → 适配 → 路由+编排+管理。技能代码的最终执行由 AI Agent 完成。
+
 ---
 
 ## 架构图
@@ -104,14 +107,14 @@ VibeSOP 采用清晰的三层架构，每层有明确的职责和边界。这种
 
 ### 模块结构
 
-#### 1. 路由引擎 (routing/)
+#### 1. SkillOS 路由层 (routing/)
 
-**职责**: 将用户请求路由到最合适的技能
+**职责**: 将用户请求路由到最合适的技能（SkillOS 智能路由层）
 
 **核心组件**:
 ```python
 core/routing/
-├── unified.py           # UnifiedRouter - 7层路由pipeline
+├── unified.py           # UnifiedRouter - 10层路由pipeline
 ├── triage_service.py    # TriageService - AI语义分流
 ├── cache.py            # CacheManager - 缓存管理
 ├── layers.py           # 路由层定义

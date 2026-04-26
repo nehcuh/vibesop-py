@@ -309,7 +309,7 @@ A: 不需要。VibeSOP 可以在没有 API key 的情况下工作（使用关键
 
 ### Q: VibeSOP 会执行技能吗？
 
-A: 不会。VibeSOP 只负责**找到**最合适的技能，不负责执行。执行由你的 AI 工具完成。
+A: 不会。VibeSOP 是 SkillOS，负责管理技能的全生命周期（发现、路由、编排、评估），而技能代码的实际执行由你的 AI 工具（Claude Code、Cursor 等）完成。
 
 ### Q: 准确率有多高？
 

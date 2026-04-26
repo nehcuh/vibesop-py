@@ -252,6 +252,7 @@ class StepStatus(StrEnum):
     IN_PROGRESS = "in_progress"
     COMPLETED = "completed"
     SKIPPED = "skipped"
+    FAILED = "failed"
 
 
 class PlanStatus(StrEnum):
@@ -495,6 +496,34 @@ class OrchestrationResult(BaseModel):
             "has_match": self.has_match,
         }
 
+    def to_routing_result(self) -> RoutingResult:
+        """Extract a single-skill RoutingResult from this orchestration result.
+
+        When mode=SINGLE, returns the routing result directly.
+        When mode=ORCHESTRATED, returns the single_fallback as primary.
+        """
+        primary = self.single_fallback if self.mode == OrchestrationMode.ORCHESTRATED else self.primary
+
+        # Build layer_details from the existing fields if present, otherwise empty
+        layer_details = self.layer_details or []
+
+        # Build routing_path from detected layers, falling back to NO_MATCH
+        if self.routing_path:
+            routing_path = self.routing_path
+        elif self.primary and self.primary.layer:
+            routing_path = [self.primary.layer]
+        else:
+            routing_path = [RoutingLayer.FALLBACK_LLM]
+
+        return RoutingResult(
+            primary=primary,
+            alternatives=self.alternatives or [],
+            routing_path=routing_path,
+            layer_details=layer_details,
+            duration_ms=self.duration_ms,
+            query=self.original_query,
+        )
+
 
 class SkillDefinition(BaseModel):
     """Definition of a skill.
@@ -570,8 +599,8 @@ class AppSettings(BaseSettings):
         default="INFO",
         description="Log level",
     )
-    llm_provider: Literal["anthropic", "openai"] = Field(
-        default="anthropic",
+    llm_provider: Literal["anthropic", "openai", "ollama"] = Field(
+        default="ollama",
         description="LLM provider",
     )
     anthropic_api_key: str | None = Field(

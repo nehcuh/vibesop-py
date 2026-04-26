@@ -20,9 +20,6 @@ from vibesop.cli.commands import (
     config as config_mod,
 )
 from vibesop.cli.commands import (
-    execute_cmd as execute_mod,
-)
-from vibesop.cli.commands import (
     feedback_cmd as feedback_mod,
 )
 from vibesop.cli.commands import (
@@ -90,7 +87,6 @@ def register(app: typer.Typer) -> None:
     app.command("inspect")(inspect_mod.inspect_cmd)
     app.command()(targets_mod.targets)
     app.command()(install_mod.install)
-    app.command()(execute_mod.execute)
 
     # Algorithm library
     app.command("algorithms")(algorithms_mod.algorithms_list)

@@ -16,7 +16,7 @@ vibe doctor
 # 2. 查看版本与平台信息
 vibe --version
 
-# 3. 验证路由引擎是否正常工作
+# 3. 验证 SkillOS 路由是否正常工作
 vibe route "review my code"
 
 # 4. 运行测试套件

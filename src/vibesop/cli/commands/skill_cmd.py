@@ -157,3 +157,78 @@ def status(
         title=f"Skill Status: {skill_id}",
         border_style="blue" if enabled else "yellow",
     ))
+
+
+@app.command()
+def stale(
+    auto_deprecate: bool = typer.Option(
+        False, "--auto", "-a", help="Automatically deprecate stale skills"
+    ),
+    json_output: bool = typer.Option(
+        False, "--json", "-j", help="Output as JSON"
+    ),
+) -> None:
+    """Detect stale or underperforming skills.
+
+    Analyzes usage statistics to identify skills that haven't been used
+    recently or have low quality scores. Skills with no recorded usage
+    data are shown separately — these may be newly installed or never triggered.
+
+    Examples:
+        vibe skill stale              # Show report only
+        vibe skill stale --auto       # Auto-deprecate F-grade skills
+        vibe skill stale --json       # Machine-readable output
+    """
+    from vibesop.core.skills.feedback_loop import FeedbackLoop
+
+    loop = FeedbackLoop()
+    suggestions = loop.analyze_all(auto_deprecate=auto_deprecate)
+
+    if json_output:
+        import json
+        report = loop.generate_report()
+        console.print(json.dumps(report, indent=2, default=str))
+        return
+
+    if not suggestions:
+        console.print("[green]✓[/green] No stale or underperforming skills detected.")
+        return
+
+    # Separate into deprecate/warn/boost categories
+    to_deprecate = [s for s in suggestions if s.action == "deprecate"]
+    to_warn = [s for s in suggestions if s.action == "warn"]
+    to_boost = [s for s in suggestions if s.action == "boost"]
+
+    table = Table(title="Skill Health Analysis", show_header=True)
+    table.add_column("Skill ID", style="cyan")
+    table.add_column("Action", style="bold")
+    table.add_column("Grade", justify="center")
+    table.add_column("Unused (days)", justify="right")
+    table.add_column("Routes", justify="right")
+    table.add_column("Reason", style="dim")
+
+    action_styles = {
+        "deprecate": ("[red]DEPRECATE[/red]", "red"),
+        "warn": ("[yellow]WARN[/yellow]", "yellow"),
+        "boost": ("[green]BOOST[/green]", "green"),
+    }
+
+    for s in suggestions:
+        label, _ = action_styles.get(s.action, (s.action.upper(), "white"))
+        days = str(s.days_since_last_use) if s.days_since_last_use is not None else "?"
+        table.add_row(s.skill_id, label, s.grade, days, str(s.total_routes), s.reason)
+
+    console.print(table)
+
+    # Summary
+    console.print(
+        f"\n[bold]Summary:[/bold] "
+        f"[red]{len(to_deprecate)} to deprecate[/red], "
+        f"[yellow]{len(to_warn)} to warn[/yellow], "
+        f"[green]{len(to_boost)} performing well[/green]"
+    )
+
+    if to_deprecate and not auto_deprecate:
+        console.print(
+            "\n[dim]Run `vibe skill stale --auto` to apply deprecations automatically.[/dim]"
+        )

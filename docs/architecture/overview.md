@@ -5,9 +5,9 @@
 
 ## System Purpose
 
-VibeSOP is an **intelligent routing engine** for AI-assisted development. It discovers and routes user queries to the most appropriate skills, without executing them itself.
+VibeSOP is a **Skill Operating System (SkillOS)** for AI-assisted development. It manages the full lifecycle of skills — discovering, routing, orchestrating, and evaluating — without executing skill code itself.
 
-**Key Principle**: Discovery > Execution
+**Key Principle**: Discovery > Execution. VibeSOP manages, AI Agents execute.
 
 ## High-Level Architecture
 

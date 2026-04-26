@@ -5,7 +5,6 @@ Extracted from UnifiedRouter to reduce God Object size.
 
 from __future__ import annotations
 
-import importlib
 import logging
 import re
 import threading
@@ -32,6 +31,11 @@ class CandidateManager:
         self._skill_loader: Any = None
         self._candidates_cache: list[dict[str, Any]] | None = None
         self._cache_lock = threading.Lock()
+        self._last_reload_check: float = 0.0
+        self._RELOAD_CHECK_INTERVAL: float = 5.0
+        self._usage_buffer: dict[str, dict[str, Any]] = {}
+        self._usage_flush_count: int = 0
+        self._USAGE_FLUSH_INTERVAL: int = 10
 
     def get_candidates(self) -> list[dict[str, Any]]:
         """Discover and return all skill candidates."""
@@ -92,13 +96,42 @@ class CandidateManager:
         return candidates
 
     def get_cached_candidates(self) -> list[dict[str, Any]]:
-        """Return cached candidates, loading if necessary."""
-        if self._candidates_cache is not None:
-            return self._candidates_cache
+        """Return cached candidates, auto-reloading if skills were installed.
+
+        Thread-safe: all cache access and mutation is protected by _cache_lock.
+        Reload marker check is rate-limited to avoid filesystem calls on every route.
+        """
         with self._cache_lock:
-            if self._candidates_cache is None:
-                self._candidates_cache = self.get_candidates()
-            return self._candidates_cache
+            if self._candidates_cache is not None:
+                if self._should_check_reload():
+                    return self._cached_reload_locked()
+                return self._candidates_cache
+            return self._cached_reload_locked()
+
+    def _should_check_reload(self) -> bool:
+        """Rate-limited check: only probe the filesystem marker every N seconds."""
+        import time
+        now = time.monotonic()
+        if now - self._last_reload_check < self._RELOAD_CHECK_INTERVAL:
+            return False
+        self._last_reload_check = now
+        return self._check_reload_needed()
+
+    def _check_reload_needed(self) -> bool:
+        """Check if a .skills_reload marker signals new skill installation."""
+        marker = self.project_root / ".vibe" / ".skills_reload"
+        return marker.exists()
+
+    def _cached_reload_locked(self) -> list[dict[str, Any]]:
+        """Reload candidates.  Caller MUST hold _cache_lock."""
+        marker = self.project_root / ".vibe" / ".skills_reload"
+        try:
+            marker.unlink()
+        except OSError:
+            pass
+        self._candidates_cache = None
+        self._candidates_cache = self.get_candidates()
+        return self._candidates_cache
 
     def reload(self) -> int:
         """Invalidate cache and reload."""
@@ -108,6 +141,47 @@ class CandidateManager:
     def invalidate(self) -> None:
         """Invalidate candidate cache without reloading."""
         self._candidates_cache = None
+
+    def record_usage(self, skill_id: str, was_successful: bool = True) -> None:
+        """Buffer usage stats update; flush to SkillConfig every N routes.
+
+        Increments call_count, updates last_used, and tracks success rate
+        so the RetentionPolicy and FeedbackLoop can detect stale skills.
+        """
+        try:
+            from datetime import UTC, datetime
+
+            buffered = self._usage_buffer.get(skill_id, {})
+            buffered["call_count"] = buffered.get("call_count", 0) + 1
+            buffered["success_count"] = buffered.get("success_count", 0) + (1 if was_successful else 0)
+            buffered["last_used"] = datetime.now(UTC).isoformat()
+            self._usage_buffer[skill_id] = buffered
+
+            self._usage_flush_count += 1
+            if self._usage_flush_count >= self._USAGE_FLUSH_INTERVAL:
+                self._flush_usage_buffer()
+        except Exception:
+            pass
+
+    def _flush_usage_buffer(self) -> None:
+        """Persist buffered usage stats to SkillConfig."""
+        if not self._usage_buffer:
+            return
+        try:
+            from vibesop.core.skills.config_manager import SkillConfigManager
+
+            for skill_id, stats in self._usage_buffer.items():
+                config = SkillConfigManager.get_skill_config(skill_id)
+                existing: dict[str, Any] = dict(config.usage_stats) if config and config.usage_stats else {}
+                existing["call_count"] = existing.get("call_count", 0) + stats["call_count"]
+                existing["success_count"] = existing.get("success_count", 0) + stats["success_count"]
+                existing["last_used"] = stats["last_used"]
+                SkillConfigManager.update_skill_config(skill_id, {"usage_stats": existing})
+
+            self._usage_buffer.clear()
+            self._usage_flush_count = 0
+        except Exception:
+            pass
 
     @staticmethod
     def _get_skill_source(_skill_id: str, namespace: str) -> str:

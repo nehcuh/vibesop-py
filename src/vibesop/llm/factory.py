@@ -8,9 +8,10 @@ from typing import Literal
 
 from vibesop.llm.anthropic import AnthropicProvider
 from vibesop.llm.base import LLMProvider
+from vibesop.llm.ollama import OllamaProvider
 from vibesop.llm.openai import OpenAIProvider
 
-ProviderType = Literal["anthropic", "openai"]
+ProviderType = Literal["anthropic", "openai", "ollama"]
 
 
 def create_provider(
@@ -46,8 +47,10 @@ def create_provider(
         return AnthropicProvider(api_key=api_key, base_url=base_url)
     if provider == "openai":
         return OpenAIProvider(api_key=api_key, base_url=base_url)
+    if provider == "ollama":
+        return OllamaProvider(api_key=api_key, base_url=base_url)
 
-    msg = f"Invalid provider: {provider}. Must be 'anthropic' or 'openai'."
+    msg = f"Invalid provider: {provider}. Must be 'anthropic', 'openai', or 'ollama'."
     raise ValueError(msg)
 
 
@@ -56,31 +59,30 @@ def detect_provider_from_env() -> ProviderType:
 
     Priority:
         1. VIBE_LLM_PROVIDER env var
-        2. ANTHROPIC_API_KEY env var
-        3. OPENAI_API_KEY env var
-        4. Default to 'anthropic'
+        2. OLLAMA_BASE_URL env var (local ollama detected)
+        3. ANTHROPIC_API_KEY env var
+        4. OPENAI_API_KEY env var
+        5. Default to 'ollama' (local, no API key required)
 
     Returns:
         Provider type to use
     """
-    # Explicit provider selection
     explicit_provider = os.getenv("VIBE_LLM_PROVIDER")
-    if explicit_provider and explicit_provider in ("anthropic", "openai"):
+    if explicit_provider and explicit_provider in ("anthropic", "openai", "ollama"):
         return explicit_provider
-    # If invalid value, default to anthropic
 
-    # Auto-detect from API keys
+    if os.getenv("OLLAMA_BASE_URL") or os.getenv("OLLAMA_MODEL"):
+        return "ollama"
     if os.getenv("ANTHROPIC_API_KEY"):
         return "anthropic"
     if os.getenv("OPENAI_API_KEY"):
         return "openai"
 
-    # Default to Anthropic (Claude is better for routing)
-    return "anthropic"
+    return "ollama"
 
 
 def create_from_env(
-    preferred_provider: ProviderType = "anthropic",
+    preferred_provider: ProviderType = "ollama",
 ) -> LLMProvider:
     """Create provider from environment configuration.
 

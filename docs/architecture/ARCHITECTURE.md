@@ -1,13 +1,13 @@
 # VibeSOP Architecture
 
-> **Version**: 4.3.0
-> **Last Updated**: 2026-04-24
+> **Version**: 4.4.0
+> **Last Updated**: 2026-04-26
 
 ---
 
 ## Overview
 
-VibeSOP is a **routing engine** that connects natural language queries to the appropriate skills. It operates as a middleware layer between AI agents (like Claude Code or OpenCode) and skill ecosystems.
+VibeSOP is a **Skill Operating System (SkillOS)** that manages the full lifecycle of AI development skills. It sits as a middleware layer between AI agents (Claude Code, OpenCode, etc.) and skill ecosystems.
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -42,7 +42,7 @@ VibeSOP is a **routing engine** that connects natural language queries to the ap
 
 ### 1. CLI Layer (`src/vibesop/cli/`)
 
-User-facing commands that interact with the routing engine.
+User-facing commands that interact with the SkillOS engine.
 
 ```python
 # Entry points
@@ -106,7 +106,7 @@ print(result.primary.skill_id)  # gstack/review
 
 ### 3. Routing Engine (`src/vibesop/core/routing/`)
 
-The heart of VibeSOP — routes queries to skills using a 7-layer pipeline.
+The heart of VibeSOP — routes queries to skills using a 10-layer pipeline.
 
 #### UnifiedRouter
 
@@ -410,12 +410,12 @@ tests/
 
 ## Design Decisions
 
-### Why Separate Routing from Execution?
+### Why Separate Management from Execution?
 
-1. **Single Responsibility** — VibeSOP routes, AI agents execute
+1. **Single Responsibility** — SkillOS manages, AI agents execute
 2. **Tool Agnostic** — Works with any AI agent
-3. **Security** — No arbitrary code execution in core
-4. **Testability** — Routing logic easily testable
+3. **Security** — No arbitrary code execution in management layer
+4. **Testability** — Management logic easily testable
 
 ### Why SKILL.md?
 
@@ -435,20 +435,25 @@ tests/
 
 ## Future Directions
 
-### v4.1 — AI Triage Production
-- Real LLM integration
-- Token usage optimization
-- Cost tracking
+### v4.4.0 — SkillOS Orchestration + Lifecycle
+- Multi-intent detection and task decomposition (productionized)
+- Skill lifecycle state machine (DRAFT → ACTIVE → DEPRECATED → ARCHIVED)
+- Feedback loop: usage analytics and satisfaction tracking
 
-### v4.2 — Skill Health
-- Health monitoring for external packs
-- Version compatibility checking
-- Automatic updates
+### v5.0.0 — SkillRuntime: Scope + Lifecycle
+- Scope isolation (project-level vs global skills)
+- Skill enable/disable management
+- Data pre-burial for evaluation pipeline
 
-### v5.0 — Plugin System
-- Custom matcher plugins
-- Hook system for extensions
-- Community marketplace
+### v5.1.0 — SkillMarket + Quality
+- Real skill marketplace with search and install
+- Autorating and quality evaluation
+- Automated retention/deprecation
+
+### v5.2.0 — Intelligent Ecosystem
+- Smart skill recommendations
+- Transparent auto-degradation
+- Active discovery
 
 ---
 

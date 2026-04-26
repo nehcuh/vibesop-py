@@ -1,9 +1,8 @@
-"""External skill executor - Execute skills from external SKILL.md files.
+"""External skill executor — for developer testing and skill validation only.
 
-This module provides the ability to execute skills from external skill packages
-(superpowers, gstack, omx, or any third-party package), not just detect them.
-
-**Positioning**: VibeSOP provides intelligent ROUTING and lightweight EXECUTION.
+In production, skills are executed by AI Agents (Claude Code, OpenCode, etc.).
+VibeSOP manages the skill lifecycle: discovery → routing → orchestration → evaluation.
+The executor here serves as an internal test utility for verifying skill definitions.
 
 ### Core Capabilities
 

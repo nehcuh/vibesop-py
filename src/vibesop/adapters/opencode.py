@@ -275,25 +275,6 @@ class OpenCodeAdapter(PlatformAdapter):
             self.write_file_atomic(skill_output_path, fallback_content, validate_security=False)
             result.add_file(skill_output_path)
 
-    def _find_skill_content(self, skill_id: str) -> str | None:
-        from vibesop.adapters._shared import find_skill_content
-
-        return find_skill_content(skill_id, self._project_root)
-
-    @staticmethod
-    def _normalize_skill_type(content: str) -> str:
-        from vibesop.adapters._shared import normalize_skill_type
-
-        return normalize_skill_type(content)
-
-    @staticmethod
-    def _generate_fallback_skill_content(
-        skill: Any, dir_name: str | None = None
-    ) -> str:
-        from vibesop.adapters._shared import generate_fallback_skill_content
-
-        return generate_fallback_skill_content(skill, dir_name=dir_name)
-
     def _generate_readme(self, manifest: Manifest) -> str:
         """Generate README content.
 
@@ -336,14 +317,14 @@ class OpenCodeAdapter(PlatformAdapter):
             "",
             "### Quick Commands (快捷命令)",
             "",
-            "VibeSOP provides CLI quick commands for common tasks. When the user's query starts with `/vibe-`, call `vibe route --json` or `vibe route --slash` to handle it:",
+            "VibeSOP provides CLI quick commands for common tasks. When the user's query starts with `/vibe-`, call `vibe route --slash` to handle it:",
             "",
             "```bash",
             '# Example: user types "/vibe-help"',
             'vibe route --slash "/vibe-help"',
             "",
             '# Example: user types "/vibe-list --installed"',
-            'vibe route --json "/vibe-list --installed"',
+            'vibe route --slash "/vibe-list --installed"',
             "```",
             "",
             "**Available quick commands:**",
@@ -353,7 +334,7 @@ class OpenCodeAdapter(PlatformAdapter):
             "- `/vibe-evaluate [--skill <id>]` — Evaluate skill quality",
             "- `/vibe-orchestrate <query>` — Multi-skill orchestration",
             "- `/vibe-list [--installed|--available]` — List skills",
-            "- `/vibe-help [command]` — Show slash command help",
+            "- `/vibe-help [command]` — Show quick command help",
             "",
             "",
             "### Example",

@@ -509,6 +509,80 @@ class AgentRouter:
         return execute_plan_sync(execution_plan, step_executor, max_parallel)
 
 
+    def create_runner(
+        self,
+        query: str,
+        project_root: str | Path = ".",
+    ) -> Any:
+        """Create a StepRunner for a multi-intent query.
+
+        Shortcut that runs orchestrate() and wraps the result in a StepRunner
+        for immediate step-by-step execution.
+
+        Args:
+            query: User query that may contain multiple intents.
+            project_root: Project root directory.
+
+        Returns:
+            StepRunner instance ready for iteration or execute_all().
+
+        Raises:
+            ValueError: If the query is not multi-intent (no plan generated).
+
+        Example:
+            >>> router = AgentRouter()
+            >>> runner = router.create_runner("先分析架构, 再审查代码, 最后优化性能")
+            >>> for step in runner.pending_steps():
+            ...     ctx = runner.get_context(step)
+            ...     result = agent.run_skill(step.skill_id, ctx.format_for_prompt())
+            ...     runner.mark_completed(step, result)
+            >>> print(f"Done: {runner.completed_count}/{runner.total_steps} steps")
+        """
+        from vibesop.agent.step_runner import StepRunner
+
+        orch = self.orchestrate(query)
+        if not orch.get("is_multi_intent"):
+            raise ValueError(
+                "Query is single-intent. Use router.route() directly for single-skill routing."
+            )
+
+        plan_dict = orch["plan"]
+        from vibesop.core.models import (
+            ExecutionMode,
+            ExecutionPlan,
+            ExecutionStep,
+            PlanStatus,
+            StepStatus,
+        )
+
+        steps = [
+            ExecutionStep(
+                step_id=s["step_id"],
+                step_number=s["step_number"],
+                skill_id=s["skill_id"],
+                intent=s.get("intent", ""),
+                input_query=s.get("input_query", ""),
+                output_as=s.get("output_as", ""),
+                status=StepStatus(s.get("status", "pending")),
+                dependencies=s.get("dependencies", []),
+                can_parallel=s.get("can_parallel", True),
+                parallel_group=s.get("parallel_group"),
+            )
+            for s in plan_dict["steps"]
+        ]
+        plan = ExecutionPlan(
+            plan_id=plan_dict["plan_id"],
+            original_query=plan_dict.get("original_query", query),
+            steps=steps,
+            detected_intents=plan_dict.get("detected_intents", []),
+            reasoning=plan_dict.get("reasoning", ""),
+            created_at=plan_dict.get("created_at", ""),
+            status=PlanStatus(plan_dict.get("status", "pending")),
+            execution_mode=ExecutionMode(plan_dict.get("execution_mode", "sequential")),
+        )
+        return StepRunner(plan, project_root=project_root)
+
+
 __all__ = [
     "AgentRouter",
     "SimpleLLM",

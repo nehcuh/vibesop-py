@@ -373,6 +373,18 @@ class SkillInstaller:
                 with registry_path.open("a") as f:
                     f.write(f"  - {manifest.id}\n")
 
+        # Signal the routing engine to reload candidates on next route()
+        self._touch_reload_marker(project_path)
+
+    def _touch_reload_marker(self, project_path: Path) -> None:
+        """Touch .vibe/.skills_reload to signal router to invalidate cache."""
+        marker = project_path / ".vibe" / ".skills_reload"
+        try:
+            marker.parent.mkdir(parents=True, exist_ok=True)
+            marker.write_text("")
+        except OSError:
+            pass
+
     def _remove_from_registry(self, skill_id: str, project_path: Path) -> None:
         """Remove skill from registry.
 

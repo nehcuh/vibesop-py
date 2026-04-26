@@ -1,14 +1,14 @@
 [project]
 name = "vibesop"
-version = "4.3.0"
-description = "AI-assisted development intelligent routing engine - discover skills, manage workflows, learn preferences"
+version = "4.4.0"
+description = "AI-assisted development Skill Operating System — discover skills, orchestrate tasks, manage lifecycles"
 readme = "README.md"
 requires-python = ">=3.12"
 license = { text = "MIT" }
 authors = [
     { name = "nehcuh" }
 ]
-keywords = ["ai", "workflow", "sop", "claude-code", "skill-routing"]
+keywords = ["ai", "skillos", "skill-routing", "orchestration", "workflow", "claude-code"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",

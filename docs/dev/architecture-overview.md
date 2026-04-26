@@ -56,7 +56,7 @@ interface, registered in the `SkillRouter` handler chain.
 
 ### Key Modules
 
-- `core/routing/` — 7-layer routing engine with pluggable handlers
+- `core/routing/` — 10-layer intelligent routing with pluggable handlers
 - `core/matching/` — Matching algorithms (keyword, TF-IDF, embedding, fuzzy)
 - `core/optimization/` — Preference boost, instinct learning, conflict resolution
 - `cli/` — Typer-based CLI with subcommand groups

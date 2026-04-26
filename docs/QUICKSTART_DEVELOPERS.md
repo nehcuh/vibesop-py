@@ -273,7 +273,7 @@ vibe session summary
 
 ### Q: VibeSOP 会执行技能吗？
 
-A: 不会。VibeSOP 只负责**路由**（找到正确的技能），不负责执行。执行由你的 AI 工具完成。
+A: 不会。VibeSOP 是 SkillOS，负责管理技能的全生命周期（发现、路由、编排、评估），技能代码的实际执行由 AI Agent 完成。这是有意的架构分层。
 
 ### Q: 准确率有多高？
 

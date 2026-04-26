@@ -75,8 +75,8 @@ class VibeSOPConfigManager:
                     llm_data = data["llm"]
 
                     return LLMConfig(
-                        provider=llm_data.get("provider", "anthropic"),
-                        model=llm_data.get("model", "claude-sonnet-4-6-20250514"),
+                        provider=llm_data.get("provider", "ollama"),
+                        model=llm_data.get("model", "Qwen3.6-35B-A3B-mlx-mxfp8"),
                         api_key=llm_data.get("api_key"),
                         api_base=llm_data.get("api_base"),
                         temperature=llm_data.get("temperature", 0.7),

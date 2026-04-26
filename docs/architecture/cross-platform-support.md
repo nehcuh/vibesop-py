@@ -5,7 +5,7 @@
 
 ## Overview
 
-VibeSOP is designed to work across multiple AI coding platforms, not just Claude Code. The architecture uses the **Adapter Pattern** to provide platform-specific configurations while maintaining a core routing engine.
+VibeSOP is designed to work across multiple AI coding platforms. The architecture uses the **Adapter Pattern** to provide platform-specific configurations while maintaining a core SkillOS engine.
 
 ## Supported Platforms
 

@@ -33,9 +33,8 @@ class TestRoutingPerformance:
             latencies.append(elapsed)
 
         avg_latency = sum(latencies) / len(latencies)
-        # v4.4.0 target: P95 < 100ms. Current: ~200ms avg, 354ms P95.
-        # Use conservative guardrail to prevent regression beyond current baseline.
-        assert avg_latency < 400, f"Average latency {avg_latency:.1f}ms > 400ms guardrail"
+        # v4.4.0 target: P95 < 100ms. After caching fix, avg is ~11ms.
+        assert avg_latency < 50, f"Average latency {avg_latency:.1f}ms > 50ms guardrail"
 
     @pytest.mark.benchmark
     def test_routing_throughput(self) -> None:
@@ -53,6 +52,5 @@ class TestRoutingPerformance:
         elapsed = time.perf_counter() - start
 
         qps = count / elapsed
-        # v4.4.0 target: P95 < 100ms (~20+ QPS). Current: ~4 QPS (200ms avg).
-        # Use conservative guardrail to prevent regression beyond current baseline.
-        assert qps > 3, f"Throughput {qps:.0f} qps < 3 qps guardrail"
+        # After caching fix, QPS should be 30+ (P50 ~15ms)
+        assert qps > 20, f"Throughput {qps:.0f} qps < 20 qps guardrail"

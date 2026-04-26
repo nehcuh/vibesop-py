@@ -302,6 +302,41 @@ class TransactionalInstaller:
         if snapshot_path.exists():
             shutil.rmtree(snapshot_path)
 
+    def cleanup_old_snapshots(self, days: int = 7) -> dict[str, int]:
+        """Clean up snapshots older than N days.
+
+        Args:
+            days: Keep snapshots from the last N days (default: 7)
+
+        Returns:
+            dict with 'kept' and 'removed' counts
+        """
+        if not self._snapshot_dir.exists():
+            return {"kept": 0, "removed": 0}
+
+        cutoff = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        cutoff = cutoff.replace(day=cutoff.day - days)
+
+        kept = 0
+        removed = 0
+
+        for entry in self._snapshot_dir.iterdir():
+            if not entry.is_dir():
+                continue
+            try:
+                # Parse snapshot ID format: YYYYMMDD_HHMMSS
+                snapshot_date = datetime.strptime(entry.name, "%Y%m%d_%H%M%S")
+                if snapshot_date < cutoff:
+                    shutil.rmtree(entry)
+                    removed += 1
+                else:
+                    kept += 1
+            except ValueError:
+                # Skip entries that don't match the expected format
+                kept += 1
+
+        return {"kept": kept, "removed": removed}
+
 
 class FileTransactionalInstaller(TransactionalInstaller):
     """Transactional installer that tracks file changes.

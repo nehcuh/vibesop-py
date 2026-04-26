@@ -38,7 +38,7 @@ uv run ruff check .
 
 Before contributing, read [docs/PRINCIPLES.md](docs/PRINCIPLES.md). Key points:
 
-- **Discovery > Execution**: VibeSOP routes, doesn't execute
+- **Discovery > Execution**: SkillOS manages, AI agents execute
 - **Matching > Guessing**: Use multi-layer matching
 - **Memory > Intelligence**: Leverage preference learning
 - **Open > Closed**: Support any SKILL.md skill

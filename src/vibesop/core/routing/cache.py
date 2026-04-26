@@ -7,6 +7,7 @@ Provides multi-level caching:
 Cache keys are generated from normalized input and relevant context.
 """
 
+import builtins
 import collections
 import contextlib
 import hashlib
@@ -15,7 +16,7 @@ import re
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Set
+from typing import Any
 
 from vibesop.constants import CacheSettings
 
@@ -265,12 +266,12 @@ class CacheManager:
         return None
 
     @staticmethod
-    def _char_bigrams(text: str) -> Set[str]:
+    def _char_bigrams(text: str) -> builtins.set[str]:
         """Extract character bigrams from text."""
         return {text[i : i + 2] for i in range(len(text) - 1)}
 
     @staticmethod
-    def _jaccard_similarity(set_a: Set[str], set_b: Set[str]) -> float:
+    def _jaccard_similarity(set_a: builtins.set[str], set_b: builtins.set[str]) -> float:
         """Compute Jaccard similarity between two sets."""
         intersection = len(set_a & set_b)
         union = len(set_a | set_b)

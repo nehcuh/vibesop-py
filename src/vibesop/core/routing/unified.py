@@ -446,6 +446,9 @@ class UnifiedRouter(RouterStatsMixin, RouterExecutionMixin, RouterOrchestrationM
         # Record this routing decision for memory/learning
         self._record_routing_decision(query, primary, None)
 
+        # Update SkillConfig.usage_stats for stale-skill detection
+        self._candidate_manager.record_usage(primary.skill_id, was_successful=True)
+
         # Ensure alternatives are populated from layer_details even without --explain
         if not alternatives:
             alternatives = self._collect_alternatives_from_details(layer_details)

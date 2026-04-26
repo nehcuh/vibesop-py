@@ -58,17 +58,17 @@ vibe route "analyze architecture and write tests"
 #   Step 2: superpowers/test — test generation
 ```
 
-### Slash Commands
+### CLI Quick Commands
 
-When the user types a `/vibe-*` command, execute it directly with `vibe route`:
+When the user types a `/vibe-*` command, execute it directly with `vibe route --slash`:
 ```bash
-vibe route "/vibe-help"
-vibe route "/vibe-list"
-vibe route "/vibe-analyze --deep"
-vibe route "/vibe-install gstack"
+vibe route --slash "/vibe-help"
+vibe route --slash "/vibe-list"
+vibe route --slash "/vibe-analyze --deep"
+vibe route --slash "/vibe-install gstack"
 ```
 
-Available slash commands:
+Available quick commands:
 - `/vibe-help` — Show all available commands
 - `/vibe-list` — List installed skills and available packs
 - `/vibe-route <query>` — Force trigger routing with transparency

@@ -44,8 +44,8 @@ class TestRoutingPerformance:
         p50_index = len(latencies) // 2
         p50_latency = latencies[p50_index]
 
-        # P50 guardrail: current baseline ~180ms, target <100ms (v4.4 roadmap)
-        assert p50_latency < 0.3, f"P50 latency {p50_latency:.3f}s exceeds 300ms guardrail"
+        # P50 guardrail: target <100ms for real queries, <200ms for synthetic queries
+        assert p50_latency < 0.2, f"P50 latency {p50_latency:.3f}s exceeds 200ms guardrail"
 
     @pytest.mark.slow
     def test_routing_latency_p99(self) -> None:
@@ -75,8 +75,8 @@ class TestRoutingPerformance:
         p99_index = int(len(latencies) * 0.99)
         p99_latency = latencies[p99_index]
 
-        # Assert P99 < 500ms
-        assert p99_latency < 0.5, f"P99 latency {p99_latency:.3f}s exceeds 500ms"
+        # Assert P99 < 200ms
+        assert p99_latency < 0.2, f"P99 latency {p99_latency:.3f}s exceeds 200ms"
 
     def test_cache_hit_rate(self) -> None:
         """Test cache hit rate > 80%.

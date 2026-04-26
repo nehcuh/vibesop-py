@@ -1,8 +1,8 @@
 # VibeSOP - Python 版本
 
-> **AI 辅助开发的智能路由引擎**
+> **AI 辅助开发的技能操作系统（SkillOS）**
 >
-> 理解你的意图，路由到最佳技能 — 无需记忆命令
+> 发现、路由、编排、管理——技能的全生命周期
 
 [![Python](https://img.shields.io/badge/Python-3.12+-blue.svg)](https://www.python.org/downloads/)
 [![Ruff](https://img.shields.io/badge/Ruff-Enabled-black.svg)](https://github.com/astral-sh/ruff)
@@ -14,30 +14,26 @@
 
 ## VibeSOP 是什么？
 
-**VibeSOP 是 AI 开发工具的智能路由引擎。**它理解你想做什么，并将你的意图路由到正确的技能或工作流。
+**VibeSOP 是 AI 开发工具的 SkillOS（技能操作系统）。**它管理技能的全生命周期——发现、路由、编排、评估、淘汰——让 AI 辅助开发变得简单。
 
 ### 核心问题
 
 AI 编码工具（Claude Code、Cursor、Continue.dev、Aider）功能强大，但：
 
-- **"代码评审用什么命令？"** → 需要记忆
+- **"代码评审用什么技能？"** → 需要记忆
 - **"如何调试这个错误？"** → 搜索文档
 - **"有重构技能吗？"** → 不知道有什么可用
+- **"这个技能质量如何？"** → 无法评估
+- **"安装了太多技能怎么办？"** → 无法管理
 
-**当前方案**：记忆命令、搜索文档、或猜测。
+**当前方案**：记忆命令、搜索文档、手动管理。
 
 ### VibeSOP 的解决方案
 
-```bash
-# 直接说出你的需求
-vibe route "帮我调试数据库错误"
-# → 路由到: systematic-debugging (95% 置信度)
-
-vibe route "scan for security vulnerabilities"
-# → 路由到: gstack/cso (88% 置信度)
-
-vibe route "review my PR"
-# → 路由到: gstack/review (92% 置信度)
+```
+不再记忆技能 → 表达意图，AI 自动匹配
+不再猜测质量 → 使用数据驱动评估
+不再堆积技能 → 全生命周期管理
 ```
 
 VibeSOP：
@@ -46,14 +42,22 @@ VibeSOP：
 3. **学习你的偏好** — 用得越多，路由越准
 4. **兼容所有 AI 工具** — Claude Code、Cursor、Continue.dev、Aider 等
 
-### VibeSOP 不是什么
+### VibeSOP 的定位
 
-| ❌ 不是 | ✅ 而是 |
-|---------|---------|
-| AI 编码工具 | 运行在 AI 工具之上的路由层 |
-| 技能执行器 | 路由到技能，不执行技能 |
-| 提示词库 | 管理以 SKILL.md 定义的技能 |
-| 绑定单一平台 | 跨 Claude Code、Cursor 等工作 |
+**VibeSOP 是 SkillOS（技能操作系统）**，管理技能的全生命周期：
+
+| ✅ 是什么 | 说明 |
+|---------|------|
+| 技能操作系统 | 发现、路由、编排、评估、淘汰——全生命周期管理 |
+| 智能路由器 | 理解意图，匹配最佳技能 |
+| 任务编排器 | 复杂请求分解，多技能协同 |
+| 生命周期管理器 | 启禁用、作用域隔离、质量评估 |
+
+| ❌ 不是什么 | 说明 |
+|---------|------|
+| 技能执行器 | 执行技能代码的是 AI Agent，不是 VibeSOP |
+| AI 编码工具 | VibeSOP 管理技能，AI Agent 执行技能 |
+| 单平台工具 | 跨 Claude Code、Cursor、OpenCode 等工作 |
 
 ---
 
@@ -88,6 +92,8 @@ VibeSOP 借鉴了多个优秀的项目和理念：
            ┌─────────▼──────────┐
            │     VibeSOP        │ ← 我们在这里
            │  智能路由引擎       │
+           │  任务编排引擎       │
+           │  生命周期管理器     │
            │                    │
            │  • 理解意图         │
            │  • 匹配技能         │
@@ -567,7 +573,7 @@ uv run pytest --cov=src/vibesop --cov-report=html
 
 ## 路线图
 
-- [x] v4.0.0: 核心路由引擎（7 层管道）
+- [x] v4.0.0: 核心路由引擎（10 层管道）
 - [x] v4.1.0: AI 分诊生产就绪
 - [x] v4.2.0: 技能健康监控
 - [x] v4.3.0: 上下文感知路由 + Agent Runtime

@@ -399,25 +399,6 @@ class KimiCliAdapter(PlatformAdapter):
             self.write_file_atomic(skill_output_path, fallback_content, validate_security=False)
             result.add_file(skill_output_path)
 
-    def _find_skill_content(self, skill_id: str) -> str | None:
-        from vibesop.adapters._shared import find_skill_content
-
-        return find_skill_content(skill_id, self._project_root)
-
-    @staticmethod
-    def _normalize_skill_type(content: str) -> str:
-        from vibesop.adapters._shared import normalize_skill_type
-
-        return normalize_skill_type(content)
-
-    @staticmethod
-    def _generate_fallback_skill_content(
-        skill: Any, dir_name: str | None = None
-    ) -> str:
-        from vibesop.adapters._shared import generate_fallback_skill_content
-
-        return generate_fallback_skill_content(skill, dir_name=dir_name)
-
     def _generate_readme(self, manifest: Manifest) -> str:
         """Generate README content.
 
