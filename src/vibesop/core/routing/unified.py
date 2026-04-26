@@ -233,6 +233,11 @@ class UnifiedRouter(RouterStatsMixin, RouterExecutionMixin, RouterOrchestrationM
 
         self._scenario_cache: dict[str, Any] | None = None
 
+        self._scenario_cache: dict[str, Any] | None = None
+
+        # Project analyzer cache (expensive: ~2s filesystem scan)
+        self._project_analyzer: Any | None = None
+
         # Orchestration components (lazy init)
         self._multi_intent_detector: MultiIntentDetector | None = None
         self._task_decomposer: TaskDecomposer | None = None
@@ -499,10 +504,12 @@ class UnifiedRouter(RouterStatsMixin, RouterExecutionMixin, RouterOrchestrationM
         candidates: list[dict[str, Any]] | None = None,
         context: RoutingContext | None = None,
     ) -> RoutingResult:
-        """Public wrapper for single-skill routing.
+        """Single-skill routing — fast path for single-intent queries.
 
-        Prefer orchestrate() for the full multi-skill pipeline.
-        This method delegates to _route() for backward compatibility.
+        Directly runs the 10-layer routing pipeline without multi-intent
+        detection or task decomposition overhead.
+
+        For multi-intent queries, use orchestrate() directly.
         """
         return self._route(query, candidates, context)
 
@@ -561,7 +568,7 @@ class UnifiedRouter(RouterStatsMixin, RouterExecutionMixin, RouterOrchestrationM
             progress=0.2,
         ))
         detector = self._get_multi_intent_detector()
-        should_decompose = detector.should_decompose(query, single_result)
+        should_decompose = detector.should_decompose(query, single_result, llm_client=self._llm)
         cb.on_phase_complete(PhaseInfo(
             phase=OrchestrationPhase.DETECTION,
             message=f"Multi-intent detected: {should_decompose}",
@@ -859,6 +866,14 @@ class UnifiedRouter(RouterStatsMixin, RouterExecutionMixin, RouterOrchestrationM
         self._candidates_cache = None
         return len(self._get_cached_candidates())
 
+    def invalidate_project_cache(self) -> None:
+        """Invalidate cached project analysis (type + tech stack).
+
+        Call this after adding/removing tech stack files (requirements.txt,
+        package.json, etc.) to ensure context-aware routing uses current data.
+        """
+        self._project_analyzer = None
+
     def _get_skill_source(self, _skill_id: str, namespace: str) -> str:
         """Determine skill source based on namespace.
 
@@ -952,9 +967,10 @@ class UnifiedRouter(RouterStatsMixin, RouterExecutionMixin, RouterOrchestrationM
 
         # Detect project type and tech stack for context-aware routing
         if not context.project_type:
-            from vibesop.core.project_analyzer import ProjectAnalyzer
-
-            analyzer = ProjectAnalyzer(self.project_root)
+            if self._project_analyzer is None:
+                from vibesop.core.project_analyzer import ProjectAnalyzer
+                self._project_analyzer = ProjectAnalyzer(self.project_root)
+            analyzer = self._project_analyzer
             profile = analyzer.analyze()
             if profile.project_type:
                 context.project_type = profile.project_type

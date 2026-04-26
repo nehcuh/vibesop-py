@@ -8,7 +8,7 @@ Uses a two-phase approach:
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from vibesop.core.orchestration.patterns import (
     INTENT_DOMAINS,
@@ -48,22 +48,48 @@ class MultiIntentDetector:
         self,
         query: str,
         single_result: RoutingResult,
+        llm_client: Any | None = None,
     ) -> bool:
         """Determine if a query should be decomposed into multiple sub-tasks.
 
-        Returns True only if BOTH heuristic and (optional) LLM confirm multi-intent.
+        Returns True only if heuristic passes AND (when available) LLM confirms.
         """
-        # Phase 1: Heuristic filter
+        # Phase 1: Heuristic filter (fast, zero cost)
         heuristic_pass = self._heuristic_check(query, single_result)
         if not heuristic_pass:
             logger.debug("Heuristic rejected multi-intent for query: %s", query[:50])
             return False
 
-        # Phase 2: LLM confirmation (optional, can be skipped for speed)
-        # For v1, heuristic is sufficient. LLM confirmation can be added later
-        # to reduce false positives without adding latency to every query.
-        logger.debug("Heuristic passed multi-intent for query: %s", query[:50])
+        # Phase 2: LLM confirmation (lightweight, ~10 tokens)
+        if llm_client is not None:
+            llm_confirms = self._llm_confirm_multi_intent(query, llm_client)
+            if not llm_confirms:
+                logger.debug("LLM rejected multi-intent for query: %s", query[:50])
+                return False
+
+        logger.debug("Multi-intent confirmed for query: %s", query[:50])
         return True
+
+    def _llm_confirm_multi_intent(self, query: str, llm_client: Any) -> bool:
+        """Lightweight LLM yes/no check for multi-intent confirmation.
+
+        Uses a minimal prompt (~10 tokens output) to confirm whether the
+        query genuinely contains multiple independent intents.
+        """
+        prompt = (
+            "Does this request contain MULTIPLE INDEPENDENT tasks that "
+            "should be handled separately? Answer only YES or NO.\n\n"
+            f"Request: {query}"
+        )
+        try:
+            response = llm_client.call(prompt, max_tokens=5, temperature=0.0)
+            content = getattr(response, "content", str(response)).strip().upper()
+            return content.startswith("YES")
+        except Exception as e:
+            logger.warning(
+                "LLM multi-intent confirmation failed: %s, defaulting to heuristic", e
+            )
+            return True  # On failure, trust heuristic to avoid blocking
 
     def _heuristic_check(self, query: str, single_result: RoutingResult) -> bool:
         """Fast heuristic check for multi-intent candidates.

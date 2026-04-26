@@ -86,3 +86,63 @@ class TestMultiIntentDetector:
         detector = MultiIntentDetector(min_query_length=10)
         result = RoutingResult()
         assert detector.should_decompose("先review代码，再设计优化方案", result)
+
+    def test_llm_confirms_multi_intent(self) -> None:
+        """When LLM confirms, multi-intent is detected."""
+        detector = MultiIntentDetector(min_query_length=10)
+
+        class MockLLM:
+            def call(self, prompt: str, max_tokens: int = 100, temperature: float = 0.1) -> object:
+                return type("Response", (), {"content": "YES"})()
+
+        result = RoutingResult(
+            primary=SkillRoute(skill_id="test", confidence=0.5, layer=RoutingLayer.KEYWORD),
+            alternatives=[
+                SkillRoute(skill_id="alt1", confidence=0.5, layer=RoutingLayer.KEYWORD),
+            ],
+        )
+        assert detector.should_decompose(
+            "分析项目架构然后给出代码优化建议",
+            result,
+            llm_client=MockLLM(),
+        )
+
+    def test_llm_rejects_false_multi_intent(self) -> None:
+        """When LLM says NO, even heuristic-positive queries stay single."""
+        detector = MultiIntentDetector(min_query_length=10)
+
+        class MockLLM:
+            def call(self, prompt: str, max_tokens: int = 100, temperature: float = 0.1) -> object:
+                return type("Response", (), {"content": "NO"})()
+
+        result = RoutingResult(
+            primary=SkillRoute(skill_id="test", confidence=0.5, layer=RoutingLayer.KEYWORD),
+            alternatives=[
+                SkillRoute(skill_id="alt1", confidence=0.5, layer=RoutingLayer.KEYWORD),
+            ],
+        )
+        assert not detector.should_decompose(
+            "分析项目架构然后给出代码优化建议",
+            result,
+            llm_client=MockLLM(),
+        )
+
+    def test_llm_unavailable_falls_back_to_heuristic(self) -> None:
+        """When LLM raises, trust heuristic to avoid blocking."""
+        detector = MultiIntentDetector(min_query_length=10)
+
+        class BrokenLLM:
+            def call(self, prompt: str, max_tokens: int = 100, temperature: float = 0.1) -> None:
+                raise RuntimeError("LLM unavailable")
+
+        result = RoutingResult(
+            primary=SkillRoute(skill_id="test", confidence=0.5, layer=RoutingLayer.KEYWORD),
+            alternatives=[
+                SkillRoute(skill_id="alt1", confidence=0.5, layer=RoutingLayer.KEYWORD),
+            ],
+        )
+        assert detector.should_decompose(
+            "分析项目架构然后给出代码优化建议",
+            result,
+            llm_client=BrokenLLM(),
+        )
