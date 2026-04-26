@@ -79,6 +79,38 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+class _LazyEmbeddingMatcher:
+    """Lazy proxy that defers EmbeddingMatcher construction until warm-up.
+
+    EmbeddingMatcher loads a SentenceTransformer model (~100-200ms),
+    so deferring to warm-up keeps UnifiedRouter.__init__ fast.
+    """
+
+    def __init__(self, config: MatcherConfig):
+        self._config = config
+        self._real: IMatcher | None = None
+
+    def _ensure_real(self) -> IMatcher:
+        if self._real is None:
+            from vibesop.core.matching import EmbeddingMatcher
+            self._real = EmbeddingMatcher(config=self._config)
+        return self._real
+
+    def warm_up(self, candidates: list[dict[str, Any]]) -> None:
+        self._ensure_real().warm_up(candidates)
+
+    def match(
+        self, query: str, candidates: list[dict[str, Any]], context: Any = None
+    ) -> list[tuple[str, float]]:
+        return self._ensure_real().match(query, candidates, context)
+
+    def preprocess(self, query: str) -> str:
+        return self._ensure_real().preprocess(query)
+
+    def __getattr__(self, name: str):
+        return getattr(self._ensure_real(), name)
+
+
 class UnifiedRouter(RouterStatsMixin, RouterExecutionMixin, RouterOrchestrationMixin):
     """Unified router for skill selection.
 
@@ -132,15 +164,11 @@ class UnifiedRouter(RouterStatsMixin, RouterExecutionMixin, RouterOrchestrationM
             (RoutingLayer.TFIDF, TFIDFMatcher(matcher_config)),
         ]
 
-        if self._config.enable_embedding:
-            try:
-                from vibesop.core.matching import EmbeddingMatcher
-
-                self._matchers.append(
-                    (RoutingLayer.EMBEDDING, EmbeddingMatcher(config=matcher_config))
-                )
-            except ImportError:
-                pass
+        self._embedding_enabled = self._config.enable_embedding
+        if self._embedding_enabled:
+            self._matchers.append(
+                (RoutingLayer.EMBEDDING, _LazyEmbeddingMatcher(matcher_config))
+            )
 
         self._matchers.append((RoutingLayer.LEVENSHTEIN, LevenshteinMatcher(matcher_config)))
 
@@ -389,6 +417,12 @@ class UnifiedRouter(RouterStatsMixin, RouterExecutionMixin, RouterOrchestrationM
                 original_query,
                 skill_id=result.primary.skill_id if result.primary else None,
             )
+
+        from vibesop.core.routing.perf_monitor import get_perf_monitor
+        get_perf_monitor().record(
+            result.duration_ms,
+            result.primary.layer.value if result.primary else RoutingLayer.NO_MATCH.value,
+        )
         return result
 
     def _build_match_result(
@@ -723,6 +757,11 @@ class UnifiedRouter(RouterStatsMixin, RouterExecutionMixin, RouterOrchestrationM
         duration_ms = (time.perf_counter() - start_time) * 1000
         if deprecated_warnings and primary:
             primary.metadata["deprecated_warnings"] = deprecated_warnings
+
+        from vibesop.core.routing.perf_monitor import get_perf_monitor
+        if primary:
+            get_perf_monitor().record(duration_ms, primary.layer.value)
+
         return RoutingResult(
             primary=primary,
             alternatives=alternatives,

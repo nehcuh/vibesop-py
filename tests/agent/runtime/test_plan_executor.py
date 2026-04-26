@@ -38,7 +38,7 @@ class TestPlanExecutor:
 
         assert "执行计划" in guide.prompt
         assert "superpowers-architect" in guide.prompt
-        assert "步骤 1 完成" in guide.step_markers
+        assert "[StepCompleted:1]" in guide.step_markers
         assert len(guide.step_markers) == 1
 
     def test_build_guide_parallel_steps(self) -> None:

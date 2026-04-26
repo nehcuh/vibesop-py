@@ -149,6 +149,12 @@ class RoutingConfig(BaseModel):
     ai_triage_circuit_breaker_failure_threshold: int = Field(default=3, ge=1, le=10)
     ai_triage_circuit_breaker_latency_threshold_ms: float = Field(default=500.0, ge=100.0)
     ai_triage_circuit_breaker_cooldown_seconds: int = Field(default=60, ge=10)
+    ai_triage_short_query_bypass_words: int = Field(
+        default=8,
+        ge=0,
+        le=30,
+        description="Skip AI Triage for queries shorter than this word count (0=never bypass)",
+    )
     session_aware: bool = Field(
         default=True,
         description="Enable session-state-aware routing for multi-turn conversations",

@@ -53,6 +53,15 @@ from vibesop.cli.commands import (
     skills_cmd as skills_mod,
 )
 from vibesop.cli.commands import (
+    skills_rate_cmd as skills_rate_mod,
+)
+from vibesop.cli.commands import (
+    skills_recommended_cmd as skills_recommended_mod,
+)
+from vibesop.cli.commands import (
+    skills_suggest_cmd as skills_suggest_mod,
+)
+from vibesop.cli.commands import (
     switch as switch_mod,
 )
 from vibesop.cli.commands import (
@@ -113,10 +122,10 @@ def register(app: typer.Typer) -> None:
     skills_app.command("feedback")(skills_mod.feedback)
     skills_app.command("create")(skills_mod.create)
     skills_app.command("lifecycle")(skills_mod.lifecycle)
-    skills_app.command("suggestions")(skills_mod.suggestions)
-    skills_app.command("rate")(skills_mod.rate)
-    skills_app.command("ratings")(skills_mod.ratings)
-    skills_app.command("recommended")(skills_mod.recommended)
+    skills_app.command("suggestions")(skills_suggest_mod.suggestions)
+    skills_app.command("rate")(skills_rate_mod.rate)
+    skills_app.command("ratings")(skills_rate_mod.ratings)
+    skills_app.command("recommended")(skills_recommended_mod.recommended)
 
     # Platform verification
     app.command()(verify_mod.verify)

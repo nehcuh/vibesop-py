@@ -151,6 +151,18 @@ def try_ai_triage_layer(
     """Try AI triage layer."""
     triage_start = time.perf_counter()
 
+    # Short-query bypass: queries under N words skip AI Triage
+    # because short queries are usually explicit skill names or keywords,
+    # which the traditional matchers handle faster and more accurately.
+    bypass_words = getattr(router._config, "ai_triage_short_query_bypass_words", 10)
+    if len(query.split()) < bypass_words:
+        return None, LayerDetail(
+            layer=RoutingLayer.AI_TRIAGE,
+            matched=False,
+            reason=f"Short-query bypass (<{bypass_words} words): falling through to traditional matchers",
+            duration_ms=(time.perf_counter() - triage_start) * 1000,
+        )
+
     if router._llm is not None:
         router._triage_service._llm = router._llm
 

@@ -79,6 +79,10 @@ def route(
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Show full routing decision tree with per-layer details"),
     explain: bool = typer.Option(False, "--explain", "-e", help="Alias for --verbose (backward compatibility)"),
     yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation prompt (alias for confirmation_mode=never)"),
+    execute: bool = typer.Option(
+        False, "--execute", "-x",
+        help="Enter interactive step-by-step execution mode after plan confirmation",
+    ),
     no_session: bool = typer.Option(False, "--no-session", help="Disable session-state-aware routing for this query"),
     strategy: str | None = typer.Option(
         None,
@@ -209,7 +213,7 @@ def route(
 
     # Handle result with unified confirmation flow
     if result.mode.value == "orchestrated" and result.execution_plan:
-        _handle_orchestrated_result(result, router, yes, json_output, console)
+        _handle_orchestrated_result(result, router, yes, execute, json_output, console)
         return
 
     # Handle single-skill result
@@ -316,10 +320,15 @@ def _handle_orchestrated_result(
     result: Any,
     router: Any,
     yes: bool,
+    execute: bool,
     json_output: bool,
     console: Console,
 ) -> None:
-    """Handle multi-step orchestration result with confirmation."""
+    """Handle multi-step orchestration result with confirmation.
+
+    When --execute is passed, after confirmation the CLI enters
+    interactive step-by-step execution mode.
+    """
     plan = result.execution_plan
 
     # Use unified confirmation check
@@ -336,6 +345,10 @@ def _handle_orchestrated_result(
             questionary.Choice("📝 Skip skills, use raw LLM", value="skip"),
         ]
 
+        # Add execute option when --execute flag is active
+        if execute and sys.stdin.isatty():
+            choices.insert(1, questionary.Choice("▶️  Execute plan step-by-step", value="execute"))
+
         choice = questionary.select(
             "How would you like to proceed?",
             choices=choices,
@@ -344,9 +357,7 @@ def _handle_orchestrated_result(
         if choice == "edit":
             modified = _edit_execution_plan(result, console)
             if modified:
-                # Re-render after edit
                 render_orchestration_result(result, console=console)
-                # Ask for confirmation again
                 confirm = questionary.confirm(
                     "Proceed with updated plan?",
                     default=True,
@@ -357,7 +368,6 @@ def _handle_orchestrated_result(
             else:
                 return
         elif choice == "single" and result.single_fallback:
-            # Switch to single-skill mode
             console.print(
                 Panel(
                     f"[bold green]✅ Matched:[/bold green] {result.single_fallback.skill_id}\n"
@@ -370,6 +380,15 @@ def _handle_orchestrated_result(
         elif choice == "skip":
             console.print("[dim]Skipped. Using raw LLM.[/dim]")
             return
+        elif choice == "execute":
+            if plan:
+                _execute_plan_interactive(result, console)
+            return
+
+    # --execute mode without confirmation prompt (--yes passed)
+    if execute and plan:
+        _execute_plan_interactive(result, console)
+        return
 
     # Save plan to tracker
     from vibesop.core.orchestration import PlanTracker
@@ -384,16 +403,145 @@ def _handle_orchestrated_result(
         render_orchestration_result(result, console=console)
         console.print("\n[dim]Plan saved. Track with:[/dim] [bold]vibe plan status[/bold]")
 
-        # Generate and display execution summary
         if plan:
             from vibesop.core.orchestration import generate_execution_summary
             summary = generate_execution_summary(plan)
             console.print("\n[bold]Execution Summary:[/bold]")
             console.print(summary)
 
-        # Collect user feedback for continuous improvement
         if sys.stdin.isatty() and not json_output:
             _collect_feedback(result, router, console)
+
+
+def _execute_plan_interactive(result: Any, console: Console) -> None:
+    """Enter interactive step-by-step execution mode.
+
+    For each step in the orchestration plan:
+    1. Display the step's instruction with embedded SKILL.md content
+    2. Present a prompt with the full step context
+    3. Wait for user/agent confirmation of completion
+    4. Save the step output for downstream steps
+    5. Automatically generate the next step's prompt with upstream context
+    """
+    plan = result.execution_plan
+    if not plan:
+        console.print("[yellow]No execution plan available.[/yellow]")
+        return
+
+    from pathlib import Path
+
+    from vibesop.agent.runtime.context_injector import StepContextInjector
+    from vibesop.agent.runtime.plan_executor import PlanExecutor
+
+    executor = PlanExecutor(project_root=Path.cwd())
+    manifest = executor.build_manifest(plan)
+    injector = StepContextInjector(project_root=Path.cwd())
+
+    # Save plan and generate sequence file
+    from vibesop.core.orchestration import PlanTracker
+    tracker = PlanTracker(storage_dir=Path.cwd() / ".vibe")
+    tracker.create_plan(plan)
+    seq_file = injector.build_sequence_file(manifest)
+
+    console.print(f"\n[bold green]▶ Execution Mode[/bold green] — Plan: [cyan]{plan.plan_id}[/cyan]")
+    console.print(f"[dim]Sequence file: {seq_file}[/dim]")
+    console.print()
+
+    step_outputs: dict[int, str] = {}
+
+    for _step_index, step in enumerate(manifest.steps):
+        step_num = step.step_number
+
+        # Build context with upstream step outputs
+        enriched_input = step.input_context
+        for dep_num, dep_summary in sorted(step_outputs.items()):
+            if dep_num < step_num:
+                enriched_input = enriched_input or ""
+                enriched_input += f"\n步骤 {dep_num} 的输出:\n{dep_summary}"
+
+        console.print(f"{'─' * 60}")
+        console.print(f"[bold]Step {step_num}/{manifest.total_steps}[/bold]: "
+                      f"[cyan]{step.skill_id}[/cyan] — {step.skill_name}")
+        console.print(f"[dim]{step.instruction}[/dim]")
+        console.print()
+
+        # Display embedded skill content
+        if step.skill_content:
+            console.print("[bold]Skill Content (SKILL.md):[/bold]")
+            content_preview = step.skill_content[:800]
+            if len(step.skill_content) > 800:
+                content_preview += f"\n... ({len(step.skill_content) - 800} more chars)"
+            console.print(Panel(content_preview, border_style="dim"))
+
+        # Display upstream context if present
+        if enriched_input:
+            console.print("[bold]Input Context:[/bold]")
+            console.print(Panel(enriched_input, border_style="blue"))
+
+        console.print(
+            f"[bold yellow]Completion marker:[/bold yellow] "
+            f"[green]`<!-- {step.completion_marker} -->`[/green]"
+        )
+        console.print()
+
+        # Non-interactive mode — just display and move on
+        if not sys.stdin.isatty():
+            console.print(
+                "[dim](Non-interactive mode — skipping step confirmation. "
+                "Run in a TTY for step-by-step execution.)[/dim]"
+            )
+            continue
+
+        # Wait for completion confirmation
+        choice = questionary.select(
+            f"Step {step_num}/{manifest.total_steps} — {step.skill_id}",
+            choices=[
+                questionary.Choice("✅ Completed — proceed to next step", value="done"),
+                questionary.Choice("⏭️  Skip this step", value="skip"),
+                questionary.Choice("⏸️  Pause (exit execution mode)", value="pause"),
+            ],
+        ).ask()
+
+        if choice == "skip":
+            console.print(f"[dim]Step {step_num} skipped.[/dim]")
+            continue
+        elif choice == "pause":
+            console.print(
+                f"[dim]Execution paused at step {step_num}/{manifest.total_steps}. "
+                f"Resume with: vibe plan status[/dim]"
+            )
+            break
+
+        # Collect step output summary
+        if sys.stdin.isatty():
+            summary = questionary.text(
+                f"Summary of step {step_num} output (or leave blank):",
+            ).ask()
+            if summary:
+                injector.save_step_output(
+                    plan_id=manifest.plan_id,
+                    step_number=step_num,
+                    summary=summary.strip(),
+                    full_output=summary.strip(),
+                    skill_id=step.skill_id,
+                    marker=step.completion_marker,
+                )
+                step_outputs[step_num] = summary.strip()
+                console.print(f"[green]✔ Step {step_num} output saved.[/green]")
+
+        console.print()
+
+    # Final summary
+    console.print(f"{'═' * 60}")
+    console.print("[bold green]Execution Complete[/bold green]")
+    completed = len(step_outputs)
+    console.print(f"Steps: {completed}/{manifest.total_steps} completed")
+    console.print()
+
+    if completed > 0:
+        final_summary = injector.build_final_summary(manifest.plan_id, manifest)
+        console.print(final_summary)
+        console.print(f"\n[dim]All outputs saved to: .vibe/plans/{manifest.plan_id}/[/dim]")
 
 
 def _render_validation(result: Any, router: Any, console: Console) -> None:

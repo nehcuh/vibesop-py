@@ -78,6 +78,11 @@ class SkillRecommender:
         lang = project_info.get("primary_language", "default")
         installed = self._get_installed_skill_ids()
 
+        analytics_recs = self._get_analytics_recommendations(lang, installed)
+
+        if analytics_recs:
+            return analytics_recs
+
         recs: list[SkillRecommendation] = []
         candidates = self.STACK_RECOMMENDATIONS.get(
             lang, self.STACK_RECOMMENDATIONS["default"]
@@ -92,6 +97,50 @@ class SkillRecommender:
             ))
 
         return recs
+
+    def _get_analytics_recommendations(
+        self, _lang: str, installed: set[str]
+    ) -> list[SkillRecommendation] | None:
+        """Get data-driven recommendations from AnalyticsStore."""
+        try:
+            from vibesop.core.analytics import AnalyticsStore
+
+            store = AnalyticsStore(storage_dir=self._project_root / ".vibe")
+            popular = store.get_popular_skills(limit=30)
+            if not popular:
+                return None
+
+            ratings = self._get_skill_ratings()
+
+            recs: list[SkillRecommendation] = []
+            for skill_id, use_count, satisfaction in popular:
+                if skill_id in installed:
+                    continue
+                confidence = min(0.95, 0.5 + satisfaction * 0.3 + min(use_count, 10) * 0.02)
+                rating_str = ""
+                if skill_id in ratings:
+                    rating_str = f" ({ratings[skill_id]:.1f}/5)"
+                recs.append(SkillRecommendation(
+                    skill_id=skill_id,
+                    reason=f"Used {use_count}× ({satisfaction:.0%} satisfaction){rating_str}",
+                    confidence=confidence,
+                    installed=False,
+                ))
+
+            recs.sort(key=lambda r: r.confidence, reverse=True)
+            return recs[:10] if recs else None
+        except (ImportError, OSError):
+            return None
+
+    def _get_skill_ratings(self) -> dict[str, float]:
+        """Get average ratings from SkillRatingStore."""
+        try:
+            from vibesop.core.skills.ratings import SkillRatingStore
+            store = SkillRatingStore()
+            top = store.get_top_rated(limit=100, min_reviews=1)
+            return {skill_id: score for skill_id, score, _count in top}
+        except (ImportError, OSError):
+            return {}
 
     def recommend_collaborative(self) -> list[SkillRecommendation]:
         installed = self._get_installed_packs()

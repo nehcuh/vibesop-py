@@ -139,7 +139,6 @@ class AnalyticsStore:
 
         Returns list of (skill_id, satisfaction_rate) tuples.
         """
-        # Collect all unique skills
         all_records = self.list_records(limit=1000)
         skill_ids = {r.primary_skill for r in all_records if r.primary_skill}
 
@@ -148,8 +147,39 @@ class AnalyticsStore:
             stats = self.get_skill_stats(skill_id)
             satisfaction = stats.get("satisfaction_rate")
             total = stats.get("total_uses", 0)
-            # Only flag skills with enough samples and low satisfaction
             if total >= 3 and satisfaction is not None and satisfaction < threshold:
                 low_quality.append((skill_id, satisfaction))
 
         return sorted(low_quality, key=lambda x: x[1])
+
+    def get_popular_skills(self, limit: int = 20) -> list[tuple[str, int, float]]:
+        """Get most-used skills with usage counts and avg satisfaction.
+
+        Args:
+            limit: Maximum number of skills to return
+
+        Returns:
+            List of (skill_id, use_count, satisfaction_rate) sorted by use_count desc
+        """
+        all_records = self.list_records(limit=2000)
+        skill_counts: dict[str, int] = {}
+        skill_satisfaction: dict[str, list[bool]] = {}
+
+        for record in all_records:
+            if record.primary_skill:
+                skill_counts[record.primary_skill] = (
+                    skill_counts.get(record.primary_skill, 0) + 1
+                )
+                if record.user_satisfied is not None:
+                    if record.primary_skill not in skill_satisfaction:
+                        skill_satisfaction[record.primary_skill] = []
+                    skill_satisfaction[record.primary_skill].append(record.user_satisfied)
+
+        result: list[tuple[str, int, float]] = []
+        for skill_id, count in skill_counts.items():
+            sats = skill_satisfaction.get(skill_id, [])
+            avg_sat = sum(sats) / len(sats) if sats else 0.5
+            result.append((skill_id, count, avg_sat))
+
+        result.sort(key=lambda x: (-x[1], -x[2]))
+        return result[:limit]

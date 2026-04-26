@@ -12,6 +12,11 @@ components via their respective hook/plugin/prompt mechanisms.
 
 from __future__ import annotations
 
+from vibesop.agent.runtime.context_injector import (
+    DEFAULT_MARKER_TEMPLATE,
+    StepContextInjector,
+    StepOutput,
+)
 from vibesop.agent.runtime.decision_presenter import (
     DecisionPresenter,
     PresentResult,
@@ -23,6 +28,7 @@ from vibesop.agent.runtime.intent_interceptor import (
     InterceptionMode,
 )
 from vibesop.agent.runtime.plan_executor import (
+    COMPLETION_MARKER_PREFIX,
     ExecutionGuide,
     PlanExecutor,
 )
@@ -38,6 +44,8 @@ from vibesop.agent.runtime.slash_command_executor import (
 )
 
 __all__ = [
+    "COMPLETION_MARKER_PREFIX",
+    "DEFAULT_MARKER_TEMPLATE",
     "DecisionPresenter",
     "ExecutionGuide",
     "InjectionMethod",
@@ -52,4 +60,6 @@ __all__ = [
     "SkillInjector",
     "SlashCommandExecutor",
     "SlashCommandResult",
+    "StepContextInjector",
+    "StepOutput",
 ]

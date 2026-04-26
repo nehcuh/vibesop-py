@@ -30,11 +30,21 @@ class RouterStatsMixin:
             dist[layer.value] = dist.get(layer.value, 0) + 1
 
     def get_stats(self) -> dict[str, Any]:
+        from vibesop.core.routing.perf_monitor import get_perf_monitor
+        perf = get_perf_monitor().get_stats()
         return {
             "total_routes": self._total_routes,  # type: ignore[attr-defined]
             "layer_distribution": dict(self._layer_distribution),  # type: ignore[attr-defined]
             "cache_dir": str(self.project_root / ".vibe" / "cache"),  # type: ignore[attr-defined]
             "ai_triage": self.get_ai_triage_stats(),
+            "performance": {
+                "window_size": perf["window_size"],
+                "p50_ms": perf["p50_ms"],
+                "p95_ms": perf["p95_ms"],
+                "p99_ms": perf["p99_ms"],
+                "avg_ms": perf["avg_ms"],
+                "p95_on_target": perf["p95_ms"] < 100.0,
+            },
         }
 
     def get_ai_triage_stats(self) -> dict[str, Any]:

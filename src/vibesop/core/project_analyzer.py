@@ -84,6 +84,18 @@ TECH_STACK_MARKERS: dict[str, dict[str, Any]] = {
         "content_checks": {},
         "glob_patterns": ["**/*.yaml", "**/*.yml"],
     },
+    "ci_cd": {
+        "files": [".github/workflows", ".gitlab-ci.yml", "Jenkinsfile", ".circleci", ".travis.yml"],
+        "content_checks": {},
+    },
+    "iac": {
+        "files": ["terraform", "pulumi", "cdk.json"],
+        "glob_patterns": ["**/*.tf", "**/*.tfvars"],
+    },
+    "database": {
+        "files": ["migrations", "schema.sql", "alembic.ini"],
+        "content_checks": {},
+    },
 }
 
 

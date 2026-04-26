@@ -306,6 +306,33 @@ class SkillLoader:
 
         return self._skill_cache.get(skill_id)
 
+    def read_skill_content(self, skill_id: str) -> str:
+        """Read the full SKILL.md content for a skill.
+
+        Returns the complete file content (including frontmatter) so
+        AI agents can access the skill definition without loading it.
+
+        Args:
+            skill_id: Skill identifier (e.g., "gstack/review")
+
+        Returns:
+            Full SKILL.md content as string, or empty string if not found
+        """
+        skill = self.get_skill(skill_id)
+        if skill is None:
+            return ""
+
+        if skill.source_file and skill.source_file.exists():
+            try:
+                return skill.source_file.read_text(encoding="utf-8")
+            except (OSError, UnicodeDecodeError):
+                pass
+
+        if isinstance(skill.content, str):
+            return skill.content
+
+        return ""
+
     def list_skills(
         self,
         namespace: str | None = None,

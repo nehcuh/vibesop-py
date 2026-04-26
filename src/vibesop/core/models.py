@@ -4,6 +4,7 @@ All data structures use Pydantic v2 for runtime validation and type safety.
 This module is the single source of truth for routing models.
 """
 
+from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Any, Literal
 
@@ -611,6 +612,165 @@ class AppSettings(BaseSettings):
         default=None,
         description="OpenAI API key",
     )
+
+
+@dataclass
+class StepManifest:
+    """执行清单中单个步骤的完整信息。
+
+    PlanExecutor 生成此结构，让 AI Agent 无需手动加载 SKILL.md
+    即可获取执行单个步骤所需的全部上下文。
+
+    Attributes:
+        step_number: 1-based step position
+        skill_id: Target skill identifier
+        skill_name: Human-readable skill name
+        skill_path: SKILL.md path on disk (str for serialization)
+        skill_content: Full SKILL.md content (embedded so agent doesn't load it)
+        input_context: Output summary from upstream steps (as context for this step)
+        output_slot: Variable name for downstream steps to reference this step's output
+        completion_marker: Standardized marker the agent must emit when done
+        instruction: Concise execution instruction for this step
+    """
+
+    step_number: int
+    skill_id: str
+    skill_name: str = ""
+    skill_path: str = ""
+    skill_content: str = ""
+    input_context: str = ""
+    output_slot: str = ""
+    completion_marker: str = ""
+    instruction: str = ""
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "step_number": self.step_number,
+            "skill_id": self.skill_id,
+            "skill_name": self.skill_name,
+            "skill_path": self.skill_path,
+            "skill_content": self.skill_content,
+            "input_context": self.input_context,
+            "output_slot": self.output_slot,
+            "completion_marker": self.completion_marker,
+            "instruction": self.instruction,
+        }
+
+    @staticmethod
+    def completion_marker_for(step_number: int) -> str:
+        """Build the standardized completion marker for a step."""
+        return f"[StepCompleted:{step_number}]"
+
+
+@dataclass
+class ExecutionManifest:
+    """完整的编排执行清单。
+
+    包含编排计划中所有步骤的完整信息（含内嵌 SKILL.md 内容），
+    AI Agent 读取此清单即可分步执行，无需手动加载技能文件或查找上下文。
+
+    Attributes:
+        plan_id: Plan UUID
+        original_query: The user's original request
+        strategy: Execution strategy (sequential | parallel | mixed)
+        steps: Ordered list of StepManifest entries
+        context_file: Path to .vibe/plans/{plan_id}/context.md
+    """
+
+    plan_id: str
+    original_query: str = ""
+    strategy: str = "sequential"
+    steps: list[StepManifest] = field(default_factory=list)
+    context_file: str = ""
+
+    @property
+    def total_steps(self) -> int:
+        return len(self.steps)
+
+    @property
+    def has_parallel_groups(self) -> bool:
+        return self.strategy in ("parallel", "mixed")
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "plan_id": self.plan_id,
+            "original_query": self.original_query,
+            "strategy": self.strategy,
+            "steps": [s.to_dict() for s in self.steps],
+            "context_file": self.context_file,
+            "total_steps": self.total_steps,
+        }
+
+    def to_markdown(self) -> str:
+        """Render the manifest as a markdown execution sequence file.
+
+        This file can be written to disk and read by the agent step-by-step.
+        """
+        lines = [
+            f"# Execution Manifest: {self.original_query}",
+            "",
+            f"**Plan**: {self.plan_id}",
+            f"**Strategy**: {self.strategy}",
+            f"**Steps**: {self.total_steps}",
+            "",
+            "---",
+            "",
+            "## Execution Rules",
+            "",
+            "1. Execute steps in numbered order (step groups may be parallel)",
+            "2. Each step includes the full SKILL.md content — read it before executing",
+            "3. After completing a step, emit the completion marker exactly",
+            "4. Data marked as `input_context` is output from an upstream step",
+            "5. If a step fails, report the error before continuing",
+            "",
+            "---",
+            "",
+        ]
+
+        for step in self.steps:
+            lines.extend([
+                f"## Step {step.step_number}: {step.skill_id}",
+                "",
+                f"**Skill**: {step.skill_name}",
+                "",
+            ])
+
+            if step.input_context:
+                lines.extend([
+                    "### Input Context (from upstream steps)",
+                    "",
+                    step.input_context,
+                    "",
+                ])
+
+            lines.extend([
+                "### Instruction",
+                "",
+                step.instruction,
+                "",
+                "### Skill Content (SKILL.md inlined)",
+                "",
+                "```markdown",
+                step.skill_content,
+                "```",
+                "",
+                "### Completion",
+                "",
+                f"完成后必须输出: `<!-- {step.completion_marker} -->` 并附上结果摘要",
+                "",
+                "---",
+                "",
+            ])
+
+        lines.extend([
+            "## Final Verification",
+            "",
+            "All steps completed. Verify:",
+        ])
+        for step in self.steps:
+            lines.append(f"- [ ] Step {step.step_number} — {step.skill_id}: `<!-- {step.completion_marker} -->`")
+
+        return "\n".join(lines)
 
 
 # Type aliases for better readability

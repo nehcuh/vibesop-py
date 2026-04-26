@@ -19,6 +19,11 @@ class SkillRepo:
     topics: list[str]
     html_url: str
     has_skill_md: bool = False
+    quality_score: float = 0.0
+
+    def infer_skill_id(self) -> str:
+        """Infer local skill ID from GitHub repo name."""
+        return self.full_name.replace("/", "/", 1).rsplit("/", 1)[-1]
 
 
 class GitHubSkillCrawler:
