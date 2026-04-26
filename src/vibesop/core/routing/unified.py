@@ -1105,57 +1105,6 @@ class UnifiedRouter(RouterStatsMixin, RouterExecutionMixin, RouterOrchestrationM
             },
         }
 
-    # ================================================================
-    # Backward-compatible internal method proxies
-    # ================================================================
-
-    def _try_ai_triage(self, query: str, candidates: list[dict[str, Any]], context: Any = None):
-        """Backward-compatible proxy to TriageService.try_ai_triage."""
-        from vibesop.core.routing import _layers
-        match, _ = _layers.try_ai_triage_layer(self, query, candidates, context)
-        if match is None:
-            return None
-        from vibesop.core.routing.layers import LayerResult
-        return LayerResult(match=match, layer=match.layer)
-
-    def _build_ai_triage_prompt(self, query: str, skills_summary: str) -> str:
-        """Backward-compatible proxy to TriageService.build_ai_triage_prompt."""
-        return self._triage_service.build_ai_triage_prompt(query, skills_summary)
-
-    def _try_matcher_pipeline(self, query: str, candidates: list[dict[str, Any]], context: Any = None, collect_rejected: bool = False):
-        """Backward-compatible proxy to run_matcher_pipeline."""
-        from vibesop.core.routing import _pipeline
-        primary, alternatives, detail = _pipeline.run_matcher_pipeline(
-            self, query, candidates, context, collect_rejected=collect_rejected
-        )
-        if primary is None:
-            return None
-        from vibesop.core.routing.layers import LayerResult
-        return LayerResult(
-            match=primary,
-            alternatives=alternatives,
-            layer=detail.layer,
-            reason=detail.reason,
-            diagnostics=detail.diagnostics,
-        )
-
-    def _apply_optimizations(self, matches: Any, query: str, context: Any = None) -> Any:
-        """Backward-compatible proxy to apply_optimizations."""
-        from vibesop.core.routing import _pipeline
-        return _pipeline.apply_optimizations(self, matches, query, context)
-
-    def _prefilter_ai_triage_candidates(self, query: str, candidates: list[dict[str, Any]], max_skills: int) -> list[dict[str, Any]]:
-        """Backward-compatible proxy to TriageService.prefilter_ai_triage_candidates."""
-        return self._triage_service.prefilter_ai_triage_candidates(query, candidates, max_skills)
-
-    def _init_llm_client(self):
-        """Backward-compatible proxy to TriageService.init_llm_client."""
-        return self._triage_service.init_llm_client()
-
-    def _parse_ai_triage_response(self, response: str) -> dict[str, Any]:
-        """Backward-compatible proxy to TriageService.parse_ai_triage_response."""
-        return self._triage_service.parse_ai_triage_response(response)
-
 __all__ = [
     "RoutingLayer",
     "RoutingResult",
