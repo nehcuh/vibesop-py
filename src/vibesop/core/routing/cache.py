@@ -15,7 +15,7 @@ import re
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Set
 
 from vibesop.constants import CacheSettings
 
@@ -127,8 +127,19 @@ class CacheManager:
         key: str,
         data: dict[str, Any],
         ttl: int = 86400,
+        original_query: str | None = None,
     ) -> None:
-        """Set value in both memory and file cache."""
+        """Set value in both memory and file cache.
+
+        Args:
+            key: Cache key.
+            data: Data to cache.
+            ttl: Time-to-live in seconds.
+            original_query: Optional original query text for semantic similarity matching.
+        """
+        if original_query is not None:
+            data = dict(data)
+            data["_cache_original_query"] = original_query
         entry = CacheEntry(data=data, ttl=ttl)
         self._set_memory_cache(key, entry)
         self._set_file_cache(key, entry)
@@ -203,3 +214,64 @@ class CacheManager:
             "file_type": context.get("file_type"),
             "has_errors": bool(context.get("error_count", 0)),
         }
+
+    def get_similar(
+        self, query: str, similarity_threshold: float = 0.75
+    ) -> dict[str, Any] | None:
+        """Find a cached result for a semantically similar query.
+
+        Uses character bigram Jaccard similarity for fast approximate
+        matching without external dependencies. Falls back to exact match
+        if no similar query is found.
+
+        Args:
+            query: The query to find a similar match for.
+            similarity_threshold: Minimum similarity score (0.0-1.0).
+
+        Returns:
+            Cached data if a similar query is found, None otherwise.
+        """
+        if not self._memory_cache:
+            return None
+
+        query_bigrams = self._char_bigrams(query.lower())
+        if not query_bigrams:
+            return None
+
+        best_match: tuple[str, float] | None = None
+        for cached_key, entry in self._memory_cache.items():
+            # Check if entry has stored original query text
+            original_query = entry.data.get("_cache_original_query", "")
+            if not original_query:
+                continue
+
+            cached_bigrams = self._char_bigrams(original_query.lower())
+            if not cached_bigrams:
+                continue
+
+            similarity = self._jaccard_similarity(query_bigrams, cached_bigrams)
+            if similarity >= similarity_threshold:
+                if best_match is None or similarity > best_match[1]:
+                    best_match = (cached_key, similarity)
+
+        if best_match:
+            cached_key, _similarity = best_match
+            entry = self._memory_cache[cached_key]
+            if not entry.is_expired():
+                self._memory_cache.move_to_end(cached_key)
+                self._stats.record_hit(is_memory=True)
+                return entry.data
+
+        return None
+
+    @staticmethod
+    def _char_bigrams(text: str) -> Set[str]:
+        """Extract character bigrams from text."""
+        return {text[i : i + 2] for i in range(len(text) - 1)}
+
+    @staticmethod
+    def _jaccard_similarity(set_a: Set[str], set_b: Set[str]) -> float:
+        """Compute Jaccard similarity between two sets."""
+        intersection = len(set_a & set_b)
+        union = len(set_a | set_b)
+        return intersection / union if union > 0 else 0.0

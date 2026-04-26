@@ -233,8 +233,6 @@ class UnifiedRouter(RouterStatsMixin, RouterExecutionMixin, RouterOrchestrationM
 
         self._scenario_cache: dict[str, Any] | None = None
 
-        self._scenario_cache: dict[str, Any] | None = None
-
         # Project analyzer cache (expensive: ~2s filesystem scan)
         self._project_analyzer: Any | None = None
 
