@@ -24,13 +24,19 @@ from vibesop import __version__
 from vibesop.cli.commands import (
     badges_cmd,
     deviation_cmd,
-    experiment_cmd,
     market_cmd,
     matcher_cmd,
     plan_cmd,
     skill_cmd,
+    snapshot_cmd,
 )
 from vibesop.cli.orchestration_report import render_orchestration_result
+from vibesop.cli.render import (
+    render_compact_orchestration,
+    render_fallback_panel,
+    render_match_panel,
+    render_no_match,
+)
 from vibesop.cli.routing_report import render_routing_report
 from vibesop.cli.subcommands import register
 from vibesop.core.routing import UnifiedRouter
@@ -48,11 +54,11 @@ console = Console()
 # Register subcommands
 app.add_typer(plan_cmd.app, name="plan")
 app.add_typer(matcher_cmd.app, name="matcher")
-app.add_typer(experiment_cmd.app, name="experiment")
 app.add_typer(deviation_cmd.app, name="deviation")
 app.add_typer(badges_cmd.app, name="badges")
 app.add_typer(market_cmd.app, name="market")
 app.add_typer(skill_cmd.app, name="skill")
+app.add_typer(snapshot_cmd.app, name="snapshot")
 
 
 # -- Core routing commands --
@@ -199,7 +205,7 @@ def route(
         raise typer.Exit(0)
 
     # Default: show compact summary directly from OrchestrationResult
-    _render_compact_orchestration(result, console=console)
+    render_compact_orchestration(result, console=console)
 
     # Handle result with unified confirmation flow
     if result.mode.value == "orchestrated" and result.execution_plan:
@@ -267,7 +273,7 @@ def orchestrate(
     elif verbose:
         render_orchestration_result(result, console=console)
     else:
-        _render_compact_orchestration(result, console=console)
+        render_compact_orchestration(result, console=console)
 
 
 @app.command()
@@ -622,161 +628,6 @@ def _run_confirmation_flow(
         result.primary = None
 
 
-def _render_fallback_panel(result: Any, console: Console) -> None:
-    """Render fallback-llm routing result panel."""
-    alt_text = ""
-    if result.alternatives:
-        alt_text = "\n[bold]💡 Nearest installed skills:[/bold]\n"
-        for alt in result.alternatives[:3]:
-            desc = f" — {alt.description[:50]}" if alt.description else ""
-            alt_text += f"  • {alt.skill_id} ({alt.confidence:.0%}){desc}\n"
-    console.print(
-        Panel(
-            f"[bold yellow]🤖 Fallback Mode[/bold yellow]\n\n"
-            f"No installed skill confidently matched your query.\n"
-            f"[dim]Query:[/dim] {result.original_query}\n"
-            f"[dim]Routing path:[/dim] {' → '.join([layer.value for layer in result.routing_path])}\n"
-            f"{alt_text}\n"
-            f"[dim]VibeSOP is a routing engine, not an executor.[/dim]\n"
-            f"[dim]Your AI Agent can still process this request using raw LLM.[/dim]\n\n"
-            f"[dim]Try:[/dim]\n"
-            f"  • Using more specific keywords\n"
-            f"  • Browsing available skills: [bold]vibe skills list[/bold]\n"
-            f"  • Installing a relevant skill pack",
-            title="[bold]Routing Result[/bold]",
-            border_style="yellow",
-        )
-    )
-
-
-def _render_match_panel(result: Any, console: Console) -> None:
-    """Render normal skill match panel with quality indicators."""
-    primary = result.primary
-    quality_str = ""
-    grade = primary.metadata.get("grade")
-    if grade:
-        grade_colors = {"A": "green", "B": "green", "C": "yellow", "D": "yellow", "F": "red"}
-        color = grade_colors.get(grade, "dim")
-        quality_str = f"\n[dim]Quality:[/dim] [{color}]{grade}[/{color}]"
-    habit_boost = primary.metadata.get("habit_boost")
-    if habit_boost:
-        quality_str += " [dim](habit)[/dim]"
-        # Show habit boost notice inline for user visibility
-        console.print("[dim]💡 Habit boost applied[/dim]")
-
-    deprecated = primary.metadata.get("deprecated_warnings", [])
-    if deprecated:
-        console.print(
-            f"\n[yellow]⚠️  Deprecated skills in ecosystem:[/yellow] {', '.join(deprecated)}"
-        )
-
-    console.print(
-        Panel(
-            f"[bold green]✅ Matched:[/bold green] {primary.skill_id}\n"
-            f"[dim]Confidence:[/dim] {primary.confidence:.0%}\n"
-            f"[dim]Layer:[/dim] {primary.layer.value}\n"
-            f"[dim]Source:[/dim] {primary.source}{quality_str}\n"
-            f"[dim]Duration:[/dim] {result.duration_ms:.1f}ms",
-            title="[bold]Routing Result[/bold]",
-            border_style="blue",
-        )
-    )
-    if result.alternatives:
-        console.print("\n[bold]💡 Alternatives:[/bold]")
-        for alt in result.alternatives[:3]:
-            desc = f" — {alt.description[:50]}" if alt.description else ""
-            console.print(f"  • {alt.skill_id} ({alt.confidence:.0%}){desc}")
-
-
-def _render_no_match(result: Any, console: Console) -> None:
-    """Render no-match panel."""
-    console.print(
-        Panel(
-            f"[yellow]❓ No suitable match found[/yellow]\n\n"
-            f"[dim]Query:[/dim] {result.original_query}\n"
-            f"[dim]Routing path:[/dim] {' → '.join([layer.value for layer in result.routing_path])}\n\n"
-            f"[dim]Try:[/dim]\n"
-            f"  • Using more specific keywords\n"
-            f"  • Lowering the threshold\n"
-            f"  • Listing available skills",
-            title="[bold]Routing Result[/bold]",
-            border_style="yellow",
-        )
-    )
-
-
-def _render_compact_orchestration(
-    result: OrchestrationResult,
-    console: Console | None = None,
-) -> None:
-    """Render a compact summary directly from OrchestrationResult.
-
-    Replaces the old render_compact_summary + RoutingResult wrapping.
-    """
-    if console is None:
-        console = Console()
-
-    from rich import box
-    from rich.table import Table
-
-    table = Table(
-        title="[bold cyan]🔍 Routing Summary[/bold cyan]",
-        box=box.SIMPLE,
-        show_header=False,
-        padding=(0, 1),
-    )
-    table.add_column("Field", style="dim", justify="right")
-    table.add_column("Value", style="bold")
-
-    if result.mode.value == "single":
-        # Single-skill mode
-        if result.primary:
-            if result.primary.layer.value == "fallback_llm":
-                table.add_row("Selected", f"[yellow]{result.primary.skill_id}[/yellow]")
-                table.add_row("Status", "[yellow]Fallback (no skill matched)[/yellow]")
-            else:
-                table.add_row("Selected", f"[green]{result.primary.skill_id}[/green]")
-                table.add_row("Confidence", f"{result.primary.confidence:.0%}")
-                table.add_row("Layer", result.primary.layer.value)
-        else:
-            table.add_row("Selected", "[yellow]No match[/yellow]")
-
-        table.add_row("Duration", f"{result.duration_ms:.1f}ms")
-
-        if result.alternatives:
-            alt_lines = []
-            for alt in result.alternatives[:3]:
-                alt_lines.append(
-                    f"  • {alt.skill_id} ({alt.confidence:.0%} via {alt.layer.value})"
-                )
-            table.add_row("Alternatives", "\n".join(alt_lines))
-    else:
-        # Orchestrated mode
-        plan = result.execution_plan
-        if plan:
-            table.add_row("Mode", "[cyan]Orchestrated[/cyan]")
-            table.add_row("Steps", str(len(plan.steps)))
-            table.add_row("Strategy", plan.execution_mode.value)
-
-            step_lines = []
-            for step in plan.steps:
-                step_lines.append(
-                    f"  {step.step_number}. {step.skill_id} — {step.intent}"
-                )
-            table.add_row("Plan", "\n".join(step_lines))
-
-            if result.single_fallback:
-                table.add_row(
-                    "Fallback",
-                    f"{result.single_fallback.skill_id} ({result.single_fallback.confidence:.0%})",
-                )
-        else:
-            table.add_row("Mode", "[yellow]Orchestrated (no plan)[/yellow]")
-
-    console.print(table)
-    console.print()
-
-
 def _render_validation(result: Any, router: Any, console: Console) -> None:
     """Render validation output and exit."""
     console.print(f"\n[bold cyan]✓ Route Validation[/bold cyan]\n{'=' * 40}\n")
@@ -842,11 +693,11 @@ def _handle_single_result(
         return
 
     if result.primary is None:
-        _render_no_match(result, console)
+        render_no_match(result, console)
     elif result.primary.layer.value == "fallback_llm":
-        _render_fallback_panel(result, console)
+        render_fallback_panel(result, console)
     else:
-        _render_match_panel(result, console)
+        render_match_panel(result, console)
 
 @app.command()
 def doctor() -> None:
