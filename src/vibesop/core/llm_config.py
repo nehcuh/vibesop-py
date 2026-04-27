@@ -239,14 +239,14 @@ class EnvVarLLMDetector:
     }
 
     PROVIDER_DEFAULT_MODELS: ClassVar[dict[str, str]] = {
-        "deepseek": "deepseek-chat",
+        "deepseek": "deepseek-v4-flash",
         "kimi": "moonshot-v1-8k",
         "zhipu": "glm-4",
         "ollama": "qwen3:35b-a3b-mlx",
     }
 
     PROVIDER_DEFAULT_BASES: ClassVar[dict[str, str]] = {
-        "deepseek": "https://api.deepseek.com/v1",
+        "deepseek": "https://api.deepseek.com",
         "kimi": "https://api.moonshot.cn/v1",
         "zhipu": "https://open.bigmodel.cn/api/paas/v4",
         "ollama": "http://localhost:11434/v1",

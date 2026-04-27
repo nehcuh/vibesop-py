@@ -51,6 +51,8 @@ class OpenAIProvider(LLMProvider):
         if model:
             self.DEFAULT_MODEL = model
 
+        self._is_deepseek = bool(base_url and "deepseek.com" in base_url)
+
         super().__init__(api_key=api_key, base_url=base_url)
 
         # Initialize OpenAI client
@@ -97,12 +99,16 @@ class OpenAIProvider(LLMProvider):
             model = self.default_model()
 
         try:
-            response = self._client.chat.completions.create(
+            kwargs: dict[str, Any] = dict(
                 model=model,
                 messages=[{"role": "user", "content": prompt}],
                 max_tokens=max_tokens,
                 temperature=temperature,
             )
+            if self._is_deepseek:
+                kwargs["extra_body"] = {"thinking": {"type": "disabled"}}
+
+            response = self._client.chat.completions.create(**kwargs)
 
             content = response.choices[0].message.content or ""
             if response.usage:

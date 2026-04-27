@@ -16,14 +16,14 @@ ProviderType = Literal["anthropic", "openai", "ollama", "deepseek", "kimi", "zhi
 # OpenAI-compatible providers — all routed through OpenAIProvider
 # with the appropriate base_url.
 _OPENAI_COMPATIBLE: dict[str, str] = {
-    "deepseek": "https://api.deepseek.com/v1",
+    "deepseek": "https://api.deepseek.com",
     "kimi": "https://api.moonshot.cn/v1",
     "zhipu": "https://open.bigmodel.cn/api/paas/v4",
 }
 
 # Default models for each provider
 _PROVIDER_DEFAULT_MODELS: dict[str, str] = {
-    "deepseek": "deepseek-chat",
+    "deepseek": "deepseek-v4-flash",
     "kimi": "moonshot-v1-8k",
     "zhipu": "glm-4",
 }
