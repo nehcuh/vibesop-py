@@ -6,7 +6,7 @@ reducing the need for `type: ignore[attr-defined]` comments.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -19,15 +19,15 @@ class RoutingStatsProvider(Protocol):
 
     _total_routes: int
     _layer_distribution: dict[str, int]
-    _stats_lock: Any  # noqa: F821
+    _stats_lock: Any
 
-    def _record_layer(self, layer: Any) -> None: ...  # noqa: F821
+    def _record_layer(self, layer: Any) -> None: ...
 
 
 class RoutingConfigProvider(Protocol):
     """Protocol for router configuration access."""
 
-    _config: Any  # noqa: F821
+    _config: Any
     project_root: Path
 
 
@@ -35,13 +35,13 @@ class RoutingTriageProvider(Protocol):
     """Protocol for triage service access."""
 
     _triage_service: TriageService
-    _config: Any  # noqa: F821
+    _config: Any
 
 
 class RoutingCandidateProvider(Protocol):
     """Protocol for candidate loading."""
 
-    def _get_cached_candidates(self) -> list[dict[str, Any]]: ...  # noqa: F821
+    def _get_cached_candidates(self) -> list[dict[str, Any]]: ...
     def _get_skill_source(self, skill_id: str, namespace: str) -> str: ...
 
 
@@ -49,9 +49,9 @@ class RoutingCore(RoutingConfigProvider, RoutingCandidateProvider, Protocol):
     """Core routing capabilities needed by layer functions."""
 
     _triage_service: TriageService
-    _config: Any  # noqa: F821
+    _config: Any
     project_root: Path
 
-    def _record_layer(self, layer: Any) -> None: ...  # noqa: F821
-    def _get_cached_candidates(self) -> list[dict[str, Any]]: ...  # noqa: F821
+    def _record_layer(self, layer: Any) -> None: ...
+    def _get_cached_candidates(self) -> list[dict[str, Any]]: ...
     def _get_skill_source(self, skill_id: str, namespace: str) -> str: ...

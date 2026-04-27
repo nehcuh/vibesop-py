@@ -7,7 +7,9 @@ console = Console()
 
 
 def recommended(
-    collaborative: bool = typer.Option(False, "--collaborative", "-c", help="Show collaborative filtering recommendations"),
+    collaborative: bool = typer.Option(
+        False, "--collaborative", "-c", help="Show collaborative filtering recommendations"
+    ),
     install: bool = typer.Option(False, "--install", "-i", help="Install all recommended skills"),
 ) -> None:
     """Show personalized skill recommendations.
@@ -36,14 +38,19 @@ def recommended(
     else:
         stack_recs = recommender.recommend_for_project()
         missing_recs = recommender.detect_missing_skills()
-        recs = stack_recs + [r for r in missing_recs if r.skill_id not in {s.skill_id for s in stack_recs}]
+        recs = stack_recs + [
+            r for r in missing_recs if r.skill_id not in {s.skill_id for s in stack_recs}
+        ]
         title = "Recommended for This Project"
 
     if not recs:
-        console.print("[dim]No recommendations available. You might have all essential skills installed![/dim]")
+        console.print(
+            "[dim]No recommendations available. You might have all essential skills installed![/dim]"
+        )
         return
 
     from rich.table import Table
+
     table = Table(title=title)
     table.add_column("#", style="dim", justify="right")
     table.add_column("Skill", style="cyan")
@@ -63,6 +70,7 @@ def recommended(
             for r in uninstalled:
                 try:
                     from vibesop.installer.pack_installer import PackInstaller
+
                     installer = PackInstaller()
                     installer.install_skill_from_github(r.skill_id)
                     console.print(f"[green]\u2713[/green] Installed: {r.skill_id}")

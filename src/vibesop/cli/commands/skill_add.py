@@ -166,7 +166,7 @@ def add(
         Panel(
             f"[bold]{metadata.name}[/bold] is now ready to use!\n\n"
             f"[dim]Test it with:[/dim]\n"
-            f"  [cyan]vibe route \"{metadata.trigger_when or 'test query'}\"[/cyan]\n\n"
+            f'  [cyan]vibe route "{metadata.trigger_when or "test query"}"[/cyan]\n\n'
             f"[dim]View details:[/dim]\n"
             f"  [cyan]vibe skills info {metadata.id}[/cyan]",
             border_style="green",
@@ -616,13 +616,58 @@ def _extract_keywords(text: str) -> list[str]:
     # Filter common words (expanded stop words list)
     stop_words = {
         # English stop words
-        "the", "a", "an", "is", "are", "was", "were", "be", "been", "being",
-        "have", "has", "had", "do", "does", "did", "will", "would", "could",
-        "should", "may", "might", "must", "shall", "can", "need", "for",
-        "with", "from", "this", "that", "these", "those",
-        "use", "using", "get", "got", "make", "made", "take", "took",
-        "help", "user", "ask", "want", "like", # Chinese stop words
-        "用户", "帮助", "使用", "需要", "想要", "可以",
+        "the",
+        "a",
+        "an",
+        "is",
+        "are",
+        "was",
+        "were",
+        "be",
+        "been",
+        "being",
+        "have",
+        "has",
+        "had",
+        "do",
+        "does",
+        "did",
+        "will",
+        "would",
+        "could",
+        "should",
+        "may",
+        "might",
+        "must",
+        "shall",
+        "can",
+        "need",
+        "for",
+        "with",
+        "from",
+        "this",
+        "that",
+        "these",
+        "those",
+        "use",
+        "using",
+        "get",
+        "got",
+        "make",
+        "made",
+        "take",
+        "took",
+        "help",
+        "user",
+        "ask",
+        "want",
+        "like",  # Chinese stop words
+        "用户",
+        "帮助",
+        "使用",
+        "需要",
+        "想要",
+        "可以",
     }
 
     keywords = [w for w in words if w not in stop_words and len(w) >= 3]
@@ -652,7 +697,7 @@ def _verify_and_sync(skill_id: str, _scope: str) -> None:
 
     matched = False
     for query in test_queries:
-        result = router.route(query)
+        result = router._route(query)
         if result.primary and result.primary.skill_id == skill_id:
             matched = True
             console.print(f"[green]✓ Routing test passed:[/green] {query}")

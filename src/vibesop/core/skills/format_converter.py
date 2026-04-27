@@ -127,7 +127,7 @@ class GstackConverter(SkillFormatConverter):
 
         for line in lines[:30]:  # Only check first 30 lines
             # Match **Field**: `value` format
-            match = re.match(r'\*\*([^*]+)\*\*:\s*`([^`]+)`', line)
+            match = re.match(r"\*\*([^*]+)\*\*:\s*`([^`]+)`", line)
             if match:
                 key = match.group(1).strip().lower()
                 value = match.group(2).strip()

@@ -94,6 +94,7 @@ class InstallService:
         """Lazy-load PackInstaller instance."""
         if self._installer is None:
             from vibesop.installer.pack_installer import PackInstaller
+
             self._installer = PackInstaller()
         return self._installer
 
@@ -132,6 +133,7 @@ class AnalysisService:
         """Lazy-load ProjectAnalyzer instance."""
         if self._analyzer is None:
             from vibesop.core.project_analyzer import ProjectAnalyzer
+
             self._analyzer = ProjectAnalyzer(self.project_root)
         return self._analyzer
 
@@ -170,6 +172,7 @@ class EvaluationService:
         """Lazy-load RoutingEvaluator instance."""
         if self._evaluator is None:
             from vibesop.core.skills.evaluator import RoutingEvaluator
+
             self._evaluator = RoutingEvaluator(project_root=self.project_root)
         return self._evaluator
 

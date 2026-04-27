@@ -112,29 +112,22 @@ def generate_fallback_skill_content(
         Minimal SKILL.md markdown content
     """
     skill_id = skill.id if hasattr(skill, "id") else skill.get("id", "")
-    name = (
-        dir_name
-        or (skill.name if hasattr(skill, "name") else skill.get("name", skill_id))
-    )
+    name = dir_name or (skill.name if hasattr(skill, "name") else skill.get("name", skill_id))
     description = (
-        skill.description
-        if hasattr(skill, "description")
-        else skill.get("description", "")
+        skill.description if hasattr(skill, "description") else skill.get("description", "")
     )
     # Collapse multi-line descriptions to a single line for valid YAML
     description = " ".join(description.split()) if description else ""
     # Escape embedded double quotes
     description = description.replace('"', '\\"')
     trigger = (
-        skill.trigger_when
-        if hasattr(skill, "trigger_when")
-        else skill.get("trigger_when", "")
+        skill.trigger_when if hasattr(skill, "trigger_when") else skill.get("trigger_when", "")
     )
 
     lines = [
         "---",
         f"name: {name}",
-        f"description: \"{description}\"",
+        f'description: "{description}"',
         "---",
         "",
         f"# {name}",
@@ -144,9 +137,7 @@ def generate_fallback_skill_content(
     ]
     if trigger:
         lines.extend(["## Trigger", "", f"{trigger}", ""])
-    lines.extend(
-        ["", "*External skill — install the source pack for full content.*", ""]
-    )
+    lines.extend(["", "*External skill — install the source pack for full content.*", ""])
     return "\n".join(lines)
 
 

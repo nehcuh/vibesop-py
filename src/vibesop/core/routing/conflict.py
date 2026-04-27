@@ -176,7 +176,9 @@ class NamespacePriorityStrategy(ResolutionStrategy):
 
         # If there's a clear priority winner, use it
         top_priority = self.priorities.get(top_namespace, 50)
-        other_priorities = [self.priorities.get(ns, 50) for ns in by_namespace if ns != top_namespace]
+        other_priorities = [
+            self.priorities.get(ns, 50) for ns in by_namespace if ns != top_namespace
+        ]
 
         if top_priority > max(other_priorities, default=0) + 5:
             top_matches = by_namespace[top_namespace]
@@ -186,7 +188,11 @@ class NamespacePriorityStrategy(ResolutionStrategy):
                 alternatives=[m.skill_id for m in matches if m.skill_id != best.skill_id],
                 reason=f"Namespace priority: {top_namespace} ({top_priority}) > others",
                 needs_review=False,
-                metadata={"namespace": top_namespace, "priority": top_priority, "strategy": "namespace_priority"},
+                metadata={
+                    "namespace": top_namespace,
+                    "priority": top_priority,
+                    "strategy": "namespace_priority",
+                },
             )
 
         return None
@@ -314,10 +320,15 @@ class ExplicitOverrideStrategy(ResolutionStrategy):
                     if m.skill_id == requested_skill or m.skill_id.endswith(requested_skill):
                         return ConflictResolution(
                             primary=m.skill_id,
-                            alternatives=[m2.skill_id for m2 in matches if m2.skill_id != m.skill_id],
+                            alternatives=[
+                                m2.skill_id for m2 in matches if m2.skill_id != m.skill_id
+                            ],
                             reason=f"Explicit override: {pattern_type} pattern matched",
                             needs_review=False,
-                            metadata={"override_type": pattern_type, "strategy": "explicit_override"},
+                            metadata={
+                                "override_type": pattern_type,
+                                "strategy": "explicit_override",
+                            },
                         )
 
         return None
@@ -351,7 +362,9 @@ class FallbackStrategy(ResolutionStrategy):
         top = sorted_matches[0]
 
         # Check if it's a close call
-        needs_review = len(sorted_matches) >= 2 and abs(top.confidence - sorted_matches[1].confidence) < 0.1
+        needs_review = (
+            len(sorted_matches) >= 2 and abs(top.confidence - sorted_matches[1].confidence) < 0.1
+        )
 
         return ConflictResolution(
             primary=top.skill_id,

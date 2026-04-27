@@ -38,7 +38,9 @@ class SkillPublisher:
 
     BASE_URL = "https://api.github.com"
 
-    def __init__(self, token: str | None = None, registry_repo: str = DEFAULT_REGISTRY_REPO) -> None:
+    def __init__(
+        self, token: str | None = None, registry_repo: str = DEFAULT_REGISTRY_REPO
+    ) -> None:
         self.token = token or os.getenv("GITHUB_TOKEN") or os.getenv("GH_TOKEN")
         self.registry_repo = registry_repo
         self.headers: dict[str, str] = {
@@ -89,12 +91,13 @@ class SkillPublisher:
             body_parts.append(f"- **Tags**: {', '.join(tags)}")
         if homepage:
             body_parts.append(f"- **Homepage**: {homepage}")
-        body_parts.extend([
-            "",
-            "---",
-            "*Published via VibeSOP SkillPublisher. "
-            "Close this issue to delist.*",
-        ])
+        body_parts.extend(
+            [
+                "",
+                "---",
+                "*Published via VibeSOP SkillPublisher. Close this issue to delist.*",
+            ]
+        )
         body = "\n".join(body_parts)
 
         payload: dict[str, Any] = {
@@ -107,9 +110,7 @@ class SkillPublisher:
             return {"dry_run": True, "payload": payload, "repo_name": repo_name}
 
         if not self.token:
-            return {
-                "error": "GITHUB_TOKEN or GH_TOKEN environment variable required for publish"
-            }
+            return {"error": "GITHUB_TOKEN or GH_TOKEN environment variable required for publish"}
 
         url = f"{self.BASE_URL}/repos/{self.registry_repo}/issues"
         try:
@@ -165,17 +166,19 @@ class SkillPublisher:
             title = item.get("title", "")
             if not title.startswith(f"[{PUBLISH_LABEL}]"):
                 continue
-            repo_name = title[len(f"[{PUBLISH_LABEL}] "):].strip()
+            repo_name = title[len(f"[{PUBLISH_LABEL}] ") :].strip()
             body = item.get("body", "")
             desc, tag_list, homepage = self._parse_issue_body(body)
-            listings.append(SkillListing(
-                repo_name=repo_name,
-                description=desc,
-                tags=tag_list,
-                homepage=homepage,
-                issue_url=item.get("html_url", ""),
-                issue_number=item.get("number", 0),
-            ))
+            listings.append(
+                SkillListing(
+                    repo_name=repo_name,
+                    description=desc,
+                    tags=tag_list,
+                    homepage=homepage,
+                    issue_url=item.get("html_url", ""),
+                    issue_number=item.get("number", 0),
+                )
+            )
 
         return listings
 
@@ -189,6 +192,7 @@ class SkillPublisher:
             if resp.status_code != 200:
                 return result
             import base64
+
             content = base64.b64decode(resp.json()["content"]).decode("utf-8")
             frontmatter = self._parse_frontmatter(content)
             result["description"] = frontmatter.get("description", "")

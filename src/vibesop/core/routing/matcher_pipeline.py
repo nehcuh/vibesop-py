@@ -51,8 +51,7 @@ class MatcherPipeline:
 
         # Build skill_id -> description lookup from candidates
         desc_map: dict[str, str] = {
-            str(c.get("id", "")): str(c.get("description", ""))
-            for c in filtered
+            str(c.get("id", "")): str(c.get("description", "")) for c in filtered
         }
 
         # Aggregate scores across all matchers so a strong TF-IDF match isn't
@@ -116,12 +115,14 @@ class MatcherPipeline:
                     try:
                         score = first_matcher.score(query, c, context)
                         if near_miss_threshold <= score < threshold:
-                            rejected_candidates.append({
-                                "skill_id": sid,
-                                "confidence": score,
-                                "layer": first_layer,
-                                "reason": f"below threshold ({threshold:.2f})",
-                            })
+                            rejected_candidates.append(
+                                {
+                                    "skill_id": sid,
+                                    "confidence": score,
+                                    "layer": first_layer,
+                                    "reason": f"below threshold ({threshold:.2f})",
+                                }
+                            )
                     except (TypeError, ValueError):
                         pass
                 # Sort by confidence desc and limit to top 5

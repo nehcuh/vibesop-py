@@ -55,9 +55,7 @@ class SessionTracker(ABC):
         pass
 
     @abstractmethod
-    def record_tool_use(
-        self, tool_name: str, skill: str | None = None, **_context: Any
-    ) -> None:
+    def record_tool_use(self, tool_name: str, skill: str | None = None, **_context: Any) -> None:
         """Record a tool use event.
 
         Args:
@@ -123,6 +121,7 @@ class GenericSessionTracker(SessionTracker):
 
         # State file (hash the project root to keep sessions separate per project)
         import hashlib
+
         project_hash = hashlib.md5(str(self.project_root).encode()).hexdigest()[:8]
         self._state_file = self.config_dir / f"state_{project_hash}.json"
 
@@ -170,9 +169,7 @@ class GenericSessionTracker(SessionTracker):
             logger.error(f"Failed to disable generic tracking: {e}")
             return False
 
-    def record_tool_use(
-        self, tool_name: str, skill: str | None = None, **_context: Any
-    ) -> None:
+    def record_tool_use(self, tool_name: str, skill: str | None = None, **_context: Any) -> None:
         """Record a tool use event.
 
         Args:
@@ -317,9 +314,7 @@ class HookBasedSessionTracker(SessionTracker):
         # Hooks are disabled via VIBESOP_CONTEXT_TRACKING=false
         return True
 
-    def record_tool_use(
-        self, tool_name: str, skill: str | None = None, **context: Any
-    ) -> None:
+    def record_tool_use(self, tool_name: str, skill: str | None = None, **context: Any) -> None:
         """Record a tool use event (called by hooks).
 
         Args:
@@ -384,9 +379,7 @@ def _detect_platform() -> str:
     import os
 
     # Check for Claude Code
-    if "CLAUDE_SESSION_FILE" in os.environ or Path.home().joinpath(
-        ".claude"
-    ).exists():
+    if "CLAUDE_SESSION_FILE" in os.environ or Path.home().joinpath(".claude").exists():
         return "claude-code"
 
     # Check for Kimi Code CLI

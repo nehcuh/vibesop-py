@@ -26,9 +26,7 @@ class RouterOrchestrationMixin:
         - project_root: Path
     """
 
-    def _to_orchestration_result(
-        self, result: RoutingResult, query: str
-    ) -> OrchestrationResult:
+    def _to_orchestration_result(self, result: RoutingResult, query: str) -> OrchestrationResult:
         """Convert a single RoutingResult to OrchestrationResult."""
         return OrchestrationResult(
             mode=OrchestrationMode.SINGLE,
@@ -72,6 +70,7 @@ class RouterOrchestrationMixin:
         # 3. Direct provider from environment
         try:
             from vibesop.llm.factory import create_provider
+
             provider = create_provider()
             if provider.configured():
                 return provider

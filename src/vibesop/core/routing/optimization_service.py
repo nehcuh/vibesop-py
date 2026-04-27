@@ -311,11 +311,15 @@ class OptimizationService:
 
         # Build augmented query from memory context
         search_query = query
-        if context and context.recent_queries and (
-            len(query) < 15
-            or any(
-                p in query.lower()
-                for p in ("还是", "再", "继续", "也", "另外", "还有", "不行", "不对")
+        if (
+            context
+            and context.recent_queries
+            and (
+                len(query) < 15
+                or any(
+                    p in query.lower()
+                    for p in ("还是", "再", "继续", "也", "另外", "还有", "不行", "不对")
+                )
             )
         ):
             search_query = " ".join([*context.recent_queries[-2:], query])
@@ -345,7 +349,9 @@ class OptimizationService:
         boosted: list[MatchResult] = []
         for match_obj in matches:
             boost = boost_map.get(match_obj.skill_id, 0.0)
-            boosted_match = match_obj.with_boost(boost, source="instinct") if boost > 0 else match_obj
+            boosted_match = (
+                match_obj.with_boost(boost, source="instinct") if boost > 0 else match_obj
+            )
             boosted.append(boosted_match)
 
         # Re-sort by boosted confidence

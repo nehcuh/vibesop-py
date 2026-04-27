@@ -42,6 +42,7 @@ skills_app.command("available")(available)
 skills_app.command("enable")(enable)
 skills_app.command("disable")(disable)
 
+
 # Add alias for "skills" (plural form)
 def skills(
     action: str = typer.Argument(..., help="Action: add, list, info, etc."),

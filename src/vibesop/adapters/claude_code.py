@@ -504,7 +504,6 @@ class ClaudeCodeAdapter(PlatformAdapter):
             },
         }
 
-
     def _render_route_hook(
         self,
         output_dir: Path,

@@ -125,22 +125,32 @@ def _check_platform(platform: str) -> list[dict]:
         elif check_id == "claude_md":
             path = config_dir / "CLAUDE.md"
             result["pass"] = path.exists()
-            result["detail"] = f"Found ({path.stat().st_size}b)" if result["pass"] else f"Missing: {path}"
+            result["detail"] = (
+                f"Found ({path.stat().st_size}b)" if result["pass"] else f"Missing: {path}"
+            )
 
         elif check_id == "project_claude_md":
             path = project_root / "CLAUDE.md"
             result["pass"] = path.exists()
-            result["detail"] = f"Found ({path.stat().st_size}b)" if result["pass"] else f"Missing: {path}"
+            result["detail"] = (
+                f"Found ({path.stat().st_size}b)" if result["pass"] else f"Missing: {path}"
+            )
 
         elif check_id == "rules_dir":
             path = config_dir / "rules"
             result["pass"] = path.is_dir()
-            result["detail"] = f"Found ({len(list(path.iterdir()))} files)" if result["pass"] else f"Missing: {path}"
+            result["detail"] = (
+                f"Found ({len(list(path.iterdir()))} files)"
+                if result["pass"]
+                else f"Missing: {path}"
+            )
 
         elif check_id == "route_hook":
             path = config_dir / "hooks" / "vibesop-route.sh"
             result["pass"] = path.exists()
-            result["detail"] = f"Found ({path.stat().st_size}b)" if result["pass"] else f"Missing: {path}"
+            result["detail"] = (
+                f"Found ({path.stat().st_size}b)" if result["pass"] else f"Missing: {path}"
+            )
 
         elif check_id == "route_hook_executable":
             path = config_dir / "hooks" / "vibesop-route.sh"
@@ -154,12 +164,16 @@ def _check_platform(platform: str) -> list[dict]:
         elif check_id == "track_hook":
             path = config_dir / "hooks" / "vibesop-track.sh"
             result["pass"] = path.exists()
-            result["detail"] = f"Found ({path.stat().st_size}b)" if result["pass"] else f"Missing: {path}"
+            result["detail"] = (
+                f"Found ({path.stat().st_size}b)" if result["pass"] else f"Missing: {path}"
+            )
 
         elif check_id == "config_toml":
             path = config_dir / "config.toml"
             result["pass"] = path.exists()
-            result["detail"] = f"Found ({path.stat().st_size}b)" if result["pass"] else f"Missing: {path}"
+            result["detail"] = (
+                f"Found ({path.stat().st_size}b)" if result["pass"] else f"Missing: {path}"
+            )
 
         elif check_id == "hooks_section":
             path = config_dir / "config.toml"
@@ -173,29 +187,39 @@ def _check_platform(platform: str) -> list[dict]:
                 elif has_hooks:
                     result["detail"] = "[[hooks]] exists but vibesop-route not found"
                 else:
-                    result["detail"] = "No [[hooks]] section found (may have been overwritten by Kimi CLI)"
+                    result["detail"] = (
+                        "No [[hooks]] section found (may have been overwritten by Kimi CLI)"
+                    )
             else:
                 result["detail"] = "config.toml not found"
 
         elif check_id == "agents_md_config":
             path = config_dir / "AGENTS.md"
             result["pass"] = path.exists()
-            result["detail"] = f"Found ({path.stat().st_size}b)" if result["pass"] else f"Missing: {path}"
+            result["detail"] = (
+                f"Found ({path.stat().st_size}b)" if result["pass"] else f"Missing: {path}"
+            )
 
         elif check_id == "agents_md_project":
             path = project_root / "AGENTS.md"
             result["pass"] = path.exists()
-            result["detail"] = f"Found ({path.stat().st_size}b)" if result["pass"] else f"Missing: {path}"
+            result["detail"] = (
+                f"Found ({path.stat().st_size}b)" if result["pass"] else f"Missing: {path}"
+            )
 
         elif check_id == "env_script":
             path = config_dir / "vibesop-env.sh"
             result["pass"] = path.exists()
-            result["detail"] = f"Found ({path.stat().st_size}b)" if result["pass"] else f"Missing: {path}"
+            result["detail"] = (
+                f"Found ({path.stat().st_size}b)" if result["pass"] else f"Missing: {path}"
+            )
 
         elif check_id == "hook_script":
             path = config_dir / "hooks" / "vibesop-route.sh"
             result["pass"] = path.exists()
-            result["detail"] = f"Found ({path.stat().st_size}b)" if result["pass"] else f"Missing: {path}"
+            result["detail"] = (
+                f"Found ({path.stat().st_size}b)" if result["pass"] else f"Missing: {path}"
+            )
 
         elif check_id == "hook_executable":
             path = config_dir / "hooks" / "vibesop-route.sh"

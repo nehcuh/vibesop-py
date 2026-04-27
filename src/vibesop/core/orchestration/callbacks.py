@@ -18,20 +18,20 @@ if TYPE_CHECKING:
 class OrchestrationPhase(StrEnum):
     """Phases in the orchestration pipeline."""
 
-    ROUTING = "routing"           # Single-skill routing (fast path)
-    DETECTION = "detection"       # Multi-intent detection
+    ROUTING = "routing"  # Single-skill routing (fast path)
+    DETECTION = "detection"  # Multi-intent detection
     DECOMPOSITION = "decomposition"  # Task decomposition
     PLAN_BUILDING = "plan_building"  # Execution plan construction
-    EXECUTION = "execution"       # Step execution (if applicable)
-    COMPLETE = "complete"         # Orchestration finished
+    EXECUTION = "execution"  # Step execution (if applicable)
+    COMPLETE = "complete"  # Orchestration finished
 
 
 class ErrorPolicy(StrEnum):
     """How to handle errors during orchestration."""
 
-    SKIP = "skip"       # Skip failed step, continue with others
-    RETRY = "retry"     # Retry failed step (with backoff)
-    ABORT = "abort"     # Stop entire orchestration
+    SKIP = "skip"  # Skip failed step, continue with others
+    RETRY = "retry"  # Retry failed step (with backoff)
+    ABORT = "abort"  # Stop entire orchestration
 
 
 @dataclass

@@ -4,10 +4,16 @@ from pathlib import Path
 _AI_SLOP_PATTERNS: list[tuple[str, str]] = [
     (r"#.*(?:obvious|simple|straightforward)\b", "over-explanatory comment"),
     (r"#.*(?:In this|Here we|Now let|I'm going)", "AI narrative comment"),
-    (r'"""[\s\S]*?(?:This\s+(?:function|class|module|method)\s+(?:is|does|will|can|should|handles))[\s\S]*?"""', "redundant docstring"),
+    (
+        r'"""[\s\S]*?(?:This\s+(?:function|class|module|method)\s+(?:is|does|will|can|should|handles))[\s\S]*?"""',
+        "redundant docstring",
+    ),
     (r"@property\s*\n\s*def\s+\w+\(self\)[\s\S]*?return\s+self\._\w+", "trivial property wrapper"),
     (r"class\s+\w+Error\s*\(.*\):\s*\n\s*pass", "empty error class"),
-    (r"def\s+\w+\([^)]*\)\s*->\s*(?:None|bool|int|str|float|list|dict):\s*\n\s*pass\b", "stub function"),
+    (
+        r"def\s+\w+\([^)]*\)\s*->\s*(?:None|bool|int|str|float|list|dict):\s*\n\s*pass\b",
+        "stub function",
+    ),
 ]
 
 
@@ -43,11 +49,13 @@ def scan_file(
     for pattern, kind in _AI_SLOP_PATTERNS:
         for match in re.finditer(pattern, content):
             line_num = content[: match.start()].count("\n") + 1
-            findings.append({
-                "line": line_num,
-                "kind": kind,
-                "snippet": match.group()[:100],
-            })
+            findings.append(
+                {
+                    "line": line_num,
+                    "kind": kind,
+                    "snippet": match.group()[:100],
+                }
+            )
             if len(findings) >= max_slops:
                 break
         if len(findings) >= max_slops:

@@ -144,7 +144,7 @@ def _generate_recommendations(
         )
 
     if mismatched_skills:
-        top_skill = max(mismatched_skills, key=mismatched_skills.get)
+        top_skill = max(mismatched_skills, key=mismatched_skills.get)  # type: ignore[reportCallIssue]
         recommendations.append(
             f"Skill '{top_skill}' has {mismatched_skills[top_skill]} mismatches - consider refining its trigger keywords"
         )
@@ -207,7 +207,7 @@ def get_deviation_summary(
         query = record.get("query", "")[:50]
         skill = record.get("routed_skill", "N/A")
         reason = record.get("reason_code", "unknown")
-        lines.append(f"- `{timestamp}` | **{skill}** | {reason} | \"{query}...\"")
+        lines.append(f'- `{timestamp}` | **{skill}** | {reason} | "{query}..."')
 
     lines.append("")
     lines.append("*Run `vibe analyze-deviations` for detailed analysis*")

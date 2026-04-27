@@ -35,8 +35,13 @@ def suggestions(
 
     if json_output:
         import json
+
         suggestions_data = [s.to_dict() for s in collector.get_pending()]
-        console.print(json.dumps({"suggestions": suggestions_data, **collector.get_stats()}, indent=2, default=str))
+        console.print(
+            json.dumps(
+                {"suggestions": suggestions_data, **collector.get_stats()}, indent=2, default=str
+            )
+        )
         return
 
     if dismiss:
@@ -46,13 +51,19 @@ def suggestions(
 
     pending = collector.get_pending()
     if not pending:
-        console.print("[dim]No pending skill suggestions. Keep working \u2014 VibeSOP learns from your workflows![/dim]")
+        console.print(
+            "[dim]No pending skill suggestions. Keep working \u2014 VibeSOP learns from your workflows![/dim]"
+        )
         stats = collector.get_stats()
         if stats["created"] > 0:
-            console.print(f"[dim]{stats['created']} skill(s) created from suggestions so far.[/dim]")
+            console.print(
+                f"[dim]{stats['created']} skill(s) created from suggestions so far.[/dim]"
+            )
         return
 
-    console.print(f"\n[bold]\U0001f4a1 Pending Skill Suggestions[/bold] [dim]({len(pending)} total)[/dim]\n")
+    console.print(
+        f"\n[bold]\U0001f4a1 Pending Skill Suggestions[/bold] [dim]({len(pending)} total)[/dim]\n"
+    )
 
     for i, s in enumerate(pending, 1):
         steps_str = " \u2192 ".join(s.pattern_steps[:5])
@@ -60,9 +71,13 @@ def suggestions(
             steps_str += f" \u2192 ... (+{len(s.pattern_steps) - 5} more)"
         tags_str = f" [dim]{', '.join(s.context_tags)}[/dim]" if s.context_tags else ""
 
-        console.print(f"[bold cyan]{i}.[/bold cyan] [bold]{s.suggested_name}[/bold cyan] (confidence: {s.confidence:.0%})")
+        console.print(
+            f"[bold cyan]{i}.[/bold cyan] [bold]{s.suggested_name}[/bold cyan] (confidence: {s.confidence:.0%})"
+        )
         console.print(f"    Pattern: {steps_str}")
-        console.print(f"    Occurrences: {s.occurrences} times, {s.success_rate:.0%} success{tags_str}")
+        console.print(
+            f"    Occurrences: {s.occurrences} times, {s.success_rate:.0%} success{tags_str}"
+        )
         console.print(f"    ID: [dim]{s.id}[/dim]")
         console.print()
 
@@ -86,25 +101,27 @@ def create_from_suggestion(suggestion_id: str) -> None:
         raise typer.Exit(1)
 
     if suggestion.status == "created":
-        console.print(f"[yellow]\u26a0 Suggestion already created as skill: {suggestion.skill_id}[/yellow]")
+        console.print(
+            f"[yellow]\u26a0 Suggestion already created as skill: {suggestion.skill_id}[/yellow]"
+        )
         return
 
     console.print("\n[bold]\u2728 Creating skill from pattern...[/bold]")
     console.print(f"  Name: [cyan]{suggestion.suggested_name}[/cyan]")
     console.print(f"  Pattern: [dim]{' \u2192 '.join(suggestion.pattern_steps)}[/dim]")
-    console.print(f"  Confidence: {suggestion.confidence:.0%} ({suggestion.occurrences} occurrences)")
+    console.print(
+        f"  Confidence: {suggestion.confidence:.0%} ({suggestion.occurrences} occurrences)"
+    )
 
     skill_dir = Path.cwd() / ".vibe" / "skills" / suggestion.suggested_name
     skill_dir.mkdir(parents=True, exist_ok=True)
 
-    steps_md = "\n".join(
-        f"   - {step}" for step in suggestion.pattern_steps
-    )
+    steps_md = "\n".join(f"   - {step}" for step in suggestion.pattern_steps)
     content = f"""---
 id: custom/{suggestion.suggested_name}
 name: {suggestion.suggested_name}
 description: {suggestion.suggested_description}
-tags: [{', '.join(suggestion.context_tags) or 'workflow, auto-generated'}]
+tags: [{", ".join(suggestion.context_tags) or "workflow, auto-generated"}]
 intent: general
 namespace: custom
 version: 1.0.0
@@ -113,7 +130,7 @@ auto_generated: true
 source_suggestion: {suggestion.id}
 ---
 
-# {suggestion.suggested_name.replace('-', ' ').title()}
+# {suggestion.suggested_name.replace("-", " ").title()}
 
 > Auto-generated from your workflow patterns
 > Confidence: {suggestion.confidence:.0%} | Occurrences: {suggestion.occurrences}
@@ -132,7 +149,7 @@ This skill was auto-detected from your successful tool call sequences.
 Edit this file to add context, refine steps, and improve accuracy.
 
 ```bash
-vibe route "your query related to {' \u2192 '.join(suggestion.pattern_steps[:3])}"
+vibe route "your query related to {" \u2192 ".join(suggestion.pattern_steps[:3])}"
 ```
 """
     (skill_dir / "SKILL.md").write_text(content)
@@ -143,7 +160,9 @@ vibe route "your query related to {' \u2192 '.join(suggestion.pattern_steps[:3])
         configurator = SkillAutoConfigurator()
         configurator.save_config(config, Path.cwd() / ".vibe" / "skills")
 
-        console.print(f"[green]\u2713[/green] Auto-analyzed: category={config.category}, priority={config.priority}")
+        console.print(
+            f"[green]\u2713[/green] Auto-analyzed: category={config.category}, priority={config.priority}"
+        )
         console.print(f"  Routing patterns: {len(config.routing_patterns)} generated")
     except Exception as e:
         console.print(f"[yellow]\u26a0 Auto-config skipped: {e}[/yellow]")
@@ -152,7 +171,7 @@ vibe route "your query related to {' \u2192 '.join(suggestion.pattern_steps[:3])
     collector.mark_created(suggestion.id, skill_id)
     console.print(f"[green]\u2713[/green] Registered as: [bold]{skill_id}[/bold]")
 
-    console.print("\n[dim]Next: `vibe route \"your query\"` will now match this skill[/dim]")
+    console.print('\n[dim]Next: `vibe route "your query"` will now match this skill[/dim]')
 
 
 __all__ = ["create_from_suggestion", "suggestions"]

@@ -285,8 +285,8 @@ class ExecutionMode(StrEnum):
     """Execution mode for a plan."""
 
     SEQUENTIAL = "sequential"  # Steps run one after another
-    PARALLEL = "parallel"      # Independent steps run concurrently
-    MIXED = "mixed"            # Automatically determine based on dependencies
+    PARALLEL = "parallel"  # Independent steps run concurrently
+    MIXED = "mixed"  # Automatically determine based on dependencies
 
 
 class ExecutionStep(BaseModel):
@@ -319,15 +319,14 @@ class ExecutionStep(BaseModel):
     completed_at: str | None = Field(default=None, description="Completion timestamp")
     dependencies: list[str] = Field(
         default_factory=list,
-        description="Step IDs this step depends on (empty = can run in parallel)"
+        description="Step IDs this step depends on (empty = can run in parallel)",
     )
     can_parallel: bool = Field(
-        default=True,
-        description="Whether this step can run in parallel with independent steps"
+        default=True, description="Whether this step can run in parallel with independent steps"
     )
     parallel_group: int | None = Field(
         default=None,
-        description="Group ID for parallel execution (steps in same group run together)"
+        description="Group ID for parallel execution (steps in same group run together)",
     )
 
     def to_dict(self) -> dict[str, Any]:
@@ -372,8 +371,7 @@ class ExecutionPlan(BaseModel):
     created_at: str = Field(default="", description="Creation timestamp")
     status: PlanStatus = Field(default=PlanStatus.PENDING, description="Plan status")
     execution_mode: ExecutionMode = Field(
-        default=ExecutionMode.SEQUENTIAL,
-        description="How steps should be executed"
+        default=ExecutionMode.SEQUENTIAL, description="How steps should be executed"
     )
 
     def to_dict(self) -> dict[str, Any]:
@@ -414,7 +412,8 @@ class ExecutionPlan(BaseModel):
         while len(completed) < len(self.steps):
             # Find all steps whose dependencies are satisfied
             ready = [
-                step for step in self.steps
+                step
+                for step in self.steps
                 if step.step_id not in completed
                 and all(dep in completed for dep in step.dependencies)
                 and step.can_parallel
@@ -491,10 +490,7 @@ class OrchestrationResult(BaseModel):
     @property
     def has_match(self) -> bool:
         """Whether any match was found (single or orchestrated), excluding fallback."""
-        return (
-            self.primary is not None
-            and self.primary.layer != RoutingLayer.FALLBACK_LLM
-        ) or (
+        return (self.primary is not None and self.primary.layer != RoutingLayer.FALLBACK_LLM) or (
             self.execution_plan is not None and len(self.execution_plan.steps) > 0
         )
 
@@ -519,7 +515,9 @@ class OrchestrationResult(BaseModel):
         When mode=SINGLE, returns the routing result directly.
         When mode=ORCHESTRATED, returns the single_fallback as primary.
         """
-        primary = self.single_fallback if self.mode == OrchestrationMode.ORCHESTRATED else self.primary
+        primary = (
+            self.single_fallback if self.mode == OrchestrationMode.ORCHESTRATED else self.primary
+        )
 
         # Build layer_details from the existing fields if present, otherwise empty
         layer_details = self.layer_details or []
@@ -744,47 +742,57 @@ class ExecutionManifest:
         ]
 
         for step in self.steps:
-            lines.extend([
-                f"## Step {step.step_number}: {step.skill_id}",
-                "",
-                f"**Skill**: {step.skill_name}",
-                "",
-            ])
+            lines.extend(
+                [
+                    f"## Step {step.step_number}: {step.skill_id}",
+                    "",
+                    f"**Skill**: {step.skill_name}",
+                    "",
+                ]
+            )
 
             if step.input_context:
-                lines.extend([
-                    "### Input Context (from upstream steps)",
-                    "",
-                    step.input_context,
-                    "",
-                ])
+                lines.extend(
+                    [
+                        "### Input Context (from upstream steps)",
+                        "",
+                        step.input_context,
+                        "",
+                    ]
+                )
 
-            lines.extend([
-                "### Instruction",
-                "",
-                step.instruction,
-                "",
-                "### Skill Content (SKILL.md inlined)",
-                "",
-                "```markdown",
-                step.skill_content,
-                "```",
-                "",
-                "### Completion",
-                "",
-                f"完成后必须输出: `<!-- {step.completion_marker} -->` 并附上结果摘要",
-                "",
-                "---",
-                "",
-            ])
+            lines.extend(
+                [
+                    "### Instruction",
+                    "",
+                    step.instruction,
+                    "",
+                    "### Skill Content (SKILL.md inlined)",
+                    "",
+                    "```markdown",
+                    step.skill_content,
+                    "```",
+                    "",
+                    "### Completion",
+                    "",
+                    f"完成后必须输出: `<!-- {step.completion_marker} -->` 并附上结果摘要",
+                    "",
+                    "---",
+                    "",
+                ]
+            )
 
-        lines.extend([
-            "## Final Verification",
-            "",
-            "All steps completed. Verify:",
-        ])
+        lines.extend(
+            [
+                "## Final Verification",
+                "",
+                "All steps completed. Verify:",
+            ]
+        )
         for step in self.steps:
-            lines.append(f"- [ ] Step {step.step_number} — {step.skill_id}: `<!-- {step.completion_marker} -->`")
+            lines.append(
+                f"- [ ] Step {step.step_number} — {step.skill_id}: `<!-- {step.completion_marker} -->`"
+            )
 
         return "\n".join(lines)
 

@@ -10,7 +10,7 @@ if TYPE_CHECKING:
     from rich.console import Console
 
 
-def _edit_execution_plan(result: Any, console: Console) -> bool:
+def _edit_execution_plan(result: Any, console: Console) -> bool:  # pyright: ignore[reportUnusedFunction]
     """Interactive execution plan editor.
 
     Returns True if plan was modified, False otherwise.

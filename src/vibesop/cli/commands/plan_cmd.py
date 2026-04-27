@@ -91,7 +91,9 @@ def plan_status() -> None:
 def plan_complete_step(
     step_id: str = typer.Argument(..., help="Step ID to mark complete"),
     result: str | None = typer.Option(None, "--result", "-r", help="Brief result summary"),
-    plan_id: str | None = typer.Option(None, "--plan", "-p", help="Plan ID (defaults to active plan)"),
+    plan_id: str | None = typer.Option(
+        None, "--plan", "-p", help="Plan ID (defaults to active plan)"
+    ),
 ) -> None:
     """Mark an execution step as completed."""
     tracker = _get_tracker()

@@ -177,9 +177,7 @@ class SkillHealthMonitor:
 
                 # 检查必需字段
                 required_fields = ["id:", "name:", "description:", "intent:"]
-                missing_fields = [
-                    field for field in required_fields if field not in content
-                ]
+                missing_fields = [field for field in required_fields if field not in content]
                 if missing_fields:
                     reasons.append(f"{skill_file.name} 缺少字段: {', '.join(missing_fields)}")
                     has_errors = True

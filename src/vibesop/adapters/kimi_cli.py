@@ -112,9 +112,7 @@ class KimiCliAdapter(PlatformAdapter):
 
             # Auto-merge with existing config if present (preserves auth/providers)
             if config_path.exists():
-                config_content = self._merge_config_with_existing(
-                    config_path, config_content
-                )
+                config_content = self._merge_config_with_existing(config_path, config_content)
             else:
                 result.add_warning(
                     "Kimi CLI first-time setup: "
@@ -222,11 +220,11 @@ class KimiCliAdapter(PlatformAdapter):
             "#   3. Follow browser authentication",
             "#",
             "# Method 2: Set environment variable",
-            "#   export KIMI_API_KEY=\"sk-your-api-key\"",
+            '#   export KIMI_API_KEY="sk-your-api-key"',
             "#",
             "# Method 3: Add api_key manually (Not recommended)",
             "#   [providers.kimi-for-coding]",
-            "#   api_key = \"sk-your-api-key\"",
+            '#   api_key = "sk-your-api-key"',
             "#",
             "# ==============================================",
             "",
@@ -235,65 +233,77 @@ class KimiCliAdapter(PlatformAdapter):
 
         # Add metadata if present
         if manifest.metadata.author:
-            lines.extend([
-                f"# Author: {manifest.metadata.author}",
-                "",
-            ])
+            lines.extend(
+                [
+                    f"# Author: {manifest.metadata.author}",
+                    "",
+                ]
+            )
         if manifest.metadata.description:
-            lines.extend([
-                f"# Description: {manifest.metadata.description}",
-                "",
-            ])
+            lines.extend(
+                [
+                    f"# Description: {manifest.metadata.description}",
+                    "",
+                ]
+            )
 
         # Add security settings
         security = manifest.get_effective_security_policy()
-        lines.extend([
-            "[vibesop.security]",
-            f"scan_external_content = {str(security.scan_external_content).lower()}",
-            f"max_file_size_mb = {security.max_file_size / (1024 * 1024):.1f}",
-            "",
-        ])
+        lines.extend(
+            [
+                "[vibesop.security]",
+                f"scan_external_content = {str(security.scan_external_content).lower()}",
+                f"max_file_size_mb = {security.max_file_size / (1024 * 1024):.1f}",
+                "",
+            ]
+        )
 
         # Add routing settings
         routing = manifest.get_effective_routing_policy()
-        lines.extend([
-            "[vibesop.routing]",
-            f"enable_ai_routing = {str(routing.enable_ai_routing).lower()}",
-            f"confidence_threshold = {routing.confidence_threshold}",
-            "",
-        ])
+        lines.extend(
+            [
+                "[vibesop.routing]",
+                f"enable_ai_routing = {str(routing.enable_ai_routing).lower()}",
+                f"confidence_threshold = {routing.confidence_threshold}",
+                "",
+            ]
+        )
 
         # Add skills note
         if manifest.skills:
-            lines.extend([
-                "# VibeSOP Skills",
-                f"# {len(manifest.skills)} skills configured.",
-                "# Install them to ~/.kimi/skills/ (or .kimi/skills/ for project-level)",
-                "# and set merge_all_available_skills = true to load from multiple sources.",
-                "",
-            ])
+            lines.extend(
+                [
+                    "# VibeSOP Skills",
+                    f"# {len(manifest.skills)} skills configured.",
+                    "# Install them to ~/.kimi/skills/ (or .kimi/skills/ for project-level)",
+                    "# and set merge_all_available_skills = true to load from multiple sources.",
+                    "",
+                ]
+            )
 
         # Add hook configuration for automatic VibeSOP routing
-        lines.extend([
-            "# ==============================================",
-            "# VibeSOP Auto-Routing Hook",
-            "# ==============================================",
-            "#",
-            "# This hook automatically calls 'vibe route' before each user prompt",
-            "# to enable context-aware skill routing. Requires the hook script",
-            "# to be installed at ~/.kimi/hooks/vibesop-route.sh",
-            "#",
-            "# NOTE: Kimi CLI event names vary by version. Valid values:",
-            "#   - 'UserPromptSubmit' : before sending user message to AI",
-            "#   - 'PreToolUse'       : before tool execution",
-            "# Adjust the event below to match your Kimi CLI version.",
-            "",
-            "[[hooks]]",
-            'name = "vibesop-route"',
-            'event = "UserPromptSubmit"',
-            'command = "bash ~/.kimi/hooks/vibesop-route.sh"',
-            "",
-        ])
+        lines.extend(
+            [
+                "# ==============================================",
+                "# VibeSOP Auto-Routing Hook",
+                "# ==============================================",
+                "#",
+                "# This hook automatically calls 'vibe route' before each user prompt",
+                "# to enable context-aware skill routing. Requires the hook script",
+                "# to be installed at ~/.kimi/hooks/vibesop-route.sh",
+                "#",
+                "# NOTE: Kimi CLI event names vary by version. Valid values:",
+                "#   - 'UserPromptSubmit' : before sending user message to AI",
+                "#   - 'PreToolUse'       : before tool execution",
+                "# Adjust the event below to match your Kimi CLI version.",
+                "",
+                "[[hooks]]",
+                'name = "vibesop-route"',
+                'event = "UserPromptSubmit"',
+                'command = "bash ~/.kimi/hooks/vibesop-route.sh"',
+                "",
+            ]
+        )
 
         return "\n".join(lines)
 
@@ -310,15 +320,16 @@ class KimiCliAdapter(PlatformAdapter):
             return ""
 
         # Remove newlines and replace with spaces
-        text = text.replace('\n', ' ')
-        text = text.replace('\r', ' ')
+        text = text.replace("\n", " ")
+        text = text.replace("\r", " ")
 
         # Collapse multiple spaces into one
         import re
-        text = re.sub(r'\s+', ' ', text)
+
+        text = re.sub(r"\s+", " ", text)
 
         # Escape backslashes and quotes
-        text = text.replace('\\', '\\\\')
+        text = text.replace("\\", "\\\\")
         text = text.replace('"', '\\"')
 
         return text.strip()
@@ -448,20 +459,20 @@ class KimiCliAdapter(PlatformAdapter):
             "- Parallel steps can be executed simultaneously",
             "",
             "Example:",
-            '```bash',
+            "```bash",
             '# User: "分析架构并优化性能"',
-            '# vibe route returns execution plan:',
-            '#   Step 1: superpowers-architect — Analyze architecture',
-            '#   Step 2: superpowers-optimize — Optimize performance',
-            '#',
-            '# Execution:',
-            '# 1. Read superpowers-architect/SKILL.md',
-            '# 2. Follow architect workflow',
+            "# vibe route returns execution plan:",
+            "#   Step 1: superpowers-architect — Analyze architecture",
+            "#   Step 2: superpowers-optimize — Optimize performance",
+            "#",
+            "# Execution:",
+            "# 1. Read superpowers-architect/SKILL.md",
+            "# 2. Follow architect workflow",
             '# 3. Report: "步骤 1 完成"',
-            '# 4. Read superpowers-optimize/SKILL.md',
-            '# 5. Follow optimize workflow',
+            "# 4. Read superpowers-optimize/SKILL.md",
+            "# 5. Follow optimize workflow",
             '# 6. Report: "步骤 2 完成"',
-            '```',
+            "```",
             "",
             "### Fallback Mode (降级处理)",
             "",
@@ -473,12 +484,12 @@ class KimiCliAdapter(PlatformAdapter):
             "### Quick Commands (快捷命令)",
             "",
             "When a user types a `/vibe-*` command, execute it directly with `vibe route --slash`:",
-            '```bash',
+            "```bash",
             'vibe route --slash "/vibe-help"',
             'vibe route --slash "/vibe-list"',
             'vibe route --slash "/vibe-analyze --deep"',
             'vibe route --slash "/vibe-install gstack"',
-            '```',
+            "```",
             "",
             "Available quick commands:",
             "- `/vibe-help` — Show all available commands",
@@ -591,7 +602,7 @@ class KimiCliAdapter(PlatformAdapter):
             "",
             "收到任何**非平凡**的用户请求时，你必须：",
             "",
-            "1. **先路由**：运行 `vibe route \"<用户请求>\"` 获取技能推荐",
+            '1. **先路由**：运行 `vibe route "<用户请求>"` 获取技能推荐',
             "2. **再加载**：读取推荐 skill 的 SKILL.md",
             "3. **后执行**：严格按照 skill 指导执行",
             "",
@@ -599,12 +610,12 @@ class KimiCliAdapter(PlatformAdapter):
             "",
             "以下情况**必须**执行路由：",
             "- 用户请求涉及代码审查、调试、优化、架构设计",
-            "- 用户请求包含多个子任务（如\"分析并优化\"）",
+            '- 用户请求包含多个子任务（如"分析并优化"）',
             "- 用户请求长度超过 20 个字符",
-            "- 用户使用了明确的技能指示词（如\"review\",\"debug\",\"plan\"）",
+            '- 用户使用了明确的技能指示词（如"review","debug","plan"）',
             "",
             "以下情况**可以跳过**路由：",
-            "- 简单的问候或确认（\"你好\"、\"ok\"）",
+            '- 简单的问候或确认（"你好"、"ok"）',
             "- 关于 VibeSOP 系统本身的元问题",
             "- 长度少于 10 个字符的查询",
             "",
@@ -617,20 +628,20 @@ class KimiCliAdapter(PlatformAdapter):
             "- 独立步骤可以并行处理",
             "",
             "示例：",
-            '```bash',
+            "```bash",
             '# 用户请求："分析架构并优化性能"',
-            '# vibe route 返回：',
-            '#   步骤 1: superpowers-architect — 分析架构',
-            '#   步骤 2: superpowers-optimize — 优化性能',
-            '#',
-            '# 执行流程：',
-            '# 1. 读取 superpowers-architect/SKILL.md',
-            '# 2. 按 skill 指导分析架构',
-            '# 3. 声明「步骤 1 完成」',
-            '# 4. 读取 superpowers-optimize/SKILL.md',
-            '# 5. 按 skill 指导优化性能',
-            '# 6. 声明「步骤 2 完成」',
-            '```',
+            "# vibe route 返回：",
+            "#   步骤 1: superpowers-architect — 分析架构",
+            "#   步骤 2: superpowers-optimize — 优化性能",
+            "#",
+            "# 执行流程：",
+            "# 1. 读取 superpowers-architect/SKILL.md",
+            "# 2. 按 skill 指导分析架构",
+            "# 3. 声明「步骤 1 完成」",
+            "# 4. 读取 superpowers-optimize/SKILL.md",
+            "# 5. 按 skill 指导优化性能",
+            "# 6. 声明「步骤 2 完成」",
+            "```",
             "",
             "## 决策透明化",
             "",
@@ -652,12 +663,12 @@ class KimiCliAdapter(PlatformAdapter):
             "## 快捷命令（Quick Commands）",
             "",
             "当用户输入 `/vibe-*` 命令时，直接使用 `vibe route --slash` 执行：",
-            '```bash',
+            "```bash",
             'vibe route --slash "/vibe-help"',
             'vibe route --slash "/vibe-list"',
             'vibe route --slash "/vibe-analyze --deep"',
             'vibe route --slash "/vibe-install gstack"',
-            '```',
+            "```",
             "",
             "可用快捷命令：",
             "- `/vibe-help` — 显示所有可用命令",
@@ -672,13 +683,13 @@ class KimiCliAdapter(PlatformAdapter):
             "",
             "为了启用多轮对话上下文感知，你必须在同一个会话中保持稳定的 conversation ID：",
             "",
-            '```bash',
-            '# 开始会话时生成一个稳定的 conversation ID（跨平台）',
+            "```bash",
+            "# 开始会话时生成一个稳定的 conversation ID（跨平台）",
             'CONVERSATION_ID="kimi-$(python3 -c "import os, hashlib; print(hashlib.sha256(os.getcwd().encode()).hexdigest()[:16])")"',
-            '',
-            '# 每次调用 vibe route 时都传递这个 ID',
+            "",
+            "# 每次调用 vibe route 时都传递这个 ID",
             'vibe route --conversation "$CONVERSATION_ID" "<用户请求>"',
-            '```',
+            "```",
             "",
             "上下文感知会带来的效果：",
             "- **Session Stickiness**：如果用户连续问相关问题，系统会优先保持当前 skill",
@@ -693,29 +704,35 @@ class KimiCliAdapter(PlatformAdapter):
 
         if manifest.skills:
             for skill in manifest.skills:
-                lines.extend([
-                    f"### {skill.id}",
-                    f"- **名称**: {skill.name}",
-                    f"- **描述**: {skill.description}",
-                    f"- **触发**: {skill.trigger_when}",
-                    "",
-                ])
+                lines.extend(
+                    [
+                        f"### {skill.id}",
+                        f"- **名称**: {skill.name}",
+                        f"- **描述**: {skill.description}",
+                        f"- **触发**: {skill.trigger_when}",
+                        "",
+                    ]
+                )
         else:
-            lines.extend([
-                "当前未配置技能。",
-                "",
-                "安装技能：",
-                "```bash",
-                "vibe install <skill-pack-url>",
-                "```",
-                "",
-            ])
+            lines.extend(
+                [
+                    "当前未配置技能。",
+                    "",
+                    "安装技能：",
+                    "```bash",
+                    "vibe install <skill-pack-url>",
+                    "```",
+                    "",
+                ]
+            )
 
-        lines.extend([
-            "---",
-            "",
-            f"*Generated by VibeSOP v{manifest.metadata.version}*",
-        ])
+        lines.extend(
+            [
+                "---",
+                "",
+                f"*Generated by VibeSOP v{manifest.metadata.version}*",
+            ]
+        )
 
         return "\n".join(lines)
 

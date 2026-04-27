@@ -30,12 +30,8 @@ from vibesop.core.skills.manager import SkillManager
 
 console = Console()
 
-_IMPORT_CONFIG_ARGUMENT = typer.Argument(
-    ..., help="Path to configuration file (JSON or YAML)"
-)
-_EXPORT_CONFIG_ARGUMENT = typer.Argument(
-    ..., help="Output file path (JSON or YAML)"
-)
+_IMPORT_CONFIG_ARGUMENT = typer.Argument(..., help="Path to configuration file (JSON or YAML)")
+_EXPORT_CONFIG_ARGUMENT = typer.Argument(..., help="Output file path (JSON or YAML)")
 
 
 def list_configs() -> None:
@@ -86,7 +82,9 @@ def list_configs() -> None:
     with_llm = sum(1 for c in skill_configs.values() if c.requires_llm)
     auto_configured = sum(1 for c in skill_configs.values() if c.auto_configured)
 
-    console.print(f"\n[dim]Total: {total} | Enabled: {enabled} | With LLM: {with_llm} | Auto-configured: {auto_configured}[/dim]")
+    console.print(
+        f"\n[dim]Total: {total} | Enabled: {enabled} | With LLM: {with_llm} | Auto-configured: {auto_configured}[/dim]"
+    )
 
 
 def get_config(skill_id: str) -> None:
@@ -159,10 +157,16 @@ def get_config(skill_id: str) -> None:
 
 def set_config(
     skill_id: str = typer.Argument(..., help="Skill identifier"),
-    provider: str | None = typer.Option(None, "--provider", "-p", help="LLM provider (anthropic, openai, etc.)"),
+    provider: str | None = typer.Option(
+        None, "--provider", "-p", help="LLM provider (anthropic, openai, etc.)"
+    ),
     model: str | None = typer.Option(None, "--model", "-m", help="Model name"),
-    temperature: float | None = typer.Option(None, "--temperature", "-t", help="Temperature parameter"),
-    api_key: str | None = typer.Option(None, "--api-key", help="API key (optional, uses global if not specified)"),
+    temperature: float | None = typer.Option(
+        None, "--temperature", "-t", help="Temperature parameter"
+    ),
+    api_key: str | None = typer.Option(
+        None, "--api-key", help="API key (optional, uses global if not specified)"
+    ),
     api_base: str | None = typer.Option(None, "--api-base", help="API base URL (optional)"),
 ) -> None:
     """Set LLM configuration for a specific skill.
@@ -190,7 +194,9 @@ def set_config(
             console.print(f"[dim]Skill found: {skill_def.metadata.name}[/dim]\n")
     except (OSError, ValueError):
         console.print(f"[yellow]⚠ Warning: Skill '{skill_id}' not found in registry[/yellow]")
-        console.print("[dim]Configuration will be saved, but skill may not be installed yet\n[/dim]")
+        console.print(
+            "[dim]Configuration will be saved, but skill may not be installed yet\n[/dim]"
+        )
 
     # 如果没有提供参数,使用交互式模式
     if not any([provider, model]):
@@ -213,7 +219,9 @@ def set_config(
         # 根据提供商推荐模型
         if provider == "anthropic":
             model_choices = [
-                questionary.Choice("Claude 3.5 Sonnet (Recommended)", value="claude-3-5-sonnet-20241022"),
+                questionary.Choice(
+                    "Claude 3.5 Sonnet (Recommended)", value="claude-3-5-sonnet-20241022"
+                ),
                 questionary.Choice("Claude Sonnet 4.6", value="claude-sonnet-4-6-20250514"),
                 questionary.Choice("Claude 3 Opus", value="claude-3-opus-20240229"),
                 questionary.Choice("Claude 3 Haiku (Fast)", value="claude-3-haiku-20240307"),
@@ -280,7 +288,7 @@ def set_config(
             f"  [cyan]Model:[/cyan] {model}\n"
             f"  [cyan]Temperature:[/cyan] {temperature}\n\n"
             f"[dim]Test it with:[/dim]\n"
-            f"  [cyan]vibe route \"{skill_id}\"[/cyan]",
+            f'  [cyan]vibe route "{skill_id}"[/cyan]',
             border_style="green",
         )
     )
@@ -348,6 +356,7 @@ def import_config(
         with config_file.open() as f:
             if config_file.suffix in [".yaml", ".yml"]:
                 import yaml
+
                 configs = yaml.safe_load(f)
             else:
                 configs = json.load(f)
@@ -409,6 +418,7 @@ def export_config(
         with output_file.open("w") as f:
             if output_file.suffix in [".yaml", ".yml"]:
                 import yaml
+
                 yaml.dump(export_data, f, default_flow_style=False)
             else:
                 json.dump(export_data, f, indent=2)

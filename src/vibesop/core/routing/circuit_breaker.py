@@ -60,9 +60,7 @@ class TriageCircuitBreaker:
                 return True
             elapsed = time.monotonic() - self._last_failure_time
             if elapsed >= self.cooldown_seconds:
-                logger.debug(
-                    f"Circuit breaker entering HALF_OPEN after {elapsed:.0f}s cooldown"
-                )
+                logger.debug(f"Circuit breaker entering HALF_OPEN after {elapsed:.0f}s cooldown")
                 self._state = CircuitState.HALF_OPEN
                 return True
             logger.debug(
@@ -143,7 +141,7 @@ class TriageCircuitBreaker:
             "last_trip_reason": self._last_trip_reason,
             "cooldown_seconds": self.cooldown_seconds,
             "recent_calls": len(self._latencies_ms),
-            "avg_latency_ms": round(
-                sum(self._latencies_ms) / len(self._latencies_ms), 1
-            ) if self._latencies_ms else 0.0,
+            "avg_latency_ms": round(sum(self._latencies_ms) / len(self._latencies_ms), 1)
+            if self._latencies_ms
+            else 0.0,
         }

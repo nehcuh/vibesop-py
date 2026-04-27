@@ -50,10 +50,12 @@ class RoutingPerfMonitor:
             route_layer: The layer that produced the final match
         """
         with self._lock:
-            self._timings.append(RouteTiming(
-                duration_ms=duration_ms,
-                route_layer=route_layer,
-            ))
+            self._timings.append(
+                RouteTiming(
+                    duration_ms=duration_ms,
+                    route_layer=route_layer,
+                )
+            )
             self._total_routes += 1
             self._total_duration_ms += duration_ms
             self._layer_counts[route_layer] = self._layer_counts.get(route_layer, 0) + 1

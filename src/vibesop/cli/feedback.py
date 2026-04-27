@@ -11,7 +11,7 @@ if TYPE_CHECKING:
     from rich.console import Console
 
 
-def _collect_feedback(result: Any, router: Any, console: Console) -> None:
+def _collect_feedback(result: Any, router: Any, console: Console) -> None:  # pyright: ignore[reportUnusedFunction]
     """Collect user satisfaction feedback after orchestration.
 
     Writes to AnalyticsStore (analytics.jsonl) and synchronizes with
@@ -36,6 +36,7 @@ def _collect_feedback(result: Any, router: Any, console: Console) -> None:
         partial = feedback == "partial"
 
         from vibesop.core.analytics import AnalyticsStore
+
         store = AnalyticsStore()
         records = store.list_records(limit=1)
         if records:
@@ -47,17 +48,13 @@ def _collect_feedback(result: Any, router: Any, console: Console) -> None:
         if satisfied and result.execution_plan:
             for step in result.execution_plan.steps:
                 with contextlib.suppress(Exception):
-                    router.record_selection(
-                        step.skill_id, result.original_query, was_helpful=True
-                    )
+                    router.record_selection(step.skill_id, result.original_query, was_helpful=True)
 
         # Synchronize feedback with evaluator data source
         _sync_to_evaluator(result, satisfied)
 
         if not satisfied:
-            console.print(
-                "[dim]Thanks for the feedback. We'll use this to improve routing.[/dim]"
-            )
+            console.print("[dim]Thanks for the feedback. We'll use this to improve routing.[/dim]")
             record_deviation = questionary.confirm(
                 "Would you like to record this as a routing deviation for analysis?",
                 default=False,

@@ -95,7 +95,7 @@ class SkillInjector:
         truncated = False
 
         if skill_content and len(skill_content) > self.MAX_INJECT_LENGTH:
-            skill_content = skill_content[:self.MAX_INJECT_LENGTH]
+            skill_content = skill_content[: self.MAX_INJECT_LENGTH]
             truncated = True
 
         if platform == PlatformType.CLAUDE_CODE:
@@ -282,25 +282,31 @@ You MUST follow this skill's workflow. Do not skip steps.
 
         # Transparency: show detected intents and reasoning
         if plan.detected_intents:
-            lines.extend([
-                "## 检测到的意图",
-                ", ".join(f"- {intent}" for intent in plan.detected_intents),
-                "",
-            ])
+            lines.extend(
+                [
+                    "## 检测到的意图",
+                    ", ".join(f"- {intent}" for intent in plan.detected_intents),
+                    "",
+                ]
+            )
 
         if plan.reasoning:
-            lines.extend([
-                "## 分解理由",
-                plan.reasoning,
-                "",
-            ])
+            lines.extend(
+                [
+                    "## 分解理由",
+                    plan.reasoning,
+                    "",
+                ]
+            )
 
-        lines.extend([
-            f"## 执行模式: {plan.execution_mode.value}",
-            "",
-            "你必须按以下步骤执行。每完成一步，报告结果后再继续下一步。",
-            "",
-        ])
+        lines.extend(
+            [
+                f"## 执行模式: {plan.execution_mode.value}",
+                "",
+                "你必须按以下步骤执行。每完成一步，报告结果后再继续下一步。",
+                "",
+            ]
+        )
 
         # Get parallel groups for visualization
         groups = plan.get_parallel_groups()
@@ -308,42 +314,49 @@ You MUST follow this skill's workflow. Do not skip steps.
         for group_num, group in enumerate(groups, 1):
             if len(group) == 1:
                 step = group[0]
-                lines.extend([
-                    f"## 步骤 {step.step_number}: {step.intent}",
-                    f"- 使用 skill: {step.skill_id}",
-                    f"- 任务: {step.input_query}",
-                    f"- 输出变量: {step.output_as}",
-                    "",
-                    f"完成此步骤后，请明确声明：『步骤 {step.step_number} 完成，"
-                    f"输出已保存到 {step.output_as}』",
-                    "",
-                ])
+                lines.extend(
+                    [
+                        f"## 步骤 {step.step_number}: {step.intent}",
+                        f"- 使用 skill: {step.skill_id}",
+                        f"- 任务: {step.input_query}",
+                        f"- 输出变量: {step.output_as}",
+                        "",
+                        f"完成此步骤后，请明确声明：『步骤 {step.step_number} 完成，"
+                        f"输出已保存到 {step.output_as}』",
+                        "",
+                    ]
+                )
             else:
                 lines.append(f"## 并行步骤组 {group_num}")
                 lines.append("以下步骤可以并行执行：")
                 for step in group:
-                    lines.extend([
+                    lines.extend(
+                        [
+                            "",
+                            f"### 步骤 {step.step_number}: {step.intent}",
+                            f"- 使用 skill: {step.skill_id}",
+                            f"- 任务: {step.input_query}",
+                        ]
+                    )
+                lines.extend(
+                    [
                         "",
-                        f"### 步骤 {step.step_number}: {step.intent}",
-                        f"- 使用 skill: {step.skill_id}",
-                        f"- 任务: {step.input_query}",
-                    ])
-                lines.extend([
-                    "",
-                    f"所有并行步骤完成后，请明确声明："
-                    f"『并行组 {group_num} 全部完成』",
-                    "",
-                ])
+                        f"所有并行步骤完成后，请明确声明：『并行组 {group_num} 全部完成』",
+                        "",
+                    ]
+                )
 
-        lines.extend([
-            "",
-            "---",
-            "执行规则:",
-            "1. 严格按照步骤顺序执行",
-            "2. 每步必须读取对应的 SKILL.md",
-            "3. 每步完成后明确报告",
-            "4. 如果某步失败，报告错误并询问是否继续",
-        ])
+        lines.extend(
+            [
+                "",
+                "---",
+                "执行规则:",
+                "1. 严格按照步骤顺序执行",
+                "2. 每步必须读取对应的 SKILL.md",
+                "3. 每步完成后明确报告",
+                "4. 如果某步失败，报告错误并询问是否继续",
+            ]
+        )
 
         return "\n".join(lines)
 

@@ -159,9 +159,7 @@ class SessionContext:
             return env_id
 
         # Derive from project path hash for per-project isolation
-        path_hash = hashlib.sha256(
-            str(self.project_root).encode("utf-8")
-        ).hexdigest()[:12]
+        path_hash = hashlib.sha256(str(self.project_root).encode("utf-8")).hexdigest()[:12]
         return f"project-{path_hash}"
 
     def record_tool_use(
@@ -243,7 +241,7 @@ class SessionContext:
                 )
 
             # Route the new message
-            routing_result = self._router.route(user_message)
+            routing_result = self._router._route(user_message)
 
             if not routing_result.has_match:
                 return RoutingSuggestion(
@@ -293,7 +291,11 @@ class SessionContext:
         Returns:
             List of recent tool use events
         """
-        return self._tool_history[-min_events:] if len(self._tool_history) >= min_events else self._tool_history.copy()
+        return (
+            self._tool_history[-min_events:]
+            if len(self._tool_history) >= min_events
+            else self._tool_history.copy()
+        )
 
     def _detect_context_change(
         self, user_message: str, recent_tools: list[ToolUseEvent]
@@ -433,7 +435,10 @@ class SessionContext:
             Human-readable explanation
         """
         if context_change == ContextChange.SIGNIFICANT:
-            return f"Context shift detected: {current_skill} → {new_skill}. " f"Recent tool usage suggests a phase change."
+            return (
+                f"Context shift detected: {current_skill} → {new_skill}. "
+                f"Recent tool usage suggests a phase change."
+            )
 
         elif context_change == ContextChange.MODERATE:
             return (
@@ -441,7 +446,9 @@ class SessionContext:
                 f"Consider switching if the task focus has changed."
             )
 
-        return f"Suggesting switch from {current_skill} to {new_skill} based on conversation context."
+        return (
+            f"Suggesting switch from {current_skill} to {new_skill} based on conversation context."
+        )
 
     def record_route_decision(self, query: str, selected_skill: str) -> None:
         """Record a routing decision for habit learning.
@@ -451,11 +458,13 @@ class SessionContext:
             selected_skill: Skill that was selected
         """
         with self._lock:
-            self._route_history.append(RouteDecision(
-                query_pattern=self._extract_pattern(query),
-                selected_skill=selected_skill,
-                timestamp=time.time(),
-            ))
+            self._route_history.append(
+                RouteDecision(
+                    query_pattern=self._extract_pattern(query),
+                    selected_skill=selected_skill,
+                    timestamp=time.time(),
+                )
+            )
             self._update_habit_patterns()
 
     def get_habit_boost(self, query: str) -> dict[str, float]:
@@ -494,9 +503,31 @@ class SessionContext:
         query_lower = query.lower()
         # Simple keyword extraction: remove common stop words
         stop_words = {
-            "帮我", "请", "一下", "这个", "那个", "的", "了", "在", "是",
-            "help", "me", "please", "the", "a", "an", "this", "that",
-            "with", "for", "to", "my", "can", "you", "i", "need",
+            "帮我",
+            "请",
+            "一下",
+            "这个",
+            "那个",
+            "的",
+            "了",
+            "在",
+            "是",
+            "help",
+            "me",
+            "please",
+            "the",
+            "a",
+            "an",
+            "this",
+            "that",
+            "with",
+            "for",
+            "to",
+            "my",
+            "can",
+            "you",
+            "i",
+            "need",
         }
         words = []
         for word in query_lower.split():
@@ -523,8 +554,7 @@ class SessionContext:
 
         # Keep only patterns that occurred 3+ times
         self._habit_patterns = {
-            pattern: skill for (pattern, skill), count in patterns.items()
-            if count >= 3
+            pattern: skill for (pattern, skill), count in patterns.items() if count >= 3
         }
 
     def get_session_summary(self) -> dict[str, Any]:

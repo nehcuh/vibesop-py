@@ -72,12 +72,18 @@ class InstallPlanner:
         )
 
         for skill_file in analysis.skill_files:
-            plan.skills.append({
-                "id": skill_file.parent.name,
-                "path": str(skill_file.parent.relative_to(
-                    skill_file.parent.parent.parent if len(skill_file.parent.parts) > 2 else Path()
-                )),
-            })
+            plan.skills.append(
+                {
+                    "id": skill_file.parent.name,
+                    "path": str(
+                        skill_file.parent.relative_to(
+                            skill_file.parent.parent.parent
+                            if len(skill_file.parent.parts) > 2
+                            else Path()
+                        )
+                    ),
+                }
+            )
 
         # Deduce setup steps
         if analysis.setup_scripts:

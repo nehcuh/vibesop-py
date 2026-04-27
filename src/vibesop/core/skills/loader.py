@@ -110,6 +110,7 @@ class SkillLoader:
     def _compute_project_hash(self) -> str:
         """Compute a stable project identity for scope isolation."""
         import hashlib
+
         return hashlib.md5(str(self.project_root).encode()).hexdigest()[:12]
 
     @property
@@ -165,6 +166,7 @@ class SkillLoader:
                     if last_used:
                         try:
                             from datetime import UTC, datetime
+
                             last = datetime.fromisoformat(last_used.replace("Z", "+00:00"))
                             now = datetime.now(UTC)
                             days_since = (now - last).days
@@ -475,9 +477,7 @@ class SkillLoader:
 
         for algo in metadata.algorithms:
             if not AlgorithmRegistry.is_registered(algo):
-                logger.warning(
-                    f"Skill '{metadata.id}' declares unknown algorithm: {algo}"
-                )
+                logger.warning(f"Skill '{metadata.id}' declares unknown algorithm: {algo}")
 
     def _parse_metadata(
         self,

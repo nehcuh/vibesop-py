@@ -31,6 +31,7 @@ class RouterStatsMixin:
 
     def get_stats(self) -> dict[str, Any]:
         from vibesop.core.routing.perf_monitor import get_perf_monitor
+
         perf = get_perf_monitor().get_stats()
         return {
             "total_routes": self._total_routes,  # type: ignore[attr-defined]

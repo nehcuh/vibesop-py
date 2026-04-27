@@ -118,10 +118,11 @@ class TestInstallCommand:
         mock_installer_cls.return_value = mock_installer
 
         mock_loader = MagicMock()
-        # superpowers is installed, gstack is not -> only gstack should be installed
+        # TRUSTED_PACKS includes superpowers, gstack, omx
         mock_loader.get_supported_packs.return_value = {
             "superpowers": {"installed": True},
             "gstack": {"installed": False},
+            "omx": {"installed": True},
         }
         mock_loader_cls.return_value = mock_loader
 
@@ -141,6 +142,7 @@ class TestInstallCommand:
         mock_loader.get_supported_packs.return_value = {
             "gstack": {"installed": True},
             "superpowers": {"installed": True},
+            "omx": {"installed": True},
         }
         mock_loader_cls.return_value = mock_loader
 

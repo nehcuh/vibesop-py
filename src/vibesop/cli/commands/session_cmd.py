@@ -35,7 +35,7 @@ def record_tool(
 
     This is typically called by hooks, but can be used manually for testing.
     """
-    context_file = Path(context_file).expanduser()
+    context_file = Path(context_file).expanduser()  # type: ignore[reportUnknownVariableType]
 
     # For now, create a simple session context
     # In production, this would persist state to context_file
@@ -186,7 +186,7 @@ def enable_tracking() -> None:
 
     console.print(f"[green]✓[/green] Added to {shell_profile}")
     console.print("\n[yellow]Restart your shell or run:[/yellow]")
-    console.print(f'  source {shell_profile}')
+    console.print(f"  source {shell_profile}")
 
 
 @app.command()
@@ -196,7 +196,7 @@ def disable_tracking() -> None:
 
     if shell_profile is None or not shell_profile.exists():
         console.print("[yellow]Run this to disable for current session:[/yellow]")
-        console.print('  unset VIBESOP_CONTEXT_TRACKING')
+        console.print("  unset VIBESOP_CONTEXT_TRACKING")
         return
 
     # Remove from profile

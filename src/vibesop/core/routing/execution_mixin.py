@@ -41,6 +41,7 @@ class RouterExecutionMixin:
         nearest: list[SkillRoute] = []
         try:
             from vibesop.core.routing import _pipeline
+
             nearest_primary, nearest_alts, _ = _pipeline.run_matcher_pipeline(
                 self, query, candidates, None, collect_rejected=False
             )

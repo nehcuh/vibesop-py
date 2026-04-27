@@ -14,7 +14,7 @@ from vibesop.cli.routing_report import render_routing_report
 from vibesop.core.models import RoutingResult
 
 
-def _needs_confirmation(
+def _needs_confirmation(  # pyright: ignore[reportUnusedFunction]
     result: Any,
     router: Any,
     yes: bool = False,
@@ -43,7 +43,7 @@ def _needs_confirmation(
     )
 
 
-def _run_confirmation_flow(result: Any, console: Console) -> None:
+def _run_confirmation_flow(result: Any, console: Console) -> None:  # pyright: ignore[reportUnusedFunction]
     """Interactive confirmation: confirm / alternative / skip."""
     routing_result = RoutingResult(
         primary=result.primary,

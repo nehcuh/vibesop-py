@@ -74,17 +74,31 @@ def route(
         help="Minimum confidence threshold (0.0-1.0)",
     ),
     json_output: bool = typer.Option(False, "--json", "-j", help="Output as JSON"),
-    slash: bool = typer.Option(False, "--slash", help="Treat query as a quick command (e.g., --slash '/vibe-help')"),
+    slash: bool = typer.Option(
+        False, "--slash", help="Treat query as a quick command (e.g., --slash '/vibe-help')"
+    ),
     validate: bool = typer.Option(False, "--validate", "-V", help="Validate routing configuration"),
-    verbose: bool = typer.Option(False, "--verbose", "-v", help="Show full routing decision tree (now the default)"),
-    explain: bool = typer.Option(False, "--explain", "-e", help="Alias for --verbose (backward compatibility)"),
-    quiet: bool = typer.Option(False, "--quiet", "-q", help="Suppress routing decision tree, show compact summary only"),
-    yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation prompt (alias for confirmation_mode=never)"),
+    verbose: bool = typer.Option(
+        False, "--verbose", "-v", help="Show full routing decision tree (now the default)"
+    ),
+    explain: bool = typer.Option(
+        False, "--explain", "-e", help="Alias for --verbose (backward compatibility)"
+    ),
+    quiet: bool = typer.Option(
+        False, "--quiet", "-q", help="Suppress routing decision tree, show compact summary only"
+    ),
+    yes: bool = typer.Option(
+        False, "--yes", "-y", help="Skip confirmation prompt (alias for confirmation_mode=never)"
+    ),
     execute: bool = typer.Option(
-        False, "--execute", "-x",
+        False,
+        "--execute",
+        "-x",
         help="Enter interactive step-by-step execution mode after plan confirmation",
     ),
-    no_session: bool = typer.Option(False, "--no-session", help="Disable session-state-aware routing for this query"),
+    no_session: bool = typer.Option(
+        False, "--no-session", help="Disable session-state-aware routing for this query"
+    ),
     strategy: str | None = typer.Option(
         None,
         "--strategy",
@@ -128,7 +142,17 @@ def route(
 
         if json_output:
             import json
-            console.print(json.dumps({"success": result.success, "message": result.message, "command": result.command}, indent=2))
+
+            console.print(
+                json.dumps(
+                    {
+                        "success": result.success,
+                        "message": result.message,
+                        "command": result.command,
+                    },
+                    indent=2,
+                )
+            )
         elif result.success:
             console.print(f"[bold green]✓[/bold green] {result.message}")
         else:
@@ -144,7 +168,10 @@ def route(
 
         if json_output:
             import json
-            console.print(json.dumps({"success": result.success, "message": result.message}, indent=2))
+
+            console.print(
+                json.dumps({"success": result.success, "message": result.message}, indent=2)
+            )
         elif result.success:
             console.print(f"[bold green]✓[/bold green] {result.message}")
         else:
@@ -202,6 +229,7 @@ def route(
 
     if use_live_progress:
         from vibesop.cli.progress import LiveOrchestrationCallbacks
+
         with LiveOrchestrationCallbacks(console=console) as callbacks:
             result = router.orchestrate(query, context=context, callbacks=callbacks)
     else:
@@ -211,6 +239,7 @@ def route(
     if transparency_mode == "full":
         if result.mode.value == "single":
             from vibesop.core.models import RoutingResult
+
             routing_result = RoutingResult(
                 primary=result.primary,
                 alternatives=result.alternatives,
@@ -240,7 +269,9 @@ def route(
 def orchestrate(
     query: str = typer.Argument(..., help="Multi-intent query to orchestrate into sub-tasks"),
     json_output: bool = typer.Option(False, "--json", "-j", help="Output as JSON"),
-    verbose: bool = typer.Option(False, "--verbose", "-v", help="Show full decomposition and planning details"),
+    verbose: bool = typer.Option(
+        False, "--verbose", "-v", help="Show full decomposition and planning details"
+    ),
     strategy: str | None = typer.Option(
         None,
         "--strategy",
@@ -282,6 +313,7 @@ def orchestrate(
         context.conversation_id = conversation_id
     else:
         import hashlib
+
         project_hash = hashlib.sha256(str(Path.cwd()).encode()).hexdigest()[:8]
         context.conversation_id = f"cli-{project_hash}"
 
@@ -289,6 +321,7 @@ def orchestrate(
 
     if json_output:
         import json
+
         console.print(json.dumps(result.model_dump(mode="json"), indent=2, default=str))
     elif verbose:
         render_orchestration_result(result, console=console)
@@ -318,14 +351,22 @@ def decompose(
 
     if json_output:
         import json
-        console.print(json.dumps(
-            {"query": query, "sub_tasks": [{"intent": t.intent, "query": t.query} for t in sub_tasks]},
-            indent=2,
-            ensure_ascii=False,
-        ))
+
+        console.print(
+            json.dumps(
+                {
+                    "query": query,
+                    "sub_tasks": [{"intent": t.intent, "query": t.query} for t in sub_tasks],
+                },
+                indent=2,
+                ensure_ascii=False,
+            )
+        )
     else:
         if not sub_tasks:
-            console.print("[yellow]No sub-tasks detected — query appears to be single intent.[/yellow]")
+            console.print(
+                "[yellow]No sub-tasks detected — query appears to be single intent.[/yellow]"
+            )
             return
         console.print(f"[bold]Decomposed '{query}' into {len(sub_tasks)} sub-tasks:[/bold]\n")
         for i, task in enumerate(sub_tasks, 1):
@@ -408,12 +449,14 @@ def _handle_orchestrated_result(
 
     # Save plan to tracker
     from vibesop.core.orchestration import PlanTracker
+
     tracker = PlanTracker(storage_dir=Path.cwd() / ".vibe")
     if plan:
         tracker.create_plan(plan)
 
     if json_output:
         import json
+
         console.print(json.dumps(result.to_dict(), indent=2))
     else:
         render_orchestration_result(result, console=console)
@@ -421,6 +464,7 @@ def _handle_orchestrated_result(
 
         if plan:
             from vibesop.core.orchestration import generate_execution_summary
+
             summary = generate_execution_summary(plan)
             console.print("\n[bold]Execution Summary:[/bold]")
             console.print(summary)
@@ -455,11 +499,14 @@ def _execute_plan_interactive(result: Any, console: Console) -> None:
 
     # Save plan and generate sequence file
     from vibesop.core.orchestration import PlanTracker
+
     tracker = PlanTracker(storage_dir=Path.cwd() / ".vibe")
     tracker.create_plan(plan)
     seq_file = injector.build_sequence_file(manifest)
 
-    console.print(f"\n[bold green]▶ Execution Mode[/bold green] — Plan: [cyan]{plan.plan_id}[/cyan]")
+    console.print(
+        f"\n[bold green]▶ Execution Mode[/bold green] — Plan: [cyan]{plan.plan_id}[/cyan]"
+    )
     console.print(f"[dim]Sequence file: {seq_file}[/dim]")
     console.print()
 
@@ -476,8 +523,10 @@ def _execute_plan_interactive(result: Any, console: Console) -> None:
                 enriched_input += f"\n步骤 {dep_num} 的输出:\n{dep_summary}"
 
         console.print(f"{'─' * 60}")
-        console.print(f"[bold]Step {step_num}/{manifest.total_steps}[/bold]: "
-                      f"[cyan]{step.skill_id}[/cyan] — {step.skill_name}")
+        console.print(
+            f"[bold]Step {step_num}/{manifest.total_steps}[/bold]: "
+            f"[cyan]{step.skill_id}[/cyan] — {step.skill_name}"
+        )
         console.print(f"[dim]{step.instruction}[/dim]")
         console.print()
 
@@ -606,12 +655,15 @@ def _handle_single_result(
         _render_validation(result, router, console)
 
     # Confirmation flow (unified check)
-    if _needs_confirmation(result, router, yes, json_output, validate=validate, is_orchestrated=False):
+    if _needs_confirmation(
+        result, router, yes, json_output, validate=validate, is_orchestrated=False
+    ):
         _run_confirmation_flow(result, console)
 
     # Output rendering
     if json_output:
         from vibesop.core.models import RoutingResult
+
         routing_result = RoutingResult(
             primary=result.primary,
             alternatives=result.alternatives,
@@ -621,6 +673,7 @@ def _handle_single_result(
             duration_ms=result.duration_ms,
         )
         import json
+
         console.print(json.dumps(routing_result.to_dict(), indent=2))
         return
 
@@ -660,6 +713,7 @@ def _check_stale_skills_post_route() -> None:
 
     try:
         from vibesop.core.skills.feedback_loop import FeedbackLoop
+
         loop = FeedbackLoop()
         suggestions = loop.analyze_all()
         critical = [s for s in suggestions if s.action in ("deprecate", "archive")]
@@ -676,6 +730,7 @@ def _check_stale_skills_post_route() -> None:
         counter_file.write_text(json.dumps(counter, indent=2))
     except Exception:
         pass
+
 
 @app.command()
 def doctor() -> None:
@@ -874,7 +929,10 @@ def _check_skill_health() -> tuple[bool, str]:
         total_skills = summary.get("total_skills", 0)
 
         if critical > 0:
-            return False, f"{healthy}/{total} packs healthy, {critical} critical ({total_skills} skills)"
+            return (
+                False,
+                f"{healthy}/{total} packs healthy, {critical} critical ({total_skills} skills)",
+            )
         if healthy == 0 and total == 0:
             return False, "No skill packs detected"
         return True, f"{healthy}/{total} packs healthy ({total_skills} skills)"

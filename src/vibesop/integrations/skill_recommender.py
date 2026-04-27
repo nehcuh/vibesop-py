@@ -111,14 +111,16 @@ class SkillRecommender:
                 reason_parts.append(f"{trigger_hits} trigger hits")
             reason = "; ".join(reason_parts) if reason_parts else "priority-based match"
 
-            scored.append(Recommendation(
-                skill_id=skill_id,
-                namespace=namespace,
-                score=round(score, 4),
-                matched_keywords=matched_keywords,
-                intent=intent,
-                reason=reason,
-            ))
+            scored.append(
+                Recommendation(
+                    skill_id=skill_id,
+                    namespace=namespace,
+                    score=round(score, 4),
+                    matched_keywords=matched_keywords,
+                    intent=intent,
+                    reason=reason,
+                )
+            )
 
         scored.sort(key=lambda r: r.score, reverse=True)
         return scored[:top_k]
@@ -200,14 +202,16 @@ class SkillRecommender:
                 reason_parts.append(f"{intent_overlap} keyword matches")
             reason = "; ".join(reason_parts) if reason_parts else "discovery suggestion"
 
-            scored.append(Recommendation(
-                skill_id=skill_id,
-                namespace=namespace,
-                score=round(score, 4),
-                matched_keywords=matched_keywords,
-                intent=intent,
-                reason=reason,
-            ))
+            scored.append(
+                Recommendation(
+                    skill_id=skill_id,
+                    namespace=namespace,
+                    score=round(score, 4),
+                    matched_keywords=matched_keywords,
+                    intent=intent,
+                    reason=reason,
+                )
+            )
 
         scored.sort(key=lambda r: r.score, reverse=True)
         return scored[:top_k]

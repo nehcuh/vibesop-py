@@ -316,6 +316,7 @@ class SlashCommandHandler:
                 from rich.console import Console
 
                 from vibesop.cli.routing_report import render_routing_report
+
                 console = Console()
                 render_routing_report(result, console=console)
                 return True, "Routing decision displayed"
@@ -344,9 +345,7 @@ class SlashCommandHandler:
                 platforms = [args[idx + 1]]
 
         try:
-            return self._install_service.install_pack(
-                pack_name=pack_name, platforms=platforms
-            )
+            return self._install_service.install_pack(pack_name=pack_name, platforms=platforms)
         except (OSError, ValueError, RuntimeError) as e:
             logger.error(f"Install command failed: {e}")
             return False, f"Installation failed: {e}"
@@ -359,12 +358,12 @@ class SlashCommandHandler:
             result = self._analysis_service.analyze(deep=deep)
 
             msg = f"Project type: {result.get('project_type') or 'Unknown'}\n"
-            tech_stack = result.get('tech_stack', [])
+            tech_stack = result.get("tech_stack", [])
             msg += f"Tech stack: {', '.join(tech_stack) if tech_stack else 'Not detected'}\n"
 
             if deep:
-                file_count = result.get('file_count')
-                code_lines = result.get('code_lines')
+                file_count = result.get("file_count")
+                code_lines = result.get("code_lines")
                 if file_count is not None:
                     msg += f"Files: {file_count}\n"
                 if code_lines is not None:
@@ -411,7 +410,10 @@ class SlashCommandHandler:
     def _handle_orchestrate(self, *args: str) -> tuple[bool, str]:
         """Handle /vibe-orchestrate command."""
         if not args:
-            return False, "Usage: /vibe-orchestrate <query> [--strategy <sequential|parallel|hybrid>]"
+            return (
+                False,
+                "Usage: /vibe-orchestrate <query> [--strategy <sequential|parallel|hybrid>]",
+            )
 
         query, flags = _extract_query_and_flags(args, {"--strategy"})
         if not query:
@@ -449,6 +451,7 @@ class SlashCommandHandler:
 
         try:
             from vibesop.core.skills.storage import SkillStorage
+
             storage = SkillStorage()
             skills = storage.list_skills()
 
@@ -461,6 +464,7 @@ class SlashCommandHandler:
 
             if not installed_only:
                 from vibesop.constants import TRUSTED_PACKS
+
                 msg += "\nAvailable Packs:\n"
                 for pack_name in TRUSTED_PACKS:
                     msg += f"  • {pack_name}\n"

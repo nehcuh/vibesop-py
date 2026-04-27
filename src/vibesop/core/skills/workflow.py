@@ -601,7 +601,9 @@ class WorkflowEngine:
                 message += f"\n{instruction}"
             return message
         else:
-            logger.debug(f"Condition not met: {step.condition} = {variable_value} (expected {step.condition_value})")
+            logger.debug(
+                f"Condition not met: {step.condition} = {variable_value} (expected {step.condition_value})"
+            )
             return None
 
     def _execute_conditional_from_instruction(
@@ -638,7 +640,7 @@ class WorkflowEngine:
                 elif value_str.lower() in ("true", "false"):
                     value = value_str.lower() == "true"
                 else:
-                    value = value_str.strip('"\'')
+                    value = value_str.strip("\"'")
             except ValueError:
                 value = value_str
 
@@ -760,71 +762,87 @@ class WorkflowEngine:
 
         try:
             # Parse condition into AST
-            tree = ast.parse(condition, mode='eval')
+            tree = ast.parse(condition, mode="eval")
 
             # Define allowed AST node types (whitelist)
             ALLOWED_NODE_TYPES = {
                 # Root node
                 ast.Expression,
-
                 # Literals and names
                 ast.Constant,  # Numbers, strings, booleans, None
-                ast.Name,      # Variable names
-                ast.Load,      # Name loading context (required for variable access)
-
+                ast.Name,  # Variable names
+                ast.Load,  # Name loading context (required for variable access)
                 # Operators
-                ast.Compare,      # Comparisons (==, !=, <, >, <=, >=, in, not in, is, is not)
-                ast.BoolOp,       # Boolean operations (and, or)
-                ast.UnaryOp,      # Unary operations (not, +, -)
-                ast.BinOp,        # Binary operations (+, -, *, /, //, %, **)
-
+                ast.Compare,  # Comparisons (==, !=, <, >, <=, >=, in, not in, is, is not)
+                ast.BoolOp,  # Boolean operations (and, or)
+                ast.UnaryOp,  # Unary operations (not, +, -)
+                ast.BinOp,  # Binary operations (+, -, *, /, //, %, **)
                 # Operator types
-                ast.And,          # and operator
-                ast.Or,           # or operator
-                ast.Not,          # not operator
-                ast.Add,          # +
-                ast.Sub,          # -
-                ast.Mult,         # *
-                ast.Div,          # /
-                ast.FloorDiv,     # //
-                ast.Mod,          # %
-                ast.Pow,          # **
-                ast.UAdd,         # unary +
-                ast.USub,         # unary -
-                ast.Eq,           # ==
-                ast.NotEq,        # !=
-                ast.Lt,           # <
-                ast.LtE,          # <=
-                ast.Gt,           # >
-                ast.GtE,          # >=
-                ast.In,           # in
-                ast.Is,           # is
-                ast.IsNot,        # is not
-
+                ast.And,  # and operator
+                ast.Or,  # or operator
+                ast.Not,  # not operator
+                ast.Add,  # +
+                ast.Sub,  # -
+                ast.Mult,  # *
+                ast.Div,  # /
+                ast.FloorDiv,  # //
+                ast.Mod,  # %
+                ast.Pow,  # **
+                ast.UAdd,  # unary +
+                ast.USub,  # unary -
+                ast.Eq,  # ==
+                ast.NotEq,  # !=
+                ast.Lt,  # <
+                ast.LtE,  # <=
+                ast.Gt,  # >
+                ast.GtE,  # >=
+                ast.In,  # in
+                ast.Is,  # is
+                ast.IsNot,  # is not
                 # Function calls (restricted to safe functions)
                 ast.Call,
-                ast.Attribute,    # For accessing attributes (limited use)
-
+                ast.Attribute,  # For accessing attributes (limited use)
                 # Collection literals
-                ast.List,         # List literals [1, 2, 3]
-                ast.Tuple,        # Tuple literals (1, 2, 3)
-                ast.Set,          # Set literals {1, 2, 3}
-                ast.Dict,         # Dict literals {"key": "value"}
-                ast.ListComp,     # List comprehensions [x for x in ...]
+                ast.List,  # List literals [1, 2, 3]
+                ast.Tuple,  # Tuple literals (1, 2, 3)
+                ast.Set,  # Set literals {1, 2, 3}
+                ast.Dict,  # Dict literals {"key": "value"}
+                ast.ListComp,  # List comprehensions [x for x in ...]
             }
 
             # Define allowed built-in functions
             ALLOWED_FUNCTIONS = {
                 # Type conversions
-                'len', 'str', 'int', 'float', 'bool', 'list', 'dict', 'tuple', 'set',
+                "len",
+                "str",
+                "int",
+                "float",
+                "bool",
+                "list",
+                "dict",
+                "tuple",
+                "set",
                 # Math
-                'abs', 'min', 'max', 'sum', 'round', 'pow',
+                "abs",
+                "min",
+                "max",
+                "sum",
+                "round",
+                "pow",
                 # Iteration
-                'any', 'all', 'enumerate', 'zip', 'filter', 'map',
+                "any",
+                "all",
+                "enumerate",
+                "zip",
+                "filter",
+                "map",
                 # Type checks
-                'isinstance', 'hasattr', 'getattr',
+                "isinstance",
+                "hasattr",
+                "getattr",
                 # String operations
-                'ord', 'chr',
+                "ord",
+                "chr",
             }
 
             # Walk the AST and verify all nodes are safe
@@ -842,7 +860,7 @@ class WorkflowEngine:
                             return False
 
                         # Extra security for getattr: only allow literal string arguments
-                        if node.func.id == 'getattr':
+                        if node.func.id == "getattr":
                             # Require exactly 2 arguments
                             if len(node.args) < 2:
                                 logger.error("getattr requires exactly 2 arguments")
@@ -850,12 +868,14 @@ class WorkflowEngine:
 
                             # Second argument MUST be a literal string (not a variable)
                             if not isinstance(node.args[1], ast.Constant):
-                                logger.error("getattr requires literal attribute name (not a variable)")
+                                logger.error(
+                                    "getattr requires literal attribute name (not a variable)"
+                                )
                                 return False
 
                             # Check if the literal string is a special attribute
                             attr_name = str(node.args[1].value)
-                            if attr_name.startswith('__'):
+                            if attr_name.startswith("__"):
                                 logger.error(f"getattr special attribute not allowed: {attr_name}")
                                 return False
                     else:
@@ -864,19 +884,24 @@ class WorkflowEngine:
                         return False
 
                 # Extra check for attribute access
-                if isinstance(node, ast.Attribute) and node.attr.startswith('__') and node.attr.endswith('__'):
+                if (
+                    isinstance(node, ast.Attribute)
+                    and node.attr.startswith("__")
+                    and node.attr.endswith("__")
+                ):
                     logger.error(f"Special attribute access not allowed: {node.attr}")
                     return False
 
             # Prepare evaluation context
             eval_context = {
-                'True': True,
-                'False': False,
-                'None': None,
+                "True": True,
+                "False": False,
+                "None": None,
             }
 
             # Add allowed built-in functions to context
             import builtins
+
             safe_builtins = {}
             for func_name in ALLOWED_FUNCTIONS:
                 if hasattr(builtins, func_name):
@@ -887,7 +912,7 @@ class WorkflowEngine:
                 eval_context.update(context.variables)
 
             # Compile and evaluate the AST
-            code = compile(tree, '<string>', 'eval')
+            code = compile(tree, "<string>", "eval")
             result = eval(code, {"__builtins__": safe_builtins}, eval_context)
 
             return bool(result)
@@ -990,7 +1015,9 @@ def parse_workflow_from_markdown(markdown_content: str, skill_id: str) -> Workfl
                 # Save previous step if exists
                 if step_number > 0 and current_step_content:
                     step_desc = current_step_content[0]
-                    step_instruction = "\n".join(current_step_content[1:]) if len(current_step_content) > 1 else ""
+                    step_instruction = (
+                        "\n".join(current_step_content[1:]) if len(current_step_content) > 1 else ""
+                    )
 
                     # Detect step type
                     step_type = _detect_step_type(step_desc, step_instruction)
@@ -1029,7 +1056,11 @@ def parse_workflow_from_markdown(markdown_content: str, skill_id: str) -> Workfl
                     # Save previous step if exists
                     if step_number > 0 and current_step_content:
                         step_desc = current_step_content[0]
-                        step_instruction = "\n".join(current_step_content[1:]) if len(current_step_content) > 1 else ""
+                        step_instruction = (
+                            "\n".join(current_step_content[1:])
+                            if len(current_step_content) > 1
+                            else ""
+                        )
 
                         step_type = _detect_step_type(step_desc, step_instruction)
 
@@ -1057,7 +1088,9 @@ def parse_workflow_from_markdown(markdown_content: str, skill_id: str) -> Workfl
     # Don't forget the last step!
     if step_number > 0 and current_step_content:
         step_desc = current_step_content[0]
-        step_instruction = "\n".join(current_step_content[1:]) if len(current_step_content) > 1 else ""
+        step_instruction = (
+            "\n".join(current_step_content[1:]) if len(current_step_content) > 1 else ""
+        )
 
         step_type = _detect_step_type(step_desc, step_instruction)
 
@@ -1113,16 +1146,19 @@ def _detect_step_type(description: str, instruction: str) -> StepType:
         Detected StepType
     """
     import re
+
     text = (description + " " + instruction).lower()
 
     # Flexible matching: call/invoke/use + [words] + tool (within 5 words)
     # This catches "Call the read tool" but avoids false positives
-    tool_call_pattern = r'\b(call|invoke|use)\s+(\w+\s+){0,4}tool\b'
+    tool_call_pattern = r"\b(call|invoke|use)\s+(\w+\s+){0,4}tool\b"
     if re.search(tool_call_pattern, text):
         return StepType.TOOL_CALL
 
     # Strict matching: must contain conditional keyword + structure
-    if text.startswith(("if ", "when ")) and any(k in text for k in ["condition", "otherwise", "else"]):
+    if text.startswith(("if ", "when ")) and any(
+        k in text for k in ["condition", "otherwise", "else"]
+    ):
         return StepType.CONDITIONAL
 
     # Strict matching: loop patterns
@@ -1130,7 +1166,9 @@ def _detect_step_type(description: str, instruction: str) -> StepType:
         return StepType.LOOP
 
     # Strict matching: verification patterns
-    if any(pattern in text for pattern in ["verify that", "check that", "validate that", "ensure that"]):
+    if any(
+        pattern in text for pattern in ["verify that", "check that", "validate that", "ensure that"]
+    ):
         return StepType.VERIFICATION
 
     return StepType.INSTRUCTION

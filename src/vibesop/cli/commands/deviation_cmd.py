@@ -72,7 +72,7 @@ def record_cmd(
 
     if success:
         console.print(
-            f"[green]✓[/green] Recorded deviation: [bold]{reason_code}[/bold] for query: \"{query[:50]}...\""
+            f'[green]✓[/green] Recorded deviation: [bold]{reason_code}[/bold] for query: "{query[:50]}..."'
         )
     else:
         console.print("[red]✗[/red] Failed to record deviation")
@@ -136,8 +136,7 @@ def list_cmd(
     reason_filter: str | None = typer.Option(None, "--reason", "-r", help="Filter by reason code"),
 ) -> None:
     """List recent deviations."""
-    storage_path = Path(storage_path)
-
+    storage_path = Path(storage_path)  # type: ignore[reportUnknownVariableType]
     if not storage_path.exists():
         console.print("[dim]No deviation records found.[/dim]")
         return
@@ -191,16 +190,22 @@ def reasons_cmd() -> None:
     table.add_column("Severity")
 
     for code, description in REASON_CODES.items():
-        severity = "high" if code == "skill_mismatch" else "medium" if code == "context_ignored" else "low"
-        severity_color = "red" if severity == "high" else "yellow" if severity == "medium" else "green"
-        table.add_row(f"[bold]{code}[/bold]", description, f"[{severity_color}]{severity}[/{severity_color}]")
+        severity = (
+            "high" if code == "skill_mismatch" else "medium" if code == "context_ignored" else "low"
+        )
+        severity_color = (
+            "red" if severity == "high" else "yellow" if severity == "medium" else "green"
+        )
+        table.add_row(
+            f"[bold]{code}[/bold]", description, f"[{severity_color}]{severity}[/{severity_color}]"
+        )
 
     console.print(table)
 
 
 @app.command("reset")
 def reset_cmd(
-    storage_path: str = typer.Option(".vibe/memory/deviations.jsonl", "--path", "-p"),
+    storage_path: Path = typer.Option(Path(".vibe/memory/deviations.jsonl"), "--path", "-p"),  # type: ignore[reportArgumentType]
     confirm: bool = typer.Option(False, "--confirm", "-y", help="Skip confirmation"),
 ) -> None:
     """Reset deviation records."""
@@ -210,7 +215,7 @@ def reset_cmd(
             console.print("[dim]Reset cancelled.[/dim]")
             raise typer.Exit(0)
 
-    storage_path = Path(storage_path)
+    storage_path = Path(storage_path)  # type: ignore[reportUnknownVariableType]
     if storage_path.exists():
         storage_path.unlink()
         console.print("[green]✓[/green] Deviation records reset")

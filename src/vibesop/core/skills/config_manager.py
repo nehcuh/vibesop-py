@@ -35,6 +35,11 @@ from vibesop.core.models import SkillLifecycle
 logger = logging.getLogger(__name__)
 console = Console()
 
+# Module-level cache for loaded skill config files.
+# _load_skill_config_file() is a hot path called once per skill (395+ times
+# on cold start). Without caching, the same YAML file is parsed 395 times.
+_CONFIG_FILE_CACHE: dict[Path, tuple[float, dict[str, Any]]] = {}
+
 # Backward-compatible alias
 SkillLifecycleState = SkillLifecycle
 
@@ -142,9 +147,7 @@ class SkillConfigManager:
 
         if skill_config and skill_config.requires_llm and skill_config.llm_provider:
             # 技能有自己的 LLM 配置
-            console.print(
-                f"[dim]  Using skill-level LLM config for {skill_id}[/dim]"
-            )
+            console.print(f"[dim]  Using skill-level LLM config for {skill_id}[/dim]")
 
             return LLMConfig(
                 provider=skill_config.llm_provider,
@@ -157,19 +160,13 @@ class SkillConfigManager:
             )
 
         # 2. 使用全局 LLM 配置解析器
-        console.print(
-            f"[dim]  Using global LLM config for {skill_id}[/dim]"
-        )
+        console.print(f"[dim]  Using global LLM config for {skill_id}[/dim]")
 
         resolver = LLMConfigResolver()
         return resolver.resolve_llm_config(prefer_agent=True)
 
     @classmethod
-    def set_skill_llm_config(
-        cls,
-        skill_id: str,
-        llm_config: dict[str, Any]
-    ) -> None:
+    def set_skill_llm_config(cls, skill_id: str, llm_config: dict[str, Any]) -> None:
         """设置技能的 LLM 配置
 
         Args:
@@ -220,11 +217,12 @@ class SkillConfigManager:
                 enabled=skill_data.get("enabled", True),
                 priority=skill_data.get("priority", 50),
                 category=skill_data.get("category", "development"),
-            scope=skill_data.get("scope", "global"),
-            lifecycle=SkillLifecycle(skill_data.get("lifecycle", "active")),
-            usage_stats=skill_data.get("usage_stats", {}),
-            version_history=skill_data.get("version_history", []),
-            evaluation_context=skill_data.get("evaluation_context", {}) or skill_data.get("metadata", {}),
+                scope=skill_data.get("scope", "global"),
+                lifecycle=SkillLifecycle(skill_data.get("lifecycle", "active")),
+                usage_stats=skill_data.get("usage_stats", {}),
+                version_history=skill_data.get("version_history", []),
+                evaluation_context=skill_data.get("evaluation_context", {})
+                or skill_data.get("metadata", {}),
                 requires_llm=skill_data.get("requires_llm", False),
                 llm_provider=skill_data.get("llm", {}).get("provider"),
                 llm_model=skill_data.get("llm", {}).get("model"),
@@ -237,11 +235,7 @@ class SkillConfigManager:
         return skill_configs
 
     @classmethod
-    def update_skill_config(
-        cls,
-        skill_id: str,
-        updates: dict[str, Any]
-    ) -> None:
+    def update_skill_config(cls, skill_id: str, updates: dict[str, Any]) -> None:
         """更新技能配置
 
         Args:
@@ -302,7 +296,7 @@ class SkillConfigManager:
             skill_id: 技能 ID
             state: 生命周期状态 ("draft", "active", "deprecated", "archived")
         """
-        if isinstance(state, str):
+        if isinstance(state, str):  # type: ignore[reportUnnecessaryIsInstance]
             state = SkillLifecycle(state)
         cls.update_skill_config(skill_id, {"lifecycle": state.value})
 
@@ -349,7 +343,8 @@ class SkillConfigManager:
             lifecycle=SkillLifecycle(skill_data.get("lifecycle", "active")),
             usage_stats=skill_data.get("usage_stats", {}),
             version_history=skill_data.get("version_history", []),
-            evaluation_context=skill_data.get("evaluation_context", {}) or skill_data.get("metadata", {}),
+            evaluation_context=skill_data.get("evaluation_context", {})
+            or skill_data.get("metadata", {}),
             requires_llm=skill_data.get("requires_llm", False),
             llm_provider=llm_data.get("provider"),
             llm_model=llm_data.get("model"),
@@ -363,20 +358,18 @@ class SkillConfigManager:
 
     @classmethod
     def _load_skill_config_file(cls) -> dict[str, Any]:
-        """加载技能配置文件"""
-
-        # 尝试多个路径
-        config_paths = [
-            cls.SKILL_CONFIG_FILE,
-            cls.GLOBAL_CONFIG_FILE,
-            cls.GLOBAL_CONFIG_HOME,
-        ]
-
-        for config_path in config_paths:
+        for config_path in [cls.SKILL_CONFIG_FILE, cls.GLOBAL_CONFIG_FILE, cls.GLOBAL_CONFIG_HOME]:
             if config_path.exists():
                 try:
+                    mtime = config_path.stat().st_mtime
+                    cached = _CONFIG_FILE_CACHE.get(config_path)
+                    if cached is not None and cached[0] == mtime:
+                        return cached[1]
                     with config_path.open() as f:
-                        return yaml.safe_load(f) or {}
+                        data = yaml.safe_load(f) or {}
+                    if isinstance(data, dict):
+                        _CONFIG_FILE_CACHE[config_path] = (mtime, data)
+                    return data
                 except Exception as e:
                     console.print(f"[yellow]⚠ Failed to load {config_path}: {e}[/yellow]")
 
@@ -384,17 +377,15 @@ class SkillConfigManager:
 
     @classmethod
     def _save_skill_config_file(cls, config_data: dict[str, Any]) -> None:
-        """保存技能配置文件"""
 
         config_file = cls.SKILL_CONFIG_FILE
 
-        # 确保目录存在
         config_file.parent.mkdir(parents=True, exist_ok=True)
 
-        # 保存配置
         with config_file.open("w") as f:
             yaml.dump(config_data, f, default_flow_style=False)
 
+        _CONFIG_FILE_CACHE.pop(config_file, None)
         logger.info(f"Skill config saved to: {config_file}")
 
 

@@ -100,6 +100,7 @@ class FeedbackLoop:
         if evaluation.last_used:
             try:
                 from datetime import datetime
+
                 last = datetime.fromisoformat(evaluation.last_used)
                 now = datetime.now(UTC).replace(tzinfo=None)
                 days_since = (now - last).days
@@ -231,6 +232,7 @@ class FeedbackLoop:
         suggestion_stats: dict[str, Any] = {"pending": 0, "should_prompt": False}
         try:
             from vibesop.core.skills.suggestion_collector import SkillSuggestionCollector
+
             collector = SkillSuggestionCollector()
             suggestion_stats = {
                 "pending": len(collector.get_pending()),

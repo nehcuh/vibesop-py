@@ -122,9 +122,7 @@ def _list_available() -> None:
 
 def _auto_install(force: bool, skip_verify: bool) -> None:
     """Auto-install recommended skill packs."""
-    console.print(
-        f"\n[bold cyan]🚀 Auto-Installing Recommended Packs[/bold cyan]\n{'=' * 40}\n"
-    )
+    console.print(f"\n[bold cyan]🚀 Auto-Installing Recommended Packs[/bold cyan]\n{'=' * 40}\n")
 
     loader = ExternalSkillLoader()
     supported = loader.get_supported_packs()

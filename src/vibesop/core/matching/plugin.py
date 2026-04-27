@@ -42,7 +42,9 @@ class PluginMatcher:
         try:
             return self.match_fn(query, candidate)
         except Exception as e:
-            logger.warning("Custom matcher '%s' failed for %s: %s", self.name, candidate.get("id"), e)
+            logger.warning(
+                "Custom matcher '%s' failed for %s: %s", self.name, candidate.get("id"), e
+            )
             return 0.0
 
     def match(
@@ -112,9 +114,7 @@ class MatcherPluginRegistry:
                 # Return confidence 0.0-1.0
                 return 0.5
         """
-        spec = importlib.util.spec_from_file_location(
-            file_path.stem, str(file_path)
-        )
+        spec = importlib.util.spec_from_file_location(file_path.stem, str(file_path))
         if not spec or not spec.loader:
             return None
 

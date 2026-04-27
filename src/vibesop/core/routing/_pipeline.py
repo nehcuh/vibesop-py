@@ -39,8 +39,7 @@ def run_matcher_pipeline(
 
     # Build skill_id -> description lookup
     desc_map: dict[str, str] = {
-        str(c.get("id", "")): str(c.get("description", ""))
-        for c in filtered
+        str(c.get("id", "")): str(c.get("description", "")) for c in filtered
     }
 
     # Aggregate scores across all matchers
@@ -71,11 +70,15 @@ def run_matcher_pipeline(
     matcher_duration_ms = (time.perf_counter() - matcher_start) * 1000
 
     if not best_scores:
-        return None, [], LayerDetail(
-            layer=RoutingLayer.LEVENSHTEIN,
-            matched=False,
-            reason="No matcher produced a confident match",
-            duration_ms=matcher_duration_ms,
+        return (
+            None,
+            [],
+            LayerDetail(
+                layer=RoutingLayer.LEVENSHTEIN,
+                matched=False,
+                reason="No matcher produced a confident match",
+                duration_ms=matcher_duration_ms,
+            ),
         )
 
     # Deduplicate all_matches keeping highest confidence per skill
@@ -87,11 +90,15 @@ def run_matcher_pipeline(
     merged_matches = sorted(seen.values(), key=lambda x: x.confidence, reverse=True)
 
     if not merged_matches or merged_matches[0].confidence < config.min_confidence:
-        return None, [], LayerDetail(
-            layer=RoutingLayer.LEVENSHTEIN,
-            matched=False,
-            reason="No matcher produced a confident match",
-            duration_ms=matcher_duration_ms,
+        return (
+            None,
+            [],
+            LayerDetail(
+                layer=RoutingLayer.LEVENSHTEIN,
+                matched=False,
+                reason="No matcher produced a confident match",
+                duration_ms=matcher_duration_ms,
+            ),
         )
 
     primary_match, alternatives = router._optimization_service.apply_optimizations(
@@ -113,12 +120,14 @@ def run_matcher_pipeline(
                 try:
                     score = first_matcher.score(query, c, context)
                     if near_miss_threshold <= score < threshold:
-                        rejected_candidates.append({
-                            "skill_id": sid,
-                            "confidence": score,
-                            "layer": first_layer,
-                            "reason": f"below threshold ({threshold:.2f})",
-                        })
+                        rejected_candidates.append(
+                            {
+                                "skill_id": sid,
+                                "confidence": score,
+                                "layer": first_layer,
+                                "reason": f"below threshold ({threshold:.2f})",
+                            }
+                        )
                 except (TypeError, ValueError):
                     pass
             rejected_candidates.sort(key=lambda x: x["confidence"], reverse=True)

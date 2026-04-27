@@ -167,9 +167,7 @@ class AnalyticsStore:
 
         for record in all_records:
             if record.primary_skill:
-                skill_counts[record.primary_skill] = (
-                    skill_counts.get(record.primary_skill, 0) + 1
-                )
+                skill_counts[record.primary_skill] = skill_counts.get(record.primary_skill, 0) + 1
                 if record.user_satisfied is not None:
                     if record.primary_skill not in skill_satisfaction:
                         skill_satisfaction[record.primary_skill] = []

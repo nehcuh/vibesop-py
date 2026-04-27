@@ -83,9 +83,7 @@ class SlashCommandExecutor:
             ValueError: If decision mode is not SLASH_COMMAND
         """
         if decision.mode != InterceptionMode.SLASH_COMMAND:
-            raise ValueError(
-                f"Expected mode SLASH_COMMAND, got {decision.mode}"
-            )
+            raise ValueError(f"Expected mode SLASH_COMMAND, got {decision.mode}")
 
         return self.execute_query(decision.query)
 

@@ -223,7 +223,10 @@ def _get_ai_triage_skip_reason(router: RoutingCore) -> str:
         return "AI triage disabled in config"
     if getattr(router._triage_service, "_llm", None) is None:
         return "LLM not initialized"
-    if getattr(router._triage_service, "_circuit_breaker", None) and not router._triage_service._circuit_breaker.can_execute():
+    if (
+        getattr(router._triage_service, "_circuit_breaker", None)
+        and not router._triage_service._circuit_breaker.can_execute()
+    ):
         return "Circuit breaker open (too many failures)"
     monthly_cost = getattr(router._cost_tracker, "get_monthly_cost", lambda: 0.0)()
     if monthly_cost >= router._config.ai_triage_budget_monthly:

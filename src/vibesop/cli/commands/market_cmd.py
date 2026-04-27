@@ -54,25 +54,29 @@ def search(
     if json_output:
         data = []
         for r in results:
-            data.append({
-                "source": "github",
-                "name": r.name,
-                "full_name": r.full_name,
-                "description": r.description,
-                "stars": r.stars,
-                "topics": r.topics,
-                "html_url": r.html_url,
-                "quality_score": round(r.quality_score, 1),
-            })
+            data.append(
+                {
+                    "source": "github",
+                    "name": r.name,
+                    "full_name": r.full_name,
+                    "description": r.description,
+                    "stars": r.stars,
+                    "topics": r.topics,
+                    "html_url": r.html_url,
+                    "quality_score": round(r.quality_score, 1),
+                }
+            )
         for listing in listings:
-            data.append({
-                "source": "published",
-                "repo_name": listing.repo_name,
-                "description": listing.description,
-                "tags": listing.tags,
-                "homepage": listing.homepage,
-                "issue_url": listing.issue_url,
-            })
+            data.append(
+                {
+                    "source": "published",
+                    "repo_name": listing.repo_name,
+                    "description": listing.description,
+                    "tags": listing.tags,
+                    "homepage": listing.homepage,
+                    "issue_url": listing.issue_url,
+                }
+            )
         console.print(json.dumps(data, indent=2))
         return
 
@@ -103,7 +107,9 @@ def search(
     if listings:
         console.print(f"\n[bold]Published Skills ({len(listings)}):[/bold]")
         for listing in listings:
-            console.print(f"  [cyan]{listing.repo_name}[/cyan] — {listing.description or 'no description'}")
+            console.print(
+                f"  [cyan]{listing.repo_name}[/cyan] — {listing.description or 'no description'}"
+            )
             console.print(f"    [dim]Published: {listing.issue_url}[/dim]")
             if listing.tags:
                 console.print(f"    [dim]Tags: {', '.join(listing.tags)}[/dim]")
@@ -153,9 +159,7 @@ def install(
         has_skill_md = crawler.validate(skill_repo)
 
     if not has_skill_md:
-        console.print(
-            f"[red]Repository '{repo}' does not have a SKILL.md file at the root[/red]"
-        )
+        console.print(f"[red]Repository '{repo}' does not have a SKILL.md file at the root[/red]")
         raise typer.Exit(1)
 
     console.print(f"[green]Repository '{repo}' is valid[/green]")
@@ -171,11 +175,12 @@ def install(
 
     installer = PackInstaller()
     try:
-        result = installer.install_pack(skill_repo.name, url)
-        console.print(
-            f"[green]Successfully installed {result.pack_name} "
-            f"({result.skill_count} skills)[/green]"
-        )
+        success, message = installer.install_pack(skill_repo.name, url)
+        if success:
+            console.print(f"[green]Successfully installed {skill_repo.name}[/green]")
+        else:
+            console.print(f"[red]Installation failed: {message}[/red]")
+            raise typer.Exit(1) from None
     except Exception as e:
         console.print(f"[red]Installation failed: {e}[/red]")
         raise typer.Exit(1) from e
@@ -209,8 +214,7 @@ def publish(
         repo = _detect_git_remote()
         if not repo:
             console.print(
-                "[red]Could not detect GitHub repo. "
-                "Run from a git repo or specify user/repo.[/red]"
+                "[red]Could not detect GitHub repo. Run from a git repo or specify user/repo.[/red]"
             )
         raise typer.Exit(1)
 
@@ -286,6 +290,7 @@ def _get_local_ratings() -> dict[str, float]:
     """Get local skill ratings, normalized to 0-1."""
     try:
         from vibesop.core.skills.ratings import SkillRatingStore
+
         store = SkillRatingStore()
         top = store.get_top_rated(limit=100, min_reviews=1)
         return {skill_id: score / 5.0 for skill_id, score, _count in top}
@@ -297,6 +302,7 @@ def _get_local_usage() -> dict[str, int]:
     """Get local skill usage counts."""
     try:
         from vibesop.core.analytics import AnalyticsStore
+
         store = AnalyticsStore()
         popular = store.get_popular_skills(limit=100)
         return {skill_id: count for skill_id, count, _satisfaction in popular}

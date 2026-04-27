@@ -154,26 +154,23 @@ class RoutingEvaluator:
     def evaluate_skill(self, skill_id: str) -> SkillEvaluation | None:
         """Evaluate a single skill across all 5 dimensions."""
         # 1. Routing accuracy from FeedbackCollector
-        feedback_records = [
-            r for r in self._feedback.get_records() if r.routed_skill == skill_id
-        ]
+        feedback_records = [r for r in self._feedback.get_records() if r.routed_skill == skill_id]
         total_routes = len(feedback_records)
         routing_accuracy = (
             sum(1 for r in feedback_records if r.was_correct) / total_routes
-            if total_routes > 0 else 0.0
+            if total_routes > 0
+            else 0.0
         )
         avg_confidence = (
-            sum(r.confidence for r in feedback_records) / total_routes
-            if total_routes > 0 else 0.0
+            sum(r.confidence for r in feedback_records) / total_routes if total_routes > 0 else 0.0
         )
-        last_used = max(
-            (r.timestamp for r in feedback_records), default=None
-        )
+        last_used = max((r.timestamp for r in feedback_records), default=None)
 
         # Merge with SkillConfig.usage_stats.last_used (written by record_usage)
         # so the FeedbackLoop stale-skill detection can use usage data
         try:
             from vibesop.core.skills.config_manager import SkillConfigManager
+
             config = SkillConfigManager.get_skill_config(skill_id)
             if config and config.usage_stats:
                 usage_last = config.usage_stats.get("last_used")
@@ -193,9 +190,7 @@ class RoutingEvaluator:
             for sid in {r.routed_skill for r in self._feedback.get_records()}
         }
         max_count = max(all_counts.values(), default=0)
-        usage_frequency = (
-            total_routes / max_count if max_count > 0 else 0.0
-        )
+        usage_frequency = total_routes / max_count if max_count > 0 else 0.0
 
         # 4. Health score from HealthMonitor (if available)
         health_score = self._get_health_score(skill_id)
@@ -207,6 +202,7 @@ class RoutingEvaluator:
         if user_satisfaction == 0.0:
             try:
                 from vibesop.core.skills.ratings import SkillRatingStore
+
                 store = SkillRatingStore()
                 avg_rating = store.get_avg_score(skill_id)
                 if avg_rating is not None:
@@ -268,8 +264,7 @@ class RoutingEvaluator:
         """Get skills with low quality scores."""
         all_evals = self.evaluate_all_skills().values()
         low_quality = [
-            e for e in all_evals
-            if e.total_routes >= min_routes and e.quality_score < threshold
+            e for e in all_evals if e.total_routes >= min_routes and e.quality_score < threshold
         ]
         return sorted(low_quality, key=lambda e: e.quality_score)
 

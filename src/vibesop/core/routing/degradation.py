@@ -27,9 +27,7 @@ class DegradationManager:
         self._degrade_threshold = getattr(config, "degradation_degrade_threshold", 0.2)
         self._always_ask = getattr(config, "degradation_fallback_always_ask", True)
 
-    def evaluate(
-        self, primary: SkillRoute | None
-    ) -> tuple[DegradationLevel, SkillRoute | None]:
+    def evaluate(self, primary: SkillRoute | None) -> tuple[DegradationLevel, SkillRoute | None]:
         """Evaluate a routing match and return (level, route).
 
         Returns (FALLBACK, None) when no route exists or confidence is below

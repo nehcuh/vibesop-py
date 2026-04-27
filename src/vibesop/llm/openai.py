@@ -50,7 +50,7 @@ class OpenAIProvider(LLMProvider):
             base_url = self.DEFAULT_BASE_URL
 
         if model:
-            self.DEFAULT_MODEL = model
+            self.DEFAULT_MODEL = model  # type: ignore[reportConstantRedefinition]
 
         self._is_deepseek = bool(base_url and "deepseek.com" in base_url)
 

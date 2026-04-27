@@ -49,7 +49,7 @@ class PlanTracker:
 
         for step in plan.steps:
             if step.step_id == step_id:
-                if isinstance(status, str):
+                if isinstance(status, str):  # type: ignore[reportUnnecessaryIsInstance]
                     step.status = StepStatus(status)
                 else:
                     step.status = status

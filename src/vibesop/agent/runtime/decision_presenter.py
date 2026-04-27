@@ -10,10 +10,10 @@ Shows:
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from vibesop.core.models import OrchestrationResult, RoutingResult
+    from vibesop.core.models import OrchestrationResult, RoutingResult, SkillRoute
 
 
 class PlatformType:
@@ -148,54 +148,58 @@ class DecisionPresenter:
         lines: list[str] = []
 
         # Multi-intent header
-        lines.extend([
-            "🔀 VibeSOP 多意图检测",
-            "",
-            f"原请求: {plan.original_query}",
-            f"检测到 {len(plan.steps)} 个子任务:",
-            "",
-        ])
+        lines.extend(
+            [
+                "🔀 VibeSOP 多意图检测",
+                "",
+                f"原请求: {plan.original_query}",
+                f"检测到 {len(plan.steps)} 个子任务:",
+                "",
+            ]
+        )
 
         # Show parallel groups
         groups = plan.get_parallel_groups()
         for group_num, group in enumerate(groups, 1):
             if len(group) == 1:
                 step = group[0]
-                lines.append(
-                    f"  {step.step_number}. {step.skill_id} — {step.intent}"
-                )
+                lines.append(f"  {step.step_number}. {step.skill_id} — {step.intent}")
             else:
                 lines.append(f"  并行组 {group_num}:")
                 for step in group:
-                    lines.append(
-                        f"    • 步骤 {step.step_number}: {step.skill_id} — {step.intent}"
-                    )
+                    lines.append(f"    • 步骤 {step.step_number}: {step.skill_id} — {step.intent}")
 
         # Execution strategy
-        lines.extend([
-            "",
-            f"执行策略: {plan.execution_mode.value.upper()}",
-        ])
+        lines.extend(
+            [
+                "",
+                f"执行策略: {plan.execution_mode.value.upper()}",
+            ]
+        )
 
         if plan.reasoning:
             lines.extend(["", f"分解理由: {plan.reasoning}"])
 
         # Single fallback
         if result.single_fallback:
-            lines.extend([
-                "",
-                f"💡 单技能备选: {result.single_fallback.skill_id} "
-                f"({result.single_fallback.confidence:.0%})",
-            ])
+            lines.extend(
+                [
+                    "",
+                    f"💡 单技能备选: {result.single_fallback.skill_id} "
+                    f"({result.single_fallback.confidence:.0%})",
+                ]
+            )
 
         # Plan summary
         summary = plan.get_execution_summary()
-        lines.extend([
-            "",
-            f"计划概要: {summary['total_steps']} 步, "
-            f"{summary['parallel_groups']} 个执行组, "
-            f"最多并行 {summary['max_parallel']} 步",
-        ])
+        lines.extend(
+            [
+                "",
+                f"计划概要: {summary['total_steps']} 步, "
+                f"{summary['parallel_groups']} 个执行组, "
+                f"最多并行 {summary['max_parallel']} 步",
+            ]
+        )
 
         actions = [
             "execute_plan",
@@ -219,13 +223,12 @@ class DecisionPresenter:
                 ],
                 "execution_mode": plan.execution_mode.value,
                 "single_fallback": (
-                    result.single_fallback.skill_id
-                    if result.single_fallback else None
+                    result.single_fallback.skill_id if result.single_fallback else None
                 ),
             },
         )
 
-    def _format_header(self, primary, _platform: str) -> list[str]:
+    def _format_header(self, primary: SkillRoute | Any, _platform: str) -> list[str]:
         """Format the match header."""
         if primary.layer.value == "fallback_llm":
             return [
@@ -248,7 +251,7 @@ class DecisionPresenter:
 
         return header
 
-    def _format_routing_path(self, result) -> list[str]:
+    def _format_routing_path(self, result: RoutingResult | Any) -> list[str]:
         """Show which layers were tried."""
         if not result.routing_path:
             return []
@@ -256,7 +259,7 @@ class DecisionPresenter:
         path_str = " → ".join(layer.value for layer in result.routing_path)
         return ["", f"路由路径: {path_str}"]
 
-    def _format_boosts(self, primary) -> list[str]:
+    def _format_boosts(self, primary: SkillRoute | Any) -> list[str]:
         """Show confidence boost explanations."""
         lines: list[str] = []
         meta = primary.metadata or {}
@@ -287,7 +290,7 @@ class DecisionPresenter:
 
         return lines if lines else []
 
-    def _format_alternatives(self, alternatives) -> list[str]:
+    def _format_alternatives(self, alternatives: list[SkillRoute | Any]) -> list[str]:
         """Show alternative candidates."""
         if not alternatives:
             return []
@@ -299,7 +302,7 @@ class DecisionPresenter:
 
         return lines
 
-    def _format_rejected_candidates(self, result) -> list[str]:
+    def _format_rejected_candidates(self, result: RoutingResult | Any) -> list[str]:
         """Show near-miss candidates that were rejected."""
         if not result.layer_details:
             return []
@@ -308,8 +311,7 @@ class DecisionPresenter:
         for detail in result.layer_details:
             for rejected in getattr(detail, "rejected_candidates", []):
                 near_misses.append(
-                    f"  • {rejected.skill_id} ({rejected.confidence:.0%}) — "
-                    f"{rejected.reason}"
+                    f"  • {rejected.skill_id} ({rejected.confidence:.0%}) — {rejected.reason}"
                 )
 
         if not near_misses:
@@ -317,7 +319,7 @@ class DecisionPresenter:
 
         return ["", "接近但未达阈值的候选:", *near_misses[:5]]
 
-    def _present_no_match(self, result, _platform: str) -> PresentResult:
+    def _present_no_match(self, result: RoutingResult | Any, _platform: str) -> PresentResult:
         """Present when no match is found."""
         lines = [
             "🤖 VibeSOP Fallback 模式",

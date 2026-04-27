@@ -44,28 +44,70 @@ class ConversationTurn:
 
 FOLLOW_UP_PATTERNS = {
     "continuation": [
-        "继续", "go on", "continue", "proceed", "next step",
-        "接着", "然后", "下一步", "继续刚才的", "继续之前的",
-        "还没完", "还有问题", "后续", "follow up",
+        "继续",
+        "go on",
+        "continue",
+        "proceed",
+        "next step",
+        "接着",
+        "然后",
+        "下一步",
+        "继续刚才的",
+        "继续之前的",
+        "还没完",
+        "还有问题",
+        "后续",
+        "follow up",
     ],
     "retry": [
-        "再试一次", "retry", "try again", "再来一次", "again",
-        "重新", "重做", "再执行", "还是不行", "仍然报错",
-        "同样的错误", "还是报错", "依旧失败",
+        "再试一次",
+        "retry",
+        "try again",
+        "再来一次",
+        "again",
+        "重新",
+        "重做",
+        "再执行",
+        "还是不行",
+        "仍然报错",
+        "同样的错误",
+        "还是报错",
+        "依旧失败",
     ],
     "alternative": [
-        "换个方法", "another way", "different approach", "alternatively",
-        "或者", "另一种", "其他方法", "还有别的办法吗",
+        "换个方法",
+        "another way",
+        "different approach",
+        "alternatively",
+        "或者",
+        "另一种",
+        "其他方法",
+        "还有别的办法吗",
     ],
     "clarification": [
-        "什么意思", "what do you mean", "explain", " clarify",
-        "不清楚", "不明白", "详细点", "说具体点",
-        "能再解释一下吗", "具体怎么做", "详细说明",
+        "什么意思",
+        "what do you mean",
+        "explain",
+        " clarify",
+        "不清楚",
+        "不明白",
+        "详细点",
+        "说具体点",
+        "能再解释一下吗",
+        "具体怎么做",
+        "详细说明",
     ],
     "refinement": [
-        "更具体", "more specific", "refine", "narrow down",
-        "更精确", "更准确", "限定一下", "能不能更",
-        "再深入", "再细化",
+        "更具体",
+        "more specific",
+        "refine",
+        "narrow down",
+        "更精确",
+        "更准确",
+        "限定一下",
+        "能不能更",
+        "再深入",
+        "再细化",
     ],
 }
 
@@ -148,7 +190,7 @@ class ConversationContext:
             )
             self._turns.append(turn)
             if len(self._turns) > self._max_history:
-                self._turns = self._turns[-self._max_history:]
+                self._turns = self._turns[-self._max_history :]
             self._last_activity = time.time()
         self.save()
 
@@ -214,8 +256,17 @@ class ConversationContext:
         # queries often indicate referential continuity.
         if self._turns:
             pronoun_indicators = [
-                "it", "that", "this", "them", "those", "these",
-                "它", "这个", "那个", "它们", "那些",
+                "it",
+                "that",
+                "this",
+                "them",
+                "those",
+                "these",
+                "它",
+                "这个",
+                "那个",
+                "它们",
+                "那些",
             ]
             words = query_lower.split()
             if len(words) <= 15 and any(p in words for p in pronoun_indicators):
@@ -298,7 +349,9 @@ class ConversationContext:
     # ------------------------------------------------------------------
 
     @classmethod
-    def cleanup_expired(cls, storage_dir: str | Path = ".vibe/conversations", max_age: float = 86400.0) -> int:
+    def cleanup_expired(
+        cls, storage_dir: str | Path = ".vibe/conversations", max_age: float = 86400.0
+    ) -> int:
         """Remove conversation files older than max_age seconds.
 
         Returns number of files removed.

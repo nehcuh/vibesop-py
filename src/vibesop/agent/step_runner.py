@@ -101,9 +101,7 @@ class StepRunner:
 
         self._states: dict[str, PlanStepState] = {}
         for step in plan.steps:
-            already_completed = (
-                step.status.value in ("completed", "skipped")
-            )
+            already_completed = step.status.value in ("completed", "skipped")
             st = PlanStepState(
                 step=step,
                 completed=already_completed,
@@ -188,6 +186,7 @@ class StepRunner:
     def start_step(self, step: ExecutionStep) -> None:
         """Mark a step as in-progress (for status visibility)."""
         from vibesop.core.models import StepStatus
+
         st = self._states[step.step_id]
         st.started_at = datetime.now(UTC).isoformat()
         step.status = StepStatus.IN_PROGRESS
@@ -301,11 +300,25 @@ class StepRunner:
                     self.mark_completed(step, output)
                     if on_step_complete:
                         on_step_complete(step, output)
-                    results.append({"step_id": step.step_id, "output": output, "error": None, "status": "completed"})
+                    results.append(
+                        {
+                            "step_id": step.step_id,
+                            "output": output,
+                            "error": None,
+                            "status": "completed",
+                        }
+                    )
                 except Exception as e:
                     self.mark_failed(step, str(e))
                     should_continue = on_step_error(step, e) if on_step_error else not fail_fast
-                    results.append({"step_id": step.step_id, "output": None, "error": str(e), "status": "failed"})
+                    results.append(
+                        {
+                            "step_id": step.step_id,
+                            "output": None,
+                            "error": str(e),
+                            "status": "failed",
+                        }
+                    )
                     if not should_continue or fail_fast:
                         break
             else:
@@ -330,7 +343,9 @@ class StepRunner:
                 # Use semaphore to limit concurrency
                 semaphore = asyncio.Semaphore(self._max_parallel)
 
-                async def limited_exec(s: ExecutionStep, _sem: asyncio.Semaphore = semaphore) -> tuple[ExecutionStep, str | Exception]:
+                async def limited_exec(
+                    s: ExecutionStep, _sem: asyncio.Semaphore = semaphore
+                ) -> tuple[ExecutionStep, str | Exception]:
                     async with _sem:
                         return await exec_step(s)
 
@@ -346,19 +361,39 @@ class StepRunner:
                             should_continue = on_step_error(step, step_result)
                         else:
                             should_continue = not fail_fast
-                        results.append({"step_id": step.step_id, "output": None, "error": str(step_result), "status": "failed"})
+                        results.append(
+                            {
+                                "step_id": step.step_id,
+                                "output": None,
+                                "error": str(step_result),
+                                "status": "failed",
+                            }
+                        )
                         if not should_continue or fail_fast:
                             # Stop processing remaining steps in this batch and break outer loop
                             for remaining_step in batch:
-                                if remaining_step.step_id != step.step_id and not self._states[remaining_step.step_id].completed and not self._states[remaining_step.step_id].failed:
-                                    self.mark_skipped(remaining_step, "Batch aborted due to previous failure")
+                                if (
+                                    remaining_step.step_id != step.step_id
+                                    and not self._states[remaining_step.step_id].completed
+                                    and not self._states[remaining_step.step_id].failed
+                                ):
+                                    self.mark_skipped(
+                                        remaining_step, "Batch aborted due to previous failure"
+                                    )
                             break
                     else:
                         output = str(step_result) if step_result else ""
                         self.mark_completed(step, output)
                         if on_step_complete:
                             on_step_complete(step, output)
-                        results.append({"step_id": step.step_id, "output": output, "error": None, "status": "completed"})
+                        results.append(
+                            {
+                                "step_id": step.step_id,
+                                "output": output,
+                                "error": None,
+                                "status": "completed",
+                            }
+                        )
 
                 if not should_continue or fail_fast:
                     break

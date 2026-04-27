@@ -9,8 +9,6 @@ from typing import TYPE_CHECKING, Any
 from vibesop.core.models import RoutingLayer, SkillRoute
 from vibesop.core.routing.circuit_breaker import TriageCircuitBreaker
 from vibesop.core.routing.layers import LayerResult
-from vibesop.llm.factory import create_provider
-from vibesop.llm.triage_prompts import TriagePromptRegistry
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -46,9 +44,7 @@ class TriageService:
             latency_threshold_ms=getattr(
                 config, "ai_triage_circuit_breaker_latency_threshold_ms", 500.0
             ),
-            cooldown_seconds=getattr(
-                config, "ai_triage_circuit_breaker_cooldown_seconds", 60
-            ),
+            cooldown_seconds=getattr(config, "ai_triage_circuit_breaker_cooldown_seconds", 60),
         )
 
     def try_ai_triage(
@@ -77,8 +73,7 @@ class TriageService:
                 self._circuit_breaker.trip("budget_exhausted")
                 return None
             if monthly_cost >= budget * 0.9:
-                logger.warning(
-                    f"AI triage budget at {monthly_cost:.4f}/{budget:.4f} USD (90%+)")
+                logger.warning(f"AI triage budget at {monthly_cost:.4f}/{budget:.4f} USD (90%+)")
 
         # Circuit breaker: fast-fail if recent calls have been slow or failing
         if not self._circuit_breaker.can_execute():
@@ -91,14 +86,19 @@ class TriageService:
 
         # Build augmented query with memory context
         augmented_query = query
-        if context and context.recent_queries and (
-            len(query) < 20 or any(
-                p in query.lower() for p in ("还是", "再", "继续", "也", "另外", "还有")
+        if (
+            context
+            and context.recent_queries
+            and (
+                len(query) < 20
+                or any(p in query.lower() for p in ("还是", "再", "继续", "也", "另外", "还有"))
             )
         ):
-            augmented_query = "Conversation:\n" + "\n".join(
-                f"- {q}" for q in context.recent_queries[-3:]
-            ) + f"\nCurrent request: {query}"
+            augmented_query = (
+                "Conversation:\n"
+                + "\n".join(f"- {q}" for q in context.recent_queries[-3:])
+                + f"\nCurrent request: {query}"
+            )
 
         cache_key = f"ai_triage:{augmented_query}"
         cached = self._get_cache(cache_key)
@@ -156,12 +156,13 @@ class TriageService:
             if skill_id:
                 candidate = next((c for c in candidates if c["id"] == skill_id), None)
                 if candidate:
-                    source = self._get_skill_source(
-                        skill_id, candidate.get("namespace", "builtin")
-                    )
+                    source = self._get_skill_source(skill_id, candidate.get("namespace", "builtin"))
                     # Dynamic confidence: structured JSON gets higher trust than regex fallback
                     confidence = 0.88 if parsed.get("structured") else 0.82
-                    if isinstance(parsed_confidence, (int, float)) and 0.0 <= float(parsed_confidence) <= 1.0:
+                    if (
+                        isinstance(parsed_confidence, (int, float))
+                        and 0.0 <= float(parsed_confidence) <= 1.0
+                    ):
                         confidence = float(parsed_confidence)
                     result = SkillRoute(
                         skill_id=skill_id,
@@ -218,6 +219,8 @@ class TriageService:
         return prefiltered[:max_skills]
 
     def build_ai_triage_prompt(self, query: str, skills_summary: str) -> str:
+        from vibesop.llm.triage_prompts import TriagePromptRegistry
+
         version = getattr(self._config, "ai_triage_prompt_version", "v2")
         return TriagePromptRegistry.render(
             query=query,
@@ -232,6 +235,7 @@ class TriageService:
         try:
             # Try to get LLM config from VibeSOP config file first
             from vibesop.core.llm_config import VibeSOPConfigManager
+            from vibesop.llm.factory import create_provider
 
             llm_config = VibeSOPConfigManager.get_llm_config()
             if llm_config and llm_config.api_key:
@@ -279,7 +283,9 @@ class TriageService:
             try:
                 data = json.loads(cleaned)
                 if isinstance(data, dict):
-                    result["skill_id"] = data.get("skill_id") if isinstance(data.get("skill_id"), str) else None
+                    result["skill_id"] = (
+                        data.get("skill_id") if isinstance(data.get("skill_id"), str) else None
+                    )
                     result["confidence"] = data.get("confidence")
                     result["structured"] = True
                     return result

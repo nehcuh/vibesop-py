@@ -23,8 +23,15 @@ logger = logging.getLogger(__name__)
 
 # Keywords indicating parallel execution
 PARALLEL_KEYWORDS = {
-    "同时", "simultaneously", "parallel", "concurrent",
-    "一起", "both", "and then", "之后", "after",
+    "同时",
+    "simultaneously",
+    "parallel",
+    "concurrent",
+    "一起",
+    "both",
+    "and then",
+    "之后",
+    "after",
 }
 
 
@@ -60,9 +67,7 @@ class PlanBuilder:
 
         for i, sub_task in enumerate(sub_tasks, 1):
             # Build contextualized query for this step
-            contextualized_query = self._build_step_query(
-                original_query, sub_task.query, i, steps
-            )
+            contextualized_query = self._build_step_query(original_query, sub_task.query, i, steps)
 
             # Route to best skill for this sub-task
             # Prefer LLM-assigned skill_id from decomposition if available
@@ -77,8 +82,13 @@ class PlanBuilder:
                     logger.warning("No skill match for sub-task %d: %s", i, sub_task.query[:50])
                     continue
 
-                if route_result.primary.layer == RoutingLayer.FALLBACK_LLM or route_result.primary.skill_id == "fallback-llm":
-                    logger.warning("Fallback LLM for sub-task %d, skipping: %s", i, sub_task.query[:50])
+                if (
+                    route_result.primary.layer == RoutingLayer.FALLBACK_LLM
+                    or route_result.primary.skill_id == "fallback-llm"
+                ):
+                    logger.warning(
+                        "Fallback LLM for sub-task %d, skipping: %s", i, sub_task.query[:50]
+                    )
                     continue
 
                 if route_result.primary.confidence < self.MIN_STEP_CONFIDENCE:
@@ -93,15 +103,10 @@ class PlanBuilder:
                 confidence = route_result.primary.confidence
 
             detected_intents.append(sub_task.intent)
-            reasoning_parts.append(
-                f"Step {i}: '{sub_task.intent}' → {skill_id} "
-                f"({confidence:.0%})"
-            )
+            reasoning_parts.append(f"Step {i}: '{sub_task.intent}' → {skill_id} ({confidence:.0%})")
 
             # Determine dependencies based on execution mode
-            dependencies, can_parallel = self._determine_dependencies(
-                i, sub_task, execution_mode
-            )
+            dependencies, can_parallel = self._determine_dependencies(i, sub_task, execution_mode)
 
             steps.append(
                 ExecutionStep(
@@ -122,7 +127,9 @@ class PlanBuilder:
             original_query=original_query,
             steps=steps,
             detected_intents=detected_intents,
-            reasoning="; ".join(reasoning_parts) if reasoning_parts else "No decomposition reasoning",
+            reasoning="; ".join(reasoning_parts)
+            if reasoning_parts
+            else "No decomposition reasoning",
             created_at=datetime.now(UTC).isoformat(),
             status=PlanStatus.PENDING,
             execution_mode=execution_mode,
@@ -145,15 +152,11 @@ class PlanBuilder:
         query_lower = original_query.lower()
 
         # Check for explicit parallel keywords
-        has_parallel_keyword = any(
-            kw in query_lower for kw in PARALLEL_KEYWORDS
-        )
+        has_parallel_keyword = any(kw in query_lower for kw in PARALLEL_KEYWORDS)
 
         # Check for sequential keywords
         sequential_keywords = {"then", "after", "next", "followed by", "然后", "之后", "接着"}
-        has_sequential_keyword = any(
-            kw in query_lower for kw in sequential_keywords
-        )
+        has_sequential_keyword = any(kw in query_lower for kw in sequential_keywords)
 
         # Multiple tasks without explicit sequence = parallel
         if len(sub_tasks) > 1 and has_parallel_keyword:
@@ -195,8 +198,15 @@ class PlanBuilder:
         # Check for dependency indicators in the intent
         intent_lower = sub_task.intent.lower()
         dependency_indicators = {
-            "then", "after", "based on", "using", "from",
-            "然后", "之后", "基于", "使用",
+            "then",
+            "after",
+            "based on",
+            "using",
+            "from",
+            "然后",
+            "之后",
+            "基于",
+            "使用",
         }
 
         has_dependency = any(indicator in intent_lower for indicator in dependency_indicators)
@@ -227,7 +237,4 @@ class PlanBuilder:
             prev_refs.append(f"- {prev.intent} (completed)")
 
         context = "\n".join(prev_refs)
-        return (
-            f"{sub_task_query}\n\n"
-            f"Context from previous steps:\n{context}"
-        )
+        return f"{sub_task_query}\n\nContext from previous steps:\n{context}"

@@ -87,9 +87,7 @@ def _render_orchestrated_result(result: OrchestrationResult, console: Console) -
     strategy_label = "Sequential"
     if plan.steps and len(plan.steps) > 1:
         # Simple heuristic: if all steps use previous output, it's sequential
-        has_dependencies = any(
-            i > 0 and step.output_as for i, step in enumerate(plan.steps)
-        )
+        has_dependencies = any(i > 0 and step.output_as for i, step in enumerate(plan.steps))
         if not has_dependencies:
             strategy_label = "Parallel (no dependencies)"
         else:
@@ -175,9 +173,7 @@ def render_plan_status(plan: ExecutionPlan, console: Console | None = None) -> N
 
     console.print(
         Panel(
-            f"[bold]{plan.plan_id}[/bold]\n"
-            f"{progress}\n"
-            f"[dim]Status:[/dim] {plan.status.value}",
+            f"[bold]{plan.plan_id}[/bold]\n{progress}\n[dim]Status:[/dim] {plan.status.value}",
             title="[bold]Plan Status[/bold]",
             border_style="blue" if plan.status.value == "active" else "dim",
         )
@@ -186,6 +182,8 @@ def render_plan_status(plan: ExecutionPlan, console: Console | None = None) -> N
     # Show current step if active
     for step in plan.steps:
         if step.status == StepStatus.IN_PROGRESS:
-            console.print(f"\n[bold yellow]Current step:[/bold yellow] {step.step_number}. {step.skill_id}")
+            console.print(
+                f"\n[bold yellow]Current step:[/bold yellow] {step.step_number}. {step.skill_id}"
+            )
             console.print(f"[dim]Query:[/dim] {step.input_query[:100]}...")
             break

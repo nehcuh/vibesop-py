@@ -27,11 +27,13 @@ def cleanup(
     )
     result = installer.cleanup_old_snapshots(days=days)
 
-    console.print(Panel(
-        f"[bold green]Snapshot cleanup complete[/bold green]\n\n"
-        f"Kept: [bold]{result['kept']}[/bold] snapshots\n"
-        f"Removed: [bold red]{result['removed']}[/bold red] snapshots\n"
-        f"Retention: last {days} days",
-        title="vibe snapshot cleanup",
-        border_style="green",
-    ))
+    console.print(
+        Panel(
+            f"[bold green]Snapshot cleanup complete[/bold green]\n\n"
+            f"Kept: [bold]{result['kept']}[/bold] snapshots\n"
+            f"Removed: [bold red]{result['removed']}[/bold red] snapshots\n"
+            f"Retention: last {days} days",
+            title="vibe snapshot cleanup",
+            border_style="green",
+        )
+    )

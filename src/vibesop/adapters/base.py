@@ -122,9 +122,7 @@ class PlatformAdapter(ABC):
         return normalize_skill_type(content)
 
     @staticmethod
-    def _generate_fallback_skill_content(
-        skill: Any, dir_name: str | None = None
-    ) -> str:
+    def _generate_fallback_skill_content(skill: Any, dir_name: str | None = None) -> str:
         from vibesop.adapters._shared import generate_fallback_skill_content
 
         return generate_fallback_skill_content(skill, dir_name=dir_name)

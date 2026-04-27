@@ -102,6 +102,7 @@ def list_skills(
 
         # Load evaluations once for quality warnings
         from vibesop.core.skills.evaluator import RoutingEvaluator
+
         evaluator = RoutingEvaluator()
         evals = evaluator.evaluate_all_skills()
 
@@ -113,7 +114,13 @@ def list_skills(
             # Quality warning for low-grade skills
             evaluation = evals.get(skill_id)
             if evaluation and evaluation.total_routes >= 3:
-                grade_colors = {"A": "green", "B": "green", "C": "yellow", "D": "yellow", "F": "red"}
+                grade_colors = {
+                    "A": "green",
+                    "B": "green",
+                    "C": "yellow",
+                    "D": "yellow",
+                    "F": "red",
+                }
                 quality_str = f"[{grade_colors.get(evaluation.grade, 'dim')}]{evaluation.grade}[/{grade_colors.get(evaluation.grade, 'dim')}]"
             else:
                 quality_str = "[dim]—[/dim]"
@@ -125,7 +132,11 @@ def list_skills(
             ]
             if show_status:
                 config = SkillConfigManager.get_skill_config(skill_id)
-                status = "[green]✓ enabled[/green]" if (config and config.enabled) else "[red]✗ disabled[/red]"
+                status = (
+                    "[green]✓ enabled[/green]"
+                    if (config and config.enabled)
+                    else "[red]✗ disabled[/red]"
+                )
                 row.append(status)
             if show_scope:
                 config = SkillConfigManager.get_skill_config(skill_id)
@@ -516,10 +527,19 @@ def health(
                     all_evals.items(), key=lambda x: x[1].quality_score, reverse=True
                 )[:10]:
                     grade_color = {
-                        "A": "green", "B": "green", "C": "yellow",
-                        "D": "yellow", "F": "red",
+                        "A": "green",
+                        "B": "green",
+                        "C": "yellow",
+                        "D": "yellow",
+                        "F": "red",
                     }.get(evaluation.grade, "dim")
-                    icon = "✅" if evaluation.grade in ("A", "B") else "⚠️" if evaluation.grade in ("C", "D") else "🗑️"
+                    icon = (
+                        "✅"
+                        if evaluation.grade in ("A", "B")
+                        else "⚠️"
+                        if evaluation.grade in ("C", "D")
+                        else "🗑️"
+                    )
                     console.print(
                         f"  {icon} [cyan]{skill_id}[/cyan] "
                         f"[{grade_color}]{evaluation.grade} ({evaluation.quality_score:.0%})[/{grade_color}] "
@@ -533,7 +553,9 @@ def _show_ecosystem_report(monitor: Any) -> None:
     """Render gamified ecosystem health report."""
     from datetime import datetime
 
-    console.print(f"\n[bold]📊 Your Skill Ecosystem Health[/bold] [dim]({datetime.now().strftime('%Y-%m-%d')})[/dim]\n")
+    console.print(
+        f"\n[bold]📊 Your Skill Ecosystem Health[/bold] [dim]({datetime.now().strftime('%Y-%m-%d')})[/dim]\n"
+    )
 
     # Gather data
     summary = monitor.get_health_summary()
@@ -591,13 +613,17 @@ def _show_ecosystem_report(monitor: Any) -> None:
             console.print(
                 f"  [cyan]{sid:<30}[/cyan] {ev.grade}  -0.05 demote  [dim]{ev.total_routes} routes[/dim]"
             )
-        console.print("  [dim]Action: Run `vibe skills feedback --skill <id>` or `vibe skills disable <id>`[/dim]")
+        console.print(
+            "  [dim]Action: Run `vibe skills feedback --skill <id>` or `vibe skills disable <id>`[/dim]"
+        )
         console.print()
 
     # Insufficient Data
     if insufficient:
         console.print("[bold blue]💡 Feedback Opportunities[/bold blue]")
-        console.print(f"  [dim]{len(insufficient)} skills need more usage to reach reliable grading:[/dim]")
+        console.print(
+            f"  [dim]{len(insufficient)} skills need more usage to reach reliable grading:[/dim]"
+        )
         for sid, ev in insufficient[:3]:
             needed = 3 - ev.total_routes
             console.print(f"    • {sid}: {ev.total_routes}/3 routes (needs {needed} more)")
@@ -771,8 +797,16 @@ def info(
             console.print(f"  [dim]Success Rate:[/dim] {evaluation.success_rate:.0%}")
             console.print(f"  [dim]Avg Confidence:[/dim] {evaluation.avg_confidence:.0%}")
             console.print(f"  [dim]User Score:[/dim] {evaluation.user_score:.2f}")
-            quality_color = "green" if evaluation.quality_score >= 0.7 else "yellow" if evaluation.quality_score >= 0.4 else "red"
-            console.print(f"  [dim]Quality Score:[/dim] [{quality_color}]{evaluation.quality_score:.0%}[/{quality_color}]")
+            quality_color = (
+                "green"
+                if evaluation.quality_score >= 0.7
+                else "yellow"
+                if evaluation.quality_score >= 0.4
+                else "red"
+            )
+            console.print(
+                f"  [dim]Quality Score:[/dim] [{quality_color}]{evaluation.quality_score:.0%}[/{quality_color}]"
+            )
             if evaluation.last_used:
                 console.print(f"  [dim]Last Used:[/dim] {evaluation.last_used[:10]}")
     except (OSError, ValueError):
@@ -977,12 +1011,16 @@ def scope(
     if set_scope is None:
         console.print(f"[dim]Current scope for '{skill_id}':[/dim] [cyan]{current_scope}[/cyan]")
         if current_scope == "project":
-            project_hash = config.evaluation_context.get("project_hash", "unknown") if config else "unknown"
+            project_hash = (
+                config.evaluation_context.get("project_hash", "unknown") if config else "unknown"
+            )
             console.print(f"  [dim]Bound to project: {project_hash}[/dim]")
         return
 
     if set_scope not in ("global", "project", "session"):
-        console.print(f"[red]✗ Invalid scope: {set_scope}. Must be global, project, or session.[/red]")
+        console.print(
+            f"[red]✗ Invalid scope: {set_scope}. Must be global, project, or session.[/red]"
+        )
         raise typer.Exit(1)
 
     import hashlib
@@ -990,13 +1028,17 @@ def scope(
     updates: dict[str, Any] = {"scope": set_scope}
     if set_scope == "project":
         project_hash = hashlib.md5(str(Path.cwd().resolve()).encode()).hexdigest()[:12]
-        updates["evaluation_context"] = config.evaluation_context.copy() if (config and config.evaluation_context) else {}
+        updates["evaluation_context"] = (
+            config.evaluation_context.copy() if (config and config.evaluation_context) else {}
+        )
         updates["evaluation_context"]["project_hash"] = project_hash
 
     SkillConfigManager.update_skill_config(skill_id, updates)
     console.print(f"[green]✓ Scope for '{skill_id}' set to {set_scope}[/green]")
     if set_scope == "project":
-        console.print(f"  [dim]Bound to project: {project_hash}[/dim]")
+        console.print(
+            f"  [dim]Bound to project: {updates.get('evaluation_context', {}).get('project_hash', 'unknown')}[/dim]"
+        )
 
 
 def feedback(
@@ -1082,7 +1124,9 @@ def create(
     description: str | None = typer.Option(None, help="What this skill does"),
     from_template: str | None = typer.Option(None, "--from", help="Base on existing skill"),
     from_suggestion: str | None = typer.Option(
-        None, "--from-suggestion", help="Create from auto-detected pattern (use 'vibe skills suggestions' to list)"
+        None,
+        "--from-suggestion",
+        help="Create from auto-detected pattern (use 'vibe skills suggestions' to list)",
     ),
     namespace: str = typer.Option("custom", help="Skill namespace"),
     interactive: bool = typer.Option(True, help="Use interactive wizard"),
@@ -1135,16 +1179,12 @@ def create(
             template_text = Path(template_path).read_text()
             # Replace header fields
             new_text = template_text.replace(
-                f"id: {from_template}",
-                f"id: {namespace}/{name}"
-            ).replace(
-                f"name: {from_template.split('/')[-1]}",
-                f"name: {name}"
-            )
+                f"id: {from_template}", f"id: {namespace}/{name}"
+            ).replace(f"name: {from_template.split('/')[-1]}", f"name: {name}")
             if description:
                 new_text = new_text.replace(
                     f"description: {template_info.get('description', '')}",
-                    f"description: {description}"
+                    f"description: {description}",
                 )
             (skill_dir / "SKILL.md").write_text(new_text)
         else:
@@ -1180,10 +1220,13 @@ def create(
             "Trigger keywords (comma-separated):",
         ).ask()
 
-        namespace = questionary.text(
-            "Namespace:",
-            default=namespace,
-        ).ask() or namespace
+        namespace = (
+            questionary.text(
+                "Namespace:",
+                default=namespace,
+            ).ask()
+            or namespace
+        )
 
     if not name:
         console.print("[red]✗ Skill name is required[/red]")
@@ -1260,7 +1303,9 @@ def lifecycle(
             "archived": "dim",
         }
         color = state_colors.get(current_state, "white")
-        console.print(f"[dim]Lifecycle state for '{skill_id}':[/dim] [{color}]{current_state}[/{color}]")
+        console.print(
+            f"[dim]Lifecycle state for '{skill_id}':[/dim] [{color}]{current_state}[/{color}]"
+        )
         if current_state == "deprecated" and getattr(config, "deprecation_reason", None):
             console.print(f"  [dim]Reason: {config.deprecation_reason}[/dim]")
         return
@@ -1268,7 +1313,9 @@ def lifecycle(
     # Validate state
     valid_states = [s.value for s in SkillLifecycleState]
     if set_state not in valid_states:
-        console.print(f"[red]✗ Invalid state: {set_state}. Must be one of: {', '.join(valid_states)}[/red]")
+        console.print(
+            f"[red]✗ Invalid state: {set_state}. Must be one of: {', '.join(valid_states)}[/red]"
+        )
         raise typer.Exit(1)
 
     # Update state
@@ -1276,10 +1323,13 @@ def lifecycle(
     if reason:
         config.deprecation_reason = reason
 
-    SkillConfigManager.update_skill_config(skill_id, {
-        "lifecycle": set_state,
-        "deprecation_reason": reason,
-    })
+    SkillConfigManager.update_skill_config(
+        skill_id,
+        {
+            "lifecycle": set_state,
+            "deprecation_reason": reason,
+        },
+    )
 
     state_colors = {
         "draft": "blue",
@@ -1288,7 +1338,9 @@ def lifecycle(
         "archived": "dim",
     }
     color = state_colors.get(set_state, "white")
-    console.print(f"[green]✓[/green] Lifecycle state for '{skill_id}' set to [{color}]{set_state}[/{color}]")
+    console.print(
+        f"[green]✓[/green] Lifecycle state for '{skill_id}' set to [{color}]{set_state}[/{color}]"
+    )
     if reason:
         console.print(f"  [dim]Reason: {reason}[/dim]")
 
@@ -1322,7 +1374,9 @@ def _lifecycle_auto_review() -> None:
 
     console.print("[bold]🔍 Lifecycle Auto-Review[/bold]\n")
     for skill_id, suggested_state, reason in suggestions:
-        console.print(f"  [cyan]{skill_id}[/cyan] → [yellow]{suggested_state}[/yellow] [dim]({reason})[/dim]")
+        console.print(
+            f"  [cyan]{skill_id}[/cyan] → [yellow]{suggested_state}[/yellow] [dim]({reason})[/dim]"
+        )
     console.print("\n[dim]Run `vibe skills lifecycle <skill> --set <state>` to apply.[/dim]")
 
 

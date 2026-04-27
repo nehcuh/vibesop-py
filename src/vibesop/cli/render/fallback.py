@@ -68,9 +68,7 @@ def _render_stale_suggestions() -> str:
                 f"  • [yellow]{len(warned)} skill(s) could be reviewed:[/yellow] "
                 f"[dim]{skill_names}[/dim]"
             )
-        lines.append(
-            "  • Run [bold]vibe skill stale[/bold] for details and cleanup options"
-        )
+        lines.append("  • Run [bold]vibe skill stale[/bold] for details and cleanup options")
         return "\n".join(lines)
     except Exception:
         return ""

@@ -183,7 +183,9 @@ class KeywordMatcher:
         ):
             name_bonus = 0.4
 
-        return min(1.0, base_score + min(partial_bonus, 0.4) + min(substring_bonus, 0.5) + name_bonus)
+        return min(
+            1.0, base_score + min(partial_bonus, 0.4) + min(substring_bonus, 0.5) + name_bonus
+        )
 
     def _get_matched_keywords(
         self,
@@ -343,23 +345,19 @@ class TFIDFMatcher:
             str(candidate.get("name", "")),
             str(candidate.get("name", "")),
             str(candidate.get("name", "")),
-
             # Intent - highest weight (semantic clarity)
             str(candidate.get("intent", "")),
             str(candidate.get("intent", "")),
             str(candidate.get("intent", "")),
             str(candidate.get("intent", "")),
             str(candidate.get("intent", "")),
-
             # Keywords - high weight (specific scenarios)
             " ".join(str(k) for k in keywords_list),
             " ".join(str(k) for k in keywords_list),
             " ".join(str(k) for k in keywords_list),
-
             # Triggers - medium weight (pattern matching)
             " ".join(str(t) for t in triggers_list),
             " ".join(str(t) for t in triggers_list),
-
             # Description - lowest weight (noisy, keep minimal)
             str(candidate.get("description", "")),
         ]
@@ -597,10 +595,7 @@ class LevenshteinMatcher:
         for qt in query_tokens:
             if len(qt) <= 2:
                 continue  # Skip very short tokens
-            best = max(
-                self._normalized_similarity(qt, ct)
-                for ct in candidate_tokens
-            )
+            best = max(self._normalized_similarity(qt, ct) for ct in candidate_tokens)
             if best >= SIMILARITY_THRESHOLD:
                 token_scores.append(best)
 
@@ -628,11 +623,7 @@ class LevenshteinMatcher:
         """Simple whitespace and punctuation tokenizer."""
         import re
 
-        return [
-            t.lower()
-            for t in re.findall(r"[a-zA-Z0-9\u4e00-\u9fff]+", text)
-            if len(t) > 1
-        ]
+        return [t.lower() for t in re.findall(r"[a-zA-Z0-9\u4e00-\u9fff]+", text) if len(t) > 1]
 
     def _candidate_tokens(self, candidate: SkillCandidateDict) -> list[str]:
         """Extract searchable tokens from a candidate."""
@@ -675,7 +666,9 @@ class LevenshteinMatcher:
 
     def _candidate_to_text(self, candidate: SkillCandidateDict) -> str:
         """Convert candidate to searchable text."""
-        return str(str(candidate.get("name", ""))) + " " + str(str(candidate.get("description", "")))
+        return (
+            str(str(candidate.get("name", ""))) + " " + str(str(candidate.get("description", "")))
+        )
 
     def warm_up(self, candidates: list[SkillCandidateDict]) -> None:
         """No-op for Levenshtein matcher — it has no lazy-loaded components."""

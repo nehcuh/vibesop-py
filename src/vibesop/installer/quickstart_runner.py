@@ -414,16 +414,24 @@ class QuickstartRunner:
         console.print(f"   [dim]  Create: {config_path}[/dim]")
         console.print("   [dim]  Example:[/dim]")
         console.print("   [dim]    llm:[/dim]")
-        console.print('   [dim]      provider: anthropic  # or: openai / deepseek / kimi / zhipu[/dim]')
-        console.print('   [dim]      model: claude-sonnet-4-6-20250514[/dim]')
+        console.print(
+            "   [dim]      provider: anthropic  # or: openai / deepseek / kimi / zhipu[/dim]"
+        )
+        console.print("   [dim]      model: claude-sonnet-4-6-20250514[/dim]")
         console.print('   [dim]      api_key: "sk-..."  # or set via env var[/dim]')
-        console.print('   [dim]      api_base: "https://api.deepseek.com/v1"  # for custom endpoints[/dim]')
+        console.print(
+            '   [dim]      api_base: "https://api.deepseek.com/v1"  # for custom endpoints[/dim]'
+        )
         console.print()
         console.print("   [bold]Option 2: Environment Variables[/bold]")
         console.print('   [dim]  export ANTHROPIC_API_KEY="sk-ant-..."[/dim]')
         console.print('   [dim]  export OPENAI_API_KEY="sk-..."[/dim]')
-        console.print('   [dim]  export DEEPSEEK_API_KEY="sk-..." && export DEEPSEEK_BASE_URL="https://api.deepseek.com/v1"[/dim]')
-        console.print('   [dim]  # or local Ollama: export VIBE_LLM_PROVIDER=ollama && ollama serve[/dim]')
+        console.print(
+            '   [dim]  export DEEPSEEK_API_KEY="sk-..." && export DEEPSEEK_BASE_URL="https://api.deepseek.com/v1"[/dim]'
+        )
+        console.print(
+            "   [dim]  # or local Ollama: export VIBE_LLM_PROVIDER=ollama && ollama serve[/dim]"
+        )
 
         console.print("\n[bold]📖 Documentation:[/bold]")
         console.print("   - Quick Start: README.md")

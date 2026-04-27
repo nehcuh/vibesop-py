@@ -129,15 +129,12 @@ class SequencePattern:
 
     @property
     def is_candidate(self) -> bool:
-        return (
-            self.total_count >= 5
-            and self.success_rate >= 0.8
-            and len(self.steps) >= 3
-        )
+        return self.total_count >= 5 and self.success_rate >= 0.8 and len(self.steps) >= 3
 
     @property
     def sequence_hash(self) -> str:
         import hashlib
+
         return hashlib.md5("→".join(self.steps).encode()).hexdigest()[:12]
 
     def to_dict(self) -> dict[str, Any]:
@@ -484,9 +481,7 @@ class InstinctLearner:
             "avg_confidence": sum(i.confidence for i in self._instincts.values()) / total
             if total > 0
             else 0,
-            "sequence_candidates": sum(
-                1 for s in self._sequences.values() if s.is_candidate
-            ),
+            "sequence_candidates": sum(1 for s in self._sequences.values() if s.is_candidate),
         }
 
     # --- Sequence Pattern Detection ---
@@ -508,6 +503,7 @@ class InstinctLearner:
             return None
 
         import hashlib
+
         seq_hash = hashlib.md5("→".join(steps).encode()).hexdigest()[:12]
 
         if seq_hash in self._sequences:
@@ -523,8 +519,15 @@ class InstinctLearner:
 
         if context:
             context_lower = context.lower()
-            for tag in ("debugging", "testing", "linting", "deploying", "refactoring",
-                        "building", "security"):
+            for tag in (
+                "debugging",
+                "testing",
+                "linting",
+                "deploying",
+                "refactoring",
+                "building",
+                "security",
+            ):
                 if tag in context_lower and tag not in pattern.context_tags:
                     pattern.context_tags.append(tag)
 
@@ -534,12 +537,11 @@ class InstinctLearner:
             return pattern
         return None
 
-    def get_sequence_candidates(
-        self, min_confidence: float = 0.5
-    ) -> list[SequencePattern]:
+    def get_sequence_candidates(self, min_confidence: float = 0.5) -> list[SequencePattern]:
         """Get all sequence patterns that qualify as skill candidates."""
         return [
-            s for s in self._sequences.values()
+            s
+            for s in self._sequences.values()
             if s.is_candidate and s.success_rate >= min_confidence
         ]
 

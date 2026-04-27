@@ -98,15 +98,14 @@ class _LazyEmbeddingMatcher:
             with self._init_lock:
                 if self._real is None:
                     from vibesop.core.matching import EmbeddingMatcher
+
                     self._real = EmbeddingMatcher(config=self._config)
         return self._real
 
     def warm_up(self, candidates: list[dict[str, Any]]) -> None:
         self._ensure_real().warm_up(candidates)
 
-    def match(
-        self, query: str, candidates: list[dict[str, Any]], context: Any = None
-    ) -> list[tuple[str, float]]:
+    def match(self, query: str, candidates: list[dict[str, Any]], context: Any = None) -> Any:
         return self._ensure_real().match(query, candidates, context)
 
     def preprocess(self, query: str) -> str:
@@ -171,9 +170,7 @@ class UnifiedRouter(RouterStatsMixin, RouterExecutionMixin, RouterOrchestrationM
 
         self._embedding_enabled = self._config.enable_embedding
         if self._embedding_enabled:
-            self._matchers.append(
-                (RoutingLayer.EMBEDDING, _LazyEmbeddingMatcher(matcher_config))
-            )
+            self._matchers.append((RoutingLayer.EMBEDDING, _LazyEmbeddingMatcher(matcher_config)))
 
         self._matchers.append((RoutingLayer.LEVENSHTEIN, LevenshteinMatcher(matcher_config)))
 
@@ -337,8 +334,15 @@ class UnifiedRouter(RouterStatsMixin, RouterExecutionMixin, RouterOrchestrationM
         if match:
             self._record_layer(RoutingLayer.EXPLICIT)
             result = self._build_match_result(
-                query, match, [], routing_path, layer_details,
-                start_time, deprecated_warnings, conversation, original_query,
+                query,
+                match,
+                [],
+                routing_path,
+                layer_details,
+                start_time,
+                deprecated_warnings,
+                conversation,
+                original_query,
                 context,
             )
             return result
@@ -356,13 +360,14 @@ class UnifiedRouter(RouterStatsMixin, RouterExecutionMixin, RouterOrchestrationM
         # the silent FALLBACK_LLM degradation that occurs when AI Triage
         # is disabled or no LLM provider is configured.
         llm_available = (
-            self._llm is not None
-            or self._triage_service._llm is not None
+            self._llm is not None or self._triage_service._llm is not None
         ) and self._config.enable_ai_triage
 
         if not llm_available and self._config.enable_ai_triage:
             self._triage_service._llm = self._triage_service.init_llm_client()
-            llm_available = self._triage_service._llm is not None and self._triage_service._llm.configured()
+            llm_available = (
+                self._triage_service._llm is not None and self._triage_service._llm.configured()
+            )
 
         if not use_keyword_routing and not llm_available:
             use_keyword_routing = True
@@ -372,11 +377,18 @@ class UnifiedRouter(RouterStatsMixin, RouterExecutionMixin, RouterOrchestrationM
             match, detail = _layers.try_scenario_layer(self, query, candidates)
             routing_path.append(RoutingLayer.SCENARIO)
             layer_details.append(detail)
-            if match:
+            if match and match.confidence >= self._config.min_confidence:
                 self._record_layer(RoutingLayer.SCENARIO)
                 result = self._build_match_result(
-                    query, match, [], routing_path, layer_details,
-                    start_time, deprecated_warnings, conversation, original_query,
+                    query,
+                    match,
+                    [],
+                    routing_path,
+                    layer_details,
+                    start_time,
+                    deprecated_warnings,
+                    conversation,
+                    original_query,
                     context,
                 )
                 return result
@@ -385,11 +397,18 @@ class UnifiedRouter(RouterStatsMixin, RouterExecutionMixin, RouterOrchestrationM
             match, detail = _layers.try_ai_triage_layer(self, query, candidates, context)
             routing_path.append(RoutingLayer.AI_TRIAGE)
             layer_details.append(detail)
-            if match:
+            if match and match.confidence >= self._config.min_confidence:
                 self._record_layer(RoutingLayer.AI_TRIAGE)
                 result = self._build_match_result(
-                    query, match, [], routing_path, layer_details,
-                    start_time, deprecated_warnings, conversation, original_query,
+                    query,
+                    match,
+                    [],
+                    routing_path,
+                    layer_details,
+                    start_time,
+                    deprecated_warnings,
+                    conversation,
+                    original_query,
                     context,
                 )
                 return result
@@ -403,8 +422,15 @@ class UnifiedRouter(RouterStatsMixin, RouterExecutionMixin, RouterOrchestrationM
             if primary:
                 self._record_layer(detail.layer)
                 result = self._build_match_result(
-                    query, primary, alternatives, routing_path, layer_details,
-                    start_time, deprecated_warnings, conversation, original_query
+                    query,
+                    primary,
+                    alternatives,
+                    routing_path,
+                    layer_details,
+                    start_time,
+                    deprecated_warnings,
+                    conversation,
+                    original_query,
                 )
                 return result
         else:
@@ -414,11 +440,18 @@ class UnifiedRouter(RouterStatsMixin, RouterExecutionMixin, RouterOrchestrationM
             )
             routing_path.append(RoutingLayer.AI_TRIAGE)
             layer_details.append(detail)
-            if match:
+            if match and match.confidence >= self._config.min_confidence:
                 self._record_layer(RoutingLayer.AI_TRIAGE)
                 result = self._build_match_result(
-                    query, match, [], routing_path, layer_details,
-                    start_time, deprecated_warnings, conversation, original_query,
+                    query,
+                    match,
+                    [],
+                    routing_path,
+                    layer_details,
+                    start_time,
+                    deprecated_warnings,
+                    conversation,
+                    original_query,
                     context,
                 )
                 return result
@@ -473,6 +506,7 @@ class UnifiedRouter(RouterStatsMixin, RouterExecutionMixin, RouterOrchestrationM
             )
 
         from vibesop.core.routing.perf_monitor import get_perf_monitor
+
         get_perf_monitor().record(
             result.duration_ms,
             result.primary.layer.value if result.primary else RoutingLayer.NO_MATCH.value,
@@ -520,9 +554,7 @@ class UnifiedRouter(RouterStatsMixin, RouterExecutionMixin, RouterOrchestrationM
                 semantic_score=None,
                 metadata=primary.metadata,
             )
-            optimized_primary, _ = self._apply_optimizations(
-                [match_result], query, context
-            )
+            optimized_primary, _ = self._apply_optimizations([match_result], query, context)
             primary = SkillRoute(
                 skill_id=optimized_primary.skill_id,
                 confidence=optimized_primary.confidence,
@@ -538,9 +570,9 @@ class UnifiedRouter(RouterStatsMixin, RouterExecutionMixin, RouterOrchestrationM
         if primary.layer not in (RoutingLayer.EXPLICIT, RoutingLayer.CUSTOM):
             degradation_level, degraded_primary = self._degradation_manager.evaluate(primary)
             if degradation_level == DegradationLevel.FALLBACK:
-                primary = None
+                primary = None  # type: ignore[reportArgumentType]
             elif degradation_level == DegradationLevel.DEGRADE:
-                primary = degraded_primary
+                primary = degraded_primary  # type: ignore[reportArgumentType]
             if primary:
                 primary.metadata["degradation_level"] = degradation_level.value
             else:
@@ -568,6 +600,7 @@ class UnifiedRouter(RouterStatsMixin, RouterExecutionMixin, RouterOrchestrationM
         try:
             if self._skill_recommender is None:
                 from vibesop.integrations.skill_recommender import SkillRecommender
+
                 self._skill_recommender = SkillRecommender()
             recommender = self._skill_recommender
             all_candidates = self._candidate_manager.get_cached_candidates()
@@ -575,14 +608,16 @@ class UnifiedRouter(RouterStatsMixin, RouterExecutionMixin, RouterOrchestrationM
             recs = recommender.recommend(query, all_candidates, top_k=5)
             for rec in recs:
                 if rec.skill_id not in existing_ids and rec.score >= 0.2:
-                    enriched_alternatives.append(SkillRoute(
-                        skill_id=rec.skill_id,
-                        confidence=rec.score,
-                        layer=RoutingLayer.KEYWORD,
-                        source=rec.namespace,
-                        description=rec.intent,
-                        metadata={"recommended": True, "reason": rec.reason},
-                    ))
+                    enriched_alternatives.append(
+                        SkillRoute(
+                            skill_id=rec.skill_id,
+                            confidence=rec.score,
+                            layer=RoutingLayer.KEYWORD,
+                            source=rec.namespace,
+                            description=rec.intent,
+                            metadata={"recommended": True, "reason": rec.reason},
+                        )
+                    )
         except (ImportError, KeyError, ValueError):
             pass
 
@@ -603,21 +638,26 @@ class UnifiedRouter(RouterStatsMixin, RouterExecutionMixin, RouterOrchestrationM
         try:
             if self._skill_recommender is None:
                 from vibesop.integrations.skill_recommender import SkillRecommender
+
                 self._skill_recommender = SkillRecommender()
             recommender = self._skill_recommender
             all_candidates = self._candidate_manager.get_cached_candidates()
             used_ids = existing_ids.copy()
-            discoveries = recommender.discover(query, all_candidates, used_skill_ids=used_ids, top_k=3)
+            discoveries = recommender.discover(
+                query, all_candidates, used_skill_ids=used_ids, top_k=3
+            )
             for d in discoveries:
                 if d.skill_id not in existing_ids and d.score >= 0.15:
-                    alternatives.append(SkillRoute(
-                        skill_id=d.skill_id,
-                        confidence=d.score,
-                        layer=RoutingLayer.KEYWORD,
-                        source=d.namespace,
-                        description=d.intent,
-                        metadata={"discovery": True, "reason": d.reason},
-                    ))
+                    alternatives.append(
+                        SkillRoute(
+                            skill_id=d.skill_id,
+                            confidence=d.score,
+                            layer=RoutingLayer.KEYWORD,
+                            source=d.namespace,
+                            description=d.intent,
+                            metadata={"discovery": True, "reason": d.reason},
+                        )
+                    )
         except (ImportError, KeyError, ValueError):
             pass
 
@@ -709,51 +749,68 @@ class UnifiedRouter(RouterStatsMixin, RouterExecutionMixin, RouterOrchestrationM
         start_time = time.perf_counter()
 
         # 1. Single-skill routing (fast path)
-        cb.on_phase_start(PhaseInfo(
-            phase=OrchestrationPhase.ROUTING,
-            message="Analyzing query for skill match...",
-            progress=0.0,
-        ))
+        cb.on_phase_start(
+            PhaseInfo(
+                phase=OrchestrationPhase.ROUTING,
+                message="Analyzing query for skill match...",
+                progress=0.0,
+            )
+        )
         single_result = self._route(query, candidates, context)
-        cb.on_phase_complete(PhaseInfo(
-            phase=OrchestrationPhase.ROUTING,
-            message=f"Single-skill match: {single_result.primary.skill_id if single_result.primary else 'none'}",
-            progress=0.2,
-            metadata={"primary_confidence": single_result.primary.confidence if single_result.primary else 0.0},
-        ))
+        cb.on_phase_complete(
+            PhaseInfo(
+                phase=OrchestrationPhase.ROUTING,
+                message=f"Single-skill match: {single_result.primary.skill_id if single_result.primary else 'none'}",
+                progress=0.2,
+                metadata={
+                    "primary_confidence": single_result.primary.confidence
+                    if single_result.primary
+                    else 0.0
+                },
+            )
+        )
 
         # 2. Check if orchestration is enabled
         if not self._config.enable_orchestration:
             return self._to_orchestration_result(single_result, query)
 
         # 3. Multi-intent detection
-        cb.on_phase_start(PhaseInfo(
-            phase=OrchestrationPhase.DETECTION,
-            message="Detecting multiple intents...",
-            progress=0.2,
-        ))
+        cb.on_phase_start(
+            PhaseInfo(
+                phase=OrchestrationPhase.DETECTION,
+                message="Detecting multiple intents...",
+                progress=0.2,
+            )
+        )
         detector = self._get_multi_intent_detector()
         should_decompose = detector.should_decompose(query, single_result, llm_client=self._llm)
-        cb.on_phase_complete(PhaseInfo(
-            phase=OrchestrationPhase.DETECTION,
-            message=f"Multi-intent detected: {should_decompose}",
-            progress=0.4,
-            metadata={"should_decompose": should_decompose},
-        ))
+        cb.on_phase_complete(
+            PhaseInfo(
+                phase=OrchestrationPhase.DETECTION,
+                message=f"Multi-intent detected: {should_decompose}",
+                progress=0.4,
+                metadata={"should_decompose": should_decompose},
+            )
+        )
 
         if not should_decompose:
             return self._to_orchestration_result(single_result, query)
 
         # 4. Decompose into sub-tasks
-        cb.on_phase_start(PhaseInfo(
-            phase=OrchestrationPhase.DECOMPOSITION,
-            message="Decomposing query into sub-tasks...",
-            progress=0.4,
-        ))
+        cb.on_phase_start(
+            PhaseInfo(
+                phase=OrchestrationPhase.DECOMPOSITION,
+                message="Decomposing query into sub-tasks...",
+                progress=0.4,
+            )
+        )
         decomposer = self._get_task_decomposer()
         try:
             skill_candidates = candidates or self._get_cached_candidates()
-            skills = [f"{c['id']}: {c.get('description', c.get('intent', 'N/A'))}" for c in skill_candidates[:50]]
+            skills = [
+                f"{c['id']}: {c.get('description', c.get('intent', 'N/A'))}"
+                for c in skill_candidates[:50]
+            ]
             sub_tasks = decomposer.decompose(query, skills=skills)
         except Exception as e:
             policy = cb.on_phase_error(
@@ -769,22 +826,26 @@ class UnifiedRouter(RouterStatsMixin, RouterExecutionMixin, RouterOrchestrationM
                 return self._to_orchestration_result(single_result, query)
             sub_tasks = []
 
-        cb.on_phase_complete(PhaseInfo(
-            phase=OrchestrationPhase.DECOMPOSITION,
-            message=f"Decomposed into {len(sub_tasks)} sub-tasks",
-            progress=0.6,
-            metadata={"sub_task_count": len(sub_tasks)},
-        ))
+        cb.on_phase_complete(
+            PhaseInfo(
+                phase=OrchestrationPhase.DECOMPOSITION,
+                message=f"Decomposed into {len(sub_tasks)} sub-tasks",
+                progress=0.6,
+                metadata={"sub_task_count": len(sub_tasks)},
+            )
+        )
 
         if len(sub_tasks) <= 1:
             return self._to_orchestration_result(single_result, query)
 
         # 5. Build execution plan
-        cb.on_phase_start(PhaseInfo(
-            phase=OrchestrationPhase.PLAN_BUILDING,
-            message="Building execution plan...",
-            progress=0.6,
-        ))
+        cb.on_phase_start(
+            PhaseInfo(
+                phase=OrchestrationPhase.PLAN_BUILDING,
+                message="Building execution plan...",
+                progress=0.6,
+            )
+        )
         builder = self._get_plan_builder()
         try:
             plan = builder.build_plan(query, sub_tasks)
@@ -803,19 +864,23 @@ class UnifiedRouter(RouterStatsMixin, RouterExecutionMixin, RouterOrchestrationM
             plan = None  # type: ignore[assignment]
 
         if not plan or not plan.steps:
-            cb.on_phase_complete(PhaseInfo(
-                phase=OrchestrationPhase.PLAN_BUILDING,
-                message="No valid plan could be built, falling back to single skill",
-                progress=0.8,
-            ))
+            cb.on_phase_complete(
+                PhaseInfo(
+                    phase=OrchestrationPhase.PLAN_BUILDING,
+                    message="No valid plan could be built, falling back to single skill",
+                    progress=0.8,
+                )
+            )
             return self._to_orchestration_result(single_result, query)
 
-        cb.on_phase_complete(PhaseInfo(
-            phase=OrchestrationPhase.PLAN_BUILDING,
-            message=f"Execution plan built with {len(plan.steps)} steps",
-            progress=0.9,
-            metadata={"step_count": len(plan.steps), "strategy": plan.execution_mode.value},
-        ))
+        cb.on_phase_complete(
+            PhaseInfo(
+                phase=OrchestrationPhase.PLAN_BUILDING,
+                message=f"Execution plan built with {len(plan.steps)} steps",
+                progress=0.9,
+                metadata={"step_count": len(plan.steps), "strategy": plan.execution_mode.value},
+            )
+        )
 
         duration_ms = (time.perf_counter() - start_time) * 1000
 
@@ -832,11 +897,13 @@ class UnifiedRouter(RouterStatsMixin, RouterExecutionMixin, RouterOrchestrationM
         self._record_execution(query, result)
 
         cb.on_plan_ready(plan)
-        cb.on_phase_complete(PhaseInfo(
-            phase=OrchestrationPhase.COMPLETE,
-            message="Orchestration complete",
-            progress=1.0,
-        ))
+        cb.on_phase_complete(
+            PhaseInfo(
+                phase=OrchestrationPhase.COMPLETE,
+                message="Orchestration complete",
+                progress=1.0,
+            )
+        )
 
         return result
 
@@ -855,7 +922,9 @@ class UnifiedRouter(RouterStatsMixin, RouterExecutionMixin, RouterOrchestrationM
             query=query,
             mode=result.mode.value,
             primary_skill=result.primary.skill_id if result.primary else None,
-            plan_steps=[s.skill_id for s in result.execution_plan.steps] if result.execution_plan else [],
+            plan_steps=[s.skill_id for s in result.execution_plan.steps]
+            if result.execution_plan
+            else [],
             step_count=len(result.execution_plan.steps) if result.execution_plan else 0,
             duration_ms=result.duration_ms,
             user_modified=user_modified,
@@ -919,6 +988,7 @@ class UnifiedRouter(RouterStatsMixin, RouterExecutionMixin, RouterOrchestrationM
             primary.metadata["deprecated_warnings"] = deprecated_warnings
 
         from vibesop.core.routing.perf_monitor import get_perf_monitor
+
         if primary:
             get_perf_monitor().record(duration_ms, primary.layer.value)
 
@@ -994,9 +1064,7 @@ class UnifiedRouter(RouterStatsMixin, RouterExecutionMixin, RouterOrchestrationM
         if self._memory_manager is None:
             from vibesop.core.memory import MemoryManager
 
-            self._memory_manager = MemoryManager(
-                storage_dir=self.project_root / ".vibe" / "memory"
-            )
+            self._memory_manager = MemoryManager(storage_dir=self.project_root / ".vibe" / "memory")
         return self._memory_manager
 
     def _get_session_context(self):
@@ -1066,6 +1134,7 @@ class UnifiedRouter(RouterStatsMixin, RouterExecutionMixin, RouterOrchestrationM
         if not context.project_type:
             if self._project_analyzer is None:
                 from vibesop.core.project_analyzer import ProjectAnalyzer
+
                 self._project_analyzer = ProjectAnalyzer(self.project_root)
             analyzer = self._project_analyzer
             profile = analyzer.analyze()
@@ -1079,9 +1148,7 @@ class UnifiedRouter(RouterStatsMixin, RouterExecutionMixin, RouterOrchestrationM
     # Config management (from former config_mixin)
     # ================================================================
 
-    def _create_config_manager_from_config(
-        self, config: ConfigRoutingConfig
-    ) -> ConfigManager:
+    def _create_config_manager_from_config(self, config: ConfigRoutingConfig) -> ConfigManager:
         manager = ConfigManager(project_root=self.project_root)
         for field_name in type(config).model_fields:
             value = getattr(config, field_name)
@@ -1188,20 +1255,24 @@ class UnifiedRouter(RouterStatsMixin, RouterExecutionMixin, RouterOrchestrationM
     def _apply_optimizations(self, matches: Any, query: str, context: Any = None) -> Any:
         """Apply optimization strategies to match results."""
         from vibesop.core.routing import _pipeline
+
         return _pipeline.apply_optimizations(self, matches, query, context)
 
     def _try_ai_triage(self, query: str, candidates: list[dict[str, Any]], context: Any = None):
         """Backward-compatible proxy to TriageService.try_ai_triage."""
         from vibesop.core.routing import _layers
+
         match, _ = _layers.try_ai_triage_layer(self, query, candidates, context)
         if match is None:
             return None
         from vibesop.core.routing.layers import LayerResult
+
         return LayerResult(match=match, layer=match.layer)
 
     def _build_ai_triage_prompt(self, query: str, skills_summary: str) -> str:
         """Backward-compatible proxy to TriageService.build_ai_triage_prompt."""
         return self._triage_service.build_ai_triage_prompt(query, skills_summary)
+
 
 __all__ = [
     "RoutingLayer",

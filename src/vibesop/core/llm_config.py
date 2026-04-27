@@ -28,6 +28,7 @@ console = Console()
 
 class LLMSource(Enum):
     """LLM 配置来源"""
+
     AGENT_ENV = "agent_environment"  # Claude Code, Cursor 等 Agent 环境
     VIBESOP_CONFIG = "vibesop_config"  # VibeSOP 配置文件
     ENV_VAR = "environment_variable"  # 环境变量
@@ -215,7 +216,7 @@ class EnvVarLLMDetector:
     plus the generic VIBE_LLM_PROVIDER override.
     """
 
-    PROVIDER_ENV_MAP: ClassVar[dict[str, dict[str, str]]] = {
+    PROVIDER_ENV_MAP: ClassVar[dict[str, dict[str, str | None]]] = {
         "deepseek": {
             "api_key": "DEEPSEEK_API_KEY",
             "api_base": "DEEPSEEK_BASE_URL",
@@ -263,7 +264,8 @@ class EnvVarLLMDetector:
 
         # Priority 2: Anthropic
         if os.getenv("ANTHROPIC_API_KEY"):
-            return cls._build_config("anthropic",
+            return cls._build_config(
+                "anthropic",
                 api_key_env="ANTHROPIC_API_KEY",
                 base_url_env="ANTHROPIC_BASE_URL",
                 model_env="ANTHROPIC_MODEL",
@@ -272,7 +274,8 @@ class EnvVarLLMDetector:
 
         # Priority 3: OpenAI
         if os.getenv("OPENAI_API_KEY"):
-            return cls._build_config("openai",
+            return cls._build_config(
+                "openai",
                 api_key_env="OPENAI_API_KEY",
                 base_url_env="OPENAI_BASE_URL",
                 model_env="OPENAI_MODEL",
@@ -308,8 +311,10 @@ class EnvVarLLMDetector:
         if not api_base:
             api_base = cls.PROVIDER_DEFAULT_BASES.get(provider)
         model = (
-            os.getenv(_model_env) if _model_env else None
-        ) or default_model or cls.PROVIDER_DEFAULT_MODELS.get(provider, "default")
+            (os.getenv(_model_env) if _model_env else None)
+            or default_model
+            or cls.PROVIDER_DEFAULT_MODELS.get(provider, "default")
+        )
 
         return LLMConfig(
             provider=provider,
@@ -329,9 +334,7 @@ class LLMConfigResolver:
         self.logger = console
 
     def resolve_llm_config(
-        self,
-        skill_requirements: dict[str, Any] | None = None,
-        prefer_agent: bool = True
+        self, skill_requirements: dict[str, Any] | None = None, prefer_agent: bool = True
     ) -> LLMConfig | None:
         """解析 LLM 配置(使用降级策略)
 
@@ -349,10 +352,14 @@ class LLMConfigResolver:
         if prefer_agent:
             agent_config = AgentEnvironmentDetector.get_agent_llm_config()
             if agent_config:
-                self.logger.print(f"  ✓ Using Agent's LLM: {agent_config.provider}/{agent_config.model}")
+                self.logger.print(
+                    f"  ✓ Using Agent's LLM: {agent_config.provider}/{agent_config.model}"
+                )
 
                 # 验证是否满足技能需求
-                if skill_requirements and self._meets_requirements(agent_config, skill_requirements):
+                if skill_requirements and self._meets_requirements(
+                    agent_config, skill_requirements
+                ):
                     return agent_config
                 else:
                     self.logger.print("  ⚠ Agent's LLM doesn't meet skill requirements")
@@ -360,7 +367,9 @@ class LLMConfigResolver:
         # 优先级 2: VibeSOP 配置文件
         vibesop_config = VibeSOPConfigManager.get_llm_config()
         if vibesop_config:
-            self.logger.print(f"  ✓ Using VibeSOP config: {vibesop_config.provider}/{vibesop_config.model}")
+            self.logger.print(
+                f"  ✓ Using VibeSOP config: {vibesop_config.provider}/{vibesop_config.model}"
+            )
 
             if skill_requirements and self._meets_requirements(vibesop_config, skill_requirements):
                 return vibesop_config
@@ -370,7 +379,9 @@ class LLMConfigResolver:
         # 优先级 3: 环境变量
         env_config = EnvVarLLMDetector.get_llm_config()
         if env_config:
-            self.logger.print(f"  ✓ Using environment variables: {env_config.provider}/{env_config.model}")
+            self.logger.print(
+                f"  ✓ Using environment variables: {env_config.provider}/{env_config.model}"
+            )
 
             if skill_requirements and self._meets_requirements(env_config, skill_requirements):
                 return env_config
@@ -385,11 +396,7 @@ class LLMConfigResolver:
         self.logger.print("  ❌ No LLM configuration found")
         return None
 
-    def _meets_requirements(
-        self,
-        config: LLMConfig,
-        requirements: dict[str, Any]
-    ) -> bool:
+    def _meets_requirements(self, config: LLMConfig, requirements: dict[str, Any]) -> bool:
         """验证配置是否满足技能需求"""
 
         # 检查提供商
@@ -414,11 +421,7 @@ class LLMConfigResolver:
 
         return True
 
-    def _is_compatible_model(
-        self,
-        model: str,
-        recommended_models: list[str]
-    ) -> bool:
+    def _is_compatible_model(self, model: str, recommended_models: list[str]) -> bool:
         """检查模型是否兼容推荐模型"""
 
         # 简化版兼容性检查
@@ -432,10 +435,7 @@ class LLMConfigResolver:
 
         return False
 
-    def _create_default_config(
-        self,
-        requirements: dict[str, Any]
-    ) -> LLMConfig:
+    def _create_default_config(self, requirements: dict[str, Any]) -> LLMConfig:
         """创建默认配置"""
 
         # 使用推荐配置
@@ -463,7 +463,9 @@ class LLMConfigResolver:
         # 1. Agent 环境(最快)
         agent_config = AgentEnvironmentDetector.get_agent_llm_config()
         if agent_config:
-            self.logger.print(f"[dim]  Using Agent's LLM for understanding: {agent_config.model}[/dim]")
+            self.logger.print(
+                f"[dim]  Using Agent's LLM for understanding: {agent_config.model}[/dim]"
+            )
             return agent_config
 
         # 2. 环境变量
@@ -475,11 +477,15 @@ class LLMConfigResolver:
         # 3. VibeSOP 配置
         vibesop_config = VibeSOPConfigManager.get_llm_config()
         if vibesop_config:
-            self.logger.print(f"[dim]  Using VibeSOP config for understanding: {vibesop_config.model}[/dim]")
+            self.logger.print(
+                f"[dim]  Using VibeSOP config for understanding: {vibesop_config.model}[/dim]"
+            )
             return vibesop_config
 
         # 4. 默认(使用 Haiku - 快速且便宜)
-        self.logger.print("[dim]  Using default LLM (claude-3-haiku-20240307) for understanding[/dim]")
+        self.logger.print(
+            "[dim]  Using default LLM (claude-3-haiku-20240307) for understanding[/dim]"
+        )
         return LLMConfig(
             provider="anthropic",
             model="claude-3-haiku-20240307",
@@ -489,8 +495,7 @@ class LLMConfigResolver:
 
 # 便捷函数
 def get_llm_config(
-    skill_requirements: dict[str, Any] | None = None,
-    prefer_agent: bool = True
+    skill_requirements: dict[str, Any] | None = None, prefer_agent: bool = True
 ) -> LLMConfig | None:
     """获取 LLM 配置(便捷函数)
 

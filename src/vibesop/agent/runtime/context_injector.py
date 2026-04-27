@@ -114,13 +114,17 @@ class StepContextInjector:
 
         output_file = plan_dir / f"step_{step_number}_output.json"
         output_file.write_text(
-            json.dumps({
-                "step_number": output.step_number,
-                "skill_id": output.skill_id,
-                "completion_marker": output.completion_marker,
-                "summary": output.summary,
-                "full_output": output.full_output,
-            }, indent=2, ensure_ascii=False),
+            json.dumps(
+                {
+                    "step_number": output.step_number,
+                    "skill_id": output.skill_id,
+                    "completion_marker": output.completion_marker,
+                    "summary": output.summary,
+                    "full_output": output.full_output,
+                },
+                indent=2,
+                ensure_ascii=False,
+            ),
             encoding="utf-8",
         )
 
@@ -191,7 +195,9 @@ class StepContextInjector:
         parts.append(f"\n{step.instruction}\n")
 
         if step.skill_content:
-            parts.append(f"\n## Skill Definition ({step.skill_id})\n\n```markdown\n{step.skill_content}\n```\n")
+            parts.append(
+                f"\n## Skill Definition ({step.skill_id})\n\n```markdown\n{step.skill_content}\n```\n"
+            )
 
         parts.append(
             f"\nWhen done, output: `<!-- {step.completion_marker} -->` followed by a summary.\n"

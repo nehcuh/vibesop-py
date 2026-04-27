@@ -84,17 +84,17 @@ class SkillRecommender:
             return analytics_recs
 
         recs: list[SkillRecommendation] = []
-        candidates = self.STACK_RECOMMENDATIONS.get(
-            lang, self.STACK_RECOMMENDATIONS["default"]
-        )
+        candidates = self.STACK_RECOMMENDATIONS.get(lang, self.STACK_RECOMMENDATIONS["default"])
 
         for skill_id, reason in candidates:
-            recs.append(SkillRecommendation(
-                skill_id=skill_id,
-                reason=f"[{lang.title()}] {reason}",
-                confidence=0.85,
-                installed=skill_id in installed,
-            ))
+            recs.append(
+                SkillRecommendation(
+                    skill_id=skill_id,
+                    reason=f"[{lang.title()}] {reason}",
+                    confidence=0.85,
+                    installed=skill_id in installed,
+                )
+            )
 
         return recs
 
@@ -120,12 +120,14 @@ class SkillRecommender:
                 rating_str = ""
                 if skill_id in ratings:
                     rating_str = f" ({ratings[skill_id]:.1f}/5)"
-                recs.append(SkillRecommendation(
-                    skill_id=skill_id,
-                    reason=f"Used {use_count}× ({satisfaction:.0%} satisfaction){rating_str}",
-                    confidence=confidence,
-                    installed=False,
-                ))
+                recs.append(
+                    SkillRecommendation(
+                        skill_id=skill_id,
+                        reason=f"Used {use_count}× ({satisfaction:.0%} satisfaction){rating_str}",
+                        confidence=confidence,
+                        installed=False,
+                    )
+                )
 
             recs.sort(key=lambda r: r.confidence, reverse=True)
             return recs[:10] if recs else None
@@ -136,6 +138,7 @@ class SkillRecommender:
         """Get average ratings from SkillRatingStore."""
         try:
             from vibesop.core.skills.ratings import SkillRatingStore
+
             store = SkillRatingStore()
             top = store.get_top_rated(limit=100, min_reviews=1)
             return {skill_id: score for skill_id, score, _count in top}
@@ -150,28 +153,36 @@ class SkillRecommender:
         has_superpowers = any("superpowers" in p for p in installed)
 
         if has_gstack and not has_superpowers:
-            recs.append(SkillRecommendation(
-                skill_id="superpowers/tdd",
-                reason="Users with gstack often also use superpowers",
-                confidence=0.75,
-            ))
-            recs.append(SkillRecommendation(
-                skill_id="superpowers/refactor",
-                reason="Complementary to gstack/review",
-                confidence=0.70,
-            ))
+            recs.append(
+                SkillRecommendation(
+                    skill_id="superpowers/tdd",
+                    reason="Users with gstack often also use superpowers",
+                    confidence=0.75,
+                )
+            )
+            recs.append(
+                SkillRecommendation(
+                    skill_id="superpowers/refactor",
+                    reason="Complementary to gstack/review",
+                    confidence=0.70,
+                )
+            )
 
         if has_superpowers and not has_gstack:
-            recs.append(SkillRecommendation(
-                skill_id="gstack/review",
-                reason="Users with superpowers often also use gstack",
-                confidence=0.75,
-            ))
-            recs.append(SkillRecommendation(
-                skill_id="gstack/qa",
-                reason="Complementary to superpowers/tdd",
-                confidence=0.70,
-            ))
+            recs.append(
+                SkillRecommendation(
+                    skill_id="gstack/review",
+                    reason="Users with superpowers often also use gstack",
+                    confidence=0.75,
+                )
+            )
+            recs.append(
+                SkillRecommendation(
+                    skill_id="gstack/qa",
+                    reason="Complementary to superpowers/tdd",
+                    confidence=0.70,
+                )
+            )
 
         return recs
 
@@ -185,17 +196,20 @@ class SkillRecommender:
         ]
         for skill_id, reason in essential:
             if skill_id not in installed:
-                recs.append(SkillRecommendation(
-                    skill_id=skill_id,
-                    reason=reason,
-                    confidence=0.9,
-                ))
+                recs.append(
+                    SkillRecommendation(
+                        skill_id=skill_id,
+                        reason=reason,
+                        confidence=0.9,
+                    )
+                )
 
         return recs
 
     def _analyze_project(self) -> dict[str, Any]:
         try:
             from vibesop.core.project_analyzer import ProjectAnalyzer
+
             analyzer = ProjectAnalyzer(self._project_root)
             result = analyzer.analyze()
             return result if isinstance(result, dict) else {}
@@ -205,8 +219,12 @@ class SkillRecommender:
     def _simple_detect(self) -> dict[str, str]:
         counts: dict[str, int] = {}
         ext_map = {
-            ".py": "python", ".js": "javascript", ".ts": "typescript",
-            ".rs": "rust", ".go": "go", ".java": "java",
+            ".py": "python",
+            ".js": "javascript",
+            ".ts": "typescript",
+            ".rs": "rust",
+            ".go": "go",
+            ".java": "java",
         }
         for f in self._project_root.rglob("*"):
             if f.suffix in ext_map and f.is_file():
@@ -214,12 +232,13 @@ class SkillRecommender:
                 counts[lang] = counts.get(lang, 0) + 1
         if not counts:
             return {"primary_language": "default"}
-        best = max(counts, key=counts.get)
+        best = max(counts, key=counts.get)  # type: ignore[reportCallIssue]
         return {"primary_language": best}
 
     def _get_installed_skill_ids(self) -> set[str]:
         try:
             from vibesop.core.skills.loader import SkillLoader
+
             loader = SkillLoader(project_root=self._project_root)
             skills = loader.discover_all()
             return set(skills.keys())
@@ -229,6 +248,7 @@ class SkillRecommender:
     def _get_installed_packs(self) -> set[str]:
         try:
             from vibesop.core.skills.loader import SkillLoader
+
             loader = SkillLoader(project_root=self._project_root)
             skills = loader.discover_all()
             packs: set[str] = set()

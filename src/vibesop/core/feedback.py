@@ -497,9 +497,18 @@ class ExecutionFeedbackCollector:
 
         return {
             "total": len(records),
-            "helpful_rate": sum(1 for r in helpful if r.was_helpful) / len(helpful) if helpful else None,
-            "success_rate": sum(1 for r in success if r.execution_success) / len(success) if success else None,
-            "avg_execution_time_ms": sum(r.execution_time_ms for r in records if r.execution_time_ms is not None) / len([r for r in records if r.execution_time_ms is not None]) if any(r.execution_time_ms is not None for r in records) else None,
+            "helpful_rate": sum(1 for r in helpful if r.was_helpful) / len(helpful)
+            if helpful
+            else None,
+            "success_rate": sum(1 for r in success if r.execution_success) / len(success)
+            if success
+            else None,
+            "avg_execution_time_ms": sum(
+                r.execution_time_ms for r in records if r.execution_time_ms is not None
+            )
+            / len([r for r in records if r.execution_time_ms is not None])
+            if any(r.execution_time_ms is not None for r in records)
+            else None,
         }
 
     def clear_records(self) -> None:

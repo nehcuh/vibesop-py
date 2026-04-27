@@ -82,9 +82,11 @@ class ParallelScheduler:
 
             # Wait for all tasks in this batch (with semaphore for max_parallel)
             if len(group) > self._max_parallel:
-                semaphore = asyncio.Semaphore(self._max_parallel)
+                _semaphore = asyncio.Semaphore(self._max_parallel)
 
-                async def limited_execute(step, exec_fn, _sem=semaphore):
+                async def limited_execute(
+                    step: ExecutionStep, exec_fn: Any, _sem: asyncio.Semaphore = _semaphore
+                ) -> Any:
                     async with _sem:
                         return await self._execute_with_tracking(step, exec_fn)
 
@@ -228,6 +230,7 @@ def execute_plan_sync(
         ...     return f"Result: {step.skill_id}"
         >>> results = execute_plan_sync(plan, my_executor)
     """
+
     async def async_executor(step: ExecutionStep) -> Any:
         result = executor(step)
         if asyncio.iscoroutine(result):
@@ -242,6 +245,4 @@ def execute_plan_sync(
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
 
-    return loop.run_until_complete(
-        scheduler.execute_plan(plan, async_executor)
-    )
+    return loop.run_until_complete(scheduler.execute_plan(plan, async_executor))

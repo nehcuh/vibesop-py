@@ -103,7 +103,9 @@ def render_routing_report(
                     c.reason or "—",
                 )
         console.print(rej_table)
-        console.print("[dim]These candidates were close but didn't meet the confidence threshold.[/dim]")
+        console.print(
+            "[dim]These candidates were close but didn't meet the confidence threshold.[/dim]"
+        )
 
     # Alternatives table
     if result.alternatives:
@@ -226,9 +228,7 @@ def render_compact_summary(
     if result.alternatives:
         alt_lines = []
         for alt in result.alternatives[:3]:
-            alt_lines.append(
-                f"  • {alt.skill_id} ({alt.confidence:.0%} via {alt.layer.value})"
-            )
+            alt_lines.append(f"  • {alt.skill_id} ({alt.confidence:.0%} via {alt.layer.value})")
         table.add_row("Alternatives", "\n".join(alt_lines))
 
     # Orchestration info

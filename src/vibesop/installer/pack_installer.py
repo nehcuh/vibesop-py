@@ -146,7 +146,11 @@ class PackInstaller:
                     if symlink_results:
                         msg_parts.append("Symlinks:")
                         for platform, status in symlink_results:
-                            icon = "✓" if status.startswith("Linked") or status.startswith("Already") else "✗"
+                            icon = (
+                                "✓"
+                                if status.startswith("Linked") or status.startswith("Already")
+                                else "✗"
+                            )
                             msg_parts.append(f"  {icon} {platform}: {status}")
                     return True, "\n".join(p for p in msg_parts if p)
 
@@ -184,7 +188,9 @@ class PackInstaller:
             if symlink_results:
                 msg_parts.append("Symlinks:")
                 for platform, status in symlink_results:
-                    icon = "✓" if status.startswith("Linked") or status.startswith("Already") else "✗"
+                    icon = (
+                        "✓" if status.startswith("Linked") or status.startswith("Already") else "✗"
+                    )
                     msg_parts.append(f"  {icon} {platform}: {status}")
 
             return True, "\n".join(msg_parts)

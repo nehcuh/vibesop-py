@@ -217,9 +217,7 @@ class CacheManager:
             "has_errors": bool(context.get("error_count", 0)),
         }
 
-    def get_similar(
-        self, query: str, similarity_threshold: float = 0.75
-    ) -> dict[str, Any] | None:
+    def get_similar(self, query: str, similarity_threshold: float = 0.75) -> dict[str, Any] | None:
         """Find a cached result for a semantically similar query.
 
         Uses character bigram Jaccard similarity for fast approximate
@@ -252,7 +250,9 @@ class CacheManager:
                 continue
 
             similarity = self._jaccard_similarity(query_bigrams, cached_bigrams)
-            if similarity >= similarity_threshold and (best_match is None or similarity > best_match[1]):
+            if similarity >= similarity_threshold and (
+                best_match is None or similarity > best_match[1]
+            ):
                 best_match = (cached_key, similarity)
 
         if best_match:

@@ -33,7 +33,13 @@ class SimpleResponse:
     Matches the interface expected by TriageService.
     """
 
-    def __init__(self, content: str, model: str = "agent-internal", input_tokens: int = 0, output_tokens: int = 0):
+    def __init__(
+        self,
+        content: str,
+        model: str = "agent-internal",
+        input_tokens: int = 0,
+        output_tokens: int = 0,
+    ):
         self.content = content
         self.model = model
         self.input_tokens = input_tokens
@@ -149,16 +155,18 @@ class AgentRouter:
             original_triage_config = self._router._triage_service._config
             try:
                 # Create modified configs with AI triage enabled
-                modified_config = original_router_config.model_copy(update={"enable_ai_triage": True})
+                modified_config = original_router_config.model_copy(
+                    update={"enable_ai_triage": True}
+                )
                 self._router._config = modified_config
                 self._router._triage_service._config = modified_config
-                result = self._router.route(query)
+                result = self._router._route(query)
             finally:
                 # Restore original configs
                 self._router._config = original_router_config
                 self._router._triage_service._config = original_triage_config
         else:
-            result = self._router.route(query)
+            result = self._router._route(query)
 
         return result
 
@@ -193,7 +201,9 @@ class AgentRouter:
             original_router_config = self._router._config
             original_triage_config = self._router._triage_service._config
             try:
-                modified_config = original_router_config.model_copy(update={"enable_ai_triage": True})
+                modified_config = original_router_config.model_copy(
+                    update={"enable_ai_triage": True}
+                )
                 self._router._config = modified_config
                 self._router._triage_service._config = modified_config
                 ctx = SessionContext(project_root=self._router.project_root, router=self._router)
@@ -257,7 +267,9 @@ class AgentRouter:
         return {
             "is_multi_intent": should_decompose,
             "confidence": 0.8 if should_decompose else 0.2,
-            "reason": "Multiple intent keywords detected" if should_decompose else "Single intent detected",
+            "reason": "Multiple intent keywords detected"
+            if should_decompose
+            else "Single intent detected",
             "primary_skill": single_result.primary.skill_id if single_result.has_match else None,
         }
 
@@ -280,12 +292,11 @@ class AgentRouter:
         # Decompose query
         sub_tasks = decomposer.decompose(query)
 
-        return [
-            {"intent": task.intent, "query": task.query}
-            for task in sub_tasks
-        ]
+        return [{"intent": task.intent, "query": task.query} for task in sub_tasks]
 
-    def build_plan(self, query: str, sub_tasks: list[dict[str, str]] | None = None) -> dict[str, Any]:
+    def build_plan(
+        self, query: str, sub_tasks: list[dict[str, str]] | None = None
+    ) -> dict[str, Any]:
         """Build an execution plan for a complex query.
 
         Args:
@@ -306,16 +317,10 @@ class AgentRouter:
         if sub_tasks is None:
             decomposer = TaskDecomposer(llm_client=self._router._llm)
             raw_sub_tasks = decomposer.decompose(query)
-            sub_tasks = [
-                {"intent": task.intent, "query": task.query}
-                for task in raw_sub_tasks
-            ]
+            sub_tasks = [{"intent": task.intent, "query": task.query} for task in raw_sub_tasks]
 
         # Convert to SubTask objects
-        sub_task_objects = [
-            SubTask(intent=t["intent"], query=t["query"])
-            for t in sub_tasks
-        ]
+        sub_task_objects = [SubTask(intent=t["intent"], query=t["query"]) for t in sub_tasks]
 
         # Build plan
         plan_builder = PlanBuilder(router=self._router)
@@ -365,7 +370,9 @@ class AgentRouter:
                 "is_multi_intent": False,
                 "single_result": {
                     "skill_id": single_result.primary.skill_id if single_result.has_match else None,
-                    "confidence": single_result.primary.confidence if single_result.has_match else 0.0,
+                    "confidence": single_result.primary.confidence
+                    if single_result.has_match
+                    else 0.0,
                     "layer": single_result.primary.layer.value if single_result.has_match else None,
                 },
             }
@@ -507,7 +514,6 @@ class AgentRouter:
 
         # Execute the plan
         return execute_plan_sync(execution_plan, step_executor, max_parallel)
-
 
     def create_runner(
         self,

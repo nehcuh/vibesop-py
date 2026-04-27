@@ -19,9 +19,7 @@ from vibesop.core.matching.plugin import MatcherPluginRegistry
 app = typer.Typer(name="matcher", help="Manage custom matcher plugins")
 console = Console()
 
-_PROJECT_ROOT_OPTION = typer.Option(
-    None, "--project-root", help="Project root directory"
-)
+_PROJECT_ROOT_OPTION = typer.Option(None, "--project-root", help="Project root directory")
 
 
 @app.command("list")
@@ -73,7 +71,9 @@ def register_matcher(
             console.print(f"  [dim]{plugin.description}[/dim]")
     else:
         console.print("[red]✗ Failed to register matcher[/red]")
-        console.print("[dim]Ensure the file defines a `match(query, candidate) -> float` function.[/dim]")
+        console.print(
+            "[dim]Ensure the file defines a `match(query, candidate) -> float` function.[/dim]"
+        )
         raise typer.Exit(1)
 
 

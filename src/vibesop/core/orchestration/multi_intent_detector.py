@@ -86,9 +86,7 @@ class MultiIntentDetector:
             content = getattr(response, "content", str(response)).strip().upper()
             return content.startswith("YES")
         except Exception as e:
-            logger.warning(
-                "LLM multi-intent confirmation failed: %s, defaulting to heuristic", e
-            )
+            logger.warning("LLM multi-intent confirmation failed: %s, defaulting to heuristic", e)
             return True  # On failure, trust heuristic to avoid blocking
 
     def _heuristic_check(self, query: str, single_result: RoutingResult) -> bool:
@@ -119,7 +117,8 @@ class MultiIntentDetector:
         # Condition 2: Low confidence with strong alternatives
         if primary_conf < self.low_confidence_threshold:
             strong_alts = [
-                alt for alt in single_result.alternatives
+                alt
+                for alt in single_result.alternatives
                 if alt.confidence >= self.alternative_threshold
             ]
             if len(strong_alts) >= 2:
@@ -129,7 +128,10 @@ class MultiIntentDetector:
         if len(single_result.alternatives) >= 1:
             top_alt = single_result.alternatives[0]
             gap = primary_conf - top_alt.confidence
-            if gap < self.confidence_gap_threshold and top_alt.confidence >= self.alternative_threshold:
+            if (
+                gap < self.confidence_gap_threshold
+                and top_alt.confidence >= self.alternative_threshold
+            ):
                 return True
 
         return False

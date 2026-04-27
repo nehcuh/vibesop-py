@@ -67,7 +67,9 @@ def ratings(
             return
 
         stars = "\u2b50" * round(avg or 0) + "\u2606" * (5 - round(avg or 0))
-        console.print(f"\n[bold]{skill_id}[/bold] \u2014 {stars} {avg:.1f}/5 ({len(ratings_list)} reviews)\n")
+        console.print(
+            f"\n[bold]{skill_id}[/bold] \u2014 {stars} {avg:.1f}/5 ({len(ratings_list)} reviews)\n"
+        )
 
         for r in sorted(ratings_list, key=lambda x: x.created_at, reverse=True)[:10]:
             stars_str = "\u2b50" * r.score
@@ -77,13 +79,17 @@ def ratings(
     else:
         top = store.get_top_rated(limit=limit)
         if not top:
-            console.print("[dim]No ratings yet. Rate your skills with: vibe skills rate <id> <1-5>[/dim]")
+            console.print(
+                "[dim]No ratings yet. Rate your skills with: vibe skills rate <id> <1-5>[/dim]"
+            )
             return
 
         console.print("\n[bold]Top Rated Skills[/bold]\n")
         for i, (sid, score, count) in enumerate(top, 1):
             stars = "\u2b50" * round(score) + "\u2606" * (5 - round(score))
-            console.print(f"  {i:2}. [cyan]{sid}[/cyan] {stars} {score:.1f}/5 ([dim]{count} reviews[/dim])")
+            console.print(
+                f"  {i:2}. [cyan]{sid}[/cyan] {stars} {score:.1f}/5 ([dim]{count} reviews[/dim])"
+            )
 
 
 __all__ = ["rate", "ratings"]

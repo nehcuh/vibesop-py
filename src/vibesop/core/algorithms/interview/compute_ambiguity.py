@@ -14,11 +14,5 @@ def compute_ambiguity(
         ambiguity = 1.0 - (intent×0.30 + outcome×0.25 + scope×0.20
                            + constraints×0.15 + success×0.10)
     """
-    clarity = (
-        intent * 0.30
-        + outcome * 0.25
-        + scope * 0.20
-        + constraints * 0.15
-        + success * 0.10
-    )
+    clarity = intent * 0.30 + outcome * 0.25 + scope * 0.20 + constraints * 0.15 + success * 0.10
     return max(0.0, min(1.0, 1.0 - clarity))

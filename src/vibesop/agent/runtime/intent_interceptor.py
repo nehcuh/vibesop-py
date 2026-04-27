@@ -25,8 +25,8 @@ from vibesop.core.orchestration.patterns import (
 class InterceptionMode(StrEnum):
     """How to handle the intercepted message."""
 
-    NONE = "none"           # Don't route, let agent handle normally
-    SINGLE = "single"       # Route to single best skill
+    NONE = "none"  # Don't route, let agent handle normally
+    SINGLE = "single"  # Route to single best skill
     ORCHESTRATE = "orchestrate"  # Detect multi-intent and build execution plan
     SLASH_COMMAND = "slash_command"  # Execute built-in slash command directly
 
@@ -153,9 +153,8 @@ class IntentInterceptor:
             )
 
         # 4. Short, focused query → single routing (conservative)
-        if (
-            len(original_query) <= self.MAX_SHORT_QUERY
-            and not self._has_multi_intent_markers(original_query)
+        if len(original_query) <= self.MAX_SHORT_QUERY and not self._has_multi_intent_markers(
+            original_query
         ):
             return InterceptionDecision(
                 should_route=True,

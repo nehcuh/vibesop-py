@@ -75,11 +75,14 @@ _BADGE_METADATA: dict[BadgeType, dict[str, str]] = {
 
 def get_badge_display(badge_type: BadgeType) -> dict[str, str]:
     """Get display metadata for a badge type."""
-    return _BADGE_METADATA.get(badge_type, {
-        "icon": "🏅",
-        "title": badge_type.value,
-        "description": "",
-    })
+    return _BADGE_METADATA.get(
+        badge_type,
+        {
+            "icon": "🏅",
+            "title": badge_type.value,
+            "description": "",
+        },
+    )
 
 
 class BadgeTracker:
@@ -112,12 +115,11 @@ class BadgeTracker:
         """Save badges to data file."""
         self._data_path.parent.mkdir(parents=True, exist_ok=True)
 
-        data: dict[str, Any] = {
-            "badges": [b.to_dict() for b in self._badges]
-        }
+        data: dict[str, Any] = {"badges": [b.to_dict() for b in self._badges]}
 
         # Atomic write to prevent corruption
         import tempfile
+
         try:
             fd, tmp_path = tempfile.mkstemp(dir=self._data_path.parent, prefix=".tmp_badges_")
             with open(fd, "w", encoding="utf-8", closefd=False) as f:

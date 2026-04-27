@@ -12,7 +12,14 @@ from typing import Any
 
 # Mapping of marker files/directories to project types
 PROJECT_TYPE_MARKERS: dict[str, list[str]] = {
-    "python": ["pyproject.toml", "setup.py", "setup.cfg", "requirements.txt", "Pipfile", "poetry.lock"],
+    "python": [
+        "pyproject.toml",
+        "setup.py",
+        "setup.cfg",
+        "requirements.txt",
+        "Pipfile",
+        "poetry.lock",
+    ],
     "rust": ["Cargo.toml", "Cargo.lock"],
     "javascript": ["package.json", "package-lock.json", "yarn.lock", "pnpm-lock.yaml"],
     "typescript": ["tsconfig.json", "package.json"],
@@ -195,7 +202,10 @@ class ProjectAnalyzer:
                             for yaml_file in self.project_root.glob(pattern):
                                 try:
                                     content = yaml_file.read_text(encoding="utf-8").lower()
-                                    if any(k in content for k in ["apiversion:", "kind:", "deployment", "service"]):
+                                    if any(
+                                        k in content
+                                        for k in ["apiversion:", "kind:", "deployment", "service"]
+                                    ):
                                         matched = True
                                         break
                                 except (OSError, UnicodeDecodeError):

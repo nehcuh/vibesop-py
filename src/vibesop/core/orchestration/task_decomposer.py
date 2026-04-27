@@ -102,7 +102,7 @@ class TaskDecomposer:
     def _parse_json_response(self, content: str) -> list[SubTask]:
         """Parse structured JSON response."""
         # Extract JSON from possible markdown fences
-        json_match = re.search(r'\{.*\}', content, re.DOTALL)
+        json_match = re.search(r"\{.*\}", content, re.DOTALL)
         if not json_match:
             return []
 
@@ -128,7 +128,7 @@ class TaskDecomposer:
         tasks: list[SubTask] = []
         for line in lines:
             # Match patterns like "1. intent: query" or "- intent: query"
-            match = re.match(r'^[\s\-\d\.]*\s*(.+?)[:\-]\s*(.+)$', line)
+            match = re.match(r"^[\s\-\d\.]*\s*(.+?)[:\-]\s*(.+)$", line)
             if match:
                 tasks.append(SubTask(intent=match.group(1).strip(), query=match.group(2).strip()))
         return tasks
@@ -185,7 +185,9 @@ class TaskDecomposer:
                         if intent == "single task":
                             continue
                         contextualized = self._contextualize_query(query, cleaned, intent)
-                        forced_tasks.append(SubTask(intent=intent, query=contextualized, source="rule_fallback"))
+                        forced_tasks.append(
+                            SubTask(intent=intent, query=contextualized, source="rule_fallback")
+                        )
                     if len(forced_tasks) >= 2:
                         sub_tasks = forced_tasks
 
@@ -201,10 +203,26 @@ class TaskDecomposer:
     def _segment_by_conjunctions(self, query: str) -> list[str]:
         """Split query on conjunctions to identify candidate segments."""
         conjunctions = [
-            "然后", "之后", "接着", "并", "并且", "同时", "另外", "还有", "以及",
-            "先", "再", "最后",
-            "and then", "after that", "and also", "plus", "meanwhile",
-            "first", "second", "third",
+            "然后",
+            "之后",
+            "接着",
+            "并",
+            "并且",
+            "同时",
+            "另外",
+            "还有",
+            "以及",
+            "先",
+            "再",
+            "最后",
+            "and then",
+            "after that",
+            "and also",
+            "plus",
+            "meanwhile",
+            "first",
+            "second",
+            "third",
         ]
         pattern = "|".join(re.escape(c) for c in conjunctions)
         return [s.strip() for s in re.split(pattern, query) if s.strip()]
@@ -289,7 +307,7 @@ class TaskDecomposer:
         cleaned = segment.strip()
         for prefix in noise_prefixes:
             if cleaned.startswith(prefix):
-                cleaned = cleaned[len(prefix):].strip()
+                cleaned = cleaned[len(prefix) :].strip()
         return cleaned
 
     def _detect_intent(self, text: str) -> str:

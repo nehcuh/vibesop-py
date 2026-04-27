@@ -211,8 +211,7 @@ class ExternalSkillExecutor:
             loaded = self._loader.get_skill(skill_id)
             if not loaded:
                 raise SkillNotFoundError(
-                    f"Skill not found: {skill_id}. "
-                    f"Use `vibe skills list` to see available skills."
+                    f"Skill not found: {skill_id}. Use `vibe skills list` to see available skills."
                 )
 
             # Step 2: Security audit
@@ -220,9 +219,8 @@ class ExternalSkillExecutor:
                 audit_result = self._auditor.audit_skill_file(loaded.source_file)
                 if not audit_result.is_safe:
                     # Allow trusted packs through with non-critical audit issues.
-                    is_trusted = (
-                        loaded.external_metadata is not None
-                        and getattr(loaded.external_metadata, "is_trusted", False)
+                    is_trusted = loaded.external_metadata is not None and getattr(
+                        loaded.external_metadata, "is_trusted", False
                     )
                     from vibesop.security.skill_auditor import ThreatLevel
 

@@ -198,15 +198,21 @@ class RoutingConfig(BaseModel):
         description="Enable confidence-gated layered degradation instead of binary fallback",
     )
     degradation_auto_threshold: float = Field(
-        default=0.6, ge=0.0, le=1.0,
+        default=0.6,
+        ge=0.0,
+        le=1.0,
         description="Confidence threshold for auto-selection (>= this = auto)",
     )
     degradation_suggest_threshold: float = Field(
-        default=0.4, ge=0.0, le=1.0,
+        default=0.4,
+        ge=0.0,
+        le=1.0,
         description="Confidence threshold for suggest mode (>= this but < auto = suggest)",
     )
     degradation_degrade_threshold: float = Field(
-        default=0.2, ge=0.0, le=1.0,
+        default=0.2,
+        ge=0.0,
+        le=1.0,
         description="Confidence threshold for degrade mode (>= this but < suggest = degrade, below = fallback)",
     )
     degradation_fallback_always_ask: bool = Field(

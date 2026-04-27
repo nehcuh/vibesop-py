@@ -30,6 +30,7 @@ logger = logging.getLogger(__name__)
 
 class ComplexityLevel(Enum):
     """技能复杂度"""
+
     LOW = "low"
     MEDIUM = "medium"
     HIGH = "high"
@@ -37,6 +38,7 @@ class ComplexityLevel(Enum):
 
 class UrgencyLevel(Enum):
     """紧急程度"""
+
     NORMAL = "normal"
     HIGH = "high"
     CRITICAL = "critical"
@@ -203,40 +205,121 @@ class CategoryRules:
     # 类别关键词映射
     CATEGORY_KEYWORDS: ClassVar[dict[str, list[str]]] = {
         "debugging": [
-            "debug", "error", "bug", "fix", "troubleshoot", "diagnose",
-            "调试", "错误", "故障", "修复", "诊断", "breakpoint", "stacktrace",
+            "debug",
+            "error",
+            "bug",
+            "fix",
+            "troubleshoot",
+            "diagnose",
+            "调试",
+            "错误",
+            "故障",
+            "修复",
+            "诊断",
+            "breakpoint",
+            "stacktrace",
         ],
         "testing": [
-            "test", "spec", "tdd", "verify", "check", "coverage",
-            "测试", "验证", "检查", "用例", "单元测试", "回归",
+            "test",
+            "spec",
+            "tdd",
+            "verify",
+            "check",
+            "coverage",
+            "测试",
+            "验证",
+            "检查",
+            "用例",
+            "单元测试",
+            "回归",
         ],
         "review": [
-            "review", "audit", "quality", "inspect", "analyze", "assess",
-            "审查", "审计", "质量", "分析", "评估", "code review",
+            "review",
+            "audit",
+            "quality",
+            "inspect",
+            "analyze",
+            "assess",
+            "审查",
+            "审计",
+            "质量",
+            "分析",
+            "评估",
+            "code review",
         ],
         "documentation": [
-            "document", "doc", "readme", "guide", "tutorial", "handbook",
-            "文档", "指南", "教程", "说明书", "手册",
+            "document",
+            "doc",
+            "readme",
+            "guide",
+            "tutorial",
+            "handbook",
+            "文档",
+            "指南",
+            "教程",
+            "说明书",
+            "手册",
         ],
         "deployment": [
-            "deploy", "release", "publish", "ship", "cd", "ci/cd",
-            "部署", "发布", "上线", "交付", "流水线",
+            "deploy",
+            "release",
+            "publish",
+            "ship",
+            "cd",
+            "ci/cd",
+            "部署",
+            "发布",
+            "上线",
+            "交付",
+            "流水线",
         ],
         "security": [
-            "security", "vulnerability", "scan", "audit", "exploit",
-            "安全", "漏洞", "扫描", "渗透", "加固",
+            "security",
+            "vulnerability",
+            "scan",
+            "audit",
+            "exploit",
+            "安全",
+            "漏洞",
+            "扫描",
+            "渗透",
+            "加固",
         ],
         "brainstorming": [
-            "brainstorm", "idea", "creative", "innovate", "ideate",
-            "头脑风暴", "创意", "创新", "发散", "构思",
+            "brainstorm",
+            "idea",
+            "creative",
+            "innovate",
+            "ideate",
+            "头脑风暴",
+            "创意",
+            "创新",
+            "发散",
+            "构思",
         ],
         "optimization": [
-            "optimize", "performance", "improve", "speed", "efficient",
-            "优化", "性能", "改进", "提速", "效率",
+            "optimize",
+            "performance",
+            "improve",
+            "speed",
+            "efficient",
+            "优化",
+            "性能",
+            "改进",
+            "提速",
+            "效率",
         ],
         "planning": [
-            "plan", "roadmap", "strategy", "estimate", "schedule",
-            "规划", "计划", "路线", "策略", "排期",
+            "plan",
+            "roadmap",
+            "strategy",
+            "estimate",
+            "schedule",
+            "规划",
+            "计划",
+            "路线",
+            "策略",
+            "排期",
         ],
     }
 
@@ -328,49 +411,133 @@ class KeywordAnalyzer:
     # 扩展的停用词列表
     STOP_WORDS: ClassVar[set[str]] = {
         # 英文
-        "the", "a", "an", "is", "are", "was", "were", "be", "been", "being",
-        "have", "has", "had", "do", "does", "did", "will", "would", "could",
-        "should", "may", "might", "must", "shall", "can", "need",
-        "for", "with", "from", "this", "that", "these", "those",
-        "use", "using", "get", "got", "make", "made", "take", "took",
-        "help", "user", "ask", "want", "like", "and", "or", "but", "not", "nor", "so", "yet", "after", "once",
+        "the",
+        "a",
+        "an",
+        "is",
+        "are",
+        "was",
+        "were",
+        "be",
+        "been",
+        "being",
+        "have",
+        "has",
+        "had",
+        "do",
+        "does",
+        "did",
+        "will",
+        "would",
+        "could",
+        "should",
+        "may",
+        "might",
+        "must",
+        "shall",
+        "can",
+        "need",
+        "for",
+        "with",
+        "from",
+        "this",
+        "that",
+        "these",
+        "those",
+        "use",
+        "using",
+        "get",
+        "got",
+        "make",
+        "made",
+        "take",
+        "took",
+        "help",
+        "user",
+        "ask",
+        "want",
+        "like",
+        "and",
+        "or",
+        "but",
+        "not",
+        "nor",
+        "so",
+        "yet",
+        "after",
+        "once",
         # 中文
-        "用户", "帮助", "使用", "需要", "想要", "可以", "和", "或", "但是", "不",
+        "用户",
+        "帮助",
+        "使用",
+        "需要",
+        "想要",
+        "可以",
+        "和",
+        "或",
+        "但是",
+        "不",
     }
 
     # LLM 相关关键词
     LLM_KEYWORDS: ClassVar[list[str]] = [
-        "ai", "llm", "gpt", "claude", "anthropic", "openai",
-        "分析", "生成", "理解", "总结", "解释",
-        "analyze", "generate", "understand", "summarize", "explain"
+        "ai",
+        "llm",
+        "gpt",
+        "claude",
+        "anthropic",
+        "openai",
+        "分析",
+        "生成",
+        "理解",
+        "总结",
+        "解释",
+        "analyze",
+        "generate",
+        "understand",
+        "summarize",
+        "explain",
     ]
 
     # 复杂度关键词
     COMPLEXITY_KEYWORDS: ClassVar[dict[ComplexityLevel, list[str]]] = {
         ComplexityLevel.HIGH: [
-            "complex", "architecture", "system", "multi", "framework",
-            "复杂", "架构", "系统", "框架"
+            "complex",
+            "architecture",
+            "system",
+            "multi",
+            "framework",
+            "复杂",
+            "架构",
+            "系统",
+            "框架",
         ],
         ComplexityLevel.MEDIUM: [
-            "module", "component", "feature", "function",
-            "模块", "组件", "功能", "函数"
+            "module",
+            "component",
+            "feature",
+            "function",
+            "模块",
+            "组件",
+            "功能",
+            "函数",
         ],
-        ComplexityLevel.LOW: [
-            "simple", "basic", "quick", "easy",
-            "简单", "基础", "快速"
-        ],
+        ComplexityLevel.LOW: ["simple", "basic", "quick", "easy", "简单", "基础", "快速"],
     }
 
     # 紧急性关键词
     URGENCY_KEYWORDS: ClassVar[dict[UrgencyLevel, list[str]]] = {
         UrgencyLevel.CRITICAL: [
-            "critical", "urgent", "security", "vulnerability",
-            "关键", "紧急", "安全", "漏洞"
+            "critical",
+            "urgent",
+            "security",
+            "vulnerability",
+            "关键",
+            "紧急",
+            "安全",
+            "漏洞",
         ],
-        UrgencyLevel.HIGH: [
-            "important", "priority", "high",
-            "重要", "优先"
-        ],
+        UrgencyLevel.HIGH: ["important", "priority", "high", "重要", "优先"],
     }
 
     @classmethod
@@ -384,9 +551,7 @@ class KeywordAnalyzer:
         analysis.keywords = cls._extract_keywords(text)
 
         # 2. 检测 LLM 需求
-        analysis.requires_llm = any(
-            kw in text_lower for kw in cls.LLM_KEYWORDS
-        )
+        analysis.requires_llm = any(kw in text_lower for kw in cls.LLM_KEYWORDS)
 
         # 3. 检测复杂度
         for complexity, keywords in cls.COMPLEXITY_KEYWORDS.items():
@@ -395,7 +560,12 @@ class KeywordAnalyzer:
                 break
 
         # 4. 基于文件结构的启发式(phase/step 丰富的技能通常更复杂)
-        if "## phases" in text_lower or "## steps" in text_lower or "## workflow" in text_lower or "## process" in text_lower:
+        if (
+            "## phases" in text_lower
+            or "## steps" in text_lower
+            or "## workflow" in text_lower
+            or "## process" in text_lower
+        ):
             analysis.complexity = ComplexityLevel.HIGH
 
         # 5. 检测紧急性
@@ -430,10 +600,7 @@ class SkillAutoConfigurator:
         self.logger = logger
 
     def understand_and_configure(
-        self,
-        metadata: SkillMetadata,
-        skill_content: str,
-        scope: str = "project"
+        self, metadata: SkillMetadata, skill_content: str, scope: str = "project"
     ) -> AutoGeneratedConfig:
         """理解技能并生成配置
 
@@ -476,11 +643,7 @@ class SkillAutoConfigurator:
 
         return config
 
-    def _analyze_skill(
-        self,
-        metadata: SkillMetadata,
-        content: str
-    ) -> SkillAnalysis:
+    def _analyze_skill(self, metadata: SkillMetadata, content: str) -> SkillAnalysis:
         """分析技能特征"""
 
         analysis = SkillAnalysis()
@@ -505,10 +668,7 @@ class SkillAutoConfigurator:
         return analysis
 
     def _generate_config(
-        self,
-        metadata: SkillMetadata,
-        analysis: SkillAnalysis,
-        scope: str
+        self, metadata: SkillMetadata, analysis: SkillAnalysis, scope: str
     ) -> AutoGeneratedConfig:
         """生成基础配置"""
 
@@ -537,9 +697,7 @@ class SkillAutoConfigurator:
         return config
 
     def _generate_routing_patterns(
-        self,
-        metadata: SkillMetadata,
-        analysis: SkillAnalysis
+        self, metadata: SkillMetadata, analysis: SkillAnalysis
     ) -> list[str]:
         """生成路由规则"""
 
@@ -565,11 +723,7 @@ class SkillAutoConfigurator:
 
         return patterns
 
-    def _calculate_priority(
-        self,
-        metadata: SkillMetadata,
-        analysis: SkillAnalysis
-    ) -> int:
+    def _calculate_priority(self, metadata: SkillMetadata, analysis: SkillAnalysis) -> int:
         """计算优先级"""
 
         priority = 50  # 基础优先级
@@ -642,11 +796,7 @@ class SkillAutoConfigurator:
 
         return min(1.0, confidence)
 
-    def save_config(
-        self,
-        config: AutoGeneratedConfig,
-        output_dir: Path
-    ) -> Path:
+    def save_config(self, config: AutoGeneratedConfig, output_dir: Path) -> Path:
         """保存配置到文件
 
         Args:
@@ -691,9 +841,10 @@ class SkillAutoConfigurator:
 
         if config.scope == "project":
             import hashlib
-            metadata["project_hash"] = hashlib.md5(
-                str(Path.cwd().resolve()).encode()
-            ).hexdigest()[:12]
+
+            metadata["project_hash"] = hashlib.md5(str(Path.cwd().resolve()).encode()).hexdigest()[
+                :12
+            ]
 
         config_data["skills"][config.skill_id]["metadata"] = metadata
 
@@ -707,10 +858,7 @@ class SkillAutoConfigurator:
         return config_file
 
 
-def understand_skill_from_file(
-    skill_path: Path,
-    scope: str = "project"
-) -> AutoGeneratedConfig:
+def understand_skill_from_file(skill_path: Path, scope: str = "project") -> AutoGeneratedConfig:
     """从技能文件生成配置(便捷函数)
 
     Args:

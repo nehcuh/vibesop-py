@@ -46,9 +46,7 @@ def render_compact_orchestration(
         if result.alternatives:
             alt_lines = []
             for alt in result.alternatives[:3]:
-                alt_lines.append(
-                    f"  • {alt.skill_id} ({alt.confidence:.0%} via {alt.layer.value})"
-                )
+                alt_lines.append(f"  • {alt.skill_id} ({alt.confidence:.0%} via {alt.layer.value})")
             table.add_row("Alternatives", "\n".join(alt_lines))
     else:
         plan = result.execution_plan
@@ -59,9 +57,7 @@ def render_compact_orchestration(
 
             step_lines = []
             for step in plan.steps:
-                step_lines.append(
-                    f"  {step.step_number}. {step.skill_id} — {step.intent}"
-                )
+                step_lines.append(f"  {step.step_number}. {step.skill_id} — {step.intent}")
             table.add_row("Plan", "\n".join(step_lines))
 
             if result.single_fallback:

@@ -49,7 +49,9 @@ def record(
     if correct:
         console.print(f"[green]✓[/green] Recorded correct routing: {query} → {skill}")
     else:
-        console.print(f"[yellow]⚠[/yellow] Recorded incorrect routing: {query} → {skill} (should be: {actual_skill})")
+        console.print(
+            f"[yellow]⚠[/yellow] Recorded incorrect routing: {query} → {skill} (should be: {actual_skill})"
+        )
 
 
 def report() -> None:
@@ -64,8 +66,12 @@ def report() -> None:
     # Overall statistics
     console.print("\n[bold]Feedback Report[/bold]")
     console.print(f"Total records: {report.total_records}")
-    console.print(f"Correct: {report.correct_count} ({report.correct_count / report.total_records * 100:.1f}%)")
-    console.print(f"Incorrect: {report.incorrect_count} ({report.incorrect_count / report.total_records * 100:.1f}%)")
+    console.print(
+        f"Correct: {report.correct_count} ({report.correct_count / report.total_records * 100:.1f}%)"
+    )
+    console.print(
+        f"Incorrect: {report.incorrect_count} ({report.incorrect_count / report.total_records * 100:.1f}%)"
+    )
     console.print(f"[cyan]Accuracy: {report.accuracy_rate:.1%}[/cyan]")
 
     # By skill breakdown
@@ -130,7 +136,9 @@ def export(
 
     if collector.get_records():
         collector.export_records(output_file)
-        console.print(f"[green]✓[/green] Exported {len(collector.get_records())} records to {output_file}")
+        console.print(
+            f"[green]✓[/green] Exported {len(collector.get_records())} records to {output_file}"
+        )
     else:
         console.print("[yellow]No feedback records to export.[/yellow]")
 

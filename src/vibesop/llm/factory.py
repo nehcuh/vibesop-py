@@ -82,7 +82,7 @@ def detect_provider_from_env() -> ProviderType:
     """
     explicit_provider = os.getenv("VIBE_LLM_PROVIDER")
     if explicit_provider:
-        return explicit_provider
+        return explicit_provider  # pyright: ignore[reportReturnType]
 
     if os.getenv("OLLAMA_BASE_URL") or os.getenv("OLLAMA_MODEL"):
         return "ollama"
@@ -94,7 +94,7 @@ def detect_provider_from_env() -> ProviderType:
     for provider_name in ["deepseek", "kimi", "zhipu"]:
         env_key = f"{provider_name.upper()}_API_KEY"
         if os.getenv(env_key):
-            return provider_name
+            return provider_name  # pyright: ignore[reportReturnType]
 
     return "ollama"
 

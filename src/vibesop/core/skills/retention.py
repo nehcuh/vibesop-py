@@ -166,6 +166,7 @@ class RetentionPolicy:
             if s.action in ("archive", "remove"):
                 try:
                     from vibesop.core.skills.config_manager import SkillConfigManager
+
                     SkillConfigManager.set_lifecycle(s.skill_id, "deprecated")
                     applied += 1
                 except Exception:

@@ -25,6 +25,7 @@ from typing import TYPE_CHECKING
 from vibesop.core.models import (
     ExecutionManifest,
     ExecutionMode,
+    ExecutionStep,
     StepManifest,
 )
 
@@ -33,6 +34,7 @@ if TYPE_CHECKING:
 
 
 COMPLETION_MARKER_PREFIX = "[StepCompleted:"
+
 
 @dataclass
 class ExecutionGuide:
@@ -125,8 +127,7 @@ class PlanExecutor:
                 output_slot=step.output_as,
                 completion_marker=StepManifest.completion_marker_for(step.step_number),
                 instruction=(
-                    f"使用 {step.skill_id} 技能执行: {step.intent}\n"
-                    f"具体查询: {step.input_query}"
+                    f"使用 {step.skill_id} 技能执行: {step.intent}\n具体查询: {step.input_query}"
                 ),
             )
             steps.append(manifest_step)
@@ -142,9 +143,7 @@ class PlanExecutor:
             context_file=context_file,
         )
 
-    def _resolve_input_context(
-        self, plan: ExecutionPlan, current_step
-    ) -> str:
+    def _resolve_input_context(self, plan: ExecutionPlan, current_step: ExecutionStep) -> str:
         """Resolve the input context for a step from its upstream dependencies."""
         if not current_step.dependencies:
             return ""
@@ -182,9 +181,9 @@ class PlanExecutor:
             Transition prompt text
         """
         next_steps = [
-            s for s in plan.steps
-            if s.step_number > completed_step_number
-            and s.status.value == "pending"
+            s
+            for s in plan.steps
+            if s.step_number > completed_step_number and s.status.value == "pending"
         ]
 
         if not next_steps:
@@ -209,10 +208,12 @@ class PlanExecutor:
         next_marker = StepManifest.completion_marker_for(next_step.step_number)
         lines.append(f"- 完成标记: `<!-- {next_marker} -->`")
 
-        lines.extend([
-            "",
-            f"请先读取 {next_step.skill_id} 的 SKILL.md，然后执行。",
-        ])
+        lines.extend(
+            [
+                "",
+                f"请先读取 {next_step.skill_id} 的 SKILL.md，然后执行。",
+            ]
+        )
 
         return "\n".join(lines)
 
@@ -265,7 +266,9 @@ class PlanExecutor:
         ]
 
         # Group by parallel batches
-        if plan.execution_mode == ExecutionMode.PARALLEL and not any(s.dependencies for s in plan.steps):
+        if plan.execution_mode == ExecutionMode.PARALLEL and not any(
+            s.dependencies for s in plan.steps
+        ):
             groups = [plan.steps]
         else:
             groups = plan.get_parallel_groups()
@@ -278,23 +281,27 @@ class PlanExecutor:
                 lines.extend(self._format_parallel_group(group_num, group))
 
         # Execution rules
-        lines.extend([
-            "",
-            "---",
-            "## 执行规则",
-            "",
-            "1. **每步必须读取 SKILL.md**: 在执行任何步骤前，先读取对应 skill 的 SKILL.md 文件",
-            "2. **严格按顺序**: 不要跳过步骤，不要改变顺序",
-            "3. **明确报告**: 每步完成后，必须声明" + f"`<!-- {COMPLETION_MARKER_PREFIX}N] -->`" + " 标记",
-            "4. **处理依赖**: 如果某步依赖前一步输出，确保前一步已完成",
-            "5. **失败处理**: 如果某步失败，报告错误并询问是否继续剩余步骤",
-            "6. **最终汇总**: 所有步骤完成后，汇总结果并给出整体结论",
-            "",
-        ])
+        lines.extend(
+            [
+                "",
+                "---",
+                "## 执行规则",
+                "",
+                "1. **每步必须读取 SKILL.md**: 在执行任何步骤前，先读取对应 skill 的 SKILL.md 文件",
+                "2. **严格按顺序**: 不要跳过步骤，不要改变顺序",
+                "3. **明确报告**: 每步完成后，必须声明"
+                + f"`<!-- {COMPLETION_MARKER_PREFIX}N] -->`"
+                + " 标记",
+                "4. **处理依赖**: 如果某步依赖前一步输出，确保前一步已完成",
+                "5. **失败处理**: 如果某步失败，报告错误并询问是否继续剩余步骤",
+                "6. **最终汇总**: 所有步骤完成后，汇总结果并给出整体结论",
+                "",
+            ]
+        )
 
         return "\n".join(lines)
 
-    def _format_single_step(self, step) -> list[str]:
+    def _format_single_step(self, step: StepManifest) -> list[str]:
         """Format a single sequential step."""
         marker = StepManifest.completion_marker_for(step.step_number)
         lines = [
@@ -310,11 +317,13 @@ class PlanExecutor:
             deps = ", ".join(step.dependencies)
             lines.append(f"- **依赖**: 必须等 {deps} 完成后才能开始")
 
-        lines.extend([
-            "",
-            f"完成此步骤后声明: `<!-- {marker} -->` 并附上结果摘要",
-            "",
-        ])
+        lines.extend(
+            [
+                "",
+                f"完成此步骤后声明: `<!-- {marker} -->` 并附上结果摘要",
+                "",
+            ]
+        )
 
         return lines
 
@@ -329,28 +338,34 @@ class PlanExecutor:
 
         for step in group:
             marker = StepManifest.completion_marker_for(step.step_number)
-            lines.extend([
-                f"### 步骤 {step.step_number}: {step.intent}",
-                f"- **Skill**: {step.skill_id}",
-                f"- **任务**: {step.input_query}",
-            ])
+            lines.extend(
+                [
+                    f"### 步骤 {step.step_number}: {step.intent}",
+                    f"- **Skill**: {step.skill_id}",
+                    f"- **任务**: {step.input_query}",
+                ]
+            )
             if step.output_as:
                 lines.append(f"- **输出变量**: {step.output_as}")
             lines.append(f"- 完成后声明: `<!-- {marker} -->`")
             lines.append("")
 
-        lines.extend([
-            f"并行组 {group_num} 的所有步骤完成后，声明: "
-            f"\u2018并行组 {group_num} 全部完成\u2019",
-            "",
-        ])
+        lines.extend(
+            [
+                f"并行组 {group_num} 的所有步骤完成后，声明: "
+                f"\u2018并行组 {group_num} 全部完成\u2019",
+                "",
+            ]
+        )
 
         return lines
 
     def _extract_step_markers(self, plan: ExecutionPlan) -> list[str]:
         """Extract the completion markers for each step."""
         markers = []
-        if plan.execution_mode == ExecutionMode.PARALLEL and not any(s.dependencies for s in plan.steps):
+        if plan.execution_mode == ExecutionMode.PARALLEL and not any(
+            s.dependencies for s in plan.steps
+        ):
             groups = [plan.steps]
         else:
             groups = plan.get_parallel_groups()
@@ -369,8 +384,7 @@ class PlanExecutor:
         total = len(plan.steps)
         markers = [StepManifest.completion_marker_for(i + 1) for i in range(total)]
         return (
-            f"所有 {total} 个步骤均标记为完成。"
-            f"请检查是否收到所有步骤的标记: {', '.join(markers)}"
+            f"所有 {total} 个步骤均标记为完成。请检查是否收到所有步骤的标记: {', '.join(markers)}"
         )
 
 

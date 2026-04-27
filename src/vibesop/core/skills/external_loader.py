@@ -317,7 +317,8 @@ class ExternalSkillLoader:
             has_high = any(t.level.value == "high" for t in audit_result.threats)
             if has_high:
                 logger.warning(
-                    "Security audit rejected: %s (%s)", skill_file,
+                    "Security audit rejected: %s (%s)",
+                    skill_file,
                     [t.name for t in audit_result.threats if t.level.value == "high"],
                 )
                 return None

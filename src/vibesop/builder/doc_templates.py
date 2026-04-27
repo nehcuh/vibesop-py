@@ -86,6 +86,7 @@ class DocTemplates:
             loader=FileSystemLoader(template_dir),
             autoescape=False,
         )
+
         def _now(fmt: str = "%Y-%m-%d") -> str:
             return datetime.now().strftime(fmt)
 
@@ -126,6 +127,7 @@ class DocTemplates:
             Jinja2 template
         """
         env = Environment()
+
         def _now(fmt: str = "%Y-%m-%d") -> str:
             return datetime.now().strftime(fmt)
 

@@ -86,7 +86,13 @@ class RepoAnalyzer:
             result.skill_files = list(tmpdir_path.rglob("SKILL.md"))
 
             # Detect setup scripts
-            for script_name in ("setup.py", "pyproject.toml", "package.json", "Makefile", "requirements.txt"):
+            for script_name in (
+                "setup.py",
+                "pyproject.toml",
+                "package.json",
+                "Makefile",
+                "requirements.txt",
+            ):
                 if (tmpdir_path / script_name).exists():
                     result.setup_scripts.append(script_name)
 

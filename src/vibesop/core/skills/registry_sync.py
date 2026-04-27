@@ -69,7 +69,11 @@ class RegistrySync:
 
         # Preserve non-builtin skills (external packs, etc.)
         for skill in existing_skills:
-            if isinstance(skill, dict) and skill.get("namespace") != "builtin" and skill.get("id") not in discovered:
+            if (
+                isinstance(skill, dict)
+                and skill.get("namespace") != "builtin"
+                and skill.get("id") not in discovered
+            ):
                 new_skills.append(skill)
 
         registry["skills"] = new_skills

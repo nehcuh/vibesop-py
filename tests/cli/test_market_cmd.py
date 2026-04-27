@@ -81,16 +81,21 @@ class TestMarketSearch:
 class TestMarketInstall:
     """Tests for vibe market install."""
 
+    @patch("vibesop.installer.pack_installer.PackInstaller")
     @patch("vibesop.cli.commands.market_cmd.GitHubSkillCrawler")
-    def test_install_valid_repo(self, mock_crawler_cls: Any) -> None:
+    def test_install_valid_repo(self, mock_crawler_cls: Any, mock_installer_cls: Any) -> None:
         mock_crawler = MagicMock()
         mock_crawler.validate.return_value = True
         mock_crawler_cls.return_value = mock_crawler
 
-        result = runner.invoke(app, ["market", "install", "user/repo"])
+        mock_installer = MagicMock()
+        mock_installer.install_pack.return_value = (True, "Installed")
+        mock_installer_cls.return_value = mock_installer
+
+        result = runner.invoke(app, ["market", "install", "user/repo", "--yes"])
         assert result.exit_code == 0
         assert "valid" in result.output
-        assert "vibe install https://github.com/user/repo" in result.output
+        assert "Successfully installed" in result.output
 
     @patch("vibesop.cli.commands.market_cmd.GitHubSkillCrawler")
     def test_install_invalid_repo_format(self, mock_crawler_cls: Any) -> None:

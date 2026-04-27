@@ -216,15 +216,11 @@ class CandidatePrefilter:
         # dynamically triggered (e.g. newly installed third-party packs not yet
         # present in the cluster index).
         return [
-            c
-            for c in candidates
-            if c["id"] in allowed_ids or c.get("namespace") in triggered_ns
+            c for c in candidates if c["id"] in allowed_ids or c.get("namespace") in triggered_ns
         ]
 
     @staticmethod
-    def _discover_namespace_keywords(
-        candidates: list[dict[str, Any]]
-    ) -> dict[str, list[str]]:
+    def _discover_namespace_keywords(candidates: list[dict[str, Any]]) -> dict[str, list[str]]:
         """Discover namespace-to-keywords mappings from skill metadata.
 
         This enables third-party skill packs to be discovered without

@@ -6,6 +6,8 @@ Extracted from UnifiedRouter to reduce God Object size.
 from __future__ import annotations
 
 import contextlib
+import hashlib
+import json
 import logging
 import re
 import threading
@@ -31,6 +33,7 @@ class CandidateManager:
         self.project_root = Path(project_root).resolve()
         self._resolved_project_root = self.project_root
         self._skill_loader: Any = None
+        self._search_paths: list[Path] = []
         self._candidates_cache: list[dict[str, Any]] | None = None
         self._cache_lock = threading.Lock()
         self._last_reload_check: float = 0.0
@@ -39,28 +42,59 @@ class CandidateManager:
         self._usage_flush_count: int = 0
         self._USAGE_FLUSH_INTERVAL: int = 10
 
+    @property
+    def _disk_cache_path(self) -> Path:
+        return self.project_root / ".vibe" / "cache" / "candidates_v2.json"
+
+    def _compute_paths_hash(self, search_paths: list[Path]) -> str:
+        """Hash search paths and their mtimes for cache invalidation."""
+        h = hashlib.sha256()
+        for sp in sorted(search_paths):
+            h.update(str(sp).encode())
+            if sp.exists():
+                mtime = sp.stat().st_mtime
+                h.update(str(mtime).encode())
+        return h.hexdigest()[:16]
+
+    def _load_from_disk_cache(self, search_paths: list[Path]) -> list[dict[str, Any]] | None:
+        """Try loading candidates from persistent disk cache."""
+        cache_path = self._disk_cache_path
+        if not cache_path.exists():
+            return None
+        current_hash = self._compute_paths_hash(search_paths)
+        try:
+            data = json.loads(cache_path.read_text())
+            if data.get("paths_hash") == current_hash:
+                return data.get("candidates", [])
+        except (json.JSONDecodeError, KeyError, OSError):
+            pass
+        return None
+
+    def _save_to_disk_cache(self, candidates: list[dict[str, Any]], paths_hash: str) -> None:
+        """Persist candidates to disk cache."""
+        cache_path = self._disk_cache_path
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+        with contextlib.suppress(OSError):
+            cache_path.write_text(
+                json.dumps(
+                    {
+                        "paths_hash": paths_hash,
+                        "candidates": candidates,
+                    },
+                    default=str,
+                    ensure_ascii=False,
+                )
+            )
+
     def get_candidates(self) -> list[dict[str, Any]]:
         """Discover and return all skill candidates."""
         if self._skill_loader is None:
-            import vibesop
-
-            builtin_skills_path = (
-                Path(vibesop.__file__).parent.parent.parent / "core" / "skills"
-            )
-            search_paths = [
-                self.project_root / ".vibe" / "skills",
-                Path.home() / ".config" / "skills",
-                Path.home() / ".config" / "opencode" / "skills",
-                Path.home() / ".claude" / "skills",
-                Path.home() / ".kimi" / "skills",
-            ]
-            if builtin_skills_path.exists() and builtin_skills_path not in search_paths:
-                search_paths.insert(0, builtin_skills_path)
+            self._search_paths = self._build_search_paths()
             from vibesop.core.skills import SkillLoader
 
             self._skill_loader = SkillLoader(
                 project_root=self.project_root,
-                search_paths=search_paths,
+                search_paths=self._search_paths,
             )
 
         definitions = self._skill_loader.discover_all()
@@ -116,6 +150,7 @@ class CandidateManager:
     def _should_check_reload(self) -> bool:
         """Rate-limited check: only probe the filesystem marker every N seconds."""
         import time
+
         now = time.monotonic()
         if now - self._last_reload_check < self._RELOAD_CHECK_INTERVAL:
             return False
@@ -133,12 +168,40 @@ class CandidateManager:
         with contextlib.suppress(OSError):
             marker.unlink()
         self._candidates_cache = None
-        self._candidates_cache = self.get_candidates()
-        return self._candidates_cache
+
+        search_paths = self._search_paths if self._search_paths else self._build_search_paths()
+        cached = self._load_from_disk_cache(search_paths)
+        if cached is not None:
+            self._candidates_cache = cached
+            return cached
+
+        candidates = self.get_candidates()
+        paths_hash = self._compute_paths_hash(self._search_paths)
+        self._candidates_cache = candidates
+        self._save_to_disk_cache(candidates, paths_hash)
+        return candidates
+
+    def _build_search_paths(self) -> list[Path]:
+        """Build the list of search paths for skill discovery."""
+        import vibesop
+
+        builtin_skills_path = Path(vibesop.__file__).parent.parent.parent / "core" / "skills"
+        paths: list[Path] = [
+            self.project_root / ".vibe" / "skills",
+            Path.home() / ".config" / "skills",
+            Path.home() / ".config" / "opencode" / "skills",
+            Path.home() / ".claude" / "skills",
+            Path.home() / ".kimi" / "skills",
+        ]
+        if builtin_skills_path.exists() and builtin_skills_path not in paths:
+            paths.insert(0, builtin_skills_path)
+        return paths
 
     def reload(self) -> int:
         """Invalidate cache and reload."""
         self._candidates_cache = None
+        with contextlib.suppress(OSError):
+            self._disk_cache_path.unlink()
         return len(self.get_cached_candidates())
 
     def invalidate(self) -> None:
@@ -156,7 +219,9 @@ class CandidateManager:
 
             buffered = self._usage_buffer.get(skill_id, {})
             buffered["call_count"] = buffered.get("call_count", 0) + 1
-            buffered["success_count"] = buffered.get("success_count", 0) + (1 if was_successful else 0)
+            buffered["success_count"] = buffered.get("success_count", 0) + (
+                1 if was_successful else 0
+            )
             buffered["last_used"] = datetime.now(UTC).isoformat()
             self._usage_buffer[skill_id] = buffered
 
@@ -175,9 +240,13 @@ class CandidateManager:
 
             for skill_id, stats in self._usage_buffer.items():
                 config = SkillConfigManager.get_skill_config(skill_id)
-                existing: dict[str, Any] = dict(config.usage_stats) if config and config.usage_stats else {}
+                existing: dict[str, Any] = (
+                    dict(config.usage_stats) if config and config.usage_stats else {}
+                )
                 existing["call_count"] = existing.get("call_count", 0) + stats["call_count"]
-                existing["success_count"] = existing.get("success_count", 0) + stats["success_count"]
+                existing["success_count"] = (
+                    existing.get("success_count", 0) + stats["success_count"]
+                )
                 existing["last_used"] = stats["last_used"]
                 SkillConfigManager.update_skill_config(skill_id, {"usage_stats": existing})
 
@@ -234,9 +303,7 @@ class CandidateManager:
                 source_file = c.get("source_file")
                 if source_file:
                     try:
-                        Path(source_file).resolve().relative_to(
-                            self._resolved_project_root
-                        )
+                        Path(source_file).resolve().relative_to(self._resolved_project_root)
                     except ValueError:
                         continue
             filtered.append(c)

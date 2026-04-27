@@ -60,7 +60,9 @@ class SkillRatingStore:
         self._ratings: dict[str, list[SkillRating]] = {}
         self._load()
 
-    def rate(self, skill_id: str, score: int, review: str = "", user_id: str = "local") -> SkillRating:
+    def rate(
+        self, skill_id: str, score: int, review: str = "", user_id: str = "local"
+    ) -> SkillRating:
         if not 1 <= score <= 5:
             raise ValueError(f"Score must be 1-5, got {score}")
 
