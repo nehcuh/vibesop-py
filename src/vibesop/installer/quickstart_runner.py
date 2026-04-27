@@ -63,6 +63,7 @@ class QuickstartRunner:
             for name, desc in [
                 ("gstack", "Virtual engineering team skills"),
                 ("superpowers", "General-purpose productivity skills"),
+                ("omx", "oh-my-codex — autonomous agent skills"),
             ]
             if name in ExternalSkillLoader.TRUSTED_PACKS
         }
@@ -321,7 +322,7 @@ class QuickstartRunner:
 
             # Step 3: Install integrations (if requested)
             if config.install_integrations:
-                for integration in ["gstack", "superpowers"]:
+                for integration in self._available_integrations:
                     self._install_integration(integration, config.platform)
             else:
                 console.print("⊘ Integrations skipped")
