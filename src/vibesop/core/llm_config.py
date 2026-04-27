@@ -209,37 +209,108 @@ class AgentEnvironmentDetector:
 
 
 class EnvVarLLMDetector:
-    """环境变量 LLM 检测器"""
+    """环境变量 LLM 检测器.
+
+    Supports all OpenAI-compatible providers via *_API_KEY / *_BASE_URL env vars,
+    plus the generic VIBE_LLM_PROVIDER override.
+    """
+
+    PROVIDER_ENV_MAP: ClassVar[dict[str, dict[str, str]]] = {
+        "deepseek": {
+            "api_key": "DEEPSEEK_API_KEY",
+            "api_base": "DEEPSEEK_BASE_URL",
+            "model": "DEEPSEEK_MODEL",
+        },
+        "kimi": {
+            "api_key": "KIMI_API_KEY",
+            "api_base": "KIMI_BASE_URL",
+            "model": "KIMI_MODEL",
+        },
+        "zhipu": {
+            "api_key": "ZHIPU_API_KEY",
+            "api_base": "ZHIPU_BASE_URL",
+            "model": "ZHIPU_MODEL",
+        },
+        "ollama": {
+            "api_key": None,
+            "api_base": "OLLAMA_BASE_URL",
+            "model": "OLLAMA_MODEL",
+        },
+    }
+
+    PROVIDER_DEFAULT_MODELS: ClassVar[dict[str, str]] = {
+        "deepseek": "deepseek-chat",
+        "kimi": "moonshot-v1-8k",
+        "zhipu": "glm-4",
+        "ollama": "qwen3:35b-a3b-mlx",
+    }
 
     @classmethod
     def get_llm_config(cls) -> LLMConfig | None:
-        """从环境变量读取 LLM 配置"""
+        """从环境变量读取 LLM 配置."""
 
-        # Anthropic
+        # Priority 1: Generic provider override (VIBE_LLM_PROVIDER)
+        generic_provider = os.getenv("VIBE_LLM_PROVIDER")
+        if generic_provider:
+            return cls._build_config(generic_provider)
+
+        # Priority 2: Anthropic
         if os.getenv("ANTHROPIC_API_KEY"):
-            return LLMConfig(
-                provider="anthropic",
-                model=os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-6-20250514"),
-                api_key=os.getenv("ANTHROPIC_API_KEY"),
-                api_base=os.getenv("ANTHROPIC_BASE_URL"),
-                temperature=float(os.getenv("ANTHROPIC_TEMPERATURE", "0.7")),
-                max_tokens=int(os.getenv("ANTHROPIC_MAX_TOKENS", "4096")),
-                source=LLMSource.ENV_VAR,
+            return cls._build_config("anthropic",
+                api_key_env="ANTHROPIC_API_KEY",
+                base_url_env="ANTHROPIC_BASE_URL",
+                model_env="ANTHROPIC_MODEL",
+                default_model="claude-sonnet-4-6-20250514",
             )
 
-        # OpenAI
+        # Priority 3: OpenAI
         if os.getenv("OPENAI_API_KEY"):
-            return LLMConfig(
-                provider="openai",
-                model=os.getenv("OPENAI_MODEL", "gpt-4"),
-                api_key=os.getenv("OPENAI_API_KEY"),
-                api_base=os.getenv("OPENAI_BASE_URL"),
-                temperature=float(os.getenv("OPENAI_TEMPERATURE", "0.7")),
-                max_tokens=int(os.getenv("OPENAI_MAX_TOKENS", "4096")),
-                source=LLMSource.ENV_VAR,
+            return cls._build_config("openai",
+                api_key_env="OPENAI_API_KEY",
+                base_url_env="OPENAI_BASE_URL",
+                model_env="OPENAI_MODEL",
+                default_model="gpt-4",
             )
+
+        # Priority 4: Provider-specific env vars (deepseek, kimi, zhipu, ollama, etc.)
+        for provider_name, env_keys in cls.PROVIDER_ENV_MAP.items():
+            api_key_env = env_keys.get("api_key")
+            if api_key_env and os.getenv(api_key_env):
+                return cls._build_config(provider_name)
 
         return None
+
+    @classmethod
+    def _build_config(
+        cls,
+        provider: str,
+        api_key_env: str | None = None,
+        base_url_env: str | None = None,
+        model_env: str | None = None,
+        default_model: str | None = None,
+    ) -> LLMConfig:
+        """Build LLMConfig from env vars for a given provider."""
+        provider_map = cls.PROVIDER_ENV_MAP.get(provider, {})
+
+        _api_key_env = api_key_env or provider_map.get("api_key")
+        _base_url_env = base_url_env or provider_map.get("api_base")
+        _model_env = model_env or provider_map.get("model")
+
+        api_key = os.getenv(_api_key_env) if _api_key_env else None
+        api_base = os.getenv(_base_url_env) if _base_url_env else None
+        model = (
+            os.getenv(_model_env) if _model_env else None
+        ) or default_model or cls.PROVIDER_DEFAULT_MODELS.get(provider, "default")
+
+        return LLMConfig(
+            provider=provider,
+            model=model,
+            api_key=api_key,
+            api_base=api_base,
+            temperature=float(os.getenv("VIBE_LLM_TEMPERATURE", "0.7")),
+            max_tokens=int(os.getenv("VIBE_LLM_MAX_TOKENS", "4096")),
+            source=LLMSource.ENV_VAR,
+        )
 
 
 class LLMConfigResolver:

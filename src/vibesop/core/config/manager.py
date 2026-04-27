@@ -267,6 +267,14 @@ class ConfigManager:
 
     # Default configuration
     DEFAULT_CONFIG: ClassVar[dict[str, Any]] = {
+        "llm": {
+            "provider": None,
+            "model": None,
+            "api_key": None,
+            "api_base": None,
+            "temperature": 0.7,
+            "max_tokens": 4096,
+        },
         "routing": {
             "min_confidence": 0.3,
             "auto_select_threshold": 0.6,
