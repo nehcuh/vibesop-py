@@ -406,11 +406,20 @@ class QuickstartRunner:
         console.print(
             "   VibeSOP runs as a CLI subprocess and [bold]cannot reuse your Agent's LLM[/bold]."
         )
-        console.print("   Configure a separate LLM for semantic routing:")
-        console.print("   [dim]  export ANTHROPIC_API_KEY=\"sk-ant-...\"  # or OPENAI_API_KEY[/dim]")
-        console.print("   [dim]  # or local Ollama (zero cost):[/dim]")
-        console.print("   [dim]  export VIBE_LLM_PROVIDER=ollama[/dim]")
-        console.print("   [dim]  ollama pull qwen3:35b-a3b-mlx && ollama serve[/dim]")
+        console.print("   Configure a separate LLM for semantic routing (AI Triage):")
+        console.print()
+        console.print("   [bold]Option 1: Environment Variables[/bold]")
+        console.print("   [dim]  export ANTHROPIC_API_KEY=\"sk-ant-...\"[/dim]")
+        console.print("   [dim]  # or: export VIBE_LLM_PROVIDER=ollama && ollama serve[/dim]")
+        console.print()
+        console.print("   [bold]Option 2: Config File[/bold]")
+        config_path = config.project_path / ".vibe" / "config.yaml"
+        console.print(f"   [dim]  Create: {config_path}[/dim]")
+        console.print("   [dim]  Content:[/dim]")
+        console.print("   [dim]    routing:[/dim]")
+        console.print("   [dim]      enable_ai_triage: true[/dim]")
+        console.print("   [dim]      keyword_match_max_chars: 5  # 0=always LLM, 200=always keyword[/dim]")
+        console.print("   [dim]  (LLM provider + API key must still be set via env vars)[/dim]")
 
         console.print("\n[bold]📖 Documentation:[/bold]")
         console.print("   - Quick Start: README.md")
