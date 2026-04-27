@@ -65,7 +65,7 @@ class OllamaProvider(LLMProvider):
     ) -> LLMResponse:
         if self._client is None:
             raise LLMError(
-                "Ollama client not configured. Ensure ollama is running: ollama serve"
+                "ollama", "Ollama client not configured. Ensure ollama is running: ollama serve"
             )
 
         model = model or self._model
@@ -79,7 +79,7 @@ class OllamaProvider(LLMProvider):
             )
         except APIError as e:
             msg = getattr(e, "message", str(e))
-            raise LLMError(f"Ollama API error: {msg}") from e
+            raise LLMError("ollama", f"Ollama API error: {msg}") from e
 
         choice = response.choices[0]
         content = choice.message.content or ""

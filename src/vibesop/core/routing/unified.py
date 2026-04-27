@@ -347,6 +347,14 @@ class UnifiedRouter(RouterStatsMixin, RouterExecutionMixin, RouterOrchestrationM
         keyword_max_chars = getattr(self._config, "keyword_match_max_chars", 5)
         use_keyword_routing = len(query) <= keyword_max_chars
 
+        # Fallback: when LLM is unavailable and query is long, still try keyword
+        # matchers rather than immediately returning no-match. This prevents
+        # the silent FALLBACK_LLM degradation that occurs when AI Triage
+        # is disabled or no LLM provider is configured.
+        llm_available = self._llm is not None and self._config.enable_ai_triage
+        if not use_keyword_routing and not llm_available:
+            use_keyword_routing = True
+
         if use_keyword_routing:
             # Layer 1: Scenario Pattern
             match, detail = _layers.try_scenario_layer(self, query, candidates)
