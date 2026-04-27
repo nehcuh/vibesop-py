@@ -67,6 +67,8 @@ vibe analyze session              → SessionAnalyzer.analyze()
 
 Direct Python API for AI Agents to use VibeSOP routing with their internal LLM, without requiring external API key configuration.
 
+> **⚠️ Process boundary**: The `set_llm()` API only works for in-process Python integration. When VibeSOP is invoked as a CLI subprocess (`vibe route`), it runs in a separate process and cannot access the Agent's LLM — separate LLM configuration is required for CLI usage.
+
 ```python
 # Entry point for AI Agents
 from vibesop.agent import AgentRouter, SimpleLLM, SimpleResponse
@@ -97,7 +99,7 @@ print(result.primary.skill_id)  # gstack/review
 - `intent_interceptor.py` — Intercept and interpret complex intents
 
 **Why Agent Runtime?**
-- ✅ No external API key needed (uses Agent's internal LLM)
+- ✅ No external API key needed (uses Agent's internal LLM, **in-process only**)
 - ✅ Direct Python API (no subprocess overhead)
 - ✅ Deep integration with Agent's session state
 - ✅ Platform adaptation (Claude Code, Cursor, Continue.dev)

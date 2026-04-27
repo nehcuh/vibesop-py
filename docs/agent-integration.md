@@ -1,5 +1,7 @@
 # VibeSOP Agent Integration Guide
 
+> **⚠️ Critical Distinction**: This guide describes **in-process Python API integration**. The `set_llm()` method only works when the Agent imports VibeSOP as a Python library and calls the API directly within the same process. It does **NOT** work with CLI subprocess calls (`vibe route`), which require separate LLM configuration. See [README](../README.md) for CLI setup.
+
 This guide shows how to integrate VibeSOP routing into AI Agents (like Claude Code) using the Agent's internal LLM for semantic skill selection.
 
 ## Quick Start
@@ -27,10 +29,12 @@ if result.has_match:
 
 ## How It Works
 
+> **⚠️ This requires in-process Python integration.** The `set_llm()` API passes the LLM object by reference within the Python process. CLI subprocess calls (`vibe route`) operate in a separate process and cannot access the Agent's LLM.
+
 1. **LLM Injection**: The Agent injects its internal LLM via `set_llm()`
 2. **AI Triage**: When routing, VibeSOP uses the injected LLM for semantic understanding
 3. **Multilingual Support**: Works with Chinese, English, and other languages
-4. **No API Keys Needed**: Uses Agent's existing LLM, no separate configuration
+4. **No API Keys Needed** (in-process only): Uses Agent's existing LLM, no separate configuration
 
 ## Multi-Turn Conversations
 
@@ -112,8 +116,8 @@ Response wrapper for LLM output.
 
 ## Benefits
 
-1. **No External API Keys**: Uses Agent's internal LLM
+1. **No External API Keys** (in-process only): Uses Agent's internal LLM
 2. **Semantic Understanding**: AI triage understands intent, not just keywords
 3. **Multilingual**: Works with Chinese, English, and other languages
 4. **Session Awareness**: Tracks conversation context for multi-turn scenarios
-5. **Python Native**: Direct API integration, no shell calls needed
+5. **Python Native**: Direct API integration **within the same process** — not via subprocess
