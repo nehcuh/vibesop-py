@@ -14,7 +14,7 @@ VibeSOP 是一个功能完整、架构清晰的 AI 辅助开发的 SkillOS（技
 
 **关键发现**:
 - ✅ 1308 个测试全部通过（1 skipped），覆盖率 82.30%
-- ✅ 7 层路由管道完整实现
+- ✅ 10 层路由管道完整实现
 - ✅ 安全审计机制完善
 - ✅ 路由性能修复完成（>50 qps）
 - ⚠️ 类型检查仍有 ~389 个警告（目标 <200）
@@ -106,7 +106,7 @@ $ uv run basedpyright src/
 
 | 功能 | 状态 | 测试覆盖 |
 |------|------|----------|
-| 7 层路由管道 | ✅ 完整 | 高 |
+| 10 层路由管道 | ✅ 完整 | 高 |
 | AI Triage | ✅ 实现 | 中 |
 | 偏好学习 | ✅ 实现 | 中 |
 | 安全审计 | ✅ 完整 | 高 |
@@ -161,7 +161,7 @@ $ uv run basedpyright src/
 - ⚠️ 性能基准报告（CI 已添加，待稳定运行后补充数据）
 
 **已修正**:
-- ✅ `docs/architecture/routing-system.md` 已更新为 7-layer（原 "5-layer" 引用已修正）
+- ✅ `docs/architecture/routing-system.md` 已更新为 10-layer（原 "5-layer" 引用已修正）
 - ✅ `docs/architecture/routing-system.md` 中 `enable_ai_triage` 的 Layer 编号注释已修正为 Layer 2
 
 **仍待处理**:

@@ -508,7 +508,7 @@ class KimiCliAdapter(PlatformAdapter):
             "- ✅ **Preference learning** - gets better the more you use it",
             "- ✅ **Context-aware** - considers conversation history and recent work",
             "",
-            "**7-Layer Routing System:**",
+            "**10-Layer Routing System:**",
             "- **Layer 0**: Explicit override (`/review`, `use tdd`)",
             "- **Layer 1**: Scenario patterns (debug, review, refactor, etc.)",
             "- **Layer 2**: AI Semantic Triage (Haiku/GPT, optional)",

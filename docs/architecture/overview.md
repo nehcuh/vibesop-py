@@ -19,7 +19,7 @@ VibeSOP is a **Skill Operating System (SkillOS)** for AI-assisted development. I
 │                      Routing Engine                             │
 │  ┌─────────────────┐  ┌─────────────────┐  ┌──────────────┐   │
 │  │ UnifiedRouter   │  │ Layer Pipeline  │  │ Optimization │   │
-│  │ (Single Entry)  │  │ (7-Layer Match) │  │ (Pref/Learn) │   │
+│  │ (Single Entry)  │  │ (10-Layer Match)│  │ (Pref/Learn) │   │
 │  └─────────────────┘  └─────────────────┘  └──────────────┘   │
 ├─────────────────────────────────────────────────────────────────┤
 │                    Core Services                                │
@@ -45,7 +45,7 @@ VibeSOP is a **Skill Operating System (SkillOS)** for AI-assisted development. I
 **Purpose**: Single entry point for all routing operations
 
 **Responsibilities**:
-- Coordinate 7-layer matching pipeline
+- Coordinate 10-layer matching pipeline
 - Apply preference learning
 - Return routing results with confidence scores
 

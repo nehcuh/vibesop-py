@@ -556,7 +556,7 @@ class ClaudeCodeAdapter(PlatformAdapter):
         try:
             env = self._get_template_env()
             template = env.get_template("hooks/vibesop-track.sh.j2")
-            hook_content = template.render(version="4.3.0")
+            hook_content = template.render(version="5.2.0")
             hook_path = output_dir / "hooks" / "vibesop-track.sh"
             self.write_file_atomic(hook_path, hook_content, validate_security=False)
             hook_path.chmod(0o755)
@@ -633,7 +633,7 @@ fi
         try:
             env = self._get_template_env()
             template = env.get_template("hooks/vibesop-track.sh.j2")
-            track_content = template.render(version="4.3.0")
+            track_content = template.render(version="5.2.0")
             track_hook_path.parent.mkdir(parents=True, exist_ok=True)
             self.write_file_atomic(track_hook_path, track_content, validate_security=False)
             track_hook_path.chmod(0o755)

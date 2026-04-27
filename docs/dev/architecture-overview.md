@@ -9,7 +9,7 @@ Procedures) for AI-assisted development. It is NOT a consumer of the skills it p
 
 **VibeSOP (this project)** — The "skill router":
 - Discovers skills from filesystem (gstack, superpowers, builtin)
-- Routes natural language queries to the right skill (7-layer routing)
+- Routes natural language queries to the right skill (10-layer routing)
 - Generates platform configuration (Claude Code, OpenCode)
 - Manages skill installations and integrations
 
@@ -28,19 +28,19 @@ AI assistants help you write code — not for the tool's own development.
 
 - `vibe skills` — Lists all skills VibeSOP can route to (discovery)
 - `vibe install <platform>` — Generates config with those skills for a target project
-- `vibe route "query"` — Routes a query to the best skill (uses 7-layer system)
+- `vibe route "query"` — Routes a query to the best skill (uses 10-layer system)
 - `vibe route --validate` — Shows routing decision path and diagnostics
 
-### 7-Layer Routing Architecture
+### 10-Layer Routing Architecture
 
 ```
 User Query → Layer 0: Explicit (/review, 使用 review)
               ↓ (no match)
             Layer 1: Scenario (debug/test/review/refactor keywords)
               ↓ (no match)
-            Layer 2: AI Triage (LLM, optional)
+            Layer 2: AI Triage (LLM, optional — forced for long queries >5 chars by default)
               ↓ (no match)
-            Layer 3: Keyword (exact token matching)
+            Layer 3: Keyword (exact token matching, short queries only)
               ↓ (no match)
             Layer 4: TF-IDF Semantic (cosine similarity)
               ↓ (no match)
@@ -48,7 +48,11 @@ User Query → Layer 0: Explicit (/review, 使用 review)
               ↓ (no match)
             Layer 6: Fuzzy (Levenshtein distance)
               ↓ (no match)
-            Fallback: systematic-debugging workflow
+            Layer 7: Custom Plugin Matchers
+              ↓ (no match)
+            Layer 8: No Match (below threshold)
+              ↓ (no match)
+            Layer 9: Fallback LLM (last-resort routing)
 ```
 
 Each layer is implemented as a separate `RoutingHandler` class with a common

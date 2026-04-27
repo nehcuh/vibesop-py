@@ -2,20 +2,9 @@
 
 > **Always Loaded**: These rules govern how skills are selected and invoked
 
-## 5-Layer Routing System
+## 10-Layer Routing System
 
-### Layer 0: AI Semantic Triage (Primary)
-
-**When**: Starting any non-trivial task
-
-**Process**:
-1. Call `vibe route "<user_request>"`
-2. AI analyzes semantic meaning and context
-3. Returns best-matching skill with confidence score
-
-**Accuracy**: ~95% with Haiku/GPT models
-
-### Layer 1: Explicit Overrides
+### Layer 0: Explicit Overrides
 
 **When**: User specifies a skill directly
 
@@ -23,9 +12,9 @@
 - `/review` - Force review skill
 - `vibe skills use tdd` - Use specific skill
 
-**Priority**: Overrides AI routing
+**Priority**: Overrides all other routing (confidence 1.0)
 
-### Layer 2: Scenario Patterns
+### Layer 1: Scenario Patterns
 
 **When**: Predefined scenarios match
 
@@ -36,25 +25,66 @@
 
 **Definition**: `core/policies/task-routing.yaml`
 
-### Layer 3: Semantic Matching
+### Layer 2: AI Semantic Triage (LLM)
 
-**When**: Layers 0-2 don't match
+**When**: Complex queries, long queries (>5 chars by default)
 
 **Process**:
-1. TF-IDF vectorization
-2. Cosine similarity comparison
-3. Best match above threshold
+1. Call `vibe route "<user_request>"`
+2. AI analyzes semantic meaning and context
+3. Returns best-matching skill with confidence score
+
+**Accuracy**: ~95% with Haiku/GPT models
+
+### Layer 3: Keyword Matching
+
+**When**: Short queries (≤5 chars by default) after Layers 0-2
+
+**Process**: Exact token matching against skill names, intents, and keywords
 
 **Accuracy**: ~70%
 
-### Layer 4: Fuzzy Matching
+### Layer 4: TF-IDF Semantic Matching
 
-**When**: All else fails
+**When**: Layers 0-3 don't match
 
-**Process**:
-1. Levenshtein distance
-2. Typo tolerance
-3. Last resort
+**Process**: Cosine similarity on TF-IDF term vectors
+
+**Accuracy**: ~75%
+
+### Layer 5: Embedding-Based Matching (Optional)
+
+**When**: Deep semantic understanding needed
+
+**Process**: Vector similarity using SentenceTransformer embeddings
+
+**Accuracy**: ~85%
+
+### Layer 6: Fuzzy Matching (Levenshtein)
+
+**When**: Typos and misspellings
+
+**Process**: Edit distance with typo tolerance
+
+**Accuracy**: ~60%
+
+### Layer 7: Custom Plugin Matchers
+
+**When**: User-defined matching logic in `.vibe/matchers/`
+
+**Process**: Any `match(query, candidate) -> float` function
+
+### Layer 8: No Match
+
+**When**: All layers fail to produce a confident match
+
+**Action**: Return no match, suggest nearest candidates
+
+### Layer 9: Fallback LLM
+
+**When**: Last resort for unmatched queries
+
+**Modes**: `transparent` (explain + suggest), `silent` (quiet), `disabled`
 
 ## Candidate Selection
 
@@ -88,20 +118,44 @@ Your choices are learned across dimensions:
 Routing does not learn from your choices.
 {% endif %}
 
+## Keyword Routing Threshold
+
+The `keyword_match_max_chars` config (default: 5) controls when keyword-based layers are used:
+
+- **Short queries (≤5 chars)**: Full pipeline — Scenario → AI Triage → Keyword → TF-IDF → etc.
+- **Long queries (>5 chars)**: Skip keyword layers — Explicit → AI Triage (LLM) only
+
+Configure via:
+```yaml
+# .vibe/config.yaml
+routing:
+  keyword_match_max_chars: 5   # 0=always LLM, 200=always keyword
+```
+
 ## Routing Workflow
 
 ```
 User Request
      ↓
-[Layer 0] AI Semantic Triage
+[Layer 0] Explicit Override
      ↓ (no match)
-[Layer 1] Explicit Override
+[Layer 1] Scenario Patterns         ← only for short queries (≤5 chars by default)
      ↓ (no match)
-[Layer 2] Scenario Patterns
+[Layer 2] AI Semantic Triage (LLM)  ← primary for long queries (>5 chars)
      ↓ (no match)
-[Layer 3] Semantic Matching
+[Layer 3] Keyword Matching          ← only for short queries
      ↓ (no match)
-[Layer 4] Fuzzy Matching
+[Layer 4] TF-IDF Semantic Matching  ← only for short queries
+     ↓ (no match)
+[Layer 5] Embedding-Based Matching  ← only for short queries (optional)
+     ↓ (no match)
+[Layer 6] Fuzzy Matching            ← only for short queries
+     ↓ (no match)
+[Layer 7] Custom Plugin Matchers    ← only for short queries
+     ↓ (no match)
+[Layer 8] No Match                  ← all layers exhausted
+     ↓
+[Layer 9] Fallback LLM              ← last-resort routing
      ↓
 Candidate Selection
      ↓

@@ -4,11 +4,40 @@
 
 ## Overview
 
-VibeSOP uses a 5-layer routing system to select the most appropriate skill for each task.
+VibeSOP uses a 10-layer routing system to select the most appropriate skill for each task.
 
 ## Routing Layers
 
-### Layer 0: AI Semantic Triage (Primary)
+### Layer 0: Explicit Overrides
+
+**User Control**: Direct skill specification
+
+**Methods**:
+- `/skill-name` shorthand
+- `namespace/skill-name` full syntax
+- `vibe skills use <skill-id>` command
+
+**Priority**: Overrides all other routing (confidence 1.0)
+
+**Example**:
+```
+User: /tdd
+→ Forces TDD skill, ignoring all other routing
+```
+
+### Layer 1: Scenario Patterns
+
+**Predefined**: Rules in `core/policies/task-routing.yaml`
+
+**Trigger Examples**:
+- Error/failure → `systematic-debugging`
+- Before completion → `verification-before-completion`
+- Exit signal → `session-end`
+- New skill added → Security audit
+
+**Definition**: YAML file with scenario → skill mappings
+
+### Layer 2: AI Semantic Triage (LLM)
 
 **Technology**: Claude Haiku or OpenAI GPT
 
@@ -21,42 +50,23 @@ VibeSOP uses a 5-layer routing system to select the most appropriate skill for e
 
 **Cost**: ~$0.11/month with 70%+ cache hit rate
 
+**When**: Primary router for long queries (>5 chars by default)
+
 **Example**:
 ```
 Input: "help me implement a login system"
 Output: gstack/plan-eng-review (95% confidence)
 ```
 
-### Layer 1: Explicit Overrides
+### Layer 3: Keyword Matching
 
-**User Control**: Direct skill specification
+**Technology**: Jaccard similarity + prefix/substring bonuses
 
-**Methods**:
-- `/skill-name` shorthand
-- `namespace/skill-name` full syntax
-- `vibe skills use <skill-id>` command
+**When**: Short queries (≤5 chars by default) after Layers 0-2
 
-**Priority**: Overrides AI routing
+**Accuracy**: ~70%
 
-**Example**:
-```
-User: /tdd
-→ Forces TDD skill, ignoring AI suggestion
-```
-
-### Layer 2: Scenario Patterns
-
-**Predefined**: Rules in `core/policies/task-routing.yaml`
-
-**Trigger Examples**:
-- Error/failure → `systematic-debugging`
-- Before completion → `verification-before-completion`
-- Exit signal → `session-end`
-- New skill added → Security audit
-
-**Definition**: YAML file with scenario → skill mappings
-
-### Layer 3: Semantic Matching
+### Layer 4: TF-IDF Semantic Matching
 
 **Technology**: TF-IDF + Cosine Similarity
 
@@ -65,20 +75,43 @@ User: /tdd
 2. Calculate cosine similarity
 3. Return best match above threshold
 
-**Accuracy**: ~70%
+**Accuracy**: ~75%
 
-**Fallback**: When Layers 0-2 don't match
+### Layer 5: Embedding-Based Matching (Optional)
 
-### Layer 4: Fuzzy Matching
+**Technology**: SentenceTransformer embeddings
+
+**When**: Deep semantic understanding needed
+
+**Accuracy**: ~85%
+
+**Default**: Disabled (`enable_embedding: false`)
+
+### Layer 6: Fuzzy Matching (Levenshtein)
 
 **Technology**: Levenshtein Distance
 
-**Process**:
-1. Calculate edit distance
-2. Typo tolerance
-3. Last resort
+**Process**: Edit distance with typo tolerance
 
-**Accuracy**: Low but catches typos
+**Accuracy**: ~60% but catches typos
+
+### Layer 7: Custom Plugin Matchers
+
+**When**: User-defined matching logic in `.vibe/matchers/`
+
+**Process**: Any `match(query, candidate) -> float` function
+
+### Layer 8: No Match
+
+**When**: All layers fail to produce a confident match
+
+**Action**: Return no match, suggest nearest candidates
+
+### Layer 9: Fallback LLM
+
+**When**: Last resort for unmatched queries
+
+**Modes**: `transparent` (explain + suggest), `silent` (quiet), `disabled`
 
 ## Selection Logic
 
@@ -97,6 +130,19 @@ User: /tdd
 **Behavior**: Present top {{ routing.max_candidates }} candidates
 
 **User Experience**: Choose from options
+
+## Keyword Routing Threshold
+
+The `keyword_match_max_chars` config (default: 5) controls whether keyword-based layers (1, 3-7) are used:
+
+- **Short queries (≤5 chars)**: Full 10-layer pipeline
+- **Long queries (>5 chars)**: Layers 0 → 2 → 8 → 9 (explicit + LLM only)
+
+Configure via `.vibe/config.yaml`:
+```yaml
+routing:
+  keyword_match_max_chars: 5   # 0=always LLM, 200=always keyword
+```
 
 ## Preference Learning
 
@@ -148,32 +194,39 @@ To enable: Set `enable_preference_learning: true` in routing config.
 └────────┬────────┘
          ↓
 ┌─────────────────────────┐
-│ Layer 0: AI Triage      │ ────┐
-│ (95% accuracy)          │     │
-└────────┬────────────────┘     │
-         ↓ No match            │
-┌─────────────────────────┐     │
-│ Layer 1: Explicit       │ ────┤
+│ Layer 0: Explicit       │ ────┐
 │ (user override)         │     │
 └────────┬────────────────┘     │
          ↓ No match            │
 ┌─────────────────────────┐     │
-│ Layer 2: Scenarios      │ ────┤
-│ (predefined rules)      │     │
+│ Layer 1: Scenarios      │ ────┤  only for short
+│ (predefined rules)      │     │  queries (≤5 chars)
+└────────┬────────────────┘     │  by default
+         ↓ No match            │
+┌─────────────────────────┐     │
+│ Layer 2: AI Triage (LLM)│ ────┤  primary for long
+│ (95% accuracy)          │     │  queries (>5 chars)
 └────────┬────────────────┘     │
          ↓ No match            │
 ┌─────────────────────────┐     │
-│ Layer 3: Semantic       │ ────┤
-│ (70% accuracy)          │     │
-└────────┬────────────────┘     │
-         ↓ No match            │
-┌─────────────────────────┐     │
-│ Layer 4: Fuzzy          │ ────┤
-│ (typo tolerance)        │     │
+│ Layer 3: Keyword        │ ────┤  only for short
+│ Layer 4: TF-IDF         │     │  queries
+│ Layer 5: Embedding      │     │
+│ Layer 6: Fuzzy          │     │
+│ Layer 7: Custom Plugin  │     │
 └────────┬────────────────┘     │
          ↓                     │
 ┌─────────────────────────┐     │
-│ Candidate Selection     │ ◄───┘
+│ Layer 8: No Match       │     │
+└────────┬────────────────┘     │
+         ↓                     │
+┌─────────────────────────┐     │
+│ Layer 9: Fallback LLM   │ ────┘
+│ (last-resort routing)   │
+└────────┬────────────────┘
+         ↓
+┌─────────────────────────┐
+│ Candidate Selection     │
 │ Confidence: 0.XX        │
 └────────┬────────────────┘
          ↓

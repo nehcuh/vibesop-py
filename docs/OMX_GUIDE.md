@@ -659,7 +659,10 @@ Agent 10: 修复 bug #132 (文档更新)
 ### 方法 1: 自动同步
 
 ```bash
-# 同步所有内置技能（包括 OMX）到 Claude Code
+# 安装 OMX 技能包（外部技能，需先安装）
+vibe install omx
+
+# 同步所有技能（包括已安装的 OMX）到 Claude Code
 vibe skills sync claude-code
 
 # 查看已同步的技能
@@ -832,13 +835,13 @@ vibe route "准备部署"
 
 ### Q3: OMX 的安全吗？
 
-**A**: OMX 技能已通过 VibeSOP 安全审计：
+**A**: OMX 作为外部技能包，安装时会通过 VibeSOP 安全审计：
 
 - ✅ 无 prompt injection 风险
 - ✅ 无 command injection 风险
 - ✅ 无 privilege escalation 风险
 - ✅ 代码审查通过
-- ✅ 标记为 `trusted_builtin`
+- ✅ 标记为 `external_reviewed`（通过安全审计的外部技能）
 
 ---
 

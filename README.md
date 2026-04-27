@@ -280,6 +280,41 @@ Based on a 10-layer routing pipeline combining AI semantic analysis and scenario
 - **Layer 8**: No Match (below threshold)
 - **Layer 9**: Fallback LLM (last-resort routing)
 
+### 🛒 技能市场 (Skill Market) — v5.2.0
+
+发现、安装、发布技能：
+
+```bash
+# 搜索市场中已有的技能
+vibe market search "debug"
+
+# 从市场安装技能
+vibe market install user/repo
+
+# 发布你的技能到市场（通过 GitHub Issue）
+vibe market publish
+vibe market publish --dry-run  # 预览发布内容
+```
+
+发布基于 GitHub Issues，无需额外服务器。关闭 Issue 即下架。
+
+### 📉 智能降级 (Degradation) — v5.2.0
+
+4 级置信度降级，替代二元 fallback：
+
+```
+>= 0.6 → 自动选择    (AUTO)
+>= 0.4 → 建议确认    (SUGGEST)
+>= 0.2 → 降级警告    (DEGRADE)
+< 0.2  → 原始 LLM   (FALLBACK)
+```
+
+所有阈值可配置。用户显式指定的技能不受降级影响。
+
+### 🔍 主动发现 (Proactive Discovery) — v5.2.0
+
+每次路由后自动推荐尚未使用但匹配当前工作流的技能，标记为 `[DISCOVER]`。让你持续发现生态中适合你的技能。
+
 ### 🧠 偏好学习 (Preference Learning)
 
 VibeSOP 会记住你的选择：
@@ -520,6 +555,13 @@ routing:
   max_candidates: 3
   confirmation_mode: always  # always | never | ambiguous_only
   keyword_match_max_chars: 5  # max chars for keyword routing (0=always LLM, 200=always keyword)
+
+  # Degradation: confidence-gated layered fallback (v5.2.0)
+  degradation_enabled: true
+  degradation_auto_threshold: 0.6    # >= this = auto-select
+  degradation_suggest_threshold: 0.4 # >= this but < auto = suggest
+  degradation_degrade_threshold: 0.2 # >= this but < suggest = degrade
+  degradation_fallback_always_ask: true  # ask user before raw LLM
 
 security:
   threat_level: medium
@@ -918,6 +960,6 @@ vibe skill add code-reviewer
 
 ---
 
-**版本 Version**: 4.4.0
-**更新时间 Last Updated**: 2026-04-26
+**版本 Version**: 5.2.0
+**更新时间 Last Updated**: 2026-04-28
 **状态 Status**: ✅ 生产就绪 Production Ready

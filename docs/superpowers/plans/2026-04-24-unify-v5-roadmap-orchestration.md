@@ -166,7 +166,7 @@ Replace lines 722-729:
 ```
 ## 路线图 Roadmap
 
-- [x] v4.0.0: 核心路由引擎 Core routing engine with 7-layer pipeline
+- [x] v4.0.0: 核心路由引擎 Core routing engine with 10-layer pipeline
 - [x] v4.1.0: AI Triage 生产就绪 AI Triage production readiness
 - [x] v4.2.0: 技能健康监控 Skill health monitoring
 - [ ] v5.0.0: 插件系统 Plugin system for custom matchers
@@ -179,7 +179,7 @@ With:
 ```markdown
 ## 路线图 Roadmap
 
-- [x] v4.0.0: 核心路由引擎 Core routing engine with 7-layer pipeline
+- [x] v4.0.0: 核心路由引擎 Core routing engine with 10-layer pipeline
 - [x] v4.1.0: AI Triage 生产就绪 AI Triage production readiness
 - [x] v4.2.0: 技能健康监控 Skill health monitoring
 - [x] v4.3.0: 上下文感知路由 + Agent Runtime Context-aware routing + Agent Runtime

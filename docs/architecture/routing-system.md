@@ -1,14 +1,14 @@
 # Routing System Architecture
 
-> **Version**: 4.2.1+
-> **Last Updated**: 2026-04-21
+> **Version**: 5.2.0
+> **Last Updated**: 2026-04-28
 
 ## Overview
 
 The routing system is VibeSOP's core component. It takes user queries and returns the most appropriate skill(s) to handle them.
 
 ```
-Query → UnifiedRouter → 7-Layer Pipeline → RoutingResult
+Query → UnifiedRouter → 10-Layer Pipeline → RoutingResult
 ```
 
 ## UnifiedRouter
@@ -29,11 +29,11 @@ class UnifiedRouter:
         """Route query to best matching skill."""
 ```
 
-## 8-Layer Pipeline
+## 10-Layer Pipeline
 
 Layers are tried in priority order. First match wins (except for alternatives).
 
-> **v4.2.1+ update**: Added Layer 7 (Fallback LLM) and the Optimization Layer now includes quality boost, habit boost, and session stickiness.
+> **v4.4.0**: Layers 7 (Custom plugins), 8 (No Match), and 9 (Fallback LLM) added. Keyword routing is bypassed for queries exceeding `keyword_match_max_chars` (default 5), falling directly to AI Triage.
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -47,7 +47,7 @@ Layers are tried in priority order. First match wins (except for alternatives).
 │ • Latency: <0.1ms                                           │
 │ • Use when: Common scenarios (debug, review, deploy)        │
 ├─────────────────────────────────────────────────────────────┤
-│ Layer 2: AI Triage (Optional)                               │
+│ Layer 2: AI Triage (LLM)                                    │
 │ • Uses LLM for semantic classification                      │
 │ • Cost: ~$0.001/call                                        │
 │ • Latency: ~100-500ms                                      │
@@ -68,10 +68,25 @@ Layers are tried in priority order. First match wins (except for alternatives).
 │ • Latency: ~10-20ms                                         │
 │ • Use when: Semantic meaning > exact keywords               │
 ├─────────────────────────────────────────────────────────────┤
-│ Layer 6: Fuzzy Fallback                                     │
-│ • Levenshtein distance for typos                            │
+│ Layer 6: Fuzzy Fallback (Levenshtein)                       │
+│ • Edit distance for typos and misspellings                  │
 │ • Latency: ~10-20ms                                         │
 │ • Use when: No matches in upper layers                      │
+├─────────────────────────────────────────────────────────────┤
+│ Layer 7: Custom Matcher Plugins                             │
+│ • User-defined matchers in .vibe/matchers/                  │
+│ • Latency: varies                                           │
+│ • Use when: Specialized matching logic needed               │
+├─────────────────────────────────────────────────────────────┤
+│ Layer 8: No Match                                           │
+│ • All layers failed to find a confident match               │
+│ • Latency: N/A                                              │
+│ • Use when: Query doesn't match any skill                   │
+├─────────────────────────────────────────────────────────────┤
+│ Layer 9: Fallback LLM                                       │
+│ • Raw LLM fallback when no skill matches                    │
+│ • Configurable: transparent / silent / disabled             │
+│ • Use when: Last-resort routing for unmatched queries       │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -178,7 +193,7 @@ scenarios:
 
 ## Optimization Layer
 
-After the 8-layer matching pipeline, optimization is applied:
+After the 10-layer matching pipeline, optimization is applied:
 
 ### Preference Boost
 
@@ -303,7 +318,52 @@ routing:
   session_stickiness_boost: 0.03 # Continuity boost (0.0–0.2)
   fallback_mode: transparent     # transparent / silent / disabled
   enable_quality_boost: true     # Grade-based confidence adjustment
+  keyword_match_max_chars: 5     # Max chars for keyword routing (0=always LLM, 200=always keyword)
 ```
+
+## Degradation System (v5.2.0)
+
+After a skill match is found, the `DegradationManager` evaluates confidence and applies a 4-level degradation:
+
+| Level | Confidence Range | Behavior |
+|-------|-----------------|----------|
+| **AUTO** | >= 0.6 (configurable) | Auto-select, no user prompt |
+| **SUGGEST** | >= 0.4 | Show primary + alternatives for user confirmation |
+| **DEGRADE** | >= 0.2 | Use matched skill but warn about low confidence |
+| **FALLBACK** | < 0.2 | Drop match entirely, use raw LLM fallback |
+
+**Configuration**:
+```yaml
+routing:
+  degradation_enabled: true
+  degradation_auto_threshold: 0.6
+  degradation_suggest_threshold: 0.4
+  degradation_degrade_threshold: 0.2
+  degradation_fallback_always_ask: true  # Ask user before fallback
+```
+
+Explicit user-specified skills (Layer 0 EXPLICIT, Layer 7 CUSTOM) bypass degradation.
+
+**Implementation**: `src/vibesop/core/routing/degradation.py`
+
+
+## Skill Recommendation & Discovery (v5.2.0)
+
+The `SkillRecommender` enriches routing results with two strategies:
+
+### Recommendation
+After a primary match, scores all installed skills by intent keyword overlap (40%), trigger matching (30%), priority (20%), and namespace diversity (10%). Top matches are injected as `[RECOMMENDED]` alternatives.
+
+### Proactive Discovery
+Scores all skills but **penalizes already-used skills** (×0.2 weight), favoring undiscovered skills matching the current query domain. These appear as `[DISCOVER]` alternatives.
+
+**Implementation**: `src/vibesop/integrations/skill_recommender.py`
+
+**Scoring dimensions**:
+- Intent keyword overlap: 40% (via `INTENT_DOMAIN_KEYWORDS`)
+- Trigger keyword match: 30% (from skill's `triggers` field)
+- Priority bonus: 20% (P0=1.0, P1=0.7, P2=0.4)
+- Namespace diversity: 10% (avoid same-namespace crowding)
 
 ## Extending the Router
 

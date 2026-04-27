@@ -1,7 +1,7 @@
 # VibeSOP Architecture
 
-> **Version**: 4.4.0
-> **Last Updated**: 2026-04-26
+> **Version**: 5.2.0
+> **Last Updated**: 2026-04-28
 
 ---
 
@@ -20,7 +20,7 @@ VibeSOP is a **Skill Operating System (SkillOS)** that manages the full lifecycl
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────────┐  │
 │  │ CLI Layer   │  │ UnifiedRouter│  │ Skill Management       │  │
 │  │             │  │             │  │                         │  │
-│  │ vibe route  │──│ 7-Layer     │──│ Discovery → Security    │  │
+│  │ vibe route  │──│ 10-Layer    │──│ Discovery → Security    │  │
 │  │ vibe execute│  │ Pipeline    │  │ Audit → Metadata        │  │
 │  │ vibe install│  │             │  │                         │  │
 │  └─────────────┘  └─────────────┘  └─────────────────────────┘  │
@@ -63,7 +63,7 @@ vibe analyze session              → SessionAnalyzer.analyze()
 
 ---
 
-### 2. Agent Runtime Layer (`src/vibesop/agent/`) ✨ v4.3.0
+### 2. Agent Runtime Layer (`src/vibesop/agent/`) ✨ v4.4.0
 
 Direct Python API for AI Agents to use VibeSOP routing with their internal LLM, without requiring external API key configuration.
 
@@ -121,19 +121,22 @@ result = router.route("debug this error")
 # result.routing_path = [RoutingLayer.KEYWORD]
 ```
 
-**7-Layer Matching Pipeline**:
+**10-Layer Matching Pipeline**:
 
 | Layer | Strategy | Speed | When Used |
 |-------|----------|-------|-----------|
 | 0 | Explicit Override | <1ms | Direct commands like `/review` |
 | 1 | Scenario Pattern | <1ms | Predefined scenarios |
-| 2 | AI Triage | ~100ms | Complex semantic queries |
-| 3 | Keyword Matching | <1ms | Direct keyword hits |
+| 2 | AI Triage | ~100ms | Complex semantic queries, long queries (>5 chars by default) |
+| 3 | Keyword Matching | <1ms | Direct keyword hits (short queries) |
 | 4 | TF-IDF | ~5ms | Semantic similarity |
 | 5 | Embedding | ~20ms | Deep semantic (optional) |
-| 6 | Fuzzy Matching | ~10ms | Typo tolerance |
+| 6 | Fuzzy Matching (Levenshtein) | ~10ms | Typo tolerance |
+| 7 | Custom Plugins | varies | User-defined matchers |
+| 8 | No Match | N/A | No confident match found |
+| 9 | Fallback LLM | ~100ms | Last-resort routing |
 
-**3 Optimization Layers**:
+**3 Optimization Mechanisms**:
 
 1. **Candidate Prefilter** — Reduces search space
 2. **Preference Boost** — Learns from user history
@@ -258,7 +261,7 @@ User Query
          │
          ▼
 ┌─────────────────┐
-│ UnifiedRouter   │  → 7-layer matching pipeline
+│ UnifiedRouter   │  → 10-layer matching pipeline
 │   .route()      │
 └────────┬────────┘
          │
@@ -424,7 +427,7 @@ tests/
 3. **Portable** — Works across AI tools
 4. **Human Readable** — Easy to understand
 
-### Why 7-Layer Pipeline?
+### Why 10-Layer Pipeline?
 
 1. **Accuracy** — Multiple strategies catch different patterns
 2. **Performance** — Fast layers first, slow layers as fallback
@@ -433,27 +436,25 @@ tests/
 
 ---
 
-## Future Directions
+## v5.x Feature Overview
 
-### v4.4.0 — SkillOS Orchestration + Lifecycle
-- Multi-intent detection and task decomposition (productionized)
-- Skill lifecycle state machine (DRAFT → ACTIVE → DEPRECATED → ARCHIVED)
-- Feedback loop: usage analytics and satisfaction tracking
-
-### v5.0.0 — SkillRuntime: Scope + Lifecycle
+### v5.0.0 — SkillRuntime: Scope + Lifecycle ✅
 - Scope isolation (project-level vs global skills)
-- Skill enable/disable management
-- Data pre-burial for evaluation pipeline
+- Skill enable/disable with lifecycle state machine
+- DRAFT → ACTIVE → DEPRECATED → ARCHIVED transitions
+- Data pre-burial: usage_stats, version_history, evaluation_context
 
-### v5.1.0 — SkillMarket + Quality
-- Real skill marketplace with search and install
-- Autorating and quality evaluation
-- Automated retention/deprecation
+### v5.1.0 — SkillMarket + Quality ✅
+- Skill marketplace: search (`vibe market search`), install (`vibe market install`)
+- Publish via GitHub Issues (`vibe market publish`)
+- 5-dimension quality evaluation (routing accuracy, user satisfaction, execution success, usage frequency, health score)
+- Automated retention/deprecation with FeedbackLoop
 
-### v5.2.0 — Intelligent Ecosystem
-- Smart skill recommendations
-- Transparent auto-degradation
-- Active discovery
+### v5.2.0 — Intelligent Ecosystem ✅
+- Per-skill recommendation engine (SkillRecommender)
+- 4-level confidence-gated degradation (DegradationManager)
+- Proactive discovery of unused skills matching current workflow
+- Auto-deprecation enabled by default
 
 ---
 

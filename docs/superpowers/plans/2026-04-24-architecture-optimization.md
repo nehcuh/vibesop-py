@@ -92,15 +92,17 @@ rg "版本.*:.*\d+\.\d+\.\d+|Version.*:.*\d+\.\d+\.\d+" docs/ README.md CLAUDE.m
 - - **Layer 2**: Scenario patterns (predefined cases)
 - - **Layer 3**: Semantic matching (TF-IDF + cosine similarity)
 - - **Layer 4**: Fuzzy matching (Levenshtein distance)
-+ **8-Layer Routing System:**
-+ - **Layer 0**: AI Semantic Triage (Haiku/GPT, 95% accuracy)
-+ - **Layer 1**: Explicit overrides (user-specified)
-+ - **Layer 2**: Scenario patterns (predefined cases)
++ **10-Layer Routing System:**
++ - **Layer 0**: Explicit overrides (user-specified)
++ - **Layer 1**: Scenario patterns (predefined cases)
++ - **Layer 2**: AI Semantic Triage (Haiku/GPT, 95% accuracy)
 + - **Layer 3**: Keyword matching (exact + partial)
 + - **Layer 4**: TF-IDF semantic similarity
 + - **Layer 5**: Embedding-based (optional, 85% accuracy)
 + - **Layer 6**: Levenshtein fuzzy matching
-+ - **Layer 7**: Fallback LLM (transparent degradation)
++ - **Layer 7**: Custom plugin matchers
++ - **Layer 8**: No Match (below threshold)
++ - **Layer 9**: Fallback LLM (transparent degradation)
 ```
 
 - [ ] **Step 5: 修正 README.md 的架构图层级**

@@ -24,7 +24,7 @@ These files remain in the project root for discoverability and tool integration:
 
 - **🆕 [Skills Ecosystem Guide](SKILLS_GUIDE.md)** - Complete guide to the VibeSOP skills ecosystem
   - 50+ skills explained (builtin, superpowers, gstack, omx)
-  - 7-layer routing system详解
+  - 10-layer routing system详解
   - Priority decision mechanism
   - How to switch between skills
   - Scenario-based selection guide
@@ -68,7 +68,7 @@ These files remain in the project root for discoverability and tool integration:
 
 - **🆕 [Skills Ecosystem Guide](SKILLS_GUIDE.md)** - Complete guide to all 50+ skills
   - Builtin, Superpowers, GStack, OMX skills explained
-  - 7-layer routing system详解
+  - 10-layer routing system详解
   - Priority decision mechanism
   - How to switch between skills manually
   - Scenario-based selection guide with decision tree

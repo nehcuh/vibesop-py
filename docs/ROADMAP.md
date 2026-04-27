@@ -1,12 +1,12 @@
 # VibeSOP Roadmap
 
-> **Version**: 4.4.0
-> **Last Updated**: 2026-04-26
+> **Version**: 5.2.0
+> **Last Updated**: 2026-04-28
 > **Status**: Active Development
 
 ---
 
-## Current State (v4.4.0)
+## Current State (v5.2.0)
 
 ### ✅ Completed
 
@@ -468,7 +468,7 @@ See something missing? Want to accelerate a feature?
 
 ### v4.0.0 (2026-04-06)
 - Initial stable release
-- 7-layer routing pipeline
+- 10-layer routing pipeline
 - Unified architecture
 - Security auditing
 - Performance optimization

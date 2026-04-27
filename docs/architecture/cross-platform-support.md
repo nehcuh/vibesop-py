@@ -1,7 +1,7 @@
 # Cross-Platform Support
 
-> **Version**: v4.3.0
-> **Updated**: 2026-04-18
+> **Version**: v5.2.0
+> **Updated**: 2026-04-27
 
 ## Overview
 
@@ -35,7 +35,7 @@ VibeSOP is designed to work across multiple AI coding platforms. The architectur
 │                  Application Layer                   │
 │              (VibeSOP Core Logic)                   │
 │                                                      │
-│  • UnifiedRouter (7-layer routing pipeline)         │
+│  • UnifiedRouter (10-layer routing pipeline)         │
 │  • SessionContext (conversation tracking)           │
 │  • SkillManager (skill discovery)                   │
 │  • Preference Learning                              │
