@@ -725,7 +725,9 @@ class UnifiedRouter(RouterStatsMixin, RouterExecutionMixin, RouterOrchestrationM
         ))
         decomposer = self._get_task_decomposer()
         try:
-            sub_tasks = decomposer.decompose(query)
+            skill_candidates = candidates or self._get_cached_candidates()
+            skills = [f"{c['id']}: {c.get('description', c.get('intent', 'N/A'))}" for c in skill_candidates[:50]]
+            sub_tasks = decomposer.decompose(query, skills=skills)
         except Exception as e:
             policy = cb.on_phase_error(
                 PhaseInfo(

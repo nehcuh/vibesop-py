@@ -20,6 +20,7 @@ class SubTask:
     intent: str
     query: str
     source: str = "llm"  # "llm" | "rule_fallback" | "skill_name"
+    skill_id: str | None = None  # Pre-assigned skill ID from LLM decomposition
 
 
 class TaskDecomposer:
@@ -37,8 +38,12 @@ class TaskDecomposer:
     def __init__(self, llm_client: Any | None = None):
         self._llm = llm_client
 
-    def decompose(self, query: str) -> list[SubTask]:
+    def decompose(self, query: str, skills: list[str] | None = None) -> list[SubTask]:
         """Decompose query into sub-tasks.
+
+        Args:
+            query: User query to decompose
+            skills: List of "skill_id: description" strings for the LLM
 
         Returns empty list if decomposition fails or produces invalid results.
         """
@@ -47,7 +52,7 @@ class TaskDecomposer:
             return self._fallback_decomposition(query)
 
         try:
-            sub_tasks = self._llm_decompose(query)
+            sub_tasks = self._llm_decompose(query, skills)
         except Exception as e:
             logger.warning("LLM decomposition failed: %s, using fallback", e)
             sub_tasks = self._fallback_decomposition(query)
@@ -56,9 +61,9 @@ class TaskDecomposer:
         sub_tasks = self._apply_guardrails(sub_tasks)
         return sub_tasks
 
-    def _llm_decompose(self, query: str) -> list[SubTask]:
+    def _llm_decompose(self, query: str, skills: list[str] | None = None) -> list[SubTask]:
         """Call LLM to decompose query."""
-        prompt = self._build_prompt(query)
+        prompt = self._build_prompt(query, skills)
         response = self._llm.call(prompt, max_tokens=500, temperature=0.1)
         content = getattr(response, "content", str(response))
 
@@ -70,16 +75,26 @@ class TaskDecomposer:
         # Fallback: regex extraction
         return self._parse_regex_response(content)
 
-    def _build_prompt(self, query: str) -> str:
+    def _build_prompt(self, query: str, skills: list[str] | None = None) -> str:
+        skill_list = ""
+        if skills:
+            skill_list = "\n\nAvailable skills:\n" + "\n".join(f"  - {s}" for s in skills)
+            skill_list += (
+                "\n(Use the exact skill_id from the list above. "
+                "If no skill matches a sub-task, use skill_id: null)"
+            )
+
         return (
             "Decompose the following user request into distinct sub-tasks. "
             "Each sub-task should be independently actionable.\n\n"
-            f"Request: {query}\n\n"
-            "Output JSON with this exact format:\n"
-            '{"tasks": [{"intent": "brief description", "query": "self-contained query"}]}\n\n'
+            f"Request: {query}\n"
+            f"{skill_list}"
+            "\n\nOutput JSON with this exact format:\n"
+            '{"tasks": [{"intent": "brief description", "query": "self-contained query", "skill_id": "exact-skill-id-or-null"}]}\n\n'
             "Rules:\n"
             "- Max 5 sub-tasks\n"
             "- Each query must be self-contained (understandable without context)\n"
+            "- Map each sub-task to the BEST matching skill from the available skills list\n"
             "- If the request is a single task, return only 1 task\n"
             "- Output ONLY the JSON, no markdown, no explanation"
         )
@@ -95,7 +110,11 @@ class TaskDecomposer:
             data = json.loads(json_match.group())
             tasks_data = data.get("tasks", [])
             return [
-                SubTask(intent=t.get("intent", ""), query=t.get("query", ""))
+                SubTask(
+                    intent=t.get("intent", ""),
+                    query=t.get("query", ""),
+                    skill_id=t.get("skill_id"),
+                )
                 for t in tasks_data
                 if t.get("query")
             ]

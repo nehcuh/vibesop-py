@@ -65,28 +65,37 @@ class PlanBuilder:
             )
 
             # Route to best skill for this sub-task
-            route_result = self._router.route(contextualized_query)
+            # Prefer LLM-assigned skill_id from decomposition if available
+            pre_assigned = getattr(sub_task, "skill_id", None)
+            if pre_assigned and pre_assigned != "null":
+                skill_id = pre_assigned
+                confidence = 0.99
+            else:
+                route_result = self._router.route(contextualized_query)
 
-            if route_result.primary is None:
-                logger.warning("No skill match for sub-task %d: %s", i, sub_task.query[:50])
-                continue
+                if route_result.primary is None:
+                    logger.warning("No skill match for sub-task %d: %s", i, sub_task.query[:50])
+                    continue
 
-            if route_result.primary.layer == RoutingLayer.FALLBACK_LLM or route_result.primary.skill_id == "fallback-llm":
-                logger.warning("Fallback LLM for sub-task %d, skipping: %s", i, sub_task.query[:50])
-                continue
+                if route_result.primary.layer == RoutingLayer.FALLBACK_LLM or route_result.primary.skill_id == "fallback-llm":
+                    logger.warning("Fallback LLM for sub-task %d, skipping: %s", i, sub_task.query[:50])
+                    continue
 
-            if route_result.primary.confidence < self.MIN_STEP_CONFIDENCE:
-                logger.warning(
-                    "Low confidence (%s) for sub-task %d, skipping",
-                    route_result.primary.confidence,
-                    i,
-                )
-                continue
+                if route_result.primary.confidence < self.MIN_STEP_CONFIDENCE:
+                    logger.warning(
+                        "Low confidence (%s) for sub-task %d, skipping",
+                        route_result.primary.confidence,
+                        i,
+                    )
+                    continue
+
+                skill_id = route_result.primary.skill_id
+                confidence = route_result.primary.confidence
 
             detected_intents.append(sub_task.intent)
             reasoning_parts.append(
-                f"Step {i}: '{sub_task.intent}' → {route_result.primary.skill_id} "
-                f"({route_result.primary.confidence:.0%})"
+                f"Step {i}: '{sub_task.intent}' → {skill_id} "
+                f"({confidence:.0%})"
             )
 
             # Determine dependencies based on execution mode
@@ -98,7 +107,7 @@ class PlanBuilder:
                 ExecutionStep(
                     step_id=str(uuid.uuid4())[:8],
                     step_number=i,
-                    skill_id=route_result.primary.skill_id,
+                    skill_id=skill_id,
                     intent=sub_task.intent,
                     input_query=contextualized_query,
                     output_as=f"step_{i}_result",
