@@ -569,6 +569,26 @@ class UnifiedRouter(RouterStatsMixin, RouterExecutionMixin, RouterOrchestrationM
             if rec.skill_id not in existing_ids:
                 alternatives.append(rec)
 
+        # Proactive discovery: suggest unused skills matching current query domain
+        try:
+            from vibesop.integrations.skill_recommender import SkillRecommender
+            recommender = SkillRecommender()
+            all_candidates = self._candidate_manager.get_cached_candidates()
+            used_ids = existing_ids.copy()
+            discoveries = recommender.discover(query, all_candidates, used_skill_ids=used_ids, top_k=3)
+            for d in discoveries:
+                if d.skill_id not in existing_ids and d.score >= 0.15:
+                    alternatives.append(SkillRoute(
+                        skill_id=d.skill_id,
+                        confidence=d.score,
+                        layer=RoutingLayer.KEYWORD,
+                        source=d.namespace,
+                        description=d.intent,
+                        metadata={"discovery": True, "reason": d.reason},
+                    ))
+        except (ImportError, KeyError, ValueError):
+            pass
+
         result = self._build_result(
             query=query,
             primary=primary,

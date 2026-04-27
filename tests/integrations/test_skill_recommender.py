@@ -68,3 +68,19 @@ class TestSkillRecommender:
         recommender = SkillRecommender()
         results = recommender.recommend("debug crash", CANDIDATES, top_k=3, exclude_namespaces=["gstack"])
         assert all(r.namespace != "gstack" for r in results)
+
+    def test_discover_prioritizes_unused_skills(self):
+        recommender = SkillRecommender()
+        results = recommender.discover("debug crash", CANDIDATES, used_skill_ids={"systematic-debugging"}, top_k=3)
+        scores = {r.skill_id: r.score for r in results}
+        assert scores.get("gstack/investigate", 0) > scores.get("systematic-debugging", 0)
+
+    def test_discover_empty_candidates(self):
+        recommender = SkillRecommender()
+        results = recommender.discover("debug", [], top_k=3)
+        assert results == []
+
+    def test_discover_respects_top_k(self):
+        recommender = SkillRecommender()
+        results = recommender.discover("debug", CANDIDATES, top_k=1)
+        assert len(results) == 1

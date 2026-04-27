@@ -1,6 +1,6 @@
 [project]
 name = "vibesop"
-version = "4.4.0"
+version = "5.2.0"
 description = "AI-assisted development Skill Operating System — discover skills, orchestrate tasks, manage lifecycles"
 readme = "README.md"
 requires-python = ">=3.12"
