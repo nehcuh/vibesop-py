@@ -96,6 +96,16 @@ def try_scenario_layer(
             (c for c in candidates if c["id"].endswith(f"/{short_name}")),
             None,
         )
+        if not candidate:
+            candidate = next(
+                (c for c in candidates if c["id"].endswith(f"-{short_name}")),
+                None,
+            )
+        if not candidate:
+            candidate = next(
+                (c for c in candidates if c["id"] == short_name),
+                None,
+            )
     if not candidate:
         return None, LayerDetail(
             layer=RoutingLayer.SCENARIO,

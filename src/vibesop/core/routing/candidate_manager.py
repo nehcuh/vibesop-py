@@ -50,6 +50,8 @@ class CandidateManager:
             search_paths = [
                 self.project_root / ".vibe" / "skills",
                 Path.home() / ".config" / "skills",
+                Path.home() / ".config" / "opencode" / "skills",
+                Path.home() / ".claude" / "skills",
             ]
             if builtin_skills_path.exists() and builtin_skills_path not in search_paths:
                 search_paths.insert(0, builtin_skills_path)
