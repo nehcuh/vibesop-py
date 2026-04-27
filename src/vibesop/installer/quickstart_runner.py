@@ -402,6 +402,16 @@ class QuickstartRunner:
             console.print("3. Run: [cyan]vibe build[/cyan]")
             console.print('4. Run: [cyan]vibe route "your query"[/cyan] to test')
 
+        console.print("\n[bold yellow]⚠️  LLM Configuration Required[/bold yellow]")
+        console.print(
+            "   VibeSOP runs as a CLI subprocess and [bold]cannot reuse your Agent's LLM[/bold]."
+        )
+        console.print("   Configure a separate LLM for semantic routing:")
+        console.print("   [dim]  export ANTHROPIC_API_KEY=\"sk-ant-...\"  # or OPENAI_API_KEY[/dim]")
+        console.print("   [dim]  # or local Ollama (zero cost):[/dim]")
+        console.print("   [dim]  export VIBE_LLM_PROVIDER=ollama[/dim]")
+        console.print("   [dim]  ollama pull qwen3:35b-a3b-mlx && ollama serve[/dim]")
+
         console.print("\n[bold]📖 Documentation:[/bold]")
         console.print("   - Quick Start: README.md")
         console.print("   - Architecture: ARCHITECTURE.md")
