@@ -239,10 +239,17 @@ class EnvVarLLMDetector:
     }
 
     PROVIDER_DEFAULT_MODELS: ClassVar[dict[str, str]] = {
-        "deepseek": "deepseek-chat",
+        "deepseek": "deepseek-v4-flash",
         "kimi": "moonshot-v1-8k",
         "zhipu": "glm-4",
         "ollama": "qwen3:35b-a3b-mlx",
+    }
+
+    PROVIDER_DEFAULT_BASES: ClassVar[dict[str, str]] = {
+        "deepseek": "https://api.deepseek.com/v1",
+        "kimi": "https://api.moonshot.cn/v1",
+        "zhipu": "https://open.bigmodel.cn/api/paas/v4",
+        "ollama": "http://localhost:11434/v1",
     }
 
     @classmethod
@@ -298,6 +305,8 @@ class EnvVarLLMDetector:
 
         api_key = os.getenv(_api_key_env) if _api_key_env else None
         api_base = os.getenv(_base_url_env) if _base_url_env else None
+        if not api_base:
+            api_base = cls.PROVIDER_DEFAULT_BASES.get(provider)
         model = (
             os.getenv(_model_env) if _model_env else None
         ) or default_model or cls.PROVIDER_DEFAULT_MODELS.get(provider, "default")
