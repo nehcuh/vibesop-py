@@ -59,7 +59,7 @@ class TaskDecomposer:
     def _llm_decompose(self, query: str) -> list[SubTask]:
         """Call LLM to decompose query."""
         prompt = self._build_prompt(query)
-        response = self._llm.call(prompt, max_tokens=200, temperature=0.1)
+        response = self._llm.call(prompt, max_tokens=500, temperature=0.1)
         content = getattr(response, "content", str(response))
 
         # Try structured JSON parsing first
