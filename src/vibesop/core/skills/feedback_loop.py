@@ -60,7 +60,7 @@ class FeedbackLoop:
         self._project_root = Path(project_root)
         self._evaluator = evaluator or RoutingEvaluator(project_root=project_root)
 
-    def analyze_all(self, auto_deprecate: bool = False) -> list[RetentionSuggestion]:
+    def analyze_all(self, auto_deprecate: bool = True) -> list[RetentionSuggestion]:
         """Analyze all skills and return actionable suggestions.
 
         Args:

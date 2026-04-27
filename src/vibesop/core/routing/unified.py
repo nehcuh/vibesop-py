@@ -535,6 +535,27 @@ class UnifiedRouter(RouterStatsMixin, RouterExecutionMixin, RouterOrchestrationM
 
         self._record_routing_decision(query, primary, None)
 
+        # Enrich alternatives with SkillRecommender suggestions
+        enriched_alternatives = list(alternatives) if alternatives else []
+        try:
+            from vibesop.integrations.skill_recommender import SkillRecommender
+            recommender = SkillRecommender()
+            all_candidates = self._candidate_manager.get_cached_candidates()
+            existing_ids = {primary.skill_id} | {a.skill_id for a in enriched_alternatives}
+            recs = recommender.recommend(query, all_candidates, top_k=5)
+            for rec in recs:
+                if rec.skill_id not in existing_ids and rec.score >= 0.2:
+                    enriched_alternatives.append(SkillRoute(
+                        skill_id=rec.skill_id,
+                        confidence=rec.score,
+                        layer=RoutingLayer.KEYWORD,
+                        source=rec.namespace,
+                        description=rec.intent,
+                        metadata={"recommended": True, "reason": rec.reason},
+                    ))
+        except (ImportError, KeyError, ValueError):
+            pass
+
         # Update SkillConfig.usage_stats for stale-skill detection
         self._candidate_manager.record_usage(primary.skill_id, was_successful=True)
 
