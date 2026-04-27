@@ -66,9 +66,22 @@ class TestRouteValidateCommand:
         assert result.exit_code == 0
         assert "Routing Decision Report" in result.stdout
 
-    def test_route_default_shows_compact_summary(self) -> None:
-        """Test that default route output shows compact summary (transparency by default)."""
+    def test_route_default_shows_full_decision_report(self) -> None:
+        """Test that default route output shows full decision report (transparency default-on)."""
         result = runner.invoke(app, ["route", "test query"])
+        assert result.exit_code == 0
+        assert "Routing Decision Report" in result.stdout
+
+    def test_route_quiet_shows_compact_summary(self) -> None:
+        """Test that --quiet shows compact summary only."""
+        result = runner.invoke(app, ["route", "test query", "--quiet"])
+        assert result.exit_code == 0
+        assert "Routing Summary" in result.stdout
+        assert "Routing Decision Report" not in result.stdout
+
+    def test_route_quiet_short_flag(self) -> None:
+        """Test that -q shows compact summary only."""
+        result = runner.invoke(app, ["route", "test query", "-q"])
         assert result.exit_code == 0
         assert "Routing Summary" in result.stdout
 

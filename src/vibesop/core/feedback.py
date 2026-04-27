@@ -308,12 +308,12 @@ class FeedbackCollector:
             try:
                 self._records = []
                 with self._storage_path.open() as f:
-                    for line in f:
-                        line = line.strip()
-                        if not line:
+                    for raw_line in f:
+                        stripped = raw_line.strip()
+                        if not stripped:
                             continue
                         try:
-                            data = json.loads(line)
+                            data = json.loads(stripped)
                             self._records.append(FeedbackRecord.from_dict(data))
                         except (json.JSONDecodeError, KeyError):
                             pass
@@ -512,12 +512,12 @@ class ExecutionFeedbackCollector:
             try:
                 self._records = []
                 with self._storage_path.open() as f:
-                    for line in f:
-                        line = line.strip()
-                        if not line:
+                    for raw_line in f:
+                        stripped = raw_line.strip()
+                        if not stripped:
                             continue
                         try:
-                            data = json.loads(line)
+                            data = json.loads(stripped)
                             self._records.append(SkillExecutionFeedback.from_dict(data))
                         except (json.JSONDecodeError, KeyError):
                             pass

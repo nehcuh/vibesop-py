@@ -36,7 +36,7 @@ class OllamaProvider(LLMProvider):
         model: str | None = None,
     ) -> None:
         if api_key is None:
-            api_key = os.getenv("OLLAMA_API_KEY", "ollama")
+            api_key = os.getenv("OLLAMA_API_KEY", "1234")
         if base_url is None:
             base_url = os.getenv("OLLAMA_BASE_URL", self.DEFAULT_BASE_URL)
         if model is None:
@@ -84,13 +84,24 @@ class OllamaProvider(LLMProvider):
         choice = response.choices[0]
         content = choice.message.content or ""
 
+        if response.usage:
+            input_tokens = response.usage.prompt_tokens
+            output_tokens = response.usage.completion_tokens
+            tokens_used = response.usage.total_tokens
+        else:
+            input_tokens = None
+            output_tokens = None
+            tokens_used = None
+
+        self._record_call(tokens_used)
+
         return LLMResponse(
             content=content,
             model=response.model,
-            usage={
-                "input_tokens": response.usage.prompt_tokens if response.usage else 0,
-                "output_tokens": response.usage.completion_tokens if response.usage else 0,
-            },
+            provider=self.provider_name,
+            tokens_used=tokens_used,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
         )
 
     def configured(self) -> bool:

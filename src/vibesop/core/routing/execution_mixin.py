@@ -6,7 +6,7 @@ Extracted from UnifiedRouter to reduce class size and separate concerns.
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from vibesop.core.models import (
     LayerDetail,
@@ -14,9 +14,6 @@ from vibesop.core.models import (
     RoutingResult,
     SkillRoute,
 )
-
-if TYPE_CHECKING:
-    from vibesop.core.matching import RoutingContext
 
 logger = logging.getLogger(__name__)
 

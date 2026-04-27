@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from collections import Counter
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, ClassVar
 
 from vibesop.core.orchestration.patterns import INTENT_DOMAIN_KEYWORDS
 
@@ -35,7 +35,7 @@ class SkillRecommender:
     - Namespace diversity boost (10%): avoid recommending all from same namespace
     """
 
-    _PRIORITY_WEIGHTS: dict[str, float] = {"P0": 1.0, "P1": 0.7, "P2": 0.4}
+    _PRIORITY_WEIGHTS: ClassVar[dict[str, float]] = {"P0": 1.0, "P1": 0.7, "P2": 0.4}
 
     def __init__(self) -> None:
         self._keyword_index: dict[str, set[str]] = self._build_keyword_index()

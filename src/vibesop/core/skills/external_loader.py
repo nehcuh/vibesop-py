@@ -184,7 +184,7 @@ class ExternalSkillLoader:
                 )
                 if metadata:
                     skill_key = metadata.base_metadata.id
-                    if pack_name:
+                    if pack_name and not skill_key.startswith(f"{pack_name}/"):
                         skill_key = f"{pack_name}/{skill_key}"
                     skills[skill_key] = metadata
 

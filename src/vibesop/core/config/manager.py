@@ -213,6 +213,10 @@ class RoutingConfig(BaseModel):
         default=True,
         description="When in fallback mode, ask user before proceeding with raw LLM",
     )
+    transparency: Literal["full", "compact"] = Field(
+        default="full",
+        description="Routing transparency mode: 'full' (default, show decision tree) or 'compact' (summary only)",
+    )
 
 
 class SecurityConfig(BaseModel):
@@ -305,6 +309,7 @@ class ConfigManager:
             "degradation_suggest_threshold": 0.4,
             "degradation_degrade_threshold": 0.2,
             "degradation_fallback_always_ask": True,
+            "transparency": "full",
         },
         "security": {
             "scan_external": True,

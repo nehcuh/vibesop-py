@@ -4,6 +4,7 @@ Supports GPT-4o, GPT-4o-mini, and other OpenAI models.
 """
 
 import os
+from typing import Any
 
 from openai import APIError as OpenAIAPIError
 from openai import AsyncOpenAI, OpenAI
@@ -99,12 +100,12 @@ class OpenAIProvider(LLMProvider):
             model = self.default_model()
 
         try:
-            kwargs: dict[str, Any] = dict(
-                model=model,
-                messages=[{"role": "user", "content": prompt}],
-                max_tokens=max_tokens,
-                temperature=temperature,
-            )
+            kwargs: dict[str, Any] = {
+                "model": model,
+                "messages": [{"role": "user", "content": prompt}],
+                "max_tokens": max_tokens,
+                "temperature": temperature,
+            }
             if self._is_deepseek:
                 kwargs["extra_body"] = {"thinking": {"type": "disabled"}}
 

@@ -643,16 +643,39 @@ class UnifiedRouter(RouterStatsMixin, RouterExecutionMixin, RouterOrchestrationM
     def route(
         self,
         query: str,
-        candidates: list[dict[str, Any]] | None = None,
+        candidates: list[Any] | None = None,
         context: RoutingContext | None = None,
     ) -> RoutingResult:
-        """Single-skill routing — fast path for single-intent queries.
+        """Route a query to the best matching skill (single-skill mode).
 
-        Directly runs the 10-layer routing pipeline without multi-intent
-        detection or task decomposition overhead.
+        .. deprecated::
+            Prefer :meth:`orchestrate()` which handles both single-intent
+            and multi-intent queries through a unified pipeline, with
+            single-skill routing as a degenerate 1-step execution plan.
+            This method remains available for internal sub-routing use
+            (e.g., PlanBuilder, SessionContext re-routing) but external
+            callers should migrate to orchestrate().
 
-        For multi-intent queries, use orchestrate() directly.
+        Returns a RoutingResult with primary match, alternatives, layer details,
+        routing path, and query metadata.
+
+        Args:
+            query: Natural language query
+            candidates: Pre-filtered skill candidates (optional)
+            context: Routing context with project/session info
+
+        Returns:
+            RoutingResult with primary match and alternatives
         """
+        import warnings
+
+        warnings.warn(
+            "UnifiedRouter.route() is deprecated. "
+            "Use UnifiedRouter.orchestrate() instead, which handles both single "
+            "and multi-intent queries through a unified pipeline.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         return self._route(query, candidates, context)
 
     def orchestrate(

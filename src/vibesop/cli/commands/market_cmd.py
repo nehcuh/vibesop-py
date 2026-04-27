@@ -17,7 +17,7 @@ from rich.console import Console
 from rich.table import Table
 
 from vibesop.market.crawler import GitHubSkillCrawler, SkillRepo
-from vibesop.market.publisher import SkillPublisher, SkillListing
+from vibesop.market.publisher import SkillPublisher
 
 console = Console()
 
@@ -178,7 +178,7 @@ def install(
         )
     except Exception as e:
         console.print(f"[red]Installation failed: {e}[/red]")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from e
 
 
 @app.command()
@@ -212,7 +212,7 @@ def publish(
                 "[red]Could not detect GitHub repo. "
                 "Run from a git repo or specify user/repo.[/red]"
             )
-            raise typer.Exit(1)
+        raise typer.Exit(1)
 
     publisher = SkillPublisher()
     result = publisher.publish(repo, dry_run=dry_run)
@@ -228,7 +228,7 @@ def publish(
         console.print_json(json.dumps(result["payload"], indent=2))
         return
 
-    console.print(f"[green]Skill published![/green]")
+    console.print("[green]Skill published![/green]")
     console.print(f"  Issue: {result['issue_url']}")
     console.print(f"  Install: [cyan]vibe market install {repo}[/cyan]")
 

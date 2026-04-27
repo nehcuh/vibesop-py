@@ -183,8 +183,8 @@ INSTRUCTION_INJECTION_PATTERNS = [
     r"bypass\s+(your\s+)?(programming|training|instructions|restrictions|filters)",
     r"ignore\s+(your\s+)?(programming|training|instructions|restrictions|filters)",
     r"do\s+not\s+follow\s+(your\s+)?(programming|training|instructions)",
-    r"(new\s+)?instruction\s*:\s*",
-    r"updated\s+instruction\s*:\s*",
+    r"(?<!\S)new\s+instruction\s*:\s*",
+    r"(?<!\S)updated\s+instruction\s*:\s*",
     r"instead\s+(of\s+)?(the\s+)?(above|previous)",
 ]
 

@@ -84,8 +84,8 @@ class ParallelScheduler:
             if len(group) > self._max_parallel:
                 semaphore = asyncio.Semaphore(self._max_parallel)
 
-                async def limited_execute(step, exec_fn):
-                    async with semaphore:
+                async def limited_execute(step, exec_fn, _sem=semaphore):
+                    async with _sem:
                         return await self._execute_with_tracking(step, exec_fn)
 
                 batch_results = await asyncio.gather(

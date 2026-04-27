@@ -8,12 +8,10 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Any
 
 import httpx
 import yaml
-
 
 DEFAULT_REGISTRY_REPO = "nehcuh/vibesop-py"
 PUBLISH_LABEL = "skill-publish"
@@ -94,8 +92,8 @@ class SkillPublisher:
         body_parts.extend([
             "",
             "---",
-            f"*Published via VibeSOP SkillPublisher. "
-            f"Close this issue to delist.*",
+            "*Published via VibeSOP SkillPublisher. "
+            "Close this issue to delist.*",
         ])
         body = "\n".join(body_parts)
 
@@ -220,14 +218,14 @@ class SkillPublisher:
         tags: list[str] = []
         homepage = ""
 
-        for line in body.split("\n"):
-            line = line.strip()
-            if line.startswith("## ") and not description:
-                description = line[3:].strip()
-            elif line.startswith("- **Tags**:"):
-                raw = line.split("**Tags**:", 1)[1].strip()
+        for raw_line in body.split("\n"):
+            stripped = raw_line.strip()
+            if stripped.startswith("## ") and not description:
+                description = stripped[3:].strip()
+            elif stripped.startswith("- **Tags**:"):
+                raw = stripped.split("**Tags**:", 1)[1].strip()
                 tags = [t.strip() for t in raw.split(",") if t.strip()]
-            elif line.startswith("- **Homepage**:"):
-                homepage = line.split("**Homepage**:", 1)[1].strip()
+            elif stripped.startswith("- **Homepage**:"):
+                homepage = stripped.split("**Homepage**:", 1)[1].strip()
 
         return description, tags, homepage

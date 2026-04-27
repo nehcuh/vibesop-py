@@ -76,8 +76,9 @@ def route(
     json_output: bool = typer.Option(False, "--json", "-j", help="Output as JSON"),
     slash: bool = typer.Option(False, "--slash", help="Treat query as a quick command (e.g., --slash '/vibe-help')"),
     validate: bool = typer.Option(False, "--validate", "-V", help="Validate routing configuration"),
-    verbose: bool = typer.Option(False, "--verbose", "-v", help="Show full routing decision tree with per-layer details"),
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Show full routing decision tree (now the default)"),
     explain: bool = typer.Option(False, "--explain", "-e", help="Alias for --verbose (backward compatibility)"),
+    quiet: bool = typer.Option(False, "--quiet", "-q", help="Suppress routing decision tree, show compact summary only"),
     yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation prompt (alias for confirmation_mode=never)"),
     execute: bool = typer.Option(
         False, "--execute", "-x",
@@ -181,6 +182,21 @@ def route(
     # Merge --explain alias into verbose flag for backward compatibility
     verbose = verbose or explain
 
+    # Determine transparency mode: config value or CLI flags
+    # --quiet forces compact; --verbose forces full even if config says compact
+    router_config = router._config
+    transparency_mode = (
+        "full"
+        if verbose
+        else "compact"
+        if quiet
+        else (
+            router_config.transparency
+            if router_config and hasattr(router_config, "transparency")
+            else "full"
+        )
+    )
+
     # Use live progress display for interactive non-verbose, non-json mode
     use_live_progress = not verbose and not json_output and sys.stdin.isatty()
 
@@ -191,8 +207,8 @@ def route(
     else:
         result = router.orchestrate(query, context=context)
 
-    # --verbose mode: show full decision tree and exit
-    if verbose:
+    # Full transparency: show routing decision tree (default)
+    if transparency_mode == "full":
         if result.mode.value == "single":
             from vibesop.core.models import RoutingResult
             routing_result = RoutingResult(
@@ -208,7 +224,7 @@ def route(
             render_orchestration_result(result, console=console)
         raise typer.Exit(0)
 
-    # Default: show compact summary directly from OrchestrationResult
+    # Compact mode: show compact summary only
     render_compact_orchestration(result, console=console)
 
     # Handle result with unified confirmation flow

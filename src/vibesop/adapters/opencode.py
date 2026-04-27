@@ -465,14 +465,29 @@ class OpenCodeAdapter(PlatformAdapter):
 > **Version**: 1.0.0
 > **Generated**: {now}
 
-## CRITICAL AGENT INSTRUCTION
+## CRITICAL AGENT INSTRUCTION — ROUTING ENFORCEMENT
 
-**MANDATORY: ALWAYS call `vibe route` before starting ANY non-trivial task**
-This is NOT optional — routing ensures the correct skill is loaded for the task.
+**MANDATORY: You MUST call `vibe route` before attempting ANY non-trivial task.**
 
-### Workflow
+This is a **hard requirement**, not a suggestion. Every user request that is not
+trivial (simple greetings, one-word answers, reading a specified file) MUST be
+routed through VibeSOP first. The routing engine determines the correct skill,
+decomposes multi-intent requests, and provides full decision transparency.
 
-**Step 1**: Call routing to get recommendations
+**How to comply** (for every non-trivial user message):
+```bash
+vibe route "<user_request>"
+```
+
+**Why this is required**:
+- VibeSOP manages 45+ skills across multiple domains; guessing which to use leads to poor outcomes
+- Multi-intent requests require orchestration (detecting >1 task and planning execution)
+- Routing decisions are now transparent by default, showing why each skill was chosen
+- Skipping routing means losing the entire SkillOS capability layer
+
+### Workflow (execute in order)
+
+**Step 1**: Route the user request
 ```bash
 vibe route "<user_request>"
 ```
@@ -483,6 +498,26 @@ read skills/<matched-skill>/SKILL.md
 ```
 
 **Step 3**: Execute according to the skill's steps
+
+**Step 4**: Run verification after completion
+
+### Non-compliance Detection
+
+If you find yourself about to perform a non-trivial task without first running
+`vibe route`, STOP and route it first. Examples of tasks that MUST be routed:
+- Debugging / fixing bugs
+- Code review / analysis
+- Writing or modifying features
+- Architecture / design work
+- Security audits
+- Performance optimization
+- Any multi-step or multi-domain request
+
+Examples of tasks that do NOT need routing:
+- "What does git status do?"
+- "Show me the current directory"
+- "Open file X" (when user provides the exact file path)
+- Simple follow-ups to existing routed context
 
 ## Skill Catalog
 
@@ -517,18 +552,24 @@ For skill management commands, use:
             f"> **Version**: {manifest.metadata.version}",
             f"> **Generated**: {manifest.metadata.created_at.strftime('%Y-%m-%d %H:%M:%S')}",
             "",
-            "## CRITICAL AGENT INSTRUCTION",
+            "## CRITICAL AGENT INSTRUCTION — ROUTING ENFORCEMENT",
             "",
             "**Do NOT guess or hallucinate rules.** When you need information from any category below, you **MUST** use the `read` tool to fetch the file contents before proceeding.",
             "",
-            "## AI-Powered Skill Routing",
+            "**MANDATORY: Call `vibe route` before attempting ANY non-trivial task.**",
             "",
-            "**MANDATORY: ALWAYS call `vibe route` before starting ANY non-trivial task**",
-            "This is NOT optional — routing ensures the correct skill is loaded for the task.",
+            "This is a **hard requirement**. Every non-trivial user request MUST pass through",
+            "VibeSOP routing first. The routing engine provides:",
+            "- **Skill matching**: 10-layer pipeline to find the correct skill",
+            "- **Multi-intent orchestration**: Detects and decomposes complex requests",
+            "- **Decision transparency**: Shows WHY each skill was chosen (default-on since v5.2)",
+            "- **Confidence-gated degradation**: Falls back gracefully when no skill matches",
+            "",
+            "Skipping routing means losing all of the above. Do not skip.",
             "",
             "### Workflow",
             "",
-            "**Step 1**: Call routing to get recommendations",
+            "**Step 1**: Route every non-trivial user request:",
             '```bash',
             'vibe route "<user_request>"',
             '```',
@@ -541,6 +582,38 @@ For skill management commands, use:
             "**Step 3**: Execute according to the skill's steps",
             "",
             "**Step 4**: Run verification after completion",
+            "",
+            "### Routing Decision Visibility",
+            "",
+            "Since v5.2, routing decisions are transparent by default. The CLI shows:",
+            "- The detected intent(s) and matched skill(s)",
+            "- Confidence scores and matching layer",
+            "- Alternative candidates and why they were rejected",
+            "- Orchestration plan for multi-intent requests",
+            "",
+            "To suppress the decision tree and see only a compact summary, use:",
+            "```bash",
+            "vibe route --quiet \"<user_request>\"",
+            "```",
+            "",
+            "### Tasks That MUST Be Routed",
+            "",
+            "- Debugging / fixing bugs, errors, or unexpected behavior",
+            "- Code review, analysis, or quality assessment",
+            "- Writing, modifying, or refactoring features",
+            "- Architecture design, planning, or documentation",
+            "- Security auditing or threat modeling",
+            "- Performance optimization or profiling",
+            "- Multi-step or cross-domain tasks",
+            "- Test-driven development and test writing",
+            "- Brainstorming, ideation, or product design",
+            "",
+            "### Tasks That Do NOT Need Routing",
+            "",
+            "- Trivial one-shot questions (\"what does X do?\")",
+            "- Reading a file at a user-specified path",
+            "- Listing directory contents",
+            "- Simple follow-up clarifications within an existing routed context",
             "",
             "### 快捷命令 (Quick Commands)",
             "",

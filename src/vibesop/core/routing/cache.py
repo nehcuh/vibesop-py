@@ -202,7 +202,8 @@ class CacheManager:
             pass
 
     def _get_file_path(self, key: str) -> Path:
-        return self.cache_dir / f"cache_{key}.json"
+        safe_key = hashlib.sha256(key.encode()).hexdigest()[:24]
+        return self.cache_dir / f"cache_{safe_key}.json"
 
     def _normalize_for_cache(self, input_text: str) -> str:
         normalized = re.sub(r"\d+", "N", input_text)

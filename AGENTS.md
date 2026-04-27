@@ -3,14 +3,29 @@
 > **Version**: 1.0.0
 > **Generated**: 2026-04-27 18:46:06
 
-## CRITICAL AGENT INSTRUCTION
+## CRITICAL AGENT INSTRUCTION — ROUTING ENFORCEMENT
 
-**MANDATORY: ALWAYS call `vibe route` before starting ANY non-trivial task**
-This is NOT optional — routing ensures the correct skill is loaded for the task.
+**MANDATORY: You MUST call `vibe route` before attempting ANY non-trivial task.**
 
-### Workflow
+This is a **hard requirement**, not a suggestion. Every user request that is not
+trivial (simple greetings, one-word answers, reading a specified file) MUST be
+routed through VibeSOP first. The routing engine determines the correct skill,
+decomposes multi-intent requests, and provides full decision transparency.
 
-**Step 1**: Call routing to get recommendations
+**How to comply** (for every non-trivial user message):
+```bash
+vibe route "<user_request>"
+```
+
+**Why this is required**:
+- VibeSOP manages 45+ skills across multiple domains; guessing which to use leads to poor outcomes
+- Multi-intent requests require orchestration (detecting >1 task and planning execution)
+- Routing decisions are now transparent by default, showing why each skill was chosen
+- Skipping routing means losing the entire SkillOS capability layer
+
+### Workflow (execute in order)
+
+**Step 1**: Route the user request
 ```bash
 vibe route "<user_request>"
 ```
@@ -21,6 +36,26 @@ read skills/<matched-skill>/SKILL.md
 ```
 
 **Step 3**: Execute according to the skill's steps
+
+**Step 4**: Run verification after completion
+
+### Non-compliance Detection
+
+If you find yourself about to perform a non-trivial task without first running
+`vibe route`, STOP and route it first. Examples of tasks that MUST be routed:
+- Debugging / fixing bugs
+- Code review / analysis
+- Writing or modifying features
+- Architecture / design work
+- Security audits
+- Performance optimization
+- Any multi-step or multi-domain request
+
+Examples of tasks that do NOT need routing:
+- "What does git status do?"
+- "Show me the current directory"
+- "Open file X" (when user provides the exact file path)
+- Simple follow-ups to existing routed context
 
 ## Skill Catalog
 
