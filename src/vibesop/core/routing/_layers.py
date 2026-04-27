@@ -147,21 +147,32 @@ def try_ai_triage_layer(
     query: str,
     candidates: list[dict[str, Any]],
     context: RoutingContext | None,
+    force: bool = False,
 ) -> tuple[SkillRoute | None, LayerDetail]:
-    """Try AI triage layer."""
+    """Try AI triage layer.
+
+    Args:
+        force: If True, skip the short-query word-count bypass.
+               Used when keyword routing is already disabled for long queries.
+    """
     triage_start = time.perf_counter()
 
-    # Short-query bypass: queries under N words skip AI Triage
+    # Short-query bypass: queries under N chars skip AI Triage
     # because short queries are usually explicit skill names or keywords,
     # which the traditional matchers handle faster and more accurately.
-    bypass_words = getattr(router._config, "ai_triage_short_query_bypass_words", 10)
-    if len(query.split()) < bypass_words:
-        return None, LayerDetail(
-            layer=RoutingLayer.AI_TRIAGE,
-            matched=False,
-            reason=f"Short-query bypass (<{bypass_words} words): falling through to traditional matchers",
-            duration_ms=(time.perf_counter() - triage_start) * 1000,
-        )
+    # Uses character count (not word count) to correctly handle CJK
+    # and other languages that don't use whitespace word boundaries.
+    # When forced (long queries where keyword routing is disabled),
+    # this bypass is skipped.
+    if not force:
+        bypass_chars = getattr(router._config, "ai_triage_short_query_bypass_chars", 15)
+        if len(query) < bypass_chars:
+            return None, LayerDetail(
+                layer=RoutingLayer.AI_TRIAGE,
+                matched=False,
+                reason=f"Short-query bypass (<{bypass_chars} chars): falling through to traditional matchers",
+                duration_ms=(time.perf_counter() - triage_start) * 1000,
+            )
 
     if router._llm is not None:
         router._triage_service._llm = router._llm

@@ -1937,7 +1937,7 @@ wheels = [
 
 [[package]]
 name = "vibesop"
-version = "4.4.0"
+version = "5.2.0"
 source = { editable = "." }
 dependencies = [
     { name = "anthropic" },

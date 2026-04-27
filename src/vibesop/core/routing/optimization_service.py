@@ -69,7 +69,9 @@ class OptimizationService:
         # Apply project context boost: favor skills matching detected project type/tech stack
         matches = self._apply_project_context_boost(matches, context)
 
-        if len(matches) <= 1:
+        if not matches:
+            raise ValueError("apply_optimizations received empty matches list")
+        if len(matches) == 1:
             return matches[0], []
 
         return self.resolve_conflicts(matches, query)

@@ -40,13 +40,13 @@ from vibesop.core.matching import (
     TFIDFMatcher,
 )
 from vibesop.core.models import (
+    DegradationLevel,
     LayerDetail,
     OrchestrationMode,
     OrchestrationResult,
     RoutingLayer,
     RoutingResult,
     SkillRoute,
-    DegradationLevel,
 )
 from vibesop.core.optimization import (
     CandidatePrefilter,
@@ -63,13 +63,13 @@ from vibesop.core.routing.conflict import (
     NamespacePriorityStrategy,
     RecencyStrategy,
 )
+from vibesop.core.routing.degradation import DegradationManager
 from vibesop.core.routing.execution_mixin import RouterExecutionMixin
 from vibesop.core.routing.matcher_pipeline import MatcherPipeline
 from vibesop.core.routing.optimization_service import OptimizationService
 from vibesop.core.routing.orchestration_mixin import RouterOrchestrationMixin
 from vibesop.core.routing.stats_mixin import RouterStatsMixin
 from vibesop.core.routing.triage_service import TriageService
-from vibesop.core.routing.degradation import DegradationManager
 from vibesop.llm.cost_tracker import TriageCostTracker
 
 if TYPE_CHECKING:
@@ -217,6 +217,9 @@ class UnifiedRouter(RouterStatsMixin, RouterExecutionMixin, RouterOrchestrationM
             storage_path=str(self.project_root / ".vibe" / "preferences.json"),
         )
 
+        # Cached SkillRecommender instance (from integrations)
+        self._skill_recommender: Any = None
+
         # Memory and instinct systems for context-aware routing (lazy init)
         self._memory_manager: MemoryManager | None = None
         self._instinct_learner: InstinctLearner | None = None
@@ -314,7 +317,7 @@ class UnifiedRouter(RouterStatsMixin, RouterExecutionMixin, RouterOrchestrationM
         context = self._enrich_context(context, query)
 
         if candidates is None:
-            candidates = self._candidate_manager.get_cached_candidates()
+            candidates = self._get_cached_candidates()
 
         # Filter by enablement, scope, and lifecycle state
         # External callers can bypass by passing their own candidate list
@@ -331,7 +334,8 @@ class UnifiedRouter(RouterStatsMixin, RouterExecutionMixin, RouterOrchestrationM
             self._record_layer(RoutingLayer.EXPLICIT)
             result = self._build_match_result(
                 query, match, [], routing_path, layer_details,
-                start_time, deprecated_warnings, conversation, original_query
+                start_time, deprecated_warnings, conversation, original_query,
+                context,
             )
             return result
 
@@ -352,7 +356,8 @@ class UnifiedRouter(RouterStatsMixin, RouterExecutionMixin, RouterOrchestrationM
                 self._record_layer(RoutingLayer.SCENARIO)
                 result = self._build_match_result(
                     query, match, [], routing_path, layer_details,
-                    start_time, deprecated_warnings, conversation, original_query
+                    start_time, deprecated_warnings, conversation, original_query,
+                    context,
                 )
                 return result
 
@@ -364,7 +369,8 @@ class UnifiedRouter(RouterStatsMixin, RouterExecutionMixin, RouterOrchestrationM
                 self._record_layer(RoutingLayer.AI_TRIAGE)
                 result = self._build_match_result(
                     query, match, [], routing_path, layer_details,
-                    start_time, deprecated_warnings, conversation, original_query
+                    start_time, deprecated_warnings, conversation, original_query,
+                    context,
                 )
                 return result
 
@@ -392,7 +398,8 @@ class UnifiedRouter(RouterStatsMixin, RouterExecutionMixin, RouterOrchestrationM
                 self._record_layer(RoutingLayer.AI_TRIAGE)
                 result = self._build_match_result(
                     query, match, [], routing_path, layer_details,
-                    start_time, deprecated_warnings, conversation, original_query
+                    start_time, deprecated_warnings, conversation, original_query,
+                    context,
                 )
                 return result
 
@@ -463,6 +470,7 @@ class UnifiedRouter(RouterStatsMixin, RouterExecutionMixin, RouterOrchestrationM
         deprecated_warnings: list[str] | None,
         conversation: Any,
         original_query: str,
+        context: Any = None,
     ) -> RoutingResult:
         """Build result for a successful match, applying optimizations for non-matcher layers."""
 
@@ -493,7 +501,7 @@ class UnifiedRouter(RouterStatsMixin, RouterExecutionMixin, RouterOrchestrationM
                 metadata=primary.metadata,
             )
             optimized_primary, _ = self._apply_optimizations(
-                [match_result], query, None
+                [match_result], query, context
             )
             primary = SkillRoute(
                 skill_id=optimized_primary.skill_id,
@@ -538,8 +546,10 @@ class UnifiedRouter(RouterStatsMixin, RouterExecutionMixin, RouterOrchestrationM
         # Enrich alternatives with SkillRecommender suggestions
         enriched_alternatives = list(alternatives) if alternatives else []
         try:
-            from vibesop.integrations.skill_recommender import SkillRecommender
-            recommender = SkillRecommender()
+            if self._skill_recommender is None:
+                from vibesop.integrations.skill_recommender import SkillRecommender
+                self._skill_recommender = SkillRecommender()
+            recommender = self._skill_recommender
             all_candidates = self._candidate_manager.get_cached_candidates()
             existing_ids = {primary.skill_id} | {a.skill_id for a in enriched_alternatives}
             recs = recommender.recommend(query, all_candidates, top_k=5)
@@ -571,8 +581,10 @@ class UnifiedRouter(RouterStatsMixin, RouterExecutionMixin, RouterOrchestrationM
 
         # Proactive discovery: suggest unused skills matching current query domain
         try:
-            from vibesop.integrations.skill_recommender import SkillRecommender
-            recommender = SkillRecommender()
+            if self._skill_recommender is None:
+                from vibesop.integrations.skill_recommender import SkillRecommender
+                self._skill_recommender = SkillRecommender()
+            recommender = self._skill_recommender
             all_candidates = self._candidate_manager.get_cached_candidates()
             used_ids = existing_ids.copy()
             discoveries = recommender.discover(query, all_candidates, used_skill_ids=used_ids, top_k=3)
@@ -767,6 +779,7 @@ class UnifiedRouter(RouterStatsMixin, RouterExecutionMixin, RouterOrchestrationM
             original_query=query,
             execution_plan=plan,
             single_fallback=single_result.primary,
+            layer_details=single_result.layer_details,
             duration_ms=duration_ms,
         )
 

@@ -22,6 +22,16 @@ _templates:
     safety_level: external_reviewed
     conditional: gstack_installed
 
+  omx_base: &omx_base
+    namespace: omx
+    entrypoint: external
+    priority: P2
+    supported_targets:
+      claude-code: external-skill
+      opencode: external-skill
+    safety_level: external_reviewed
+    conditional: omx_installed
+
 namespaces:
   builtin:
     owner: repository
@@ -44,8 +54,8 @@ namespaces:
     purpose: Project-specific skills layered on top of builtin or external packs.
 
   omx:
-    owner: oh-my-codex
-    default_trust: reviewed
+    owner: external_skill_pack
+    default_trust: review_required
     purpose: oh-my-codex engineering methodologies — deep-interview, ralph, ralplan, team, ultrawork, autopilot, ultraqa.
 
 merge_policy:
@@ -53,6 +63,7 @@ merge_policy:
     - builtin
     - superpowers
     - gstack
+    - omx
     - project
   name_collision: require_namespace_or_explicit_alias
   default_external_trigger_mode: suggest
@@ -633,82 +644,48 @@ skills:
       - Bash
     safety_level: trusted_builtin
 
-  # omx/ skills — oh-my-codex engineering methodologies
-  - id: omx/deep-interview
-    namespace: omx
-    entrypoint: skills/omx/deep-interview/SKILL.md
+  # omx/ skills — oh-my-codex engineering methodologies (external install)
+  - <<: *omx_base
+    id: omx/deep-interview
     intent: Socratic requirements clarification with mathematical ambiguity scoring.
     trigger_mode: suggest
     priority: P1
-    supported_targets:
-      claude-code: native-skill
-      opencode: native-skill
-    safety_level: trusted_builtin
 
-  - id: omx/ralph
-    namespace: omx
-    entrypoint: skills/omx/ralph/SKILL.md
+  - <<: *omx_base
+    id: omx/ralph
     intent: Persistent completion loop with mandatory deslop pass and tiered architect verification.
     trigger_mode: suggest
     priority: P1
-    supported_targets:
-      claude-code: native-skill
-      opencode: native-skill
-    safety_level: trusted_builtin
 
-  - id: omx/ralplan
-    namespace: omx
-    entrypoint: skills/omx/ralplan/SKILL.md
+  - <<: *omx_base
+    id: omx/ralplan
     intent: Consensus planning with RALPLAN-DR structured deliberation and ADR output.
     trigger_mode: suggest
     priority: P1
-    supported_targets:
-      claude-code: native-skill
-      opencode: native-skill
-    safety_level: trusted_builtin
 
-  - id: omx/team
-    namespace: omx
-    entrypoint: skills/omx/team/SKILL.md
+  - <<: *omx_base
+    id: omx/team
     intent: Multi-agent parallel execution with Python asyncio runtime and file-based coordination.
     trigger_mode: manual
     priority: P1
-    supported_targets:
-      claude-code: native-skill
-      opencode: native-skill
-    safety_level: trusted_builtin
 
-  - id: omx/ultrawork
-    namespace: omx
-    entrypoint: skills/omx/ultrawork/SKILL.md
+  - <<: *omx_base
+    id: omx/ultrawork
     intent: Tier-aware parallel execution engine for independent tasks.
     trigger_mode: manual
     priority: P2
-    supported_targets:
-      claude-code: native-skill
-      opencode: native-skill
-    safety_level: trusted_builtin
 
-  - id: omx/autopilot
-    namespace: omx
-    entrypoint: skills/omx/autopilot/SKILL.md
+  - <<: *omx_base
+    id: omx/autopilot
     intent: Full autonomous lifecycle from idea to verified code.
     trigger_mode: manual
     priority: P1
-    supported_targets:
-      claude-code: native-skill
-      opencode: native-skill
-    safety_level: trusted_builtin
 
-  - id: omx/ultraqa
-    namespace: omx
-    entrypoint: skills/omx/ultraqa/SKILL.md
+  - <<: *omx_base
+    id: omx/ultraqa
     intent: Autonomous QA cycling with architect diagnosis before fix.
     trigger_mode: manual
     priority: P1
-    supported_targets:
-      claude-code: native-skill
-      opencode: native-skill
 
   # Slash Commands — explicit triggers for VibeSOP capabilities
   - id: slash-route

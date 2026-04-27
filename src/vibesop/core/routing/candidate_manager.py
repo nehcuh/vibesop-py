@@ -29,6 +29,7 @@ class CandidateManager:
 
     def __init__(self, project_root: Path | str):
         self.project_root = Path(project_root).resolve()
+        self._resolved_project_root = self.project_root
         self._skill_loader: Any = None
         self._candidates_cache: list[dict[str, Any]] | None = None
         self._cache_lock = threading.Lock()
@@ -74,7 +75,7 @@ class CandidateManager:
 
             skill_config = SkillConfigManager.get_skill_config(_skill_id)
             enabled = skill_config.enabled if skill_config else True
-            scope = skill_config.scope if skill_config else "project"
+            scope = skill_config.scope if skill_config else "global"
             lifecycle = skill_config.lifecycle if skill_config else "active"
 
             candidates.append(
@@ -225,13 +226,13 @@ class CandidateManager:
                 continue
             if lifecycle == SkillLifecycle.DEPRECATED:
                 deprecated_warnings.append(str(c.get("id", "")))
-            scope = c.get("scope", "project")
+            scope = c.get("scope", "global")
             if scope == "project":
                 source_file = c.get("source_file")
                 if source_file:
                     try:
                         Path(source_file).resolve().relative_to(
-                            self.project_root.resolve()
+                            self._resolved_project_root
                         )
                     except ValueError:
                         continue

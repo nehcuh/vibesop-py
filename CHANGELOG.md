@@ -66,7 +66,7 @@ This release completes the v5.0 "user-perceivable last mile" initiative — turn
 - **`.vibe/matchers/` directory** — auto-discovered custom matcher functions
 - **Duck-typing interface** — any `match(query, candidate) -> float` function works
 - **`vibe matcher list|register|remove|reload`** CLI commands
-- **`RoutingLayer.CUSTOM`** — custom matchers integrated into 8-layer pipeline
+- **`RoutingLayer.CUSTOM`** — custom matchers integrated into 10-layer pipeline
 
 #### A/B Testing Framework
 - **`vibe experiment create|run|analyze|list|delete`** CLI commands

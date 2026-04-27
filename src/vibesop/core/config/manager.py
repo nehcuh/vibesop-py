@@ -64,15 +64,17 @@ class ConfigSource:
         keys = key.split(".")
         value = self.data
 
+        _MISSING = object()
+
         for k in keys:
             if isinstance(value, dict):
-                value = value.get(k)
-                if value is None:
+                value = value.get(k, _MISSING)
+                if value is _MISSING:
                     return default
             else:
                 return default
 
-        return value if value is not None else default
+        return default if value is _MISSING else value
 
     def has(self, key: str) -> bool:
         """Check if this source has a key.
@@ -154,6 +156,14 @@ class RoutingConfig(BaseModel):
         ge=0,
         le=30,
         description="Skip AI Triage for queries shorter than this word count (0=never bypass)",
+    )
+    ai_triage_short_query_bypass_chars: int = Field(
+        default=15,
+        ge=0,
+        le=200,
+        description="Skip AI Triage when query character length is below this threshold. "
+        "Uses character count (not word count) to correctly handle CJK and "
+        "other languages without whitespace word boundaries.",
     )
     keyword_match_max_chars: int = Field(
         default=5,
@@ -277,6 +287,7 @@ class ConfigManager:
             "ai_triage_circuit_breaker_latency_threshold_ms": 500.0,
             "ai_triage_circuit_breaker_cooldown_seconds": 60,
             "ai_triage_short_query_bypass_words": 8,
+            "ai_triage_short_query_bypass_chars": 15,
             "session_aware": True,
             "session_stickiness_boost": 0.08,
             "fallback_mode": "transparent",

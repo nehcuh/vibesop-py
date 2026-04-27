@@ -122,7 +122,7 @@ class SkillHealthMonitor:
         # For builtin pack under core/skills/, exclude subdirectories that are
         # themselves known packs (e.g., omx) to avoid double-counting.
         if skill_pack == "builtin" and pack_dir == self.project_root / "core" / "skills":
-            known_pack_dirs = {"superpowers", "gstack", "omx"}
+            known_pack_dirs = {"superpowers", "gstack"}
             skill_files = [f for f in skill_files if f.parent.name not in known_pack_dirs]
 
         reasons = []

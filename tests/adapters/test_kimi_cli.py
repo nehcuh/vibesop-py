@@ -129,8 +129,8 @@ class TestKimiCliAdapter:
         assert "## Skills" in readme
         assert "test-skill" in readme
         assert "Test Skill" in readme
-        # Should include correct 7-layer routing description
-        assert "7-Layer Routing System" in readme
+        # Should include correct 10-layer routing description
+        assert "10-Layer Routing System" in readme
         assert "Layer 0**: Explicit override" in readme
         assert "Layer 2**: AI Semantic Triage" in readme
         # Should mention Kimi Code CLI skill directories

@@ -331,7 +331,7 @@ class SkillConfigManager:
             enabled=skill_data.get("enabled", True),
             priority=skill_data.get("priority", 50),
             category=skill_data.get("category", "development"),
-            scope=skill_data.get("scope", "project"),
+            scope=skill_data.get("scope", "global"),
             lifecycle=SkillLifecycle(skill_data.get("lifecycle", "active")),
             usage_stats=skill_data.get("usage_stats", {}),
             version_history=skill_data.get("version_history", []),

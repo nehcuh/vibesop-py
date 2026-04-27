@@ -150,11 +150,24 @@ def run_matcher_pipeline(
         for m in alternatives
     ]
 
+    from vibesop.core.models import RejectedCandidate
+
+    rejected_routes = [
+        RejectedCandidate(
+            skill_id=rc["skill_id"],
+            confidence=rc["confidence"],
+            layer=rc["layer"],
+            reason=rc.get("reason", ""),
+        )
+        for rc in rejected_candidates
+    ]
+
     layer_detail = LayerDetail(
         layer=winning_layer,
         matched=True,
         reason=f"Matcher selected '{primary_match.skill_id}' (confidence: {primary_match.confidence:.0%})",
         duration_ms=matcher_duration_ms,
+        rejected_candidates=rejected_routes,
         diagnostics={"rejected_candidates": rejected_candidates} if rejected_candidates else {},
     )
 

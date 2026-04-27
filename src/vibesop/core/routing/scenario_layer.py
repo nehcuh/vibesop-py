@@ -1,6 +1,6 @@
 """Scenario pattern layer — predefined routing patterns.
 
-Layer 2: Match queries against predefined scenario patterns from registry.yaml.
+Layer 1: Match queries against predefined scenario patterns from registry.yaml.
 Each scenario maps a category of queries to a primary skill with alternatives.
 
 Scenarios are defined in core/registry.yaml under conflict_resolution.strategies.

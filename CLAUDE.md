@@ -105,7 +105,7 @@ read skills/riper-workflow/SKILL.md
 - ✅ **Context-aware** - considers file types, errors, recent work
 - ✅ **~$0.11/month** - cost-effective with 70%+ cache hit rate
 
-**8-Layer Routing System:**
+**10-Layer Routing System:**
 - **Layer 0**: Explicit overrides (user-specified)
 - **Layer 1**: Scenario patterns (predefined cases)
 - **Layer 2**: AI Semantic Triage (Haiku/GPT, 95% accuracy)
@@ -113,8 +113,9 @@ read skills/riper-workflow/SKILL.md
 - **Layer 4**: TF-IDF semantic similarity (TF-IDF + cosine similarity)
 - **Layer 5**: Embedding-based matching (vector embeddings, 85%)
 - **Layer 6**: Fuzzy matching (Levenshtein distance, typo-tolerant)
-- **Layer 7**: Fallback LLM (last-resort AI routing)
-(Additional internal layers: CUSTOM for user matchers, NO_MATCH for empty results)
+- **Layer 7**: Custom matcher plugins (user-defined in `.vibe/matchers/`)
+- **Layer 8**: No Match (all layers failed, below confidence threshold)
+- **Layer 9**: Fallback LLM (last-resort AI routing)
 
 ## Configuration Structure
 

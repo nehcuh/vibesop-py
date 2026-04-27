@@ -1,6 +1,6 @@
 """Explicit override layer — user-specified skill routing.
 
-Layer 1: If the user explicitly specifies a skill (via !skill prefix,
+Layer 0: If the user explicitly specifies a skill (via !skill prefix,
 or by skill_id in the query), route directly to it without matching.
 
 Examples:

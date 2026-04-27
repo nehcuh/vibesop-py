@@ -15,7 +15,7 @@ if TYPE_CHECKING:
 class AlgorithmRegistry:
     """Registry of callable algorithms available to skills.
 
-    Algorithms are registered by a namespaced name (e.g., "interview/compute_ambiguity")
+    Algorithms are registered by a namespaced name (e.g., "demo/double")
     and can be retrieved by skills that declare them in their frontmatter.
     """
 

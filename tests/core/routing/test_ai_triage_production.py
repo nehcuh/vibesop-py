@@ -170,7 +170,8 @@ class TestUnifiedRouterAIBudget:
         router._llm = mock_llm
 
         candidates = [{"id": "systematic-debugging", "intent": "debug"}]
-        result = router._try_ai_triage("debug this", candidates)
+        # Use a query long enough to bypass the short-query threshold (default 15 chars)
+        result = router._try_ai_triage("debug this strange error please", candidates)
 
         assert result is not None
         assert result.match.layer == RoutingLayer.AI_TRIAGE

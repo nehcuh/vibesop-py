@@ -94,8 +94,9 @@ def _sync_to_evaluator(result: Any, satisfied: bool) -> None:
 
         primary = getattr(result, "primary", None)
         if primary and getattr(primary, "skill_id", None):
-            collector.record(
+            collector.collect(
                 skill_id=primary.skill_id,
+                query=getattr(result, "original_query", ""),
                 was_helpful=satisfied,
                 execution_success=satisfied,
             )
