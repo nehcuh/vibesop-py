@@ -34,10 +34,10 @@ class MultiIntentDetector:
 
     def __init__(
         self,
-        min_query_length: int = 20,
-        low_confidence_threshold: float = 0.8,
-        alternative_threshold: float = 0.6,
-        confidence_gap_threshold: float = 0.15,
+        min_query_length: int = 15,
+        low_confidence_threshold: float = 0.7,
+        alternative_threshold: float = 0.5,
+        confidence_gap_threshold: float = 0.2,
     ):
         self.min_query_length = min_query_length
         self.low_confidence_threshold = low_confidence_threshold

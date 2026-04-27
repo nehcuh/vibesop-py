@@ -172,3 +172,20 @@ INTENT_DOMAINS: list[tuple[str, list[str]]] = [
     ("design", ["设计", "design", "架构", "architecture", "方案", "proposal"]),
     ("brainstorm", ["畅想", "brainstorm", "思路", "idea", "创意", "探索", "explore"]),
 ]
+
+# ── Intent domain weights (for weighted multi-intent detection) ──────────────
+
+INTENT_DOMAIN_WEIGHTS: dict[str, float] = {
+    "analyze": 0.9,
+    "review": 0.8,
+    "debug": 0.95,
+    "optimize": 0.7,
+    "refactor": 0.7,
+    "test": 0.8,
+    "implement": 0.85,
+    "document": 0.5,
+    "deploy": 0.6,
+    "security": 0.9,
+    "design": 0.8,
+    "brainstorm": 0.6,
+}
