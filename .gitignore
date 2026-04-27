@@ -65,6 +65,18 @@ htmlcov/
 .vibe/checkpoints/
 .vibe/workflows/
 
+# VibeSOP runtime artifacts (one-off reports, plans, backups)
+.vibe/routing_counter.json
+.vibe/*.bak
+.vibe/*-report.md
+.vibe/*-complete.md
+.vibe/deep-code-review.md
+.vibe/findings.md
+.vibe/progress.md
+.vibe/task_plan.md
+.vibe/experiment.yaml
+.vibe/execution_plans.jsonl
+
 # Type checking
 .mypy_cache/
 .pyright_cache/
