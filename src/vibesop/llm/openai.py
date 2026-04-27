@@ -33,18 +33,23 @@ class OpenAIProvider(LLMProvider):
         self,
         api_key: str | None = None,
         base_url: str | None = None,
+        model: str | None = None,
     ) -> None:
         """Initialize the OpenAI provider.
 
         Args:
-            api_key: OpenAI API key (defaults to OPENAI_API_KEY env var)
+            api_key: API key (defaults to OPENAI_API_KEY env var)
             base_url: Custom base URL (defaults to https://api.openai.com/v1)
+            model: Default model name (defaults to gpt-4o-mini)
         """
         if api_key is None:
             api_key = os.getenv("OPENAI_API_KEY")
 
         if base_url is None:
             base_url = self.DEFAULT_BASE_URL
+
+        if model:
+            self.DEFAULT_MODEL = model
 
         super().__init__(api_key=api_key, base_url=base_url)
 
@@ -125,11 +130,12 @@ class OpenAIProvider(LLMProvider):
             raise LLMError(self.provider_name, msg) from e
 
     def _is_configured(self) -> bool:
-        """Check if OpenAI API key is valid.
+        """Check if API key is valid.
 
-        OpenAI keys start with 'sk-' and are typically 40+ characters.
+        OpenAI keys start with 'sk-' and are typically 40+ characters,
+        but DeepSeek/Kimi/Zhipu keys may be shorter.
         """
-        return bool(self.api_key and self.api_key.startswith("sk-") and len(self.api_key) >= 40)
+        return bool(self.api_key and len(self.api_key) > 10)
 
     async def acall(
         self,

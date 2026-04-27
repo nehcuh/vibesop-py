@@ -21,6 +21,13 @@ _OPENAI_COMPATIBLE: dict[str, str] = {
     "zhipu": "https://open.bigmodel.cn/api/paas/v4",
 }
 
+# Default models for each provider
+_PROVIDER_DEFAULT_MODELS: dict[str, str] = {
+    "deepseek": "deepseek-v4-flash",
+    "kimi": "moonshot-v1-8k",
+    "zhipu": "glm-4",
+}
+
 
 def create_provider(
     provider: ProviderType | None = None,
@@ -45,13 +52,21 @@ def create_provider(
         provider = detect_provider_from_env()
 
     if provider == "anthropic":
-        return AnthropicProvider(api_key=api_key, base_url=base_url)
+        resolved_key = api_key or os.getenv("ANTHROPIC_API_KEY")
+        return AnthropicProvider(api_key=resolved_key, base_url=base_url)
     if provider == "ollama":
-        return OllamaProvider(api_key=api_key, base_url=base_url)
+        resolved_key = api_key
+        resolved_base = base_url or os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/v1")
+        return OllamaProvider(api_key=resolved_key, base_url=resolved_base)
 
     # OpenAI and all OpenAI-compatible providers
+    resolved_key = api_key
+    if not resolved_key:
+        env_map = {"deepseek": "DEEPSEEK_API_KEY", "kimi": "KIMI_API_KEY", "zhipu": "ZHIPU_API_KEY"}
+        resolved_key = os.getenv(env_map.get(provider, "")) or os.getenv("OPENAI_API_KEY")
     resolved_base_url = base_url or _OPENAI_COMPATIBLE.get(provider)
-    return OpenAIProvider(api_key=api_key, base_url=resolved_base_url)
+    resolved_model = _PROVIDER_DEFAULT_MODELS.get(provider, "gpt-4o-mini")
+    return OpenAIProvider(api_key=resolved_key, base_url=resolved_base_url, model=resolved_model)
 
 
 def detect_provider_from_env() -> ProviderType:

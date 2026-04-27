@@ -351,7 +351,15 @@ class UnifiedRouter(RouterStatsMixin, RouterExecutionMixin, RouterOrchestrationM
         # matchers rather than immediately returning no-match. This prevents
         # the silent FALLBACK_LLM degradation that occurs when AI Triage
         # is disabled or no LLM provider is configured.
-        llm_available = self._llm is not None and self._config.enable_ai_triage
+        llm_available = (
+            self._llm is not None
+            or self._triage_service._llm is not None
+        ) and self._config.enable_ai_triage
+
+        if not llm_available and self._config.enable_ai_triage:
+            self._triage_service._llm = self._triage_service.init_llm_client()
+            llm_available = self._triage_service._llm is not None and self._triage_service._llm.configured()
+
         if not use_keyword_routing and not llm_available:
             use_keyword_routing = True
 
