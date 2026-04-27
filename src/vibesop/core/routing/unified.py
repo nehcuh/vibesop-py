@@ -563,6 +563,12 @@ class UnifiedRouter(RouterStatsMixin, RouterExecutionMixin, RouterOrchestrationM
         if not alternatives:
             alternatives = self._collect_alternatives_from_details(layer_details)
 
+        # Merge enriched recommendations (SkillRecommender) into alternatives
+        existing_ids = {primary.skill_id} | {a.skill_id for a in alternatives}
+        for rec in enriched_alternatives:
+            if rec.skill_id not in existing_ids:
+                alternatives.append(rec)
+
         result = self._build_result(
             query=query,
             primary=primary,
