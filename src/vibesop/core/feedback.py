@@ -119,7 +119,8 @@ class FeedbackCollector:
         Args:
             storage_path: Path to feedback storage file
         """
-        self._storage_path = Path(storage_path).expanduser()
+        storage = Path(storage_path).expanduser()
+        self._storage_path = storage.with_suffix(".jsonl")  # Use JSONL for append performance
         self._records: list[FeedbackRecord] = []
         self._load_records()
 
@@ -302,23 +303,31 @@ class FeedbackCollector:
         return len(data)
 
     def _load_records(self) -> None:
-        """Load records from storage."""
+        """Load records from JSONL storage."""
         if self._storage_path.exists():
             try:
+                self._records = []
                 with self._storage_path.open() as f:
-                    data = json.load(f)
-                    self._records = [FeedbackRecord.from_dict(r) for r in data]
+                    for line in f:
+                        line = line.strip()
+                        if not line:
+                            continue
+                        try:
+                            data = json.loads(line)
+                            self._records.append(FeedbackRecord.from_dict(data))
+                        except (json.JSONDecodeError, KeyError):
+                            pass
             except (json.JSONDecodeError, OSError, KeyError):
-                # If file is corrupted, start fresh
                 self._records = []
 
     def _save_records(self) -> None:
-        """Save records to storage."""
+        """Append latest record to JSONL storage (O(1) vs O(n) full rewrite)."""
         self._storage_path.parent.mkdir(parents=True, exist_ok=True)
-
-        data = [record.to_dict() for record in self._records]
-        with self._storage_path.open("w") as f:
-            json.dump(data, f, indent=2, ensure_ascii=False)
+        if not self._records:
+            return
+        record = self._records[-1]
+        with self._storage_path.open("a") as f:
+            f.write(json.dumps(record.to_dict(), ensure_ascii=False) + "\n")
 
 
 # Convenience function for quick feedback collection
@@ -438,7 +447,8 @@ class ExecutionFeedbackCollector:
     """
 
     def __init__(self, storage_path: str | Path = "~/.vibe/execution_feedback.json"):
-        self._storage_path = Path(storage_path).expanduser()
+        storage = Path(storage_path).expanduser()
+        self._storage_path = storage.with_suffix(".jsonl")
         self._records: list[SkillExecutionFeedback] = []
         self._load_records()
 
@@ -500,14 +510,24 @@ class ExecutionFeedbackCollector:
     def _load_records(self) -> None:
         if self._storage_path.exists():
             try:
+                self._records = []
                 with self._storage_path.open() as f:
-                    data = json.load(f)
-                    self._records = [SkillExecutionFeedback.from_dict(r) for r in data]
+                    for line in f:
+                        line = line.strip()
+                        if not line:
+                            continue
+                        try:
+                            data = json.loads(line)
+                            self._records.append(SkillExecutionFeedback.from_dict(data))
+                        except (json.JSONDecodeError, KeyError):
+                            pass
             except (json.JSONDecodeError, OSError, KeyError):
                 self._records = []
 
     def _save_records(self) -> None:
         self._storage_path.parent.mkdir(parents=True, exist_ok=True)
-        data = [record.to_dict() for record in self._records]
-        with self._storage_path.open("w") as f:
-            json.dump(data, f, indent=2, ensure_ascii=False)
+        if not self._records:
+            return
+        record = self._records[-1]
+        with self._storage_path.open("a") as f:
+            f.write(json.dumps(record.to_dict(), ensure_ascii=False) + "\n")
