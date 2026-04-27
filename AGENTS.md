@@ -109,6 +109,13 @@ After execution, VibeSOP may ask for feedback:
 
 ## Auto-Routing Setup
 
+> **⚠️ VibeSOP requires its own LLM configuration.** It runs as a CLI subprocess
+> and cannot reuse your session's LLM. Configure a separate LLM API key or local
+> Ollama service:
+> ```bash
+> export ANTHROPIC_API_KEY="sk-ant-..."   # or OPENAI_API_KEY / VIBE_LLM_PROVIDER=ollama
+> ```
+
 Source the VibeSOP environment script before starting OpenCode:
 ```bash
 source ~/.config/opencode/vibesop-env.sh

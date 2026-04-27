@@ -177,6 +177,10 @@ $ vibe doctor
 
 ### 可选：AI 驱动的路由
 
+> **⚠️ 重要：VibeSOP 需要独立的 LLM 配置**
+>
+> VibeSOP 通过 CLI 子进程运行，**无法复用宿主 Agent 的内部 LLM**（如 OpenCode、Claude Code 的会话模型）。你必须为 VibeSOP 单独配置 LLM API key 或本地 Ollama 服务。没有 LLM 时，VibeSOP 仅使用关键词/TF-IDF 匹配，长查询可能无法匹配到合适技能。
+
 为获得最佳路由准确性，设置 LLM 提供商：
 
 ```bash
@@ -186,10 +190,13 @@ export ANTHROPIC_API_KEY="sk-ant-..."
 # 或 OpenAI
 export OPENAI_API_KEY="sk-..."
 
-# VibeSOP 将自动使用 AI 路由
+# 或本地 Ollama（零成本，无隐私泄露）
+export VIBE_LLM_PROVIDER=ollama
+export OLLAMA_BASE_URL=http://localhost:11434/v1
+export OLLAMA_MODEL=qwen3:35b-a3b-mlx
 ```
 
-**没有 API key** 时，VibeSOP 仍可使用关键词/TF-IDF 匹配（仅精度略低）。
+**没有 LLM** 时，VibeSOP 仍可使用关键词/TF-IDF 匹配（仅精度略低，且长查询可能路由失败）。
 
 ---
 

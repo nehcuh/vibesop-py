@@ -175,6 +175,21 @@ Plan:
 
 **That's it!** VibeSOP understands your intent — whether it's a single task or a complex multi-step request.
 
+> **⚠️ Important: VibeSOP requires its own LLM configuration**
+>
+> VibeSOP runs as a CLI subprocess and **cannot reuse the host Agent's internal LLM** (e.g., OpenCode or Claude Code's session model). You must configure a separate LLM API key or local Ollama service for VibeSOP. Without LLM, VibeSOP uses keyword/TF-IDF matching only, and long queries may fail to match any skill.
+>
+> ```bash
+> # Anthropic Claude (recommended)
+> export ANTHROPIC_API_KEY="sk-ant-..."
+> # or OpenAI
+> export OPENAI_API_KEY="sk-..."
+> # or local Ollama (zero cost, no data leaving your machine)
+> export VIBE_LLM_PROVIDER=ollama
+> export OLLAMA_BASE_URL=http://localhost:11434/v1
+> export OLLAMA_MODEL=qwen3:35b-a3b-mlx
+> ```
+
 ---
 
 ## 为什么选择 VibeSOP？ Why VibeSOP?
