@@ -877,3 +877,85 @@ Alternative: Wrap entire shell script sections in `{% raw %}...{% endraw %}` if 
 
 **Files**: `tests/e2e/test_agent_runtime.py`
 
+---
+
+### Code Review Verification: Trace Full Call Chains (2026-04-27)
+
+**Issue**: When verifying external code review claims, stopping at the directly visible call site can lead to false conclusions. KIMI claimed `PreferenceBooster.boost()` and `InstinctLearner.find_matching()` were "orphan modules" not connected to routing core, but they ARE called through `OptimizationService.apply_optimizations()` → `boost()` + `apply_instinct_boost()` → `find_matching()`.
+
+**Root Cause**: The reviewer only traced `UnifiedRouter._route()` directly without descending into `_pipeline.run_matcher_pipeline()` → `optimization_service.apply_optimizations()` internal calls.
+
+**Solution**:
+1. Always grep for actual call sites across the full codebase
+2. When reviewing routing/optimization claims, trace at least 2 levels deep into sub-services
+3. Verify Pydantic model field definitions (not just constructor calls) when checking attribute existence
+
+---
+
+### ConfigSource.get Sentinel Pattern (2026-04-27)
+
+**Issue**: `value if value is not None else default` treats `False`, `0`, `""`, `[]` as "missing" and returns `default`. This causes config keys with falsy values to silently return wrong defaults.
+
+**Root Cause**: Python's `value.get(k)` returns `None` when key is missing, but `None` is also a valid value for some keys. Without a distinct sentinel, you can't distinguish "key not found" from "value is None".
+
+**Solution**: Use `_MISSING = object()` sentinel:
+```python
+_MISSING = object()
+value = value.get(k, _MISSING)
+if value is _MISSING:
+    return default
+return value
+```
+
+**Files**: `src/vibesop/core/config/manager.py:64-75`
+
+---
+
+### CJK Languages and `len(query.split())` (2026-04-27)
+
+**Issue**: `len(query.split())` breaks for Chinese, Japanese, Korean, Thai etc. languages that don't use whitespace word boundaries. A 200-char Chinese query returns `len([query]) == 1`, always below bypass thresholds.
+
+**Solution**: Use `len(query)` for character-based threshold instead. Added `ai_triage_short_query_bypass_chars` config field (default 15 chars) alongside existing `ai_triage_short_query_bypass_words`.
+
+**Files**: `src/vibesop/core/routing/_layers.py:166-167`
+
+---
+
+### Pydantic Field vs Dict Diagnostics Mismatch (2026-04-27)
+
+**Issue**: `_pipeline.py` wrote `rejected_candidates` into `LayerDetail.diagnostics` dict, but `_collect_alternatives_from_details` read from `LayerDetail.rejected_candidates` (Pydantic field, default `[]`). Data was silently lost — alternatives never populated.
+
+**Solution**: Write to Pydantic `rejected_candidates` field as `RejectedCandidate` objects. Keep duplicate in `diagnostics` dict for backward compatibility.
+
+**Files**: `src/vibesop/core/routing/_pipeline.py:153-170`, `unified.py:1037-1073`
+
+---
+
+### Empty List Crash in Optimization (2026-04-27)
+
+**Issue**: `if len(matches) <= 1: return matches[0], []` crashes with IndexError when `matches` is empty (all matchers return no results). The `<= 1` check passes for empty list, then `matches[0]` fails.
+
+**Solution**: Separate the check: `if not matches: raise ValueError(...)`, `if len(matches) == 1: return matches[0], []`.
+
+**Files**: `src/vibesop/core/routing/optimization_service.py:72-73`
+
+---
+
+### ExecutionFeedbackCollector Method Name Mismatch (2026-04-27)
+
+**Issue**: `cli/feedback.py` called `collector.record(skill_id=..., was_helpful=..., execution_success=...)` but the method is named `collect()`. The `AttributeError` was silently swallowed by `except Exception: pass`, meaning execution feedback was never persisted.
+
+**Solution**: Rename call to `collector.collect()` and add required `query` parameter.
+
+**Files**: `src/vibesop/cli/feedback.py:97`
+
+---
+
+### Context=None Bypasses Session/Project Optimization (2026-04-27)
+
+**Issue**: `_build_match_result` passed `None` as context to `_apply_optimizations()` for non-matcher layer matches (EXPLICIT/SCENARIO/AI_TRIAGE), despite comments claiming these optimizations should be "consistent across all layers". This silently disabled session stickiness, habit boost, and project context boost for early-layer matches.
+
+**Solution**: Add `context` parameter to `_build_match_result` signature and pass it from all 5 call sites.
+
+**Files**: `src/vibesop/core/routing/unified.py:473,496,335-399`
+

@@ -1,6 +1,6 @@
 # Overview - VibeSOP Project
 
-**Last Updated**: 2026-04-23 (Agent Runtime + Platform Adaptation)
+**Last Updated**: 2026-04-27 (Code Review Defect Fixes)
 
 ---
 
@@ -22,11 +22,13 @@
 1. **Agent Runtime Layer** ✅ (Completed - April 23)
    - 4 core modules: IntentInterceptor, SkillInjector, DecisionPresenter, PlanExecutor
    - 36 unit tests, 13 E2E tests, all passing
-   - Platform adapters: Claude Code (hooks), Kimi CLI (AGENTS.md), OpenCode (plugin template)
 
 2. **v4.4 Platform Adaptation** 🔄 (In Progress)
    - Phase 1-2 complete (core + adapters)
-   - Phase 3 pending: Real platform validation (Claude Code hook trigger, Kimi CLI AGENTS.md compliance)
+
+3. **Code Review Defect Fixes** ✅ (Completed - April 27)
+   - 9 P0/P1 fixes from KIMI review: IndexError, rejected_candidates mismatch, Chinese AI Triage bypass, ConfigSource sentinel, CLI feedback method, context=None, prefilter warmup, resolve cache, SkillRecommender dedup
+   - 218 core tests passing, committed `6c50373`
 
 3. **CLI `vibe build --platform=all`** ⏳ (Pending)
    - Support building all platform configs in one command
@@ -36,17 +38,20 @@
 ## Projects Summary
 
 ### VibeSOP (vibesop-py)
-**Status**: v4.4 Agent Runtime Ready (v4.3.0 Released)
+**Status**: v5.2.0 (Code Review Defects Fixed)
 **Description**: AI-assisted development intelligent routing engine with skill-level LLM configuration and Agent Runtime layer
-**Coverage**: 75%+ (1,782+ tests passing)
+**Coverage**: 75%+ (218+ core routing tests passing)
 **Key Metrics**:
 - Routing accuracy: 94%
 - Performance: 44 QPS (target: 40+ QPS)
 - Skills supported: 91 skills across 4 packs
-- Security audit: All external skills scanned
-- LLM configs: Skill-level configuration with 5-tier fallback
 - Test speed: 39s fast suite / ~4.5min full suite
-- Agent Runtime modules: 4/4 implemented, 36 unit + 13 E2E tests
+
+**Recent Changes** (2026-04-27):
+- ✅ 9 P0/P1 routing/feedback defects fixed (IndexError, Chinese bypass, ConfigSource, etc.)
+- ✅ Context-aware optimization now works for all routing layers
+- ✅ Matcher prefilter warmup re-activated
+- ✅ Scope defaults corrected (project→global) for builtin skills
 
 **Recent Changes** (2026-04-23):
 - ✅ Agent Runtime layer: IntentInterceptor + SkillInjector + DecisionPresenter + PlanExecutor

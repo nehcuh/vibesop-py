@@ -423,3 +423,17 @@ Lint: 0 errors ✅
 
 **Recorded**: yes — 3 technical pitfalls + 2 architecture decisions
 
+---
+
+## Current Session
+
+### S1 (14:00~16:00) [VibeSOP Code Review Cross-Verification]
+- Cross-verified KIMI's deep code review against VibeSOP source code across 3 rounds
+- Found KIMI's "飞轮未转动" claim incorrect: PreferenceBooster/InstinctLearner ARE connected to routing core
+- Identified and fixed 9 P0/P1 code defects: IndexError, rejected_candidates mismatch, Chinese AI Triage bypass, ConfigSource sentinel bug, CLI feedback method name, context=None, dead prefilter code, resolve() cache, SkillRecommender dedup
+- Fixed scope defaults ("project" → "global") for builtin skills without explicit config
+- 218 core tests passing, committed as `6c50373`
+- **Key discoveries**: `len(query.split())` breaks for CJK, Pydantic field vs diagnostics dict mismatch, `len(matches) <= 1` crashes on empty list
+- **Next steps**: Fix remaining REVIEW-TODO items (thread safety, FeedbackCollector O(n), TaskDecomposer skill context, auto-deprecation)
+- **Recorded**: yes — 7 technical pitfalls in project-knowledge.md
+
