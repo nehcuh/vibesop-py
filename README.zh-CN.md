@@ -8,7 +8,7 @@
 [![Ruff](https://img.shields.io/badge/Ruff-Enabled-black.svg)](https://github.com/astral-sh/ruff)
 [![Basedpyright](https://img.shields.io/badge/Basedpyright-Strict-blue.svg)](https://github.com/DetachHead/basedpyright)
 [![Coverage](https://img.shields.io/badge/Coverage-65%25-green.svg)]()
-[![Version](https://img.shields.io/badge/Version-4.0.0-green.svg)](https://github.com/nehcuh/vibesop-py)
+[![Version](https://img.shields.io/badge/Version-5.2.0-blue.svg)](https://github.com/nehcuh/vibesop-py)
 
 ---
 
@@ -79,7 +79,7 @@ VibeSOP 借鉴了多个优秀的项目和理念：
 - **信息检索**：TF-IDF、基于嵌入的语义搜索、模糊匹配
 - **偏好学习**：隐式反馈循环、协同过滤
 - **多臂老虎机**：技能选择中的探索与利用平衡
-- **意图分类**：多阶段路由管道（7 层）
+- **意图分类**：多阶段路由管道（10 层）
 
 ### VibeSOP 的差异化
 
@@ -124,7 +124,7 @@ VibeSOP 借鉴了多个优秀的项目和理念：
 
 | 特性 | VibeSOP | Cursor | Continue.dev | Aider |
 |------|---------|--------|--------------|-------|
-| **智能路由** | 7 层管道 | 内置命令 | 扩展机制 | CLI 参数 |
+| **智能路由** | 10 层管道 | 内置命令 | 扩展机制 | CLI 参数 |
 | **技能数量** | 45+ 跨平台技能 | 内置功能 | 社区扩展 | 内置工作流 |
 | **学习能力** | 偏好学习 | 固定 | 无 | 无 |
 | **跨平台** | ✅ 兼容所有 AI 工具 | ❌ 仅 Cursor | ❌ 仅 Continue | ❌ 仅 Aider |
@@ -281,19 +281,22 @@ vibe install https://github.com/anthropics/gstack
 
 ## 工作原理
 
-### 7 层路由管道
+### 10 层路由管道
 
 VibeSOP 按顺序尝试多种匹配策略，从最快开始：
 
 | 层级 | 策略 | 速度 | 准确率 | 使用场景 |
 |-------|----------|-------|----------|----------|
-| 0 | AI 分诊 | ~100ms | 95% | 复杂查询、语义理解 |
-| 1 | 显式覆盖 | <1ms | 100% | 直接命令如 `/review` |
-| 2 | 场景模式 | <1ms | 90% | 预定义场景（调试、测试、评审） |
-| 3 | 关键词匹配 | <1ms | 70% | 直接关键词命中 |
+| 0 | 显式覆盖 | <1ms | 100% | 直接命令如 `/review` |
+| 1 | 场景模式 | <1ms | 90% | 预定义场景（调试、测试、评审） |
+| 2 | AI 分诊 | ~100ms | 95% | 复杂查询（>5字符默认）、语义理解 |
+| 3 | 关键词匹配 | <1ms | 70% | 直接关键词命中（短查询） |
 | 4 | TF-IDF | ~5ms | 75% | 语义相似度 |
 | 5 | 嵌入向量 | ~20ms | 85% | 深度语义匹配（可选） |
-| 6 | 模糊匹配 | ~10ms | 60% | 容错拼写 |
+| 6 | 模糊匹配 (Levenshtein) | ~10ms | 60% | 容错拼写 |
+| 7 | 自定义插件 | 可变 | 可变 | 用户自定义匹配逻辑 |
+| 8 | 无匹配 | N/A | N/A | 低于阈值 |
+| 9 | 兜底 LLM | ~100ms | 80% | 最后手段的原始 LLM 路由 |
 
 **结果**：带缓存的 P95 延迟 < 50ms。
 
@@ -405,6 +408,7 @@ routing:
   min_confidence: 0.6
   enable_fuzzy: true
   semantic_threshold: 0.75
+  keyword_match_max_chars: 5  # 关键词路由最高字符数（0=始终 LLM，200=始终关键词）
 
 security:
   threat_level: medium
@@ -521,7 +525,7 @@ $ vibe install https://github.com/suspicious/skills
 ## 文档
 
 - [架构概览](docs/architecture/README.md) - 系统设计与组件
-- [路由系统](docs/architecture/routing-system.md) - 7 层管道详解
+- [路由系统](docs/architecture/routing-system.md) - 10 层管道详解
 - [定位与理念](docs/POSITIONING.md) - 为什么存在 VibeSOP
 - [贡献指南](CONTRIBUTING.md) - 如何贡献
 
@@ -535,7 +539,7 @@ $ vibe install https://github.com/suspicious/skills
 
 ### 匹配优于猜测
 
-7 层匹配管道确保准确路由。不再有"你是想说...？"
+10 层匹配管道确保准确路由。不再有"你是想说...？"
 
 ### 记忆优于智能
 
@@ -577,8 +581,10 @@ uv run pytest --cov=src/vibesop --cov-report=html
 - [x] v4.1.0: AI 分诊生产就绪
 - [x] v4.2.0: 技能健康监控
 - [x] v4.3.0: 上下文感知路由 + Agent Runtime
-- [ ] v4.4.0: 高级路由优化（进行中）
-- [ ] v5.0.0: 插件生态系统
+- [x] v4.4.0: SkillOS 编排 + 生命周期 + 反馈闭环
+- [x] v5.0.0: SkillRuntime — 作用域 + 生命周期 + 启禁用
+- [x] v5.1.0: 技能市场 + 评估体系 + 反馈闭环
+- [x] v5.2.0: 智能推荐 + 自动退化 + 主动发现
 
 ---
 

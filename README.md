@@ -7,7 +7,7 @@
 [![Python](https://img.shields.io/badge/Python-3.12+-blue.svg)](https://www.python.org/downloads/)
 [![Ruff](https://img.shields.io/badge/Ruff-Enabled-black.svg)](https://github.com/astral-sh/ruff)
 [![Coverage](https://img.shields.io/badge/Coverage->75%25-green.svg)]()
-[![Version](https://img.shields.io/badge/Version-4.4.0-green.svg)](https://github.com/nehcuh/vibesop-py)
+[![Version](https://img.shields.io/badge/Version-5.2.0-blue.svg)](https://github.com/nehcuh/vibesop-py)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 ---
@@ -265,18 +265,20 @@ vibe skill add code-reviewer
 
 ### 🎯 95% 路由准确率 (95% Routing Accuracy)
 
-基于 8 层路由 pipeline，结合 AI 语义分析和场景知识：
+基于 10 层路由 pipeline，结合 AI 语义分析和场景知识：
 
-Based on an 8-layer routing pipeline combining AI semantic analysis and scenario knowledge:
+Based on a 10-layer routing pipeline combining AI semantic analysis and scenario knowledge:
 
 - **Layer 0**: Explicit overrides
 - **Layer 1**: Scenario patterns (90% accuracy)
-- **Layer 2**: AI Semantic Triage (95% accuracy)
-- **Layer 3**: Keyword matching (70% accuracy)
+- **Layer 2**: AI Semantic Triage (95% accuracy, forced for long queries >5 chars)
+- **Layer 3**: Keyword matching (70% accuracy, short queries only by default)
 - **Layer 4**: TF-IDF semantic similarity (75% accuracy)
 - **Layer 5**: Embedding-based matching (85% accuracy)
 - **Layer 6**: Fuzzy matching for typos (60% accuracy)
-- **Layer 7**: Fallback LLM (last-resort routing)
+- **Layer 7**: Custom plugin matchers (user-defined)
+- **Layer 8**: No Match (below threshold)
+- **Layer 9**: Fallback LLM (last-resort routing)
 
 ### 🧠 偏好学习 (Preference Learning)
 
@@ -517,6 +519,7 @@ routing:
   enable_embedding: false
   max_candidates: 3
   confirmation_mode: always  # always | never | ambiguous_only
+  keyword_match_max_chars: 5  # max chars for keyword routing (0=always LLM, 200=always keyword)
 
 security:
   threat_level: medium
@@ -665,7 +668,7 @@ Detailed architecture docs: [docs/architecture/](docs/architecture/)
 
 - **🆕 [docs/SKILLS_GUIDE.md](docs/SKILLS_GUIDE.md)** - 技能生态系统完整指南 / Complete skills ecosystem guide
   - 50+ 个技能详解 / All skills explained
-  - 8 层路由系统 / 8-layer routing system
+  - 10 层路由系统 / 10-layer routing system
   - 优先级决策机制 / Priority decision mechanism
   - 手动切换技能 / How to switch skills
 - [docs/QUICKSTART_USERS.md](docs/QUICKSTART_USERS.md) - 用户快速入门 / User quick start
@@ -770,10 +773,10 @@ uv run pytest --cov=src/vibesop --cov-report=html
 - [x] v4.1.0: AI Triage 生产就绪 AI Triage production readiness
 - [x] v4.2.0: 技能健康监控 Skill health monitoring
 - [x] v4.3.0: 上下文感知路由 + Agent Runtime Context-aware routing + Agent Runtime
-- [ ] v4.4.0: SkillOS 编排 + 生命周期 + 反馈闭环 SkillOS Orchestration + Lifecycle + Feedback Loop
-- [ ] v5.0.0: SkillRuntime — 作用域 + 生命周期 + 启禁用（质量收敛）
-- [ ] v5.1.0: 技能市场 + 反馈闭环 SkillMarket + Feedback Loop
-- [ ] v5.2.0: 智能生态系统 Intelligent Ecosystem — 推荐 + 退化 + 发现
+- [x] v4.4.0: SkillOS 编排 + 生命周期 + 反馈闭环 SkillOS Orchestration + Lifecycle + Feedback Loop
+- [x] v5.0.0: SkillRuntime — 作用域 + 生命周期 + 启禁用（质量收敛）
+- [x] v5.1.0: 技能市场 + 反馈闭环 SkillMarket + Feedback Loop
+- [x] v5.2.0: 智能生态系统 Intelligent Ecosystem — 推荐 + 退化 + 发现
 
 详见: [docs/ROADMAP.md](docs/ROADMAP.md) | [version_05.md ADR](docs/version_05.md)
 
