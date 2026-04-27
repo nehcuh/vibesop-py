@@ -46,6 +46,7 @@ from vibesop.core.models import (
     RoutingLayer,
     RoutingResult,
     SkillRoute,
+    DegradationLevel,
 )
 from vibesop.core.optimization import (
     CandidatePrefilter,
@@ -68,6 +69,7 @@ from vibesop.core.routing.optimization_service import OptimizationService
 from vibesop.core.routing.orchestration_mixin import RouterOrchestrationMixin
 from vibesop.core.routing.stats_mixin import RouterStatsMixin
 from vibesop.core.routing.triage_service import TriageService
+from vibesop.core.routing.degradation import DegradationManager
 from vibesop.llm.cost_tracker import TriageCostTracker
 
 if TYPE_CHECKING:
@@ -254,6 +256,8 @@ class UnifiedRouter(RouterStatsMixin, RouterExecutionMixin, RouterOrchestrationM
             get_skill_source=self._get_skill_source,
         )
 
+        self._degradation_manager = DegradationManager(self._config)
+
         self._total_routes = 0
         self._layer_distribution: dict[str, int] = {}
         self._stats_lock = threading.Lock()
@@ -331,43 +335,66 @@ class UnifiedRouter(RouterStatsMixin, RouterExecutionMixin, RouterOrchestrationM
             )
             return result
 
-        # Layer 1: Scenario Pattern
-        match, detail = _layers.try_scenario_layer(self, query, candidates)
-        routing_path.append(RoutingLayer.SCENARIO)
-        layer_details.append(detail)
-        if match:
-            self._record_layer(RoutingLayer.SCENARIO)
-            result = self._build_match_result(
-                query, match, [], routing_path, layer_details,
-                start_time, deprecated_warnings, conversation, original_query
-            )
-            return result
+        # Keyword routing threshold: for queries longer than this character count,
+        # skip keyword-based layers (scenario, keyword, TF-IDF, levenshtein)
+        # and rely on LLM semantic triage instead.
+        # Short queries (<=N chars) are likely explicit skill names or keywords,
+        # which keyword matchers handle faster and more accurately.
+        keyword_max_chars = getattr(self._config, "keyword_match_max_chars", 5)
+        use_keyword_routing = len(query) <= keyword_max_chars
 
-        # Layer 2: AI Triage
-        match, detail = _layers.try_ai_triage_layer(self, query, candidates, context)
-        routing_path.append(RoutingLayer.AI_TRIAGE)
-        layer_details.append(detail)
-        if match:
-            self._record_layer(RoutingLayer.AI_TRIAGE)
-            result = self._build_match_result(
-                query, match, [], routing_path, layer_details,
-                start_time, deprecated_warnings, conversation, original_query
-            )
-            return result
+        if use_keyword_routing:
+            # Layer 1: Scenario Pattern
+            match, detail = _layers.try_scenario_layer(self, query, candidates)
+            routing_path.append(RoutingLayer.SCENARIO)
+            layer_details.append(detail)
+            if match:
+                self._record_layer(RoutingLayer.SCENARIO)
+                result = self._build_match_result(
+                    query, match, [], routing_path, layer_details,
+                    start_time, deprecated_warnings, conversation, original_query
+                )
+                return result
 
-        # Layers 3-6: Matcher pipeline (keyword, tfidf, embedding, levenshtein)
-        primary, alternatives, detail = _pipeline.run_matcher_pipeline(
-            self, query, candidates, context, collect_rejected=True
-        )
-        routing_path.append(detail.layer)
-        layer_details.append(detail)
-        if primary:
-            self._record_layer(detail.layer)
-            result = self._build_match_result(
-                query, primary, alternatives, routing_path, layer_details,
-                start_time, deprecated_warnings, conversation, original_query
+            # Layer 2: AI Triage (may be bypassed for very short queries)
+            match, detail = _layers.try_ai_triage_layer(self, query, candidates, context)
+            routing_path.append(RoutingLayer.AI_TRIAGE)
+            layer_details.append(detail)
+            if match:
+                self._record_layer(RoutingLayer.AI_TRIAGE)
+                result = self._build_match_result(
+                    query, match, [], routing_path, layer_details,
+                    start_time, deprecated_warnings, conversation, original_query
+                )
+                return result
+
+            # Layers 3-6: Matcher pipeline (keyword, tfidf, embedding, levenshtein)
+            primary, alternatives, detail = _pipeline.run_matcher_pipeline(
+                self, query, candidates, context, collect_rejected=True
             )
-            return result
+            routing_path.append(detail.layer)
+            layer_details.append(detail)
+            if primary:
+                self._record_layer(detail.layer)
+                result = self._build_match_result(
+                    query, primary, alternatives, routing_path, layer_details,
+                    start_time, deprecated_warnings, conversation, original_query
+                )
+                return result
+        else:
+            # Long query: skip keyword-based layers, use LLM semantic triage
+            match, detail = _layers.try_ai_triage_layer(
+                self, query, candidates, context, force=True
+            )
+            routing_path.append(RoutingLayer.AI_TRIAGE)
+            layer_details.append(detail)
+            if match:
+                self._record_layer(RoutingLayer.AI_TRIAGE)
+                result = self._build_match_result(
+                    query, match, [], routing_path, layer_details,
+                    start_time, deprecated_warnings, conversation, original_query
+                )
+                return result
 
         # No match found
         duration_ms = (time.perf_counter() - start_time) * 1000
@@ -478,6 +505,34 @@ class UnifiedRouter(RouterStatsMixin, RouterExecutionMixin, RouterOrchestrationM
             )
 
         # Record this routing decision for memory/learning
+
+        # Apply degradation evaluation (skip for explicit/user-specified layers)
+        if primary.layer not in (RoutingLayer.EXPLICIT, RoutingLayer.CUSTOM):
+            degradation_level, degraded_primary = self._degradation_manager.evaluate(primary)
+            if degradation_level == DegradationLevel.FALLBACK:
+                primary = None
+            elif degradation_level == DegradationLevel.DEGRADE:
+                primary = degraded_primary
+            if primary:
+                primary.metadata["degradation_level"] = degradation_level.value
+            else:
+                return self._build_fallback_result(
+                    query=original_query,
+                    candidates=[],
+                    routing_path=routing_path,
+                    layer_details=layer_details,
+                    duration_ms=(time.perf_counter() - start_time) * 1000,
+                )
+
+        if primary is None:
+            return self._build_fallback_result(
+                query=original_query,
+                candidates=[],
+                routing_path=routing_path,
+                layer_details=layer_details,
+                duration_ms=(time.perf_counter() - start_time) * 1000,
+            )
+
         self._record_routing_decision(query, primary, None)
 
         # Update SkillConfig.usage_stats for stale-skill detection
