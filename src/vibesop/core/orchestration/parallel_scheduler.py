@@ -82,22 +82,18 @@ class ParallelScheduler:
 
             # Wait for all tasks in this batch (with semaphore for max_parallel)
             if len(group) > self._max_parallel:
-                # Use semaphore to limit concurrency
                 semaphore = asyncio.Semaphore(self._max_parallel)
 
-                def make_limited_execute(sem: asyncio.Semaphore):
-                    async def limited_execute(task: asyncio.Task[Any]) -> Any:
-                        async with sem:
-                            return await task
-                    return limited_execute  # noqa: B023
-
-                limited_execute = make_limited_execute(semaphore)
+                async def limited_execute(step, exec_fn):
+                    async with semaphore:
+                        return await self._execute_with_tracking(step, exec_fn)
 
                 batch_results = await asyncio.gather(
-                    *[limited_execute(t) for t in batch_tasks],
+                    *(limited_execute(step, executor) for step in group),
                     return_exceptions=True,
                 )
             else:
+                batch_tasks = [self._execute_with_tracking(step, executor) for step in group]
                 batch_results = await asyncio.gather(
                     *batch_tasks,
                     return_exceptions=True,

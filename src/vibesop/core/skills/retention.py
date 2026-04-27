@@ -146,6 +146,32 @@ class RetentionPolicy:
         suggestions.sort(key=lambda s: severity.get(s.action, 99))
         return suggestions
 
+    def apply_auto_actions(self, suggestions: list[RetentionSuggestion] | None = None) -> int:
+        """Apply automatic lifecycle transitions for retention recommendations.
+
+        Auto-applies: archive → DEPRECATED, remove → DEPRECATED (advisory).
+        Warn and highlight are informational only.
+
+        Args:
+            suggestions: Optional pre-computed suggestions. If None, analyze_all() is called.
+
+        Returns:
+            Number of automatic actions applied.
+        """
+        if suggestions is None:
+            suggestions = self.analyze_all()
+
+        applied = 0
+        for s in suggestions:
+            if s.action in ("archive", "remove"):
+                try:
+                    from vibesop.core.skills.config_manager import SkillConfigManager
+                    SkillConfigManager.set_lifecycle(s.skill_id, "deprecated")
+                    applied += 1
+                except Exception:
+                    pass
+        return applied
+
     def _days_since(self, timestamp: str | None) -> int | None:
         """Calculate days since a timestamp."""
         if timestamp is None:

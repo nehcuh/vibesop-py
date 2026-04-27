@@ -91,11 +91,14 @@ class _LazyEmbeddingMatcher:
     def __init__(self, config: MatcherConfig):
         self._config = config
         self._real: IMatcher | None = None
+        self._init_lock = threading.Lock()
 
     def _ensure_real(self) -> IMatcher:
         if self._real is None:
-            from vibesop.core.matching import EmbeddingMatcher
-            self._real = EmbeddingMatcher(config=self._config)
+            with self._init_lock:
+                if self._real is None:
+                    from vibesop.core.matching import EmbeddingMatcher
+                    self._real = EmbeddingMatcher(config=self._config)
         return self._real
 
     def warm_up(self, candidates: list[dict[str, Any]]) -> None:
@@ -297,7 +300,8 @@ class UnifiedRouter(RouterStatsMixin, RouterExecutionMixin, RouterOrchestrationM
         from vibesop.core.routing import _layers, _pipeline
 
         start_time = time.perf_counter()
-        self._total_routes += 1
+        with self._stats_lock:
+            self._total_routes += 1
 
         # Multi-turn support: detect follow-up queries and enrich with context
         original_query = query

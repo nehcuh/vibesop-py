@@ -287,7 +287,7 @@ class ConfigManager:
             "keyword_match_max_chars": 5,
             "ai_triage_max_skills": 20,
             "ai_triage_max_tokens": 100,
-            "ai_triage_prompt_version": "v2",
+            "ai_triage_prompt_version": "v3",
             "ai_triage_budget_monthly": 5.0,
             "ai_triage_log_calls": True,
             "ai_triage_circuit_breaker_enabled": True,
