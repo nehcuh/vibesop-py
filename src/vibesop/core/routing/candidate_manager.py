@@ -52,6 +52,7 @@ class CandidateManager:
                 Path.home() / ".config" / "skills",
                 Path.home() / ".config" / "opencode" / "skills",
                 Path.home() / ".claude" / "skills",
+                Path.home() / ".kimi" / "skills",
             ]
             if builtin_skills_path.exists() and builtin_skills_path not in search_paths:
                 search_paths.insert(0, builtin_skills_path)
