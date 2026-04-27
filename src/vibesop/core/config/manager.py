@@ -120,7 +120,7 @@ class RoutingConfig(BaseModel):
     Attributes:
         min_confidence: Minimum confidence threshold for auto-selection
         auto_select_threshold: Confidence threshold for automatic skill selection
-        enable_ai_triage: Enable AI semantic triage (Layer 0)
+        enable_ai_triage: Enable AI semantic triage (Layer 2)
         enable_embedding: Enable embedding-based matching (Layer 5)
         max_candidates: Maximum number of candidates to return
         use_cache: Enable caching for improved performance
@@ -155,6 +155,16 @@ class RoutingConfig(BaseModel):
         le=30,
         description="Skip AI Triage for queries shorter than this word count (0=never bypass)",
     )
+    keyword_match_max_chars: int = Field(
+        default=5,
+        ge=0,
+        le=200,
+        description="Skip keyword-based routing (scenario, keyword, TF-IDF, Levenshtein) "
+        "when query character length exceeds this threshold. "
+        "Short queries (<=N chars) use fast keyword matching; "
+        "long queries rely on LLM semantic triage. "
+        "Set to 0 to always use LLM, 200 to always use keyword matching.",
+    )
     session_aware: bool = Field(
         default=True,
         description="Enable session-state-aware routing for multi-turn conversations",
@@ -172,6 +182,26 @@ class RoutingConfig(BaseModel):
     default_strategy: Literal["auto", "sequential", "parallel", "hybrid"] = Field(
         default="auto",
         description="Default execution strategy for multi-skill orchestration: auto, sequential, parallel, hybrid",
+    )
+    degradation_enabled: bool = Field(
+        default=True,
+        description="Enable confidence-gated layered degradation instead of binary fallback",
+    )
+    degradation_auto_threshold: float = Field(
+        default=0.6, ge=0.0, le=1.0,
+        description="Confidence threshold for auto-selection (>= this = auto)",
+    )
+    degradation_suggest_threshold: float = Field(
+        default=0.4, ge=0.0, le=1.0,
+        description="Confidence threshold for suggest mode (>= this but < auto = suggest)",
+    )
+    degradation_degrade_threshold: float = Field(
+        default=0.2, ge=0.0, le=1.0,
+        description="Confidence threshold for degrade mode (>= this but < suggest = degrade, below = fallback)",
+    )
+    degradation_fallback_always_ask: bool = Field(
+        default=True,
+        description="When in fallback mode, ask user before proceeding with raw LLM",
     )
 
 
@@ -236,6 +266,26 @@ class ConfigManager:
             "enable_embedding": False,
             "max_candidates": 3,
             "use_cache": True,
+            "keyword_match_max_chars": 5,
+            "ai_triage_max_skills": 20,
+            "ai_triage_max_tokens": 100,
+            "ai_triage_prompt_version": "v1",
+            "ai_triage_budget_monthly": 5.0,
+            "ai_triage_log_calls": True,
+            "ai_triage_circuit_breaker_enabled": True,
+            "ai_triage_circuit_breaker_failure_threshold": 3,
+            "ai_triage_circuit_breaker_latency_threshold_ms": 500.0,
+            "ai_triage_circuit_breaker_cooldown_seconds": 60,
+            "ai_triage_short_query_bypass_words": 8,
+            "session_aware": True,
+            "session_stickiness_boost": 0.08,
+            "fallback_mode": "transparent",
+            "default_strategy": "auto",
+            "degradation_enabled": True,
+            "degradation_auto_threshold": 0.6,
+            "degradation_suggest_threshold": 0.4,
+            "degradation_degrade_threshold": 0.2,
+            "degradation_fallback_always_ask": True,
         },
         "security": {
             "scan_external": True,

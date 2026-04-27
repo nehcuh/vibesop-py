@@ -44,6 +44,22 @@ class RoutingLayer(StrEnum):
         return mapping[self]
 
 
+class DegradationLevel(StrEnum):
+    """Confidence-gated degradation levels for skill routing fallback.
+
+    Replaces binary fallback (match/no-match) with layered degradation:
+    - AUTO: high confidence, auto-select
+    - SUGGEST: moderate confidence, show with alternatives
+    - DEGRADE: low confidence, use skill but warn
+    - FALLBACK: below threshold, raw LLM
+    """
+
+    AUTO = "auto"
+    SUGGEST = "suggest"
+    DEGRADE = "degrade"
+    FALLBACK = "fallback"
+
+
 class SkillLifecycle(StrEnum):
     """Lifecycle states for a skill.
 
