@@ -126,12 +126,32 @@ class PackInstaller:
         # Execute installation
         try:
             target_path = plan.target_path
-            target_path.mkdir(parents=True, exist_ok=True)
 
-            # git clone cannot target an existing non-empty directory.
-            # Remove the old directory if it already exists and has contents.
+            # If already installed and has content, skip clone (use existing)
             if target_path.exists() and any(target_path.iterdir()):
-                shutil.rmtree(target_path)
+                installed_skill_files = list(target_path.rglob("SKILL.md"))
+                if installed_skill_files:
+                    # Audit existing installation
+                    audit_results = []
+                    for skill_file in installed_skill_files:
+                        audit = self._auditor.audit_skill_file(skill_file)
+                        audit_results.append(
+                            f"{skill_file.parent.name}: {'PASS' if audit.is_safe else 'WARN'}"
+                        )
+                    symlink_results = self._create_symlinks(pack_name, platforms)
+                    msg_parts = [
+                        f"Already installed: {pack_name} ({len(installed_skill_files)} skills)",
+                        f"Audit: {', '.join(audit_results)}" if audit_results else "",
+                    ]
+                    if symlink_results:
+                        msg_parts.append("Symlinks:")
+                        for platform, status in symlink_results:
+                            icon = "✓" if status.startswith("Linked") or status.startswith("Already") else "✗"
+                            msg_parts.append(f"  {icon} {platform}: {status}")
+                    return True, "\n".join(p for p in msg_parts if p)
+
+            # Not yet installed — prepare target directory
+            target_path.mkdir(parents=True, exist_ok=True)
 
             # Clone to central storage
             clone_ok = analyzer.git_clone(pack_url, target_path)
