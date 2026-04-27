@@ -89,28 +89,38 @@ def search(
 @app.command()
 def install(
     repo: str = typer.Argument(..., help="GitHub repository in user/repo format"),
+    yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation"),
 ) -> None:
     """Install a skill from a GitHub repository.
 
-    Validates that the repository has a SKILL.md file at the root.
+    Validates that the repository has a SKILL.md file at the root,
+    then installs it via the PackInstaller.
 
     \b
     Examples:
         # Install from GitHub repo
         vibe market install user/repo
+
+        # Install without confirmation prompt
+        vibe market install user/repo --yes
     """
+    import questionary
+
+    from vibesop.installer.pack_installer import PackInstaller
+
     if "/" not in repo:
-        console.print("[red]✗ Repository must be in 'user/repo' format[/red]")
+        console.print("[red]Repository must be in 'user/repo' format[/red]")
         raise typer.Exit(1)
 
     crawler = GitHubSkillCrawler()
+    url = f"https://github.com/{repo}"
     skill_repo = SkillRepo(
         name=repo.rsplit("/", maxsplit=1)[-1],
         full_name=repo,
         description="",
         stars=0,
         topics=[],
-        html_url=f"https://github.com/{repo}",
+        html_url=url,
     )
 
     with console.status("[bold green]Validating repository..."):
@@ -118,13 +128,31 @@ def install(
 
     if not has_skill_md:
         console.print(
-            f"[red]✗ Repository '{repo}' does not have a SKILL.md file at the root[/red]"
+            f"[red]Repository '{repo}' does not have a SKILL.md file at the root[/red]"
         )
         raise typer.Exit(1)
 
-    console.print(f"[green]✓ Repository '{repo}' is valid[/green]")
-    console.print("\n[bold]Install command:[/bold]")
-    console.print(f"  [cyan]vibe install https://github.com/{repo}[/cyan]")
+    console.print(f"[green]Repository '{repo}' is valid[/green]")
+
+    if not yes:
+        confirmed = questionary.confirm(
+            f"Install skill pack from {url}?",
+            default=True,
+        ).ask()
+        if not confirmed:
+            console.print("[yellow]Installation cancelled.[/yellow]")
+            raise typer.Exit(0)
+
+    installer = PackInstaller()
+    try:
+        result = installer.install_pack(skill_repo.name, url)
+        console.print(
+            f"[green]Successfully installed {result.pack_name} "
+            f"({result.skill_count} skills)[/green]"
+        )
+    except Exception as e:
+        console.print(f"[red]Installation failed: {e}[/red]")
+        raise typer.Exit(1)
 
 
 def _enrich_with_local_quality(results: list[SkillRepo]) -> list[SkillRepo]:

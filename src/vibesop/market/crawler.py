@@ -25,6 +25,11 @@ class SkillRepo:
         """Infer local skill ID from GitHub repo name."""
         return self.full_name.replace("/", "/", 1).rsplit("/", 1)[-1]
 
+    @property
+    def install_source(self) -> str:
+        """Return the installable source (git URL) for this repo."""
+        return f"https://github.com/{self.full_name}"
+
 
 class GitHubSkillCrawler:
     """Search GitHub for repositories tagged with topic:vibesop-skill."""
