@@ -1,24 +1,27 @@
-"""VibeSOP market command - Discover and install skills from GitHub.
+"""VibeSOP market command - Discover, publish, and install skills from GitHub.
 
 Usage:
     vibe market search <query>
     vibe market search <query> --json
     vibe market install <user/repo>
+    vibe market publish [user/repo]
 """
 
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import typer
 from rich.console import Console
 from rich.table import Table
 
 from vibesop.market.crawler import GitHubSkillCrawler, SkillRepo
+from vibesop.market.publisher import SkillPublisher, SkillListing
 
 console = Console()
 
-app = typer.Typer(name="market", help="Discover and install VibeSOP skills")
+app = typer.Typer(name="market", help="Discover, publish, and install VibeSOP skills")
 
 
 @app.command()
@@ -42,12 +45,17 @@ def search(
     """
     crawler = GitHubSkillCrawler()
     results = crawler.search(query, page=page)
-
     results = _enrich_with_local_quality(results)
 
+    # Also search published skills (GitHub Issues)
+    publisher = SkillPublisher()
+    listings = publisher.search_issues(query, page=page)
+
     if json_output:
-        data = [
-            {
+        data = []
+        for r in results:
+            data.append({
+                "source": "github",
                 "name": r.name,
                 "full_name": r.full_name,
                 "description": r.description,
@@ -55,35 +63,53 @@ def search(
                 "topics": r.topics,
                 "html_url": r.html_url,
                 "quality_score": round(r.quality_score, 1),
-            }
-            for r in results
-        ]
+            })
+        for listing in listings:
+            data.append({
+                "source": "published",
+                "repo_name": listing.repo_name,
+                "description": listing.description,
+                "tags": listing.tags,
+                "homepage": listing.homepage,
+                "issue_url": listing.issue_url,
+            })
         console.print(json.dumps(data, indent=2))
         return
 
-    if not results:
+    if not results and not listings:
         console.print("[yellow]No skills found.[/yellow]")
         return
 
-    table = Table(title=f"Market Search Results for '{query}'")
-    table.add_column("Name", style="cyan")
-    table.add_column("Description", style="green")
-    table.add_column("Stars", justify="right", style="yellow")
-    table.add_column("Quality", justify="center")
-    table.add_column("Install Command", style="dim")
+    if results:
+        table = Table(title=f"Market Search Results for '{query}'")
+        table.add_column("Name", style="cyan")
+        table.add_column("Description", style="green")
+        table.add_column("Stars", justify="right", style="yellow")
+        table.add_column("Quality", justify="center")
+        table.add_column("Install Command", style="dim")
 
-    for repo in results:
-        quality_display = _quality_icon(repo.quality_score)
-        table.add_row(
-            repo.name,
-            repo.description or "\u2014",
-            str(repo.stars),
-            quality_display,
-            f"vibe market install {repo.full_name}",
-        )
+        for repo in results:
+            quality_display = _quality_icon(repo.quality_score)
+            table.add_row(
+                repo.name,
+                repo.description or "\u2014",
+                str(repo.stars),
+                quality_display,
+                f"vibe market install {repo.full_name}",
+            )
 
-    console.print(table)
-    console.print(f"\n[dim]Found {len(results)} result(s)[/dim]")
+        console.print(table)
+
+    if listings:
+        console.print(f"\n[bold]Published Skills ({len(listings)}):[/bold]")
+        for listing in listings:
+            console.print(f"  [cyan]{listing.repo_name}[/cyan] — {listing.description or 'no description'}")
+            console.print(f"    [dim]Published: {listing.issue_url}[/dim]")
+            if listing.tags:
+                console.print(f"    [dim]Tags: {', '.join(listing.tags)}[/dim]")
+
+    total = len(results) + len(listings)
+    console.print(f"\n[dim]Found {total} result(s)[/dim]")
 
 
 @app.command()
@@ -153,6 +179,80 @@ def install(
     except Exception as e:
         console.print(f"[red]Installation failed: {e}[/red]")
         raise typer.Exit(1)
+
+
+@app.command()
+def publish(
+    repo: str = typer.Argument(
+        "",
+        help="GitHub repository in user/repo format (auto-detected from git remote if omitted)",
+    ),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Preview the issue without creating it"),
+) -> None:
+    """Publish a skill to the VibeSOP marketplace via GitHub Issue.
+
+    Creates a labeled Issue on the VibeSOP registry repository.
+    Requires GITHUB_TOKEN or GH_TOKEN environment variable.
+
+    \b
+    Examples:
+        # Auto-detect repo from git remote
+        vibe market publish
+
+        # Specify repo explicitly
+        vibe market publish user/my-skill
+
+        # Preview without publishing
+        vibe market publish --dry-run
+    """
+    if not repo:
+        repo = _detect_git_remote()
+        if not repo:
+            console.print(
+                "[red]Could not detect GitHub repo. "
+                "Run from a git repo or specify user/repo.[/red]"
+            )
+            raise typer.Exit(1)
+
+    publisher = SkillPublisher()
+    result = publisher.publish(repo, dry_run=dry_run)
+
+    if "error" in result:
+        console.print(f"[red]Publish failed: {result['error']}[/red]")
+        if "detail" in result:
+            console.print(f"[dim]{result['detail']}[/dim]")
+        raise typer.Exit(1)
+
+    if dry_run:
+        console.print("[bold]Dry run — issue payload:[/bold]")
+        console.print_json(json.dumps(result["payload"], indent=2))
+        return
+
+    console.print(f"[green]Skill published![/green]")
+    console.print(f"  Issue: {result['issue_url']}")
+    console.print(f"  Install: [cyan]vibe market install {repo}[/cyan]")
+
+
+def _detect_git_remote() -> str:
+    """Detect GitHub owner/repo from git remote origin."""
+    import subprocess
+
+    try:
+        output = subprocess.check_output(
+            ["git", "remote", "get-url", "origin"],
+            cwd=Path.cwd(),
+            text=True,
+            stderr=subprocess.DEVNULL,
+        ).strip()
+        for prefix in ("https://github.com/", "git@github.com:"):
+            if prefix in output:
+                path = output.split(prefix, 1)[1]
+                if path.endswith(".git"):
+                    path = path[:-4]
+                return path
+    except (subprocess.CalledProcessError, FileNotFoundError, IndexError):
+        pass
+    return ""
 
 
 def _enrich_with_local_quality(results: list[SkillRepo]) -> list[SkillRepo]:
