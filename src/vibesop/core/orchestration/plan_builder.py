@@ -12,6 +12,7 @@ from vibesop.core.models import (
     ExecutionPlan,
     ExecutionStep,
     PlanStatus,
+    RoutingLayer,
     StepStatus,
 )
 
@@ -68,6 +69,10 @@ class PlanBuilder:
 
             if route_result.primary is None:
                 logger.warning("No skill match for sub-task %d: %s", i, sub_task.query[:50])
+                continue
+
+            if route_result.primary.layer == RoutingLayer.FALLBACK_LLM or route_result.primary.skill_id == "fallback-llm":
+                logger.warning("Fallback LLM for sub-task %d, skipping: %s", i, sub_task.query[:50])
                 continue
 
             if route_result.primary.confidence < self.MIN_STEP_CONFIDENCE:
