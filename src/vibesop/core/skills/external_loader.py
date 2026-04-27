@@ -12,6 +12,7 @@ All external skills go through security validation before being loaded.
 from __future__ import annotations
 
 import json
+import logging
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
@@ -20,6 +21,8 @@ from typing import TYPE_CHECKING, Any, ClassVar
 from vibesop.constants import TRUSTED_PACKS
 from vibesop.core.skills.parser import parse_skill_md
 from vibesop.security import AuditResult, SkillSecurityAuditor
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from vibesop.core.skills.base import SkillMetadata
@@ -154,6 +157,10 @@ class ExternalSkillLoader:
 
             # Search for skill directories (containing SKILL.md) recursively
             for skill_file in search_path.rglob("SKILL.md"):
+                if skill_file.is_symlink():
+                    logger.warning("Skipping symlinked skill file: %s", skill_file)
+                    continue
+
                 skill_dir = skill_file.parent
 
                 # Infer pack name from directory structure.
@@ -209,6 +216,10 @@ class ExternalSkillLoader:
         is_trusted = pack_name in self.TRUSTED_PACKS
 
         for skill_file in pack_path.rglob("SKILL.md"):
+            if skill_file.is_symlink():
+                logger.warning("Skipping symlinked skill file: %s", skill_file)
+                continue
+
             skill_dir = skill_file.parent
 
             metadata = self._parse_and_audit(
@@ -284,7 +295,7 @@ class ExternalSkillLoader:
         pack_version: str | None = None,
         is_trusted: bool = False,
     ) -> ExternalSkillMetadata | None:
-        """Parse skill file and perform security audit.
+        """Audit skill file first, then parse only if safe.
 
         Args:
             skill_dir: Directory containing the skill
@@ -294,23 +305,27 @@ class ExternalSkillLoader:
             is_trusted: Whether the pack is trusted
 
         Returns:
-            ExternalSkillMetadata or None if parsing failed
+            ExternalSkillMetadata or None if audit failed
         """
-        # Parse skill file
+        # Security audit first — check before parsing
+        audit_result = self._auditor.audit_skill_file(skill_file)
+
+        # Only block HIGH-level threats from untrusted packs.
+        # Trusted packs and MEDIUM/LOW threats are allowed through
+        # (marked as unsafe but available) — same behavior as before.
+        if not audit_result.is_safe and not is_trusted:
+            has_high = any(t.level.value == "high" for t in audit_result.threats)
+            if has_high:
+                logger.warning(
+                    "Security audit rejected: %s (%s)", skill_file,
+                    [t.name for t in audit_result.threats if t.level.value == "high"],
+                )
+                return None
+
+        # Parse skill file only after passing audit
         base_metadata = parse_skill_md(skill_file)
         if not base_metadata:
             return None
-
-        # Security audit
-        audit_result = self._auditor.audit_skill_file(skill_file)
-
-        # Check if safe
-        is_safe = audit_result.is_safe
-
-        # For trusted packs in non-strict mode, allow through with warning
-        if is_trusted and not is_safe and not self._strict_mode:
-            # Still mark as unsafe but allow with warning
-            pass
 
         # Determine source
         source = SkillSource.PACK if pack_name else SkillSource.EXTERNAL

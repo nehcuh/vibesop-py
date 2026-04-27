@@ -78,12 +78,26 @@ class SkillConfig:
 
 
 class SkillConfigManager:
-    """技能配置管理器"""
+    """技能配置管理器.
+
+    Supports both class-level API (backward compatible) and instance-level API
+    (recommended for multi-project scenarios where CWD-dependent relative paths
+    would cause silent misconfiguration).
+    """
 
     # 配置文件路径
     SKILL_CONFIG_FILE = Path(".vibe/skills/auto-config.yaml")
     GLOBAL_CONFIG_FILE = Path(".vibe/config.yaml")
     GLOBAL_CONFIG_HOME = Path.home() / ".vibe" / "config.yaml"
+
+    def __init__(self, project_root: str | Path | None = None):
+        self._project_root = Path(project_root).resolve() if project_root else None
+
+    def _resolve_path(self, path: Path) -> Path:
+        """Resolve relative paths against project_root if available."""
+        if path.is_absolute() or self._project_root is None:
+            return path
+        return self._project_root / path
 
     @classmethod
     def get_skill_config(cls, skill_id: str) -> SkillConfig | None:
