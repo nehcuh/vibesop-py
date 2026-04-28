@@ -191,7 +191,7 @@ class TestAppSettings:
         settings = AppSettings()
         assert settings.debug is False
         assert settings.log_level == "INFO"
-        assert settings.llm_provider == "anthropic"
+        assert settings.llm_provider == "ollama"
 
     def test_settings_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Test loading settings from environment."""

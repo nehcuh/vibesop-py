@@ -555,6 +555,8 @@ class UnifiedRouter(RouterStatsMixin, RouterExecutionMixin, RouterOrchestrationM
                 metadata=primary.metadata,
             )
             optimized_primary, _ = self._apply_optimizations([match_result], query, context)
+            if optimized_primary is None:
+                optimized_primary = match_result
             primary = SkillRoute(
                 skill_id=optimized_primary.skill_id,
                 confidence=optimized_primary.confidence,

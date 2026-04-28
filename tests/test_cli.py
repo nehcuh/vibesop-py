@@ -193,12 +193,11 @@ class TestCLIEdgeCases:
     """Test CLI edge cases."""
 
     def test_no_args_is_help(self) -> None:
-        """Test that no args shows help."""
+        """Test that no args shows status dashboard (v5.3.0+ behavior)."""
         result = runner.invoke(app, [])
 
-        # no_args_is_help=True causes exit code 2
-        assert result.exit_code == 2
-        assert "help" in result.stdout.lower()
+        assert result.exit_code == 0
+        assert "status" in result.stdout.lower() or "VibeSOP" in result.stdout
 
     def test_help_command(self) -> None:
         """Test explicit help command."""
