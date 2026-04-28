@@ -41,21 +41,21 @@ def _grade_bar(counts: dict[str, int], total: int) -> str:
     return "  ".join(parts)
 
 
+def _get_skill_count(project_root: Path) -> int:
+    """Get total skill count without loading UnifiedRouter."""
+    try:
+        from vibesop.core.routing.candidate_manager import CandidateManager
+
+        mgr = CandidateManager(project_root)
+        candidates = mgr.get_candidates()
+        return len(candidates)
+    except Exception:
+        return 0
+
+
 def _load_ecosystem_health(project_root: Path) -> Panel:
     """Build ecosystem health panel."""
-    try:
-        from vibesop.core.routing import UnifiedRouter
-
-        router = UnifiedRouter(project_root=project_root)
-        candidates = router.get_candidates() or []
-        total = len(candidates)
-    except Exception:
-        return Panel(
-            "[dim]Unable to load skill candidates[/dim]",
-            title="[bold]Ecosystem Health[/bold]",
-            border_style="dim",
-            box=ROUNDED,
-        )
+    total = _get_skill_count(project_root)
 
     try:
         from vibesop.core.skills.evaluator import RoutingEvaluator

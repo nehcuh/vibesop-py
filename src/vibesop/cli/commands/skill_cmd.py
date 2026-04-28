@@ -43,10 +43,10 @@ def _skill_overview(
 
     # Load skill stats
     try:
-        from vibesop.core.routing import UnifiedRouter
+        from vibesop.core.routing.candidate_manager import CandidateManager
 
-        router = UnifiedRouter(project_root=project_root)
-        candidates = router.get_candidates() or []
+        mgr = CandidateManager(project_root)
+        candidates = mgr.get_candidates()
         total = len(candidates)
     except Exception:
         total = 0
