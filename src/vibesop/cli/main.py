@@ -30,6 +30,7 @@ from vibesop.cli.commands import (
     skill_cmd,
     snapshot_cmd,
 )
+from vibesop.cli.commands.status_cmd import status as status_command
 from vibesop.cli.confirmation import _needs_confirmation, _run_confirmation_flow
 from vibesop.cli.feedback import _collect_feedback
 from vibesop.cli.orchestration_report import render_orchestration_result
@@ -47,9 +48,25 @@ from vibesop.core.routing import UnifiedRouter
 app = typer.Typer(
     name="vibe",
     help="VibeSOP - AI-powered workflow SOP",
-    no_args_is_help=True,
+    no_args_is_help=False,
 )
 console = Console()
+
+
+@app.callback(invoke_without_command=True)
+def _default_callback(
+    ctx: typer.Context,
+    version: bool = typer.Option(
+        False, "--version", "-V", help="Show version and exit"
+    ),
+) -> None:
+    """VibeSOP — AI-powered skill operating system for developers."""
+    if version:
+        console.print(f"VibeSOP v{__version__}")
+        raise typer.Exit(0)
+    if ctx.invoked_subcommand is None:
+        status_command()
+
 
 # Register subcommands
 app.add_typer(plan_cmd.app, name="plan")
@@ -59,6 +76,16 @@ app.add_typer(badges_cmd.app, name="badges")
 app.add_typer(market_cmd.app, name="market")
 app.add_typer(skill_cmd.app, name="skill")
 app.add_typer(snapshot_cmd.app, name="snapshot")
+
+
+@app.command()
+def status(
+    no_color: bool = typer.Option(
+        False, "--no-color", help="Disable colored output"
+    ),
+) -> None:
+    """Show a unified snapshot of your VibeSOP skill ecosystem."""
+    status_command(no_color=no_color)
 
 
 # -- Core routing commands --

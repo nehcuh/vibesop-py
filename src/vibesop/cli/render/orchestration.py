@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from rich import box
@@ -36,6 +37,9 @@ def render_compact_orchestration(
                 table.add_row("Status", "[yellow]Fallback (no skill matched)[/yellow]")
             else:
                 table.add_row("Selected", f"[green]{result.primary.skill_id}[/green]")
+                desc = getattr(result.primary, "description", "")
+                if desc:
+                    table.add_row("Description", f"[dim]{desc[:100]}[/dim]")
                 table.add_row("Confidence", f"{result.primary.confidence:.0%}")
                 table.add_row("Layer", result.primary.layer.value)
         else:
@@ -70,3 +74,14 @@ def render_compact_orchestration(
 
     console.print(table)
     console.print()
+
+    from vibesop.cli.render.tips import render_ecosystem_tips
+
+    query = getattr(result, "original_query", "")
+    skill_id = result.primary.skill_id if result.primary else ""
+    render_ecosystem_tips(
+        project_root=Path.cwd(),
+        console=console,
+        query=query,
+        routed_skill_id=skill_id,
+    )

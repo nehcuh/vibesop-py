@@ -5,6 +5,8 @@ Enhanced skills CLI with smart installation.
 
 import typer
 
+from vibesop.cli.commands.cleanup_cmd import cleanup
+from vibesop.cli.commands.community_cmd import discover, share
 from vibesop.cli.commands.skill_add import add as skill_add
 from vibesop.cli.commands.skills_cmd import (
     available,
@@ -41,6 +43,9 @@ skills_app.command("health")(health)
 skills_app.command("available")(available)
 skills_app.command("enable")(enable)
 skills_app.command("disable")(disable)
+skills_app.command("share")(share)
+skills_app.command("discover")(discover)
+skills_app.command("cleanup")(cleanup)
 
 
 # Add alias for "skills" (plural form)

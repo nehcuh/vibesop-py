@@ -1,0 +1,60 @@
+---
+name: 技能分享 (Skill Share)
+description: 向社区分享你的技能
+title: "[技能分享] "
+labels: ["skill-share", "community"]
+assignees: []
+body:
+  - type: input
+    id: skill_id
+    attributes:
+      label: 技能 ID
+      description: "唯一标识符，如 my-namespace/my-skill"
+      placeholder: "gstack/custom-linter"
+    validations:
+      required: true
+  - type: input
+    id: description
+    attributes:
+      label: 一句话描述
+      description: "这个技能做什么"
+      placeholder: "自动化 Python 代码 lint 和格式化"
+    validations:
+      required: true
+  - type: textarea
+    id: scenarios
+    attributes:
+      label: 适用场景
+      description: "什么情况下应该使用这个技能"
+      placeholder: "- 提交代码前自动检查\n- CI 中集成 lint 检查"
+    validations:
+      required: true
+  - type: textarea
+    id: skill_md
+    attributes:
+      label: SKILL.md 内容
+      description: "粘贴完整的 SKILL.md 内容"
+      render: markdown
+    validations:
+      required: true
+  - type: dropdown
+    id: namespace
+    attributes:
+      label: 命名空间
+      description: "技能所属分类"
+      options:
+        - gstack
+        - superpowers
+        - omx
+        - custom
+        - other
+    validations:
+      required: true
+  - type: textarea
+    id: install_notes
+    attributes:
+      label: 安装说明（可选）
+      description: "是否需要特殊依赖或前置条件"
+      placeholder: "需要安装 ruff >= 0.5.0"
+    validations:
+      required: false

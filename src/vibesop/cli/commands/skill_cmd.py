@@ -7,6 +7,9 @@ Provides:
 - vibe skill status <id>: Show skill details
 - vibe skill stale: Detect stale/underperforming skills
 - vibe skill end-check: Session-end retention + suggestion review
+- vibe skill share <id>: Publish a skill to the community
+- vibe skill discover [query]: Browse community skills
+- vibe skill cleanup: Interactive cleanup of low-quality/stale skills
 """
 
 from __future__ import annotations
@@ -18,10 +21,90 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
+from vibesop.cli.commands.cleanup_cmd import cleanup
+from vibesop.cli.commands.community_cmd import discover, share
 from vibesop.core.skills.config_manager import SkillConfigManager
 from vibesop.core.skills.lifecycle import SkillLifecycle, SkillLifecycleManager
 
-app = typer.Typer(name="skill", help="Manage skill lifecycle")
+app = typer.Typer(name="skill", help="Manage skill lifecycle", no_args_is_help=False)
+
+
+@app.callback(invoke_without_command=True)
+def _skill_overview(
+    ctx: typer.Context,
+) -> None:
+    """Show skill ecosystem overview when no subcommand is given."""
+    if ctx.invoked_subcommand is not None:
+        return
+
+    from pathlib import Path
+
+    project_root = Path.cwd()
+
+    # Load skill stats
+    try:
+        from vibesop.core.routing.candidate_manager import CandidateManager
+
+        mgr = CandidateManager(project_root)
+        candidates = mgr.get_candidates()
+        total = len(candidates)
+    except Exception:
+        total = 0
+
+    try:
+        from vibesop.core.skills.evaluator import RoutingEvaluator
+
+        evaluator = RoutingEvaluator(project_root=project_root)
+        low = evaluator.get_low_quality_skills(threshold=0.3, min_routes=3)
+        low_count = len(low)
+    except Exception:
+        low_count = 0
+
+    try:
+        from vibesop.core.skills.feedback_loop import FeedbackLoop
+
+        loop = FeedbackLoop(project_root=project_root)
+        stale = loop.analyze_all(auto_deprecate=False)
+        stale_count = sum(1 for s in stale if s.action in ("deprecate", "archive"))
+    except Exception:
+        stale_count = 0
+
+    # Dashboard
+    console.print()
+    console.rule("[bold cyan]VibeSOP Skill Management[/bold cyan]")
+    console.print()
+
+    status_parts = [f"[bold]{total}[/bold] skills installed"]
+    if low_count > 0:
+        status_parts.append(f"[yellow]{low_count} need attention[/yellow]")
+    if stale_count > 0:
+        status_parts.append(f"[yellow]{stale_count} stale[/yellow]")
+    if low_count == 0 and stale_count == 0:
+        status_parts.append("[green]all healthy[/green]")
+
+    console.print(f"  {' · '.join(status_parts)}")
+    console.print()
+
+    # Quick actions
+    from rich.box import ROUNDED
+    from rich.panel import Panel
+
+    actions = (
+        "[cyan]vibe skill list[/cyan]            [dim]— browse all installed skills[/dim]\n"
+        "[cyan]vibe skill discover[/cyan]        [dim]— find community skills[/dim]\n"
+        "[cyan]vibe skill cleanup[/cyan]         [dim]— review and prune stale skills[/dim]\n"
+        "[cyan]vibe skill enable/disable[/cyan]  [dim]— toggle skills on/off[/dim]\n"
+        "[cyan]vibe skill stale[/cyan]           [dim]— detailed health analysis[/dim]\n"
+        "[cyan]vibe skill share[/cyan]           [dim]— publish your skill to the community[/dim]"
+    )
+
+    console.print(
+        Panel(actions, title="[bold]Quick Actions[/bold]", border_style="cyan", box=ROUNDED)
+    )
+
+    console.print()
+    console.print("[dim]Also try:[/dim] [cyan]vibe status[/cyan] [dim]for full ecosystem health[/dim]")
+    console.print()
 console = Console()
 
 
@@ -286,3 +369,31 @@ def end_check(
 
     if not retention and not result.get("should_prompt_suggestions"):
         console.print("[green]All skills healthy. No new pattern suggestions.[/green]")
+
+
+# Community commands
+@app.command(name="share", help="Publish a skill to the community via GitHub Issues")
+def _share_cmd(
+    skill_id: str = typer.Argument(..., help="Skill ID to share"),
+) -> None:
+    share(skill_id)
+
+
+@app.command(name="discover", help="Discover community-shared skills from GitHub Issues")
+def _discover_cmd(
+    query: str | None = typer.Argument(None, help="Search keywords"),
+    json_output: bool = typer.Option(False, "--json", "-j", help="Output as JSON"),
+) -> None:
+    discover(query=query, json_output=json_output)
+
+
+@app.command(name="cleanup", help="Interactively review and clean up low-quality or stale skills")
+def _cleanup_cmd(
+    auto: bool = typer.Option(
+        False, "--auto", "-a", help="Apply all suggested actions automatically"
+    ),
+    dry_run: bool = typer.Option(
+        False, "--dry-run", "-n", help="Preview without making changes"
+    ),
+) -> None:
+    cleanup(auto=auto, dry_run=dry_run)

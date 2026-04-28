@@ -23,17 +23,14 @@ def render_fallback_panel(result: Any, console: Console) -> None:
 
     console.print(
         Panel(
-            f"[bold yellow]🤖 Fallback Mode[/bold yellow]\n\n"
-            f"No installed skill confidently matched your query.\n"
+            f"[bold yellow]No matching skill found[/bold yellow]\n\n"
             f"[dim]Query:[/dim] {result.original_query}\n"
-            f"[dim]Routing path:[/dim] {' → '.join([layer.value for layer in result.routing_path])}\n"
             f"{alt_text}\n"
-            f"[dim]VibeSOP is a routing engine, not an executor.[/dim]\n"
-            f"[dim]Your AI Agent can still process this request using raw LLM.[/dim]\n\n"
-            f"[dim]Try:[/dim]\n"
-            f"  • Using more specific keywords\n"
-            f"  • Browsing available skills: [bold]vibe skills list[/bold]\n"
-            f"  • Installing a relevant skill pack\n"
+            f"[bold]What to do:[/bold]\n"
+            f"  • [cyan]vibe skill discover[/cyan] — search community skills\n"
+            f"  • [cyan]vibe skills list[/cyan] — browse installed skills\n"
+            f"  • Rephrase your query with more specific keywords\n"
+            f"  • Your AI Agent can still handle this without a skill\n"
             f"{stale_text}",
             title="[bold]Routing Result[/bold]",
             border_style="yellow",

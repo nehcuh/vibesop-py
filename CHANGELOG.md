@@ -7,6 +7,70 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.3.0] - 2026-04-28
+
+### Product Experience Overhaul — "从路由工具到 SkillOS 产品"
+
+This release closes the gap between VibeSOP's infrastructure capabilities and
+the end-user experience. The product now feels like a coherent SkillOS, not a
+collection of disconnected CLI commands.
+
+#### Unified Ecosystem Dashboard
+
+- **`vibe status`** — single view of skill ecosystem health:
+  - Total skills count with A-F grade distribution
+  - Recent routing activity (last 5 routes)
+  - Personalized recommendations (SkillRecommender)
+  - Warnings (low quality, stale skills)
+  - Community trending skills (GitHub Issues by 👍)
+  - Skill creation suggestions from workflow patterns
+- **`vibe` (no args)** — now shows the dashboard instead of help text
+- **`vibe skill` (no args)** — skill management hub with quick actions panel
+
+#### Post-Route Experience
+
+- **Auto badge checking** — SKILL_CHAMPION awarded on 10th use of a skill
+- **Today's stats** — "8 routes today · top: systematic-debugging"
+- **Rotating tips** — ~30% of routes show contextual discovery hints
+- **Skill description** — matched skill's one-line description shown inline
+- **Urgent warnings** — low quality and stale skill alerts after routing
+
+#### Skill Lifecycle Management
+
+- **`vibe skill cleanup`** — interactive checkbox cleanup of stale/low-quality skills
+  - `--auto` mode for non-interactive batch processing
+  - `--dry-run` mode for preview without changes
+- **`vibe skill stale`** — detailed health analysis with deprecation actions
+
+#### Community Skills (GitHub Issues)
+
+- **`vibe skill share`** — publish skills via `gh` CLI or browser
+- **`vibe skill discover`** — browse community skills sorted by 👍
+- **Issue templates** — `skill-share.yml` and `skill-request.yml`
+- Zero infrastructure — reuses GitHub Issues API, swappable later
+
+#### First-Run Onboarding
+
+- Welcome guide for new users with getting-started instructions
+- Friendly empty states in status dashboard ("Try `vibe route` to get started!")
+
+#### Improved Error Experience
+
+- Route no-match shows nearest-matching skills with rephrasing suggestions
+- Fallback panel prioritizes community discovery over raw LLM fallback
+
+#### Thread Safety
+
+- `RouterStatsMixin.get_stats()` now acquires `_stats_lock` for reads
+  (writes were already locked, reads were unprotected — fixed race condition)
+
+#### Tests
+
+- 20 new tests for status and cleanup commands
+- All 2098+ existing tests continue to pass
+
+---
+
 ## [4.3.0] - 2026-04-24
 
 ### v5.0 User Experience Closure (T1–T5)

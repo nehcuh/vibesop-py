@@ -33,9 +33,14 @@ class RouterStatsMixin:
         from vibesop.core.routing.perf_monitor import get_perf_monitor
 
         perf = get_perf_monitor().get_stats()
+
+        with self._stats_lock:  # type: ignore[attr-defined]
+            total_routes = self._total_routes  # type: ignore[attr-defined]
+            layer_dist = dict(self._layer_distribution)  # type: ignore[attr-defined]
+
         return {
-            "total_routes": self._total_routes,  # type: ignore[attr-defined]
-            "layer_distribution": dict(self._layer_distribution),  # type: ignore[attr-defined]
+            "total_routes": total_routes,
+            "layer_distribution": layer_dist,
             "cache_dir": str(self.project_root / ".vibe" / "cache"),  # type: ignore[attr-defined]
             "ai_triage": self.get_ai_triage_stats(),
             "performance": {

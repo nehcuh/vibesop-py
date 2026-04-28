@@ -11,7 +11,7 @@ Version Format: MAJOR.MINOR.PATCH
 
 # Version components
 MAJOR = 5
-MINOR = 2
+MINOR = 3
 PATCH = 0
 
 # Version metadata
