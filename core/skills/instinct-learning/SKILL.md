@@ -3,7 +3,7 @@ id: builtin/instinct-learning
 name: instinct-learning
 description: Automatic pattern learning system - extract reusable instincts from sessions
 tags: [instinct, pattern, learn, extract, habit, 本能, 模式, 学习]
-version: 1.0.0
+version: 1.1.0
 commands:
   - learn
   - learn-eval
@@ -18,300 +18,386 @@ type: prompt
 
 # Instinct Learning System
 
-> **Automatic pattern extraction from your work sessions**
-> Learn from your successful workflows and build a personal knowledge base.
+> Extract reusable patterns from your work, build instincts, and evolve them into formal skills.
 
-## What This Skill Does
+## Core Principle
 
-### The Problem
-- You solve the same problem multiple times but forget the solution
-- Successful workflows are not captured and reused
-- Team knowledge is scattered and not shared
-- Manual documentation is tedious and often skipped
+**Memory > Intelligence.** Instead of reasoning from scratch every time, remember what worked and reuse it.
 
-### The Solution
-**Automatically learn** from your sessions:
-1. **Pattern Detection**: Analyze successful tool call sequences
-2. **Confidence Scoring**: Evaluate pattern reliability
-3. **Knowledge Sharing**: Export/import instincts across team
-4. **Skill Evolution**: Upgrade high-quality instincts to formal skills
+---
 
-## Commands
+## `/learn` — Record a Pattern
 
-### `/learn` - Extract Patterns from Current Session
+Records a successful workflow pattern as an instinct candidate.
 
-Analyzes the current session and extracts successful patterns as instinct candidates.
+### Execution
 
-**Usage**: `/learn`
+```bash
+python3 -c "
+from pathlib import Path
+from vibesop.core.instinct.learner import InstinctLearner
 
-**What it does**:
-- Analyzes tool call history
-- Identifies successful sequences (3+ consecutive successes)
-- Generates natural language pattern descriptions
-- Creates instinct candidates for review
-
-**Example output**:
+learner = InstinctLearner(Path.cwd() / '.vibe' / 'instincts.jsonl')
+learner.learn(
+    pattern='<DESCRIBE_THE_PATTERN_IN_ONE_SENTENCE>',
+    action='<WHAT_ACTION_TO_TAKE>',
+    context='<WHEN_THIS_APPLIES>',
+    tags=['<comma_separated_tags>'],
+)
+instinct = list(learner._instincts.values())[-1]
+print(f'Learned: {instinct.pattern} (confidence: {instinct.confidence:.0%})')
+"
 ```
-Found 3 pattern candidates:
 
-1. Ruby Syntax Fix Pattern
-   Sequence: rubocop → Edit → ruby test
-   Success rate: 100% (5/5 times)
-   Suggested pattern: "When fixing Ruby syntax errors, run rubocop first"
-   Tags: ruby, linting, debugging
+### When to Use
 
-2. Git Workflow Pattern
-   Sequence: git status → git add → git commit
-   Success rate: 100% (8/8 times)
-   Suggested pattern: "Always check git status before committing"
-   Tags: git, workflow
+- After solving a complex problem successfully
+- After establishing a new workflow that worked well
+- At the end of a productive session
 
-Use /learn-eval to review and save these patterns.
+### Pattern Writing Guidelines
+
+| Good Pattern | Bad Pattern |
+|-------------|------------|
+| "Before deploying, run `pytest --cov` and check coverage > 80%" | "Test before deploy" |
+| "When fixing lint errors, run `ruff check --fix` before manual edits" | "Fix lint" |
+| "For Django migrations, always run `makemigrations --dry-run` first" | "Migrations" |
+
+### Auto-Record from Session
+
+After a successful tool sequence (3+ consecutive successes), automatically record it:
+
+```bash
+python3 -c "
+from pathlib import Path
+from vibesop.core.instinct.learner import InstinctLearner
+
+learner = InstinctLearner(Path.cwd() / '.vibe' / 'instincts.jsonl')
+
+steps = ['<step1>', '<step2>', '<step3>']  # e.g. ['Bash:ruff check', 'Edit:fix.py', 'Bash:ruff check']
+success = True  # Set based on whether the sequence succeeded
+
+candidate = learner.record_sequence(steps, success)
+if candidate:
+    print(f'New pattern candidate: {\" → \".join(candidate.steps)}')
+    print(f'  Occurrences: {candidate.total_count}, Success rate: {candidate.success_rate:.0%}')
+else:
+    print('No candidate yet (need 5+ occurrences with 80%+ success)')
+"
 ```
 
 ---
 
-### `/learn-eval` - Evaluate and Save Instinct Candidates
+## `/learn-eval` — Evaluate and Save Candidates
 
-Reviews instinct candidates and saves approved ones to the knowledge base.
+Reviews detected sequence patterns and saves approved ones.
 
-**Usage**: `/learn-eval [instinct_id]`
+### View Candidates
 
-**What it does**:
-- Calculates confidence score
-- Shows usage statistics
-- Asks for user confirmation
-- Saves to memory/instincts.yaml
+```bash
+python3 -c "
+from pathlib import Path
+from vibesop.core.instinct.learner import InstinctLearner
 
-**Example**:
+learner = InstinctLearner(Path.cwd() / '.vibe' / 'instincts.jsonl')
+candidates = learner.get_sequence_candidates()
+
+if not candidates:
+    print('No pattern candidates ready yet.')
+else:
+    for i, c in enumerate(candidates):
+        print(f'{i+1}. {\" → \".join(c.steps)}')
+        print(f'   Occurrences: {c.total_count} | Success: {c.success_rate:.0%} | Tags: {c.context_tags}')
+        print()
+"
 ```
-Evaluating Instinct Candidate #1
 
-Pattern: "When fixing Ruby syntax errors, run rubocop first"
-Confidence: 0.85 (High)
-  - Success rate: 100% (5/5) → 0.60
-  - Usage frequency: 5/20 → 0.15
-  - Source diversity: 2 sessions → 0.10
+### Approve and Convert to Skill Suggestion
 
-Tags: ruby, linting, debugging
-Context: Ruby projects with rubocop configured
+For each candidate you want to keep:
 
-Save this instinct? [y/n/e]
-y - Yes, save to knowledge base
-n - No, discard
-e - Edit before saving
+```bash
+python3 -c "
+from pathlib import Path
+from vibesop.core.instinct.learner import InstinctLearner
+from vibesop.core.skills.suggestion_collector import SkillSuggestionCollector
+
+learner = InstinctLearner(Path.cwd() / '.vibe' / 'instincts.jsonl')
+collector = SkillSuggestionCollector()
+
+# Get all candidates and convert the ones you approve
+candidates = learner.get_sequence_candidates()
+# Add the candidate at <INDEX> (0-based) as a skill suggestion
+collector.add_from_pattern(candidates[<INDEX>])
+
+pending = collector.get_pending()
+print(f'Pending suggestions: {len(pending)}')
+for s in pending:
+    print(f'  {s.name}: {s.description}')
+"
+```
+
+### Apply to Routing
+
+Approved instincts automatically boost matching skills in the router via `OptimizationService.apply_instinct_boost()`. No manual step needed.
+
+---
+
+## `/instinct-status` — View All Instincts
+
+### Show All Active Instincts
+
+```bash
+python3 -c "
+from pathlib import Path
+from vibesop.core.instinct.learner import InstinctLearner
+
+learner = InstinctLearner(Path.cwd() / '.vibe' / 'instincts.jsonl')
+
+instincts = learner.get_reliable_instincts()
+if not instincts:
+    print('No reliable instincts yet. Use /learn to build your knowledge base.')
+else:
+    print(f'Active Instincts ({len(instincts)} total)')
+    print()
+    high = [i for i in instincts if i.confidence >= 0.8]
+    mid = [i for i in instincts if 0.6 <= i.confidence < 0.8]
+    low = [i for i in instincts if i.confidence < 0.6]
+
+    if high:
+        print('High Confidence (>= 0.8):')
+        for i in high:
+            print(f'  {i.pattern}')
+            print(f'    Action: {i.action}  |  Uses: {i.total_applications}  |  Tags: {i.tags}')
+    if mid:
+        print('Medium Confidence (0.6-0.8):')
+        for i in mid:
+            print(f'  {i.pattern}')
+    if low:
+        print('Low Confidence (<0.6):')
+        for i in low:
+            print(f'  {i.pattern}')
+"
+```
+
+### Filter by Tag
+
+Add `tag_filter = '<tag>'` before the `get_reliable_instincts()` call:
+
+```bash
+python3 -c "
+from pathlib import Path
+from vibesop.core.instinct.learner import InstinctLearner
+
+learner = InstinctLearner(Path.cwd() / '.vibe' / 'instincts.jsonl')
+tag = '<TAG>'
+instincts = [i for i in learner.get_reliable_instincts() if tag.lower() in [t.lower() for t in i.tags]]
+print(f'Instincts tagged \"{tag}\": {len(instincts)}')
+for i in instincts:
+    print(f'  {i.pattern} ({i.confidence:.0%})')
+"
+```
+
+### Show Statistics
+
+```bash
+python3 -c "
+from pathlib import Path
+from vibesop.core.instinct.learner import InstinctLearner
+
+learner = InstinctLearner(Path.cwd() / '.vibe' / 'instincts.jsonl')
+stats = learner.get_stats()
+print(f'Total instincts: {stats.get(\"total\", 0)}')
+print(f'Reliable: {stats.get(\"reliable\", 0)}')
+print(f'Sequence candidates: {len(learner.get_sequence_candidates())}')
+"
 ```
 
 ---
 
-### `/instinct-status` - View All Instincts
+## `/instinct-export` — Export Instincts
 
-Lists all learned instincts with their confidence scores.
+Export all reliable instincts (or filtered by tag/confidence) to YAML for backup or team sharing.
 
-**Usage**:
-- `/instinct-status` - List all active instincts
-- `/instinct-status --tag ruby` - Filter by tag
-- `/instinct-status --min-confidence 0.8` - Filter by confidence
-- `/instinct-status --all` - Include archived and evolved
+```bash
+python3 -c "
+from pathlib import Path
+import json
+from vibesop.core.instinct.learner import InstinctLearner
 
-**Example output**:
+learner = InstinctLearner(Path.cwd() / '.vibe' / 'instincts.jsonl')
+instincts = learner.get_reliable_instincts()
+
+# Optional: filter by tag or confidence
+# instincts = [i for i in instincts if i.confidence >= 0.8]
+# instincts = [i for i in instincts if 'python' in [t.lower() for t in i.tags]]
+
+data = {
+    'version': '1.0',
+    'exported_at': __import__('datetime').datetime.now().isoformat(),
+    'instincts': [i.to_dict() for i in instincts],
+}
+
+output_path = Path.cwd() / 'instincts-export.json'
+output_path.write_text(json.dumps(data, indent=2, ensure_ascii=False, default=str))
+print(f'Exported {len(instincts)} instincts to {output_path}')
+"
 ```
-Active Instincts (12 total)
 
-High Confidence (≥ 0.8):
-  1. Ruby syntax fix workflow (0.92) [ruby, linting]
-  2. Git commit workflow (0.88) [git, workflow]
-  3. Test-driven debugging (0.85) [testing, debugging]
+Replace `instincts-export.json` with the desired filename. The agent can then share this file.
 
-Medium Confidence (0.6-0.8):
-  4. API error handling (0.75) [api, error-handling]
-  5. Database migration pattern (0.68) [database, rails]
+---
 
-Low Confidence (< 0.6):
-  6. Performance optimization (0.55) [performance]
+## `/instinct-import` — Import Instincts
+
+Import instincts from a shared JSON export file.
+
+### Import (Skip Duplicates — Safe Default)
+
+```bash
+python3 -c "
+from pathlib import Path
+import json
+from vibesop.core.instinct.learner import InstinctLearner, Instinct
+
+input_path = Path('<PATH_TO_EXPORT_FILE>')
+if not input_path.exists():
+    print(f'File not found: {input_path}')
+    exit(1)
+
+data = json.loads(input_path.read_text())
+incoming = [Instinct.from_dict(i) for i in data.get('instincts', [])]
+
+learner = InstinctLearner(Path.cwd() / '.vibe' / 'instincts.jsonl')
+imported = 0
+skipped = 0
+for instinct in incoming:
+    if instinct.id not in learner._instincts:
+        learner._instincts[instinct.id] = instinct
+        # Persist to storage
+        with learner.storage_path.open('a') as f:
+            f.write(json.dumps(instinct.to_dict(), default=str) + '\n')
+        imported += 1
+    else:
+        skipped += 1
+
+print(f'Imported: {imported} | Skipped (duplicates): {skipped}')
+"
+```
+
+### Import with Overwrite
+
+To overwrite existing instincts with the same ID, change `skipped` logic:
+
+```python
+# Instead of "if instinct.id not in learner._instincts", use:
+learner._instincts[instinct.id] = instinct  # Always overwrite
 ```
 
 ---
 
-### `/instinct-export` - Export Instincts
+## `/evolve` — Upgrade Instinct to Skill
 
-Exports instincts to a file for backup or team sharing.
+Convert a high-quality instinct (confidence >= 0.8, 10+ uses) into a formal VibeSOP skill.
 
-**Usage**:
-- `/instinct-export backup.yaml` - Export all
-- `/instinct-export ruby-patterns.yaml --tag ruby` - Export by tag
-- `/instinct-export high-confidence.yaml --min-confidence 0.8` - Export high-confidence only
+### Step 1: Identify Candidate
 
-**Example**:
+```bash
+python3 -c "
+from pathlib import Path
+from vibesop.core.instinct.learner import InstinctLearner
+
+learner = InstinctLearner(Path.cwd() / '.vibe' / 'instincts.jsonl')
+reliable = [i for i in learner.get_reliable_instincts() if i.confidence >= 0.8 and i.total_applications >= 10]
+for j, ins in enumerate(reliable):
+    print(f'{j+1}. [{ins.confidence:.0%}] {ins.pattern} ({ins.total_applications} uses)')
+if not reliable:
+    print('No instincts ready for evolution (need confidence >= 0.8 and 10+ uses)')
+"
 ```
-Exported 8 instincts to ruby-patterns.yaml
-  - 5 high confidence
-  - 3 medium confidence
-  - Tags: ruby, rails, testing
 
-Share this file with your team!
-```
+### Step 2: Generate SKILL.md
 
+Pick the instinct to evolve and run:
+
+```bash
+python3 -c "
+from pathlib import Path
+from vibesop.core.instinct.learner import InstinctLearner
+
+learner = InstinctLearner(Path.cwd() / '.vibe' / 'instincts.jsonl')
+reliable = [i for i in learner.get_reliable_instincts() if i.confidence >= 0.8 and i.total_applications >= 10]
+
+ins = reliable[<INDEX>]  # 0-based index from step 1
+
+skill_id = 'custom/' + ins.pattern.lower().replace(' ', '-').replace(',', '')[:50]
+skill_dir = Path.cwd() / '.vibe' / 'skills' / skill_id
+skill_dir.mkdir(parents=True, exist_ok=True)
+
+skill_md = f'''---
+id: {skill_id}
+name: {skill_id}
+description: {ins.pattern} (evolved from instinct)
+tags: {ins.tags}
+intent: workflow
+namespace: custom
+version: 1.0.0
+type: prompt
+source: instinct-evolution
+instinct_id: {ins.id}
 ---
 
-### `/instinct-import` - Import Instincts
+# {ins.pattern}
 
-Imports instincts from a file (team sharing or backup restore).
+## Overview
 
-**Usage**:
-- `/instinct-import team-patterns.yaml` - Import with skip strategy (default)
-- `/instinct-import backup.yaml --overwrite` - Overwrite existing
-- `/instinct-import shared.yaml --merge` - Merge usage statistics
+Pattern evolved from instinct with {ins.confidence:.0%} confidence ({ins.total_applications} uses).
 
-**Merge strategies**:
-- `skip`: Skip existing instincts (safe, default)
-- `overwrite`: Replace existing instincts
-- `merge`: Combine usage statistics
+## When to Apply
 
-**Example**:
-```
-Importing from team-patterns.yaml...
+{ins.context}
 
-Results:
-  ✓ Imported: 12 new instincts
-  ⊘ Skipped: 3 duplicates
-  ⚠ Errors: 0
+## Steps
 
-New instincts added:
-  - React hooks best practices (0.90)
-  - TypeScript type narrowing (0.85)
-  - Jest testing patterns (0.82)
-```
+When this pattern matches, {ins.action}.
 
----
+## Metrics
 
-### `/evolve` - Upgrade Instinct to Skill
+- **Confidence**: {ins.confidence:.0%}
+- **Success rate**: {ins.success_rate:.0%} ({ins.success_count}/{ins.total_applications})
+- **Evolved from**: instinct #{ins.id[:8]}
+'''
 
-Converts high-quality instincts into formal skills.
-
-**Usage**: `/evolve <instinct_id> [skill_name]`
-
-**What it does**:
-- Aggregates related instincts
-- Generates skill markdown file
-- Saves to skills/ directory
-- Marks instinct as "evolved"
-
-**Example**:
-```
-Evolving instinct #1 into skill...
-
-Creating skill: ruby-linting-workflow
-  - Based on 3 related instincts
-  - Combined confidence: 0.88
-  - Total usage: 45 times across 8 sessions
-
-Generated files:
-  ✓ skills/ruby-linting-workflow/SKILL.md
-  ✓ Updated memory/instincts.yaml (marked as evolved)
-
-You can now use: /ruby-linting-workflow
+(skill_dir / 'SKILL.md').write_text(skill_md)
+print(f'Skill created: {skill_dir}/SKILL.md')
+print(f'Skill ID: {skill_id}')
+print()
+print('Next: run \"vibe skills suggestions\" to register it formally.')
+"
 ```
 
----
+### Step 3: Register the Skill
 
-## How It Works
+After generating the SKILL.md, register it with VibeSOP so it becomes routable:
 
-### 1. Pattern Detection
-```
-Session Activity:
-  Bash: rubocop app.rb → Success
-  Edit: app.rb (fix syntax) → Success
-  Bash: ruby app.rb → Success
-
-Pattern Detected:
-  "Run linter before testing Ruby code"
-  Confidence: 0.75 (initial)
+```bash
+vibe skills suggestions
 ```
 
-### 2. Confidence Evolution
-```
-First use:  0.75 (1 success, 1 session)
-After 5:    0.82 (5 successes, 2 sessions)
-After 20:   0.90 (19 successes, 5 sessions)
-```
-
-### 3. Knowledge Sharing
-```
-Developer A: Learns pattern → Exports
-Developer B: Imports → Applies pattern
-Developer C: Imports → Pattern confidence increases
-```
+The new skill will appear in the routing pipeline on the next `vibe route` call.
 
 ---
 
 ## Storage
 
-**Location**: `memory/instincts.yaml`
-
-**Format**:
-```yaml
-version: "1.0"
-instincts:
-  - id: "550e8400-e29b-41d4-a716-446655440000"
-    pattern: "Run rubocop before testing Ruby code"
-    confidence: 0.85
-    source_sessions: ["session-001", "session-002"]
-    usage_count: 12
-    success_rate: 0.92
-    tags: ["ruby", "linting"]
-    status: "active"
-```
+All instincts are stored in `.vibe/instincts.jsonl` (JSONL, one instinct per line). Sequence patterns in `.vibe/sequences.jsonl`. Skill suggestions in `.vibe/instincts/skill_candidates.jsonl`.
 
 ---
 
 ## Best Practices
 
-### When to Use `/learn`
-- ✅ After solving a complex problem
-- ✅ After establishing a new workflow
-- ✅ At the end of a productive session
-- ❌ During active debugging (wait until solved)
-
-### Confidence Thresholds
-- **0.9+**: Highly reliable, auto-apply
-- **0.7-0.9**: Reliable, suggest to user
-- **0.5-0.7**: Experimental, use with caution
-- **< 0.5**: Low confidence, needs more data
-
-### Team Sharing
-1. Export high-confidence instincts (≥ 0.8)
-2. Share via Git or team drive
-3. Team members import with `--merge` strategy
-4. Collective usage increases confidence
-
----
-
-## Safety
-
-**What this skill does NOT do**:
-- ❌ Auto-apply patterns without confirmation
-- ❌ Modify your code automatically
-- ❌ Share data outside your control
-- ❌ Execute commands without permission
-
-**What it DOES**:
-- ✅ Learn from your explicit actions
-- ✅ Store data locally (memory/instincts.yaml)
-- ✅ Require confirmation before saving
-- ✅ Support team sharing via explicit export/import
-
----
-
-## Upgrade Path
-
-**Phase 1 (Current)**: Manual learning with `/learn` and `/learn-eval`
-**Phase 2**: Auto-detection with user confirmation
-**Phase 3**: High-confidence patterns auto-suggest
-**Phase 4**: Cross-project pattern recognition
-
----
-
-**Version**: 1.0.0
-**Status**: Active Development
-**Feedback**: Report issues to VibeSOP repository
+- Use `/learn` immediately after a successful workflow (while context is fresh)
+- Run `/learn-eval` at session end to review accumulated patterns
+- Export high-confidence instincts (>= 0.8) for team sharing
+- Evolve instincts to skills after 10+ successful uses
+- Keep instinct descriptions specific and actionable (not vague)
