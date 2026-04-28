@@ -245,4 +245,9 @@ def render_compact_summary(
 
     from vibesop.cli.render.tips import render_ecosystem_tips
 
-    render_ecosystem_tips(project_root=Path.cwd(), console=console)
+    render_ecosystem_tips(
+        project_root=Path.cwd(),
+        console=console,
+        query=getattr(result, "query", ""),
+        routed_skill_id=result.primary.skill_id if result.primary else "",
+    )
