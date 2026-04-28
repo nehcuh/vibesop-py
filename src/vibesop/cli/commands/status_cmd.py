@@ -4,6 +4,7 @@ Usage:
     vibe status
 
 Displays:
+    - Welcome (first-run) / Badge showcase
     - Skill ecosystem health (total count, grade distribution A-F)
     - Recent routing activity
     - Personalized recommendations
@@ -80,7 +81,7 @@ def _load_ecosystem_health(project_root: Path) -> Panel:
     else:
         lines.append("")
         lines.append(
-            "[dim]No evaluation data yet. Use skills to collect feedback.[/dim]"
+            "[dim]No evaluation data yet. Skills are evaluated as you use them.[/dim]"
         )
 
     content = "\n".join(lines)
@@ -104,7 +105,8 @@ def _load_recent_activity(project_root: Path) -> Panel:
 
     if not records:
         return Panel(
-            "[dim]No routing activity yet. Try [bold]vibe route[/bold] to get started![/dim]",
+            "[dim]No routing activity yet.\n"
+            "Try [bold cyan]vibe route \"help me debug this error\"[/bold cyan] to get started![/dim]",
             title="[bold]Recent Activity[/bold]",
             border_style="dim",
             box=ROUNDED,
@@ -204,6 +206,60 @@ def _load_warnings(project_root: Path) -> Panel:
     return Panel(content, title="[bold]Warnings[/bold]", border_style="yellow", box=ROUNDED)
 
 
+def _load_badges() -> Panel | None:
+    """Build badges showcase panel."""
+    try:
+        from vibesop.core.badges import BadgeTracker, get_badge_display
+
+        tracker = BadgeTracker()
+        badges = tracker.list_badges()
+    except Exception:
+        return None
+
+    if not badges:
+        return None
+
+    lines: list[str] = []
+    for b in badges[:8]:
+        meta = get_badge_display(b.type)
+        date = b.awarded_at[:10] if len(b.awarded_at) >= 10 else b.awarded_at
+        lines.append(
+            f"{meta['icon']} [bold]{meta['title']}[/bold] [dim]—[/dim] "
+            f"{meta['description']} [dim]({date})[/dim]"
+        )
+
+    content = "\n".join(lines)
+    return Panel(content, title="[bold]Achievements[/bold]", border_style="magenta", box=ROUNDED)
+
+
+def _detect_first_run(project_root: Path) -> bool:
+    """Check if this appears to be the first run."""
+    analytics_exists = (project_root / ".vibe" / "analytics.jsonl").exists()
+    feedback_exists = (project_root / ".vibe" / "feedback.jsonl").exists()
+    return not analytics_exists and not feedback_exists
+
+
+def _load_welcome(is_first: bool) -> Panel | None:
+    """Build welcome panel for first-time users."""
+    if not is_first:
+        return None
+
+    content = (
+        "[bold]Welcome to VibeSOP![/bold]  Your AI-powered skill operating system.\n\n"
+        "[dim]Getting started:[/dim]\n"
+        "  [cyan]vibe route \"help me debug this\"[/cyan]  [dim]— route a query to the best skill[/dim]\n"
+        "  [cyan]vibe skills list[/cyan]             [dim]— browse your 45+ available skills[/dim]\n"
+        "  [cyan]vibe status[/cyan]                   [dim]— return to this dashboard[/dim]\n\n"
+        "[dim]VibeSOP manages your skills so your AI agent can focus on execution.[/dim]"
+    )
+    return Panel(
+        content,
+        title="[bold cyan]Welcome to VibeSOP[/bold cyan]",
+        border_style="cyan",
+        box=ROUNDED,
+    )
+
+
 def status(
     no_color: bool = typer.Option(
         False, "--no-color", help="Disable colored output"
@@ -212,7 +268,7 @@ def status(
     """Show a unified snapshot of your VibeSOP skill ecosystem.
 
     Displays ecosystem health, recent activity, personalized
-    recommendations, and warnings — all in one view.
+    recommendations, warnings, and achievements — all in one view.
 
     This is the default command when running `vibe` with no arguments.
     """
@@ -222,9 +278,23 @@ def status(
 
     project_root = Path.cwd()
 
+    is_first = _detect_first_run(project_root)
+
     # Header
     console.print()
     console.rule("[bold cyan]VibeSOP Status[/bold cyan]")
+
+    # Welcome (first-run only)
+    welcome = _load_welcome(is_first)
+    if welcome:
+        console.print()
+        console.print(welcome)
+
+    # Badge showcase
+    badges = _load_badges()
+    if badges:
+        console.print()
+        console.print(badges)
 
     # Ecosystem health
     console.print()
