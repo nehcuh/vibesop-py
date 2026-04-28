@@ -289,9 +289,6 @@ Lint: 0 errors ✅
 
 **Recorded**: yes - 4 technical pitfalls, 3 reusable patterns, 2 architecture decisions
 
-
----
-
 ### SN-2026-04-22 (22:30~23:30) v4.3 收尾 — Custom Matchers + A/B Testing
 
 **Session**: 完成 v4.3 最后两项功能并推送远程
@@ -437,3 +434,12 @@ Lint: 0 errors ✅
 - **Next steps**: Fix remaining REVIEW-TODO items (thread safety, FeedbackCollector O(n), TaskDecomposer skill context, auto-deprecation)
 - **Recorded**: yes — 7 technical pitfalls in project-knowledge.md
 
+### S2 (15:27~15:45) Claude Code 配置格式修复
+
+- 修复 Claude Code 配置生成器 `_render_settings_json` 中的两个格式错误：
+  1. `"Bash(vibe:* *)"` → 删除（`:*` 不在模式末尾，且已有 `"Bash(vibe:*)"` 前缀匹配）
+  2. hooks 结构：`{"matcher": "", "command": "..."}` → `{"matcher": "", "hooks": [{"type": "command", "command": "..."}]}`
+- 运行 adapter 测试验证（7 passed, 1 pre-existing failed）
+- **Key discovery**: Claude Code settings.json 中 hooks 必须使用 `matcher` + `hooks` 数组，permissions 中 `:*` 前缀匹配必须在模式末尾
+- **Next steps**: 重新生成 Claude Code 配置验证修复生效
+- **Recorded**: yes — 2 technical pitfalls

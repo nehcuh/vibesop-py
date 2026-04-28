@@ -434,7 +434,7 @@ class ClaudeCodeAdapter(PlatformAdapter):
         settings["permissions"] = {
             "allow": [
                 "Bash(vibe *)",
-                "Bash(vibe:* *)",
+                "Bash(vibe:*)",
                 "Bash(~/.claude/hooks/*)",
             ]
         }
@@ -444,7 +444,12 @@ class ClaudeCodeAdapter(PlatformAdapter):
             "UserPromptSubmit": [
                 {
                     "matcher": "",
-                    "command": f"bash {hooks_dir}/vibesop-route.sh",
+                    "hooks": [
+                        {
+                            "type": "command",
+                            "command": f"bash {hooks_dir}/vibesop-route.sh",
+                        }
+                    ],
                 }
             ]
         }

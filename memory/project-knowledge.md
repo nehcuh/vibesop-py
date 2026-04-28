@@ -485,7 +485,6 @@ class UnifiedRouter:
 
 **Files**: `src/vibesop/core/routing/unified.py`
 
-
 ---
 
 ### Flaky Tests Under pytest-xdist Parallel Execution (2026-04-22)
@@ -642,7 +641,6 @@ for tech, checks in TECH_STACK_MARKERS.items():
 **Alternative Considered**: Extend `RoutingContext.recent_queries` — rejected because `RoutingContext` is recreated per route() call, not persisted across CLI invocations.
 
 **Files**: `src/vibesop/core/conversation.py`, `src/vibesop/core/sessions/context.py`
-
 
 ---
 
@@ -959,3 +957,50 @@ return value
 
 **Files**: `src/vibesop/core/routing/unified.py:473,496,335-399`
 
+---
+
+## Technical Pitfalls
+
+### Claude Code settings.json Hooks Format (2026-04-28)
+
+**Issue**: Claude Code 的 `settings.json` 中 `hooks` 字段必须使用特定的 `matcher` + `hooks` 数组结构。直接使用 `command` 字段会导致 "Expected array, but received undefined" 错误。
+
+**Correct Format**:
+```json
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash /path/to/script.sh"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+**File**: `src/vibesop/adapters/claude_code.py`
+
+---
+
+### Claude Code Permission Rule `:*` Wildcard Position (2026-04-28)
+
+**Issue**: Claude Code 的 `permissions.allow` 规则中，`:*` 前缀通配符必须出现在整个模式参数的末尾。如 `Bash(vibe:* *)` 中的 `:*` 后面还有 ` *`，导致 "The :* pattern must be at the end" 错误。
+
+**Correct**:
+```json
+"Bash(vibe:*)"     // 前缀匹配，:* 在末尾
+"Bash(vibe *)"     // 精确匹配 vibe + 一个参数
+```
+
+**Incorrect**:
+```json
+"Bash(vibe:* *)"   // :* 不在末尾！
+```
+
+**File**: `src/vibesop/adapters/claude_code.py`
