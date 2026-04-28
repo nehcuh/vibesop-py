@@ -1,6 +1,6 @@
 # Routing System Architecture
 
-> **Version**: 5.2.0
+> **Version**: 5.3.0
 > **Last Updated**: 2026-04-28
 
 ## Overview

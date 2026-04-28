@@ -1,7 +1,7 @@
 # Cross-Platform Support
 
-> **Version**: v5.2.0
-> **Updated**: 2026-04-27
+> **Version**: v5.3.0
+> **Updated**: 2026-04-28
 
 ## Overview
 

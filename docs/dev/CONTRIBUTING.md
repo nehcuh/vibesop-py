@@ -83,7 +83,7 @@ uv run pytest tests/benchmark/ -v
 ```
 
 **Requirements**:
-- Minimum coverage: 75% (current: ~78%)
+- Minimum coverage: 75% (current: ~74%)
 - All tests must pass
 - New features need tests
 
