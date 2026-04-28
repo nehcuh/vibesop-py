@@ -5,6 +5,7 @@ Renders a human-readable routing decision report from RoutingResult.layer_detail
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 from rich import box
@@ -241,3 +242,7 @@ def render_compact_summary(
 
     console.print(table)
     console.print()
+
+    from vibesop.cli.render.tips import render_ecosystem_tips
+
+    render_ecosystem_tips(project_root=Path.cwd(), console=console)

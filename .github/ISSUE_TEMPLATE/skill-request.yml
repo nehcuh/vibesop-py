@@ -1,0 +1,39 @@
+---
+name: 技能请求 (Skill Request)
+description: 请求社区创建你需要的技能
+title: "[技能请求] "
+labels: ["skill-request", "community"]
+assignees: []
+body:
+  - type: textarea
+    id: need
+    attributes:
+      label: 我想要一个技能来做...
+      description: "描述你的具体需求，越详细越好"
+      placeholder: "我需要一个技能来自动生成 Django REST Framework 的 API 文档"
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: 使用场景
+      description: "在什么情况下会用到这个技能"
+      placeholder: "- 每次创建新的 DRF ViewSet 时\n- 更新已有 API 时自动同步文档"
+    validations:
+      required: true
+  - type: input
+    id: stack
+    attributes:
+      label: 技术栈
+      description: "相关技术栈（语言、框架、工具）"
+      placeholder: "Python 3.12+, Django 4.2+, DRF 3.14+"
+    validations:
+      required: false
+  - type: textarea
+    id: references
+    attributes:
+      label: 参考资源（可选）
+      description: "类似的工具、文档或实现参考"
+      placeholder: "- https://drf-spectacular.readthedocs.io/"
+    validations:
+      required: false

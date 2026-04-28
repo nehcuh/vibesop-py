@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from rich import box
@@ -70,3 +71,7 @@ def render_compact_orchestration(
 
     console.print(table)
     console.print()
+
+    from vibesop.cli.render.tips import render_ecosystem_tips
+
+    render_ecosystem_tips(project_root=Path.cwd(), console=console)
