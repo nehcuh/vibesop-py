@@ -25,6 +25,17 @@
 
 set -e
 
+# Cross-platform timeout wrapper (macOS doesn't ship with `timeout`)
+_run_cmd() {
+    if command -v timeout &> /dev/null; then
+        timeout 15 "$@"
+    elif command -v gtimeout &> /dev/null; then
+        gtimeout 15 "$@"
+    else
+        "$@"
+    fi
+}
+
 INPUT=$(cat)
 
 # Try JSON parsing first; fall back to raw input for plain-text use
@@ -64,11 +75,14 @@ if [ -n "$CONVERSATION_ID" ]; then
     CONVERSATION_ARG="--conversation $CONVERSATION_ID"
 fi
 
-# Detect VibeSOP quick commands (/vibe-*)
-if echo "$QUERY" | grep -qE '^/vibe-'; then
+# Detect VibeSOP informational slash commands (non-routing: help, list, install, etc.)
+# These return a text message to be shown as systemMessage.
+# /vibe-route{% if enable_orchestration %} and /vibe-orchestrate{% endif %} are handled below —
+# they need full structured routing results for the AI Agent to follow.
+if echo "$QUERY" | grep -qE '^/(vibe-)?(install|analyze|evaluate|list|help)'; then
     SLASH_RESULT=""
     if command -v vibe &> /dev/null; then
-        SLASH_RESULT=$(timeout 3 vibe route $CONVERSATION_ARG --json "$QUERY" 2>/dev/null || true)
+        SLASH_RESULT=$(_run_cmd vibe route $CONVERSATION_ARG --yes --json "$QUERY" 2>/dev/null || true)
     fi
     if [ -n "$SLASH_RESULT" ]; then
         SLASH_MSG=$(echo "$SLASH_RESULT" | jq -r '.message // empty')
@@ -79,6 +93,18 @@ if echo "$QUERY" | grep -qE '^/vibe-'; then
     fi
     echo "{\"systemMessage\": \"📎 VibeSOP quick command: $QUERY\"}"
     exit 0
+fi
+
+# Strip /vibe-route, /slash-route{% if enable_orchestration %}, /vibe-orchestrate, /orchestrate{% endif %} prefix
+# and let the underlying query go through normal routing so the full
+# result (with skill_id, execution_plan, etc.) is available for
+# structured injection by the platform adapter.
+if echo "$QUERY" | grep -qE '^/(vibe-route|slash-route{% if enable_orchestration %}|vibe-orchestrate|orchestrate{% endif %})\b'; then
+    QUERY=$(echo "$QUERY" | sed -E 's/^\/[a-z-]+[[:space:]]*"?//; s/"$//')
+    if [ -z "$QUERY" ]; then
+        echo "{\"systemMessage\": \"⚠️  VibeSOP: this command requires a query.\"}"
+        exit 0
+    fi
 fi
 
 {% if enable_explicit_overrides %}
@@ -96,7 +122,7 @@ fi
 # Call VibeSOP routing (with timeout to avoid blocking)
 RESULT=""
 if command -v vibe &> /dev/null; then
-    RESULT=$(timeout 3 vibe route --auto $CONVERSATION_ARG --json "$QUERY" 2>/dev/null || true)
+    RESULT=$(_run_cmd vibe route --yes $CONVERSATION_ARG --json "$QUERY" 2>/dev/null || true)
 fi
 
 if [ -z "$RESULT" ]; then
@@ -117,6 +143,7 @@ if [ "$MODE" = "orchestrated" ] || [ "$MODE" = "orchestrate" ]; then
     else
         echo "{\"systemMessage\": \"🔀 VibeSOP detected multiple intents.\"}"
     fi
+fi
 {% else %}
 PRIMARY=$(echo "$RESULT" | jq -r '.primary.skill_id // empty')
 CONFIDENCE=$(echo "$RESULT" | jq -r '.primary.confidence // "0"')
@@ -125,7 +152,7 @@ CONFIDENCE=$(echo "$RESULT" | jq -r '.primary.confidence // "0"')
 if [ -n "$PRIMARY" ] && [ "$PRIMARY" != "fallback-llm" ]; then
     SKILL_CONTENT=""
     if command -v vibe &> /dev/null; then
-        SKILL_CONTENT=$(timeout 2 vibe skills read "$PRIMARY" 2>/dev/null | head -c 3000 || true)
+        SKILL_CONTENT=$(_run_cmd vibe skills read "$PRIMARY" 2>/dev/null | head -c 3000 || true)
     fi
 {% if include_additional_context %}
     if [ -n "$SKILL_CONTENT" ]; then

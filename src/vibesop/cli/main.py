@@ -190,20 +190,35 @@ def route(
     decision = interceptor.should_intercept(query)
 
     if decision.mode == InterceptionMode.SLASH_COMMAND:
-        executor = SlashCommandExecutor()
-        result = executor.execute(decision)
+        # /vibe-route, /slash-route, /vibe-orchestrate, /orchestrate:
+        # strip the prefix and let the underlying query go through the normal
+        # routing pipeline so the full RoutingResult/OrchestrationResult is
+        # available for structured output (--json, hook additionalContext).
+        import re
 
-        if json_output:
-            import json
-
-            console.print(
-                json.dumps({"success": result.success, "message": result.message}, indent=2)
-            )
-        elif result.success:
-            console.print(f"[bold green]✓[/bold green] {result.message}")
+        _route_like_re = re.compile(
+            r'^/(?:vibe-route|slash-route|vibe-orchestrate|orchestrate)\s+["\']?(.+?)["\']?\s*$',
+            re.DOTALL,
+        )
+        route_match = _route_like_re.match(query.strip())
+        if route_match:
+            query = route_match.group(1).strip()
         else:
-            console.print(f"[bold yellow]⚠[/bold yellow] {result.message}")
-        raise typer.Exit(0 if result.success else 1)
+            # Other slash commands (/vibe-help, /vibe-list, /vibe-install, etc.)
+            executor = SlashCommandExecutor()
+            result = executor.execute(decision)
+
+            if json_output:
+                import json
+
+                console.print(
+                    json.dumps({"success": result.success, "message": result.message}, indent=2)
+                )
+            elif result.success:
+                console.print(f"[bold green]✓[/bold green] {result.message}")
+            else:
+                console.print(f"[bold yellow]⚠[/bold yellow] {result.message}")
+            raise typer.Exit(0 if result.success else 1)
 
     # Set up router with optional overrides
     routing_kwargs: dict[str, Any] = {}
@@ -261,6 +276,13 @@ def route(
             result = router.orchestrate(query, context=context, callbacks=callbacks)
     else:
         result = router.orchestrate(query, context=context)
+
+    # JSON output mode: skip all Rich rendering, write structured result to stdout
+    if json_output:
+        import json
+
+        console.print(json.dumps(result.to_dict(), indent=2, default=str))
+        raise typer.Exit(0 if result.has_match else 1)
 
     # Full transparency: show routing decision tree (default)
     if transparency_mode == "full":

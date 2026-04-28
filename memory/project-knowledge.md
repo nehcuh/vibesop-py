@@ -961,6 +961,47 @@ return value
 
 ## Technical Pitfalls
 
+### VibeSOP Hook Template Bash Bugs (2026-04-28)
+
+**Issue**: Three pre-existing bugs in `vibesop-route.sh.j2` caused `UserPromptSubmit hook error` on every request:
+1. `timeout 3` killed `vibe route` before it could complete (Python startup + LLM call ~5-10s)
+2. Missing `fi` after `if [ "$MODE" = "orchestrated" ]` block caused bash syntax error
+3. `--auto` flag passed to `vibe route` doesn't exist (should be `--yes`)
+
+**Solution**:
+1. `timeout 3` → `timeout 15` for main route call
+2. Added `fi` after the inner `if [ -n "$PLAN" ]` block closing the outer `if`
+3. `--auto` → `--yes` everywhere
+4. Added cross-platform `_run_cmd()` wrapper: `timeout` → `gtimeout` → direct execution
+
+**Key Insight**: Hook templates with Jinja2 conditionals make it easy to miss bash-level syntax errors (the `fi` only renders when `enable_orchestration=True`).
+
+**Files**: `src/vibesop/adapters/templates/shared/vibesop-route.sh.j2`
+
+---
+
+### `--json` CLI Flag Broken by Transparency Rendering (2026-04-28)
+
+**Issue**: `vibe route --json "query"` never output JSON when `transparency_mode == "full"` (default). The transparency rendering at `main.py:281-284` called `render_routing_report()` and `raise typer.Exit(0)` BEFORE reaching the JSON output handler at `main.py:694`.
+
+**Solution**: Move the `if json_output:` check to immediately after `router.orchestrate()`, before any Rich rendering logic. JSON output now correctly produces structured `OrchestrationResult.to_dict()`.
+
+**Files**: `src/vibesop/cli/main.py`
+
+---
+
+### Slash Command Routing Returns Text, Not Structured Result (2026-04-28)
+
+**Issue**: `/vibe-route "query"` and `/vibe-orchestrate "query"` went through `SlashCommandExecutor` → `SlashCommandHandler._handle_route/__handle_orchestrate`, which called the routing service but discarded the full `RoutingResult`/`OrchestrationResult`, returning only a text message like `"Recommended: systematic-debugging (93%)"`.
+
+**Root Cause**: These commands need the full structured result for AI Agent instruction injection (skill ID, confidence, execution plan, layer details), not a one-line text message.
+
+**Solution**: In CLI `route()`, detect `/vibe-route`, `/slash-route`, `/vibe-orchestrate`, `/orchestrate` via regex, strip the prefix, and let the underlying query fall through to the normal routing pipeline. Other slash commands (`/vibe-help`, `/vibe-list`, etc.) keep their text-message behavior.
+
+**Files**: `src/vibesop/cli/main.py`, `src/vibesop/adapters/templates/shared/vibesop-route.sh.j2`
+
+---
+
 ### Claude Code settings.json Hooks Format (2026-04-28)
 
 **Issue**: Claude Code 的 `settings.json` 中 `hooks` 字段必须使用特定的 `matcher` + `hooks` 数组结构。直接使用 `command` 字段会导致 "Expected array, but received undefined" 错误。

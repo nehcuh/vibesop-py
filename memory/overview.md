@@ -1,6 +1,6 @@
 # Overview - VibeSOP Project
 
-**Last Updated**: 2026-04-27 (Code Review Defect Fixes)
+**Last Updated**: 2026-04-28 (Hook Template Fixes + Slash-Route Architecture)
 
 ---
 

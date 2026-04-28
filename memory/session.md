@@ -424,7 +424,17 @@ Lint: 0 errors ✅
 
 ## Current Session
 
-### S1 (14:00~16:00) [VibeSOP Code Review Cross-Verification]
+### S3 (2026-04-28 18:30~19:15) Hook Template Bug Fixes + CLI JSON Priority + Slash-Route Architecture Fix
+
+- **AGENTS.md `uv` Enforcement**: Added PYTHON RUNTIME ENFORCEMENT — all Python operations must use `uv`
+- **ROADMAP Metrics Realism**: Changed code lines target from unrealistic 15,000 → 60,000 cap (matching SkillOS scope)
+- **3 Hook Template Native Bugs Fixed**: timeout 3→15, missing fi, --auto→--yes; added _run_cmd() cross-platform wrapper
+- **CLI `--json` Priority Fixed**: JSON output now takes precedence over Rich transparency rendering
+- **Slash-Route/Orchestrate Architecture Fix**: /vibe-route, /slash-route, /vibe-orchestrate, /orchestrate now strip prefix and route normally
+- **Installed Hook Scripts Updated**: ~/.claude/hooks/vibesop-route.sh and ~/.config/opencode/hooks/vibesop-route.sh
+- **Test Status**: 246 passed, 0 failed ✅ (adapters + CLI)
+- **Next Steps**: User to verify /slash-route works in Claude Code
+- **Recorded**: yes — 3 technical pitfalls
 - Cross-verified KIMI's deep code review against VibeSOP source code across 3 rounds
 - Found KIMI's "飞轮未转动" claim incorrect: PreferenceBooster/InstinctLearner ARE connected to routing core
 - Identified and fixed 9 P0/P1 code defects: IndexError, rejected_candidates mismatch, Chinese AI Triage bypass, ConfigSource sentinel bug, CLI feedback method name, context=None, dead prefilter code, resolve() cache, SkillRecommender dedup
