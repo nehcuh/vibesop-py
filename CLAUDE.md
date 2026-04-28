@@ -1,7 +1,7 @@
 # VibeSOP Configuration
 
-> **Version**: 1.0.0
-> **Generated**: 2026-04-24 13:59:21
+> **Version**: 5.3.0
+> **Generated**: 2026-04-28 10:00:00
 > **Platform**: Claude Code
 
 ## Overview

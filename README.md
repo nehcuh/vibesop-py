@@ -834,6 +834,7 @@ uv run pytest --cov=src/vibesop --cov-report=html
 - [x] v5.0.0: SkillRuntime — 作用域 + 生命周期 + 启禁用（质量收敛）
 - [x] v5.1.0: 技能市场 + 反馈闭环 SkillMarket + Feedback Loop
 - [x] v5.2.0: 智能生态系统 Intelligent Ecosystem — 推荐 + 退化 + 发现
+- [x] v5.3.0: 产品体验重塑 Product Experience — 仪表盘 + 清理 + 社区 + 徽章 + 引导
 
 详见: [docs/ROADMAP.md](docs/ROADMAP.md) | [version_05.md ADR](docs/version_05.md)
 

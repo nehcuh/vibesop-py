@@ -1,3 +1,7 @@
+> ⚠️ **Historical document** — written pre-v4.4 when the routing pipeline was 7-layer.
+> The ADR's v5.x roadmap (scope → market → intelligence) is now fully delivered as of v5.3.0 (2026-04-28).
+> Current pipeline is 10-layer. See [ROADMAP.md](ROADMAP.md) for current status.
+
  现状诊断（Pre-context）
   从当前代码库状态来看，VibeSOP 已经具备了以下基础能力：
    能力                                  当前状态       你问题的映射

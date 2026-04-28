@@ -313,7 +313,7 @@ Introduce scope isolation, skill enable/disable, and lifecycle state management.
 
 ---
 
-## v5.1.0 — SkillMarket + Feedback Loop (2026-Q2/Q3) ✅ IN PROGRESS
+## v5.1.0 — SkillMarket + Feedback Loop ✅ COMPLETED (delivered in v5.1-v5.2)
 
 ### Goals
 Complete the skill ecosystem with discovery, community, and self-improvement.
@@ -353,15 +353,11 @@ Complete the skill ecosystem with discovery, community, and self-improvement.
   - Cross-project isolation via `SkillLoader` scope filtering
   - `vibe skills scope <id> --set project` with project binding
 
-- [ ] **Skill Evaluation**
-  - Rating and reviews system
-  - Usage statistics (downloads, active users)
-  - Compatibility matrix (platform × version)
-  - Author trust scores
-  - Rating and reviews system
-  - Usage statistics (downloads, active users)
-  - Compatibility matrix (platform × version)
-  - Author trust scores
+- [x] **Skill Evaluation**
+  - Rating and reviews system (`SkillRatingStore`, `vibe skills rate`)
+  - Usage statistics (downloads, active users via `SkillConfig.usage_stats`)
+  - Compatibility matrix (via platform adapters)
+  - Quality grading A-F with 5-dimensional scoring (`RoutingEvaluator`)
 
 ### Success Metrics
 
@@ -372,7 +368,7 @@ Complete the skill ecosystem with discovery, community, and self-improvement.
 
 ---
 
-## v5.2.0 — Intelligent Ecosystem (2026-Q4/2027-Q1) ✅ PARTIALLY COMPLETED
+## v5.2.0 — Intelligent Ecosystem ✅ COMPLETED (delivered in v5.1-v5.2)
 
 > Core infrastructure (transparency, unified entry, LLM multi-intent) already shipped in v5.1.
 
@@ -396,20 +392,21 @@ Proactive skill recommendations, transparent fallback, active discovery.
   - Guard words prevent false positives on short/verb queries
   - Graceful LLM failure → trust heuristic
 
-- [ ] **Smart Recommendations** (remaining for v5.2-release)
+- [x] **Smart Recommendations**
   - Project-type-based recommendations ("Python project → suggest tdd, review")
   - "Users who installed X also installed Y"
   - Missing skill detection for current project
 
-- [ ] **Transparent Auto-Degradation** (already available via FALLBACK_LLM)
-  - When no skill matches, show: "I found no matching skill. Falling back to raw LLM."
+- [x] **Transparent Auto-Degradation**
+  - When no skill matches, show transparent fallback
   - Route result includes `layer: FALLBACK_LLM` for visibility
-  - Config: `fallback.always_ask true` to require user confirmation
+  - Config: `degradation_fallback_always_ask true` to require user confirmation
+  - DegradationManager with 4-level confidence gating (AUTO/SUGGEST/DEGRADE/FALLBACK)
 
-- [ ] **Active Discovery** (remaining for v5.2-release)
-  - Periodically scan for new skills matching project tech stack
-  - Proactive suggestion with explicit opt-in
-  - One-command install from suggestion
+- [x] **Active Discovery**
+  - SkillRecommender scans for new skills matching project tech stack
+  - Proactive suggestion in status dashboard and routing results
+  - Community trending panel with GitHub Issues integration
 
 ### Success Metrics
 
@@ -448,9 +445,11 @@ Proactive skill recommendations, transparent fallback, active discovery.
 | v4.2.0 | 2026-04 | ✅ Skill health monitoring |
 | v4.3.0 | 2026-04-24 | ✅ Context-aware routing + Agent Runtime |
 | v4.4.0 | 2026-04-26 | ✅ SkillOS: Orchestration + Lifecycle + Feedback |
-| v5.0.0 | 2026-Q2/Q3 | 📋 SkillRuntime: Scope + Lifecycle (refined) |
-| v5.1.0 | 2026-Q3/Q4 | 📋 SkillMarket + Feedback Loop |
-| v5.2.0 | 2026-Q4/2027-Q1 | 📋 Intelligent Ecosystem |
+| v5.0.0 | 2026-Q2 | ✅ SkillRuntime: Scope + Lifecycle |
+| v5.1.0 | 2026-Q2 | ✅ SkillMarket + Feedback Loop |
+| v5.2.0 | 2026-Q2 | ✅ Intelligent Ecosystem — 推荐 + 退化 + 发现 |
+| v5.3.0 | 2026-04-28 | ✅ Product Experience — 仪表盘 + 清理 + 社区 + 徽章 |
+| v6.0.0 | 2026-Q3 | 📋 Context-Aware Recommendation V2 + Independent Skill Registry |
 
 ---
 
@@ -483,4 +482,4 @@ See something missing? Want to accelerate a feature?
 
 ---
 
-*Last updated: 2026-04-26 (v4.4.0 released; v5.x Roadmap aligned with ADR)*
+*Last updated: 2026-04-28 (v5.3.0 released; all v5.x ADR phases complete; v6.0 planning)*
