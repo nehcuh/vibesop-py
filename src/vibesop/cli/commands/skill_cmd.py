@@ -26,7 +26,85 @@ from vibesop.cli.commands.community_cmd import discover, share
 from vibesop.core.skills.config_manager import SkillConfigManager
 from vibesop.core.skills.lifecycle import SkillLifecycle, SkillLifecycleManager
 
-app = typer.Typer(name="skill", help="Manage skill lifecycle")
+app = typer.Typer(name="skill", help="Manage skill lifecycle", no_args_is_help=False)
+
+
+@app.callback(invoke_without_command=True)
+def _skill_overview(
+    ctx: typer.Context,
+) -> None:
+    """Show skill ecosystem overview when no subcommand is given."""
+    if ctx.invoked_subcommand is not None:
+        return
+
+    from pathlib import Path
+
+    project_root = Path.cwd()
+
+    # Load skill stats
+    try:
+        from vibesop.core.routing import UnifiedRouter
+
+        router = UnifiedRouter(project_root=project_root)
+        candidates = router.get_candidates() or []
+        total = len(candidates)
+    except Exception:
+        total = 0
+
+    try:
+        from vibesop.core.skills.evaluator import RoutingEvaluator
+
+        evaluator = RoutingEvaluator(project_root=project_root)
+        low = evaluator.get_low_quality_skills(threshold=0.3, min_routes=3)
+        low_count = len(low)
+    except Exception:
+        low_count = 0
+
+    try:
+        from vibesop.core.skills.feedback_loop import FeedbackLoop
+
+        loop = FeedbackLoop(project_root=project_root)
+        stale = loop.analyze_all(auto_deprecate=False)
+        stale_count = sum(1 for s in stale if s.action in ("deprecate", "archive"))
+    except Exception:
+        stale_count = 0
+
+    # Dashboard
+    console.print()
+    console.rule("[bold cyan]VibeSOP Skill Management[/bold cyan]")
+    console.print()
+
+    status_parts = [f"[bold]{total}[/bold] skills installed"]
+    if low_count > 0:
+        status_parts.append(f"[yellow]{low_count} need attention[/yellow]")
+    if stale_count > 0:
+        status_parts.append(f"[yellow]{stale_count} stale[/yellow]")
+    if low_count == 0 and stale_count == 0:
+        status_parts.append("[green]all healthy[/green]")
+
+    console.print(f"  {' · '.join(status_parts)}")
+    console.print()
+
+    # Quick actions
+    from rich.box import ROUNDED
+    from rich.panel import Panel
+
+    actions = (
+        "[cyan]vibe skill list[/cyan]            [dim]— browse all installed skills[/dim]\n"
+        "[cyan]vibe skill discover[/cyan]        [dim]— find community skills[/dim]\n"
+        "[cyan]vibe skill cleanup[/cyan]         [dim]— review and prune stale skills[/dim]\n"
+        "[cyan]vibe skill enable/disable[/cyan]  [dim]— toggle skills on/off[/dim]\n"
+        "[cyan]vibe skill stale[/cyan]           [dim]— detailed health analysis[/dim]\n"
+        "[cyan]vibe skill share[/cyan]           [dim]— publish your skill to the community[/dim]"
+    )
+
+    console.print(
+        Panel(actions, title="[bold]Quick Actions[/bold]", border_style="cyan", box=ROUNDED)
+    )
+
+    console.print()
+    console.print("[dim]Also try:[/dim] [cyan]vibe status[/cyan] [dim]for full ecosystem health[/dim]")
+    console.print()
 console = Console()
 
 
