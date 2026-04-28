@@ -32,7 +32,8 @@ def render_match_panel(result: Any, console: Console) -> None:
 
     console.print(
         Panel(
-            f"[bold green]✅ Matched:[/bold green] {primary.skill_id}\n"
+            f"[bold green]Matched:[/bold green] {primary.skill_id}\n"
+            f"[dim]{primary.description[:120]}[/dim]\n\n"
             f"[dim]Confidence:[/dim] {primary.confidence:.0%}\n"
             f"[dim]Layer:[/dim] {primary.layer.value}\n"
             f"[dim]Source:[/dim] {primary.source}{quality_str}\n"

@@ -37,6 +37,9 @@ def render_compact_orchestration(
                 table.add_row("Status", "[yellow]Fallback (no skill matched)[/yellow]")
             else:
                 table.add_row("Selected", f"[green]{result.primary.skill_id}[/green]")
+                desc = getattr(result.primary, "description", "")
+                if desc:
+                    table.add_row("Description", f"[dim]{desc[:100]}[/dim]")
                 table.add_row("Confidence", f"{result.primary.confidence:.0%}")
                 table.add_row("Layer", result.primary.layer.value)
         else:
