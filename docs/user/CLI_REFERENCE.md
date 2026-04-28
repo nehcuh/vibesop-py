@@ -7,13 +7,31 @@ Complete reference for all VibeSOP CLI commands.
 ## Table of Contents
 
 - [Core Commands](#core-commands)
+  - [`vibe route`](#vibe-route)
+  - [`vibe status`](#vibe-status-v530)
+  - [`vibe orchestrate`](#vibe-orchestrate)
+  - [`vibe decompose`](#vibe-decompose)
+  - [`vibe doctor`](#vibe-doctor)
+  - [`vibe version`](#vibe-version)
+  - [`vibe install`](#vibe-install)
 - [Skills Management](#skills-management)
+  - [`vibe skills`](#vibe-skills)
+  - [`vibe skill cleanup`](#vibe-skill-cleanup-v530)
+  - [`vibe skill stale`](#vibe-skill-stale)
+  - [`vibe skill end-check`](#vibe-skill-end-check-v510)
+  - [`vibe skill share`](#vibe-skill-share-v530)
+  - [`vibe skill discover`](#vibe-skill-discover-v530)
+  - [`vibe skills suggestions`](#vibe-skills-suggestions-v510)
 - [Project Setup](#project-setup)
+- [Platform & Utility Commands](#platform--utility-commands)
 - [Analysis Commands](#analysis-commands)
 - [Configuration](#configuration)
+- [LLM Configuration](#llm-configuration)
 - [Preference Learning](#preference-learning)
 - [Experimental Commands](#experimental-commands)
-- [Legacy Commands](#legacy-commands)
+- [Command Summary](#command-summary)
+- [Environment Variables](#environment-variables)
+- [Exit Codes](#exit-codes)
 
 ---
 
@@ -640,6 +658,178 @@ Summary: 1 to deprecate, 1 to warn, 1 performing well
 - Reads quality scores from `RoutingEvaluator` (A-F grades)
 - Skills unused >30 days or with F-grade are flagged for deprecation
 - `--auto` transitions flagged skills to DEPRECATED lifecycle state
+
+---
+
+#### `vibe skill cleanup` (v5.3.0+)
+
+Interactively review and clean up low-quality or stale skills with checkbox selection.
+
+```bash
+vibe skill cleanup [options]
+```
+
+**Options:**
+- `--auto, -a` — Apply all suggested deprecations and archives automatically
+- `--dry-run, -n` — Preview what would be cleaned without making changes
+
+**Examples:**
+```bash
+# Interactive cleanup (select skills to deprecate/archive)
+vibe skill cleanup
+
+# Auto-apply all suggestions
+vibe skill cleanup --auto
+
+# Preview only
+vibe skill cleanup --dry-run
+```
+
+**Output:**
+```
+Analyzing skill ecosystem...
+
+Skills Needing Attention
+────────────────────────────────
+#  Skill ID          Action      Grade   Quality   Unused   Reason
+1  gstack/old        ARCHIVE     D       30%       120d     Unused 120d, grade D
+2  my-custom         DEPRECATE   F       10%        60d     Quality 0.1, grade F
+
+Found: 1 to archive, 1 to deprecate
+
+Select skills to clean up (space to select, enter to confirm):
+  ◻ ARCHIVE  gstack/old
+  ◻ DEPRECATE  my-custom
+```
+
+---
+
+#### `vibe skill end-check` (v5.1.0+)
+
+Run end-of-session checks: retention analysis + skill creation suggestions.
+
+```bash
+vibe skill end-check [options]
+```
+
+**Options:**
+- `--json, -j` — Output as JSON
+
+**Examples:**
+```bash
+# Run session-end checks
+vibe skill end-check
+
+# Machine-readable output
+vibe skill end-check --json
+```
+
+---
+
+#### `vibe skill share` (v5.3.0+)
+
+Publish a skill to the community via GitHub Issues. Opens a browser with a prefilled issue form, or uses `gh` CLI if installed.
+
+```bash
+vibe skill share <skill-id>
+```
+
+**Examples:**
+```bash
+# Share your custom skill
+vibe skill share my-custom-linter
+
+# Share a gstack skill variant
+vibe skill share gstack/custom-review
+```
+
+---
+
+#### `vibe skill discover` (v5.3.0+)
+
+Browse community-shared skills from GitHub Issues, sorted by 👍 reactions.
+
+```bash
+vibe skill discover [query] [options]
+```
+
+**Arguments:**
+- `query` — Optional search keywords to filter community skills
+
+**Options:**
+- `--json, -j` — Output as JSON
+
+**Examples:**
+```bash
+# Browse all community skills
+vibe skill discover
+
+# Search for debugging-related skills
+vibe skill discover debugging
+
+# Search with keywords
+vibe skill discover "python lint"
+```
+
+---
+
+#### `vibe skills suggestions` (v5.1.0+)
+
+View auto-detected skill suggestions from your repeated workflow patterns.
+
+```bash
+vibe skills suggestions [options]
+```
+
+**Options:**
+- `--dismiss, -d` — Dismiss all pending suggestions
+- `--json, -j` — Output as JSON
+
+**Examples:**
+```bash
+# View pending suggestions
+vibe skills suggestions
+
+# Dismiss all
+vibe skills suggestions --dismiss
+```
+
+---
+
+#### `vibe status` (v5.3.0+)
+
+Show a unified snapshot of your VibeSOP skill ecosystem. Displays ecosystem health, recent activity, personalized recommendations, warnings, community trends, skill suggestions, and earned badges.
+
+```bash
+vibe status [options]
+```
+Also the default command when running `vibe` with no arguments.
+
+**Options:**
+- `--no-color` — Disable colored output
+
+**Examples:**
+```bash
+# Full status dashboard
+vibe status
+
+# No args also shows status
+vibe
+```
+
+**Output:**
+```
+──────────────────── VibeSOP Status ────────────────────
+
+Ecosystem Health     289 skills · 29 with evaluation data  A: 12 B: 8 C: 5 D: 3 F: 1
+Recent Activity      [route] systematic-debugging    2026-04-28
+                     [route] gstack/review           2026-04-28
+For You              refactor — your project has 12 TODOs, try this skill
+                     security-review — you've never used this, matches Python project
+Warnings             my-old-skill — grade F, quality 25%
+Community Trending   django-test-helper  👍 23
+Skill Suggestions    3 new pattern(s) detected from your workflows
+```
 
 ---
 

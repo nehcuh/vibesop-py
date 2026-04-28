@@ -65,7 +65,7 @@ When a user says "结束了" or "That's all for now":
 
 2. **Shell Level** (Claude Code only):
    - `pre-session-end` shell hook executes
-   - Can run `vibe memory flush` CLI command *(🚧 未来版本实现)*
+    - Can trigger automated cleanup and learning tasks
    - Performs additional cleanup
 
 ### Dual-Layer Protection
@@ -80,7 +80,7 @@ AI Layer (all platforms):
     ↓
 Shell Layer (Claude Code only):
     ├─ Executes pre-session-end.sh
-    ├─ Runs vibe memory flush *(🚧 未来版本实现)*
+    ├─ Runs session-end cleanup and retention checks
     └─ Performs cleanup
 ```
 
@@ -116,8 +116,7 @@ src/vibesop/hooks/templates/
 
 1. **Always install hooks after deployment:**
    ```bash
-   vibe deploy claude-code
-   vibe hooks install claude-code
+   vibe build claude-code --output ~/.claude
    ```
 
 2. **Verify hooks before important sessions:**
@@ -168,8 +167,7 @@ src/vibesop/hooks/templates/
 
 3. **Rebuild and redeploy:**
    ```bash
-   vibe build claude-code
-   vibe deploy claude-code --force
+   vibe build claude-code --output ~/.claude
    ```
 
 ## Migration from Ruby Version

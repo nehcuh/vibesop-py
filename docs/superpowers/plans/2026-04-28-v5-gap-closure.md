@@ -1,3 +1,5 @@
+> **Status**: ✅ Delivered (degradation, recommender, market install shipped in v5.1-v5.2)
+
 # VibeSOP v5.2 Gap Closure Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
