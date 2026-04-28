@@ -178,6 +178,7 @@ def route(
                         "command": result.command,
                     },
                     indent=2,
+                    ensure_ascii=False,
                 )
             )
         elif result.success:
@@ -213,7 +214,7 @@ def route(
 
                 # Use print() instead of console.print() to avoid Rich's line wrapping
                 # which would break JSON structure with unescaped newlines
-                print(json.dumps({"success": result.success, "message": result.message}, indent=2))
+                print(json.dumps({"success": result.success, "message": result.message}, indent=2, ensure_ascii=False))
             elif result.success:
                 console.print(f"[bold green]✓[/bold green] {result.message}")
             else:
@@ -281,7 +282,7 @@ def route(
     if json_output:
         import json
 
-        print(json.dumps(result.to_dict(), indent=2, default=str))
+        print(json.dumps(result.to_dict(), indent=2, default=str, ensure_ascii=False))
         raise typer.Exit(0 if result.has_match else 1)
 
     # Full transparency: show routing decision tree (default)
@@ -371,7 +372,7 @@ def orchestrate(
     if json_output:
         import json
 
-        print(json.dumps(result.model_dump(mode="json"), indent=2, default=str))
+        print(json.dumps(result.model_dump(mode="json"), indent=2, default=str, ensure_ascii=False))
     elif verbose:
         render_orchestration_result(result, console=console)
     else:
@@ -506,7 +507,7 @@ def _handle_orchestrated_result(
     if json_output:
         import json
 
-        print(json.dumps(result.to_dict(), indent=2))
+        print(json.dumps(result.to_dict(), indent=2, ensure_ascii=False))
     else:
         render_orchestration_result(result, console=console)
         console.print("\n[dim]Plan saved. Track with:[/dim] [bold]vibe plan status[/bold]")
@@ -723,7 +724,7 @@ def _handle_single_result(
         )
         import json
 
-        print(json.dumps(routing_result.to_dict(), indent=2))
+        print(json.dumps(routing_result.to_dict(), indent=2, ensure_ascii=False))
         return
 
         if result.primary is None:
