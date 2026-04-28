@@ -7,6 +7,9 @@ Provides:
 - vibe skill status <id>: Show skill details
 - vibe skill stale: Detect stale/underperforming skills
 - vibe skill end-check: Session-end retention + suggestion review
+- vibe skill share <id>: Publish a skill to the community
+- vibe skill discover [query]: Browse community skills
+- vibe skill cleanup: Interactive cleanup of low-quality/stale skills
 """
 
 from __future__ import annotations
@@ -18,6 +21,8 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
+from vibesop.cli.commands.cleanup_cmd import cleanup
+from vibesop.cli.commands.community_cmd import discover, share
 from vibesop.core.skills.config_manager import SkillConfigManager
 from vibesop.core.skills.lifecycle import SkillLifecycle, SkillLifecycleManager
 
@@ -286,3 +291,31 @@ def end_check(
 
     if not retention and not result.get("should_prompt_suggestions"):
         console.print("[green]All skills healthy. No new pattern suggestions.[/green]")
+
+
+# Community commands
+@app.command(name="share", help="Publish a skill to the community via GitHub Issues")
+def _share_cmd(
+    skill_id: str = typer.Argument(..., help="Skill ID to share"),
+) -> None:
+    share(skill_id)
+
+
+@app.command(name="discover", help="Discover community-shared skills from GitHub Issues")
+def _discover_cmd(
+    query: str | None = typer.Argument(None, help="Search keywords"),
+    json_output: bool = typer.Option(False, "--json", "-j", help="Output as JSON"),
+) -> None:
+    discover(query=query, json_output=json_output)
+
+
+@app.command(name="cleanup", help="Interactively review and clean up low-quality or stale skills")
+def _cleanup_cmd(
+    auto: bool = typer.Option(
+        False, "--auto", "-a", help="Apply all suggested actions automatically"
+    ),
+    dry_run: bool = typer.Option(
+        False, "--dry-run", "-n", help="Preview without making changes"
+    ),
+) -> None:
+    cleanup(auto=auto, dry_run=dry_run)
