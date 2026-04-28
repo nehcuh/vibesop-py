@@ -232,6 +232,61 @@ def _load_badges() -> Panel | None:
     return Panel(content, title="[bold]Achievements[/bold]", border_style="magenta", box=ROUNDED)
 
 
+def _load_suggestions_count() -> int:
+    """Get count of pending skill creation suggestions."""
+    try:
+        from vibesop.core.skills.suggestion_collector import SkillSuggestionCollector
+
+        collector = SkillSuggestionCollector()
+        return len(collector.get_pending())
+    except Exception:
+        return 0
+
+
+def _load_community_trending() -> Panel | None:
+    """Build community trending skills panel from GitHub Issues."""
+    try:
+        import json
+        import os
+        import urllib.request
+
+        token = os.environ.get("GITHUB_TOKEN", os.environ.get("GH_TOKEN", ""))
+        headers = {"Accept": "application/vnd.github.v3+json"}
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
+
+        url = (
+            "https://api.github.com/repos/nehcuh/vibesop-py/issues"
+            "?labels=skill-share&state=open&per_page=5&sort=reactions&direction=desc"
+        )
+        req = urllib.request.Request(url, headers=headers)
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            issues = json.loads(resp.read())
+
+        if not issues:
+            return None
+
+        lines: list[str] = []
+        for issue in issues[:5]:
+            title = issue.get("title", "").replace("[技能分享] ", "").strip()
+            reactions = issue.get("reactions", {}).get("+1", 0)
+            url_link = issue.get("html_url", "")
+            lines.append(
+                f"[cyan][link={url_link}]{title}[/link][/cyan] "
+                f"[dim]👍 {reactions}[/dim]"
+            )
+
+        content = "\n".join(lines)
+        return Panel(
+            content,
+            title="[bold]Community Trending[/bold]",
+            border_style="cyan",
+            box=ROUNDED,
+        )
+    except Exception:
+        return None
+
+
 def _detect_first_run(project_root: Path) -> bool:
     """Check if this appears to be the first run."""
     analytics_exists = (project_root / ".vibe" / "analytics.jsonl").exists()
@@ -308,6 +363,25 @@ def status(
 
     # Warnings
     console.print(_load_warnings(project_root))
+
+    # Community trending
+    trending = _load_community_trending()
+    if trending:
+        console.print(trending)
+
+    # Skill suggestions
+    suggestion_count = _load_suggestions_count()
+    if suggestion_count > 0:
+        console.print(
+            Panel(
+                f"[bold cyan]{suggestion_count}[/bold cyan] new skill pattern(s) detected "
+                f"from your workflows\n"
+                f"[dim]Run [cyan]vibe skills suggestions[/cyan] to review and create skills[/dim]",
+                title="[bold]Skill Suggestions[/bold]",
+                border_style="green",
+                box=ROUNDED,
+            )
+        )
 
     # Footer
     console.print()

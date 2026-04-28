@@ -49,16 +49,30 @@ def render_match_panel(result: Any, console: Console) -> None:
 
 
 def render_no_match(result: Any, console: Console) -> None:
-    """Render no-match panel."""
+    """Render improved no-match panel with actionable suggestions."""
+    query = getattr(result, "original_query", getattr(result, "query", "your query"))
+
+    suggestions = [
+        "Try being more specific with your intent",
+        "Use [cyan]vibe skills list[/cyan] to see available skills",
+        "Use [cyan]vibe skill discover[/cyan] to find community skills",
+        "Check [cyan]vibe status[/cyan] for ecosystem health",
+    ]
+
+    if hasattr(result, "alternatives") and result.alternatives:
+        best_alt = result.alternatives[0]
+        suggestions.insert(
+            0,
+            f"[cyan]{best_alt.skill_id}[/cyan] was close "
+            f"([dim]{best_alt.confidence:.0%}[/dim]) — try rephrasing",
+        )
+
+    suggestion_text = "\n".join(f"  • {s}" for s in suggestions[:4])
+
     console.print(
         Panel(
-            f"[yellow]❓ No suitable match found[/yellow]\n\n"
-            f"[dim]Query:[/dim] {result.original_query}\n"
-            f"[dim]Routing path:[/dim] {' → '.join([layer.value for layer in result.routing_path])}\n\n"
-            f"[dim]Try:[/dim]\n"
-            f"  • Using more specific keywords\n"
-            f"  • Lowering the threshold\n"
-            f"  • Listing available skills",
+            f"[yellow]No matching skill found for:[/yellow] {query}\n\n"
+            f"[bold]Suggestions:[/bold]\n{suggestion_text}",
             title="[bold]Routing Result[/bold]",
             border_style="yellow",
         )
