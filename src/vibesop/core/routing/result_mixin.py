@@ -57,7 +57,7 @@ class RouterResultMixin:
         context: Any = None,
     ) -> RoutingResult:
         """Build result for a successful match, applying optimizations for non-matcher layers."""
-        host = cast(_ResultHost, self)
+        host = cast("_ResultHost", self)
 
         # Early-layer matches (EXPLICIT/SCENARIO/AI_TRIAGE) bypass the
         # MatcherPipeline where OptimizationService normally runs.
@@ -251,7 +251,7 @@ class RouterResultMixin:
 
         Returns a FALLBACK_LLM route with nearest candidates as alternatives.
         """
-        host = cast(_ResultHost, self)
+        host = cast("_ResultHost", self)
         # Find nearest candidates (even if below threshold) for suggestions
         nearest: list[SkillRoute] = []
         try:

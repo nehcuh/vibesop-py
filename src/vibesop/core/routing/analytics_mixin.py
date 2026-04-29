@@ -42,7 +42,7 @@ class RouterAnalyticsMixin:
         user_satisfied: bool | None = None,
     ) -> None:
         """Record execution to analytics store."""
-        host = cast(_AnalyticsHost, self)
+        host = cast("_AnalyticsHost", self)
         from vibesop.core.analytics import AnalyticsStore, ExecutionRecord
 
         store = AnalyticsStore(storage_dir=host.project_root / ".vibe")
@@ -69,7 +69,7 @@ class RouterAnalyticsMixin:
     ) -> None:
         """Record successful routing decision to memory and instinct systems."""
         try:
-            host = cast(_AnalyticsHost, self)
+            host = cast("_AnalyticsHost", self)
             # Add to memory conversation if available
             if context and context.conversation_id:
                 host._get_memory_manager().add_assistant_message(

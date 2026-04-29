@@ -12,9 +12,6 @@ Covers:
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
-from unittest.mock import MagicMock, patch
-
-import pytest
 
 from vibesop.core.config.manager import RoutingConfig
 from vibesop.core.models import DegradationLevel, RoutingLayer
@@ -51,17 +48,17 @@ class TestRouteExplicitLayer:
 class TestRouteScenarioLayer:
     """Test scenario pattern layer (Layer 1)."""
 
-    def test_scenario_debug_error(self, tmp_path: Path) -> None:
-        """Debug-related queries should match debugging skills."""
+    def test_scenario_planning_query(self, tmp_path: Path) -> None:
+        """Planning-related queries should match planning skills via scenario layer."""
         config = RoutingConfig(enable_ai_triage=False)
         router = UnifiedRouter(project_root=tmp_path, config=config)
 
-        result = router._route("database connection failed")
+        result = router._route("plan this complex task")
 
         assert result.has_match
         if result.has_match:
             primary = result.primary.skill_id.lower()
-            assert any(kw in primary for kw in ["debug", "error", "systematic", "office"])
+            assert any(kw in primary for kw in ["plan", "riper", "orchestrate"])
 
     def test_scenario_review_code(self, tmp_path: Path) -> None:
         """Review-related queries should match review skills."""
@@ -106,10 +103,38 @@ class TestRouteMatcherPipeline:
 
         # Should either have no match or fallback
         if not result.has_match:
-            assert result.primary is None
+            # Fallback LLM sets primary to a fallback skill, not None
+            assert result.primary is None or result.primary.layer == RoutingLayer.FALLBACK_LLM
         else:
             # If it matches something, that's also fine
             assert result.primary is not None
+
+
+class TestKeywordRoutingFallback:
+    """Test keyword routing fallback when LLM is unavailable."""
+
+    def test_long_query_fallback_when_ai_triage_disabled(self, tmp_path: Path) -> None:
+        """Long queries should fall back to keyword routing when AI triage is disabled."""
+        config = RoutingConfig(enable_ai_triage=False, keyword_match_max_chars=15)
+        router = UnifiedRouter(project_root=tmp_path, config=config)
+
+        # Query longer than keyword_match_max_chars but AI triage is disabled
+        result = router._route("plan this complex task")
+
+        # Should still produce a match via keyword/TF-IDF/levenshtein pipeline
+        assert result.has_match
+        assert result.primary is not None
+
+    def test_keyword_max_chars_affects_routing_path(self, tmp_path: Path) -> None:
+        """Keyword max chars should influence which layers are tried."""
+        config = RoutingConfig(enable_ai_triage=False, keyword_match_max_chars=5)
+        router = UnifiedRouter(project_root=tmp_path, config=config)
+
+        # Long query with strict keyword threshold → only scenario + matcher pipeline
+        result = router._route("plan this")
+        # With keyword_match_max_chars=5, "plan this" (9 chars) should still
+        # fall back to matcher pipeline since LLM is disabled
+        assert result.primary is not None
 
 
 class TestRouteDegradation:

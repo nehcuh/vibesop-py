@@ -12,17 +12,10 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
+from vibesop.agent.runtime.skill_injector import PlatformType
+
 if TYPE_CHECKING:
     from vibesop.core.models import OrchestrationResult, RoutingResult, SkillRoute
-
-
-class PlatformType:
-    """Re-use from skill_injector to avoid circular import."""
-
-    CLAUDE_CODE = "claude-code"
-    OPENCODE = "opencode"
-    KIMI_CLI = "kimi-cli"
-    GENERIC = "generic"
 
 
 @dataclass

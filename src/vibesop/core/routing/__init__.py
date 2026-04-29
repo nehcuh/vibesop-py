@@ -5,6 +5,11 @@ Implements unified skill routing system.
     >>> from vibesop.core.routing import UnifiedRouter
     >>> router = UnifiedRouter()
     >>> result = router.route("your query")
+
+WARNING: This module exports from `unified.py`, while `unified.py` imports
+`_layers` and `_pipeline` from `vibesop.core.routing`. Avoid adding imports
+from `vibesop.core.routing` at the top of `_layers.py` or `_pipeline.py`
+to prevent circular import cycles.
 """
 
 from vibesop.core.config import ConfigManager

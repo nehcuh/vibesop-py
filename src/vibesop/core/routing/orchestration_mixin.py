@@ -62,13 +62,13 @@ class RouterOrchestrationMixin:
         )
 
     def _get_multi_intent_detector(self) -> MultiIntentDetector:
-        host = cast(_OrchestrationHost, self)
+        host = cast("_OrchestrationHost", self)
         if host._multi_intent_detector is None:
             host._multi_intent_detector = MultiIntentDetector()
         return host._multi_intent_detector
 
     def _get_task_decomposer(self) -> TaskDecomposer:
-        host = cast(_OrchestrationHost, self)
+        host = cast("_OrchestrationHost", self)
         if host._task_decomposer is None:
             llm = host._init_decomposer_llm()
             host._task_decomposer = TaskDecomposer(llm_client=llm)
@@ -82,7 +82,7 @@ class RouterOrchestrationMixin:
         2. TriageService's cached LLM
         3. Direct provider creation from environment
         """
-        host = cast(_OrchestrationHost, self)
+        host = cast("_OrchestrationHost", self)
 
         # 1. Agent Runtime LLM
         agent_llm = getattr(host, "_llm", None)
@@ -107,13 +107,13 @@ class RouterOrchestrationMixin:
         return None
 
     def _get_plan_builder(self) -> PlanBuilder:
-        host = cast(_OrchestrationHost, self)
+        host = cast("_OrchestrationHost", self)
         if host._plan_builder is None:
             host._plan_builder = PlanBuilder(router=self)
         return host._plan_builder
 
     def _get_plan_tracker(self) -> PlanTracker:
-        host = cast(_OrchestrationHost, self)
+        host = cast("_OrchestrationHost", self)
         if host._plan_tracker is None:
             host._plan_tracker = PlanTracker(
                 storage_dir=host.project_root / ".vibe"

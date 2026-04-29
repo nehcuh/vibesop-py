@@ -35,8 +35,7 @@ def record_tool(
 
     This is typically called by hooks, but can be used manually for testing.
     """
-    file_path = Path(context_file).expanduser()
-
+    _ = context_file  # Reserved for future persistent session storage
     # For now, create a simple session context
     # In production, this would persist state to context_file
     ctx = SessionContext(project_root=Path.cwd())

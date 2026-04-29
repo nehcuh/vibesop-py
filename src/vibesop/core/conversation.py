@@ -13,9 +13,9 @@ import time
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
-logger = logging.getLogger(__name__)
-
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass

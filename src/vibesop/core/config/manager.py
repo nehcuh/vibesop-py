@@ -166,7 +166,7 @@ class RoutingConfig(BaseModel):
         "other languages without whitespace word boundaries.",
     )
     keyword_match_max_chars: int = Field(
-        default=5,
+        default=15,
         ge=0,
         le=200,
         description="Skip keyword-based routing (scenario, keyword, TF-IDF, Levenshtein) "
@@ -294,7 +294,7 @@ class ConfigManager:
             "enable_embedding": False,
             "max_candidates": 3,
             "use_cache": True,
-            "keyword_match_max_chars": 5,
+            "keyword_match_max_chars": 15,
             "ai_triage_max_skills": 20,
             "ai_triage_max_tokens": 100,
             "ai_triage_prompt_version": "v3",
@@ -361,7 +361,6 @@ class ConfigManager:
     # Environment variable prefix
     ENV_PREFIX = "VIBE_"
 
-    @staticmethod
     @staticmethod
     def deep_merge_configs(*configs: dict[str, Any]) -> dict[str, Any]:
         """Deep merge multiple configuration dictionaries.

@@ -13,13 +13,13 @@ Displays:
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 import typer
 from rich.box import ROUNDED
 from rich.console import Console
 from rich.panel import Panel
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +53,7 @@ def _get_skill_count(project_root: Path) -> int:
         mgr = CandidateManager(project_root)
         candidates = mgr.get_candidates()
         return len(candidates)
-    except Exception as e:
+    except Exception:
         return 0
 
 
@@ -99,7 +99,7 @@ def _load_recent_activity(project_root: Path) -> Panel:
 
         store = AnalyticsStore(storage_dir=project_root / ".vibe")
         records = store.list_records(limit=10)
-    except Exception as e:
+    except Exception:
         return Panel(
             "[dim]No analytics data available[/dim]",
             title="[bold]Recent Activity[/bold]",
@@ -138,7 +138,7 @@ def _load_recommendations() -> Panel:
         all_recs = list(recs) + [
             r for r in missing if r.skill_id not in {s.skill_id for s in recs}
         ]
-    except Exception as e:
+    except Exception:
         return Panel(
             "[dim]Recommendations not available[/dim]",
             title="[bold]For You[/bold]",
@@ -217,7 +217,7 @@ def _load_badges() -> Panel | None:
 
         tracker = BadgeTracker()
         badges = tracker.list_badges()
-    except Exception as e:
+    except Exception:
         return None
 
     if not badges:
@@ -243,7 +243,7 @@ def _load_suggestions_count() -> int:
 
         collector = SkillSuggestionCollector()
         return len(collector.get_pending())
-    except Exception as e:
+    except Exception:
         return 0
 
 
@@ -287,7 +287,7 @@ def _load_community_trending() -> Panel | None:
             border_style="cyan",
             box=ROUNDED,
         )
-    except Exception as e:
+    except Exception:
         return None
 
 

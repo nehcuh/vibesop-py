@@ -22,17 +22,17 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 # Keywords indicating parallel execution
-PARALLEL_KEYWORDS = {
-    "同时",
-    "simultaneously",
-    "parallel",
-    "concurrent",
-    "一起",
-    "both",
-    "and then",
-    "之后",
+PARALLEL_KEYWORDS = (
     "after",
-}
+    "and then",
+    "both",
+    "concurrent",
+    "parallel",
+    "simultaneously",
+    "同时",
+    "一起",
+    "之后",
+)
 
 
 class PlanBuilder:

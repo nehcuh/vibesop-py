@@ -11,7 +11,6 @@ Features:
 import fcntl
 import json
 import math
-import os
 import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -21,6 +20,10 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from vibesop.constants import PreferenceSettings
+
+# Prevent integer overflow in association counters (Python 3.12 limit: 4300 digits)
+MAX_ASSOCIATION_COUNT = 1_000_000
+MIN_ASSOCIATION_COUNT = -100_000
 
 
 @dataclass
@@ -237,9 +240,7 @@ class PreferenceLearner:
                         latest.selections.append(s)
                 # Merge skill scores (take higher score)
                 for skill_id, data in self._storage.skill_scores.items():
-                    if skill_id not in latest.skill_scores:
-                        latest.skill_scores[skill_id] = data
-                    elif data.get("score", 0) > latest.skill_scores[skill_id].get("score", 0):
+                    if skill_id not in latest.skill_scores or data.get("score", 0) > latest.skill_scores[skill_id].get("score", 0):
                         latest.skill_scores[skill_id] = data
                 # Merge associations (sum counters)
                 for word, skills in self._storage.word_associations.items():
@@ -276,7 +277,10 @@ class PreferenceLearner:
             if word not in self._storage.word_associations:
                 self._storage.word_associations[word] = {}
             current = self._storage.word_associations[word].get(skill_id, 0)
-            self._storage.word_associations[word][skill_id] = current + weight
+            new_count = current + weight
+            self._storage.word_associations[word][skill_id] = max(
+                MIN_ASSOCIATION_COUNT, min(MAX_ASSOCIATION_COUNT, new_count)
+            )
 
     def _update_ngram_associations(
         self,
@@ -290,7 +294,10 @@ class PreferenceLearner:
             if bigram not in self._storage.ngram_associations:
                 self._storage.ngram_associations[bigram] = {}
             current = self._storage.ngram_associations[bigram].get(skill_id, 0)
-            self._storage.ngram_associations[bigram][skill_id] = current + weight
+            new_count = current + weight
+            self._storage.ngram_associations[bigram][skill_id] = max(
+                MIN_ASSOCIATION_COUNT, min(MAX_ASSOCIATION_COUNT, new_count)
+            )
 
     def _calculate_query_boost(self, skill_id: str, query: str) -> float:
         if not query:

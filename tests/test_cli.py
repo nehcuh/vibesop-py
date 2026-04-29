@@ -86,23 +86,41 @@ class TestRouteCommand:
 class TestRecordCommand:
     """Test record command."""
 
-    def test_record_command_helpful(self) -> None:
+    def test_record_command_helpful(self, tmp_path) -> None:
         """Test recording a helpful selection."""
-        result = runner.invoke(app, ["record", "test-skill", "test query"])
+        import os
 
-        assert result.exit_code == 0
+        cwd = os.getcwd()
+        os.chdir(tmp_path)
+        try:
+            result = runner.invoke(app, ["record", "test-skill", "test query"])
+            assert result.exit_code == 0
+        finally:
+            os.chdir(cwd)
 
-    def test_record_command_not_helpful(self) -> None:
+    def test_record_command_not_helpful(self, tmp_path) -> None:
         """Test recording a not helpful selection."""
-        result = runner.invoke(app, ["record", "test-skill", "test query", "--not-helpful"])
+        import os
 
-        assert result.exit_code == 0
+        cwd = os.getcwd()
+        os.chdir(tmp_path)
+        try:
+            result = runner.invoke(app, ["record", "test-skill", "test query", "--not-helpful"])
+            assert result.exit_code == 0
+        finally:
+            os.chdir(cwd)
 
-    def test_record_command_short_option(self) -> None:
+    def test_record_command_short_option(self, tmp_path) -> None:
         """Test record command with short -H option."""
-        result = runner.invoke(app, ["record", "test-skill", "test query", "-H"])
+        import os
 
-        assert result.exit_code == 0
+        cwd = os.getcwd()
+        os.chdir(tmp_path)
+        try:
+            result = runner.invoke(app, ["record", "test-skill", "test query", "-H"])
+            assert result.exit_code == 0
+        finally:
+            os.chdir(cwd)
 
 
 class TestPreferencesCommand:

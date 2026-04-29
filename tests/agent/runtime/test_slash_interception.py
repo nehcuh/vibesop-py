@@ -80,7 +80,7 @@ class TestIntentInterceptorSlashCommands:
             session_id="test-session",
             platform="claude-code",
         )
-        decision = interceptor.should_intercept("/vibe-list", context=context)
+        decision = interceptor.should_intercept("/vibe-list", _context=context)
 
         assert decision.should_route is True
         assert decision.mode == InterceptionMode.SLASH_COMMAND

@@ -6,15 +6,10 @@ Covers the core CLI entry points for skill routing.
 from __future__ import annotations
 
 import json
-from typing import TYPE_CHECKING
 
-import pytest
 from typer.testing import CliRunner
 
 from vibesop.cli.main import app
-
-if TYPE_CHECKING:
-    pass
 
 runner = CliRunner()
 

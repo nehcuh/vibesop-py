@@ -41,7 +41,7 @@ class RouterCandidateMixin:
 
     def _get_cached_candidates(self) -> list[dict[str, Any]]:
         """Get cached candidates, initializing prefilter and warming matchers on first call."""
-        host = cast(_CandidateHost, self)
+        host = cast("_CandidateHost", self)
         candidates = host._candidate_manager.get_cached_candidates()
         if not host._matchers_warmed:
             host._prefilter = CandidatePrefilter.from_candidates(
@@ -54,7 +54,7 @@ class RouterCandidateMixin:
 
     def _warm_up_matchers(self, candidates: list[dict[str, Any]]) -> None:
         """Warm up matchers by initializing lazy-loaded components."""
-        host = cast(_CandidateHost, self)
+        host = cast("_CandidateHost", self)
         if host._matchers_warmed:
             return
         try:
@@ -71,12 +71,12 @@ class RouterCandidateMixin:
             host._matchers_warmed = True
 
     def reload_candidates(self) -> int:
-        host = cast(_CandidateHost, self)
+        host = cast("_CandidateHost", self)
         return host._candidate_manager.reload()
 
     def invalidate_project_cache(self) -> None:
         """Invalidate cached project analysis."""
-        host = cast(_CandidateHost, self)
+        host = cast("_CandidateHost", self)
         host._project_analyzer = None
 
     def _get_skill_source(self, _skill_id: str, namespace: str) -> str:
@@ -88,7 +88,7 @@ class RouterCandidateMixin:
         return "external"
 
     def get_candidates(self, _query: str = "") -> list[dict[str, Any]]:
-        host = cast(_CandidateHost, self)
+        host = cast("_CandidateHost", self)
         return host._candidate_manager.get_candidates()
 
     def _get_candidates(self, _query: str = "") -> list[dict[str, Any]]:

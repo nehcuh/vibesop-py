@@ -1,6 +1,6 @@
 """Tests for DegradationManager."""
 
-from vibesop.core.models import DegradationLevel, SkillRoute, RoutingLayer
+from vibesop.core.models import DegradationLevel, RoutingLayer, SkillRoute
 from vibesop.core.routing.degradation import DegradationManager
 
 

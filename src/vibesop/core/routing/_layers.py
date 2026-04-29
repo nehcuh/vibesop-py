@@ -2,6 +2,10 @@
 
 Extracted from explicit_layer.py, scenario_layer.py, and triage_mixin.py.
 Each function returns (SkillRoute | None, LayerDetail).
+
+NOTE: Do NOT add `from vibesop.core.routing import ...` at the module level.
+This module is imported BY `vibesop.core.routing.__init__`, which re-exports
+from `unified.py`. Circular imports will occur if this rule is violated.
 """
 
 from __future__ import annotations

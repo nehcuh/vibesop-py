@@ -6,8 +6,8 @@ import time
 
 import pytest
 
-from vibesop.core.matching import RoutingContext
 from vibesop.core.config.manager import RoutingConfig
+from vibesop.core.matching import RoutingContext
 from vibesop.core.routing import UnifiedRouter
 
 

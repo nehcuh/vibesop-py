@@ -126,3 +126,56 @@ class TestConfigLoader:
         # Config should still be accessible
         config = manager.get_routing_config()
         assert config is not None
+
+    def test_deep_merge_configs(self) -> None:
+        """Test deep merge of multiple config dictionaries."""
+        from vibesop.core.config.manager import ConfigManager
+
+        base = {"routing": {"min_confidence": 0.5, "max_candidates": 3}}
+        override = {"routing": {"min_confidence": 0.8}}
+
+        merged = ConfigManager.deep_merge_configs(base, override)
+
+        assert merged["routing"]["min_confidence"] == 0.8
+        assert merged["routing"]["max_candidates"] == 3
+
+    def test_deep_merge_nested_dicts(self) -> None:
+        """Test that nested dicts are merged rather than replaced."""
+        from vibesop.core.config.manager import ConfigManager
+
+        base = {"a": {"b": 1, "c": 2}}
+        override = {"a": {"c": 3, "d": 4}}
+
+        merged = ConfigManager.deep_merge_configs(base, override)
+
+        assert merged["a"]["b"] == 1
+        assert merged["a"]["c"] == 3
+        assert merged["a"]["d"] == 4
+
+    def test_keyword_match_max_chars_default(self) -> None:
+        """Test that keyword_match_max_chars default is reasonable."""
+        from vibesop.core.config import RoutingConfig
+
+        config = RoutingConfig()
+        # Default was 5 (too aggressive), updated to 15 for better local matching
+        assert config.keyword_match_max_chars == 15
+
+    def test_keyword_match_max_chars_bounds(self) -> None:
+        """Test keyword_match_max_chars respects bounds."""
+        from pydantic import ValidationError
+
+        from vibesop.core.config import RoutingConfig
+
+        # Valid values
+        config = RoutingConfig(keyword_match_max_chars=0)
+        assert config.keyword_match_max_chars == 0
+
+        config_max = RoutingConfig(keyword_match_max_chars=200)
+        assert config_max.keyword_match_max_chars == 200
+
+        # Out of bounds
+        try:
+            RoutingConfig(keyword_match_max_chars=201)
+            raise AssertionError("Should have raised ValidationError")
+        except ValidationError:
+            pass

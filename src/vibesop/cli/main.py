@@ -10,6 +10,7 @@ VibeSOP is a routing engine, not an executor.
 from __future__ import annotations
 
 import importlib.util
+import logging
 import os
 import sys
 from pathlib import Path
@@ -38,14 +39,10 @@ from vibesop.cli.orchestration_report import render_orchestration_result
 from vibesop.cli.plan_editor import _edit_execution_plan
 from vibesop.cli.render import (
     render_compact_orchestration,
-    render_fallback_panel,
-    render_match_panel,
-    render_no_match,
 )
 from vibesop.cli.routing_report import render_routing_report
 from vibesop.cli.subcommands import register
 from vibesop.core.routing import UnifiedRouter
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -732,13 +729,6 @@ def _handle_single_result(
 
         print(json.dumps(routing_result.to_dict(), indent=2, ensure_ascii=False))
         return
-
-        if result.primary is None:
-            render_no_match(result, console)
-        elif result.primary.layer.value == "fallback_llm":
-            render_fallback_panel(result, console)
-        else:
-            render_match_panel(result, console)
 
     # Post-route retention check (every 20 routes)
     _check_stale_skills_post_route()

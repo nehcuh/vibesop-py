@@ -46,7 +46,7 @@ class RouterContextMixin:
     """
 
     def _get_memory_manager(self) -> MemoryManager:
-        host = cast(_ContextHost, self)
+        host = cast("_ContextHost", self)
         if host._memory_manager is None:
             from vibesop.core.memory import MemoryManager
 
@@ -57,7 +57,7 @@ class RouterContextMixin:
 
     def _get_session_context(self):
         """Lazy-load session context for multi-turn state persistence."""
-        host = cast(_ContextHost, self)
+        host = cast("_ContextHost", self)
         if host._session_context is None:
             from vibesop.core.sessions import SessionContext
 
@@ -72,7 +72,7 @@ class RouterContextMixin:
         self, result: RoutingResult, _context: RoutingContext | None
     ) -> None:
         """Persist session state after routing."""
-        host = cast(_ContextHost, self)
+        host = cast("_ContextHost", self)
         if not host._config.session_aware:
             return
 
@@ -87,7 +87,7 @@ class RouterContextMixin:
             logger.debug("Failed to save session state: %s", e)
 
     def _get_instinct_learner(self) -> InstinctLearner:
-        host = cast(_ContextHost, self)
+        host = cast("_ContextHost", self)
         if host._instinct_learner is None:
             from vibesop.core.instinct import InstinctLearner
 
@@ -116,7 +116,7 @@ class RouterContextMixin:
             )
 
         # Load session state for multi-turn awareness
-        host = cast(_ContextHost, self)
+        host = cast("_ContextHost", self)
         if host._config.session_aware:
             session = self._get_session_context()
             if session:

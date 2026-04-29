@@ -46,7 +46,7 @@ class RouterStatsMixin:
     """
 
     def _record_layer(self, layer: RoutingLayer) -> None:
-        host = cast(_StatsHost, self)
+        host = cast("_StatsHost", self)
         with host._stats_lock:
             dist = host._layer_distribution
             dist[layer.value] = dist.get(layer.value, 0) + 1
@@ -56,7 +56,7 @@ class RouterStatsMixin:
 
         perf = get_perf_monitor().get_stats()
 
-        host = cast(_StatsHost, self)
+        host = cast("_StatsHost", self)
         with host._stats_lock:
             total_routes = host._total_routes
             layer_dist = dict(host._layer_distribution)
@@ -78,7 +78,7 @@ class RouterStatsMixin:
 
     def get_ai_triage_stats(self) -> dict[str, Any]:
         """Get AI Triage usage and cost statistics."""
-        host = cast(_StatsHost, self)
+        host = cast("_StatsHost", self)
         stats = host._cost_tracker.get_stats(days=30)
         budget = getattr(host._config, "ai_triage_budget_monthly", 5.0)
         return {
@@ -88,21 +88,21 @@ class RouterStatsMixin:
         }
 
     def record_selection(self, skill_id: str, query: str, was_helpful: bool = True) -> None:
-        host = cast(_StatsHost, self)
+        host = cast("_StatsHost", self)
         learner = host._preference_booster.get_learner()
         learner.record_selection(skill_id, query, was_helpful)
 
     def get_preference_stats(self) -> dict[str, int | float | str]:
-        host = cast(_StatsHost, self)
+        host = cast("_StatsHost", self)
         learner = host._preference_booster.get_learner()
         return learner.get_stats()
 
     def get_top_skills(self, limit: int = 5, min_selections: int = 2) -> list[Any]:
-        host = cast(_StatsHost, self)
+        host = cast("_StatsHost", self)
         learner = host._preference_booster.get_learner()
         return learner.get_top_skills(limit, min_selections)
 
     def clear_old_preferences(self, days: int = 90) -> int:
-        host = cast(_StatsHost, self)
+        host = cast("_StatsHost", self)
         learner = host._preference_booster.get_learner()
         return learner.clear_old_data(days)

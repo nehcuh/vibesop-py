@@ -49,7 +49,7 @@
 | Metric | Current | Target | Status |
 |--------|---------|--------|--------|
 | Test Count | 2,118 | 2,000+ | ✅ |
-| Test Coverage | 74% (full run) | >75% | ⚠️ 1% below target |
+| Test Coverage | ~25% (full run) | >75% | ⚠️ Significant gap, quality sprint needed |
 | Pure Routing P95 | ~50ms | <100ms | ✅ |
 | LLM Triage P95 | ~220ms | <300ms | ✅ |
 | Skills Supported | 45+ | 45+ | ✅ |
@@ -268,7 +268,7 @@ Transform VibeSOP from a routing tool into a complete Skill Operating System.
 
 - [x] **Quality Gates** (Completed)
   - Fix remaining lint errors → 0 ✅
-  - Increase coverage from 65% → 72% ✅ (target 75%)
+  - Increase coverage from 25% → 60% → 75% (quality sprint in progress)
 
 ### Success Metrics
 
@@ -279,7 +279,7 @@ Transform VibeSOP from a routing tool into a complete Skill Operating System.
 - ✅ Pure routing P95: ~50ms (target <100ms)
 - ✅ LLM Triage P95: ~220ms (target <300ms)
 - ✅ Lint errors: 0
-- ⚠️ Test coverage: 74% (target 75%, only 1% gap)
+- ⚠️ Test coverage: ~25% (target 75%, quality sprint needed)
 
 ---
 

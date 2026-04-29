@@ -192,9 +192,12 @@ class TestSecurityAuditorIntegration:
         # Test with a known safe builtin skill
         auditor = SkillSecurityAuditor(project_root=Path(__file__).parents[2])
 
-        result = auditor.audit_skill_file(
-            Path(__file__).parents[2] / "core/skills/systematic-debugging/SKILL.md"
-        )
+        # Builtin skills are installed in ~/.config/skills/
+        skill_file = Path.home() / ".config/skills/systematic-debugging/SKILL.md"
+        if not skill_file.exists():
+            pytest.skip("systematic-debugging skill not installed in ~/.config/skills/")
+
+        result = auditor.audit_skill_file(skill_file)
 
         assert result is not None, "Should return audit result"
         assert result.is_safe, "Builtin skill should be safe"

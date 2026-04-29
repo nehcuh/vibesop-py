@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from vibesop.core.skills.manager import SkillManager
+
+# Project root for skill discovery (tests/core/skills/ → project root)
+PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
 
 
 class TestSkillManagerIntegration:
@@ -22,10 +27,10 @@ class TestSkillManagerIntegration:
 
     def test_get_skill_definition(self) -> None:
         """Test getting skill workflow definition."""
-        manager = SkillManager()
+        manager = SkillManager(project_root=PROJECT_ROOT)
 
-        # Use a stable external skill known to have a valid workflow
-        skill_id = "gstack/freeze"
+        # Use a stable built-in skill known to have a valid workflow
+        skill_id = "builtin/session-end"
         result = manager.get_skill_definition(skill_id)
 
         assert result is not None
@@ -36,7 +41,7 @@ class TestSkillManagerIntegration:
 
     def test_get_skill_definition_not_found(self) -> None:
         """Test getting definition for non-existent skill."""
-        manager = SkillManager()
+        manager = SkillManager(project_root=PROJECT_ROOT)
 
         result = manager.get_skill_definition("non-existent-skill")
 
@@ -55,8 +60,8 @@ class TestSkillManagerIntegration:
         """Test execution when enabled."""
         manager = SkillManager(enable_execution=True)
 
-        # Use a stable external skill known to have a valid workflow
-        skill_id = "gstack/freeze"
+        # Use a stable built-in skill known to have a valid workflow
+        skill_id = "builtin/session-end"
 
         # Execute the skill
         result = manager.execute_skill(skill_id, context={"test": True})
@@ -67,10 +72,10 @@ class TestSkillManagerIntegration:
 
     def test_validate_skill_valid(self) -> None:
         """Test validating a valid skill."""
-        manager = SkillManager()
+        manager = SkillManager(project_root=PROJECT_ROOT)
 
-        # Use a stable external skill known to have a valid workflow
-        skill_id = "gstack/freeze"
+        # Use a stable built-in skill known to have a valid workflow
+        skill_id = "builtin/session-end"
 
         result = manager.validate_skill(skill_id)
 
@@ -80,7 +85,7 @@ class TestSkillManagerIntegration:
 
     def test_validate_skill_invalid(self) -> None:
         """Test validating an invalid skill."""
-        manager = SkillManager()
+        manager = SkillManager(project_root=PROJECT_ROOT)
 
         result = manager.validate_skill("non-existent-skill")
 
@@ -90,27 +95,27 @@ class TestSkillManagerIntegration:
 
     def test_list_skills_still_works(self) -> None:
         """Test that existing methods still work after integration."""
-        manager = SkillManager()
+        manager = SkillManager(project_root=PROJECT_ROOT)
 
         skills = manager.list_skills()
 
         assert isinstance(skills, list)
         assert len(skills) > 0
-        assert any(s["id"].endswith("/systematic-debugging") for s in skills)
+        assert any(s["id"].endswith("/session-end") for s in skills)
 
     def test_get_skill_info_still_works(self) -> None:
         """Test that get_skill_info still works."""
-        manager = SkillManager()
+        manager = SkillManager(project_root=PROJECT_ROOT)
 
-        info = manager.get_skill_info("builtin/systematic-debugging")
+        info = manager.get_skill_info("builtin/session-end")
 
         assert info is not None
-        assert info["id"] == "builtin/systematic-debugging"
+        assert info["id"] == "builtin/session-end"
         assert "name" in info
 
     def test_search_skills_still_works(self) -> None:
         """Test that search_skills still works."""
-        manager = SkillManager()
+        manager = SkillManager(project_root=PROJECT_ROOT)
 
         results = manager.search_skills("debug")
 
@@ -120,7 +125,7 @@ class TestSkillManagerIntegration:
 
     def test_get_namespaces_still_works(self) -> None:
         """Test that get_namespaces still works."""
-        manager = SkillManager()
+        manager = SkillManager(project_root=PROJECT_ROOT)
 
         namespaces = manager.get_namespaces()
 
@@ -129,7 +134,7 @@ class TestSkillManagerIntegration:
 
     def test_get_stats_still_works(self) -> None:
         """Test that get_stats still works."""
-        manager = SkillManager()
+        manager = SkillManager(project_root=PROJECT_ROOT)
 
         stats = manager.get_stats()
 
@@ -152,7 +157,7 @@ class TestSkillManagerIntegration:
         assert len(skills) > 0
 
         # 2. Get skill definition for a known stable skill
-        stable_skill_id = "gstack/freeze"
+        stable_skill_id = "builtin/session-end"
         definition = manager.get_skill_definition(stable_skill_id)
         assert definition is not None
 
@@ -166,11 +171,11 @@ class TestSkillManagerIntegration:
 
     def test_backward_compatibility(self) -> None:
         """Test that old API is still functional."""
-        manager = SkillManager()
+        manager = SkillManager(project_root=PROJECT_ROOT)
 
         # All old methods should work
         skills = manager.list_skills()
-        info = manager.get_skill_info("builtin/systematic-debugging")
+        info = manager.get_skill_info("builtin/session-end")
         results = manager.search_skills("test")
         namespaces = manager.get_namespaces()
         stats = manager.get_stats()

@@ -37,6 +37,7 @@ def router_with_llm(tmp_path, mock_llm):
 
     manager = ConfigManager(project_root=tmp_path)
     manager.set_cli_override("routing.enable_ai_triage", True)
+    manager.set_cli_override("routing.keyword_match_max_chars", 0)
 
     router = UnifiedRouter(project_root=tmp_path, config=manager)
     router._llm = mock_llm

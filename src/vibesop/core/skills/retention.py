@@ -3,9 +3,6 @@
 Analyzes SkillEvaluation data and generates actionable retention
 recommendations based on time decay and usage patterns.
 
-logger = logging.getLogger(__name__)
-
-
 Policy rules (advisory only, no automatic removal):
 - Grade F for 30+ days with < 3 uses → suggest removal
 - Grade D for 60+ days with no improvement → warn
@@ -21,6 +18,8 @@ from datetime import datetime
 from typing import Any
 
 from vibesop.core.skills.evaluator import RoutingEvaluator
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass

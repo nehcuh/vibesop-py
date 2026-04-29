@@ -1,7 +1,5 @@
 """Tests for trust store."""
 
-import pytest
-from pathlib import Path
 from vibesop.core.skills.trust import TrustStore
 
 

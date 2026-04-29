@@ -167,12 +167,16 @@ class TestPreferenceLearner:
         """Test clearing old data."""
         learner = self._create_learner()
 
-        # Record a selection
-        learner.record_selection("/review", "old query")
-
-        # Manually age the data
+        # Manually inject an old selection (avoid record_selection which auto-saves)
         old_timestamp = (datetime.now() - timedelta(days=100)).isoformat()
-        learner._storage.selections[0]["timestamp"] = old_timestamp
+        learner._storage.selections.append(
+            {
+                "skill_id": "/review",
+                "query": "old query",
+                "timestamp": old_timestamp,
+                "was_helpful": True,
+            }
+        )
 
         # Clear data older than 90 days
         removed = learner.clear_old_data(days=90)

@@ -19,7 +19,7 @@ from vibesop.security import SecurityScanner
 class TestFullWorkflow:
     """Test complete workflows from start to finish."""
 
-    def test_skill_routing_lifecycle(self) -> None:
+    def test_skill_routing_lifecycle(self, tmp_path: Path) -> None:
         """Test complete skill routing workflow.
 
         This test verifies:
@@ -28,8 +28,9 @@ class TestFullWorkflow:
         3. Alternative selection
         4. Preference recording
         """
-        # Initialize router
-        router = UnifiedRouter()
+        # Initialize router with isolated project root to avoid
+        # polluted preferences.json in the real .vibe directory
+        router = UnifiedRouter(project_root=tmp_path)
 
         # Test routing
         result = router.route("帮我评审代码")

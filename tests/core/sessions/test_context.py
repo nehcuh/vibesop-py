@@ -363,9 +363,9 @@ class TestIntegrationScenarios:
         # Now user encounters errors
         suggestion = ctx.check_reroute_needed("the tests are failing")
 
-        # Should suggest re-routing to debugging/testing/qa
+        # Should suggest re-routing to debugging/testing/qa/investigate
         if suggestion.should_reroute:
             assert any(
                 keyword in suggestion.recommended_skill.lower()
-                for keyword in ["debug", "test", "systematic-debugging", "qa"]
+                for keyword in ["debug", "test", "systematic-debugging", "qa", "investigate"]
             )

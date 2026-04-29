@@ -13,12 +13,12 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-logger = logging.getLogger(__name__)
-
 from typing import Any
 
 from vibesop.core.feedback import ExecutionFeedbackCollector, FeedbackCollector
 from vibesop.core.preference import PreferenceLearner
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass

@@ -7,7 +7,7 @@ Stores user-approved pack names and source URLs at
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -40,14 +40,14 @@ class TrustStore:
 
     def trust_pack(self, pack_name: str, source_url: str = "") -> None:
         self._data.setdefault("packs", {})[pack_name] = {
-            "trusted_at": datetime.now(timezone.utc).isoformat(),
+            "trusted_at": datetime.now(UTC).isoformat(),
             "source": source_url,
         }
         self._save()
 
     def trust_source(self, source_url: str, reason: str = "") -> None:
         self._data.setdefault("sources", {})[source_url] = {
-            "trusted_at": datetime.now(timezone.utc).isoformat(),
+            "trusted_at": datetime.now(UTC).isoformat(),
             "reason": reason,
         }
         self._save()

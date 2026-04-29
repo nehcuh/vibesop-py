@@ -13,7 +13,7 @@ VibeSOP is a **battle-tested, production-ready** AI-powered Skill Operating Syst
 ### ✅ Production Ready
 
 **Key Metrics:**
-- **Test Status**: 2044+ tests passing (99.9%)
+- **Test Status**: 2178 tests collected, coverage improving (see latest run for passing count)
 - **Security**: AST-based safe evaluation, no eval() usage
 - **Cross-Platform**: Windows, macOS, Linux compatible
 - **Documentation**: Complete with organized archive
@@ -247,7 +247,7 @@ vibe build claude-code
 
 ### Potential Enhancements
 1. **Performance Optimization**: Reduce routing P95 from 225ms to <100ms
-2. **Additional Tests**: Increase coverage from 74% to 80%
+2. **Additional Tests**: Increase coverage from ~25% to 75%
 3. **Lint Cleanup**: Fix 157 lint errors
 4. **Plugin System**: Extend external skills with hooks
 

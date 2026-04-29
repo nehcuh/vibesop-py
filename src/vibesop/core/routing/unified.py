@@ -32,14 +32,11 @@ from vibesop.core.matching import (
     IMatcher,
     KeywordMatcher,
     LevenshteinMatcher,
-    MatchResult,
     MatcherConfig,
-    MatcherType,
     RoutingContext,
     TFIDFMatcher,
 )
 from vibesop.core.models import (
-    DegradationLevel,
     LayerDetail,
     OrchestrationMode,
     OrchestrationResult,
@@ -52,8 +49,10 @@ from vibesop.core.optimization import (
     PreferenceBooster,
     SkillClusterIndex,
 )
+from vibesop.core.routing.analytics_mixin import RouterAnalyticsMixin
 from vibesop.core.routing.cache import CacheManager
 from vibesop.core.routing.candidate_manager import CandidateManager
+from vibesop.core.routing.candidate_mixin import RouterCandidateMixin
 from vibesop.core.routing.conflict import (
     ConfidenceGapStrategy,
     ConflictResolver,
@@ -62,13 +61,11 @@ from vibesop.core.routing.conflict import (
     NamespacePriorityStrategy,
     RecencyStrategy,
 )
+from vibesop.core.routing.context_mixin import RouterContextMixin
 from vibesop.core.routing.degradation import DegradationManager
 from vibesop.core.routing.matcher_pipeline import MatcherPipeline
 from vibesop.core.routing.optimization_service import OptimizationService
 from vibesop.core.routing.orchestration_mixin import RouterOrchestrationMixin
-from vibesop.core.routing.analytics_mixin import RouterAnalyticsMixin
-from vibesop.core.routing.candidate_mixin import RouterCandidateMixin
-from vibesop.core.routing.context_mixin import RouterContextMixin
 from vibesop.core.routing.result_mixin import RouterResultMixin
 from vibesop.core.routing.stats_mixin import RouterStatsMixin
 from vibesop.core.routing.triage_service import TriageService

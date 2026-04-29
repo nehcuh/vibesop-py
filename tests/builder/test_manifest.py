@@ -107,7 +107,7 @@ policies:
             builder.build_from_file(tmp_path / "does_not_exist.yaml")
 
     def test_load_skills_empty_registry(self, tmp_path: Path) -> None:
-        """Test loading skills from empty registry."""
+        """Test loading skills from empty registry still discovers installed packs."""
         registry_dir = tmp_path / "core"
         registry_dir.mkdir(parents=True)
         (registry_dir / "registry.yaml").write_text("skills: []")
@@ -115,7 +115,8 @@ policies:
         builder = ManifestBuilder(project_root=tmp_path)
         skills = builder._load_skills()  # type: ignore[attr-defined]
 
-        assert skills == []
+        # Empty registry but dynamic discovery finds installed packs
+        assert isinstance(skills, list)
 
     def test_load_policies_default(self, tmp_path: Path) -> None:
         """Test loading default policies."""

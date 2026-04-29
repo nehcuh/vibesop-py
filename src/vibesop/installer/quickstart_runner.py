@@ -5,7 +5,6 @@ This module provides an interactive wizard for setting up
 VibeSOP configuration.
 """
 
-import shutil
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -382,9 +381,9 @@ class QuickstartRunner:
         Delegates to PackInstaller._create_skill_symlinks for the actual
         symlink creation, avoiding duplicated logic.
         """
+        from vibesop.constants import TRUSTED_PACKS
         from vibesop.core.skills.storage import SkillStorage
         from vibesop.installer.pack_installer import PackInstaller
-        from vibesop.constants import TRUSTED_PACKS
 
         storage = SkillStorage()
         platform_dir = storage.PLATFORM_SKILLS_DIRS.get(platform)
@@ -405,6 +404,7 @@ class QuickstartRunner:
             total += count
 
         if total > 0:
+            console.print(f"  Synced {total} skill(s) to {platform}")
 
     def _show_next_steps(self, config: QuickstartConfig) -> None:
         """Show next steps after installation.

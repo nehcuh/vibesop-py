@@ -8,23 +8,23 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class RoutingLayer(StrEnum):
-    """Routing layers in priority order."""
+    """Routing layers in priority order (Layer 0 → Layer 9)."""
 
-    AI_TRIAGE = "ai_triage"
-    EXPLICIT = "explicit"
-    SCENARIO = "scenario"
-    KEYWORD = "keyword"
-    TFIDF = "tfidf"
-    EMBEDDING = "embedding"
-    LEVENSHTEIN = "levenshtein"
-    CUSTOM = "custom"
-    NO_MATCH = "no_match"
-    FALLBACK_LLM = "fallback_llm"
+    EXPLICIT = "explicit"           # Layer 0
+    SCENARIO = "scenario"           # Layer 1
+    AI_TRIAGE = "ai_triage"         # Layer 2
+    KEYWORD = "keyword"             # Layer 3
+    TFIDF = "tfidf"                 # Layer 4
+    EMBEDDING = "embedding"         # Layer 5
+    LEVENSHTEIN = "levenshtein"     # Layer 6
+    CUSTOM = "custom"               # Layer 7
+    NO_MATCH = "no_match"           # Layer 8
+    FALLBACK_LLM = "fallback_llm"   # Layer 9
 
     @property
     def layer_number(self) -> int:
@@ -108,13 +108,8 @@ class SkillRoute(BaseModel):
         description="Additional routing metadata",
     )
 
-    @field_validator("skill_id")
-    @classmethod
-    def validate_skill_id(cls, v: str) -> str:
-        """Validate skill ID format."""
-        if not v:
-            raise ValueError("skill_id cannot be empty")
-        return v
+    # Note: min_length=1 on the Field already enforces non-empty skill_id
+    # No additional field_validator needed
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization."""

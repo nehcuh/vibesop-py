@@ -26,7 +26,7 @@ Examples:
 
 import logging
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 
 import typer
 from rich.console import Console

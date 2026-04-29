@@ -12,15 +12,14 @@ Provides:
 from __future__ import annotations
 
 import json
+import logging
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 import typer
 from rich.console import Console
-from rich.panel import Panel
 from rich.table import Table
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +42,6 @@ def _instinct_overview(ctx: typer.Context) -> None:
     learner = InstinctLearner(_get_storage_path())
     stats = learner.get_stats()
     instincts = learner.get_reliable_instincts()
-    candidates = learner.get_sequence_candidates()
 
     console.rule("[bold cyan]Instinct Learning System[/bold cyan]")
     console.print()
@@ -264,7 +262,7 @@ def import_(
         incoming = [Instinct.from_dict(i) for i in data.get("instincts", [])]
     except (json.JSONDecodeError, KeyError) as e:
         console.print(f"[red]✗[/red] Invalid export file: {e}")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from None
 
     learner = InstinctLearner(_get_storage_path())
     imported = 0
