@@ -48,6 +48,35 @@ def find_skill_content(skill_id: str, project_root: Path) -> str | None:
     return None
 
 
+def is_pack_installed(skill_id: str) -> Path | None:
+    """Check if the external pack for a skill is installed in central storage.
+
+    For skill IDs like 'gstack/review' or 'superpowers/brainstorm',
+    checks if ~/.config/skills/<namespace>/<name>/SKILL.md exists.
+
+    Returns:
+        Path to the installed skill directory or None
+    """
+    if "/" not in skill_id:
+        return None
+
+    parts = skill_id.split("/", 1)
+    namespace = parts[0]
+    skill_name = parts[1]
+
+    central_base = Path.home() / ".config" / "skills"
+
+    candidates = [
+        central_base / namespace / skill_name,
+        central_base / namespace / "skills" / skill_name,
+    ]
+    for candidate in candidates:
+        if candidate.exists() and (candidate / "SKILL.md").exists():
+            return candidate
+
+    return None
+
+
 def normalize_skill_type(content: str) -> str:
     """Normalize skill type for platform compatibility.
 
@@ -206,6 +235,7 @@ def render_route_hook(
 __all__ = [
     "find_skill_content",
     "generate_fallback_skill_content",
+    "is_pack_installed",
     "normalize_skill_type",
     "render_route_hook",
 ]

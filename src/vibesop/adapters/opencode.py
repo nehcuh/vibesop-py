@@ -6,6 +6,7 @@ demonstrating the adapter pattern with minimal complexity.
 
 import json
 import os
+import shutil
 from pathlib import Path
 from typing import Any
 
@@ -247,7 +248,11 @@ class OpenCodeAdapter(PlatformAdapter):
         result: RenderResult,
         dir_name: str | None = None,
     ) -> None:
-        """Render skill content from actual skill file.
+        """Render skill content from actual skill file or central storage.
+
+        For external pack skills (e.g., 'gstack/review'), checks central
+        storage (~/.config/skills/) and creates a symlink if the pack
+        is installed there, avoiding stub generation.
 
         Args:
             skill: Skill definition from manifest
@@ -258,21 +263,35 @@ class OpenCodeAdapter(PlatformAdapter):
         skill_id = skill.id if hasattr(skill, "id") else skill.get("id", "")
         skill_output_path = skill_dir / "SKILL.md"
 
-        # Try to find actual skill content from core/skills/
         skill_content = self._find_skill_content(skill_id)
 
         if skill_content:
-            # Normalize skill type for platform compatibility.
-            # VibeSOP uses "prompt" internally; convert to "standard" for
-            # platforms that only recognize "standard" and "flow" types.
             skill_content = self._normalize_skill_type(skill_content)
             self.write_file_atomic(skill_output_path, skill_content, validate_security=False)
             result.add_file(skill_output_path)
-        else:
-            # Fallback: generate minimal skill definition
-            fallback_content = self._generate_fallback_skill_content(skill, dir_name=dir_name)
-            self.write_file_atomic(skill_output_path, fallback_content, validate_security=False)
-            result.add_file(skill_output_path)
+            return
+
+        from vibesop.adapters._shared import is_pack_installed
+
+        installed_path = is_pack_installed(skill_id)
+        if installed_path:
+            if skill_dir.exists() and not skill_dir.is_symlink():
+                shutil.rmtree(skill_dir)
+            try:
+                skill_dir.symlink_to(installed_path, target_is_directory=True)
+                result.add_file(skill_dir / "SKILL.md")
+                return
+            except OSError:
+                try:
+                    shutil.copytree(installed_path, skill_dir)
+                    result.add_file(skill_output_path)
+                    return
+                except Exception:
+                    pass
+
+        fallback_content = self._generate_fallback_skill_content(skill, dir_name=dir_name)
+        self.write_file_atomic(skill_output_path, fallback_content, validate_security=False)
+        result.add_file(skill_output_path)
 
     def _generate_readme(self, manifest: Manifest) -> str:
         """Generate README content.
