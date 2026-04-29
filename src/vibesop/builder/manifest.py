@@ -179,6 +179,9 @@ class ManifestBuilder:
                     # Skip invalid skills
                     logger.warning("Failed to load skill %s: %s", skill_dict.get('id'), e)
 
+            # Merge with dynamically discovered skills from central storage
+            self._merge_discovered_skills(skills)
+
             return skills
 
         except Exception as e:
@@ -285,6 +288,41 @@ class ManifestBuilder:
             return match.group(1).strip()
 
         return ""
+
+    def _merge_discovered_skills(self, existing_skills: list[SkillDefinition]) -> None:
+        """Discover skills from installed packs and add new ones to the list.
+
+        Skills already present in the registry are not duplicated.
+
+        Args:
+            existing_skills: List of SkillDefinition objects to extend in place
+        """
+        try:
+            from vibesop.core.routing.dynamic_discovery import DynamicSkillDiscovery
+
+            discovery = DynamicSkillDiscovery()
+            existing_ids = {s.id for s in existing_skills}
+            discovered = discovery.discover()
+
+            for skill in discovered:
+                if skill.id not in existing_ids:
+                    new_skill = SkillDefinition(
+                        id=skill.id,
+                        name=skill.name or skill.id,
+                        description=skill.description,
+                        trigger_when=(
+                            skill.triggers[0] if skill.triggers else ""
+                        ),
+                        metadata={
+                            "namespace": skill.namespace,
+                            "entrypoint": "external",
+                            "source_path": str(skill.source_path),
+                        },
+                    )
+                    existing_skills.append(new_skill)
+                    existing_ids.add(skill.id)
+        except Exception as e:
+            logger.debug("Dynamic skill discovery skipped: %s", e)
 
     def _load_policies(self) -> PolicySet:
         """Load policies from config files.
