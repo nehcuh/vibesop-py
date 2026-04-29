@@ -434,75 +434,95 @@ def _handle_orchestrated_result(
     json_output: bool,
     console: Console,
 ) -> None:
-    """Handle multi-step orchestration result with confirmation.
-
-    When --execute is passed, after confirmation the CLI enters
-    interactive step-by-step execution mode.
-    """
+    """Handle multi-step orchestration result — confirmation, execution, post-processing."""
     plan = result.execution_plan
 
-    # Use unified confirmation check
-    if _needs_confirmation(result, router, yes, json_output, is_orchestrated=True):
-        render_orchestration_result(result, console=console)
+    # 1. Confirmation flow (when needed)
+    confirmed = _orchestration_confirmation_flow(result, yes, execute, json_output, console, router)
+    if not confirmed:
+        return
 
-        choices = [
-            questionary.Choice("✅ Confirm execution plan", value="confirm"),
-            questionary.Choice("✏️  Edit steps", value="edit"),
-            questionary.Choice(
-                f"🔀 Use single skill: {result.single_fallback.skill_id if result.single_fallback else 'none'}",
-                value="single",
-            ),
-            questionary.Choice("📝 Skip skills, use raw LLM", value="skip"),
-        ]
-
-        # Add execute option when --execute flag is active
-        if execute and sys.stdin.isatty():
-            choices.insert(1, questionary.Choice("▶️  Execute plan step-by-step", value="execute"))
-
-        choice = questionary.select(
-            "How would you like to proceed?",
-            choices=choices,
-        ).ask()
-
-        if choice == "edit":
-            modified = _edit_execution_plan(result, console)
-            if modified:
-                render_orchestration_result(result, console=console)
-                confirm = questionary.confirm(
-                    "Proceed with updated plan?",
-                    default=True,
-                ).ask()
-                if not confirm:
-                    console.print("[dim]Plan editing cancelled.[/dim]")
-                    return
-            else:
-                return
-        elif choice == "single" and result.single_fallback:
-            console.print(
-                Panel(
-                    f"[bold green]✅ Matched:[/bold green] {result.single_fallback.skill_id}\n"
-                    f"[dim]Confidence:[/dim] {result.single_fallback.confidence:.0%}",
-                    title="[bold]Single Skill Fallback[/bold]",
-                    border_style="blue",
-                )
-            )
-            return
-        elif choice == "skip":
-            console.print("[dim]Skipped. Using raw LLM.[/dim]")
-            return
-        elif choice == "execute":
-            if plan:
-                _execute_plan_interactive(result, console)
-            return
-
-    # --execute mode without confirmation prompt (--yes passed)
+    # 2. Interactive execution (--execute flag)
     if execute and plan:
         _execute_plan_interactive(result, console)
         return
 
-    # Save plan to tracker
+    # 3. Post-processing: save plan, render output, collect feedback
+    _orchestration_post_process(result, router, json_output, console)
+
+
+def _orchestration_confirmation_flow(
+    result: Any,
+    yes: bool,
+    execute: bool,
+    json_output: bool,
+    console: Console,
+    router: Any,
+) -> bool:
+    """Interactive confirmation for orchestrated result. Returns False if cancelled."""
+    plan = result.execution_plan
+
+    if not _needs_confirmation(result, router, yes, json_output, is_orchestrated=True):
+        return True
+
+    render_orchestration_result(result, console=console)
+
+    choices = [
+        questionary.Choice("✅ Confirm execution plan", value="confirm"),
+        questionary.Choice("✏️  Edit steps", value="edit"),
+        questionary.Choice(
+            f"🔀 Use single skill: {result.single_fallback.skill_id if result.single_fallback else 'none'}",
+            value="single",
+        ),
+        questionary.Choice("📝 Skip skills, use raw LLM", value="skip"),
+    ]
+
+    if execute and sys.stdin.isatty():
+        choices.insert(1, questionary.Choice("▶️  Execute plan step-by-step", value="execute"))
+
+    choice = questionary.select("How would you like to proceed?", choices=choices).ask()
+
+    if choice == "edit":
+        modified = _edit_execution_plan(result, console)
+        if modified:
+            render_orchestration_result(result, console=console)
+            if not questionary.confirm("Proceed with updated plan?", default=True).ask():
+                console.print("[dim]Plan editing cancelled.[/dim]")
+                return False
+            return True
+        return False
+    elif choice == "single" and result.single_fallback:
+        console.print(
+            Panel(
+                f"[bold green]✅ Matched:[/bold green] {result.single_fallback.skill_id}\n"
+                f"[dim]Confidence:[/dim] {result.single_fallback.confidence:.0%}",
+                title="[bold]Single Skill Fallback[/bold]",
+                border_style="blue",
+            )
+        )
+        return False
+    elif choice == "skip":
+        console.print("[dim]Skipped. Using raw LLM.[/dim]")
+        return False
+    elif choice == "execute" and plan:
+        _execute_plan_interactive(result, console)
+        return False
+
+    return True
+
+
+def _orchestration_post_process(
+    result: Any,
+    router: Any,
+    json_output: bool,
+    console: Console,
+) -> None:
+    """Save plan, render output, and collect feedback."""
+    from pathlib import Path
+
     from vibesop.core.orchestration import PlanTracker
 
+    plan = result.execution_plan
     tracker = PlanTracker(storage_dir=Path.cwd() / ".vibe")
     if plan:
         tracker.create_plan(plan)
@@ -750,6 +770,7 @@ def _check_stale_skills_post_route() -> None:
     routes_since = counter.get("routes_since_last_check", 0) + 1
     counter["routes_since_last_check"] = routes_since
     check_interval = counter.get("check_interval", 20)
+    counter["check_interval"] = check_interval
 
     counter_file.parent.mkdir(parents=True, exist_ok=True)
     counter_file.write_text(json.dumps(counter, indent=2))

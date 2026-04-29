@@ -1,4 +1,4 @@
-"""Tests for UnifiedRouter._route() branches and internal logic.
+"""Tests for UnifiedRouter._single_skill_route() branches and internal logic.
 
 Covers:
     - Explicit layer routing
@@ -29,7 +29,7 @@ class TestRouteExplicitLayer:
         config = RoutingConfig(enable_ai_triage=False)
         router = UnifiedRouter(project_root=tmp_path, config=config)
 
-        result = router._route("use skill:systematic-debugging")
+        result = router._single_skill_route("use skill:systematic-debugging")
 
         if result.has_match:
             assert "systematic-debugging" in result.primary.skill_id
@@ -39,7 +39,7 @@ class TestRouteExplicitLayer:
         config = RoutingConfig(enable_ai_triage=False)
         router = UnifiedRouter(project_root=tmp_path, config=config)
 
-        result = router._route("gstack/review")
+        result = router._single_skill_route("gstack/review")
 
         if result.has_match:
             assert "gstack" in result.primary.skill_id or "review" in result.primary.skill_id
@@ -53,7 +53,7 @@ class TestRouteScenarioLayer:
         config = RoutingConfig(enable_ai_triage=False)
         router = UnifiedRouter(project_root=tmp_path, config=config)
 
-        result = router._route("plan this complex task")
+        result = router._single_skill_route("plan this complex task")
 
         assert result.has_match
         if result.has_match:
@@ -65,7 +65,7 @@ class TestRouteScenarioLayer:
         config = RoutingConfig(enable_ai_triage=False)
         router = UnifiedRouter(project_root=tmp_path, config=config)
 
-        result = router._route("review my pull request")
+        result = router._single_skill_route("review my pull request")
 
         if result.has_match:
             assert "review" in result.primary.skill_id.lower()
@@ -79,7 +79,7 @@ class TestRouteMatcherPipeline:
         config = RoutingConfig(enable_ai_triage=False)
         router = UnifiedRouter(project_root=tmp_path, config=config)
 
-        result = router._route("debug")
+        result = router._single_skill_route("debug")
 
         assert result.has_match
         assert result.primary is not None
@@ -89,7 +89,7 @@ class TestRouteMatcherPipeline:
         config = RoutingConfig(enable_ai_triage=False)
         router = UnifiedRouter(project_root=tmp_path, config=config)
 
-        result = router._route("debbug")  # typo for debug
+        result = router._single_skill_route("debbug")  # typo for debug
 
         assert result.has_match
         assert result.primary is not None
@@ -99,7 +99,7 @@ class TestRouteMatcherPipeline:
         config = RoutingConfig(enable_ai_triage=False)
         router = UnifiedRouter(project_root=tmp_path, config=config)
 
-        result = router._route("xyzabc123 nonsense query")
+        result = router._single_skill_route("xyzabc123 nonsense query")
 
         # Should either have no match or fallback
         if not result.has_match:
@@ -119,7 +119,7 @@ class TestKeywordRoutingFallback:
         router = UnifiedRouter(project_root=tmp_path, config=config)
 
         # Query longer than keyword_match_max_chars but AI triage is disabled
-        result = router._route("plan this complex task")
+        result = router._single_skill_route("plan this complex task")
 
         # Should still produce a match via keyword/TF-IDF/levenshtein pipeline
         assert result.has_match
@@ -131,7 +131,7 @@ class TestKeywordRoutingFallback:
         router = UnifiedRouter(project_root=tmp_path, config=config)
 
         # Long query with strict keyword threshold → only scenario + matcher pipeline
-        result = router._route("plan this")
+        result = router._single_skill_route("plan this")
         # With keyword_match_max_chars=5, "plan this" (9 chars) should still
         # fall back to matcher pipeline since LLM is disabled
         assert result.primary is not None
@@ -152,7 +152,7 @@ class TestRouteDegradation:
         config = RoutingConfig(enable_ai_triage=False)
         router = UnifiedRouter(project_root=tmp_path, config=config)
 
-        result = router._route("debug")
+        result = router._single_skill_route("debug")
 
         if result.has_match and result.primary.confidence >= 0.8:
             assert result.primary.layer != RoutingLayer.FALLBACK_LLM
@@ -219,6 +219,6 @@ class TestRouteWithContext:
         router = UnifiedRouter(project_root=tmp_path, config=config)
         context = RoutingContext(project_type="python")
 
-        result = router._route("test", context=context)
+        result = router._single_skill_route("test", context=context)
 
         assert result.has_match

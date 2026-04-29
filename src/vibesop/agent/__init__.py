@@ -160,7 +160,7 @@ class AgentRouter:
                 )
                 self._router._config = modified_config
                 self._router._triage_service._config = modified_config
-                result = self._router._route(query)
+                result = self._router._single_skill_route(query)
             finally:
                 # Restore original configs
                 self._router._config = original_router_config

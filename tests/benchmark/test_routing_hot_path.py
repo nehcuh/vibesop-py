@@ -25,7 +25,7 @@ class TestRoutingHotPath:
         times = []
         for _ in range(iterations):
             start = time.perf_counter()
-            router._route(query, context=RoutingContext())
+            router._single_skill_route(query, context=RoutingContext())
             elapsed = (time.perf_counter() - start) * 1000
             times.append(elapsed)
 
@@ -55,7 +55,7 @@ class TestRoutingHotPath:
 
     def test_routing_is_consistent_across_runs(self, router):
         """Same query should produce consistent results."""
-        result1 = router._route("debug error", context=RoutingContext())
-        result2 = router._route("debug error", context=RoutingContext())
+        result1 = router._single_skill_route("debug error", context=RoutingContext())
+        result2 = router._single_skill_route("debug error", context=RoutingContext())
         if result1.primary and result2.primary:
             assert result1.primary.skill_id == result2.primary.skill_id

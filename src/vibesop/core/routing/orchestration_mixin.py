@@ -51,8 +51,13 @@ class RouterOrchestrationMixin:
 
     def _to_orchestration_result(self, result: RoutingResult, query: str) -> OrchestrationResult:
         """Convert a single RoutingResult to OrchestrationResult."""
+        mode = (
+            OrchestrationMode.SINGLE
+            if result.primary is not None
+            else OrchestrationMode.FALLBACK
+        )
         return OrchestrationResult(
-            mode=OrchestrationMode.SINGLE,
+            mode=mode,
             original_query=query,
             primary=result.primary,
             alternatives=result.alternatives,

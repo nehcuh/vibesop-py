@@ -43,6 +43,15 @@ class RouterResultMixin:
     degradation manager, candidate manager, skill recommender, and config.
     """
 
+    def _get_skill_recommender(self) -> Any:
+        """Lazy-init and return the SkillRecommender singleton."""
+        host = cast("_ResultHost", self)
+        if host._skill_recommender is None:
+            from vibesop.integrations.skill_recommender import SkillRecommender
+
+            host._skill_recommender = SkillRecommender()
+        return host._skill_recommender
+
     def _build_match_result(
         self,
         query: str,
@@ -129,11 +138,7 @@ class RouterResultMixin:
         # Enrich alternatives with SkillRecommender suggestions
         enriched_alternatives = list(alternatives) if alternatives else []
         try:
-            if host._skill_recommender is None:
-                from vibesop.integrations.skill_recommender import SkillRecommender
-
-                host._skill_recommender = SkillRecommender()
-            recommender = host._skill_recommender
+            recommender = self._get_skill_recommender()
             all_candidates = host._candidate_manager.get_cached_candidates()
             existing_ids = {primary.skill_id} | {a.skill_id for a in enriched_alternatives}
             recs = recommender.recommend(query, all_candidates, top_k=5)
@@ -167,11 +172,7 @@ class RouterResultMixin:
 
         # Proactive discovery: suggest unused skills matching current query domain
         try:
-            if host._skill_recommender is None:
-                from vibesop.integrations.skill_recommender import SkillRecommender
-
-                host._skill_recommender = SkillRecommender()
-            recommender = host._skill_recommender
+            recommender = self._get_skill_recommender()
             all_candidates = host._candidate_manager.get_cached_candidates()
             used_ids = existing_ids.copy()
             discoveries = recommender.discover(
@@ -279,7 +280,7 @@ class RouterResultMixin:
                 source="builtin",
                 metadata={
                     "reason": "No skill matched query",
-                    "fallback_mode": host._config.fallback_mode,
+                    "fallback_mode": getattr(host._config, "fallback_mode", "silent"),
                     "candidate_count": len(candidates),
                 },
             ),

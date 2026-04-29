@@ -241,7 +241,7 @@ class SessionContext:
                 )
 
             # Route the new message
-            routing_result = self._router._route(user_message)
+            routing_result = self._router._single_skill_route(user_message)
 
             if not routing_result.has_match:
                 return RoutingSuggestion(

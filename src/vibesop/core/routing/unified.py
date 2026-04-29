@@ -19,6 +19,7 @@ Example:
 
 from __future__ import annotations
 
+import atexit
 import logging
 import threading
 import time
@@ -253,11 +254,17 @@ class UnifiedRouter(
         # Session context for multi-turn state persistence (lazy init)
         self._session_context = None
 
+        # Flush usage buffer on normal exit to prevent data loss
+        atexit.register(self._candidate_manager._flush_usage_buffer)
+
+        # Router-level coarse lock for thread safety
+        self._route_lock = threading.Lock()
+
     # ================================================================
     # Main routing entry point
     # ================================================================
 
-    def _route(
+    def _single_skill_route(
         self,
         query: str,
         candidates: list[dict[str, Any]] | None = None,
@@ -376,7 +383,7 @@ class UnifiedRouter(
                     start_time, deprecated_warnings, conversation, original_query,
                 )
         else:
-            # Long query: skip keyword-based layers, use LLM semantic triage
+            # Long query: prefer LLM semantic triage, fall back to matchers
             match, detail = _layers.try_ai_triage_layer(
                 self, query, candidates, context, force=True
             )
@@ -387,6 +394,19 @@ class UnifiedRouter(
                 return self._build_match_result(
                     query, match, [], routing_path, layer_details,
                     start_time, deprecated_warnings, conversation, original_query, context,
+                )
+
+            # Fallback: try matcher pipeline for long queries when AI Triage fails
+            primary, alternatives, detail = _pipeline.run_matcher_pipeline(
+                self, query, candidates, context, collect_rejected=True
+            )
+            routing_path.append(detail.layer)
+            layer_details.append(detail)
+            if primary:
+                self._record_layer(detail.layer)
+                return self._build_match_result(
+                    query, primary, alternatives, routing_path, layer_details,
+                    start_time, deprecated_warnings, conversation, original_query,
                 )
 
         return None
@@ -520,7 +540,7 @@ class UnifiedRouter(
             DeprecationWarning,
             stacklevel=2,
         )
-        return self._route(query, candidates, context)
+        return self._single_skill_route(query, candidates, context)
 
     def orchestrate(
         self,
@@ -560,7 +580,7 @@ class UnifiedRouter(
                 progress=0.0,
             )
         )
-        single_result = self._route(query, candidates, context)
+        single_result = self._single_skill_route(query, candidates, context)
         cb.on_phase_complete(
             PhaseInfo(
                 phase=OrchestrationPhase.ROUTING,

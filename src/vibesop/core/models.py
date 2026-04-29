@@ -450,6 +450,7 @@ class OrchestrationMode(StrEnum):
 
     SINGLE = "single"
     ORCHESTRATED = "orchestrated"
+    FALLBACK = "fallback"
 
 
 class OrchestrationResult(BaseModel):

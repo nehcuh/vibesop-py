@@ -697,7 +697,7 @@ def _verify_and_sync(skill_id: str, _scope: str) -> None:
 
     matched = False
     for query in test_queries:
-        result = router._route(query)
+        result = router._single_skill_route(query)
         if result.primary and result.primary.skill_id == skill_id:
             matched = True
             console.print(f"[green]✓ Routing test passed:[/green] {query}")

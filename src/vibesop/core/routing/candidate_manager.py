@@ -41,6 +41,7 @@ class CandidateManager:
         self._usage_buffer: dict[str, dict[str, Any]] = {}
         self._usage_flush_count: int = 0
         self._USAGE_FLUSH_INTERVAL: int = 10
+        self._path_mtimes: dict[str, float] = {}
 
     @property
     def _disk_cache_path(self) -> Path:
@@ -148,14 +149,28 @@ class CandidateManager:
             return self._cached_reload_locked()
 
     def _should_check_reload(self) -> bool:
-        """Rate-limited check: only probe the filesystem marker every N seconds."""
+        """Rate-limited check: probe filesystem marker + search path mtimes every N seconds."""
         import time
 
         now = time.monotonic()
         if now - self._last_reload_check < self._RELOAD_CHECK_INTERVAL:
             return False
         self._last_reload_check = now
-        return self._check_reload_needed()
+
+        if self._check_reload_needed():
+            return True
+
+        # Check if any search path mtime changed (new skill installed without marker)
+        for sp in self._search_paths:
+            if sp.exists():
+                try:
+                    mtime = sp.stat().st_mtime
+                    if mtime != self._path_mtimes.get(str(sp), 0):
+                        self._path_mtimes[str(sp)] = mtime
+                        return True
+                except OSError:
+                    continue
+        return False
 
     def _check_reload_needed(self) -> bool:
         """Check if a .skills_reload marker signals new skill installation."""
