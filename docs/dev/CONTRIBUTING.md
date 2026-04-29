@@ -36,7 +36,7 @@ uv run ruff check .
 
 ### Core Principles
 
-Before contributing, read [docs/PRINCIPLES.md](docs/PRINCIPLES.md). Key points:
+Before contributing, read [docs/PHILOSOPHY.md](../PHILOSOPHY.md). Key points:
 
 - **Discovery > Execution**: SkillOS manages, AI agents execute
 - **Matching > Guessing**: Use multi-layer matching
@@ -160,7 +160,7 @@ Security: CVE-2024-XXXX
 
 - **GitHub Issues**: Bugs and features
 - **GitHub Discussions**: Questions
-- **Docs**: [ARCHITECTURE.md](ARCHITECTURE.md), [docs/PRINCIPLES.md](docs/PRINCIPLES.md)
+- **Docs**: [docs/architecture/ARCHITECTURE.md](../architecture/ARCHITECTURE.md), [docs/PHILOSOPHY.md](../PHILOSOPHY.md)
 
 ## License
 

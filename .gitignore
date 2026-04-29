@@ -48,6 +48,7 @@ coverage.xml
 htmlcov/
 *.cover
 .hypothesis/
+*.prof
 
 # VibeSOP state
 .vibe/state/
