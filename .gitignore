@@ -98,3 +98,4 @@ ruff.toml
 .vibe/rules/
 .vibe/conversations/
 .vibe/*.jsonl
+.worktrees/
