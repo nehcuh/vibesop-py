@@ -75,8 +75,8 @@ class DynamicSkillDiscovery:
             triggers: list[str] = []
             if skill_file and skill_file.exists():
                 parsed = parse_skill_md(skill_file)
-                if parsed and parsed.tags:
-                    triggers = parsed.tags
+                if parsed and parsed.triggers:
+                    triggers = parsed.triggers
 
             discovered.append(
                 DiscoveredSkill(

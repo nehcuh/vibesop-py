@@ -29,6 +29,7 @@ class SkillMetadata:
         version: Skill version
         author: Skill author
         tags: List of tags for categorization
+        triggers: List of trigger phrases for routing
         skill_type: Type of skill
         trigger_when: When to trigger this skill (extracted from description)
     """
@@ -41,6 +42,7 @@ class SkillMetadata:
     version: str = "1.0.0"
     author: str = ""
     tags: list[str] | None = None
+    triggers: list[str] | None = None
     skill_type: SkillType = SkillType.PROMPT
     trigger_when: str = ""
     algorithms: list[str] | None = None
@@ -48,6 +50,8 @@ class SkillMetadata:
     def __post_init__(self) -> None:
         if self.tags is None:
             self.tags = []
+        if self.triggers is None:
+            self.triggers = []
         if self.algorithms is None:
             self.algorithms = []
 

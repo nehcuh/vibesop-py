@@ -134,7 +134,7 @@ class PackInstaller:
                     # Audit existing installation
                     audit_results = []
                     for skill_file in installed_skill_files:
-                        audit = self._auditor.audit_skill_file(skill_file)
+                        audit = self._auditor.audit_skill_file(skill_file, pack_name=pack_name)
                         audit_results.append(
                             f"{skill_file.parent.name}: {'PASS' if audit.is_safe else 'WARN'}"
                         )
@@ -214,7 +214,6 @@ class PackInstaller:
         Args:
             pack_name: Name of the pack
             platforms: Specific platforms to link (None = all)
-            _analysis: Repository analysis (reserved for future use)
 
         Returns:
             List of (platform, status) tuples
@@ -311,7 +310,7 @@ class PackInstaller:
                 else:
                     link_path.unlink()
 
-            link_path.symlink_to(skill_dir)
+            link_path.symlink_to(skill_dir, target_is_directory=True)
             count += 1
 
         return count

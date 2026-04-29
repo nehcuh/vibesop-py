@@ -322,7 +322,7 @@ class ManifestBuilder:
                     existing_skills.append(new_skill)
                     existing_ids.add(skill.id)
         except Exception as e:
-            logger.debug("Dynamic skill discovery skipped: %s", e)
+            logger.warning("Dynamic skill discovery failed: %s", e)
 
     def _load_policies(self) -> PolicySet:
         """Load policies from config files.
