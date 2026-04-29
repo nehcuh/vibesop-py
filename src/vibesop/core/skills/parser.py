@@ -111,6 +111,7 @@ def build_metadata(
         version=data.get("version", "1.0.0"),
         author=data.get("author", ""),
         tags=tags,
+        triggers=triggers,
         skill_type=skill_type,
         trigger_when=trigger_when,
         algorithms=algorithms,

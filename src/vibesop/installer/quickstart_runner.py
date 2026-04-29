@@ -379,69 +379,32 @@ class QuickstartRunner:
     def _sync_platform_symlinks(self, platform: str) -> None:
         """Sync skill symlinks from central storage to platform directory.
 
-        After a pack is installed, creates per-skill symlinks in the platform
-        skills directory so the routing engine can find them.
+        Delegates to PackInstaller._create_skill_symlinks for the actual
+        symlink creation, avoiding duplicated logic.
         """
-        from vibesop.core.skills.external_loader import ExternalSkillLoader
         from vibesop.core.skills.storage import SkillStorage
+        from vibesop.installer.pack_installer import PackInstaller
+        from vibesop.constants import TRUSTED_PACKS
 
         storage = SkillStorage()
         platform_dir = storage.PLATFORM_SKILLS_DIRS.get(platform)
         if not platform_dir:
             return
 
-        loader = ExternalSkillLoader()
-        discovered = loader.discover_all()
+        platform_dir.mkdir(parents=True, exist_ok=True)
 
-        count = 0
-        for skill_id, meta in discovered.items():
-            if not skill_id or "/" not in skill_id:
+        installer = PackInstaller()
+        total = 0
+        for pack_name in TRUSTED_PACKS:
+            central_path = Path.home() / ".config" / "skills" / pack_name
+            if not central_path.exists():
                 continue
+            count = installer._create_skill_symlinks(
+                central_path, platform_dir, pack_name
+            )
+            total += count
 
-            parts = skill_id.split("/", 1)
-            namespace = parts[0]
-            skill_name = parts[1]
-
-            # Determine central source path
-            central = Path.home() / ".config" / "skills"
-            source = None
-            for candidate in [
-                central / namespace / skill_name,
-                central / namespace / "skills" / skill_name,
-            ]:
-                if candidate.exists() and (candidate / "SKILL.md").exists():
-                    source = candidate
-                    break
-
-            if not source:
-                continue
-
-            # Create flattened symlink (e.g., gstack-review -> gstack/review/)
-            flat_name = skill_id.replace("/", "-")
-            target = platform_dir / flat_name
-
-            try:
-                if target.exists():
-                    if target.is_symlink():
-                        if target.resolve() == source.resolve():
-                            continue
-                        target.unlink()
-                    elif target.is_dir():
-                        shutil.rmtree(target)
-                    else:
-                        target.unlink()
-                target.symlink_to(source, target_is_directory=True)
-                count += 1
-            except OSError:
-                # Windows fallback
-                try:
-                    shutil.copytree(source, target, dirs_exist_ok=True)
-                    count += 1
-                except Exception:
-                    pass
-
-        if count > 0:
-            console.print(f"  Synced {count} skill(s) to {platform}")
+        if total > 0:
 
     def _show_next_steps(self, config: QuickstartConfig) -> None:
         """Show next steps after installation.

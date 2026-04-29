@@ -211,6 +211,8 @@ class SkillSecurityAuditor:
     def audit_skill_file(
         self,
         skill_path: Path,
+        pack_name: str | None = None,
+        source_url: str | None = None,
     ) -> AuditResult:
         """Audit a skill file for security threats.
 
@@ -275,6 +277,23 @@ class SkillSecurityAuditor:
                 risk_level=ThreatLevel.CRITICAL,
                 reason="Unsafe content detected by scanner",
             )
+
+        # 4.5. Trust store override — downgrade HIGH threats to MEDIUM
+        # for packs the user has explicitly trusted
+        if pack_name or source_url:
+            try:
+                from vibesop.core.skills.trust import TrustStore
+                store = TrustStore()
+                is_trusted = (
+                    (pack_name and store.is_trusted_pack(pack_name))
+                    or (source_url and store.is_trusted_source(source_url))
+                )
+                if is_trusted:
+                    for threat in threats:
+                        if threat.level == ThreatLevel.HIGH:
+                            threat.level = ThreatLevel.MEDIUM
+            except Exception:
+                pass  # Trust store is best-effort
 
         # 5. Calculate result
         if not threats:

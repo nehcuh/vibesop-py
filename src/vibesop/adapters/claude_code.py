@@ -5,6 +5,7 @@ configuration files from a manifest.
 """
 
 import logging
+import shutil
 from pathlib import Path
 from typing import Any
 
@@ -348,7 +349,12 @@ class ClaudeCodeAdapter(PlatformAdapter):
         manifest: Manifest,
         result: RenderResult,
     ) -> None:
-        """Render skill content from actual skill file.
+        """Render skill content from actual skill file or central storage.
+
+        For external pack skills (e.g., 'gstack/review'), checks central
+        storage (~/.config/skills/) and creates a symlink if the pack
+        is installed there, falling back to template rendering only when
+        the pack is not installed.
 
         Args:
             skill: Skill definition from manifest
@@ -359,23 +365,39 @@ class ClaudeCodeAdapter(PlatformAdapter):
         skill_id = skill.id if hasattr(skill, "id") else skill.get("id", "")
         skill_output_path = skill_dir / "SKILL.md"
 
-        # Try to find actual skill content from core/skills/
         skill_content = self._find_skill_content(skill_id)
 
         if skill_content:
-            # Use actual skill content
             self.write_file_atomic(skill_output_path, skill_content, validate_security=False)
             result.add_file(skill_output_path)
-        else:
-            # Fallback to template for external skills (superpowers, gstack, etc.)
-            self._render_and_write(
-                "skills/SKILL.md.j2",
-                skill_output_path,
-                manifest,
-                result,
-                skill=skill,
-                validate_security=False,
-            )
+            return
+
+        from vibesop.adapters._shared import is_pack_installed
+
+        installed_path = is_pack_installed(skill_id)
+        if installed_path:
+            if skill_dir.exists() and not skill_dir.is_symlink():
+                shutil.rmtree(skill_dir)
+            try:
+                skill_dir.symlink_to(installed_path, target_is_directory=True)
+                result.add_file(skill_dir / "SKILL.md")
+                return
+            except OSError:
+                try:
+                    shutil.copytree(installed_path, skill_dir)
+                    result.add_file(skill_output_path)
+                    return
+                except Exception:
+                    pass
+
+        self._render_and_write(
+            "skills/SKILL.md.j2",
+            skill_output_path,
+            manifest,
+            result,
+            skill=skill,
+            validate_security=False,
+        )
 
     def _render_project_claude_md(self, manifest: Manifest, result: RenderResult) -> None:
         """Write project-level CLAUDE.md if it doesn't exist.

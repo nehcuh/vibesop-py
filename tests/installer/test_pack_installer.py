@@ -153,3 +153,74 @@ class TestPackInstaller:
             assert success is True
             assert "PASS" in msg
             mock_auditor.audit_skill_file.assert_called_once()
+
+
+class TestSkillSymlinks:
+    """Tests for _create_skill_symlinks and _copy_skill_dirs."""
+
+    def test_create_skill_symlinks_flat_layout(self, tmp_path):
+        """Skill symlinks are created with correct flattened names for flat layout."""
+        from vibesop.installer.pack_installer import PackInstaller
+
+        # Create a mock pack structure
+        central = tmp_path / "central"
+        pack = central / "testpack"
+        review_dir = pack / "review"
+        review_dir.mkdir(parents=True)
+        (review_dir / "SKILL.md").write_text("---\nname: review\n---\n# Test skill")
+        qa_dir = pack / "qa"
+        qa_dir.mkdir(parents=True)
+        (qa_dir / "SKILL.md").write_text("---\nname: qa\n---\n# QA skill")
+
+        platform = tmp_path / "platform"
+        platform.mkdir(parents=True)
+
+        installer = PackInstaller(central_storage=central, platform_paths=[platform])
+        count = installer._create_skill_symlinks(pack, platform, "testpack")
+
+        assert count == 2
+        symlink_review = platform / "testpack-review"
+        assert symlink_review.is_symlink()
+        assert symlink_review.resolve() == review_dir.resolve()
+
+    def test_create_skill_symlinks_replaces_stub(self, tmp_path):
+        """Existing stub directories are replaced with symlinks."""
+        from vibesop.installer.pack_installer import PackInstaller
+
+        central = tmp_path / "central"
+        pack = central / "testpack"
+        review_dir = pack / "review"
+        review_dir.mkdir(parents=True)
+        (review_dir / "SKILL.md").write_text("real content")
+
+        platform = tmp_path / "platform"
+        platform.mkdir(parents=True)
+
+        # Create a stub directory (simulating vibe build output)
+        stub = platform / "testpack-review"
+        stub.mkdir(parents=True)
+        (stub / "SKILL.md").write_text("stub content")
+
+        installer = PackInstaller(central_storage=central, platform_paths=[platform])
+        count = installer._create_skill_symlinks(pack, platform, "testpack")
+
+        assert count == 1
+        assert stub.is_symlink()
+        assert (stub / "SKILL.md").read_text() == "real content"
+
+    def test_create_skill_symlinks_root_skill_md(self, tmp_path):
+        """Root-level SKILL.md is symlinked using pack_name as the flat name."""
+        from vibesop.installer.pack_installer import PackInstaller
+
+        central = tmp_path / "central"
+        pack = central / "testpack"
+        pack.mkdir(parents=True)
+        (pack / "SKILL.md").write_text("---\nname: testpack\n---\n# Pack manifest")
+
+        platform = tmp_path / "platform"
+        platform.mkdir(parents=True)
+
+        installer = PackInstaller(central_storage=central, platform_paths=[platform])
+        count = installer._create_skill_symlinks(pack, platform, "testpack")
+
+        assert count == 1
