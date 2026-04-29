@@ -3,6 +3,27 @@
 ## Session Handoff
 
 <!-- handoff:start -->
+### 2026-04-29 01:00
+**Session**: VibeSOP v5.3.1 Release
+
+**Completed**:
+- Documentation cleanup: archived 8 outdated/intermediate files to `docs/archive/`
+- Fixed 2 broken documentation links in `docs/dev/CONTRIBUTING.md`
+- Bumped version 5.3.0 → 5.3.1
+- Successfully published to PyPI: https://pypi.org/project/vibesop/5.3.1/
+
+**Key Learnings**:
+- `uv publish` doesn't read `~/.pypirc` — use `twine upload dist/*` instead
+- uv's .venv lacks pip module — install twine via `uv pip install --python .venv/bin/python twine`
+
+**Commits**:
+- 13dc34b: docs: fix broken links and archive outdated documentation
+- 6d91c93: chore: bump version to 5.3.1
+
+**Next Steps**: None — release complete
+
+---
+
 ### 2026-04-29 00:45
 **Session**: ripgrep Hook 兼容性修复
 
@@ -25,28 +46,4 @@
 **Next Steps**:
 - 用户重启会话测试验证
 - 考虑在 hook 生成模板中应用此修复
-
----
-
-### 2026-04-28 19:45
-**Session**: Fixed Hook JSON Output Bug (Rich Line Wrapping)
-
-**Completed**:
-- Fixed `UserPromptSubmit hook error` caused by Rich's `console.print()` breaking JSON structure
-- Root cause: Rich automatically wraps long lines, inserting literal newlines instead of `\n` escapes
-- Solution: Replace `console.print()` with `print()` for all JSON outputs
-- Added `ensure_ascii=False` for proper Unicode display (Chinese, bullets, emojis)
-- Commits pushed: b0b14a6, 8c7e873
-
-**Key Decisions**:
-- JSON outputs should use `print()` not `console.print()` to avoid formatting issues
-- Always add `ensure_ascii=False` for human-readable JSON output
-
-**Files Modified**:
-- src/vibesop/cli/main.py — 6 locations changed from `console.print(json.dumps(...))` to `print(json.dumps(..., ensure_ascii=False))`
-
-**Test Status**: Verified with `vibe route --json /vibe-list` and Chinese queries
-
-**Next Steps**:
-- None — issue fully resolved
 <!-- handoff:end -->
