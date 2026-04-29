@@ -13,7 +13,7 @@ import importlib.util
 import os
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import questionary
 import typer
@@ -44,6 +44,10 @@ from vibesop.cli.render import (
 from vibesop.cli.routing_report import render_routing_report
 from vibesop.cli.subcommands import register
 from vibesop.core.routing import UnifiedRouter
+import logging
+
+logger = logging.getLogger(__name__)
+
 
 app = typer.Typer(
     name="vibe",
@@ -778,8 +782,8 @@ def _check_stale_skills_post_route() -> None:
 
         counter["routes_since_last_check"] = 0
         counter_file.write_text(json.dumps(counter, indent=2))
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("Unhandled error: %s", e)
 
 
 @app.command()
@@ -999,7 +1003,7 @@ def _check_hooks() -> tuple[bool, str]:
         results: list[str] = []
         for platform_info in platforms:
             platform_name: str = platform_info["name"]
-            verify_result: dict[str, Any] = installer.verify(platform_name)  # type: ignore[reportUnknownVariableType]
+            verify_result = cast("dict[str, Any]", installer.verify(platform_name))
             if verify_result["installed"]:
                 hooks_status: dict[str, Any] = verify_result.get("hooks_installed", {})
                 hook_count = sum(1 for s in hooks_status.values() if s)

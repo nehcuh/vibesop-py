@@ -18,7 +18,9 @@ def router(tmp_path):
     manager.set_cli_override("optimization.preference_boost.enabled", True)
     manager.set_cli_override("optimization.clustering.enabled", True)
 
-    return UnifiedRouter(project_root=tmp_path, config=manager)
+    router = UnifiedRouter(project_root=tmp_path, config=manager)
+    router._config.enable_ai_triage = False
+    return router
 
 
 def test_router_with_optimization_enabled(router):
@@ -39,5 +41,6 @@ def test_router_backward_compatible(tmp_path):
     manager.set_cli_override("optimization.enabled", False)
 
     router = UnifiedRouter(project_root=tmp_path, config=manager)
+    router._config.enable_ai_triage = False
     result = router.route("test query")
     assert isinstance(result, RoutingResult)

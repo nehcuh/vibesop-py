@@ -7,11 +7,14 @@ and enhanced routing based on conversation history.
 from __future__ import annotations
 
 import json
+import logging
 import threading
 import time
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
+logger = logging.getLogger(__name__)
+
 from typing import Any
 
 
@@ -224,7 +227,8 @@ class ConversationContext:
         try:
             scores = self._similarity_calc.calculate(query, [previous_query])
             return scores[0]
-        except Exception:
+        except Exception as e:
+            logger.debug("Failed to calculate query similarity: %s", e)
             return 0.0
 
     def is_follow_up(self, query: str) -> tuple[bool, str | None]:

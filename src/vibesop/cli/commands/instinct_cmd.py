@@ -20,6 +20,10 @@ import typer
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
+import logging
+
+logger = logging.getLogger(__name__)
+
 
 app = typer.Typer(name="instinct", help="Instinct learning system", no_args_is_help=False)
 console = Console()
@@ -148,8 +152,8 @@ def eval(
             try:
                 collector.add_from_pattern(c)
                 console.print(f"[green]Approved:[/green] {' → '.join(c.steps)}")
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("Unhandled error: %s", e)
         pending = collector.get_pending()
         if pending:
             console.print(f"[green]✓[/green] [bold]{len(pending)}[/bold] suggestion(s) pending. Run [cyan]vibe skills suggestions[/cyan] to review.")

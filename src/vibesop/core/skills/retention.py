@@ -3,6 +3,9 @@
 Analyzes SkillEvaluation data and generates actionable retention
 recommendations based on time decay and usage patterns.
 
+logger = logging.getLogger(__name__)
+
+
 Policy rules (advisory only, no automatic removal):
 - Grade F for 30+ days with < 3 uses → suggest removal
 - Grade D for 60+ days with no improvement → warn
@@ -12,6 +15,7 @@ Policy rules (advisory only, no automatic removal):
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
@@ -169,8 +173,8 @@ class RetentionPolicy:
 
                     SkillConfigManager.set_lifecycle(s.skill_id, "deprecated")
                     applied += 1
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.warning("Failed to deprecate skill %s: %s", s.skill_id, e)
         return applied
 
     def _days_since(self, timestamp: str | None) -> int | None:

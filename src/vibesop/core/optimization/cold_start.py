@@ -236,6 +236,16 @@ class ColdStartStrategy:
         return not prefs_path.exists()
 
 
+class _ColdStartStrategyCache:
+    _instance: ColdStartStrategy | None = None
+
+    @classmethod
+    def get(cls, project_root: str | Path = ".") -> ColdStartStrategy:
+        if cls._instance is None:
+            cls._instance = ColdStartStrategy(project_root)
+        return cls._instance
+
+
 def get_cold_start_strategy(project_root: str | Path = ".") -> ColdStartStrategy:
     """Get or create the default cold start strategy.
 
@@ -245,11 +255,7 @@ def get_cold_start_strategy(project_root: str | Path = ".") -> ColdStartStrategy
     Returns:
         ColdStartStrategy instance
     """
-    strategy = getattr(get_cold_start_strategy, "_strategy", None)
-    if strategy is None:
-        strategy = ColdStartStrategy(project_root)
-        get_cold_start_strategy._strategy = strategy  # type: ignore[attr-defined]
-    return strategy
+    return _ColdStartStrategyCache.get(project_root)
 
 
 __all__ = [

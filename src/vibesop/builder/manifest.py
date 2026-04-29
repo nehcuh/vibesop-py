@@ -177,12 +177,12 @@ class ManifestBuilder:
                     skills.append(skill)
                 except Exception as e:
                     # Skip invalid skills
-                    print(f"Warning: Failed to load skill {skill_dict.get('id')}: {e}")
+                    logger.warning("Failed to load skill %s: %s", skill_dict.get('id'), e)
 
             return skills
 
         except Exception as e:
-            print(f"Warning: Failed to load skills from registry: {e}")
+            logger.warning("Failed to load skills from registry: %s", e)
             return []
 
     def _load_skill_description(self, skill_id: str, _skill_dict: dict) -> str:
@@ -309,7 +309,7 @@ class ManifestBuilder:
             )
 
         except Exception as e:
-            print(f"Warning: Failed to load policies, using defaults: {e}")
+            logger.warning("Failed to load policies, using defaults: %s", e)
             return PolicySet()
 
     def _dict_to_security_policy(self, data: dict[str, Any]) -> SecurityPolicy:

@@ -228,8 +228,8 @@ class CandidateManager:
             self._usage_flush_count += 1
             if self._usage_flush_count >= self._USAGE_FLUSH_INTERVAL:
                 self._flush_usage_buffer()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("Failed to record skill usage: %s", e)
 
     def _flush_usage_buffer(self) -> None:
         """Persist buffered usage stats to SkillConfig."""
@@ -252,8 +252,8 @@ class CandidateManager:
 
             self._usage_buffer.clear()
             self._usage_flush_count = 0
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("Failed to flush usage buffer: %s", e)
 
     @staticmethod
     def _get_skill_source(_skill_id: str, namespace: str) -> str:

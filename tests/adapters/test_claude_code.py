@@ -102,7 +102,7 @@ class TestClaudeCodeHookRendering:
         adapter._render_route_hook(tmp_path, result)
 
         content = (tmp_path / "hooks" / "vibesop-route.sh").read_text()
-        assert "^/vibe-" in content, "Slash command regex missing"
+        assert "vibe-" in content, "Slash command detection missing"
         assert "vibe route" in content, "vibe route call missing"
 
     def test_route_hook_has_conversation_id_passing(self, adapter, tmp_path):

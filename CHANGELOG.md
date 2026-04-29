@@ -7,6 +7,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Unreleased]
+
+### Test Reliability & Performance Optimization
+
+#### Phase 1 — Stop the Bleeding
+- Fixed LLM factory provider validation (OpenAI/Anthropic/Kimi/DeepSeek)
+- Fixed adapter hook regex patterns for Kimi CLI and Claude Code
+- Fixed routing method migrations (`route()` → `orchestrate()`)
+- Isolated environment variable contamination in tests
+
+#### Phase 2 — Test Coverage
+- Added 14 orchestration tests for multi-intent decomposition
+- Added 14 CLI route/orchestrate integration tests
+- Added 12 UnifiedRouter branch coverage tests
+- Added 40 total new tests across routing and CLI packages
+
+#### Phase 3 — God Class Decomposition
+- Extracted 5 mixins from `UnifiedRouter` (1,283 → 814 lines, -36.5%):
+  - `RouterContextMixin` — context enrichment, session management
+  - `RouterCandidateMixin` — candidate lifecycle, matcher warm-up
+  - `RouterAnalyticsMixin` — execution recording, routing decision persistence
+  - `RouterResultMixin` — result building, post-match enrichment, fallback
+  - `matching/lazy_matcher.py` — `_LazyEmbeddingMatcher` extracted
+- Decomposed `_route()` into `_try_layers()`, `_should_use_keyword_routing()`, `_finalize_no_match()`
+- Deduplicated `_pipeline.py` (193 → 69 lines, -64%)
+
+#### Phase 4 — Code Quality
+- Eliminated 30 bare `except Exception` blocks across production code
+- Replaced 9 production `print()` calls with `logger.debug()`
+- Deduplicated 3 `deep_merge` implementations into `vibesop.utils.helpers`
+- Reduced `# type: ignore` / `# noqa` suppressions from 30+ to 10
+- Added file locking + atomic writes to `PreferenceLearner` for concurrent test safety
+
+#### Phase 5 — Performance Optimization
+- Eliminated ~1.42s of `time.sleep` in tests (cache TTL, conversation timeout, snapshot timestamps)
+- Identified and disabled real OpenAI API calls in 8 test files (saving ~60-80s per full run)
+- Profiled routing hot path: identified `_save_storage` (~120ms) and `_detect_tech_stack` (~520ms) as per-route bottlenecks
+- Fixed `test_cold_start.py` regression from Phase 4 cache class refactoring
+
+---
+
 ## [5.3.0] - 2026-04-28
 
 ### Product Experience Overhaul — "从路由工具到 SkillOS 产品"

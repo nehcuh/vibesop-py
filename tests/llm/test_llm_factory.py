@@ -45,6 +45,13 @@ def test_detect_provider_explicit(monkeypatch):
 
 def test_detect_provider_explicit_invalid_defaults(monkeypatch):
     monkeypatch.setenv("VIBE_LLM_PROVIDER", "bogus")
+    monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
+    monkeypatch.delenv("KIMI_API_KEY", raising=False)
+    monkeypatch.delenv("ZHIPU_API_KEY", raising=False)
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("OLLAMA_BASE_URL", raising=False)
+    monkeypatch.delenv("OLLAMA_MODEL", raising=False)
     assert detect_provider_from_env() == "ollama"
 
 
@@ -68,6 +75,9 @@ def test_detect_provider_default(monkeypatch):
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.delenv("OLLAMA_BASE_URL", raising=False)
     monkeypatch.delenv("OLLAMA_MODEL", raising=False)
+    monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
+    monkeypatch.delenv("KIMI_API_KEY", raising=False)
+    monkeypatch.delenv("ZHIPU_API_KEY", raising=False)
     assert detect_provider_from_env() == "ollama"
 
 
@@ -88,6 +98,13 @@ def test_create_from_env_fallback_when_preferred_unconfigured(monkeypatch):
 def test_create_from_env_returns_unconfigured_preferred(monkeypatch):
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
+    monkeypatch.delenv("KIMI_API_KEY", raising=False)
+    monkeypatch.delenv("ZHIPU_API_KEY", raising=False)
+    monkeypatch.delenv("OLLAMA_BASE_URL", raising=False)
+    monkeypatch.delenv("OLLAMA_MODEL", raising=False)
+    # Ollama defaults to localhost and is always "configured", so create_from_env
+    # falls back to it when no other provider keys are present.
+    from vibesop.llm.ollama import OllamaProvider
     provider = create_from_env(preferred_provider="anthropic")
-    assert isinstance(provider, AnthropicProvider)
-    assert not provider.configured()
+    assert isinstance(provider, OllamaProvider)

@@ -92,7 +92,7 @@ class ConfigDrivenRenderer:
             return rules
 
         except Exception as e:
-            print(f"Warning: Failed to load rules from {rules_config}: {e}")
+            logger.warning("Failed to load rules from %s: %s", rules_config, e)
             return []
 
     def render_with_rules(

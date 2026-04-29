@@ -6,6 +6,10 @@ import contextlib
 from typing import TYPE_CHECKING, Any
 
 import questionary
+import logging
+
+logger = logging.getLogger(__name__)
+
 
 if TYPE_CHECKING:
     from rich.console import Console
@@ -63,8 +67,8 @@ def _collect_feedback(result: Any, router: Any, console: Console) -> None:  # py
                 console.print(
                     '[dim]Use: vibe deviation record "<query>" "<skill>" <confidence> "<layer>"[/dim]'
                 )
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("Unhandled error: %s", e)
 
 
 def _sync_to_evaluator(result: Any, satisfied: bool) -> None:
@@ -97,5 +101,5 @@ def _sync_to_evaluator(result: Any, satisfied: bool) -> None:
                 was_helpful=satisfied,
                 execution_success=satisfied,
             )
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("Unhandled error: %s", e)

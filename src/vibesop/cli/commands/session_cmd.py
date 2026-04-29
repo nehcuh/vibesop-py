@@ -35,7 +35,7 @@ def record_tool(
 
     This is typically called by hooks, but can be used manually for testing.
     """
-    context_file = Path(context_file).expanduser()  # type: ignore[reportUnknownVariableType]
+    file_path = Path(context_file).expanduser()
 
     # For now, create a simple session context
     # In production, this would persist state to context_file

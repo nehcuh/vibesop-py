@@ -5,11 +5,34 @@ Extracted from UnifiedRouter to reduce class size and separate concerns.
 
 from __future__ import annotations
 
-from typing import Any
+import logging
+from pathlib import Path
+from typing import TYPE_CHECKING, Any, Protocol, cast
 
 from vibesop.core.models import OrchestrationMode, OrchestrationResult, RoutingResult
 from vibesop.core.orchestration import MultiIntentDetector, PlanBuilder, PlanTracker
 from vibesop.core.orchestration.task_decomposer import TaskDecomposer
+
+if TYPE_CHECKING:
+    from vibesop.core.routing.triage_service import TriageService
+
+
+logger = logging.getLogger(__name__)
+
+
+class _OrchestrationHost(Protocol):
+    """Protocol defining the interface expected by RouterOrchestrationMixin."""
+
+    _multi_intent_detector: MultiIntentDetector | None
+    _task_decomposer: TaskDecomposer | None
+    _plan_builder: PlanBuilder | None
+    _plan_tracker: PlanTracker | None
+    _triage_service: TriageService
+    project_root: Path
+    _llm: Any | None
+    logger: logging.Logger
+
+    def _init_decomposer_llm(self) -> Any | None: ...
 
 
 class RouterOrchestrationMixin:
@@ -39,15 +62,17 @@ class RouterOrchestrationMixin:
         )
 
     def _get_multi_intent_detector(self) -> MultiIntentDetector:
-        if self._multi_intent_detector is None:  # type: ignore[attr-defined]
-            self._multi_intent_detector = MultiIntentDetector()  # type: ignore[attr-defined]
-        return self._multi_intent_detector  # type: ignore[attr-defined]
+        host = cast(_OrchestrationHost, self)
+        if host._multi_intent_detector is None:
+            host._multi_intent_detector = MultiIntentDetector()
+        return host._multi_intent_detector
 
     def _get_task_decomposer(self) -> TaskDecomposer:
-        if self._task_decomposer is None:  # type: ignore[attr-defined]
-            llm = self._init_decomposer_llm()  # type: ignore[attr-defined]
-            self._task_decomposer = TaskDecomposer(llm_client=llm)  # type: ignore[attr-defined]
-        return self._task_decomposer  # type: ignore[attr-defined]
+        host = cast(_OrchestrationHost, self)
+        if host._task_decomposer is None:
+            llm = host._init_decomposer_llm()
+            host._task_decomposer = TaskDecomposer(llm_client=llm)
+        return host._task_decomposer
 
     def _init_decomposer_llm(self) -> Any | None:
         """Initialize LLM client for TaskDecomposer, independent of TriageService.
@@ -57,13 +82,15 @@ class RouterOrchestrationMixin:
         2. TriageService's cached LLM
         3. Direct provider creation from environment
         """
+        host = cast(_OrchestrationHost, self)
+
         # 1. Agent Runtime LLM
-        agent_llm = getattr(self, "_llm", None)  # type: ignore[attr-defined]
+        agent_llm = getattr(host, "_llm", None)
         if agent_llm is not None:
             return agent_llm
 
         # 2. TriageService's cached LLM
-        triage_llm = getattr(self._triage_service, "_llm", None)  # type: ignore[attr-defined]
+        triage_llm = getattr(host._triage_service, "_llm", None)
         if triage_llm is not None:
             return triage_llm
 
@@ -74,19 +101,21 @@ class RouterOrchestrationMixin:
             provider = create_provider()
             if provider.configured():
                 return provider
-        except Exception:
-            pass
+        except Exception as e:
+            host.logger.warning("Failed to initialize LLM provider: %s", e)
 
         return None
 
     def _get_plan_builder(self) -> PlanBuilder:
-        if self._plan_builder is None:  # type: ignore[attr-defined]
-            self._plan_builder = PlanBuilder(router=self)  # type: ignore[attr-defined]
-        return self._plan_builder  # type: ignore[attr-defined]
+        host = cast(_OrchestrationHost, self)
+        if host._plan_builder is None:
+            host._plan_builder = PlanBuilder(router=self)
+        return host._plan_builder
 
     def _get_plan_tracker(self) -> PlanTracker:
-        if self._plan_tracker is None:  # type: ignore[attr-defined]
-            self._plan_tracker = PlanTracker(  # type: ignore[attr-defined]
-                storage_dir=self.project_root / ".vibe"  # type: ignore[attr-defined]
+        host = cast(_OrchestrationHost, self)
+        if host._plan_tracker is None:
+            host._plan_tracker = PlanTracker(
+                storage_dir=host.project_root / ".vibe"
             )
-        return self._plan_tracker  # type: ignore[attr-defined]
+        return host._plan_tracker

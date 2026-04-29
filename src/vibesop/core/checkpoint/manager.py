@@ -339,7 +339,9 @@ class CheckpointManager:
         try:
             content = full_path.read_text(encoding="utf-8")
             content_hash = self._storage.save_file(checkpoint_id, file_path, content)
-            checkpoint.files[file_path] = content_hash  # type: ignore[reportOptionalSubscript]
+            if checkpoint.files is None:
+                checkpoint.files = {}
+            checkpoint.files[file_path] = content_hash
             self._storage.save(checkpoint)
             return True
         except (OSError, UnicodeDecodeError):

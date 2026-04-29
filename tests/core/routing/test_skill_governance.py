@@ -33,6 +33,7 @@ def router_with_skills(tmp_path):
 
     manager = ConfigManager(project_root=tmp_path)
     router = UnifiedRouter(project_root=tmp_path, config=manager)
+    router._config.enable_ai_triage = False
     return router
 
 

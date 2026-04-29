@@ -310,7 +310,7 @@ class SlashCommandHandler:
             if strategy:
                 context.strategy_hint = strategy
 
-            result = self._routing_service.route(query, context=context)
+            result = self._routing_service.orchestrate(query, context=context)
 
             if explain:
                 from rich.console import Console

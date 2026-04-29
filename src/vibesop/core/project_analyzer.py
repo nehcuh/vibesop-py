@@ -111,11 +111,11 @@ class ProjectProfile:
     """Detected project profile."""
 
     project_type: str | None = None
-    tech_stack: list[str] = None  # type: ignore[assignment]
+    tech_stack: list[str] | None = None
     confidence: float = 0.0
 
     def __post_init__(self) -> None:
-        if self.tech_stack is None:  # pyright: ignore[reportUnnecessaryComparison]
+        if self.tech_stack is None:
             self.tech_stack = []
 
     def to_dict(self) -> dict[str, Any]:
@@ -165,7 +165,7 @@ class ProjectAnalyzer:
             return None
 
         # Return type with highest score
-        return max(scores, key=scores.get)  # type: ignore[arg-type]
+        return max(scores, key=lambda k: scores[k])
 
     def _detect_tech_stack(self) -> list[str]:
         """Detect technology stack from markers and file contents."""

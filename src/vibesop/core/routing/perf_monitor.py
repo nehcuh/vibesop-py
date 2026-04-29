@@ -129,12 +129,16 @@ class RoutingPerfMonitor:
 _perf_monitor: RoutingPerfMonitor | None = None
 
 
-def get_perf_monitor() -> RoutingPerfMonitor:
-    """Get or create the global performance monitor."""
+def _get_perf_monitor() -> RoutingPerfMonitor:
     global _perf_monitor  # noqa: PLW0603
     if _perf_monitor is None:
         _perf_monitor = RoutingPerfMonitor()
     return _perf_monitor
+
+
+def get_perf_monitor() -> RoutingPerfMonitor:
+    """Get or create the global performance monitor."""
+    return _get_perf_monitor()
 
 
 def reset_perf_monitor() -> None:

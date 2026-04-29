@@ -106,7 +106,7 @@ class IntentInterceptor:
     def should_intercept(
         self,
         query: str,
-        context: InterceptionContext | None = None,  # noqa: ARG002
+        _context: InterceptionContext | None = None,
     ) -> InterceptionDecision:
         """Decide whether to intercept and route this message.
 

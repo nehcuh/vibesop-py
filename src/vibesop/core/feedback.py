@@ -334,6 +334,13 @@ class FeedbackCollector:
 _collector_instance: FeedbackCollector | None = None
 
 
+def _get_collector() -> FeedbackCollector:
+    global _collector_instance  # noqa: PLW0603
+    if _collector_instance is None:
+        _collector_instance = FeedbackCollector()
+    return _collector_instance
+
+
 def collect_feedback(
     query: str,
     routed_skill: str,
@@ -350,12 +357,7 @@ def collect_feedback(
         ...     was_correct=True,
         ... )
     """
-    global _collector_instance  # noqa: PLW0603
-
-    if _collector_instance is None:
-        _collector_instance = FeedbackCollector()
-
-    _collector_instance.collect_feedback(
+    _get_collector().collect_feedback(
         query=query,
         routed_skill=routed_skill,
         was_correct=was_correct,
@@ -371,12 +373,7 @@ def get_feedback_report() -> FeedbackReport:
         >>> report = get_feedback_report()
         >>> print(f"Accuracy: {report.accuracy_rate:.1%}")
     """
-    global _collector_instance  # noqa: PLW0603
-
-    if _collector_instance is None:
-        _collector_instance = FeedbackCollector()
-
-    return _collector_instance.generate_report()
+    return _get_collector().generate_report()
 
 
 @dataclass

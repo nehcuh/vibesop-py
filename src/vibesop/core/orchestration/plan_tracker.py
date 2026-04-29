@@ -49,10 +49,10 @@ class PlanTracker:
 
         for step in plan.steps:
             if step.step_id == step_id:
-                if isinstance(status, str):  # type: ignore[reportUnnecessaryIsInstance]
-                    step.status = StepStatus(status)
-                else:
+                if isinstance(status, StepStatus):
                     step.status = status
+                else:
+                    step.status = StepStatus(status)
                 if result_summary is not None:
                     step.result_summary = result_summary
                 break

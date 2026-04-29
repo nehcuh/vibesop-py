@@ -25,6 +25,10 @@ from vibesop.cli.commands.cleanup_cmd import cleanup
 from vibesop.cli.commands.community_cmd import discover, share
 from vibesop.core.skills.config_manager import SkillConfigManager
 from vibesop.core.skills.lifecycle import SkillLifecycle, SkillLifecycleManager
+import logging
+
+logger = logging.getLogger(__name__)
+
 
 app = typer.Typer(name="skill", help="Manage skill lifecycle", no_args_is_help=False)
 
@@ -48,7 +52,7 @@ def _skill_overview(
         mgr = CandidateManager(project_root)
         candidates = mgr.get_candidates()
         total = len(candidates)
-    except Exception:
+    except Exception as e:
         total = 0
 
     try:
@@ -57,7 +61,7 @@ def _skill_overview(
         evaluator = RoutingEvaluator(project_root=project_root)
         low = evaluator.get_low_quality_skills(threshold=0.3, min_routes=3)
         low_count = len(low)
-    except Exception:
+    except Exception as e:
         low_count = 0
 
     try:
@@ -66,7 +70,7 @@ def _skill_overview(
         loop = FeedbackLoop(project_root=project_root)
         stale = loop.analyze_all(auto_deprecate=False)
         stale_count = sum(1 for s in stale if s.action in ("deprecate", "archive"))
-    except Exception:
+    except Exception as e:
         stale_count = 0
 
     # Dashboard

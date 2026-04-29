@@ -256,7 +256,7 @@ class AgentRouter:
         from vibesop.core.orchestration import MultiIntentDetector
 
         # First, get single routing result for context
-        single_result = self.route(query, enable_ai_triage=False)
+        single_result = self._route(query, enable_ai_triage=False)
 
         # Initialize detector
         detector = MultiIntentDetector()
@@ -365,7 +365,7 @@ class AgentRouter:
 
         if not intent_detection["is_multi_intent"]:
             # Single intent - return routing result
-            single_result = self.route(query)
+            single_result = self._route(query)
             return {
                 "is_multi_intent": False,
                 "single_result": {

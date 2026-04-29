@@ -5,6 +5,10 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from rich.panel import Panel
+import logging
+
+logger = logging.getLogger(__name__)
+
 
 if TYPE_CHECKING:
     from rich.console import Console
@@ -67,5 +71,5 @@ def _render_stale_suggestions() -> str:
             )
         lines.append("  • Run [bold]vibe skill stale[/bold] for details and cleanup options")
         return "\n".join(lines)
-    except Exception:
+    except Exception as e:
         return ""

@@ -18,6 +18,10 @@ import typer
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
+import logging
+
+logger = logging.getLogger(__name__)
+
 
 console = Console()
 GITHUB_REPO = "nehcuh/vibesop-py"
@@ -60,7 +64,7 @@ def _fetch_community_skills(
         req = urllib.request.Request(url, headers=headers)
         with urllib.request.urlopen(req, timeout=10) as resp:
             return json.loads(resp.read())
-    except Exception:
+    except Exception as e:
         return []
 
 

@@ -136,14 +136,14 @@ def list_cmd(
     reason_filter: str | None = typer.Option(None, "--reason", "-r", help="Filter by reason code"),
 ) -> None:
     """List recent deviations."""
-    storage_path = Path(storage_path)  # type: ignore[reportUnknownVariableType]
-    if not storage_path.exists():
+    path = Path(storage_path)
+    if not path.exists():
         console.print("[dim]No deviation records found.[/dim]")
         return
 
     records = []
     try:
-        with storage_path.open("r", encoding="utf-8") as f:
+        with path.open("r", encoding="utf-8") as f:
             for line in f:
                 stripped = line.strip()
                 if stripped:
@@ -205,7 +205,7 @@ def reasons_cmd() -> None:
 
 @app.command("reset")
 def reset_cmd(
-    storage_path: Path = typer.Option(Path(".vibe/memory/deviations.jsonl"), "--path", "-p"),  # type: ignore[reportArgumentType]
+    storage_path: Path = typer.Option(".vibe/memory/deviations.jsonl", "--path", "-p"),
     confirm: bool = typer.Option(False, "--confirm", "-y", help="Skip confirmation"),
 ) -> None:
     """Reset deviation records."""
@@ -215,8 +215,8 @@ def reset_cmd(
             console.print("[dim]Reset cancelled.[/dim]")
             raise typer.Exit(0)
 
-    storage_path = Path(storage_path)  # type: ignore[reportUnknownVariableType]
-    if storage_path.exists():
+    path = Path(storage_path)
+    if path.exists():
         storage_path.unlink()
         console.print("[green]✓[/green] Deviation records reset")
     else:

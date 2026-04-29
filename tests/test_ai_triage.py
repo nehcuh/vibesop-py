@@ -149,8 +149,8 @@ def test_ai_triage_explicit_disable(tmp_path, monkeypatch):
     manager.set_cli_override("routing.enable_ai_triage", True)
 
     router = UnifiedRouter(project_root=tmp_path, config=manager)
-    # _init_llm_client should return None when explicitly disabled
-    assert router._init_llm_client() is None
+    # init_llm_client should return None when explicitly disabled
+    assert router._triage_service.init_llm_client() is None
 
 
 def test_parse_ai_triage_response():
@@ -163,34 +163,34 @@ def test_parse_ai_triage_response():
     router = UnifiedRouter(project_root=tmp_path, config=manager)
 
     # Structured JSON response (preferred)
-    parsed = router._parse_ai_triage_response('{"skill_id": "systematic-debugging"}')
+    parsed = router._triage_service.parse_ai_triage_response('{"skill_id": "systematic-debugging"}')
     assert parsed["skill_id"] == "systematic-debugging"
     assert parsed["structured"] is True
 
     # JSON inside markdown code block
-    parsed = router._parse_ai_triage_response('```json\n{"skill_id": "gstack/qa"}\n```')
+    parsed = router._triage_service.parse_ai_triage_response('```json\n{"skill_id": "gstack/qa"}\n```')
     assert parsed["skill_id"] == "gstack/qa"
     assert parsed["structured"] is True
 
     # Legacy code block format (regex fallback)
-    parsed = router._parse_ai_triage_response("```systematic-debugging```")
+    parsed = router._triage_service.parse_ai_triage_response("```systematic-debugging```")
     assert parsed["skill_id"] == "systematic-debugging"
     assert parsed["structured"] is False
 
     # Plain text (regex fallback)
-    parsed = router._parse_ai_triage_response("gstack/qa")
+    parsed = router._triage_service.parse_ai_triage_response("gstack/qa")
     assert parsed["skill_id"] == "gstack/qa"
     assert parsed["structured"] is False
 
     # With namespace (regex fallback)
-    parsed = router._parse_ai_triage_response("omx/deep-interview")
+    parsed = router._triage_service.parse_ai_triage_response("omx/deep-interview")
     assert parsed["skill_id"] == "omx/deep-interview"
     assert parsed["structured"] is False
 
     # Empty response
-    parsed = router._parse_ai_triage_response("")
+    parsed = router._triage_service.parse_ai_triage_response("")
     assert parsed["skill_id"] is None
 
     # Random text
-    parsed = router._parse_ai_triage_response("I don't know")
+    parsed = router._triage_service.parse_ai_triage_response("I don't know")
     assert parsed["skill_id"] is None

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from vibesop.core.models import RoutingLayer, SkillRoute
 from vibesop.core.routing.circuit_breaker import TriageCircuitBreaker
@@ -17,6 +17,7 @@ if TYPE_CHECKING:
     from vibesop.core.optimization import CandidatePrefilter
     from vibesop.core.routing.cache import CacheManager
     from vibesop.llm.cost_tracker import TriageCostTracker
+    from vibesop.llm.factory import ProviderType
 
 logger = logging.getLogger(__name__)
 
@@ -241,7 +242,7 @@ class TriageService:
             if llm_config and llm_config.api_key:
                 # Use config file settings
                 provider = create_provider(
-                    provider=llm_config.provider,  # type: ignore
+                    provider=cast("ProviderType", llm_config.provider),
                     api_key=llm_config.api_key,
                     base_url=llm_config.api_base,
                 )

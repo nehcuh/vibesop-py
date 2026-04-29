@@ -405,7 +405,6 @@ class ExecutionPlan(BaseModel):
             return [[step] for step in self.steps]
 
         # Build dependency graph and perform topological sort
-        {step.step_id: step for step in self.steps}
         completed = set()
         groups = []
 

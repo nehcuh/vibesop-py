@@ -7,6 +7,7 @@ import time
 import pytest
 
 from vibesop.core.matching import RoutingContext
+from vibesop.core.config.manager import RoutingConfig
 from vibesop.core.routing import UnifiedRouter
 
 
@@ -17,7 +18,8 @@ class TestRoutingHotPath:
     def router(self, tmp_path_factory):
         tmp_path = tmp_path_factory.mktemp("bench")
         (tmp_path / ".vibe").mkdir(exist_ok=True)
-        return UnifiedRouter(project_root=tmp_path)
+        config = RoutingConfig(enable_ai_triage=False)
+        return UnifiedRouter(project_root=tmp_path, config=config)
 
     def _measure(self, router, query: str, iterations: int = 20) -> dict:
         times = []

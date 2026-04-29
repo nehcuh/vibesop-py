@@ -166,8 +166,16 @@ class TestFactory:
         old_anthropic = os.getenv("ANTHROPIC_API_KEY")
         old_openai = os.getenv("OPENAI_API_KEY")
         old_vibe = os.getenv("VIBE_LLM_PROVIDER")
+        old_deepseek = os.getenv("DEEPSEEK_API_KEY")
+        old_kimi = os.getenv("KIMI_API_KEY")
+        old_zhipu = os.getenv("ZHIPU_API_KEY")
 
         try:
+            # Clear all provider-specific keys
+            for key in ["DEEPSEEK_API_KEY", "KIMI_API_KEY", "ZHIPU_API_KEY"]:
+                if key in os.environ:
+                    del os.environ[key]
+
             # Test with VIBE_LLM_PROVIDER
             os.environ["VIBE_LLM_PROVIDER"] = "anthropic"
             assert detect_provider_from_env() == "anthropic"
@@ -184,7 +192,7 @@ class TestFactory:
 
             # Test default when no keys
             del os.environ["OPENAI_API_KEY"]
-            assert detect_provider_from_env() == "anthropic"
+            assert detect_provider_from_env() == "ollama"
 
         finally:
             # Restore original values
@@ -196,6 +204,12 @@ class TestFactory:
                 os.environ["VIBE_LLM_PROVIDER"] = old_vibe
             elif "VIBE_LLM_PROVIDER" in os.environ:
                 del os.environ["VIBE_LLM_PROVIDER"]
+            if old_deepseek:
+                os.environ["DEEPSEEK_API_KEY"] = old_deepseek
+            if old_kimi:
+                os.environ["KIMI_API_KEY"] = old_kimi
+            if old_zhipu:
+                os.environ["ZHIPU_API_KEY"] = old_zhipu
 
 
 class TestCreateFromEnv:
@@ -204,19 +218,33 @@ class TestCreateFromEnv:
     def test_create_from_env_with_key(self) -> None:
         """Test creating provider with explicit key."""
         old_key = os.getenv("ANTHROPIC_API_KEY")
+        old_deepseek = os.getenv("DEEPSEEK_API_KEY")
+        old_kimi = os.getenv("KIMI_API_KEY")
+        old_zhipu = os.getenv("ZHIPU_API_KEY")
         try:
-            os.environ["ANTHROPIC_API_KEY"] = "sk-test-key-1234567890"
+            # Use a valid Anthropic key format so configured() returns True
+            os.environ["ANTHROPIC_API_KEY"] = "sk-ant-" + "x" * 40
+            # Clear other provider keys to avoid fallback
+            for key in ["DEEPSEEK_API_KEY", "KIMI_API_KEY", "ZHIPU_API_KEY"]:
+                if key in os.environ:
+                    del os.environ[key]
 
             provider = create_from_env("anthropic")
 
             assert isinstance(provider, AnthropicProvider)
-            assert provider.api_key == "sk-test-key-1234567890"
+            assert provider.api_key == "sk-ant-" + "x" * 40
 
         finally:
             if old_key:
                 os.environ["ANTHROPIC_API_KEY"] = old_key
             elif "ANTHROPIC_API_KEY" in os.environ:
                 del os.environ["ANTHROPIC_API_KEY"]
+            if old_deepseek:
+                os.environ["DEEPSEEK_API_KEY"] = old_deepseek
+            if old_kimi:
+                os.environ["KIMI_API_KEY"] = old_kimi
+            if old_zhipu:
+                os.environ["ZHIPU_API_KEY"] = old_zhipu
 
     def test_create_from_env_auto_detect(self) -> None:
         """Test creating provider without key (auto-detect)."""

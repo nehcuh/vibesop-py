@@ -5,9 +5,30 @@ Extracted from UnifiedRouter to reduce class size and separate concerns.
 
 from __future__ import annotations
 
-from typing import Any
+import logging
+import threading
+from pathlib import Path
+from typing import TYPE_CHECKING, Any, Protocol, cast
 
 from vibesop.core.models import RoutingLayer
+
+if TYPE_CHECKING:
+    from vibesop.core.config.manager import RoutingConfig
+    from vibesop.core.optimization.preference_boost import PreferenceBooster
+    from vibesop.llm.cost_tracker import TriageCostTracker
+
+
+class _StatsHost(Protocol):
+    """Protocol defining the interface expected by RouterStatsMixin."""
+
+    _total_routes: int
+    _layer_distribution: dict[str, int]
+    _stats_lock: threading.Lock
+    _cost_tracker: TriageCostTracker
+    _config: RoutingConfig
+    _preference_booster: PreferenceBooster
+    project_root: Path
+    logger: logging.Logger
 
 
 class RouterStatsMixin:
@@ -25,8 +46,9 @@ class RouterStatsMixin:
     """
 
     def _record_layer(self, layer: RoutingLayer) -> None:
-        with self._stats_lock:  # type: ignore[attr-defined]
-            dist = self._layer_distribution  # type: ignore[attr-defined]
+        host = cast(_StatsHost, self)
+        with host._stats_lock:
+            dist = host._layer_distribution
             dist[layer.value] = dist.get(layer.value, 0) + 1
 
     def get_stats(self) -> dict[str, Any]:
@@ -34,14 +56,15 @@ class RouterStatsMixin:
 
         perf = get_perf_monitor().get_stats()
 
-        with self._stats_lock:  # type: ignore[attr-defined]
-            total_routes = self._total_routes  # type: ignore[attr-defined]
-            layer_dist = dict(self._layer_distribution)  # type: ignore[attr-defined]
+        host = cast(_StatsHost, self)
+        with host._stats_lock:
+            total_routes = host._total_routes
+            layer_dist = dict(host._layer_distribution)
 
         return {
             "total_routes": total_routes,
             "layer_distribution": layer_dist,
-            "cache_dir": str(self.project_root / ".vibe" / "cache"),  # type: ignore[attr-defined]
+            "cache_dir": str(host.project_root / ".vibe" / "cache"),
             "ai_triage": self.get_ai_triage_stats(),
             "performance": {
                 "window_size": perf["window_size"],
@@ -55,8 +78,9 @@ class RouterStatsMixin:
 
     def get_ai_triage_stats(self) -> dict[str, Any]:
         """Get AI Triage usage and cost statistics."""
-        stats = self._cost_tracker.get_stats(days=30)  # type: ignore[attr-defined]
-        budget = getattr(self._config, "ai_triage_budget_monthly", 5.0)  # type: ignore[attr-defined]
+        host = cast(_StatsHost, self)
+        stats = host._cost_tracker.get_stats(days=30)
+        budget = getattr(host._config, "ai_triage_budget_monthly", 5.0)
         return {
             **stats,
             "budget_monthly_usd": budget,
@@ -64,17 +88,21 @@ class RouterStatsMixin:
         }
 
     def record_selection(self, skill_id: str, query: str, was_helpful: bool = True) -> None:
-        learner = self._preference_booster.get_learner()  # type: ignore[attr-defined]
+        host = cast(_StatsHost, self)
+        learner = host._preference_booster.get_learner()
         learner.record_selection(skill_id, query, was_helpful)
 
     def get_preference_stats(self) -> dict[str, int | float | str]:
-        learner = self._preference_booster.get_learner()  # type: ignore[attr-defined]
+        host = cast(_StatsHost, self)
+        learner = host._preference_booster.get_learner()
         return learner.get_stats()
 
     def get_top_skills(self, limit: int = 5, min_selections: int = 2) -> list[Any]:
-        learner = self._preference_booster.get_learner()  # type: ignore[attr-defined]
+        host = cast(_StatsHost, self)
+        learner = host._preference_booster.get_learner()
         return learner.get_top_skills(limit, min_selections)
 
     def clear_old_preferences(self, days: int = 90) -> int:
-        learner = self._preference_booster.get_learner()  # type: ignore[attr-defined]
+        host = cast(_StatsHost, self)
+        learner = host._preference_booster.get_learner()
         return learner.clear_old_data(days)

@@ -6,6 +6,7 @@ import time
 
 import pytest
 
+from vibesop.core.config.manager import RoutingConfig
 from vibesop.core.routing.unified import UnifiedRouter
 
 
@@ -19,7 +20,8 @@ class TestRoutingPerformance:
         Note: Warm-up cache first to measure typical latency (not cold-start).
         In real CLI usage, the first call loads cache, subsequent calls are fast.
         """
-        router = UnifiedRouter()
+        config = RoutingConfig(enable_ai_triage=False)
+        router = UnifiedRouter(config=config)
         queries = ["review", "debug", "test", "build", "deploy"]
 
         # Warm up: Load candidate cache on first call

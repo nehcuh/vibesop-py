@@ -19,7 +19,10 @@ class TestUnifiedRouterIntegration:
 
     def test_router_with_real_skills(self):
         """Test that UnifiedRouter can discover and match real skills."""
-        router = UnifiedRouter(project_root=Path(__file__).parents[2])
+        router = UnifiedRouter(
+            project_root=Path(__file__).parents[2],
+            config=RoutingConfig(enable_ai_triage=False),
+        )
 
         # Get candidates
         candidates = router.get_candidates()
@@ -31,7 +34,7 @@ class TestUnifiedRouterIntegration:
 
     def test_router_with_low_threshold(self):
         """Test routing with low confidence threshold."""
-        config = RoutingConfig(min_confidence=0.0)
+        config = RoutingConfig(min_confidence=0.0, enable_ai_triage=False)
         router = UnifiedRouter(
             project_root=Path(__file__).parents[2],
             config=config,
@@ -44,7 +47,7 @@ class TestUnifiedRouterIntegration:
 
     def test_router_with_high_threshold(self):
         """Test routing with high confidence threshold."""
-        config = RoutingConfig(min_confidence=0.99)
+        config = RoutingConfig(min_confidence=0.99, enable_ai_triage=False)
         router = UnifiedRouter(
             project_root=Path(__file__).parents[2],
             config=config,
@@ -56,7 +59,10 @@ class TestUnifiedRouterIntegration:
 
     def test_router_capabilities(self):
         """Test that router reports capabilities correctly."""
-        router = UnifiedRouter(project_root=Path(__file__).parents[2])
+        router = UnifiedRouter(
+            project_root=Path(__file__).parents[2],
+            config=RoutingConfig(enable_ai_triage=False),
+        )
 
         caps = router.get_capabilities()
         assert "type" in caps, "Should have type"
@@ -69,6 +75,7 @@ class TestUnifiedRouterIntegration:
         config = RoutingConfig(
             min_confidence=0.0,
             max_candidates=5,
+            enable_ai_triage=False,
         )
         router = UnifiedRouter(
             project_root=Path(__file__).parents[2],
@@ -93,13 +100,19 @@ class TestUnifiedRouterIntegration:
             shutil.copytree(core_skills, project_root / "core" / "skills", dirs_exist_ok=True)
 
         # First route — should set session state
-        router1 = UnifiedRouter(project_root=project_root)
+        router1 = UnifiedRouter(
+            project_root=project_root,
+            config=RoutingConfig(enable_ai_triage=False),
+        )
         result1 = router1.route("debug this error")
 
         assert result1.primary is not None, "Should match a skill"
 
         # Second router instance — should load session state
-        router2 = UnifiedRouter(project_root=project_root)
+        router2 = UnifiedRouter(
+            project_root=project_root,
+            config=RoutingConfig(enable_ai_triage=False),
+        )
         result2 = router2.route("help me debug")
 
         # Session file should exist (session_id derived from project path hash)
@@ -115,7 +128,7 @@ class TestUnifiedRouterIntegration:
         project_root = tmp_path / "test_project"
         project_root.mkdir()
 
-        config = RoutingConfig(session_aware=False)
+        config = RoutingConfig(session_aware=False, enable_ai_triage=False)
         router = UnifiedRouter(project_root=project_root, config=config)
         router.route("debug this error")
 

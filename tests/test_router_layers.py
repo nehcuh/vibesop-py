@@ -13,7 +13,7 @@ class TestLayer1Explicit:
 
     def test_direct_skill_invocation(self) -> None:
         """Test direct skill invocation by keyword."""
-        router = UnifiedRouter(project_root=Path.cwd())
+        router = UnifiedRouter(project_root=Path.cwd(), config=RoutingConfig(enable_ai_triage=False))
         result = router.route("review my code")
 
         # Should find a match or have alternatives
@@ -21,7 +21,7 @@ class TestLayer1Explicit:
 
     def test_slash_prefix_with_known_skill(self) -> None:
         """Test / prefix for direct skill invocation."""
-        router = UnifiedRouter(project_root=Path.cwd())
+        router = UnifiedRouter(project_root=Path.cwd(), config=RoutingConfig(enable_ai_triage=False))
         result = router.route("/review")
 
         # Should handle slash prefix
@@ -33,21 +33,21 @@ class TestLayer2Scenario:
 
     def test_test_keywords(self) -> None:
         """Test keywords trigger testing scenarios."""
-        router = UnifiedRouter(project_root=Path.cwd())
+        router = UnifiedRouter(project_root=Path.cwd(), config=RoutingConfig(enable_ai_triage=False))
         result = router.route("run tests")
 
         assert result is not None
 
     def test_refactor_keywords(self) -> None:
         """Test keywords trigger refactoring scenarios."""
-        router = UnifiedRouter(project_root=Path.cwd())
+        router = UnifiedRouter(project_root=Path.cwd(), config=RoutingConfig(enable_ai_triage=False))
         result = router.route("refactor this code")
 
         assert result is not None
 
     def test_chinese_keywords(self) -> None:
         """Test Chinese keywords work."""
-        router = UnifiedRouter(project_root=Path.cwd())
+        router = UnifiedRouter(project_root=Path.cwd(), config=RoutingConfig(enable_ai_triage=False))
         result = router.route("帮我调试")
 
         assert result is not None
@@ -58,7 +58,7 @@ class TestLayer3Semantic:
 
     def test_semantic_similarity(self) -> None:
         """Test semantic similarity matching."""
-        config = RoutingConfig(min_confidence=0.0, enable_embedding=False)
+        config = RoutingConfig(min_confidence=0.0, enable_embedding=False, enable_ai_triage=False)
         router = UnifiedRouter(project_root=Path.cwd(), config=config)
         result = router.route("fix the bug")
 
@@ -67,7 +67,7 @@ class TestLayer3Semantic:
 
     def test_synonym_handling(self) -> None:
         """Test synonym handling in semantic layer."""
-        config = RoutingConfig(min_confidence=0.0)
+        config = RoutingConfig(min_confidence=0.0, enable_ai_triage=False)
         router = UnifiedRouter(project_root=Path.cwd(), config=config)
         result = router.route("examine the code")
 
@@ -79,7 +79,7 @@ class TestLayer4Fuzzy:
 
     def test_typo_tolerance(self) -> None:
         """Test fuzzy matching handles typos."""
-        config = RoutingConfig(min_confidence=0.0)
+        config = RoutingConfig(min_confidence=0.0, enable_ai_triage=False)
         router = UnifiedRouter(project_root=Path.cwd(), config=config)
         result = router.route("ddebug")  # Typo for "debug"
 
@@ -88,7 +88,7 @@ class TestLayer4Fuzzy:
 
     def test_low_confidence_fallback(self) -> None:
         """Test fallback with very low confidence."""
-        config = RoutingConfig(min_confidence=0.0)
+        config = RoutingConfig(min_confidence=0.0, enable_ai_triage=False)
         router = UnifiedRouter(project_root=Path.cwd(), config=config)
         result = router.route("xyz")
 
@@ -107,7 +107,7 @@ class TestEarlyLayerOptimization:
 
     def test_explicit_match_calls_optimizations(self) -> None:
         """EXPLICIT layer match should trigger _apply_optimizations."""
-        router = UnifiedRouter(project_root=Path.cwd())
+        router = UnifiedRouter(project_root=Path.cwd(), config=RoutingConfig(enable_ai_triage=False))
         candidates = [
             {"id": "test-skill", "description": "Test skill", "enabled": True}
         ]
@@ -137,8 +137,7 @@ class TestEarlyLayerOptimization:
         MatcherPipeline already applies optimizations internally; calling
         them again in route() would double-count boosts.
         """
-        router = UnifiedRouter(project_root=Path.cwd())
-        config = RoutingConfig(min_confidence=0.0)
+        config = RoutingConfig(min_confidence=0.0, enable_ai_triage=False)
         router = UnifiedRouter(project_root=Path.cwd(), config=config)
 
         with patch.object(router, "_apply_optimizations") as mock_opt:

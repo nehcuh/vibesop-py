@@ -651,13 +651,13 @@ class WorkflowEngine:
             elif op == "!=":
                 condition_met = var_value != value
             elif op == ">":
-                condition_met = var_value is not None and var_value > value  # type: ignore
+                condition_met = var_value is not None and bool(var_value > value)
             elif op == "<":
-                condition_met = var_value is not None and var_value < value  # type: ignore
+                condition_met = var_value is not None and bool(var_value < value)
             elif op == ">=":
-                condition_met = var_value is not None and var_value >= value  # type: ignore
+                condition_met = var_value is not None and bool(var_value >= value)
             elif op == "<=":
-                condition_met = var_value is not None and var_value <= value  # type: ignore
+                condition_met = var_value is not None and bool(var_value <= value)
 
             if condition_met:
                 return f"Condition met: {var_name} {op} {value}\n{action}"

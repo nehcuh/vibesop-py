@@ -296,9 +296,10 @@ class SkillConfigManager:
             skill_id: 技能 ID
             state: 生命周期状态 ("draft", "active", "deprecated", "archived")
         """
-        if isinstance(state, str):  # type: ignore[reportUnnecessaryIsInstance]
-            state = SkillLifecycle(state)
-        cls.update_skill_config(skill_id, {"lifecycle": state.value})
+        if isinstance(state, SkillLifecycle):
+            cls.update_skill_config(skill_id, {"lifecycle": state.value})
+        else:
+            cls.update_skill_config(skill_id, {"lifecycle": SkillLifecycle(state).value})
 
     @classmethod
     def delete_skill_config(cls, skill_id: str) -> None:

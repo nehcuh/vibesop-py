@@ -12,7 +12,7 @@ class TestFallbackLLM:
 
     def test_fallback_mode_transparent_returns_fallback_llm(self, tmp_path):
         """Test that transparent fallback returns FALLBACK_LLM primary."""
-        config = RoutingConfig(fallback_mode="transparent", min_confidence=0.99)
+        config = RoutingConfig(fallback_mode="transparent", min_confidence=0.99, enable_ai_triage=False)
         router = UnifiedRouter(project_root=tmp_path, config=config)
 
         result = router.route("xyzqwerty_no_match_12345")
@@ -24,7 +24,7 @@ class TestFallbackLLM:
 
     def test_fallback_mode_disabled_returns_none(self, tmp_path):
         """Test that disabled fallback returns primary=None."""
-        config = RoutingConfig(fallback_mode="disabled", min_confidence=0.99)
+        config = RoutingConfig(fallback_mode="disabled", min_confidence=0.99, enable_ai_triage=False)
         router = UnifiedRouter(project_root=tmp_path, config=config)
 
         result = router.route("xyzqwerty_no_match_12345")
@@ -34,7 +34,7 @@ class TestFallbackLLM:
 
     def test_fallback_mode_silent_returns_none_with_alternatives(self, tmp_path):
         """Test that silent fallback returns primary=None but keeps alternatives."""
-        config = RoutingConfig(fallback_mode="silent", min_confidence=0.99)
+        config = RoutingConfig(fallback_mode="silent", min_confidence=0.99, enable_ai_triage=False)
         router = UnifiedRouter(project_root=tmp_path, config=config)
 
         # Create a candidate so alternatives can be populated
@@ -51,7 +51,7 @@ class TestFallbackLLM:
 
     def test_fallback_includes_nearest_candidates(self, tmp_path):
         """Test that fallback includes nearest candidates as alternatives."""
-        config = RoutingConfig(fallback_mode="transparent", min_confidence=0.99)
+        config = RoutingConfig(fallback_mode="transparent", min_confidence=0.99, enable_ai_triage=False)
         router = UnifiedRouter(project_root=tmp_path, config=config)
 
         result = router.route("xyzqwerty_no_match_12345")
@@ -62,7 +62,7 @@ class TestFallbackLLM:
 
     def test_has_match_excludes_fallback_llm(self, tmp_path):
         """Test that has_match is False when primary is FALLBACK_LLM."""
-        config = RoutingConfig(fallback_mode="transparent", min_confidence=0.99)
+        config = RoutingConfig(fallback_mode="transparent", min_confidence=0.99, enable_ai_triage=False)
         router = UnifiedRouter(project_root=tmp_path, config=config)
 
         result = router.route("no_match_query_abc123")
@@ -73,7 +73,7 @@ class TestFallbackLLM:
 
     def test_routing_path_includes_fallback_layer(self, tmp_path):
         """Test that routing_path includes FALLBACK_LLM as last element."""
-        config = RoutingConfig(fallback_mode="transparent", min_confidence=0.99)
+        config = RoutingConfig(fallback_mode="transparent", min_confidence=0.99, enable_ai_triage=False)
         router = UnifiedRouter(project_root=tmp_path, config=config)
 
         result = router.route("no_match_query_abc123")
@@ -82,7 +82,7 @@ class TestFallbackLLM:
 
     def test_layer_details_include_fallback(self, tmp_path):
         """Test that layer_details includes FALLBACK_LLM detail."""
-        config = RoutingConfig(fallback_mode="transparent", min_confidence=0.99)
+        config = RoutingConfig(fallback_mode="transparent", min_confidence=0.99, enable_ai_triage=False)
         router = UnifiedRouter(project_root=tmp_path, config=config)
 
         result = router.route("no_match_query_abc123")

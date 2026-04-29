@@ -8,8 +8,10 @@ Features:
 - Word-level semantic matching for query boosting
 """
 
+import fcntl
 import json
 import math
+import os
 import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -196,7 +198,12 @@ class PreferenceLearner:
             return PreferenceStorage()
         try:
             with self.storage_path.open("r") as f:
-                data = json.load(f)
+                # Acquire shared lock for reading
+                fcntl.flock(f.fileno(), fcntl.LOCK_SH)
+                try:
+                    data = json.load(f)
+                finally:
+                    fcntl.flock(f.fileno(), fcntl.LOCK_UN)
                 ngram_data = data.get("ngram_associations", {})
                 storage = PreferenceStorage(
                     selections=data.get("selections", []),
@@ -209,9 +216,53 @@ class PreferenceLearner:
             return PreferenceStorage()
 
     def _save_storage(self) -> None:
+        from vibesop.utils.atomic_writer import write_text
+
         self.storage_path.parent.mkdir(parents=True, exist_ok=True)
-        with self.storage_path.open("w") as f:
-            json.dump(self._storage.model_dump(), f, indent=2)
+        # Use a separate lock file to coordinate concurrent writers
+        lock_path = self.storage_path.with_suffix(".lock")
+        with lock_path.open("w") as lock_file:
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+            try:
+                # Re-read latest state under lock to avoid overwriting concurrent changes
+                latest = self._load_storage()
+                # Merge: keep selections from both
+                existing_ids = {
+                    (s.get("skill_id"), s.get("timestamp"))
+                    for s in latest.selections
+                }
+                for s in self._storage.selections:
+                    key = (s.get("skill_id"), s.get("timestamp"))
+                    if key not in existing_ids:
+                        latest.selections.append(s)
+                # Merge skill scores (take higher score)
+                for skill_id, data in self._storage.skill_scores.items():
+                    if skill_id not in latest.skill_scores:
+                        latest.skill_scores[skill_id] = data
+                    elif data.get("score", 0) > latest.skill_scores[skill_id].get("score", 0):
+                        latest.skill_scores[skill_id] = data
+                # Merge associations (sum counters)
+                for word, skills in self._storage.word_associations.items():
+                    if word not in latest.word_associations:
+                        latest.word_associations[word] = dict(skills)
+                    else:
+                        for sid, count in skills.items():
+                            latest.word_associations[word][sid] = (
+                                latest.word_associations[word].get(sid, 0) + count
+                            )
+                for bigram, skills in self._storage.ngram_associations.items():
+                    if bigram not in latest.ngram_associations:
+                        latest.ngram_associations[bigram] = dict(skills)
+                    else:
+                        for sid, count in skills.items():
+                            latest.ngram_associations[bigram][sid] = (
+                                latest.ngram_associations[bigram].get(sid, 0) + count
+                            )
+                self._storage = latest
+                self._recalculate_scores()
+                write_text(self.storage_path, json.dumps(self._storage.model_dump(), indent=2))
+            finally:
+                fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
 
     def _update_word_associations(
         self,

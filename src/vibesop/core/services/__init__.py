@@ -59,7 +59,7 @@ class RoutingService:
         """
         if context is None:
             context = RoutingContext()
-        return self.router.route(query, context=context)
+        return self.router.orchestrate(query, context=context)
 
     def orchestrate(
         self,

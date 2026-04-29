@@ -13,6 +13,11 @@ from vibesop.llm.openai import OpenAIProvider
 
 ProviderType = Literal["anthropic", "openai", "ollama", "deepseek", "kimi", "zhipu"]
 
+# Valid providers for input validation
+_VALID_PROVIDERS: frozenset[str] = frozenset(
+    ["anthropic", "openai", "ollama", "deepseek", "kimi", "zhipu"]
+)
+
 # OpenAI-compatible providers — all routed through OpenAIProvider
 # with the appropriate base_url.
 _OPENAI_COMPATIBLE: dict[str, str] = {
@@ -51,6 +56,9 @@ def create_provider(
     if provider is None:
         provider = detect_provider_from_env()
 
+    if provider not in _VALID_PROVIDERS:
+        raise ValueError(f"Invalid provider: {provider}")
+
     if provider == "anthropic":
         resolved_key = api_key or os.getenv("ANTHROPIC_API_KEY")
         return AnthropicProvider(api_key=resolved_key, base_url=base_url)
@@ -81,7 +89,7 @@ def detect_provider_from_env() -> ProviderType:
         6. Default to 'ollama' (local, no API key required)
     """
     explicit_provider = os.getenv("VIBE_LLM_PROVIDER")
-    if explicit_provider:
+    if explicit_provider and explicit_provider in _VALID_PROVIDERS:
         return explicit_provider  # pyright: ignore[reportReturnType]
 
     if os.getenv("OLLAMA_BASE_URL") or os.getenv("OLLAMA_MODEL"):
@@ -130,14 +138,3 @@ def create_from_env(
             pass
 
     return create_provider(preferred_provider)
-    if os.getenv("ANTHROPIC_API_KEY"):
-        return "anthropic"
-    if os.getenv("OPENAI_API_KEY"):
-        return "openai"
-
-    for provider_name in ["deepseek", "kimi", "zhipu"]:
-        env_key = f"{provider_name.upper()}_API_KEY"
-        if os.getenv(env_key):
-            return provider_name
-
-    return "ollama"

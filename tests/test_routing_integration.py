@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from vibesop.core.routing import UnifiedRouter
+from vibesop.core.routing import RoutingConfig, UnifiedRouter
 
 
 class TestSkillRouterIntegration:
@@ -10,7 +10,7 @@ class TestSkillRouterIntegration:
 
     def test_route_debug_query(self) -> None:
         """Test routing a debug query."""
-        router = UnifiedRouter(project_root=Path.cwd())
+        router = UnifiedRouter(project_root=Path.cwd(), config=RoutingConfig(enable_ai_triage=False))
         result = router.route("debug this error")
 
         assert result is not None
@@ -19,7 +19,7 @@ class TestSkillRouterIntegration:
 
     def test_route_review_query(self) -> None:
         """Test routing a review query."""
-        router = UnifiedRouter(project_root=Path.cwd())
+        router = UnifiedRouter(project_root=Path.cwd(), config=RoutingConfig(enable_ai_triage=False))
         result = router.route("review my code")
 
         assert result is not None
@@ -29,7 +29,7 @@ class TestSkillRouterIntegration:
 
     def test_route_refactor_query(self) -> None:
         """Test routing a refactor query."""
-        router = UnifiedRouter(project_root=Path.cwd())
+        router = UnifiedRouter(project_root=Path.cwd(), config=RoutingConfig(enable_ai_triage=False))
         result = router.route("refactor this code")
 
         assert result is not None
@@ -37,7 +37,7 @@ class TestSkillRouterIntegration:
 
     def test_route_chinese_query(self) -> None:
         """Test routing Chinese queries."""
-        router = UnifiedRouter(project_root=Path.cwd())
+        router = UnifiedRouter(project_root=Path.cwd(), config=RoutingConfig(enable_ai_triage=False))
         result = router.route("帮我调试这个 bug")
 
         assert result is not None

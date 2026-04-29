@@ -10,8 +10,11 @@ Provides aggregated quality metrics for skills based on 5 dimensions:
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from pathlib import Path
+logger = logging.getLogger(__name__)
+
 from typing import Any
 
 from vibesop.core.feedback import ExecutionFeedbackCollector, FeedbackCollector
@@ -176,8 +179,8 @@ class RoutingEvaluator:
                 usage_last = config.usage_stats.get("last_used")
                 if usage_last and (last_used is None or usage_last > last_used):
                     last_used = usage_last
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("Failed to evaluate skill usage: %s", e)
 
         # 2. User satisfaction + execution success from ExecutionFeedbackCollector
         exec_summary = self._execution.get_skill_summary(skill_id)

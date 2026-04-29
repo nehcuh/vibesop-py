@@ -188,6 +188,10 @@ class SecurityScanner:
         >>> assert result.risk_level == RiskLevel.CRITICAL
     """
 
+    rules: dict[ThreatType, SecurityRule]
+    heuristic_analyzer: HeuristicAnalyzer
+    enable_heuristics: bool
+
     def __init__(
         self,
         rules: dict[ThreatType, SecurityRule] | None = None,
@@ -203,7 +207,7 @@ class SecurityScanner:
                                If None, uses default analyzer.
             enable_heuristics: Whether to enable heuristic analysis
         """
-        self.rules = rules if rules is not None else get_default_rules()  # type: ignore[assignment]
+        self.rules = rules if rules is not None else get_default_rules()
         self.heuristic_analyzer = (
             heuristic_analyzer if heuristic_analyzer is not None else DefaultHeuristicAnalyzer()
         )
@@ -345,7 +349,7 @@ class SecurityScanner:
         Args:
             rule: Security rule to add
         """
-        self.rules[rule.threat_type] = rule  # type: ignore[assignment]
+        self.rules[rule.threat_type] = rule
 
     def remove_rule(self, threat_type: ThreatType) -> None:
         """Remove a security rule.

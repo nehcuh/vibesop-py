@@ -168,7 +168,7 @@ def _get_configured_platform() -> str | None:
     try:
         yaml_parser = YAML()
         with config_path.open() as f:
-            config = cast("dict[str, Any]", yaml_parser.load(f))  # type: ignore[reportUnknownMemberType,reportUnknownVariableType]
+            config: dict[str, Any] | None = yaml_parser.load(f)
             return config.get("platform") if config else None
     except Exception as e:
         logger.debug(f"Failed to read config.yaml: {e}")

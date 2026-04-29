@@ -144,7 +144,7 @@ def _generate_recommendations(
         )
 
     if mismatched_skills:
-        top_skill = max(mismatched_skills, key=mismatched_skills.get)  # type: ignore[reportCallIssue]
+        top_skill = max(mismatched_skills, key=lambda k: mismatched_skills[k])
         recommendations.append(
             f"Skill '{top_skill}' has {mismatched_skills[top_skill]} mismatches - consider refining its trigger keywords"
         )

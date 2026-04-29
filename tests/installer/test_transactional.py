@@ -1,5 +1,6 @@
 """Tests for transactional installer."""
 
+import json
 import tempfile
 from pathlib import Path
 
@@ -354,22 +355,39 @@ class TestTransactionalInstallerEdgeCases:
 
     def test_concurrent_snapshots(self) -> None:
         """Test multiple transactions create different snapshots."""
-        with tempfile.TemporaryDirectory() as tmpdir:
+        from unittest.mock import patch
+
+        call_count = [0]
+
+        def mock_create_snapshot(_self):
+            call_count[0] += 1
+            snapshot_id = f"20240101_120000_{call_count[0]}"
+            snapshot_path = _self._snapshot_dir / snapshot_id
+            snapshot_path.mkdir(exist_ok=True)
+            metadata = {
+                "snapshot_id": snapshot_id,
+                "created_at": "2024-01-01T12:00:00",
+                "steps": [s.name for s in _self._steps],
+            }
+            with (snapshot_path / "metadata.json").open("w") as f:
+                json.dump(metadata, f, indent=2)
+            return snapshot_id
+
+        with tempfile.TemporaryDirectory() as tmpdir, patch.object(
+            TransactionalInstaller, "_create_snapshot", mock_create_snapshot
+        ):
             installer1 = TransactionalInstaller(snapshot_dir=Path(tmpdir))
             installer1.add_step("step1", lambda: {"success": True}, lambda: {"success": True})
             result1 = installer1.execute()
-
-            # Small delay to ensure different timestamp
-            import time
-            time.sleep(0.1)
 
             installer2 = TransactionalInstaller(snapshot_dir=Path(tmpdir))
             installer2.add_step("step2", lambda: {"success": True}, lambda: {"success": True})
             result2 = installer2.execute()
 
-            # Snapshots should have different IDs (based on timestamps)
+            # Snapshots should have different IDs
             assert result1.snapshot_id is not None
             assert result2.snapshot_id is not None
+            assert result1.snapshot_id != result2.snapshot_id
 
 
 class TestFileTransactionalInstaller:

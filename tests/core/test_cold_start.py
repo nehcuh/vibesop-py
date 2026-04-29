@@ -97,7 +97,9 @@ class TestGetColdStartStrategy:
 
     def test_new_instance_when_none_cached(self) -> None:
         """Factory creates new instance when cache is cleared."""
+        from vibesop.core.optimization.cold_start import _ColdStartStrategyCache
+
         s1 = get_cold_start_strategy()
-        delattr(get_cold_start_strategy, "_strategy")
+        _ColdStartStrategyCache._instance = None
         s2 = get_cold_start_strategy()
         assert s1 is not s2

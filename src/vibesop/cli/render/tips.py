@@ -15,6 +15,10 @@ import hashlib
 from pathlib import Path
 
 from rich.console import Console
+import logging
+
+logger = logging.getLogger(__name__)
+
 
 # Tip rotation categories — one is picked based on query hash
 _TIP_TEMPLATES: list[tuple[str, str]] = [
@@ -33,7 +37,7 @@ def _count_low_quality_skills(project_root: Path) -> int:
         evaluator = RoutingEvaluator(project_root=project_root)
         low = evaluator.get_low_quality_skills(threshold=0.3, min_routes=3)
         return len(low)
-    except Exception:
+    except Exception as e:
         return 0
 
 
@@ -44,7 +48,7 @@ def _count_stale_skills(project_root: Path) -> int:
         loop = FeedbackLoop(project_root=project_root)
         suggestions = loop.analyze_all(auto_deprecate=False)
         return sum(1 for s in suggestions if s.action == "deprecate")
-    except Exception:
+    except Exception as e:
         return 0
 
 
@@ -55,7 +59,7 @@ def _get_today_stats(project_root: Path) -> dict:
 
         store = AnalyticsStore(storage_dir=project_root / ".vibe")
         records = store.list_records(limit=500)
-    except Exception:
+    except Exception as e:
         return {"routes_today": 0, "top_skill": None}
 
     today = __import__("datetime").datetime.now().date().isoformat()
@@ -97,7 +101,7 @@ def _check_new_badges(project_root: Path, skill_id: str) -> list[str]:
             meta = get_badge_display(b.type)
             lines.append(f"{meta['icon']} [bold magenta]{meta['title']}[/bold magenta] — {meta['description']}")
         return lines
-    except Exception:
+    except Exception as e:
         return []
 
 

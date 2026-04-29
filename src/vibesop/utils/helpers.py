@@ -142,23 +142,27 @@ def get_config_path(base_dir: Path, *path_parts: str) -> Path:
     return config_dir.joinpath(*path_parts)
 
 
-def merge_dicts(base: dict[str, Any], overlay: dict[str, Any]) -> dict[str, Any]:
-    """Deep merge two dictionaries.
+def merge_dicts(base: dict[str, Any], *overlays: dict[str, Any]) -> dict[str, Any]:
+    """Deep merge multiple dictionaries.
+
+    Later dictionaries override earlier ones. Nested dictionaries are
+    merged recursively rather than replaced.
 
     Args:
         base: Base dictionary
-        overlay: Dictionary to overlay on base
+        *overlays: Dictionaries to overlay on base
 
     Returns:
         Merged dictionary
     """
     result = base.copy()
 
-    for key, value in overlay.items():
-        if key in result and isinstance(result[key], dict) and isinstance(value, dict):
-            result[key] = merge_dicts(result[key], value)
-        else:
-            result[key] = value
+    for overlay in overlays:
+        for key, value in overlay.items():
+            if key in result and isinstance(result[key], dict) and isinstance(value, dict):
+                result[key] = merge_dicts(result[key], value)
+            else:
+                result[key] = value
 
     return result
 

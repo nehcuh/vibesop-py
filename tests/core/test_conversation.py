@@ -175,16 +175,19 @@ class TestConversationContext:
         assert ftype is None
 
     def test_follow_up_timeout(self, tmp_path: Path) -> None:
+        from unittest.mock import patch
+
         ctx = ConversationContext(
             storage_dir=tmp_path,
             follow_up_timeout=0.1,
         )
         ctx.add_turn("review", skill_id="review")
-        time.sleep(0.2)
 
-        is_follow, ftype = ctx.is_follow_up("continue")
-        assert is_follow is False
-        assert ftype is None
+        # Simulate time passing without real sleep
+        with patch("time.time", return_value=time.time() + 0.2):
+            is_follow, ftype = ctx.is_follow_up("continue")
+            assert is_follow is False
+            assert ftype is None
 
     def test_follow_up_empty_query(self, tmp_path: Path) -> None:
         ctx = ConversationContext(storage_dir=tmp_path)

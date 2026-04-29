@@ -19,6 +19,10 @@ import typer
 from rich.box import ROUNDED
 from rich.console import Console
 from rich.panel import Panel
+import logging
+
+logger = logging.getLogger(__name__)
+
 
 console = Console()
 
@@ -49,7 +53,7 @@ def _get_skill_count(project_root: Path) -> int:
         mgr = CandidateManager(project_root)
         candidates = mgr.get_candidates()
         return len(candidates)
-    except Exception:
+    except Exception as e:
         return 0
 
 
@@ -67,7 +71,7 @@ def _load_ecosystem_health(project_root: Path) -> Panel:
         for e in evals.values():
             grade_counts[e.grade] = grade_counts.get(e.grade, 0) + 1
         evaluated = len(evals)
-    except Exception:
+    except Exception as e:
         evaluated = 0
         grade_counts = {"A": 0, "B": 0, "C": 0, "D": 0, "F": 0}
 
@@ -95,7 +99,7 @@ def _load_recent_activity(project_root: Path) -> Panel:
 
         store = AnalyticsStore(storage_dir=project_root / ".vibe")
         records = store.list_records(limit=10)
-    except Exception:
+    except Exception as e:
         return Panel(
             "[dim]No analytics data available[/dim]",
             title="[bold]Recent Activity[/bold]",
@@ -134,7 +138,7 @@ def _load_recommendations() -> Panel:
         all_recs = list(recs) + [
             r for r in missing if r.skill_id not in {s.skill_id for s in recs}
         ]
-    except Exception:
+    except Exception as e:
         return Panel(
             "[dim]Recommendations not available[/dim]",
             title="[bold]For You[/bold]",
@@ -174,8 +178,8 @@ def _load_warnings(project_root: Path) -> Panel:
                 f"[yellow]{e.skill_id}[/yellow] — grade [red]{e.grade}[/red], "
                 f"quality {e.quality_score:.0%}"
             )
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("Unhandled error: %s", e)
 
     try:
         from vibesop.core.skills.feedback_loop import FeedbackLoop
@@ -191,8 +195,8 @@ def _load_warnings(project_root: Path) -> Panel:
                     f"[yellow]{s.skill_id}[/yellow] — [red]suggested deprecation[/red]: "
                     f"{s.reason[:60]}"
                 )
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("Unhandled error: %s", e)
 
     if not warnings:
         return Panel(
@@ -213,7 +217,7 @@ def _load_badges() -> Panel | None:
 
         tracker = BadgeTracker()
         badges = tracker.list_badges()
-    except Exception:
+    except Exception as e:
         return None
 
     if not badges:
@@ -239,7 +243,7 @@ def _load_suggestions_count() -> int:
 
         collector = SkillSuggestionCollector()
         return len(collector.get_pending())
-    except Exception:
+    except Exception as e:
         return 0
 
 
@@ -283,7 +287,7 @@ def _load_community_trending() -> Panel | None:
             border_style="cyan",
             box=ROUNDED,
         )
-    except Exception:
+    except Exception as e:
         return None
 
 
@@ -327,47 +331,45 @@ def status(
 
     This is the default command when running `vibe` with no arguments.
     """
-    global console  # noqa: PLW0603
-    if no_color:
-        console = Console(no_color=True)
+    local_console = Console(no_color=True) if no_color else console
 
     project_root = Path.cwd()
 
     is_first = _detect_first_run(project_root)
 
     # Header
-    console.print()
-    console.rule("[bold cyan]VibeSOP Status[/bold cyan]")
+    local_console.print()
+    local_console.rule("[bold cyan]VibeSOP Status[/bold cyan]")
 
     # Welcome (first-run only)
     welcome = _load_welcome(is_first)
     if welcome:
-        console.print()
-        console.print(welcome)
+        local_console.print()
+        local_console.print(welcome)
 
     # Badge showcase
     badges = _load_badges()
     if badges:
-        console.print()
-        console.print(badges)
+        local_console.print()
+        local_console.print(badges)
 
     # Ecosystem health
-    console.print()
-    console.print(_load_ecosystem_health(project_root))
+    local_console.print()
+    local_console.print(_load_ecosystem_health(project_root))
 
     # Recent activity
-    console.print(_load_recent_activity(project_root))
+    local_console.print(_load_recent_activity(project_root))
 
     # Recommendations
-    console.print(_load_recommendations())
+    local_console.print(_load_recommendations())
 
     # Warnings
-    console.print(_load_warnings(project_root))
+    local_console.print(_load_warnings(project_root))
 
     # Community trending
     trending = _load_community_trending()
     if trending:
-        console.print(trending)
+        local_console.print(trending)
 
     # Skill suggestions
     suggestion_count = _load_suggestions_count()

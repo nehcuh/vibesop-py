@@ -146,8 +146,9 @@ class ParallelScheduler:
             result = await executor(step)
             step.status = "completed"
             return result
-        except Exception:
+        except Exception as e:
             step.status = "failed"
+            logger.warning("Step %s failed: %s", step.step_id, e)
             raise
 
     def get_execution_preview(self, plan: ExecutionPlan) -> dict[str, Any]:

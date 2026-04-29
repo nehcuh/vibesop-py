@@ -26,13 +26,14 @@ class TestCacheEntry:
 
     def test_is_expired_true(self) -> None:
         """Test expiration check for old entry."""
-        # Create entry in the past
-        entry = CacheEntry(data={"skill": "/review"}, ttl=0)
+        from unittest.mock import patch
 
-        # Small delay to ensure expiration
-        time.sleep(0.01)
+        # Patch time.time to simulate elapsed time
+        base_time = time.time()
+        entry = CacheEntry(data={"skill": "/review"}, created_at=base_time, ttl=1)
 
-        assert entry.is_expired()
+        with patch("time.time", return_value=base_time + 2):
+            assert entry.is_expired()
 
 
 class TestCacheStats:
@@ -133,6 +134,8 @@ class TestCacheManager:
 
     def test_set_with_custom_ttl(self) -> None:
         """Test setting entry with custom TTL."""
+        from unittest.mock import patch
+
         manager = self._create_manager()
 
         manager.set("test_key", {"skill": "/review"}, ttl=1)
@@ -140,21 +143,23 @@ class TestCacheManager:
         # Should be available immediately
         assert manager.get("test_key") is not None
 
-        # Wait for expiration
-        time.sleep(1.1)
-
-        # Should be expired
-        assert manager.get("test_key") is None
+        # Simulate time passing without real sleep
+        with patch("time.time", return_value=time.time() + 2):
+            # Should be expired
+            assert manager.get("test_key") is None
 
     def test_expired_memory_entry_removed(self) -> None:
         """Test expired memory entries are removed."""
+        from unittest.mock import patch
+
         manager = self._create_manager()
 
         manager.set("test_key", {"skill": "/review"}, ttl=0)
-        time.sleep(0.01)
 
-        # First access - should find entry expired and remove it
-        assert manager.get("test_key") is None
+        # Simulate time passing without real sleep
+        with patch("time.time", return_value=time.time() + 0.1):
+            # First access - should find entry expired and remove it
+            assert manager.get("test_key") is None
 
         # Second access - should miss (entry was removed)
         assert manager.get("test_key") is None
@@ -206,16 +211,19 @@ class TestCacheManager:
 
     def test_expired_file_cache_removed(self) -> None:
         """Test expired file cache entries are removed."""
+        from unittest.mock import patch
+
         manager = self._create_manager()
 
         manager.set("test_key", {"skill": "/review"}, ttl=0)
-        time.sleep(0.01)
 
-        # Clear memory to force file access
-        manager._memory_cache.clear()
+        # Simulate time passing without real sleep
+        with patch("time.time", return_value=time.time() + 0.1):
+            # Clear memory to force file access
+            manager._memory_cache.clear()
 
-        # Should find file entry expired and remove it
-        assert manager.get("test_key") is None
+            # Should find file entry expired and remove it
+            assert manager.get("test_key") is None
 
         # File should be removed
         file_path = manager._get_file_path("test_key")

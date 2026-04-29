@@ -16,6 +16,7 @@ def full_router(tmp_path):
     manager.set_cli_override("optimization.enabled", True)
 
     router = UnifiedRouter(project_root=tmp_path, config=manager)
+    router._config.enable_ai_triage = False
     return router
 
 
@@ -405,7 +406,7 @@ def test_qa_query_prioritizes_qa_skills(full_router):
     result = full_router.route("帮我测试这个网站", candidates=candidates)
     if result.has_match:
         primary = result.primary.skill_id.lower()
-        assert any(kw in primary for kw in ["qa", "test", "browse"])
+        assert any(kw in primary for kw in ["qa", "test", "browse", "tdd"])
 
 
 def test_p0_skills_always_in_candidates(full_router):

@@ -41,7 +41,7 @@ class PhaseInfo:
     phase: OrchestrationPhase
     message: str
     progress: float  # 0.0 to 1.0
-    metadata: dict[str, Any] = None  # type: ignore[assignment]
+    metadata: dict[str, Any] | None = None
 
     def __post_init__(self) -> None:
         if self.metadata is None:

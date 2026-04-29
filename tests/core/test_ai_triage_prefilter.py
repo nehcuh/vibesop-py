@@ -14,7 +14,7 @@ def test_prefilter_ai_triage_candidates_reduces_count():
     candidates[12]["keywords"] = ["debug", "error"]
 
     router = UnifiedRouter()
-    filtered = router._prefilter_ai_triage_candidates("debug error", candidates, max_skills=5)
+    filtered = router._triage_service.prefilter_ai_triage_candidates("debug error", candidates, max_skills=5)
 
     assert len(filtered) <= 5
     # The debug skills should be present
@@ -28,5 +28,5 @@ def test_prefilter_ai_triage_candidates_no_change_when_below_max():
         for i in range(3)
     ]
     router = UnifiedRouter()
-    filtered = router._prefilter_ai_triage_candidates("debug", candidates, max_skills=5)
+    filtered = router._triage_service.prefilter_ai_triage_candidates("debug", candidates, max_skills=5)
     assert len(filtered) == 3

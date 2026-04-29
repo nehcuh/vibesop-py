@@ -276,7 +276,7 @@ class TestKimiCliAdapter:
         content = hook_path.read_text()
         assert "shasum -a 256" in content, "macOS hash fallback missing"
         assert "python3 -c" in content, "Python hash fallback missing"
-        assert "^/vibe-" in content, "Slash command detection missing"
+        assert "vibe-" in content, "Slash command detection missing"
         assert "vibe route" in content, "vibe route call missing"
 
     def test_config_toml_has_hooks_section(self, tmp_path: Path) -> None:

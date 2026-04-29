@@ -362,6 +362,7 @@ class ConfigManager:
     ENV_PREFIX = "VIBE_"
 
     @staticmethod
+    @staticmethod
     def deep_merge_configs(*configs: dict[str, Any]) -> dict[str, Any]:
         """Deep merge multiple configuration dictionaries.
 
@@ -389,40 +390,12 @@ class ConfigManager:
             >>> assert merged["routing"]["min_confidence"] == 0.5
             >>> assert merged["routing"]["cache"] is False
         """
+        from vibesop.utils.helpers import merge_dicts
+
         if not configs:
             return {}
 
-        # Start with first config
-        result = configs[0].copy()
-
-        # Merge each subsequent config
-        for config in configs[1:]:
-            result = ConfigManager._deep_merge_dicts(result, config)
-
-        return result
-
-    @staticmethod
-    def _deep_merge_dicts(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
-        """Deep merge two dictionaries.
-
-        Args:
-            base: Base dictionary
-            override: Override dictionary (takes precedence)
-
-        Returns:
-            Merged dictionary
-        """
-        result = base.copy()
-
-        for key, value in override.items():
-            if key in result and isinstance(result[key], dict) and isinstance(value, dict):
-                # Recursively merge nested dictionaries
-                result[key] = ConfigManager._deep_merge_dicts(result[key], value)
-            else:
-                # Override with new value
-                result[key] = value
-
-        return result
+        return merge_dicts(configs[0], *configs[1:])
 
     def __init__(self, project_root: str | Path = "."):
         """Initialize the configuration manager.

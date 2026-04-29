@@ -27,7 +27,8 @@ def render_routing_report(
         console = Console()
 
     # Header panel
-    header_text = f"[bold]Query:[/bold] {result.query}\n"
+    query_text = getattr(result, "query", None) or getattr(result, "original_query", "")
+    header_text = f"[bold]Query:[/bold] {query_text}\n"
     if result.primary:
         if result.primary.layer == RoutingLayer.FALLBACK_LLM:
             header_text += (

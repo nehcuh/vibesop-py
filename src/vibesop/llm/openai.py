@@ -49,8 +49,7 @@ class OpenAIProvider(LLMProvider):
         if base_url is None:
             base_url = self.DEFAULT_BASE_URL
 
-        if model:
-            self.DEFAULT_MODEL = model  # type: ignore[reportConstantRedefinition]
+        self._default_model = model or self.DEFAULT_MODEL
 
         self._is_deepseek = bool(base_url and "deepseek.com" in base_url)
 
@@ -68,7 +67,7 @@ class OpenAIProvider(LLMProvider):
 
     def default_model(self) -> str:
         """Get default model."""
-        return self.DEFAULT_MODEL
+        return self._default_model
 
     def call(
         self,

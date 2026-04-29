@@ -232,7 +232,7 @@ class SkillRecommender:
                 counts[lang] = counts.get(lang, 0) + 1
         if not counts:
             return {"primary_language": "default"}
-        best = max(counts, key=counts.get)  # type: ignore[reportCallIssue]
+        best = max(counts, key=lambda k: counts[k])
         return {"primary_language": best}
 
     def _get_installed_skill_ids(self) -> set[str]:
