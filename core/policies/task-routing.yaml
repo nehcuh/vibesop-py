@@ -29,7 +29,7 @@ scenario_patterns:
       - "修复"
       - "broken"
       - "not working"
-    skill_id: "systematic-debugging"
+    skill_id: "gstack/investigate"
     priority: P0
     message: "检测到错误，必须先找根因再修复"
 
@@ -46,7 +46,7 @@ scenario_patterns:
       - "搞定"
       - "结束"
       - "好了吗"
-    skill_id: "verification-before-completion"
+    skill_id: "gstack/investigate"
     priority: P0
     message: "声称完成前必须先验证"
 
@@ -91,7 +91,7 @@ scenario_patterns:
       - "pull request"
       - "提交代码"
       - "审查代码"
-    skill_id: "verification-before-completion"
+    skill_id: "gstack/investigate"
     priority: P1
     message: "PR前建议先验证"
 
@@ -103,7 +103,7 @@ scenario_patterns:
       - "install skill"
       - "add mcp"
       - "new skill"
-    skill_id: "systematic-debugging"  # Security audit via debugging
+    skill_id: "superpowers/debug"  # Security audit via debugging
     priority: P0
     message: "新技能需要先进行安全审计"
 
@@ -114,7 +114,7 @@ scenario_patterns:
     keywords:
       - "still failing"
       - "failed again"
-    skill_id: "systematic-debugging"
+    skill_id: "gstack/investigate"
     priority: P0
     message: "连续失败需要暂停并重新诊断"
 
@@ -431,9 +431,9 @@ conflict_resolution:
   # When multiple skills match, use these rules to decide
   strategies:
     - scenario: debugging
-      primary: systematic-debugging
-      primary_source: builtin
-      reason: "P0 mandatory, always primary for debugging"
+      primary: gstack/investigate
+      primary_source: gstack
+      reason: "Systematic root-cause debugging with auto-freeze scope"
       
     - scenario: code_review
       primary: gstack/review

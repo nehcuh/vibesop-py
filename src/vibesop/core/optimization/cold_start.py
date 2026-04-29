@@ -48,12 +48,12 @@ class ColdStartStrategy:
         # Debugging scenarios
         {
             "pattern": "debug",
-            "skill_id": "systematic-debugging",
+            "skill_id": "gstack/investigate",
             "keywords": ["debug", "调试", "bug", "error", "错误", "fix", "修复"],
         },
         {
             "pattern": "test fail",
-            "skill_id": "systematic-debugging",
+            "skill_id": "gstack/investigate",
             "keywords": ["test failure", "测试失败", "failing test"],
         },
         # Code review
@@ -118,8 +118,7 @@ class ColdStartStrategy:
 
     # Priority skills to always include in candidate set
     _P0_SKILLS: ClassVar[list[str]] = [
-        "systematic-debugging",
-        "verification-before-completion",
+        "gstack/investigate",
         "session-end",
     ]
 

@@ -171,15 +171,12 @@ conflict_resolution:
       - "回归测试"
 
   strategies:
-    # Debugging: builtin systematic-debugging is P0 mandatory, always primary
+    # Debugging: gstack/investigate is primary, superpowers/debug as alternative
     - scenario: debugging
-      primary: systematic-debugging
-      primary_source: builtin
+      primary: /investigate
+      primary_source: gstack
       alternatives:
-        - skill: /investigate
-          source: gstack
-          trigger: "需要自动 freeze 作用域"
-        - skill: /systematic-debugging
+        - skill: /debug
           source: superpowers
           trigger: "需要高级调试工作流"
       override_keywords:
@@ -298,8 +295,8 @@ conflict_resolution:
         - skill: omx/ultrawork
           source: omx
           trigger: "纯并行执行"
-        - skill: using-git-worktrees
-          source: builtin
+        - skill: /using-git-worktrees
+          source: superpowers
           trigger: "工作树隔离"
 
     # QA cycling: omx/ultraqa is primary
@@ -327,7 +324,7 @@ routing_hints:
       message: "建议使用 /qa 进行浏览器测试"
 
     - keywords: ["bug", "错误", "调试", "不工作", "卡住了"]
-      suggest: builtin/systematic-debugging
+      suggest: gstack/investigate
       message: "建议先找根因再修复"
 
     - keywords: ["复杂", "很多文件", "麻烦"]
@@ -355,35 +352,6 @@ external_pack_template:
     - Run the skill security audit before first use.
 
 skills:
-  - id: systematic-debugging
-    namespace: builtin
-    entrypoint: skills/systematic-debugging/SKILL.md
-    intent: Find root cause before attempting fixes.
-    trigger_mode: mandatory
-    priority: P0
-    supported_targets:
-      claude-code: native-skill
-      opencode: native-skill
-    requires_tools:
-      - Read
-      - Grep
-      - Bash
-    safety_level: trusted_builtin
-
-  - id: verification-before-completion
-    namespace: builtin
-    entrypoint: skills/verification-before-completion/SKILL.md
-    intent: Require fresh verification evidence before claiming completion.
-    trigger_mode: mandatory
-    priority: P0
-    supported_targets:
-      claude-code: native-skill
-      opencode: native-skill
-    requires_tools:
-      - Read
-      - Bash
-    safety_level: trusted_builtin
-
   - id: session-end
     namespace: builtin
     entrypoint: skills/session-end/SKILL.md
@@ -463,7 +431,7 @@ skills:
 
   - id: superpowers/debug
     <<: *superpowers_base
-    intent: Advanced debugging workflows beyond systematic-debugging.
+    intent: Advanced debugging workflows for complex issues.
     trigger_mode: suggest
 
   - id: superpowers/architect
@@ -595,19 +563,6 @@ skills:
     requires_tools:
       - Read
       - Grep
-      - Bash
-    safety_level: trusted_builtin
-
-  - id: using-git-worktrees
-    namespace: builtin
-    entrypoint: skills/using-git-worktrees/SKILL.md
-    intent: Branch isolation using git worktrees for parallel task execution.
-    trigger_mode: suggest
-    priority: P1
-    supported_targets:
-      claude-code: native-skill
-      opencode: native-skill
-    requires_tools:
       - Bash
     safety_level: trusted_builtin
 

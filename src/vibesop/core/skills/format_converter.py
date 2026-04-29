@@ -235,7 +235,6 @@ class SuperpowersConverter(SkillFormatConverter):
             "refactor": "refactoring",
             "debugging": "debugging",
             "architect": "architecture",
-            "systematic-debugging": "debugging",
             "review": "code-review",
             "optimizing": "optimization",
         }

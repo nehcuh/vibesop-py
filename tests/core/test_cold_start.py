@@ -29,14 +29,14 @@ class TestColdStartStrategy:
         strategy = ColdStartStrategy()
         mapping = strategy.get_mapping_for_query("I need to debug this")
         assert mapping is not None
-        assert mapping.skill_id == "systematic-debugging"
+        assert mapping.skill_id == "gstack/investigate"
 
     def test_get_mapping_for_query_keyword_match(self) -> None:
         """Test query mapping by keyword."""
         strategy = ColdStartStrategy()
         mapping = strategy.get_mapping_for_query("修复一个 bug")
         assert mapping is not None
-        assert mapping.skill_id == "systematic-debugging"
+        assert mapping.skill_id == "gstack/investigate"
 
     def test_get_mapping_for_query_no_match(self) -> None:
         """Test query mapping returns None for unknown query."""
@@ -55,7 +55,7 @@ class TestColdStartStrategy:
         """Test priority skills retrieval."""
         strategy = ColdStartStrategy()
         skills = strategy.get_p0_skills()
-        assert "systematic-debugging" in skills
+        assert "gstack/investigate" in skills
 
     def test_get_namespace_priority_known(self) -> None:
         """Test namespace priority for known namespaces."""

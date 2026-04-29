@@ -22,7 +22,7 @@ class TriagePromptRegistry:
             "4. Return ONLY the skill ID. No explanation. No markdown.\n\n"
             "User request: {query}\n\n"
             "Available skills:\n{skills_summary}\n\n"
-            "Return ONLY the skill ID (e.g., gstack/review or systematic-debugging):\n"
+            "Return ONLY the skill ID (e.g., gstack/review or gstack/investigate):\n"
         ),
         "v2": (
             "You are a skill routing assistant. Your job is to select the single most appropriate "
@@ -50,10 +50,10 @@ class TriagePromptRegistry:
             "Common patterns:\n"
             "- 'review code', 'check PR' → gstack/review or superpowers/review\n"
             "- 'test this', 'QA' → gstack/qa (for browser testing) or superpowers/tdd (for test-writing)\n"
-            "- 'optimize', 'slow' → superpowers/optimize (performance) or systematic-debugging (if investigating)\n"
+            "- 'optimize', 'slow' → superpowers/optimize (performance) or gstack/investigate (if investigating)\n"
             "- 'design', 'architecture' → gstack/architect (system design) or gstack/plan-design-review (review)\n"
             "- 'refactor', 'clean up' → superpowers/refactor\n"
-            "- 'debug', 'error', 'broken' → systematic-debugging or gstack/investigate (complex cases)\n\n"
+            "- 'debug', 'error', 'broken' → gstack/investigate or superpowers/debug\n\n"
             "User request: {query}\n\n"
             "Available skills:\n{skills_summary}\n\n"
             "Respond with a JSON object (no markdown, no explanation):\n"

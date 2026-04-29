@@ -467,3 +467,14 @@ Lint: 0 errors ✅
 - **Key discovery**: Claude Code settings.json 中 hooks 必须使用 `matcher` + `hooks` 数组，permissions 中 `:*` 前缀匹配必须在模式末尾
 - **Next steps**: 重新生成 Claude Code 配置验证修复生效
 - **Recorded**: yes — 2 technical pitfalls
+
+### S4 (2026-04-29 15:00~15:30) 移除冗余 builtin 技能
+
+- 识别出 3 个从 superpowers 移植来的冗余内置技能: `systematic-debugging`, `verification-before-completion`, `using-git-worktrees`
+- 移除 `core/skills/` 中对应目录及 `.claude/skills/`、`.config/opencode/skills/` 中的副本
+- 路由重定向: `systematic-debugging` → `gstack/investigate`, `verification-before-completion` → `gstack/investigate`, `using-git-worktrees` → `superpowers/using-git-worktrees`
+- 更新 10 个文件的引用 (registry, policies, cold_start, recommender, format_converter, triage_prompts, tests)
+- 保留 `riper-workflow` 内置
+- 测试: 92 passed, 1 预存失败（无关于此更改）
+- **Next steps**: None
+- **Recorded**: yes — builtin skill 重复问题

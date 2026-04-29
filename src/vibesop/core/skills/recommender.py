@@ -64,7 +64,7 @@ class SkillRecommender:
             ("superpowers/architect", "System architecture design"),
         ],
         "default": [
-            ("systematic-debugging", "Systematic debugging for any project"),
+            ("gstack/investigate", "Systematic root-cause debugging"),
             ("gstack/review", "Pre-merge code review"),
             ("superpowers/tdd", "Test-driven development"),
         ],
