@@ -54,7 +54,7 @@ if [ -z "$QUERY" ] || [ "$(printf '%s' "$QUERY" | wc -m | tr -d ' ')" -lt 10 ]; 
 fi
 
 # Skip meta queries about VibeSOP itself
-if echo "$QUERY" | grep -qiE 'vibe\s+(route|skill|config)|why.*routing|how.*skill'; then
+if echo "$QUERY" | command grep -qiE 'vibe\s+(route|skill|config)|why.*routing|how.*skill'; then
     echo '{}'
     exit 0
 fi
@@ -79,7 +79,7 @@ fi
 # These return a text message to be shown as systemMessage.
 # /vibe-route{% if enable_orchestration %} and /vibe-orchestrate{% endif %} are handled below —
 # they need full structured routing results for the AI Agent to follow.
-if echo "$QUERY" | grep -qE '^/(vibe-)?(install|analyze|evaluate|list|help)'; then
+if echo "$QUERY" | command grep -qE '^/(vibe-)?(install|analyze|evaluate|list|help)'; then
     SLASH_RESULT=""
     if command -v vibe &> /dev/null; then
         SLASH_RESULT=$(_run_cmd vibe route $CONVERSATION_ARG --yes --json "$QUERY" 2>/dev/null || true)
@@ -99,7 +99,7 @@ fi
 # and let the underlying query go through normal routing so the full
 # result (with skill_id, execution_plan, etc.) is available for
 # structured injection by the platform adapter.
-if echo "$QUERY" | grep -qE '^/(vibe-route|slash-route{% if enable_orchestration %}|vibe-orchestrate|orchestrate{% endif %})\b'; then
+if echo "$QUERY" | command grep -qE '^/(vibe-route|slash-route{% if enable_orchestration %}|vibe-orchestrate|orchestrate{% endif %})\b'; then
     QUERY=$(echo "$QUERY" | sed -E 's/^\/[a-z-]+[[:space:]]*"?//; s/"$//')
     if [ -z "$QUERY" ]; then
         echo "{\"systemMessage\": \"⚠️  VibeSOP: this command requires a query.\"}"
@@ -109,7 +109,7 @@ fi
 
 {% if enable_explicit_overrides %}
 # Detect explicit skill overrides (bypass routing)
-OVERRIDE=$(echo "$QUERY" | grep -oE '(/[a-z-]+|@[a-z-]+|使用\s+[a-z-]+)' | head -1)
+OVERRIDE=$(echo "$QUERY" | command grep -owE '/[a-z-]+|@[a-z-]+|使用\s+[a-z-]+' | head -1)
 if [ -n "$OVERRIDE" ]; then
     SKILL_ID="${OVERRIDE#/}"
     SKILL_ID="${SKILL_ID#@}"

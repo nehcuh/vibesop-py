@@ -1045,3 +1045,29 @@ return value
 ```
 
 **File**: `src/vibesop/adapters/claude_code.py`
+
+---
+
+### ripgrep Alias Compatibility in Hook Scripts (2026-04-29)
+
+**Issue**: When users have `grep` aliased to `rg` (ripgrep), VibeSOP's `vibesop-route.sh` hook fails silently with `UserPromptSubmit hook error`. ripgrep doesn't fully support GNU grep's `-E` flag syntax and reports "unknown encoding" errors.
+
+**Root Cause**: Hook script uses bare `grep` command which respects user shell aliases. When `grep` → `rg` alias exists:
+1. `grep -E` throws error: "unknown encoding: (/[a-z-]+|@[a-z-]+)"
+2. `grep -oE` similarly fails on extended regex patterns
+3. Error is swallowed by `2>/dev/null`, leaving Claude Code with empty JSON output
+
+**Additional Bug**: Same script's regex `/[a-z-]+` falsely matches `docs/version_05.md` file path (extracts `/version` as a skill ID).
+
+**Solution**:
+1. Use `command grep` throughout hook script to bypass aliases
+2. Add `-w` (word) flag to only match complete words, preventing path segment matches
+3. Verify with system grep: `command -p grep --version`
+
+**Files**: `~/.claude/hooks/vibesop-route.sh` (installed hook)
+
+**Check Command**:
+```bash
+# Test if user has ripgrep alias
+type grep  # If "grep is an alias for rg", need fix
+```

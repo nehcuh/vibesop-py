@@ -424,6 +424,20 @@ Lint: 0 errors ✅
 
 ## Current Session
 
+### S1 (2026-04-29 00:35~00:45) ripgrep Hook 兼容性修复
+
+- **用户报告**: `UserPromptSubmit hook error` 在输入长中文 query 时出现
+- **根因分析**: 用户系统 `grep` 被别名化为 `rg` (ripgrep)，不完全兼容 GNU grep 的 `-E` 语法
+- **两个问题修复**:
+  1. 所有 `grep` 调用改为 `command grep` 绕过别名
+  2. 正则 `/[a-z-]+` 添加 `-w` 选项防止误匹配文件路径（如 `docs/version_05.md` → `/version`）
+- **修改文件**: `~/.claude/hooks/vibesop-route.sh`
+- **验证**: 修复后 hook 正确识别多意图并生成执行计划
+- **Next steps**: 用户重启会话测试验证
+- **Recorded**: yes — ripgrep 兼容性陷阱记录到 project-knowledge.md
+
+---
+
 ### S3 (2026-04-28 18:30~19:15) Hook Template Bug Fixes + CLI JSON Priority + Slash-Route Architecture Fix
 
 - **AGENTS.md `uv` Enforcement**: Added PYTHON RUNTIME ENFORCEMENT — all Python operations must use `uv`

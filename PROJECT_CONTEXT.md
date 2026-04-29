@@ -3,6 +3,31 @@
 ## Session Handoff
 
 <!-- handoff:start -->
+### 2026-04-29 00:45
+**Session**: ripgrep Hook 兼容性修复
+
+**Completed**:
+- 修复 `UserPromptSubmit hook error` — 用户系统 `grep` 别名为 `rg` (ripgrep) 导致兼容性问题
+- 根因: ripgrep 不完全支持 GNU grep 的 `-E` 扩展正则语法，报 "unknown encoding" 错误
+- 两个修复:
+  1. 所有 `grep` → `command grep` 绕过别名
+  2. 正则添加 `-w` 选项防止误匹配文件路径 (`docs/version_05.md` → `/version`)
+
+**Key Decisions**:
+- Hook 脚本必须使用 `command grep` 而非裸 `grep`，避免受用户 shell 别名影响
+- 匹配 skill ID 的正则应使用 `-w` (word) 选项，只匹配完整单词
+
+**Files Modified**:
+- ~/.claude/hooks/vibesop-route.sh — 4 处 `grep` → `command grep`，1 处添加 `-w` 选项
+
+**Test Status**: Hook 验证通过，正确识别多意图并生成执行计划
+
+**Next Steps**:
+- 用户重启会话测试验证
+- 考虑在 hook 生成模板中应用此修复
+
+---
+
 ### 2026-04-28 19:45
 **Session**: Fixed Hook JSON Output Bug (Rich Line Wrapping)
 
@@ -24,41 +49,4 @@
 
 **Next Steps**:
 - None — issue fully resolved
-
----
-
-### 2026-04-28 19:15
-**Session**: Hook Template Bug Fixes + Slash-Route Architecture Fix
-
-**Completed**:
-- Fixed 3 pre-existing hook template bugs (timeout 3→15, missing fi, --auto→--yes)
-- Added cross-platform timeout wrapper (_run_cmd: timeout/gtimeout/fallback)
-- Fixed `--json` CLI flag priority (JSON now outputs before Rich transparency rendering)
-- Fixed /vibe-route, /slash-route, /vibe-orchestrate to return full structured results (not just text)
-- Updated installed hooks: ~/.claude/hooks/vibesop-route.sh, ~/.config/opencode/hooks/vibesop-route.sh
-- Added PYTHON RUNTIME ENFORCEMENT to AGENTS.md (all Python must use `uv`)
-- Updated ROADMAP code lines metric to realistic ~60,000
-
-**Key Decisions**:
-- Route-like slash commands (/vibe-route, /vibe-orchestrate) strip prefix → normal routing pipeline
-- Info slash commands (/vibe-help, /vibe-list, /vibe-install) keep text-message behavior
-- Template conditionally renders "orchestrate" references to pass existing tests
-
-**Files Modified**:
-- src/vibesop/cli/main.py — JSON priority + route/orchestrate prefix stripping
-- src/vibesop/adapters/templates/shared/vibesop-route.sh.j2 — 3 bug fixes + cross-platform timeout
-- docs/ROADMAP.md — realistic metrics, version 5.3.0
-- AGENTS.md — PYTHON RUNTIME ENFORCEMENT section
-
-**Test Status**: 246 passed, 0 failed
-
-**Next Steps**:
-- Verify /slash-route works in Claude Code (UserPromptSubmit hook)
-- Commit all changes
-
----
-
-### 2026-04-28 17:00
-**Session**: VibeSOP Project Deep Analysis + Documentation Updates
-- Comprehensive project analysis; verified test coverage 74.03%; updated ROADMAP metrics; unified versions to 5.3.0
 <!-- handoff:end -->
