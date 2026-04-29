@@ -19,7 +19,7 @@ from typing import ClassVar
 
 from vibesop.constants import TRUSTED_PACKS
 from vibesop.core.skills.storage import SkillStorage
-from vibesop.installer.analyzer import RepoAnalyzer
+from vibesop.installer.analyzer import RepoAnalysis, RepoAnalyzer
 from vibesop.installer.planner import InstallPlanner
 from vibesop.security import SkillSecurityAuditor
 
@@ -202,12 +202,20 @@ class PackInstaller:
         self,
         pack_name: str,
         platforms: list[str] | None = None,
+        _analysis: RepoAnalysis | None = None,
     ) -> list[tuple[str, str]]:
-        """Create symlinks from platform directories to central storage.
+        """Create per-skill symlinks from platform directories to central storage.
+
+        For each SKILL.md found in the pack, creates a symlink in each platform
+        directory using flattened naming (e.g., gstack-review -> gstack/review/).
+
+        Pack-level symlinks are intentionally NOT created — only individual
+        skill symlinks, so the platform directory stays clean.
 
         Args:
             pack_name: Name of the pack
             platforms: Specific platforms to link (None = all)
+            _analysis: Repository analysis (reserved for future use)
 
         Returns:
             List of (platform, status) tuples
@@ -219,7 +227,6 @@ class PackInstaller:
         if not central_path.exists():
             return results
 
-        # Determine which platforms to link
         platforms_to_link = platforms or list(storage.PLATFORM_SKILLS_DIRS.keys())
 
         for platform in platforms_to_link:
@@ -228,42 +235,117 @@ class PackInstaller:
                 continue
 
             platform_dir = storage.PLATFORM_SKILLS_DIRS[platform]
-            platform_path = platform_dir / pack_name
 
             try:
                 platform_dir.mkdir(parents=True, exist_ok=True)
 
-                # If platform already has a real directory (legacy install), remove it
-                if platform_path.exists() and not platform_path.is_symlink():
-                    if platform_path.is_dir():
-                        shutil.rmtree(platform_path)
-                    else:
-                        platform_path.unlink()
+                skill_count = self._create_skill_symlinks(
+                    central_path, platform_dir, pack_name
+                )
 
-                # Create or update symlink
-                if platform_path.is_symlink():
-                    current_target = platform_path.resolve()
-                    if current_target == central_path.resolve():
-                        results.append((platform, f"Already linked to {platform}"))
-                        continue
-                    platform_path.unlink()
-
-                platform_path.symlink_to(central_path)
-                results.append((platform, f"Linked to {platform}"))
+                results.append(
+                    (platform, f"Linked to {platform} ({skill_count} skills)")
+                )
 
             except OSError:
-                # Fallback: copy if symlinks not supported
                 try:
-                    if platform_path.exists():
-                        if platform_path.is_symlink():
-                            platform_path.unlink()
-                        elif platform_path.is_dir():
-                            shutil.rmtree(platform_path)
-                        else:
-                            platform_path.unlink()
-                    shutil.copytree(central_path, platform_path)
-                    results.append((platform, f"Copied to {platform} (symlinks not supported)"))
+                    skill_count = self._copy_skill_dirs(
+                        central_path, platform_dir, pack_name
+                    )
+                    results.append(
+                        (platform, f"Copied to {platform} ({skill_count} skills, symlinks not supported)")
+                    )
                 except Exception as copy_err:
                     results.append((platform, f"Failed: {copy_err}"))
 
         return results
+
+    def _create_skill_symlinks(
+        self,
+        central_path: Path,
+        platform_dir: Path,
+        pack_name: str,
+    ) -> int:
+        """Create per-skill symlinks for each SKILL.md in the central path.
+
+        Creates flattened-name symlinks like:
+          platform_dir/gstack-review -> central_path/gstack/review/
+
+        Args:
+            central_path: Path to the pack in central storage
+            platform_dir: Target platform directory
+            pack_name: Name of the pack (used for flattened naming)
+
+        Returns:
+            Number of skill symlinks created
+        """
+        count = 0
+        for skill_file in central_path.rglob("SKILL.md"):
+            skill_dir = skill_file.parent
+            rel_path = skill_dir.relative_to(central_path)
+
+            # Flatten nested paths: gstack/review -> gstack-review
+            if str(rel_path) == ".":
+                flat_name = pack_name
+            else:
+                flat_name = pack_name + "-" + str(rel_path).replace("/", "-")
+
+            link_path = platform_dir / flat_name
+
+            if link_path.exists():
+                if link_path.is_symlink():
+                    current_target = link_path.resolve()
+                    if current_target == skill_dir.resolve():
+                        count += 1
+                        continue
+                    link_path.unlink()
+                elif link_path.is_dir():
+                    shutil.rmtree(link_path)
+                else:
+                    link_path.unlink()
+
+            link_path.symlink_to(skill_dir)
+            count += 1
+
+        return count
+
+    def _copy_skill_dirs(
+        self,
+        central_path: Path,
+        platform_dir: Path,
+        pack_name: str,
+    ) -> int:
+        """Copy skill directories to platform (fallback when symlinks not supported).
+
+        Args:
+            central_path: Path to the pack in central storage
+            platform_dir: Target platform directory
+            pack_name: Name of the pack (used for flattened naming)
+
+        Returns:
+            Number of skill directories copied
+        """
+        count = 0
+        for skill_file in central_path.rglob("SKILL.md"):
+            skill_dir = skill_file.parent
+            rel_path = skill_dir.relative_to(central_path)
+
+            if str(rel_path) == ".":
+                flat_name = pack_name
+            else:
+                flat_name = pack_name + "-" + str(rel_path).replace("/", "-")
+
+            dest_path = platform_dir / flat_name
+
+            if dest_path.exists():
+                if dest_path.is_symlink():
+                    dest_path.unlink()
+                elif dest_path.is_dir():
+                    shutil.rmtree(dest_path)
+                else:
+                    dest_path.unlink()
+
+            shutil.copytree(skill_dir, dest_path)
+            count += 1
+
+        return count
