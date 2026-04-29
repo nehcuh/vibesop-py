@@ -6,7 +6,7 @@ and post-install security auditing.
 
 Architecture:
     1. Clone to central storage: ~/.config/skills/<pack>/
-    2. Create symlinks in platform directories: ~/.claude/skills/<pack> -> ~/.config/skills/<pack>/
+    2. Create per-skill symlinks: ~/.kimi/skills/<pack>-<skill> -> ~/.config/skills/<pack>/<skill>/
     3. Audit installed skills
 """
 
@@ -19,7 +19,7 @@ from typing import ClassVar
 
 from vibesop.constants import TRUSTED_PACKS
 from vibesop.core.skills.storage import SkillStorage
-from vibesop.installer.analyzer import RepoAnalysis, RepoAnalyzer
+from vibesop.installer.analyzer import RepoAnalyzer
 from vibesop.installer.planner import InstallPlanner
 from vibesop.security import SkillSecurityAuditor
 
@@ -202,7 +202,6 @@ class PackInstaller:
         self,
         pack_name: str,
         platforms: list[str] | None = None,
-        _analysis: RepoAnalysis | None = None,
     ) -> list[tuple[str, str]]:
         """Create per-skill symlinks from platform directories to central storage.
 
@@ -260,6 +259,18 @@ class PackInstaller:
 
         return results
 
+    @staticmethod
+    def _flatten_skill_name(pack_name: str, rel_path: str) -> str:
+        """Convert a relative skill path to a flattened directory name.
+
+        Examples:
+            review -> gstack-review
+            skills/ralph -> omx-skills-ralph
+        """
+        if str(rel_path) == ".":
+            return pack_name
+        return pack_name + "-" + str(rel_path).replace("/", "-")
+
     def _create_skill_symlinks(
         self,
         central_path: Path,
@@ -284,11 +295,7 @@ class PackInstaller:
             skill_dir = skill_file.parent
             rel_path = skill_dir.relative_to(central_path)
 
-            # Flatten nested paths: gstack/review -> gstack-review
-            if str(rel_path) == ".":
-                flat_name = pack_name
-            else:
-                flat_name = pack_name + "-" + str(rel_path).replace("/", "-")
+            flat_name = self._flatten_skill_name(pack_name, str(rel_path))
 
             link_path = platform_dir / flat_name
 
@@ -330,10 +337,7 @@ class PackInstaller:
             skill_dir = skill_file.parent
             rel_path = skill_dir.relative_to(central_path)
 
-            if str(rel_path) == ".":
-                flat_name = pack_name
-            else:
-                flat_name = pack_name + "-" + str(rel_path).replace("/", "-")
+            flat_name = self._flatten_skill_name(pack_name, str(rel_path))
 
             dest_path = platform_dir / flat_name
 
