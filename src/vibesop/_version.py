@@ -12,7 +12,7 @@ Version Format: MAJOR.MINOR.PATCH
 # Version components
 MAJOR = 5
 MINOR = 3
-PATCH = 0
+PATCH = 2
 
 # Version metadata
 VERSION_SUFFIX = ""  # e.g., "a1", "b1", "rc1", "" for stable
