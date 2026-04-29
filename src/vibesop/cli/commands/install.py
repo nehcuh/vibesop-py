@@ -29,6 +29,7 @@ from rich.table import Table
 
 from vibesop.constants import TRUSTED_PACKS
 from vibesop.core.skills.external_loader import ExternalSkillLoader
+from vibesop.core.skills.trust import TrustStore
 from vibesop.installer.pack_installer import PackInstaller
 
 console = Console()
@@ -151,6 +152,39 @@ def _auto_install(force: bool, skip_verify: bool) -> None:
     console.print()
 
 
+def _prompt_trust_if_untrusted(
+    pack_name: str,
+    pack_url: str | None,
+    is_url: bool,
+    audit_msg: str,
+) -> None:
+    """Prompt user to trust a pack/source if not already trusted.
+
+    Called after successful installation of a non-standard (URL) pack
+    that may have security audit warnings.
+    """
+    store = TrustStore()
+
+    if is_url and pack_url:
+        if store.is_trusted_source(pack_url):
+            return
+        if "WARN" in audit_msg:
+            console.print(
+                f"[yellow]Security audit found warnings for [bold]{pack_name}[/bold][/yellow]\n"
+                f"[yellow]Source: [bold]{pack_url}[/bold][/yellow]\n"
+                f"[dim]Trust this source with:[/dim] [cyan]vibe trust {pack_url}[/cyan]\n"
+            )
+        elif pack_url not in TRUSTED_PACKS.values():
+            console.print(
+                f"[dim]New source detected. Trust it with:[/dim] [cyan]vibe trust {pack_url}[/cyan]\n"
+            )
+    elif pack_url and pack_url not in TRUSTED_PACKS.values():
+        if not store.is_trusted_pack(pack_name) and not store.is_trusted_source(pack_url):
+            console.print(
+                f"[dim]New source detected. Trust it with:[/dim] [cyan]vibe trust {pack_url}[/cyan]\n"
+            )
+
+
 def _install_pack(
     name_or_url: str,
     force: bool,
@@ -232,6 +266,8 @@ def _install_pack(
                     )
                 else:
                     console.print("[yellow]⚠ No skills discovered after install[/yellow]\n")
+
+            _prompt_trust_if_untrusted(pack_name, pack_url, is_url, msg)
         return "success"
 
     if not quiet:

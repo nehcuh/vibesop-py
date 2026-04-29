@@ -30,6 +30,7 @@ from vibesop.cli.commands import (
     skill_cmd,
     snapshot_cmd,
 )
+from vibesop.cli.commands import trust as trust_module
 from vibesop.cli.commands.status_cmd import status as status_command
 from vibesop.cli.confirmation import _needs_confirmation, _run_confirmation_flow
 from vibesop.cli.feedback import _collect_feedback
@@ -80,6 +81,7 @@ app.add_typer(badges_cmd.app, name="badges")
 app.add_typer(market_cmd.app, name="market")
 app.add_typer(skill_cmd.app, name="skill")
 app.add_typer(snapshot_cmd.app, name="snapshot")
+app.command(name="trust")(trust_module.trust)
 
 
 @app.command()
