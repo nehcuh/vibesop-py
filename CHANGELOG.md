@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [5.3.3] - 2026-04-29
+
+### Quality Convergence Sprint
+
+- **Fixed 12 hard test failures** across integration, e2e, and unit test suites
+- **Fixed integer overflow** in `PreferenceLearner` — added `MAX_ASSOCIATION_COUNT` (1M) and `MIN_ASSOCIATION_COUNT` (-100K) bounds to prevent 4300-digit overflow
+- **Removed corrupted 13MB** `.vibe/preferences.json` production data
+- **Fixed flaky test** `test_callbacks_invoked_for_single_intent` with `@pytest.mark.flaky(reruns=2)`
+- **Added 24 new unit tests** for `SkillPublisher` (publish/search/validate/frontmatter/issue-body parsing)
+- **Fixed xdist determinism** — `PARALLEL_KEYWORDS` changed from `set()` to `tuple()`
+- **Updated documentation consistency** — README, PROJECT_STATUS, ROADMAP, three-layers (coverage 74%→~25%, 7-layer→10-layer routing, 2044→2178 tests)
+- **Recorded 8 technical pitfalls + 3 reusable patterns** to `memory/project-knowledge.md`
+
 ### Test Reliability & Performance Optimization
 
 #### Phase 1 — Stop the Bleeding
