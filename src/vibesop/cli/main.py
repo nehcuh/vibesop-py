@@ -28,7 +28,6 @@ from vibesop.cli.commands import (
     market_cmd,
     matcher_cmd,
     plan_cmd,
-    skill_cmd,
     snapshot_cmd,
 )
 from vibesop.cli.commands import trust as trust_module
@@ -76,7 +75,6 @@ app.add_typer(matcher_cmd.app, name="matcher")
 app.add_typer(deviation_cmd.app, name="deviation")
 app.add_typer(badges_cmd.app, name="badges")
 app.add_typer(market_cmd.app, name="market")
-app.add_typer(skill_cmd.app, name="skill")
 app.add_typer(snapshot_cmd.app, name="snapshot")
 app.command(name="trust")(trust_module.trust)
 

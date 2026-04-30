@@ -17,6 +17,12 @@ from vibesop.cli.commands import (
     build as build_mod,
 )
 from vibesop.cli.commands import (
+    cleanup_cmd as cleanup_mod,
+)
+from vibesop.cli.commands import (
+    community_cmd as community_mod,
+)
+from vibesop.cli.commands import (
     config as config_mod,
 )
 from vibesop.cli.commands import (
@@ -45,6 +51,9 @@ from vibesop.cli.commands import (
 )
 from vibesop.cli.commands import (
     skill_add as skill_add_mod,
+)
+from vibesop.cli.commands import (
+    skill_cmd as skill_cmd_mod,
 )
 from vibesop.cli.commands import (
     skill_craft as skill_craft_mod,
@@ -126,6 +135,11 @@ def register(app: typer.Typer) -> None:
     skills_app.command("rate")(skills_rate_mod.rate)
     skills_app.command("ratings")(skills_rate_mod.ratings)
     skills_app.command("recommended")(skills_recommended_mod.recommended)
+    skills_app.command("stale")(skill_cmd_mod.stale)
+    skills_app.command("end-check")(skill_cmd_mod.end_check)
+    skills_app.command("share")(community_mod.share)
+    skills_app.command("discover")(community_mod.discover)
+    skills_app.command("cleanup")(cleanup_mod.cleanup)
 
     # Platform verification
     app.command()(verify_mod.verify)
