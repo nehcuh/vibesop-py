@@ -4,10 +4,10 @@ Records and analyzes when Agent skips routing recommendations.
 """
 
 import json
-from typing import Any
 import logging
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 from vibesop.core.models import RoutingResult
 

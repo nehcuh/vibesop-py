@@ -5,12 +5,12 @@ exposed via `vibe route-stats`.
 """
 
 from __future__ import annotations
-from typing import Any
 
 import time
 from collections import deque
 from dataclasses import dataclass, field
 from threading import Lock
+from typing import Any
 
 
 @dataclass

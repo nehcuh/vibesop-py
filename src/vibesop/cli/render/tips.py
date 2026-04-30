@@ -10,11 +10,11 @@ Features:
 """
 
 from __future__ import annotations
-from typing import Any
 
 import hashlib
 import logging
 from pathlib import Path
+from typing import Any
 
 from rich.console import Console
 

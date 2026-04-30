@@ -1,6 +1,6 @@
 import re
-from typing import Any
 from pathlib import Path
+from typing import Any
 
 _AI_SLOP_PATTERNS: list[tuple[str, str]] = [
     (r"#.*(?:obvious|simple|straightforward)\b", "over-explanatory comment"),
