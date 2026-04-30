@@ -17,8 +17,8 @@ from typing import Any
 # Pattern: !skill_id at the start of query
 EXPLICIT_PREFIX_PATTERN = re.compile(r"^!(\S+)\s+(.*)")
 
-# Pattern: verb followed by skill identifier
-EXPLICIT_VERB_PATTERN = re.compile(r"(?:use|run|execute|try)\s+([\w\-/]+)", re.IGNORECASE)
+# Pattern: verb followed by skill identifier (may include namespace:skill or prefix:id)
+EXPLICIT_VERB_PATTERN = re.compile(r"(?:use|run|execute|try)\s+([\w\-/:]+)", re.IGNORECASE)
 
 # Pattern: skill_id anywhere in query (must look like a valid skill ID)
 SKILL_ID_PATTERN = re.compile(r"\b([\w\-]+/[\w\-]+|[\w\-]{3,})\b")
@@ -51,6 +51,12 @@ def check_explicit_override(
         skill_id = match.group(1)
         if _is_valid_skill(skill_id, candidates):
             return skill_id, query
+        # If the captured text contains a colon, try the part after colon
+        # (e.g., "use skill:systematic-debugging" → "systematic-debugging")
+        if ":" in skill_id:
+            after_colon = skill_id.split(":", 1)[1]
+            if _is_valid_skill(after_colon, candidates):
+                return after_colon, query
 
     return None, None
 
