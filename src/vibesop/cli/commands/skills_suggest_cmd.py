@@ -72,7 +72,7 @@ def suggestions(
         tags_str = f" [dim]{', '.join(s.context_tags)}[/dim]" if s.context_tags else ""
 
         console.print(
-            f"[bold cyan]{i}.[/bold cyan] [bold]{s.suggested_name}[/bold cyan] (confidence: {s.confidence:.0%})"
+            f"[bold cyan]{i}.[/bold cyan] [bold]{s.suggested_name}[/bold] (confidence: {s.confidence:.0%})"
         )
         console.print(f"    Pattern: {steps_str}")
         console.print(

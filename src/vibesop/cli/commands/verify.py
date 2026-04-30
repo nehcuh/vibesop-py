@@ -20,13 +20,14 @@ Examples:
 """
 
 import shutil
+from typing import Any
 from pathlib import Path
 
 import typer
 from rich.console import Console
 from rich.table import Table
 
-PLATFORM_CONFIGS: dict[str, dict] = {
+PLATFORM_CONFIGS: dict[str, dict[str, Any]] = {
     "claude-code": {
         "name": "Claude Code",
         "config_dir": Path.home() / ".claude",
@@ -94,7 +95,7 @@ def verify(
         platforms_to_check = [platform]
 
     all_pass = True
-    overall_results: list[tuple[str, str, list[dict]]] = []
+    overall_results: list[tuple[str, str, list[dict[str, Any]]]] = []
 
     for plat in platforms_to_check:
         results = _check_platform(plat)
@@ -109,11 +110,11 @@ def verify(
         raise typer.Exit(1)
 
 
-def _check_platform(platform: str) -> list[dict]:
+def _check_platform(platform: str) -> list[dict[str, Any]]:
     config = PLATFORM_CONFIGS[platform]
     config_dir = config["config_dir"]
     project_root = Path.cwd()
-    results: list[dict] = []
+    results: list[dict[str, Any]] = []
 
     for check_id, check_desc in config["checks"].items():
         result = {"id": check_id, "description": check_desc, "pass": False, "detail": ""}
@@ -235,7 +236,7 @@ def _check_platform(platform: str) -> list[dict]:
     return results
 
 
-def _render_results(overall_results: list[tuple[str, str, list[dict]]], verbose: bool) -> None:
+def _render_results(overall_results: list[tuple[str, str, list[dict[str, Any]]]], verbose: bool) -> None:
     console.print(f"\n[bold cyan]🔍 Configuration Verification[/bold cyan]\n{'=' * 40}\n")
 
     vibe_available = shutil.which("vibe") is not None

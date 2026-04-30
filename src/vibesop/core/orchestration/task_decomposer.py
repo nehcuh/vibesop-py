@@ -64,6 +64,9 @@ class TaskDecomposer:
     def _llm_decompose(self, query: str, skills: list[str] | None = None) -> list[SubTask]:
         """Call LLM to decompose query."""
         prompt = self._build_prompt(query, skills)
+        if self._llm is None:
+            logger.warning("LLM not initialized for task decomposition")
+            return []
         response = self._llm.call(prompt, max_tokens=500, temperature=0.1)
         content = getattr(response, "content", str(response))
 

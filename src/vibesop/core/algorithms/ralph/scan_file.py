@@ -1,4 +1,5 @@
 import re
+from typing import Any
 from pathlib import Path
 
 _AI_SLOP_PATTERNS: list[tuple[str, str]] = [
@@ -21,7 +22,7 @@ def scan_file(
     filepath: Path | str,
     *,
     max_slops: int = 20,
-) -> dict:
+) -> dict[str, Any]:
     """Scan a file for AI slop patterns (deslop pass).
 
     Detects common patterns in AI-generated code:
@@ -45,7 +46,7 @@ def scan_file(
 
     content = p.read_text(errors="replace")
 
-    findings: list[dict] = []
+    findings: list[dict[str, Any]] = []
     for pattern, kind in _AI_SLOP_PATTERNS:
         for match in re.finditer(pattern, content):
             line_num = content[: match.start()].count("\n") + 1

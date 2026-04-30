@@ -6,6 +6,7 @@ Usage:
 """
 
 from __future__ import annotations
+from typing import Any
 
 import json
 import logging
@@ -48,7 +49,7 @@ def _open_issue_form(
 def _fetch_community_skills(
     label: str = "skill-share",
     per_page: int = 20,
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     """Fetch community skill issues from GitHub API."""
     token = os.environ.get("GITHUB_TOKEN", os.environ.get("GH_TOKEN", ""))
 

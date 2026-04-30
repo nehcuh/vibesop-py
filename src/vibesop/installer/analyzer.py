@@ -96,6 +96,16 @@ class RepoAnalyzer:
                 if (tmpdir_path / script_name).exists():
                     result.setup_scripts.append(script_name)
 
+            # Detect post-install build scripts (e.g., .tmpl compilation)
+            for build_script in (
+                ".vibesop-build",
+                "BUILD.sh",
+                "setup.sh",
+            ):
+                script_path = tmpdir_path / build_script
+                if script_path.exists() and script_path.is_file():
+                    result.setup_scripts.append(build_script)
+
             # Infer namespace from first skill or directory structure
             if result.skill_files:
                 meta = parse_skill_md(result.skill_files[0])

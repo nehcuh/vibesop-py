@@ -49,10 +49,7 @@ class PlanTracker:
 
         for step in plan.steps:
             if step.step_id == step_id:
-                if isinstance(status, StepStatus):
-                    step.status = status
-                else:
-                    step.status = StepStatus(status)
+                step.status = status if isinstance(status, StepStatus) else StepStatus(status)  # pyright: ignore[reportUnnecessaryIsInstance]
                 if result_summary is not None:
                     step.result_summary = result_summary
                 break

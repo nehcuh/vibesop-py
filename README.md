@@ -7,7 +7,7 @@
 [![Python](https://img.shields.io/badge/Python-3.12+-blue.svg)](https://www.python.org/downloads/)
 [![Ruff](https://img.shields.io/badge/Ruff-Enabled-black.svg)](https://github.com/astral-sh/ruff)
 [![Coverage](https://img.shields.io/badge/Coverage-~25%25-yellow.svg)]()
-[![Version](https://img.shields.io/badge/Version-5.3.0-blue.svg)](https://github.com/nehcuh/vibesop-py)
+[![Version](https://img.shields.io/badge/Version-5.3.2-blue.svg)](https://github.com/nehcuh/vibesop-py)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 ---

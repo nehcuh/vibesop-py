@@ -71,7 +71,12 @@ class RouterContextMixin:
     def _save_session_state(
         self, result: RoutingResult, _context: RoutingContext | None
     ) -> None:
-        """Persist session state after routing."""
+        """Persist session state after routing, including reroute check.
+
+        After saving the current routing decision as session state, checks
+        whether a context shift has occurred (e.g., from debugging to planning)
+        and persists a reroute suggestion if the new intent differs significantly.
+        """
         host = cast("_ContextHost", self)
         if not host._config.session_aware:
             return
@@ -79,9 +84,22 @@ class RouterContextMixin:
         try:
             session = self._get_session_context()
             if result.has_match and result.primary is not None:
-                session.set_current_skill(result.primary.skill_id)
-                session.record_route_decision(result.query, result.primary.skill_id)
-            # Note: fallback/no-match does NOT erase current_skill — preserves context
+                current_skill = session._current_skill
+                new_skill = result.primary.skill_id
+
+                session.set_current_skill(new_skill)
+                session.record_route_decision(result.query, new_skill)
+
+                if current_skill and current_skill != new_skill:
+                    suggestion = session.check_reroute_needed(result.query)
+                    if suggestion.should_reroute:
+                        result.primary.metadata["reroute_suggestion"] = {
+                            "from_skill": current_skill,
+                            "to_skill": suggestion.recommended_skill,
+                            "confidence": suggestion.confidence,
+                            "reason": suggestion.reason,
+                        }
+
             session.save()
         except (OSError, ValueError, RuntimeError) as e:
             logger.debug("Failed to save session state: %s", e)

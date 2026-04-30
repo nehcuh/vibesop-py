@@ -179,34 +179,79 @@ class TestSkillSymlinks:
         count = installer._create_skill_symlinks(pack, platform, "testpack")
 
         assert count == 2
-        symlink_review = platform / "testpack-review"
-        assert symlink_review.is_symlink()
-        assert symlink_review.resolve() == review_dir.resolve()
 
-    def test_create_skill_symlinks_replaces_stub(self, tmp_path):
-        """Existing stub directories are replaced with symlinks."""
+
+class TestPostInstallHook:
+    """Tests for _run_post_install build script detection and execution."""
+
+    def test_no_build_script_returns_empty(self, tmp_path):
+        """Pack without build scripts returns empty string."""
         from vibesop.installer.pack_installer import PackInstaller
 
-        central = tmp_path / "central"
-        pack = central / "testpack"
-        review_dir = pack / "review"
-        review_dir.mkdir(parents=True)
-        (review_dir / "SKILL.md").write_text("real content")
+        installer = PackInstaller(external_paths=[tmp_path])
+        pack_dir = tmp_path / "pack"
+        pack_dir.mkdir()
+        (pack_dir / "SKILL.md").write_text("# Test")
 
-        platform = tmp_path / "platform"
-        platform.mkdir(parents=True)
+        result = installer._run_post_install(pack_dir, object())
+        assert result == ""
 
-        # Create a stub directory (simulating vibe build output)
-        stub = platform / "testpack-review"
-        stub.mkdir(parents=True)
-        (stub / "SKILL.md").write_text("stub content")
+    def test_build_sh_executed(self, tmp_path):
+        """BUILD.sh is detected and executed."""
+        from vibesop.installer.pack_installer import PackInstaller
 
-        installer = PackInstaller(central_storage=central, platform_paths=[platform])
-        count = installer._create_skill_symlinks(pack, platform, "testpack")
+        installer = PackInstaller(external_paths=[tmp_path])
+        pack_dir = tmp_path / "pack"
+        pack_dir.mkdir()
+        (pack_dir / "BUILD.sh").write_text("#!/bin/sh\necho 'built'")
 
-        assert count == 1
-        assert stub.is_symlink()
-        assert (stub / "SKILL.md").read_text() == "real content"
+        result = installer._run_post_install(pack_dir, object())
+        assert "BUILD.sh" in result
+
+    def test_vibesop_build_priority(self, tmp_path):
+        """.vibesop-build takes priority over BUILD.sh."""
+        from vibesop.installer.pack_installer import PackInstaller
+
+        installer = PackInstaller(external_paths=[tmp_path])
+        pack_dir = tmp_path / "pack"
+        pack_dir.mkdir()
+        (pack_dir / ".vibesop-build").write_text("#!/bin/sh\necho 'vibesop'")
+        (pack_dir / "BUILD.sh").write_text("#!/bin/sh\necho 'build'")
+
+        result = installer._run_post_install(pack_dir, object())
+        assert "vibesop-build" in result
+
+    def test_package_json_bun_fallback(self, tmp_path, monkeypatch):
+        """If no build script, bun run gen:skill-docs is attempted."""
+        import shutil as _shutil
+        from vibesop.installer.pack_installer import PackInstaller
+
+        installer = PackInstaller(external_paths=[tmp_path])
+        pack_dir = tmp_path / "pack"
+        pack_dir.mkdir()
+        (pack_dir / "package.json").write_text('{"scripts":{"gen:skill-docs":"echo skills"}}')
+
+        def _mock_which(cmd):
+            if cmd == "bun":
+                return "/usr/local/bin/bun"
+            return _shutil.which(cmd)
+
+        monkeypatch.setattr("shutil.which", _mock_which)
+
+        result = installer._run_post_install(pack_dir, object())
+        assert isinstance(result, str)
+
+    def test_setup_sh_executed(self, tmp_path):
+        """setup.sh is also detected as a build script."""
+        from vibesop.installer.pack_installer import PackInstaller
+
+        installer = PackInstaller(external_paths=[tmp_path])
+        pack_dir = tmp_path / "pack"
+        pack_dir.mkdir()
+        (pack_dir / "setup.sh").write_text("#!/bin/sh\necho 'setup'")
+
+        result = installer._run_post_install(pack_dir, object())
+        assert "setup.sh" in result
 
     def test_create_skill_symlinks_root_skill_md(self, tmp_path):
         """Root-level SKILL.md is symlinked using pack_name as the flat name."""

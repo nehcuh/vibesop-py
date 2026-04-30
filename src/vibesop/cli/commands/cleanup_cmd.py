@@ -7,6 +7,7 @@ Usage:
 """
 
 from __future__ import annotations
+from typing import Any
 
 from pathlib import Path
 
@@ -19,7 +20,7 @@ from rich.table import Table
 console = Console()
 
 
-def _run_feedback_analysis(project_root: Path) -> dict:
+def _run_feedback_analysis(project_root: Path) -> dict[str, Any]:
     """Run feedback analysis and return categorized suggestions."""
     from vibesop.core.skills.feedback_loop import FeedbackLoop
 
@@ -40,9 +41,9 @@ def _run_feedback_analysis(project_root: Path) -> dict:
 
 
 def _render_cleanup_table(
-    deprecate: list,
-    archive: list,
-    warn: list,
+    deprecate: list[str],
+    archive: list[str],
+    warn: list[str],
 ) -> Table:
     """Render a table of skills needing attention."""
     table = Table(title="Skills Needing Attention", show_header=True)

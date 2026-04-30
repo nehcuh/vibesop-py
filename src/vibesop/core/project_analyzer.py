@@ -254,6 +254,8 @@ class ProjectAnalyzer:
             boost += 0.05
 
         # Boost if skill keywords mention any detected tech stack
+        if profile.tech_stack is None:
+            return boost
         for tech in profile.tech_stack:
             if tech in skill_text:
                 boost += 0.03

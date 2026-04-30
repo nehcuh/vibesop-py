@@ -20,7 +20,7 @@ from vibesop.core.matching import RoutingContext
 from vibesop.core.routing import UnifiedRouter
 
 if TYPE_CHECKING:
-    from vibesop.core.models import RoutingResult
+    from vibesop.core.models import OrchestrationResult
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +47,7 @@ class RoutingService:
         self,
         query: str,
         context: RoutingContext | None = None,
-    ) -> RoutingResult:
+    ) -> OrchestrationResult:
         """Route a query to the best matching skill.
 
         Args:
@@ -55,7 +55,7 @@ class RoutingService:
             context: Optional routing context
 
         Returns:
-            RoutingResult with matched skill and metadata
+            OrchestrationResult with matched skill and metadata
         """
         if context is None:
             context = RoutingContext()

@@ -33,7 +33,7 @@ def _get_storage_path() -> Path:
 
 
 @app.callback(invoke_without_command=True)
-def _instinct_overview(ctx: typer.Context) -> None:
+def _instinct_overview(ctx: typer.Context) -> None:  # pyright: ignore[reportUnusedFunction]
     if ctx.invoked_subcommand is not None:
         return
 

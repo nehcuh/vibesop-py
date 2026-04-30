@@ -208,9 +208,9 @@ conflict_resolution:
       override_keywords:
         - "用 superpowers"
 
-    # Planning: builtin default, gstack for specific angles
+    # Planning: builtin fallback, gstack/omx for specific angles
     - scenario: planning
-      primary: planning-with-files
+      primary: riper-workflow
       primary_source: builtin
       alternatives:
         - skill: /plan-ceo-review
@@ -280,9 +280,6 @@ conflict_resolution:
       primary: omx/ralplan
       primary_source: omx
       alternatives:
-        - skill: planning-with-files
-          source: builtin
-          trigger: "文件规划"
         - skill: gstack/plan-eng-review
           source: gstack
           trigger: "架构审查"
@@ -328,7 +325,7 @@ routing_hints:
       message: "建议先找根因再修复"
 
     - keywords: ["复杂", "很多文件", "麻烦"]
-      suggest: builtin/planning-with-files
+      suggest: builtin/riper-workflow
       message: "复杂任务建议先制定详细计划"
 
     - keywords: ["实验", "优化", "迭代", "autonomous", "experiment", "循环优化", "自主实验"]
@@ -367,22 +364,6 @@ skills:
       - Bash
     safety_level: trusted_builtin
 
-  - id: planning-with-files
-    namespace: builtin
-    entrypoint: skills/planning-with-files/SKILL.md
-    intent: Use persistent files as working memory for complex multi-step tasks.
-    trigger_mode: suggest
-    priority: P1
-    supported_targets:
-      claude-code: native-skill
-      opencode: native-skill
-    requires_tools:
-      - Read
-      - Write
-      - Edit
-      - Grep
-      - Bash
-    safety_level: trusted_builtin
 
   - id: experience-evolution
     namespace: builtin
@@ -667,17 +648,6 @@ skills:
     command: "/vibe-install"
     safety_level: trusted_builtin
 
-  - id: slash-analyze
-    namespace: builtin
-    entrypoint: vibesop.core.skills.slash_commands
-    intent: Deep project architecture and tech stack analysis. Use when you need to understand the project structure.
-    trigger_mode: manual
-    priority: P0
-    supported_targets:
-      claude-code: slash-command
-      opencode: slash-command
-    command: "/vibe-analyze"
-    safety_level: trusted_builtin
 
   - id: slash-evaluate
     namespace: builtin

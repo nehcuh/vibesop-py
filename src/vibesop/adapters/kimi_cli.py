@@ -412,15 +412,28 @@ class KimiCliAdapter(PlatformAdapter):
 
         installed_path = is_pack_installed(skill_id)
         if installed_path:
-            if skill_dir.exists() and not skill_dir.is_symlink():
+            resolved_installed = installed_path.resolve()
+
+            if (
+                skill_dir.is_symlink()
+                and skill_dir.exists()
+                and skill_dir.resolve() == resolved_installed
+            ):
+                result.add_file(skill_output_path)
+                return
+
+            if skill_dir.is_symlink():
+                skill_dir.unlink(missing_ok=True)
+            elif skill_dir.exists():
                 shutil.rmtree(skill_dir)
+
             try:
-                skill_dir.symlink_to(installed_path, target_is_directory=True)
-                result.add_file(skill_dir / "SKILL.md")
+                skill_dir.symlink_to(resolved_installed, target_is_directory=True)
+                result.add_file(skill_output_path)
                 return
             except OSError:
                 try:
-                    shutil.copytree(installed_path, skill_dir)
+                    shutil.copytree(resolved_installed, skill_dir)
                     result.add_file(skill_output_path)
                     return
                 except Exception:
@@ -823,8 +836,8 @@ class KimiCliAdapter(PlatformAdapter):
                 platform="kimi-cli",
                 platform_name="Kimi CLI",
                 purpose="Auto-routing via [[hooks]] in config.toml",
-                enable_explicit_overrides=False,
-                enable_orchestration=False,
+                enable_explicit_overrides=True,
+                enable_orchestration=True,
                 include_additional_context=True,
                 no_match_message=True,
             )

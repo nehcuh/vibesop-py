@@ -250,8 +250,16 @@ class SessionContext:
                     current_skill=self._current_skill,
                 )
 
-            new_skill = routing_result.primary.skill_id
-            confidence = routing_result.primary.confidence
+            primary = routing_result.primary
+            if primary is None:
+                return RoutingSuggestion(
+                    should_reroute=False,
+                    reason="No primary match available",
+                    current_skill=self._current_skill,
+                )
+
+            new_skill = primary.skill_id
+            confidence = primary.confidence
 
             # Check if different from current skill
             if new_skill == self._current_skill:

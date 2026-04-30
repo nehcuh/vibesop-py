@@ -151,3 +151,115 @@ class TestClaudeCodeHookRendering:
         content = (tmp_path / "hooks" / "vibesop-route.sh").read_text()
         assert "EXPLICIT SKILL" in content, "Explicit override output missing"
         assert "OVERRIDE" in content, "Override detection missing"
+
+
+class TestSkillContentRender:
+    """Tests for _render_skill_content symlink preservation fix.
+
+    Verifies that external pack skill symlinks are NOT overwritten
+    by the thin Jinja2 template on subsequent builds.
+    """
+
+    def test_symlink_preserved_on_second_build(self, monkeypatch, tmp_path):
+        """Symlink to installed pack must be preserved on re-build."""
+        from vibesop.adapters.models import Manifest, ManifestMetadata
+        from vibesop.adapters.claude_code import ClaudeCodeAdapter
+
+        adapter = ClaudeCodeAdapter()
+        output_dir = tmp_path / "output"
+        skill_dir = output_dir / "skills" / "gstack-review"
+        skill_dir.mkdir(parents=True)
+
+        installed_dir = tmp_path / "installed"
+        installed_dir.mkdir(parents=True)
+        (installed_dir / "SKILL.md").write_text("# Full Review Skill\n\nExecute review flow.")
+
+        monkeypatch.setattr(
+            "vibesop.adapters._shared.is_pack_installed",
+            lambda _: installed_dir,
+        )
+
+        class _Skill:
+            id = "gstack/review"
+            namespace = "gstack"
+            name = "GStack Review"
+            description = "Code review"
+            version = "1.0"
+            skill_type = "standard"
+            tags = ["review"]
+            trigger_when = "When asked to review code"
+
+        skill = _Skill()
+        meta = ManifestMetadata(
+            platform="claude-code",
+            version="5.3.2",
+        )
+        manifest = Manifest(
+            metadata=meta,
+            skills=[],
+        )
+
+        result = MagicMock()
+        result.add_file = MagicMock()
+        result.add_error = MagicMock()
+
+        # First build: creates symlink
+        adapter._render_skill_content(skill, skill_dir, manifest, result)
+        assert skill_dir.is_symlink()
+        assert skill_dir.resolve() == installed_dir.resolve()
+
+        # Second build: symlink must be preserved
+        adapter._render_skill_content(skill, skill_dir, manifest, result)
+        assert skill_dir.is_symlink(), "Symlink was lost on second build"
+        assert skill_dir.resolve() == installed_dir.resolve(), "Symlink target changed"
+
+        content = (skill_dir / "SKILL.md").read_text()
+        assert "Full Review Skill" in content, "Original content was overwritten"
+        assert "Execute review flow" in content, "Original flow text missing"
+
+    def test_no_pack_falls_back_to_template(self, monkeypatch, tmp_path):
+        """Uninstalled external skills get template fallback."""
+        from vibesop.adapters.claude_code import ClaudeCodeAdapter
+        from vibesop.adapters.models import Manifest, ManifestMetadata
+
+        adapter = ClaudeCodeAdapter()
+        output_dir = tmp_path / "output"
+        skill_dir = output_dir / "skills" / "unknown-skill"
+        skill_dir.mkdir(parents=True)
+
+        monkeypatch.setattr(
+            "vibesop.adapters._shared.is_pack_installed",
+            lambda _: None,
+        )
+        monkeypatch.setattr(
+            adapter,
+            "_find_skill_content",
+            lambda _: None,
+        )
+
+        class _Skill:
+            id = "unknown/skill"
+            namespace = "unknown"
+            name = "Unknown Skill"
+            description = "Not installed"
+            version = "1.0"
+            skill_type = "standard"
+            tags = []
+            trigger_when = "never"
+
+        meta = ManifestMetadata(
+            platform="claude-code",
+            version="5.3.2",
+        )
+        manifest = Manifest(
+            metadata=meta,
+            skills=[],
+        )
+
+        result = MagicMock()
+        result.add_file = MagicMock()
+        result.add_error = MagicMock()
+
+        adapter._render_skill_content(_Skill(), skill_dir, manifest, result)
+        skill_md = skill_dir / "SKILL.md"
+        assert skill_md.exists(), "SKILL.md should exist from template fallback"

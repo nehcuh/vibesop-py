@@ -36,6 +36,12 @@ clean: ## Clean up generated files
 	find . -type f -name "*.pyc" -delete
 	rm -rf .pytest_cache .ruff_cache .coverage htmlcov/
 
+docs: ## Generate API documentation
+	uv run pdoc src/vibesop -o docs/api --docformat google
+
+docs-serve: ## Serve API documentation locally
+	uv run pdoc src/vibesop --docformat google
+
 check: lint type-check test ## Run all checks (lint, type-check, test)
 
 benchmark: ## Run performance benchmarks

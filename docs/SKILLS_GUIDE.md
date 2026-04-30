@@ -137,7 +137,7 @@ VibeSOP 技能生态
 | 触发模式 | 说明 | 示例 |
 |----------|------|------|
 | **mandatory** | 强制触发，无法关闭 | `systematic-debugging`, `verification-before-completion` |
-| **suggest** | 自动建议，可选择 | `planning-with-files`, `gstack/review` |
+| **suggest** | 自动建议，可选择 | `riper-workflow`, `gstack/review` |
 | **manual** | 仅手动调用 | `omx/team`, `gstack/browse` |
 
 ---
@@ -237,7 +237,7 @@ code_review:
   - superpowers/review (alternative)
 
 planning:
-  - planning-with-files (primary)
+  - riper-workflow (primary)
   - gstack/plan-eng-review (alternative)
 ```
 
@@ -327,7 +327,7 @@ Query: "debub"  # 拼写错误
 
 | 技能 ID | 用途 | 触发条件 |
 |---------|------|----------|
-| `planning-with-files` | 用文件作为工作记忆处理复杂任务 | 复杂任务（>5 文件） |
+| `riper-workflow` | 结构化 5 阶段开发工作流 (Research→Innovate→Plan→Execute→Review) | 复杂任务 fallback |
 | `experience-evolution` | 捕获可重用的经验和模式 | 重复工作模式 |
 | `instinct-learning` | 自动提取会话模式 | 会话结束时 |
 | `riper-workflow` | 5 阶段开发工作流 | 复杂项目开发 |
@@ -495,7 +495,7 @@ Layer 0-6: 路由分析
 | **需求澄清** | omx/deep-interview | gstack/office-hours | superpowers/brainstorm | 需求不明确 |
 | **代码审查** | gstack/review | superpowers/review | gstack/codex | PR/合并 |
 | **产品思考** | gstack/office-hours | superpowers/brainstorm | - | 新功能/想法 |
-| **规划** | planning-with-files | gstack/plan-eng-review | gstack/plan-ceo-review | 规划/设计 |
+| **规划** | riper-workflow | omx/ralplan | gstack/plan-eng-review | 规划/设计 |
 | **重构** | superpowers/refactor | gstack/review | - | 代码质量 |
 | **持久执行** | omx/ralph | riper-workflow | - | 完整实现 |
 | **共识规划** | omx/ralplan | planning-with-files | gstack/plan-eng-review | 团队决策 |
@@ -590,7 +590,7 @@ skills:
     # 为特定场景设置默认技能
     code_review: superpowers/review  # 覆盖 gstack/review
     debugging: systematic-debugging
-    planning: omx/ralplan  # 覆盖 planning-with-files
+    planning: omx/ralplan  # 覆盖 riper-workflow
 ```
 
 **用户级配置**:
@@ -657,7 +657,7 @@ skills:
 │  └─ 需要实验 → autonomous-experiment
 │
 ├─ 需要规划？
-│  ├─ 复杂任务 → planning-with-files
+│  ├─ 复杂任务 → riper-workflow
 │  ├─ 团队共识 → omx/ralplan ⭐
 │  ├─ 工程审查 → gstack/plan-eng-review
 │  └─ 产品视角 → gstack/plan-ceo-review

@@ -14,7 +14,7 @@ import logging
 import os
 import sys
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 
 import questionary
 import typer
@@ -56,7 +56,7 @@ console = Console()
 
 
 @app.callback(invoke_without_command=True)
-def _default_callback(
+def _default_callback(  # pyright: ignore[reportUnusedFunction]
     ctx: typer.Context,
     version: bool = typer.Option(
         False, "--version", "-V", help="Show version and exit"
@@ -1016,7 +1016,7 @@ def _check_hooks() -> tuple[bool, str]:
         results: list[str] = []
         for platform_info in platforms:
             platform_name: str = platform_info["name"]
-            verify_result = cast("dict[str, Any]", installer.verify(platform_name))
+            verify_result: dict[str, Any] = installer.verify(platform_name)
             if verify_result["installed"]:
                 hooks_status: dict[str, Any] = verify_result.get("hooks_installed", {})
                 hook_count = sum(1 for s in hooks_status.values() if s)

@@ -4,6 +4,7 @@ Records and analyzes when Agent skips routing recommendations.
 """
 
 import json
+from typing import Any
 import logging
 from datetime import UTC, datetime
 from pathlib import Path
@@ -76,7 +77,7 @@ def record_deviation(
 def analyze_deviations(
     storage_path: str | Path = ".vibe/memory/deviations.jsonl",
     min_records: int = 5,
-) -> dict:
+) -> dict[str, Any]:
     """Analyze deviation patterns.
 
     Args:
@@ -127,8 +128,8 @@ def analyze_deviations(
 
 
 def _generate_recommendations(
-    reason_counts: dict,
-    mismatched_skills: dict,
+    reason_counts: dict[str, Any],
+    mismatched_skills: dict[str, Any],
 ) -> list[str]:
     """Generate improvement recommendations from deviation patterns."""
     recommendations = []

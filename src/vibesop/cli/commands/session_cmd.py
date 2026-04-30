@@ -38,7 +38,7 @@ def record_tool(
     _ = context_file  # Reserved for future persistent session storage
     # For now, create a simple session context
     # In production, this would persist state to context_file
-    ctx = SessionContext(project_root=Path.cwd())
+    ctx = SessionContext(project_root=str(Path.cwd()))
     ctx.record_tool_use(tool, skill)
 
     console.print(f"[green]✓[/green] Recorded tool use: {tool} (skill: {skill})")
@@ -62,7 +62,7 @@ def check_reroute(
     """
     _ = Path(context_file).expanduser()  # legacy param, kept for CLI compatibility
 
-    ctx = SessionContext.load(project_root=Path.cwd())
+    ctx = SessionContext.load(project_root=str(Path.cwd()))
     ctx.set_current_skill(current_skill)
 
     suggestion = ctx.check_reroute_needed(message)
@@ -104,7 +104,7 @@ def summary(
     """Display session context summary."""
     _ = Path(context_file).expanduser()  # legacy param, kept for CLI compatibility
 
-    ctx = SessionContext.load(project_root=Path.cwd())
+    ctx = SessionContext.load(project_root=str(Path.cwd()))
     summary = ctx.get_session_summary()
 
     if json_output:
@@ -148,7 +148,7 @@ def set_skill(
     """Set the current active skill."""
     _ = Path(context_file).expanduser()  # legacy param, kept for CLI compatibility
 
-    ctx = SessionContext.load(project_root=Path.cwd())
+    ctx = SessionContext.load(project_root=str(Path.cwd()))
     ctx.set_current_skill(skill_id)
     ctx.save()
 

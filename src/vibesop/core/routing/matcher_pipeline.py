@@ -75,8 +75,14 @@ class MatcherPipeline:
                     existing = best_scores.get(sid)
                     if existing is None or m.confidence > existing[0]:
                         best_scores[sid] = (m.confidence, layer, m.metadata)
-                    # Keep all matches for optimization service
                     all_matches.append(m)
+
+                # Early exit: high-confidence keyword match skips TF-IDF/Embedding/Levenshtein
+                if layer == RoutingLayer.KEYWORD and best_scores:
+                    top_confidence = max(c[0] for c in best_scores.values())
+                    if top_confidence >= 0.95:
+                        break
+
             except (OSError, ValueError, KeyError, MatcherError) as e:
                 logger.debug(f"Matcher {type(matcher).__name__} failed: {e}, trying next matcher")
                 continue

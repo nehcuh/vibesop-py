@@ -76,7 +76,7 @@ class PlanBuilder:
                 skill_id = pre_assigned
                 confidence = 0.99
             else:
-                route_result = self._router.route(contextualized_query)
+                route_result = self._router.orchestrate(contextualized_query)
 
                 if route_result.primary is None:
                     logger.warning("No skill match for sub-task %d: %s", i, sub_task.query[:50])

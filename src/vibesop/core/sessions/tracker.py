@@ -117,7 +117,7 @@ class GenericSessionTracker(SessionTracker):
         self.config_dir.mkdir(parents=True, exist_ok=True)
 
         # Session context
-        self._context = SessionContext(project_root=self.project_root)
+        self._context = SessionContext(project_root=str(self.project_root))
 
         # State file (hash the project root to keep sessions separate per project)
         import hashlib
@@ -284,7 +284,7 @@ class HookBasedSessionTracker(SessionTracker):
         self.hooks_dir = Path(hooks_dir or f"~/.{platform}/hooks").expanduser()
 
         # Session context (in-memory only for hooks)
-        self._context = SessionContext(project_root=self.project_root)
+        self._context = SessionContext(project_root=str(self.project_root))
 
     def is_available(self) -> bool:
         """Check if hooks are available.

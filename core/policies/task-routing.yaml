@@ -77,7 +77,7 @@ scenario_patterns:
       - "复杂"
       - "麻烦"
       - "很多文件"
-    skill_id: "planning-with-files"
+    skill_id: "riper-workflow"
     priority: P1
     message: "复杂任务建议先制定详细计划"
 
@@ -441,9 +441,9 @@ conflict_resolution:
       reason: "Pre-landing review with SQL safety"
       
     - scenario: planning
-      primary: planning-with-files
+      primary: riper-workflow
       primary_source: builtin
-      reason: "Default planning skill"
+      reason: "Default planning fallback"
 
 # Override keywords for explicit skill selection
 # When user mentions these, bypass routing and use specified skill

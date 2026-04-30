@@ -31,7 +31,7 @@ VibeSOP's Session Intelligent Routing monitors conversation context and suggests
 
 **Before**: You start with "review my code" → get `gstack/review`. But when you follow up with "based on feedback, let's redesign the architecture", the AI continues using review skill instead of suggesting planning mode.
 
-**After**: The AI detects the context shift and suggests: "This looks like a design task. Would you like to switch to `planning-with-files` or `riper-workflow`?"
+**After**: The AI detects the context shift and suggests: "This looks like a design task. Would you like to switch to `riper-workflow`?"
 
 **Works with**:
 - ✅ **Claude Code** - Automatic via hooks

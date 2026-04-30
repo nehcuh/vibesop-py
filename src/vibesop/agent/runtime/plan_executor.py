@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import Any, TYPE_CHECKING
 
 from vibesop.core.models import (
     ExecutionManifest,
@@ -327,7 +327,7 @@ class PlanExecutor:
 
         return lines
 
-    def _format_parallel_group(self, group_num: int, group: list) -> list[str]:
+    def _format_parallel_group(self, group_num: int, group: list[Any]) -> list[str]:
         """Format a parallel step group."""
         lines = [
             f"## 并行组 {group_num}",

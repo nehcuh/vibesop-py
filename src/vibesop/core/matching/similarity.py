@@ -73,8 +73,8 @@ class ISimilarityCalculator(Protocol):
 
     def calculate_single(
         self,
-        vec1: np.ndarray,
-        vec2: np.ndarray,
+        vec1: np.ndarray,  # pyright: ignore[reportMissingTypeArgument]
+        vec2: np.ndarray,  # pyright: ignore[reportMissingTypeArgument]
     ) -> float:
         """Calculate similarity between two vectors.
 
@@ -121,8 +121,8 @@ class SimilarityCalculator:
 
     def calculate(
         self,
-        query: str | list[str] | np.ndarray,
-        candidates: list[str] | list[list[str]] | np.ndarray,
+        query: str | list[str] | np.ndarray,  # pyright: ignore[reportMissingTypeArgument]
+        candidates: list[str] | list[list[str]] | np.ndarray,  # pyright: ignore[reportMissingTypeArgument]
     ) -> list[float]:
         """Calculate similarity scores.
 
@@ -174,8 +174,8 @@ class SimilarityCalculator:
 
     def calculate_single(
         self,
-        vec1: np.ndarray,
-        vec2: np.ndarray,
+        vec1: np.ndarray,  # pyright: ignore[reportMissingTypeArgument]
+        vec2: np.ndarray,  # pyright: ignore[reportMissingTypeArgument]
     ) -> float:
         """Calculate similarity between two numpy vectors.
 
@@ -221,8 +221,8 @@ class SimilarityCalculator:
 
     def _calculate_numpy_query(
         self,
-        query: np.ndarray,
-        candidates: np.ndarray,
+        query: np.ndarray,  # pyright: ignore[reportMissingTypeArgument]
+        candidates: np.ndarray,  # pyright: ignore[reportMissingTypeArgument]
     ) -> list[float]:
         """Calculate similarity for numpy array vectors."""
         if candidates.ndim == 1:
@@ -272,7 +272,7 @@ class SimilarityCalculator:
         return dot_product / (mag1 * mag2)
 
     @staticmethod
-    def _cosine_similarity_numpy(vec1: np.ndarray, vec2: np.ndarray) -> float:
+    def _cosine_similarity_numpy(vec1: np.ndarray, vec2: np.ndarray) -> float:  # pyright: ignore[reportMissingTypeArgument]
         """Calculate cosine similarity for numpy vectors.
 
         This is the original implementation from semantic/similarity.py,
@@ -302,8 +302,8 @@ class SimilarityCalculator:
 
 
 def cosine_similarity(
-    vec1: dict[str, float] | np.ndarray,
-    vec2: dict[str, float] | np.ndarray,
+    vec1: dict[str, float] | np.ndarray,  # pyright: ignore[reportMissingTypeArgument]
+    vec2: dict[str, float] | np.ndarray,  # pyright: ignore[reportMissingTypeArgument]
 ) -> float:
     """Convenience function for cosine similarity calculation.
 

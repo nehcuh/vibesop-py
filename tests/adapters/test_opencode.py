@@ -362,3 +362,46 @@ class TestOpenCodeAdapterEdgeCases:
 
         # Should not create README when no skills
         assert not (tmp_path / "README.md").exists()
+
+
+class TestOpenCodeSkillContentRender:
+    """Tests for _render_skill_content symlink preservation in OpenCode adapter."""
+
+    def test_symlink_preserved_on_second_build(self, monkeypatch, tmp_path):
+        """Symlink to installed pack must be preserved on re-build."""
+        from vibesop.adapters.opencode import OpenCodeAdapter
+
+        adapter = OpenCodeAdapter()
+        output_dir = tmp_path / "output"
+        skill_dir = output_dir / "skills" / "gstack-review"
+        skill_dir.mkdir(parents=True)
+
+        installed_dir = tmp_path / "installed"
+        installed_dir.mkdir(parents=True)
+        (installed_dir / "SKILL.md").write_text("# Full Review Skill\n\nExecute review flow.")
+
+        monkeypatch.setattr(
+            "vibesop.adapters._shared.is_pack_installed",
+            lambda _: installed_dir,
+        )
+
+        class _Skill:
+            id = "gstack/review"
+            namespace = "gstack"
+            name = "GStack Review"
+            description = "Code review"
+            version = "1.0"
+            skill_type = "standard"
+            tags = ["review"]
+            trigger_when = "When asked to review code"
+
+        result = type("Result", (), {"add_file": lambda *a: None, "add_error": lambda *a: None})()
+
+        adapter._render_skill_content(_Skill(), skill_dir, result, dir_name="gstack-review")
+        assert skill_dir.is_symlink()
+        assert skill_dir.resolve() == installed_dir.resolve()
+
+        adapter._render_skill_content(_Skill(), skill_dir, result, dir_name="gstack-review")
+        assert skill_dir.is_symlink(), "Symlink was lost on second build"
+        content = (skill_dir / "SKILL.md").read_text()
+        assert "Full Review Skill" in content

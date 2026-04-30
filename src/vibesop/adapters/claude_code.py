@@ -351,10 +351,15 @@ class ClaudeCodeAdapter(PlatformAdapter):
     ) -> None:
         """Render skill content from actual skill file or central storage.
 
+        For built-in skills, copies content from core/skills/.
         For external pack skills (e.g., 'gstack/review'), checks central
         storage (~/.config/skills/) and creates a symlink if the pack
-        is installed there, falling back to template rendering only when
-        the pack is not installed.
+        is installed.  Falls back to template rendering only when the
+        pack is not installed ANYWHERE.
+
+        Critical invariant: NEVER overwrite an external skill's full
+        SKILL.md with the thin Jinja2 template wrapper.  If a valid
+        symlink already exists, leave it untouched.
 
         Args:
             skill: Skill definition from manifest
@@ -376,15 +381,31 @@ class ClaudeCodeAdapter(PlatformAdapter):
 
         installed_path = is_pack_installed(skill_id)
         if installed_path:
-            if skill_dir.exists() and not skill_dir.is_symlink():
+            resolved_installed = installed_path.resolve()
+
+            # Already a valid symlink pointing to installed pack → nothing to do
+            if (
+                skill_dir.is_symlink()
+                and skill_dir.exists()
+                and skill_dir.resolve() == resolved_installed
+            ):
+                result.add_file(skill_output_path)
+                return
+
+            # Remove whatever is there now (stale symlink, stale dir, etc.)
+            if skill_dir.is_symlink():
+                skill_dir.unlink(missing_ok=True)
+            elif skill_dir.exists():
                 shutil.rmtree(skill_dir)
+
+            # Re-create symlink
             try:
-                skill_dir.symlink_to(installed_path, target_is_directory=True)
-                result.add_file(skill_dir / "SKILL.md")
+                skill_dir.symlink_to(resolved_installed, target_is_directory=True)
+                result.add_file(skill_output_path)
                 return
             except OSError:
                 try:
-                    shutil.copytree(installed_path, skill_dir)
+                    shutil.copytree(resolved_installed, skill_dir)
                     result.add_file(skill_output_path)
                     return
                 except Exception:

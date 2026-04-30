@@ -6,6 +6,7 @@ import logging
 import os
 from typing import TYPE_CHECKING, Any, cast
 
+from vibesop.core.matching import KeywordMatcher, MatcherConfig
 from vibesop.core.models import RoutingLayer, SkillRoute
 from vibesop.core.routing.circuit_breaker import TriageCircuitBreaker
 from vibesop.core.routing.layers import LayerResult
@@ -200,8 +201,6 @@ class TriageService:
         """
         if len(candidates) <= max_skills:
             return candidates
-
-        from vibesop.core.matching import KeywordMatcher, MatcherConfig
 
         matcher_config = MatcherConfig(
             min_confidence=0.0,

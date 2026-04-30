@@ -34,7 +34,7 @@ app = typer.Typer(name="skill", help="Manage skill lifecycle", no_args_is_help=F
 
 
 @app.callback(invoke_without_command=True)
-def _skill_overview(
+def _skill_overview(  # pyright: ignore[reportUnusedFunction]
     ctx: typer.Context,
 ) -> None:
     """Show skill ecosystem overview when no subcommand is given."""
@@ -377,14 +377,14 @@ def end_check(
 
 # Community commands
 @app.command(name="share", help="Publish a skill to the community via GitHub Issues")
-def _share_cmd(
+def _share_cmd(  # pyright: ignore[reportUnusedFunction]
     skill_id: str = typer.Argument(..., help="Skill ID to share"),
 ) -> None:
     share(skill_id)
 
 
 @app.command(name="discover", help="Discover community-shared skills from GitHub Issues")
-def _discover_cmd(
+def _discover_cmd(  # pyright: ignore[reportUnusedFunction]
     query: str | None = typer.Argument(None, help="Search keywords"),
     json_output: bool = typer.Option(False, "--json", "-j", help="Output as JSON"),
 ) -> None:
@@ -392,7 +392,7 @@ def _discover_cmd(
 
 
 @app.command(name="cleanup", help="Interactively review and clean up low-quality or stale skills")
-def _cleanup_cmd(
+def _cleanup_cmd(  # pyright: ignore[reportUnusedFunction]
     auto: bool = typer.Option(
         False, "--auto", "-a", help="Apply all suggested actions automatically"
     ),

@@ -110,9 +110,9 @@ class RouterResultMixin:
         if primary.layer not in (RoutingLayer.EXPLICIT, RoutingLayer.CUSTOM):
             degradation_level, degraded_primary = host._degradation_manager.evaluate(primary)
             if degradation_level == DegradationLevel.FALLBACK:
-                primary = cast("SkillRoute | None", None)
+                primary = cast("SkillRoute | None", None)  # pyright: ignore[reportAssignmentType]
             elif degradation_level == DegradationLevel.DEGRADE:
-                primary = cast("SkillRoute | None", degraded_primary)
+                primary = cast("SkillRoute | None", degraded_primary)  # pyright: ignore[reportAssignmentType]
             if primary:
                 primary.metadata["degradation_level"] = degradation_level.value
             else:
@@ -133,15 +133,16 @@ class RouterResultMixin:
                 duration_ms=(time.perf_counter() - start_time) * 1000,
             )
 
-        host._record_routing_decision(query, primary, None)
+        host._record_routing_decision(query, primary, context)
 
         # Enrich alternatives with SkillRecommender suggestions
         enriched_alternatives = list(alternatives) if alternatives else []
+        cached_candidates = None
         try:
             recommender = self._get_skill_recommender()
-            all_candidates = host._candidate_manager.get_cached_candidates()
+            cached_candidates = host._candidate_manager.get_cached_candidates()
             existing_ids = {primary.skill_id} | {a.skill_id for a in enriched_alternatives}
-            recs = recommender.recommend(query, all_candidates, top_k=5)
+            recs = recommender.recommend(query, cached_candidates, top_k=5)
             for rec in recs:
                 if rec.skill_id not in existing_ids and rec.score >= 0.2:
                     enriched_alternatives.append(
@@ -173,7 +174,7 @@ class RouterResultMixin:
         # Proactive discovery: suggest unused skills matching current query domain
         try:
             recommender = self._get_skill_recommender()
-            all_candidates = host._candidate_manager.get_cached_candidates()
+            all_candidates = cached_candidates or host._candidate_manager.get_cached_candidates()
             used_ids = existing_ids.copy()
             discoveries = recommender.discover(
                 query, all_candidates, used_skill_ids=used_ids, top_k=3

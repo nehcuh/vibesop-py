@@ -167,6 +167,9 @@ class PackInstaller:
             if git_dir.exists():
                 shutil.rmtree(git_dir)
 
+            # Run post-install build scripts (e.g., .tmpl compilation for gstack)
+            build_output = self._run_post_install(target_path, analysis)
+
             # Audit installed skills
             audit_results = []
             installed_skill_files = list(target_path.rglob("SKILL.md"))
@@ -185,6 +188,9 @@ class PackInstaller:
                 f"Audit: {', '.join(audit_results)}",
             ]
 
+            if build_output:
+                msg_parts.append(f"Build: {build_output}")
+
             if symlink_results:
                 msg_parts.append("Symlinks:")
                 for platform, status in symlink_results:
@@ -197,6 +203,67 @@ class PackInstaller:
 
         except Exception as e:
             return False, f"Failed to install {pack_name}: {e}"
+
+    def _run_post_install(self, target_path: Path, _analysis: object) -> str:
+        """Run post-install build scripts for template-based skill packs.
+
+        Supports packs that use .tmpl templates (e.g., gstack) which need
+        compilation before SKILL.md files are usable.  Detects and runs
+        ``.vibesop-build``, ``BUILD.sh``, or ``setup.sh`` in the pack root.
+
+        Args:
+            target_path: Root directory of the installed pack
+            analysis: RepoAnalysis result with detected setup_scripts
+
+        Returns:
+            Output message or empty string if no build was run
+        """
+        import subprocess
+
+        build_scripts = [".vibesop-build", "BUILD.sh", "setup.sh"]
+        script_path: Path | None = None
+
+        for candidate in build_scripts:
+            p = target_path / candidate
+            if p.exists() and p.is_file():
+                script_path = p
+                break
+
+        if script_path is None:
+            # No build script found — check if bun/npm can generate
+            if (target_path / "package.json").exists() and shutil.which("bun"):
+                try:
+                    result = subprocess.run(
+                        ["bun", "run", "gen:skill-docs"],
+                        cwd=target_path,
+                        capture_output=True,
+                        text=True,
+                        timeout=60,
+                        check=False,
+                    )
+                    if result.returncode == 0:
+                        return "bun run gen:skill-docs OK"
+                    return f"bun build failed: {result.stderr.strip()[:80]}"
+                except (subprocess.TimeoutExpired, OSError) as e:
+                    return f"bun build error: {e}"
+            return ""
+
+        # Make script executable and run it
+        script_path.chmod(0o755)
+        try:
+            result = subprocess.run(
+                [str(script_path)],
+                cwd=target_path,
+                capture_output=True,
+                text=True,
+                timeout=120,
+                check=False,
+            )
+            if result.returncode == 0:
+                return f"{script_path.name} OK"
+            return f"{script_path.name} failed: {result.stderr.strip()[:80]}"
+        except (subprocess.TimeoutExpired, OSError) as e:
+            return f"{script_path.name} error: {e}"
 
     def _create_symlinks(
         self,

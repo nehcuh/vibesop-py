@@ -174,15 +174,19 @@ class FeedbackCollector:
         if was_correct is None:
             was_correct = True
 
+        primary = result.primary
+        if primary is None:
+            return
+
         self.collect_feedback(
             query=query,
-            routed_skill=result.primary.skill_id,
+            routed_skill=primary.skill_id,
             was_correct=was_correct,
             actual_skill=actual_skill,
-            confidence=result.primary.confidence,
+            confidence=primary.confidence,
             context={
-                "layer": result.primary.layer.value if result.primary.layer else "unknown",
-                "source": result.primary.source,
+                "layer": primary.layer.value if primary.layer else "unknown",
+                "source": primary.source,
                 "alternatives": [alt.skill_id for alt in result.alternatives],
             },
         )

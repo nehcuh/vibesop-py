@@ -149,6 +149,23 @@ PRIMARY=$(echo "$RESULT" | jq -r '.primary.skill_id // empty')
 CONFIDENCE=$(echo "$RESULT" | jq -r '.primary.confidence // "0"')
 {% endif %}
 
+# Check for context-shift reroute suggestion (session-aware routing)
+REROUTE_FROM=""
+REROUTE_TO=""
+REROUTE_CONF=""
+REROUTE_REASON=""
+if command -v jq &> /dev/null; then
+    REROUTE_FROM=$(echo "$RESULT" | jq -r '.primary.metadata.reroute_suggestion.from_skill // empty' 2>/dev/null || true)
+    REROUTE_TO=$(echo "$RESULT" | jq -r '.primary.metadata.reroute_suggestion.to_skill // empty' 2>/dev/null || true)
+    REROUTE_CONF=$(echo "$RESULT" | jq -r '.primary.metadata.reroute_suggestion.confidence // "0"' 2>/dev/null || true)
+    REROUTE_REASON=$(echo "$RESULT" | jq -r '.primary.metadata.reroute_suggestion.reason // empty' 2>/dev/null || true)
+fi
+REROUTE_NOTICE=""
+if [ -n "$REROUTE_FROM" ] && [ -n "$REROUTE_TO" ]; then
+    REROUTE_CONF_FLOAT=$(echo "$REROUTE_CONF" | awk '{printf "%.0f", $1 * 100}')
+    REROUTE_NOTICE=" [Context shift: $REROUTE_FROM → $REROUTE_TO (${REROUTE_CONF_FLOAT}%)]"
+fi
+
 if [ -n "$PRIMARY" ] && [ "$PRIMARY" != "fallback-llm" ]; then
     SKILL_CONTENT=""
     if command -v vibe &> /dev/null; then
@@ -156,15 +173,15 @@ if [ -n "$PRIMARY" ] && [ "$PRIMARY" != "fallback-llm" ]; then
     fi
 {% if include_additional_context %}
     if [ -n "$SKILL_CONTENT" ]; then
-        echo "{\"systemMessage\": \"🎯 VibeSOP routed: $PRIMARY (${CONFIDENCE} confidence)\", \"hookSpecificOutput\": {\"additionalContext\": \"[ACTIVE SKILL: $PRIMARY]\n$SKILL_CONTENT\"}}"
+        echo "{\"systemMessage\": \"🎯 VibeSOP routed: $PRIMARY (${CONFIDENCE} confidence)${REROUTE_NOTICE}\", \"hookSpecificOutput\": {\"additionalContext\": \"[ACTIVE SKILL: $PRIMARY]\n$SKILL_CONTENT\"}}"
     else
-        echo "{\"systemMessage\": \"🎯 VibeSOP routed: $PRIMARY (${CONFIDENCE} confidence). Please read skills/$PRIMARY/SKILL.md\"}"
+        echo "{\"systemMessage\": \"🎯 VibeSOP routed: $PRIMARY (${CONFIDENCE} confidence)${REROUTE_NOTICE}. Please read skills/$PRIMARY/SKILL.md\"}"
     fi
 {% else %}
     if [ -n "$SKILL_CONTENT" ]; then
-        echo "{\"systemMessage\": \"🎯 VibeSOP routed: $PRIMARY (${CONFIDENCE} confidence)\"}"
+        echo "{\"systemMessage\": \"🎯 VibeSOP routed: $PRIMARY (${CONFIDENCE} confidence)${REROUTE_NOTICE}\"}"
     else
-        echo "{\"systemMessage\": \"🎯 VibeSOP routed: $PRIMARY (${CONFIDENCE} confidence).\"}"
+        echo "{\"systemMessage\": \"🎯 VibeSOP routed: $PRIMARY (${CONFIDENCE} confidence)${REROUTE_NOTICE}.\"}"
     fi
 {% endif %}
 {% if no_match_message %}

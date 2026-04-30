@@ -5,6 +5,7 @@ exposed via `vibe route-stats`.
 """
 
 from __future__ import annotations
+from typing import Any
 
 import time
 from collections import deque
@@ -60,7 +61,7 @@ class RoutingPerfMonitor:
             self._total_duration_ms += duration_ms
             self._layer_counts[route_layer] = self._layer_counts.get(route_layer, 0) + 1
 
-    def get_stats(self) -> dict:
+    def get_stats(self) -> dict[str, Any]:
         """Get current performance statistics.
 
         Returns:

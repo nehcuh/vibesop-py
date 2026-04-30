@@ -10,6 +10,7 @@ Features:
 """
 
 from __future__ import annotations
+from typing import Any
 
 import hashlib
 import logging
@@ -52,7 +53,7 @@ def _count_stale_skills(project_root: Path) -> int:
         return 0
 
 
-def _get_today_stats(project_root: Path) -> dict:
+def _get_today_stats(project_root: Path) -> dict[str, Any]:
     """Get today's routing statistics from analytics."""
     try:
         from vibesop.core.analytics import AnalyticsStore
