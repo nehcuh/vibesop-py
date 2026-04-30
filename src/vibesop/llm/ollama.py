@@ -47,7 +47,11 @@ class OllamaProvider(LLMProvider):
         self._model = model
         self._client: OpenAI | None = None
         if self.api_key:
-            self._client = OpenAI(api_key=self.api_key, base_url=self.base_url)
+            self._client = OpenAI(
+                api_key=self.api_key,
+                base_url=self.base_url,
+                timeout=30.0,
+            )
 
     @property
     def provider_name(self) -> str:

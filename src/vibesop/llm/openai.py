@@ -55,10 +55,16 @@ class OpenAIProvider(LLMProvider):
 
         super().__init__(api_key=api_key, base_url=base_url)
 
-        # Initialize OpenAI client
+        # Initialize OpenAI client with reasonable timeout to prevent indefinite
+        # blocking on slow API responses (e.g., DeepSeek during peak hours).
+        # 60s covers绝大多数 routing calls while preventing hangs.
         self._client: OpenAI | None = None
         if self.api_key:
-            self._client = OpenAI(api_key=self.api_key, base_url=self.base_url)
+            self._client = OpenAI(
+                api_key=self.api_key,
+                base_url=self.base_url,
+                timeout=30.0,
+            )
 
     @property
     def provider_name(self) -> str:

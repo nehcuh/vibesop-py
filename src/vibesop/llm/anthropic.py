@@ -48,10 +48,14 @@ class AnthropicProvider(LLMProvider):
 
         super().__init__(api_key=api_key, base_url=base_url)
 
-        # Initialize Anthropic client
+        # Initialize Anthropic client with timeout to prevent indefinite blocking.
         self._client: Anthropic | None = None
         if self.api_key:
-            self._client = Anthropic(api_key=self.api_key, base_url=self.base_url)
+            self._client = Anthropic(
+                api_key=self.api_key,
+                base_url=self.base_url,
+                timeout=30.0,
+            )
 
     @property
     def provider_name(self) -> str:

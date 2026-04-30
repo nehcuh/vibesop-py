@@ -135,7 +135,7 @@ class SessionContext:
         self.session_id = self._resolve_session_id(session_id)
 
         # Thread-safe storage
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()
         self._tool_history: list[ToolUseEvent] = []
         self._current_skill: str | None = None
         self._session_start_time = time.time()
