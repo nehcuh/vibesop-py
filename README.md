@@ -136,6 +136,21 @@ uv sync
 pip install -e .
 ```
 
+### 可选系统依赖 Optional System Dependencies
+
+部分技能包（如 gstack）使用模板生成 SKILL.md，安装时会自动检测并编译。如需完整支持，建议提前安装：
+
+Some skill packs (e.g., gstack) use templates to generate SKILL.md and will auto-detect and compile during installation. For full support, install beforehand:
+
+```bash
+# Bun (gstack 使用 bun run gen:skill-docs 编译模板)
+# gstack uses bun run gen:skill-docs to compile templates
+curl -fsSL https://bun.sh/install | bash
+```
+
+> 如果未安装 bun，gstack 仍可安装，但基于 `.tmpl` 模板的技能可能无法完整生成。VibeSOP 会静默跳过编译步骤，不会阻断安装。
+> If bun is not installed, gstack can still be installed, but template-based skills may not be fully generated. VibeSOP will silently skip the compilation step without blocking installation.
+
 ### 第一次使用 First Use
 
 ```bash
@@ -523,14 +538,17 @@ vibe feedback report
 
 ### 会话智能路由 Session Intelligent Routing
 
-> **⚠️ Opt-in 设计**：会话智能追踪默认**关闭**（`VIBESOP_CONTEXT_TRACKING=false`），这是有意的设计选择。
+> **⚠️ 默认开启**：会话智能追踪默认**开启**（`routing.session_aware: true`），自动记录会话状态并支持多轮对话重路由。
 >
-> **为什么默认关闭？**
-> - **性能**：零开销，不影响正常使用
-> - **隐私**：不记录工具使用历史
+> **为什么可以关闭？**
+> - **性能**：部分用户希望零开销
+> - **隐私**：不希望记录工具使用历史
 > - **控制**：完全由用户决定是否启用
 >
-> 需要手动启用才能使用此功能。
+> 如需关闭：
+> ```bash
+> vibe config set routing.session_aware false
+> ```
 
 ```bash
 # Enable tracking (Claude Code)
@@ -863,6 +881,7 @@ VibeSOP provides built-in support and intelligent routing for the following comm
   - 📦 **技能数**: 19 个技能 (review, qa, ship, office-hours, browse, etc.)
   - 🎨 **特点**: 角色-based 技能 (产品、工程、设计、QA)
   - 📖 **文档**: [OMX_GUIDE.md](docs/OMX_GUIDE.md) (参见对比章节)
+  - ⚡ **前置依赖**: [Bun](https://bun.sh)（安装时自动编译 `.tmpl` 模板生成 SKILL.md）
 
 - **[superpowers](https://github.com/obra/superpowers)** by [@obra](https://github.com/obra)
   - 🎯 **定位**: 基础开发工作流 - TDD、重构、调试、优化
