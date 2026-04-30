@@ -1,212 +1,32 @@
 # Skill Routing Rules
 
-> **Always Loaded**: These rules govern how skills are selected and invoked
-
-## 10-Layer Routing System
-
-### Layer 0: Explicit Overrides
-
-**When**: User specifies a skill directly
-
-**Examples**:
-- `/review` - Force review skill
-- `vibe skills use tdd` - Use specific skill
-
-**Priority**: Overrides all other routing (confidence 1.0)
-
-### Layer 1: Scenario Patterns
-
-**When**: Predefined scenarios match
-
-**Trigger Examples**:
-- Error/Test failure → `systematic-debugging`
-- Before claiming completion → `verification-before-completion`
-- Exit signal detected → `session-end` + memory flush
-
-**Definition**: `core/policies/task-routing.yaml`
-
-### Layer 2: AI Semantic Triage (LLM)
-
-**When**: Complex queries, long queries (>5 chars by default)
-
-**Process**:
-1. Call `vibe route "<user_request>"`
-2. AI analyzes semantic meaning and context
-3. Returns best-matching skill with confidence score
-
-**Accuracy**: ~95% with Haiku/GPT models
-
-### Layer 3: Keyword Matching
-
-**When**: Short queries (≤5 chars by default) after Layers 0-2
-
-**Process**: Exact token matching against skill names, intents, and keywords
-
-**Accuracy**: ~70%
-
-### Layer 4: TF-IDF Semantic Matching
-
-**When**: Layers 0-3 don't match
-
-**Process**: Cosine similarity on TF-IDF term vectors
-
-**Accuracy**: ~75%
-
-### Layer 5: Embedding-Based Matching (Optional)
-
-**When**: Deep semantic understanding needed
-
-**Process**: Vector similarity using SentenceTransformer embeddings
-
-**Accuracy**: ~85%
-
-### Layer 6: Fuzzy Matching (Levenshtein)
-
-**When**: Typos and misspellings
-
-**Process**: Edit distance with typo tolerance
-
-**Accuracy**: ~60%
-
-### Layer 7: Custom Plugin Matchers
-
-**When**: User-defined matching logic in `.vibe/matchers/`
-
-**Process**: Any `match(query, candidate) -> float` function
-
-### Layer 8: No Match
-
-**When**: All layers fail to produce a confident match
-
-**Action**: Return no match, suggest nearest candidates
-
-### Layer 9: Fallback LLM
-
-**When**: Last resort for unmatched queries
-
-**Modes**: `transparent` (explain + suggest), `silent` (quiet), `disabled`
-
-## Candidate Selection
-
-### Auto-Selection
-
-**Condition**: Confidence ≥ {{ routing.confidence_threshold }}
-
-**Behavior**: Automatically use top match
-
-### Manual Selection
-
-**Condition**: Confidence < {{ routing.confidence_threshold }}
-
-**Behavior**: Present top {{ routing.max_candidates }} candidates to user
-
-## Preference Learning
-
-{% if routing.enable_preference_learning %}
-### Enabled
-
-Your choices are learned across dimensions:
-- **Consistency** (40%): How often you choose the same skill
-- **Satisfaction** (30%): Implicit feedback from behavior
-- **Context** (20%): Working directory, file types
-- **Recency** (10%): Recent choices weighted more
-
-**Min Samples**: 3-5 before pattern emerges
-{% else %}
-### Disabled
-
-Routing does not learn from your choices.
-{% endif %}
-
-## Keyword Routing Threshold
-
-The `keyword_match_max_chars` config (default: 5) controls when keyword-based layers are used:
-
-- **Short queries (≤5 chars)**: Full pipeline — Scenario → AI Triage → Keyword → TF-IDF → etc.
-- **Long queries (>5 chars)**: Skip keyword layers — Explicit → AI Triage (LLM) only
-
-Configure via:
-```yaml
-# .vibe/config.yaml
-routing:
-  keyword_match_max_chars: 5   # 0=always LLM, 200=always keyword
-```
-
-## Routing Workflow
-
-```
-User Request
-     ↓
-[Layer 0] Explicit Override
-     ↓ (no match)
-[Layer 1] Scenario Patterns         ← only for short queries (≤5 chars by default)
-     ↓ (no match)
-[Layer 2] AI Semantic Triage (LLM)  ← primary for long queries (>5 chars)
-     ↓ (no match)
-[Layer 3] Keyword Matching          ← only for short queries
-     ↓ (no match)
-[Layer 4] TF-IDF Semantic Matching  ← only for short queries
-     ↓ (no match)
-[Layer 5] Embedding-Based Matching  ← only for short queries (optional)
-     ↓ (no match)
-[Layer 6] Fuzzy Matching            ← only for short queries
-     ↓ (no match)
-[Layer 7] Custom Plugin Matchers    ← only for short queries
-     ↓ (no match)
-[Layer 8] No Match                  ← all layers exhausted
-     ↓
-[Layer 9] Fallback LLM              ← last-resort routing
-     ↓
-Candidate Selection
-     ↓
-[Auto/Manual] → Skill Execution
-```
-
-## Skill Trigger Modes
-
-Each skill has a trigger mode:
-- **`mandatory`**: Must trigger when scenario matches (P0 rules)
-- **`suggest`**: Recommend to user, user decides
-- **`manual`**: Never auto-trigger, user must invoke
+> **Always Loaded**: Rules governing skill selection
 
 ## Agent Runtime Rules
 
-When VibeSOP Agent Runtime is active (via hooks or manual routing):
+### [ACTIVE SKILL: xxx]
 
-### If [ACTIVE SKILL: xxx] is injected
+1. Read `skills/<skill-id>/SKILL.md`
+2. Follow the skill's steps exactly — do not skip
+3. Report completion using the skill's defined marker
 
-1. **You MUST read the skill's SKILL.md** before proceeding
-2. **Strictly follow** the workflow described in the skill
-3. **Do not skip** any steps or substeps
-4. **Report completion** using the skill's defined completion markers
+### [EXECUTION PLAN] injected
 
-### If [EXECUTION PLAN] is injected
+1. Follow steps in order
+2. Read each step's `SKILL.md` before executing
+3. Report progress: "Step N complete"
+4. Wait for dependencies before starting dependent steps
+5. Parallel steps may run simultaneously
 
-1. **Follow the plan steps in order**
-2. **Read each step's SKILL.md** before executing that step
-3. **Report progress** after each step: "『步骤 N 完成』"
-4. **Wait for dependencies** — if a step depends on a previous step's output, do not start it until the dependency is complete
-5. **Parallel steps** may be executed simultaneously if marked as parallel
+### [EXPLICIT SKILL: xxx]
 
-### If [EXPLICIT SKILL: xxx] is injected
+User explicitly requested a skill. Load and follow it immediately without routing.
 
-The user has explicitly requested this skill. Load and follow it immediately without further routing.
+## Quick Reference
 
-## Override and Customization
-
-### Adding Custom Routes
-
-Edit `core/policies/task-routing.yaml`:
-```yaml
-scenario_patterns:
-  - trigger: "my specific scenario"
-    skill: "my-skill"
-    mode: "suggest"
-```
-
-### Disabling Routes
-
-Set skill trigger mode to `manual` in registry.
+- **Auto-select**: Confidence >= {{ routing.confidence_threshold }}
+- **Manual select**: Confidence < {{ routing.confidence_threshold }} (top {{ routing.max_candidates }} candidates shown)
+- **Fallback**: No match → `FALLBACK_LLM` layer with explanation
 
 ---
 

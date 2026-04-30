@@ -423,10 +423,11 @@ class ClaudeCodeAdapter(PlatformAdapter):
     def _render_project_claude_md(self, manifest: Manifest, result: RenderResult) -> None:
         """Write project-level CLAUDE.md if it doesn't exist.
 
-        Claude Code reads CLAUDE.md from both ~/.claude/CLAUDE.md (global)
-        and ./CLAUDE.md (project-level, highest priority). Writing to the
-        project root ensures VibeSOP routing instructions are always loaded,
-        even when running Claude Code from different project directories.
+        The project-level CLAUDE.md contains only:
+        - A minimal VibeSOP routing reminder (global CLAUDE.md has the full protocol)
+        - Project-specific context placeholders for the developer to fill in
+
+        This avoids duplicating the full global protocol into every project.
 
         Args:
             manifest: Configuration manifest
@@ -436,7 +437,7 @@ class ClaudeCodeAdapter(PlatformAdapter):
         config_path = Path("~/.claude").expanduser() / "CLAUDE.md"
         if project_path.resolve() != config_path.resolve() and not project_path.exists():
             self._render_and_write(
-                "CLAUDE.md.j2",
+                "CLAUDE.md.project.j2",
                 project_path,
                 manifest,
                 result,

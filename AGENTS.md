@@ -51,6 +51,8 @@ If you find yourself about to perform a non-trivial task without first running
 - Performance optimization
 - Any multi-step or multi-domain request
 
+Run `vibe route "<request>"` to get the best skill match.
+
 Examples of tasks that do NOT need routing:
 - "What does git status do?"
 - "Show me the current directory"
