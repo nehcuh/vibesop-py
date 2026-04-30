@@ -1,12 +1,12 @@
 # VibeSOP Roadmap
 
-> **Version**: 5.3.2
+> **Version**: 5.4.0
 > **Last Updated**: 2026-04-29
 > **Status**: Active Development
 
 ---
 
-## Current State (v5.3.0)
+## Current State (v5.4.0)
 
 ### ✅ Completed
 
