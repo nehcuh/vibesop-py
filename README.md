@@ -7,7 +7,7 @@
 [![Python](https://img.shields.io/badge/Python-3.12+-blue.svg)](https://www.python.org/downloads/)
 [![Ruff](https://img.shields.io/badge/Ruff-Enabled-black.svg)](https://github.com/astral-sh/ruff)
 [![Coverage](https://img.shields.io/badge/Coverage-20%25-red.svg)]()
-[![Version](https://img.shields.io/badge/Version-5.4.0-blue.svg)](https://github.com/nehcuh/vibesop-py)
+[![Version](https://img.shields.io/badge/Version-5.4.1-blue.svg)](https://github.com/nehcuh/vibesop-py)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 ---
@@ -995,6 +995,6 @@ vibe skill add code-reviewer
 
 ---
 
-**版本 Version**: 5.4.0
+**版本 Version**: 5.4.1
 **更新时间 Last Updated**: 2026-04-28
 **状态 Status**: ✅ 生产就绪 Production Ready

@@ -1,7 +1,7 @@
 # VibeSOP Project Status
 
 > **Last Updated**: 2026-04-29
-> **Version**: 5.4.0
+> **Version**: 5.4.1
 > **Status**: 🟢 Production Ready (SkillOS — Degradation, Discovery, Market Publish)
 
 ## Executive Summary
