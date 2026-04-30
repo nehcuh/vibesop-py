@@ -9,6 +9,56 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [5.4.0] - 2026-04-30
+
+### Philosophy Alignment — Build Fix & SkillOS Boundary
+
+- **Fixed critical bug**: `vibe build` was overwriting external skill SKILL.md files with thin Jinja2 wrapper templates on re-build. Fixed in all 3 adapters (Claude Code, OpenCode, Kimi CLI) by checking for valid symlinks before recreating.
+- **Removed built-in concrete skills** from `core/skills/`: `slash-analyze` and `planning-with-files`. VibeSOP now only ships management tools (slash-route, slash-help, slash-install, slash-list, slash-evaluate, slash-orchestrate) and one fallback workflow (riper-workflow).
+- **Updated registry and task-routing**: replaced `planning-with-files` references with `riper-workflow` as default fallback.
+- **Unified version to 5.4.0** across pyproject.toml, README.md.
+
+### Context Awareness & Learning — Auto-Enabled
+
+- **InstinctLearner auto-recording**: Fixed `result_mixin.py` to pass `context` instead of `None` to `_record_routing_decision`, enabling memory conversation recording alongside instinct learning.
+- **Session-aware re-route**: Added automatic `check_reroute_needed()` call in `_save_session_state()` after every routing decision. Enabled by default (`session_aware: true`), configurable via `.vibe/config.yaml`.
+- **Route hook integration**: Modified `vibesop-route.sh.j2` shared template to parse and display `reroute_suggestion` as `[Context shift: X → Y (85%)]` in system messages visible to the AI Agent.
+
+### Post-Install Build Hook (.tmpl Support)
+
+- **New**: `_run_post_install()` in `PackInstaller` supports template-based skill packs (e.g., gstack). Detects `.vibesop-build`, `BUILD.sh`, or `setup.sh` and executes them. Falls back to `bun run gen:skill-docs` for packs with `package.json`.
+- **Analyzer enhancement**: Detects `.vibesop-build`, `BUILD.sh`, and `setup.sh` as setup scripts during repo analysis.
+
+### Type Safety — 14 Errors → 0
+
+- Fixed 8 `reportOptionalMemberAccess` NPE risks in `feedback.py`, `task_decomposer.py`, `context.py`.
+- Fixed 6 `reportArgumentType` Path→str mismatches in `session_cmd.py`, `tracker.py`.
+- Fixed 30 `reportMissingTypeArgument` across CLI commands, core modules.
+- Fixed 6 unused functions with `# pyright: ignore` annotations.
+- Total warnings reduced from 240 to 220.
+
+### Performance Optimization
+
+- **Matcher pipeline early-exit**: High-confidence keyword matches (≥0.95) skip TF-IDF/Embedding/Levenshtein.
+- **Import hoisting**: Moved `KeywordMatcher` import from hot-path function to module level in `triage_service.py`.
+- **Candidate cache reuse**: Eliminated duplicate `get_cached_candidates()` call in `result_mixin.py`.
+
+### Cross-Platform Adapter Consistency
+
+- **Unified route hook parameters** across all 3 platforms: `enable_explicit_overrides=True`, `enable_orchestration=True`, `include_additional_context=True`, `no_match_message=True`.
+- **Fixed symlink bug**: `unlink()` fails on directories; changed to `is_symlink()` check before `unlink()`, `rmtree()` otherwise.
+- **DeprecationWarning cleanup**: Replaced deprecated `router.route()` calls with `router.orchestrate()` in `services/__init__.py` and `plan_builder.py`.
+
+### Documentation & Tests
+
+- **Updated PHILOSOPHY.md**: Added sections on skill content boundary, distribution principles, built-in skills list, and context-aware features.
+- **Updated SKILLS_GUIDE.md and session-intelligent-routing.md**: Replaced stale `planning-with-files` references.
+- **Added 11 tests**: symlink preservation in Claude Code/OpenCode/Kimi CLI adapters, post-install build hook detection (BUILD.sh, setup.sh, .vibesop-build, bun fallback, no-script).
+- **Added API docs generation**: `make docs` via pdoc, `make docs-serve` for local preview.
+- **Ruff clean**: All lint errors resolved.
+
+
+
 ## [5.3.3] - 2026-04-29
 
 ### Quality Convergence Sprint
