@@ -154,6 +154,90 @@ class TestPackInstaller:
             assert "PASS" in msg
             mock_auditor.audit_skill_file.assert_called_once()
 
+    @patch("vibesop.installer.pack_installer.SkillSecurityAuditor")
+    def test_install_pack_with_build_sh(self, mock_auditor_cls: Any) -> None:
+        """Pack with BUILD.sh should run build and report output."""
+        mock_audit = MagicMock()
+        mock_audit.is_safe = True
+        mock_auditor = MagicMock()
+        mock_auditor.audit_skill_file.return_value = mock_audit
+        mock_auditor_cls.return_value = mock_auditor
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = Path(tmpdir) / "test-pack"
+
+            installer = PackInstaller(external_paths=[Path(tmpdir)])
+
+            def _mock_clone(url: str, dest: Path) -> bool:
+                dest.mkdir(parents=True, exist_ok=True)
+                (dest / "SKILL.md").write_text("# Test\n")
+                (dest / "BUILD.sh").write_text("#!/bin/sh\necho 'built'")
+                return True
+
+            with patch("vibesop.installer.pack_installer.RepoAnalyzer") as mock_cls:
+                mock_analyzer = MagicMock()
+                mock_analyzer.analyze.return_value = MagicMock(
+                    errors=[],
+                    skill_files=[target_path / "SKILL.md"],
+                    setup_scripts=["BUILD.sh"],
+                )
+                mock_analyzer.git_clone.side_effect = _mock_clone
+                mock_cls.return_value = mock_analyzer
+
+                with patch("vibesop.installer.pack_installer.InstallPlanner") as planner_cls:
+                    mock_plan = MagicMock()
+                    mock_plan.target_path = target_path
+                    planner_cls.return_value.plan.return_value = mock_plan
+
+                    success, msg = installer.install_pack(
+                        "test-pack", "https://example.com/test-pack"
+                    )
+
+            assert success is True
+            assert "Build:" in msg
+            assert "BUILD.sh" in msg or "built" in msg
+
+    @patch("vibesop.installer.pack_installer.SkillSecurityAuditor")
+    def test_install_pack_without_build_script(self, mock_auditor_cls: Any) -> None:
+        """Pack without build script should not report Build line."""
+        mock_audit = MagicMock()
+        mock_audit.is_safe = True
+        mock_auditor = MagicMock()
+        mock_auditor.audit_skill_file.return_value = mock_audit
+        mock_auditor_cls.return_value = mock_auditor
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = Path(tmpdir) / "test-pack"
+
+            installer = PackInstaller(external_paths=[Path(tmpdir)])
+
+            def _mock_clone(url: str, dest: Path) -> bool:
+                dest.mkdir(parents=True, exist_ok=True)
+                (dest / "SKILL.md").write_text("# Test\n")
+                return True
+
+            with patch("vibesop.installer.pack_installer.RepoAnalyzer") as mock_cls:
+                mock_analyzer = MagicMock()
+                mock_analyzer.analyze.return_value = MagicMock(
+                    errors=[],
+                    skill_files=[target_path / "SKILL.md"],
+                    setup_scripts=[],
+                )
+                mock_analyzer.git_clone.side_effect = _mock_clone
+                mock_cls.return_value = mock_analyzer
+
+                with patch("vibesop.installer.pack_installer.InstallPlanner") as planner_cls:
+                    mock_plan = MagicMock()
+                    mock_plan.target_path = target_path
+                    planner_cls.return_value.plan.return_value = mock_plan
+
+                    success, msg = installer.install_pack(
+                        "test-pack", "https://example.com/test-pack"
+                    )
+
+            assert success is True
+            assert "Build:" not in msg
+
 
 class TestSkillSymlinks:
     """Tests for _create_skill_symlinks and _copy_skill_dirs."""
