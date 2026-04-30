@@ -117,6 +117,15 @@ def execute_build(
                     # Path is outside current directory, show absolute path
                     console.print(f"  📄 {file_path}")
 
+        if result.files_removed:
+            console.print(f"\n[yellow]🧹 Cleaned {len(result.files_removed)} orphan skill(s):[/yellow]")
+            for file_path in result.files_removed:
+                try:
+                    rel_path = Path(file_path).relative_to(Path.cwd())
+                    console.print(f"  🗑️  {rel_path}")
+                except ValueError:
+                    console.print(f"  🗑️  {file_path}")
+
         # Suggest deployment based on output location
         if str(output_dir) == str(Path.home() / ".claude"):
             console.print(

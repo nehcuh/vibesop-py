@@ -104,6 +104,13 @@ class ConfigRenderer:
             # Render configuration
             result = adapter.render_config(manifest, output_dir)
 
+            if result.success:
+                self._notify_progress("clean", "Cleaning orphan skills", 80)
+                removed = adapter.clean_orphan_skills(manifest, output_dir)
+                result.files_removed.extend(removed)
+                if removed:
+                    result.metadata["orphans_cleaned"] = len(removed)
+
             self._notify_progress("complete", "Rendering complete", 100)
 
             return result

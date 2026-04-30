@@ -4,12 +4,15 @@ This module provides the abstract base class that all platform
 adapters must inherit from, along with shared utility methods.
 """
 
+import logging
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any
 
 from vibesop.adapters.models import Manifest, RenderResult
 from vibesop.security import PathSafety, SecurityScanner
+
+logger = logging.getLogger(__name__)
 
 
 class PlatformAdapter(ABC):
@@ -107,6 +110,55 @@ class PlatformAdapter(ABC):
             Dictionary mapping hook names to installation status
         """
         return {}
+
+    def clean_orphan_skills(
+        self,
+        manifest: Manifest,
+        output_dir: Path,
+    ) -> list[Path]:
+        """Remove skill directories not present in the manifest.
+
+        After rendering, any skill directory in ``output_dir/skills/``
+        whose name does not correspond to a skill in the manifest is
+        considered an orphan and removed.  This prevents stale skills
+        from lingering in platform configs after they have been
+        deleted from the registry.
+
+        Args:
+            manifest: Current configuration manifest
+            output_dir: Platform output directory (contains skills/)
+
+        Returns:
+            List of paths that were removed
+        """
+        import shutil
+
+        skills_dir = Path(output_dir).expanduser().resolve() / "skills"
+        if not skills_dir.exists():
+            return []
+
+        expected_dirs = {
+            skill.id.replace("/", "-")
+            for skill in manifest.skills
+        }
+
+        removed: list[Path] = []
+        for item in skills_dir.iterdir():
+            if not item.is_dir() and not item.is_symlink():
+                continue
+            if item.name.startswith("."):
+                continue
+            if item.name not in expected_dirs:
+                try:
+                    if item.is_symlink():
+                        item.unlink(missing_ok=True)
+                    else:
+                        shutil.rmtree(item)
+                    removed.append(item)
+                except OSError as e:
+                    logger.debug(f"Failed to remove orphan skill dir {item}: {e}")
+
+        return removed
 
     # Utility methods
 

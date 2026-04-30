@@ -288,6 +288,7 @@ class RenderResult(BaseModel):
     Attributes:
         success: Whether rendering was successful
         files_created: List of files that were created
+        files_removed: List of files or directories that were removed
         warnings: List of warnings
         errors: List of errors
         metadata: Additional metadata
@@ -300,6 +301,10 @@ class RenderResult(BaseModel):
     files_created: list[Path] = Field(
         default_factory=list,
         description="List of files created",
+    )
+    files_removed: list[Path] = Field(
+        default_factory=list,
+        description="List of files or directories removed during orphan cleanup",
     )
     warnings: list[str] = Field(
         default_factory=list,
