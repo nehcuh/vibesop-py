@@ -498,7 +498,7 @@ Layer 0-6: 路由分析
 | **规划** | riper-workflow | omx/ralplan | gstack/plan-eng-review | 规划/设计 |
 | **重构** | superpowers/refactor | gstack/review | - | 代码质量 |
 | **持久执行** | omx/ralph | riper-workflow | - | 完整实现 |
-| **共识规划** | omx/ralplan | planning-with-files | gstack/plan-eng-review | 团队决策 |
+| **共识规划** | omx/ralplan | riper-workflow | gstack/plan-eng-review | 团队决策 |
 | **并行执行** | omx/team | omx/ultrawork | using-git-worktrees | 并行任务 |
 | **QA 循环** | omx/ultraqa | gstack/qa | gstack/qa-only | 测试循环 |
 
