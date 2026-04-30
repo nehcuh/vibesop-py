@@ -2032,6 +2032,7 @@ test = [
 [package.dev-dependencies]
 dev = [
     { name = "pdoc" },
+    { name = "pytest-cov" },
     { name = "pytest-rerunfailures" },
     { name = "pytest-xdist" },
 ]
@@ -2070,6 +2071,7 @@ provides-extras = ["dev", "test", "semantic", "all"]
 [package.metadata.requires-dev]
 dev = [
     { name = "pdoc", specifier = ">=16.0.0" },
+    { name = "pytest-cov", specifier = ">=6.3.0" },
     { name = "pytest-rerunfailures", specifier = ">=16.1" },
     { name = "pytest-xdist", specifier = ">=3.8.0" },
 ]

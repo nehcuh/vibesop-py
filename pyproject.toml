@@ -203,10 +203,6 @@ asyncio_mode = "auto"
 addopts = [
     "--strict-markers",
     "--strict-config",
-    "--cov=src/vibesop",
-    "--cov-report=term-missing",
-    "--cov-report=html",
-    "--cov-report=xml",
 ]
 markers = [
     "slow: marks tests as slow",
@@ -248,6 +244,7 @@ exclude_lines = [
 [dependency-groups]
 dev = [
     "pdoc>=16.0.0",
+    "pytest-cov>=6.3.0",
     "pytest-rerunfailures>=16.1",
     "pytest-xdist>=3.8.0",
 ]

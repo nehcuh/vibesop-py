@@ -22,8 +22,8 @@ type-check: ## Run type checking
 test: ## Run tests
 	uv run pytest
 
-test-fast: ## Run tests in parallel (faster, no coverage, skip slow/benchmark)
-	uv run pytest -n auto --no-cov -q -m "not benchmark and not slow"
+test-fast: ## Run tests fast (skip slow/benchmark)
+	uv run pytest -q -m "not benchmark and not slow"
 
 test-cov: ## Run tests with coverage
 	uv run pytest --cov=src/vibesop --cov-report=html
