@@ -14,88 +14,113 @@ VibeSOP 采用清晰的三层架构，每层有明确的职责和边界。这种
 - **可维护性** - 清晰的依赖关系
 - **可测试性** - 每层可独立测试
 
-> **定位**: VibeSOP 是 SkillOS（技能操作系统）。三层架构分别负责：
-> 构建 → 适配 → 路由+编排+管理。技能代码的最终执行由 AI Agent 完成。
+> **定位**: VibeSOP 是 SkillOS（技能操作系统）。核心三层架构分别负责：
+> 构建 → 适配 → 路由+编排+管理。自 v4.3.0 起新增 Agent Runtime、
+> CLI、集成、安全等横向支撑层。技能代码的最终执行由 AI Agent 完成。
 
 ---
 
-## 架构图
+## 架构图 (v5.4.1)
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                        Builder Layer                        │
-│                     (构建层 - builder/)                      │
-│                                                              │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐   │
-│  │ Manifest │→ │ Renderer │→ │Generator │→ │ Templates │   │
-│  └──────────┘  └──────────┘  └──────────┘  └──────────┘   │
-│         ↓             ↓             ↓             ↓          │
-└─────────┼─────────────┼─────────────┼─────────────┼─────────┘
-          │             │             │             │
-┌─────────┼─────────────┼─────────────┼─────────────┼─────────┐
-│         ↓             ↓             ↓             ↓          │
-│                    Adapter Layer                           │
-│                  (适配器层 - adapters/)                     │
-│                                                              │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐     │
-│  │ Claude Code  │  │  OpenCode    │  │   Future     │     │
-│  │   Adapter    │  │   Adapter    │  │   Adapters   │     │
-│  └──────────────┘  └──────────────┘  └──────────────┘     │
-│         ↓                  ↓                  ↓             │
-└─────────┼──────────────────┼──────────────────┼─────────────┘
-          │                  │                  │
-┌─────────┼──────────────────┼──────────────────┼─────────────┐
-│         ↓                  ↓                  ↓              │
-│                      Core Layer                                │
-│                   (核心层 - core/)                            │
-│                                                              │
-│  ┌─────────────────────────────────────────────────────┐   │
-│  │                    Routing                          │   │
-│  │  • UnifiedRouter (10层路由pipeline)                  │   │
-│  │  • TriageService (AI语义分流)                       │   │
-│  │  • CacheManager (缓存优化)                          │   │
-│  └─────────────────────────────────────────────────────┘   │
-│         ↓                                                     │
-│  ┌─────────────────────────────────────────────────────┐   │
-│  │                  Skills                             │   │
-│  │  • SkillManager (技能发现和执行)                     │   │
-│  │  • ExternalSkillExecutor (外部技能执行)              │   │
-│  │  • WorkflowEngine (工作流引擎)                       │   │
-│  └─────────────────────────────────────────────────────┘   │
-│         ↓                                                     │
-│  ┌─────────────────────────────────────────────────────┐   │
-│  │                 Matching                            │   │
-│  │  • TFIDFMatcher (TF-IDF相似度匹配)                   │   │
-│  │  • KeywordMatcher (关键词匹配)                      │   │
-│  │  • LevenshteinMatcher (模糊匹配)                    │   │
-│  └─────────────────────────────────────────────────────┘   │
-│         ↓                                                     │
-│  ┌─────────────────────────────────────────────────────┐   │
-│  │               Optimization                          │   │
-│  │  • PreferenceBooster (偏好学习)                     │   │
-│  │  • CandidatePrefilter (候选预筛选)                  │   │
-│  │  • SkillClusterIndex (技能聚类索引)                 │   │
-│  └─────────────────────────────────────────────────────┘   │
-│         ↓                                                     │
-│  ┌─────────────────────────────────────────────────────┐   │
-│  │               Intelligence                          │   │
-│  │  • InstinctLearner (本能学习)                       │   │
-│  │  • MemoryManager (记忆管理)                         │   │
-│  │  • SessionAnalyzer (会话分析)                       │   │
-│  └─────────────────────────────────────────────────────┘   │
-│         ↓                                                     │
-│  ┌─────────────────────────────────────────────────────┐   │
-│  │                Algorithms                           │   │
-│  │  • Interview (深度访谈算法)                         │   │
-│  │  • RALPH (持续完成循环)                             │   │
-│  │  • RALPLAN (共识规划)                                │   │
-│  └─────────────────────────────────────────────────────┘   │
-│                                                              │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐   │
-│  │   LLM    │  │ Security │  │  Config  │  │  Utils   │   │
-│  └──────────┘  └──────────┘  └──────────┘  └──────────┘   │
-└─────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────┐
+│                         CLI Layer (cli/)                          │
+│               vibe route │ orchestrate │ skills │ market          │
+└───────────────────────────┬──────────────────────────────────────┘
+                            │
+┌───────────────────────────▼──────────────────────────────────────┐
+│                    Agent Runtime Layer (agent/)                   │
+│       AgentRouter │ IntentInterceptor │ StepContextInjector       │
+│       PlanExecutor │ DecisionPresenter │ SlashCommandExecutor     │
+└───────────────────────────┬──────────────────────────────────────┘
+                            │
+┌───────────────────────────▼──────────────────────────────────────┐
+│                        Builder Layer (builder/)                   │
+│     Manifest │ Renderer │ DynamicRenderer │ DocGenerators         │
+│     DocModels │ DocTemplates │ Overlay │ templates/               │
+└───────────────────────────┬──────────────────────────────────────┘
+                            │
+┌───────────────────────────▼──────────────────────────────────────┐
+│                      Adapter Layer (adapters/)                    │
+│         Claude Code │ OpenCode │ Kimi CLI │ (future)              │
+└───────────────────────────┬──────────────────────────────────────┘
+                            │
+┌───────────────────────────▼──────────────────────────────────────┐
+│                        Core Layer (core/)                         │
+│                                                                    │
+│  ┌─ Routing ────┐ ┌─ Orchestration ─┐ ┌─ Skills ────────┐        │
+│  │ UnifiedRouter │ │ TaskDecomposer   │ │ SkillManager    │        │
+│  │ 10-layer pipe │ │ PlanBuilder      │ │ SkillLoader     │        │
+│  │ TriageService │ │ MultiIntentDet.  │ │ LifecycleManager│        │
+│  └───────────────┘ └─────────────────┘ └─────────────────┘        │
+│                                                                    │
+│  ┌─ Matching ───┐ ┌─ Optimization ──┐ ┌─ Intelligence ──┐        │
+│  │ KeywordMatcher│ │ PreferenceBoost │ │ InstinctLearner  │        │
+│  │ TFIDFMatcher │ │ CandidateFilter │ │ MemoryManager    │        │
+│  │ Levenshtein  │ │ SkillClusterIdx │ │ SessionAnalyzer  │        │
+│  └──────────────┘ └─────────────────┘ └──────────────────┘        │
+│                                                                    │
+│  ┌─ Config ─────┐ ┌─ Feedback ──────┐ ┌─ Orchestration ─┐        │
+│  │ ConfigManager│ │ FeedbackCollector│ │ DegradationMgr  │        │
+│  └──────────────┘ └─────────────────┘ └──────────────────┘        │
+└──────────────────────────────────────────────────────────────────┘
+
+横向支撑层 (Cross-cutting):
+┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐
+│ Security │ │Installer │ │  Market  │ │Integrations│ │   LLM    │
+│ (security)│ │(installer│ │ (market) │ │(integrations│ │  (llm)   │
+│          │ │    /)    │ │          │ │   /)     │ │          │
+│ Scanner  │ │Pack      │ │Crawler   │ │Health     │ │Anthropic │
+│ Auditor  │ │Installer │ │Publisher │ │Monitor    │ │OpenAI    │
+│ PathSafe │ │Txnal     │ │          │ │Recommender│ │Ollama    │
+│ Rules    │ │InitSup   │ │          │ │Detector   │ │DeepSeek  │
+└──────────┘ └──────────┘ └──────────┘ └──────────┘ └──────────┘
 ```
+
+---
+
+## 第零层：CLI + Agent Runtime 层 (cli/ + agent/)
+
+自 v4.3.0 起新增，位于 Core 层之上，提供面向用户和 AI Agent 的入口。
+
+### CLI 层 (cli/)
+
+**职责**: 面向用户的命令行入口。
+
+**核心组件**:
+```python
+cli/
+├── main.py              # vibe route / orchestrate / doctor / status
+├── commands/            # 子命令模块
+│   ├── skills_cmd.py    # vibe skills list/info/install/optimize
+│   ├── market_cmd.py    # vibe market search/install/publish
+│   └── ...
+├── routing_report.py    # 路由透明度渲染
+├── orchestration_report.py # 编排结果渲染
+└── confirmation.py      # 用户确认交互
+```
+
+### Agent Runtime 层 (agent/)
+
+**职责**: 为 AI Agent 提供 in-process Python API，无需外部 API key。
+
+**核心组件**:
+```python
+agent/
+├── runtime/
+│   ├── plan_executor.py         # 多步骤编排执行
+│   ├── intent_interceptor.py    # 意图拦截与 slash 命令
+│   ├── context_injector.py      # SKILL.md 内容注入
+│   └── decision_presenter.py    # 路由决策呈现
+├── step_runner.py               # 步骤并行执行引擎
+└── __init__.py                  # AgentRouter (复用 Agent 内部 LLM)
+```
+
+**关键特性**:
+- ✅ 无需外部 API key（in-process 模式下复用 Agent LLM）
+- ✅ 直接 Python API（无子进程开销）
+- ✅ 与 Agent 会话状态深度集成
+- ⚠️ CLI 子进程模式仍需单独配置 LLM
 
 ---
 

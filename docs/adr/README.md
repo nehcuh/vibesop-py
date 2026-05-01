@@ -1,0 +1,28 @@
+# Architecture Decision Records
+
+> **Purpose**: Document significant architectural decisions with context, options, and rationale.
+
+| # | Date | Title | Status |
+|---|------|-------|--------|
+| [001](001-skill-ecosystem-evolution.md) | 2026-04-21 | Skill Ecosystem Evolution (v5.x Roadmap) | ✅ implemented |
+| [002](002-optimization-roadmap-v55.md) | 2026-05-01 | v5.4 → v5.5 Quality Convergence Roadmap | 📋 active |
+
+## ADR Format
+
+Each ADR follows a standard structure:
+
+```markdown
+# ADR NNN: Title
+
+**Date**: YYYY-MM-DD
+**Status**: proposed | approved | implemented | superseded
+
+## Context
+What is the issue motivating this decision?
+
+## Decision
+What is the change we're proposing?
+
+## Consequences
+What becomes easier or harder because of this change?
+```
