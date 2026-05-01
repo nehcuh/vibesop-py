@@ -35,6 +35,70 @@ PARALLEL_KEYWORDS = (
     "之后",
 )
 
+# Standard capability tags and their task_type mapping
+# When a sub-task has task_type X, prefer skills with capability X
+CAPABILITY_TO_TASK_TYPE: dict[str, str] = {
+    "analysis": "analysis",
+    "review": "review",
+    "design": "design",
+    "debug": "debug",
+    "refactor": "refactor",
+    "plan": "plan",
+    "test": "test",
+    "deploy": "deploy",
+    "clarify": "clarify",
+    "optimize": "optimize",
+    "security": "security",
+    "document": "document",
+}
+
+# Skill capability registry — maps skill_id to capability tags
+# Built from core/registry.yaml intent descriptions and SKILL.md documentation.
+_SKILL_CAPABILITIES: dict[str, list[str]] = {
+    # builtin
+    "riper-workflow": ["plan", "design", "analysis", "review"],
+    "autonomous-experiment": ["optimize", "test", "analysis"],
+    "session-end": ["document"],
+    "experience-evolution": ["analysis", "document"],
+    "skill-craft": ["analysis", "design"],
+    "instinct-learning": ["analysis"],
+    # gstack
+    "gstack/review": ["review", "security"],
+    "gstack/investigate": ["debug", "analysis"],
+    "gstack/qa": ["test", "review"],
+    "gstack/qa-only": ["test", "review"],
+    "gstack/office-hours": ["clarify", "design", "plan"],
+    "gstack/plan-ceo-review": ["review", "plan", "design"],
+    "gstack/plan-eng-review": ["review", "plan", "design"],
+    "gstack/plan-design-review": ["review", "design"],
+    "gstack/design-consultation": ["design"],
+    "gstack/design-review": ["review", "design"],
+    "gstack/ship": ["deploy", "review"],
+    "gstack/document-release": ["document"],
+    "gstack/codex": ["review"],
+    "gstack/browse": ["test"],
+    "gstack/careful": ["security"],
+    "gstack/cso": ["security", "review"],
+    "gstack/retro": ["analysis", "document"],
+    "gstack/benchmark": ["test", "analysis"],
+    # superpowers
+    "superpowers/architect": ["design", "analysis", "plan"],
+    "superpowers/review": ["review"],
+    "superpowers/refactor": ["refactor", "design"],
+    "superpowers/debug": ["debug", "analysis"],
+    "superpowers/tdd": ["test", "refactor"],
+    "superpowers/optimize": ["optimize", "analysis"],
+    "superpowers/brainstorm": ["clarify", "design"],
+    # omx
+    "omx/deep-interview": ["clarify", "analysis", "plan"],
+    "omx/ralph": ["plan", "refactor", "design"],
+    "omx/ralplan": ["plan", "design"],
+    "omx/team": ["plan", "deploy"],
+    "omx/ultrawork": ["plan", "deploy"],
+    "omx/autopilot": ["plan", "review", "test"],
+    "omx/ultraqa": ["test", "review", "debug"],
+}
+
 
 class PlanBuilder:
     """Builds an ExecutionPlan from decomposed sub-tasks.
@@ -46,12 +110,74 @@ class PlanBuilder:
     - Keywords like "同时", "parallel", "simultaneously" trigger parallel mode
     - Dependencies are inferred from task descriptions
     - Steps without dependencies can run in parallel
+
+    Capability matching (v5.5):
+    - Skills have capability tags (analysis, review, design, debug, etc.)
+    - Sub-tasks have task_types
+    - Matching boosts confidence for skills whose capabilities align with task_type
     """
 
     MIN_STEP_CONFIDENCE: float = 0.3
 
     def __init__(self, router: UnifiedRouter):
         self._router = router
+
+    @classmethod
+    def _capability_score(cls, skill_id: str, task_type: str) -> float:
+        """Score a skill's match against a task type based on capability tags.
+
+        Returns 0.0-1.0 where:
+        - 1.0 = exact capability match
+        - 0.5 = related capability (e.g., "analysis" for "debug" task)
+        - 0.0 = no matching capability
+        """
+        if not task_type:
+            return 0.0
+        caps = _SKILL_CAPABILITIES.get(skill_id, [])
+        if task_type in caps:
+            return 1.0
+        # Related capability scoring
+        related: dict[str, list[str]] = {
+            "debug": ["analysis"],
+            "analysis": ["debug", "optimize"],
+            "optimize": ["analysis"],
+            "review": ["security", "test"],
+            "test": ["review", "debug"],
+            "design": ["plan"],
+            "plan": ["design"],
+            "clarify": ["analysis", "design"],
+        }
+        related_caps = related.get(task_type, [])
+        overlap = set(caps) & set(related_caps)
+        return 0.5 if overlap else 0.0
+
+    @classmethod
+    def _select_best_by_capability(
+        cls,
+        primary_skill_id: str,
+        primary_confidence: float,
+        alternatives: list[Any],  # list[SkillRoute]
+        task_type: str,
+    ) -> tuple[str, float]:
+        """Select the best skill for a task_type, considering capabilities.
+
+        Returns (skill_id, adjusted_confidence).
+        """
+        if not task_type:
+            return primary_skill_id, primary_confidence
+
+        best_skill = primary_skill_id
+        best_score = (
+            primary_confidence + cls._capability_score(primary_skill_id, task_type) * 0.15
+        )
+
+        for alt in alternatives:
+            alt_score = alt.confidence + cls._capability_score(alt.skill_id, task_type) * 0.15
+            if alt_score > best_score:
+                best_score = alt_score
+                best_skill = alt.skill_id
+
+        return best_skill, min(best_score, 1.0)
 
     def build_plan(
         self,
@@ -120,6 +246,27 @@ class PlanBuilder:
 
                 skill_id = route_result.primary.skill_id
                 confidence = route_result.primary.confidence
+
+                # Apply capability matching boost when sub-task has a task_type
+                task_type = getattr(sub_task, "task_type", None) or ""
+                alternatives = getattr(route_result, "alternatives", [])
+                if task_type and alternatives:
+                    adjusted_id, adjusted_conf = self._select_best_by_capability(
+                        skill_id,
+                        confidence,
+                        alternatives,
+                        task_type,
+                    )
+                    if adjusted_id != skill_id:
+                        logger.info(
+                            "Capability boost: sub-task %d '%s' → %s (task_type=%s)",
+                            i,
+                            sub_task.intent,
+                            adjusted_id,
+                            task_type,
+                        )
+                        skill_id = adjusted_id
+                        confidence = adjusted_conf
 
             detected_intents.append(sub_task.intent)
             reasoning_parts.append(f"Step {i}: '{sub_task.intent}' → {skill_id} ({confidence:.0%})")

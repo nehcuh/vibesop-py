@@ -21,6 +21,7 @@ class SubTask:
     query: str
     source: str = "llm"  # "llm" | "rule_fallback" | "skill_name"
     skill_id: str | None = None  # Pre-assigned skill ID from LLM decomposition
+    task_type: str = ""  # "analysis" | "review" | "design" | "debug" | "refactor" | "plan" | "test"
 
 
 class TaskDecomposer:

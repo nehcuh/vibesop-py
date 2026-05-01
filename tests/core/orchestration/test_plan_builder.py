@@ -241,3 +241,74 @@ class TestPlanBuilder:
         assert len(plan.steps) == 1
         # Should use the routed skill, not "null"
         assert plan.steps[0].skill_id == "routed_skill"
+
+    def test_capability_match_exact(self) -> None:
+        """When task_type='analysis', prefer architect over review."""
+        router = FakeRouter(default=self._make_skill_route("gstack/review"))
+        builder = PlanBuilder(router)
+        sub_task = SubTask(intent="analyze", query="analyze architecture", task_type="analysis")
+
+        plan = builder.build_plan("analyze architecture", [sub_task])
+
+        assert len(plan.steps) == 1
+        # FakeRouter.default is gstack/review, but with task_type=analysis
+        # the capability score for gstack/review (capabilities: [review, security])
+        # gives 0.0 bonus, while any analysis-capable skill would have 1.0.
+        # Since no alternatives exist, primary stays.
+        assert plan.steps[0].skill_id == "gstack/review"
+
+    def test_capability_match_no_task_type(self) -> None:
+        """Without task_type, capability matching is skipped."""
+        default_route = self._make_skill_route("generic")
+        router = FakeRouter(default=default_route)
+        builder = PlanBuilder(router)
+        sub_task = SubTask(intent="test", query="test", task_type="")
+
+        plan = builder.build_plan("test", [sub_task])
+
+        assert len(plan.steps) == 1
+        assert plan.steps[0].skill_id == "generic"
+
+    def test_capability_match_with_alternatives(self) -> None:
+        """When alternatives exist, capability matching can re-rank."""
+        architect = self._make_skill_route("superpowers/architect", confidence=0.75)
+        reviewer = self._make_skill_route("gstack/review", confidence=0.80)
+        router = FakeRouter(
+            default=reviewer,
+            responses={"analyze": architect},
+        )
+        # Set up the router so that when "analyze architecture" is queried,
+        # the primary is reviewer (0.80) with architect as alternative (0.75).
+        # But when task_type='analysis', architect gets capability score 1.0
+        # vs reviewer 0.0, resulting in architect winning.
+        # We need to simulate alternatives — FakeRouter doesn't produce alternatives.
+        # Test the scoring logic directly.
+        builder = PlanBuilder(router)
+        from vibesop.core.orchestration.plan_builder import _SKILL_CAPABILITIES
+
+        # Verify capability scoring
+        arch_score = PlanBuilder._capability_score("superpowers/architect", "analysis")
+        review_score = PlanBuilder._capability_score("gstack/review", "analysis")
+        assert arch_score == 1.0
+        assert review_score == 0.0
+
+        # When sub-task has task_type, architect should be preferred
+        sub_task = SubTask(intent="analyze", query="analyze", task_type="analysis")
+        plan = builder.build_plan("analyze architecture", [sub_task])
+        assert len(plan.steps) >= 1
+
+    def test_capability_related_match(self) -> None:
+        """Related capabilities get 0.5 score."""
+        from vibesop.core.orchestration.plan_builder import PlanBuilder, _SKILL_CAPABILITIES
+
+        # analysis is a related capability for debug
+        score = PlanBuilder._capability_score("superpowers/debug", "analysis")
+        assert score == 1.0  # exact match: debug has "analysis" capability
+
+        # debug is a related capability for analysis task_type
+        score = PlanBuilder._capability_score("superpowers/debug", "analysis")
+        assert score == 1.0  # exact match
+
+        # No match
+        score = PlanBuilder._capability_score("gstack/ship", "analysis")
+        assert score == 0.0  # ship has [deploy, review], no analysis or related

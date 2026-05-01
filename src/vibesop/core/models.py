@@ -548,6 +548,7 @@ class SkillDefinition(BaseModel):
         scope: Availability scope (global or project-specific)
         enabled: Whether this skill is enabled for routing
         version: Skill version string
+        capabilities: What this skill can do (analysis, review, design, debug, etc.)
     """
 
     id: str = Field(..., min_length=1, description="Skill ID")
@@ -573,6 +574,10 @@ class SkillDefinition(BaseModel):
     version: str = Field(
         default="1.0.0",
         description="Skill version",
+    )
+    capabilities: list[str] = Field(
+        default_factory=list,
+        description="Capability tags: analysis, review, design, debug, refactor, plan, test, etc.",
     )
 
 
