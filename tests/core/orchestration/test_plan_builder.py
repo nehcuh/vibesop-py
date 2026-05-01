@@ -6,6 +6,7 @@ from typing import Any
 
 import pytest
 
+from vibesop.core.matching import RoutingContext
 from vibesop.core.models import (
     ExecutionMode,
     RoutingLayer,
@@ -17,16 +18,19 @@ from vibesop.core.orchestration.task_decomposer import SubTask
 
 
 class FakeRouter:
-    """Minimal stub for UnifiedRouter with controllable route() results."""
+    """Minimal stub for UnifiedRouter with controllable _single_skill_route results."""
 
     def __init__(self, responses: dict[str, SkillRoute] | None = None, default: SkillRoute | None = None) -> None:
         self._responses = responses or {}
         self._default = default
         self._calls: list[str] = []
+        self._context_calls: list[RoutingContext | None] = []
 
-    def route(self, query: str, **kwargs: Any) -> RoutingResult:
+    def _single_skill_route(
+        self, query: str, context: RoutingContext | None = None, **kwargs: Any
+    ) -> RoutingResult:
         self._calls.append(query)
-        # Try exact match first, then prefix match (PlanBuilder adds context text)
+        self._context_calls.append(context)
         match = self._responses.get(query)
         if match is None:
             for prefix, route in self._responses.items():
@@ -122,7 +126,7 @@ class TestPlanBuilder:
         assert len(plan.steps) == 1
         assert plan.execution_mode == ExecutionMode.SEQUENTIAL
 
-    def test_low_confidence_step_skipped(self) -> None:
+    def test_low_confidence_step_included(self) -> None:
         router = FakeRouter({
             "analyze": self._make_skill_route("architect", confidence=0.3),
         })
@@ -130,7 +134,9 @@ class TestPlanBuilder:
 
         plan = builder.build_plan("analyze this", [SubTask(intent="analyze", query="analyze")])
 
-        assert len(plan.steps) == 0
+        # Low-confidence steps are now included so the plan is faithful to decomposition
+        assert len(plan.steps) == 1
+        assert plan.steps[0].skill_id == "architect"
 
     def test_no_match_step_skipped(self) -> None:
         router = FakeRouter({})  # No matching route
@@ -185,7 +191,7 @@ class TestPlanBuilder:
         assert plan.execution_mode == ExecutionMode.SEQUENTIAL
         # In sequential mode, step 2 should depend on step 1
         assert plan.steps[0].dependencies == []
-        assert plan.steps[1].dependencies == ["step_1"]
+        assert plan.steps[1].dependencies == [plan.steps[0].step_id]
         assert plan.steps[0].can_parallel is True
         assert plan.steps[1].can_parallel is False
 
@@ -204,3 +210,34 @@ class TestPlanBuilder:
         plan = builder.build_plan(f"do a {keyword} b", sub_tasks)
 
         assert plan.execution_mode == ExecutionMode.PARALLEL
+
+    def test_skip_ai_triage_context_passed(self) -> None:
+        """Verify PlanBuilder passes skip_ai_triage=True through RoutingContext."""
+        router = FakeRouter({
+            "analyze": self._make_skill_route("architect"),
+        })
+        builder = PlanBuilder(router)
+
+        plan = builder.build_plan(
+            "analyze architecture",
+            [SubTask(intent="analyze", query="analyze")],
+        )
+
+        assert len(plan.steps) == 1
+        # Verify skip_ai_triage was passed through context
+        assert router._context_calls
+        ctx = router._context_calls[0]
+        assert ctx is not None
+        assert ctx.skip_ai_triage is True
+
+    def test_pre_assigned_skill_id_default(self) -> None:
+        """When TaskDecomposer assigns a default skill_id (null), fallback to routing."""
+        router = FakeRouter(default=self._make_skill_route("routed_skill"))
+        builder = PlanBuilder(router)
+        sub_task = SubTask(intent="test", query="some query", skill_id="null")
+
+        plan = builder.build_plan("test", [sub_task])
+
+        assert len(plan.steps) == 1
+        # Should use the routed skill, not "null"
+        assert plan.steps[0].skill_id == "routed_skill"

@@ -38,8 +38,8 @@ VibeSOP 是 **SkillOS（技能操作系统）**——管理技能的全生命周
 - **智能路由**：理解意图，从 50+ 技能中匹配最佳
   **Intelligent Routing** — understand intent, match the best from 50+ skills
 
-- **任务编排**：复杂请求自动分解，串行/并行执行计划
-  **Task Orchestration** — decompose complex requests, serial/parallel execution plans
+- **任务编排**：复杂请求自动分解，生成串行/分组执行计划
+  **Task Orchestration** — decompose complex requests, generate serial/grouped execution plans
 
 - **生命周期管理**：启禁用、作用域隔离、质量评估、自动淘汰
   **Lifecycle Management** — enable/disable, scope isolation, quality evaluation, auto-deprecation

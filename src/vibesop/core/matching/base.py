@@ -64,6 +64,8 @@ class RoutingContext:
     recent_queries: list[str] = field(default_factory=list)
     current_skill: str | None = None
     habit_boosts: dict[str, float] = field(default_factory=dict)
+    strategy_hint: str | None = None
+    skip_ai_triage: bool = False
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization."""

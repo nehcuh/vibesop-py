@@ -265,7 +265,7 @@ The combination of intelligent routing, secure execution, cross-platform compati
 
 ---
 
-**Version**: 5.3.2
+**Version**: 5.4.1
 **Status**: 🟢 Production Ready — Product Experience Mature
-**Last Updated**: 2026-04-29
+**Last Updated**: 2026-05-01
 **Repository**: https://github.com/nehcuh/vibesop-py

@@ -1,7 +1,7 @@
 # VibeSOP Roadmap
 
-> **Version**: 5.4.0
-> **Last Updated**: 2026-04-29
+> **Version**: 5.4.1
+> **Last Updated**: 2026-05-01
 > **Status**: Active Development
 
 ---
@@ -486,4 +486,4 @@ See something missing? Want to accelerate a feature?
 
 ---
 
-*Last updated: 2026-04-28 (v5.3.0 released; all v5.x ADR phases complete; v6.0 planning)*
+*Last updated: 2026-05-01 (v5.4.1 — quality convergence; all v5.x ADR phases complete; v6.0 planning)*

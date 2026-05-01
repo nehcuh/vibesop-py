@@ -172,6 +172,15 @@ def try_ai_triage_layer(
     """
     triage_start = time.perf_counter()
 
+    # Respect skip_ai_triage from context (used by PlanBuilder for sub-task routing)
+    if context and getattr(context, "skip_ai_triage", False):
+        return None, LayerDetail(
+            layer=RoutingLayer.AI_TRIAGE,
+            matched=False,
+            reason="AI triage skipped (context.skip_ai_triage=True)",
+            duration_ms=(time.perf_counter() - triage_start) * 1000,
+        )
+
     # Short-query bypass: queries under N chars skip AI Triage
     # because short queries are usually explicit skill names or keywords,
     # which the traditional matchers handle faster and more accurately.

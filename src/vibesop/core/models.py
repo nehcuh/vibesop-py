@@ -280,7 +280,7 @@ class ExecutionMode(StrEnum):
     """Execution mode for a plan."""
 
     SEQUENTIAL = "sequential"  # Steps run one after another
-    PARALLEL = "parallel"  # Independent steps run concurrently
+    PARALLEL = "parallel"  # Steps grouped for concurrent execution (execution by Agent, not here)
     MIXED = "mixed"  # Automatically determine based on dependencies
 
 

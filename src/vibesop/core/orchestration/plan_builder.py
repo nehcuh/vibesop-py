@@ -7,6 +7,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
+from vibesop.core.matching import RoutingContext
 from vibesop.core.models import (
     ExecutionMode,
     ExecutionPlan,
@@ -47,7 +48,7 @@ class PlanBuilder:
     - Steps without dependencies can run in parallel
     """
 
-    MIN_STEP_CONFIDENCE: float = 0.5
+    MIN_STEP_CONFIDENCE: float = 0.3
 
     def __init__(self, router: UnifiedRouter):
         self._router = router
@@ -66,84 +67,85 @@ class PlanBuilder:
         reasoning_parts: list[str] = []
 
         # Sub-tasks should use lightweight local matching only (keyword/scenario).
-        # Disable AI Triage temporarily to prevent N serial LLM calls that can
-        # take minutes on slow providers (e.g., DeepSeek during peak hours).
-        config = getattr(self._router, "_config", None)
-        original_ai_triage = getattr(config, "enable_ai_triage", None)
-        if config is not None and original_ai_triage is not None:
-            config.enable_ai_triage = False
+        # Pass skip_ai_triage through RoutingContext instead of mutating config
+        # to keep the router thread-safe and avoid N serial LLM calls.
+        sub_context = RoutingContext(skip_ai_triage=True)
 
-        try:
-            for i, sub_task in enumerate(sub_tasks, 1):
-                # Build contextualized query for this step
-                contextualized_query = self._build_step_query(original_query, sub_task.query, i, steps)
+        last_step_id: str | None = None
+        for i, sub_task in enumerate(sub_tasks, 1):
+            # Build contextualized query for this step
+            contextualized_query = self._build_step_query(original_query, sub_task.query, i, steps)
 
-                # Route to best skill for this sub-task
-                # Prefer LLM-assigned skill_id from decomposition if available
-                pre_assigned = getattr(sub_task, "skill_id", None)
-                if pre_assigned and pre_assigned != "null":
-                    skill_id = pre_assigned
-                    confidence = 0.99
-                else:
-                    # Use single-skill routing for sub-tasks to avoid recursive
-                    # orchestration (which would trigger repeated multi-intent detection
-                    # and cause exponential LLM calls / timeouts).
-                    route_method = getattr(self._router, "_single_skill_route", None)
-                    if route_method is None:
-                        route_method = getattr(self._router, "orchestrate", None)
-                    if route_method is None:
-                        route_method = getattr(self._router, "route", None)
-                    if route_method is None:
-                        logger.warning("Router has no route method, skipping sub-task %d", i)
-                        continue
-                    route_result = route_method(contextualized_query)
+            # Route to best skill for this sub-task
+            # Prefer LLM-assigned skill_id from decomposition if available
+            pre_assigned = getattr(sub_task, "skill_id", None)
+            if pre_assigned and pre_assigned != "null":
+                skill_id = pre_assigned
+                confidence = 0.99
+            else:
+                # Use single-skill routing for sub-tasks to avoid recursive
+                # orchestration (which would trigger repeated multi-intent detection
+                # and cause exponential LLM calls / timeouts).
+                route_method = getattr(self._router, "_single_skill_route", None)
+                if route_method is None:
+                    route_method = getattr(self._router, "orchestrate", None)
+                if route_method is None:
+                    route_method = getattr(self._router, "route", None)
+                if route_method is None:
+                    logger.warning("Router has no route method, skipping sub-task %d", i)
+                    continue
+                route_result = route_method(contextualized_query, context=sub_context)
 
-                    if route_result.primary is None:
-                        logger.warning("No skill match for sub-task %d: %s", i, sub_task.query[:50])
-                        continue
+                if route_result.primary is None:
+                    logger.warning("No skill match for sub-task %d: %s", i, sub_task.query[:50])
+                    continue
 
-                    if (
-                        route_result.primary.layer == RoutingLayer.FALLBACK_LLM
-                        or route_result.primary.skill_id == "fallback-llm"
-                    ):
-                        logger.warning(
-                            "Fallback LLM for sub-task %d, skipping: %s", i, sub_task.query[:50]
-                        )
-                        continue
-
-                    if route_result.primary.confidence < self.MIN_STEP_CONFIDENCE:
-                        logger.warning(
-                            "Low confidence (%s) for sub-task %d, skipping",
-                            route_result.primary.confidence,
-                            i,
-                        )
-                        continue
-
-                    skill_id = route_result.primary.skill_id
-                    confidence = route_result.primary.confidence
-
-                detected_intents.append(sub_task.intent)
-                reasoning_parts.append(f"Step {i}: '{sub_task.intent}' → {skill_id} ({confidence:.0%})")
-
-                # Determine dependencies based on execution mode
-                dependencies, can_parallel = self._determine_dependencies(i, sub_task, execution_mode)
-
-                steps.append(
-                    ExecutionStep(
-                        step_id=str(uuid.uuid4())[:8],
-                        step_number=i,
-                        skill_id=skill_id,
-                        intent=sub_task.intent,
-                        input_query=contextualized_query,
-                        output_as=f"step_{i}_result",
-                        status=StepStatus.PENDING,
-                        dependencies=dependencies,
-                        can_parallel=can_parallel,
-                    )
+                is_fallback = (
+                    route_result.primary.layer == RoutingLayer.FALLBACK_LLM
+                    or route_result.primary.skill_id == "fallback-llm"
                 )
-        finally:
-            if config is not None and original_ai_triage is not None:
-                config.enable_ai_triage = original_ai_triage
+                if is_fallback:
+                    logger.warning(
+                        "Fallback LLM for sub-task %d, using anyway: %s",
+                        i,
+                        sub_task.query[:50],
+                    )
+
+                if route_result.primary.confidence < self.MIN_STEP_CONFIDENCE and not is_fallback:
+                    logger.warning(
+                        "Low confidence (%s) for sub-task %d, using anyway",
+                        route_result.primary.confidence,
+                        i,
+                    )
+
+                skill_id = route_result.primary.skill_id
+                confidence = route_result.primary.confidence
+
+            detected_intents.append(sub_task.intent)
+            reasoning_parts.append(f"Step {i}: '{sub_task.intent}' → {skill_id} ({confidence:.0%})")
+
+            step_number = len(steps) + 1
+            step_id = str(uuid.uuid4())[:8]
+
+            # Determine dependencies based on execution mode
+            dependencies, can_parallel = self._determine_dependencies(
+                step_number, sub_task, execution_mode, last_step_id
+            )
+
+            steps.append(
+                ExecutionStep(
+                    step_id=step_id,
+                    step_number=step_number,
+                    skill_id=skill_id,
+                    intent=sub_task.intent,
+                    input_query=contextualized_query,
+                    output_as=f"step_{step_number}_result",
+                    status=StepStatus.PENDING,
+                    dependencies=dependencies,
+                    can_parallel=can_parallel,
+                )
+            )
+            last_step_id = step_id
 
         return ExecutionPlan(
             plan_id=str(uuid.uuid4())[:12],
@@ -196,21 +198,24 @@ class PlanBuilder:
         step_number: int,
         sub_task: Any,
         execution_mode: ExecutionMode,
+        previous_step_id: str | None = None,
     ) -> tuple[list[str], bool]:
         """Determine dependencies and parallel capability for a step.
 
         Args:
-            step_number: The step's position (1-indexed)
+            step_number: The step's position in the final plan (1-indexed)
             sub_task: The SubTask object
             execution_mode: The detected execution mode
+            previous_step_id: The step_id of the last successfully added step,
+                              if any. Used to create valid dependency references.
 
         Returns:
             Tuple of (dependencies list, can_parallel bool)
         """
         if execution_mode == ExecutionMode.SEQUENTIAL:
-            # Sequential: each step depends on the previous
-            if step_number > 1:
-                return [f"step_{step_number - 1}"], False
+            # Sequential: each step depends on the previous actual step
+            if step_number > 1 and previous_step_id is not None:
+                return [previous_step_id], False
             return [], True
 
         if execution_mode == ExecutionMode.PARALLEL:
@@ -234,8 +239,8 @@ class PlanBuilder:
 
         has_dependency = any(indicator in intent_lower for indicator in dependency_indicators)
 
-        if has_dependency and step_number > 1:
-            return [f"step_{step_number - 1}"], False
+        if has_dependency and step_number > 1 and previous_step_id is not None:
+            return [previous_step_id], False
 
         return [], True
 

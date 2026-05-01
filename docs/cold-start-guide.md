@@ -1,7 +1,7 @@
 # Cold Start Strategy
 
-> **Version**: 5.3.0
-> **Last Updated**: 2026-04-06
+> **Version**: 5.4.1
+> **Last Updated**: 2026-05-01
 
 ## Overview
 

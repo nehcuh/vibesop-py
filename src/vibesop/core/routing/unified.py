@@ -345,7 +345,7 @@ class UnifiedRouter(
                 start_time, deprecated_warnings, conversation, original_query, context,
             )
 
-        use_keyword_routing = self._should_use_keyword_routing(query)
+        use_keyword_routing = self._should_use_keyword_routing(query, context)
 
         if use_keyword_routing:
             # Layer 1: Scenario Pattern
@@ -411,10 +411,14 @@ class UnifiedRouter(
 
         return None
 
-    def _should_use_keyword_routing(self, query: str) -> bool:
+    def _should_use_keyword_routing(self, query: str, context: RoutingContext | None = None) -> bool:
         """Determine whether to use keyword-based routing or LLM semantic triage."""
         keyword_max_chars = getattr(self._config, "keyword_match_max_chars", 5)
         use_keyword = len(query) <= keyword_max_chars
+
+        # Respect skip_ai_triage from context (used by PlanBuilder for sub-task routing)
+        if context and getattr(context, "skip_ai_triage", False):
+            return True
 
         llm_available = (
             self._llm is not None or self._triage_service._llm is not None
