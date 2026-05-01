@@ -55,7 +55,7 @@ class TestInitSupport:
         vibe_dir = tmp_path / ".vibe"
         assert vibe_dir.exists()
         assert (vibe_dir / "skills").exists()
-        assert (vibe_dir / "config.yaml").exists()
+        assert (vibe_dir / "config.toml").exists()
 
     def test_verify_init(self, tmp_path: Path) -> None:
         """Test verifying project initialization."""

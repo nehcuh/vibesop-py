@@ -22,9 +22,9 @@ class TestInitSupport:
         assert (tmp_path / ".vibe").exists()
 
     def test_init_project_creates_config(self, tmp_path: Path) -> None:
-        """Test that init_project creates config.yaml."""
+        """Test that init_project creates config.toml."""
         init = InitSupport()
         init.init_project(project_path=tmp_path)
 
-        config_file = tmp_path / ".vibe" / "config.yaml"
+        config_file = tmp_path / ".vibe" / "config.toml"
         assert config_file.exists()
