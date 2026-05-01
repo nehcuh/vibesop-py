@@ -114,7 +114,11 @@ if [ -n "$OVERRIDE" ]; then
     SKILL_ID="${OVERRIDE#/}"
     SKILL_ID="${SKILL_ID#@}"
     SKILL_ID=$(echo "$SKILL_ID" | sed 's/使用 *//')
+{% if hook_event_name %}
+    echo "{\"systemMessage\": \"🎯 Explicit skill override: $SKILL_ID\", \"hookSpecificOutput\": {\"hookEventName\": \"{{ hook_event_name }}\", \"additionalContext\": \"[EXPLICIT SKILL: $SKILL_ID]\nPlease load and follow this skill.\"}}"
+{% else %}
     echo "{\"systemMessage\": \"🎯 Explicit skill override: $SKILL_ID\", \"hookSpecificOutput\": {\"additionalContext\": \"[EXPLICIT SKILL: $SKILL_ID]\nPlease load and follow this skill.\"}}"
+{% endif %}
     exit 0
 fi
 {% endif %}
@@ -136,10 +140,18 @@ MODE=$(echo "$RESULT" | jq -r '.mode // "single"')
 PRIMARY=$(echo "$RESULT" | jq -r '.primary.skill_id // empty')
 CONFIDENCE=$(echo "$RESULT" | jq -r '.primary.confidence // "0"')
 
+# Extract alternatives for Agent fallback
+ALTERNATIVES_JSON=$(echo "$RESULT" | jq -r '[.alternatives[]? | {skill_id, confidence, description: (.description // "")}] | .[0:5]' 2>/dev/null || echo "[]")
+ALT_COUNT=$(echo "$ALTERNATIVES_JSON" | jq -r 'length' 2>/dev/null || echo "0")
+
 if [ "$MODE" = "orchestrated" ] || [ "$MODE" = "orchestrate" ]; then
     PLAN=$(echo "$RESULT" | jq -r '.execution_plan // empty')
     if [ -n "$PLAN" ]; then
+{% if hook_event_name %}
+        echo "{\"systemMessage\": \"🔀 VibeSOP detected multiple intents. Execution plan injected.\", \"hookSpecificOutput\": {\"hookEventName\": \"{{ hook_event_name }}\", \"additionalContext\": \"[VibeSOP Execution Plan]\n$PLAN\"}}"
+{% else %}
         echo "{\"systemMessage\": \"🔀 VibeSOP detected multiple intents. Execution plan injected.\", \"hookSpecificOutput\": {\"additionalContext\": \"[VibeSOP Execution Plan]\n$PLAN\"}}"
+{% endif %}
     else
         echo "{\"systemMessage\": \"🔀 VibeSOP detected multiple intents.\"}"
     fi
@@ -173,17 +185,30 @@ if [ -n "$PRIMARY" ] && [ "$PRIMARY" != "fallback-llm" ]; then
     fi
     SKILL_FLAT=$(echo "$PRIMARY" | tr '/' '-')
     CONF_PCT=$(echo "$CONFIDENCE" | awk '{printf "%.0f", $1 * 100}')
+
+    ALT_MSG=""
+    if [ "$ALT_COUNT" -gt 0 ]; then
+        ALT_MSG=$(echo "$ALTERNATIVES_JSON" | jq -r 'to_entries | map("  \(.key+1). \(.value.skill_id) (\(.value.confidence*100|floor)%): \(.value.description[0:50])") | join("\n")' 2>/dev/null || echo "")
+        if [ -n "$ALT_MSG" ]; then
+            ALT_MSG=$'\n'"ALTERNATIVE SKILLS (if '$PRIMARY' doesn't fit, load one of these):"$'\n'"$ALT_MSG"$'\n'
+        fi
+    fi
+
 {% if include_additional_context %}
     if [ -n "$SKILL_CONTENT" ]; then
-        echo "{\"systemMessage\": \"🎯 VibeSOP routed: $PRIMARY (${CONF_PCT}% confidence)${REROUTE_NOTICE}\\n\\nNEXT STEP (MANDATORY): read skills/$SKILL_FLAT/SKILL.md\\nDo NOT proceed without reading this file.\", \"hookSpecificOutput\": {\"additionalContext\": \"[ACTIVE SKILL: $PRIMARY]\nYou MUST follow this skill's workflow. Do not skip steps.\\n\\n$SKILL_CONTENT\"}}"
+{% if hook_event_name %}
+        echo "{\"systemMessage\": \"🎯 VibeSOP routed: $PRIMARY (${CONF_PCT}% confidence)${REROUTE_NOTICE}${ALT_MSG}\\n\\nNEXT STEP (MANDATORY): read skills/$SKILL_FLAT/SKILL.md\\nDo NOT proceed without reading this file.\\nIf the skill doesn't match, load an alternative skill above.\", \"hookSpecificOutput\": {\"hookEventName\": \"{{ hook_event_name }}\", \"additionalContext\": \"[ACTIVE SKILL: $PRIMARY]\nYou MUST follow this skill's workflow. Do not skip steps.\\n\\n$SKILL_CONTENT\"}}"
+{% else %}
+        echo "{\"systemMessage\": \"🎯 VibeSOP routed: $PRIMARY (${CONF_PCT}% confidence)${REROUTE_NOTICE}${ALT_MSG}\\n\\nNEXT STEP (MANDATORY): read skills/$SKILL_FLAT/SKILL.md\\nDo NOT proceed without reading this file.\\nIf the skill doesn't match, load an alternative skill above.\", \"hookSpecificOutput\": {\"additionalContext\": \"[ACTIVE SKILL: $PRIMARY]\nYou MUST follow this skill's workflow. Do not skip steps.\\n\\n$SKILL_CONTENT\"}}"
+{% endif %}
     else
-        echo "{\"systemMessage\": \"🎯 VibeSOP routed: $PRIMARY (${CONF_PCT}% confidence)${REROUTE_NOTICE}\\n\\nNEXT STEP (MANDATORY): read skills/$SKILL_FLAT/SKILL.md\\nDo NOT proceed without reading this file.\"}"
+        echo "{\"systemMessage\": \"🎯 VibeSOP routed: $PRIMARY (${CONF_PCT}% confidence)${REROUTE_NOTICE}${ALT_MSG}\\n\\nNEXT STEP (MANDATORY): read skills/$SKILL_FLAT/SKILL.md\\nDo NOT proceed without reading this file.\\nIf the skill doesn't match, load an alternative skill above.\"}"
     fi
 {% else %}
     if [ -n "$SKILL_CONTENT" ]; then
-        echo "{\"systemMessage\": \"🎯 VibeSOP routed: $PRIMARY (${CONF_PCT}% confidence)${REROUTE_NOTICE}\\n\\nNEXT STEP (MANDATORY): read skills/$SKILL_FLAT/SKILL.md\\nDo NOT proceed without reading this file.\"}"
+        echo "{\"systemMessage\": \"🎯 VibeSOP routed: $PRIMARY (${CONF_PCT}% confidence)${REROUTE_NOTICE}${ALT_MSG}\\n\\nNEXT STEP (MANDATORY): read skills/$SKILL_FLAT/SKILL.md\\nDo NOT proceed without reading this file.\\nIf the skill doesn't match, load an alternative skill above.\"}"
     else
-        echo "{\"systemMessage\": \"🎯 VibeSOP routed: $PRIMARY (${CONF_PCT}% confidence)${REROUTE_NOTICE}\\n\\nNEXT STEP (MANDATORY): read skills/$SKILL_FLAT/SKILL.md\\nDo NOT proceed without reading this file.\"}"
+        echo "{\"systemMessage\": \"🎯 VibeSOP routed: $PRIMARY (${CONF_PCT}% confidence)${REROUTE_NOTICE}${ALT_MSG}\\n\\nNEXT STEP (MANDATORY): read skills/$SKILL_FLAT/SKILL.md\\nDo NOT proceed without reading this file.\\nIf the skill doesn't match, load an alternative skill above.\"}"
     fi
 {% endif %}
 {% if no_match_message %}

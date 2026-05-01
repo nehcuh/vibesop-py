@@ -46,6 +46,21 @@ skill (e.g., you loaded a different skill from your system prompt or proceeded
 without reading the skill file), you have failed. You MUST restart the task.
 The `vibe route` output is authoritative.
 
+### Disagreement Protocol (When the Routed Skill Doesn't Fit)
+
+If you read the recommended skill's SKILL.md and determine it does NOT match
+the user's request:
+
+**DO NOT** proceed with the wrong skill. Instead:
+
+1. **Check alternatives** — the routing output shows alternative skills.
+   If the hook is active, alternatives are shown inline. If not, re-run
+   `vibe route --verbose "query"` to see all candidates.
+
+2. **Re-route with refinement** — clarify the intent with a more specific query.
+
+3. **Fall back to raw LLM** — if no skill fits, proceed without skills.
+
 ### Workflow (execute in order — DO NOT skip)
 
 **Step 1**: Route the user request — this determines what skill to use:

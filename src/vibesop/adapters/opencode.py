@@ -540,6 +540,28 @@ skill (e.g., you loaded a different skill from your system prompt or proceeded
 without reading the skill file), you have failed. You MUST restart the task.
 The `vibe route` output is authoritative.
 
+### Disagreement Protocol (When the Routed Skill Doesn't Fit)
+
+If you read the recommended skill's SKILL.md and determine it does NOT match
+the user's request (wrong domain, inappropriate approach, or clearly mismatched):
+
+**DO NOT** proceed with the wrong skill. Instead:
+
+1. **Check alternatives** — the routing output shows alternative skills with
+   confidence scores. Load the top alternative's SKILL.md and evaluate it.
+
+2. **Re-route with refinement** — if no alternative fits, re-route with a
+   more specific query that clarifies the user's intent:
+   ```bash
+   vibe route "更具体的描述..."
+   ```
+
+3. **Fall back to raw LLM** — if no skill fits after retrying, proceed
+   without skills. You have full capability to handle the request directly.
+
+4. **Never force-fit** — do not contort the user's request to match a skill.
+   The SkillOS is a tool to assist, not a constraint to obey blindly.
+
 ### Workflow (execute in order — DO NOT skip)
 
 **Step 1**: Route the user request — this determines what skill to use:
@@ -892,6 +914,7 @@ For skill management commands, use:
                 platform="opencode",
                 platform_name="OpenCode",
                 purpose="Quick command handling and auto-routing for OpenCode",
+                hook_event_name="",
                 enable_explicit_overrides=True,
                 enable_orchestration=True,
                 include_additional_context=True,
