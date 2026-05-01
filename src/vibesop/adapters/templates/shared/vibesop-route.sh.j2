@@ -171,17 +171,19 @@ if [ -n "$PRIMARY" ] && [ "$PRIMARY" != "fallback-llm" ]; then
     if command -v vibe &> /dev/null; then
         SKILL_CONTENT=$(_run_cmd vibe skills read "$PRIMARY" 2>/dev/null | head -c 3000 || true)
     fi
+    SKILL_FLAT=$(echo "$PRIMARY" | tr '/' '-')
+    CONF_PCT=$(echo "$CONFIDENCE" | awk '{printf "%.0f", $1 * 100}')
 {% if include_additional_context %}
     if [ -n "$SKILL_CONTENT" ]; then
-        echo "{\"systemMessage\": \"🎯 VibeSOP routed: $PRIMARY (${CONFIDENCE} confidence)${REROUTE_NOTICE}\", \"hookSpecificOutput\": {\"additionalContext\": \"[ACTIVE SKILL: $PRIMARY]\n$SKILL_CONTENT\"}}"
+        echo "{\"systemMessage\": \"🎯 VibeSOP routed: $PRIMARY (${CONF_PCT}% confidence)${REROUTE_NOTICE}\\n\\nNEXT STEP (MANDATORY): read skills/$SKILL_FLAT/SKILL.md\\nDo NOT proceed without reading this file.\", \"hookSpecificOutput\": {\"additionalContext\": \"[ACTIVE SKILL: $PRIMARY]\nYou MUST follow this skill's workflow. Do not skip steps.\\n\\n$SKILL_CONTENT\"}}"
     else
-        echo "{\"systemMessage\": \"🎯 VibeSOP routed: $PRIMARY (${CONFIDENCE} confidence)${REROUTE_NOTICE}. Please read skills/$PRIMARY/SKILL.md\"}"
+        echo "{\"systemMessage\": \"🎯 VibeSOP routed: $PRIMARY (${CONF_PCT}% confidence)${REROUTE_NOTICE}\\n\\nNEXT STEP (MANDATORY): read skills/$SKILL_FLAT/SKILL.md\\nDo NOT proceed without reading this file.\"}"
     fi
 {% else %}
     if [ -n "$SKILL_CONTENT" ]; then
-        echo "{\"systemMessage\": \"🎯 VibeSOP routed: $PRIMARY (${CONFIDENCE} confidence)${REROUTE_NOTICE}\"}"
+        echo "{\"systemMessage\": \"🎯 VibeSOP routed: $PRIMARY (${CONF_PCT}% confidence)${REROUTE_NOTICE}\\n\\nNEXT STEP (MANDATORY): read skills/$SKILL_FLAT/SKILL.md\\nDo NOT proceed without reading this file.\"}"
     else
-        echo "{\"systemMessage\": \"🎯 VibeSOP routed: $PRIMARY (${CONFIDENCE} confidence)${REROUTE_NOTICE}.\"}"
+        echo "{\"systemMessage\": \"🎯 VibeSOP routed: $PRIMARY (${CONF_PCT}% confidence)${REROUTE_NOTICE}\\n\\nNEXT STEP (MANDATORY): read skills/$SKILL_FLAT/SKILL.md\\nDo NOT proceed without reading this file.\"}"
     fi
 {% endif %}
 {% if no_match_message %}

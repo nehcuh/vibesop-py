@@ -517,23 +517,7 @@ vibe route "<user_request>"
 - Routing decisions are now transparent by default, showing why each skill was chosen
 - Skipping routing means losing the entire SkillOS capability layer
 
-### Workflow (execute in order)
-
-**Step 1**: Route the user request
-```bash
-vibe route "<user_request>"
-```
-
-**Step 2**: Read the recommended skill file
-```markdown
-read skills/<matched-skill>/SKILL.md
-```
-
-**Step 3**: Execute according to the skill's steps
-
-**Step 4**: Run verification after completion
-
-### Non-compliance Detection
+### Non-Compliance Detection
 
 If you find yourself about to perform a non-trivial task without first running
 `vibe route`, STOP and route it first. Examples of tasks that MUST be routed:
@@ -550,6 +534,31 @@ Examples of tasks that do NOT need routing:
 - "Show me the current directory"
 - "Open file X" (when user provides the exact file path)
 - Simple follow-ups to existing routed context
+
+**FAILURE MODE**: If you called `vibe route` but then did NOT use the recommended
+skill (e.g., you loaded a different skill from your system prompt or proceeded
+without reading the skill file), you have failed. You MUST restart the task.
+The `vibe route` output is authoritative.
+
+### Workflow (execute in order — DO NOT skip)
+
+**Step 1**: Route the user request — this determines what skill to use:
+```bash
+vibe route "<user_request>"
+```
+The output will show the matched skill_id (e.g., `gstack/review`) and a
+`NEXT STEP` instruction. Follow it.
+
+**Step 2**: Read the recommended skill file — this is NOT optional:
+```markdown
+read skills/<matched-skill>/SKILL.md
+```
+You MUST read the skill file. Without it, you are guessing.
+
+**Step 3**: Execute according to the skill's workflow.
+Follow the steps defined in the SKILL.md exactly.
+
+**Step 4**: Run verification after completion.
 
 ## Skill Catalog
 
@@ -599,21 +608,58 @@ For skill management commands, use:
             "",
             "Skipping routing means losing all of the above. Do not skip.",
             "",
-            "### Workflow",
+            "### Non-Compliance Detection",
             "",
-            "**Step 1**: Route every non-trivial user request:",
+            "If you find yourself about to perform a non-trivial task without first running",
+            "`vibe route`, STOP and route it first. Examples of tasks that MUST be routed:",
+            "- Debugging / fixing bugs",
+            "- Code review / analysis",
+            "- Writing or modifying features",
+            "- Architecture / design work",
+            "- Security audits",
+            "- Performance optimization",
+            "- Any multi-step or multi-domain request",
+            "",
+            "Examples of tasks that do NOT need routing:",
+            '- "What does git status do?"',
+            '- "Show me the current directory"',
+            '- "Open file X" (when user provides the exact file path)',
+            "- Simple follow-ups to existing routed context",
+            "",
+            "**FAILURE MODE**: If you called `vibe route` but then did NOT use the recommended",
+            "skill (e.g., you loaded a different skill from your system prompt or proceeded",
+            "without reading the skill file), you have failed Step 2. You MUST restart the",
+            "task from Step 1. The `vibe route` output is authoritative — your internal skill",
+            "selection is irrelevant.",
+            "",
+            "### Workflow (execute in order — DO NOT skip or reorder)",
+            "",
+            "**Step 1**: Route the user request — this determines what skill to use:",
             "```bash",
             'vibe route "<user_request>"',
             "```",
             "",
-            "**Step 2**: Read the recommended skill file",
+            "**IMPORTANT**: After running `vibe route`, you will see output like:",
+            '```',
+            '🎯 VibeSOP routed: gstack/review (87% confidence)',
+            'NEXT STEP: read skills/gstack-review/SKILL.md',
+            '```',
+            "The skill_id shown (e.g., `gstack/review`) is what you MUST read next.",
+            "",
+            "**Step 2**: Read the recommended skill file — this is NOT optional:",
             "```markdown",
             "read skills/<matched-skill>/SKILL.md",
             "```",
             "",
-            "**Step 3**: Execute according to the skill's steps",
+            "**⚠️ CRITICAL**: You MUST read the SKILL.md file. Do NOT proceed without it.",
+            "The file contains the exact workflow steps, required tools, and execution",
+            "rules for this skill. Without reading it, you are guessing.",
             "",
-            "**Step 4**: Run verification after completion",
+            "**Step 3**: Execute according to the skill's workflow.",
+            "Follow the steps defined in the SKILL.md exactly. Do not substitute",
+            "with your own approach. Do not combine with other skills.",
+            "",
+            "**Step 4**: Run verification after completion.",
             "",
             "### Routing Decision Visibility",
             "",

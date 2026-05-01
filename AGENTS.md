@@ -23,23 +23,7 @@ vibe route "<user_request>"
 - Routing decisions are now transparent by default, showing why each skill was chosen
 - Skipping routing means losing the entire SkillOS capability layer
 
-### Workflow (execute in order)
-
-**Step 1**: Route the user request
-```bash
-vibe route "<user_request>"
-```
-
-**Step 2**: Read the recommended skill file
-```markdown
-read skills/<matched-skill>/SKILL.md
-```
-
-**Step 3**: Execute according to the skill's steps
-
-**Step 4**: Run verification after completion
-
-### Non-compliance Detection
+### Non-Compliance Detection
 
 If you find yourself about to perform a non-trivial task without first running
 `vibe route`, STOP and route it first. Examples of tasks that MUST be routed:
@@ -51,13 +35,36 @@ If you find yourself about to perform a non-trivial task without first running
 - Performance optimization
 - Any multi-step or multi-domain request
 
-Run `vibe route "<request>"` to get the best skill match.
-
 Examples of tasks that do NOT need routing:
 - "What does git status do?"
 - "Show me the current directory"
 - "Open file X" (when user provides the exact file path)
 - Simple follow-ups to existing routed context
+
+**FAILURE MODE**: If you called `vibe route` but then did NOT use the recommended
+skill (e.g., you loaded a different skill from your system prompt or proceeded
+without reading the skill file), you have failed. You MUST restart the task.
+The `vibe route` output is authoritative.
+
+### Workflow (execute in order — DO NOT skip)
+
+**Step 1**: Route the user request — this determines what skill to use:
+```bash
+vibe route "<user_request>"
+```
+The output will show the matched skill_id (e.g., `gstack/review`) and a
+`NEXT STEP` instruction. Follow it.
+
+**Step 2**: Read the recommended skill file — this is NOT optional:
+```markdown
+read skills/<matched-skill>/SKILL.md
+```
+You MUST read the skill file. Without it, you are guessing.
+
+**Step 3**: Execute according to the skill's workflow.
+Follow the steps defined in the SKILL.md exactly.
+
+**Step 4**: Run verification after completion.
 
 ## Skill Catalog
 

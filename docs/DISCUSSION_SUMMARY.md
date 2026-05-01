@@ -1,8 +1,9 @@
 # VibeSOP 项目讨论总结与纠偏建议
 
 > **日期**: 2026-04-30
-> **版本**: 基于 5.3.2 代码评审
-> **状态**: 需要文档更新 + 代码纠偏
+> **版本**: 基于 5.3.2 代码评审（部分结论已过时，见下方 ✅ 标注）
+> **状态**: 核心偏离已修复 (build 覆盖、slash-analyze 移除、类型错误归零)，剩余测试覆盖率与性能需跟进
+> **最后验证**: 2026-04-30 (v5.4.1)
 
 ---
 
@@ -46,21 +47,21 @@
 | 维度 | PHILOSOPHY.md 怎么说 | 代码实际怎么做 | 差距 |
 |------|---------------------|---------------|------|
 | **定位** | "VibeSOP 是 SkillOS，不执行技能" | 内置了 slash-analyze 等具体技能 | ❌ 偏离 |
-| **技能管理** | "完整生命周期：发现→安装→路由→编排→评估→保留/淘汰" | build 时覆盖外部技能 SKILL.md | ❌ 破坏 |
-| **学习系统** | "InstinctLearner，记住什么有效" | 代码存在，需手动触发 | ⚠️ 未自动化 |
-| **上下文感知** | "session 智能追踪，自动重路由" | 框架存在，hook 未激活 | ⚠️ 未自动化 |
+| **技能管理** | "完整生命周期：发现→安装→路由→编排→评估→保留/淘汰" | build 时覆盖外部技能 SKILL.md | ✅ 已修复 (commit dad18a2) — _render_skill_content() 优先 symlink，仅 fallback 到模板 |
+| **学习系统** | "InstinctLearner，记住什么有效" | 代码存在，需手动触发 | ✅ 已修复 — `analytics_mixin.py:81-90` 置信度 ≥ 70% 自动记录，source="auto_routing" |
+| **上下文感知** | "session 智能追踪，自动重路由" | 框架存在，hook 未激活 | ✅ 已修复 — `session_aware=True` 默认开启，`context_mixin.py` 自动重路由 |
 | **跨平台** | "Claude Code, Cursor, Continue.dev" | 3 个适配器已实现 | ✅ 基本满足 |
 
-### 2.2 核心 Bug：build 流程覆盖外部技能
+### 2.2 ~~核心 Bug：build 流程覆盖外部技能~~ ✅ 已修复
 
-**问题**: `vibe build claude-code` 时，`_render_skill_content()` 用薄包装模板覆盖了 gstack/superpowers/omx 的完整 SKILL.md。
-
-**影响**:
-- gstack/review: 296行模板 → 46行空壳
-- omx/analyze: 原始流程 → 51行元数据
-- superpowers/systematic-debugging: 多文档辅助 → 51行元数据
-
-**结果**: Agent 匹配到技能后，只能看到元数据，无法执行完整流程。
+> **修复 commit**: `dad18a2` — "fix: philosophy alignment — fix build skill overwrite"
+>
+> **当前行为**: `_render_skill_content()` (claude_code.py:345-421) 已重写，采用三层回退策略：
+> 1. 先从 `_find_skill_content()` 读取原始技能内容
+> 2. 再检查中央存储是否存在已安装的包 → 创建 symlink
+> 3. 仅当前两步全部失败时才 fallback 到 Jinja2 模板
+>
+> **关键注释**（第360-362行）: "Critical invariant: NEVER overwrite an external skill's full SKILL.md with the thin Jinja2 template wrapper."
 
 ### 2.3 测试覆盖率危机
 
@@ -81,34 +82,18 @@
 
 ## 三、需要纠偏的内容
 
-### P0（立即修复）
+### P0（立即修复）✅ 全部完成
 
-1. **修复 build 流程不覆盖外部技能 SKILL.md**
-   - 文件: `src/vibesop/adapters/claude_code.py:345-400`
-   - 方案: 如果 skill_dir 已是正确 symlink，跳过渲染
-   - 重建所有外部技能的 SKILL.md 为原始完整内容
-
-2. **移除 slash-analyze**
-   - 删除 `core/skills/slash-analyze/`
-   - 路由逻辑：分析请求 → 匹配 omx/analyze（如安装）或 gstack/review 或通用 fallback
-
-3. **统一版本号**
-   - README.md 从 5.3.0 更新为 5.3.2
-
-4. **修复 basedpyright 14 个 errors**
+1. ~~修复 build 流程不覆盖外部技能 SKILL.md~~ ✅ 已修复
+2. ~~移除 slash-analyze~~ ✅ 已移除
+3. ~~统一版本号~~ ✅ 已统一 (5.4.1)
+4. ~~修复 basedpyright 14 个 errors~~ ✅ 已归零
 
 ### P1（本周）
 
-5. **处理 planning-with-files**
-   - 选择 A: 移出为独立 vibesop-workflows 包
-   - 选择 B: 保留但明确标注为 "通用工作流示例"
-   - 推荐 A
-
-6. **清理所有 DeprecationWarning**
-
-7. **制定覆盖率提升计划**
-   - 分阶段: 20% → 40% → 60% → 75%
-   - 优先覆盖 security/, installer/, market/
+5. ~~处理 planning-with-files~~ ✅ 已从 core/skills 移除
+6. **清理所有 DeprecationWarning** — ⚠️ 仍有大量 `route()` 调用待迁移
+7. **制定覆盖率提升计划** — ⚠️ 20% → 75% 待启动
 
 ### P2（本月）
 
@@ -209,11 +194,16 @@ VibeSOP 管理技能的分发和生命周期，但不编写、不修改技能的
 
 ---
 
-## 六、一句话总结
+## 六、总结 (2026-04-30 更新)
 
-> **VibeSOP 的 PHILOSOPHY 是对的，但代码走偏了。**
+> ~~**VibeSOP 的 PHILOSOPHY 是对的，但代码走偏了。**~~
+> ~~修复 build 流程的覆盖 bug，移除偏离定位的内置技能，诚实标注实验性功能，VibeSOP 就能回到正确的轨道上。~~
 >
-> 它应该是一个纯粹的 SkillOS——管理技能但不生产技能、路由但不执行、分发但不篡改。
+> **上述 P0 偏离已全部修复** (commit `dad18a2`):
+> - ✅ build 覆盖 → symlink 优先策略
+> - ✅ slash-analyze / planning-with-files → 已从 core/skills 移除
+> - ✅ 版本号 → 统一 5.4.1
+> - ✅ 类型错误 → 14→0
+> - ✅ InstinctLearner / session 追踪 → 默认自动开启
 >
-> 修复 build 流程的覆盖 bug，移除偏离定位的内置技能，诚实标注实验性功能，
-> VibeSOP 就能回到正确的轨道上。
+> **当前核心矛盾**: 代码方向已回正轨，但**质量基座仍薄弱**（20% 测试覆盖率、221 类型警告、大量 DeprecationWarning 待迁移）。
