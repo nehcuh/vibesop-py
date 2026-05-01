@@ -1422,3 +1422,92 @@ vibe route "your query here"
 ```
 """
     (skill_dir / "SKILL.md").write_text(content)
+
+
+def skill_optimize(
+    skill_id: str = typer.Argument(..., help="Skill ID to analyze (e.g., 'gstack/investigate')"),
+    min_confidence: float = typer.Option(
+        0.6, "--min-confidence", "-c", help="Minimum confidence for actionable suggestions"
+    ),
+    n: int = typer.Option(5, "--top", "-n", help="Number of keyword suggestions"),
+) -> None:
+    """Suggest trigger keyword improvements based on routing feedback.
+
+    Analyzes feedback records where this skill was the correct answer
+    but wasn't routed, and extracts candidate keywords from the queries.
+
+    Examples:
+        vibe skill optimize gstack/investigate
+        vibe skill optimize superpowers/architect --top 10
+    """
+    try:
+        from vibesop.core.feedback import FeedbackCollector
+    except ImportError:
+        console.print("[yellow]Feedback system not available[/yellow]")
+        raise typer.Exit(1)
+
+    collector = FeedbackCollector()
+    mismatches = collector.get_top_mismatches(top_n=100)
+
+    # Find mismatches where this skill was the correct answer
+    candidate_queries: list[str] = []
+    for m in mismatches:
+        if m["actual_skill"] == skill_id and m["avg_confidence"] >= min_confidence:
+            candidate_queries.extend(m["example_queries"])
+
+    if not candidate_queries:
+        console.print(f"[dim]No feedback data found for {skill_id} as correct skill[/dim]")
+        console.print("[dim]Use `vibe feedback record` to collect routing feedback first[/dim]")
+        raise typer.Exit(0)
+
+    # Extract keyword candidates from queries (simple frequency-based)
+    import re
+    from collections import Counter
+
+    stop_words = {
+        "the", "a", "an", "is", "are", "was", "were", "be", "been", "being",
+        "have", "has", "had", "do", "does", "did", "will", "would", "shall",
+        "should", "may", "might", "must", "can", "could", "i", "me", "my",
+        "we", "our", "you", "your", "he", "she", "it", "they", "them", "this",
+        "that", "these", "those", "in", "on", "at", "to", "for", "of", "with",
+        "from", "by", "about", "as", "into", "through", "during", "before",
+        "after", "above", "below", "between", "and", "but", "or", "not", "no",
+        "if", "then", "else", "when", "where", "why", "how", "all", "each",
+        "every", "both", "few", "more", "most", "other", "some", "such", "only",
+        "own", "same", "so", "than", "too", "very", "just", "now", "up", "out",
+        "help",
+    }
+
+    word_counts: Counter = Counter()
+    for query in candidate_queries:
+        words = re.findall(r"\w+", query.lower())
+        for word in words:
+            if word not in stop_words and len(word) > 2:
+                word_counts[word] += 1
+
+    top_keywords = word_counts.most_common(n)
+    if not top_keywords:
+        console.print("[dim]No meaningful keywords extracted from feedback[/dim]")
+        raise typer.Exit(0)
+
+    console.print()
+    console.print(
+        Panel(
+            f"[bold]Keyword Suggestions for [cyan]{skill_id}[/cyan][/bold]\n"
+            f"[dim]Based on {len(candidate_queries)} feedback records[/dim]",
+            border_style="blue",
+        )
+    )
+
+    table = Table(title="Suggested Keywords")
+    table.add_column("#", style="dim")
+    table.add_column("Keyword", style="cyan")
+    table.add_column("Frequency", style="green")
+    table.add_column("Action", style="yellow")
+
+    for i, (word, count) in enumerate(top_keywords, 1):
+        table.add_row(str(i), word, str(count), "Consider adding as trigger")
+
+    console.print(table)
+    console.print()
+    console.print("[dim]To add a keyword: add it to the skill's trigger_when field in registry.yaml[/dim]")
