@@ -4,6 +4,7 @@ import pytest
 
 from vibesop.core.config.manager import ConfigManager
 from vibesop.core.routing.unified import RoutingResult, UnifiedRouter
+from vibesop.core.models import OrchestrationResult
 
 
 @pytest.fixture
@@ -24,12 +25,12 @@ def router(tmp_path):
 
 
 def test_router_with_optimization_enabled(router):
-    result = router.route("debug this error")
-    assert isinstance(result, RoutingResult)
+    result = router.orchestrate("debug this error")
+    assert isinstance(result, OrchestrationResult)
 
 
 def test_optimization_reduces_candidates(router):
-    result = router.route("test query")
+    result = router.orchestrate("test query")
     assert result is not None
 
 
@@ -42,5 +43,5 @@ def test_router_backward_compatible(tmp_path):
 
     router = UnifiedRouter(project_root=tmp_path, config=manager)
     router._config.enable_ai_triage = False
-    result = router.route("test query")
-    assert isinstance(result, RoutingResult)
+    result = router.orchestrate("test query")
+    assert isinstance(result, OrchestrationResult)

@@ -11,7 +11,7 @@ class TestSkillRouterIntegration:
     def test_route_debug_query(self) -> None:
         """Test routing a debug query."""
         router = UnifiedRouter(project_root=Path.cwd(), config=RoutingConfig(enable_ai_triage=False))
-        result = router.route("debug this error")
+        result = router.orchestrate("debug this error")
 
         assert result is not None
         # Should have a routing path even if no exact match
@@ -20,7 +20,7 @@ class TestSkillRouterIntegration:
     def test_route_review_query(self) -> None:
         """Test routing a review query."""
         router = UnifiedRouter(project_root=Path.cwd(), config=RoutingConfig(enable_ai_triage=False))
-        result = router.route("review my code")
+        result = router.orchestrate("review my code")
 
         assert result is not None
         # With min_confidence default, should find something or return alternatives
@@ -30,7 +30,7 @@ class TestSkillRouterIntegration:
     def test_route_refactor_query(self) -> None:
         """Test routing a refactor query."""
         router = UnifiedRouter(project_root=Path.cwd(), config=RoutingConfig(enable_ai_triage=False))
-        result = router.route("refactor this code")
+        result = router.orchestrate("refactor this code")
 
         assert result is not None
         # Check that result exists
@@ -38,7 +38,7 @@ class TestSkillRouterIntegration:
     def test_route_chinese_query(self) -> None:
         """Test routing Chinese queries."""
         router = UnifiedRouter(project_root=Path.cwd(), config=RoutingConfig(enable_ai_triage=False))
-        result = router.route("帮我调试这个 bug")
+        result = router.orchestrate("帮我调试这个 bug")
 
         assert result is not None
         # Should handle Chinese queries

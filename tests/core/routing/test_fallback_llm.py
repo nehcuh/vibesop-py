@@ -15,7 +15,7 @@ class TestFallbackLLM:
         config = RoutingConfig(fallback_mode="transparent", min_confidence=0.99, enable_ai_triage=False)
         router = UnifiedRouter(project_root=tmp_path, config=config)
 
-        result = router.route("xyzqwerty_no_match_12345")
+        result = router.orchestrate("xyzqwerty_no_match_12345")
 
         assert result.primary is not None
         assert result.primary.skill_id == "fallback-llm"
@@ -27,7 +27,7 @@ class TestFallbackLLM:
         config = RoutingConfig(fallback_mode="disabled", min_confidence=0.99, enable_ai_triage=False)
         router = UnifiedRouter(project_root=tmp_path, config=config)
 
-        result = router.route("xyzqwerty_no_match_12345")
+        result = router.orchestrate("xyzqwerty_no_match_12345")
 
         assert result.primary is None
         assert result.has_match is False
@@ -44,7 +44,7 @@ class TestFallbackLLM:
             encoding="utf-8",
         )
 
-        result = router.route("xyzqwerty12345_nonsense_no_match")
+        result = router.orchestrate("xyzqwerty12345_nonsense_no_match")
 
         assert result.primary is None
         assert result.has_match is False
@@ -54,7 +54,7 @@ class TestFallbackLLM:
         config = RoutingConfig(fallback_mode="transparent", min_confidence=0.99, enable_ai_triage=False)
         router = UnifiedRouter(project_root=tmp_path, config=config)
 
-        result = router.route("xyzqwerty_no_match_12345")
+        result = router.orchestrate("xyzqwerty_no_match_12345")
 
         # Alternatives may be empty if no candidates are close, but the structure is correct
         assert isinstance(result.alternatives, list)
@@ -65,7 +65,7 @@ class TestFallbackLLM:
         config = RoutingConfig(fallback_mode="transparent", min_confidence=0.99, enable_ai_triage=False)
         router = UnifiedRouter(project_root=tmp_path, config=config)
 
-        result = router.route("no_match_query_abc123")
+        result = router.orchestrate("no_match_query_abc123")
 
         assert result.primary is not None
         assert result.primary.layer == RoutingLayer.FALLBACK_LLM
@@ -76,7 +76,7 @@ class TestFallbackLLM:
         config = RoutingConfig(fallback_mode="transparent", min_confidence=0.99, enable_ai_triage=False)
         router = UnifiedRouter(project_root=tmp_path, config=config)
 
-        result = router.route("no_match_query_abc123")
+        result = router.orchestrate("no_match_query_abc123")
 
         assert result.routing_path[-1] == RoutingLayer.FALLBACK_LLM
 
@@ -85,7 +85,7 @@ class TestFallbackLLM:
         config = RoutingConfig(fallback_mode="transparent", min_confidence=0.99, enable_ai_triage=False)
         router = UnifiedRouter(project_root=tmp_path, config=config)
 
-        result = router.route("no_match_query_abc123")
+        result = router.orchestrate("no_match_query_abc123")
 
         fallback_details = [d for d in result.layer_details if d.layer == RoutingLayer.FALLBACK_LLM]
         assert len(fallback_details) == 1

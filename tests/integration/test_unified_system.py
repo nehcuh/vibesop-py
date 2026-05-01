@@ -9,6 +9,8 @@ These tests verify the end-to-end functionality of:
 
 from pathlib import Path
 
+import pytest
+
 from vibesop.core.config import ConfigManager
 from vibesop.core.routing import RoutingConfig, UnifiedRouter
 from vibesop.security import SkillSecurityAuditor
@@ -29,7 +31,7 @@ class TestUnifiedRouterIntegration:
         assert len(candidates) > 0, "Should find at least some skills"
 
         # Test routing
-        result = router.route("debug error")
+        result = router.orchestrate("debug error")
         assert isinstance(result, object), "Should return a result"
 
     def test_router_with_low_threshold(self):
@@ -40,7 +42,7 @@ class TestUnifiedRouterIntegration:
             config=config,
         )
 
-        result = router.route("systematic debugging")
+        result = router.orchestrate("systematic debugging")
         # Should find something with zero threshold
         # (even if confidence is very low)
         assert result.routing_path, "Should have routing path"
@@ -53,7 +55,7 @@ class TestUnifiedRouterIntegration:
             config=config,
         )
 
-        result = router.route("nonsense query that wont match anything")
+        result = router.orchestrate("nonsense query that wont match anything")
         # With high threshold and nonsense query, shouldn't match
         assert result is not None, "Should always return a result"
 
@@ -82,7 +84,7 @@ class TestUnifiedRouterIntegration:
             config=config,
         )
 
-        result = router.route("plan")
+        result = router.orchestrate("plan")
 
         # Even if no primary match, check structure
         assert hasattr(result, "alternatives"), "Should have alternatives attribute"
@@ -104,7 +106,7 @@ class TestUnifiedRouterIntegration:
             project_root=project_root,
             config=RoutingConfig(enable_ai_triage=False),
         )
-        result1 = router1.route("debug this error")
+        result1 = router1.orchestrate("debug this error")
 
         assert result1.primary is not None, "Should match a skill"
 
@@ -113,7 +115,7 @@ class TestUnifiedRouterIntegration:
             project_root=project_root,
             config=RoutingConfig(enable_ai_triage=False),
         )
-        result2 = router2.route("help me debug")
+        result2 = router2.orchestrate("help me debug")
 
         # Session file should exist (session_id derived from project path hash)
         session_dir = project_root / ".vibe" / "session"
@@ -130,7 +132,7 @@ class TestUnifiedRouterIntegration:
 
         config = RoutingConfig(session_aware=False, enable_ai_triage=False)
         router = UnifiedRouter(project_root=project_root, config=config)
-        router.route("debug this error")
+        router.orchestrate("debug this error")
 
         # Session file should NOT be created
         session_file = project_root / ".vibe" / "session" / "default.json"

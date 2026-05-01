@@ -46,14 +46,14 @@ class TestSkillEnablement:
         # Disable the local skill
         SkillConfigManager.update_skill_config("my-local-skill", {"enabled": False})
 
-        # Clear router cache so next route() reloads from SkillLoader
+        # Clear router cache so next orchestrate() reloads from SkillLoader
         router_with_skills._candidates_cache = None
         if hasattr(router_with_skills, "_skill_loader"):
             router_with_skills._skill_loader._skill_cache = {}
 
         # SkillLoader.discover_all() filters out disabled skills;
         # route() should therefore not match the disabled skill
-        result = router_with_skills.route("!my-local-skill run local task")
+        result = router_with_skills.orchestrate("!my-local-skill run local task")
         assert result.primary is None or result.primary.skill_id != "my-local-skill"
 
         # Clean up
@@ -62,7 +62,7 @@ class TestSkillEnablement:
     def test_enabled_skill_included_in_routing(self, router_with_skills):
         """Skills with enabled=True (default) should be available."""
         # Use explicit syntax to bypass prefilter/levenshtein complexities in test
-        result = router_with_skills.route("!my-local-skill run local task")
+        result = router_with_skills.orchestrate("!my-local-skill run local task")
         assert result.primary is not None
         assert result.primary.skill_id == "my-local-skill"
 
@@ -76,7 +76,7 @@ class TestSkillScope:
         SkillConfigManager.update_skill_config("my-local-skill", {"scope": "project"})
 
         # Use explicit syntax to bypass prefilter/levenshtein complexities in test
-        result = router_with_skills.route("!my-local-skill run local task")
+        result = router_with_skills.orchestrate("!my-local-skill run local task")
         assert result.primary is not None
         assert result.primary.skill_id == "my-local-skill"
 
@@ -113,7 +113,7 @@ class TestSkillScope:
 
         # The skill may be discovered (if SkillLoader searches broadly),
         # but should be filtered at route time
-        result = router_b.route("do project A thing")
+        result = router_b.orchestrate("do project A thing")
         if result.primary:
             assert result.primary.skill_id != "project-a-skill"
 
@@ -123,9 +123,9 @@ class TestSkillScope:
     def test_global_skill_always_available(self, router_with_skills):
         """Global-scoped skills should be available regardless of project."""
         # Builtin skills are global by default
-        result = router_with_skills.route("!builtin/systematic-debugging debug systematically")
+        result = router_with_skills.orchestrate("!systematic-debugging debug systematically")
         assert result.primary is not None
-        assert result.primary.skill_id == "builtin/systematic-debugging"
+        assert result.primary.skill_id == "systematic-debugging"
 
 
 class TestSkillConfigDefaults:

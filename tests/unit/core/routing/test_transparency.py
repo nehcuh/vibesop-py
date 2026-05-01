@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from vibesop.core.models import (
     LayerDetail,
+    OrchestrationResult,
     RejectedCandidate,
     RoutingLayer,
     RoutingResult,
@@ -15,11 +16,11 @@ class TestRoutingTransparency:
     """Test suite for Task 1.1: Refactor routing transparency from opt-in to default."""
 
     def test_route_returns_layer_details(self, tmp_path) -> None:
-        """router.route() must always return result.layer_details with at least one entry."""
+        """router.orchestrate() must always return result.layer_details with at least one entry."""
         router = UnifiedRouter(project_root=tmp_path)
-        result = router.route("debug database error")
+        result = router.orchestrate("debug database error")
 
-        assert isinstance(result, RoutingResult)
+        assert isinstance(result, OrchestrationResult)
         assert len(result.layer_details) >= 1, "layer_details should always be populated"
 
     def test_orchestrate_returns_layer_details(self, tmp_path) -> None:
@@ -150,7 +151,7 @@ class TestRoutingTransparency:
 
         # This test verifies the integration: route() calls _collect_alternatives_from_details
         # when layer_result.alternatives is empty
-        result = router.route("some query that might not match strongly")
+        result = router.orchestrate("some query that might not match strongly")
 
         # Even if no strong match, layer_details should exist and may contain rejected candidates
         assert result.layer_details is not None

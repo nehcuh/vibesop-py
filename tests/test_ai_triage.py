@@ -5,6 +5,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from vibesop.core.routing.unified import RoutingLayer, RoutingResult, UnifiedRouter
+from vibesop.core.models import OrchestrationResult
 
 
 @pytest.fixture
@@ -13,7 +14,7 @@ def mock_llm():
     llm = MagicMock()
     llm.configured.return_value = True
     llm.call.return_value = MagicMock(
-        content="builtin/systematic-debugging",
+        content="systematic-debugging",
         model="claude-3-5-haiku-20241022",
         tokens_used=50,
         input_tokens=40,
@@ -46,11 +47,11 @@ def router_with_llm(tmp_path, mock_llm):
 
 def test_ai_triage_returns_skill_route(router_with_llm):
     """AI triage should return a SkillRoute when LLM responds."""
-    result = router_with_llm.route("帮我调试数据库错误")
-    assert isinstance(result, RoutingResult)
+    result = router_with_llm.orchestrate("帮我调试数据库错误")
+    assert isinstance(result, OrchestrationResult)
     # AI triage should be in routing path after explicit/scenario attempts
     assert RoutingLayer.AI_TRIAGE in result.routing_path
-    assert result.primary.skill_id == "builtin/systematic-debugging"
+    assert result.primary.skill_id == "systematic-debugging"
     # Confidence is dynamic: fallback parsing gets ~0.82, structured JSON gets ~0.88
     assert 0.8 <= result.primary.confidence <= 0.92
     assert result.primary.metadata.get("ai_triage") is True
@@ -68,19 +69,19 @@ def test_ai_triage_disabled_by_default(tmp_path):
 
     router = UnifiedRouter(project_root=tmp_path, config=manager)
     # Should not call LLM
-    result = router.route("debug this")
+    result = router.orchestrate("debug this")
     # Should fall through to keyword/TF-IDF matchers
-    assert isinstance(result, RoutingResult)
+    assert isinstance(result, OrchestrationResult)
 
 
 def test_ai_triage_caches_results(router_with_llm, tmp_path):
     """AI triage should cache results to avoid repeated LLM calls."""
     # First call
-    router_with_llm.route("debug error")
+    router_with_llm.orchestrate("debug error")
     assert router_with_llm._llm.call.call_count == 1
 
     # Second call with same query should use cache
-    router_with_llm.route("debug error")
+    router_with_llm.orchestrate("debug error")
     assert router_with_llm._llm.call.call_count == 1  # Still 1, cached
 
 
@@ -106,8 +107,8 @@ def test_ai_triage_handles_invalid_response(tmp_path, mock_llm):
     router._llm = mock_llm
 
     # Should fall through to next layer
-    result = router.route("debug this")
-    assert isinstance(result, RoutingResult)
+    result = router.orchestrate("debug this")
+    assert isinstance(result, OrchestrationResult)
     # AI Triage was attempted but failed; it should appear in the full routing
     # path for observability, but the final match (if any) comes from later layers.
     assert RoutingLayer.AI_TRIAGE in result.routing_path
@@ -133,8 +134,8 @@ def test_ai_triage_handles_llm_error(tmp_path):
     router._llm = mock_llm
 
     # Should fall through to next layer without crashing
-    result = router.route("debug this")
-    assert isinstance(result, RoutingResult)
+    result = router.orchestrate("debug this")
+    assert isinstance(result, OrchestrationResult)
 
 
 def test_ai_triage_explicit_disable(tmp_path, monkeypatch):
