@@ -136,11 +136,12 @@ def try_scenario_layer(
             )
 
     scenario_name = scenario.get("scenario", "unknown")
+    actual_skill_id = candidate.get("id", target_skill)
     match = SkillRoute(
-        skill_id=target_skill,
+        skill_id=actual_skill_id,
         confidence=0.9,
         layer=RoutingLayer.SCENARIO,
-        source=router._get_skill_source(target_skill, candidate.get("namespace", "builtin")),
+        source=router._get_skill_source(actual_skill_id, candidate.get("namespace", "builtin")),
         description=str(candidate.get("description", "")),
         metadata={"scenario": scenario_name},
     )

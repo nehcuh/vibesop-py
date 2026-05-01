@@ -1,7 +1,11 @@
 """Tests for scenario pattern layer."""
 
+from unittest.mock import MagicMock
+
 import pytest
 
+from vibesop.core.models import RoutingLayer
+from vibesop.core.routing._layers import try_scenario_layer
 from vibesop.core.routing.scenario_layer import (
     load_scenario_config,
     load_scenarios,
@@ -121,3 +125,150 @@ def test_load_nonexistent_registry_config():
     config = load_scenario_config("nonexistent/registry.yaml")
     assert config["strategies"] == []
     assert config["keywords"] == {}
+
+
+# -- Regression tests for try_scenario_layer --
+
+
+def test_scenario_layer_returns_full_skill_id():
+    """When scenario matches a short skill name but candidate has namespaced ID,
+    the returned match must use the candidate's actual ID, not the short name.
+
+    Regression: previously returned 'review' when candidate was 'gstack/review',
+    causing the consumer to look up a nonexistent skill file.
+    """
+    router = MagicMock()
+    router._scenario_cache = {
+        "strategies": [
+            {
+                "scenario": "code_review",
+                "primary": "review",
+                "keywords": ["review", "审查"],
+            }
+        ],
+        "keywords": {
+            "code_review": ["review", "审查"],
+        },
+    }
+    router._get_skill_source.return_value = "external"
+    router._record_layer = MagicMock()
+
+    # Candidate has namespaced ID — this is the real format from SkillLoader
+    candidates = [
+        {
+            "id": "gstack/review",
+            "name": "review",
+            "namespace": "gstack",
+            "description": "Code review skill",
+        }
+    ]
+
+    match, detail = try_scenario_layer(router, "帮我 review 这段代码", candidates)
+
+    assert match is not None, f"Expected match, got None with detail: {detail.reason}"
+    assert match.skill_id == "gstack/review", (
+        f"Expected 'gstack/review', got '{match.skill_id}'. "
+        "Scenario layer must return the candidate's actual ID, not the short name."
+    )
+    assert match.layer == RoutingLayer.SCENARIO
+    assert detail.matched is True
+
+
+def test_scenario_layer_returns_exact_match_id():
+    """When candidate ID exactly matches scenario target_skill, use it as-is."""
+    router = MagicMock()
+    router._scenario_cache = {
+        "strategies": [
+            {
+                "scenario": "debugging",
+                "primary": "systematic-debugging",
+                "keywords": ["debug", "bug"],
+            }
+        ],
+        "keywords": {
+            "debugging": ["debug", "bug"],
+        },
+    }
+    router._get_skill_source.return_value = "builtin"
+    router._record_layer = MagicMock()
+
+    candidates = [
+        {
+            "id": "systematic-debugging",
+            "namespace": "builtin",
+            "description": "Debug skill",
+        }
+    ]
+
+    match, detail = try_scenario_layer(router, "debug this error", candidates)
+
+    assert match is not None
+    assert match.skill_id == "systematic-debugging"
+    assert detail.matched is True
+
+
+def test_scenario_layer_short_name_with_dash_prefix():
+    """Scenario with /-prefixed short name should resolve via endswith checks."""
+    router = MagicMock()
+    router._scenario_cache = {
+        "strategies": [
+            {
+                "scenario": "benchmarking",
+                "primary": "/benchmark",
+                "keywords": ["benchmark", "性能测试"],
+            }
+        ],
+        "keywords": {
+            "benchmarking": ["benchmark", "性能测试"],
+        },
+    }
+    router._get_skill_source.return_value = "external"
+    router._record_layer = MagicMock()
+
+    candidates = [
+        {
+            "id": "superpowers/benchmark",
+            "namespace": "superpowers",
+            "description": "Benchmark skill",
+        }
+    ]
+
+    match, detail = try_scenario_layer(router, "benchmark this code", candidates)
+
+    assert match is not None, f"Expected match, got None: {detail.reason}"
+    assert match.skill_id == "superpowers/benchmark", (
+        f"Expected 'superpowers/benchmark', got '{match.skill_id}'"
+    )
+
+
+def test_scenario_layer_no_match_when_skill_missing():
+    """When scenario matches but no candidate exists, should return no match."""
+    router = MagicMock()
+    router._scenario_cache = {
+        "strategies": [
+            {
+                "scenario": "code_review",
+                "primary": "nonexistent-skill",
+                "keywords": ["review"],
+            }
+        ],
+        "keywords": {
+            "code_review": ["review"],
+        },
+    }
+    router._get_skill_source.return_value = "builtin"
+    router._record_layer = MagicMock()
+
+    candidates = [
+        {
+            "id": "gstack/review",
+            "namespace": "gstack",
+            "description": "Code review skill",
+        }
+    ]
+
+    match, detail = try_scenario_layer(router, "review my code", candidates)
+
+    assert match is None
+    assert detail.matched is False
+    assert "skill not in candidates" in detail.reason
