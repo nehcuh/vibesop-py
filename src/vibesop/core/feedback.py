@@ -255,6 +255,59 @@ class FeedbackCollector:
             common_errors=common_errors,
         )
 
+    def get_top_mismatches(self, top_n: int = 10) -> list[dict[str, Any]]:
+        """Get top routing mismatches with example queries for analysis.
+
+        Identifies high-confidence (>0.8) routing decisions that were
+        marked incorrect by users. Returns (routed_skill, actual_skill)
+        pairs with counts, example queries, and avg confidence.
+
+        Args:
+            top_n: Number of top mismatches to return
+
+        Returns:
+            List of mismatch dicts with keys:
+            - routed_skill, actual_skill, count, example_queries, avg_confidence
+        """
+        mismatches: dict[tuple[str, str], dict[str, Any]] = {}
+        for record in self._records:
+            if record.was_correct or not record.actual_skill:
+                continue
+            key = (record.routed_skill, record.actual_skill)
+            if key not in mismatches:
+                mismatches[key] = {
+                    "routed_skill": record.routed_skill,
+                    "actual_skill": record.actual_skill,
+                    "count": 0,
+                    "example_queries": [],
+                    "total_confidence": 0.0,
+                }
+            entry = mismatches[key]
+            entry["count"] += 1
+            entry["total_confidence"] += record.confidence
+            if len(entry["example_queries"]) < 3:
+                entry["example_queries"].append(record.query)
+
+        result = sorted(
+            mismatches.values(),
+            key=lambda m: m["count"],
+            reverse=True,
+        )[:top_n]
+
+        for m in result:
+            m["avg_confidence"] = m["total_confidence"] / m["count"]
+            del m["total_confidence"]
+
+        return result
+
+    def get_high_confidence_errors(self, min_confidence: float = 0.8) -> list[dict[str, Any]]:
+        """Get errors where routing was high-confidence but user said wrong.
+
+        These are the most actionable — the router was confident but wrong.
+        """
+        mismatches = self.get_top_mismatches(top_n=100)
+        return [m for m in mismatches if m["avg_confidence"] >= min_confidence]
+
     def get_records(self, limit: int | None = None) -> list[FeedbackRecord]:
         """Get feedback records.
 
