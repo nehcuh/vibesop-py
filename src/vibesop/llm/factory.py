@@ -92,14 +92,17 @@ def detect_provider_from_env() -> ProviderType:
     if explicit_provider and explicit_provider in _VALID_PROVIDERS:
         return explicit_provider  # pyright: ignore[reportReturnType]
 
+    # Priority: Ollama (local, no key needed) > DeepSeek > OpenAI > Anthropic > Others
     if os.getenv("OLLAMA_BASE_URL") or os.getenv("OLLAMA_MODEL"):
         return "ollama"
-    if os.getenv("ANTHROPIC_API_KEY"):
-        return "anthropic"
+    if os.getenv("DEEPSEEK_API_KEY"):
+        return "deepseek"
     if os.getenv("OPENAI_API_KEY"):
         return "openai"
+    if os.getenv("ANTHROPIC_API_KEY"):
+        return "anthropic"
 
-    for provider_name in ["deepseek", "kimi", "zhipu"]:
+    for provider_name in ["kimi", "zhipu"]:
         env_key = f"{provider_name.upper()}_API_KEY"
         if os.getenv(env_key):
             return provider_name  # pyright: ignore[reportReturnType]
@@ -108,7 +111,7 @@ def detect_provider_from_env() -> ProviderType:
 
 
 def create_from_env(
-    preferred_provider: str = "ollama",
+    preferred_provider: ProviderType | None = None,
 ) -> LLMProvider:
     """Create provider from environment configuration.
 
@@ -126,7 +129,7 @@ def create_from_env(
         return provider
 
     # Try alternatives in order
-    alternatives = ["openai", "deepseek", "kimi", "zhipu", "ollama"]
+    alternatives: list[ProviderType] = ["openai", "deepseek", "kimi", "zhipu", "ollama"]
     for alt in alternatives:
         if alt == preferred_provider:
             continue
