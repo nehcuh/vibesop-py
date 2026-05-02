@@ -334,24 +334,31 @@ class StepRunner:
                     except Exception as e:
                         return (s, e)
 
+                old_loop = None
                 try:
-                    loop = asyncio.new_event_loop()
-                except Exception:
-                    loop = asyncio.new_event_loop()
-                    asyncio.set_event_loop(loop)
+                    old_loop = asyncio.get_event_loop()
+                except RuntimeError:
+                    pass
 
-                # Use semaphore to limit concurrency
-                semaphore = asyncio.Semaphore(self._max_parallel)
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
 
-                async def limited_exec(
-                    s: ExecutionStep, _sem: asyncio.Semaphore = semaphore
-                ) -> tuple[ExecutionStep, str | Exception]:
-                    async with _sem:
-                        return await exec_step(s)
+                try:
+                    # Use semaphore to limit concurrency
+                    semaphore = asyncio.Semaphore(self._max_parallel)
 
-                batch_results = loop.run_until_complete(
-                    asyncio.gather(*(limited_exec(s) for s in batch), return_exceptions=True)
-                )
+                    async def limited_exec(
+                        s: ExecutionStep, _sem: asyncio.Semaphore = semaphore
+                    ) -> tuple[ExecutionStep, str | Exception]:
+                        async with _sem:
+                            return await exec_step(s)
+
+                    batch_results = loop.run_until_complete(
+                        asyncio.gather(*(limited_exec(s) for s in batch), return_exceptions=True)
+                    )
+                finally:
+                    asyncio.set_event_loop(old_loop)
+                    loop.close()
 
                 should_continue = True
                 for step, step_result in batch_results:
