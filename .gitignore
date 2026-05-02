@@ -68,7 +68,8 @@ htmlcov/
 
 # VibeSOP runtime artifacts (one-off reports, plans, backups)
 .vibe/routing_counter.json
-.vibe/*.bak
+.vibe/*.bak*
+.vibe/*.backup
 .vibe/*-report.md
 .vibe/*-complete.md
 .vibe/deep-code-review.md
