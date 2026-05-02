@@ -46,6 +46,7 @@ class SkillMetadata:
     skill_type: SkillType = SkillType.PROMPT
     trigger_when: str = ""
     algorithms: list[str] | None = None
+    capabilities: list[str] | None = None
 
     def __post_init__(self) -> None:
         if self.tags is None:
@@ -54,6 +55,8 @@ class SkillMetadata:
             self.triggers = []
         if self.algorithms is None:
             self.algorithms = []
+        if self.capabilities is None:
+            self.capabilities = []
 
 
 @dataclass

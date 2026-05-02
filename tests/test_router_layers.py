@@ -105,8 +105,13 @@ class TestEarlyLayerOptimization:
     multi-turn behavior.
     """
 
-    def test_explicit_match_calls_optimizations(self) -> None:
-        """EXPLICIT layer match should trigger _apply_optimizations."""
+    def test_explicit_match_respects_user_choice(self) -> None:
+        """EXPLICIT layer match should NOT call _apply_optimizations.
+
+        The user explicitly specified the skill via !skill_id syntax.
+        Applying preference/session/quality optimizations would override
+        the user's choice, breaking trust. EXPLICIT matches are sacred.
+        """
         router = UnifiedRouter(project_root=Path.cwd(), config=RoutingConfig(enable_ai_triage=False))
         candidates = [
             {"id": "test-skill", "description": "Test skill", "enabled": True}
@@ -115,7 +120,7 @@ class TestEarlyLayerOptimization:
         with patch.object(router, "_apply_optimizations") as mock_opt:
             mock_opt.return_value = (
                 MatchResult(
-                    skill_id="test-skill",
+                    skill_id="wrong-skill",
                     confidence=1.0,
                     matcher_type=MatcherType.CUSTOM,
                 ),
@@ -124,9 +129,8 @@ class TestEarlyLayerOptimization:
 
             result = router.route("!test-skill hello", candidates=candidates)
 
-            assert mock_opt.called, (
-                "EXPLICIT layer match should call _apply_optimizations"
-            )
+            # EXPLICIT must NOT call optimizations — user's choice is final
+            assert not mock_opt.called
             assert result.primary is not None
             assert result.primary.skill_id == "test-skill"
             assert result.primary.layer == RoutingLayer.EXPLICIT

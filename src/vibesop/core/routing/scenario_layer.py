@@ -10,12 +10,31 @@ Scenario keywords are defined in core/registry.yaml under conflict_resolution.sc
 from __future__ import annotations
 
 import logging
+import re
 from pathlib import Path
 from typing import Any, cast
 
 from ruamel.yaml import YAML
 
 logger = logging.getLogger(__name__)
+
+
+def _matches_keyword(keyword: str, query_lower: str) -> bool:
+    """Check whether a scenario keyword matches the (already-lowercased) query.
+
+    ASCII keywords use a regex word-boundary match to prevent false positives
+    where a short keyword is a substring of an unrelated word — e.g. ``"pr"``
+    would otherwise match ``"project"``, ``"merge"`` would match ``"emerged"``.
+
+    Non-ASCII (CJK) keywords keep substring matching because Python's ``\\b``
+    word-boundary anchor only fires between ``[A-Za-z0-9_]`` and other
+    characters, which doesn't behave well for Chinese/Japanese/Korean text.
+    """
+    if not keyword:
+        return False
+    if any(ord(c) > 127 for c in keyword):
+        return keyword in query_lower
+    return re.search(r"\b" + re.escape(keyword) + r"\b", query_lower) is not None
 
 
 def load_scenario_config(registry_path: str | Path = "core/registry.yaml") -> dict[str, Any]:
@@ -102,8 +121,8 @@ def match_scenario(
         if not scenario_keywords or scenario_keywords == [""]:
             continue
 
-        # Check if any keyword matches
-        if any(kw and kw in query_lower for kw in scenario_keywords):
+        # Check if any keyword matches (word-bounded for ASCII, substring for CJK).
+        if any(_matches_keyword(kw, query_lower) for kw in scenario_keywords):
             return scenario
 
     return None

@@ -3,8 +3,8 @@
 import pytest
 
 from vibesop.core.config.manager import ConfigManager
-from vibesop.core.routing.unified import RoutingResult, UnifiedRouter
 from vibesop.core.models import OrchestrationResult
+from vibesop.core.routing.unified import UnifiedRouter
 
 
 @pytest.fixture

@@ -402,6 +402,67 @@ INTENT_DOMAINS: list[tuple[str, list[str]]] = [
     ("brainstorm", ["畅想", "brainstorm", "思路", "idea", "创意", "探索", "explore"]),
 ]
 
+# ── PlanBuilder execution mode keywords ─────────────────────────────────────
+
+PARALLEL_KEYWORDS: set[str] = {
+    "after",
+    "and then",
+    "both",
+    "concurrent",
+    "parallel",
+    "simultaneously",
+    "同时",
+    "一起",
+    "之后",
+}
+
+SEQUENTIAL_KEYWORDS: set[str] = {
+    "then",
+    "after",
+    "next",
+    "followed by",
+    "然后",
+    "之后",
+    "接着",
+}
+
+DEPENDENCY_INDICATORS: set[str] = {
+    "then",
+    "after",
+    "based on",
+    "using",
+    "from",
+    "然后",
+    "之后",
+    "基于",
+    "使用",
+}
+
+# ── TaskDecomposer segmentation conjunctions ────────────────────────────────
+
+DECOMPOSITION_CONJUNCTIONS: set[str] = {
+    "然后",
+    "之后",
+    "接着",
+    "并",
+    "并且",
+    "同时",
+    "另外",
+    "还有",
+    "以及",
+    "先",
+    "再",
+    "最后",
+    "and then",
+    "after that",
+    "and also",
+    "plus",
+    "meanwhile",
+    "first",
+    "second",
+    "third",
+}
+
 # ── Intent domain weights (for weighted multi-intent detection) ──────────────
 
 INTENT_DOMAIN_WEIGHTS: dict[str, float] = {

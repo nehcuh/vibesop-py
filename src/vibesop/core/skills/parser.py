@@ -100,6 +100,10 @@ def build_metadata(
     if isinstance(algorithms, str):
         algorithms = [a.strip() for a in algorithms.split(",") if a.strip()]
 
+    capabilities = data.get("capabilities") or []
+    if isinstance(capabilities, str):
+        capabilities = [c.strip() for c in capabilities.split(",") if c.strip()]
+
     source = infer_source(skill_file)
 
     return SkillMetadata(
@@ -115,6 +119,7 @@ def build_metadata(
         skill_type=skill_type,
         trigger_when=trigger_when,
         algorithms=algorithms,
+        capabilities=capabilities,
     )
 
 

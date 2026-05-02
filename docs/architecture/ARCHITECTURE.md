@@ -409,7 +409,7 @@ tests/
 └── security/         # Security tests
 ```
 
-**Coverage**: ~80%
+**Coverage**: ~29% (measured 2026-05-01, target: 75%)
 
 ---
 

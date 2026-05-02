@@ -8,7 +8,12 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
-from vibesop.core.orchestration.patterns import INTENT_DOMAIN_KEYWORDS
+from pydantic import BaseModel, Field, ValidationError
+
+from vibesop.core.orchestration.patterns import (
+    DECOMPOSITION_CONJUNCTIONS,
+    INTENT_DOMAIN_KEYWORDS,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +27,23 @@ class SubTask:
     source: str = "llm"  # "llm" | "rule_fallback" | "skill_name"
     skill_id: str | None = None  # Pre-assigned skill ID from LLM decomposition
     task_type: str = ""  # "analysis" | "review" | "design" | "debug" | "refactor" | "plan" | "test"
+    original_intent: str = ""  # Original query segment that triggered this intent
+
+
+class _LLMTaskItem(BaseModel):
+    """Pydantic model for a single task in LLM decomposition output."""
+
+    intent: str = Field(default="")
+    query: str = Field(default="", min_length=1)
+    skill_id: str | None = Field(default=None)
+    task_type: str = Field(default="")
+    original_intent: str = Field(default="")
+
+
+class _LLMDecompositionResult(BaseModel):
+    """Pydantic model for LLM decomposition JSON output."""
+
+    tasks: list[_LLMTaskItem] = Field(default_factory=list, max_length=5)
 
 
 class TaskDecomposer:
@@ -103,27 +125,73 @@ class TaskDecomposer:
             "- Output ONLY the JSON, no markdown, no explanation"
         )
 
+    def _extract_json(self, content: str) -> str | None:
+        """Extract first balanced JSON object from text.
+
+        Handles nested braces correctly (unlike greedy regex).
+        Prefers markdown code blocks when present.
+        """
+        # Try markdown code block first
+        code_match = re.search(r"```(?:json)?\s*(\{.*?)\s*```", content, re.DOTALL)
+        if code_match:
+            return code_match.group(1)
+
+        # Find first opening brace and track depth to find matching close
+        start = content.find("{")
+        if start == -1:
+            return None
+        depth = 0
+        for i, ch in enumerate(content[start:], start):
+            if ch == "{":
+                depth += 1
+            elif ch == "}":
+                depth -= 1
+                if depth == 0:
+                    return content[start : i + 1]
+        return None
+
     def _parse_json_response(self, content: str) -> list[SubTask]:
-        """Parse structured JSON response."""
-        # Extract JSON from possible markdown fences
-        json_match = re.search(r"\{.*\}", content, re.DOTALL)
-        if not json_match:
+        """Parse structured JSON response with Pydantic validation."""
+        json_str = self._extract_json(content)
+        if json_str is None:
             return []
 
         try:
-            data = json.loads(json_match.group())
-            tasks_data = data.get("tasks", [])
+            data = json.loads(json_str)
+            result = _LLMDecompositionResult.model_validate(data)
             return [
                 SubTask(
-                    intent=t.get("intent", ""),
-                    query=t.get("query", ""),
-                    skill_id=t.get("skill_id"),
+                    # LLMs sometimes omit `intent` entirely while still returning
+                    # a valid query — derive a short intent from the query so that
+                    # downstream consumers (PlanBuilder, ExecutionStep) never see
+                    # an empty label.
+                    intent=t.intent.strip() or self._derive_intent(t.query),
+                    query=t.query,
+                    skill_id=t.skill_id if t.skill_id and t.skill_id != "null" else None,
+                    task_type=t.task_type,
+                    original_intent=t.original_intent,
                 )
-                for t in tasks_data
-                if t.get("query")
+                for t in result.tasks
             ]
-        except json.JSONDecodeError:
+        except (json.JSONDecodeError, ValidationError) as e:
+            logger.debug("Failed to parse structured LLM response: %s", e)
             return []
+
+    @staticmethod
+    def _derive_intent(query: str, max_len: int = 60) -> str:
+        """Derive a short intent label from the sub-task query.
+
+        Truncates at the first sentence-ending punctuation or after max_len chars
+        so the intent stays human-readable in plan rendering.
+        """
+        text = query.strip().splitlines()[0] if query else ""
+        for sep in ("。", "；", ";", ".", " - ", ":"):
+            if sep in text:
+                text = text.split(sep, 1)[0]
+                break
+        if len(text) > max_len:
+            text = text[:max_len].rstrip() + "…"
+        return text or "sub-task"
 
     def _parse_regex_response(self, content: str) -> list[SubTask]:
         """Fallback regex-based extraction."""
@@ -134,7 +202,9 @@ class TaskDecomposer:
             # Match patterns like "1. intent: query" or "- intent: query"
             match = re.match(r"^[\s\-\d\.]*\s*(.+?)[:\-]\s*(.+)$", line)
             if match:
-                tasks.append(SubTask(intent=match.group(1).strip(), query=match.group(2).strip()))
+                intent_text = match.group(1).strip()
+                query_text = match.group(2).strip()
+                tasks.append(SubTask(intent=intent_text, query=query_text, original_intent=query_text))
         return tasks
 
     def _fallback_decomposition(self, query: str) -> list[SubTask]:
@@ -167,7 +237,7 @@ class TaskDecomposer:
                 continue
 
             contextualized = self._contextualize_query(query, cleaned, intent)
-            sub_tasks.append(SubTask(intent=intent, query=contextualized, source="rule_fallback"))
+            sub_tasks.append(SubTask(intent=intent, query=contextualized, source="rule_fallback", original_intent=cleaned))
 
         # If we only got one subtask but the original query has multiple intents,
         # try to split by intent boundaries on the original query directly
@@ -190,14 +260,14 @@ class TaskDecomposer:
                             continue
                         contextualized = self._contextualize_query(query, cleaned, intent)
                         forced_tasks.append(
-                            SubTask(intent=intent, query=contextualized, source="rule_fallback")
+                            SubTask(intent=intent, query=contextualized, source="rule_fallback", original_intent=cleaned)
                         )
                     if len(forced_tasks) >= 2:
                         sub_tasks = forced_tasks
 
         if not sub_tasks:
             intent = self._detect_intent(query)
-            return [SubTask(intent=intent, query=query, source="rule_fallback")]
+            return [SubTask(intent=intent, query=query, source="rule_fallback", original_intent=query)]
 
         if len(sub_tasks) == 1:
             return sub_tasks
@@ -206,29 +276,7 @@ class TaskDecomposer:
 
     def _segment_by_conjunctions(self, query: str) -> list[str]:
         """Split query on conjunctions to identify candidate segments."""
-        conjunctions = [
-            "然后",
-            "之后",
-            "接着",
-            "并",
-            "并且",
-            "同时",
-            "另外",
-            "还有",
-            "以及",
-            "先",
-            "再",
-            "最后",
-            "and then",
-            "after that",
-            "and also",
-            "plus",
-            "meanwhile",
-            "first",
-            "second",
-            "third",
-        ]
-        pattern = "|".join(re.escape(c) for c in conjunctions)
+        pattern = "|".join(re.escape(c) for c in DECOMPOSITION_CONJUNCTIONS)
         return [s.strip() for s in re.split(pattern, query) if s.strip()]
 
     def _merge_short_segments(self, segments: list[str]) -> list[str]:

@@ -304,3 +304,104 @@ class TestPlatformAdapterEdgeCases:
 
         errors = adapter.validate_manifest(manifest)
         assert errors == []
+
+    def test_clean_orphan_skills(self, tmp_path: Path) -> None:
+        """Test clean_orphan_skills removes unexpected directories."""
+        adapter = DummyAdapter()
+        skills_dir = tmp_path / "skills"
+        skills_dir.mkdir()
+
+        # Create an orphan dir
+        orphan = skills_dir / "old-skill"
+        orphan.mkdir()
+        (orphan / "SKILL.md").write_text("# Old")
+
+        # Create a valid skill dir
+        valid = skills_dir / "valid-skill"
+        valid.mkdir()
+
+        metadata = ManifestMetadata(platform="dummy-platform")
+        manifest = Manifest(
+            metadata=metadata,
+            skills=[SkillDefinition(id="valid-skill", name="Valid", description="desc", trigger_when="")],
+        )
+
+        removed = adapter.clean_orphan_skills(manifest, tmp_path)
+
+        assert len(removed) == 1
+        assert not orphan.exists()
+        assert valid.exists()
+
+    def test_clean_orphan_skills_no_skills_dir(self, tmp_path: Path) -> None:
+        """Test clean_orphan_skills when skills dir doesn't exist."""
+        adapter = DummyAdapter()
+        metadata = ManifestMetadata(platform="dummy-platform")
+        manifest = Manifest(metadata=metadata)
+
+        removed = adapter.clean_orphan_skills(manifest, tmp_path)
+
+        assert removed == []
+
+    def test_clean_orphan_skills_symlink(self, tmp_path: Path) -> None:
+        """Test clean_orphan_skills removes orphan symlinks."""
+        adapter = DummyAdapter()
+        skills_dir = tmp_path / "skills"
+        skills_dir.mkdir()
+
+        target = tmp_path / "target"
+        target.mkdir()
+        orphan_link = skills_dir / "orphan-link"
+        orphan_link.symlink_to(target)
+
+        metadata = ManifestMetadata(platform="dummy-platform")
+        manifest = Manifest(metadata=metadata)
+
+        removed = adapter.clean_orphan_skills(manifest, tmp_path)
+
+        assert len(removed) == 1
+        assert not orphan_link.exists()
+
+    def test_normalize_skill_type(self) -> None:
+        """Test _normalize_skill_type proxy method."""
+        adapter = DummyAdapter()
+        content = "---\ntype: prompt\n---\n# Skill"
+        result = adapter._normalize_skill_type(content)
+        assert "type: standard" in result
+
+    def test_validate_manifest_no_metadata(self) -> None:
+        """Test validate_manifest when metadata is falsy."""
+        from unittest.mock import MagicMock
+
+        adapter = DummyAdapter()
+        # metadata that is falsy but has a platform attr (covers the bug path)
+        fake_meta = MagicMock()
+        fake_meta.__bool__ = lambda _self: False
+        fake_meta.platform = "other"
+        manifest = MagicMock()
+        manifest.metadata = fake_meta
+
+        errors = adapter.validate_manifest(manifest)
+        assert any("metadata" in e.lower() for e in errors)
+
+    def test_validate_manifest_path_traversal_allowed(self) -> None:
+        """Test validate_manifest detects allow_path_traversal=True via mock."""
+        from unittest.mock import MagicMock, patch
+
+        adapter = DummyAdapter()
+        metadata = ManifestMetadata(platform="dummy-platform")
+        manifest = Manifest(metadata=metadata)
+
+        # Patch get_effective_security_policy to return a policy with allow_path_traversal=True
+        fake_policy = MagicMock()
+        fake_policy.allow_path_traversal = True
+        with patch("vibesop.adapters.base.Manifest.get_effective_security_policy", return_value=fake_policy):
+            errors = adapter.validate_manifest(manifest)
+        assert any("path traversal" in e.lower() for e in errors)
+
+    def test_scan_for_threats_no_scanner(self) -> None:
+        """Test scan_for_threats when scanner is None."""
+        adapter = DummyAdapter()
+        adapter._security_scanner = None
+
+        threats = adapter.scan_for_threats("anything")
+        assert threats == []

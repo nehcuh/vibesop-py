@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from vibesop.core.config import RoutingConfig
 from vibesop.core.models import DegradationLevel, RoutingLayer, SkillRoute
 from vibesop.core.routing.degradation import DegradationManager

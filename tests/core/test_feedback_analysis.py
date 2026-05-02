@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from vibesop.core.feedback import FeedbackCollector, collect_feedback
+from vibesop.core.feedback import FeedbackCollector
 
 
 class TestFeedbackCollector:

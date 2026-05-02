@@ -3,12 +3,9 @@
 from __future__ import annotations
 
 import time
-from pathlib import Path
-from unittest.mock import MagicMock, PropertyMock
+from unittest.mock import MagicMock
 
-from vibesop.core.matching import MatchResult, MatcherType
 from vibesop.core.models import (
-    DegradationLevel,
     LayerDetail,
     RejectedCandidate,
     RoutingLayer,

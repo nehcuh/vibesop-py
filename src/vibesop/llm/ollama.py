@@ -36,7 +36,7 @@ class OllamaProvider(LLMProvider):
         model: str | None = None,
     ) -> None:
         if api_key is None:
-            api_key = os.getenv("OLLAMA_API_KEY", "1234")
+            api_key = os.getenv("OLLAMA_API_KEY", "ollama-local-key-no-auth")
         if base_url is None:
             base_url = os.getenv("OLLAMA_BASE_URL", self.DEFAULT_BASE_URL)
         if model is None:

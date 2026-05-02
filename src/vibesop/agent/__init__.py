@@ -166,7 +166,7 @@ class AgentRouter:
                 self._router._config = original_router_config
                 self._router._triage_service._config = original_triage_config
         else:
-            result = self._router._route(query)
+            result = self._router._single_skill_route(query)
 
         return result
 
@@ -256,7 +256,7 @@ class AgentRouter:
         from vibesop.core.orchestration import MultiIntentDetector
 
         # First, get single routing result for context
-        single_result = self._route(query, enable_ai_triage=False)
+        single_result = self.route(query, enable_ai_triage=False)
 
         # Initialize detector
         detector = MultiIntentDetector()
@@ -283,16 +283,28 @@ class AgentRouter:
             List of sub-task dictionaries with:
                 - intent: str - brief description
                 - query: str - self-contained sub-query
+                - skill_id: str | None - LLM-assigned skill, if any
         """
         from vibesop.core.orchestration import TaskDecomposer
 
         # Initialize decomposer with injected LLM
         decomposer = TaskDecomposer(llm_client=self._router._llm)
 
-        # Decompose query
-        sub_tasks = decomposer.decompose(query)
+        # Pass the skill catalog so the LLM can pre-assign skill_id per sub-task —
+        # without it, PlanBuilder falls back to skip_ai_triage routing and every
+        # sub-task ends up at whichever skill the SCENARIO/INDEX layers pick first.
+        skills = self._router._build_decomposition_skills()
 
-        return [{"intent": task.intent, "query": task.query} for task in sub_tasks]
+        sub_tasks = decomposer.decompose(query, skills=skills)
+
+        return [
+            {
+                "intent": task.intent,
+                "query": task.query,
+                "skill_id": task.skill_id,  # type: ignore[dict-item]
+            }
+            for task in sub_tasks
+        ]
 
     def build_plan(
         self, query: str, sub_tasks: list[dict[str, str]] | None = None
@@ -313,14 +325,23 @@ class AgentRouter:
         """
         from vibesop.core.orchestration import PlanBuilder, SubTask, TaskDecomposer
 
-        # Auto-decompose if sub_tasks not provided
+        # Auto-decompose if sub_tasks not provided. Keep SubTask objects directly
+        # so the LLM-assigned skill_id (and task_type) are preserved into PlanBuilder.
         if sub_tasks is None:
             decomposer = TaskDecomposer(llm_client=self._router._llm)
-            raw_sub_tasks = decomposer.decompose(query)
-            sub_tasks = [{"intent": task.intent, "query": task.query} for task in raw_sub_tasks]
-
-        # Convert to SubTask objects
-        sub_task_objects = [SubTask(intent=t["intent"], query=t["query"]) for t in sub_tasks]
+            skills = self._router._build_decomposition_skills()
+            sub_task_objects = decomposer.decompose(query, skills=skills)
+        else:
+            # External caller provided dicts — read skill_id/task_type if present.
+            sub_task_objects = [
+                SubTask(
+                    intent=t["intent"],
+                    query=t["query"],
+                    skill_id=t.get("skill_id"),
+                    task_type=t.get("task_type", ""),
+                )
+                for t in sub_tasks
+            ]
 
         # Build plan
         plan_builder = PlanBuilder(router=self._router)
@@ -365,7 +386,7 @@ class AgentRouter:
 
         if not intent_detection["is_multi_intent"]:
             # Single intent - return routing result
-            single_result = self._route(query)
+            single_result = self.route(query)
             return {
                 "is_multi_intent": False,
                 "single_result": {

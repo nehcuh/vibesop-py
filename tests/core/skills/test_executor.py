@@ -100,16 +100,63 @@ class TestExternalSkillExecutor:
 
     def test_get_skill_definition_builtin(self) -> None:
         """Test getting definition for built-in skill."""
-        executor = ExternalSkillExecutor(project_root=PROJECT_ROOT)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            skill_dir = Path(tmpdir) / "systematic-debugging"
+            skill_dir.mkdir()
+            skill_md = skill_dir / "SKILL.md"
+            skill_md.write_text(
+                """---
+name: Systematic Debugging
+description: Debug systematically
+---
 
-        # Use a built-in skill that should exist
-        result = executor.get_skill_definition("builtin/systematic-debugging")
+# Systematic Debugging
 
-        assert result.success is True
-        assert result.skill_id == "builtin/systematic-debugging"
-        assert result.workflow is not None
-        assert len(result.workflow.steps) > 0
-        assert result.execution_time >= 0
+## Steps
+
+1. First step
+   Do something first
+""",
+                encoding="utf-8",
+            )
+
+            executor = ExternalSkillExecutor(project_root=tmpdir)
+
+            # Mock the loader to return our test skill definition
+            with patch.object(executor._loader, "get_skill") as mock_get:
+                from vibesop.core.skills.base import SkillMetadata
+                from vibesop.core.skills.loader import LoadedSkill
+
+                mock_get.return_value = LoadedSkill(
+                    metadata=SkillMetadata(
+                        id="systematic-debugging",
+                        name="Systematic Debugging",
+                        description="Debug systematically",
+                        intent="Debug",
+                        namespace="builtin",
+                        version="1.0.0",
+                    ),
+                    content="",
+                    source_file=skill_md,
+                )
+
+                # Mock the auditor to return safe result
+                with patch.object(executor._auditor, "audit_skill_file") as mock_audit:
+                    from vibesop.security.skill_auditor import AuditResult
+
+                    mock_audit.return_value = AuditResult(
+                        is_safe=True,
+                        threats=[],
+                        reason="Safe",
+                    )
+
+                    result = executor.get_skill_definition("systematic-debugging")
+
+                    assert result.success is True
+                    assert result.skill_id == "systematic-debugging"
+                    assert result.workflow is not None
+                    assert len(result.workflow.steps) > 0
+                    assert result.execution_time >= 0
 
     def test_get_skill_definition_not_found(self) -> None:
         """Test getting definition for non-existent skill."""

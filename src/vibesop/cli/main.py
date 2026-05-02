@@ -398,7 +398,8 @@ def decompose(
     router = UnifiedRouter(project_root=Path.cwd())
     llm = getattr(router, "_llm", None)
     decomposer = TaskDecomposer(llm_client=llm)
-    sub_tasks = decomposer.decompose(query)
+    skills = router._build_decomposition_skills()
+    sub_tasks = decomposer.decompose(query, skills=skills)
 
     if json_output:
         import json
@@ -407,7 +408,14 @@ def decompose(
             json.dumps(
                 {
                     "query": query,
-                    "sub_tasks": [{"intent": t.intent, "query": t.query} for t in sub_tasks],
+                    "sub_tasks": [
+                        {
+                            "intent": t.intent,
+                            "query": t.query,
+                            "skill_id": t.skill_id,
+                        }
+                        for t in sub_tasks
+                    ],
                 },
                 indent=2,
                 ensure_ascii=False,
@@ -421,7 +429,8 @@ def decompose(
             return
         console.print(f"[bold]Decomposed '{query}' into {len(sub_tasks)} sub-tasks:[/bold]\n")
         for i, task in enumerate(sub_tasks, 1):
-            console.print(f"  {i}. [cyan]{task.intent}[/cyan] — {task.query}")
+            skill_hint = f" → [magenta]{task.skill_id}[/magenta]" if task.skill_id else ""
+            console.print(f"  {i}. [cyan]{task.intent}[/cyan] — {task.query}{skill_hint}")
 
 
 def _handle_orchestrated_result(

@@ -288,6 +288,11 @@ class QuickstartRunner:
             True if successful, False otherwise
         """
         try:
+            # Step 0: Ensure global ~/.vibe/config.toml exists (always)
+            from vibesop.installer.init_support import _ensure_global_config
+
+            _ensure_global_config(config.platform, {"created_files": []})
+
             # Step 1: Initialize project
             if not config.global_install:
                 init_support = InitSupport()
@@ -347,6 +352,24 @@ class QuickstartRunner:
                     console.print("⊘ No hooks available for this platform")
             else:
                 console.print("⊘ Hooks skipped")
+
+            # Step 5: Build skill semantic index (layered architecture)
+            from vibesop.core.skills.indexer import SkillIndexer
+
+            indexer = SkillIndexer(project_root=config.project_path)
+
+            if config.global_install:
+                # Global install: only build the global index
+                console.print("\n[bold cyan]🔍 Building global skill index...[/bold cyan]")
+                indexer.build_index(scope="global", show_progress=True)
+            else:
+                # Project install: ensure global index exists, then build project index
+                if not indexer.global_index_path.exists():
+                    console.print("\n[bold cyan]🔍 Building global skill index...[/bold cyan]")
+                    indexer.build_index(scope="global", show_progress=True)
+
+                console.print("\n[bold cyan]🔍 Building project skill index...[/bold cyan]")
+                indexer.build_index(scope="project", show_progress=True)
 
             return True
 
@@ -437,35 +460,17 @@ class QuickstartRunner:
             console.print("3. Run: [cyan]vibe build[/cyan]")
             console.print('4. Run: [cyan]vibe route "your query"[/cyan] to test')
 
-        console.print("\n[bold yellow]⚠️  LLM Configuration Required[/bold yellow]")
+        console.print("\n[bold yellow]⚙️  LLM Configuration[/bold yellow]")
         console.print(
-            "   VibeSOP runs as a CLI subprocess and [bold]cannot reuse your Agent's LLM[/bold]."
+            "   Default config created at [cyan]~/.vibe/config.toml[/cyan] with Ollama as provider."
         )
-        console.print("   Configure a separate LLM for semantic routing (AI Triage):")
+        console.print("   Edit this file to switch provider (Anthropic, OpenAI, DeepSeek, etc.):")
         console.print()
-        console.print("   [bold]Option 1: Config File (recommended)[/bold]")
-        config_path = config.project_path / ".vibe" / "config.yaml"
-        console.print(f"   [dim]  Create: {config_path}[/dim]")
-        console.print("   [dim]  Example:[/dim]")
-        console.print("   [dim]    llm:[/dim]")
-        console.print(
-            "   [dim]      provider: anthropic  # or: openai / deepseek / kimi / zhipu[/dim]"
-        )
-        console.print("   [dim]      model: claude-sonnet-4-6-20250514[/dim]")
-        console.print('   [dim]      api_key: "sk-..."  # or set via env var[/dim]')
-        console.print(
-            '   [dim]      api_base: "https://api.deepseek.com/v1"  # for custom endpoints[/dim]'
-        )
-        console.print()
-        console.print("   [bold]Option 2: Environment Variables[/bold]")
-        console.print('   [dim]  export ANTHROPIC_API_KEY="sk-ant-..."[/dim]')
-        console.print('   [dim]  export OPENAI_API_KEY="sk-..."[/dim]')
-        console.print(
-            '   [dim]  export DEEPSEEK_API_KEY="sk-..." && export DEEPSEEK_BASE_URL="https://api.deepseek.com/v1"[/dim]'
-        )
-        console.print(
-            "   [dim]  # or local Ollama: export VIBE_LLM_PROVIDER=ollama && ollama serve[/dim]"
-        )
+        console.print("   [dim]  [llm][/dim]")
+        console.print("   [dim]  provider = \"anthropic\"[/dim]")
+        console.print("   [dim]  model = \"claude-sonnet-4-6-20250514\"[/dim]")
+        console.print("   [dim]  api_key = \"sk-...\"[/dim]")
+
 
         console.print("\n[bold]📖 Documentation:[/bold]")
         console.print("   - Quick Start: README.md")

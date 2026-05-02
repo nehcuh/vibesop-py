@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-import pytest
-
 from vibesop.cli.confirmation import _needs_confirmation
 
 
@@ -123,3 +121,189 @@ class TestNeedsConfirmation:
         router = _mock_router(confirmation_mode="ambiguous_only", auto_select_threshold=0.6)
         result = _mock_orchestrated_result(confidence=0.40)
         assert _needs_confirmation(result, router, is_orchestrated=True) is True
+
+
+class TestRunConfirmationFlow:
+    """Test _run_confirmation_flow with mocked questionary."""
+
+    def test_confirm_choice(self, monkeypatch) -> None:
+        """User confirms the selected skill."""
+        import io
+
+        from rich.console import Console
+
+        from vibesop.cli.confirmation import _run_confirmation_flow
+        from vibesop.core.models import RoutingLayer, SkillRoute
+
+        primary = SkillRoute(
+            skill_id="test-skill",
+            confidence=0.85,
+            layer=RoutingLayer.TFIDF,
+            source="routing",
+        )
+        result = type(
+            "R",
+            (),
+            {
+                "primary": primary,
+                "alternatives": [],
+                "routing_path": [],
+                "layer_details": [],
+                "original_query": "test query",
+                "duration_ms": 5.0,
+            },
+        )()
+
+        output = io.StringIO()
+        console = Console(file=output, force_terminal=False)
+
+        monkeypatch.setattr(
+            "vibesop.cli.confirmation.questionary.select",
+            lambda _title, choices: type("Q", (), {"ask": lambda self: "confirm"})(),
+        )
+
+        _run_confirmation_flow(result, console)
+        # Primary should remain unchanged
+        assert result.primary is not None
+
+    def test_skip_choice(self, monkeypatch) -> None:
+        """User chooses to skip skill."""
+        import io
+
+        from rich.console import Console
+
+        from vibesop.cli.confirmation import _run_confirmation_flow
+        from vibesop.core.models import RoutingLayer, SkillRoute
+
+        primary = SkillRoute(
+            skill_id="test-skill",
+            confidence=0.85,
+            layer=RoutingLayer.TFIDF,
+            source="routing",
+        )
+        result = type(
+            "R",
+            (),
+            {
+                "primary": primary,
+                "alternatives": [],
+                "routing_path": [],
+                "layer_details": [],
+                "original_query": "test query",
+                "duration_ms": 5.0,
+            },
+        )()
+
+        output = io.StringIO()
+        console = Console(file=output, force_terminal=False)
+
+        monkeypatch.setattr(
+            "vibesop.cli.confirmation.questionary.select",
+            lambda _title, choices: type("Q", (), {"ask": lambda self: "skip"})(),
+        )
+
+        _run_confirmation_flow(result, console)
+        assert result.primary is None
+
+    def test_alternative_choice(self, monkeypatch) -> None:
+        """User chooses an alternative skill."""
+        import io
+
+        from rich.console import Console
+
+        from vibesop.cli.confirmation import _run_confirmation_flow
+        from vibesop.core.models import RoutingLayer, SkillRoute
+
+        primary = SkillRoute(
+            skill_id="test-skill",
+            confidence=0.85,
+            layer=RoutingLayer.TFIDF,
+            source="routing",
+        )
+        alt = SkillRoute(
+            skill_id="alt-skill",
+            confidence=0.70,
+            layer=RoutingLayer.KEYWORD,
+            source="routing_rejected",
+            description="Alt description",
+        )
+        result = type(
+            "R",
+            (),
+            {
+                "primary": primary,
+                "alternatives": [alt],
+                "routing_path": [],
+                "layer_details": [],
+                "original_query": "test query",
+                "duration_ms": 5.0,
+            },
+        )()
+
+        output = io.StringIO()
+        console = Console(file=output, force_terminal=False)
+
+        call_count = [0]
+
+        def mock_select(title, choices):
+            call_count[0] += 1
+            if call_count[0] == 1:
+                return type("Q", (), {"ask": lambda self: "alternative"})()
+            return type("Q", (), {"ask": lambda self: "alt-skill"})()
+
+        monkeypatch.setattr("vibesop.cli.confirmation.questionary.select", mock_select)
+
+        _run_confirmation_flow(result, console)
+        assert result.primary.skill_id == "alt-skill"
+
+    def test_alternative_back_choice(self, monkeypatch) -> None:
+        """User goes back from alternative selection."""
+        import io
+
+        from rich.console import Console
+
+        from vibesop.cli.confirmation import _run_confirmation_flow
+        from vibesop.core.models import RoutingLayer, SkillRoute
+
+        primary = SkillRoute(
+            skill_id="test-skill",
+            confidence=0.85,
+            layer=RoutingLayer.TFIDF,
+            source="routing",
+        )
+        alt = SkillRoute(
+            skill_id="alt-skill",
+            confidence=0.70,
+            layer=RoutingLayer.KEYWORD,
+            source="routing_rejected",
+            description="",
+        )
+        result = type(
+            "R",
+            (),
+            {
+                "primary": primary,
+                "alternatives": [alt],
+                "routing_path": [],
+                "layer_details": [],
+                "original_query": "test query",
+                "duration_ms": 5.0,
+            },
+        )()
+
+        output = io.StringIO()
+        console = Console(file=output, force_terminal=False)
+
+        call_count = [0]
+
+        def mock_select(title, choices):
+            call_count[0] += 1
+            if call_count[0] == 1:
+                return type("Q", (), {"ask": lambda self: "alternative"})()
+            return type("Q", (), {"ask": lambda self: "back"})()
+
+        monkeypatch.setattr("vibesop.cli.confirmation.questionary.select", mock_select)
+
+        _run_confirmation_flow(result, console)
+        # Primary should remain unchanged since user went back
+        assert result.primary.confidence == 0.85

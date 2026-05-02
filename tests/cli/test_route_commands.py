@@ -92,6 +92,22 @@ class TestDecomposeCommand:
         # Decompose returns a list of tasks or a dict
         assert isinstance(data, (list, dict))
 
+    def test_decompose_json_includes_skill_id(self) -> None:
+        """Each sub-task in JSON output exposes a skill_id field (str or null).
+
+        P1-B: the decomposer is now fed the project skill catalog, so each task
+        carries a skill_id (or explicit None) for downstream consumers.
+        """
+        result = runner.invoke(app, ["decompose", "debug then test", "--json"])
+        assert result.exit_code == 0
+        data = json.loads(result.output)
+
+        # data is {"query": ..., "sub_tasks": [...]}
+        if isinstance(data, dict) and "sub_tasks" in data:
+            for task in data["sub_tasks"]:
+                assert "skill_id" in task
+                assert task["skill_id"] is None or isinstance(task["skill_id"], str)
+
 
 class TestRouteEdgeCases:
     """Edge cases for routing commands."""

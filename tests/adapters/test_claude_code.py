@@ -162,8 +162,8 @@ class TestSkillContentRender:
 
     def test_symlink_preserved_on_second_build(self, monkeypatch, tmp_path):
         """Symlink to installed pack must be preserved on re-build."""
-        from vibesop.adapters.models import Manifest, ManifestMetadata
         from vibesop.adapters.claude_code import ClaudeCodeAdapter
+        from vibesop.adapters.models import Manifest, ManifestMetadata
 
         adapter = ClaudeCodeAdapter()
         output_dir = tmp_path / "output"

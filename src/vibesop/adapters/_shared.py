@@ -121,7 +121,7 @@ def normalize_skill_type(content: str) -> str:
                     new_lines.append(line)
             new_frontmatter = "\n".join(new_lines)
             return f"---\n{new_frontmatter}\n---{parts[2]}"
-    except (ValueError, IndexError):
+    except Exception:
         pass
 
     return content
@@ -176,6 +176,7 @@ def render_route_hook(
     platform_name: str = "OpenCode",
     version: str = __version__,
     purpose: str = "Route user queries to VibeSOP skills",
+    hook_event_name: str = "",
     enable_explicit_overrides: bool = False,
     enable_orchestration: bool = False,
     include_additional_context: bool = False,
@@ -195,6 +196,11 @@ def render_route_hook(
         platform_name: Human-readable platform name for the header.
         version: VibeSOP version string (defaults to ``__version__``).
         purpose: One-line description for the script header.
+        hook_event_name: Name of the hook event (e.g.,
+            ``"UserPromptSubmit"``).  When non-empty, included in every
+            ``hookSpecificOutput`` object as the required
+            ``hookEventName`` field (Claude Code and Kimi CLI both
+            require this).
         enable_explicit_overrides:  When ``True`` the rendered script
             includes the ``/skill-id`` / ``@skill-id`` / ``使用 skill-id``
             override detection block.
@@ -225,6 +231,7 @@ def render_route_hook(
         platform_name=platform_name,
         version=version,
         purpose=purpose,
+        hook_event_name=hook_event_name,
         enable_explicit_overrides=enable_explicit_overrides,
         enable_orchestration=enable_orchestration,
         include_additional_context=include_additional_context,

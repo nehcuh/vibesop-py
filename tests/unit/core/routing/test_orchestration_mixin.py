@@ -2,10 +2,6 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, PropertyMock
-
-import pytest
-
 from vibesop.core.models import (
     LayerDetail,
     OrchestrationMode,

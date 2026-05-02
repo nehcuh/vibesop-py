@@ -120,7 +120,7 @@ TOTAL: 41/41 tests passing (100%)
 ```bash
 # 全量测试 (2026-04-18)
 TOTAL: 1501 passed, 1 failed, 2 skipped
-覆盖率: 80.23% (超过要求的 75%)
+覆盖率: ~29% (目标: 75%，当前冲刺中)
 运行时间: 5分19秒
 
 # KIMI 报告的 2 个核心失败已修复
@@ -247,7 +247,7 @@ vibe build claude-code
 
 ### Potential Enhancements
 1. **Performance Optimization**: Reduce routing P95 from 225ms to <100ms
-2. **Additional Tests**: Increase coverage from ~25% to 75%
+2. **Additional Tests**: Increase coverage from ~29% to 75%
 3. **Lint Cleanup**: Fix 157 lint errors
 4. **Plugin System**: Extend external skills with hooks
 

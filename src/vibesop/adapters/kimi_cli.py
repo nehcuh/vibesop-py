@@ -836,6 +836,7 @@ class KimiCliAdapter(PlatformAdapter):
                 platform="kimi-cli",
                 platform_name="Kimi CLI",
                 purpose="Auto-routing via [[hooks]] in config.toml",
+                hook_event_name="UserPromptSubmit",
                 enable_explicit_overrides=True,
                 enable_orchestration=True,
                 include_additional_context=True,

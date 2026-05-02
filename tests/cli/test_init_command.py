@@ -58,7 +58,7 @@ class TestInitCommand:
         assert result.exit_code == 0
         assert "DRY RUN" in result.stdout
         assert "Preview Mode" in result.stdout
-        assert "config.yaml" in result.stdout
+        assert "config.toml" in result.stdout
 
     def test_init_dry_run_existing_vibe(self, monkeypatch, tmp_path) -> None:
         """Test init --dry-run when .vibe already exists."""

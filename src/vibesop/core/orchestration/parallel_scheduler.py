@@ -77,9 +77,6 @@ class ParallelScheduler:
         for batch_num, group in enumerate(groups, 1):
             logger.info("Executing batch %d with %d steps", batch_num, len(group))
 
-            # Execute batch in parallel
-            batch_tasks = [self._execute_with_tracking(step, executor) for step in group]
-
             # Wait for all tasks in this batch (with semaphore for max_parallel)
             if len(group) > self._max_parallel:
                 _semaphore = asyncio.Semaphore(self._max_parallel)

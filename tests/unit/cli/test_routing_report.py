@@ -6,8 +6,14 @@ import io
 
 from rich.console import Console
 
-from vibesop.cli.routing_report import render_compact_summary
+from vibesop.cli.routing_report import (
+    render_compact_report,
+    render_compact_summary,
+    render_routing_report,
+)
 from vibesop.core.models import (
+    LayerDetail,
+    RejectedCandidate,
     RoutingLayer,
     RoutingResult,
     SkillRoute,
@@ -160,5 +166,213 @@ class TestRenderCompactSummary:
         output = io.StringIO()
         console = Console(file=output, force_terminal=False)
         render_compact_summary(result, console=console)
+        text = output.getvalue()
+        assert "No match" in text
+
+
+class TestRenderRoutingReport:
+    """Test suite for render_routing_report()."""
+
+    def test_render_with_match(self) -> None:
+        """render_routing_report with a skill match."""
+        result = RoutingResult(
+            query="debug error",
+            primary=SkillRoute(
+                skill_id="investigate",
+                confidence=0.85,
+                layer=RoutingLayer.TFIDF,
+                source="routing",
+            ),
+            layer_details=[
+                LayerDetail(layer=RoutingLayer.EXPLICIT, matched=False, reason="No override"),
+                LayerDetail(layer=RoutingLayer.TFIDF, matched=True, reason="TF-IDF match"),
+            ],
+            duration_ms=12.3,
+        )
+        output = io.StringIO()
+        console = Console(file=output, force_terminal=False)
+        render_routing_report(result, console=console)
+        text = output.getvalue()
+        assert "investigate" in text
+        assert "85%" in text
+        assert "TF-IDF" in text.upper()
+
+    def test_render_fallback_mode(self) -> None:
+        """render_routing_report with fallback LLM result."""
+        result = RoutingResult(
+            query="unknown request",
+            primary=SkillRoute(
+                skill_id="fallback-llm",
+                confidence=1.0,
+                layer=RoutingLayer.FALLBACK_LLM,
+                source="fallback",
+            ),
+            layer_details=[
+                LayerDetail(
+                    layer=RoutingLayer.FALLBACK_LLM,
+                    matched=True,
+                    reason="No skill matched",
+                ),
+            ],
+            duration_ms=5.0,
+        )
+        output = io.StringIO()
+        console = Console(file=output, force_terminal=False)
+        render_routing_report(result, console=console)
+        text = output.getvalue()
+        assert "Fallback" in text or "fallback" in text.lower()
+
+    def test_render_no_match(self) -> None:
+        """render_routing_report with no primary match."""
+        result = RoutingResult(
+            query="something weird",
+            primary=None,
+            duration_ms=3.0,
+        )
+        output = io.StringIO()
+        console = Console(file=output, force_terminal=False)
+        render_routing_report(result, console=console)
+        text = output.getvalue()
+        assert "No match" in text
+
+    def test_render_with_rejected_candidates(self) -> None:
+        """render_routing_report shows rejected near-miss candidates."""
+        result = RoutingResult(
+            query="debug",
+            primary=SkillRoute(
+                skill_id="investigate",
+                confidence=0.85,
+                layer=RoutingLayer.TFIDF,
+                source="routing",
+            ),
+            layer_details=[
+                LayerDetail(
+                    layer=RoutingLayer.TFIDF,
+                    matched=True,
+                    reason="TF-IDF match",
+                    rejected_candidates=[
+                        RejectedCandidate(
+                            skill_id="alt-skill",
+                            confidence=0.55,
+                            reason="Below threshold",
+                            layer=RoutingLayer.TFIDF,
+                        )
+                    ],
+                ),
+            ],
+            duration_ms=10.0,
+        )
+        output = io.StringIO()
+        console = Console(file=output, force_terminal=False)
+        render_routing_report(result, console=console)
+        text = output.getvalue()
+        assert "Near-Miss" in text or "Rejected" in text or "alt-skill" in text
+
+    def test_render_with_alternatives(self) -> None:
+        """render_routing_report shows alternative skills."""
+        result = RoutingResult(
+            query="debug",
+            primary=SkillRoute(
+                skill_id="investigate",
+                confidence=0.85,
+                layer=RoutingLayer.TFIDF,
+                source="routing",
+            ),
+            alternatives=[
+                SkillRoute(
+                    skill_id="alt-1",
+                    confidence=0.70,
+                    layer=RoutingLayer.KEYWORD,
+                    source="routing_rejected",
+                    description="Alternative skill description",
+                ),
+            ],
+            layer_details=[
+                LayerDetail(layer=RoutingLayer.TFIDF, matched=True, reason="TF-IDF match"),
+            ],
+            duration_ms=10.0,
+        )
+        output = io.StringIO()
+        console = Console(file=output, force_terminal=False)
+        render_routing_report(result, console=console)
+        text = output.getvalue()
+        assert "Alternative" in text or "alt-1" in text
+
+    def test_render_with_context(self) -> None:
+        """render_routing_report with context panel."""
+        result = RoutingResult(
+            query="debug",
+            primary=SkillRoute(
+                skill_id="investigate",
+                confidence=0.85,
+                layer=RoutingLayer.TFIDF,
+                source="routing",
+            ),
+            layer_details=[],
+            duration_ms=10.0,
+        )
+        context = type("Ctx", (), {
+            "conversation_id": "conv-123",
+            "current_skill": "debug",
+            "recent_queries": ["previous query"],
+            "habit_boosts": {"debug": 0.1},
+            "project_type": "python",
+        })()
+        output = io.StringIO()
+        console = Console(file=output, force_terminal=False)
+        render_routing_report(result, console=console, context=context)
+        text = output.getvalue()
+        assert "conv-123" in text or "Context" in text or "debug" in text
+
+
+class TestRenderCompactReport:
+    """Test suite for render_compact_report()."""
+
+    def test_compact_with_match(self) -> None:
+        """render_compact_report with skill match."""
+        result = RoutingResult(
+            query="debug",
+            primary=SkillRoute(
+                skill_id="investigate",
+                confidence=0.85,
+                layer=RoutingLayer.TFIDF,
+                source="routing",
+            ),
+            duration_ms=5.0,
+        )
+        output = io.StringIO()
+        console = Console(file=output, force_terminal=False)
+        render_compact_report(result, console=console)
+        text = output.getvalue()
+        assert "investigate" in text
+
+    def test_compact_fallback(self) -> None:
+        """render_compact_report with fallback."""
+        result = RoutingResult(
+            query="unknown",
+            primary=SkillRoute(
+                skill_id="fallback-llm",
+                confidence=1.0,
+                layer=RoutingLayer.FALLBACK_LLM,
+                source="fallback",
+            ),
+            duration_ms=3.0,
+        )
+        output = io.StringIO()
+        console = Console(file=output, force_terminal=False)
+        render_compact_report(result, console=console)
+        text = output.getvalue()
+        assert "fallback" in text.lower() or "No skill" in text
+
+    def test_compact_no_match(self) -> None:
+        """render_compact_report with no match."""
+        result = RoutingResult(
+            query="unknown",
+            primary=None,
+            duration_ms=3.0,
+        )
+        output = io.StringIO()
+        console = Console(file=output, force_terminal=False)
+        render_compact_report(result, console=console)
         text = output.getvalue()
         assert "No match" in text

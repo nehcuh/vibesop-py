@@ -2,8 +2,8 @@
 
 This module consolidates configuration from multiple sources:
 - Built-in defaults
-- Global config (~/.vibe/config.yaml)
-- Project config (.vibe/config.yaml)
+- Global config (~/.vibe/config.toml or ~/.vibe/config.yaml)
+- Project config (.vibe/config.toml or .vibe/config.yaml)
 - Environment variables
 - CLI arguments
 """
@@ -102,18 +102,44 @@ class ConfigSource:
             self.load_from_file()
 
     def load_from_file(self) -> None:
-        """Load configuration from file."""
+        """Load configuration from file (supports TOML and YAML)."""
         if self.path is None:
             self.data = {}
             return
         try:
-            import yaml
+            suffix = self.path.suffix.lower()
+            if suffix == ".toml":
+                import tomllib
 
-            with self.path.open() as f:
-                self.data = yaml.safe_load(f) or {}
+                with self.path.open("rb") as f:
+                    self.data = tomllib.load(f)
+            else:
+                import yaml
+
+                with self.path.open() as f:
+                    self.data = yaml.safe_load(f) or {}
         except Exception as e:
             logger.debug(f"Failed to load config from {self.path}: {e}")
             self.data = {}
+
+    @staticmethod
+    def _resolve_config_path(base_dir: Path, name: str) -> Path | None:
+        """Resolve config file path, preferring .toml over .yaml.
+
+        Args:
+            base_dir: Base directory to look in
+            name: Base name without extension (e.g. "config")
+
+        Returns:
+            Path to existing config file, or None if neither exists
+        """
+        toml_path = base_dir / f"{name}.toml"
+        if toml_path.exists():
+            return toml_path
+        yaml_path = base_dir / f"{name}.yaml"
+        if yaml_path.exists():
+            return yaml_path
+        return None
 
 
 class RoutingConfig(BaseModel):
@@ -151,12 +177,6 @@ class RoutingConfig(BaseModel):
     ai_triage_circuit_breaker_failure_threshold: int = Field(default=3, ge=1, le=10)
     ai_triage_circuit_breaker_latency_threshold_ms: float = Field(default=500.0, ge=100.0)
     ai_triage_circuit_breaker_cooldown_seconds: int = Field(default=60, ge=10)
-    ai_triage_short_query_bypass_words: int = Field(
-        default=8,
-        ge=0,
-        le=30,
-        description="Skip AI Triage for queries shorter than this word count (0=never bypass)",
-    )
     ai_triage_short_query_bypass_chars: int = Field(
         default=15,
         ge=0,
@@ -304,7 +324,6 @@ class ConfigManager:
             "ai_triage_circuit_breaker_failure_threshold": 3,
             "ai_triage_circuit_breaker_latency_threshold_ms": 500.0,
             "ai_triage_circuit_breaker_cooldown_seconds": 60,
-            "ai_triage_short_query_bypass_words": 8,
             "ai_triage_short_query_bypass_chars": 15,
             "session_aware": True,
             "session_stickiness_boost": 0.08,
@@ -418,9 +437,9 @@ class ConfigManager:
             path=None,
         )
 
-        # 2. Global config (~/.vibe/config.yaml)
-        global_config_path = Path.home() / ".vibe" / "config.yaml"
-        if global_config_path.exists():
+        # 2. Global config (~/.vibe/config.toml or ~/.vibe/config.yaml)
+        global_config_path = ConfigSource._resolve_config_path(Path.home() / ".vibe", "config")
+        if global_config_path:
             source = ConfigSource(
                 priority=ConfigSourcePriority.GLOBAL,
                 data={},
@@ -429,9 +448,9 @@ class ConfigManager:
             source.load_from_file()
             self._sources[ConfigSourcePriority.GLOBAL] = source
 
-        # 3. Project config (.vibe/config.yaml)
-        project_config_path = self.project_root / ".vibe" / "config.yaml"
-        if project_config_path.exists():
+        # 3. Project config (.vibe/config.toml or .vibe/config.yaml)
+        project_config_path = ConfigSource._resolve_config_path(self.project_root / ".vibe", "config")
+        if project_config_path:
             source = ConfigSource(
                 priority=ConfigSourcePriority.PROJECT,
                 data={},

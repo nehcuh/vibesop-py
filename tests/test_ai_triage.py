@@ -4,8 +4,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from vibesop.core.routing.unified import RoutingLayer, RoutingResult, UnifiedRouter
 from vibesop.core.models import OrchestrationResult
+from vibesop.core.routing.unified import RoutingLayer, UnifiedRouter
 
 
 @pytest.fixture

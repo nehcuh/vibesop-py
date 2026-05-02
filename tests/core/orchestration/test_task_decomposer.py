@@ -104,3 +104,136 @@ class TestTaskDecomposer:
         result = decomposer.decompose("analyze architecture and then optimize performance")
 
         assert len(result) >= 2
+
+
+class TestDecomposeWithSkillCatalog:
+    """The decomposer must surface the skill list to the LLM and preserve skill_id.
+
+    Without the catalog the LLM can't pre-assign sub-tasks, and PlanBuilder is
+    forced to fall through to the cheap (skip_ai_triage) routing layers — which
+    is what made every sub-task land at the same wrong skill.
+    """
+
+    def test_skills_appear_in_prompt(self) -> None:
+        mock_llm = Mock()
+        mock_llm.call.return_value = Mock(
+            content='{"tasks": [{"intent": "x", "query": "do x", "skill_id": "gstack/review"}]}'
+        )
+
+        decomposer = TaskDecomposer(llm_client=mock_llm)
+        decomposer.decompose(
+            "review and test",
+            skills=["gstack/review: Code review", "gstack/test: Test runner"],
+        )
+
+        # Inspect the prompt that was sent to the LLM.
+        prompt = mock_llm.call.call_args.kwargs.get("prompt") or mock_llm.call.call_args.args[0]
+        assert "Available skills" in prompt
+        assert "gstack/review: Code review" in prompt
+        assert "gstack/test: Test runner" in prompt
+
+    def test_skill_id_round_trips_into_subtask(self) -> None:
+        """When the LLM assigns skill_id, decompose() must surface it on SubTask."""
+        mock_llm = Mock()
+        mock_llm.call.return_value = Mock(
+            content=(
+                '{"tasks": ['
+                '{"intent": "analyze", "query": "analyze architecture", "skill_id": "superpowers/architect"},'
+                '{"intent": "review", "query": "review security", "skill_id": "gstack/review"}'
+                "]}"
+            )
+        )
+
+        decomposer = TaskDecomposer(llm_client=mock_llm)
+        result = decomposer.decompose(
+            "analyze and review",
+            skills=["superpowers/architect: arch", "gstack/review: review"],
+        )
+
+        assert len(result) == 2
+        assert result[0].skill_id == "superpowers/architect"
+        assert result[1].skill_id == "gstack/review"
+
+    def test_null_skill_id_normalized_to_none(self) -> None:
+        """Both literal "null" string and JSON null collapse to Python None."""
+        mock_llm = Mock()
+        mock_llm.call.return_value = Mock(
+            content=(
+                '{"tasks": ['
+                '{"intent": "a", "query": "do a thing", "skill_id": "null"},'
+                '{"intent": "b", "query": "do another", "skill_id": null}'
+                "]}"
+            )
+        )
+
+        decomposer = TaskDecomposer(llm_client=mock_llm)
+        result = decomposer.decompose("a and b", skills=["x: y"])
+
+        assert len(result) == 2
+        assert all(t.skill_id is None for t in result)
+
+    def test_no_skills_kw_still_works(self) -> None:
+        """Backward-compat: callers that don't pass skills= still get a decomposition."""
+        mock_llm = Mock()
+        mock_llm.call.return_value = Mock(
+            content='{"tasks": [{"intent": "x", "query": "investigate this thing"}]}'
+        )
+
+        decomposer = TaskDecomposer(llm_client=mock_llm)
+        result = decomposer.decompose("investigate this thing")
+
+        assert len(result) == 1
+        prompt = mock_llm.call.call_args.kwargs.get("prompt") or mock_llm.call.call_args.args[0]
+        # Without skills, the "Available skills" preamble must NOT appear.
+        assert "Available skills" not in prompt
+
+
+class TestDeriveIntentFallback:
+    """The decomposer must not produce SubTasks with empty intent.
+
+    LLMs occasionally return tasks with `intent: ""` while still emitting a real
+    query. Downstream (PlanBuilder, ExecutionStep) treats intent as a label and
+    asserts non-empty in e2e tests, so we derive a short intent from the query.
+    """
+
+    def test_empty_intent_falls_back_to_query_prefix(self) -> None:
+        mock_llm = Mock()
+        mock_llm.call.return_value = Mock(
+            content='{"tasks": [{"intent": "", "query": "analyze the architecture"}]}'
+        )
+
+        decomposer = TaskDecomposer(llm_client=mock_llm)
+        result = decomposer.decompose("analyze the architecture")
+
+        assert len(result) == 1
+        assert result[0].intent  # non-empty
+        assert "analyze" in result[0].intent
+
+    def test_whitespace_intent_treated_as_empty(self) -> None:
+        mock_llm = Mock()
+        mock_llm.call.return_value = Mock(
+            content='{"tasks": [{"intent": "   ", "query": "audit the auth flow"}]}'
+        )
+
+        decomposer = TaskDecomposer(llm_client=mock_llm)
+        result = decomposer.decompose("audit the auth flow")
+
+        assert len(result) == 1
+        assert result[0].intent.strip()
+
+    def test_derive_intent_truncates_long_query(self) -> None:
+        long = "x" * 200
+        derived = TaskDecomposer._derive_intent(long, max_len=60)
+
+        assert len(derived) <= 61  # 60 + ellipsis
+        assert derived.endswith("…")
+
+    def test_derive_intent_stops_at_punctuation(self) -> None:
+        derived = TaskDecomposer._derive_intent("review the auth flow. then deploy")
+
+        assert derived == "review the auth flow"
+
+    def test_derive_intent_handles_empty_query(self) -> None:
+        derived = TaskDecomposer._derive_intent("")
+
+        assert derived == "sub-task"

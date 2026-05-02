@@ -19,6 +19,7 @@ from vibesop.core.routing._protocols import RoutingCore
 from vibesop.core.routing.explicit_layer import check_explicit_override
 from vibesop.core.routing.project_config import load_merged_scenario_config
 from vibesop.core.routing.scenario_layer import match_scenario
+from vibesop.core.skills.indexer import SkillIndexer
 
 
 def try_explicit_layer(
@@ -246,3 +247,185 @@ def _get_ai_triage_skip_reason(router: RoutingCore) -> str:
     if monthly_cost >= router._config.ai_triage_budget_monthly:
         return f"Monthly AI triage budget exhausted (${monthly_cost:.2f} / ${router._config.ai_triage_budget_monthly:.2f})"
     return "AI triage did not produce a match"
+
+
+# --- Skill Semantic Index layer ---
+
+def _tokenize_query(query: str) -> set[str]:
+    """Tokenize a query for index matching.
+
+    Handles both CJK (character-based) and Latin (word-based) text.
+    """
+    import re
+
+    tokens: set[str] = set()
+    # English words
+    for word in re.findall(r"[a-zA-Z]{2,}", query.lower()):
+        tokens.add(word)
+    # CJK characters (each char is a meaningful token)
+    for char in query:
+        if "一" <= char <= "鿿":
+            tokens.add(char)
+    return tokens
+
+
+def _compute_index_score(query_tokens: set[str], profile: Any) -> float:
+    """Compute match score between query tokens and a skill profile.
+
+    Returns a score between 0.0 and 1.0 based on keyword overlap.
+    """
+    if not query_tokens:
+        return 0.0
+
+    all_text = " ".join(profile.query_patterns + profile.scenarios + profile.confidence_boosters)
+    profile_tokens = _tokenize_query(all_text)
+
+    return _score_overlap(query_tokens, profile_tokens)
+
+
+def _score_overlap(query_tokens: set[str], profile_tokens: set[str]) -> float:
+    """Score overlap between two pre-tokenized sets.
+
+    Extracted so the index layer can score against pre-tokenized profiles
+    (cached once at index load) without re-tokenizing per route.
+    """
+    if not query_tokens or not profile_tokens:
+        return 0.0
+
+    overlap = query_tokens & profile_tokens
+    # Jaccard-like score weighted by overlap density
+    score = len(overlap) / max(len(query_tokens), len(profile_tokens) * 0.5)
+    return min(score, 1.0)
+
+
+def _build_profile_token_index(index: dict[str, Any]) -> dict[str, set[str]]:
+    """Pre-tokenize each profile's combined text once.
+
+    Tokenization over 100+ profiles per route call dominated INDEX latency
+    (~370ms in the simple-route benchmark). Pre-computing once at first
+    cache hit keeps subsequent routes O(profile-count * set-intersection).
+    """
+    tokens_by_id: dict[str, set[str]] = {}
+    for skill_id, profile in index.items():
+        all_text = " ".join(
+            profile.query_patterns + profile.scenarios + profile.confidence_boosters
+        )
+        tokens_by_id[skill_id] = _tokenize_query(all_text)
+    return tokens_by_id
+
+
+def try_index_layer(
+    router: RoutingCore,
+    query: str,
+    candidates: list[dict[str, Any]],
+) -> tuple[SkillRoute | None, LayerDetail]:
+    """Try skill semantic index layer.
+
+    Uses the pre-built skill-index.json to match queries against skill
+    scenarios and query patterns without calling an LLM. Fast, local,
+    and complements AI Triage.
+
+    Returns:
+        (SkillRoute, LayerDetail) if index hit, (None, LayerDetail) otherwise.
+        The match is reported as AI_TRIAGE layer with metadata["index_hit"]=True.
+    """
+    index_start = time.perf_counter()
+
+    # Cache the loaded index on the router to avoid repeatedly re-parsing
+    # ~1MB of JSON + reconstructing 100+ SkillProfile objects per route.
+    # We also cache per-profile token sets so we don't re-tokenize ~100
+    # profiles' combined text on every route. We check `isinstance(cached, dict)`
+    # rather than `is None` so MagicMock-based unit tests (which auto-create
+    # attributes on access) still take the load path on first call.
+    cached = getattr(router, "_index_layer_cache", None)
+    if not isinstance(cached, dict):
+        indexer = SkillIndexer(project_root=router.project_root)
+        if not indexer.has_index():
+            router._index_layer_cache = {}  # mark as "tried, missing"
+            router._index_profile_tokens = {}
+            return None, LayerDetail(
+                layer=RoutingLayer.AI_TRIAGE,
+                matched=False,
+                reason="Skill semantic index not built (run 'vibe init' to build)",
+                duration_ms=(time.perf_counter() - index_start) * 1000,
+            )
+        router._index_layer_cache = indexer.load_index()
+        router._index_profile_tokens = _build_profile_token_index(
+            router._index_layer_cache
+        )
+        cached = router._index_layer_cache
+
+    index = cached
+    if not index:
+        return None, LayerDetail(
+            layer=RoutingLayer.AI_TRIAGE,
+            matched=False,
+            reason="Skill semantic index is empty",
+            duration_ms=(time.perf_counter() - index_start) * 1000,
+        )
+
+    profile_tokens_by_id_raw = getattr(router, "_index_profile_tokens", None)
+    profile_tokens_by_id: dict[str, set[str]] = (
+        profile_tokens_by_id_raw
+        if isinstance(profile_tokens_by_id_raw, dict)
+        else {}
+    )
+    query_tokens = _tokenize_query(query)
+    best_skill_id: str | None = None
+    best_score = 0.0
+
+    for skill_id in index:
+        profile_tokens = profile_tokens_by_id.get(skill_id)
+        if profile_tokens is None:
+            # Cache miss for a profile (e.g. cache populated by older code path);
+            # fall back to on-the-fly compute. Cheap once, persists for next time.
+            profile_tokens = _build_profile_token_index({skill_id: index[skill_id]})[
+                skill_id
+            ]
+            profile_tokens_by_id[skill_id] = profile_tokens
+        score = _score_overlap(query_tokens, profile_tokens)
+        if score > best_score:
+            best_score = score
+            best_skill_id = skill_id
+
+    threshold = getattr(router._config, "index_match_threshold", 0.20)
+    if best_score < threshold or not best_skill_id:
+        return None, LayerDetail(
+            layer=RoutingLayer.AI_TRIAGE,
+            matched=False,
+            reason=f"No index match above threshold ({best_score:.2f} < {threshold})",
+            duration_ms=(time.perf_counter() - index_start) * 1000,
+        )
+
+    candidate = next((c for c in candidates if c["id"] == best_skill_id), None)
+    if not candidate:
+        return None, LayerDetail(
+            layer=RoutingLayer.AI_TRIAGE,
+            matched=False,
+            reason=f"Index matched '{best_skill_id}' but skill not in candidates",
+            duration_ms=(time.perf_counter() - index_start) * 1000,
+        )
+
+    # Confidence: scale score [threshold..1.0] → [0.65..0.95]
+    # Lower bound 0.65 (vs SCENARIO's fixed 0.9) signals "weaker" match,
+    # so a strong scenario keyword hit can still take precedence when it follows.
+    confidence = 0.65 + (best_score - threshold) / (1.0 - threshold) * 0.30
+
+    match = SkillRoute(
+        skill_id=best_skill_id,
+        confidence=round(confidence, 2),
+        layer=RoutingLayer.AI_TRIAGE,  # Report as AI_TRIAGE to avoid enum churn
+        source=router._get_skill_source(best_skill_id, candidate.get("namespace", "builtin")),
+        description=str(candidate.get("description", "")),
+        metadata={
+            "index_hit": True,
+            "index_score": round(best_score, 3),
+            "scenarios": index[best_skill_id].scenarios[:3],
+        },
+    )
+    return match, LayerDetail(
+        layer=RoutingLayer.AI_TRIAGE,
+        matched=True,
+        reason=f"Index match: '{best_skill_id}' (score {best_score:.2f})",
+        duration_ms=(time.perf_counter() - index_start) * 1000,
+    )

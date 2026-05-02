@@ -17,6 +17,8 @@ import shutil
 from pathlib import Path
 from typing import ClassVar
 
+from rich.console import Console
+
 from vibesop.constants import TRUSTED_PACKS
 from vibesop.core.skills.storage import SkillStorage
 from vibesop.installer.analyzer import RepoAnalyzer
@@ -24,6 +26,7 @@ from vibesop.installer.planner import InstallPlanner
 from vibesop.security import SkillSecurityAuditor
 
 logger = logging.getLogger(__name__)
+console = Console()
 
 
 class PackInstaller:
@@ -152,6 +155,10 @@ class PackInstaller:
                                 else "✗"
                             )
                             msg_parts.append(f"  {icon} {platform}: {status}")
+
+                    # Rebuild global skill index after updating symlinks
+                    self._rebuild_global_index(pack_name)
+
                     return True, "\n".join(p for p in msg_parts if p)
 
             # Not yet installed — prepare target directory
@@ -198,6 +205,9 @@ class PackInstaller:
                         "✓" if status.startswith("Linked") or status.startswith("Already") else "✗"
                     )
                     msg_parts.append(f"  {icon} {platform}: {status}")
+
+            # Rebuild global skill index after successful install
+            self._rebuild_global_index(pack_name)
 
             return True, "\n".join(msg_parts)
 
@@ -419,3 +429,52 @@ class PackInstaller:
             count += 1
 
         return count
+
+    def _rebuild_global_index(self, pack_name: str) -> None:
+        """Refresh the global skill index for a single pack incrementally.
+
+        Loads the existing global index, re-analyzes only the skills shipped
+        by ``pack_name`` (resolved through symlinks back to central storage),
+        and merges the result back. Profiles for other packs and builtin
+        skills are preserved, so a single ``vibe install`` doesn't pay the
+        full LLM cost of re-analyzing every skill.
+
+        Index errors do not propagate — they're surfaced to the user via the
+        console (so they know to run ``vibe quickstart`` for full recovery)
+        and logged for diagnostics, but the install itself still succeeds.
+        """
+        recovery_hint = (
+            "[dim]Run `vibe quickstart` to rebuild the index from scratch.[/dim]"
+        )
+        try:
+            from vibesop.core.skills.indexer import SkillIndexer
+
+            indexer = SkillIndexer(project_root=Path.home())
+            result = indexer.update_global_index_for_pack(
+                pack_name=pack_name,
+                pack_storage=self.central_storage,
+                show_progress=False,
+            )
+            if result.success:
+                logger.info(
+                    "Global index updated for pack %s: %d skills (re)indexed",
+                    pack_name,
+                    result.indexed_count,
+                )
+            else:
+                detail = "; ".join(result.errors) if result.errors else "unknown"
+                logger.warning(
+                    "Global index update for pack %s completed with issues: %s",
+                    pack_name,
+                    detail,
+                )
+                console.print(
+                    f"\n[yellow]⚠ Index update for '{pack_name}' had issues:[/yellow] "
+                    f"{detail}\n{recovery_hint}"
+                )
+        except Exception as e:
+            logger.warning("Global index update for %s failed (non-fatal): %s", pack_name, e)
+            console.print(
+                f"\n[yellow]⚠ Index update for '{pack_name}' failed:[/yellow] {e}\n"
+                f"{recovery_hint}"
+            )

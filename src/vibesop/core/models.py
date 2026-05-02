@@ -306,6 +306,9 @@ class ExecutionStep(BaseModel):
     step_number: int = Field(..., ge=1, description="Step position")
     skill_id: str = Field(..., description="Target skill ID")
     intent: str = Field(default="", description="Human-readable intent")
+    original_query_segment: str = Field(
+        default="", description="Original query segment that triggered this step"
+    )
     input_query: str = Field(default="", description="Query for this step")
     output_as: str = Field(default="", description="Output variable name")
     status: StepStatus = Field(default=StepStatus.PENDING, description="Step status")
@@ -331,6 +334,7 @@ class ExecutionStep(BaseModel):
             "step_number": self.step_number,
             "skill_id": self.skill_id,
             "intent": self.intent,
+            "original_query_segment": self.original_query_segment,
             "input_query": self.input_query,
             "output_as": self.output_as,
             "status": self.status.value,

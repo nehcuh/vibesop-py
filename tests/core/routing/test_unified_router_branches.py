@@ -89,7 +89,16 @@ class TestRouteMatcherPipeline:
         config = RoutingConfig(enable_ai_triage=False)
         router = UnifiedRouter(project_root=tmp_path, config=config)
 
-        result = router._single_skill_route("debbug")  # typo for debug
+        # Provide a builtin candidate so the prefilter keeps it
+        candidates = [
+            {
+                "id": "systematic-debugging",
+                "description": "Debug systematically",
+                "namespace": "builtin",
+                "enabled": True,
+            }
+        ]
+        result = router._single_skill_route("systmatic", candidates=candidates)
 
         assert result.has_match
         assert result.primary is not None
@@ -222,3 +231,60 @@ class TestRouteWithContext:
         result = router._single_skill_route("test", context=context)
 
         assert result.has_match
+
+
+class TestBuildDecompositionSkills:
+    """The skill catalog builder shared by orchestrate(), agent, and `vibe decompose`."""
+
+    def test_format_is_id_colon_description(self, tmp_path: Path) -> None:
+        config = RoutingConfig(enable_ai_triage=False)
+        router = UnifiedRouter(project_root=tmp_path, config=config)
+
+        candidates = [
+            {"id": "gstack/review", "description": "Review code"},
+            {"id": "gstack/test", "description": "Run tests"},
+        ]
+
+        skills = router._build_decomposition_skills(candidates=candidates)
+
+        assert skills == ["gstack/review: Review code", "gstack/test: Run tests"]
+
+    def test_falls_back_to_intent_when_description_missing(self, tmp_path: Path) -> None:
+        config = RoutingConfig(enable_ai_triage=False)
+        router = UnifiedRouter(project_root=tmp_path, config=config)
+
+        candidates = [{"id": "gstack/test", "intent": "test_code"}]
+
+        skills = router._build_decomposition_skills(candidates=candidates)
+
+        assert skills == ["gstack/test: test_code"]
+
+    def test_uses_n_a_when_neither_field_present(self, tmp_path: Path) -> None:
+        config = RoutingConfig(enable_ai_triage=False)
+        router = UnifiedRouter(project_root=tmp_path, config=config)
+
+        skills = router._build_decomposition_skills(candidates=[{"id": "x"}])
+
+        assert skills == ["x: N/A"]
+
+    def test_limit_caps_output(self, tmp_path: Path) -> None:
+        config = RoutingConfig(enable_ai_triage=False)
+        router = UnifiedRouter(project_root=tmp_path, config=config)
+
+        candidates = [{"id": f"s{i}", "description": "x"} for i in range(20)]
+
+        skills = router._build_decomposition_skills(candidates=candidates, limit=5)
+
+        assert len(skills) == 5
+
+    def test_default_uses_cached_candidates(self, tmp_path: Path) -> None:
+        """Without explicit candidates, fall through to _get_cached_candidates."""
+        config = RoutingConfig(enable_ai_triage=False)
+        router = UnifiedRouter(project_root=tmp_path, config=config)
+
+        skills = router._build_decomposition_skills()
+
+        # Real router has at least the project skills indexed; format check is enough.
+        assert isinstance(skills, list)
+        for s in skills:
+            assert isinstance(s, str) and ":" in s

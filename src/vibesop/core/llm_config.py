@@ -53,9 +53,13 @@ class VibeSOPConfigManager:
     """VibeSOP 配置管理器"""
 
     CONFIG_PATHS: ClassVar[list[Path]] = [
+        Path(".vibe/config.toml"),
         Path(".vibe/config.yaml"),
+        Path(".vibe/llm.toml"),
         Path(".vibe/llm.yaml"),
+        Path.home() / ".vibe" / "config.toml",
         Path.home() / ".vibe" / "config.yaml",
+        Path.home() / ".vibe" / "llm.toml",
         Path.home() / ".vibe" / "llm.yaml",
     ]
 
@@ -68,8 +72,15 @@ class VibeSOPConfigManager:
                 continue
 
             try:
-                with config_path.open() as f:
-                    data = yaml.safe_load(f)
+                suffix = config_path.suffix.lower()
+                if suffix == ".toml":
+                    import tomllib
+
+                    with config_path.open("rb") as f:
+                        data = tomllib.load(f)
+                else:
+                    with config_path.open() as f:
+                        data = yaml.safe_load(f) or {}
 
                 # 检查 LLM 配置
                 if "llm" in data:
@@ -143,26 +154,28 @@ class AgentEnvironmentDetector:
     }
 
     @classmethod
-    def detect_agent(cls) -> str | None:
-        """检测当前 Agent 环境"""
+    def detect_agent(cls) -> tuple[str, Path] | None:
+        """检测当前 Agent 环境并返回命中的配置文件.
 
+        Returns:
+            Tuple of (agent_id, config_file_path) or None if no agent detected.
+        """
         for agent_id, agent_config in cls.AGENT_CONFIGS.items():
             for config_file in agent_config["config_files"]:
                 if config_file.exists():
-                    return agent_id
-
+                    return agent_id, config_file
         return None
 
     @classmethod
     def get_agent_llm_config(cls) -> LLMConfig | None:
         """从 Agent 环境获取 LLM 配置"""
 
-        agent_id = cls.detect_agent()
-        if not agent_id:
+        detected = cls.detect_agent()
+        if not detected:
             return None
 
+        agent_id, config_file = detected
         agent_config = cls.AGENT_CONFIGS[agent_id]
-        config_file = agent_config["config_files"][0]
 
         try:
             with config_file.open() as f:
@@ -282,13 +295,36 @@ class EnvVarLLMDetector:
                 default_model="gpt-4",
             )
 
-        # Priority 4: Provider-specific env vars (deepseek, kimi, zhipu, ollama, etc.)
+        # Priority 4: Provider-specific env vars (deepseek, kimi, zhipu, etc.)
         for provider_name, env_keys in cls.PROVIDER_ENV_MAP.items():
             api_key_env = env_keys.get("api_key")
             if api_key_env and os.getenv(api_key_env):
                 return cls._build_config(provider_name)
 
+        # Priority 5: Ollama (no API key; detect via base URL env or default localhost)
+        ollama_base = os.getenv("OLLAMA_BASE_URL")
+        if ollama_base or cls._is_ollama_reachable():
+            return cls._build_config("ollama")
+
         return None
+
+    @classmethod
+    def _is_ollama_reachable(cls) -> bool:
+        """Quick check if Ollama is running on default port.
+
+        Uses a short timeout to avoid blocking on cold-start.
+        """
+        try:
+            import urllib.request
+
+            req = urllib.request.Request(
+                "http://localhost:11434/api/tags",
+                method="GET",
+            )
+            with urllib.request.urlopen(req, timeout=0.5) as resp:
+                return resp.status == 200
+        except Exception:
+            return False
 
     @classmethod
     def _build_config(
@@ -456,6 +492,16 @@ class LLMConfigResolver:
         与 resolve_llm_config 不同,这个方法专注于理解阶段的 LLM 选择
         理解阶段不需要太高的准确性,快速响应更重要
 
+        优先级:
+            1. Agent 环境（最高，由托管平台决定）
+            2. VibeSOP config (~/.vibe/config.toml 中显式声明的 provider)
+            3. 环境变量 (DEEPSEEK_API_KEY 等)
+            4. 默认 (claude-3-haiku)
+
+        VibeSOP config 优先于环境变量：用户在配置文件里显式写了
+        ``provider = "ollama"`` 时，本来可能存在的 ``DEEPSEEK_API_KEY``
+        不应该悄悄取代用户的选择。
+
         Returns:
             LLM 配置对象
         """
@@ -468,19 +514,19 @@ class LLMConfigResolver:
             )
             return agent_config
 
-        # 2. 环境变量
+        # 2. VibeSOP 配置 (用户显式声明优先于环境变量)
+        vibesop_config = VibeSOPConfigManager.get_llm_config()
+        if vibesop_config:
+            self.logger.print(
+                f"[dim]  Using VibeSOP config for understanding: {vibesop_config.provider}/{vibesop_config.model}[/dim]"
+            )
+            return vibesop_config
+
+        # 3. 环境变量
         env_config = EnvVarLLMDetector.get_llm_config()
         if env_config:
             self.logger.print(f"[dim]  Using env LLM for understanding: {env_config.model}[/dim]")
             return env_config
-
-        # 3. VibeSOP 配置
-        vibesop_config = VibeSOPConfigManager.get_llm_config()
-        if vibesop_config:
-            self.logger.print(
-                f"[dim]  Using VibeSOP config for understanding: {vibesop_config.model}[/dim]"
-            )
-            return vibesop_config
 
         # 4. 默认(使用 Haiku - 快速且便宜)
         self.logger.print(

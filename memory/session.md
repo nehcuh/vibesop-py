@@ -478,3 +478,207 @@ Lint: 0 errors ✅
 - 测试: 92 passed, 1 预存失败（无关于此更改）
 - **Next steps**: None
 - **Recorded**: yes — builtin skill 重复问题
+
+---
+
+### S5 (2026-05-02) Quickstart + 索引 + 路由三连问（待修复）
+
+用户运行 `vibe quickstart`（global / opencode）后发现三个未修复的实际行为问题：
+
+#### 问题 1：LLM 选择没用 Ollama，反而用了 DeepSeek
+
+- **现象**：quickstart/索引日志显示 `Using env LLM for understanding: deepseek-v4-flash`
+- **根因（两层）**：
+  1. `LLMConfigResolver.get_llm_for_understanding()`（`src/vibesop/core/llm_config.py:489-529`）的优先级是 Agent → **环境变量** → VibeSOP config → 默认。环境变量胜过用户在 `~/.vibe/config.toml` 里写的 `provider = "ollama"`。
+  2. `EnvVarLLMDetector.get_llm_config()`（`src/vibesop/core/llm_config.py:269-309`）内部按 `PROVIDER_ENV_MAP` 字典遍历，**deepseek 排在 ollama 之前**。用户环境里有 `DEEPSEEK_API_KEY`，所以就直接命中 deepseek，永远走不到 ollama。
+- **与文档冲突**：`~/.vibe/config.toml` 的注释自己写的优先级是 `1. VIBE_LLM_PROVIDER, 2. Ollama, 3. DeepSeek...`，但代码完全相反
+- **修复方向**：让 VibeSOP config 显式声明的 provider 优先于隐式 env var；env-var detector 内部把 ollama 提前
+
+#### 问题 2：索引创建非常慢（5+ 分钟）且无进度反馈
+
+- **现象**：global install + 132 个技能（gstack+superpowers+omx），索引串行调用 LLM 一个个分析，~5 分钟才结束
+- **根因**：
+  - `SkillIndexer.build_index()`（`src/vibesop/core/skills/indexer.py:274-299`）是 `for skill_id in skills: _analyze_skill(...)` 纯串行
+  - 每次 `llm.call()` 提示词 ~4000 字符 + 800 max_tokens，DeepSeek 单次响应 2-5 秒
+  - 132 × ~3s ≈ 6.6 分钟（吻合体感）
+  - `show_progress=True` 只在最后打一句完成消息（`indexer.py:311-330`），过程中**没有任何进度条/计数**
+- **修复方向**：
+  1. `asyncio.gather` + 并发上限（如 8）→ 理论上 1 分钟内完成
+  2. Rich Progress 实时进度条
+  3. 增量索引：基于 SKILL.md 内容 hash 缓存，未变更跳过
+
+#### 问题 3：刚建好的索引没起作用，多意图分解后所有子任务都被路由到 `gstack/review`（明显错误）
+
+- **现象**：用户 query 是"项目深度分析+设计哲学+架构评估+代码-vs-文档偏离+隐藏设计意图"。
+  - **单技能路由（AI Triage 全语义路径）** → `gstack/plan-design-review` (83%) ← 合理
+  - **多意图分解后 5 个子任务全部** routed → `gstack/review` (90%) ← 明显错误
+
+- **真正根因**：**SCENARIO 层使用裸的 `kw in query_lower` 子串匹配，没有词边界**
+  - `core/registry.yaml:80-98` 中 `code_review` 场景的 keyword 列表包含 **`"pr"`**
+  - `scenario_layer.py:106` 直接判断 `if any(kw and kw in query_lower for kw in scenario_keywords): return scenario`
+  - 用户子任务 1 是 "Analyze **pr**oject design goals..." → "project" 包含 "pr" 子串 → 命中 `code_review` 场景 → 返回 `/review` (即 `gstack/review`) at **fixed 0.9 confidence**
+  - PlanBuilder `_build_step_query`（`plan_builder.py:365-386`）对 step ≥2 把 step 1 的 intent 字符串拼接进 context，"project" 跟着传播到所有后续步骤 → 5 个 step 全中
+  - 同理，`"plan"` 关键词会匹配 `"explanation"`、`"complain"` 等；`"review"` 会匹配 `"preview"/"reviewed"`；`"design"` 会匹配 `"designation"` 等
+
+- **次要根因（架构级，仍待修）**：
+  1. PlanBuilder `RoutingContext(skip_ai_triage=True)`（`plan_builder.py:181`）让子任务永远跳过真正的 LLM 语义层，使 SCENARIO/INDEX 层的错误无法被纠正
+  2. 层优先级声明的"语义优先"与实际不符：当前 `EXPLICIT → SCENARIO（子串匹配）→ INDEX（字符 Jaccard）→ AI_TRIAGE → matchers`，前两层完全不是语义
+  3. 索引层（`_compute_index_score`）也是 token overlap 而非真 embedding/semantic similarity
+
+- **结论**：用户的直觉是对的，**语义级别理解应该是最高优先级**。当前两个机制都失灵：
+  - 长 query 单技能 → AI Triage 是真语义（用 LLM）✅
+  - 子任务路由 → SCENARIO 子串匹配 + Index Jaccard，AI Triage 被强制跳过 → 文不对题 ❌
+
+- **修复方向（按收益排序）**：
+  1. **P0 关键词加词边界**（最小改动）：`scenario_layer.py:match_scenario` 用 `re.search(r'\b' + re.escape(kw) + r'\b', query_lower)` 替代 `kw in query_lower`；中文 keyword 仍用子串匹配
+  2. **P0 删除危险短关键词**：`registry.yaml` 中 `"pr"` / `"land"` / `"merge"` 这种 2-4 字符英文词全部干掉或改长（如 `" pr "`, `"PR"` 大写匹配）
+  3. **P1 PlanBuilder 不再 skip AI Triage**：把 N 个子任务一次打包给 AI Triage，一次 LLM 调用给所有 step 打分（`triage_service.batch_triage`）
+  4. **P1 Decomposer 直接返回 skill_id**：让分解 LLM 在切分意图时同时填 `sub_task.skill_id`，避免二次路由
+  5. **P2 Index 层升级**：sentence-transformers embedding 替代字符 Jaccard
+  6. **P2 层级重排**：把 AI Triage 提前于 SCENARIO（当 LLM 可用且置信高时）
+
+**Test status**: P0 已完成 + 测试通过
+**Recorded**: yes — 三个问题已落入 session.md，待修复后 promote 到 project-knowledge.md
+
+#### P0 修复完成（2026-05-02）✅
+
+**改动**：`src/vibesop/core/routing/scenario_layer.py`
+- 新增辅助函数 `_matches_keyword(keyword, query_lower)`：ASCII keyword 用 `re.search(r'\b' + re.escape(kw) + r'\b', query_lower)` 词边界匹配；非 ASCII（CJK）keyword 仍用 `kw in query_lower` 子串匹配
+- `match_scenario()` 第 106 行改为调用新辅助函数
+
+**验证**：
+- 23 例 scenario_layer 测试全通过
+- 154 例 routing + 112 例 orchestration 测试全通过
+- 实际 registry 测试：`"Analyze project design goals..."` 不再匹配 `code_review`，正确匹配 `planning` ✓
+- `"review my pr"`、`"帮我审查代码"` 仍正确匹配 `code_review` ✓
+- `"test" in "latest"`, `"plan" in "planning"` 这类伪匹配全部消除（细微回归：`plan` 不再匹配 `planning`，由后续层兜底）
+
+**Next steps**: 等待用户确认是否继续 P1 修复（PlanBuilder 不再 skip AI Triage / TaskDecomposer 直接返回 skill_id）
+
+#### Route A 修复完成（2026-05-02）✅ — INDEX 层参与路由决策
+
+**改动**：
+1. `src/vibesop/core/routing/_layers.py`
+   - 新增 `_score_overlap()` 辅助函数：解耦 token 计算与评分，支持预 tokenize profile 复用
+   - 新增 `_build_profile_token_index()`：在第一次 cache hit 时把 ~115 个 profile 的 `query_patterns + scenarios + confidence_boosters` 一次性 tokenize，避免每次路由都重 tokenize 100+ profiles（cProfile 显示 INDEX 路径占 ~370ms 的 simple-route 延迟）
+   - `try_index_layer()` 用 router 级 cache：`router._index_layer_cache`（dict 索引）+ `router._index_profile_tokens`（dict[skill_id, set[token]]），避免每次路由 re-parse 1MB+ JSON
+   - **MagicMock-safe sentinel**：用 `isinstance(cached, dict)` 而不是 `is None`，因为 MagicMock 在属性访问时自动创建 attribute（不是 None），原 sentinel 会短路掉 load 路径
+   - threshold 默认 0.35 → **0.20**（更宽容，让弱信号也能匹配）
+   - 置信度公式 `0.75 + (s-th)/(1-th)*0.20` → **`0.65 + (s-th)/(1-th)*0.30`**（INDEX 0.65–0.95 vs SCENARIO 固定 0.9，强 SCENARIO 关键词仍能取胜）
+
+2. `src/vibesop/core/routing/unified.py` — `_try_layers()` keyword 分支
+   - 替换为 **best-of(SCENARIO, INDEX) 模式**：两层都跑，取 max-confidence above min_confidence
+   - SCENARIO 0.9 仍主导大多数情况；只有 INDEX ≥ 0.91 才反超
+   - 保留后续 AI Triage + matcher pipeline 不变
+
+**验证**：
+- 252 例 routing + orchestration 测试通过
+- 10 例 `tests/core/routing/test_index_layer.py` 测试通过（包括之前因 MagicMock 短路失败的 `test_index_match`、`test_index_match_skill_not_in_candidates`）
+- 2384 例总测试通过；6 例无关失败（`test_llm_factory.py` env detection 因 DEEPSEEK_API_KEY 命中 = 待修问题 1，`test_config_rendering_speed` 因 13MB prefs 文件 = 待修预存 perf 问题）
+- 实际用户 query 模拟：sub-task "深入阅读项目设计目标" 现在路由到 `builtin/riper-workflow`(planning, 0.90) 而非 `gstack/review` ✓
+
+**发现但未修的正交问题**：
+1. **项目候选技能列表缺失**：`omx/deep-interview`、`omx/ultraqa`、`gstack/office-hours` 未出现在 `_get_cached_candidates()`（仅 `builtin/*` 可见，共 157 个）→ 多个子任务因此 fallthrough 到 `fallback-llm`。属于 skill discovery 问题，与 Route A 无关
+2. **中英文桥接缺失**：所有 skill profile 都是英文，中文 query 在 INDEX 层 score=0。需要双语 profile 或 query translation（Route B / 未来工作）
+3. **Benchmark 慢由 13MB `.vibe/preferences.json` 引起**：`_record_routing_decision` → `preference._save_storage` 每次成功路由都写盘。预存问题，需要 prefs 压缩
+
+**Next steps**: 等待用户确认下一步方向（P1-A LLM provider 优先级修复 / P1-B PlanBuilder batch triage / P2 索引并行化进度条 / Route B 真 embedding / skill discovery 修复）
+
+**Recorded**: yes（INDEX layer 缓存 + MagicMock 类型 sentinel 模式 已记入 project-knowledge.md 待补）
+
+#### P1-A 修复完成（2026-05-02）✅ — LLM provider 优先级修复
+
+**问题**：用户在 `~/.vibe/config.toml` 写 `provider = "ollama"`，但 quickstart/索引仍用 DeepSeek。3 个 `tests/llm/test_llm_factory.py` 测试因 `DEEPSEEK_API_KEY` 在用户 env 中也失败。
+
+**改动**（两处）：
+
+1. `src/vibesop/llm/factory.py:80-114` — `detect_provider_from_env()` 重排优先级
+   - 旧：`Ollama > DeepSeek > OpenAI > Anthropic > Others`
+   - 新：`VIBE_LLM_PROVIDER > OLLAMA(显式) > Anthropic > OpenAI > DeepSeek/Kimi/Zhipu > 默认 ollama`
+   - 理由：first-class providers (anthropic, openai) 应该胜过遗留的第三方 API key
+
+2. `src/vibesop/core/llm_config.py:489-543` — `LLMConfigResolver.get_llm_for_understanding()` 重排
+   - 旧：`Agent → 环境变量 → VibeSOP config → 默认`
+   - 新：`Agent → VibeSOP config → 环境变量 → 默认`
+   - 理由：用户在 config.toml 里显式写的 provider 不应被 env 中残留的 `DEEPSEEK_API_KEY` 静默取代
+
+**验证**：
+- 所有 27 例 `tests/llm/` 测试通过（之前 3 例失败）
+- 55 例 LLM 相关测试通过（`tests/llm/` + `tests/test_llm.py`）
+- 53 例 indexer + integration 测试通过
+- 653 例广域 sweep 全部通过（llm + skills + routing + orchestration + integration + cli/quickstart）
+- 烟雾测试：env 中有 `DEEPSEEK_API_KEY`、config.toml 里 `provider = "ollama"` → 现在正确返回 `ollama/qwen3:35b-a3b-mlx`，source=vibesop_config ✓
+
+**Next steps**: 等待用户确认下一步（P1-B PlanBuilder batch triage / P2 索引并行化+进度条 / Route B 真 embedding / skill discovery 修复）
+
+#### P2 完成（2026-05-02）✅ — 索引并行化 + Rich 进度条 + 内容哈希增量缓存
+
+**问题**：global install + 132 个技能（gstack+superpowers+omx），索引串行调用 LLM 一个个分析，~5 分钟才结束，过程中无任何进度反馈。
+
+**改动**：`src/vibesop/core/skills/indexer.py`(700→894 行)
+
+1. **`SkillProfile.content_hash`**：新增字段，存 SHA256(prompt)[:16]。`to_dict`/`from_dict` 同步；`from_dict` 用 `data.get("content_hash", "")` 兼容旧索引
+
+2. **拆分 prompt 构建**：
+   - `_build_prompt(loaded_skill) -> str`：之前直接写在 `_analyze_skill` 里的 `_SKILL_ANALYSIS_PROMPT.format(...)` 提取出来
+   - `_hash_prompt(prompt) -> str`：`hashlib.sha256(prompt.encode()).hexdigest()[:16]`
+   - `_analyze_skill` 重构：成功解析 profile 后 `profile.content_hash = self._hash_prompt(prompt)` 自动盖戳。**签名不变** (`_analyze_skill(ls, llm)`)，所有现有 `patch.object(indexer, "_analyze_skill", ...)` 测试无需改动
+
+3. **`_progress_context`** 上下文管理器：返回 `advance()` callable。`show=False` 或 `total=0` 走 no-op lambda；否则 Rich Progress（SpinnerColumn + BarColumn + MofNCompleteColumn + Time…）
+
+4. **`build_index` 重构**（核心）：
+   - 新增 `force: bool = False` / `max_workers: int = 8` 参数
+   - 1）发现技能；2）`load_index()` 拉历史 profiles（除非 force）；3）按 scope 过滤；4）逐个算 prompt hash，若 `existing.content_hash == new_hash` → cache hit（profile 直接复用，pack_owner 重新 stamp）；5）miss 集合走 `ThreadPoolExecutor(max_workers)` 并行 `_analyze_skill`；6）主线程在 `as_completed` 循环里收集结果（`result`/`global_profiles`/`project_profiles` 单线程突变，无需锁）；7）`advance()` 推进进度条
+   - 描述行包含 `(N cached)` 提示当 cache 命中
+
+5. **`update_global_index_for_pack`** 同样重构：cache check + ThreadPoolExecutor + progress context；签名向后兼容（新增 `force` / `max_workers` 都是默认值）
+
+**测试**：`tests/core/skills/test_indexer.py` 51→63 (+12)
+- `TestContentHashCache` 9 例：deterministic hash、内容变 hash 变、stamp 后存在、save/load round trip、legacy 索引（无 content_hash）默认空、cache hit 跳过 LLM、`force=True` 绕过 cache、内容变（hash 不匹配）触发重分析、pack 路径同样走 cache
+- `TestParallelism` 2 例：8 技能 × 50ms 串行 ≥400ms，并行 (8 workers) <250ms（实测 ~50-100ms）；max_concurrent>1；单线程异常不杀同批
+- `TestProgressSuppression` 1 例：`show_progress=False` 不写任何 Rich 控制台输出
+
+**性能预期**：132 个技能 × ~3s/call（DeepSeek typical），原串行 ~6.6 分钟 → 并行 8 worker ~50s。Cache hit 时近乎瞬时（仅 hash 计算 + JSON 写盘）。
+
+**验证**：
+- 63 例 `tests/core/skills/test_indexer.py` 全过 ✓
+- 525 例广域 sweep（skills + routing + integration + cli/quickstart + llm）全过，1 skipped ✓
+- 无 deprecation warning（除 `UnifiedRouter.route()` 既有 warning）
+
+**注意事项**：
+- `ThreadPoolExecutor` 选择而非 asyncio：现有 LLM provider (`OpenAIProvider.call`) 是同步接口，threads 在 HTTP I/O 期间释放 GIL，并发收益等同
+- 主线程汇总：`futures` dict + `as_completed` 循环里 mutate `result`/`*_profiles`，无需 `threading.Lock`
+- Cache hit 时 `pack_owner` 仍会基于当前文件位置重新计算（`_infer_pack_owner`），这样技能从 builtin 迁到 pack 后即使 prompt 不变 ownership 也能更新
+- 测试 hash 用 `_hash_prompt(_build_prompt(ls))` 计算预期值，避免硬编码 16 hex 字符
+
+**Recorded**: yes（content-hash incremental cache + ThreadPoolExecutor for HTTP-bound LLM batching 模式可记入 project-knowledge.md 待补）
+
+**Next steps**: 等待用户确认下一步（P1-B PlanBuilder batch triage / Route B 真 embedding / skill discovery 修复）
+
+---
+
+#### P1-B 完成（2026-05-02）✅ — 多意图分解 skill 目录贯通 + 0.99 confidence 直通
+
+**问题**：multi-intent 分解后所有 sub-task 路由到同一个错误 skill。例如 "分析架构然后审查代码然后写测试" 三个 sub-task 全部命中 SCENARIO 层得分最高的那一个 skill。
+
+**根因**：`agent/__init__.py:293,319` 和 `cli/main.py:401` 调用 `TaskDecomposer.decompose(query)` 没传 `skills=`，LLM 看不到技能目录、无法 pre-assign skill_id。下游 PlanBuilder 退回 `RoutingContext(skip_ai_triage=True)`，廉价 SCENARIO/INDEX 匹配器对所有 sub-task 给出相同的最高分赢家。
+
+**修复（4 改动）**：
+1. `core/routing/unified.py:314-331` — 抽出 `_build_decomposition_skills(candidates=None, limit=50)` 共享 helper，`orchestrate()` 内联推导式替换为该 helper 调用
+2. `agent/__init__.py:276-307` — `decompose()` 走 `self._router._build_decomposition_skills()`，返回 dict 增 `skill_id` 字段；`build_plan()` auto-decompose 路径保留 SubTask 对象（避免 dict round-trip 丢 skill_id），caller-provided dict 解析新增的 `skill_id`/`task_type` 键
+3. `cli/main.py:384` — `vibe decompose` 同样调 `_build_decomposition_skills()`，JSON 输出每个 sub-task 含 skill_id 字段，控制台输出 `→ [magenta]skill_id[/magenta]` 后缀
+4. `core/orchestration/task_decomposer.py` — 鲁棒性补丁：`_parse_json_response` 中 `intent=t.intent.strip() or self._derive_intent(t.query)` 确保 LLM 返回空 intent 时也有 fallback；新增 `_derive_intent` 静态方法（首行/首句、≤60 字截断 + 省略号）
+
+**测试（19 例新增）**：
+- `tests/core/orchestration/test_task_decomposer.py`
+  - `TestDecomposeWithSkillCatalog` (4 例)：skills 出现在 prompt、skill_id 圆周回 SubTask、"null" 字符串 + JSON null 都归一为 None、不传 skills 仍正常
+  - `TestDeriveIntentFallback` (5 例)：空 intent 退化为 query 前缀、空白 intent 视同空、长 query 截断带省略号、停在标点、空 query 退化为 "sub-task"
+- `tests/core/orchestration/test_plan_builder.py::TestPreAssignedSkillIdPropagation` (4 例)：pre-assigned skill 完全绕过 router、reasoning 含 99%、多 sub-task 各自独立、混合预分配/路由
+- `tests/core/routing/test_unified_router_branches.py::TestBuildDecompositionSkills` (5 例)：format 检查、description 缺失退化为 intent、两者皆缺为 N/A、limit 截断、无参时取 cached candidates
+- `tests/cli/test_route_commands.py::test_decompose_json_includes_skill_id` (1 例)：每个 sub-task JSON 含 skill_id 字段
+
+**验证**：
+- 80 例 P1-B 相关 sweep（task_decomposer + plan_builder + unified_router_branches + route_commands）全过 ✓
+- 之前 1113 例广域 sweep 基线维持（pre-existing 改动未触发）
+
+**Next steps**: 等待用户确认下一步（Route B 真 embedding cosine sim / skill discovery 修复 omx/* + gstack/office-hours 不显示 / 13MB `.vibe/preferences.json` 拖慢 benchmark）

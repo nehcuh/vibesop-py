@@ -7,7 +7,6 @@ import pytest
 from vibesop.core.skills.executor import SkillExecutionError
 from vibesop.core.skills.manager import SkillManager
 
-
 # Skills that are confirmed available in the loader cache
 _TEST_SKILL_ID = "gstack/gstack-openclaw-investigate"
 _TEST_SKILL_NS = "gstack"

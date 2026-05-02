@@ -81,26 +81,29 @@ def detect_provider_from_env() -> ProviderType:
     """Detect which provider to use from environment variables.
 
     Priority:
-        1. VIBE_LLM_PROVIDER env var
-        2. OLLAMA_BASE_URL or OLLAMA_MODEL env var (local ollama)
-        3. ANTHROPIC_API_KEY env var
-        4. OPENAI_API_KEY env var
+        1. VIBE_LLM_PROVIDER env var (explicit override)
+        2. OLLAMA_BASE_URL or OLLAMA_MODEL env var (explicit local override)
+        3. ANTHROPIC_API_KEY env var (first-class)
+        4. OPENAI_API_KEY env var (first-class)
         5. Provider-specific keys (DEEPSEEK_API_KEY, KIMI_API_KEY, ZHIPU_API_KEY)
         6. Default to 'ollama' (local, no API key required)
+
+    First-class providers (anthropic, openai) are checked before third-party
+    OpenAI-compatible keys (deepseek, kimi, zhipu) so that an explicit
+    ANTHROPIC_API_KEY beats a stale third-party key the user may have lying around.
     """
     explicit_provider = os.getenv("VIBE_LLM_PROVIDER")
     if explicit_provider and explicit_provider in _VALID_PROVIDERS:
         return explicit_provider  # pyright: ignore[reportReturnType]
 
-    # Priority: Ollama (local, no key needed) > DeepSeek > OpenAI > Anthropic > Others
     if os.getenv("OLLAMA_BASE_URL") or os.getenv("OLLAMA_MODEL"):
         return "ollama"
-    if os.getenv("DEEPSEEK_API_KEY"):
-        return "deepseek"
-    if os.getenv("OPENAI_API_KEY"):
-        return "openai"
     if os.getenv("ANTHROPIC_API_KEY"):
         return "anthropic"
+    if os.getenv("OPENAI_API_KEY"):
+        return "openai"
+    if os.getenv("DEEPSEEK_API_KEY"):
+        return "deepseek"
 
     for provider_name in ["kimi", "zhipu"]:
         env_key = f"{provider_name.upper()}_API_KEY"

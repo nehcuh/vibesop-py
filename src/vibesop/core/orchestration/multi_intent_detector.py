@@ -84,7 +84,14 @@ class MultiIntentDetector:
         try:
             response = llm_client.call(prompt, max_tokens=5, temperature=0.0)
             content = getattr(response, "content", str(response)).strip().upper()
-            return content.startswith("YES")
+            affirmative = {"YES", "Y", "TRUE", "是"}
+            negative = {"NO", "N", "FALSE", "否"}
+            if any(content.startswith(a) for a in affirmative):
+                return True
+            if any(content.startswith(n) for n in negative):
+                return False
+            logger.debug("Ambiguous LLM response '%s', defaulting to heuristic", content)
+            return True  # On ambiguous, trust heuristic to avoid blocking
         except Exception as e:
             logger.warning("LLM multi-intent confirmation failed: %s, defaulting to heuristic", e)
             return True  # On failure, trust heuristic to avoid blocking

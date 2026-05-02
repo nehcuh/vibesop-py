@@ -16,24 +16,16 @@ from vibesop.core.models import (
     RoutingLayer,
     StepStatus,
 )
+from vibesop.core.orchestration.patterns import (
+    DEPENDENCY_INDICATORS,
+    PARALLEL_KEYWORDS,
+    SEQUENTIAL_KEYWORDS,
+)
 
 if TYPE_CHECKING:
     from vibesop.core.routing.unified import UnifiedRouter
 
 logger = logging.getLogger(__name__)
-
-# Keywords indicating parallel execution
-PARALLEL_KEYWORDS = (
-    "after",
-    "and then",
-    "both",
-    "concurrent",
-    "parallel",
-    "simultaneously",
-    "同时",
-    "一起",
-    "之后",
-)
 
 # Standard capability tags and their task_type mapping
 # When a sub-task has task_type X, prefer skills with capability X
@@ -52,52 +44,6 @@ CAPABILITY_TO_TASK_TYPE: dict[str, str] = {
     "document": "document",
 }
 
-# Skill capability registry — maps skill_id to capability tags
-# Built from core/registry.yaml intent descriptions and SKILL.md documentation.
-_SKILL_CAPABILITIES: dict[str, list[str]] = {
-    # builtin
-    "riper-workflow": ["plan", "design", "analysis", "review"],
-    "autonomous-experiment": ["optimize", "test", "analysis"],
-    "session-end": ["document"],
-    "experience-evolution": ["analysis", "document"],
-    "skill-craft": ["analysis", "design"],
-    "instinct-learning": ["analysis"],
-    # gstack
-    "gstack/review": ["review", "security"],
-    "gstack/investigate": ["debug", "analysis"],
-    "gstack/qa": ["test", "review"],
-    "gstack/qa-only": ["test", "review"],
-    "gstack/office-hours": ["clarify", "design", "plan"],
-    "gstack/plan-ceo-review": ["review", "plan", "design"],
-    "gstack/plan-eng-review": ["review", "plan", "design"],
-    "gstack/plan-design-review": ["review", "design"],
-    "gstack/design-consultation": ["design"],
-    "gstack/design-review": ["review", "design"],
-    "gstack/ship": ["deploy", "review"],
-    "gstack/document-release": ["document"],
-    "gstack/codex": ["review"],
-    "gstack/browse": ["test"],
-    "gstack/careful": ["security"],
-    "gstack/cso": ["security", "review"],
-    "gstack/retro": ["analysis", "document"],
-    "gstack/benchmark": ["test", "analysis"],
-    # superpowers
-    "superpowers/architect": ["design", "analysis", "plan"],
-    "superpowers/review": ["review"],
-    "superpowers/refactor": ["refactor", "design"],
-    "superpowers/debug": ["debug", "analysis"],
-    "superpowers/tdd": ["test", "refactor"],
-    "superpowers/optimize": ["optimize", "analysis"],
-    "superpowers/brainstorm": ["clarify", "design"],
-    # omx
-    "omx/deep-interview": ["clarify", "analysis", "plan"],
-    "omx/ralph": ["plan", "refactor", "design"],
-    "omx/ralplan": ["plan", "design"],
-    "omx/team": ["plan", "deploy"],
-    "omx/ultrawork": ["plan", "deploy"],
-    "omx/autopilot": ["plan", "review", "test"],
-    "omx/ultraqa": ["test", "review", "debug"],
-}
 
 
 class PlanBuilder:
@@ -121,9 +67,46 @@ class PlanBuilder:
 
     def __init__(self, router: UnifiedRouter):
         self._router = router
+        self._capability_cache: dict[str, list[str]] = {}
 
-    @classmethod
-    def _capability_score(cls, skill_id: str, task_type: str) -> float:
+    def _get_skill_capabilities(self, skill_id: str) -> list[str]:
+        """Fetch capability tags for a skill from the skill loader.
+
+        Tries the router's skill_loader first, then the candidate_manager's,
+        then falls back to an empty list. Results are cached per instance.
+        """
+        if skill_id in self._capability_cache:
+            return self._capability_cache[skill_id]
+
+        caps: list[str] = []
+
+        # 1. Try router's direct skill_loader
+        skill_loader = getattr(self._router, "_skill_loader", None)
+        if skill_loader is not None:
+            try:
+                loaded = skill_loader.get_skill(skill_id)
+                if loaded is not None:
+                    caps = loaded.metadata.capabilities or []
+            except Exception:
+                pass
+
+        # 2. Try candidate_manager's skill_loader
+        if not caps:
+            candidate_manager = getattr(self._router, "_candidate_manager", None)
+            if candidate_manager is not None:
+                cm_loader = getattr(candidate_manager, "_skill_loader", None)
+                if cm_loader is not None:
+                    try:
+                        loaded = cm_loader.get_skill(skill_id)
+                        if loaded is not None:
+                            caps = loaded.metadata.capabilities or []
+                    except Exception:
+                        pass
+
+        self._capability_cache[skill_id] = caps
+        return caps
+
+    def _capability_score(self, capabilities: list[str], task_type: str) -> float:
         """Score a skill's match against a task type based on capability tags.
 
         Returns 0.0-1.0 where:
@@ -133,8 +116,7 @@ class PlanBuilder:
         """
         if not task_type:
             return 0.0
-        caps = _SKILL_CAPABILITIES.get(skill_id, [])
-        if task_type in caps:
+        if task_type in capabilities:
             return 1.0
         # Related capability scoring
         related: dict[str, list[str]] = {
@@ -148,12 +130,11 @@ class PlanBuilder:
             "clarify": ["analysis", "design"],
         }
         related_caps = related.get(task_type, [])
-        overlap = set(caps) & set(related_caps)
+        overlap = set(capabilities) & set(related_caps)
         return 0.5 if overlap else 0.0
 
-    @classmethod
     def _select_best_by_capability(
-        cls,
+        self,
         primary_skill_id: str,
         primary_confidence: float,
         alternatives: list[Any],  # list[SkillRoute]
@@ -166,13 +147,15 @@ class PlanBuilder:
         if not task_type:
             return primary_skill_id, primary_confidence
 
+        primary_caps = self._get_skill_capabilities(primary_skill_id)
         best_skill = primary_skill_id
         best_score = (
-            primary_confidence + cls._capability_score(primary_skill_id, task_type) * 0.15
+            primary_confidence + self._capability_score(primary_caps, task_type) * 0.15
         )
 
         for alt in alternatives:
-            alt_score = alt.confidence + cls._capability_score(alt.skill_id, task_type) * 0.15
+            alt_caps = self._get_skill_capabilities(alt.skill_id)
+            alt_score = alt.confidence + self._capability_score(alt_caps, task_type) * 0.15
             if alt_score > best_score:
                 best_score = alt_score
                 best_skill = alt.skill_id
@@ -285,6 +268,7 @@ class PlanBuilder:
                     step_number=step_number,
                     skill_id=skill_id,
                     intent=sub_task.intent,
+                    original_query_segment=sub_task.original_intent or sub_task.query,
                     input_query=contextualized_query,
                     output_as=f"step_{step_number}_result",
                     status=StepStatus.PENDING,
@@ -327,8 +311,7 @@ class PlanBuilder:
         has_parallel_keyword = any(kw in query_lower for kw in PARALLEL_KEYWORDS)
 
         # Check for sequential keywords
-        sequential_keywords = {"then", "after", "next", "followed by", "然后", "之后", "接着"}
-        has_sequential_keyword = any(kw in query_lower for kw in sequential_keywords)
+        has_sequential_keyword = any(kw in query_lower for kw in SEQUENTIAL_KEYWORDS)
 
         # Multiple tasks without explicit sequence = parallel
         if len(sub_tasks) > 1 and has_parallel_keyword:
@@ -372,19 +355,7 @@ class PlanBuilder:
         # MIXED mode: infer from task description
         # Check for dependency indicators in the intent
         intent_lower = sub_task.intent.lower()
-        dependency_indicators = {
-            "then",
-            "after",
-            "based on",
-            "using",
-            "from",
-            "然后",
-            "之后",
-            "基于",
-            "使用",
-        }
-
-        has_dependency = any(indicator in intent_lower for indicator in dependency_indicators)
+        has_dependency = any(indicator in intent_lower for indicator in DEPENDENCY_INDICATORS)
 
         if has_dependency and step_number > 1 and previous_step_id is not None:
             return [previous_step_id], False

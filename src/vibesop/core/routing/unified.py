@@ -50,10 +50,8 @@ from vibesop.core.optimization import (
     PreferenceBooster,
     SkillClusterIndex,
 )
-from vibesop.core.routing.analytics_mixin import RouterAnalyticsMixin
 from vibesop.core.routing.cache import CacheManager
 from vibesop.core.routing.candidate_manager import CandidateManager
-from vibesop.core.routing.candidate_mixin import RouterCandidateMixin
 from vibesop.core.routing.conflict import (
     ConfidenceGapStrategy,
     ConflictResolver,
@@ -86,8 +84,6 @@ class UnifiedRouter(
     RouterResultMixin,
     RouterOrchestrationMixin,
     RouterContextMixin,
-    RouterCandidateMixin,
-    RouterAnalyticsMixin,
 ):
     """Unified router for skill selection.
 
@@ -261,6 +257,80 @@ class UnifiedRouter(
         self._route_lock = threading.Lock()
 
     # ================================================================
+    # Candidate and matcher lifecycle
+    # ================================================================
+
+    def _get_cached_candidates(self) -> list[dict[str, Any]]:
+        """Get cached candidates, initializing prefilter and warming matchers on first call."""
+        candidates = self._candidate_manager.get_cached_candidates()
+        if not self._matchers_warmed:
+            self._prefilter = CandidatePrefilter.from_candidates(
+                candidates,
+                cluster_index=self._cluster_index,
+            )
+            self._matcher_pipeline.set_prefilter(self._prefilter)
+            self._warm_up_matchers(candidates)
+        return candidates
+
+    def _warm_up_matchers(self, candidates: list[dict[str, Any]]) -> None:
+        """Warm up matchers by initializing lazy-loaded components."""
+        if self._matchers_warmed:
+            return
+        try:
+            for _layer, matcher in self._matchers:
+                try:
+                    matcher.warm_up(candidates)
+                except (OSError, RuntimeError, ValueError, ImportError) as e:
+                    logger.warning(
+                        "Matcher %s warm-up failed: %s",
+                        type(matcher).__name__,
+                        e,
+                    )
+        finally:
+            self._matchers_warmed = True
+
+    def reload_candidates(self) -> int:
+        return self._candidate_manager.reload()
+
+    def invalidate_project_cache(self) -> None:
+        """Invalidate cached project analysis."""
+        self._project_analyzer = None
+
+    def _get_skill_source(self, _skill_id: str, namespace: str) -> str:
+        """Determine skill source based on namespace."""
+        if namespace == "project":
+            return "project"
+        if namespace == "builtin":
+            return "builtin"
+        return "external"
+
+    def get_candidates(self, _query: str = "") -> list[dict[str, Any]]:
+        return self._candidate_manager.get_candidates()
+
+    def _get_candidates(self, _query: str = "") -> list[dict[str, Any]]:
+        """Backward-compatible alias for get_candidates."""
+        return self.get_candidates(_query)
+
+    def _build_decomposition_skills(
+        self,
+        candidates: list[dict[str, Any]] | None = None,
+        limit: int = 50,
+    ) -> list[str]:
+        """Build the "skill_id: description" list fed to TaskDecomposer.
+
+        Centralized here so orchestrate(), agent.decompose(), agent.build_plan(),
+        and `vibe decompose` use the exact same skill catalog. When no skill list
+        reaches the LLM, the decomposer can't pre-assign skill_id and PlanBuilder
+        falls back to lightweight (skip_ai_triage) routing — which is what causes
+        the "all sub-tasks → wrong skill" symptom.
+        """
+        skill_candidates = candidates or self._get_cached_candidates()
+        return [
+            f"{c['id']}: {c.get('description', c.get('intent', 'N/A'))}"
+            for c in skill_candidates[:limit]
+        ]
+
+    # ================================================================
     # Main routing entry point
     # ================================================================
 
@@ -348,18 +418,32 @@ class UnifiedRouter(
         use_keyword_routing = self._should_use_keyword_routing(query, context)
 
         if use_keyword_routing:
-            # Layer 1: Scenario Pattern
-            match, detail = _layers.try_scenario_layer(self, query, candidates)
+            # Layers 1+2: Scenario Pattern + Skill Semantic Index (best-of)
+            # Run both layers, return whichever has higher confidence above
+            # min_confidence. SCENARIO is fixed 0.9; INDEX scales 0.65-0.95.
+            # Strong scenario keyword hits win; very-confident INDEX matches
+            # can override; weak INDEX defers to SCENARIO.
+            scen_match, scen_detail = _layers.try_scenario_layer(self, query, candidates)
             routing_path.append(RoutingLayer.SCENARIO)
-            layer_details.append(detail)
-            if match and match.confidence >= self._config.min_confidence:
-                self._record_layer(RoutingLayer.SCENARIO)
+            layer_details.append(scen_detail)
+
+            idx_match, idx_detail = _layers.try_index_layer(self, query, candidates)
+            routing_path.append(RoutingLayer.AI_TRIAGE)
+            layer_details.append(idx_detail)
+
+            best_local = max(
+                (m for m in (scen_match, idx_match) if m is not None),
+                key=lambda m: m.confidence,
+                default=None,
+            )
+            if best_local and best_local.confidence >= self._config.min_confidence:
+                self._record_layer(best_local.layer)
                 return self._build_match_result(
-                    query, match, [], routing_path, layer_details,
+                    query, best_local, [], routing_path, layer_details,
                     start_time, deprecated_warnings, conversation, original_query, context,
                 )
 
-            # Layer 2: AI Triage
+            # Layer 3: AI Triage (LLM-based)
             match, detail = _layers.try_ai_triage_layer(self, query, candidates, context)
             routing_path.append(RoutingLayer.AI_TRIAGE)
             layer_details.append(detail)
@@ -370,7 +454,7 @@ class UnifiedRouter(
                     start_time, deprecated_warnings, conversation, original_query, context,
                 )
 
-            # Layers 3-6: Matcher pipeline
+            # Layers 4-7: Matcher pipeline
             primary, alternatives, detail = _pipeline.run_matcher_pipeline(
                 self, query, candidates, context, collect_rejected=True
             )
@@ -384,6 +468,18 @@ class UnifiedRouter(
                 )
         else:
             # Long query: prefer LLM semantic triage, fall back to matchers
+            # Layer 2: Skill Semantic Index (fast local match)
+            match, detail = _layers.try_index_layer(self, query, candidates)
+            routing_path.append(RoutingLayer.AI_TRIAGE)
+            layer_details.append(detail)
+            if match and match.confidence >= self._config.min_confidence:
+                self._record_layer(RoutingLayer.AI_TRIAGE)
+                return self._build_match_result(
+                    query, match, [], routing_path, layer_details,
+                    start_time, deprecated_warnings, conversation, original_query, context,
+                )
+
+            # Layer 3: AI Triage (LLM-based)
             match, detail = _layers.try_ai_triage_layer(
                 self, query, candidates, context, force=True
             )
@@ -634,11 +730,7 @@ class UnifiedRouter(
         )
         decomposer = self._get_task_decomposer()
         try:
-            skill_candidates = candidates or self._get_cached_candidates()
-            skills = [
-                f"{c['id']}: {c.get('description', c.get('intent', 'N/A'))}"
-                for c in skill_candidates[:50]
-            ]
+            skills = self._build_decomposition_skills(candidates)
             sub_tasks = decomposer.decompose(query, skills=skills)
         except Exception as e:
             policy = cb.on_phase_error(
@@ -745,6 +837,72 @@ class UnifiedRouter(
             value = getattr(config, field_name)
             manager.set_cli_override(f"routing.{field_name}", value)
         return manager
+
+    # ================================================================
+    # Analytics and execution recording
+    # ================================================================
+
+    def _record_execution(
+        self,
+        query: str,
+        result: OrchestrationResult,
+        user_modified: bool = False,
+        user_satisfied: bool | None = None,
+    ) -> None:
+        """Record execution to analytics store."""
+        from vibesop.core.analytics import AnalyticsStore, ExecutionRecord
+
+        store = AnalyticsStore(storage_dir=self.project_root / ".vibe")
+        record = ExecutionRecord(
+            query=query,
+            mode=result.mode.value,
+            primary_skill=result.primary.skill_id if result.primary else None,
+            plan_steps=[s.skill_id for s in result.execution_plan.steps]
+            if result.execution_plan
+            else [],
+            step_count=len(result.execution_plan.steps) if result.execution_plan else 0,
+            duration_ms=result.duration_ms,
+            user_modified=user_modified,
+            user_satisfied=user_satisfied,
+            routing_layers=[layer.value for layer in result.routing_path],
+        )
+        store.record(record)
+
+    def _record_routing_decision(
+        self,
+        query: str,
+        match: SkillRoute,
+        context: RoutingContext | None,
+    ) -> None:
+        """Record successful routing decision to memory and instinct systems."""
+        try:
+            # Add to memory conversation if available
+            if context and context.conversation_id:
+                self._get_memory_manager().add_assistant_message(
+                    context.conversation_id,
+                    f"Routed to {match.skill_id} (confidence: {match.confidence:.2f})",
+                    metadata={"skill_id": match.skill_id, "layer": match.layer.value},
+                )
+
+            # Extract a simple instinct: query pattern -> skill suggestion
+            # Only record if query is non-trivial and confidence is high
+            if match.confidence >= 0.7 and len(query) > 5:
+                self._get_instinct_learner().learn(
+                    pattern=query.lower(),
+                    action=f"suggest {match.skill_id} skill",
+                    context=match.layer.value,
+                    tags=["routing", "auto_extracted"],
+                    source="auto_routing",
+                )
+
+            # Record to preference learner for personalization
+            try:
+                learner = self._preference_booster.get_learner()
+                learner.record_selection(match.skill_id, query, was_helpful=True)
+            except Exception as e:
+                logger.debug("Failed to record preference selection: %s", e)
+        except (OSError, ValueError, RuntimeError) as e:
+            logger.debug("Failed to record routing decision: %s", e)
 
     # ================================================================
     # Alternatives collection

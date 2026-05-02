@@ -73,13 +73,22 @@ class RouterResultMixin:
         # Apply optimizations here so session stickiness, habit boost,
         # quality boost, and project context are consistent across
         # all layers.
+        #
+        # IMPORTANT: EXPLICIT and SCENARIO layers are user-directed
+        # (via @skill_id syntax or predefined scenario rules). Do NOT
+        # override the user's explicit choice with preference/session
+        # optimization — that would break user trust.
         matcher_layers = {
             RoutingLayer.KEYWORD,
             RoutingLayer.TFIDF,
             RoutingLayer.EMBEDDING,
             RoutingLayer.LEVENSHTEIN,
         }
-        if primary.layer not in matcher_layers:
+        user_directed_layers = {
+            RoutingLayer.EXPLICIT,
+            RoutingLayer.SCENARIO,
+        }
+        if primary.layer not in matcher_layers and primary.layer not in user_directed_layers:
             match_result = MatchResult(
                 skill_id=primary.skill_id,
                 confidence=primary.confidence,

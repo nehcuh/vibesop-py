@@ -76,6 +76,11 @@ def init(
         "--verify",
         help="Only verify initialization without creating anything",
     ),
+    skip_index: bool = typer.Option(
+        False,
+        "--skip-index",
+        help="Skip building the skill semantic index after initialization",
+    ),
 ) -> None:
     """Initialize a project with VibeSOP configuration.
 
@@ -120,7 +125,7 @@ def init(
         return
 
     # Perform initialization
-    _do_init(project_path, platform, platform_label, force)
+    _do_init(project_path, platform, platform_label, force, skip_index)
 
 
 def _verify_init(project_path: Path, platform_label: str) -> None:
@@ -144,7 +149,7 @@ def _verify_init(project_path: Path, platform_label: str) -> None:
     table.add_row(".vibe directory", status_icon)
 
     status_icon = "✅" if result["config_exists"] else "❌"
-    table.add_row("config.yaml", status_icon)
+    table.add_row("config.toml", status_icon)
 
     status_icon = "✅" if result["skills_dir_exists"] else "❌"
     table.add_row("skills/ directory", status_icon)
@@ -194,7 +199,7 @@ def _preview_init(project_path: Path, _platform: str, platform_label: str) -> No
 
     console.print("[bold]Files that would be created:[/bold]\n")
     console.print("  📁 .vibe/")
-    console.print("  ├─ 📄 config.yaml")
+    console.print("  ├─ 📄 config.toml")
     console.print("  ├─ 📁 skills/")
     console.print("  ├─ 📁 core/")
     console.print("  ├─ 📁 memory/")
@@ -208,7 +213,9 @@ def _preview_init(project_path: Path, _platform: str, platform_label: str) -> No
     )
 
 
-def _do_init(project_path: Path, platform: str, platform_label: str, force: bool) -> None:
+def _do_init(
+    project_path: Path, platform: str, platform_label: str, force: bool, skip_index: bool = False
+) -> None:
     """Perform the actual initialization.
 
     Args:
@@ -216,6 +223,7 @@ def _do_init(project_path: Path, platform: str, platform_label: str, force: bool
         platform: Platform identifier
         platform_label: Platform name for display
         force: Whether to force re-initialization
+        skip_index: Whether to skip building the skill semantic index
     """
     console.print(f"\n[bold cyan]🚀 {platform_label} Initialization[/bold cyan]\n{'=' * 40}\n")
 
@@ -258,9 +266,26 @@ def _do_init(project_path: Path, platform: str, platform_label: str, force: bool
 
         console.print(
             "[dim]Next steps:[/dim]\n"
-            "  1. Review .vibe/config.yaml\n"
+            "  1. Review .vibe/config.toml\n"
             f"  2. Run [cyan]vibe switch {platform}[/cyan] to build and deploy configuration\n"
         )
+
+        # Build skill semantic index (layered: global first, then project)
+        if not skip_index:
+            from vibesop.core.skills.indexer import SkillIndexer
+
+            indexer = SkillIndexer(project_root=project_path)
+
+            # Ensure global index exists (built once, shared across projects)
+            if not indexer.global_index_path.exists():
+                console.print("\n[bold cyan]🔍 Building global skill index...[/bold cyan]")
+                indexer.build_index(scope="global", show_progress=True)
+
+            # Build project-local index (only project-specific skills)
+            console.print("\n[bold cyan]🔍 Building project skill index...[/bold cyan]")
+            indexer.build_index(scope="project", show_progress=True)
+        else:
+            console.print("\n[dim]⊘ Skill index build skipped (--skip-index)[/dim]")
 
         # Auto-detect integrations
         console.print(f"\n[bold cyan]🔍 Detecting Integrations[/bold cyan]\n{'=' * 40}\n")

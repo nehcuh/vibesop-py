@@ -25,7 +25,7 @@ class InitSupport:
     def __init__(self) -> None:
         """Initialize init support."""
         self._vibe_dir = Path(".vibe")
-        self._config_file = self._vibe_dir / "config.yaml"
+        self._config_file = self._vibe_dir / "config.toml"
 
     def init_project(
         self,
@@ -81,11 +81,14 @@ class InitSupport:
                 full_path.mkdir(parents=True, exist_ok=True)
                 result["created_dirs"].append(str(full_path))
 
-            # Create default config file
+            # Create default config file (project-level)
             config_content = self._generate_default_config(platform)
             config_file = project_path / self._config_file
             config_file.write_text(config_content)
             result["created_files"].append(str(config_file))
+
+            # Ensure global ~/.vibe/config.yaml exists with full template
+            _ensure_global_config(platform, result)
 
             # Create project-level routing configuration
             from vibesop.core.routing.project_config import create_default_project_routing
@@ -131,7 +134,7 @@ class InitSupport:
         vibe_dir = project_path / self._vibe_dir
 
         result["vibe_dir_exists"] = vibe_dir.exists()
-        result["config_exists"] = (vibe_dir / "config.yaml").exists()
+        result["config_exists"] = (vibe_dir / "config.toml").exists() or (vibe_dir / "config.yaml").exists()
         result["skills_dir_exists"] = (vibe_dir / "skills").exists()
 
         result["initialized"] = (
@@ -143,40 +146,86 @@ class InitSupport:
         return result
 
     def _generate_default_config(self, platform: str) -> str:
-        """Generate default configuration content.
+        """Generate default configuration content as TOML.
 
         Args:
             platform: Target platform
 
         Returns:
-            Configuration YAML content
+            Configuration TOML content
         """
+        date_str = self._get_current_date()
         return f"""# VibeSOP Project Configuration
 # Generated for: {platform}
-# Date: {self._get_current_date()}
+# Date: {date_str}
 
-platform: {platform}
+platform = "{platform}"
+
+# ─────────────────────────────────────────────────────
+# LLM Configuration (required for AI triage and orchestration)
+# VibeSOP runs as a CLI subprocess and cannot reuse the host AI Agent's LLM.
+# Choose one provider below.
+# ─────────────────────────────────────────────────────
+[llm]
+# Provider: ollama | anthropic | openai | deepseek | kimi | zhipu
+provider = "ollama"
+
+# Model name (defaults shown below per provider)
+# Ollama: Qwen3.6-35B-A3B-mlx-mxfp8
+# Anthropic: claude-3-5-haiku-20241022
+# OpenAI: gpt-4o-mini
+# DeepSeek: deepseek-v4-flash
+# Kimi: moonshot-v1-8k
+# Zhipu: glm-4
+model = "Qwen3.6-35B-A3B-mlx-mxfp8"
+
+# API key (required for cloud providers, ignored for Ollama)
+# For Ollama: leave empty (uses local dummy key)
+# For Anthropic: sk-ant-...
+# For OpenAI: sk-...
+# For DeepSeek: sk-...
+# Tip: set ANTHROPIC_API_KEY / OPENAI_API_KEY env var instead
+api_key = ""
+
+# Custom API base URL (for self-hosted or proxies)
+# Ollama default: http://localhost:11434/v1
+api_base = ""
+
+temperature = 0.7
+max_tokens = 4096
 
 # Routing configuration
-routing:
-  semantic_threshold: 0.75
-  enable_fuzzy: true
-  cache_enabled: true
+[routing]
+confirmation_mode = "always"  # always | never | ambiguous_only
+enable_ai_triage = true
+enable_orchestration = true
+enable_embedding = false
+max_candidates = 3
+use_cache = true
+keyword_match_max_chars = 15
+session_aware = true
+default_strategy = "auto"  # auto | sequential | parallel | hybrid
+
+# Degradation: confidence-gated layered fallback
+degradation_enabled = true
+degradation_auto_threshold = 0.6
+degradation_suggest_threshold = 0.4
+degradation_degrade_threshold = 0.2
+degradation_fallback_always_ask = true
 
 # Security configuration
-security:
-  enable_scanning: true
-  threat_level: high
+[security]
+scan_external = true
 
 # Memory configuration
-memory:
-  enabled: true
-  autoload: true
+[memory]
+enabled = true
+autoload = true
 
 # Preference learning
-preferences:
-  enabled: true
-  learning_rate: 0.1
+[preferences]
+enabled = true
+learning_rate = 0.1
 """
 
     def _generate_readme(self, platform: str) -> str:
@@ -250,3 +299,177 @@ For more information, see:
         from datetime import datetime
 
         return datetime.now().strftime("%Y-%m-%d")
+
+
+def _ensure_global_config(platform: str, result: dict[str, Any]) -> None:
+    """Ensure global ~/.vibe/config.yaml exists with full default template.
+
+    Only creates the file if it doesn't already exist (never overwrites).
+
+    Args:
+        platform: Target platform identifier
+        result: Initialization result dict (mutated with created file path)
+    """
+    global_config_dir = Path.home() / ".vibe"
+    global_config_file = global_config_dir / "config.toml"
+
+    # Also skip if old config.yaml exists (don't overwrite existing Yaml configs)
+    if (global_config_dir / "config.yaml").exists():
+        return
+
+    if global_config_file.exists():
+        return
+
+    global_config_dir.mkdir(parents=True, exist_ok=True)
+
+    global_template = _generate_global_config_template(platform)
+    global_config_file.write_text(global_template)
+    result["created_files"].append(str(global_config_file))
+
+
+def _generate_global_config_template(platform: str) -> str:
+    """Generate the global ~/.vibe/config.toml template.
+
+    This is a comprehensive template with all available options documented.
+    Users should edit this file to configure their preferred LLM provider
+    and routing behavior globally.
+
+    Args:
+        platform: Target platform identifier
+
+    Returns:
+        Full TOML config template as string
+    """
+    date_str = _get_date_str()
+    return f"""# ───────────────────────────────────────────
+# VibeSOP Global Configuration
+# Location: ~/.vibe/config.toml
+# Applies to all projects unless overridden in .vibe/config.toml
+# Generated: {date_str}
+# ───────────────────────────────────────────
+
+# Default platform for CLI operations
+default_platform = "{platform}"
+
+# ─────────────────────────────────────────────────────
+# LLM Configuration (REQUIRED for AI triage & orchestration)
+#
+# VibeSOP runs as a CLI subprocess and CANNOT reuse the host
+# AI Agent's internal LLM (e.g., Claude Code's session model).
+# You MUST configure a separate provider below.
+#
+# Priority order (auto-detect if provider is unset):
+#   1. VIBE_LLM_PROVIDER env var  (explicit override)
+#   2. Ollama (local, zero-cost)
+#   3. DeepSeek
+#   4. OpenAI
+#   5. Anthropic
+# ─────────────────────────────────────────────────────
+[llm]
+# Provider
+# Options: ollama | anthropic | openai | deepseek | kimi | zhipu
+# Default: ollama (local, no API key needed)
+provider = "ollama"
+
+# Model
+# Ollama default:  Qwen3.6-35B-A3B-mlx-mxfp8
+# Anthropic fast:  claude-3-5-haiku-20241022
+# Anthropic smart: claude-sonnet-4-6-20250514
+# OpenAI cheap:    gpt-4o-mini
+# DeepSeek:        deepseek-v4-flash
+model = "Qwen3.6-35B-A3B-mlx-mxfp8"
+
+# API Key
+# Ollama:        leave empty (uses local dummy key)
+# Anthropic:     sk-ant-...
+# OpenAI:        sk-...
+# DeepSeek:      sk-...
+# Tip: set ANTHROPIC_API_KEY / OPENAI_API_KEY / DEEPSEEK_API_KEY env var instead
+api_key = ""
+
+# API Base URL (for self-hosted, proxies, or non-standard ports)
+# Ollama default:    http://localhost:11434/v1
+# DeepSeek default:  https://api.deepseek.com
+# Kimi default:      https://api.moonshot.cn/v1
+# Zhipu default:     https://open.bigmodel.cn/api/paas/v4
+api_base = ""
+
+# Generation parameters
+temperature = 0.7
+max_tokens = 4096
+
+# ─────────────────────────────────────────────────────
+# Routing Configuration
+# ─────────────────────────────────────────────────────
+[routing]
+# User confirmation before selecting a skill
+#   "always"          - ask for confirmation every time (default)
+#   "never"           - skip confirmation, auto-select
+#   "ambiguous_only"  - ask only when multiple close candidates
+confirmation_mode = "always"
+
+# AI-powered semantic triage (Layer 2 of 10-layer pipeline)
+# Disable if no LLM configured or you want keyword-only routing
+enable_ai_triage = true
+
+# Multi-intent detection and task decomposition
+enable_orchestration = true
+
+# Vector embedding-based semantic matching (Layer 5)
+# Requires sentence-transformers (pip install vibesop[semantic])
+enable_embedding = false
+
+# Maximum candidate skills to return
+max_candidates = 3
+
+# Cache routing results for repeated queries
+use_cache = true
+
+# Maximum query length (chars) for keyword-only routing
+# Queries shorter than this skip LLM triage
+keyword_match_max_chars = 15
+
+# Session-aware routing: remembers current skill context
+# Disable for lower overhead or privacy concerns
+session_aware = true
+
+# Default orchestration strategy for multi-intent queries
+#   "auto" | "sequential" | "parallel" | "hybrid"
+default_strategy = "auto"
+
+# ── Confidence-Gated Degradation (v5.2.0) ──
+# Avoids binary match/no-match. Instead:
+#   >= 0.6 → AUTO (auto-select)
+#   >= 0.4 → SUGGEST (show with alternatives)
+#   >= 0.2 → DEGRADE (use but warn)
+#   < 0.2  → FALLBACK (raw LLM, no skill)
+degradation_enabled = true
+degradation_auto_threshold = 0.6
+degradation_suggest_threshold = 0.4
+degradation_degrade_threshold = 0.2
+degradation_fallback_always_ask = true
+
+# Routing transparency: show full decision tree
+#   "full" | "compact"
+transparency = "full"
+
+# ─────────────────────────────────────────────────────
+# Security Configuration
+# ─────────────────────────────────────────────────────
+[security]
+# Scan external skills for threats before loading
+scan_external = true
+
+# ─────────────────────────────────────────────────────
+# Preference Learning
+# ─────────────────────────────────────────────────────
+[preferences]
+# Learn from your routing choices to improve accuracy
+learning_enabled = true
+"""
+
+
+def _get_date_str() -> str:
+    from datetime import datetime
+
+    return datetime.now().strftime("%Y-%m-%d")

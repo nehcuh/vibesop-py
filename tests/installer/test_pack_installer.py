@@ -308,6 +308,7 @@ class TestPostInstallHook:
     def test_package_json_bun_fallback(self, tmp_path, monkeypatch):
         """If no build script, bun run gen:skill-docs is attempted."""
         import shutil as _shutil
+
         from vibesop.installer.pack_installer import PackInstaller
 
         installer = PackInstaller(external_paths=[tmp_path])

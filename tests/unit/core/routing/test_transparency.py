@@ -7,7 +7,6 @@ from vibesop.core.models import (
     OrchestrationResult,
     RejectedCandidate,
     RoutingLayer,
-    RoutingResult,
 )
 from vibesop.core.routing import UnifiedRouter
 

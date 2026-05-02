@@ -277,18 +277,12 @@ class TestPlanBuilder:
             default=reviewer,
             responses={"analyze": architect},
         )
-        # Set up the router so that when "analyze architecture" is queried,
-        # the primary is reviewer (0.80) with architect as alternative (0.75).
-        # But when task_type='analysis', architect gets capability score 1.0
-        # vs reviewer 0.0, resulting in architect winning.
-        # We need to simulate alternatives — FakeRouter doesn't produce alternatives.
-        # Test the scoring logic directly.
+        # Test the scoring logic directly with explicit capability lists.
         builder = PlanBuilder(router)
-        from vibesop.core.orchestration.plan_builder import _SKILL_CAPABILITIES
 
-        # Verify capability scoring
-        arch_score = PlanBuilder._capability_score("superpowers/architect", "analysis")
-        review_score = PlanBuilder._capability_score("gstack/review", "analysis")
+        # Verify capability scoring (instance method, capabilities passed directly)
+        arch_score = builder._capability_score(["design", "analysis", "plan"], "analysis")
+        review_score = builder._capability_score(["review", "security"], "analysis")
         assert arch_score == 1.0
         assert review_score == 0.0
 
@@ -299,16 +293,104 @@ class TestPlanBuilder:
 
     def test_capability_related_match(self) -> None:
         """Related capabilities get 0.5 score."""
-        from vibesop.core.orchestration.plan_builder import PlanBuilder, _SKILL_CAPABILITIES
+        router = FakeRouter()
+        builder = PlanBuilder(router)
 
-        # analysis is a related capability for debug
-        score = PlanBuilder._capability_score("superpowers/debug", "analysis")
-        assert score == 1.0  # exact match: debug has "analysis" capability
+        # Exact match
+        score = builder._capability_score(["debug", "analysis"], "analysis")
+        assert score == 1.0
 
-        # debug is a related capability for analysis task_type
-        score = PlanBuilder._capability_score("superpowers/debug", "analysis")
-        assert score == 1.0  # exact match
+        # Related match: design is related to plan
+        score = builder._capability_score(["design"], "plan")
+        assert score == 0.5
 
         # No match
-        score = PlanBuilder._capability_score("gstack/ship", "analysis")
-        assert score == 0.0  # ship has [deploy, review], no analysis or related
+        score = builder._capability_score(["deploy", "review"], "analysis")
+        assert score == 0.0
+
+
+class TestPreAssignedSkillIdPropagation:
+    """Verify decomposer-supplied skill_id wins over the (skip_ai_triage) router.
+
+    This is the P1-B regression guard: when the decomposer LLM has been given the
+    skill catalog and assigns skill_id per sub-task, PlanBuilder MUST honor those
+    assignments instead of falling back to SCENARIO/INDEX which routes everything
+    to whichever skill scores highest in the cheap matchers.
+    """
+
+    @staticmethod
+    def _route(skill_id: str, confidence: float = 0.5) -> SkillRoute:
+        return SkillRoute(
+            skill_id=skill_id,
+            confidence=confidence,
+            layer=RoutingLayer.SCENARIO,
+            source="test",
+        )
+
+    def test_pre_assigned_skill_bypasses_router(self) -> None:
+        """When skill_id is set, the router is not consulted at all."""
+        router = FakeRouter(default=self._route("wrong_skill"))
+        builder = PlanBuilder(router)
+
+        sub_task = SubTask(
+            intent="review code",
+            query="review the new auth flow",
+            skill_id="gstack/review",
+        )
+        plan = builder.build_plan("review the new auth flow", [sub_task])
+
+        assert len(plan.steps) == 1
+        assert plan.steps[0].skill_id == "gstack/review"
+        # No routing call should have been issued for this sub-task.
+        assert router._calls == []
+
+    def test_pre_assigned_skill_high_confidence(self) -> None:
+        """Pre-assigned sub-tasks land at 0.99 confidence in the reasoning."""
+        router = FakeRouter()
+        builder = PlanBuilder(router)
+
+        sub_task = SubTask(intent="debug", query="debug auth", skill_id="gstack/debug")
+        plan = builder.build_plan("debug auth", [sub_task])
+
+        assert len(plan.steps) == 1
+        # Confidence is logged via reasoning string at percent precision.
+        assert "99%" in plan.reasoning
+
+    def test_multi_sub_task_distinct_skills(self) -> None:
+        """Each sub-task with its own skill_id reaches its own skill — no shared default.
+
+        This is the symptom from the issue: every sub-task previously ended up at the
+        SCENARIO winner. With skill_id pre-assigned, each step is independent.
+        """
+        router = FakeRouter(default=self._route("scenario_winner"))
+        builder = PlanBuilder(router)
+
+        sub_tasks = [
+            SubTask(intent="analyze", query="analyze architecture", skill_id="superpowers/architect"),
+            SubTask(intent="review", query="review security", skill_id="gstack/review"),
+            SubTask(intent="test", query="run tests", skill_id="gstack/test"),
+        ]
+        plan = builder.build_plan("analyze, review, test", sub_tasks)
+
+        assert len(plan.steps) == 3
+        assigned = [step.skill_id for step in plan.steps]
+        assert assigned == ["superpowers/architect", "gstack/review", "gstack/test"]
+        # Sanity: router was never invoked for any sub-task.
+        assert router._calls == []
+
+    def test_mixed_pre_assigned_and_routed(self) -> None:
+        """When some sub-tasks have skill_id and others don't, only the unset ones route."""
+        router = FakeRouter(default=self._route("router_default"))
+        builder = PlanBuilder(router)
+
+        sub_tasks = [
+            SubTask(intent="analyze", query="analyze architecture", skill_id="superpowers/architect"),
+            SubTask(intent="review", query="review security"),  # no skill_id → must route
+        ]
+        plan = builder.build_plan("analyze, review", sub_tasks)
+
+        assert len(plan.steps) == 2
+        assert plan.steps[0].skill_id == "superpowers/architect"
+        assert plan.steps[1].skill_id == "router_default"
+        # Exactly one routing call (for the unset sub-task).
+        assert len(router._calls) == 1
