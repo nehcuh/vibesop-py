@@ -48,14 +48,34 @@ class CandidateManager:
         return self.project_root / ".vibe" / "cache" / "candidates_v2.json"
 
     def _compute_paths_hash(self, search_paths: list[Path]) -> str:
-        """Hash search paths and their mtimes for cache invalidation."""
+        """Hash all SKILL.md paths and their mtimes for cache invalidation."""
         h = hashlib.sha256()
         for sp in sorted(search_paths):
-            h.update(str(sp).encode())
-            if sp.exists():
-                mtime = sp.stat().st_mtime
-                h.update(str(mtime).encode())
+            if not sp.exists():
+                continue
+            skill_files = sorted(sp.rglob("SKILL.md"), key=lambda p: str(p))
+            for skill_file in skill_files:
+                h.update(str(skill_file).encode())
+                try:
+                    mtime = skill_file.stat().st_mtime
+                    h.update(str(mtime).encode())
+                except OSError:
+                    continue
         return h.hexdigest()[:16]
+
+    @staticmethod
+    def _compute_skill_mtimes(search_paths: list[Path]) -> dict[str, float]:
+        """Return {path_str: mtime} for every SKILL.md under search_paths."""
+        mtimes: dict[str, float] = {}
+        for sp in search_paths:
+            if not sp.exists():
+                continue
+            for skill_file in sp.rglob("SKILL.md"):
+                try:
+                    mtimes[str(skill_file)] = skill_file.stat().st_mtime
+                except OSError:
+                    continue
+        return mtimes
 
     def _load_from_disk_cache(self, search_paths: list[Path]) -> list[dict[str, Any]] | None:
         """Try loading candidates from persistent disk cache."""
@@ -149,7 +169,7 @@ class CandidateManager:
             return self._cached_reload_locked()
 
     def _should_check_reload(self) -> bool:
-        """Rate-limited check: probe filesystem marker + search path mtimes every N seconds."""
+        """Rate-limited check: probe filesystem marker + deep skill mtimes every N seconds."""
         import time
 
         now = time.monotonic()
@@ -160,16 +180,11 @@ class CandidateManager:
         if self._check_reload_needed():
             return True
 
-        # Check if any search path mtime changed (new skill installed without marker)
-        for sp in self._search_paths:
-            if sp.exists():
-                try:
-                    mtime = sp.stat().st_mtime
-                    if mtime != self._path_mtimes.get(str(sp), 0):
-                        self._path_mtimes[str(sp)] = mtime
-                        return True
-                except OSError:
-                    continue
+        # Check if any SKILL.md under search paths changed
+        current_mtimes = self._compute_skill_mtimes(self._search_paths)
+        if current_mtimes != self._path_mtimes:
+            self._path_mtimes = current_mtimes
+            return True
         return False
 
     def _check_reload_needed(self) -> bool:
@@ -188,11 +203,13 @@ class CandidateManager:
         cached = self._load_from_disk_cache(search_paths)
         if cached is not None:
             self._candidates_cache = cached
+            self._path_mtimes = self._compute_skill_mtimes(search_paths)
             return cached
 
         candidates = self.get_candidates()
-        paths_hash = self._compute_paths_hash(self._search_paths)
+        paths_hash = self._compute_paths_hash(search_paths)
         self._candidates_cache = candidates
+        self._path_mtimes = self._compute_skill_mtimes(search_paths)
         self._save_to_disk_cache(candidates, paths_hash)
         return candidates
 

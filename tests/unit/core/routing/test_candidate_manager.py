@@ -177,3 +177,90 @@ class TestRecordUsage:
         mgr.record_usage("test-skill", was_successful=True)
         assert mgr._usage_buffer["test-skill"]["call_count"] == 3
         assert mgr._usage_buffer["test-skill"]["success_count"] == 2
+
+
+class TestCacheInvalidation:
+    """Regression tests for stale candidates cache when skills are added deep in the tree."""
+
+    def test_deep_skill_changes_hash(self, tmp_path: Path) -> None:
+        """Adding a SKILL.md at depth >= 2 must change _compute_paths_hash."""
+        mgr = CandidateManager(tmp_path)
+        search_path = tmp_path / "skills"
+        search_path.mkdir()
+        deep_dir = search_path / "pack" / "sub"
+        deep_dir.mkdir(parents=True)
+        (deep_dir / "SKILL.md").write_text("id: old\n")
+
+        hash_before = mgr._compute_paths_hash([search_path])
+
+        # Add a new skill two levels deep
+        new_dir = search_path / "pack" / "new"
+        new_dir.mkdir(parents=True)
+        (new_dir / "SKILL.md").write_text("id: new\n")
+
+        hash_after = mgr._compute_paths_hash([search_path])
+        assert hash_before != hash_after
+
+    def test_disk_cache_rejected_after_deep_change(self, tmp_path: Path) -> None:
+        """Old disk cache must be rejected after a deep SKILL.md appears."""
+        mgr = CandidateManager(tmp_path)
+        search_path = tmp_path / "skills"
+        search_path.mkdir()
+        deep_dir = search_path / "pack" / "sub"
+        deep_dir.mkdir(parents=True)
+        (deep_dir / "SKILL.md").write_text("id: old\n")
+
+        # Write disk cache with the old hash
+        paths_hash = mgr._compute_paths_hash([search_path])
+        mgr._save_to_disk_cache([{"id": "old"}], paths_hash)
+
+        # Cache should load successfully
+        assert mgr._load_from_disk_cache([search_path]) is not None
+
+        # Add a new deep skill
+        new_dir = search_path / "pack" / "new"
+        new_dir.mkdir(parents=True)
+        (new_dir / "SKILL.md").write_text("id: new\n")
+
+        # Old cache is now stale
+        assert mgr._load_from_disk_cache([search_path]) is None
+
+    def test_skill_mtimes_captures_deep_files(self, tmp_path: Path) -> None:
+        """_compute_skill_mtimes must include files below depth 1."""
+        mgr = CandidateManager(tmp_path)
+        search_path = tmp_path / "skills"
+        search_path.mkdir()
+        deep_dir = search_path / "pack" / "sub"
+        deep_dir.mkdir(parents=True)
+        skill_file = deep_dir / "SKILL.md"
+        skill_file.write_text("id: x\n")
+
+        mtimes = CandidateManager._compute_skill_mtimes([search_path])
+        assert str(skill_file) in mtimes
+        assert isinstance(mtimes[str(skill_file)], float)
+
+    def test_should_check_reload_triggers_on_deep_change(self, tmp_path: Path) -> None:
+        """_should_check_reload returns True when a deep SKILL.md is added."""
+        mgr = CandidateManager(tmp_path)
+        search_path = tmp_path / "skills"
+        search_path.mkdir()
+        deep_dir = search_path / "pack" / "sub"
+        deep_dir.mkdir(parents=True)
+        (deep_dir / "SKILL.md").write_text("id: old\n")
+
+        mgr._search_paths = [search_path]
+        mgr._path_mtimes = CandidateManager._compute_skill_mtimes([search_path])
+        mgr._last_reload_check = 0.0  # Force the interval gate open
+
+        # No change yet
+        assert mgr._should_check_reload() is False
+
+        # Open the interval gate again
+        mgr._last_reload_check = 0.0
+
+        # Add a new deep skill
+        new_dir = search_path / "pack" / "new"
+        new_dir.mkdir(parents=True)
+        (new_dir / "SKILL.md").write_text("id: new\n")
+
+        assert mgr._should_check_reload() is True
