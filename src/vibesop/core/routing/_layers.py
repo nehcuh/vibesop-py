@@ -314,6 +314,130 @@ def _build_profile_token_index(index: dict[str, Any]) -> dict[str, set[str]]:
     return tokens_by_id
 
 
+def _cosine_similarity(a: list[float], b: list[float]) -> float:
+    """Compute cosine similarity between two dense vectors (pure Python)."""
+    dot = sum(x * y for x, y in zip(a, b))
+    norm_a = sum(x * x for x in a) ** 0.5
+    norm_b = sum(x * x for x in b) ** 0.5
+    return dot / (norm_a * norm_b + 1e-10)
+
+
+def _try_embedding_fallback(
+    router: RoutingCore,
+    query: str,
+    index: dict[str, Any],
+    candidates: list[dict[str, Any]],
+    index_start: float,
+) -> tuple[SkillRoute | None, LayerDetail]:
+    """Try cosine-similarity matching against pre-computed skill embeddings.
+
+    This is invoked only when the fast token-overlap path did not produce
+    a match above the regular index threshold.  It requires the index to
+    contain embedding vectors (built by SkillIndexer v1.3+) and
+    sentence-transformers to be installed.
+    """
+    # Quick check: does any profile carry an embedding?
+    profiles_with_emb: dict[str, Any] = {
+        sid: prof
+        for sid, prof in index.items()
+        if getattr(prof, "embedding", None) is not None
+    }
+    if not profiles_with_emb:
+        return None, LayerDetail(
+            layer=RoutingLayer.AI_TRIAGE,
+            matched=False,
+            reason="No embeddings in index",
+            duration_ms=(time.perf_counter() - index_start) * 1000,
+        )
+
+    # Lazy-load the model once per router instance.
+    model = getattr(router, "_index_embedding_model", None)
+    if model is None:
+        try:
+            from sentence_transformers import SentenceTransformer
+
+            model = SentenceTransformer("paraphrase-multilingual-MiniLM-L12-v2")
+            router._index_embedding_model = model
+        except Exception:
+            return None, LayerDetail(
+                layer=RoutingLayer.AI_TRIAGE,
+                matched=False,
+                reason="sentence-transformers not available for embedding fallback",
+                duration_ms=(time.perf_counter() - index_start) * 1000,
+            )
+
+    try:
+        raw_emb = model.encode([query], show_progress_bar=False)[0]
+        query_emb = raw_emb.tolist() if hasattr(raw_emb, "tolist") else list(raw_emb)
+    except Exception:
+        return None, LayerDetail(
+            layer=RoutingLayer.AI_TRIAGE,
+            matched=False,
+            reason="Query embedding failed",
+            duration_ms=(time.perf_counter() - index_start) * 1000,
+        )
+
+    best_skill_id: str | None = None
+    best_similarity = 0.0
+    for skill_id, profile in profiles_with_emb.items():
+        sim = _cosine_similarity(query_emb, profile.embedding)
+        if sim > best_similarity:
+            best_similarity = sim
+            best_skill_id = skill_id
+
+    EMBEDDING_THRESHOLD = 0.45
+    if best_similarity < EMBEDDING_THRESHOLD or not best_skill_id:
+        return None, LayerDetail(
+            layer=RoutingLayer.AI_TRIAGE,
+            matched=False,
+            reason=(
+                f"Embedding fallback: no match above threshold "
+                f"({best_similarity:.2f} < {EMBEDDING_THRESHOLD})"
+            ),
+            duration_ms=(time.perf_counter() - index_start) * 1000,
+        )
+
+    candidate = next((c for c in candidates if c["id"] == best_skill_id), None)
+    if not candidate:
+        return None, LayerDetail(
+            layer=RoutingLayer.AI_TRIAGE,
+            matched=False,
+            reason=f"Embedding matched '{best_skill_id}' but skill not in candidates",
+            duration_ms=(time.perf_counter() - index_start) * 1000,
+        )
+
+    # Scale similarity [threshold..1.0] → confidence [0.65..0.95]
+    confidence = 0.65 + (best_similarity - EMBEDDING_THRESHOLD) / (
+        1.0 - EMBEDDING_THRESHOLD
+    ) * 0.30
+
+    match = SkillRoute(
+        skill_id=best_skill_id,
+        confidence=round(confidence, 2),
+        layer=RoutingLayer.AI_TRIAGE,
+        source=router._get_skill_source(
+            best_skill_id, candidate.get("namespace", "builtin")
+        ),
+        description=str(candidate.get("description", "")),
+        metadata={
+            "index_hit": True,
+            "index_score": round(best_similarity, 3),
+            "embedding_match": True,
+            "scenarios": index[best_skill_id].scenarios[:3],
+        },
+    )
+    detail = LayerDetail(
+        layer=RoutingLayer.AI_TRIAGE,
+        matched=True,
+        reason=(
+            f"Embedding match: '{best_skill_id}' "
+            f"(similarity {best_similarity:.2f})"
+        ),
+        duration_ms=(time.perf_counter() - index_start) * 1000,
+    )
+    return match, detail
+
+
 def try_index_layer(
     router: RoutingCore,
     query: str,
@@ -390,12 +514,14 @@ def try_index_layer(
 
     threshold = getattr(router._config, "index_match_threshold", 0.20)
     if best_score < threshold or not best_skill_id:
-        return None, LayerDetail(
-            layer=RoutingLayer.AI_TRIAGE,
-            matched=False,
-            reason=f"No index match above threshold ({best_score:.2f} < {threshold})",
-            duration_ms=(time.perf_counter() - index_start) * 1000,
+        # Token overlap missed — try semantic embedding fallback when available.
+        emb_match, emb_detail = _try_embedding_fallback(
+            router, query, index, candidates, index_start
         )
+        if emb_match is not None:
+            return emb_match, emb_detail
+        # Fallback ran but also missed; return its (more informative) detail.
+        return None, emb_detail
 
     candidate = next((c for c in candidates if c["id"] == best_skill_id), None)
     if not candidate:

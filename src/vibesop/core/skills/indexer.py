@@ -93,9 +93,13 @@ class SkillProfile:
     # re-analyzing skills whose content hasn't changed since the last run.
     # Empty string means: profile from a pre-cache indexer; treat as cold.
     content_hash: str = ""
+    # Optional sentence-transformers embedding vector for cosine-similarity
+    # matching in the INDEX routing layer.  None when the library is not
+    # installed or the index was built by a pre-v1.3 indexer.
+    embedding: list[float] | None = None
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        d: dict[str, Any] = {
             "skill_id": self.skill_id,
             "scenarios": self.scenarios,
             "query_patterns": self.query_patterns,
@@ -104,6 +108,9 @@ class SkillProfile:
             "pack_owner": self.pack_owner,
             "content_hash": self.content_hash,
         }
+        if self.embedding is not None:
+            d["embedding"] = self.embedding
+        return d
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> SkillProfile:
@@ -115,6 +122,7 @@ class SkillProfile:
             confidence_boosters=data.get("confidence_boosters", []),
             pack_owner=data.get("pack_owner", ""),
             content_hash=data.get("content_hash", ""),
+            embedding=data.get("embedding"),
         )
 
 
@@ -429,6 +437,18 @@ class SkillIndexer:
                         finally:
                             advance()
 
+        # Compute sentence embeddings when sentence-transformers is available.
+        # This is done once per build, after all LLM analysis is complete.
+        all_profiles = {**global_profiles, **project_profiles}
+        if all_profiles:
+            self._compute_embeddings(all_profiles)
+            # Write computed embeddings back into the partitioned dicts
+            for sid, prof in all_profiles.items():
+                if sid in global_profiles:
+                    global_profiles[sid] = prof
+                if sid in project_profiles:
+                    project_profiles[sid] = prof
+
         # Save to appropriate files
         if scope in ("all", "global") and global_profiles:
             self._save_index(global_profiles, scope="global")
@@ -461,6 +481,60 @@ class SkillIndexer:
             console.print()
 
         return result
+
+    @staticmethod
+    def _compute_profile_text(profile: SkillProfile) -> str:
+        """Concatenate all profile text fields into a single string for encoding.
+
+        Scenarios and query_patterns carry the strongest semantic signal,
+        followed by confidence_boosters and differentiation.
+        """
+        parts: list[str] = []
+        parts.extend(profile.scenarios)
+        parts.extend(profile.query_patterns)
+        parts.extend(profile.confidence_boosters)
+        if profile.differentiation:
+            parts.append(profile.differentiation)
+        return " ".join(parts)
+
+    def _compute_embeddings(self, profiles: dict[str, SkillProfile]) -> None:
+        """Compute sentence embeddings for all profiles when sentence-transformers is available.
+
+        This is a best-effort operation: if the library is missing, or the
+        model fails to load, we silently skip and leave embeddings as None.
+        The INDEX layer will fall back to token-overlap matching.
+        """
+        try:
+            from sentence_transformers import SentenceTransformer
+        except ImportError:
+            logger.debug("sentence-transformers not installed; skipping embeddings")
+            return
+
+        try:
+            model = SentenceTransformer("paraphrase-multilingual-MiniLM-L12-v2")
+        except Exception as e:
+            logger.warning("Failed to load sentence-transformers model: %s", e)
+            return
+
+        texts = []
+        keys: list[str] = []
+        for skill_id, profile in profiles.items():
+            text = self._compute_profile_text(profile)
+            if text:
+                texts.append(text)
+                keys.append(skill_id)
+
+        if not texts:
+            return
+
+        try:
+            embeddings = model.encode(texts, show_progress_bar=False)
+            for skill_id, vector in zip(keys, embeddings):
+                profiles[skill_id].embedding = (
+                    vector.tolist() if hasattr(vector, "tolist") else list(vector)
+                )
+        except Exception as e:
+            logger.warning("Failed to compute embeddings: %s", e)
 
     def _build_prompt(self, loaded_skill: Any) -> str:
         """Build the LLM analysis prompt for a single skill.
@@ -582,7 +656,7 @@ class SkillIndexer:
         index_path.parent.mkdir(parents=True, exist_ok=True)
 
         index_data = {
-            "version": "1.2.0",
+            "version": "1.3.0",
             "indexed_at": datetime.now(UTC).isoformat(),
             "scope": scope,
             "indexed_count": len(profiles),

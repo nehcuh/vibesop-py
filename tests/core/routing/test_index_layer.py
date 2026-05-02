@@ -171,3 +171,126 @@ class TestTryIndexLayer:
 
         assert match is None
         assert "not in candidates" in detail.reason.lower()
+
+
+class TestEmbeddingFallback:
+    """Test embedding cosine-similarity fallback when token overlap misses."""
+
+    def test_embedding_fallback_hits_when_tokens_miss(self, tmp_path: Path) -> None:
+        """Token overlap fails, but pre-computed embeddings yield a match."""
+        import sys
+
+        router = MagicMock()
+        router.project_root = tmp_path
+        router._config.index_match_threshold = 0.35
+        router._get_skill_source = lambda sid, ns: "builtin"
+        router._index_embedding_model = None  # Prevent MagicMock auto-creation
+
+        # Profile with an embedding — query shares no tokens with profile text
+        index_path = tmp_path / ".vibe" / "skill-index.json"
+        index_path.parent.mkdir(parents=True)
+        index_data = {
+            "version": "1.3.0",
+            "skills": {
+                "gstack/review": {
+                    "skill_id": "gstack/review",
+                    "scenarios": ["code review"],
+                    "query_patterns": ["review this code"],
+                    "differentiation": "",
+                    "confidence_boosters": ["review"],
+                    # Fake 3-dim embedding
+                    "embedding": [1.0, 0.0, 0.0],
+                }
+            },
+        }
+        index_path.write_text(json.dumps(index_data))
+
+        candidates = [
+            {"id": "gstack/review", "description": "Review code", "namespace": "gstack"}
+        ]
+
+        # Build a fake sentence_transformers module so no real model is loaded.
+        mock_model = MagicMock()
+        mock_model.encode.return_value = [[0.9, 0.1, 0.0]]
+
+        fake_st = MagicMock()
+        fake_st.SentenceTransformer.return_value = mock_model
+
+        with patch.dict(sys.modules, {"sentence_transformers": fake_st}):
+            match, detail = try_index_layer(
+                router, "audit the authentication flow", candidates
+            )
+
+        assert match is not None
+        assert match.skill_id == "gstack/review"
+        assert match.metadata.get("embedding_match") is True
+        assert detail.matched is True
+        assert "embedding match" in detail.reason.lower()
+
+    def test_no_embedding_skips_fallback(self, tmp_path: Path) -> None:
+        """When the index has no embeddings, fallback is skipped gracefully."""
+        router = MagicMock()
+        router.project_root = tmp_path
+        router._config.index_match_threshold = 0.35
+
+        index_path = tmp_path / ".vibe" / "skill-index.json"
+        index_path.parent.mkdir(parents=True)
+        index_data = {
+            "version": "1.2.0",
+            "skills": {
+                "gstack/review": {
+                    "skill_id": "gstack/review",
+                    "scenarios": ["code review"],
+                    "query_patterns": ["review this code"],
+                    "differentiation": "",
+                    "confidence_boosters": ["review"],
+                    # No embedding field
+                }
+            },
+        }
+        index_path.write_text(json.dumps(index_data))
+
+        match, detail = try_index_layer(router, "audit the auth flow", [])
+
+        assert match is None
+        assert detail.matched is False
+        assert "no embeddings" in detail.reason.lower()
+
+    def test_missing_sentence_transformers_skips_fallback(self, tmp_path: Path) -> None:
+        """When sentence-transformers is not installed, fallback is skipped."""
+        import sys
+
+        router = MagicMock()
+        router.project_root = tmp_path
+        router._config.index_match_threshold = 0.35
+        router._index_embedding_model = None  # Prevent MagicMock auto-creation
+
+        index_path = tmp_path / ".vibe" / "skill-index.json"
+        index_path.parent.mkdir(parents=True)
+        index_data = {
+            "version": "1.3.0",
+            "skills": {
+                "gstack/review": {
+                    "skill_id": "gstack/review",
+                    "scenarios": ["code review"],
+                    "query_patterns": ["review this code"],
+                    "differentiation": "",
+                    "confidence_boosters": ["review"],
+                    "embedding": [1.0, 0.0, 0.0],
+                }
+            },
+        }
+        index_path.write_text(json.dumps(index_data))
+
+        # Ensure sentence_transformers is NOT importable by removing any mock
+        # that earlier tests may have injected into sys.modules.
+        _saved = sys.modules.pop("sentence_transformers", None)
+        try:
+            match, detail = try_index_layer(router, "audit the auth flow", [])
+        finally:
+            if _saved is not None:
+                sys.modules["sentence_transformers"] = _saved
+
+        assert match is None
+        assert detail.matched is False
+        assert "not available" in detail.reason.lower()

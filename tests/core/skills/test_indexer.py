@@ -161,12 +161,12 @@ class TestClassifySkillSource:
 
 
 class TestSaveIndexSchema:
-    def test_save_writes_v1_2_0_schema(self, indexer: SkillIndexer) -> None:
+    def test_save_writes_v1_3_0_schema(self, indexer: SkillIndexer) -> None:
         profiles = {"a/b": _make_profile("a/b")}
         indexer._save_index(profiles, scope="global")
 
         data = json.loads(indexer.global_index_path.read_text(encoding="utf-8"))
-        assert data["version"] == "1.2.0"
+        assert data["version"] == "1.3.0"
         assert data["scope"] == "global"
         assert data["indexed_count"] == 1
         assert "indexed_at" in data
@@ -1486,3 +1486,102 @@ class TestProgressSuppression:
         assert "Indexing" not in captured.out
         assert "✅ Index built" not in captured.out
         assert "skills indexed" not in captured.out
+
+
+class TestEmbeddingSupport:
+    """Route B: sentence-transformers embedding integration in SkillProfile."""
+
+    def test_profile_to_dict_includes_embedding_when_set(self) -> None:
+        prof = _make_profile("a/b")
+        prof.embedding = [0.1, 0.2, 0.3]
+        d = prof.to_dict()
+        assert d["embedding"] == [0.1, 0.2, 0.3]
+
+    def test_profile_to_dict_omits_embedding_when_none(self) -> None:
+        prof = _make_profile("a/b")
+        prof.embedding = None
+        d = prof.to_dict()
+        assert "embedding" not in d
+
+    def test_profile_from_dict_parses_embedding(self) -> None:
+        d = {
+            "skill_id": "a/b",
+            "scenarios": ["s"],
+            "query_patterns": ["q"],
+            "differentiation": "d",
+            "confidence_boosters": ["c"],
+            "pack_owner": "",
+            "content_hash": "",
+            "embedding": [0.4, 0.5],
+        }
+        prof = SkillProfile.from_dict(d)
+        assert prof.embedding == [0.4, 0.5]
+
+    def test_profile_from_dict_missing_embedding_defaults_none(self) -> None:
+        d = {
+            "skill_id": "a/b",
+            "scenarios": ["s"],
+            "query_patterns": ["q"],
+            "differentiation": "d",
+            "confidence_boosters": ["c"],
+            "pack_owner": "",
+            "content_hash": "",
+        }
+        prof = SkillProfile.from_dict(d)
+        assert prof.embedding is None
+
+    def test_save_index_writes_v1_3_0_schema(self, indexer: SkillIndexer) -> None:
+        prof = _make_profile("a/b")
+        prof.embedding = [0.1, 0.2]
+        indexer._save_index({"a/b": prof}, scope="global")
+
+        data = json.loads(indexer.global_index_path.read_text(encoding="utf-8"))
+        assert data["version"] == "1.3.0"
+        assert data["skills"]["a/b"]["embedding"] == [0.1, 0.2]
+
+    def test_load_single_index_restores_embedding(self, indexer: SkillIndexer) -> None:
+        prof = _make_profile("a/b")
+        prof.embedding = [0.3, 0.4]
+        indexer._save_index({"a/b": prof}, scope="global")
+
+        loaded = indexer._load_single_index(indexer.global_index_path)
+        assert loaded["a/b"].embedding == [0.3, 0.4]
+
+    def test_compute_profile_text_concatenates_fields(self, indexer: SkillIndexer) -> None:
+        prof = SkillProfile(
+            skill_id="x",
+            scenarios=["scenario one", "scenario two"],
+            query_patterns=["query a", "query b"],
+            differentiation="diff sentence",
+            confidence_boosters=["boost1", "boost2"],
+        )
+        text = indexer._compute_profile_text(prof)
+        assert "scenario one" in text
+        assert "query a" in text
+        assert "diff sentence" in text
+        assert "boost1" in text
+
+    def test_compute_embeddings_skips_when_library_missing(self, indexer: SkillIndexer) -> None:
+        """If sentence-transformers is not installed, embeddings stay None."""
+        prof = _make_profile("a/b")
+        indexer._compute_embeddings({"a/b": prof})
+        assert prof.embedding is None
+
+    def test_compute_embeddings_uses_fake_module(self, indexer: SkillIndexer) -> None:
+        """When a fake sentence_transformers module is present, embeddings are computed."""
+        import sys
+        from unittest.mock import MagicMock
+
+        prof = _make_profile("a/b")
+        prof.scenarios = ["scenario one"]
+
+        mock_model = MagicMock()
+        mock_model.encode.return_value = [[0.1, 0.2, 0.3]]
+
+        fake_st = MagicMock()
+        fake_st.SentenceTransformer.return_value = mock_model
+
+        with patch.dict(sys.modules, {"sentence_transformers": fake_st}):
+            indexer._compute_embeddings({"a/b": prof})
+
+        assert prof.embedding == [0.1, 0.2, 0.3]
