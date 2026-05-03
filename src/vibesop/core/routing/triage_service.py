@@ -121,7 +121,7 @@ class TriageService:
             response = self._llm.call(
                 prompt=prompt,
                 max_tokens=self._config.ai_triage_max_tokens,
-                temperature=0.1,
+                temperature=0.0,
             )
             latency_ms = (time.perf_counter() - start_time) * 1000
 

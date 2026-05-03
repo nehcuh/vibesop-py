@@ -1,8 +1,15 @@
 ---
 id: builtin/riper-workflow
 name: riper-workflow
-description: Structured 5-phase development workflow - Research, Innovate, Plan, Execute, Review
-tags: [riper, workflow, research, plan, execute, review, develop, 工作流, 研发, 规划]
+description: Use ONLY when the user explicitly requests the RIPER structured 5-phase development workflow (Research, Innovate, Plan, Execute, Review). Not for generic analysis, planning, or review tasks.
+tags: [riper, riper-workflow, 5-phase, structured-workflow, riper五阶段]
+triggers:
+  - "use riper"
+  - "riper workflow"
+  - "riper 工作流"
+  - "5 phase workflow"
+  - "五阶段工作流"
+  - "structured workflow"
 version: 1.0.0
 commands:
   - riper-research

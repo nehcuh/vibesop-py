@@ -19,7 +19,7 @@ Prefer small, reversible, single-purpose changes.
 ### 3. Progressive Disclosure
 
 Use AI-powered skill routing before manual selection:
-1. Call `vibe route "<request>"`
+1. Call `vibe route "<original-user-query>"` using the user's EXACT words — never rewrite, summarize, or translate before routing
 2. Read the recommended skill file
 3. Follow the skill's steps
 4. Complete with verification

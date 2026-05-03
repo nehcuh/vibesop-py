@@ -587,7 +587,7 @@ class SkillIndexer:
             response = llm.call(
                 prompt=prompt,
                 max_tokens=800,
-                temperature=0.1,
+                temperature=0.0,
             )
             profile = self._parse_profile(response.content, skill_id)
             if profile is not None:

@@ -188,6 +188,36 @@ class TestDecomposeWithSkillCatalog:
         assert "Available skills" not in prompt
 
 
+class TestDeterministicDecomposition:
+    """Decomposition must be deterministic — temperature=0.0 is mandatory."""
+
+    def test_llm_called_with_zero_temperature(self) -> None:
+        """Temperature must be 0.0 to eliminate sampling variance across runs."""
+        mock_llm = Mock()
+        mock_llm.call.return_value = Mock(
+            content='{"tasks": [{"intent": "x", "query": "do x"}]}'
+        )
+
+        decomposer = TaskDecomposer(llm_client=mock_llm)
+        decomposer.decompose("do x")
+
+        _, kwargs = mock_llm.call.call_args
+        assert kwargs.get("temperature") == 0.0
+
+    def test_fallback_decomposition_is_deterministic(self) -> None:
+        """Rule-based fallback must return identical results for identical input."""
+        decomposer = TaskDecomposer(llm_client=None)
+        query = "分析系统架构并优化数据库性能"
+
+        result1 = decomposer.decompose(query)
+        result2 = decomposer.decompose(query)
+
+        assert len(result1) == len(result2)
+        for a, b in zip(result1, result2):
+            assert a.intent == b.intent
+            assert a.query == b.query
+
+
 class TestDeriveIntentFallback:
     """The decomposer must not produce SubTasks with empty intent.
 

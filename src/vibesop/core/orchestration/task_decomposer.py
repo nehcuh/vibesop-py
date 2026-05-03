@@ -90,7 +90,7 @@ class TaskDecomposer:
         if self._llm is None:
             logger.warning("LLM not initialized for task decomposition")
             return []
-        response = self._llm.call(prompt, max_tokens=500, temperature=0.1)
+        response = self._llm.call(prompt, max_tokens=500, temperature=0.0)
         content = getattr(response, "content", str(response))
 
         # Try structured JSON parsing first
