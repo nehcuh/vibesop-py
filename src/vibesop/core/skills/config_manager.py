@@ -81,6 +81,9 @@ class SkillConfig:
     auto_configured: bool = False
     confidence: float = 0.5
 
+    # 弃用原因
+    deprecation_reason: str | None = None
+
 
 class SkillConfigManager:
     """技能配置管理器.

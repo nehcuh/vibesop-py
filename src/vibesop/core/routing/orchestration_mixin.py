@@ -1,3 +1,4 @@
+# pyright: reportPrivateUsage=false
 """Router orchestration mixin - multi-intent detection and execution planning.
 
 Extracted from UnifiedRouter to reduce class size and separate concerns.
@@ -114,7 +115,7 @@ class RouterOrchestrationMixin:
     def _get_plan_builder(self) -> PlanBuilder:
         host = cast("_OrchestrationHost", self)
         if host._plan_builder is None:
-            host._plan_builder = PlanBuilder(router=self)
+            host._plan_builder = PlanBuilder(router=self)  # pyright: ignore[reportArgumentType]
         return host._plan_builder
 
     def _get_plan_tracker(self) -> PlanTracker:

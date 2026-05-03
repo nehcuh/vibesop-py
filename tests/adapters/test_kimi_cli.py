@@ -1,6 +1,7 @@
 """Tests for KimiCliAdapter."""
 
 from pathlib import Path
+from typing import ClassVar
 
 from vibesop.adapters.kimi_cli import KimiCliAdapter
 from vibesop.adapters.models import (
@@ -416,7 +417,7 @@ class TestKimiCLISkillContentRender:
             description = "Code review"
             version = "1.0"
             skill_type = "standard"
-            tags = ["review"]
+            tags: ClassVar[list[str]] = ["review"]
             trigger_when = "When asked to review code"
 
         result = type("Result", (), {"add_file": lambda *a: None, "add_error": lambda *a: None})()

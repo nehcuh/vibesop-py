@@ -82,7 +82,7 @@ class TestDegradationManager:
         config = RoutingConfig(degradation_auto_threshold=0.60)
         mgr = DegradationManager(config)
         primary = _make_route(confidence=0.60)
-        level, result = mgr.evaluate(primary)
+        level, _result = mgr.evaluate(primary)
         assert level == DegradationLevel.AUTO
 
     def test_boundary_suggest_threshold_exact(self) -> None:
@@ -90,7 +90,7 @@ class TestDegradationManager:
         config = RoutingConfig(degradation_suggest_threshold=0.40)
         mgr = DegradationManager(config)
         primary = _make_route(confidence=0.40)
-        level, result = mgr.evaluate(primary)
+        level, _result = mgr.evaluate(primary)
         assert level == DegradationLevel.SUGGEST
 
     def test_boundary_degrade_threshold_exact(self) -> None:
@@ -98,7 +98,7 @@ class TestDegradationManager:
         config = RoutingConfig(degradation_degrade_threshold=0.20)
         mgr = DegradationManager(config)
         primary = _make_route(confidence=0.20)
-        level, result = mgr.evaluate(primary)
+        level, _result = mgr.evaluate(primary)
         assert level == DegradationLevel.DEGRADE
 
     def test_custom_thresholds_respected(self) -> None:

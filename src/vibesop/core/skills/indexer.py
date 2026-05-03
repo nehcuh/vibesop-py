@@ -192,7 +192,7 @@ class SkillIndexer:
 
         try:
             self._llm_provider = create_provider(
-                provider=config.provider,
+                provider=config.provider,  # pyright: ignore[reportArgumentType]
                 api_key=config.api_key,
                 base_url=config.api_base,
             )
@@ -505,7 +505,9 @@ class SkillIndexer:
         The INDEX layer will fall back to token-overlap matching.
         """
         try:
-            from sentence_transformers import SentenceTransformer
+            from sentence_transformers import (
+                SentenceTransformer,  # pyright: ignore[reportMissingImports]
+            )
         except ImportError:
             logger.debug("sentence-transformers not installed; skipping embeddings")
             return
@@ -529,7 +531,7 @@ class SkillIndexer:
 
         try:
             embeddings = model.encode(texts, show_progress_bar=False)
-            for skill_id, vector in zip(keys, embeddings):
+            for skill_id, vector in zip(keys, embeddings, strict=True):
                 profiles[skill_id].embedding = (
                     vector.tolist() if hasattr(vector, "tolist") else list(vector)
                 )

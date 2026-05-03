@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-from unittest.mock import patch
 
 from vibesop.core.routing.scenario_layer import (
     _matches_keyword,

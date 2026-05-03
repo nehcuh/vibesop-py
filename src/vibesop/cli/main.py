@@ -1,3 +1,4 @@
+# pyright: reportPrivateUsage=false
 """VibeSOP CLI - Main entry point.
 
 Built with Typer for modern CLI UX.

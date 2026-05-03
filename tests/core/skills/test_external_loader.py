@@ -3,10 +3,11 @@
 from pathlib import Path
 from unittest.mock import MagicMock
 
-import pytest
-
-from vibesop.core.skills.external_loader import ExternalSkillLoader, ExternalSkillMetadata, SkillSource
-from vibesop.security.exceptions import SecurityError
+from vibesop.core.skills.external_loader import (
+    ExternalSkillLoader,
+    ExternalSkillMetadata,
+    SkillSource,
+)
 
 
 class TestSkillSource:

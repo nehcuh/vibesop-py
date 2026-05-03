@@ -55,7 +55,7 @@ class TestFilterRoutable:
         """DEPRECATED lifecycle is NOT routable (filtered out)."""
         mgr = CandidateManager(tmp_path)
         candidates = [{"id": "dep-skill", "enabled": True, "lifecycle": "deprecated", "scope": "global"}]
-        filtered, warnings = mgr.filter_routable(candidates)
+        filtered, _warnings = mgr.filter_routable(candidates)
         # DEPRECATED is not routable — filtered out entirely
         assert len(filtered) == 0
 
@@ -184,13 +184,13 @@ class TestCacheInvalidation:
 
     def test_deep_skill_changes_hash(self, tmp_path: Path) -> None:
         """Adding a SKILL.md at depth >= 2 must change _compute_paths_hash."""
-        mgr = CandidateManager(tmp_path)
         search_path = tmp_path / "skills"
         search_path.mkdir()
         deep_dir = search_path / "pack" / "sub"
         deep_dir.mkdir(parents=True)
         (deep_dir / "SKILL.md").write_text("id: old\n")
 
+        mgr = CandidateManager(tmp_path)
         hash_before = mgr._compute_paths_hash([search_path])
 
         # Add a new skill two levels deep
@@ -227,7 +227,6 @@ class TestCacheInvalidation:
 
     def test_skill_mtimes_captures_deep_files(self, tmp_path: Path) -> None:
         """_compute_skill_mtimes must include files below depth 1."""
-        mgr = CandidateManager(tmp_path)
         search_path = tmp_path / "skills"
         search_path.mkdir()
         deep_dir = search_path / "pack" / "sub"

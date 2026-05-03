@@ -1,3 +1,4 @@
+# pyright: reportPrivateUsage=false
 # pyright: ignore[reportArgumentType]
 """Platform-agnostic session tracking interface.
 

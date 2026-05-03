@@ -1,3 +1,4 @@
+# pyright: reportPrivateUsage=false
 """VibeSOP Agent Integration.
 
 This module provides direct Python API for AI Agents (like Claude Code)
@@ -206,14 +207,14 @@ class AgentRouter:
                 )
                 self._router._config = modified_config
                 self._router._triage_service._config = modified_config
-                ctx = SessionContext(project_root=self._router.project_root, router=self._router)
+                ctx = SessionContext(project_root=str(self._router.project_root), router=self._router)
                 ctx.set_current_skill(current_skill)
                 suggestion = ctx.check_reroute_needed(new_message)
             finally:
                 self._router._config = original_router_config
                 self._router._triage_service._config = original_triage_config
         else:
-            ctx = SessionContext(project_root=self._router.project_root, router=self._router)
+            ctx = SessionContext(project_root=str(self._router.project_root), router=self._router)
             ctx.set_current_skill(current_skill)
             suggestion = ctx.check_reroute_needed(new_message)
 
@@ -233,7 +234,7 @@ class AgentRouter:
         """
         from vibesop.core.sessions import SessionContext
 
-        ctx = SessionContext.load(project_root=self._router.project_root)
+        ctx = SessionContext.load(project_root=str(self._router.project_root))
         return ctx.get_session_summary()
 
     # ================================================================

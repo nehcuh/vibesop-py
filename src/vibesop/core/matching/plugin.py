@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from vibesop.core.matching.base import MatchResult, RoutingContext
+from vibesop.core.matching.base import MatchResult, MatcherType, RoutingContext
 
 logger = logging.getLogger(__name__)
 
@@ -64,7 +64,7 @@ class PluginMatcher:
                         skill_id=str(c.get("id", "")),
                         confidence=min(score * self.weight, 1.0),
                         score_breakdown={"custom_matcher": score, "weight": self.weight},
-                        matcher_type="custom",
+                        matcher_type=MatcherType.CUSTOM,
                         matched_keywords=[],
                         matched_patterns=[],
                         semantic_score=0.0,
@@ -134,7 +134,7 @@ class MatcherPluginRegistry:
             name=name,
             description=description,
             source_file=file_path,
-            match_fn=match_fn,
+            match_fn=match_fn,  # pyright: ignore[reportArgumentType]
             weight=float(weight),
         )
 

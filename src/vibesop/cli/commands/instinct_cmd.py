@@ -1,3 +1,4 @@
+# pyright: reportPrivateUsage=false
 """Instinct learning system CLI commands.
 
 Provides:

@@ -107,6 +107,10 @@ class SkillRoute(BaseModel):
         default_factory=dict,
         description="Additional routing metadata",
     )
+    score_breakdown: dict[str, float] = Field(
+        default_factory=dict,
+        description="Per-matcher score contributions",
+    )
 
     # Note: min_length=1 on the Field already enforces non-empty skill_id
     # No additional field_validator needed
@@ -660,6 +664,9 @@ class StepManifest:
     output_slot: str = ""
     completion_marker: str = ""
     instruction: str = ""
+    intent: str = ""
+    input_query: str = ""
+    dependencies: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -672,6 +679,9 @@ class StepManifest:
             "output_slot": self.output_slot,
             "completion_marker": self.completion_marker,
             "instruction": self.instruction,
+            "intent": self.intent,
+            "input_query": self.input_query,
+            "dependencies": self.dependencies,
         }
 
     @staticmethod

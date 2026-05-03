@@ -1,5 +1,6 @@
 """Tests for PathSafety."""
 
+import contextlib
 from pathlib import Path
 
 import pytest
@@ -472,7 +473,5 @@ class TestPathSafetyAdditionalEdgeCases:
         safety = PathSafety()
         # Null byte isn't caught by current logic but may be suspicious
         # depending on OS; just ensure it doesn't crash.
-        try:
-            safety.validate_filename("file\x00.txt")
-        except ValueError:
-            pass  # acceptable
+        with contextlib.suppress(ValueError):
+            safety.validate_filename("file\x00.txt")  # acceptable

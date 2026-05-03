@@ -53,7 +53,7 @@ class CandidateManager:
         for sp in sorted(search_paths):
             if not sp.exists():
                 continue
-            skill_files = sorted(sp.rglob("SKILL.md"), key=lambda p: str(p))
+            skill_files = sorted(sp.rglob("SKILL.md"), key=str)
             for skill_file in skill_files:
                 h.update(str(skill_file).encode())
                 try:

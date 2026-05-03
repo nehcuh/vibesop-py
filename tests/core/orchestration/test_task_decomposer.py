@@ -213,7 +213,7 @@ class TestDeterministicDecomposition:
         result2 = decomposer.decompose(query)
 
         assert len(result1) == len(result2)
-        for a, b in zip(result1, result2):
+        for a, b in zip(result1, result2, strict=True):
             assert a.intent == b.intent
             assert a.query == b.query
 

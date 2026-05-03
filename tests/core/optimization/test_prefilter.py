@@ -1,8 +1,7 @@
 """Tests for candidate prefilter."""
 
-import pytest
 
-from vibesop.core.optimization.prefilter import CandidatePrefilter, COMPLEXITY_INDICATORS
+from vibesop.core.optimization.prefilter import COMPLEXITY_INDICATORS, CandidatePrefilter
 
 
 class TestCandidatePrefilterInit:

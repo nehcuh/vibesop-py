@@ -43,11 +43,13 @@ class PlatformAdapter(ABC):
     # Safety validators
     _path_safety: PathSafety
     _security_scanner: SecurityScanner
+    _project_root: Path
 
     def __init__(self) -> None:
         """Initialize the platform adapter."""
         self._path_safety = PathSafety()
         self._security_scanner = SecurityScanner()
+        self._project_root = Path().resolve()
 
     @property
     @abstractmethod

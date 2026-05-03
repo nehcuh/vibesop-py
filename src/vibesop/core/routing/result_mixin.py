@@ -1,3 +1,4 @@
+# pyright: reportPrivateUsage=false
 """Router result building and post-match enrichment mixin.
 
 Extracted from UnifiedRouter to reduce class size and separate concerns.
@@ -133,7 +134,7 @@ class RouterResultMixin:
                     duration_ms=(time.perf_counter() - start_time) * 1000,
                 )
 
-        if primary is None:
+        if primary is None:  # pyright: ignore[reportUnnecessaryComparison]
             return self._build_fallback_result(
                 query=original_query,
                 candidates=[],

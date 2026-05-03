@@ -1,6 +1,7 @@
 """Tests for Claude Code adapter."""
 
 from pathlib import Path
+from typing import ClassVar
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -186,7 +187,7 @@ class TestSkillContentRender:
             description = "Code review"
             version = "1.0"
             skill_type = "standard"
-            tags = ["review"]
+            tags: ClassVar[list[str]] = ["review"]
             trigger_when = "When asked to review code"
 
         skill = _Skill()
@@ -244,7 +245,7 @@ class TestSkillContentRender:
             description = "Not installed"
             version = "1.0"
             skill_type = "standard"
-            tags = []
+            tags: ClassVar[list[str]] = []
             trigger_when = "never"
 
         meta = ManifestMetadata(

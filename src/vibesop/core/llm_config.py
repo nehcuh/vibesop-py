@@ -196,7 +196,7 @@ class AgentEnvironmentDetector:
 
                     return LLMConfig(
                         provider="anthropic",
-                        model=claude_model,
+                        model=str(claude_model),
                         api_key=None,  # Agent 会管理 API key
                         source=LLMSource.AGENT_ENV,
                         confidence=0.95,  # Agent 配置置信度高

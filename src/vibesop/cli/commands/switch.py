@@ -174,7 +174,7 @@ def switch(
     console.print(f"[dim]Destination: {destination or 'platform default'}[/dim]\n")
 
     # Import and call the actual deploy function
-    from vibesop.cli.commands.deploy import _execute_deploy
+    from vibesop.cli.commands.deploy import _execute_deploy  # pyright: ignore[reportPrivateUsage]
 
     _execute_deploy(
         target=platform,

@@ -50,6 +50,13 @@ class RoutingCore(RoutingConfigProvider, RoutingCandidateProvider, Protocol):
 
     _triage_service: TriageService
     _config: Any
+    _llm: Any
+    _cost_tracker: Any
+    _scenario_cache: Any
+    _index_embedding_model: Any
+    _index_layer_cache: Any
+    _index_profile_tokens: Any
+    _matchers: list[tuple[Any, Any]]
     project_root: Path
 
     def _record_layer(self, layer: Any) -> None: ...

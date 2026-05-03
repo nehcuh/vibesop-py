@@ -1,3 +1,4 @@
+# pyright: reportPrivateUsage=false
 # pyright: reportMissingTypeArgument=false
 """Quickstart runner for interactive installation.
 

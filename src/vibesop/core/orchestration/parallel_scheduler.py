@@ -11,6 +11,8 @@ import logging
 import time
 from typing import TYPE_CHECKING, Any
 
+from vibesop.core.models import StepStatus
+
 if TYPE_CHECKING:
     from collections.abc import Callable
 
@@ -137,14 +139,14 @@ class ParallelScheduler:
             Step execution result
         """
         logger.debug("Executing step %s: %s", step.step_id, step.skill_id)
-        step.status = "in_progress"
+        step.status = StepStatus.IN_PROGRESS
 
         try:
             result = await executor(step)
-            step.status = "completed"
+            step.status = StepStatus.COMPLETED
             return result
         except Exception as e:
-            step.status = "failed"
+            step.status = StepStatus.FAILED
             logger.warning("Step %s failed: %s", step.step_id, e)
             raise
 

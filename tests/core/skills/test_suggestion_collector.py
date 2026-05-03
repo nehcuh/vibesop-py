@@ -104,7 +104,7 @@ class TestSkillSuggestionCollector:
     """Test SkillSuggestionCollector lifecycle."""
 
     def test_init_creates_directory(self, tmp_path: Path):
-        collector = SkillSuggestionCollector(storage_dir=tmp_path)
+        SkillSuggestionCollector(storage_dir=tmp_path)
         assert tmp_path.exists()
 
     def test_add_from_pattern(self, tmp_path: Path):

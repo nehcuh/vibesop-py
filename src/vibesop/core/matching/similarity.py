@@ -145,13 +145,13 @@ class SimilarityCalculator:
         # Check if numpy is available for vector operations
         if np is not None and isinstance(query, np.ndarray):
             # Numpy array (semantic/similarity.py style)
-            return self._calculate_numpy_query(query, candidates)
+            return self._calculate_numpy_query(query, candidates)  # pyright: ignore[reportArgumentType]
 
         # String or list input - tokenize and convert to dict
         from vibesop.core.matching.tokenizers import tokenize
 
         query_tokens = tokenize(query) if isinstance(query, str) else query
-        query_vec = self._tokens_to_dict(query_tokens)
+        query_vec = self._tokens_to_dict(query_tokens)  # pyright: ignore[reportArgumentType]
 
         candidate_vecs = []
         for candidate in candidates:

@@ -438,7 +438,7 @@ class ConfigManager:
         )
 
         # 2. Global config (~/.vibe/config.toml or ~/.vibe/config.yaml)
-        global_config_path = ConfigSource._resolve_config_path(Path.home() / ".vibe", "config")
+        global_config_path = ConfigSource._resolve_config_path(Path.home() / ".vibe", "config")  # pyright: ignore[reportPrivateUsage]
         if global_config_path:
             source = ConfigSource(
                 priority=ConfigSourcePriority.GLOBAL,
@@ -449,7 +449,7 @@ class ConfigManager:
             self._sources[ConfigSourcePriority.GLOBAL] = source
 
         # 3. Project config (.vibe/config.toml or .vibe/config.yaml)
-        project_config_path = ConfigSource._resolve_config_path(self.project_root / ".vibe", "config")
+        project_config_path = ConfigSource._resolve_config_path(self.project_root / ".vibe", "config")  # pyright: ignore[reportPrivateUsage]
         if project_config_path:
             source = ConfigSource(
                 priority=ConfigSourcePriority.PROJECT,

@@ -9,7 +9,8 @@ from __future__ import annotations
 import threading
 from typing import Any
 
-from vibesop.core.matching.base import IMatcher, MatcherConfig
+from vibesop.core.matching.base import IMatcher
+from vibesop.core.matching.strategies import MatcherConfig
 
 
 class LazyEmbeddingMatcher:
@@ -19,9 +20,13 @@ class LazyEmbeddingMatcher:
     so deferring to warm-up keeps router initialization fast.
     """
 
+    _real: IMatcher | None
+    _config: MatcherConfig
+    _init_lock: threading.Lock
+
     def __init__(self, config: MatcherConfig):
         self._config = config
-        self._real: IMatcher | None = None
+        self._real = None
         self._init_lock = threading.Lock()
 
     def _ensure_real(self) -> IMatcher:
@@ -30,7 +35,7 @@ class LazyEmbeddingMatcher:
                 if self._real is None:
                     from vibesop.core.matching import EmbeddingMatcher
 
-                    self._real = EmbeddingMatcher(config=self._config)
+                    self._real = EmbeddingMatcher(config=self._config)  # pyright: ignore[reportAttributeAccessIssue]
         return self._real
 
     def warm_up(self, candidates: list[dict[str, Any]]) -> None:

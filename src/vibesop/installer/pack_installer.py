@@ -44,6 +44,21 @@ class PackInstaller:
     # Central storage for all external skills
     CENTRAL_STORAGE: ClassVar[Path] = Path.home() / ".config" / "skills"
 
+    def install_skill_from_github(self, skill_id: str) -> tuple[bool, str]:
+        """Install a single skill from its GitHub repository.
+
+        Args:
+            skill_id: Skill identifier in "namespace/name" format
+
+        Returns:
+            Tuple of (success, message)
+        """
+        try:
+            success, msg = self.install_pack(skill_id.split("/", maxsplit=1)[0] if "/" in skill_id else skill_id)
+            return success, msg
+        except Exception as e:
+            return False, str(e)
+
     # Platform directories that receive symlinks
     PLATFORM_PATHS: ClassVar[list[Path]] = [
         Path.home() / ".claude" / "skills",

@@ -43,7 +43,7 @@ class SkillClusterIndex:
     def _cluster_by_tfidf(self, skills: list[dict[str, Any]]) -> dict[str, list[str]]:
         try:
             import numpy as np
-            from sklearn.cluster import KMeans
+            from sklearn.cluster import KMeans  # pyright: ignore[reportMissingImports]
 
             from vibesop.core.matching.tfidf import TFIDFCalculator
             from vibesop.core.matching.tokenizers import tokenize
@@ -69,7 +69,9 @@ class SkillClusterIndex:
                 km = KMeans(n_clusters=k, random_state=42, n_init=10)
                 labels = km.fit_predict(vector_array)
                 try:
-                    from sklearn.metrics import silhouette_score
+                    from sklearn.metrics import (
+                        silhouette_score,  # pyright: ignore[reportMissingImports]
+                    )
 
                     score = float(silhouette_score(vector_array, labels))
                 except ImportError:

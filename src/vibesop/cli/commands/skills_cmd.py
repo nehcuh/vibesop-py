@@ -980,7 +980,7 @@ def report(
 
 def scope(
     skill_id: str = typer.Argument(..., help="Skill ID"),
-    set_scope: str = typer.Option(
+    set_scope: str | None = typer.Option(
         None,
         "--set",
         help="Set scope: global, project, or session",
@@ -1319,7 +1319,7 @@ def lifecycle(
         raise typer.Exit(1)
 
     # Update state
-    config.lifecycle = set_state
+    config.lifecycle = SkillLifecycleState(set_state)
     if reason:
         config.deprecation_reason = reason
 
@@ -1442,9 +1442,9 @@ def skill_optimize(
     """
     try:
         from vibesop.core.feedback import FeedbackCollector
-    except ImportError:
+    except ImportError as err:
         console.print("[yellow]Feedback system not available[/yellow]")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from err
 
     collector = FeedbackCollector()
     mismatches = collector.get_top_mismatches(top_n=100)
@@ -1478,7 +1478,7 @@ def skill_optimize(
         "help",
     }
 
-    word_counts: Counter = Counter()
+    word_counts: Counter[str] = Counter()
     for query in candidate_queries:
         words = re.findall(r"\w+", query.lower())
         for word in words:

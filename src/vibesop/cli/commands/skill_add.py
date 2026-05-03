@@ -1,3 +1,4 @@
+# pyright: reportPrivateUsage=false
 # pyright: ignore[reportPrivateUsage, reportMissingParameterType]
 """VibeSOP skill add command - One-click smart skill installation.
 
@@ -535,7 +536,7 @@ def _manual_configure_skill(metadata: SkillMetadata, scope: str) -> None:
             questionary.Choice("🟡 Medium (50) - Default priority", value=50),
             questionary.Choice("🟢 Low (25) - Use only if no better match", value=25),
         ],
-        default=50,
+        default=questionary.Choice("🟡 Medium (50) - Default priority", value=50),
     ).ask()
 
     # Ask about routing

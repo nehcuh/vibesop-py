@@ -1,7 +1,6 @@
 """Tests for SkillStorage."""
 
 from pathlib import Path
-from unittest.mock import patch
 
 import pytest
 
@@ -129,7 +128,7 @@ class TestSkillStorageReal:
         (source / "SKILL.md").write_text("# Test Skill")
 
         try:
-            success, msg = storage.install_skill("test-skill", source)
+            success, _msg = storage.install_skill("test-skill", source)
             assert success is True
             assert (storage.get_skill_path("test-skill") / "SKILL.md").exists()
         finally:
@@ -172,7 +171,7 @@ class TestSkillStorageReal:
         try:
             storage.install_skill("test", source)
             assert storage.skill_exists("test") is True
-            success, msg = storage.remove_skill("test")
+            success, _msg = storage.remove_skill("test")
             assert success is True
             assert storage.skill_exists("test") is False
         finally:
@@ -205,6 +204,6 @@ class TestConvenienceFunctions:
         assert "not found" in msg.lower()
 
     def test_link_all_to_platform_no_skills(self, tmp_path: Path):
-        installed, linked, messages = link_all_to_platform("claude-code", project_root=tmp_path)
+        installed, linked, _messages = link_all_to_platform("claude-code", project_root=tmp_path)
         assert installed == 0
         assert linked == 0

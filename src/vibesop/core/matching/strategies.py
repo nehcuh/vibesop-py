@@ -405,7 +405,9 @@ class EmbeddingMatcher:
             return
 
         try:
-            from sentence_transformers import SentenceTransformer
+            from sentence_transformers import (
+                SentenceTransformer,  # pyright: ignore[reportMissingImports]
+            )
 
             self._model = SentenceTransformer(self._model_name)
         except ImportError:

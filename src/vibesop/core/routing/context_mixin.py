@@ -1,3 +1,4 @@
+# pyright: reportPrivateUsage=false
 """Router context enrichment and session management mixin.
 
 Extracted from UnifiedRouter to reduce class size and separate concerns.
@@ -64,7 +65,7 @@ class RouterContextMixin:
             host._session_context = SessionContext.load(
                 session_id="default",  # resolved internally via _resolve_session_id
                 project_root=str(host.project_root),
-                router=self,
+                router=self,  # pyright: ignore[reportArgumentType]
             )
         return host._session_context
 

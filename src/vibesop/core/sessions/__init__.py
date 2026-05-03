@@ -37,7 +37,7 @@ from vibesop.core.sessions.tracker import (
     GenericSessionTracker,
     HookBasedSessionTracker,
     SessionTracker,
-    _detect_platform,
+    _detect_platform,  # pyright: ignore[reportPrivateUsage]
     get_tracker,
 )
 

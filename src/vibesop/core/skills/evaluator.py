@@ -47,6 +47,7 @@ class SkillEvaluation:
     health_score: float = 0.0
     avg_confidence: float = 0.0
     user_score: float = 0.0
+    success_rate: float = 0.0
     last_used: str | None = None
 
     @property
@@ -247,7 +248,7 @@ class RoutingEvaluator:
         skill_ids: set[str] = set()
         for record in self._feedback.get_records():
             skill_ids.add(record.routed_skill)
-        skill_ids.update(self._preferences._storage.skill_scores.keys())
+        skill_ids.update(self._preferences._storage.skill_scores.keys())  # pyright: ignore[reportPrivateUsage]
         # Also include skills with execution feedback
         for record in self._execution.get_records():
             skill_ids.add(record.skill_id)

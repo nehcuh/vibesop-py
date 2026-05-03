@@ -1,6 +1,5 @@
 """Tests for core type definitions."""
 
-import pytest
 
 from vibesop.core.types import (
     BoostAmount,

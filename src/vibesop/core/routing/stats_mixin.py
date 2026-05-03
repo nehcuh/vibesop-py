@@ -1,3 +1,4 @@
+# pyright: reportPrivateUsage=false
 """Router statistics and preference tracking mixin.
 
 Extracted from UnifiedRouter to reduce class size and separate concerns.

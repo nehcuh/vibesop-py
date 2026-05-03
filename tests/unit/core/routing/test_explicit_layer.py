@@ -38,7 +38,7 @@ class TestCheckExplicitOverride:
     def test_verb_run_override(self) -> None:
         """'run <skill_id>' triggers explicit override."""
         candidates = [{"id": "benchmark"}, {"id": "review"}]
-        skill_id, cleaned = check_explicit_override(
+        skill_id, _cleaned = check_explicit_override(
             "Run benchmark on this code", candidates
         )
         assert skill_id == "benchmark"

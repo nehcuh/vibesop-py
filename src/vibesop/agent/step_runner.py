@@ -14,7 +14,9 @@ Entry points:
 
 from __future__ import annotations
 
+import contextlib
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -260,9 +262,9 @@ class StepRunner:
 
     def execute_all(
         self,
-        step_executor: callable,
-        on_step_complete: callable | None = None,
-        on_step_error: callable | None = None,
+        step_executor: Callable[..., Any],
+        on_step_complete: Callable[..., Any] | None = None,
+        on_step_error: Callable[..., Any] | None = None,
         fail_fast: bool = False,
     ) -> dict[str, Any]:
         """Execute all pending steps in topological order.
@@ -335,10 +337,8 @@ class StepRunner:
                         return (s, e)
 
                 old_loop = None
-                try:
+                with contextlib.suppress(RuntimeError):
                     old_loop = asyncio.get_event_loop()
-                except RuntimeError:
-                    pass
 
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
@@ -361,7 +361,11 @@ class StepRunner:
                     loop.close()
 
                 should_continue = True
-                for step, step_result in batch_results:
+                for item in batch_results:
+                    if isinstance(item, Exception):
+                        # Should not happen with return_exceptions=True, but guard anyway
+                        continue
+                    step, step_result = item  # pyright: ignore[reportGeneralTypeIssues]
                     if isinstance(step_result, Exception):
                         self.mark_failed(step, str(step_result))
                         if on_step_error:
@@ -434,7 +438,7 @@ class StepRunner:
             self._tracker.update_step_status(
                 plan_id=self._plan.plan_id,
                 step_id=step.step_id,
-                status=status,
+                status=status,  # pyright: ignore[reportArgumentType]
                 result_summary=step.result_summary,
             )
         except (OSError, ValueError, RuntimeError) as e:

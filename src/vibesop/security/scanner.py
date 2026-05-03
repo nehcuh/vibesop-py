@@ -207,7 +207,7 @@ class SecurityScanner:
                                If None, uses default analyzer.
             enable_heuristics: Whether to enable heuristic analysis
         """
-        self.rules = rules if rules is not None else get_default_rules()
+        object.__setattr__(self, "rules", rules if rules is not None else get_default_rules())
         self.heuristic_analyzer = (
             heuristic_analyzer if heuristic_analyzer is not None else DefaultHeuristicAnalyzer()
         )

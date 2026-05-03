@@ -4,7 +4,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from vibesop.core.matching.base import MatcherType, MatchResult
+from vibesop.core.matching.base import MatchResult, MatcherType
 from vibesop.core.optimization.preference_boost import PreferenceBooster
 
 

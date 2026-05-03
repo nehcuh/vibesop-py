@@ -1,7 +1,5 @@
 """Tests for routing layer types and models."""
 
-import pytest
-from pydantic import ValidationError
 
 from vibesop.core.models import RoutingLayer, SkillRoute
 from vibesop.core.routing.layers import IRouteLayer, LayerResult

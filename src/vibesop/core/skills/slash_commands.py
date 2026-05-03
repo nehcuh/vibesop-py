@@ -307,7 +307,7 @@ class SlashCommandHandler:
             from vibesop.core.matching import RoutingContext
 
             context = RoutingContext()
-            if strategy:
+            if strategy and isinstance(strategy, str):
                 context.strategy_hint = strategy
 
             result = self._routing_service.orchestrate(query, context=context)
@@ -425,7 +425,7 @@ class SlashCommandHandler:
             from vibesop.core.matching import RoutingContext
 
             context = RoutingContext()
-            if strategy:
+            if strategy and isinstance(strategy, str):
                 context.strategy_hint = strategy
 
             result = self._routing_service.orchestrate(query, context=context)

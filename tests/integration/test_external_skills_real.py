@@ -158,7 +158,7 @@ class TestRealExternalSkills:
 
         # Get skills from different namespaces
         builtin_skills = manager.list_skills(namespace="builtin")
-        gstack_skills = manager.list_skills(namespace="gstack")
+        manager.list_skills(namespace="gstack")
 
         # builtin should always have skills
         assert len(builtin_skills) > 0

@@ -1,6 +1,5 @@
 """Tests for TF-IDF calculation module."""
 
-import math
 
 import pytest
 

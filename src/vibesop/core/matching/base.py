@@ -223,6 +223,17 @@ class IMatcher(Protocol):
         """
         ...
 
+    def preprocess(self, query: str) -> str:
+        """Preprocess query text before matching.
+
+        Args:
+            query: Raw user query
+
+        Returns:
+            Preprocessed query string
+        """
+        ...
+
     def get_capabilities(self) -> MatcherCapabilitiesDict:
         """Return information about this matcher's capabilities.
 

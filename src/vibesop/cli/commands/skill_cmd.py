@@ -120,8 +120,8 @@ def _load_skills(project_root: str = ".") -> list[dict[str, Any]]:
     return router.get_candidates() or []
 
 
-@app.command()
-def list(
+@app.command("list")
+def list_skills(
     show_all: bool = typer.Option(False, "--all", "-a", help="Show all skills including archived"),
     project_only: bool = typer.Option(
         False, "--project", "-p", help="Show only project-scoped skills"
@@ -232,7 +232,7 @@ def status(
         if lifecycle in [s.value for s in SkillLifecycle]
         else SkillLifecycle.ACTIVE
     )
-    valid_next = SkillLifecycleManager._valid_transitions().get(current, frozenset())
+    valid_next = SkillLifecycleManager._valid_transitions().get(current, frozenset())  # pyright: ignore[reportPrivateUsage]
     next_states = ", ".join(s.value for s in valid_next) if valid_next else "none (terminal)"
 
     console.print(

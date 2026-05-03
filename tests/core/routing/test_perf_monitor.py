@@ -67,7 +67,6 @@ class TestRoutingPerfMonitor:
         assert stats["total_routes"] == 4
         # Oldest should be evicted
         assert stats["avg_ms"] == pytest.approx(10.0 / 4)  # total routes still 4
-        durations = [1.0, 2.0, 3.0, 4.0]
         assert stats["p50_ms"] == pytest.approx(3.0)  # median of [2,3,4]
 
     def test_percentile_calculation(self):

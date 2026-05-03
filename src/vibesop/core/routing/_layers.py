@@ -1,3 +1,4 @@
+# pyright: reportPrivateUsage=false
 """Layer execution functions for UnifiedRouter.
 
 Extracted from explicit_layer.py, scenario_layer.py, and triage_mixin.py.
@@ -318,7 +319,7 @@ def _build_profile_token_index(index: dict[str, Any]) -> dict[str, set[str]]:
 
 def _cosine_similarity(a: list[float], b: list[float]) -> float:
     """Compute cosine similarity between two dense vectors (pure Python)."""
-    dot = sum(x * y for x, y in zip(a, b))
+    dot = sum(x * y for x, y in zip(a, b, strict=True))
     norm_a = sum(x * x for x in a) ** 0.5
     norm_b = sum(x * x for x in b) ** 0.5
     return dot / (norm_a * norm_b + 1e-10)
@@ -356,7 +357,9 @@ def _try_embedding_fallback(
     model = getattr(router, "_index_embedding_model", None)
     if model is None:
         try:
-            from sentence_transformers import SentenceTransformer
+            from sentence_transformers import (
+                SentenceTransformer,  # pyright: ignore[reportMissingImports]
+            )
 
             model = SentenceTransformer("paraphrase-multilingual-MiniLM-L12-v2")
             router._index_embedding_model = model

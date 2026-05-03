@@ -1,3 +1,4 @@
+# pyright: reportPrivateUsage=false
 """High-level skill management API.
 
 **⚠️ POSITIONING**: VibeSOP is a ROUTING ENGINE, not an execution engine.
@@ -77,6 +78,17 @@ class SkillManager:
 
         # Discover skills on init
         self._loader.discover_all()
+
+    def get_skill(self, skill_id: str) -> Any | None:
+        """Get a skill definition by ID.
+
+        Args:
+            skill_id: Skill identifier
+
+        Returns:
+            Skill definition or None if not found
+        """
+        return self._loader.get_skill(skill_id)
 
     def list_skills(
         self,

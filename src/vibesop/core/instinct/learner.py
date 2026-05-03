@@ -382,7 +382,9 @@ class InstinctLearner:
         if self._embedding_model is not None:
             return True
         try:
-            from sentence_transformers import SentenceTransformer
+            from sentence_transformers import (
+                SentenceTransformer,  # pyright: ignore[reportMissingImports]
+            )
 
             self._embedding_model = SentenceTransformer(self._embedding_model_name)
             return True

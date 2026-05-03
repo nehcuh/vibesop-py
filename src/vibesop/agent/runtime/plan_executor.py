@@ -129,6 +129,9 @@ class PlanExecutor:
                 instruction=(
                     f"使用 {step.skill_id} 技能执行: {step.intent}\n具体查询: {step.input_query}"
                 ),
+                intent=step.intent,
+                input_query=step.input_query,
+                dependencies=step.dependencies,
             )
             steps.append(manifest_step)
 
@@ -301,7 +304,7 @@ class PlanExecutor:
 
         return "\n".join(lines)
 
-    def _format_single_step(self, step: StepManifest) -> list[str]:
+    def _format_single_step(self, step: StepManifest | ExecutionStep) -> list[str]:
         """Format a single sequential step."""
         marker = StepManifest.completion_marker_for(step.step_number)
         lines = [
@@ -310,8 +313,9 @@ class PlanExecutor:
             f"- **任务**: {step.input_query}",
         ]
 
-        if step.output_as:
-            lines.append(f"- **输出变量**: {step.output_as}")
+        output_slot = getattr(step, "output_slot", getattr(step, "output_as", ""))
+        if output_slot:
+            lines.append(f"- **输出变量**: {output_slot}")
 
         if step.dependencies:
             deps = ", ".join(step.dependencies)

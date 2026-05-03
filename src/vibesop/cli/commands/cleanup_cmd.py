@@ -9,13 +9,16 @@ Usage:
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import questionary
 import typer
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
+
+if TYPE_CHECKING:
+    from vibesop.core.skills.feedback_loop import RetentionSuggestion
 
 console = Console()
 
@@ -41,9 +44,9 @@ def _run_feedback_analysis(project_root: Path) -> dict[str, Any]:
 
 
 def _render_cleanup_table(
-    deprecate: list[str],
-    archive: list[str],
-    warn: list[str],
+    deprecate: list[RetentionSuggestion],
+    archive: list[RetentionSuggestion],
+    warn: list[RetentionSuggestion],
 ) -> Table:
     """Render a table of skills needing attention."""
     table = Table(title="Skills Needing Attention", show_header=True)

@@ -2,9 +2,7 @@
 
 from datetime import datetime
 
-import pytest
-
-from vibesop.core.memory.base import Conversation, Context, Message, MessageRole
+from vibesop.core.memory.base import Context, Conversation, Message, MessageRole
 
 
 class TestMessageRole:

@@ -2,8 +2,6 @@
 
 from pathlib import Path
 
-import pytest
-
 from vibesop.core.skills.parser import extract_frontmatter, parse_skill_md
 
 
@@ -26,18 +24,18 @@ class TestExtractFrontmatter:
 
     def test_incomplete_frontmatter(self):
         content = "---\nid: test\n"
-        frontmatter, body = extract_frontmatter(content)
+        frontmatter, _body = extract_frontmatter(content)
         assert frontmatter is None
 
     def test_empty_frontmatter(self):
         content = "---\n---\n# Body\n"
-        frontmatter, body = extract_frontmatter(content)
+        frontmatter, _body = extract_frontmatter(content)
         # Empty frontmatter parses as None with ruamel.yaml
         assert frontmatter is None
 
     def test_invalid_yaml(self):
         content = "---\n{invalid yaml: [\n---\n# Body\n"
-        frontmatter, body = extract_frontmatter(content)
+        frontmatter, _body = extract_frontmatter(content)
         assert frontmatter is None
 
 

@@ -47,7 +47,7 @@ class TestSkillRatingStore:
 
     def test_init_creates_directory(self, tmp_path: Path):
         store_path = tmp_path / ".vibe" / "ratings.jsonl"
-        store = SkillRatingStore(store_path=store_path)
+        SkillRatingStore(store_path=store_path)
         assert store_path.parent.exists()
 
     def test_rate_and_get(self, tmp_path: Path):
