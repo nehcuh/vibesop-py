@@ -165,7 +165,7 @@ class TaskDecomposer:
                     # a valid query — derive a short intent from the query so that
                     # downstream consumers (PlanBuilder, ExecutionStep) never see
                     # an empty label.
-                    intent=t.intent.strip() or self._derive_intent(t.query),
+                    intent=self._clean_intent(t.intent) or self._derive_intent(t.query),
                     query=t.query,
                     skill_id=t.skill_id if t.skill_id and t.skill_id != "null" else None,
                     task_type=t.task_type,
@@ -176,6 +176,18 @@ class TaskDecomposer:
         except (json.JSONDecodeError, ValidationError) as e:
             logger.debug("Failed to parse structured LLM response: %s", e)
             return []
+
+    @staticmethod
+    def _clean_intent(intent: str) -> str:
+        """Strip markdown formatting and common LLM artifact prefixes.
+
+        Removes bold/italic markers (**, *) and collapses whitespace so
+        downstream consumers never see labels like `**Input` or
+        `**Translation/Understanding`.
+        """
+        cleaned = intent.strip()
+        cleaned = re.sub(r"\*+\s*", "", cleaned)
+        return cleaned.strip()
 
     @staticmethod
     def _derive_intent(query: str, max_len: int = 60) -> str:
@@ -202,7 +214,7 @@ class TaskDecomposer:
             # Match patterns like "1. intent: query" or "- intent: query"
             match = re.match(r"^[\s\-\d\.]*\s*(.+?)[:\-]\s*(.+)$", line)
             if match:
-                intent_text = match.group(1).strip()
+                intent_text = self._clean_intent(match.group(1))
                 query_text = match.group(2).strip()
                 tasks.append(SubTask(intent=intent_text, query=query_text, original_intent=query_text))
         return tasks

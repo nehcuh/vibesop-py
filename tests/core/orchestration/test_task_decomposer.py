@@ -267,3 +267,45 @@ class TestDeriveIntentFallback:
         derived = TaskDecomposer._derive_intent("")
 
         assert derived == "sub-task"
+
+
+class TestCleanIntentMarkdown:
+    """Markdown artifacts from LLM output must be stripped from intent labels."""
+
+    def test_clean_intent_strips_bold_markers(self) -> None:
+        assert TaskDecomposer._clean_intent("**Input") == "Input"
+        assert TaskDecomposer._clean_intent("**Translation/Understanding**") == "Translation/Understanding"
+        assert TaskDecomposer._clean_intent("*italic*") == "italic"
+
+    def test_clean_intent_strips_mixed_markers(self) -> None:
+        assert TaskDecomposer._clean_intent("** *Mixed**") == "Mixed"
+
+    def test_clean_intent_preserves_normal_text(self) -> None:
+        assert TaskDecomposer._clean_intent("analyze architecture") == "analyze architecture"
+
+    def test_json_parser_strips_markdown_intent(self) -> None:
+        """LLM returns JSON with markdown-wrapped intent — cleaned before use."""
+        mock_llm = Mock()
+        mock_llm.call.return_value = Mock(
+            content='{"tasks": [{"intent": "**Input", "query": "analyze this"}]}'
+        )
+
+        decomposer = TaskDecomposer(llm_client=mock_llm)
+        result = decomposer.decompose("analyze this")
+
+        assert len(result) == 1
+        assert result[0].intent == "Input"
+
+    def test_regex_fallback_strips_markdown_intent(self) -> None:
+        """Regex fallback catches markdown headers — strips them."""
+        mock_llm = Mock()
+        mock_llm.call.return_value = Mock(
+            content="**Translation/Understanding**: analyze the code\n**Output**: fix the bug"
+        )
+
+        decomposer = TaskDecomposer(llm_client=mock_llm)
+        result = decomposer.decompose("analyze and fix")
+
+        assert len(result) == 2
+        assert result[0].intent == "Translation/Understanding"
+        assert result[1].intent == "Output"

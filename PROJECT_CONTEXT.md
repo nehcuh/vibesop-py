@@ -3,6 +3,33 @@
 ## Session Handoff
 
 <!-- handoff:start -->
+### 2026-05-03 11:15
+**Session**: Routing inconsistency fix — OpenCode config sync + markdown intent stripping
+
+**Completed**:
+- Fixed `~/.config/opencode/AGENTS.md`: verbatim query instruction (`<original_user_query>`), orchestration plan compliance, removed stale `riper-workflow`
+- Removed stale `riper-workflow` from `~/.config/opencode/config.yaml` (kept `builtin/riper-workflow`)
+- Synced orchestration plan section to Claude Code template (`CLAUDE.md.j2`)
+- Added `_clean_intent()` in `task_decomposer.py` to strip markdown artifacts (`**Input`, `**Translation/Understanding`)
+- Added 5 regression tests for markdown stripping
+- P1-B sweep: 349 tests passed, zero regressions
+- Explained root causes to user: temperature variance + Agent query rewriting + riper over-matching + stale OpenCode config
+
+**Key Learnings**:
+- OpenCode config was stale compared to Claude Code templates (Fix B not applied)
+- Stale `riper-workflow` entry without `builtin/` prefix created duplicate/conflicting matches
+- LLM markdown artifacts leak into intent labels via regex fallback when JSON parsing fails
+- `_clean_intent()` pattern: strip `\*+\s*` from intent strings before downstream consumption
+
+**Files Modified**: 3 files
+- `src/vibesop/adapters/templates/claude-code/CLAUDE.md.j2` — orchestration plan instruction
+- `src/vibesop/core/orchestration/task_decomposer.py` — `_clean_intent()` + markdown stripping
+- `tests/core/orchestration/test_task_decomposer.py` — 5 regression tests
+
+**Next Steps**: None — fixes complete
+
+---
+
 ### 2026-04-29 15:30
 **Session**: 移除冗余 builtin 技能 (systematic-debugging / verification-before-completion / using-git-worktrees)
 
@@ -24,25 +51,4 @@
 - tests/core/test_cold_start.py
 
 **Next Steps**: None — cleanup complete
-
----
-
-### 2026-04-29 01:00
-**Session**: VibeSOP v5.3.1 Release
-
-**Completed**:
-- Documentation cleanup: archived 8 outdated/intermediate files to `docs/archive/`
-- Fixed 2 broken documentation links in `docs/dev/CONTRIBUTING.md`
-- Bumped version 5.3.0 → 5.3.1
-- Successfully published to PyPI: https://pypi.org/project/vibesop/5.3.1/
-
-**Key Learnings**:
-- `uv publish` doesn't read `~/.pypirc` — use `twine upload dist/*` instead
-- uv's .venv lacks pip module — install twine via `uv pip install --python .venv/bin/python twine`
-
-**Commits**:
-- 13dc34b: docs: fix broken links and archive outdated documentation
-- 6d91c93: chore: bump version to 5.3.1
-
-**Next Steps**: None — release complete
 <!-- handoff:end -->

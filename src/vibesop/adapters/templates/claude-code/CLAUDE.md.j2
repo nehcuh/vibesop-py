@@ -16,6 +16,17 @@ Do not guess which skill to use. Do not skip routing.
 3. **Execute**: Follow the skill's steps exactly
 4. **Verify**: Run checks the skill requires
 
+### Multi-Intent Orchestration Plans
+
+When `vibe route` returns an orchestration plan (2+ intents with step-by-step execution), follow the plan exactly:
+1. Execute each step in order
+2. Read each step's `SKILL.md` before executing
+3. Report progress: "Step N complete"
+4. Wait for dependencies before starting dependent steps
+5. Parallel steps may run simultaneously
+
+Do NOT ignore the plan and pick a single skill.
+
 ### Quick Commands
 
 When the user types `/vibe-<command>`, run:
