@@ -74,8 +74,8 @@ VibeSOP is a **Skill Operating System (SkillOS)** for AI-assisted development. I
 
 **Priority Order**:
 1. CLI flags (highest)
-2. Project config (`.vibe/config.yaml`)
-3. User config (`~/.config/vibe/config.yaml`)
+2. Project config (`.vibe/config.toml`)
+3. User config (`~/.vibe/config.toml`)
 4. Defaults (lowest)
 
 ### 5. Integration Layer

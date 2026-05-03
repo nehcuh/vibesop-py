@@ -4,13 +4,19 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from vibesop.utils.helpers import (
     calculate_age,
     ensure_directory,
     format_timestamp,
+    get_cache_path,
+    get_config_path,
+    load_yaml_safe,
     merge_dicts,
     normalize_path,
     truncate_text,
+    write_yaml_safe,
 )
 
 
@@ -160,3 +166,76 @@ class TestCalculateAge:
         ts = time.time() - 172800
         result = calculate_age(ts)
         assert "day" in result
+
+
+class TestLoadYamlSafe:
+    """Tests for load_yaml_safe function."""
+
+    def test_normal_load(self, tmp_path: Path) -> None:
+        """Test loading a valid YAML file."""
+        yaml_file = tmp_path / "test.yaml"
+        yaml_file.write_text("name: test\nvalue: 42\n", encoding="utf-8")
+        result = load_yaml_safe(yaml_file)
+        assert result == {"name": "test", "value": 42}
+
+    def test_file_not_found(self, tmp_path: Path) -> None:
+        """Test that FileNotFoundError is raised for missing file."""
+        missing = tmp_path / "nonexistent.yaml"
+        with pytest.raises(FileNotFoundError):
+            load_yaml_safe(missing)
+
+    def test_parse_error(self, tmp_path: Path) -> None:
+        """Test that ValueError is raised for invalid YAML."""
+        bad_yaml = tmp_path / "bad.yaml"
+        bad_yaml.write_text("{ invalid", encoding="utf-8")
+        with pytest.raises(ValueError):
+            load_yaml_safe(bad_yaml)
+
+
+class TestWriteYamlSafe:
+    """Tests for write_yaml_safe function."""
+
+    def test_normal_write(self, tmp_path: Path) -> None:
+        """Test writing data to a YAML file."""
+        yaml_file = tmp_path / "output.yaml"
+        data = {"key": "value", "list": [1, 2, 3]}
+        write_yaml_safe(yaml_file, data)
+        assert yaml_file.exists()
+        content = yaml_file.read_text(encoding="utf-8")
+        assert "key: value" in content
+
+    def test_round_trip(self, tmp_path: Path) -> None:
+        """Test that written YAML can be read back correctly."""
+        yaml_file = tmp_path / "roundtrip.yaml"
+        data = {"name": "round", "nested": {"a": 1}}
+        write_yaml_safe(yaml_file, data)
+        loaded = load_yaml_safe(yaml_file)
+        assert loaded == data
+
+
+class TestGetCachePath:
+    """Tests for get_cache_path function."""
+
+    def test_returns_correct_path_structure(self, tmp_path: Path) -> None:
+        """Test that cache path includes .vibe/.vibe/cache and path parts."""
+        result = get_cache_path(tmp_path, "sub", "file.txt")
+        assert result == tmp_path / ".vibe" / ".vibe/cache" / "sub" / "file.txt"
+
+    def test_no_extra_parts(self, tmp_path: Path) -> None:
+        """Test cache path with no additional parts."""
+        result = get_cache_path(tmp_path)
+        assert result == tmp_path / ".vibe" / ".vibe/cache"
+
+
+class TestGetConfigPath:
+    """Tests for get_config_path function."""
+
+    def test_returns_correct_path_structure(self, tmp_path: Path) -> None:
+        """Test that config path includes .vibe and path parts."""
+        result = get_config_path(tmp_path, "settings.yaml")
+        assert result == tmp_path / ".vibe" / "settings.yaml"
+
+    def test_no_extra_parts(self, tmp_path: Path) -> None:
+        """Test config path with no additional parts."""
+        result = get_config_path(tmp_path)
+        assert result == tmp_path / ".vibe"

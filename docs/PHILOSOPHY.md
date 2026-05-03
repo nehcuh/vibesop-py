@@ -432,11 +432,11 @@ VibeSOP 内置的上下文感知和自主学习功能**默认自动开启**，�
 
 #### 配置关闭
 
-如需关闭上下文感知，在配置文件（`.vibe/config.yaml` 或 `~/.config/vibesop/config.yaml`）中设置：
+如需关闭上下文感知，在配置文件（`.vibe/config.toml` 或 `~/.vibe/config.toml`）中设置：
 
-```yaml
-routing:
-  session_aware: false
+```toml
+[routing]
+session_aware = false
 ```
 
 或在 CLI 中：
@@ -453,11 +453,11 @@ VibeSOP 使用以下目录存储配置和数据。所有路径遵循 XDG 规范�
 
 | 路径 | 用途 | 级别 |
 |------|------|------|
-| `.vibe/config.yaml` | 项目级路由、编排、技能配置 | 项目 |
+| `.vibe/config.toml` | 项目级路由、编排、技能配置 | 项目 |
 | `.vibe/skills/` | 项目级自定义技能存储 | 项目 |
 | `.vibe/preferences.json` | 偏好学习数据（自动维护） | 项目 |
 | `.vibe/session/` | 会话状态持久化（自动维护） | 项目 |
-| `~/.vibe/config.yaml` | 全局默认配置 | 用户 |
+| `~/.vibe/config.toml` | 全局默认配置 | 用户 |
 | `~/.config/skills/` | 外部技能包中央存储（gstack/superpowers/omx） | 用户 |
 | `~/.claude/`, `~/.config/opencode/`, `~/.kimi/` | 各平台配置文件目录 | 用户 |
 
@@ -470,7 +470,7 @@ VibeSOP 支持两种 LLM 集成模式：
 | 模式 | 说明 | API Key |
 |------|------|---------|
 | **进程内集成** | Agent 代码直接调用 `AgentRouter.set_llm()`，复用 Agent 的 LLM 客户端 | 无需单独配置 |
-| **CLI 子进程** | `vibe route` 作为独立进程运行（route hook 的实际场景） | 需配置 `VIBESOP_LLM_PROVIDER` 环境变量或 `.vibe/config.yaml` 中的 `llm` 字段 |
+| **CLI 子进程** | `vibe route` 作为独立进程运行（route hook 的实际场景） | 需配置 `VIBESOP_LLM_PROVIDER` 环境变量或 `.vibe/config.toml` 中的 `llm` 字段 |
 
 > CLI 子进程模式是当前大多数平台的默认运行方式（通过 hook 调用），因此需要为 VibeSOP 单独配置 LLM 凭证。详见 [SKILL_LLM_CONFIG_GUIDE.md](SKILL_LLM_CONFIG_GUIDE.md)。
 

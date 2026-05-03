@@ -226,8 +226,8 @@ dev = ["pytest", "ruff", "basedpyright", ...]
 
 **配置源优先级**（正确实现）:
 1. 环境变量
-2. `.vibe/config.yaml`
-3. `~/.vibe/config.yaml`
+2. `.vibe/config.toml`
+3. `~/.vibe/config.toml`
 4. 默认值
 
 ### 6.3 版本管理

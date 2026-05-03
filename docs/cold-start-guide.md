@@ -129,17 +129,17 @@ class CustomColdStart(ColdStartStrategy):
 
 Cold start behavior is configured via:
 
-```yaml
-# .vibe/config.yaml
-routing:
-  # Enable/disable built-in mappings
-  use_builtin_mappings: true
+```toml
+# .vibe/config.toml
+[routing]
+# Enable/disable built-in mappings
+use_builtin_mappings = true
 
-  # Minimum samples before preference learning kicks in
-  preference_min_samples: 3
+# Minimum samples before preference learning kicks in
+preference_min_samples = 3
 
-  # Cache candidates for performance
-  use_cache: true
+# Cache candidates for performance
+use_cache = true
 ```
 
 ## Troubleshooting

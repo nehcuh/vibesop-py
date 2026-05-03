@@ -140,7 +140,11 @@ def route(
         help="Conversation ID for multi-turn context (auto-generated if omitted)",
     ),
 ) -> None:
-    """Route a query to the appropriate skill using unified routing.
+    """Route a query to the appropriate skill using unified orchestration.
+
+    Detects single vs. multi-intent queries automatically. For multi-intent
+    queries, decomposes into sub-tasks and builds an execution plan.
+    For single-intent queries, routes to the best matching skill directly.
 
     VibeSOP is a routing engine - it tells you which skill to use,
     but does not execute skills. Use your AI Agent (Claude Code, OpenCode)
@@ -287,6 +291,7 @@ def route(
         raise typer.Exit(0 if result.has_match else 1)
 
     # Full transparency: show routing decision tree (default)
+    already_rendered = False
     if transparency_mode == "full":
         if result.mode.value == "single":
             from vibesop.core.models import RoutingResult
@@ -302,18 +307,24 @@ def route(
             render_routing_report(routing_result, console=console, context=context)
         else:
             render_orchestration_result(result, console=console)
-        raise typer.Exit(0)
-
-    # Compact mode: show compact summary only
-    render_compact_orchestration(result, console=console)
+        already_rendered = True
+    else:
+        # Compact mode: show compact summary only
+        render_compact_orchestration(result, console=console)
 
     # Handle result with unified confirmation flow
     if result.mode.value == "orchestrated" and result.execution_plan:
-        _handle_orchestrated_result(result, router, yes, execute, json_output, console)
+        _handle_orchestrated_result(
+            result, router, yes, execute, json_output, console,
+            already_rendered=already_rendered,
+        )
         return
 
     # Handle single-skill result
-    _handle_single_result(result, router, yes, json_output, validate, console)
+    _handle_single_result(
+        result, router, yes, json_output, validate, console,
+        already_rendered=already_rendered,
+    )
 
 
 @app.command()
@@ -440,12 +451,16 @@ def _handle_orchestrated_result(
     execute: bool,
     json_output: bool,
     console: Console,
+    already_rendered: bool = False,
 ) -> None:
     """Handle multi-step orchestration result — confirmation, execution, post-processing."""
     plan = result.execution_plan
 
     # 1. Confirmation flow (when needed)
-    confirmed = _orchestration_confirmation_flow(result, yes, execute, json_output, console, router)
+    confirmed = _orchestration_confirmation_flow(
+        result, yes, execute, json_output, console, router,
+        already_rendered=already_rendered,
+    )
     if not confirmed:
         return
 
@@ -465,6 +480,7 @@ def _orchestration_confirmation_flow(
     json_output: bool,
     console: Console,
     router: Any,
+    already_rendered: bool = False,
 ) -> bool:
     """Interactive confirmation for orchestrated result. Returns False if cancelled."""
     plan = result.execution_plan
@@ -472,7 +488,8 @@ def _orchestration_confirmation_flow(
     if not _needs_confirmation(result, router, yes, json_output, is_orchestrated=True):
         return True
 
-    render_orchestration_result(result, console=console)
+    if not already_rendered:
+        render_orchestration_result(result, console=console)
 
     choices = [
         questionary.Choice("✅ Confirm execution plan", value="confirm"),
@@ -728,6 +745,7 @@ def _handle_single_result(
     json_output: bool,
     validate: bool,
     console: Console,
+    already_rendered: bool = False,
 ) -> None:
     """Handle single-skill routing result."""
     # Validation mode
@@ -738,7 +756,7 @@ def _handle_single_result(
     if _needs_confirmation(
         result, router, yes, json_output, validate=validate, is_orchestrated=False
     ):
-        _run_confirmation_flow(result, console)
+        _run_confirmation_flow(result, console, already_rendered=already_rendered)
 
     # Output rendering
     if json_output:

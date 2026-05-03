@@ -573,12 +573,12 @@ Full CLI reference: [docs/user/CLI_REFERENCE.md](docs/user/CLI_REFERENCE.md)
 
 ### 项目级配置 Project-Level Config
 
-创建 `.vibe/config.yaml`：
+创建 `.vibe/config.toml`：
 
-Create `.vibe/config.yaml`:
+Create `.vibe/config.toml`:
 
 ```yaml
-# .vibe/config.yaml
+# .vibe/config.toml
 platform: claude-code
 
 routing:
@@ -626,19 +626,19 @@ How would you like to proceed?
 你可以通过以下方式关闭确认：
 
 - **临时跳过**：`vibe route "query" --yes` 或 `-y`
-- **全局关闭**：在 `~/.vibe/config.yaml` 中设置 `routing.confirmation_mode: never`
+- **全局关闭**：在 `~/.vibe/config.toml` 中设置 `routing.confirmation_mode = "never"`
 - **仅低置信度时确认**：设置 `routing.confirmation_mode: ambiguous_only`
 
 > ⚠️ **注意**：确认模式默认开启 (`always`)，旨在让你了解 VibeSOP 的决策过程。关闭后将恢复为自动选择。
 
 ### 全局配置 Global Config
 
-创建 `~/.vibe/config.yaml`：
+创建 `~/.vibe/config.toml`：
 
-Create `~/.vibe/config.yaml`:
+Create `~/.vibe/config.toml`:
 
 ```yaml
-# ~/.vibe/config.yaml
+# ~/.vibe/config.toml
 default_platform: claude-code
 llm_provider: anthropic  # or openai
 

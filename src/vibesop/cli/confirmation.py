@@ -43,17 +43,22 @@ def _needs_confirmation(  # pyright: ignore[reportUnusedFunction]
     )
 
 
-def _run_confirmation_flow(result: Any, console: Console) -> None:  # pyright: ignore[reportUnusedFunction]
+def _run_confirmation_flow(
+    result: Any,
+    console: Console,
+    already_rendered: bool = False,
+) -> None:  # pyright: ignore[reportUnusedFunction]
     """Interactive confirmation: confirm / alternative / skip."""
-    routing_result = RoutingResult(
-        primary=result.primary,
-        alternatives=result.alternatives,
-        routing_path=result.routing_path,
-        layer_details=result.layer_details,
-        query=result.original_query,
-        duration_ms=result.duration_ms,
-    )
-    render_routing_report(routing_result, console=console)
+    if not already_rendered:
+        routing_result = RoutingResult(
+            primary=result.primary,
+            alternatives=result.alternatives,
+            routing_path=result.routing_path,
+            layer_details=result.layer_details,
+            query=result.original_query,
+            duration_ms=result.duration_ms,
+        )
+        render_routing_report(routing_result, console=console)
 
     choices = [
         questionary.Choice("✅ Confirm selected skill", value="confirm"),

@@ -183,21 +183,21 @@ export VIBE_SEMANTIC_BATCH_SIZE=32
 export VIBE_SEMANTIC_HALF_PRECISION=true
 ```
 
-### Config File (.vibe/config.yaml)
+### Config File (.vibe/config.toml)
 
-```yaml
-semantic:
-  enabled: false  # Default: OFF (backward compatible)
-  model: "paraphrase-multilingual-MiniLM-L12-v2"
-  device: "auto"
-  cache_dir: "~/.cache/vibesop/semantic"
+```toml
+[semantic]
+enabled = false  # Default: OFF (backward compatible)
+model = "paraphrase-multilingual-MiniLM-L12-v2"
+device = "auto"
+cache_dir = "~/.cache/vibesop/semantic"
 
-  # Performance options
-  batch_size: 32
-  half_precision: true
-  enable_cache: true
+# Performance options
+batch_size = 32
+half_precision = true
+enable_cache = true
 
-  # Matching strategy
+# Matching strategy
   strategy: "hybrid"  # cosine, hybrid
   keyword_weight: 0.3
   regex_weight: 0.2

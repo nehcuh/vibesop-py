@@ -37,14 +37,14 @@ vibe route "start a new project with planning"
 ```
 
 ### 2. Preference Learning
-VibeSOP learns from your routing history. Enable it in `.vibe/config.yaml`:
+VibeSOP learns from your routing history. Enable it in `.vibe/config.toml`:
 
-```yaml
-routing:
-  enable_ai_triage: true
+```toml
+[routing]
+enable_ai_triage = true
 
-preferences:
-  learning_enabled: true
+[preferences]
+learning_enabled = true
 ```
 
 See [Troubleshooting](troubleshooting.md) and [CLI Reference](../../CLI_REFERENCE.md) for more details.

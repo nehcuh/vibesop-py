@@ -882,21 +882,19 @@ vibe route "准备部署"
 
 ### 自定义配置
 
-```yaml
-# .vibe/config.yaml
-skills:
-  omx:
-    deep_interview:
-      max_questions: 10      # 最多提问数
-      ambiguity_threshold: 30 # 歧义度阈值
+```toml
+# .vibe/config.toml
+[skills.omx.deep_interview]
+max_questions = 10        # 最多提问数
+ambiguity_threshold = 30  # 歧义度阈值
 
-    ralph:
-      deslop_level: aggressive # deslop 强度
-      verification_layers: 4    # 验证层级
+[skills.omx.ralph]
+deslop_level = "aggressive"  # deslop 强度
+verification_layers = 4      # 验证层级
 
-    ralplan:
-      consensus_threshold: 0.8 # 共识阈值
-      auto_adr: true           # 自动生成 ADR
+[skills.omx.ralplan]
+consensus_threshold = 0.8  # 共识阈值
+auto_adr = true            # 自动生成 ADR
 
     team:
       max_agents: 5            # 最大代理数

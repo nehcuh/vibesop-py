@@ -87,7 +87,7 @@ class InitSupport:
             config_file.write_text(config_content)
             result["created_files"].append(str(config_file))
 
-            # Ensure global ~/.vibe/config.yaml exists with full template
+            # Ensure global ~/.vibe/config.toml exists with full template
             _ensure_global_config(platform, result)
 
             # Create project-level routing configuration
@@ -302,7 +302,7 @@ For more information, see:
 
 
 def _ensure_global_config(platform: str, result: dict[str, Any]) -> None:
-    """Ensure global ~/.vibe/config.yaml exists with full default template.
+    """Ensure global ~/.vibe/config.toml exists with full default template.
 
     Only creates the file if it doesn't already exist (never overwrites).
 

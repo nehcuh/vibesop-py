@@ -399,3 +399,80 @@ class TestPathSafetyEdgeCases:
         # Backslashes should be rejected in filenames
         with pytest.raises(ValueError):
             safety.validate_filename("file\\name.txt")
+
+
+class TestPathSafetyAdditionalEdgeCases:
+    """Additional edge cases for path safety."""
+
+    def test_check_traversal_double_dot_escapes(self, tmp_path: Path) -> None:
+        """Test that '..' alone escapes base directory."""
+        safety = PathSafety()
+        assert not safety.check_traversal("..", tmp_path)
+
+    def test_check_traversal_mixed_dot_components(self, tmp_path: Path) -> None:
+        """Test mixed . and .. components."""
+        safety = PathSafety()
+        # a/../../b resolves to ../b, which escapes base_dir
+        assert not safety.check_traversal("a/../../b", tmp_path)
+        # Deep traversal should also be blocked
+        assert not safety.check_traversal("../../../etc/passwd", tmp_path)
+        # Valid case: go deep then back up but stay inside base
+        assert safety.check_traversal("a/b/../c.txt", tmp_path)
+
+    def test_ensure_safe_output_path_with_path_object(self, tmp_path: Path) -> None:
+        """Test ensure_safe_output_path accepts Path objects."""
+        safety = PathSafety()
+        safe_path = safety.ensure_safe_output_path(Path("output.txt"), tmp_path)
+        assert safe_path.is_absolute()
+        assert safe_path.name == "output.txt"
+
+    def test_check_traversal_with_string_base_dir(self, tmp_path: Path) -> None:
+        """Test check_traversal when base_dir is a string."""
+        safety = PathSafety()
+        assert safety.check_traversal("file.txt", str(tmp_path))
+
+    def test_check_traversal_absolute_path_inside_base(self, tmp_path: Path) -> None:
+        """Test absolute path that is inside base_dir is safe."""
+        safety = PathSafety()
+        inner = tmp_path / "inner" / "file.txt"
+        assert safety.check_traversal(str(inner), tmp_path)
+
+    def test_ensure_no_overlap_empty_protected(self, tmp_path: Path) -> None:
+        """Test ensure_no_overlap with empty protected list."""
+        safety = PathSafety()
+        output_path = tmp_path / "output" / "file.txt"
+        # Should not raise
+        safety.ensure_no_overlap(output_path, [])
+
+    def test_ensure_no_overlap_sibling_paths(self, tmp_path: Path) -> None:
+        """Test ensure_no_overlap with sibling paths (no overlap)."""
+        safety = PathSafety()
+        output_path = tmp_path / "output" / "file.txt"
+        protected_paths = [tmp_path / "output" / "other.txt"]
+        # Should not raise because sibling files don't overlap
+        safety.ensure_no_overlap(output_path, protected_paths)
+
+    def test_max_depth_of_one(self, tmp_path: Path) -> None:
+        """Test max_depth of 1 allows only base-level files."""
+        safety = PathSafety(max_depth=1)
+        # tmp_path itself contributes to parts, so a file directly under it
+        # should be allowed if depth limit is generous enough for base + 1.
+        # This is more of a sanity check that small limits are enforced.
+        with pytest.raises(ValueError):
+            safety.ensure_safe_output_path("a/b/c.txt", tmp_path)
+
+    def test_validate_filename_single_dot(self, tmp_path: Path) -> None:
+        """Test validate_filename with single dot."""
+        safety = PathSafety()
+        # Single dot is a valid filename on most systems
+        assert safety.validate_filename(".")
+
+    def test_validate_filename_with_null_bytes(self, tmp_path: Path) -> None:
+        """Test validate_filename with null byte (if any issues)."""
+        safety = PathSafety()
+        # Null byte isn't caught by current logic but may be suspicious
+        # depending on OS; just ensure it doesn't crash.
+        try:
+            safety.validate_filename("file\x00.txt")
+        except ValueError:
+            pass  # acceptable

@@ -336,11 +336,11 @@ Claude: 💡 This looks like a design task. Would you like to switch to
 
 ### Routing Config
 
-```yaml
-# .vibe/config.yaml
-routing:
-  session_aware: true              # Enable session-state-aware routing
-  session_stickiness_boost: 0.03   # Confidence boost for current skill (0.0–0.2)
+```toml
+# .vibe/config.toml
+[routing]
+session_aware = true              # Enable session-state-aware routing
+session_stickiness_boost = 0.03   # Confidence boost for current skill (0.0–0.2)
 ```
 
 ### SessionContext Parameters

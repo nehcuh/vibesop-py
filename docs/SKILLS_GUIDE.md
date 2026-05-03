@@ -196,11 +196,11 @@ Layer 0 分析:
 ```
 
 **配置**:
-```yaml
-# .vibe/config.yaml
-routing:
-  enable_ai_triage: true
-  llm_provider: anthropic  # or openai
+```toml
+# .vibe/config.toml
+[routing]
+enable_ai_triage = true
+llm_provider = "anthropic"  # or openai
 ```
 
 #### Layer 1: Explicit Overrides
@@ -583,45 +583,43 @@ vibe route "use omx/deep-interview 帮我澄清需求"
 
 **项目级配置**:
 
-```yaml
-# .vibe/config.yaml
-skills:
-  defaults:
-    # 为特定场景设置默认技能
-    code_review: superpowers/review  # 覆盖 gstack/review
-    debugging: systematic-debugging
-    planning: omx/ralplan  # 覆盖 riper-workflow
+```toml
+# .vibe/config.toml
+[skills.defaults]
+# 为特定场景设置默认技能
+code_review = "superpowers/review"  # 覆盖 gstack/review
+debugging = "systematic-debugging"
+planning = "omx/ralplan"  # 覆盖 riper-workflow
 ```
 
 **用户级配置**:
 
-```yaml
-# ~/.vibe/config.yaml
-skills:
-  defaults:
-    qa: omx/ultraqa  # 默认使用 omx 而非 gstack
-    test: superpowers/tdd
+```toml
+# ~/.vibe/config.toml
+[skills.defaults]
+qa = "omx/ultraqa"  # 默认使用 omx 而非 gstack
+test = "superpowers/tdd"
 ```
 
 ### 方法 4: 禁用特定技能
 
-```yaml
-# .vibe/config.yaml
-skills:
-  disabled:
-    - gstack/codex  # 禁用 Codex 技能
-    - superpowers/brainstorm  # 禁用头脑风暴
+```toml
+# .vibe/config.toml
+[skills]
+disabled = [
+    "gstack/codex",  # 禁用 Codex 技能
+    "superpowers/brainstorm",  # 禁用头脑风暴
+]
 ```
 
 ### 方法 5: 调整技能触发模式
 
-```yaml
-# .vibe/config.yaml
-skills:
-  trigger_modes:
-    # 改为手动触发
-    gstack/qa: manual
-    omx/team: suggest  # 改为自动建议
+```toml
+# .vibe/config.toml
+[skills.trigger_modes]
+# 改为手动触发
+"gstack/qa" = "manual"
+"omx/team" = "suggest"  # 改为自动建议
 ```
 
 ---
@@ -908,14 +906,13 @@ vibe feedback record "review PR" "gstack/review" \
 
 **为项目设置合理的默认值**:
 
-```yaml
-# .vibe/config.yaml
-skills:
-  defaults:
-    # 根据项目特点调整
-    code_review: superpowers/review  # 如果更注重质量
-    qa: omx/ultraqa  # 如果需要架构驱动测试
-    planning: omx/ralplan  # 如果是团队项目
+```toml
+# .vibe/config.toml
+[skills.defaults]
+# 根据项目特点调整
+code_review = "superpowers/review"  # 如果更注重质量
+qa = "omx/ultraqa"  # 如果需要架构驱动测试
+planning = "omx/ralplan"  # 如果是团队项目
 ```
 
 ### 7. 定期查看技能列表
@@ -963,15 +960,14 @@ conflict_resolution:
 
 **创建易记的别名**:
 
-```yaml
-# .vibe/config.yaml
-skills:
-  aliases:
-    # 短别名
-    review: gstack/review
-    tdd: superpowers/tdd
-    qa: gstack/qa
-    ship: gstack/ship
+```toml
+# .vibe/config.toml
+[skills.aliases]
+# 短别名
+review = "gstack/review"
+tdd = "superpowers/tdd"
+qa = "gstack/qa"
+ship = "gstack/ship"
 ```
 
 ### 技能链
@@ -1078,7 +1074,7 @@ vibe skills sync claude-code
 ### 配置参考
 
 - **[core/registry.yaml](../core/registry.yaml)** - 技能注册表
-- **[.vibe/config.yaml](.vibe/config.yaml)** - 项目配置
+- **[.vibe/config.toml](.vibe/config.toml)** - 项目配置
 
 ---
 

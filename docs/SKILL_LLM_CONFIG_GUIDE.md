@@ -14,7 +14,7 @@ VibeSOP 现在支持为每个技能配置独立的 LLM 设置，优先级如下�
 ```
 1. 技能级别配置 (.vibe/skills/auto-config.yaml)
    ↓ (如果不存在)
-2. 全局配置 (.vibe/config.yaml)
+2. 全局配置 (.vibe/config.toml)
    ↓ (如果不存在)
 3. 环境变量 (ANTHROPIC_API_KEY, OPENAI_API_KEY, etc.)
    ↓ (如果不存在)

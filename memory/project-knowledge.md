@@ -1301,3 +1301,98 @@ def test_something(self, tmp_path: Path) -> None:
 def test_keywords(self, word: str): ...
 ```
 
+
+
+## Technical Pitfalls
+
+### Pytest Module Basename Collision Across Directories (2026-05-03)
+
+**Issue**: Having `test_base.py` in both `tests/core/memory/` and `tests/core/matching/` causes pytest collection errors because pytest imports modules by basename. The second import shadows the first, causing `ImportMismatchError` or wrong module loading.
+
+**Root Cause**: pytest's import system uses the module basename as the import key. `tests/core/memory/test_base.py` and `tests/core/matching/test_base.py` both become `test_base` in the import cache.
+
+**Solution**: Use unique basenames across the entire test suite:
+```python
+# ❌ Wrong: basename collision
+tests/core/memory/test_base.py
+tests/core/matching/test_base.py
+
+# ✅ Correct: unique basenames
+tests/core/memory/test_storage.py      # for memory/storage.py
+tests/core/matching/test_match_base.py  # for matching/base.py
+```
+
+**Same issue applies to**: `test_storage.py` in `memory/` vs `skills/`.
+
+**Files**: `tests/core/matching/test_match_base.py` (renamed), `tests/core/skills/test_skill_base.py` (renamed), `tests/core/skills/test_skill_storage.py` (renamed)
+
+---
+
+### MagicMock Auto-Creation Breaks `is None` Sentinel Checks (2026-05-03)
+
+**Issue**: `if cached is None:` fails when `cached` is a `MagicMock` because MagicMock auto-creates any accessed attribute, returning a new MagicMock instead of `None`.
+
+**Root Cause**: `MagicMock()` returns a new MagicMock for any attribute access. When code does `if router._index_layer_cache is None:` and `_index_layer_cache` was never set, MagicMock creates it on-the-fly, returning a truthy MagicMock object. The `is None` check fails, and the code skips the initialization path.
+
+**Solution**: Use `isinstance(cached, dict)` instead of `is None` for cache sentinels when testing with mocks:
+```python
+# ❌ Wrong: MagicMock breaks this
+if router._index_layer_cache is None:
+    router._index_layer_cache = {}
+
+# ✅ Correct: type-check works with MagicMock
+if not isinstance(router._index_layer_cache, dict):
+    router._index_layer_cache = {}
+```
+
+**Files**: `src/vibesop/core/routing/_layers.py`
+
+---
+
+## Architecture Decisions
+
+### Session Storage: Two Independent Systems (2026-05-03)
+
+**Decision**: Keep `SessionContext` (project-local) and `GenericSessionTracker` (global) as separate, independent systems with different use cases.
+
+**System 1 — SessionContext**:
+- Path: `.vibe/session/{session_id}.json` (project-local)
+- Used by: CLI `vibe route`, `RouterContextMixin._save_session_state()`
+- Purpose: Per-project session state for intelligent re-routing
+- Session ID: `"project-{path_hash}"` for project isolation
+
+**System 2 — GenericSessionTracker**:
+- Path: `~/.vibe/sessions/state_{hash}.json` (global)
+- Used by: Platform hooks (Claude Code, OpenCode)
+- Purpose: Cross-project session tracking for platform-level analytics
+
+**Why two systems**: 
+- CLI needs project-local isolation (different projects have different active skills)
+- Platform hooks need global view (user's skill usage across all projects)
+- Merging them would create coupling between CLI and platform adapter layers
+
+**Files**: `src/vibesop/core/sessions/context.py`, `src/vibesop/core/sessions/tracker.py`
+
+---
+
+## Reusable Patterns
+
+### Comprehensive Test Coverage Backfill Workflow (2026-05-03)
+
+**Pattern**: When a codebase has large untested modules, systematically create test files matching the source structure.
+
+**Workflow**:
+1. **Inventory**: Find all source modules with <X% coverage or no corresponding test file
+2. **Map**: Create test files mirroring source structure (`src/core/X.py` → `tests/core/test_X.py`)
+3. **Basename uniqueness**: Ensure no test basename collisions across directories
+4. **Test categories per module**:
+   - Dataclass/enum defaults and construction
+   - Public API methods (happy path)
+   - Edge cases (empty input, None, exceptions)
+   - Integration with neighboring modules
+5. **Run and fix**: Execute tests, fix naming conflicts, adjust expectations to match actual behavior
+
+**Result**: 341 new tests across 24 files, all passing in 1.54s.
+
+**Files**: `tests/core/` — 24 new/updated test files
+

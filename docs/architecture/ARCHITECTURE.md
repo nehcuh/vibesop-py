@@ -243,8 +243,8 @@ routing_config = config.get_routing_config()
 **Priority** (highest to lowest):
 1. CLI overrides
 2. Environment variables
-3. Project config (`.vibe/config.yaml`)
-4. Global config (`~/.config/vibesop/config.yaml`)
+3. Project config (`.vibe/config.toml`)
+4. Global config (`~/.vibe/config.toml`)
 5. Default values
 
 ---

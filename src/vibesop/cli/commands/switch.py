@@ -36,23 +36,29 @@ VALID_TARGETS = ["claude-code", "kimi-cli", "opencode", "superpowers", "cursor"]
 
 
 def _get_configured_platform() -> str | None:
-    """Get platform from .vibe/config.yaml.
+    """Get platform from .vibe/config.toml (preferred) or .vibe/config.yaml.
 
     Returns:
         Platform string if configured, None otherwise
     """
-    config_path = Path(".vibe/config.yaml")
-    if not config_path.exists():
-        return None
-
-    try:
-        yaml_parser = YAML()
-        with config_path.open() as f:
-            config = yaml_parser.load(f)
+    # Prefer .toml over .yaml
+    for ext in [".toml", ".yaml"]:
+        config_path = Path(f".vibe/config{ext}")
+        if not config_path.exists():
+            continue
+        try:
+            if ext == ".toml":
+                import tomllib
+                with config_path.open("rb") as f:
+                    config = tomllib.load(f)
+            else:
+                yaml_parser = YAML()
+                with config_path.open() as f:
+                    config = yaml_parser.load(f)
             return config.get("platform") if config else None
-    except Exception as e:
-        logger.debug(f"Failed to read config.yaml: {e}")
-        return None
+        except Exception as e:
+            logger.debug(f"Failed to read {config_path.name}: {e}")
+    return None
 
 
 def switch(

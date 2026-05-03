@@ -92,8 +92,8 @@ class SkillConfigManager:
 
     # 配置文件路径
     SKILL_CONFIG_FILE = Path(".vibe/skills/auto-config.yaml")
-    GLOBAL_CONFIG_FILE = Path(".vibe/config.yaml")
-    GLOBAL_CONFIG_HOME = Path.home() / ".vibe" / "config.yaml"
+    GLOBAL_CONFIG_FILE = Path(".vibe/config.toml")
+    GLOBAL_CONFIG_HOME = Path.home() / ".vibe" / "config.toml"
 
     def __init__(self, project_root: str | Path | None = None):
         self._project_root = Path(project_root).resolve() if project_root else None
@@ -130,7 +130,7 @@ class SkillConfigManager:
 
         优先级:
         1. 技能级别的 LLM 配置(.vibe/skills/auto-config.yaml)
-        2. 全局 LLM 配置(.vibe/config.yaml)
+        2. 全局 LLM 配置(.vibe/config.toml)
         3. 环境变量
         4. Agent 环境
         5. 默认配置
@@ -359,20 +359,36 @@ class SkillConfigManager:
 
     @classmethod
     def _load_skill_config_file(cls) -> dict[str, Any]:
-        for config_path in [cls.SKILL_CONFIG_FILE, cls.GLOBAL_CONFIG_FILE, cls.GLOBAL_CONFIG_HOME]:
-            if config_path.exists():
-                try:
-                    mtime = config_path.stat().st_mtime
-                    cached = _CONFIG_FILE_CACHE.get(config_path)
-                    if cached is not None and cached[0] == mtime:
-                        return cached[1]
+        # Build path list: prefer .toml over .yaml for global configs
+        paths_to_try = [cls.SKILL_CONFIG_FILE]
+        for base in [cls.GLOBAL_CONFIG_FILE, cls.GLOBAL_CONFIG_HOME]:
+            toml_path = base.with_suffix(".toml")
+            if toml_path.exists() or not base.exists():
+                paths_to_try.append(toml_path)
+            if base.exists():
+                paths_to_try.append(base)
+
+        for config_path in paths_to_try:
+            if not config_path.exists():
+                continue
+            try:
+                mtime = config_path.stat().st_mtime
+                cached = _CONFIG_FILE_CACHE.get(config_path)
+                if cached is not None and cached[0] == mtime:
+                    return cached[1]
+
+                if config_path.suffix.lower() == ".toml":
+                    import tomllib
+                    with config_path.open("rb") as f:
+                        data = tomllib.load(f) or {}
+                else:
                     with config_path.open() as f:
                         data = yaml.safe_load(f) or {}
-                    if isinstance(data, dict):
-                        _CONFIG_FILE_CACHE[config_path] = (mtime, data)
-                    return data
-                except Exception as e:
-                    console.print(f"[yellow]⚠ Failed to load {config_path}: {e}[/yellow]")
+                if isinstance(data, dict):
+                    _CONFIG_FILE_CACHE[config_path] = (mtime, data)
+                return data
+            except Exception as e:
+                console.print(f"[yellow]⚠ Failed to load {config_path}: {e}[/yellow]")
 
         return {}
 

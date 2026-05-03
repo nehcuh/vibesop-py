@@ -1,7 +1,12 @@
 """Tests for marker file management system."""
 
+import json
+import shutil
 import tempfile
 from pathlib import Path
+from unittest.mock import patch
+
+import pytest
 
 from vibesop.utils import (
     MarkerData,
@@ -386,3 +391,260 @@ class TestMarkerFileManager:
             # Read back and verify metadata
             data = manager.read_marker(MarkerType.INSTALLATION, "test-integration")
             assert data.metadata == metadata
+
+
+class TestMarkerFileManagerEdgeCases:
+    """Test edge cases and error handling for MarkerFileManager."""
+
+    def test_write_marker_invalid_path_traversal(self, tmp_path: Path) -> None:
+        """Test write_marker with invalid path (traversal attack)."""
+        manager = MarkerFileManager(base_path=tmp_path)
+        result = manager.write_marker(
+            marker_type=MarkerType.INSTALLATION,
+            name="test",
+            install_path=Path("/etc/passwd"),
+        )
+        assert not result["success"]
+        assert result["marker_path"] is None
+        assert "Invalid installation path" in result["errors"][0]
+
+    def test_write_marker_path_validation_exception(self, tmp_path: Path, monkeypatch) -> None:
+        """Test write_marker when path validation raises an exception."""
+        manager = MarkerFileManager(base_path=tmp_path)
+
+        def raise_exception(*args, **kwargs):
+            raise RuntimeError("validation error")
+
+        monkeypatch.setattr(manager._path_safety, "check_traversal", raise_exception)
+
+        install_path = tmp_path / "install"
+        install_path.mkdir()
+
+        result = manager.write_marker(
+            marker_type=MarkerType.INSTALLATION,
+            name="test",
+            install_path=install_path,
+        )
+        # Should continue past the exception and succeed
+        assert result["success"]
+        assert result["marker_path"] is not None
+
+    def test_read_marker_corrupted_json(self, tmp_path: Path) -> None:
+        """Test read_marker with corrupted/invalid JSON file."""
+        manager = MarkerFileManager(base_path=tmp_path)
+        marker_dir = tmp_path / ".vibe" / "markers" / "installations"
+        marker_dir.mkdir(parents=True, exist_ok=True)
+        marker_file = marker_dir / "corrupted.json"
+        marker_file.write_text("not valid json {")
+
+        data = manager.read_marker(MarkerType.INSTALLATION, "corrupted")
+        assert data is None
+
+    def test_remove_marker_exception(self, tmp_path: Path, monkeypatch) -> None:
+        """Test remove_marker with permission error."""
+        manager = MarkerFileManager(base_path=tmp_path)
+
+        install_dir = tmp_path / "test_install"
+        install_dir.mkdir()
+
+        manager.write_marker(
+            marker_type=MarkerType.INSTALLATION,
+            name="test",
+            install_path=install_dir,
+        )
+
+        def raise_permission(*args, **kwargs):
+            raise PermissionError("Access denied")
+
+        monkeypatch.setattr(Path, "unlink", raise_permission)
+
+        result = manager.remove_marker(MarkerType.INSTALLATION, "test")
+        assert not result["success"]
+        assert "Failed to remove marker" in result["errors"][0]
+
+    def test_list_markers_skips_invalid_json(self, tmp_path: Path) -> None:
+        """Test list_markers skips invalid JSON files."""
+        manager = MarkerFileManager(base_path=tmp_path)
+
+        install_dir = tmp_path / "test_install"
+        install_dir.mkdir()
+
+        manager.write_marker(
+            marker_type=MarkerType.INSTALLATION,
+            name="valid",
+            install_path=install_dir,
+        )
+
+        marker_dir = tmp_path / ".vibe" / "markers" / "installations"
+        invalid_file = marker_dir / "invalid.json"
+        invalid_file.write_text("not json")
+
+        markers = manager.list_markers(MarkerType.INSTALLATION)
+        assert "valid" in markers
+        assert "invalid" not in markers
+        assert len(markers) == 1
+
+    def test_verify_marker_checksum_mismatch(self, tmp_path: Path) -> None:
+        """Test verify_marker with checksum mismatch."""
+        manager = MarkerFileManager(base_path=tmp_path)
+
+        install_dir = tmp_path / "test_install"
+        install_dir.mkdir()
+        test_file = install_dir / "test.txt"
+        test_file.write_text("original")
+
+        checksum = manager.calculate_checksum(install_dir)
+
+        manager.write_marker(
+            marker_type=MarkerType.INSTALLATION,
+            name="test",
+            install_path=install_dir,
+            checksum=checksum,
+        )
+
+        # Modify the file to change checksum
+        test_file.write_text("modified")
+
+        result = manager.verify_marker(MarkerType.INSTALLATION, "test")
+        assert result["exists"]
+        assert result["path_matches"]
+        assert not result["checksum_matches"]
+        assert not result["valid"]
+        assert "Checksum mismatch" in result["errors"]
+
+    def test_verify_marker_install_path_missing(self, tmp_path: Path) -> None:
+        """Test verify_marker when install path no longer exists."""
+        manager = MarkerFileManager(base_path=tmp_path)
+
+        install_dir = tmp_path / "test_install"
+        install_dir.mkdir()
+
+        manager.write_marker(
+            marker_type=MarkerType.INSTALLATION,
+            name="test",
+            install_path=install_dir,
+        )
+
+        # Remove the install directory
+        shutil.rmtree(install_dir)
+
+        result = manager.verify_marker(MarkerType.INSTALLATION, "test")
+        assert result["exists"]
+        assert not result["path_matches"]
+        assert not result["valid"]
+        assert any("Installation path does not exist" in err for err in result["errors"])
+
+    def test_calculate_checksum_directory_internal(self, tmp_path: Path) -> None:
+        """Test _calculate_checksum for a directory with nested files."""
+        manager = MarkerFileManager(base_path=tmp_path)
+
+        test_dir = tmp_path / "nested_dir"
+        test_dir.mkdir()
+        subdir = test_dir / "subdir"
+        subdir.mkdir()
+        (test_dir / "a.txt").write_text("a")
+        (subdir / "b.txt").write_text("b")
+
+        checksum = manager._calculate_checksum(test_dir)
+        assert isinstance(checksum, str)
+        assert len(checksum) == 64
+
+    def test_cleanup_markers_removes_orphaned(self, tmp_path: Path) -> None:
+        """Test cleanup_markers removes orphaned markers."""
+        manager = MarkerFileManager(base_path=tmp_path)
+
+        existing_dir = tmp_path / "existing"
+        existing_dir.mkdir()
+        manager.write_marker(
+            marker_type=MarkerType.INSTALLATION,
+            name="existing",
+            install_path=existing_dir,
+        )
+
+        orphan_dir = tmp_path / "orphan"
+        # Don't create the directory
+        manager.write_marker(
+            marker_type=MarkerType.INSTALLATION,
+            name="orphan",
+            install_path=orphan_dir,
+        )
+
+        result = manager.cleanup_markers()
+        assert "existing" in result["kept"]
+        assert "orphan" in result["cleaned"]
+
+    def test_import_markers_skip_existing(self, tmp_path: Path) -> None:
+        """Test import_markers with overwrite=False skips existing."""
+        manager = MarkerFileManager(base_path=tmp_path)
+
+        install_dir = tmp_path / "test"
+        install_dir.mkdir()
+
+        manager.write_marker(
+            marker_type=MarkerType.INSTALLATION,
+            name="existing",
+            install_path=install_dir,
+            version="1.0.0",
+        )
+
+        export_data = {
+            "existing": {
+                "marker_type": "installation",
+                "name": "existing",
+                "version": "2.0.0",
+                "timestamp": "2024-01-01T00:00:00",
+                "path": str(install_dir),
+                "checksum": None,
+                "metadata": {},
+            }
+        }
+
+        import_path = tmp_path / "import.json"
+        import_path.write_text(json.dumps(export_data))
+
+        result = manager.import_markers(import_path, overwrite=False)
+        assert result["success"]
+        assert result["skipped_count"] == 1
+        assert result["imported_count"] == 0
+
+        data = manager.read_marker(MarkerType.INSTALLATION, "existing")
+        assert data is not None
+        assert data.version == "1.0.0"
+
+    def test_import_markers_overwrite_existing(self, tmp_path: Path) -> None:
+        """Test import_markers with overwrite=True overwrites existing."""
+        manager = MarkerFileManager(base_path=tmp_path)
+
+        install_dir = tmp_path / "test"
+        install_dir.mkdir()
+
+        manager.write_marker(
+            marker_type=MarkerType.INSTALLATION,
+            name="existing",
+            install_path=install_dir,
+            version="1.0.0",
+        )
+
+        export_data = {
+            "existing": {
+                "marker_type": "installation",
+                "name": "existing",
+                "version": "2.0.0",
+                "timestamp": "2024-01-01T00:00:00",
+                "path": str(install_dir),
+                "checksum": None,
+                "metadata": {},
+            }
+        }
+
+        import_path = tmp_path / "import.json"
+        import_path.write_text(json.dumps(export_data))
+
+        result = manager.import_markers(import_path, overwrite=True)
+        assert result["success"]
+        assert result["skipped_count"] == 0
+        assert result["imported_count"] == 1
+
+        data = manager.read_marker(MarkerType.INSTALLATION, "existing")
+        assert data is not None
+        assert data.version == "2.0.0"

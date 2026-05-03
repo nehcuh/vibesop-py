@@ -1167,13 +1167,13 @@ When no `VIBE_LLM_PROVIDER` is set, VibeSOP auto-detects:
 
 ### Configuration File
 
-```yaml
-# .vibe/config.yaml
-llm:
-  provider: ollama
-  model: Qwen3.6-35B-A3B-mlx-mxfp8
-  temperature: 0.3
-  max_tokens: 500
+```toml
+# .vibe/config.toml
+[llm]
+provider = "ollama"
+model = "Qwen3.6-35B-A3B-mlx-mxfp8"
+temperature = 0.3
+max_tokens = 500
 ```
 
 ### Verifying LLM Configuration

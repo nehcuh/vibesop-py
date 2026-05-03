@@ -504,7 +504,7 @@ def _display_and_save_config(config: Any) -> None:
                 "[yellow]  ⚠ No LLM configured - skill will work in limited mode[/yellow]"
             )
             console.print(
-                "[dim]    Configure LLM in .vibe/config.yaml or set environment variables[/dim]"
+                "[dim]    Configure LLM in .vibe/config.toml or set environment variables[/dim]"
             )
     else:
         console.print("[green]✓ LLM:[/green] Not required")

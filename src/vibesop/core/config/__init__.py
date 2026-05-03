@@ -5,8 +5,8 @@ replacing the fragmented config system across multiple files.
 
 Configuration Sources (priority order):
 1. defaults - Built-in defaults
-2. global - ~/.vibe/config.yaml
-3. project - .vibe/config.yaml
+2. global - ~/.vibe/config.toml
+3. project - .vibe/config.toml
 4. preferences - .vibe/preferences.json (legacy)
 5. env - Environment variables
 6. cli - Command-line arguments

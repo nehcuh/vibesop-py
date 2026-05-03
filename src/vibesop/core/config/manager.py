@@ -29,8 +29,8 @@ class ConfigSourcePriority(StrEnum):
     """Configuration source priority levels (low to high)."""
 
     DEFAULTS = "defaults"  # 1. Built-in defaults
-    GLOBAL = "global"  # 2. Global config (~/.vibe/config.yaml)
-    PROJECT = "project"  # 3. Project config (.vibe/config.yaml)
+    GLOBAL = "global"  # 2. Global config (~/.vibe/config.toml)
+    PROJECT = "project"  # 3. Project config (.vibe/config.toml)
     PREFERENCES = "preferences"  # 4. Legacy preferences (.vibe/preferences.json)
     ENV = "env"  # 5. Environment variables
     CLI = "cli"  # 6. Command-line arguments
@@ -389,8 +389,8 @@ class ConfigManager:
 
         Priority order (lowest to highest):
             1. Built-in defaults
-            2. Global config (~/.vibe/config.yaml)
-            3. Project config (.vibe/config.yaml)
+            2. Global config (~/.vibe/config.toml)
+            3. Project config (.vibe/config.toml)
             4. Environment variables (VIBE_*)
             5. CLI arguments
 

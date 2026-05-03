@@ -82,12 +82,10 @@ vibe route "/systematic-debugging"
 ### 优化方法
 
 #### 2.1 禁用 EmbeddingMatcher（如果不需要）
-在 `.vibe/config.yaml` 中：
-```yaml
-routing:
-  matchers:
-    embedding:
-      enabled: false
+在 `.vibe/config.toml` 中：
+```toml
+[routing]
+enable_embedding = false
 ```
 
 #### 2.2 预热缓存
