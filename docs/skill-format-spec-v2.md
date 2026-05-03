@@ -240,7 +240,7 @@ security:
 ### 1. 官方仓库
 
 ```bash
-vibe skill add tushare
+vibe skills add tushare
 ```
 
 配置：
@@ -254,8 +254,8 @@ source_config:
 ### 2. GitHub
 
 ```bash
-vibe skill add github:user/repo/skills/skill@v1.0.0
-vibe skill add https://github.com/user/repo.git
+vibe skills add github:user/repo/skills/skill@v1.0.0
+vibe skills add https://github.com/user/repo.git
 ```
 
 配置：
@@ -271,20 +271,20 @@ source_config:
 ### 3. GitLab
 
 ```bash
-vibe skill add gitlab:user/repo/skills/skill@main
+vibe skills add gitlab:user/repo/skills/skill@main
 ```
 
 ### 4. 远程 URL
 
 ```bash
-vibe skill add https://example.com/skills/skill-1.0.0.skill
+vibe skills add https://example.com/skills/skill-1.0.0.skill
 ```
 
 ### 5. 本地文件
 
 ```bash
-vibe skill add ./skill-1.0.0.skill
-vibe skill add --source ./skill.skill --name custom
+vibe skills add ./skill-1.0.0.skill
+vibe skills add --source ./skill.skill --name custom
 ```
 
 ---

@@ -6,7 +6,7 @@
 
 [![Python](https://img.shields.io/badge/Python-3.12+-blue.svg)](https://www.python.org/downloads/)
 [![Ruff](https://img.shields.io/badge/Ruff-Enabled-black.svg)](https://github.com/astral-sh/ruff)
-[![Coverage](https://img.shields.io/badge/Coverage-20%25-red.svg)]()
+[![Coverage](https://img.shields.io/badge/Coverage-~25%25-red.svg)]()
 [![Version](https://img.shields.io/badge/Version-5.4.1-blue.svg)](https://github.com/nehcuh/vibesop-py)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
@@ -100,7 +100,7 @@ orchestration → evaluation → retention/deprecation. Actual skill execution i
 
 ```bash
 # 安装技能 - 自动配置，零学习曲线
-vibe skill add tushare
+vibe skills add tushare
 
 # 系统自动完成：
 # ✅ 检测技能类型
@@ -259,9 +259,9 @@ VibeSOP:
 
 ```bash
 # 安装任何技能，零配置
-vibe skill add tushare
-vibe skill add git-helper
-vibe skill add code-reviewer
+vibe skills add tushare
+vibe skills add git-helper
+vibe skills add code-reviewer
 
 # 系统自动完成：
 # ✅ 检测技能类型和元数据
@@ -770,23 +770,22 @@ Detailed architecture docs: [docs/architecture/](docs/architecture/)
 
 ### 路由准确率 Routing Accuracy
 
-| 指标 Metric | 值 Value |
-|-----------|---------|
-| **总体准确率 Overall Accuracy** | **94%** |
-| **AI Triage 准确率 AI Triage Accuracy** | **95%** |
-| **场景匹配准确率 Scenario Matching Accuracy** | **90%** |
-| **语义歧义准确率 Semantic Ambiguity Accuracy** | **90%** |
+| 指标 Metric | 值 Value | 说明 Note |
+|-----------|---------|----------|
+| **总体准确率 Overall Accuracy** | **~90%** | 基于内部测试集估算，非标准化基准 |
+| **AI Triage 准确率 AI Triage Accuracy** | **~95%** | 基于抽样验证估算 |
+| **场景匹配准确率 Scenario Matching Accuracy** | **~90%** | 基于关键词匹配估算 |
+| **语义歧义准确率 Semantic Ambiguity Accuracy** | **~90%** | 基于 LLM 评估估算 |
 
 ### 响应时间 Response Time
 
-| 操作 Operation | 时间 Time |
-|--------------|----------|
-| **简单路由 Simple Routing** (缓存命中) | ~10ms |
-| **复杂路由 Complex Routing** (多层) | ~270ms |
-| **AI Triage** | ~220ms |
+| 操作 Operation | 时间 Time | 说明 Note |
+|--------------|----------|----------|
+| **简单路由 Simple Routing** (缓存命中) | ~10-50ms | P50 估算值，受硬件影响 |
+| **复杂路由 Complex Routing** (多层) | ~200-300ms | 含 LLM Triage |
+| **AI Triage** | ~200-300ms | 取决于 LLM 提供商和网络 |
 
-详见: [docs/benchmarks/routing-accuracy-benchmark.md](docs/benchmarks/routing-accuracy-benchmark.md)
-See: [docs/benchmarks/routing-accuracy-benchmark.md](docs/benchmarks/routing-accuracy-benchmark.md)
+> ⚠️ **性能声明说明**：以上数据为设计目标和内部估算值，非标准化基准测试结果。实际性能因硬件、网络、LLM 提供商和技能数量而异。标准化基准测试套件正在建设中。
 
 ---
 
@@ -952,9 +951,9 @@ Thanks to the authors and maintainers of these projects for making AI-native dev
 
 ```bash
 # 安装任何技能
-vibe skill add tushare
-vibe skill add git-helper
-vibe skill add code-reviewer
+vibe skills add tushare
+vibe skills add git-helper
+vibe skills add code-reviewer
 
 # AI 自动完成：
 # ✅ 检测技能类型和元数据

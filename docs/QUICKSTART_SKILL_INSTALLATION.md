@@ -8,13 +8,13 @@
 
 ```bash
 # 从官方仓库安装
-vibe skill add tushare
+vibe skills add tushare
 
 # 或从本地文件安装
-vibe skill add ./tushare.skill
+vibe skills add ./tushare.skill
 
 # 或从 URL 安装
-vibe skill add https://skills.vibesop.dev/tushare-1.0.0.skill
+vibe skills add https://skills.vibesop.dev/tushare-1.0.0.skill
 ```
 
 #### 第2步：交互式配置（智能引导）
@@ -125,7 +125,7 @@ vibe build --platform claude-code
 
 ```bash
 # 只需要 1 条命令！
-vibe skill add tushare
+vibe skills add tushare
 
 # 系统自动完成：
 # ✓ 检测技能类型
@@ -192,7 +192,7 @@ skills:
 
 ```bash
 # 安装到全局（所有项目可用）
-vibe skill add tushare --global
+vibe skills add tushare --global
 
 # 全局技能存储在 ~/.vibe/skills/
 ```
@@ -201,7 +201,7 @@ vibe skill add tushare --global
 
 ```bash
 # 禁用自动配置，手动设置
-vibe skill add tushare --manual-config
+vibe skills add tushare --manual-config
 
 # 交互式配置向导：
 ? What priority should this skill have?
@@ -221,7 +221,7 @@ vibe skill add tushare --manual-config
 
 ```bash
 # 覆盖已存在的技能
-vibe skill add tushare --force
+vibe skills add tushare --force
 ```
 
 ---
@@ -260,16 +260,16 @@ vibe skill publish tushare-quant-1.0.0.skill \
 # 用户可以从多种来源安装：
 
 # 1. 官方仓库（推荐）
-vibe skill add tushare
+vibe skills add tushare
 
 # 2. 本地文件
-vibe skill add ./tushare-quant.skill
+vibe skills add ./tushare-quant.skill
 
 # 3. URL
-vibe skill add https://example.com/tushare-quant.skill
+vibe skills add https://example.com/tushare-quant.skill
 
 # 4. Git 仓库
-vibe skill add github:user/skills/tushare@v1.0.0
+vibe skills add github:user/skills/tushare@v1.0.0
 ```
 
 ---
@@ -371,7 +371,7 @@ mkdir quant-strategy && cd quant-strategy
 vibe init
 
 # 安装 Tushare 技能
-vibe skill add tushare
+vibe skills add tushare
 
 # 开始使用
 vibe route "帮我获取茅台最近三年的股价数据"
@@ -434,7 +434,7 @@ vibe inspect
 vibe skills verify tushare-quant
 
 # 重新安装
-vibe skill add tushare --force
+vibe skills add tushare --force
 
 # 检查路由配置
 vibe route "test" --explain
@@ -469,8 +469,8 @@ pip install -r .vibe/skills/tushare-quant/requirements.txt
 
 1. **使用官方技能仓库**
    ```bash
-   vibe skill add tushare  # 推荐
-   # 而不是 vibe skill add https://...
+   vibe skills add tushare  # 推荐
+   # 而不是 vibe skills add https://...
    ```
 
 2. **项目级 vs 全局**

@@ -3,30 +3,26 @@
 > **Version**: 1.0.0
 > **Generated**: 2026-04-29 16:40:09
 
-## CRITICAL AGENT INSTRUCTION — ROUTING ENFORCEMENT
+## AGENT INSTRUCTION — ROUTING RECOMMENDATION
 
-**MANDATORY: You MUST call `vibe route` before attempting ANY non-trivial task.**
+**强烈建议：在处理非平凡任务前，先调用 `vibe route`。**
 
-This is a **hard requirement**, not a suggestion. Every user request that is not
-trivial (simple greetings, one-word answers, reading a specified file) MUST be
-routed through VibeSOP first. The routing engine determines the correct skill,
-decomposes multi-intent requests, and provides full decision transparency.
+这是 Agent 工作流的最佳实践，而非 CLI 的运行时强制。对于非平凡的用户请求（非简单问候、非单字回答、非指定文件读取），建议先通过 VibeSOP 路由确定最佳技能。
 
-**How to comply** (for every non-trivial user message):
+**推荐流程** (对于非平凡用户消息)：
 ```bash
 vibe route "<user_request>"
 ```
 
-**Why this is required**:
-- VibeSOP manages 45+ skills across multiple domains; guessing which to use leads to poor outcomes
-- Multi-intent requests require orchestration (detecting >1 task and planning execution)
-- Routing decisions are now transparent by default, showing why each skill was chosen
-- Skipping routing means losing the entire SkillOS capability layer
+**为什么推荐路由**：
+- VibeSOP 管理 45+ 技能，路由可提升技能选择质量
+- 多意图请求可通过编排自动分解
+- 路由决策透明，展示选择理由和候选技能
+- 遵循路由流程可充分利用 SkillOS 能力层
 
-### Non-Compliance Detection
+### 适用场景
 
-If you find yourself about to perform a non-trivial task without first running
-`vibe route`, STOP and route it first. Examples of tasks that MUST be routed:
+**建议路由的任务**：
 - Debugging / fixing bugs
 - Code review / analysis
 - Writing or modifying features
@@ -35,16 +31,20 @@ If you find yourself about to perform a non-trivial task without first running
 - Performance optimization
 - Any multi-step or multi-domain request
 
-Examples of tasks that do NOT need routing:
+**无需路由的任务**：
 - "What does git status do?"
 - "Show me the current directory"
 - "Open file X" (when user provides the exact file path)
 - Simple follow-ups to existing routed context
 
-**FAILURE MODE**: If you called `vibe route` but then did NOT use the recommended
-skill (e.g., you loaded a different skill from your system prompt or proceeded
-without reading the skill file), you have failed. You MUST restart the task.
-The `vibe route` output is authoritative.
+### 偏差处理
+
+如果 `vibe route` 推荐的技能明显不匹配用户需求：
+1. 查看路由输出中的候选技能列表
+2. 重新用更精确的查询路由：`vibe route --verbose "<refined_query>"`
+3. 如仍无匹配，可直接使用原始 LLM 能力
+
+> **注意**：`vibe route` 输出是建议性的。Agent 拥有最终决策权。如果路由结果不适用，无需强制重启任务。
 
 ### Disagreement Protocol (When the Routed Skill Doesn't Fit)
 

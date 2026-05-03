@@ -244,17 +244,17 @@ vibe skill test-install tushare.skill --dry-run
 vibe skill publish tushare.skill --registry official
 
 # 从官方仓库安装
-vibe skill add tushare
+vibe skills add tushare
 ```
 
 ### 第三方分发
 
 ```bash
 # 从 URL 安装
-vibe skill add https://example.com/skills/tushare.skill
+vibe skills add https://example.com/skills/tushare.skill
 
 # 从 GitHub 安装
-vibe skill add github:user/repo/skills/tushare@v1.0.0
+vibe skills add github:user/repo/skills/tushare@v1.0.0
 ```
 
 ## 安全考虑
@@ -322,7 +322,7 @@ tar -czf tushare.skill -C tushare.skill .
 vibe skill validate tushare.skill
 
 # 7. 安装
-vibe skill add tushare.skill
+vibe skills add tushare.skill
 ```
 
 ---

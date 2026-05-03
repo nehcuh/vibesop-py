@@ -32,7 +32,7 @@ VibeSOP 现在支持为每个技能配置独立的 LLM 设置，优先级如下�
 安装技能时，系统会自动生成 LLM 配置建议：
 
 ```bash
-$ vibe skill add code-reviewer
+$ vibe skills add code-reviewer
 
 Phase 5: Understanding skill and generating config...
   📊 Analyzing: code-reviewer/SKILL.md

@@ -324,19 +324,19 @@ Complete the skill ecosystem with discovery, community, and self-improvement.
 
 ### Features
 
-- [x] **SkillMarket MVP**
-  - `vibe market search <query>` — keyword + tag search
-  - `vibe market info <skill>` — ratings, downloads, compatibility
-  - `vibe market install` — one-click from discovered skills
-  - GitHub topic crawling (`topic:vibesop-skill`)
+- [~] **SkillMarket MVP** (Partial — core commands implemented)
+  - `vibe market search <query>` — keyword + tag search ✅
+  - `vibe market info <skill>` — ratings, downloads, compatibility ⚠️ (command stubbed)
+  - `vibe market install` — one-click from discovered skills ✅
+  - GitHub topic crawling (`topic:vibesop-skill`) ✅ (unauthenticated, rate-limited)
 
-- [x] **Autoresearch Feedback Loop**
-  - Analyze routing success/failure patterns
-  - Suggest keyword additions for missed queries
-  - Skill quality regression detection
-  - Auto-deprecate skills below quality threshold
-  - User satisfaction tracking (`AnalyticsStore`)
-  - Interactive feedback collection after execution
+- [~] **Autoresearch Feedback Loop** (Partial — analysis implemented, automation pending)
+  - Analyze routing success/failure patterns ✅
+  - Suggest keyword additions for missed queries ⚠️ (manual CLI only: `vibe skill optimize`)
+  - Skill quality regression detection ✅
+  - Auto-deprecate skills below quality threshold ✅
+  - User satisfaction tracking (`AnalyticsStore`) ✅
+  - Interactive feedback collection after execution ✅
 
 - [x] **Retention System (CLI-visible)**
   - `vibe skill stale` — detect stale/underperforming skills with archive actions
@@ -345,12 +345,13 @@ Complete the skill ecosystem with discovery, community, and self-improvement.
   - Post-route retention nudge every 20 routes
   - `vibe skill end-check` — session-end review command
 
-- [x] **Skill Learning → Creation → Registration Closed Loop**
-  - `InstinctLearner` sequence pattern detection (multi-step tool call patterns)
-  - `SkillSuggestionCollector` — candidate persistence + threshold triggering
-  - `vibe skills suggestions` — view auto-detected workflow patterns
-  - `vibe skills create --from-suggestion <id>` — one-click skill generation
-  - Auto-generated SKILL.md + `SkillAutoConfigurator` + registry registration
+- [~] **Skill Learning → Creation → Registration Closed Loop** (Partial — manual workflow ready, auto-trigger pending)
+  - `InstinctLearner` sequence pattern detection (multi-step tool call patterns) ✅
+  - `SkillSuggestionCollector` — candidate persistence + threshold triggering ✅
+  - `vibe skills suggestions` — view auto-detected workflow patterns ✅
+  - `vibe skills create --from-suggestion <id>` — one-click skill generation ✅
+  - Auto-generated SKILL.md + `SkillAutoConfigurator` + registry registration ✅
+  - ⚠️ `record_sequence()` is not auto-triggered; users must manually run `vibe session record-tool`
 
 - [x] **Scope-Aware Routing**
   - Project hash binding for project-scoped skills
@@ -396,10 +397,10 @@ Proactive skill recommendations, transparent fallback, active discovery.
   - Guard words prevent false positives on short/verb queries
   - Graceful LLM failure → trust heuristic
 
-- [x] **Smart Recommendations**
-  - Project-type-based recommendations ("Python project → suggest tdd, review")
-  - "Users who installed X also installed Y"
-  - Missing skill detection for current project
+- [~] **Smart Recommendations** (Partial — scoring implemented, proactive display pending)
+  - Project-type-based recommendations ("Python project → suggest tdd, review") ⚠️ (hardcoded stack maps)
+  - "Users who installed X also installed Y" ⚠️ (stubbed — no real collaborative data)
+  - Missing skill detection for current project ⚠️ (scoring exists, not proactively surfaced)
 
 - [x] **Transparent Auto-Degradation**
   - When no skill matches, show transparent fallback
@@ -407,10 +408,10 @@ Proactive skill recommendations, transparent fallback, active discovery.
   - Config: `degradation_fallback_always_ask true` to require user confirmation
   - DegradationManager with 4-level confidence gating (AUTO/SUGGEST/DEGRADE/FALLBACK)
 
-- [x] **Active Discovery**
-  - SkillRecommender scans for new skills matching project tech stack
-  - Proactive suggestion in status dashboard and routing results
-  - Community trending panel with GitHub Issues integration
+- [~] **Active Discovery** (Partial — passive query-scoring, proactive scanning pending)
+  - SkillRecommender scores skills against current query ✅ (passive, embedded in routing)
+  - Proactive suggestion in status dashboard and routing results ⚠️ (scoring exists, UI nudge limited)
+  - Community trending panel with GitHub Issues integration ❌ (not implemented)
 
 ### Success Metrics
 
