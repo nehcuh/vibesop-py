@@ -242,22 +242,30 @@ class PreferenceLearner:
                 for skill_id, data in self._storage.skill_scores.items():
                     if skill_id not in latest.skill_scores or data.get("score", 0) > latest.skill_scores[skill_id].get("score", 0):
                         latest.skill_scores[skill_id] = data
-                # Merge associations (sum counters)
+                # Merge associations (sum counters, clamp to prevent overflow)
                 for word, skills in self._storage.word_associations.items():
                     if word not in latest.word_associations:
-                        latest.word_associations[word] = dict(skills)
+                        latest.word_associations[word] = {
+                            sid: max(MIN_ASSOCIATION_COUNT, min(MAX_ASSOCIATION_COUNT, count))
+                            for sid, count in skills.items()
+                        }
                     else:
                         for sid, count in skills.items():
-                            latest.word_associations[word][sid] = (
-                                latest.word_associations[word].get(sid, 0) + count
+                            merged = latest.word_associations[word].get(sid, 0) + count
+                            latest.word_associations[word][sid] = max(
+                                MIN_ASSOCIATION_COUNT, min(MAX_ASSOCIATION_COUNT, merged)
                             )
                 for bigram, skills in self._storage.ngram_associations.items():
                     if bigram not in latest.ngram_associations:
-                        latest.ngram_associations[bigram] = dict(skills)
+                        latest.ngram_associations[bigram] = {
+                            sid: max(MIN_ASSOCIATION_COUNT, min(MAX_ASSOCIATION_COUNT, count))
+                            for sid, count in skills.items()
+                        }
                     else:
                         for sid, count in skills.items():
-                            latest.ngram_associations[bigram][sid] = (
-                                latest.ngram_associations[bigram].get(sid, 0) + count
+                            merged = latest.ngram_associations[bigram].get(sid, 0) + count
+                            latest.ngram_associations[bigram][sid] = max(
+                                MIN_ASSOCIATION_COUNT, min(MAX_ASSOCIATION_COUNT, merged)
                             )
                 self._storage = latest
                 self._recalculate_scores()

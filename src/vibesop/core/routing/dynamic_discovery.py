@@ -50,6 +50,8 @@ class DynamicSkillDiscovery:
         ...     print(f"{skill.id}: {skill.name}")
     """
 
+    _loader: Any | None = None
+
     def discover(self) -> list[DiscoveredSkill]:
         """Scan ~/.config/skills/ for installed packs.
 
@@ -59,7 +61,9 @@ class DynamicSkillDiscovery:
         from vibesop.core.skills.external_loader import ExternalSkillLoader
         from vibesop.core.skills.parser import parse_skill_md
 
-        loader = ExternalSkillLoader()
+        if DynamicSkillDiscovery._loader is None:
+            DynamicSkillDiscovery._loader = ExternalSkillLoader()
+        loader = DynamicSkillDiscovery._loader
         raw = loader.discover_all()
 
         discovered: list[DiscoveredSkill] = []

@@ -250,8 +250,19 @@ class UnifiedRouter(
         # Session context for multi-turn state persistence (lazy init)
         self._session_context = None
 
-        # Flush usage buffer on normal exit to prevent data loss
-        atexit.register(self._candidate_manager._flush_usage_buffer)
+        # Flush usage buffer on normal exit to prevent data loss.
+        # Use a weak reference so the atexit handler does not keep the
+        # CandidateManager (and thus the router) alive indefinitely.
+        import weakref
+
+        _cm_ref = weakref.ref(self._candidate_manager)
+
+        def _flush_usage_buffer() -> None:
+            cm = _cm_ref()
+            if cm is not None:
+                cm._flush_usage_buffer()
+
+        atexit.register(_flush_usage_buffer)
 
         # Router-level coarse lock for thread safety
         self._route_lock = threading.Lock()
