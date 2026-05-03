@@ -43,11 +43,11 @@ def _needs_confirmation(  # pyright: ignore[reportUnusedFunction]
     )
 
 
-def _run_confirmation_flow(
+def _run_confirmation_flow(  # pyright: ignore[reportUnusedFunction]
     result: Any,
     console: Console,
     already_rendered: bool = False,
-) -> None:  # pyright: ignore[reportUnusedFunction]
+) -> None:
     """Interactive confirmation: confirm / alternative / skip."""
     if not already_rendered:
         routing_result = RoutingResult(

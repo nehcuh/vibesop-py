@@ -269,7 +269,9 @@ def _tokenize_query(query: str) -> set[str]:
     return tokens
 
 
-def _compute_index_score(query_tokens: set[str], profile: Any) -> float:
+def _compute_index_score(  # pyright: ignore[reportUnusedFunction]
+    query_tokens: set[str], profile: Any
+) -> float:
     """Compute match score between query tokens and a skill profile.
 
     Returns a score between 0.0 and 1.0 based on keyword overlap.
