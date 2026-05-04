@@ -13,7 +13,7 @@ runner = CliRunner()
 class TestSkillsList:
     """Tests for vibe skills list."""
 
-    @patch("vibesop.cli.commands.skills_commands.SkillStorage")
+    @patch("vibesop.cli.commands.skills_commands._listing.SkillStorage")
     def test_list_simple(self, mock_storage_cls) -> None:
         mock_storage = MagicMock()
         mock_storage.list_skills.return_value = {"skill-a": MagicMock(), "skill-b": MagicMock()}
@@ -24,7 +24,7 @@ class TestSkillsList:
         assert "Installed Skills" in result.stdout
         assert "skill-a" in result.stdout
 
-    @patch("vibesop.cli.commands.skills_commands.SkillStorage")
+    @patch("vibesop.cli.commands.skills_commands._listing.SkillStorage")
     def test_list_all(self, mock_storage_cls) -> None:
         mock_storage = MagicMock()
         manifest = MagicMock()
@@ -40,7 +40,7 @@ class TestSkillsList:
         assert result.exit_code == 0
         assert "Installed Skills" in result.stdout or "Skill A" in result.stdout
 
-    @patch("vibesop.cli.commands.skills_commands.SkillStorage")
+    @patch("vibesop.cli.commands.skills_commands._listing.SkillStorage")
     def test_list_platform(self, mock_storage_cls) -> None:
         mock_storage = MagicMock()
         mock_storage.PLATFORM_SKILLS_DIRS = {"claude-code": Path("/tmp/claude")}
@@ -51,7 +51,7 @@ class TestSkillsList:
         assert result.exit_code == 0
         assert "Skills linked to claude-code" in result.stdout
 
-    @patch("vibesop.cli.commands.skills_commands.SkillStorage")
+    @patch("vibesop.cli.commands.skills_commands._listing.SkillStorage")
     def test_list_unknown_platform(self, mock_storage_cls) -> None:
         mock_storage = MagicMock()
         mock_storage.PLATFORM_SKILLS_DIRS = {}
@@ -65,7 +65,7 @@ class TestSkillsList:
 class TestSkillsInstall:
     """Tests for vibe skills install."""
 
-    @patch("vibesop.cli.commands.skills_commands.SkillStorage")
+    @patch("vibesop.cli.commands.skills_commands._crud.SkillStorage")
     def test_install_from_url(self, mock_storage_cls) -> None:
         mock_storage = MagicMock()
         mock_storage.install_from_remote.return_value = (True, "Installed from URL")
@@ -75,7 +75,7 @@ class TestSkillsInstall:
         assert result.exit_code == 0
         assert "Installed from URL" in result.stdout
 
-    @patch("vibesop.cli.commands.skills_commands.SkillStorage")
+    @patch("vibesop.cli.commands.skills_commands._crud.SkillStorage")
     def test_install_from_source(self, mock_storage_cls, tmp_path) -> None:
         mock_storage = MagicMock()
         mock_storage.install_skill.return_value = (True, "Installed from source")
@@ -87,7 +87,7 @@ class TestSkillsInstall:
         assert result.exit_code == 0
         assert "Installed from source" in result.stdout
 
-    @patch("vibesop.cli.commands.skills_commands.SkillStorage")
+    @patch("vibesop.cli.commands.skills_commands._crud.SkillStorage")
     def test_install_not_found(self, mock_storage_cls, monkeypatch, tmp_path) -> None:
         monkeypatch.chdir(tmp_path)
         mock_storage = MagicMock()
@@ -101,7 +101,7 @@ class TestSkillsInstall:
 class TestSkillsLinkUnlink:
     """Tests for vibe skills link and unlink."""
 
-    @patch("vibesop.cli.commands.skills_commands.SkillStorage")
+    @patch("vibesop.cli.commands.skills_commands._crud.SkillStorage")
     def test_link_success(self, mock_storage_cls) -> None:
         mock_storage = MagicMock()
         mock_storage.link_to_platform.return_value = (True, "Linked")
@@ -111,7 +111,7 @@ class TestSkillsLinkUnlink:
         assert result.exit_code == 0
         assert "Linked" in result.stdout
 
-    @patch("vibesop.cli.commands.skills_commands.SkillStorage")
+    @patch("vibesop.cli.commands.skills_commands._crud.SkillStorage")
     def test_link_failure(self, mock_storage_cls) -> None:
         mock_storage = MagicMock()
         mock_storage.link_to_platform.return_value = (False, "Already linked")
@@ -121,7 +121,7 @@ class TestSkillsLinkUnlink:
         assert result.exit_code == 1
         assert "Already linked" in result.stdout
 
-    @patch("vibesop.cli.commands.skills_commands.SkillStorage")
+    @patch("vibesop.cli.commands.skills_commands._crud.SkillStorage")
     def test_unlink_success(self, mock_storage_cls) -> None:
         mock_storage = MagicMock()
         mock_storage.unlink_from_platform.return_value = (True, "Unlinked")
@@ -131,7 +131,7 @@ class TestSkillsLinkUnlink:
         assert result.exit_code == 0
         assert "Unlinked" in result.stdout
 
-    @patch("vibesop.cli.commands.skills_commands.SkillStorage")
+    @patch("vibesop.cli.commands.skills_commands._crud.SkillStorage")
     def test_unlink_failure(self, mock_storage_cls) -> None:
         mock_storage = MagicMock()
         mock_storage.unlink_from_platform.return_value = (False, "Not linked")
@@ -145,7 +145,7 @@ class TestSkillsLinkUnlink:
 class TestSkillsRemove:
     """Tests for vibe skills remove."""
 
-    @patch("vibesop.cli.commands.skills_commands.SkillStorage")
+    @patch("vibesop.cli.commands.skills_commands._crud.SkillStorage")
     def test_remove_success(self, mock_storage_cls, monkeypatch, tmp_path) -> None:
         monkeypatch.chdir(tmp_path)
         mock_storage = MagicMock()
@@ -157,7 +157,7 @@ class TestSkillsRemove:
         assert result.exit_code == 0
         assert "Removed" in result.stdout
 
-    @patch("vibesop.cli.commands.skills_commands.SkillStorage")
+    @patch("vibesop.cli.commands.skills_commands._crud.SkillStorage")
     def test_remove_linked_without_flag(self, mock_storage_cls, monkeypatch, tmp_path) -> None:
         monkeypatch.chdir(tmp_path)
         platform_dir = tmp_path / "claude"
@@ -173,7 +173,7 @@ class TestSkillsRemove:
         assert result.exit_code == 1
         assert "Skill is linked to" in result.stdout
 
-    @patch("vibesop.cli.commands.skills_commands.SkillStorage")
+    @patch("vibesop.cli.commands.skills_commands._crud.SkillStorage")
     def test_remove_with_unlink_all(self, mock_storage_cls, monkeypatch, tmp_path) -> None:
         monkeypatch.chdir(tmp_path)
         mock_storage = MagicMock()
@@ -189,7 +189,7 @@ class TestSkillsRemove:
 class TestSkillsStatus:
     """Tests for vibe skills status."""
 
-    @patch("vibesop.cli.commands.skills_commands.SkillStorage")
+    @patch("vibesop.cli.commands.skills_commands._health.SkillStorage")
     def test_status(self, mock_storage_cls, monkeypatch, tmp_path) -> None:
         monkeypatch.chdir(tmp_path)
         mock_storage = MagicMock()
@@ -208,7 +208,7 @@ class TestSkillsStatus:
 class TestSkillsAvailable:
     """Tests for vibe skills available."""
 
-    @patch("vibesop.cli.commands.skills_commands.SkillManager")
+    @patch("vibesop.cli.commands.skills_commands._listing.SkillManager")
     def test_available_empty(self, mock_mgr_cls) -> None:
         mock_mgr = MagicMock()
         mock_mgr.list_skills.return_value = []
@@ -218,7 +218,7 @@ class TestSkillsAvailable:
         assert result.exit_code == 0
         assert "No skills found" in result.stdout
 
-    @patch("vibesop.cli.commands.skills_commands.SkillManager")
+    @patch("vibesop.cli.commands.skills_commands._listing.SkillManager")
     def test_available_with_skills(self, mock_mgr_cls) -> None:
         mock_mgr = MagicMock()
         mock_mgr.list_skills.return_value = [
@@ -232,7 +232,7 @@ class TestSkillsAvailable:
         assert "Available Skills" in result.stdout
         assert "debug" in result.stdout
 
-    @patch("vibesop.cli.commands.skills_commands.SkillManager")
+    @patch("vibesop.cli.commands.skills_commands._listing.SkillManager")
     def test_available_verbose(self, mock_mgr_cls) -> None:
         mock_mgr = MagicMock()
         mock_mgr.list_skills.return_value = [
@@ -249,7 +249,7 @@ class TestSkillsAvailable:
 class TestSkillsInfo:
     """Tests for vibe skills info."""
 
-    @patch("vibesop.cli.commands.skills_commands.SkillManager")
+    @patch("vibesop.cli.commands.skills_commands._listing.SkillManager")
     def test_info_found(self, mock_mgr_cls) -> None:
         mock_mgr = MagicMock()
         mock_mgr.get_skill_info.return_value = {
@@ -272,7 +272,7 @@ class TestSkillsInfo:
         assert "Debug Skill" in result.stdout
         assert "Debug things" in result.stdout
 
-    @patch("vibesop.cli.commands.skills_commands.SkillManager")
+    @patch("vibesop.cli.commands.skills_commands._listing.SkillManager")
     def test_info_not_found(self, mock_mgr_cls) -> None:
         mock_mgr = MagicMock()
         mock_mgr.get_skill_info.return_value = None

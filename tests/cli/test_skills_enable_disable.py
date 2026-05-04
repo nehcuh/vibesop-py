@@ -12,8 +12,8 @@ runner = CliRunner()
 class TestSkillEnableCommand:
     """Test `vibe skills enable` command."""
 
-    @patch("vibesop.cli.commands.skills_commands.SkillConfigManager")
-    @patch("vibesop.cli.commands.skills_commands.SkillManager")
+    @patch("vibesop.cli.commands.skills_commands._config.SkillConfigManager")
+    @patch("vibesop.cli.commands.skills_commands._config.SkillManager")
     def test_enable_existing_skill(self, mock_manager_cls, mock_config_mgr_cls):
         """Enable should update config for an existing skill."""
         mock_manager = MagicMock()
@@ -32,7 +32,7 @@ class TestSkillEnableCommand:
         )
         assert "enabled" in result.output.lower()
 
-    @patch("vibesop.cli.commands.skills_commands.SkillManager")
+    @patch("vibesop.cli.commands.skills_commands._config.SkillManager")
     def test_enable_nonexistent_skill(self, mock_manager_cls):
         """Enable should fail for a non-existent skill."""
         mock_manager = MagicMock()
@@ -44,8 +44,8 @@ class TestSkillEnableCommand:
         assert result.exit_code == 1
         assert "not found" in result.output.lower()
 
-    @patch("vibesop.cli.commands.skills_commands.SkillConfigManager")
-    @patch("vibesop.cli.commands.skills_commands.SkillManager")
+    @patch("vibesop.cli.commands.skills_commands._config.SkillConfigManager")
+    @patch("vibesop.cli.commands.skills_commands._config.SkillManager")
     def test_enable_already_enabled(self, mock_manager_cls, mock_config_mgr_cls):
         """Enable should warn if skill is already enabled."""
         mock_manager = MagicMock()
@@ -66,8 +66,8 @@ class TestSkillEnableCommand:
 class TestSkillDisableCommand:
     """Test `vibe skills disable` command."""
 
-    @patch("vibesop.cli.commands.skills_commands.SkillConfigManager")
-    @patch("vibesop.cli.commands.skills_commands.SkillManager")
+    @patch("vibesop.cli.commands.skills_commands._config.SkillConfigManager")
+    @patch("vibesop.cli.commands.skills_commands._config.SkillManager")
     def test_disable_existing_skill(self, mock_manager_cls, mock_config_mgr_cls):
         """Disable should update config for an existing skill."""
         mock_manager = MagicMock()
@@ -86,7 +86,7 @@ class TestSkillDisableCommand:
         )
         assert "disabled" in result.output.lower()
 
-    @patch("vibesop.cli.commands.skills_commands.SkillManager")
+    @patch("vibesop.cli.commands.skills_commands._config.SkillManager")
     def test_disable_nonexistent_skill(self, mock_manager_cls):
         """Disable should fail for a non-existent skill."""
         mock_manager = MagicMock()
@@ -98,8 +98,8 @@ class TestSkillDisableCommand:
         assert result.exit_code == 1
         assert "not found" in result.output.lower()
 
-    @patch("vibesop.cli.commands.skills_commands.SkillConfigManager")
-    @patch("vibesop.cli.commands.skills_commands.SkillManager")
+    @patch("vibesop.cli.commands.skills_commands._config.SkillConfigManager")
+    @patch("vibesop.cli.commands.skills_commands._config.SkillManager")
     def test_disable_already_disabled(self, mock_manager_cls, mock_config_mgr_cls):
         """Disable should warn if skill is already disabled."""
         mock_manager = MagicMock()
