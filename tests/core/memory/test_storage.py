@@ -3,8 +3,7 @@
 from datetime import datetime
 from pathlib import Path
 
-from vibesop.core.memory.base import Conversation, Message, MessageRole
-from vibesop.core.memory.storage import ConversationStorage
+from vibesop.core.memory import Conversation, ConversationStorage, Message, MessageRole
 
 
 class TestConversationStorage:

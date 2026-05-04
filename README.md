@@ -47,11 +47,11 @@ VibeSOP 是 **SkillOS（技能操作系统）**——管理技能的全生命周
 - **跨平台适配**：一套技能定义，所有 AI Agent 通用
   **Cross-Platform** — one skill definition, works with all AI Agents
 
-**VibeSOP 定位**: VibeSOP 是 SkillOS。它管理技能的**全生命周期**：发现 → 安装 → 路由 → 编排 → 评估 → 保留/淘汰。
-技能的实际执行由 AI Agent（Claude Code, Cursor, OpenCode）完成。
+**VibeSOP 定位**: VibeSOP 是 SkillOS + 轻量引导执行层。它管理技能的**全生命周期**：发现 → 安装 → 路由 → 编排 → 评估 → 保留/淘汰。
+简单任务由 VibeSOP 端到端完成（路由→注入→引导执行），复杂任务由 AI Agent（Claude Code, Cursor, OpenCode）接手。
 
-**Note**: VibeSOP is a Skill Operating System. It manages the **full skill lifecycle**: discovery → installation → routing →
-orchestration → evaluation → retention/deprecation. Actual skill execution is done by AI Agents
+**Note**: VibeSOP is a Skill Operating System with lightweight guided execution. It manages the **full skill lifecycle**: discovery → installation → routing →
+orchestration → evaluation → retention/deprecation. Simple tasks are handled end-to-end by VibeSOP (route → inject → guide execution); complex tasks are delegated to AI Agents
 (Claude Code, Cursor, OpenCode).
 
 📖 **Read our philosophy**: [docs/PHILOSOPHY.md](docs/PHILOSOPHY.md) | [中文版](docs/PHILOSOPHY.md)

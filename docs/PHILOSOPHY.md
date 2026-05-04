@@ -382,22 +382,32 @@ AI 辅助开发的工具爆炸式增长：
 
 | ❌ | 说明 |
 |----|------|
-| 技能执行器 | 执行技能代码的是 AI Agent，不是 VibeSOP |
-| AI 编码工具 | VibeSOP 管理技能，AI Agent 执行技能 |
+| **重量级 Agent 执行引擎** | VibeSOP 不读取/修改文件、不运行测试、不发起 API 调用——这些是 AI Agent 的职责 |
+| AI 编码工具 | VibeSOP 管理技能路由和编排，AI Agent 执行技能 |
 | 单平台工具 | 不绑定 Claude Code、Cursor 或任何特定平台 |
 | 闭源系统 | 永久开源（MIT），开放决策过程 |
 | **技能生产者** | **VibeSOP 管理技能的分发和生命周期，但不编写、不修改技能的具体执行流程** |
 
-> **技能内容边界**: VibeSOP 不生产技能内容。每个技能的 SKILL.md 正文由其作者编写和维护（如 gstack、superpowers、omx 或社区作者）。VibeSOP 在分发时只追加元数据 frontmatter（如 namespace、version、installed_at），绝不修改或替换技能正文。Agent 读取到的是技能的原始完整内容，不是 VibeSOP 生成的薄包装。
+> **执行能力三层模型**:
 >
-> **执行能力说明**: VibeSOP 保留轻量级本地执行能力（`ExternalSkillExecutor`、AST 安全评估器）用于开发者测试和技能验证。但在生产流程中，技能的最终执行由 AI Agent（Claude Code、OpenCode、Cursor 等）完成。这是有意的边界：SkillOS 管"用什么技能、以什么顺序"，AI Agent 管"怎么执行"。
+> | 层级 | 能力 | 执行者 | 示例 |
+> |------|------|--------|------|
+> | L1 路由注入 | 路由到技能，将 SKILL.md 内容注入 Agent 上下文 | VibeSOP | `vibe route "debug this"` |
+> | L2 引导执行 | 多步骤编排，上下文传递，进度追踪 | VibeSOP | `vibe route --execute "分析架构并生成测试"` |
+> | L3 Agent 接管 | 文件读写、代码修改、测试运行 | AI Agent | 由 Claude Code / OpenCode 等完成 |
+>
+> VibeSOP 实现了 L1 和 L2。L3 由 AI Agent 完成。
+> **L2 不包含**：文件读写、代码修改、API 调用——这些是 L3 的职责。
+> 简单任务由 VibeSOP 端到端完成（L1→L2），复杂任务由 AI Agent 接手（L3）。
 
-> **定位边界**: VibeSOP 是 SkillOS，管理技能的**全生命周期**：
-> **发现 → 安装 → 路由 → 编排 → [分发: 完整保留技能内容] → 评估 → 保留/淘汰**
+> **技能内容边界**: VibeSOP 不生产技能内容。每个技能的 SKILL.md 正文由其作者编写和维护（如 gstack、superpowers、omx 或社区作者）。VibeSOP 在分发时只追加元数据 frontmatter（如 namespace、version、installed_at），绝不修改或替换技能正文。Agent 读取到的是技能的原始完整内容，不是 VibeSOP 生成的薄包装。
+
+> **定位边界**: VibeSOP 是 SkillOS + 轻量引导执行层，管理技能的**全生命周期**：
+> **发现 → 安装 → 路由 → 编排 → [L2引导执行 | L3 Agent接管] → 评估 → 保留/淘汰**
 >
-> 其中"执行"环节由 AI Agent（Claude Code、OpenCode、Cursor 等）完成。
-> 这是有意的架构分层：SkillOS 管"用什么技能、以什么顺序"，
-> AI Agent 管"怎么执行"。两者解耦，确保平台无关性。
+> 对于简单的单步骤任务，VibeSOP 提供端到端的"路由→注入→执行"体验（L1+L2）。
+> 对于复杂的多步骤编排，VibeSOP 负责"用什么技能、以什么顺序"，具体执行由 AI Agent 完成（L3）。
+> 两者渐进增强，确保平台无关性。
 >
 > **分发原则**: VibeSOP 同步技能到平台目录时，采用以下策略：
 > 1. **外部技能包**（gstack、superpowers、omx 等）：完整保留原始内容，使用 symlink 或完整复制，不修改 SKILL.md 正文

@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from vibesop.core.memory.base import Context, Conversation, Message, MessageRole
+from vibesop.core.memory import Context, Conversation, Message, MessageRole
 
 
 class TestMessageRole:

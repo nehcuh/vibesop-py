@@ -227,9 +227,9 @@ omit = [
 ]
 
 [tool.coverage.report]
-# NOTE: Coverage target is 75%, but current baseline is ~25%.
-# This will be raised during the quality sprint (see ROADMAP.md).
-fail_under = 0
+# NOTE: Target 75%. Baseline ~25% (v6 quality convergence sprint).
+# fail_under is gradually raised: 20 → 30 → 45 → 70.
+fail_under = 20
 precision = 2
 show_missing = true
 skip_covered = false

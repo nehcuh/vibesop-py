@@ -244,7 +244,7 @@ def render_compact_summary(
     console.print(table)
     console.print()
 
-    from vibesop.cli.render.tips import render_ecosystem_tips
+    from vibesop.cli.render import render_ecosystem_tips
 
     render_ecosystem_tips(
         project_root=Path.cwd(),

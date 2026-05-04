@@ -2,8 +2,7 @@
 
 import pytest
 
-from vibesop.core.memory.base import Conversation, MessageRole
-from vibesop.core.memory.manager import MemoryManager
+from vibesop.core.memory import Conversation, MemoryManager, MessageRole
 
 
 @pytest.fixture
