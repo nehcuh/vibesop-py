@@ -57,6 +57,24 @@ def _render_single_result(result: OrchestrationResult, console: Console) -> None
             )
         )
 
+    # Agent Override Protocol — mandatory footer
+    console.print()
+    console.print(
+        Panel(
+            "[bold]AGENT INSTRUCTION (MANDATORY)[/bold]\n\n"
+            "1. Read the skill file at [bold]skills/<matched-skill>/SKILL.md[/bold]\n"
+            "2. Execute the skill workflow exactly as defined\n\n"
+            "If you choose NOT to use the recommended skill, you MUST:\n"
+            "  • State your explicit reasoning\n"
+            "  • Show why the skill is unsuitable\n"
+            "  • Propose your alternative approach\n"
+            "  • [bold]WAIT for user confirmation[/bold] before proceeding",
+            title="[bold red]🚨 Override Protocol[/bold red]",
+            border_style="red",
+            box=box.ROUNDED,
+        )
+    )
+
 
 def _render_orchestrated_result(result: OrchestrationResult, console: Console) -> None:
     """Render multi-step execution plan."""
@@ -150,6 +168,24 @@ def _render_orchestrated_result(result: OrchestrationResult, console: Console) -
             f"\n[dim]Single-skill fallback:[/dim] {result.single_fallback.skill_id} "
             f"({result.single_fallback.confidence:.0%})"
         )
+
+    # Agent Override Protocol — mandatory footer
+    console.print()
+    console.print(
+        Panel(
+            "[bold]AGENT INSTRUCTION (MANDATORY)[/bold]\n\n"
+            "1. Read the skill file for each step\n"
+            "2. Execute each skill workflow exactly as defined\n\n"
+            "If you choose NOT to use any recommended skill, you MUST:\n"
+            "  • State your explicit reasoning\n"
+            "  • Show why the skill is unsuitable\n"
+            "  • Propose your alternative approach\n"
+            "  • [bold]WAIT for user confirmation[/bold] before proceeding",
+            title="[bold red]🚨 Override Protocol[/bold red]",
+            border_style="red",
+            box=box.ROUNDED,
+        )
+    )
 
 
 def render_plan_status(plan: ExecutionPlan, console: Console | None = None) -> None:

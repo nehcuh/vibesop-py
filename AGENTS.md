@@ -44,7 +44,16 @@ vibe route "<user_request>"
 2. 重新用更精确的查询路由：`vibe route --verbose "<refined_query>"`
 3. 如仍无匹配，可直接使用原始 LLM 能力
 
-> **注意**：`vibe route` 输出是建议性的。Agent 拥有最终决策权。如果路由结果不适用，无需强制重启任务。
+> **注意**：`vibe route` 输出是**建议性**的，但 Agent 偏离推荐时必须**透明化决策**。
+>
+> **MANDATORY — Agent Override Protocol**：
+> 如果你决定**不采纳**路由推荐的技能，你必须：
+> 1. **明确声明**："我选择不使用推荐技能 `<skill_id>`"
+> 2. **展示理由**：具体说明为什么该技能不适用（技能描述不匹配、能力缺失、置信度过低等）
+> 3. **提供替代**：说明你计划使用的替代方案（另一个技能、原始 LLM、自定义流程）
+> 4. **获取用户确认**：向用户呈现你的理由和替代方案，等待用户明确同意后再继续
+>
+> 没有以上 4 步的 Override 视为违规操作。用户拥有最终决策权，而非 Agent。
 
 ### Disagreement Protocol (When the Routed Skill Doesn't Fit)
 
@@ -53,13 +62,23 @@ the user's request:
 
 **DO NOT** proceed with the wrong skill. Instead:
 
-1. **Check alternatives** — the routing output shows alternative skills.
-   If the hook is active, alternatives are shown inline. If not, re-run
-   `vibe route --verbose "query"` to see all candidates.
+1. **State your reasoning explicitly** — explain WHY the skill is unsuitable
+   (description mismatch, capability gap, low confidence, etc.).
 
-2. **Re-route with refinement** — clarify the intent with a more specific query.
+2. **Present alternatives** — show the user the routing output's alternative
+   skills and explain why each is or isn't viable.
 
-3. **Fall back to raw LLM** — if no skill fits, proceed without skills.
+3. **Propose your plan** — describe exactly what you intend to do instead
+   (use a different skill, raw LLM, custom workflow).
+
+4. **Get user confirmation** — WAIT for the user to explicitly approve your
+   override before proceeding. The user has the final say, not the Agent.
+
+5. **Re-route with refinement** — if the user wants a better match, clarify
+   the intent with a more specific query.
+
+6. **Fall back to raw LLM** — only if the user explicitly approves proceeding
+   without a skill.
 
 ### Workflow (execute in order — DO NOT skip)
 

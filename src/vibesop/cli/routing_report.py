@@ -130,6 +130,24 @@ def render_routing_report(
         console.print()
         console.print(alt_table)
 
+    # Agent Override Protocol — mandatory footer
+    console.print()
+    console.print(
+        Panel(
+            "[bold]AGENT INSTRUCTION (MANDATORY)[/bold]\n\n"
+            "1. Read the skill file at [bold]skills/<matched-skill>/SKILL.md[/bold]\n"
+            "2. Execute the skill workflow exactly as defined\n\n"
+            "If you choose NOT to use the recommended skill, you MUST:\n"
+            "  • State your explicit reasoning\n"
+            "  • Show why the skill is unsuitable\n"
+            "  • Propose your alternative approach\n"
+            "  • [bold]WAIT for user confirmation[/bold] before proceeding",
+            title="[bold red]🚨 Override Protocol[/bold red]",
+            border_style="red",
+            box=box.ROUNDED,
+        )
+    )
+
 
 def _render_context_panel(context: Any, console: Console) -> None:
     """Render context-awareness information."""
