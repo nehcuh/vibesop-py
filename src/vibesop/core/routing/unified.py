@@ -62,6 +62,7 @@ from vibesop.core.routing.conflict import (
     RecencyStrategy,
 )
 from vibesop.core.routing.context_mixin import RouterContextMixin
+from vibesop.core.routing.cost_tracker import TriageCostTracker
 from vibesop.core.routing.degradation import DegradationManager
 from vibesop.core.routing.matcher_pipeline import MatcherPipeline
 from vibesop.core.routing.optimization_service import OptimizationService
@@ -69,7 +70,6 @@ from vibesop.core.routing.orchestration_mixin import RouterOrchestrationMixin
 from vibesop.core.routing.result_mixin import RouterResultMixin
 from vibesop.core.routing.stats_mixin import RouterStatsMixin
 from vibesop.core.routing.triage_service import TriageService
-from vibesop.llm.cost_tracker import TriageCostTracker
 
 if TYPE_CHECKING:
     from vibesop.core.instinct import InstinctLearner

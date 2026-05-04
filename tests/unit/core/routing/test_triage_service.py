@@ -429,7 +429,7 @@ class TestInitLlmClient:
         """Exception during init logs and returns None."""
         service = _make_service()
         with patch(
-            "vibesop.core.routing.triage_service.os.getenv", return_value=""
+            "vibesop.core.routing.llm_bridge.os.getenv", return_value=""
         ), patch(
             "vibesop.llm.factory.create_provider",
             side_effect=ValueError("no provider"),

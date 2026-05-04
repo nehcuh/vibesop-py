@@ -102,10 +102,10 @@ class RouterOrchestrationMixin:
 
         # 3. Direct provider from environment
         try:
-            from vibesop.llm.factory import create_provider
+            from vibesop.core.routing.llm_bridge import llm_factory
 
-            provider = create_provider()
-            if provider.configured():
+            provider = llm_factory.create_provider()
+            if provider and provider.configured():
                 return provider
         except Exception as e:
             host.logger.warning("Failed to initialize LLM provider: %s", e)

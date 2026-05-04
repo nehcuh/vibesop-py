@@ -17,7 +17,7 @@ from typing import Any, Literal
 from rich.console import Console
 
 from vibesop.core.llm_config import LLMConfigResolver
-from vibesop.llm.factory import create_provider
+from vibesop.core.routing.llm_bridge import llm_factory
 
 logger = logging.getLogger(__name__)
 console = Console()
@@ -151,12 +151,12 @@ class SkillIndexer:
             return None
 
         try:
-            self._llm_provider = create_provider(
+            self._llm_provider = llm_factory.create_provider(
                 provider=config.provider,  # pyright: ignore[reportArgumentType]
                 api_key=config.api_key,
                 base_url=config.api_base,
             )
-            if not self._llm_provider.configured():
+            if not self._llm_provider or not self._llm_provider.configured():
                 logger.warning(f"LLM provider {config.provider} is not configured")
                 return None
             return self._llm_provider
