@@ -37,6 +37,7 @@ import time
 from pathlib import Path
 from typing import Any
 
+from vibesop import __version__
 from vibesop.core.exceptions import SkillNotFoundError
 from vibesop.core.skills.loader import SkillLoader
 from vibesop.core.skills.parser import SkillParser
@@ -336,7 +337,7 @@ class ExternalSkillExecutor:
                 variables=context or {},
                 metadata={
                     "executor": "vibesop",
-                    "version": "4.1.0",
+                    "version": __version__,
                 },
             )
 

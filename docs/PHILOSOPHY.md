@@ -83,10 +83,10 @@ AI 辅助开发的工具爆炸式增长：
 **解读**: 不要让用户猜测命令，要理解用户的真实意图。
 
 **实践**:
-- 10 层路由 pipeline，逐层理解
-- AI 语义分析（Layer 0）
-- 场景模式匹配（Layer 2）
-- 多维度相似度计算（Layer 3-6）
+- 10 层路由模型，3 阶段执行（显式匹配 → 早期层 → 匹配器流水线）
+- AI 语义分析（Layer 0: EXPLICIT）
+- 场景模式匹配 + 语义索引（Layer 1-2: SCENARIO, INDEX）
+- 多维度匹配器流水线（Layer 3-6: KEYWORD, TFIDF, EMBEDDING, LEVENSHTEIN）
 
 ### 原则 2: 数据驱动
 
@@ -249,7 +249,7 @@ AI 辅助开发的工具爆炸式增长：
 
 ### 目标 4: 支持 10+ 平台
 
-**当前**: 3+ 平台 (Claude Code, Cursor, Continue)
+**当前**: 3 平台 (Claude Code, OpenCode, Kimi CLI)
 **目标**: 10+ 平台
 **方法**: 适配器生态
 

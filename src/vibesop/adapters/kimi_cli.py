@@ -1,7 +1,7 @@
 """Kimi Code CLI platform adapter."""
 
 import re
-import shutil
+
 from pathlib import Path
 from typing import Any
 
@@ -281,52 +281,7 @@ class KimiCliAdapter(PlatformAdapter):
         result: RenderResult,
         dir_name: str | None = None,
     ) -> None:
-        """Render skill content from actual skill file or central storage."""
-        skill_id = skill.id if hasattr(skill, "id") else skill.get("id", "")
-        skill_output_path = skill_dir / "SKILL.md"
-
-        skill_content = self._find_skill_content(skill_id)
-
-        if skill_content:
-            skill_content = self._normalize_skill_type(skill_content)
-            self.write_file_atomic(skill_output_path, skill_content, validate_security=False)
-            result.add_file(skill_output_path)
-            return
-
-        from vibesop.adapters._shared import is_pack_installed
-
-        installed_path = is_pack_installed(skill_id)
-        if installed_path:
-            resolved_installed = installed_path.resolve()
-
-            if (
-                skill_dir.is_symlink()
-                and skill_dir.exists()
-                and skill_dir.resolve() == resolved_installed
-            ):
-                result.add_file(skill_output_path)
-                return
-
-            if skill_dir.is_symlink():
-                skill_dir.unlink(missing_ok=True)
-            elif skill_dir.exists():
-                shutil.rmtree(skill_dir)
-
-            try:
-                skill_dir.symlink_to(resolved_installed, target_is_directory=True)
-                result.add_file(skill_output_path)
-                return
-            except OSError:
-                try:
-                    shutil.copytree(resolved_installed, skill_dir)
-                    result.add_file(skill_output_path)
-                    return
-                except Exception:
-                    pass
-
-        fallback_content = self._generate_fallback_skill_content(skill, dir_name=dir_name)
-        self.write_file_atomic(skill_output_path, fallback_content, validate_security=False)
-        result.add_file(skill_output_path)
+        super()._render_skill_content(skill, skill_dir, result, dir_name=dir_name)
 
     def _generate_readme(self, manifest: Manifest) -> str:
         lines = [

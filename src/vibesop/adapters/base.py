@@ -386,13 +386,88 @@ class PlatformAdapter(ABC):
         return [f"{t.type.value}: {t.description}" for t in result.threats]
 
     def is_safe_path(self, path: Path, base_dir: Path) -> bool:
-        """Check if a path is safe (no traversal).
-
-        Args:
-            path: Path to check
-            base_dir: Base directory
-
-        Returns:
-            True if path is safe, False otherwise
-        """
+        """Check if a path is safe (no traversal)."""
         return self._path_safety.check_traversal(path, base_dir)
+
+    def _render_skill_content(
+        self,
+        skill: Any,
+        skill_dir: Path,
+        result: RenderResult,
+        dir_name: str | None = None,
+        manifest: Manifest | None = None,
+    ) -> None:
+        """Render skill content from actual skill file or central storage.
+
+        Shared logic for all adapters:
+        1. Try to find existing skill content
+        2. Try to symlink/copy from installed pack
+        3. Fall back to adapter-specific template generation
+
+        Subclasses override ``_fallback_skill_content()`` for step 3.
+        """
+        import shutil
+
+        skill_id = skill.id if hasattr(skill, "id") else skill.get("id", "")
+        skill_output_path = skill_dir / "SKILL.md"
+
+        skill_content = self._find_skill_content(skill_id)
+
+        if skill_content:
+            skill_content = self._normalize_skill_type(skill_content)
+            self.write_file_atomic(skill_output_path, skill_content, validate_security=False)
+            result.add_file(skill_output_path)
+            return
+
+        from vibesop.adapters._shared import is_pack_installed
+
+        installed_path = is_pack_installed(skill_id)
+        if installed_path:
+            resolved_installed = installed_path.resolve()
+
+            if (
+                skill_dir.is_symlink()
+                and skill_dir.exists()
+                and skill_dir.resolve() == resolved_installed
+            ):
+                result.add_file(skill_output_path)
+                return
+
+            if skill_dir.is_symlink():
+                skill_dir.unlink(missing_ok=True)
+            elif skill_dir.exists():
+                shutil.rmtree(skill_dir)
+
+            try:
+                skill_dir.symlink_to(resolved_installed, target_is_directory=True)
+                result.add_file(skill_output_path)
+                return
+            except OSError:
+                try:
+                    shutil.copytree(resolved_installed, skill_dir)
+                    result.add_file(skill_output_path)
+                    return
+                except Exception:
+                    pass
+
+        self._fallback_skill_content(
+            skill, skill_output_path, result, dir_name=dir_name, manifest=manifest,
+        )
+
+    def _fallback_skill_content(
+        self,
+        skill: Any,
+        skill_output_path: Path,
+        result: RenderResult,
+        *,
+        dir_name: str | None = None,
+        manifest: Manifest | None = None,
+    ) -> None:
+        """Generate fallback skill content when no real content exists.
+
+        Default: use the shared fallback generator. Subclasses (e.g. ClaudeCode)
+        override this to use Jinja2 templates instead.
+        """
+        fallback_content = self._generate_fallback_skill_content(skill, dir_name=dir_name)
+        self.write_file_atomic(skill_output_path, fallback_content, validate_security=False)
+        result.add_file(skill_output_path)
