@@ -87,6 +87,8 @@ AI 辅助开发的工具爆炸式增长：
 - AI 语义分析（Layer 0: EXPLICIT）
 - 场景模式匹配 + 语义索引（Layer 1-2: SCENARIO, INDEX）
 - 多维度匹配器流水线（Layer 3-6: KEYWORD, TFIDF, EMBEDDING, LEVENSHTEIN）
+- 4 级置信度降级模型（AUTO → SUGGEST → DEGRADE → FALLBACK）
+- Skill Semantic Index：token-overlap + embedding 双重索引，支持跨 pack 去重
 
 ### 原则 2: 数据驱动
 
@@ -382,7 +384,7 @@ AI 辅助开发的工具爆炸式增长：
 
 | ❌ | 说明 |
 |----|------|
-| **重量级 Agent 执行引擎** | VibeSOP 不读取/修改文件、不运行测试、不发起 API 调用——这些是 AI Agent 的职责 |
+| **重量级 Agent 执行引擎** | VibeSOP 不读取/修改文件、不运行测试、不发起 API 调用——这些是 AI Agent 的职责（L3）。`ExternalSkillExecutor` 仅作为开发者的技能验证工具存在，不用于生产路由流程。 |
 | AI 编码工具 | VibeSOP 管理技能路由和编排，AI Agent 执行技能 |
 | 单平台工具 | 不绑定 Claude Code、Cursor 或任何特定平台 |
 | 闭源系统 | 永久开源（MIT），开放决策过程 |
