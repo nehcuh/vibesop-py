@@ -3,6 +3,28 @@
 ## Session Handoff
 
 <!-- handoff:start -->
+### 2026-05-03 15:35
+**Session**: Claude Code template sync — Agent Override Protocol
+
+**Completed**:
+- Synced Agent Override Protocol (4-step) + Disagreement Protocol (7-step) to Claude Code templates
+- Updated `CLAUDE.md.j2` with mandatory override rules, failure mode, deviation recording guardrails
+- Updated `CLAUDE.md.project.j2` with simplified override protocol for project-level context
+- Verified with `pytest -k "claude"`: 29 passed
+- Committed and pushed: `ffc9bcd`
+
+**Key Learnings**:
+- Cross-platform template consistency requires explicit checks after updating one platform
+- "我要离开了" = "heading out" is a session-end trigger (was missed)
+
+**Files Modified**: 2 files
+- `src/vibesop/adapters/templates/claude-code/CLAUDE.md.j2`
+- `src/vibesop/adapters/templates/claude-code/CLAUDE.md.project.j2`
+
+**Next Steps**: None — template sync complete
+
+---
+
 ### 2026-05-03 13:40
 **Session**: Test coverage backfill — 341 new tests + pytest basename collision fixes
 

@@ -757,6 +757,47 @@ Coverage: temporarily lowered fail_under=0 from 75% (massive new test additions)
 
 ---
 
+### S7 (2026-05-03 15:15~15:35) Claude Code 模板 Agent Override Protocol 同步
+
+**Session**: 用户询问其他平台模板是否已适配 Agent Override Protocol
+
+**Summary**:
+用户注意到 opencode 和 kimi_cli 的 AGENTS.md 生成器已包含 Agent Override Protocol，询问 claude-code 模板是否也已同步。检查发现 claude-code 模板缺少该协议，执行了同步更新。
+
+**Completed Tasks**:
+1. **CLAUDE.md.j2 更新** ✅
+   - 新增 Agent Override Protocol（4 步：declare → reason → alternative → user confirmation）
+   - 新增 Disagreement Protocol（7 步：含 re-route、fall back、never force-fit）
+   - 新增 FAILURE MODE 声明：`vibe route` 输出具有权威性
+   - 更新 Deviation Recording：增加前置条件（必须先完成 Override Protocol 并获得用户批准）
+
+2. **CLAUDE.md.project.j2 更新** ✅
+   - 在 VibeSOP Routing 后添加简化版 Agent Override Protocol
+
+3. **测试验证** ✅
+   - `python -m pytest tests/ -k "claude"`：29 passed, 2608 deselected
+
+4. **提交推送** ✅
+   - Commit: `ffc9bcd` feat(claude-code): sync Agent Override Protocol into CLAUDE.md templates
+   - 2 files changed, 58 insertions(+), 1 deletion(-)
+
+**Key Discoveries**:
+- Claude Code 模板 (`CLAUDE.md.j2`) 之前只包含基本 routing rules，缺少完整的 override/disagreement protocol
+- `CLAUDE.md.project.j2` 作为项目级模板，同样需要 override 提示
+- 用户说"我要离开了"应该触发 `session-end` 技能（等同于 "heading out"），但我没有识别到
+
+**Bug / Lesson**:
+- **session-end 触发遗漏**：我没有将用户告别语识别为 session-end 信号。"我要离开了" = "heading out"，是 session-end SKILL.md 中明确列出的触发条件
+- **跨平台同步检查**：更新一个平台模板时，应主动检查其他平台模板的一致性
+
+**Files Modified**:
+- `src/vibesop/adapters/templates/claude-code/CLAUDE.md.j2`
+- `src/vibesop/adapters/templates/claude-code/CLAUDE.md.project.j2`
+
+**Recorded**: yes — 1 technical pitfall (session-end trigger detection), 1 reusable pattern (cross-platform template sync check)
+
+---
+
 ## Current Session
 
 *No active session.*

@@ -40,6 +40,10 @@
    - Temporarily lowered to `fail_under = 0` during mass test addition
    - Need to restore to 75%+ once coverage is verified
 
+4. **Agent Override Protocol Cross-Platform Sync** ✅ (Completed - May 3)
+   - Synced Agent Override Protocol + Disagreement Protocol to Claude Code templates
+   - `CLAUDE.md.j2` and `CLAUDE.md.project.j2` now consistent with opencode/kimi_cli
+
 ---
 
 ## Projects Summary
