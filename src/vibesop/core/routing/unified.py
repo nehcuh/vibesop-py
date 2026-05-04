@@ -86,7 +86,17 @@ class UnifiedRouter(
     RouterOrchestrationMixin,
     RouterContextMixin,
 ):
-    """Unified router for skill selection — single entry point for all routing."""
+    """Unified router for skill selection — single entry point for all routing.
+
+    Layers execute in priority order; first confident match wins:
+        EXPLICIT > SCENARIO > AI_TRIAGE > KEYWORD > TFIDF > EMBEDDING > LEVENSHTEIN > CUSTOM
+
+    Example:
+        >>> router = UnifiedRouter()
+        >>> result = router.orchestrate("扫描安全漏洞")
+        >>> if result.has_match:
+        ...     print(f"Matched: {result.primary.skill_id}")
+    """
 
     _LAYER_PRIORITY: ClassVar[list[RoutingLayer]] = [
         RoutingLayer.EXPLICIT,
@@ -315,7 +325,14 @@ class UnifiedRouter(
         candidates: list[dict[str, Any]] | None = None,
         limit: int = 50,
     ) -> list[str]:
-        """Build the 'skill_id: description' list fed to TaskDecomposer."""
+        """Build the 'skill_id: description' list fed to TaskDecomposer.
+
+        Centralized here so orchestrate(), agent.decompose(), agent.build_plan(),
+        and `vibe decompose` use the exact same skill catalog. When no skill list
+        reaches the LLM, the decomposer can't pre-assign skill_id and PlanBuilder
+        falls back to lightweight (skip_ai_triage) routing — which causes the
+        "all sub-tasks → wrong skill" symptom.
+        """
         skill_candidates = candidates or self._get_cached_candidates()
         return [
             f"{c['id']}: {c.get('description', c.get('intent', 'N/A'))}"
@@ -582,7 +599,16 @@ class UnifiedRouter(
     ) -> RoutingResult:
         """Route a query to the best matching skill (single-skill fast path).
 
-        For multi-intent queries, prefer orchestrate().
+        For multi-intent queries, prefer orchestrate() which detects compound
+        requests and builds an ExecutionPlan.
+
+        Args:
+            query: User's natural language query.
+            candidates: Optional skill candidates list (uses cached if None).
+            context: Optional routing context with conversation/memory state.
+
+        Returns:
+            RoutingResult with primary match or no-match sentinel.
         """
         return self._single_skill_route(query, candidates, context)
 
@@ -593,7 +619,17 @@ class UnifiedRouter(
         context: RoutingContext | None = None,
         callbacks: Any | None = None,
     ) -> OrchestrationResult:
-        """Orchestrate a query — detect multi-intent and build execution plan if needed."""
+        """Orchestrate a query — detect multi-intent and build execution plan if needed.
+
+        Single-skill queries route directly. Multi-intent queries are decomposed
+        into an ExecutionPlan with dependency-ordered steps.
+
+        Args:
+            query: User's natural language query.
+            candidates: Optional skill candidates list.
+            context: Optional routing context for conversation/memory state.
+            callbacks: Optional orchestration callbacks for streaming progress.
+        """
         from vibesop.core.orchestration.callbacks import (
             ErrorPolicy,
             NoOpCallbacks,
@@ -858,7 +894,19 @@ class UnifiedRouter(
     # ================================================================
 
     def set_llm(self, llm_provider: Any) -> None:
-        """Inject an LLM provider for AI triage."""
+        """Inject an LLM provider for AI triage.
+
+        Args:
+            llm_provider: Object with a ``call(prompt, max_tokens, temperature)``
+                method that returns a response with a ``content`` attribute.
+
+        Example:
+            >>> class AgentLLM:
+            ...     def call(self, prompt, max_tokens=100, temperature=0.1):
+            ...         return type("R", (), {"content": agent_generate(prompt)})()
+            >>> router = UnifiedRouter()
+            >>> router.set_llm(AgentLLM())
+        """
         self._llm = llm_provider
         self._triage_service._llm = llm_provider
 

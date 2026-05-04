@@ -280,7 +280,12 @@ class ClaudeCodeAdapter(PlatformAdapter):
         manifest: Manifest,
         result: RenderResult,
     ) -> None:
-        """Render skill content from actual skill file or central storage."""
+        """Render skill content from actual skill file or central storage.
+
+        Critical invariant: NEVER overwrite an external skill's full SKILL.md
+        with the thin Jinja2 template wrapper. External skills have their own
+        authoritative content; only generate a template when no real content exists.
+        """
         skill_id = skill.id if hasattr(skill, "id") else skill.get("id", "")
         skill_output_path = skill_dir / "SKILL.md"
 

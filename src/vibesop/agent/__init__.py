@@ -35,7 +35,18 @@ class SimpleLLM:
 
 
 class AgentRouter:
-    """Router wrapper for AI Agent integration."""
+    """Router wrapper for AI Agent integration.
+
+    Provides a simplified interface over UnifiedRouter for agents that need
+    routing without managing the full orchestration lifecycle.
+
+    Example:
+        >>> router = AgentRouter()
+        >>> router.set_llm(agent_llm)
+        >>> result = router.route("debug this error")
+        >>> if result.has_match:
+        ...     skill = result.primary.skill_id
+    """
 
     def __init__(self, project_root: str | Path = "."):
         from vibesop.core.routing import UnifiedRouter
@@ -43,11 +54,21 @@ class AgentRouter:
         self._router = UnifiedRouter(project_root=project_root)
 
     def set_llm(self, llm_provider: Any) -> None:
-        """Inject the Agent's LLM for AI triage."""
+        """Inject the Agent's LLM for AI triage.
+
+        Args:
+            llm_provider: Object with call(prompt, max_tokens, temperature)
+                returning a response with a .content attribute.
+        """
         self._router.set_llm(llm_provider)
 
     def route(self, query: str, enable_ai_triage: bool = True) -> Any:
-        """Route a query to the best matching skill."""
+        """Route a query to the best matching skill.
+
+        Args:
+            query: Natural language query string.
+            enable_ai_triage: Temporarily enable AI triage for this call.
+        """
         # If AI triage is requested and LLM is available, temporarily enable it
         if enable_ai_triage and self._router._llm is not None:
             # Store original configs

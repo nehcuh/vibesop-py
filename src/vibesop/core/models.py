@@ -325,7 +325,15 @@ class ExecutionPlan(BaseModel):
         }
 
     def get_parallel_groups(self) -> list[list["ExecutionStep"]]:
-        """Group steps into parallel batches based on dependencies."""
+        """Group steps into parallel batches based on dependencies.
+
+        Uses a topological sort to find steps that can run concurrently.
+        Steps with satisfied dependencies and ``can_parallel=True`` are
+        batched together. Non-parallel steps form singleton groups.
+
+        Returns:
+            List of step groups; each group can execute in parallel.
+        """
         if not self.steps:
             return []
 

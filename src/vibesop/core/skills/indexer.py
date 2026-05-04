@@ -64,7 +64,7 @@ class SkillProfile:
     query_patterns: list[str] = field(default_factory=list)
     differentiation: str = ""
     confidence_boosters: list[str] = field(default_factory=list)
-    pack_owner: str = ""
+    pack_owner: str = ""  # Pack namespace that owns this skill (set by symlink resolution)
     # SHA256 (truncated) of the prompt fed to the LLM. Lets the indexer skip
     # re-analyzing skills whose content hasn't changed since the last run.
     # Empty string means: profile from a pre-cache indexer; treat as cold.
@@ -179,6 +179,12 @@ class SkillIndexer:
         return "global"
 
     def _infer_pack_owner(self, loaded_skill: Any) -> str:
+        """Determine pack namespace by resolving the skill file's symlink chain.
+
+        Pack-installed skills are symlinked from ~/.config/skills/<pack>/<skill>/
+        into the platform's skills directory. Resolving the symlink reveals which
+        pack namespace owns the skill, preventing cross-pack re-indexing conflicts.
+        """
         source = loaded_skill.source_file
         if not source:
             return ""

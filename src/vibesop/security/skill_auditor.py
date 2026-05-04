@@ -1,4 +1,9 @@
-"""Skill security auditor for external skill validation."""
+"""Skill security auditor for external skill validation.
+
+Validates skills against the SKILL-INJECT threat model (cf. Mazarelli et al.,
+"Skill Injection Attacks on AI Agent Platforms", 2023) which describes how
+malicious SKILL.md files can exfiltrate data or manipulate agent behavior.
+"""
 
 from __future__ import annotations
 
