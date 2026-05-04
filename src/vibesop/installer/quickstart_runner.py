@@ -228,8 +228,12 @@ class QuickstartRunner:
                 console.print("⊘ Hooks skipped")
 
             from vibesop.core.skills.indexer import SkillIndexer
+            from vibesop.llm.factory import create_provider
 
-            indexer = SkillIndexer(project_root=config.project_path)
+            def _llm_factory() -> Any:
+                return create_provider()
+
+            indexer = SkillIndexer(project_root=config.project_path, llm_factory=_llm_factory)
 
             if config.global_install:
                 console.print("\n[bold cyan]🔍 Building global skill index...[/bold cyan]")

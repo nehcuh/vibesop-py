@@ -44,7 +44,64 @@ from vibesop.cli.routing_report import render_routing_report
 from vibesop.cli.subcommands import register
 from vibesop.core.routing import UnifiedRouter
 
+
+def _wire_defaults() -> None:
+    """Composition root: wire concrete implementations into core abstractions."""
+    from vibesop.core.skills.executor import ExternalSkillExecutor
+    from vibesop.core.skills.external_loader import ExternalSkillLoader
+    from vibesop.core.skills.storage import SkillStorage
+    from vibesop.security import PathSafety, SkillSecurityAuditor
+
+    SkillStorage.set_default_path_safety(PathSafety())
+    ExternalSkillLoader.set_default_auditor_factory(
+        lambda strict, root: SkillSecurityAuditor(strict_mode=strict, project_root=root),
+    )
+    ExternalSkillExecutor.set_default_auditor_factory(
+        lambda root: SkillSecurityAuditor(project_root=root),
+    )
+
+
+_wire_defaults()
+
 logger = logging.getLogger(__name__)
+
+
+def _build_llm_factory() -> Any:
+    """Create an LLM factory callable for injection into UnifiedRouter.
+
+    Composition root: this is the only place that imports vibesop.llm.
+    Returns a callable that, when invoked, produces a configured LLM provider.
+    """
+
+    def factory() -> Any:
+        from vibesop.core.llm_config import VibeSOPConfigManager
+        from vibesop.llm.factory import create_provider
+
+        llm_config = VibeSOPConfigManager.get_llm_config()
+        if llm_config and llm_config.api_key:
+            return create_provider(
+                provider=llm_config.provider,
+                api_key=llm_config.api_key,
+                base_url=llm_config.api_base,
+            )
+        return create_provider()
+
+    return factory
+
+
+def _build_prompt_builder() -> Any:
+    """Create a prompt builder callable for injection into UnifiedRouter."""
+
+    def builder(query: str, skills_summary: str, version: str) -> str:
+        from vibesop.llm.triage_prompts import TriagePromptRegistry
+
+        return TriagePromptRegistry.render(
+            query=query,
+            skills_summary=skills_summary,
+            version=version,
+        )
+
+    return builder
 
 
 app = typer.Typer(
@@ -238,9 +295,18 @@ def route(
 
     if routing_kwargs:
         config = RoutingConfig(**routing_kwargs)
-        router = UnifiedRouter(project_root=Path.cwd(), config=config)
+        router = UnifiedRouter(
+            project_root=Path.cwd(),
+            config=config,
+            llm_factory=_build_llm_factory(),
+            prompt_builder=_build_prompt_builder(),
+        )
     else:
-        router = UnifiedRouter(project_root=Path.cwd())
+        router = UnifiedRouter(
+            project_root=Path.cwd(),
+            llm_factory=_build_llm_factory(),
+            prompt_builder=_build_prompt_builder(),
+        )
 
     # Build routing context with conversation ID for multi-turn support
     from vibesop.core.matching import RoutingContext
@@ -367,9 +433,18 @@ def orchestrate(
 
     if routing_kwargs:
         config = RoutingConfig(**routing_kwargs)
-        router = UnifiedRouter(project_root=Path.cwd(), config=config)
+        router = UnifiedRouter(
+            project_root=Path.cwd(),
+            config=config,
+            llm_factory=_build_llm_factory(),
+            prompt_builder=_build_prompt_builder(),
+        )
     else:
-        router = UnifiedRouter(project_root=Path.cwd())
+        router = UnifiedRouter(
+            project_root=Path.cwd(),
+            llm_factory=_build_llm_factory(),
+            prompt_builder=_build_prompt_builder(),
+        )
 
     context = RoutingContext()
     if conversation_id:
@@ -407,9 +482,12 @@ def decompose(
     from vibesop.core.orchestration import TaskDecomposer
     from vibesop.core.routing import UnifiedRouter
 
-    router = UnifiedRouter(project_root=Path.cwd())
-    llm = getattr(router, "_llm", None)
-    decomposer = TaskDecomposer(llm_client=llm)
+    router = UnifiedRouter(
+        project_root=Path.cwd(),
+        llm_factory=_build_llm_factory(),
+        prompt_builder=_build_prompt_builder(),
+    )
+    decomposer = TaskDecomposer(llm_client=getattr(router, "_llm", None))
     skills = router._build_decomposition_skills()
     sub_tasks = decomposer.decompose(query, skills=skills)
 

@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import shutil
 from pathlib import Path
-from typing import ClassVar
+from typing import Any, ClassVar
 
 from rich.console import Console
 
@@ -306,8 +306,12 @@ class PackInstaller:
         recovery_hint = "[dim]Run `vibe quickstart` to rebuild the index from scratch.[/dim]"
         try:
             from vibesop.core.skills.indexer import SkillIndexer
+            from vibesop.llm.factory import create_provider
 
-            indexer = SkillIndexer(project_root=Path.home())
+            def _llm_factory() -> Any:
+                return create_provider()
+
+            indexer = SkillIndexer(project_root=Path.home(), llm_factory=_llm_factory)
             result = indexer.update_global_index_for_pack(
                 pack_name=pack_name, pack_storage=self.central_storage, show_progress=False,
             )

@@ -586,6 +586,7 @@ def _detect_and_load_skill(source: str) -> tuple[Path, Any]:
 def _auto_configure_skill(metadata: Any, scope: str, _source: str) -> None:
     from vibesop.core.ai_enhancer import AIEnhancer
     from vibesop.core.session_analyzer import SkillSuggestion
+    from vibesop.llm import create_from_env
 
     console.print("[dim]Analyzing skill for auto-configuration...[/dim]")
 
@@ -599,7 +600,7 @@ def _auto_configure_skill(metadata: Any, scope: str, _source: str) -> None:
     )
 
     try:
-        enhancer = AIEnhancer()
+        enhancer = AIEnhancer(llm_provider=create_from_env())
         enhanced = enhancer.enhance_suggestion(suggestion)
 
         console.print(f"[green]✓ Category:[/green] {enhanced.category}")

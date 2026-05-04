@@ -100,15 +100,15 @@ class RouterOrchestrationMixin:
         if triage_llm is not None:
             return triage_llm
 
-        # 3. Direct provider from environment
-        try:
-            from vibesop.llm.factory import create_provider
-
-            provider = create_provider()
-            if provider.configured():
-                return provider
-        except Exception as e:
-            host.logger.warning("Failed to initialize LLM provider: %s", e)
+        # 3. Injected factory
+        llm_factory = getattr(host, "_llm_factory", None)
+        if callable(llm_factory):
+            try:
+                provider = llm_factory()
+                if provider is not None and provider.configured():
+                    return provider
+            except Exception as e:
+                host.logger.warning("Failed to invoke LLM factory: %s", e)
 
         return None
 

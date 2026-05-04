@@ -179,11 +179,8 @@ class SkillLoader:
                 # role-hijacking heuristics. We still block CRITICAL threats.
                 if ext_metadata.is_trusted:
                     audit_result = ext_metadata.audit_result
-                    if audit_result:
-                        from vibesop.security.skill_auditor import ThreatLevel
-
-                        if audit_result.risk_level == ThreatLevel.CRITICAL:
-                            continue
+                    if audit_result and str(audit_result.risk_level) == "critical":
+                        continue
                     # Skip logging entirely for performance - trusted skills are expected
                 else:
                     continue

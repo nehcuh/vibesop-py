@@ -62,6 +62,7 @@ from vibesop.core.routing.conflict import (
     RecencyStrategy,
 )
 from vibesop.core.routing.context_mixin import RouterContextMixin
+from vibesop.core.routing.cost_tracker import TriageCostTracker
 from vibesop.core.routing.degradation import DegradationManager
 from vibesop.core.routing.matcher_pipeline import MatcherPipeline
 from vibesop.core.routing.optimization_service import OptimizationService
@@ -69,7 +70,6 @@ from vibesop.core.routing.orchestration_mixin import RouterOrchestrationMixin
 from vibesop.core.routing.result_mixin import RouterResultMixin
 from vibesop.core.routing.stats_mixin import RouterStatsMixin
 from vibesop.core.routing.triage_service import TriageService
-from vibesop.llm.cost_tracker import TriageCostTracker
 
 if TYPE_CHECKING:
     from vibesop.core.instinct import InstinctLearner
@@ -115,6 +115,8 @@ class UnifiedRouter(
         project_root: str | Path = ".",
         config: ConfigRoutingConfig | ConfigManager | None = None,
         skill_loader: Any | None = None,
+        llm_factory: Any | None = None,
+        prompt_builder: Any | None = None,
     ):
         self.project_root = Path(project_root).resolve()
 
@@ -126,6 +128,8 @@ class UnifiedRouter(
             self._config_manager = self._create_config_manager_from_config(config)
 
         self._config: ConfigRoutingConfig = self._config_manager.get_routing_config()
+        self._llm_factory = llm_factory
+        self._prompt_builder = prompt_builder
         if skill_loader is not None:
             self._skill_loader = skill_loader
 
@@ -221,6 +225,8 @@ class UnifiedRouter(
             prefilter=self._prefilter,
             cache_manager=self._cache_manager,
             get_skill_source=self._get_skill_source,
+            llm_factory=llm_factory,
+            prompt_builder=prompt_builder,
         )
 
         self._matcher_pipeline = MatcherPipeline(

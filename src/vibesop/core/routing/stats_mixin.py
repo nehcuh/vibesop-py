@@ -16,7 +16,7 @@ from vibesop.core.models import RoutingLayer
 if TYPE_CHECKING:
     from vibesop.core.config.manager import RoutingConfig
     from vibesop.core.optimization.preference_boost import PreferenceBooster
-    from vibesop.llm.cost_tracker import TriageCostTracker
+    from vibesop.core.routing.cost_tracker import TriageCostTracker
 
 
 class _StatsHost(Protocol):

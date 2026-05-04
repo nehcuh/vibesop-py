@@ -145,7 +145,10 @@ class TestUnifiedRouterAIBudget:
             enable_ai_triage=True,
             ai_triage_prompt_version="v1",
         )
-        router = UnifiedRouter(project_root=tmp_path, config=config)
+        prompt_builder = TriagePromptRegistry.render
+        router = UnifiedRouter(
+            project_root=tmp_path, config=config, prompt_builder=prompt_builder,
+        )
 
         prompt = router._build_ai_triage_prompt("test", "- skill")
         assert "skill routing assistant" in prompt

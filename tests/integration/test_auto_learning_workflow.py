@@ -167,7 +167,7 @@ class TestAIEnhancementWorkflow:
             estimated_value="high",
         )
 
-        enhancer = AIEnhancer()
+        enhancer = AIEnhancer(llm_provider=Mock())
 
         mock_response_text = """```json
 {
@@ -216,7 +216,7 @@ class TestAIEnhancementWorkflow:
             estimated_value="medium",
         )
 
-        enhancer = AIEnhancer()
+        enhancer = AIEnhancer(llm_provider=Mock())
 
         with patch.object(enhancer._llm, "call", side_effect=Exception("LLM error")):  # type: ignore[reportUnknownMemberType]
             enhanced = enhancer.enhance_suggestion(suggestion)
@@ -296,7 +296,7 @@ class TestCompleteLearningLoop:
         suggestions = analyzer.analyze_session_file(learning_environment["session_file"])
 
         # Mock the LLM call in AIEnhancer
-        enhancer = AIEnhancer()
+        enhancer = AIEnhancer(llm_provider=Mock())
         mock_response = Mock()
         mock_response.content = """```json
 {
@@ -332,7 +332,7 @@ class TestCompleteLearningLoop:
         assert len(suggestions) >= 1
 
         # Phase 4: AI Enhancement
-        enhancer = AIEnhancer()
+        enhancer = AIEnhancer(llm_provider=Mock())
         mock_response = Mock()
         mock_response.content = """```json
 {

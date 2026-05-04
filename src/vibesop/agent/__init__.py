@@ -51,7 +51,24 @@ class AgentRouter:
     def __init__(self, project_root: str | Path = "."):
         from vibesop.core.routing import UnifiedRouter
 
-        self._router = UnifiedRouter(project_root=project_root)
+        prompt_builder = self._build_prompt_builder()
+        self._router = UnifiedRouter(
+            project_root=project_root,
+            prompt_builder=prompt_builder,
+        )
+
+    @staticmethod
+    def _build_prompt_builder() -> Any:
+        def builder(query: str, skills_summary: str, version: str) -> str:
+            from vibesop.llm.triage_prompts import TriagePromptRegistry
+
+            return TriagePromptRegistry.render(
+                query=query,
+                skills_summary=skills_summary,
+                version=version,
+            )
+
+        return builder
 
     def set_llm(self, llm_provider: Any) -> None:
         """Inject the Agent's LLM for AI triage.

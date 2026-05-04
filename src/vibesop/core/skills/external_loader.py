@@ -11,12 +11,12 @@ from typing import TYPE_CHECKING, Any, ClassVar
 
 from vibesop.constants import TRUSTED_PACKS
 from vibesop.core.skills.parser import parse_skill_md
-from vibesop.security import AuditResult, SkillSecurityAuditor
 
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from vibesop.core.skills.base import SkillMetadata
+    from vibesop.security import AuditResult
 
 
 class SkillSource(StrEnum):
@@ -71,30 +71,38 @@ class ExternalSkillLoader:
     # Trusted skill pack namespaces (canonical source in vibesop.constants)
     TRUSTED_PACKS: ClassVar[dict[str, str]] = TRUSTED_PACKS
 
+    _DEFAULT_AUDITOR_FACTORY: ClassVar[Any] = None
+
     def __init__(
         self,
         external_paths: list[Path] | None = None,
         require_audit: bool = True,
         strict_mode: bool = True,
         project_root: str | Path | None = None,
+        auditor: Any | None = None,
     ):
         self.external_paths = external_paths or self.EXTERNAL_PATHS.copy()
         self._require_audit = require_audit
         self._strict_mode = strict_mode
+        self._project_root = project_root or Path.cwd()
 
-        # Initialize components
-        self._auditor = SkillSecurityAuditor(
-            strict_mode=strict_mode,
-            project_root=project_root or Path.cwd(),
-        )
+        if auditor is not None:
+            self._auditor = auditor
+        elif type(self)._DEFAULT_AUDITOR_FACTORY is not None:
+            self._auditor = type(self)._DEFAULT_AUDITOR_FACTORY(strict_mode, self._project_root)
+        else:
+            self._auditor = None
 
-        # Add external paths to auditor's allowed paths
-        for path in self.external_paths:
-            if path.exists():
-                self._auditor.add_allowed_path(path)
+        if self._auditor is not None:
+            for path in self.external_paths:
+                if path.exists():
+                    self._auditor.add_allowed_path(path)
 
-        # Cache for discovered skills
         self._cache: dict[str, ExternalSkillMetadata] = {}
+
+    @classmethod
+    def set_default_auditor_factory(cls, factory: Any) -> None:
+        cls._DEFAULT_AUDITOR_FACTORY = factory
 
     def discover_all(self, force_reload: bool = False) -> dict[str, ExternalSkillMetadata]:
         if self._cache and not force_reload:

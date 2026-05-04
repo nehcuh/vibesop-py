@@ -29,10 +29,7 @@ import tempfile
 import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
-from typing import ClassVar
-
-from vibesop.security import PathSafety
-from vibesop.security.exceptions import PathTraversalError
+from typing import Any, ClassVar
 
 logger = logging.getLogger(__name__)
 
@@ -95,9 +92,20 @@ class SkillStorage:
         "cursor": Path.home() / ".config" / "cursor" / "skills",
     }
 
-    def __init__(self, dry_run: bool = False) -> None:
+    _DEFAULT_PATH_SAFETY: ClassVar[Any] = None
+
+    def __init__(self, dry_run: bool = False, path_safety: Any | None = None) -> None:
         self.dry_run = dry_run
-        self._path_safety = PathSafety()
+        if path_safety is not None:
+            self._path_safety = path_safety
+        elif self._DEFAULT_PATH_SAFETY is not None:
+            self._path_safety = self._DEFAULT_PATH_SAFETY
+        else:
+            self._path_safety = None
+
+    @classmethod
+    def set_default_path_safety(cls, safety: Any) -> None:
+        cls._DEFAULT_PATH_SAFETY = safety
 
     def get_skill_path(self, skill_id: str) -> Path:
         return self.CENTRAL_SKILLS_DIR / skill_id
@@ -126,8 +134,9 @@ class SkillStorage:
 
         # Path traversal check
         try:
-            self._path_safety.check_traversal(str(source_path), Path.cwd())
-        except PathTraversalError:
+            if self._path_safety is not None:
+                self._path_safety.check_traversal(str(source_path), Path.cwd())
+        except Exception:
             return False, f"Unsafe source path: {source_path}"
 
         # Check if already exists

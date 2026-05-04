@@ -16,9 +16,6 @@ from typing import Any, Literal
 
 from rich.console import Console
 
-from vibesop.core.llm_config import LLMConfigResolver
-from vibesop.llm.factory import create_provider
-
 logger = logging.getLogger(__name__)
 console = Console()
 
@@ -122,8 +119,10 @@ class SkillIndexer:
         self,
         project_root: str | Path = ".",
         index_dir: str | Path | None = None,
+        llm_factory: Any | None = None,
     ) -> None:
         self.project_root = Path(project_root).resolve()
+        self._llm_factory = llm_factory
         if index_dir is None:
             self.index_dir = self.project_root / ".vibe"
         else:
@@ -144,20 +143,14 @@ class SkillIndexer:
         if self._llm_provider is not None:
             return self._llm_provider
 
-        resolver = LLMConfigResolver()
-        config = resolver.get_llm_for_understanding()
-        if config is None:
-            logger.warning("No LLM configuration found for skill indexing")
+        if self._llm_factory is None:
+            logger.warning("No LLM factory injected — skill indexing unavailable")
             return None
 
         try:
-            self._llm_provider = create_provider(
-                provider=config.provider,  # pyright: ignore[reportArgumentType]
-                api_key=config.api_key,
-                base_url=config.api_base,
-            )
-            if not self._llm_provider.configured():
-                logger.warning(f"LLM provider {config.provider} is not configured")
+            self._llm_provider = self._llm_factory()
+            if self._llm_provider is None or not self._llm_provider.configured():
+                logger.warning("LLM factory produced unconfigured provider")
                 return None
             return self._llm_provider
         except Exception as e:

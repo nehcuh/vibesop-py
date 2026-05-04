@@ -46,7 +46,6 @@ from vibesop.core.skills.workflow import (
     Workflow,
     WorkflowEngine,
 )
-from vibesop.security.skill_auditor import SkillSecurityAuditor
 
 logger = logging.getLogger(__name__)
 
@@ -146,12 +145,15 @@ class ExternalSkillExecutor:
     - Uses SkillAuditor for security checks
     """
 
+    _DEFAULT_AUDITOR_FACTORY: Any = None
+
     def __init__(
         self,
         project_root: str | Path = ".",
         enable_execution: bool = True,
         execution_timeout: float = 30.0,
         loader: SkillLoader | None = None,
+        auditor: Any | None = None,
     ) -> None:
         """Initialize the external skill executor.
 
@@ -168,7 +170,12 @@ class ExternalSkillExecutor:
         # Initialize dependencies (use injected loader or create new one)
         self._loader = loader or SkillLoader(project_root=self.project_root)
         self._parser = SkillParser()
-        self._auditor = SkillSecurityAuditor(project_root=self.project_root)
+        if auditor is not None:
+            self._auditor = auditor
+        elif type(self)._DEFAULT_AUDITOR_FACTORY is not None:
+            self._auditor = type(self)._DEFAULT_AUDITOR_FACTORY(self.project_root)
+        else:
+            self._auditor = None
         self._workflow_engine: WorkflowEngine | None = None
 
         if enable_execution:
@@ -179,6 +186,10 @@ class ExternalSkillExecutor:
         logger.info(
             f"ExternalSkillExecutor initialized (execution={'enabled' if enable_execution else 'disabled'})"
         )
+
+    @classmethod
+    def set_default_auditor_factory(cls, factory: Any) -> None:
+        cls._DEFAULT_AUDITOR_FACTORY = factory
 
     def get_skill_definition(self, skill_id: str) -> SkillResult:
         """Get skill workflow definition for AI agent execution.
@@ -216,16 +227,13 @@ class ExternalSkillExecutor:
                 )
 
             # Step 2: Security audit
-            if loaded.source_file:
+            if loaded.source_file and self._auditor is not None:
                 audit_result = self._auditor.audit_skill_file(loaded.source_file)
                 if not audit_result.is_safe:
-                    # Allow trusted packs through with non-critical audit issues.
                     is_trusted = loaded.external_metadata is not None and getattr(
                         loaded.external_metadata, "is_trusted", False
                     )
-                    from vibesop.security.skill_auditor import ThreatLevel
-
-                    if is_trusted and audit_result.risk_level != ThreatLevel.CRITICAL:
+                    if is_trusted and str(audit_result.risk_level) != "critical":
                         logger.warning(
                             "Allowing trusted skill '%s' despite audit warning: %s",
                             skill_id,

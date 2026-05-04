@@ -23,6 +23,7 @@ Examples:
 """
 
 from pathlib import Path
+from typing import Any
 
 import typer
 from rich.console import Console
@@ -273,8 +274,12 @@ def _do_init(
         # Build skill semantic index (layered: global first, then project)
         if not skip_index:
             from vibesop.core.skills.indexer import SkillIndexer
+            from vibesop.llm.factory import create_provider
 
-            indexer = SkillIndexer(project_root=project_path)
+            def _llm_factory() -> Any:
+                return create_provider()
+
+            indexer = SkillIndexer(project_root=project_path, llm_factory=_llm_factory)
 
             # Ensure global index exists (built once, shared across projects)
             if not indexer.global_index_path.exists():

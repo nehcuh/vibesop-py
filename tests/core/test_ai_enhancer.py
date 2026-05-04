@@ -16,9 +16,23 @@ class TestAIEnhancer:
     """Test AIEnhancer class."""
 
     def test_initialization(self):
-        """Test enhancer initialization."""
         enhancer = AIEnhancer()
-        assert enhancer._llm is not None
+        assert enhancer._llm is None
+
+    def test_initialization_with_provider(self):
+        mock_llm = Mock()
+        enhancer = AIEnhancer(llm_provider=mock_llm)
+        assert enhancer._llm is mock_llm
+
+    @pytest.fixture
+    def mock_llm(self):
+        llm = Mock()
+        llm.configured.return_value = True
+        return llm
+
+    @pytest.fixture
+    def enhancer(self, mock_llm):
+        return AIEnhancer(llm_provider=mock_llm)
 
     @pytest.fixture
     def sample_suggestion(self):
@@ -36,11 +50,7 @@ class TestAIEnhancer:
             estimated_value="medium",
         )
 
-    def test_enhance_suggestion_with_llm(self, sample_suggestion):
-        """Test enhancing suggestion with LLM."""
-        enhancer = AIEnhancer()
-
-        # Mock LLM response
+    def test_enhance_suggestion_with_llm(self, sample_suggestion, enhancer):
         mock_response_text = """```json
 {
   "name": "Code Performance Optimization",
@@ -65,7 +75,6 @@ class TestAIEnhancer:
         with patch.object(enhancer._llm, "call", return_value=mock_llm_response):
             enhanced = enhancer.enhance_suggestion(sample_suggestion)
 
-        # Verify enhancement
         assert isinstance(enhanced, EnhancedSkill)
         assert enhanced.name == "Code Performance Optimization"
         assert enhanced.category == "optimization"
@@ -74,30 +83,19 @@ class TestAIEnhancer:
         assert len(enhanced.steps) > 0
         assert enhanced.original == sample_suggestion
 
-    def test_enhance_suggestion_llm_error(self, sample_suggestion):
-        """Test fallback when LLM fails."""
-        enhancer = AIEnhancer()
-
-        # Mock LLM failure
+    def test_enhance_suggestion_llm_error(self, sample_suggestion, enhancer):
         with patch.object(enhancer._llm, "call", side_effect=Exception("LLM error")):
             enhanced = enhancer.enhance_suggestion(sample_suggestion)
 
-        # Should fallback to basic enhancement
         assert isinstance(enhanced, EnhancedSkill)
-        # Should have improved name
         assert "优化" in enhanced.name or "performance" in enhanced.name.lower()
-        # Should have category
         assert enhanced.category in ["development", "testing", "debugging",
                                         "review", "documentation", "deployment",
                                         "security", "optimization"]
 
-    def test_enhance_batch(self, sample_suggestion):
-        """Test batch enhancement."""
-        enhancer = AIEnhancer()
-
+    def test_enhance_batch(self, sample_suggestion, enhancer):
         suggestions = [sample_suggestion] * 3
 
-        # Mock successful enhancement
         mock_response_text = """```json
 {
   "name": "Test Skill",
@@ -115,18 +113,13 @@ class TestAIEnhancer:
         with patch.object(enhancer._llm, "call", return_value=mock_llm_response):
             enhanced_list = enhancer.enhance_batch(suggestions)
 
-        # Should enhance all suggestions
         assert len(enhanced_list) == 3
         for enhanced in enhanced_list:
             assert isinstance(enhanced, EnhancedSkill)
 
-    def test_enhance_batch_with_errors(self, sample_suggestion):
-        """Test batch enhancement with some errors."""
-        enhancer = AIEnhancer()
-
+    def test_enhance_batch_with_errors(self, sample_suggestion, enhancer):
         suggestions = [sample_suggestion] * 3
 
-        # Mock: first succeeds, second fails, third succeeds
         call_count = [0]
 
         def mock_call(prompt, max_tokens=None, temperature=None):
@@ -150,9 +143,7 @@ class TestAIEnhancer:
         with patch.object(enhancer._llm, "call", side_effect=mock_call):
             enhanced_list = enhancer.enhance_batch(suggestions)
 
-        # Should handle errors gracefully
         assert len(enhanced_list) == 3
-        # All should be EnhancedSkill instances (fallback or successful)
         for enhanced in enhanced_list:
             assert isinstance(enhanced, EnhancedSkill)
 
@@ -271,7 +262,6 @@ class TestEdgeCases:
     """Test edge cases and error handling."""
 
     def test_empty_trigger_queries(self):
-        """Test enhancement with empty trigger queries."""
         suggestion = SkillSuggestion(
             skill_name="test",
             description="test",
@@ -284,13 +274,12 @@ class TestEdgeCases:
         enhancer = AIEnhancer()
         enhanced = enhancer._fallback_enhancement(suggestion)
 
-        # Should still create EnhancedSkill
         assert isinstance(enhanced, EnhancedSkill)
         assert enhanced.name == "Test"
 
     def test_invalid_json_response(self):
-        """Test handling invalid JSON from LLM."""
-        enhancer = AIEnhancer()
+        mock_llm = Mock()
+        enhancer = AIEnhancer(llm_provider=mock_llm)
 
         suggestion = SkillSuggestion(
             skill_name="test",
@@ -301,19 +290,17 @@ class TestEdgeCases:
             estimated_value="low",
         )
 
-        # Mock invalid JSON response
         mock_response = Mock()
         mock_response.content = "Invalid JSON"
 
         with patch.object(enhancer._llm, "call", return_value=mock_response):
             enhanced = enhancer.enhance_suggestion(suggestion)
 
-        # Should fallback to basic enhancement
         assert isinstance(enhanced, EnhancedSkill)
 
     def test_malformed_json_response(self):
-        """Test handling malformed JSON from LLM."""
-        enhancer = AIEnhancer()
+        mock_llm = Mock()
+        enhancer = AIEnhancer(llm_provider=mock_llm)
 
         suggestion = SkillSuggestion(
             skill_name="test",
@@ -324,14 +311,12 @@ class TestEdgeCases:
             estimated_value="low",
         )
 
-        # Mock partial JSON
         mock_response = Mock()
         mock_response.content = '{"name": "Partial"'
 
         with patch.object(enhancer._llm, "call", return_value=mock_response):
             enhanced = enhancer.enhance_suggestion(suggestion)
 
-        # Should handle gracefully
         assert isinstance(enhanced, EnhancedSkill)
 
 
@@ -339,8 +324,9 @@ class TestIntegration:
     """Integration tests for AI enhancement."""
 
     def test_end_to_end_enhancement(self):
-        """Test complete enhancement workflow."""
-        # Create realistic suggestion
+        mock_llm = Mock()
+        enhancer = AIEnhancer(llm_provider=mock_llm)
+
         suggestion = SkillSuggestion(
             skill_name="请帮我重构代码结构",
             description="Automatically generated skill",
@@ -356,9 +342,6 @@ class TestIntegration:
             estimated_value="high",
         )
 
-        enhancer = AIEnhancer()
-
-        # Mock LLM response
         mock_response_text = """```json
 {
   "name": "Code Refactoring",
@@ -384,17 +367,15 @@ class TestIntegration:
         with patch.object(enhancer._llm, "call", return_value=mock_response):
             enhanced = enhancer.enhance_suggestion(suggestion)
 
-        # Verify complete enhancement
         assert enhanced.name == "Code Refactoring"
         assert "clarity" in enhanced.description.lower()
         assert enhanced.category == "development"
         assert "refactoring" in enhanced.tags
         assert len(enhanced.trigger_conditions) >= 2
         assert len(enhanced.steps) == 4
-        assert enhanced.confidence > 0.8  # High quality
+        assert enhanced.confidence > 0.8
 
     def test_llm_unavailable_scenario(self):
-        """Test behavior when LLM is not configured."""
         suggestion = SkillSuggestion(
             skill_name="test",
             description="test",
@@ -404,16 +385,9 @@ class TestIntegration:
             estimated_value="low",
         )
 
-        # Mock LLM initialization error
-        with patch('vibesop.core.ai_enhancer.create_from_env', side_effect=ImportError), pytest.raises(ImportError):
-            # AIEnhancer.__init__ will fail, which is expected
-            enhancer = AIEnhancer()
-
-        # Test that fallback enhancement method works
-        # Create a real AIEnhancer (outside the mock context)
         enhancer = AIEnhancer()
         enhanced = enhancer._fallback_enhancement(suggestion)
 
         assert isinstance(enhanced, EnhancedSkill)
-        assert enhanced.category  # Should have category
-        assert isinstance(enhanced.tags, list)  # Should have tags (even if empty)
+        assert enhanced.category
+        assert isinstance(enhanced.tags, list)
