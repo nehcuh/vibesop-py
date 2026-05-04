@@ -38,28 +38,14 @@ class ConfigSourcePriority(StrEnum):
 
 @dataclass
 class ConfigSource:
-    """A configuration source.
-
-    Attributes:
-        priority: Source priority level
-        data: Configuration data from this source
-        path: Path to config file (if applicable)
-    """
+    """A configuration source."""
 
     priority: ConfigSourcePriority
     data: dict[str, Any]
     path: Path | None = None
 
     def get(self, key: str, default: Any = None) -> Any:
-        """Get a value from this source.
-
-        Args:
-            key: Configuration key (supports dot notation)
-            default: Default value if key not found
-
-        Returns:
-            Configuration value or default
-        """
+        """Get a value from this source (supports dot notation)."""
         # Support dot notation
         keys = key.split(".")
         value = self.data
@@ -77,14 +63,7 @@ class ConfigSource:
         return default if value is _MISSING else value
 
     def has(self, key: str) -> bool:
-        """Check if this source has a key.
-
-        Args:
-            key: Configuration key
-
-        Returns:
-            True if key exists in this source
-        """
+        """Check if this source has a key."""
         keys = key.split(".")
         value = self.data
 
@@ -97,12 +76,10 @@ class ConfigSource:
         return True
 
     def reload(self) -> None:
-        """Reload configuration from file."""
         if self.path and self.path.exists():
             self.load_from_file()
 
     def load_from_file(self) -> None:
-        """Load configuration from file (supports TOML and YAML)."""
         if self.path is None:
             self.data = {}
             return
@@ -124,15 +101,7 @@ class ConfigSource:
 
     @staticmethod
     def _resolve_config_path(base_dir: Path, name: str) -> Path | None:
-        """Resolve config file path, preferring .toml over .yaml.
-
-        Args:
-            base_dir: Base directory to look in
-            name: Base name without extension (e.g. "config")
-
-        Returns:
-            Path to existing config file, or None if neither exists
-        """
+        """Resolve config file path, preferring .toml over .yaml."""
         toml_path = base_dir / f"{name}.toml"
         if toml_path.exists():
             return toml_path
@@ -143,16 +112,7 @@ class ConfigSource:
 
 
 class RoutingConfig(BaseModel):
-    """Configuration for routing behavior.
-
-    Attributes:
-        min_confidence: Minimum confidence threshold for auto-selection
-        auto_select_threshold: Confidence threshold for automatic skill selection
-        enable_ai_triage: Enable AI semantic triage (Layer 2)
-        enable_embedding: Enable embedding-based matching (Layer 5)
-        max_candidates: Maximum number of candidates to return
-        use_cache: Enable caching for improved performance
-    """
+    """Configuration for routing behavior."""
 
     min_confidence: float = Field(default=0.3, ge=0.0, le=1.0)
     auto_select_threshold: float = Field(default=0.6, ge=0.0, le=1.0)
@@ -246,14 +206,7 @@ class RoutingConfig(BaseModel):
 
 
 class SecurityConfig(BaseModel):
-    """Configuration for security settings.
-
-    Attributes:
-        scan_external: Scan external skill files for threats
-        require_audit: Require security audit for external skills
-        allowed_paths: Whitelist of allowed skill directories
-        block_patterns: List of blocked threat patterns
-    """
+    """Configuration for security settings."""
 
     scan_external: bool = True
     require_audit: bool = True
@@ -268,14 +221,7 @@ class SecurityConfig(BaseModel):
 
 
 class SemanticConfig(BaseModel):
-    """Configuration for semantic matching.
-
-    Attributes:
-        enabled: Enable semantic matching
-        model: Sentence transformer model name
-        cache_embeddings: Cache computed embeddings
-        batch_size: Batch size for embedding computation
-    """
+    """Configuration for semantic matching."""
 
     enabled: bool = False
     model: str = "paraphrase-multilingual-MiniLM-L12-v2"
@@ -286,13 +232,8 @@ class SemanticConfig(BaseModel):
 class ConfigManager:
     """Unified configuration manager.
 
-    This class consolidates configuration from multiple sources
-    and provides a simple interface for accessing configuration values.
-
-    Example:
-        >>> manager = ConfigManager(project_root=".")
-        >>> value = manager.get("routing.min_confidence", default=0.3)
-        >>> routing_config = manager.get_routing_config()
+    Consolidates configuration from defaults, global config, project config,
+    environment variables, and CLI arguments.
     """
 
     # Default configuration
@@ -338,32 +279,7 @@ class ConfigManager:
 
     @staticmethod
     def deep_merge_configs(*configs: dict[str, Any]) -> dict[str, Any]:
-        """Deep merge multiple configuration dictionaries.
-
-        Later configs override earlier configs. Nested dictionaries are
-        merged recursively rather than replaced.
-
-        Priority order (lowest to highest):
-            1. Built-in defaults
-            2. Global config (~/.vibe/config.toml)
-            3. Project config (.vibe/config.toml)
-            4. Environment variables (VIBE_*)
-            5. CLI arguments
-
-        Args:
-            *configs: Configuration dictionaries to merge
-
-        Returns:
-            Merged configuration dictionary
-
-        Example:
-            >>> defaults = {"routing": {"min_confidence": 0.3, "cache": True}}
-            >>> project = {"routing": {"min_confidence": 0.5}}
-            >>> cli = {"routing": {"cache": False}}
-            >>> merged = ConfigManager.deep_merge_configs(defaults, project, cli)
-            >>> assert merged["routing"]["min_confidence"] == 0.5
-            >>> assert merged["routing"]["cache"] is False
-        """
+        """Deep merge multiple configuration dictionaries. Later configs override earlier."""
         from vibesop.utils.helpers import merge_dicts
 
         if not configs:
@@ -372,11 +288,6 @@ class ConfigManager:
         return merge_dicts(configs[0], *configs[1:])
 
     def __init__(self, project_root: str | Path = "."):
-        """Initialize the configuration manager.
-
-        Args:
-            project_root: Path to project root directory
-        """
         self.project_root = Path(project_root).resolve()
         self._sources: dict[ConfigSourcePriority, ConfigSource] = {}
         self._cache: dict[str, Any] = {}
@@ -385,15 +296,12 @@ class ConfigManager:
         self._init_sources()
 
     def _init_sources(self) -> None:
-        """Initialize all configuration sources."""
-        # 1. Built-in defaults (always available)
         self._sources[ConfigSourcePriority.DEFAULTS] = ConfigSource(
             priority=ConfigSourcePriority.DEFAULTS,
             data=self.DEFAULT_CONFIG.copy(),
             path=None,
         )
 
-        # 2. Global config (~/.vibe/config.toml or ~/.vibe/config.yaml)
         global_config_path = ConfigSource._resolve_config_path(Path.home() / ".vibe", "config")  # pyright: ignore[reportPrivateUsage]
         if global_config_path:
             source = ConfigSource(
@@ -404,7 +312,6 @@ class ConfigManager:
             source.load_from_file()
             self._sources[ConfigSourcePriority.GLOBAL] = source
 
-        # 3. Project config (.vibe/config.toml or .vibe/config.yaml)
         project_config_path = ConfigSource._resolve_config_path(self.project_root / ".vibe", "config")  # pyright: ignore[reportPrivateUsage]
         if project_config_path:
             source = ConfigSource(
@@ -415,7 +322,6 @@ class ConfigManager:
             source.load_from_file()
             self._sources[ConfigSourcePriority.PROJECT] = source
 
-        # 4. Legacy preferences (.vibe/preferences.json)
         preferences_path = self.project_root / ".vibe" / "preferences.json"
         if preferences_path.exists():
             import json
@@ -423,7 +329,6 @@ class ConfigManager:
             with preferences_path.open() as f:
                 data = json.load(f)
 
-            # Map legacy preferences to new structure
             mapped_data = self._map_legacy_preferences(data)
             self._sources[ConfigSourcePriority.PREFERENCES] = ConfigSource(
                 priority=ConfigSourcePriority.PREFERENCES,
@@ -432,14 +337,7 @@ class ConfigManager:
             )
 
     def _map_legacy_preferences(self, prefs: dict[str, Any]) -> dict[str, Any]:
-        """Map legacy preferences to new config structure.
-
-        Args:
-            prefs: Legacy preferences dictionary
-
-        Returns:
-            Mapped configuration dictionary
-        """
+        """Map legacy preferences to new config structure."""
         mapped = {}
 
         # Map routing preferences
@@ -459,18 +357,7 @@ class ConfigManager:
         return mapped
 
     def get(self, key: str, default: Any = None) -> Any:
-        """Get a configuration value.
-
-        Values are resolved by checking sources in priority order
-        (highest priority first).
-
-        Args:
-            key: Configuration key (supports dot notation)
-            default: Default value if key not found
-
-        Returns:
-            Configuration value or default
-        """
+        """Get a configuration value by key (supports dot notation)."""
         # Check cache first
         cache_key = f"get:{key}"
         if cache_key in self._cache:
@@ -496,45 +383,20 @@ class ConfigManager:
         return default
 
     def get_routing_config(self) -> RoutingConfig:
-        """Get routing configuration.
-
-        Returns:
-            RoutingConfig instance with merged values from all sources
-        """
         return RoutingConfig(**self._get_section("routing"))
 
     def get_security_config(self) -> SecurityConfig:
-        """Get security configuration.
-
-        Returns:
-            SecurityConfig instance with merged values from all sources
-        """
         return SecurityConfig(**self._get_section("security"))
 
     def get_semantic_config(self) -> SemanticConfig:
-        """Get semantic configuration.
-
-        Returns:
-            SemanticConfig instance with merged values from all sources
-        """
         return SemanticConfig(**self._get_section("semantic"))
 
     def get_optimization_config(self) -> OptimizationConfig:
-        """Get optimization configuration.
-
-        Returns:
-            OptimizationConfig instance with merged values from all sources
-        """
         from vibesop.core.config.optimization_config import OptimizationConfig
 
         return OptimizationConfig(**self._get_section("optimization"))
 
     def load_policy(self) -> dict[str, Any]:
-        """Load full policy configuration.
-
-        Returns:
-            Dictionary with security, routing, behavior, and custom sections
-        """
         return {
             "security": self._get_section("security"),
             "routing": self._get_section("routing"),
@@ -543,37 +405,24 @@ class ConfigManager:
         }
 
     def _get_section(self, section: str) -> dict[str, Any]:
-        """Get a complete configuration section merged from all sources.
-
-        Args:
-            section: Section name (e.g., "routing")
-
-        Returns:
-            Merged configuration dictionary
-        """
-        # Collect all sources that have this section
+        """Get a complete configuration section merged from all sources."""
         configs_to_merge = []
 
-        # 1. Built-in defaults
         if section in self.DEFAULT_CONFIG:
             configs_to_merge.append({section: self.DEFAULT_CONFIG[section]})
 
-        # 2-6. Other sources in priority order
         for priority in ConfigSourcePriority:
             if priority in self._sources:
                 source = self._sources[priority]
                 if section in source.data:
                     configs_to_merge.append({section: source.data[section]})
 
-        # Deep merge all configs
         merged = self.deep_merge_configs(*configs_to_merge)
 
-        # 7. Environment variables (highest priority per-key)
         prefix = f"{self.ENV_PREFIX}{section.upper()}_"
         for key, value in os.environ.items():
             if key.startswith(prefix):
                 config_key = key[len(prefix) :].lower()
-                # Apply env var overrides
                 if section not in merged:
                     merged[section] = {}
                 merged[section][config_key] = self._parse_env_value(value)
@@ -581,25 +430,10 @@ class ConfigManager:
         return merged.get(section, {})
 
     def _key_to_env(self, key: str) -> str:
-        """Convert configuration key to environment variable name.
-
-        Args:
-            key: Configuration key (e.g., "routing.min_confidence")
-
-        Returns:
-            Environment variable name (e.g., "VIBE_ROUTING_MIN_CONFIDENCE")
-        """
         return f"{self.ENV_PREFIX}{key.upper().replace('.', '_')}"
 
     def _parse_env_value(self, value: str) -> Any:
-        """Parse environment variable value to appropriate type.
-
-        Args:
-            value: String value from environment
-
-        Returns:
-            Parsed value (bool, int, float, or str)
-        """
+        """Parse environment variable value to appropriate type."""
         # Try boolean
         if value.lower() in ("true", "yes", "1"):
             return True
@@ -622,19 +456,13 @@ class ConfigManager:
         return value
 
     def reload(self) -> None:
-        """Reload all configuration sources."""
         self._cache.clear()
 
         for source in self._sources.values():
             source.reload()
 
     def set_cli_override(self, key: str, value: Any) -> None:
-        """Set a CLI override (highest priority).
-
-        Args:
-            key: Configuration key
-            value: Configuration value
-        """
+        """Set a CLI override (highest priority)."""
         # Create CLI source if it doesn't exist
         if ConfigSourcePriority.CLI not in self._sources:
             self._sources[ConfigSourcePriority.CLI] = ConfigSource(
@@ -659,14 +487,7 @@ class ConfigManager:
     # --- Registry loading (migrated from ConfigLoader) ---
 
     def load_registry(self, force_reload: bool = False) -> dict[str, Any]:
-        """Load skill registry from core/registry.yaml.
-
-        Args:
-            force_reload: Force reload even if cached
-
-        Returns:
-            Dictionary with registry data
-        """
+        """Load skill registry from core/registry.yaml."""
         cache_key = "_registry"
         if not force_reload and cache_key in self._cache:
             return self._cache[cache_key]
@@ -690,14 +511,6 @@ class ConfigManager:
             return {"skills": [], "version": "1.0.0"}
 
     def get_all_skills(self, force_reload: bool = False) -> list[dict[str, Any]]:
-        """Get all skills from registry.
-
-        Args:
-            force_reload: Force reload even if cached
-
-        Returns:
-            List of skill definitions
-        """
         registry = self.load_registry(force_reload=force_reload)
         return registry.get("skills", [])
 
@@ -706,15 +519,6 @@ class ConfigManager:
         skill_id: str,
         force_reload: bool = False,
     ) -> dict[str, Any] | None:
-        """Get skill definition by ID.
-
-        Args:
-            skill_id: Skill identifier
-            force_reload: Force reload even if cached
-
-        Returns:
-            Skill definition or None if not found
-        """
         skills = self.get_all_skills(force_reload=force_reload)
 
         for skill in skills:
@@ -740,15 +544,6 @@ class ConfigManager:
         namespace: str,
         force_reload: bool = False,
     ) -> list[dict[str, Any]]:
-        """Get all skills in a namespace.
-
-        Args:
-            namespace: Namespace to filter by
-            force_reload: Force reload even if cached
-
-        Returns:
-            List of skill definitions in namespace
-        """
         skills = self.get_all_skills(force_reload=force_reload)
         return [skill for skill in skills if skill.get("namespace") == namespace]
 
@@ -757,19 +552,10 @@ class ConfigManager:
         query: str,
         force_reload: bool = False,
     ) -> list[dict[str, Any]]:
-        """Search skills by keyword in intent or description.
-
-        Args:
-            query: Search query
-            force_reload: Force reload even if cached
-
-        Returns:
-            List of matching skills
-        """
+        """Search skills by keyword in intent or description."""
         skills = self.get_all_skills(force_reload=force_reload)
         query_lower = query.lower()
         return [skill for skill in skills if query_lower in skill.get("intent", "").lower()]
 
     def clear_cache(self) -> None:
-        """Clear all cached data."""
         self._cache.clear()

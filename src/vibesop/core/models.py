@@ -75,15 +75,7 @@ class SkillLifecycle(StrEnum):
 
 
 class SkillRoute(BaseModel):
-    """Result of skill routing operation.
-
-    Attributes:
-        skill_id: Unique skill identifier (e.g., 'gstack/review')
-        confidence: Routing confidence (0.0 to 1.0)
-        layer: Which routing layer made this decision
-        source: Skill pack source (e.g., 'builtin', 'gstack', 'external')
-        metadata: Additional routing metadata
-    """
+    """Result of skill routing operation."""
 
     model_config = {"arbitrary_types_allowed": True}
 
@@ -116,7 +108,6 @@ class SkillRoute(BaseModel):
     # No additional field_validator needed
 
     def to_dict(self) -> dict[str, Any]:
-        """Convert to dictionary for serialization."""
         return {
             "skill_id": self.skill_id,
             "confidence": self.confidence,
@@ -127,12 +118,7 @@ class SkillRoute(BaseModel):
 
 
 class RoutingRequest(BaseModel):
-    """Request for skill routing.
-
-    Attributes:
-        query: User's natural language query
-        context: Additional context (file type, error count, etc.)
-    """
+    """Request for skill routing."""
 
     query: str = Field(..., min_length=1, description="User query")
     context: dict[str, str | int] = Field(
@@ -142,14 +128,7 @@ class RoutingRequest(BaseModel):
 
 
 class RejectedCandidate(BaseModel):
-    """A candidate that was considered but rejected by a routing layer.
-
-    Attributes:
-        skill_id: The rejected skill identifier
-        confidence: Confidence score (below threshold)
-        layer: Which layer rejected this candidate
-        reason: Why it was rejected (e.g., "below threshold (0.6)")
-    """
+    """A candidate that was considered but rejected by a routing layer."""
 
     model_config = {"arbitrary_types_allowed": True}
 
@@ -172,16 +151,7 @@ class RejectedCandidate(BaseModel):
 
 
 class LayerDetail(BaseModel):
-    """Detailed diagnostic for a single routing layer attempt.
-
-    Attributes:
-        layer: Which routing layer this represents
-        matched: Whether this layer produced a match
-        reason: Human-readable explanation of the layer's decision
-        duration_ms: How long this layer took
-        diagnostics: Layer-specific diagnostic data (scores, skip reasons, etc.)
-        rejected_candidates: Candidates that were close but didn't meet threshold
-    """
+    """Detailed diagnostic for a single routing layer attempt."""
 
     model_config = {"arbitrary_types_allowed": True}
 
@@ -199,7 +169,6 @@ class LayerDetail(BaseModel):
     )
 
     def to_dict(self) -> dict[str, Any]:
-        """Convert to dictionary for serialization."""
         return {
             "layer": self.layer.value,
             "matched": self.matched,
@@ -211,16 +180,7 @@ class LayerDetail(BaseModel):
 
 
 class RoutingResult(BaseModel):
-    """Result of skill routing operation.
-
-    Attributes:
-        primary: Best matching skill (None if no match)
-        alternatives: List of alternative matches
-        routing_path: Which layers were consulted
-        layer_details: Per-layer diagnostic details for transparency
-        query: The original query
-        duration_ms: How long routing took
-    """
+    """Result of skill routing operation."""
 
     model_config = {"arbitrary_types_allowed": True}
 
@@ -249,7 +209,6 @@ class RoutingResult(BaseModel):
         return self.primary is not None and self.primary.layer != RoutingLayer.FALLBACK_LLM
 
     def to_dict(self) -> dict[str, Any]:
-        """Convert to dictionary for serialization."""
         return {
             "primary": self.primary.to_dict() if self.primary else None,
             "alternatives": [a.to_dict() for a in self.alternatives],
@@ -289,20 +248,7 @@ class ExecutionMode(StrEnum):
 
 
 class ExecutionStep(BaseModel):
-    """A single step in a multi-skill execution plan.
-
-    Attributes:
-        step_id: Unique identifier for this step
-        step_number: 1-based position in the plan
-        skill_id: Target skill to use
-        intent: Human-readable description of this step's intent
-        input_query: Query to send to the skill
-        output_as: Variable name for downstream steps to reference
-        status: Current execution status
-        result_summary: Brief result after execution (optional)
-        started_at: ISO timestamp when step started
-        completed_at: ISO timestamp when step completed
-    """
+    """A single step in a multi-skill execution plan."""
 
     model_config = {"arbitrary_types_allowed": True}
 
@@ -332,7 +278,6 @@ class ExecutionStep(BaseModel):
     )
 
     def to_dict(self) -> dict[str, Any]:
-        """Convert to dictionary for serialization."""
         return {
             "step_id": self.step_id,
             "step_number": self.step_number,
@@ -352,17 +297,7 @@ class ExecutionStep(BaseModel):
 
 
 class ExecutionPlan(BaseModel):
-    """A multi-skill execution plan.
-
-    Attributes:
-        plan_id: Unique plan identifier
-        original_query: The user's original request
-        steps: Ordered list of execution steps
-        detected_intents: List of intents detected in the original query
-        reasoning: Why this decomposition was chosen
-        created_at: ISO timestamp when plan was created
-        status: Overall plan status
-    """
+    """A multi-skill execution plan."""
 
     model_config = {"arbitrary_types_allowed": True}
 
@@ -378,7 +313,6 @@ class ExecutionPlan(BaseModel):
     )
 
     def to_dict(self) -> dict[str, Any]:
-        """Convert to dictionary for serialization."""
         return {
             "plan_id": self.plan_id,
             "original_query": self.original_query,
@@ -391,15 +325,7 @@ class ExecutionPlan(BaseModel):
         }
 
     def get_parallel_groups(self) -> list[list["ExecutionStep"]]:
-        """Group steps into parallel batches based on dependencies.
-
-        Returns:
-            List of step groups, where each group can run in parallel.
-            Example: [[step1], [step2, step3], [step4]] means:
-                - step1 runs first
-                - step2 and step3 run in parallel
-                - step4 runs after step2 and step3 complete
-        """
+        """Group steps into parallel batches based on dependencies."""
         if not self.steps:
             return []
 
@@ -462,11 +388,7 @@ class OrchestrationMode(StrEnum):
 
 
 class OrchestrationResult(BaseModel):
-    """Result of orchestration — either single skill or multi-step plan.
-
-    This unifies single-skill routing and multi-skill orchestration
-    into one return type for consumers.
-    """
+    """Result of orchestration — either single skill or multi-step plan."""
 
     model_config = {"arbitrary_types_allowed": True}
 
@@ -498,7 +420,6 @@ class OrchestrationResult(BaseModel):
         )
 
     def to_dict(self) -> dict[str, Any]:
-        """Convert to dictionary for serialization."""
         return {
             "mode": self.mode.value,
             "original_query": self.original_query,
@@ -513,11 +434,7 @@ class OrchestrationResult(BaseModel):
         }
 
     def to_routing_result(self) -> RoutingResult:
-        """Extract a single-skill RoutingResult from this orchestration result.
-
-        When mode=SINGLE, returns the routing result directly.
-        When mode=ORCHESTRATED, returns the single_fallback as primary.
-        """
+        """Extract a single-skill RoutingResult from this orchestration result."""
         primary = (
             self.single_fallback if self.mode == OrchestrationMode.ORCHESTRATED else self.primary
         )
@@ -544,20 +461,7 @@ class OrchestrationResult(BaseModel):
 
 
 class SkillDefinition(BaseModel):
-    """Definition of a skill.
-
-    Attributes:
-        id: Unique skill identifier
-        name: Human-readable name
-        description: Skill description
-        trigger_when: When this skill should be triggered
-        metadata: Additional metadata
-        lifecycle: Current lifecycle state (draft/active/deprecated/archived)
-        scope: Availability scope (global or project-specific)
-        enabled: Whether this skill is enabled for routing
-        version: Skill version string
-        capabilities: What this skill can do (analysis, review, design, debug, etc.)
-    """
+    """Definition of a skill."""
 
     id: str = Field(..., min_length=1, description="Skill ID")
     name: str = Field(..., min_length=1, description="Skill name")
@@ -590,12 +494,7 @@ class SkillDefinition(BaseModel):
 
 
 class SkillRegistry(BaseModel):
-    """Registry of all available skills.
-
-    Attributes:
-        skills: Map of skill_id to SkillDefinition
-        version: Registry version
-    """
+    """Registry of all available skills."""
 
     skills: dict[str, SkillDefinition] = Field(
         default_factory=dict,
@@ -605,10 +504,7 @@ class SkillRegistry(BaseModel):
 
 
 class AppSettings(BaseSettings):
-    """Application settings.
-
-    Loaded from environment variables with type validation.
-    """
+    """Application settings loaded from environment variables."""
 
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -638,22 +534,7 @@ class AppSettings(BaseSettings):
 
 @dataclass
 class StepManifest:
-    """执行清单中单个步骤的完整信息。
-
-    PlanExecutor 生成此结构，让 AI Agent 无需手动加载 SKILL.md
-    即可获取执行单个步骤所需的全部上下文。
-
-    Attributes:
-        step_number: 1-based step position
-        skill_id: Target skill identifier
-        skill_name: Human-readable skill name
-        skill_path: SKILL.md path on disk (str for serialization)
-        skill_content: Full SKILL.md content (embedded so agent doesn't load it)
-        input_context: Output summary from upstream steps (as context for this step)
-        output_slot: Variable name for downstream steps to reference this step's output
-        completion_marker: Standardized marker the agent must emit when done
-        instruction: Concise execution instruction for this step
-    """
+    """执行清单中单个步骤的完整信息。"""
 
     step_number: int
     skill_id: str
@@ -692,18 +573,7 @@ class StepManifest:
 
 @dataclass
 class ExecutionManifest:
-    """完整的编排执行清单。
-
-    包含编排计划中所有步骤的完整信息（含内嵌 SKILL.md 内容），
-    AI Agent 读取此清单即可分步执行，无需手动加载技能文件或查找上下文。
-
-    Attributes:
-        plan_id: Plan UUID
-        original_query: The user's original request
-        strategy: Execution strategy (sequential | parallel | mixed)
-        steps: Ordered list of StepManifest entries
-        context_file: Path to .vibe/plans/{plan_id}/context.md
-    """
+    """完整的编排执行清单。"""
 
     plan_id: str
     original_query: str = ""
@@ -730,10 +600,7 @@ class ExecutionManifest:
         }
 
     def to_markdown(self) -> str:
-        """Render the manifest as a markdown execution sequence file.
-
-        This file can be written to disk and read by the agent step-by-step.
-        """
+        """Render the manifest as a markdown execution sequence file."""
         lines = [
             f"# Execution Manifest: {self.original_query}",
             "",

@@ -126,7 +126,6 @@ def _skill_overview(  # pyright: ignore[reportUnusedFunction]
 # ---------------------------------------------------------------------------
 
 def _load_skills(project_root: str = ".") -> list[dict[str, Any]]:
-    """Load all available skills."""
     from vibesop.core.routing import UnifiedRouter
 
     router = UnifiedRouter(project_root=project_root)
@@ -543,8 +542,7 @@ def add(
 
 
 def _detect_and_load_skill(source: str) -> tuple[Path, Any]:
-    """Detect skill type and load metadata."""
-    from vibesop.core.skills.base import SkillMetadata
+    """Detect skill type and load metadata from source."""
     from vibesop.core.skills.parser import parse_skill_md
 
     source_path = Path(source)
@@ -584,7 +582,6 @@ def _detect_and_load_skill(source: str) -> tuple[Path, Any]:
 
 
 def _auto_configure_skill(metadata: Any, scope: str, _source: str) -> None:
-    """Auto-generate routing rules and priorities (AIEnhancer path)."""
     from vibesop.core.ai_enhancer import AIEnhancer
     from vibesop.core.session_analyzer import SkillSuggestion
 
@@ -663,13 +660,7 @@ def _auto_configure_skill(metadata: Any, scope: str, _source: str) -> None:
 
 
 def _auto_configure_skill_with_llm(metadata: Any, scope: str, skill_source: str) -> None:
-    """Auto-configure skill using the understander module.
-
-    When running inside an Agent environment (Claude Code, Kimi, Cursor, etc.),
-    this function skips external LLM calls and relies on the rule engine or
-    prompts the Agent itself for refinement. In standalone CLI mode, it falls
-    back to AIEnhancer for low-confidence results.
-    """
+    """Auto-configure skill using the understander module."""
     from vibesop.core.llm_config import is_in_agent_environment
     from vibesop.core.skills.understander import SkillAutoConfigurator, understand_skill_from_file
 
@@ -713,7 +704,6 @@ def _auto_configure_skill_with_llm(metadata: Any, scope: str, skill_source: str)
 def _fallback_auto_configure(
     metadata: Any, scope: str, skill_source: str, in_agent: bool
 ) -> None:
-    """Fallback configuration when understander fails or SKILL.md is missing."""
     from vibesop.core.skills.understander import SkillAnalysis, SkillAutoConfigurator
 
     if in_agent:
@@ -732,7 +722,6 @@ def _prompt_agent_for_config(
     config: Any,
     scope: str,
 ):
-    """When running inside an Agent environment, emit a structured review prompt."""
     console.print("\n[bold cyan]🤖 Agent Configuration Review[/bold cyan]")
     console.print(
         "[dim]Running inside an Agent environment. Skipping external LLM call. "
@@ -786,7 +775,6 @@ def _prompt_agent_for_config(
 
 
 def _display_and_save_config(config: Any) -> None:
-    """Display configuration details and save to disk."""
     from vibesop.core.llm_config import LLMConfigResolver
     from vibesop.core.skills.understander import SkillAutoConfigurator
 
@@ -833,7 +821,6 @@ def _display_and_save_config(config: Any) -> None:
 
 
 def _manual_configure_skill(metadata: Any, scope: str) -> None:
-    """Interactive manual configuration wizard."""
     console.print("[dim]Starting manual configuration wizard...[/dim]\n")
 
     priority = questionary.select(
@@ -880,7 +867,7 @@ def _manual_configure_skill(metadata: Any, scope: str) -> None:
 
 
 def _save_auto_config(config: dict[str, Any]) -> None:
-    """Save auto-generated configuration."""
+    """Save auto-generated skill configuration to disk."""
     import yaml
 
     config_file = Path(".vibe") / "skills" / "auto-config.yaml"
@@ -900,7 +887,7 @@ def _save_auto_config(config: dict[str, Any]) -> None:
 
 
 def _extract_keywords(text: str) -> list[str]:
-    """Extract keywords from text for pattern matching."""
+    """Extract top keywords from text for routing rules."""
     import re
     from collections import Counter
 
@@ -923,7 +910,6 @@ def _extract_keywords(text: str) -> list[str]:
 
 
 def _verify_and_sync(skill_id: str, _scope: str) -> None:
-    """Verify installation and sync to platform."""
     from vibesop.core.routing.unified import UnifiedRouter
 
     router = UnifiedRouter(project_root=Path())

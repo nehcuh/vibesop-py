@@ -454,7 +454,6 @@ def _handle_orchestrated_result(
     console: Console,
     already_rendered: bool = False,
 ) -> None:
-    """Handle multi-step orchestration result — confirmation, execution, post-processing."""
     plan = result.execution_plan
 
     # 1. Confirmation flow (when needed)
@@ -483,7 +482,7 @@ def _orchestration_confirmation_flow(
     router: Any,
     already_rendered: bool = False,
 ) -> bool:
-    """Interactive confirmation for orchestrated result. Returns False if cancelled."""
+    """Interactive confirmation for orchestrated result."""
     plan = result.execution_plan
 
     if not _needs_confirmation(result, router, yes, json_output, is_orchestrated=True):
@@ -542,7 +541,6 @@ def _orchestration_post_process(
     json_output: bool,
     console: Console,
 ) -> None:
-    """Save plan, render output, and collect feedback."""
     from pathlib import Path
 
     from vibesop.core.orchestration import PlanTracker
@@ -572,15 +570,7 @@ def _orchestration_post_process(
 
 
 def _execute_plan_interactive(result: Any, console: Console) -> None:
-    """Enter interactive step-by-step execution mode.
-
-    For each step in the orchestration plan:
-    1. Display the step's instruction with embedded SKILL.md content
-    2. Present a prompt with the full step context
-    3. Wait for user/agent confirmation of completion
-    4. Save the step output for downstream steps
-    5. Automatically generate the next step's prompt with upstream context
-    """
+    """Enter interactive step-by-step execution mode."""
     plan = result.execution_plan
     if not plan:
         console.print("[yellow]No execution plan available.[/yellow]")
@@ -708,7 +698,6 @@ def _execute_plan_interactive(result: Any, console: Console) -> None:
 
 
 def _render_validation(result: Any, router: Any, console: Console) -> None:
-    """Render validation output and exit."""
     console.print(f"\n[bold cyan]✓ Route Validation[/bold cyan]\n{'=' * 40}\n")
     caps = router.get_capabilities()
     console.print("[dim]Router capabilities:[/dim]")
@@ -748,8 +737,6 @@ def _handle_single_result(
     console: Console,
     already_rendered: bool = False,
 ) -> None:
-    """Handle single-skill routing result."""
-    # Validation mode
     if validate:
         _render_validation(result, router, console)
 
@@ -781,7 +768,6 @@ def _handle_single_result(
 
 
 def _check_stale_skills_post_route() -> None:
-    """Check for stale skills every N routes and prompt user if needed."""
     import json
     from pathlib import Path
 

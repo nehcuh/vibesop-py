@@ -86,17 +86,7 @@ class UnifiedRouter(
     RouterOrchestrationMixin,
     RouterContextMixin,
 ):
-    """Unified router for skill selection.
-
-    Single entry point for all routing operations.
-    Each layer is a clearly separated service that returns a LayerResult | None.
-
-    Example:
-        >>> router = UnifiedRouter()
-        >>> result = router.route("扫描安全漏洞")
-        >>> if result.has_match:
-        ...     print(f"Matched: {result.primary.skill_id}")
-    """
+    """Unified router for skill selection — single entry point for all routing."""
 
     _LAYER_PRIORITY: ClassVar[list[RoutingLayer]] = [
         RoutingLayer.EXPLICIT,
@@ -286,7 +276,6 @@ class UnifiedRouter(
         return candidates
 
     def _warm_up_matchers(self, candidates: list[dict[str, Any]]) -> None:
-        """Warm up matchers by initializing lazy-loaded components."""
         if self._matchers_warmed:
             return
         try:
@@ -306,11 +295,9 @@ class UnifiedRouter(
         return self._candidate_manager.reload()
 
     def invalidate_project_cache(self) -> None:
-        """Invalidate cached project analysis."""
         self._project_analyzer = None
 
     def _get_skill_source(self, _skill_id: str, namespace: str) -> str:
-        """Determine skill source based on namespace."""
         if namespace == "project":
             return "project"
         if namespace == "builtin":
@@ -321,7 +308,6 @@ class UnifiedRouter(
         return self._candidate_manager.get_candidates()
 
     def _get_candidates(self, _query: str = "") -> list[dict[str, Any]]:
-        """Backward-compatible alias for get_candidates."""
         return self.get_candidates(_query)
 
     def _build_decomposition_skills(
@@ -329,14 +315,7 @@ class UnifiedRouter(
         candidates: list[dict[str, Any]] | None = None,
         limit: int = 50,
     ) -> list[str]:
-        """Build the "skill_id: description" list fed to TaskDecomposer.
-
-        Centralized here so orchestrate(), agent.decompose(), agent.build_plan(),
-        and `vibe decompose` use the exact same skill catalog. When no skill list
-        reaches the LLM, the decomposer can't pre-assign skill_id and PlanBuilder
-        falls back to lightweight (skip_ai_triage) routing — which is what causes
-        the "all sub-tasks → wrong skill" symptom.
-        """
+        """Build the 'skill_id: description' list fed to TaskDecomposer."""
         skill_candidates = candidates or self._get_cached_candidates()
         return [
             f"{c['id']}: {c.get('description', c.get('intent', 'N/A'))}"
@@ -353,16 +332,11 @@ class UnifiedRouter(
         candidates: list[dict[str, Any]] | None = None,
         context: RoutingContext | None = None,
     ) -> RoutingResult:
-        """Internal: route a query to the best matching skill (single-skill mode).
-
-        Prefer orchestrate() for the full multi-skill pipeline.
-        This method executes layers in priority order; the first confident match wins.
-        """
+        """Internal: route a query to the best matching skill."""
         start_time = time.perf_counter()
         with self._stats_lock:
             self._total_routes += 1
 
-        # Multi-turn support: detect follow-up queries and enrich with context
         original_query = query
         conversation = None
         if context and context.conversation_id:
@@ -376,13 +350,11 @@ class UnifiedRouter(
             if enriched:
                 query = enriched
 
-        # Enrich context with memory and session state if available
         context = self._enrich_context(context, query)
 
         if candidates is None:
             candidates = self._get_cached_candidates()
 
-        # Filter by enablement, scope, and lifecycle state
         candidates, deprecated_warnings = self._candidate_manager.filter_routable(candidates)
 
         routing_path: list[RoutingLayer] = []
@@ -395,7 +367,6 @@ class UnifiedRouter(
         if result is not None:
             return result
 
-        # No match found
         duration_ms = (time.perf_counter() - start_time) * 1000
         return self._finalize_no_match(
             query, original_query, candidates, context,
@@ -414,10 +385,9 @@ class UnifiedRouter(
         conversation: Any,
         original_query: str,
     ) -> RoutingResult | None:
-        """Try all routing layers in priority order. Return result on first match."""
         from vibesop.core.routing import _layers, _pipeline
 
-        # Layer 0: Explicit Override
+        # Layer 0: Explicit Override (always first)
         match, detail = _layers.try_explicit_layer(self, query, candidates)  # pyright: ignore[reportArgumentType]
         routing_path.append(RoutingLayer.EXPLICIT)
         layer_details.append(detail)
@@ -428,14 +398,61 @@ class UnifiedRouter(
                 start_time, deprecated_warnings, conversation, original_query, context,
             )
 
-        use_keyword_routing = self._should_use_keyword_routing(query, context)
+        use_keyword = self._should_use_keyword_routing(query, context)
 
-        if use_keyword_routing:
-            # Layers 1+2: Scenario Pattern + Skill Semantic Index (best-of)
-            # Run both layers, return whichever has higher confidence above
-            # min_confidence. SCENARIO is fixed 0.9; INDEX scales 0.65-0.95.
-            # Strong scenario keyword hits win; very-confident INDEX matches
-            # can override; weak INDEX defers to SCENARIO.
+        # Step 1: Early layers (scenario+index best-of for keyword, index only for LLM)
+        early_match = self._try_early_layers(
+            query, candidates, routing_path, layer_details, use_keyword
+        )
+        if early_match is not None:
+            self._record_layer(early_match.layer)
+            return self._build_match_result(
+                query, early_match, [], routing_path, layer_details,
+                start_time, deprecated_warnings, conversation, original_query, context,
+            )
+
+        # Step 2: AI Triage (force for long/LLM queries, normal for keyword)
+        match, detail = _layers.try_ai_triage_layer(
+            self, query, candidates, context,  # pyright: ignore[reportArgumentType]
+            force=not use_keyword,
+        )
+        routing_path.append(RoutingLayer.AI_TRIAGE)
+        layer_details.append(detail)
+        if match and match.confidence >= self._config.min_confidence:
+            self._record_layer(RoutingLayer.AI_TRIAGE)
+            return self._build_match_result(
+                query, match, [], routing_path, layer_details,
+                start_time, deprecated_warnings, conversation, original_query, context,
+            )
+
+        # Step 3: Matcher pipeline (shared fallback)
+        primary, alternatives, detail = _pipeline.run_matcher_pipeline(
+            self, query, candidates, context, collect_rejected=True
+        )
+        routing_path.append(detail.layer)
+        layer_details.append(detail)
+        if primary:
+            self._record_layer(detail.layer)
+            return self._build_match_result(
+                query, primary, alternatives, routing_path, layer_details,
+                start_time, deprecated_warnings, conversation, original_query,
+            )
+
+        return None
+
+    def _try_early_layers(
+        self,
+        query: str,
+        candidates: list[dict[str, Any]],
+        routing_path: list[RoutingLayer],
+        layer_details: list[LayerDetail],
+        use_keyword: bool,
+    ) -> SkillRoute | None:
+        """Try early layers: scenario+index best-of (keyword) or index alone (LLM)."""
+        from vibesop.core.routing import _layers
+
+        if use_keyword:
+            # Scenario + Index best-of
             scen_match, scen_detail = _layers.try_scenario_layer(self, query, candidates)  # pyright: ignore[reportArgumentType]
             routing_path.append(RoutingLayer.SCENARIO)
             layer_details.append(scen_detail)
@@ -444,79 +461,20 @@ class UnifiedRouter(
             routing_path.append(RoutingLayer.AI_TRIAGE)
             layer_details.append(idx_detail)
 
-            best_local = max(
+            best = max(
                 (m for m in (scen_match, idx_match) if m is not None),
                 key=lambda m: m.confidence,
                 default=None,
             )
-            if best_local and best_local.confidence >= self._config.min_confidence:
-                self._record_layer(best_local.layer)
-                return self._build_match_result(
-                    query, best_local, [], routing_path, layer_details,
-                    start_time, deprecated_warnings, conversation, original_query, context,
-                )
-
-            # Layer 3: AI Triage (LLM-based)
-            match, detail = _layers.try_ai_triage_layer(self, query, candidates, context)  # pyright: ignore[reportArgumentType]
-            routing_path.append(RoutingLayer.AI_TRIAGE)
-            layer_details.append(detail)
-            if match and match.confidence >= self._config.min_confidence:
-                self._record_layer(RoutingLayer.AI_TRIAGE)
-                return self._build_match_result(
-                    query, match, [], routing_path, layer_details,
-                    start_time, deprecated_warnings, conversation, original_query, context,
-                )
-
-            # Layers 4-7: Matcher pipeline
-            primary, alternatives, detail = _pipeline.run_matcher_pipeline(
-                self, query, candidates, context, collect_rejected=True
-            )
-            routing_path.append(detail.layer)
-            layer_details.append(detail)
-            if primary:
-                self._record_layer(detail.layer)
-                return self._build_match_result(
-                    query, primary, alternatives, routing_path, layer_details,
-                    start_time, deprecated_warnings, conversation, original_query,
-                )
+            if best and best.confidence >= self._config.min_confidence:
+                return best
         else:
-            # Long query: prefer LLM semantic triage, fall back to matchers
-            # Layer 2: Skill Semantic Index (fast local match)
+            # Index standalone
             match, detail = _layers.try_index_layer(self, query, candidates)  # pyright: ignore[reportArgumentType]
             routing_path.append(RoutingLayer.AI_TRIAGE)
             layer_details.append(detail)
             if match and match.confidence >= self._config.min_confidence:
-                self._record_layer(RoutingLayer.AI_TRIAGE)
-                return self._build_match_result(
-                    query, match, [], routing_path, layer_details,
-                    start_time, deprecated_warnings, conversation, original_query, context,
-                )
-
-            # Layer 3: AI Triage (LLM-based)
-            match, detail = _layers.try_ai_triage_layer(
-                self, query, candidates, context, force=True  # pyright: ignore[reportArgumentType]
-            )
-            routing_path.append(RoutingLayer.AI_TRIAGE)
-            layer_details.append(detail)
-            if match and match.confidence >= self._config.min_confidence:
-                self._record_layer(RoutingLayer.AI_TRIAGE)
-                return self._build_match_result(
-                    query, match, [], routing_path, layer_details,
-                    start_time, deprecated_warnings, conversation, original_query, context,
-                )
-
-            # Fallback: try matcher pipeline for long queries when AI Triage fails
-            primary, alternatives, detail = _pipeline.run_matcher_pipeline(
-                self, query, candidates, context, collect_rejected=True
-            )
-            routing_path.append(detail.layer)
-            layer_details.append(detail)
-            if primary:
-                self._record_layer(detail.layer)
-                return self._build_match_result(
-                    query, primary, alternatives, routing_path, layer_details,
-                    start_time, deprecated_warnings, conversation, original_query,
-                )
+                return match
 
         return None
 
@@ -555,7 +513,6 @@ class UnifiedRouter(
         layer_details: list[LayerDetail],
         duration_ms: float,
     ) -> RoutingResult:
-        """Build result when no skill matches."""
         from vibesop.core.routing import _pipeline
 
         self._record_layer(RoutingLayer.NO_MATCH)
@@ -625,24 +582,7 @@ class UnifiedRouter(
     ) -> RoutingResult:
         """Route a query to the best matching skill (single-skill fast path).
 
-        This is the single-skill routing entry point. For multi-intent queries,
-        prefer :meth:`orchestrate()` which handles both single and multi-intent
-        queries through a unified pipeline, with single-skill routing as a
-        degenerate 1-step execution plan.
-
-        Remains available for internal sub-routing use (e.g., PlanBuilder,
-        SessionContext re-routing) and backward compatibility.
-
-        Returns a RoutingResult with primary match, alternatives, layer details,
-        routing path, and query metadata.
-
-        Args:
-            query: Natural language query
-            candidates: Pre-filtered skill candidates (optional)
-            context: Routing context with project/session info
-
-        Returns:
-            RoutingResult with primary match and alternatives
+        For multi-intent queries, prefer orchestrate().
         """
         return self._single_skill_route(query, candidates, context)
 
@@ -653,19 +593,7 @@ class UnifiedRouter(
         context: RoutingContext | None = None,
         callbacks: Any | None = None,
     ) -> OrchestrationResult:
-        """Orchestrate a query — detect multi-intent and build execution plan if needed.
-
-        Falls back to single-skill routing when:
-        - orchestration is disabled
-        - query is clearly single-intent
-        - decomposition fails
-
-        Args:
-            query: User's natural language query
-            candidates: Optional skill candidates list
-            context: Optional routing context
-            callbacks: Optional orchestration callbacks for streaming progress
-        """
+        """Orchestrate a query — detect multi-intent and build execution plan if needed."""
         from vibesop.core.orchestration.callbacks import (
             ErrorPolicy,
             NoOpCallbacks,
@@ -853,7 +781,6 @@ class UnifiedRouter(
         user_modified: bool = False,
         user_satisfied: bool | None = None,
     ) -> None:
-        """Record execution to analytics store."""
         from vibesop.core.analytics import AnalyticsStore, ExecutionRecord
 
         store = AnalyticsStore(storage_dir=self.project_root / ".vibe")
@@ -878,7 +805,6 @@ class UnifiedRouter(
         match: SkillRoute,
         context: RoutingContext | None,
     ) -> None:
-        """Record successful routing decision to memory and instinct systems."""
         try:
             # Add to memory conversation if available
             if context and context.conversation_id:
@@ -919,7 +845,6 @@ class UnifiedRouter(
         candidate: dict[str, Any],
         context: RoutingContext | None = None,
     ) -> float:
-        """Score a specific candidate against a query using the matcher pipeline."""
         for _, matcher in self._matchers:
             try:
                 return matcher.score(query, candidate, context)
@@ -933,22 +858,7 @@ class UnifiedRouter(
     # ================================================================
 
     def set_llm(self, llm_provider: Any) -> None:
-        """Inject an LLM provider for AI triage.
-
-        This allows the router to use an external LLM (e.g., Claude Code's
-        internal LLM) instead of requiring a separate API key configuration.
-
-        Args:
-            llm_provider: An object with a `call(prompt, max_tokens, temperature)` method
-                          that returns a response object with a `content` attribute.
-
-        Example:
-            >>> class AgentLLM:
-            ...     def call(self, prompt, max_tokens=100, temperature=0.1):
-            ...         return AgentResponse(content=agent_generate_text(prompt))
-            >>> router = UnifiedRouter()
-            >>> router.set_llm(AgentLLM())
-        """
+        """Inject an LLM provider for AI triage."""
         self._llm = llm_provider
         self._triage_service._llm = llm_provider
 
@@ -968,13 +878,11 @@ class UnifiedRouter(
         }
 
     def _apply_optimizations(self, matches: Any, query: str, context: Any = None) -> Any:
-        """Apply optimization strategies to match results."""
         from vibesop.core.routing import _pipeline
 
         return _pipeline.apply_optimizations(self, matches, query, context)
 
     def _try_ai_triage(self, query: str, candidates: list[dict[str, Any]], context: Any = None):
-        """Backward-compatible proxy to TriageService.try_ai_triage."""
         from vibesop.core.routing import _layers
 
         match, _ = _layers.try_ai_triage_layer(self, query, candidates, context)  # pyright: ignore[reportArgumentType]
@@ -985,7 +893,6 @@ class UnifiedRouter(
         return LayerResult(match=match, layer=match.layer)
 
     def _build_ai_triage_prompt(self, query: str, skills_summary: str) -> str:
-        """Backward-compatible proxy to TriageService.build_ai_triage_prompt."""
         return self._triage_service.build_ai_triage_prompt(query, skills_summary)
 
 

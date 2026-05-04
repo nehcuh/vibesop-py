@@ -570,7 +570,6 @@ def health(
 
 
 def _show_ecosystem_report(monitor: Any) -> None:
-    """Render gamified ecosystem health report."""
     from datetime import datetime
 
     console.print(
@@ -664,7 +663,6 @@ def _show_ecosystem_report(monitor: Any) -> None:
 
 
 def _display_health_status(health_status: Any, verbose: bool = False) -> None:
-    """Display health status for a single pack."""
     icon_map = {
         "healthy": ("✓", "green"),
         "warning": ("⚠", "yellow"),
@@ -1364,7 +1362,6 @@ def lifecycle(
 
 
 def _lifecycle_auto_review() -> None:
-    """Suggest lifecycle transitions based on evaluation data."""
     from vibesop.core.skills.config_manager import SkillConfigManager
     from vibesop.core.skills.evaluator import RoutingEvaluator
 
@@ -1573,7 +1570,6 @@ def suggestions(
 
 
 def _create_from_suggestion(suggestion_id: str) -> None:
-    """Create a skill from an auto-detected pattern suggestion."""
     from vibesop.core.skills.suggestion_collector import SkillSuggestionCollector
     from vibesop.core.skills.understander import SkillAutoConfigurator, understand_skill_from_file
 
@@ -1838,7 +1834,6 @@ def _generate_skill_md(
     namespace: str,
     keywords: str | None = None,
 ) -> None:
-    """Generate a minimal SKILL.md file."""
     tags = ""
     if keywords:
         tag_list = [k.strip() for k in keywords.split(",") if k.strip()]
