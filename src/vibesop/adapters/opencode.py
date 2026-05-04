@@ -396,6 +396,17 @@ Examples of tasks that do NOT need routing:
 - "Open file X" (when user provides the exact file path)
 - Simple follow-ups to existing routed context
 
+> **注意**：`vibe route` 输出是**建议性**的，但 Agent 偏离推荐时必须**透明化决策**。
+>
+> **MANDATORY — Agent Override Protocol**：
+> 如果你决定**不采纳**路由推荐的技能，你必须：
+> 1. **明确声明**："我选择不使用推荐技能 `<skill_id>`"
+> 2. **展示理由**：具体说明为什么该技能不适用（技能描述不匹配、能力缺失、置信度过低等）
+> 3. **提供替代**：说明你计划使用的替代方案（另一个技能、原始 LLM、自定义流程）
+> 4. **获取用户确认**：向用户呈现你的理由和替代方案，等待用户明确同意后再继续
+>
+> 没有以上 4 步的 Override 视为违规操作。用户拥有最终决策权，而非 Agent。
+
 **FAILURE MODE**: If you called `vibe route` but then did NOT use the recommended
 skill (e.g., you loaded a different skill from your system prompt or proceeded
 without reading the skill file), you have failed. You MUST restart the task.
@@ -408,19 +419,25 @@ the user's request (wrong domain, inappropriate approach, or clearly mismatched)
 
 **DO NOT** proceed with the wrong skill. Instead:
 
-1. **Check alternatives** — the routing output shows alternative skills with
-   confidence scores. Load the top alternative's SKILL.md and evaluate it.
+1. **State your reasoning explicitly** — explain WHY the skill is unsuitable
+   (description mismatch, capability gap, low confidence, etc.).
 
-2. **Re-route with refinement** — if no alternative fits, re-route with a
-   more specific query that clarifies the user's intent:
-   ```bash
-   vibe route "更具体的描述..."
-   ```
+2. **Present alternatives** — show the user the routing output's alternative
+   skills and explain why each is or isn't viable.
 
-3. **Fall back to raw LLM** — if no skill fits after retrying, proceed
-   without skills. You have full capability to handle the request directly.
+3. **Propose your plan** — describe exactly what you intend to do instead
+   (use a different skill, raw LLM, custom workflow).
 
-4. **Never force-fit** — do not contort the user's request to match a skill.
+4. **Get user confirmation** — WAIT for the user to explicitly approve your
+   override before proceeding. The user has the final say, not the Agent.
+
+5. **Re-route with refinement** — if the user wants a better match, clarify
+   the intent with a more specific query.
+
+6. **Fall back to raw LLM** — only if the user explicitly approves proceeding
+   without a skill.
+
+7. **Never force-fit** — do not contort the user's request to match a skill.
    The SkillOS is a tool to assist, not a constraint to obey blindly.
 
 ### Workflow (execute in order — DO NOT skip)
@@ -498,6 +515,17 @@ For skill management commands, use:
             '- "Show me the current directory"',
             '- "Open file X" (when user provides the exact file path)',
             "- Simple follow-ups to existing routed context",
+            "",
+            "> **NOTE**: `vibe route` output is **advisory**, but Agent deviation must be **transparent**.",
+            ">",
+            "> **MANDATORY — Agent Override Protocol**:",
+            "> If you decide **not to adopt** the routed skill, you MUST:",
+            "> 1. **Explicitly declare**: \"I choose not to use the recommended skill `<skill_id>`\"",
+            "> 2. **Show your reasoning**: specifically explain why the skill is unsuitable (description mismatch, capability gap, low confidence, etc.)",
+            "> 3. **Propose an alternative**: describe what you plan to do instead (another skill, raw LLM, custom workflow)",
+            "> 4. **Get user confirmation**: present your reasoning and alternative to the user, WAIT for explicit user approval before proceeding",
+            ">",
+            "> Override without the above 4 steps is a violation. The user has the final say, not the Agent.",
             "",
             "**FAILURE MODE**: If you called `vibe route` but then did NOT use the recommended",
             "skill (e.g., you loaded a different skill from your system prompt or proceeded",
