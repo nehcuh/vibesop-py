@@ -62,7 +62,6 @@ from vibesop.cli.commands.skills_commands._quality import (
     report,
     skill_optimize,
 )
-from vibesop.core.skills import SkillManager, SkillStorage
 
 __all__ = [
     "available",

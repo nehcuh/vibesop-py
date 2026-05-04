@@ -71,7 +71,7 @@ class ExternalSkillLoader:
     # Trusted skill pack namespaces (canonical source in vibesop.constants)
     TRUSTED_PACKS: ClassVar[dict[str, str]] = TRUSTED_PACKS
 
-    _DEFAULT_AUDITOR_FACTORY: ClassVar[Any] = None
+    _default_auditor_factory: ClassVar[Any] = None
 
     def __init__(
         self,
@@ -88,8 +88,8 @@ class ExternalSkillLoader:
 
         if auditor is not None:
             self._auditor = auditor
-        elif type(self)._DEFAULT_AUDITOR_FACTORY is not None:
-            self._auditor = type(self)._DEFAULT_AUDITOR_FACTORY(strict_mode, self._project_root)
+        elif type(self)._default_auditor_factory is not None:
+            self._auditor = type(self)._default_auditor_factory(strict_mode, self._project_root)
         else:
             self._auditor = None
 
@@ -102,7 +102,23 @@ class ExternalSkillLoader:
 
     @classmethod
     def set_default_auditor_factory(cls, factory: Any) -> None:
-        cls._DEFAULT_AUDITOR_FACTORY = factory
+        cls._default_auditor_factory = factory
+
+    def _ensure_auditor(self) -> Any:
+        if self._auditor is not None:
+            return self._auditor
+        try:
+            from vibesop.security import SkillSecurityAuditor
+
+            self._auditor = SkillSecurityAuditor(
+                strict_mode=self._strict_mode, project_root=self._project_root,
+            )
+            for path in self.external_paths:
+                if path.exists():
+                    self._auditor.add_allowed_path(path)
+        except ImportError:
+            pass
+        return self._auditor
 
     def discover_all(self, force_reload: bool = False) -> dict[str, ExternalSkillMetadata]:
         if self._cache and not force_reload:
@@ -225,21 +241,21 @@ class ExternalSkillLoader:
         is_trusted: bool = False,
     ) -> ExternalSkillMetadata | None:
         """Audit skill file first, then parse only if safe."""
-        # Security audit first — check before parsing
-        audit_result = self._auditor.audit_skill_file(skill_file)
+        auditor = self._ensure_auditor()
+        if auditor is not None:
+            audit_result = auditor.audit_skill_file(skill_file)
 
-        # Only block HIGH-level threats from untrusted packs.
-        # Trusted packs and MEDIUM/LOW threats are allowed through
-        # (marked as unsafe but available) — same behavior as before.
-        if not audit_result.is_safe and not is_trusted:
-            has_high = any(t.level.value == "high" for t in audit_result.threats)
-            if has_high:
-                logger.warning(
-                    "Security audit rejected: %s (%s)",
-                    skill_file,
-                    [t.name for t in audit_result.threats if t.level.value == "high"],
-                )
-                return None
+            if not audit_result.is_safe and not is_trusted:
+                has_high = any(t.level.value == "high" for t in audit_result.threats)
+                if has_high:
+                    logger.warning(
+                        "Security audit rejected: %s (%s)",
+                        skill_file,
+                        [t.name for t in audit_result.threats if t.level.value == "high"],
+                    )
+                    return None
+        else:
+            audit_result = None
 
         # Parse skill file only after passing audit
         base_metadata = parse_skill_md(skill_file)

@@ -145,7 +145,7 @@ class ExternalSkillExecutor:
     - Uses SkillAuditor for security checks
     """
 
-    _DEFAULT_AUDITOR_FACTORY: Any = None
+    _default_auditor_factory: Any = None
 
     def __init__(
         self,
@@ -172,8 +172,8 @@ class ExternalSkillExecutor:
         self._parser = SkillParser()
         if auditor is not None:
             self._auditor = auditor
-        elif type(self)._DEFAULT_AUDITOR_FACTORY is not None:
-            self._auditor = type(self)._DEFAULT_AUDITOR_FACTORY(self.project_root)
+        elif type(self)._default_auditor_factory is not None:
+            self._auditor = type(self)._default_auditor_factory(self.project_root)
         else:
             self._auditor = None
         self._workflow_engine: WorkflowEngine | None = None
@@ -189,7 +189,7 @@ class ExternalSkillExecutor:
 
     @classmethod
     def set_default_auditor_factory(cls, factory: Any) -> None:
-        cls._DEFAULT_AUDITOR_FACTORY = factory
+        cls._default_auditor_factory = factory
 
     def get_skill_definition(self, skill_id: str) -> SkillResult:
         """Get skill workflow definition for AI agent execution.
