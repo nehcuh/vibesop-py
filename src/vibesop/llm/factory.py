@@ -28,7 +28,7 @@ _OPENAI_COMPATIBLE: dict[str, str] = {
 
 # Default models for each provider
 _PROVIDER_DEFAULT_MODELS: dict[str, str] = {
-    "deepseek": "deepseek-v4-flash",
+    "deepseek": "deepseek-v4-lite",
     "kimi": "moonshot-v1-8k",
     "zhipu": "glm-4",
 }
@@ -110,7 +110,7 @@ def detect_provider_from_env() -> ProviderType:
             return cast("ProviderType", provider_name)
 
     if os.getenv("OLLAMA_BASE_URL") or os.getenv("OLLAMA_MODEL"):
-        return "ollama"
+        return "deepseek"
 
     return "ollama"
 
