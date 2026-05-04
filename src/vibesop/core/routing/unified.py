@@ -330,6 +330,7 @@ class UnifiedRouter(
         self,
         candidates: list[dict[str, Any]] | None = None,
         limit: int = 50,
+        query: str | None = None,
     ) -> list[str]:
         """Build the 'skill_id: description' list fed to TaskDecomposer.
 
@@ -338,8 +339,69 @@ class UnifiedRouter(
         reaches the LLM, the decomposer can't pre-assign skill_id and PlanBuilder
         falls back to lightweight (skip_ai_triage) routing — which causes the
         "all sub-tasks → wrong skill" symptom.
+
+        When *query* is provided, candidates are relevance-ranked so the most
+        pertinent skills appear first (and within the limit).  This prevents
+        generic skills from crowding out specialized ones when the catalog is
+        large.
         """
         skill_candidates = candidates or self._get_cached_candidates()
+
+        if query:
+            query_lower = query.lower()
+            # Extract simple tokens (words >= 2 chars)
+            import re
+            tokens = set(re.findall(r"[a-zA-Z\-]{2,}", query_lower))
+            # Also include common CJK analysis keywords as whole substrings
+            cjk_keywords = ["分析", "审查", "设计", "调试", "优化", "规划", "测试", " review", " analyze", " debug", " design", " plan", " test"]
+
+            def _relevance_score(c: dict[str, Any]) -> float:
+                score = 0.0
+                cid = c.get("id", "").lower()
+                desc = c.get("description", "").lower()
+                intent = c.get("intent", "").lower()
+                keywords = [k.lower() for k in c.get("keywords", [])]
+                triggers = [t.lower() for t in c.get("triggers", [])]
+
+                # ID match (highest weight)
+                for t in tokens:
+                    if t in cid:
+                        score += 3.0
+
+                # Keyword / trigger match
+                for t in tokens:
+                    if any(t in k for k in keywords):
+                        score += 2.5
+                    if any(t in tr for tr in triggers):
+                        score += 2.0
+
+                # Description / intent match
+                for t in tokens:
+                    if t in desc:
+                        score += 1.0
+                    if t in intent:
+                        score += 1.0
+
+                # CJK / common substrings
+                for kw in cjk_keywords:
+                    kw_lower = kw.lower().strip()
+                    if kw_lower in cid or kw_lower in desc or kw_lower in intent:
+                        score += 2.0
+                    if any(kw_lower in k for k in keywords):
+                        score += 2.0
+
+                # Boost P0 skills slightly so high-priority builtins stay visible
+                if c.get("priority") == "P0":
+                    score += 0.5
+
+                return score
+
+            skill_candidates = sorted(
+                skill_candidates,
+                key=_relevance_score,
+                reverse=True,
+            )
+
         return [
             f"{c['id']}: {c.get('description', c.get('intent', 'N/A'))}"
             for c in skill_candidates[:limit]
@@ -704,7 +766,7 @@ class UnifiedRouter(
         )
         decomposer = self._get_task_decomposer()
         try:
-            skills = self._build_decomposition_skills(candidates)
+            skills = self._build_decomposition_skills(candidates, query=query)
             sub_tasks = decomposer.decompose(query, skills=skills)
         except Exception as e:
             policy = cb.on_phase_error(

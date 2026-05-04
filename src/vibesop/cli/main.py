@@ -488,7 +488,7 @@ def decompose(
         prompt_builder=_build_prompt_builder(),
     )
     decomposer = TaskDecomposer(llm_client=getattr(router, "_llm", None))
-    skills = router._build_decomposition_skills()
+    skills = router._build_decomposition_skills(query=query)
     sub_tasks = decomposer.decompose(query, skills=skills)
 
     if json_output:

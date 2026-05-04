@@ -188,7 +188,7 @@ class AgentRouter:
         # Pass the skill catalog so the LLM can pre-assign skill_id per sub-task —
         # without it, PlanBuilder falls back to skip_ai_triage routing and every
         # sub-task ends up at whichever skill the SCENARIO/INDEX layers pick first.
-        skills = self._router._build_decomposition_skills()
+        skills = self._router._build_decomposition_skills(query=query)
 
         sub_tasks = decomposer.decompose(query, skills=skills)
 
@@ -211,7 +211,7 @@ class AgentRouter:
         # so the LLM-assigned skill_id (and task_type) are preserved into PlanBuilder.
         if sub_tasks is None:
             decomposer = TaskDecomposer(llm_client=self._router._llm)
-            skills = self._router._build_decomposition_skills()
+            skills = self._router._build_decomposition_skills(query=query)
             sub_task_objects = decomposer.decompose(query, skills=skills)
         else:
             # External caller provided dicts — read skill_id/task_type if present.

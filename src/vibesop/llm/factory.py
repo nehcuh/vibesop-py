@@ -82,22 +82,21 @@ def detect_provider_from_env() -> ProviderType:
 
     Priority:
         1. VIBE_LLM_PROVIDER env var (explicit override)
-        2. OLLAMA_BASE_URL or OLLAMA_MODEL env var (explicit local override)
-        3. ANTHROPIC_API_KEY env var (first-class)
-        4. OPENAI_API_KEY env var (first-class)
-        5. Provider-specific keys (DEEPSEEK_API_KEY, KIMI_API_KEY, ZHIPU_API_KEY)
-        6. Default to 'ollama' (local, no API key required)
+        2. ANTHROPIC_API_KEY env var (first-class)
+        3. OPENAI_API_KEY env var (first-class)
+        4. DEEPSEEK_API_KEY (third-party, highest priority)
+        5. KIMI_API_KEY (third-party)
+        6. ZHIPU_API_KEY (third-party)
+        7. OLLAMA_BASE_URL or OLLAMA_MODEL env var (local fallback)
+        8. Default to 'ollama' (local, no API key required)
 
-    First-class providers (anthropic, openai) are checked before third-party
-    OpenAI-compatible keys (deepseek, kimi, zhipu) so that an explicit
-    ANTHROPIC_API_KEY beats a stale third-party key the user may have lying around.
+    Third-party providers are ordered: deepseek → kimi → zhipu → ollama.
+    This matches the team's preferred provider ranking for VibeSOP routing.
     """
     explicit_provider = os.getenv("VIBE_LLM_PROVIDER")
     if explicit_provider and explicit_provider in _VALID_PROVIDERS:
         return cast("ProviderType", explicit_provider)
 
-    if os.getenv("OLLAMA_BASE_URL") or os.getenv("OLLAMA_MODEL"):
-        return "ollama"
     if os.getenv("ANTHROPIC_API_KEY"):
         return "anthropic"
     if os.getenv("OPENAI_API_KEY"):
@@ -109,6 +108,9 @@ def detect_provider_from_env() -> ProviderType:
         env_key = f"{provider_name.upper()}_API_KEY"
         if os.getenv(env_key):
             return cast("ProviderType", provider_name)
+
+    if os.getenv("OLLAMA_BASE_URL") or os.getenv("OLLAMA_MODEL"):
+        return "ollama"
 
     return "ollama"
 
