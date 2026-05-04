@@ -9,6 +9,52 @@
 
 Do not guess which skill to use. Do not skip routing.
 
+### Agent Override Protocol
+
+> **NOTE**: `vibe route` output is a **recommendation**, but any deviation MUST be **transparent**.
+>
+> **MANDATORY — Agent Override Protocol**:
+> If you decide **not to adopt** the routed skill, you MUST:
+> 1. **Explicitly declare**: "I choose not to use the recommended skill `<skill_id>`"
+> 2. **Show your reasoning**: specifically explain why the skill is unsuitable (description mismatch, capability gap, low confidence, etc.)
+> 3. **Propose an alternative**: describe what you plan to do instead (another skill, raw LLM, custom workflow)
+> 4. **Get user confirmation**: present your reasoning and alternative to the user, WAIT for explicit user approval before proceeding
+>
+> Override without the above 4 steps is a violation. The user has the final say, not the Agent.
+
+**FAILURE MODE**: If you called `vibe route` but then did NOT use the recommended
+skill (e.g., you loaded a different skill from your system prompt or proceeded
+without reading the skill file), you have failed. You MUST restart the task.
+The `vibe route` output is authoritative.
+
+### Disagreement Protocol (When the Routed Skill Doesn't Fit)
+
+If you read the recommended skill's SKILL.md and determine it does NOT match
+the user's request (wrong domain, inappropriate approach, or clearly mismatched):
+
+**DO NOT** proceed with the wrong skill. Instead:
+
+1. **State your reasoning explicitly** — explain WHY the skill is unsuitable
+   (description mismatch, capability gap, low confidence, etc.).
+
+2. **Present alternatives** — show the user the routing output's alternative
+   skills and explain why each is or isn't viable.
+
+3. **Propose your plan** — describe exactly what you intend to do instead
+   (use a different skill, raw LLM, custom workflow).
+
+4. **Get user confirmation** — WAIT for the user to explicitly approve your
+   override before proceeding. The user has the final say, not the Agent.
+
+5. **Re-route with refinement** — if the user wants a better match, clarify
+   the intent with a more specific query.
+
+6. **Fall back to raw LLM** — only if the user explicitly approves proceeding
+   without a skill.
+
+7. **Never force-fit** — do not contort the user's request to match a skill.
+   The SkillOS is a tool to assist, not a constraint to obey blindly.
+
 ### Workflow
 
 1. **Route**: `vibe route "<original_user_query>"` using the user's EXACT words — do NOT rewrite, summarize, translate, or paraphrase
@@ -37,7 +83,8 @@ vibe route --slash "<command>"
 
 ### Deviation Recording
 
-If you skip a routing recommendation:
+If you skip a routing recommendation (only after completing the Agent Override
+Protocol above and receiving user approval):
 
 ```bash
 vibe deviation record "<query>" "<skill>" <confidence> "<layer>" \
