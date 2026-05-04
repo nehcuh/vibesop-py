@@ -240,5 +240,5 @@ class SkillInstaller:
         registry_path = project_path / ".vibe" / "skills" / "registry.yaml"
         if registry_path.exists():
             content = registry_path.read_text()
-            filtered_lines = [l for l in content.split("\n") if skill_id not in l]
+            filtered_lines = [line for line in content.split("\n") if skill_id not in line]
             registry_path.write_text("\n".join(filtered_lines))

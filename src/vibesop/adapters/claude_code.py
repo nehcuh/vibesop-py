@@ -1,7 +1,6 @@
 """Claude Code platform adapter."""
 
 import logging
-
 from pathlib import Path
 from typing import Any
 
@@ -290,7 +289,7 @@ class ClaudeCodeAdapter(PlatformAdapter):
         skill_output_path: Path,
         result: RenderResult,
         *,
-        dir_name: str | None = None,
+        dir_name: str | None = None,  # noqa: ARG002
         manifest: Manifest | None = None,
     ) -> None:
         self._render_and_write(

@@ -461,7 +461,7 @@ class PlatformAdapter(ABC):
         result: RenderResult,
         *,
         dir_name: str | None = None,
-        manifest: Manifest | None = None,
+        manifest: Manifest | None = None,  # noqa: ARG002
     ) -> None:
         """Generate fallback skill content when no real content exists.
 

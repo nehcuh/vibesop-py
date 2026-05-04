@@ -71,10 +71,9 @@ class TransactionalInstaller:
             error = str(e)
 
         rollback_completed = False
-        if failed_at or error:
-            if self._auto_rollback:
-                rb = self._rollback(completed_steps)
-                rollback_completed = rb.get("success", False)
+        if (failed_at or error) and self._auto_rollback:
+            rb = self._rollback(completed_steps)
+            rollback_completed = rb.get("success", False)
 
         return TransactionResult(
             success=not failed_at and not error,

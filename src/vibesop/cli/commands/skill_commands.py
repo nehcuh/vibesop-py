@@ -556,6 +556,8 @@ def _detect_and_load_skill(source: str) -> tuple[Path, Any]:
             metadata = parse_skill_md(metadata_file)
             return skill_path, metadata
 
+        from vibesop.core.skills.base import SkillMetadata
+
         metadata = SkillMetadata(
             id=source_path.stem,
             name=source_path.stem.replace("-", " ").title(),
@@ -662,7 +664,7 @@ def _auto_configure_skill(metadata: Any, scope: str, _source: str) -> None:
 def _auto_configure_skill_with_llm(metadata: Any, scope: str, skill_source: str) -> None:
     """Auto-configure skill using the understander module."""
     from vibesop.core.llm_config import is_in_agent_environment
-    from vibesop.core.skills.understander import SkillAutoConfigurator, understand_skill_from_file
+    from vibesop.core.skills.understander import understand_skill_from_file
 
     in_agent = is_in_agent_environment()
 

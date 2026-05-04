@@ -11,8 +11,8 @@ from typing import Any
 from pydantic import BaseModel, Field, ValidationError
 
 from vibesop.core.orchestration.patterns import (
-    MULTI_INTENT_CONJUNCTIONS,
     INTENT_DOMAIN_KEYWORDS,
+    MULTI_INTENT_CONJUNCTIONS,
 )
 
 logger = logging.getLogger(__name__)

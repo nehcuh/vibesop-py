@@ -1,7 +1,6 @@
 """Kimi Code CLI platform adapter."""
 
 import re
-
 from pathlib import Path
 from typing import Any
 

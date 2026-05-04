@@ -59,7 +59,7 @@ class KeywordMatcher:
         self,
         query: str,
         candidates: list[SkillCandidateDict],
-        context: RoutingContext | None = None,
+        context: RoutingContext | None = None,  # noqa: ARG002
         top_k: int = 10,
     ) -> list[MatchResult]:
         """Match query against candidates using keyword detection."""
@@ -235,7 +235,7 @@ class TFIDFMatcher:
         self,
         query: str,
         candidates: list[SkillCandidateDict],
-        context: RoutingContext | None = None,
+        context: RoutingContext | None = None,  # noqa: ARG002
         top_k: int = 10,
     ) -> list[MatchResult]:
         """Match query against candidates using TF-IDF similarity."""
@@ -388,7 +388,7 @@ class EmbeddingMatcher:
         self,
         query: str,
         candidates: list[SkillCandidateDict],
-        context: RoutingContext | None = None,
+        context: RoutingContext | None = None,  # noqa: ARG002
         top_k: int = 10,
     ) -> list[MatchResult]:
         """Match query using vector embeddings."""

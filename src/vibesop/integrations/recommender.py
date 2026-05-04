@@ -5,7 +5,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Any
 
-from vibesop.integrations import IntegrationInfo, IntegrationManager, IntegrationStatus
+from vibesop.integrations import IntegrationManager, IntegrationStatus
 
 
 class RecommendationPriority(Enum):

@@ -53,7 +53,7 @@ def test_skill_add_with_auto_config(temp_skill_dir, monkeypatch):
     monkeypatch.chdir(temp_skill_dir.parent)
 
     # Mock questionary for non-interactive testing
-    with patch("vibesop.cli.commands.skill_add.questionary") as mock_q:
+    with patch("vibesop.cli.commands.skill_commands.questionary") as mock_q:
         mock_q.select.return_value.ask.return_value = "project"
         mock_q.confirm.return_value.ask.return_value = True
 
@@ -146,7 +146,7 @@ def test_skill_add_with_manual_config(temp_skill_dir, monkeypatch, tmp_path):
         call_count["confirm"] += 1
         return MagicMock(ask=MagicMock(return_value=True))
 
-    with patch("vibesop.cli.commands.skill_add.questionary") as mock_q:
+    with patch("vibesop.cli.commands.skill_commands.questionary") as mock_q:
         mock_q.select.side_effect = select_side_effect
         mock_q.confirm.side_effect = confirm_side_effect
 
@@ -167,7 +167,7 @@ def test_skill_add_force_reinstall(temp_skill_dir, monkeypatch, tmp_path):
 
     monkeypatch.chdir(tmp_path)
 
-    with patch("vibesop.cli.commands.skill_add.questionary") as mock_q:
+    with patch("vibesop.cli.commands.skill_commands.questionary") as mock_q:
         mock_q.select.return_value.ask.return_value = "project"
         mock_q.confirm.return_value.ask.return_value = True
 
