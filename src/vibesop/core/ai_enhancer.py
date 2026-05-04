@@ -17,8 +17,8 @@ import logging
 from dataclasses import dataclass
 from typing import Any, cast
 
-from vibesop.core.routing.llm_bridge import llm_factory
 from vibesop.core.session_analyzer import SkillSuggestion
+from vibesop.llm import create_from_env
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +37,7 @@ class EnhancedSkill:
 
 class AIEnhancer:
     def __init__(self) -> None:
-        self._llm = llm_factory.create_provider()
+        self._llm = create_from_env()
 
     def enhance_suggestion(
         self,

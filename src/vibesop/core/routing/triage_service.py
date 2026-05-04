@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any
+import os
+from typing import TYPE_CHECKING, Any, cast
 
 from vibesop.core.matching import KeywordMatcher, MatcherConfig
 from vibesop.core.models import RoutingLayer, SkillRoute
@@ -16,7 +17,8 @@ if TYPE_CHECKING:
     from vibesop.core.config import RoutingConfig
     from vibesop.core.optimization import CandidatePrefilter
     from vibesop.core.routing.cache import CacheManager
-    from vibesop.core.routing.cost_tracker import TriageCostTracker
+    from vibesop.llm.cost_tracker import TriageCostTracker
+    from vibesop.llm.factory import ProviderType
 
 logger = logging.getLogger(__name__)
 
@@ -217,19 +219,41 @@ class TriageService:
         return prefiltered[:max_skills]
 
     def build_ai_triage_prompt(self, query: str, skills_summary: str) -> str:
-        from vibesop.core.routing.llm_bridge import build_triage_prompt
+        from vibesop.llm.triage_prompts import TriagePromptRegistry
 
         version = getattr(self._config, "ai_triage_prompt_version", "v2")
-        return build_triage_prompt(
+        return TriagePromptRegistry.render(
             query=query,
             skills_summary=skills_summary,
             version=version,
         )
 
     def init_llm_client(self) -> Any | None:
-        from vibesop.core.routing.llm_bridge import init_llm_from_config
+        # Allow explicit disable via env var
+        if os.getenv("VIBE_AI_TRIAGE_ENABLED", "").lower() in ("0", "false", "no"):
+            return None
+        try:
+            # Try to get LLM config from VibeSOP config file first
+            from vibesop.core.llm_config import VibeSOPConfigManager
+            from vibesop.llm.factory import create_provider
 
-        return init_llm_from_config()
+            llm_config = VibeSOPConfigManager.get_llm_config()
+            if llm_config and llm_config.api_key:
+                # Use config file settings
+                provider = create_provider(
+                    provider=cast("ProviderType", llm_config.provider),
+                    api_key=llm_config.api_key,
+                    base_url=llm_config.api_base,
+                )
+                logger.debug(f"Using LLM from config: {llm_config.provider}/{llm_config.model}")
+                return provider
+
+            # Fall back to environment detection
+            provider = create_provider()
+            return provider
+        except (OSError, ValueError, RuntimeError) as e:
+            logger.debug(f"LLM client initialization failed: {e}")
+            return None
 
     def parse_ai_triage_response(self, response: str) -> dict[str, Any]:
         """Parse AI Triage response with structured JSON priority + regex fallback.

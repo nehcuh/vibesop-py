@@ -405,7 +405,7 @@ class TestIntegration:
         )
 
         # Mock LLM initialization error
-        with patch('vibesop.core.routing.llm_bridge.llm_factory.create_provider', side_effect=ImportError), pytest.raises(ImportError):
+        with patch('vibesop.core.ai_enhancer.create_from_env', side_effect=ImportError), pytest.raises(ImportError):
             # AIEnhancer.__init__ will fail, which is expected
             enhancer = AIEnhancer()
 
