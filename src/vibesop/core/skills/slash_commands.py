@@ -6,14 +6,9 @@ import logging
 import shlex
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
-from vibesop.core.services import (
-    AnalysisService,
-    EvaluationService,
-    InstallService,
-    RoutingService,
-)
+from vibesop.core.routing import UnifiedRouter
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -135,12 +130,14 @@ class SlashCommandHandler:
     def __init__(self, project_root: Path | None = None) -> None:
         self.project_root = project_root or Path.cwd()
         self._registry = SlashCommandRegistry()
-        # Initialize shared services
-        self._routing_service = RoutingService(project_root=self.project_root)
-        self._install_service = InstallService()
-        self._analysis_service = AnalysisService(project_root=self.project_root)
-        self._evaluation_service = EvaluationService(project_root=self.project_root)
+        self._router: UnifiedRouter | None = None
         self._setup_handlers()
+
+    @property
+    def router(self) -> UnifiedRouter:
+        if self._router is None:
+            self._router = UnifiedRouter(project_root=self.project_root)
+        return self._router
 
     def _setup_handlers(self) -> None:
         self._registry.register(
@@ -259,7 +256,7 @@ class SlashCommandHandler:
             if strategy and isinstance(strategy, str):
                 context.strategy_hint = strategy
 
-            result = self._routing_service.orchestrate(query, context=context)
+            result = self.router.orchestrate(query, context=context)
 
             if explain:
                 from rich.console import Console
@@ -293,7 +290,10 @@ class SlashCommandHandler:
                 platforms = [args[idx + 1]]
 
         try:
-            return self._install_service.install_pack(pack_name=pack_name, platforms=platforms)
+            from vibesop.installer.pack_installer import PackInstaller
+
+            installer = PackInstaller()
+            return installer.install_pack(pack_name=pack_name, platforms=platforms)
         except (OSError, ValueError, RuntimeError) as e:
             logger.error(f"Install command failed: {e}")
             return False, f"Installation failed: {e}"
@@ -302,7 +302,17 @@ class SlashCommandHandler:
         deep = "--deep" in args
 
         try:
-            result = self._analysis_service.analyze(deep=deep)
+            from vibesop.core.project_analyzer import ProjectAnalyzer
+
+            analyzer = ProjectAnalyzer(self.project_root)
+            profile = analyzer.analyze()
+            result: dict[str, Any] = {
+                "project_type": profile.project_type,
+                "tech_stack": profile.tech_stack,
+            }
+            if deep:
+                result["file_count"] = getattr(profile, "file_count", None)
+                result["code_lines"] = getattr(profile, "code_lines", None)
 
             msg = f"Project type: {result.get('project_type') or 'Unknown'}\n"
             tech_stack = result.get("tech_stack", [])
@@ -329,25 +339,28 @@ class SlashCommandHandler:
                 skill_id = args[idx + 1]
 
         try:
+            from vibesop.core.skills.evaluator import RoutingEvaluator
+
+            evaluator = RoutingEvaluator(project_root=self.project_root)
             if skill_id:
-                evaluation = self._evaluation_service.evaluate_skill(skill_id)
+                evaluation = evaluator.evaluate_skill(skill_id)
                 if evaluation:
                     return (
                         True,
                         f"Skill: {skill_id}\n"
-                        f"Grade: {evaluation['grade']}\n"
-                        f"Quality: {evaluation['quality_score']:.0%}\n"
-                        f"Total uses: {evaluation['total_routes']}",
+                        f"Grade: {evaluation.grade}\n"
+                        f"Quality: {evaluation.quality_score:.0%}\n"
+                        f"Total uses: {evaluation.total_routes}",
                     )
                 return False, f"No evaluation data for {skill_id}"
 
-            all_evals = self._evaluation_service.evaluate_all()
+            all_evals = evaluator.evaluate_all_skills()
             if not all_evals:
                 return True, "No evaluation data yet"
 
             msg = "Skill Evaluation Summary:\n"
             for sid, ev in all_evals.items():
-                msg += f"  {sid}: {ev['grade']} ({ev['quality_score']:.0%})\n"
+                msg += f"  {sid}: {ev.grade} ({ev.quality_score:.0%})\n"
             return True, msg
         except (OSError, ValueError, RuntimeError) as e:
             logger.error(f"Evaluate command failed: {e}")
@@ -373,7 +386,7 @@ class SlashCommandHandler:
             if strategy and isinstance(strategy, str):
                 context.strategy_hint = strategy
 
-            result = self._routing_service.orchestrate(query, context=context)
+            result = self.router.orchestrate(query, context=context)
 
             if result.mode.value == "orchestrated" and result.execution_plan:
                 msg = f"Execution Plan ({result.execution_plan.mode}):\n"
