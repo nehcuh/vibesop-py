@@ -28,7 +28,7 @@ _OPENAI_COMPATIBLE: dict[str, str] = {
 
 # Default models for each provider
 _PROVIDER_DEFAULT_MODELS: dict[str, str] = {
-    "deepseek": "deepseek-v4-lite",
+    "deepseek": "deepseek-v4-flash",
     "kimi": "moonshot-v1-8k",
     "zhipu": "glm-4",
 }

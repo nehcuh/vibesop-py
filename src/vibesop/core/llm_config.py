@@ -74,7 +74,7 @@ class VibeSOPConfigManager:
 
                     return LLMConfig(
                         provider=llm_data.get("provider", "deepseek"),
-                        model=llm_data.get("model", "deepseek-v4-lite"),
+                        model=llm_data.get("model", "deepseek-v4-flash"),
                         api_key=llm_data.get("api_key"),
                         api_base=llm_data.get("api_base"),
                         temperature=llm_data.get("temperature", 0.7),
@@ -228,7 +228,7 @@ class EnvVarLLMDetector:
     }
 
     PROVIDER_DEFAULT_MODELS: ClassVar[dict[str, str]] = {
-        "deepseek": "deepseek-v4-lite",
+        "deepseek": "deepseek-v4-flash",
         "kimi": "moonshot-v1-8k",
         "zhipu": "glm-4",
         "ollama": "qwen3:35b-a3b-mlx",
@@ -423,7 +423,7 @@ class LLMConfigResolver:
 
     def _create_default_config(self, requirements: dict[str, Any]) -> LLMConfig:
         provider = requirements.get("provider", "deepseek")
-        models = requirements.get("recommended_models", ["deepseek-v4-lite"])
+        models = requirements.get("recommended_models", ["deepseek-v4-flash"])
 
         return LLMConfig(
             provider=provider,
@@ -457,11 +457,11 @@ class LLMConfigResolver:
 
         # 4. 默认(使用 Haiku - 快速且便宜)
         self.logger.print(
-            "[dim]  Using default LLM (deepseek-v4-lite) for understanding[/dim]"
+            "[dim]  Using default LLM (deepseek-v4-flash) for understanding[/dim]"
         )
         return LLMConfig(
             provider="deepseek",
-            model="deepseek-v4-lite",
+            model="deepseek-v4-flash",
             source=LLMSource.DEFAULT,
         )
 
