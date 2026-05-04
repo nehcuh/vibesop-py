@@ -84,7 +84,7 @@ class TestSwitchCommand:
 
         # Mock deploy module since it may not exist
         fake_deploy = types.ModuleType("vibesop.cli.commands.deploy")
-        fake_deploy._execute_deploy = MagicMock()
+        fake_deploy.execute_deploy = MagicMock()
         sys.modules["vibesop.cli.commands.deploy"] = fake_deploy
 
         # Create fake build output
@@ -96,13 +96,13 @@ class TestSwitchCommand:
         assert result.exit_code == 0
         assert "Switched to claude-code" in result.stdout
         mock_build.assert_called_once()
-        fake_deploy._execute_deploy.assert_called_once()
+        fake_deploy.execute_deploy.assert_called_once()
 
     def test_switch_no_build(self, monkeypatch, tmp_path) -> None:
         """Test switch with --no-build."""
         # Mock deploy module
         fake_deploy = types.ModuleType("vibesop.cli.commands.deploy")
-        fake_deploy._execute_deploy = MagicMock()
+        fake_deploy.execute_deploy = MagicMock()
         sys.modules["vibesop.cli.commands.deploy"] = fake_deploy
 
         # Create fake build output
@@ -113,7 +113,7 @@ class TestSwitchCommand:
         result = runner.invoke(app, ["switch", "claude-code", "--no-build"])
         assert result.exit_code == 0
         assert "Skipping build" in result.stdout
-        fake_deploy._execute_deploy.assert_called_once()
+        fake_deploy.execute_deploy.assert_called_once()
 
     def test_switch_build_output_missing(self, monkeypatch, tmp_path) -> None:
         """Test switch when build output is missing."""
@@ -121,7 +121,7 @@ class TestSwitchCommand:
         monkeypatch.setattr("vibesop.cli.commands.build.execute_build", mock_build)
 
         fake_deploy = types.ModuleType("vibesop.cli.commands.deploy")
-        fake_deploy._execute_deploy = MagicMock()
+        fake_deploy.execute_deploy = MagicMock()
         sys.modules["vibesop.cli.commands.deploy"] = fake_deploy
 
         monkeypatch.chdir(tmp_path)

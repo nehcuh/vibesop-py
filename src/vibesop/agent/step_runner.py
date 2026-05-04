@@ -14,7 +14,6 @@ Entry points:
 
 from __future__ import annotations
 
-import contextlib
 import logging
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -336,9 +335,10 @@ class StepRunner:
                     except Exception as e:
                         return (s, e)
 
-                old_loop = None
-                with contextlib.suppress(RuntimeError):
-                    old_loop = asyncio.get_event_loop()
+                try:
+                    old_loop = asyncio.get_running_loop()
+                except RuntimeError:
+                    old_loop = None
 
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)

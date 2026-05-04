@@ -240,7 +240,7 @@ class TestPackInstaller:
 
 
 class TestSkillSymlinks:
-    """Tests for _create_skill_symlinks and _copy_skill_dirs."""
+    """Tests for create_skill_symlinks and _copy_skill_dirs."""
 
     def test_create_skill_symlinks_flat_layout(self, tmp_path):
         """Skill symlinks are created with correct flattened names for flat layout."""
@@ -260,7 +260,7 @@ class TestSkillSymlinks:
         platform.mkdir(parents=True)
 
         installer = PackInstaller(central_storage=central, platform_paths=[platform])
-        count = installer._create_skill_symlinks(pack, platform, "testpack")
+        count = installer.create_skill_symlinks(pack, platform, "testpack")
 
         assert count == 2
 
@@ -351,6 +351,6 @@ class TestPostInstallHook:
         platform.mkdir(parents=True)
 
         installer = PackInstaller(central_storage=central, platform_paths=[platform])
-        count = installer._create_skill_symlinks(pack, platform, "testpack")
+        count = installer.create_skill_symlinks(pack, platform, "testpack")
 
         assert count == 1

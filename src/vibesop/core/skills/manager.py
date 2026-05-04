@@ -1,4 +1,3 @@
-# pyright: reportPrivateUsage=false
 """High-level skill management API.
 
 **⚠️ POSITIONING**: VibeSOP is a ROUTING ENGINE, not an execution engine.

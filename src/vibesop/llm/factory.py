@@ -4,7 +4,7 @@ Creates LLM providers based on configuration and environment.
 """
 
 import os
-from typing import Literal
+from typing import Literal, cast
 
 from vibesop.llm.anthropic import AnthropicProvider
 from vibesop.llm.base import LLMProvider
@@ -94,7 +94,7 @@ def detect_provider_from_env() -> ProviderType:
     """
     explicit_provider = os.getenv("VIBE_LLM_PROVIDER")
     if explicit_provider and explicit_provider in _VALID_PROVIDERS:
-        return explicit_provider  # pyright: ignore[reportReturnType]
+        return cast("ProviderType", explicit_provider)
 
     if os.getenv("OLLAMA_BASE_URL") or os.getenv("OLLAMA_MODEL"):
         return "ollama"
@@ -108,7 +108,7 @@ def detect_provider_from_env() -> ProviderType:
     for provider_name in ["kimi", "zhipu"]:
         env_key = f"{provider_name.upper()}_API_KEY"
         if os.getenv(env_key):
-            return provider_name  # pyright: ignore[reportReturnType]
+            return cast("ProviderType", provider_name)
 
     return "ollama"
 

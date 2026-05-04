@@ -254,7 +254,7 @@ def status(
         if lifecycle in [s.value for s in SkillLifecycle]
         else SkillLifecycle.ACTIVE
     )
-    valid_next = SkillLifecycleManager._valid_transitions().get(current, frozenset())  # pyright: ignore[reportPrivateUsage]
+    valid_next = SkillLifecycleManager.valid_transitions().get(current, frozenset())
     next_states = ", ".join(s.value for s in valid_next) if valid_next else "none (terminal)"
 
     console.print(

@@ -31,7 +31,7 @@ class SkillLifecycleManager:
     """
 
     @classmethod
-    def _valid_transitions(cls) -> dict[SkillLifecycle, frozenset[SkillLifecycle]]:
+    def valid_transitions(cls) -> dict[SkillLifecycle, frozenset[SkillLifecycle]]:
         return {
             SkillLifecycle.DRAFT: frozenset({SkillLifecycle.ACTIVE}),
             SkillLifecycle.ACTIVE: frozenset({SkillLifecycle.DEPRECATED, SkillLifecycle.ARCHIVED}),
@@ -40,13 +40,17 @@ class SkillLifecycleManager:
         }
 
     @classmethod
+    def _valid_transitions(cls) -> dict[SkillLifecycle, frozenset[SkillLifecycle]]:
+        return cls.valid_transitions()
+
+    @classmethod
     def can_transition(
         cls,
         from_state: SkillLifecycle,
         to_state: SkillLifecycle,
     ) -> bool:
         """Check if a lifecycle transition is valid."""
-        return to_state in cls._valid_transitions().get(from_state, frozenset())
+        return to_state in cls.valid_transitions().get(from_state, frozenset())
 
     @classmethod
     def transition(

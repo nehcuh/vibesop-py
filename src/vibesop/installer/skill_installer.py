@@ -1,8 +1,4 @@
-"""Skill installer for individual skill installation.
-
-This module handles installation of individual skills
-to projects, including dependency management and registry updates.
-"""
+"""Skill installer for individual skill installation."""
 
 import logging
 import shutil
@@ -15,18 +11,6 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class SkillManifest:
-    """Skill manifest data.
-
-    Attributes:
-        id: Skill identifier
-        name: Skill name
-        description: Skill description
-        version: Skill version
-        author: Skill author
-        dependencies: List of skill dependencies
-        trigger_when: Trigger conditions
-    """
-
     id: str
     name: str
     description: str
@@ -56,7 +40,6 @@ class SkillManifest:
             version = meta.version or version
             author = meta.author or author
             trigger_when = meta.trigger_when or trigger_when
-            # Dependencies are not yet part of base SkillMetadata; keep empty.
 
         return cls(
             id=id_,
@@ -70,21 +53,7 @@ class SkillManifest:
 
 
 class SkillInstaller:
-    """Installer for individual skills.
-
-    Installs skills to projects with dependency management
-    and registry updates.
-
-    Example:
-        >>> installer = SkillInstaller()
-        >>> result = installer.install_skill(
-        ...     skill_path=Path("skills/my-skill"),
-        ...     project_path=Path(".")
-        ... )
-    """
-
     def __init__(self) -> None:
-        """Initialize the skill installer."""
         self._skills_dir = Path(".vibe/skills")
 
     def install_skill(
@@ -93,16 +62,6 @@ class SkillInstaller:
         project_path: Path,
         force: bool = False,
     ) -> dict[str, Any]:
-        """Install a skill to a project.
-
-        Args:
-            skill_path: Path to skill directory
-            project_path: Project root directory
-            force: Force reinstall if already installed
-
-        Returns:
-            Dictionary with installation results
-        """
         result: dict[str, Any] = {
             "success": False,
             "skill_id": skill_path.name,
@@ -113,19 +72,15 @@ class SkillInstaller:
         }
 
         try:
-            # Validate skill path
             if not skill_path.exists():
                 result["errors"].append(f"Skill path not found: {skill_path}")
                 return result
 
-            # Load skill manifest
             manifest = self._load_skill_manifest(skill_path)
             result["skill_id"] = manifest.id
 
-            # Check dependencies
             dep_result: dict[str, Any] = self._install_dependencies(
-                manifest.dependencies,
-                project_path,
+                manifest.dependencies, project_path
             )
             if not dep_result["success"]:
                 result["errors"].extend(dep_result["errors"])
@@ -133,7 +88,6 @@ class SkillInstaller:
 
             result["dependencies_installed"] = dep_result["installed"]
 
-            # Install skill files
             target_dir = project_path / self._skills_dir / manifest.id
             if target_dir.exists() and not force:
                 result["warnings"].append(f"Skill already installed at {target_dir}")
@@ -141,10 +95,7 @@ class SkillInstaller:
                 result["installed_path"] = str(target_dir)
                 return result
 
-            # Copy skill files
             self._copy_skill_files(skill_path, target_dir)
-
-            # Update registry
             self._update_registry(manifest, project_path)
 
             result["success"] = True
@@ -156,19 +107,8 @@ class SkillInstaller:
         return result
 
     def uninstall_skill(
-        self,
-        skill_id: str,
-        project_path: Path,
+        self, skill_id: str, project_path: Path
     ) -> dict[str, Any]:
-        """Uninstall a skill from a project.
-
-        Args:
-            skill_id: Skill identifier
-            project_path: Project root directory
-
-        Returns:
-            Dictionary with uninstallation results
-        """
         result: dict[str, Any] = {
             "success": False,
             "skill_id": skill_id,
@@ -183,13 +123,9 @@ class SkillInstaller:
                 result["errors"].append(f"Skill not found: {skill_id}")
                 return result
 
-            # Remove skill directory
             shutil.rmtree(skill_dir)
             result["removed_files"].append(str(skill_dir))
-
-            # Update registry
             self._remove_from_registry(skill_id, project_path)
-
             result["success"] = True
 
         except Exception as e:
@@ -198,14 +134,6 @@ class SkillInstaller:
         return result
 
     def list_skills(self, project_path: Path) -> list[dict[str, Any]]:
-        """List installed skills in a project.
-
-        Args:
-            project_path: Project root directory
-
-        Returns:
-            List of skill information dictionaries
-        """
         skills: list[dict[str, Any]] = []
         skills_dir = project_path / self._skills_dir
 
@@ -226,26 +154,13 @@ class SkillInstaller:
                         }
                     )
                 except Exception as e:
-                    # Skip invalid skills
                     logger.debug(f"Failed to load skill manifest from {skill_path}: {e}")
-                    continue
 
         return skills
 
     def verify_skill(
-        self,
-        skill_id: str,
-        project_path: Path,
+        self, skill_id: str, project_path: Path
     ) -> dict[str, Any]:
-        """Verify a skill installation.
-
-        Args:
-            skill_id: Skill identifier
-            project_path: Project root directory
-
-        Returns:
-            Dictionary with verification results
-        """
         result: dict[str, Any] = {
             "skill_id": skill_id,
             "installed": False,
@@ -256,42 +171,23 @@ class SkillInstaller:
         }
 
         skill_dir = project_path / self._skills_dir / skill_id
-
-        # Check if directory exists
         if not skill_dir.exists():
             result["errors"].append(f"Skill directory not found: {skill_dir}")
             return result
 
         result["installed"] = True
+        result["files_present"] = (skill_dir / "SKILL.md").exists()
 
-        # Check for required files
-        skill_md = skill_dir / "SKILL.md"
-        try:
-            result["files_present"] = skill_md.exists()
-        except Exception as e:
-            logger.debug(f"Failed to check skill files: {e}")
-            result["files_present"] = False
-
-        # Check registry
-        result["in_registry"] = self._check_registry(skill_id, project_path)
+        registry_path = project_path / ".vibe" / "skills" / "registry.yaml"
+        result["in_registry"] = registry_path.exists() and skill_id in registry_path.read_text()
 
         return result
 
     def _load_skill_manifest(self, skill_path: Path) -> SkillManifest:
-        """Load skill manifest from skill directory.
-
-        Args:
-            skill_path: Path to skill directory
-
-        Returns:
-            SkillManifest instance
-        """
         skill_md = skill_path / "SKILL.md"
-
         if skill_md.exists():
             return SkillManifest.from_file(skill_md)
 
-        # Create default manifest
         return SkillManifest(
             id=skill_path.name,
             name=skill_path.name.replace("-", " ").title(),
@@ -303,31 +199,13 @@ class SkillInstaller:
         )
 
     def _install_dependencies(
-        self,
-        dependencies: list[str],
-        project_path: Path,
+        self, dependencies: list[str], project_path: Path
     ) -> dict[str, Any]:
-        """Install skill dependencies.
-
-        Args:
-            dependencies: List of skill IDs
-            project_path: Project root directory
-
-        Returns:
-            Dictionary with installation results
-        """
-        result: dict[str, Any] = {
-            "success": True,
-            "installed": [],
-            "errors": [],
-        }
+        result: dict[str, Any] = {"success": True, "installed": [], "errors": []}
 
         for dep_id in dependencies:
-            # Check if dependency is already installed
-            dep_verify: dict[str, Any] = self.verify_skill(dep_id, project_path)
-
+            dep_verify = self.verify_skill(dep_id, project_path)
             if not dep_verify["installed"]:
-                # Dependency not installed
                 result["errors"].append(f"Dependency not installed: {dep_id}")
                 result["success"] = False
             else:
@@ -336,33 +214,11 @@ class SkillInstaller:
         return result
 
     def _copy_skill_files(self, src: Path, dst: Path) -> None:
-        """Copy skill files to destination.
-
-        Args:
-            src: Source skill directory
-            dst: Destination directory
-        """
-        # Create destination directory
-        dst.mkdir(parents=True, exist_ok=True)
-
-        # Copy all files
-        for item in src.iterdir():
-            if item.is_file():
-                shutil.copy2(item, dst / item.name)
-            elif item.is_dir() and item.name != "__pycache__":
-                # Recursively copy subdirectories
-                self._copy_skill_files(item, dst / item.name)
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copytree(src, dst, dirs_exist_ok=True, ignore=shutil.ignore_patterns("__pycache__"))
 
     def _update_registry(self, manifest: SkillManifest, project_path: Path) -> None:
-        """Update skill registry.
-
-        Args:
-            manifest: Skill manifest
-            project_path: Project root directory
-        """
         registry_path = project_path / ".vibe" / "skills" / "registry.yaml"
-
-        # Simple registry update (can be enhanced)
         registry_path.parent.mkdir(parents=True, exist_ok=True)
 
         if not registry_path.exists():
@@ -373,11 +229,6 @@ class SkillInstaller:
                 with registry_path.open("a") as f:
                     f.write(f"  - {manifest.id}\n")
 
-        # Signal the routing engine to reload candidates on next route()
-        self._touch_reload_marker(project_path)
-
-    def _touch_reload_marker(self, project_path: Path) -> None:
-        """Touch .vibe/.skills_reload to signal router to invalidate cache."""
         marker = project_path / ".vibe" / ".skills_reload"
         try:
             marker.parent.mkdir(parents=True, exist_ok=True)
@@ -386,34 +237,8 @@ class SkillInstaller:
             pass
 
     def _remove_from_registry(self, skill_id: str, project_path: Path) -> None:
-        """Remove skill from registry.
-
-        Args:
-            skill_id: Skill identifier
-            project_path: Project root directory
-        """
         registry_path = project_path / ".vibe" / "skills" / "registry.yaml"
-
         if registry_path.exists():
             content = registry_path.read_text()
-            lines = content.split("\n")
-            filtered_lines = [line for line in lines if skill_id not in line]
+            filtered_lines = [l for l in content.split("\n") if skill_id not in l]
             registry_path.write_text("\n".join(filtered_lines))
-
-    def _check_registry(self, skill_id: str, project_path: Path) -> bool:
-        """Check if skill is in registry.
-
-        Args:
-            skill_id: Skill identifier
-            project_path: Project root directory
-
-        Returns:
-            True if in registry, False otherwise
-        """
-        registry_path = project_path / ".vibe" / "skills" / "registry.yaml"
-
-        if not registry_path.exists():
-            return False
-
-        content = registry_path.read_text()
-        return skill_id in content

@@ -1,10 +1,6 @@
 # pyright: reportPrivateUsage=false
 # pyright: reportMissingTypeArgument=false
-"""Quickstart runner for interactive installation.
-
-This module provides an interactive wizard for setting up
-VibeSOP configuration.
-"""
+"""Quickstart runner for interactive installation."""
 
 from dataclasses import dataclass
 from pathlib import Path
@@ -20,16 +16,6 @@ console = Console()
 
 @dataclass
 class QuickstartConfig:
-    """Configuration from quickstart wizard.
-
-    Attributes:
-        platform: Selected platform
-        install_integrations: Whether to install integrations
-        install_hooks: Whether to install hooks
-        project_path: Project root path
-        global_install: Whether this is a global install
-    """
-
     platform: str
     install_integrations: bool | None
     install_hooks: bool | None
@@ -38,19 +24,9 @@ class QuickstartConfig:
 
 
 class QuickstartRunner:
-    """Interactive quickstart wizard.
-
-    Guides users through the setup process with
-    interactive questions and recommendations.
-
-    Example:
-        >>> runner = QuickstartRunner()
-        >>> result = runner.run()
-        >>> print(f"Setup complete: {result['success']}")
-    """
+    """Interactive quickstart wizard."""
 
     def __init__(self) -> None:
-        """Initialize the quickstart runner."""
         self._supported_platforms = {
             "claude-code": "Claude Code CLI",
             "kimi-cli": "Kimi Code CLI",
@@ -70,14 +46,6 @@ class QuickstartRunner:
         }
 
     def run(self, project_path: Path | None = None) -> dict[str, Any]:
-        """Run the interactive quickstart wizard.
-
-        Args:
-            project_path: Project root (None = current directory)
-
-        Returns:
-            Dictionary with setup results
-        """
         result: dict[str, Any] = {
             "success": False,
             "config": None,
@@ -91,7 +59,6 @@ class QuickstartRunner:
             console.print("╚════════════════════════════════════════════════════╝")
             console.print()
 
-            # Step 1: Determine project path
             if project_path is None:
                 project_path = Path.cwd()
             else:
@@ -100,41 +67,30 @@ class QuickstartRunner:
             console.print(f"📁 Project Path: {project_path}")
             console.print()
 
-            # Step 2: Ask about install type
             config = self._ask_install_type(project_path)
             result["config"] = config
 
-            # Step 3: Select platform
             if config.platform == "ask":
                 config.platform = self._ask_platform()
             console.print()
 
-            # Step 4: Ask about integrations
             if config.install_integrations is None:
                 config.install_integrations = self._ask_yes_no(
-                    "Install skill pack integrations (gstack, superpowers)?",
-                    default=True,
+                    "Install skill pack integrations (gstack, superpowers)?", default=True,
                 )
             console.print()
 
-            # Step 5: Ask about hooks
             if config.install_hooks is None:
-                config.install_hooks = self._ask_yes_no(
-                    "Install platform hooks?",
-                    default=True,
-                )
+                config.install_hooks = self._ask_yes_no("Install platform hooks?", default=True)
             console.print()
 
-            # Step 6: Show summary
             self._show_summary(config)
             console.print()
 
-            # Step 7: Confirm
             if not self._ask_yes_no("Proceed with installation?", default=True):
                 console.print("Installation cancelled.")
                 return result
 
-            # Step 8: Execute installation
             result["success"] = self._execute_installation(config)
             result["steps_completed"] = [
                 "platform_selection",
@@ -157,50 +113,24 @@ class QuickstartRunner:
         return result
 
     def _ask_install_type(self, project_path: Path) -> QuickstartConfig:
-        """Ask about installation type.
-
-        Args:
-            project_path: Project root path
-
-        Returns:
-            QuickstartConfig with initial settings
-        """
         console.print("What would you like to set up?")
         console.print("1. Global configuration for Claude Code/Kimi CLI/OpenCode")
         console.print("2. Project-specific configuration")
         console.print()
 
-        choice = self._ask_choice(
-            "Choose installation type",
-            options=["1", "2"],
-            default="1",
-        )
+        choice = self._ask_choice("Choose installation type", options=["1", "2"], default="1")
 
         if choice == "1":
-            # Global install
             return QuickstartConfig(
-                platform="ask",  # Will ask later
-                install_integrations=True,
-                install_hooks=True,
-                project_path=Path.home(),  # Global config
-                global_install=True,
+                platform="ask", install_integrations=True, install_hooks=True,
+                project_path=Path.home(), global_install=True,
             )
-        else:
-            # Project install
-            return QuickstartConfig(
-                platform="ask",
-                install_integrations=False,  # Usually not for projects
-                install_hooks=False,
-                project_path=project_path,
-                global_install=False,
-            )
+        return QuickstartConfig(
+            platform="ask", install_integrations=False, install_hooks=False,
+            project_path=project_path, global_install=False,
+        )
 
     def _ask_platform(self) -> str:
-        """Ask user to select platform.
-
-        Returns:
-            Selected platform identifier
-        """
         console.print("Select your platform:")
         platforms = list(self._supported_platforms.keys())
         for i, (plat_id, plat_name) in enumerate(self._supported_platforms.items(), 1):
@@ -212,65 +142,34 @@ class QuickstartRunner:
             options=[str(i) for i in range(1, len(platforms) + 1)],
             default="1",
         )
-
         return platforms[int(choice) - 1]
 
     def _ask_yes_no(self, question: str, default: bool = False) -> bool:
-        """Ask a yes/no question.
-
-        Args:
-            question: Question text
-            default: Default answer
-
-        Returns:
-            True for yes, False for no
-        """
         default_str = "Y/n" if default else "y/N"
         prompt = f"{question} [{default_str}]: "
 
         while True:
             response = input(prompt).strip().lower()
-
             if not response:
                 return default
-
-            if response in ["y", "yes"]:
+            if response in ("y", "yes"):
                 return True
-            elif response in ["n", "no"]:
+            if response in ("n", "no"):
                 return False
-
             console.print("Please answer 'yes' or 'no'")
 
     def _ask_choice(self, question: str, options: list[str], default: str) -> str:
-        """Ask user to choose from options.
-
-        Args:
-            question: Question text
-            options: List of valid options
-            default: Default option
-
-        Returns:
-            Selected option
-        """
         prompt = f"{question} [{'/'.join(options)}]: "
 
         while True:
             response = input(prompt).strip()
-
             if not response:
                 return default
-
             if response in options:
                 return response
-
             console.print(f"Please choose one of: {'/'.join(options)}")
 
     def _show_summary(self, config: QuickstartConfig) -> None:
-        """Show installation summary.
-
-        Args:
-            config: QuickstartConfig
-        """
         console.print("┌─ Installation Summary ─────────────────────┐")
         console.print(f"│ Platform: {config.platform:<20} │")
         console.print(f"│ Type: {'Global' if config.global_install else 'Project':<20} │")
@@ -280,63 +179,38 @@ class QuickstartRunner:
         console.print("└──────────────────────────────────────────┘")
 
     def _execute_installation(self, config: QuickstartConfig) -> bool:
-        """Execute the installation.
-
-        Args:
-            config: QuickstartConfig
-
-        Returns:
-            True if successful, False otherwise
-        """
         try:
-            # Step 0: Ensure global ~/.vibe/config.toml exists (always)
             from vibesop.installer.init_support import _ensure_global_config
 
             _ensure_global_config(config.platform, {"created_files": []})
 
-            # Step 1: Initialize project
             if not config.global_install:
                 init_support = InitSupport()
-                init_result = init_support.init_project(
-                    config.project_path,
-                    config.platform,
-                )
-
+                init_result = init_support.init_project(config.project_path, config.platform)
                 if not init_result["success"]:
                     console.print(f"❌ Initialization failed: {init_result['errors']}")
                     return False
-
                 console.print("✓ Project initialized")
 
-            # Step 2: Install configuration
             installer = VibeSOPInstaller()
             if config.global_install:
                 install_target: Path | None = None
             else:
                 install_target = config.project_path / ".vibe" / "dist" / config.platform
-            install_result = installer.install(
-                config.platform,
-                install_target,
-                force=False,
-            )
+            install_result = installer.install(config.platform, install_target, force=False)
 
             if not install_result["success"]:
                 console.print(f"❌ Configuration installation failed: {install_result['errors']}")
                 return False
-
             console.print("✓ Configuration installed")
 
-            # Step 3: Install integrations (if requested)
             if config.install_integrations:
                 for integration in self._available_integrations:
                     self._install_integration(integration, config.platform)
-
-                # Sync symlinks for newly installed packs to platform
                 self._sync_platform_symlinks(config.platform)
             else:
                 console.print("⊘ Integrations skipped")
 
-            # Step 4: Install hooks (if requested)
             if config.install_hooks:
                 hooks_install_target = (
                     Path.home() / ".claude" if config.global_install else install_target
@@ -346,7 +220,6 @@ class QuickstartRunner:
                     1 for v in hooks_result.get("hooks_installed", {}).values() if v
                 )
                 total_hooks = len(hooks_result.get("hooks_installed", {}))
-
                 if hooks_installed > 0:
                     console.print(f"✓ Hooks installed: {hooks_installed}/{total_hooks}")
                 else:
@@ -354,21 +227,17 @@ class QuickstartRunner:
             else:
                 console.print("⊘ Hooks skipped")
 
-            # Step 5: Build skill semantic index (layered architecture)
             from vibesop.core.skills.indexer import SkillIndexer
 
             indexer = SkillIndexer(project_root=config.project_path)
 
             if config.global_install:
-                # Global install: only build the global index
                 console.print("\n[bold cyan]🔍 Building global skill index...[/bold cyan]")
                 indexer.build_index(scope="global", show_progress=True)
             else:
-                # Project install: ensure global index exists, then build project index
                 if not indexer.global_index_path.exists():
                     console.print("\n[bold cyan]🔍 Building global skill index...[/bold cyan]")
                     indexer.build_index(scope="global", show_progress=True)
-
                 console.print("\n[bold cyan]🔍 Building project skill index...[/bold cyan]")
                 indexer.build_index(scope="project", show_progress=True)
 
@@ -379,32 +248,19 @@ class QuickstartRunner:
             return False
 
     def _install_integration(self, integration: str, _platform: str) -> None:
-        """Install a skill pack integration.
-
-        Args:
-            integration: Integration name (gstack, superpowers)
-            _platform: Target platform (unused, kept for signature compatibility)
-        """
         try:
             from vibesop.installer.pack_installer import PackInstaller
 
             installer = PackInstaller()
             success, msg = installer.install_pack(integration)
-
             if success:
                 console.print(f"[green]✓[/green] {integration} installed")
             else:
                 console.print(f"[yellow]⊘[/yellow] {integration} installation failed: {msg}")
-
         except Exception as e:
             console.print(f"[yellow]⊘[/yellow] {integration} installation failed: {e}")
 
     def _sync_platform_symlinks(self, platform: str) -> None:
-        """Sync skill symlinks from central storage to platform directory.
-
-        Delegates to PackInstaller._create_skill_symlinks for the actual
-        symlink creation, avoiding duplicated logic.
-        """
         from vibesop.constants import TRUSTED_PACKS
         from vibesop.core.skills.storage import SkillStorage
         from vibesop.installer.pack_installer import PackInstaller
@@ -422,23 +278,14 @@ class QuickstartRunner:
             central_path = Path.home() / ".config" / "skills" / pack_name
             if not central_path.exists():
                 continue
-            count = installer._create_skill_symlinks(
-                central_path, platform_dir, pack_name
-            )
-            total += count
+            total += installer._create_skill_symlinks(central_path, platform_dir, pack_name)
 
         if total > 0:
             console.print(f"  Synced {total} skill(s) to {platform}")
 
     def _show_next_steps(self, config: QuickstartConfig) -> None:
-        """Show next steps after installation.
-
-        Args:
-            config: QuickstartConfig
-        """
         console.print("\n[bold]📚 Next Steps:[/bold]\n")
 
-        # Platform to output directory mapping
         platform_dirs = {
             "claude-code": "~/.claude",
             "kimi-cli": "~/.kimi",
@@ -448,9 +295,7 @@ class QuickstartRunner:
         if config.global_install:
             output_dir = platform_dirs.get(config.platform)
             if output_dir:
-                console.print(
-                    f"1. Run: [cyan]vibe build {config.platform} --output {output_dir}[/cyan]"
-                )
+                console.print(f"1. Run: [cyan]vibe build {config.platform} --output {output_dir}[/cyan]")
             else:
                 console.print(f"1. Run: [cyan]vibe build {config.platform}[/cyan]")
             console.print('2. Run: [cyan]vibe route "your query"[/cyan] to find skills')
@@ -462,16 +307,13 @@ class QuickstartRunner:
             console.print('4. Run: [cyan]vibe route "your query"[/cyan] to test')
 
         console.print("\n[bold yellow]⚙️  LLM Configuration[/bold yellow]")
-        console.print(
-            "   Default config created at [cyan]~/.vibe/config.toml[/cyan] with Ollama as provider."
-        )
+        console.print("   Default config created at [cyan]~/.vibe/config.toml[/cyan] with Ollama as provider.")
         console.print("   Edit this file to switch provider (Anthropic, OpenAI, DeepSeek, etc.):")
         console.print()
         console.print("   [dim]  [llm][/dim]")
         console.print("   [dim]  provider = \"anthropic\"[/dim]")
         console.print("   [dim]  model = \"claude-sonnet-4-6-20250514\"[/dim]")
         console.print("   [dim]  api_key = \"sk-...\"[/dim]")
-
 
         console.print("\n[bold]📖 Documentation:[/bold]")
         console.print("   - Quick Start: README.md")

@@ -21,7 +21,7 @@ PLATFORM_DIRS: dict[str, Path] = {
 }
 
 
-def _execute_deploy(  # pyright: ignore[reportUnusedFunction]
+def execute_deploy(
     target: str,
     destination: Path | None = None,
     source: Path | None = None,

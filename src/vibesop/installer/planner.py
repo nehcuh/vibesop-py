@@ -14,8 +14,6 @@ from vibesop.installer.analyzer import RepoAnalysis
 
 @dataclass
 class InstallPlan:
-    """A generated installation plan for a skill pack."""
-
     pack_name: str
     source_url: str
     target_path: Path
@@ -55,13 +53,10 @@ class InstallPlan:
 
 
 class InstallPlanner:
-    """Generate installation plans from repository analysis."""
-
     def __init__(self, base_target: Path | None = None) -> None:
         self.base_target = base_target or (Path.home() / ".config" / "skills")
 
     def plan(self, analysis: RepoAnalysis) -> InstallPlan:
-        """Create an installation plan from a RepoAnalysis."""
         target = self.base_target / analysis.pack_name
 
         plan = InstallPlan(
@@ -85,7 +80,6 @@ class InstallPlanner:
                 }
             )
 
-        # Deduce setup steps
         if analysis.setup_scripts:
             if "requirements.txt" in analysis.setup_scripts:
                 plan.setup_steps.append("pip install -r requirements.txt")
@@ -94,7 +88,6 @@ class InstallPlanner:
             if "Makefile" in analysis.setup_scripts:
                 plan.setup_steps.append("make setup (if available)")
 
-        # Post-install: security audit hint
         plan.post_install.append("Run security audit on installed skills")
         plan.post_install.append("Update registry with new skills")
 
