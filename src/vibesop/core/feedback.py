@@ -1,8 +1,4 @@
-"""Feedback collection system for routing improvement.
-
-This module provides tools for collecting, storing, and analyzing
-user feedback on routing decisions.
-"""
+"""Feedback collection system for routing improvement."""
 
 from __future__ import annotations
 
@@ -18,17 +14,7 @@ if TYPE_CHECKING:
 
 @dataclass
 class FeedbackRecord:
-    """A single routing feedback record.
-
-    Attributes:
-        query: User's query text
-        routed_skill: The skill that was routed to
-        was_correct: Whether the routing was correct
-        actual_skill: The correct skill if routing was wrong
-        confidence: Confidence score of the routing
-        timestamp: When the feedback was collected
-        context: Additional context (layer, model, etc.)
-    """
+    """A single routing feedback record."""
 
     query: str
     routed_skill: str
@@ -39,7 +25,6 @@ class FeedbackRecord:
     context: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
-        """Convert to dictionary."""
         return {
             "query": self.query,
             "routed_skill": self.routed_skill,
@@ -52,7 +37,6 @@ class FeedbackRecord:
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> FeedbackRecord:
-        """Create from dictionary."""
         return cls(
             query=data.get("query", ""),
             routed_skill=data.get("routed_skill", ""),
@@ -66,17 +50,7 @@ class FeedbackRecord:
 
 @dataclass
 class FeedbackReport:
-    """Aggregated feedback report.
-
-    Attributes:
-        total_records: Total number of feedback records
-        correct_count: Number of correct routings
-        incorrect_count: Number of incorrect routings
-        accuracy_rate: Overall accuracy rate
-        by_skill: Accuracy breakdown by skill
-        by_confidence: Accuracy breakdown by confidence level
-        common_errors: Most common routing errors
-    """
+    """Aggregated feedback report."""
 
     total_records: int = 0
     correct_count: int = 0
@@ -87,7 +61,6 @@ class FeedbackReport:
     common_errors: list[tuple[str, int]] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
-        """Convert to dictionary."""
         return {
             "total_records": self.total_records,
             "correct_count": self.correct_count,
@@ -100,25 +73,9 @@ class FeedbackReport:
 
 
 class FeedbackCollector:
-    """Collect and manage routing feedback.
-
-    Example:
-        >>> collector = FeedbackCollector()
-        >>> collector.collect_feedback(
-        ...     query="帮我 review 代码",
-        ...     routed_skill="superpowers/review",
-        ...     was_correct=True,
-        ... )
-        >>> report = collector.generate_report()
-        >>> print(f"Accuracy: {report.accuracy_rate:.1%}")
-    """
+    """Collect and manage routing feedback."""
 
     def __init__(self, storage_path: str | Path = "~/.vibe/feedback.json"):
-        """Initialize feedback collector.
-
-        Args:
-            storage_path: Path to feedback storage file
-        """
         storage = Path(storage_path).expanduser()
         self._storage_path = storage.with_suffix(".jsonl")  # Use JSONL for append performance
         self._records: list[FeedbackRecord] = []
@@ -133,16 +90,6 @@ class FeedbackCollector:
         confidence: float = 0.0,
         context: dict[str, Any] | None = None,
     ) -> None:
-        """Collect a routing feedback record.
-
-        Args:
-            query: User's query text
-            routed_skill: The skill that was routed to
-            was_correct: Whether the routing was correct
-            actual_skill: The correct skill if routing was wrong
-            confidence: Confidence score of the routing
-            context: Additional context
-        """
         record = FeedbackRecord(
             query=query,
             routed_skill=routed_skill,
@@ -162,15 +109,6 @@ class FeedbackCollector:
         was_correct: bool | None = None,
         actual_skill: str | None = None,
     ) -> None:
-        """Collect feedback from a routing result.
-
-        Args:
-            query: User's query
-            result: Routing result
-            was_correct: Whether routing was correct (None = assume correct)
-            actual_skill: Correct skill if wrong
-        """
-        # If not specified, assume routing was correct
         if was_correct is None:
             was_correct = True
 
@@ -192,11 +130,6 @@ class FeedbackCollector:
         )
 
     def generate_report(self) -> FeedbackReport:
-        """Generate aggregated feedback report.
-
-        Returns:
-            Feedback report with statistics and insights
-        """
         if not self._records:
             return FeedbackReport()
 
@@ -256,19 +189,6 @@ class FeedbackCollector:
         )
 
     def get_top_mismatches(self, top_n: int = 10) -> list[dict[str, Any]]:
-        """Get top routing mismatches with example queries for analysis.
-
-        Identifies high-confidence (>0.8) routing decisions that were
-        marked incorrect by users. Returns (routed_skill, actual_skill)
-        pairs with counts, example queries, and avg confidence.
-
-        Args:
-            top_n: Number of top mismatches to return
-
-        Returns:
-            List of mismatch dicts with keys:
-            - routed_skill, actual_skill, count, example_queries, avg_confidence
-        """
         mismatches: dict[tuple[str, str], dict[str, Any]] = {}
         for record in self._records:
             if record.was_correct or not record.actual_skill:
@@ -301,37 +221,19 @@ class FeedbackCollector:
         return result
 
     def get_high_confidence_errors(self, min_confidence: float = 0.8) -> list[dict[str, Any]]:
-        """Get errors where routing was high-confidence but user said wrong.
-
-        These are the most actionable — the router was confident but wrong.
-        """
         mismatches = self.get_top_mismatches(top_n=100)
         return [m for m in mismatches if m["avg_confidence"] >= min_confidence]
 
     def get_records(self, limit: int | None = None) -> list[FeedbackRecord]:
-        """Get feedback records.
-
-        Args:
-            limit: Maximum number of records to return
-
-        Returns:
-            List of feedback records
-        """
         if limit:
             return self._records[-limit:]
         return self._records
 
     def clear_records(self) -> None:
-        """Clear all feedback records."""
         self._records = []
         self._save_records()
 
     def export_records(self, output_path: str | Path) -> None:
-        """Export records to JSON file.
-
-        Args:
-            output_path: Path to output file
-        """
         output_path = Path(output_path).expanduser()
 
         data = [record.to_dict() for record in self._records]
@@ -339,14 +241,6 @@ class FeedbackCollector:
             json.dump(data, f, indent=2, ensure_ascii=False)
 
     def import_records(self, input_path: str | Path) -> int:
-        """Import records from JSON file.
-
-        Args:
-            input_path: Path to input file
-
-        Returns:
-            Number of records imported
-        """
         input_path = Path(input_path).expanduser()
 
         with input_path.open() as f:
@@ -360,7 +254,6 @@ class FeedbackCollector:
         return len(data)
 
     def _load_records(self) -> None:
-        """Load records from JSONL storage."""
         if self._storage_path.exists():
             try:
                 self._records = []
@@ -378,7 +271,6 @@ class FeedbackCollector:
                 self._records = []
 
     def _save_records(self) -> None:
-        """Append latest record to JSONL storage (O(1) vs O(n) full rewrite)."""
         self._storage_path.parent.mkdir(parents=True, exist_ok=True)
         if not self._records:
             return
@@ -405,15 +297,6 @@ def collect_feedback(
     actual_skill: str | None = None,
     confidence: float = 0.0,
 ) -> None:
-    """Quick function to collect feedback.
-
-    Example:
-        >>> collect_feedback(
-        ...     query="帮我 review 代码",
-        ...     routed_skill="superpowers/review",
-        ...     was_correct=True,
-        ... )
-    """
     _get_collector().collect_feedback(
         query=query,
         routed_skill=routed_skill,
@@ -424,30 +307,12 @@ def collect_feedback(
 
 
 def get_feedback_report() -> FeedbackReport:
-    """Get the current feedback report.
-
-    Example:
-        >>> report = get_feedback_report()
-        >>> print(f"Accuracy: {report.accuracy_rate:.1%}")
-    """
     return _get_collector().generate_report()
 
 
 @dataclass
 class SkillExecutionFeedback:
-    """Post-execution feedback for a skill.
-
-    Captures user satisfaction and execution quality beyond routing correctness.
-
-    Attributes:
-        skill_id: The skill that was executed
-        query: User's original query
-        was_helpful: User rating (thumbs up/down)
-        execution_success: Whether execution completed without errors
-        execution_time_ms: Execution duration in milliseconds
-        notes: Optional user notes
-        timestamp: When the feedback was collected
-    """
+    """Post-execution feedback for a skill."""
 
     skill_id: str
     query: str
@@ -458,7 +323,6 @@ class SkillExecutionFeedback:
     timestamp: str = field(default_factory=lambda: datetime.now().isoformat())
 
     def to_dict(self) -> dict[str, Any]:
-        """Convert to dictionary."""
         return {
             "skill_id": self.skill_id,
             "query": self.query,
@@ -471,7 +335,6 @@ class SkillExecutionFeedback:
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> SkillExecutionFeedback:
-        """Create from dictionary."""
         return cls(
             skill_id=data.get("skill_id", ""),
             query=data.get("query", ""),
@@ -484,21 +347,7 @@ class SkillExecutionFeedback:
 
 
 class ExecutionFeedbackCollector:
-    """Collect post-execution feedback for skills.
-
-    Stores execution feedback separately from routing feedback
-    to enable composite quality scoring.
-
-    Example:
-        >>> collector = ExecutionFeedbackCollector()
-        >>> collector.collect(
-        ...     skill_id="gstack/review",
-        ...     query="review my code",
-        ...     was_helpful=True,
-        ...     execution_success=True,
-        ...     execution_time_ms=1250.0,
-        ... )
-    """
+    """Collect post-execution feedback for skills."""
 
     def __init__(self, storage_path: str | Path = "~/.vibe/execution_feedback.json"):
         storage = Path(storage_path).expanduser()
@@ -515,7 +364,6 @@ class ExecutionFeedbackCollector:
         execution_time_ms: float | None = None,
         notes: str | None = None,
     ) -> None:
-        """Collect a post-execution feedback record."""
         record = SkillExecutionFeedback(
             skill_id=skill_id,
             query=query,
@@ -532,7 +380,6 @@ class ExecutionFeedbackCollector:
         skill_id: str | None = None,
         limit: int | None = None,
     ) -> list[SkillExecutionFeedback]:
-        """Get execution feedback records."""
         records = self._records
         if skill_id:
             records = [r for r in records if r.skill_id == skill_id]
@@ -541,7 +388,6 @@ class ExecutionFeedbackCollector:
         return records
 
     def get_skill_summary(self, skill_id: str) -> dict[str, Any]:
-        """Get aggregated execution feedback for a skill."""
         records = [r for r in self._records if r.skill_id == skill_id]
         if not records:
             return {"total": 0, "helpful_rate": None, "success_rate": None}
@@ -566,7 +412,6 @@ class ExecutionFeedbackCollector:
         }
 
     def clear_records(self) -> None:
-        """Clear all execution feedback records."""
         self._records = []
         self._save_records()
 

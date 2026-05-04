@@ -1,21 +1,4 @@
-"""Slash command registry for VibeSOP.
-
-Provides explicit slash commands (e.g., /vibe-route, /vibe-install) that allow
-users to directly trigger VibeSOP capabilities even when the AI Agent doesn't
-naturally route to them.
-
-Usage:
-    /vibe-route "帮我review这段代码"     # Force trigger routing
-    /vibe-install gstack                  # Install skill pack
-    /vibe-analyze --deep                  # Deep project analysis
-    /vibe-evaluate --skill review         # Evaluate skill quality
-    /vibe-orchestrate "分析→评审→优化"     # Multi-skill orchestration
-
-Architecture:
-    - SlashCommandRegistry: Central registry of all available commands
-    - SlashCommandHandler: Executes commands by dispatching to internal APIs
-    - Agent Runtime Integration: Interceptor detects /vibe-* prefix and routes
-"""
+"""Slash command registry for VibeSOP."""
 
 from __future__ import annotations
 
@@ -42,24 +25,6 @@ def _extract_query_and_flags(
     args: tuple[str, ...],
     flag_names: set[str] | None = None,
 ) -> tuple[str, dict[str, str | bool]]:
-    """Extract query text and flags from argument list.
-
-    Args:
-        args: Raw argument list from command parsing
-        flag_names: Set of flag names that take values (e.g., {"--strategy", "--platform"})
-
-    Returns:
-        Tuple of (query_text, flags_dict)
-        Flags without values are set to True
-        Flags with values store the value as string
-
-    Example:
-        >>> _extract_query_and_flags(
-        ...     ("--explain", "review", "code", "--strategy", "parallel"),
-        ...     {"--strategy"}
-        ... )
-        ('review code', {'--explain': True, '--strategy': 'parallel'})
-    """
     flag_names = flag_names or set()
     query_parts: list[str] = []
     flags: dict[str, str | bool] = {}
@@ -95,14 +60,6 @@ class SlashCommand:
     requires_confirmation: bool = False
 
     def validate_args(self, args: list[str]) -> tuple[bool, str]:
-        """Validate arguments against args_schema.
-
-        Args:
-            args: Parsed argument list
-
-        Returns:
-            Tuple of (is_valid, error_message)
-        """
         if not self.args_schema:
             return True, ""
 
@@ -122,7 +79,6 @@ class SlashCommand:
         return True, ""
 
     def generate_help(self) -> str:
-        """Generate help text for this command."""
         lines = [f"Usage: {self.name}"]
 
         if self.args_schema:
@@ -148,20 +104,16 @@ class SlashCommandRegistry:
         self._commands: dict[str, SlashCommand] = {}
 
     def register(self, command: SlashCommand) -> None:
-        """Register a slash command."""
         self._commands[command.name] = command
         logger.debug(f"Registered slash command: {command.name}")
 
     def get(self, name: str) -> SlashCommand | None:
-        """Get a command by name."""
         return self._commands.get(name)
 
     def list_commands(self) -> list[SlashCommand]:
-        """List all registered commands."""
         return list(self._commands.values())
 
     def parse(self, user_input: str) -> tuple[str | None, list[str]]:
-        """Parse user input to extract command and arguments."""
         user_input = user_input.strip()
         if not user_input.startswith("/vibe-"):
             return None, []
@@ -191,7 +143,6 @@ class SlashCommandHandler:
         self._setup_handlers()
 
     def _setup_handlers(self) -> None:
-        """Set up all command handlers."""
         self._registry.register(
             SlashCommand(
                 name="/vibe-route",
@@ -268,7 +219,6 @@ class SlashCommandHandler:
         )
 
     def execute(self, user_input: str) -> tuple[bool, str]:
-        """Execute a slash command from user input."""
         cmd_name, args = self._registry.parse(user_input)
 
         if cmd_name is None:
@@ -292,7 +242,6 @@ class SlashCommandHandler:
         return command.handler(*args)
 
     def _handle_route(self, *args: str) -> tuple[bool, str]:
-        """Handle /vibe-route command."""
         if not args:
             return False, "Usage: /vibe-route <query> [--explain] [--strategy <strategy>]"
 
@@ -333,7 +282,6 @@ class SlashCommandHandler:
             return False, f"Routing failed: {e}"
 
     def _handle_install(self, *args: str) -> tuple[bool, str]:
-        """Handle /vibe-install command."""
         if not args:
             return False, "Usage: /vibe-install <pack_name> [--platform <platform>]"
 
@@ -351,7 +299,6 @@ class SlashCommandHandler:
             return False, f"Installation failed: {e}"
 
     def _handle_analyze(self, *args: str) -> tuple[bool, str]:
-        """Handle /vibe-analyze command."""
         deep = "--deep" in args
 
         try:
@@ -375,7 +322,6 @@ class SlashCommandHandler:
             return False, f"Analysis failed: {e}"
 
     def _handle_evaluate(self, *args: str) -> tuple[bool, str]:
-        """Handle /vibe-evaluate command."""
         skill_id = None
         if "--skill" in args:
             idx = args.index("--skill")
@@ -408,7 +354,6 @@ class SlashCommandHandler:
             return False, f"Evaluation failed: {e}"
 
     def _handle_orchestrate(self, *args: str) -> tuple[bool, str]:
-        """Handle /vibe-orchestrate command."""
         if not args:
             return (
                 False,
@@ -446,7 +391,6 @@ class SlashCommandHandler:
             return False, f"Orchestration failed: {e}"
 
     def _handle_list(self, *args: str) -> tuple[bool, str]:
-        """Handle /vibe-list command."""
         installed_only = "--installed" in args
 
         try:
@@ -475,7 +419,6 @@ class SlashCommandHandler:
             return False, f"Failed to list: {e}"
 
     def _handle_help(self, *args: str) -> tuple[bool, str]:
-        """Handle /vibe-help command."""
         # Check if user wants help for a specific command
         if args and args[0].startswith("/vibe-"):
             cmd = self._registry.get(args[0])

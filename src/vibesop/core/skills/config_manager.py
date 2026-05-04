@@ -1,21 +1,4 @@
-"""技能配置管理器 - 管理技能级别的 LLM 和其他配置.
-
-该模块提供了:
-1. 技能级别的 LLM 配置加载
-2. 全局配置与技能配置的合并
-3. 配置优先级:技能配置 > 全局配置 > 环境变量 > 默认值
-
-使用方式:
-    # 获取技能的 LLM 配置
-    config = SkillConfigManager.get_skill_llm_config("my-skill")
-
-    # 设置技能的 LLM 配置
-    SkillConfigManager.set_skill_llm_config("my-skill", {
-        "provider": "openai",
-        "model": "gpt-4",
-        "temperature": 0.7
-    })
-"""
+"""技能配置管理器 - 管理技能级别的 LLM 和其他配置."""
 
 import logging
 from dataclasses import dataclass, field
@@ -86,12 +69,7 @@ class SkillConfig:
 
 
 class SkillConfigManager:
-    """技能配置管理器.
-
-    Supports both class-level API (backward compatible) and instance-level API
-    (recommended for multi-project scenarios where CWD-dependent relative paths
-    would cause silent misconfiguration).
-    """
+    """技能配置管理器."""
 
     # 配置文件路径
     SKILL_CONFIG_FILE = Path(".vibe/skills/auto-config.yaml")
@@ -102,54 +80,24 @@ class SkillConfigManager:
         self._project_root = Path(project_root).resolve() if project_root else None
 
     def _resolve_path(self, path: Path) -> Path:
-        """Resolve relative paths against project_root if available."""
         if path.is_absolute() or self._project_root is None:
             return path
         return self._project_root / path
 
     @classmethod
     def get_skill_config(cls, skill_id: str) -> SkillConfig | None:
-        """获取技能配置
-
-        Args:
-            skill_id: 技能 ID
-
-        Returns:
-            技能配置对象,如果不存在则返回 None
-        """
-
-        # 1. 尝试从技能配置文件读取
         skill_config = cls._load_skill_config_from_file(skill_id)
         if skill_config:
             return skill_config
 
-        # 2. 如果没有找到,返回默认配置
         logger.debug(f"No config found for skill {skill_id}, using defaults")
         return SkillConfig(skill_id=skill_id)
 
     @classmethod
     def get_skill_llm_config(cls, skill_id: str) -> LLMConfig | None:
-        """获取技能的 LLM 配置
-
-        优先级:
-        1. 技能级别的 LLM 配置(.vibe/skills/auto-config.yaml)
-        2. 全局 LLM 配置(.vibe/config.toml)
-        3. 环境变量
-        4. Agent 环境
-        5. 默认配置
-
-        Args:
-            skill_id: 技能 ID
-
-        Returns:
-            LLM 配置对象
-        """
-
-        # 1. 尝试从技能配置文件读取
         skill_config = cls._load_skill_config_from_file(skill_id)
 
         if skill_config and skill_config.requires_llm and skill_config.llm_provider:
-            # 技能有自己的 LLM 配置
             console.print(f"[dim]  Using skill-level LLM config for {skill_id}[/dim]")
 
             return LLMConfig(
@@ -162,7 +110,6 @@ class SkillConfigManager:
                 confidence=0.95,  # 技能配置置信度高
             )
 
-        # 2. 使用全局 LLM 配置解析器
         console.print(f"[dim]  Using global LLM config for {skill_id}[/dim]")
 
         resolver = LLMConfigResolver()
@@ -170,33 +117,17 @@ class SkillConfigManager:
 
     @classmethod
     def set_skill_llm_config(cls, skill_id: str, llm_config: dict[str, Any]) -> None:
-        """设置技能的 LLM 配置
-
-        Args:
-            skill_id: 技能 ID
-            llm_config: LLM 配置字典
-                - provider: 提供商(anthropic, openai, etc.)
-                - model: 模型名称
-                - temperature: 温度参数
-                - api_key: API 密钥(可选)
-                - api_base: API 基础 URL(可选)
-        """
-
-        # 加载现有配置
         config_data = cls._load_skill_config_file()
 
-        # 确保结构存在
         if "skills" not in config_data:
             config_data["skills"] = {}
 
         if skill_id not in config_data["skills"]:
             config_data["skills"][skill_id] = {}
 
-        # 设置 LLM 配置
         config_data["skills"][skill_id]["llm"] = llm_config
         config_data["skills"][skill_id]["requires_llm"] = True
 
-        # 保存配置
         cls._save_skill_config_file(config_data)
 
         console.print(f"[green]✓ LLM config saved for skill: {skill_id}[/green]")
@@ -205,11 +136,6 @@ class SkillConfigManager:
 
     @classmethod
     def list_skill_configs(cls) -> dict[str, SkillConfig]:
-        """列出所有技能配置
-
-        Returns:
-            技能 ID -> 技能配置的字典
-        """
 
         config_data = cls._load_skill_config_file()
         skill_configs = {}
@@ -239,66 +165,36 @@ class SkillConfigManager:
 
     @classmethod
     def update_skill_config(cls, skill_id: str, updates: dict[str, Any]) -> None:
-        """更新技能配置
-
-        Args:
-            skill_id: 技能 ID
-            updates: 要更新的配置字段
-        """
-
-        # 加载现有配置
         config_data = cls._load_skill_config_file()
 
-        # 确保结构存在
         if "skills" not in config_data:
             config_data["skills"] = {}
 
         if skill_id not in config_data["skills"]:
             config_data["skills"][skill_id] = {}
 
-        # 更新配置
         for key, value in updates.items():
             if key == "llm":
-                # LLM 配置特殊处理
                 if "llm" not in config_data["skills"][skill_id]:
                     config_data["skills"][skill_id]["llm"] = {}
                 config_data["skills"][skill_id]["llm"].update(value)
             else:
                 config_data["skills"][skill_id][key] = value
 
-        # 保存配置
         cls._save_skill_config_file(config_data)
 
         logger.debug("[dim]config updated for skill: %s[/dim]", skill_id)
 
     @classmethod
     def set_enabled(cls, skill_id: str, enabled: bool) -> None:
-        """设置技能的启用状态
-
-        Args:
-            skill_id: 技能 ID
-            enabled: 是否启用
-        """
         cls.update_skill_config(skill_id, {"enabled": enabled})
 
     @classmethod
     def set_scope(cls, skill_id: str, scope: str) -> None:
-        """设置技能的作用域
-
-        Args:
-            skill_id: 技能 ID
-            scope: 作用域 ("global", "project", "session")
-        """
         cls.update_skill_config(skill_id, {"scope": scope})
 
     @classmethod
     def set_lifecycle(cls, skill_id: str, state: SkillLifecycle | str) -> None:
-        """设置技能的生命周期状态
-
-        Args:
-            skill_id: 技能 ID
-            state: 生命周期状态 ("draft", "active", "deprecated", "archived")
-        """
         if isinstance(state, SkillLifecycle):
             cls.update_skill_config(skill_id, {"lifecycle": state.value})
         else:
@@ -306,20 +202,11 @@ class SkillConfigManager:
 
     @classmethod
     def delete_skill_config(cls, skill_id: str) -> None:
-        """删除技能配置
-
-        Args:
-            skill_id: 技能 ID
-        """
-
-        # 加载现有配置
         config_data = cls._load_skill_config_file()
 
-        # 删除技能配置
         if "skills" in config_data and skill_id in config_data["skills"]:
             del config_data["skills"][skill_id]
 
-            # 保存配置
             cls._save_skill_config_file(config_data)
 
             console.print(f"[green]✓ Config deleted for skill: {skill_id}[/green]")
@@ -328,8 +215,6 @@ class SkillConfigManager:
 
     @classmethod
     def _load_skill_config_from_file(cls, skill_id: str) -> SkillConfig | None:
-        """从文件加载技能配置"""
-
         config_data = cls._load_skill_config_file()
 
         if "skills" not in config_data or skill_id not in config_data["skills"]:
@@ -411,31 +296,12 @@ class SkillConfigManager:
 
 # 便捷函数
 def get_skill_llm_config(skill_id: str) -> LLMConfig | None:
-    """获取技能的 LLM 配置(便捷函数)
-
-    Args:
-        skill_id: 技能 ID
-
-    Returns:
-        LLM 配置对象
-    """
     return SkillConfigManager.get_skill_llm_config(skill_id)
 
 
 def set_skill_llm_config(skill_id: str, llm_config: dict[str, Any]) -> None:
-    """设置技能的 LLM 配置(便捷函数)
-
-    Args:
-        skill_id: 技能 ID
-        llm_config: LLM 配置字典
-    """
     SkillConfigManager.set_skill_llm_config(skill_id, llm_config)
 
 
 def list_skill_configs() -> dict[str, SkillConfig]:
-    """列出所有技能配置(便捷函数)
-
-    Returns:
-        技能 ID -> 技能配置的字典
-    """
     return SkillConfigManager.list_skill_configs()

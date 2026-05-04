@@ -1,8 +1,4 @@
-"""Marker file management for VibeSOP.
-
-This module provides capabilities for managing marker files
-that track installation state and metadata.
-"""
+"""Marker file management for VibeSOP."""
 
 import hashlib
 import json
@@ -19,15 +15,7 @@ logger = logging.getLogger(__name__)
 
 
 class MarkerType(Enum):
-    """Type of marker file.
-
-    Attributes:
-        INSTALLATION: Installation completion marker
-        CONFIGURATION: Configuration generation marker
-        INTEGRATION: Integration installation marker
-        SKILL: Skill installation marker
-        HOOK: Hook installation marker
-    """
+    """Type of marker file."""
 
     INSTALLATION = "installation"
     CONFIGURATION = "configuration"
@@ -38,17 +26,7 @@ class MarkerType(Enum):
 
 @dataclass
 class MarkerData:
-    """Data stored in a marker file.
-
-    Attributes:
-        marker_type: Type of marker
-        name: Name of the component being marked
-        version: Version of the component
-        timestamp: Creation timestamp
-        path: Installation path
-        checksum: Checksum of installed files
-        metadata: Additional metadata
-    """
+    """Data stored in a marker file."""
 
     marker_type: str
     name: str
@@ -59,40 +37,15 @@ class MarkerData:
     metadata: dict[str, Any]
 
     def to_dict(self) -> dict[str, Any]:
-        """Convert to dictionary.
-
-        Returns:
-            Dictionary representation
-        """
         return asdict(self)
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "MarkerData":
-        """Create from dictionary.
-
-        Args:
-            data: Dictionary data
-
-        Returns:
-            MarkerData instance
-        """
         return cls(**data)
 
 
 class MarkerFileManager:
-    """Manage marker files for installation tracking.
-
-    Marker files are used to track the state of installations
-    and enable verification and rollback.
-
-    Example:
-        >>> manager = MarkerFileManager()
-        >>> manager.write_marker(
-        ...     MarkerType.INSTALLATION,
-        ...     "gstack",
-        ...     "/path/to/gstack"
-        ... )
-    """
+    """Manage marker files for installation tracking."""
 
     # Standard marker file locations
     MARKER_LOCATIONS: ClassVar[dict[MarkerType, Path]] = {
@@ -104,11 +57,6 @@ class MarkerFileManager:
     }
 
     def __init__(self, base_path: Path | None = None) -> None:
-        """Initialize the marker file manager.
-
-        Args:
-            base_path: Base path for marker files (default: current directory)
-        """
         self._base_path = base_path or Path.cwd()
         self._path_safety = PathSafety()
 
@@ -121,19 +69,6 @@ class MarkerFileManager:
         checksum: str | None = None,
         metadata: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        """Write a marker file.
-
-        Args:
-            marker_type: Type of marker
-            name: Name of the component
-            install_path: Installation path
-            version: Component version (optional)
-            checksum: Installation checksum (optional)
-            metadata: Additional metadata (optional)
-
-        Returns:
-            Result dictionary
-        """
         result: dict[str, Any] = {
             "success": False,
             "marker_path": None,
@@ -184,15 +119,6 @@ class MarkerFileManager:
         marker_type: MarkerType,
         name: str,
     ) -> MarkerData | None:
-        """Read a marker file.
-
-        Args:
-            marker_type: Type of marker
-            name: Name of the component
-
-        Returns:
-            MarkerData if found, None otherwise
-        """
         try:
             marker_file = self._base_path / self.MARKER_LOCATIONS[marker_type] / f"{name}.json"
 
@@ -213,15 +139,6 @@ class MarkerFileManager:
         marker_type: MarkerType,
         name: str,
     ) -> dict[str, Any]:
-        """Remove a marker file.
-
-        Args:
-            marker_type: Type of marker
-            name: Name of the component
-
-        Returns:
-            Result dictionary
-        """
         result: dict[str, Any] = {
             "success": False,
             "errors": [],
@@ -243,14 +160,6 @@ class MarkerFileManager:
         self,
         marker_type: MarkerType | None = None,
     ) -> dict[str, MarkerData]:
-        """List all marker files.
-
-        Args:
-            marker_type: Type of marker to list (None = all types)
-
-        Returns:
-            Dictionary mapping names to MarkerData
-        """
         markers: dict[str, MarkerData] = {}
 
         types_to_check = [marker_type] if marker_type else list(MarkerType)
@@ -281,15 +190,6 @@ class MarkerFileManager:
         marker_type: MarkerType,
         name: str,
     ) -> dict[str, Any]:
-        """Verify a marker file against current installation.
-
-        Args:
-            marker_type: Type of marker
-            name: Name of the component
-
-        Returns:
-            Verification result dictionary
-        """
         result: dict[str, Any] = {
             "valid": False,
             "exists": False,
@@ -335,14 +235,6 @@ class MarkerFileManager:
         self,
         marker_type: MarkerType | None = None,
     ) -> dict[str, Any]:
-        """Clean up orphaned marker files.
-
-        Args:
-            marker_type: Type of marker to clean (None = all types)
-
-        Returns:
-            Cleanup result dictionary
-        """
         result: dict[str, Any] = {
             "cleaned": [],
             "kept": [],
@@ -374,25 +266,9 @@ class MarkerFileManager:
         return result
 
     def calculate_checksum(self, path: Path) -> str:
-        """Calculate checksum for a directory or file.
-
-        Args:
-            path: Path to calculate checksum for
-
-        Returns:
-            Hexadecimal checksum string
-        """
         return self._calculate_checksum(path)
 
     def _calculate_checksum(self, path: Path) -> str:
-        """Internal checksum calculation.
-
-        Args:
-            path: Path to calculate checksum for
-
-        Returns:
-            Hexadecimal checksum string
-        """
         sha256 = hashlib.sha256()
 
         if path.is_file():
@@ -418,15 +294,6 @@ class MarkerFileManager:
         output_path: Path,
         marker_type: MarkerType | None = None,
     ) -> dict[str, Any]:
-        """Export marker data to a file.
-
-        Args:
-            output_path: Output file path
-            marker_type: Type of marker to export (None = all)
-
-        Returns:
-            Result dictionary
-        """
         result: dict[str, Any] = {
             "success": False,
             "exported_count": 0,
@@ -457,15 +324,6 @@ class MarkerFileManager:
         input_path: Path,
         overwrite: bool = False,
     ) -> dict[str, Any]:
-        """Import marker data from a file.
-
-        Args:
-            input_path: Input file path
-            overwrite: Whether to overwrite existing markers
-
-        Returns:
-            Result dictionary
-        """
         result: dict[str, Any] = {
             "success": False,
             "imported_count": 0,

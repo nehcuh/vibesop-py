@@ -1,10 +1,4 @@
-"""Instinct learning system for pattern extraction.
-
-This module implements learning from experience:
-- Extract patterns from successful/unsuccessful attempts
-- Build instincts (rules of thumb)
-- Improve routing and decision-making over time
-"""
+"""Instinct learning system for pattern extraction."""
 
 from __future__ import annotations
 
@@ -18,21 +12,7 @@ from typing import Any
 
 @dataclass
 class Instinct:
-    """A learned pattern or rule of thumb.
-
-    Attributes:
-        id: Unique identifier
-        pattern: The pattern description (what to look for)
-        action: Recommended action when pattern matches
-        context: When this instinct applies
-        confidence: How confident we are (0-1, based on evidence)
-        success_count: Number of successful applications
-        failure_count: Number of failed applications
-        last_used: When this instinct was last applied
-        created_at: When this instinct was created
-        source: Where this instinct came from (experiment, manual, etc.)
-        tags: Categories for this instinct
-    """
+    """A learned pattern or rule of thumb."""
 
     id: str
     pattern: str
@@ -160,18 +140,9 @@ class SequencePattern:
 
 
 class InstinctLearner:
-    """Learn and manage instincts from experience.
-
-    This is the core of the "Memory > Intelligence" principle.
-    Instead of trying to be smart every time, we remember what worked.
-    """
+    """Learn and manage instincts from experience."""
 
     def __init__(self, storage_path: Path | None = None):
-        """Initialize the instinct learner.
-
-        Args:
-            storage_path: Path to store instincts (default: .vibe/instincts.jsonl)
-        """
         self.storage_path = storage_path or Path(".vibe/instincts.jsonl")
         self.storage_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -189,7 +160,6 @@ class InstinctLearner:
         self._load()
 
     def _load(self) -> None:
-        """Load instincts from storage."""
         if not self.storage_path.exists():
             return
 
@@ -208,7 +178,6 @@ class InstinctLearner:
         self._load_sequences()
 
     def _save(self) -> None:
-        """Save instincts to storage."""
         with self.storage_path.open("w") as f:
             for instinct in self._instincts.values():
                 f.write(json.dumps(instinct.to_dict()) + "\n")
@@ -222,18 +191,6 @@ class InstinctLearner:
         tags: list[str] | None = None,
         source: str = "manual",
     ) -> Instinct:
-        """Learn a new instinct.
-
-        Args:
-            pattern: What to look for (e.g., "user asks about debugging")
-            action: What to do (e.g., "suggest systematic-debugging skill")
-            context: When this applies (e.g., "error handling scenarios")
-            tags: Categories (e.g., ["routing", "debugging"])
-            source: Where this came from
-
-        Returns:
-            The learned instinct
-        """
         # Generate ID from pattern
         instinct_id = self._generate_id(pattern)
 
@@ -259,12 +216,6 @@ class InstinctLearner:
         return instinct
 
     def record_outcome(self, instinct_id: str, success: bool) -> None:
-        """Record whether an instinct led to success.
-
-        Args:
-            instinct_id: ID of the instinct
-            success: Whether following the instinct worked
-        """
         if instinct_id not in self._instincts:
             return
 
@@ -277,16 +228,6 @@ class InstinctLearner:
         context: str = "",
         min_confidence: float = 0.5,
     ) -> list[Instinct]:
-        """Find instincts that match a query.
-
-        Args:
-            query: The query to match against
-            context: Additional context
-            min_confidence: Minimum confidence threshold
-
-        Returns:
-            List of matching instincts, sorted by relevance
-        """
         matches = []
 
         for instinct in self._instincts.values():
@@ -311,14 +252,6 @@ class InstinctLearner:
         return [instinct for instinct, _ in matches]
 
     def get_reliable_instincts(self, tag: str | None = None) -> list[Instinct]:
-        """Get all reliable instincts.
-
-        Args:
-            tag: Optional tag filter
-
-        Returns:
-            List of reliable instincts
-        """
         instincts = [i for i in self._instincts.values() if i.is_reliable]
 
         if tag:
@@ -335,18 +268,7 @@ class InstinctLearner:
         outcome: str,
         was_successful: bool,
     ) -> Instinct | None:
-        """Extract an instinct from an experiment result.
-
-        This is the key autoresearch feature - turning experiments into learnings.
-
-        Args:
-            hypothesis: The hypothesis that was tested
-            outcome: What happened
-            was_successful: Whether it worked
-
-        Returns:
-            Extracted instinct or None
-        """
+        """Extract an instinct from an experiment result."""
         # Simple extraction: hypothesis -> pattern, outcome -> action
         # In a more sophisticated version, this would use NLP
 
@@ -367,7 +289,6 @@ class InstinctLearner:
         return instinct
 
     def _generate_id(self, pattern: str) -> str:
-        """Generate a stable ID from pattern."""
         import hashlib
 
         # Normalize and hash
@@ -376,7 +297,6 @@ class InstinctLearner:
         return f"instinct_{hash_obj.hexdigest()[:12]}"
 
     def _embedding_enabled(self) -> bool:
-        """Check if sentence-transformers embedding model is available."""
         if self._numpy is None:
             return False
         if self._embedding_model is not None:
@@ -392,7 +312,6 @@ class InstinctLearner:
             return False
 
     def _get_embedding(self, text: str) -> Any:
-        """Get embedding vector for text (with caching)."""
         if text in self._embedding_cache:
             return self._embedding_cache[text]
         if not self._embedding_enabled():
@@ -403,7 +322,6 @@ class InstinctLearner:
         return emb
 
     def _compute_embedding_similarity(self, pattern: str, text: str) -> float:
-        """Compute cosine similarity between pattern and text embeddings."""
         try:
             pattern_emb = self._get_embedding(pattern)
             text_emb = self._get_embedding(text)
@@ -417,13 +335,7 @@ class InstinctLearner:
             return 0.0
 
     def _match_score(self, pattern: str, text: str) -> float:
-        """Calculate match score between pattern and text.
-
-        Uses a hybrid of lexical overlap (Jaccard + containment + bigrams)
-        and optional sentence-transformer embeddings for semantic matching.
-        When embeddings are available they bridge vocabulary gaps that pure
-        lexical methods miss (e.g. "debug" vs "fix error").
-        """
+        """Calculate match score between pattern and text."""
         from vibesop.core.matching.tokenizers import tokenize
 
         pattern_tokens = tokenize(pattern)
@@ -467,7 +379,6 @@ class InstinctLearner:
         return max(lexical_score, embedding_score)
 
     def get_stats(self) -> dict[str, Any]:
-        """Get statistics about instincts."""
         total = len(self._instincts)
         reliable = sum(1 for i in self._instincts.values() if i.is_reliable)
 
@@ -491,16 +402,7 @@ class InstinctLearner:
     def record_sequence(
         self, steps: list[str], success: bool, context: str = ""
     ) -> SequencePattern | None:
-        """Record a sequence of tool calls and detect repeatable patterns.
-
-        Args:
-            steps: Ordered list of tool call names (e.g. ["Bash:lint", "Edit:fix", "Bash:test"])
-            success: Whether the sequence led to a successful outcome
-            context: Context description (e.g. "fixing syntax errors")
-
-        Returns:
-            The SequencePattern if it became a candidate, else None
-        """
+        """Record a sequence of tool calls and detect repeatable patterns."""
         if len(steps) < 3:
             return None
 
@@ -540,7 +442,6 @@ class InstinctLearner:
         return None
 
     def get_sequence_candidates(self, min_confidence: float = 0.5) -> list[SequencePattern]:
-        """Get all sequence patterns that qualify as skill candidates."""
         return [
             s
             for s in self._sequences.values()
@@ -548,7 +449,6 @@ class InstinctLearner:
         ]
 
     def _load_sequences(self) -> None:
-        """Load sequence patterns from storage."""
         seq_path = self.storage_path.parent / "sequences.jsonl"
         if not seq_path.exists():
             return
@@ -566,7 +466,6 @@ class InstinctLearner:
                     continue
 
     def _save_sequences(self) -> None:
-        """Save sequence patterns to storage."""
         seq_path = self.storage_path.parent / "sequences.jsonl"
         seq_path.parent.mkdir(parents=True, exist_ok=True)
         with seq_path.open("w") as f:
@@ -574,7 +473,6 @@ class InstinctLearner:
                 f.write(json.dumps(pattern.to_dict()) + "\n")
 
     def export_for_routing(self) -> list[dict[str, Any]]:
-        """Export instincts in format suitable for routing."""
         return [
             {
                 "id": i.id,
@@ -596,15 +494,6 @@ def learn_instinct(
     storage_path: Path | None = None,
     **kwargs: Any,
 ) -> Instinct:
-    """Convenience function to learn a single instinct.
-
-    Example:
-        learn_instinct(
-            pattern="user asks about debugging",
-            action="suggest systematic-debugging skill",
-            tags=["routing", "debugging"],
-        )
-    """
     learner = InstinctLearner(storage_path)
     return learner.learn(pattern, action, **kwargs)
 
@@ -613,12 +502,6 @@ def get_routing_suggestion(
     query: str,
     storage_path: Path | None = None,
 ) -> str | None:
-    """Get routing suggestion based on learned instincts.
-
-    Example:
-        suggestion = get_routing_suggestion("help me debug this error")
-        # Returns: "suggest systematic-debugging skill" if learned
-    """
     learner = InstinctLearner(storage_path)
     matches = learner.find_matching(query)
 

@@ -1,13 +1,4 @@
-"""External skill loader for dynamic skill discovery.
-
-This module provides functionality for discovering and loading skills from
-external sources like:
-- ~/.claude/skills/ (Claude Code skills)
-- ~/.config/skills/ (Central skill storage)
-- Third-party skill packs (superpowers, gstack, etc.)
-
-All external skills go through security validation before being loaded.
-"""
+"""External skill loader for dynamic skill discovery."""
 
 from __future__ import annotations
 
@@ -39,17 +30,7 @@ class SkillSource(StrEnum):
 
 @dataclass
 class ExternalSkillMetadata:
-    """Extended metadata for external skills.
-
-    Attributes:
-        base_metadata: Core skill metadata
-        source: Where the skill came from
-        pack_name: Name of the pack (if from a pack)
-        pack_version: Version of the pack
-        install_path: Path to skill directory
-        audit_result: Security audit result
-        is_trusted: Whether this skill is trusted (whitelisted)
-    """
+    """Extended metadata for external skills."""
 
     base_metadata: SkillMetadata
     source: SkillSource
@@ -61,11 +42,9 @@ class ExternalSkillMetadata:
 
     @property
     def is_safe(self) -> bool:
-        """Whether the skill passed security audit."""
         return self.audit_result is not None and self.audit_result.is_safe
 
     def to_dict(self) -> dict[str, Any]:
-        """Convert to dictionary."""
         return {
             "id": self.base_metadata.id,
             "name": self.base_metadata.name,
@@ -80,18 +59,7 @@ class ExternalSkillMetadata:
 
 
 class ExternalSkillLoader:
-    """Loader for external skills.
-
-    This loader discovers skills from external sources and validates
-    them through security auditing before allowing them to be used.
-
-    Example:
-        >>> loader = ExternalSkillLoader()
-        >>> skills = loader.discover_all()
-        >>> for skill in skills:
-        ...     if skill.is_safe:
-        ...         print(f"Safe to load: {skill.base_metadata.id}")
-    """
+    """Loader for external skills."""
 
     # External skill search paths
     EXTERNAL_PATHS: ClassVar[list[Path]] = [
@@ -110,14 +78,6 @@ class ExternalSkillLoader:
         strict_mode: bool = True,
         project_root: str | Path | None = None,
     ):
-        """Initialize the external skill loader.
-
-        Args:
-            external_paths: Paths to search for external skills
-            require_audit: Whether to require passing security audit
-            strict_mode: Whether to use strict security mode
-            project_root: Project root (for including project skills)
-        """
         self.external_paths = external_paths or self.EXTERNAL_PATHS.copy()
         self._require_audit = require_audit
         self._strict_mode = strict_mode
@@ -137,14 +97,6 @@ class ExternalSkillLoader:
         self._cache: dict[str, ExternalSkillMetadata] = {}
 
     def discover_all(self, force_reload: bool = False) -> dict[str, ExternalSkillMetadata]:
-        """Discover all external skills.
-
-        Args:
-            force_reload: Force re-discovery even if cached
-
-        Returns:
-            Dictionary mapping skill_id to ExternalSkillMetadata
-        """
         if self._cache and not force_reload:
             return self._cache
 
@@ -196,15 +148,6 @@ class ExternalSkillLoader:
         pack_name: str,
         pack_path: Path,
     ) -> dict[str, ExternalSkillMetadata]:
-        """Discover skills from a specific pack.
-
-        Args:
-            pack_name: Name of the pack (e.g., "superpowers")
-            pack_path: Path to the pack directory
-
-        Returns:
-            Dictionary mapping skill_id to ExternalSkillMetadata
-        """
         pack_path = Path(pack_path)
         if not pack_path.exists():
             return {}
@@ -239,15 +182,6 @@ class ExternalSkillLoader:
         skill_id: str,
         fallback_to_builtin: bool = True,
     ) -> ExternalSkillMetadata | None:
-        """Load an external skill by ID.
-
-        Args:
-            skill_id: Skill identifier
-            fallback_to_builtin: Whether to fall back to builtin skills
-
-        Returns:
-            ExternalSkillMetadata if found and safe
-        """
         # Discover if not cached
         if not self._cache:
             self.discover_all()
@@ -267,23 +201,10 @@ class ExternalSkillLoader:
         return None
 
     def is_safe_to_load(self, skill_id: str) -> bool:
-        """Check if a skill is safe to load.
-
-        Args:
-            skill_id: Skill identifier
-
-        Returns:
-            True if skill exists and passed security audit
-        """
         skill = self.load_skill(skill_id, fallback_to_builtin=False)
         return skill is not None and skill.is_safe
 
     def get_unsafe_skills(self) -> list[ExternalSkillMetadata]:
-        """Get list of skills that failed security audit.
-
-        Returns:
-            List of unsafe skills
-        """
         all_skills = self.discover_all()
         return [s for s in all_skills.values() if not s.is_safe and s.audit_result is not None]
 
@@ -295,18 +216,7 @@ class ExternalSkillLoader:
         pack_version: str | None = None,
         is_trusted: bool = False,
     ) -> ExternalSkillMetadata | None:
-        """Audit skill file first, then parse only if safe.
-
-        Args:
-            skill_dir: Directory containing the skill
-            skill_file: Path to SKILL.md
-            pack_name: Name of the pack
-            pack_version: Version of the pack
-            is_trusted: Whether the pack is trusted
-
-        Returns:
-            ExternalSkillMetadata or None if audit failed
-        """
+        """Audit skill file first, then parse only if safe."""
         # Security audit first — check before parsing
         audit_result = self._auditor.audit_skill_file(skill_file)
 
@@ -342,15 +252,6 @@ class ExternalSkillLoader:
         )
 
     def _get_pack_version(self, pack_path: Path, _pack_name: str) -> str | None:
-        """Get version of a skill pack.
-
-        Args:
-            pack_path: Path to the pack directory
-            pack_name: Name of the pack
-
-        Returns:
-            Version string or None
-        """
         # Check for pack manifest
         manifest_file = pack_path / "pack.json"
         if manifest_file.exists():
@@ -374,11 +275,6 @@ class ExternalSkillLoader:
         return None
 
     def get_supported_packs(self) -> dict[str, dict[str, Any]]:
-        """Get information about supported skill packs.
-
-        Returns:
-            Dictionary mapping pack name to pack info
-        """
         packs = {}
 
         for pack_name, url in TRUSTED_PACKS.items():
@@ -405,31 +301,11 @@ class ExternalSkillLoader:
 def discover_external_skills(
     require_audit: bool = True,
 ) -> dict[str, ExternalSkillMetadata]:
-    """Convenience function to discover all external skills.
-
-    Args:
-        require_audit: Whether to require passing security audit
-
-    Returns:
-        Dictionary of external skills
-
-    Example:
-        >>> skills = discover_external_skills()
-        >>> safe_skills = {k: v for k, v in skills.items() if v.is_safe}
-    """
     loader = ExternalSkillLoader(require_audit=require_audit)
     return loader.discover_all()
 
 
 def is_skill_safe(skill_id: str) -> bool:
-    """Check if an external skill is safe to load.
-
-    Args:
-        skill_id: Skill identifier
-
-    Returns:
-        True if skill exists and is safe
-    """
     loader = ExternalSkillLoader()
     return loader.is_safe_to_load(skill_id)
 

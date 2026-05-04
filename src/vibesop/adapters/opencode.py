@@ -1,8 +1,4 @@
-"""OpenCode platform adapter.
-
-This module provides a simplified adapter for the OpenCode platform,
-demonstrating the adapter pattern with minimal complexity.
-"""
+"""OpenCode platform adapter."""
 
 import json
 import os
@@ -15,49 +11,18 @@ from vibesop.adapters.models import Manifest, RenderResult
 
 
 class OpenCodeAdapter(PlatformAdapter):
-    """Adapter for OpenCode platform.
-
-    OpenCode is a simplified platform that uses a single YAML
-    configuration file. This adapter demonstrates the adapter
-    pattern with minimal complexity.
-
-    Example:
-        >>> from vibesop.adapters import OpenCodeAdapter, Manifest
-        >>>
-        >>> adapter = OpenCodeAdapter()
-        >>> manifest = Manifest(...)
-        >>> result = adapter.render_config(manifest, Path("~/.config/opencode"))
-        >>> print(f"Created {result.file_count} files")
-    """
+    """Adapter for OpenCode platform."""
 
     def __init__(self, project_root: str | Path = ".") -> None:
-        """Initialize the OpenCode adapter.
-
-        Args:
-            project_root: Path to VibeSOP project root (contains core/skills/)
-        """
         super().__init__()
         self._project_root = Path(project_root).resolve()
 
     @property
     def platform_name(self) -> str:
-        """Get platform identifier.
-
-        Returns:
-            Platform name 'opencode'
-        """
         return "opencode"
 
     @property
     def config_dir(self) -> Path:
-        """Get default configuration directory.
-
-        OpenCode reads from ~/.config/opencode/ by default.
-        The project-level AGENTS.md is generated in the project root.
-
-        Returns:
-            Path to ~/.config/opencode
-        """
         return Path("~/.config/opencode").expanduser()
 
     def render_config_only(
@@ -65,18 +30,7 @@ class OpenCodeAdapter(PlatformAdapter):
         manifest: Manifest,
         output_dir: Path,
     ) -> RenderResult:
-        """Render configuration without skills.
-
-        This renders config.yaml, README.md, and llm-config.json
-        but NOT the skills/ directory. Skills are managed separately.
-
-        Args:
-            manifest: Configuration manifest
-            output_dir: Directory to write configuration files
-
-        Returns:
-            RenderResult with list of created files and any warnings/errors
-        """
+        """Render configuration without skills."""
         result = self.create_render_result(success=True)
 
         try:
@@ -155,18 +109,7 @@ class OpenCodeAdapter(PlatformAdapter):
         return result
 
     def render_config(self, manifest: Manifest, output_dir: Path) -> RenderResult:
-        """Render OpenCode configuration from manifest.
-
-        Generates config.yaml, README.md, llm-config.json,
-        and copies skill definitions to skills/ directory.
-
-        Args:
-            manifest: Configuration manifest
-            output_dir: Directory to write configuration files
-
-        Returns:
-            RenderResult with list of created files and any warnings/errors
-        """
+        """Render OpenCode configuration from manifest."""
         result = self.render_config_only(manifest, output_dir)
         if not result.success:
             return result
@@ -189,14 +132,6 @@ class OpenCodeAdapter(PlatformAdapter):
         return result
 
     def _generate_config(self, manifest: Manifest) -> str:
-        """Generate configuration YAML content.
-
-        Args:
-            manifest: Source manifest
-
-        Returns:
-            YAML configuration content
-        """
         from ruamel.yaml import YAML
 
         yaml = YAML()
@@ -248,18 +183,7 @@ class OpenCodeAdapter(PlatformAdapter):
         result: RenderResult,
         dir_name: str | None = None,
     ) -> None:
-        """Render skill content from actual skill file or central storage.
-
-        For external pack skills (e.g., 'gstack/review'), checks central
-        storage (~/.config/skills/) and creates a symlink if the pack
-        is installed there, avoiding stub generation.
-
-        Args:
-            skill: Skill definition from manifest
-            skill_dir: Directory to write skill files
-            result: RenderResult to track files
-            dir_name: Flattened directory name used for the skill
-        """
+        """Render skill content from actual skill file or central storage."""
         skill_id = skill.id if hasattr(skill, "id") else skill.get("id", "")
         skill_output_path = skill_dir / "SKILL.md"
 
@@ -307,14 +231,6 @@ class OpenCodeAdapter(PlatformAdapter):
         result.add_file(skill_output_path)
 
     def _generate_readme(self, manifest: Manifest) -> str:
-        """Generate README content.
-
-        Args:
-            manifest: Source manifest
-
-        Returns:
-            README markdown content
-        """
         lines = [
             "# OpenCode Configuration",
             "",
@@ -478,16 +394,7 @@ class OpenCodeAdapter(PlatformAdapter):
 
     @staticmethod
     def _generate_project_agents_md() -> str:
-        """Generate minimal project-level AGENTS.md.
-
-        The full skill catalog lives in the global OpenCode config
-        (~/.config/opencode/AGENTS.md). This project-level file only
-        contains the mandatory routing instruction and quick commands
-        to avoid duplicating the complete skill catalog.
-
-        Returns:
-            Minimal AGENTS.md content for project root
-        """
+        """Generate minimal project-level AGENTS.md."""
         from datetime import datetime
 
         now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -598,17 +505,7 @@ For skill management commands, use:
 """
 
     def _generate_agents_md(self, manifest: Manifest) -> str:
-        """Generate AGENTS.md for OpenCode AI instructions.
-
-        AGENTS.md is loaded by OpenCode as project-level system prompt context.
-        It contains VibeSOP routing rules and quick command descriptions.
-
-        Args:
-            manifest: Configuration manifest
-
-        Returns:
-            AGENTS.md content
-        """
+        """Generate AGENTS.md for OpenCode AI instructions."""
         lines = [
             "# VibeSOP Configuration",
             "",
@@ -780,13 +677,6 @@ For skill management commands, use:
         return "\n".join(lines)
 
     def get_settings_schema(self) -> dict[str, Any]:
-        """Get the settings schema for OpenCode.
-
-        Returns a simple JSON schema for OpenCode settings.
-
-        Returns:
-            JSON schema as a dictionary
-        """
         return {
             "$schema": "https://json.schemastore.org/claude-code-settings.json",
             "title": "OpenCode Settings",
@@ -813,15 +703,6 @@ For skill management commands, use:
     # which returns an empty dict (OpenCode doesn't support hooks)
 
     def _generate_llm_config(self) -> str:
-        """Generate LLM configuration JSON content.
-
-        Creates a complete LLM configuration with provider settings,
-        API keys, models, and timeouts. API keys are read from environment
-        variables if available, otherwise placeholder values are used.
-
-        Returns:
-            JSON configuration content
-        """
         # Detect provider from environment
         provider = self._detect_provider()
 
@@ -871,17 +752,6 @@ For skill management commands, use:
         return json.dumps(config, indent=2)
 
     def _detect_provider(self) -> str:
-        """Detect default LLM provider from environment.
-
-        Priority:
-        1. VIBE_LLM_PROVIDER env var
-        2. ANTHROPIC_API_KEY env var
-        3. OPENAI_API_KEY env var
-        4. Default to 'anthropic'
-
-        Returns:
-            Provider name ('anthropic' or 'openai')
-        """
         explicit_provider = os.getenv("VIBE_LLM_PROVIDER")
         if explicit_provider and explicit_provider in ("anthropic", "openai"):
             return explicit_provider
@@ -898,15 +768,7 @@ For skill management commands, use:
         output_dir: Path,
         result: RenderResult,
     ) -> None:
-        """Render the vibesop-route.sh hook script using the shared template.
-
-        Delegates to ``render_route_hook()`` in ``_shared.py`` so that
-        all platform adapters share the same hook script structure.
-
-        Args:
-            output_dir: Output directory (hooks/ will be created here)
-            result: RenderResult to track files
-        """
+        """Render the vibesop-route.sh hook script using the shared template."""
         try:
             from vibesop.adapters._shared import render_route_hook as _shared_route_hook
 
@@ -933,19 +795,7 @@ For skill management commands, use:
         output_dir: Path,
         result: RenderResult,
     ) -> None:
-        """Render the vibesop-env.sh environment setup script for OpenCode.
-
-        OpenCode does not support traditional shell hooks. This script
-        provides the next-best thing: it sets up a stable CONVERSATION_ID
-        and wraps the `vibe` command so `--conversation` is always passed.
-
-        Users should source this file before starting OpenCode:
-            source ~/.config/opencode/vibesop-env.sh
-
-        Args:
-            output_dir: Output directory
-            result: RenderResult to track files
-        """
+        """Render the vibesop-env.sh environment setup script for OpenCode."""
         script_content = """#!/bin/bash
 # VibeSOP Environment Setup for OpenCode
 # Generated by VibeSOP v5.2.0

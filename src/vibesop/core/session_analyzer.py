@@ -1,16 +1,4 @@
-"""Session history analyzer for pattern detection and skill suggestion.
-
-Analyzes conversation history to:
-1. Detect repeated query patterns
-2. Identify skill creation opportunities
-3. Generate automatic suggestions
-
-Improvements over v1:
-- Word-level Jaccard similarity instead of character-level
-- CJK-aware tokenization for Chinese queries
-- Bigram overlap for better semantic grouping
-- Stopwords filtered at token level, not raw character level
-"""
+"""Session history analyzer for pattern detection and skill suggestion."""
 
 import json
 import re
@@ -223,14 +211,7 @@ ALL_STOPWORDS = ENGLISH_STOPWORDS | CHINESE_STOPWORDS
 
 
 class SessionAnalyzer:
-    """Analyze session history for patterns and skill suggestions.
-
-    Example:
-        >>> analyzer = SessionAnalyzer()
-        >>> suggestions = analyzer.analyze_session_file("session.jsonl")
-        >>> for suggestion in suggestions:
-        ...     print(f"{suggestion.skill_name}: {suggestion.frequency} queries")
-    """
+    """Analyze session history for patterns and skill suggestions."""
 
     def __init__(
         self,
@@ -333,12 +314,6 @@ class SessionAnalyzer:
         return patterns
 
     def _tokenize_query(self, query: str) -> set[str]:
-        """Tokenize query into meaningful tokens.
-
-        For English: extract alphabetic words (filtered by stopwords).
-        For Chinese: extract overlapping character bigrams (sliding window)
-        and single characters, filtered by Chinese stopwords.
-        """
         tokens: set[str] = set()
         query_lower = query.lower()
 
@@ -364,17 +339,12 @@ class SessionAnalyzer:
         return tokens
 
     def _extract_bigrams(self, tokens: set[str]) -> set[str]:
-        """Extract bigrams from sorted tokens for better semantic matching."""
         sorted_tokens = sorted(tokens)
         if len(sorted_tokens) < 2:
             return set()
         return {f"{sorted_tokens[i]}_{sorted_tokens[i + 1]}" for i in range(len(sorted_tokens) - 1)}
 
     def calculate_similarity(self, query1: str, query2: str) -> float:
-        """Calculate similarity between two queries (public API).
-
-        Uses word-level Jaccard on tokenized queries.
-        """
         tokens1 = self._tokenize_query(query1)
         tokens2 = self._tokenize_query(query2)
         return self._calculate_similarity(tokens1, tokens2)
@@ -384,12 +354,6 @@ class SessionAnalyzer:
         queries: list[str],
         similarity_threshold: float = 0.25,
     ) -> list[list[str]]:
-        """Cluster queries by word-level Jaccard similarity.
-
-        Uses token overlap instead of character overlap for much better
-        semantic grouping. "database error" and "database connection failed"
-        will cluster together, but "database error" and "baseball era" will not.
-        """
         tokenized = [(q, self._tokenize_query(q)) for q in queries]
         clusters: list[list[str]] = []
         used: set[int] = set()
@@ -415,12 +379,6 @@ class SessionAnalyzer:
         return clusters
 
     def _calculate_similarity(self, tokens1: set[str], tokens2: set[str]) -> float:
-        """Calculate word-level Jaccard similarity between two token sets.
-
-        This is semantically meaningful — two queries about "debugging errors"
-        will share "debug" and "error" tokens, giving high similarity.
-        Character-level Jaccard was meaningless (shared characters != shared meaning).
-        """
         if not tokens1 or not tokens2:
             return 0.0
 

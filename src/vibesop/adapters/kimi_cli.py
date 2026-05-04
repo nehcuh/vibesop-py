@@ -1,21 +1,4 @@
-"""Kimi Code CLI platform adapter.
-
-This module provides the adapter for generating Kimi Code CLI
-configuration files from a manifest.
-
-Kimi Code CLI uses a single TOML configuration file (~/.kimi/config.toml)
-and discovers skills from ~/.kimi/skills/ directory. The skill format
-(SKILL.md with YAML frontmatter) is fully compatible with the Agent Skills
-open standard used by Claude Code.
-
-Example:
-    >>> from vibesop.adapters import KimiCliAdapter, Manifest
-    >>>
-    >>> adapter = KimiCliAdapter()
-    >>> manifest = Manifest(...)
-    >>> result = adapter.render_config(manifest, Path("~/.kimi"))
-    >>> print(f"Created {result.file_count} files")
-"""
+"""Kimi Code CLI platform adapter."""
 
 import re
 import shutil
@@ -27,50 +10,18 @@ from vibesop.adapters.models import Manifest, RenderResult
 
 
 class KimiCliAdapter(PlatformAdapter):
-    """Adapter for Kimi Code CLI platform.
-
-    Generates Kimi Code CLI configuration files including:
-    - config.toml (main configuration)
-    - skills/*/SKILL.md (skill definitions)
-    - README.md (skill catalog and usage guide)
-
-    Kimi Code CLI uses the Agent Skills open standard, making its
-    skill format fully compatible with Claude Code skills.
-
-    Example:
-        >>> from vibesop.adapters import KimiCliAdapter, Manifest
-        >>>
-        >>> adapter = KimiCliAdapter()
-        >>> manifest = Manifest(...)
-        >>> result = adapter.render_config(manifest, Path("~/.kimi"))
-        >>> print(f"Created {result.file_count} files")
-    """
+    """Adapter for Kimi Code CLI platform."""
 
     def __init__(self, project_root: str | Path = ".") -> None:
-        """Initialize the Kimi CLI adapter.
-
-        Args:
-            project_root: Path to VibeSOP project root (contains core/skills/)
-        """
         super().__init__()
         self._project_root = Path(project_root).resolve()
 
     @property
     def platform_name(self) -> str:
-        """Get platform identifier.
-
-        Returns:
-            Platform name 'kimi-cli'
-        """
         return "kimi-cli"
 
     @property
     def config_dir(self) -> Path:
-        """Get default configuration directory.
-
-        Returns:
-            Path to ~/.kimi
-        """
         return Path("~/.kimi").expanduser()
 
     def render_config_only(
@@ -78,23 +29,7 @@ class KimiCliAdapter(PlatformAdapter):
         manifest: Manifest,
         output_dir: Path,
     ) -> RenderResult:
-        """Render configuration without skills.
-
-        This renders config.toml and README.md but NOT the skills/
-        directory. Skills are managed separately.
-
-        Note: For Kimi CLI, this generates a VibeSOP configuration fragment
-        that should be merged with the auto-generated Kimi CLI config.
-        Users should run 'kimi' first to create the default config,
-        then use '/login' to authenticate.
-
-        Args:
-            manifest: Configuration manifest
-            output_dir: Directory to write configuration files
-
-        Returns:
-            RenderResult with list of created files and any warnings/errors
-        """
+        """Render configuration without skills."""
         result = self.create_render_result(success=True)
 
         try:
@@ -150,18 +85,7 @@ class KimiCliAdapter(PlatformAdapter):
         return result
 
     def render_config(self, manifest: Manifest, output_dir: Path) -> RenderResult:
-        """Render Kimi Code CLI configuration from manifest.
-
-        Generates config.toml, README.md, AGENTS.md, and copies skill definitions
-        to skills/ directory.
-
-        Args:
-            manifest: Configuration manifest
-            output_dir: Directory to write configuration files
-
-        Returns:
-            RenderResult with list of created files and any warnings/errors
-        """
+        """Render Kimi Code CLI configuration from manifest."""
         result = self.render_config_only(manifest, output_dir)
         if not result.success:
             return result
@@ -194,14 +118,6 @@ class KimiCliAdapter(PlatformAdapter):
         return result
 
     def _generate_config(self, manifest: Manifest) -> str:
-        """Generate configuration TOML content.
-
-        Args:
-            manifest: Source manifest
-
-        Returns:
-            TOML configuration content
-        """
         lines: list[str] = [
             "# VibeSOP Configuration for Kimi Code CLI",
             f"# Generated: {manifest.metadata.created_at.isoformat()}",
@@ -309,14 +225,6 @@ class KimiCliAdapter(PlatformAdapter):
         return "\n".join(lines)
 
     def _escape_toml_string(self, text: str) -> str:
-        """Escape text for safe use in TOML double-quoted strings.
-
-        Args:
-            text: Input text that may contain newlines, quotes, or other special characters
-
-        Returns:
-            Escaped text safe for TOML double-quoted strings
-        """
         if not text:
             return ""
 
@@ -336,19 +244,7 @@ class KimiCliAdapter(PlatformAdapter):
         return text.strip()
 
     def _merge_config_with_existing(self, config_path: Path, new_config: str) -> str:
-        """Merge new VibeSOP config fragment into existing config.toml.
-
-        Preserves all existing sections (providers, auth, etc.) while
-        adding or refreshing the [[hooks]] section from the new config.
-        This prevents auth tokens from being lost on re-deploy.
-
-        Args:
-            config_path: Path to existing config.toml
-            new_config: Fresh VibeSOP config content
-
-        Returns:
-            Merged config.toml content
-        """
+        """Merge new VibeSOP config fragment into existing config.toml."""
         existing = config_path.read_text()
         lines = existing.split("\n")
 
@@ -385,18 +281,7 @@ class KimiCliAdapter(PlatformAdapter):
         result: RenderResult,
         dir_name: str | None = None,
     ) -> None:
-        """Render skill content from actual skill file or central storage.
-
-        For external pack skills (e.g., 'gstack/review'), checks central
-        storage (~/.config/skills/) and creates a symlink if the pack
-        is installed there, avoiding stub generation.
-
-        Args:
-            skill: Skill definition from manifest
-            skill_dir: Directory to write skill files
-            result: RenderResult to track files
-            dir_name: Flattened directory name used for the skill
-        """
+        """Render skill content from actual skill file or central storage."""
         skill_id = skill.id if hasattr(skill, "id") else skill.get("id", "")
         skill_output_path = skill_dir / "SKILL.md"
 
@@ -444,14 +329,6 @@ class KimiCliAdapter(PlatformAdapter):
         result.add_file(skill_output_path)
 
     def _generate_readme(self, manifest: Manifest) -> str:
-        """Generate README content.
-
-        Args:
-            manifest: Source manifest
-
-        Returns:
-            README markdown content
-        """
         lines = [
             "# Kimi Code CLI Configuration",
             "",
@@ -614,18 +491,7 @@ class KimiCliAdapter(PlatformAdapter):
         return "\n".join(lines)
 
     def _generate_agents_md(self, manifest: Manifest) -> str:
-        """Generate AGENTS.md for Kimi Code CLI.
-
-        AGENTS.md is loaded by Kimi CLI as project-level system prompt context.
-        It contains VibeSOP routing rules that guide the AI to automatically
-        trigger skill routing for non-trivial tasks.
-
-        Args:
-            manifest: Configuration manifest
-
-        Returns:
-            AGENTS.md content
-        """
+        """Generate AGENTS.md for Kimi Code CLI."""
         lines = [
             "# VibeSOP Agent 指令",
             "",
@@ -770,13 +636,6 @@ class KimiCliAdapter(PlatformAdapter):
         return "\n".join(lines)
 
     def get_settings_schema(self) -> dict[str, Any]:
-        """Get the settings schema for Kimi Code CLI.
-
-        Returns a JSON schema for Kimi Code CLI settings.
-
-        Returns:
-            JSON schema as a dictionary
-        """
         return {
             "$schema": "https://json.schemastore.org/kimi-cli-settings.json",
             "title": "Kimi Code CLI Settings",
@@ -820,15 +679,7 @@ class KimiCliAdapter(PlatformAdapter):
         output_dir: Path,
         result: RenderResult,
     ) -> None:
-        """Render the vibesop-route.sh hook script using the shared template.
-
-        Delegates to ``render_route_hook()`` in ``_shared.py`` so that
-        all platform adapters share the same hook script structure.
-
-        Args:
-            output_dir: Output directory (hooks/ will be created here)
-            result: RenderResult to track files
-        """
+        """Render the vibesop-route.sh hook script using the shared template."""
         try:
             from vibesop.adapters._shared import render_route_hook as _shared_route_hook
 

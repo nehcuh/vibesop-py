@@ -1,15 +1,4 @@
-"""Conflict resolution framework for skill routing.
-
-When multiple skills match a query, we need a strategy to choose the best one.
-This module provides a configurable framework for resolving such conflicts.
-
-Usage:
-    from vibesop.core.routing.conflict import ConflictResolver, PriorityStrategy
-
-    resolver = ConflictResolver()
-    resolver.add_strategy(PriorityStrategy())
-    result = resolver.resolve(matches, query)
-"""
+"""Conflict resolution framework for skill routing."""
 
 from __future__ import annotations
 
@@ -63,25 +52,10 @@ class ResolutionStrategy(ABC):
         matches: list[MatchResult],
         _query: str,
         _context: dict[str, Any] | None = None,
-    ) -> ConflictResolution | None:
-        """Resolve conflicts among matched skills.
-
-        Args:
-            matches: List of matched skills
-            query: Original user query
-            context: Additional routing context
-
-        Returns:
-            ConflictResolution if this strategy can handle it, None otherwise
-        """
+    ) -> ConflictResolution | None: ...
 
     @abstractmethod
-    def priority(self) -> int:
-        """Priority of this strategy (higher = tried first).
-
-        Returns:
-            Priority value (0-100)
-        """
+    def priority(self) -> int: ...
 
 
 class ConfidenceGapStrategy(ResolutionStrategy):
@@ -92,11 +66,6 @@ class ConfidenceGapStrategy(ResolutionStrategy):
     """
 
     def __init__(self, gap_threshold: float = 0.15):
-        """Initialize confidence gap strategy.
-
-        Args:
-            gap_threshold: Minimum gap between top two candidates
-        """
         self.gap_threshold = gap_threshold
 
     def resolve(
@@ -146,11 +115,6 @@ class NamespacePriorityStrategy(ResolutionStrategy):
     }
 
     def __init__(self, priorities: dict[str, int] | None = None):
-        """Initialize namespace priority strategy.
-
-        Args:
-            priorities: Custom namespace priority mapping
-        """
         self.priorities = {**self.DEFAULT_PRIORITIES, **(priorities or {})}
 
     def resolve(
@@ -208,16 +172,10 @@ class RecencyStrategy(ResolutionStrategy):
     """
 
     def __init__(self, storage_path: str = ".vibe/preferences.json"):
-        """Initialize recency strategy.
-
-        Args:
-            storage_path: Path to preferences file
-        """
         self.storage_path = storage_path
         self._recent_skills: dict[str, float] | None = None
 
     def _load_recent_skills(self) -> dict[str, float]:
-        """Load recently used skills with timestamps."""
         if self._recent_skills is not None:
             return self._recent_skills
 
@@ -386,25 +344,16 @@ class ConflictResolver:
     """
 
     def __init__(self):
-        """Initialize conflict resolver with default strategies."""
         self._strategies: list[ResolutionStrategy] = []
         self._setup_default_strategies()
 
     def _setup_default_strategies(self) -> None:
-        """Set up default resolution strategies in priority order."""
         self.add_strategy(ConfidenceGapStrategy())
         self.add_strategy(NamespacePriorityStrategy())
         self.add_strategy(RecencyStrategy())
         self.add_strategy(FallbackStrategy())
 
     def add_strategy(self, strategy: ResolutionStrategy) -> None:
-        """Add a resolution strategy.
-
-        Strategies are tried in priority order (highest priority first).
-
-        Args:
-            strategy: Strategy to add
-        """
         self._strategies.append(strategy)
         self._strategies.sort(key=lambda s: s.priority(), reverse=True)
 
@@ -414,16 +363,6 @@ class ConflictResolver:
         query: str,
         context: dict[str, Any] | None = None,
     ) -> ConflictResolution:
-        """Resolve conflicts among matched skills.
-
-        Args:
-            matches: List of matched skills
-            query: Original user query
-            context: Additional routing context
-
-        Returns:
-            Conflict resolution result
-        """
         if not matches:
             return ConflictResolution(
                 primary=None,

@@ -1,8 +1,4 @@
-"""Claude Code platform adapter.
-
-This module provides the adapter for generating Claude Code
-configuration files from a manifest.
-"""
+"""Claude Code platform adapter."""
 
 import logging
 import shutil
@@ -18,58 +14,22 @@ logger = logging.getLogger(__name__)
 
 
 class ClaudeCodeAdapter(PlatformAdapter):
-    """Adapter for Claude Code platform.
-
-    Generates Claude Code configuration files including:
-    - CLAUDE.md (main entry point)
-    - rules/*.md (always-loaded rules)
-    - docs/*.md (on-demand documentation)
-    - skills/*/SKILL.md (skill definitions)
-    - settings.json (permissions configuration)
-
-    Example:
-        >>> from vibesop.adapters import ClaudeCodeAdapter, Manifest
-        >>>
-        >>> adapter = ClaudeCodeAdapter()
-        >>> manifest = Manifest(...)
-        >>> result = adapter.render_config(manifest, Path("~/.claude"))
-        >>> print(f"Created {result.file_count} files")
-    """
+    """Adapter for Claude Code platform."""
 
     def __init__(self, project_root: str | Path = ".") -> None:
-        """Initialize the Claude Code adapter.
-
-        Args:
-            project_root: Path to VibeSOP project root (contains core/skills/)
-        """
         super().__init__()
         self._template_env: Environment | None = None
         self._project_root = Path(project_root).resolve()
 
     @property
     def platform_name(self) -> str:
-        """Get platform identifier.
-
-        Returns:
-            Platform name 'claude-code'
-        """
         return "claude-code"
 
     @property
     def config_dir(self) -> Path:
-        """Get default configuration directory.
-
-        Returns:
-            Path to ~/.claude
-        """
         return Path("~/.claude").expanduser()
 
     def _get_template_env(self) -> Environment:
-        """Get or create Jinja2 template environment.
-
-        Returns:
-            Jinja2 Environment configured for Claude Code templates
-        """
         if self._template_env is None:
             template_dir = Path(__file__).parent / "templates" / "claude-code"
             self._template_env = Environment(
@@ -81,15 +41,7 @@ class ClaudeCodeAdapter(PlatformAdapter):
         return self._template_env
 
     def render_config(self, manifest: Manifest, output_dir: Path) -> RenderResult:
-        """Render Claude Code configuration from manifest.
-
-        Args:
-            manifest: Configuration manifest
-            output_dir: Directory to write configuration files
-
-        Returns:
-            RenderResult with list of created files and any warnings/errors
-        """
+        """Render Claude Code configuration from manifest."""
         result = self.create_render_result(success=True)
 
         try:
@@ -196,19 +148,7 @@ class ClaudeCodeAdapter(PlatformAdapter):
         return result
 
     def render_config_only(self, manifest: Manifest, output_dir: Path) -> RenderResult:
-        """Render configuration without skills.
-
-        This renders CLAUDE.md, rules/, docs/, and settings.json
-        but NOT the skills/ directory. Skills are managed separately
-        by SkillStorage with symlinks.
-
-        Args:
-            manifest: Configuration manifest
-            output_dir: Directory to write configuration files
-
-        Returns:
-            RenderResult with list of created files and any warnings/errors
-        """
+        """Render configuration without skills."""
         result = self.create_render_result(success=True)
 
         try:
@@ -315,16 +255,7 @@ class ClaudeCodeAdapter(PlatformAdapter):
         validate_security: bool = True,
         **extra_context: Any,
     ) -> None:
-        """Render a template and write to file.
-
-        Args:
-            template_name: Name of the template to render
-            output_path: Path to write the rendered output
-            manifest: Source manifest
-            result: RenderResult to track files
-            validate_security: Whether to validate content security
-            **extra_context: Additional template variables
-        """
+        """Render a template and write to file."""
         try:
             env = self._get_template_env()
             template = env.get_template(template_name)
@@ -349,24 +280,7 @@ class ClaudeCodeAdapter(PlatformAdapter):
         manifest: Manifest,
         result: RenderResult,
     ) -> None:
-        """Render skill content from actual skill file or central storage.
-
-        For built-in skills, copies content from core/skills/.
-        For external pack skills (e.g., 'gstack/review'), checks central
-        storage (~/.config/skills/) and creates a symlink if the pack
-        is installed.  Falls back to template rendering only when the
-        pack is not installed ANYWHERE.
-
-        Critical invariant: NEVER overwrite an external skill's full
-        SKILL.md with the thin Jinja2 template wrapper.  If a valid
-        symlink already exists, leave it untouched.
-
-        Args:
-            skill: Skill definition from manifest
-            skill_dir: Directory to write skill files
-            manifest: Source manifest
-            result: RenderResult to track files
-        """
+        """Render skill content from actual skill file or central storage."""
         skill_id = skill.id if hasattr(skill, "id") else skill.get("id", "")
         skill_output_path = skill_dir / "SKILL.md"
 
@@ -421,18 +335,7 @@ class ClaudeCodeAdapter(PlatformAdapter):
         )
 
     def _render_project_claude_md(self, manifest: Manifest, result: RenderResult) -> None:
-        """Write project-level CLAUDE.md if it doesn't exist.
-
-        The project-level CLAUDE.md contains only:
-        - A minimal VibeSOP routing reminder (global CLAUDE.md has the full protocol)
-        - Project-specific context placeholders for the developer to fill in
-
-        This avoids duplicating the full global protocol into every project.
-
-        Args:
-            manifest: Configuration manifest
-            result: RenderResult to track files
-        """
+        """Write project-level CLAUDE.md if it doesn't exist."""
         project_path = self._project_root / "CLAUDE.md"
         config_path = Path("~/.claude").expanduser() / "CLAUDE.md"
         if project_path.resolve() != config_path.resolve() and not project_path.exists():
@@ -450,11 +353,7 @@ class ClaudeCodeAdapter(PlatformAdapter):
         _manifest: Manifest,
         result: RenderResult,
     ) -> None:
-        """Render settings.json with actual configuration values.
-
-        Generates a valid Claude Code settings file (not a JSON Schema),
-        including hook registration for VibeSOP auto-routing.
-        """
+        """Render settings.json with actual configuration values."""
         import json
 
         hooks_dir = output_dir / "hooks"
@@ -507,14 +406,6 @@ class ClaudeCodeAdapter(PlatformAdapter):
         result.add_file(settings_path)
 
     def get_settings_schema(self) -> dict[str, Any]:
-        """Get the settings schema for Claude Code.
-
-        Returns a JSON schema describing the structure of Claude Code's
-        settings.json file.
-
-        Returns:
-            JSON schema as a dictionary
-        """
         return {
             "$schema": "https://json.schemastore.org/claude-code-settings.json",
             "title": "Claude Code Settings",
@@ -558,16 +449,7 @@ class ClaudeCodeAdapter(PlatformAdapter):
         output_dir: Path,
         result: RenderResult,
     ) -> None:
-        """Render the vibesop-route.sh hook script using the shared template.
-
-        Delegates to ``render_route_hook()`` in ``_shared.py`` so that
-        Claude Code, OpenCode, and Kimi CLI all produce the same hook
-        script structure.
-
-        Args:
-            output_dir: Output directory (hooks/ will be created here)
-            result: RenderResult to track files
-        """
+        """Render the vibesop-route.sh hook script using the shared template."""
         try:
             from vibesop.adapters._shared import render_route_hook as _shared_route_hook
 
@@ -593,15 +475,7 @@ class ClaudeCodeAdapter(PlatformAdapter):
         output_dir: Path,
         result: RenderResult,
     ) -> None:
-        """Render the vibesop-track.sh hook script.
-
-        This script can be used as a PreToolUse hook on platforms
-        that support it. It tracks tool usage for session context.
-
-        Args:
-            output_dir: Output directory (hooks/ will be created here)
-            result: RenderResult to track files
-        """
+        """Render the vibesop-track.sh hook script."""
         try:
             env = self._get_template_env()
             template = env.get_template("hooks/vibesop-track.sh.j2")
@@ -614,18 +488,7 @@ class ClaudeCodeAdapter(PlatformAdapter):
             result.add_warning(f"Failed to write vibesop-track.sh: {e}")
 
     def install_hooks(self, config_dir: Path) -> dict[str, bool]:
-        """Install Claude Code hooks.
-
-        Installs the pre-session-end hook for memory flushing,
-        plus Agent Runtime hooks (vibesop-route.sh, vibesop-track.sh)
-        for platforms that support UserPromptSubmit / PreToolUse hooks.
-
-        Args:
-            config_dir: Configuration directory
-
-        Returns:
-            Dictionary mapping hook names to installation status
-        """
+        """Install Claude Code hooks."""
         results: dict[str, bool] = {}
 
         # Install pre-session-end hook

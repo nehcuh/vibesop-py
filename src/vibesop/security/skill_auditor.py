@@ -1,12 +1,4 @@
-"""Skill security auditor for external skill validation.
-
-This module provides security validation specifically for skill files,
-implementing protections against SKILL-INJECT style attacks.
-
-Based on research from:
-- "I'm Sorry, Dave, I'm Afraid I Can't Do That": Analyzing Prompt Injection
-  and Security-Grounded Behavior in Language Models (Mazarelli et al., 2023)
-"""
+"""Skill security auditor for external skill validation."""
 
 from __future__ import annotations
 
@@ -33,15 +25,7 @@ class ThreatLevel(StrEnum):
 
 @dataclass
 class ThreatPattern:
-    """A security threat pattern.
-
-    Attributes:
-        name: Human-readable name
-        pattern: Regex pattern to detect
-        level: Threat severity
-        category: Type of threat
-        description: What this threat represents
-    """
+    """A security threat pattern."""
 
     name: str
     pattern: str
@@ -50,21 +34,12 @@ class ThreatPattern:
     description: str
 
     def matches(self, text: str) -> bool:
-        """Check if this pattern matches the text."""
         return bool(re.search(self.pattern, text, re.IGNORECASE | re.DOTALL))
 
 
 @dataclass
 class AuditResult:
-    """Result of security audit.
-
-    Attributes:
-        is_safe: Whether the skill passed security audit
-        threats: List of threats detected
-        risk_level: Highest risk level found
-        reason: Human-readable explanation
-        audit_time: When audit was performed
-    """
+    """Result of security audit."""
 
     is_safe: bool
     threats: list[ThreatPattern] = field(default_factory=list)
@@ -73,7 +48,6 @@ class AuditResult:
     audit_time: datetime = field(default_factory=datetime.now)
 
     def to_dict(self) -> dict[str, Any]:
-        """Convert to dictionary."""
         return {
             "is_safe": self.is_safe,
             "threats": [
@@ -92,24 +66,7 @@ class AuditResult:
 
 
 class SkillSecurityAuditor:
-    """Security auditor for skill files.
-
-    Implements protections against:
-    - Path traversal attacks
-    - Prompt injection attempts
-    - Role hijacking
-    - Instruction injection
-    - Privilege escalation
-    - Command injection patterns
-
-    Example:
-        >>> auditor = SkillSecurityAuditor()
-        >>> result = auditor.audit_skill_file(Path("skills/external/SKILL.md"))
-        >>> if result.is_safe:
-        ...     print("Skill is safe to load")
-        ... else:
-        ...     print(f"Unsafe: {result.reason}")
-    """
+    """Security auditor for skill files."""
 
     # Allowed skill directories (whitelist)
     ALLOWED_BASE_PATHS: ClassVar[list[Path]] = [
@@ -185,13 +142,6 @@ class SkillSecurityAuditor:
         strict_mode: bool = True,
         project_root: Path | str | None = None,
     ):
-        """Initialize the skill security auditor.
-
-        Args:
-            allowed_paths: Whitelist of allowed skill directories
-            strict_mode: If True, reject on any threat; if False, warn only
-            project_root: Project root (to include project skills in allowed paths)
-        """
         self._strict_mode = strict_mode
         self._scanner = SecurityScanner()
         self._path_safety = PathSafety()
@@ -214,14 +164,7 @@ class SkillSecurityAuditor:
         pack_name: str | None = None,
         source_url: str | None = None,
     ) -> AuditResult:
-        """Audit a skill file for security threats.
-
-        Args:
-            skill_path: Path to SKILL.md file
-
-        Returns:
-            AuditResult with findings
-        """
+        """Audit a skill file for security threats."""
         threats = []
         skill_path = Path(skill_path)
 
@@ -333,14 +276,7 @@ class SkillSecurityAuditor:
         self,
         skill_dir: Path,
     ) -> AuditResult:
-        """Audit all files in a skill directory.
-
-        Args:
-            skill_dir: Path to skill directory
-
-        Returns:
-            Combined audit result
-        """
+        """Audit all files in a skill directory."""
         skill_dir = Path(skill_dir)
 
         # Find all skill files
@@ -398,17 +334,6 @@ class SkillSecurityAuditor:
         )
 
     def validate_path(self, path: Path) -> bool:
-        """Validate that a path is allowed.
-
-        Args:
-            path: Path to validate
-
-        Returns:
-            True if path is allowed
-
-        Raises:
-            PathTraversalError: If path attempts to traverse outside allowed dirs
-        """
         try:
             self._validate_path(Path(path))
             return True
@@ -416,7 +341,6 @@ class SkillSecurityAuditor:
             return False
 
     def _validate_path(self, path: Path) -> None:
-        """Validate path (raises exception if invalid)."""
         path = Path(path).resolve()
 
         # Check if path is within allowed directories
@@ -438,14 +362,6 @@ class SkillSecurityAuditor:
             )
 
     def _determine_safety(self, risk_level: ThreatLevel) -> bool:
-        """Determine if content is safe based on risk level and mode.
-
-        Args:
-            risk_level: Highest risk level detected
-
-        Returns:
-            True if content is considered safe
-        """
         if not self._strict_mode:
             # Non-strict mode: only critical/high are unsafe
             return risk_level in (ThreatLevel.SAFE, ThreatLevel.LOW, ThreatLevel.MEDIUM)
@@ -454,14 +370,6 @@ class SkillSecurityAuditor:
             return risk_level == ThreatLevel.SAFE
 
     def _risk_level_from_scan(self, scan_risk: Any) -> ThreatLevel:
-        """Convert scanner risk level to ThreatLevel.
-
-        Args:
-            scan_risk: Risk level from SecurityScanner
-
-        Returns:
-            ThreatLevel
-        """
         from vibesop.security.rules import RiskLevel
 
         mapping = {
@@ -473,27 +381,12 @@ class SkillSecurityAuditor:
         return mapping.get(scan_risk, ThreatLevel.MEDIUM)
 
     def add_threat_pattern(self, pattern: ThreatPattern) -> None:
-        """Add a custom threat pattern.
-
-        Args:
-            pattern: ThreatPattern to add
-        """
         self.THREAT_PATTERNS.append(pattern)
 
     def add_allowed_path(self, path: Path | str) -> None:
-        """Add an allowed base path.
-
-        Args:
-            path: Path to add to whitelist
-        """
         self._allowed_paths.append(Path(path).resolve())
 
     def get_allowed_paths(self) -> list[Path]:
-        """Get list of allowed base paths.
-
-        Returns:
-            Copy of allowed paths list
-        """
         return self._allowed_paths.copy()
 
 
@@ -505,21 +398,6 @@ def audit_skill(
     strict_mode: bool = True,
     project_root: Path | str | None = None,
 ) -> AuditResult:
-    """Convenience function to audit a skill.
-
-    Args:
-        skill_path: Path to SKILL.md file or directory
-        strict_mode: Whether to use strict mode
-        project_root: Project root (to include project skills)
-
-    Returns:
-        AuditResult
-
-    Example:
-        >>> result = audit_skill("skills/external/SKILL.md")
-        >>> if result.is_safe:
-        ...     print("Safe to load")
-    """
     auditor = SkillSecurityAuditor(
         strict_mode=strict_mode,
         project_root=project_root or Path.cwd(),

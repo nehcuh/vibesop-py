@@ -1,17 +1,5 @@
 # pyright: ignore[reportArgumentType]
-"""VibeSOP LLM 配置管理 - 统一的 LLM 配置和降级策略.
-
-该模块提供了:
-1. VibeSOP 配置文件中的 LLM 配置读取
-2. Agent 环境(Claude Code, Cursor 等)的 LLM 检测
-3. LLM 配置的优先级和降级策略
-
-优先级:
-1. Agent 环境的 LLM(最高优先级)
-2. VibeSOP 配置的 LLM
-3. 环境变量中的 LLM
-4. 默认配置(最低优先级)
-"""
+"""VibeSOP LLM 配置管理 - 统一的 LLM 配置和降级策略."""
 
 import json
 import os
@@ -65,8 +53,6 @@ class VibeSOPConfigManager:
 
     @classmethod
     def get_llm_config(cls) -> LLMConfig | None:
-        """从 VibeSOP 配置文件读取 LLM 配置"""
-
         for config_path in cls.CONFIG_PATHS:
             if not config_path.exists():
                 continue
@@ -155,11 +141,6 @@ class AgentEnvironmentDetector:
 
     @classmethod
     def detect_agent(cls) -> tuple[str, Path] | None:
-        """检测当前 Agent 环境并返回命中的配置文件.
-
-        Returns:
-            Tuple of (agent_id, config_file_path) or None if no agent detected.
-        """
         for agent_id, agent_config in cls.AGENT_CONFIGS.items():
             for config_file in agent_config["config_files"]:
                 if config_file.exists():
@@ -168,8 +149,6 @@ class AgentEnvironmentDetector:
 
     @classmethod
     def get_agent_llm_config(cls) -> LLMConfig | None:
-        """从 Agent 环境获取 LLM 配置"""
-
         detected = cls.detect_agent()
         if not detected:
             return None
@@ -223,11 +202,7 @@ class AgentEnvironmentDetector:
 
 
 class EnvVarLLMDetector:
-    """环境变量 LLM 检测器.
-
-    Supports all OpenAI-compatible providers via *_API_KEY / *_BASE_URL env vars,
-    plus the generic VIBE_LLM_PROVIDER override.
-    """
+    """环境变量 LLM 检测器."""
 
     PROVIDER_ENV_MAP: ClassVar[dict[str, dict[str, str | None]]] = {
         "deepseek": {
@@ -268,9 +243,6 @@ class EnvVarLLMDetector:
 
     @classmethod
     def get_llm_config(cls) -> LLMConfig | None:
-        """从环境变量读取 LLM 配置."""
-
-        # Priority 1: Generic provider override (VIBE_LLM_PROVIDER)
         generic_provider = os.getenv("VIBE_LLM_PROVIDER")
         if generic_provider:
             return cls._build_config(generic_provider)
@@ -310,10 +282,6 @@ class EnvVarLLMDetector:
 
     @classmethod
     def _is_ollama_reachable(cls) -> bool:
-        """Quick check if Ollama is running on default port.
-
-        Uses a short timeout to avoid blocking on cold-start.
-        """
         try:
             import urllib.request
 
@@ -335,7 +303,6 @@ class EnvVarLLMDetector:
         model_env: str | None = None,
         default_model: str | None = None,
     ) -> LLMConfig:
-        """Build LLMConfig from env vars for a given provider."""
         provider_map = cls.PROVIDER_ENV_MAP.get(provider, {})
 
         _api_key_env = api_key_env or provider_map.get("api_key")
@@ -372,16 +339,6 @@ class LLMConfigResolver:
     def resolve_llm_config(
         self, skill_requirements: dict[str, Any] | None = None, prefer_agent: bool = True
     ) -> LLMConfig | None:
-        """解析 LLM 配置(使用降级策略)
-
-        Args:
-            skill_requirements: 技能要求的 LLM 配置(可选)
-            prefer_agent: 是否优先使用 Agent 的 LLM(默认 True)
-
-        Returns:
-            LLM 配置对象,如果没有任何配置则返回 None
-        """
-
         self.logger.print("[dim]Resolving LLM configuration...[/dim]")
 
         # 优先级 1: Agent 环境的 LLM
@@ -433,9 +390,6 @@ class LLMConfigResolver:
         return None
 
     def _meets_requirements(self, config: LLMConfig, requirements: dict[str, Any]) -> bool:
-        """验证配置是否满足技能需求"""
-
-        # 检查提供商
         if "provider" in requirements:
             required_provider = requirements["provider"]
             if config.provider != required_provider:
@@ -458,10 +412,6 @@ class LLMConfigResolver:
         return True
 
     def _is_compatible_model(self, model: str, recommended_models: list[str]) -> bool:
-        """检查模型是否兼容推荐模型"""
-
-        # 简化版兼容性检查
-        # 实际实现应该检查模型的能力
         model_family = model.split("-", maxsplit=1)[0] if "-" in model else model
 
         for recommended in recommended_models:
@@ -472,9 +422,6 @@ class LLMConfigResolver:
         return False
 
     def _create_default_config(self, requirements: dict[str, Any]) -> LLMConfig:
-        """创建默认配置"""
-
-        # 使用推荐配置
         provider = requirements.get("provider", "anthropic")
         models = requirements.get("recommended_models", ["claude-sonnet-4-6-20250514"])
 
@@ -487,26 +434,6 @@ class LLMConfigResolver:
         )
 
     def get_llm_for_understanding(self) -> LLMConfig | None:
-        """获取用于技能理解的 LLM 配置
-
-        与 resolve_llm_config 不同,这个方法专注于理解阶段的 LLM 选择
-        理解阶段不需要太高的准确性,快速响应更重要
-
-        优先级:
-            1. Agent 环境（最高，由托管平台决定）
-            2. VibeSOP config (~/.vibe/config.toml 中显式声明的 provider)
-            3. 环境变量 (DEEPSEEK_API_KEY 等)
-            4. 默认 (claude-3-haiku)
-
-        VibeSOP config 优先于环境变量：用户在配置文件里显式写了
-        ``provider = "ollama"`` 时，本来可能存在的 ``DEEPSEEK_API_KEY``
-        不应该悄悄取代用户的选择。
-
-        Returns:
-            LLM 配置对象
-        """
-
-        # 1. Agent 环境(最快)
         agent_config = AgentEnvironmentDetector.get_agent_llm_config()
         if agent_config:
             self.logger.print(
@@ -543,15 +470,6 @@ class LLMConfigResolver:
 def get_llm_config(
     skill_requirements: dict[str, Any] | None = None, prefer_agent: bool = True
 ) -> LLMConfig | None:
-    """获取 LLM 配置(便捷函数)
-
-    Args:
-        skill_requirements: 技能的 LLM 需求(可选)
-        prefer_agent: 是否优先使用 Agent 的 LLM
-
-    Returns:
-        LLM 配置对象
-    """
     resolver = LLMConfigResolver()
     return resolver.resolve_llm_config(skill_requirements, prefer_agent)
 

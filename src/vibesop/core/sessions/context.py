@@ -1,21 +1,5 @@
 # pyright: ignore[reportCallIssue]
-"""Session context tracking for intelligent re-routing.
-
-This module monitors conversation progression and detects when
-the user's intent may have shifted, triggering intelligent re-routing.
-
-Usage:
-    >>> from vibesop.core.sessions import SessionContext
-    >>>
-    >>> context = SessionContext()
-    >>> context.record_tool_use("read", skill="systematic-debugging")
-    >>> context.record_tool_use("bash", skill="systematic-debugging")
-    >>>
-    >>> # Later in conversation
-    >>> suggestion = context.check_reroute_needed("design new architecture")
-    >>> if suggestion.should_reroute:
-    ...     print(f"Consider switching to: {suggestion.recommended_skill}")
-"""
+"""Session context tracking for intelligent re-routing."""
 
 from __future__ import annotations
 
@@ -45,15 +29,7 @@ class ContextChange(Enum):
 
 @dataclass
 class RoutingSuggestion:
-    """Suggestion for re-routing.
-
-    Attributes:
-        should_reroute: Whether re-routing is recommended
-        recommended_skill: Suggested skill ID
-        confidence: Confidence in this suggestion (0.0-1.0)
-        reason: Human-readable explanation
-        current_skill: The skill currently being used
-    """
+    """Suggestion for re-routing."""
 
     should_reroute: bool
     recommended_skill: str | None = None
@@ -64,14 +40,7 @@ class RoutingSuggestion:
 
 @dataclass
 class ToolUseEvent:
-    """Record of a tool use event.
-
-    Attributes:
-        tool_name: Name of the tool used
-        timestamp: When the tool was used
-        skill: Skill being used at the time
-        context: Additional context about the usage
-    """
+    """Record of a tool use event."""
 
     tool_name: str
     timestamp: float
@@ -81,13 +50,7 @@ class ToolUseEvent:
 
 @dataclass
 class RouteDecision:
-    """Record of a routing decision for habit learning.
-
-    Attributes:
-        query_pattern: Normalized query pattern
-        selected_skill: Skill chosen by the user/system
-        timestamp: When the decision was made
-    """
+    """Record of a routing decision for habit learning."""
 
     query_pattern: str
     selected_skill: str
@@ -95,16 +58,7 @@ class RouteDecision:
 
 
 class SessionContext:
-    """Tracks session context for intelligent re-routing.
-
-    This monitors:
-    - Tool usage patterns over time
-    - Skill transitions
-    - Topic/phase changes in the conversation
-
-    When significant changes are detected, it suggests re-routing
-    to more appropriate skills.
-    """
+    """Tracks session context for intelligent re-routing."""
 
     def __init__(
         self,
@@ -115,17 +69,6 @@ class SessionContext:
         reroute_cooldown: float = 5.0,
         session_id: str = "default",
     ):
-        """Initialize session context tracker.
-
-        Args:
-            project_root: Path to project root
-            router: Optional external UnifiedRouter instance (for dependency injection)
-            reroute_threshold: Confidence threshold for re-routing suggestions
-            tool_use_window: Number of recent tool uses to analyze
-            reroute_cooldown: Seconds between re-routing checks
-            session_id: Unique identifier for this session. If "default", derives
-                from project path hash to auto-isolate per-project sessions.
-        """
         self.project_root = Path(project_root).resolve()
         # Use injected router or create new one (dependency injection)
         self._router = router or UnifiedRouter(project_root=self.project_root)
@@ -144,13 +87,6 @@ class SessionContext:
         self._habit_patterns: dict[str, str] = {}
 
     def _resolve_session_id(self, session_id: str) -> str:
-        """Resolve session identifier.
-
-        Priority:
-        1. Explicit session_id if not "default"
-        2. VIBESOP_SESSION_ID environment variable
-        3. Project path hash (for auto-isolation per project)
-        """
         if session_id != "default":
             return session_id
 
@@ -168,13 +104,6 @@ class SessionContext:
         skill: str | None = None,
         context: dict[str, Any] | None = None,
     ) -> None:
-        """Record a tool use event.
-
-        Args:
-            tool_name: Name of the tool (e.g., "read", "bash", "edit")
-            skill: Skill being used (if known)
-            context: Additional context (files touched, commands run, etc.)
-        """
         with self._lock:
             event = ToolUseEvent(
                 tool_name=tool_name,
@@ -195,30 +124,12 @@ class SessionContext:
             logger.debug(f"Recorded tool use: {tool_name} (skill: {skill})")
 
     def set_current_skill(self, skill_id: str) -> None:
-        """Set the currently active skill.
-
-        Args:
-            skill_id: Skill identifier (e.g., "systematic-debugging")
-        """
         with self._lock:
             self._current_skill = skill_id
             logger.debug(f"Current skill set to: {skill_id}")
 
     def check_reroute_needed(self, user_message: str) -> RoutingSuggestion:
-        """Check if re-routing is suggested based on conversation context.
-
-        This analyzes:
-        1. Recent tool usage patterns
-        2. The new user message
-        3. Current skill being used
-        4. Topic/phase changes
-
-        Args:
-            user_message: The latest user message
-
-        Returns:
-            RoutingSuggestion with recommendation
-        """
+        """Check if re-routing is suggested based on conversation context."""
         with self._lock:
             # Avoid excessive re-routing checks
             now = time.time()
@@ -291,14 +202,6 @@ class SessionContext:
             )
 
     def _get_recent_tools(self, min_events: int = 3) -> list[ToolUseEvent]:
-        """Get recent tool use events.
-
-        Args:
-            min_events: Minimum number of events to return
-
-        Returns:
-            List of recent tool use events
-        """
         return (
             self._tool_history[-min_events:]
             if len(self._tool_history) >= min_events
@@ -308,15 +211,6 @@ class SessionContext:
     def _detect_context_change(
         self, user_message: str, recent_tools: list[ToolUseEvent]
     ) -> ContextChange:
-        """Detect if context has changed significantly.
-
-        Args:
-            user_message: The new user message
-            recent_tools: Recent tool usage events
-
-        Returns:
-            ContextChange level
-        """
         if not recent_tools:
             return ContextChange.MODERATE  # New session, worth checking
 
@@ -355,28 +249,12 @@ class SessionContext:
         return ContextChange.NONE
 
     def _analyze_tool_patterns(self, tools: list[ToolUseEvent]) -> dict[str, int]:
-        """Analyze tool usage patterns.
-
-        Args:
-            tools: List of tool use events
-
-        Returns:
-            Dictionary mapping tool names to usage counts
-        """
         patterns: dict[str, int] = {}
         for tool in tools:
             patterns[tool.tool_name] = patterns.get(tool.tool_name, 0) + 1
         return patterns
 
     def _infer_phase_from_tools(self, tool_patterns: dict[str, int]) -> str | None:
-        """Infer current phase from tool usage.
-
-        Args:
-            tool_patterns: Tool usage patterns
-
-        Returns:
-            Inferred phase or None
-        """
         if not tool_patterns:
             return None
 
@@ -403,15 +281,6 @@ class SessionContext:
         return None
 
     def _has_mixed_signals(self, _tools: list[ToolUseEvent], message: str) -> bool:
-        """Check if there are mixed signals in the conversation.
-
-        Args:
-            tools: Recent tool usage
-            message: User message
-
-        Returns:
-            True if mixed signals detected
-        """
         # Check for transition phrases
         transition_phrases = [
             "now let's",
@@ -431,17 +300,6 @@ class SessionContext:
         new_skill: str,
         _recent_tools: list[ToolUseEvent],
     ) -> str:
-        """Generate human-readable reason for re-routing suggestion.
-
-        Args:
-            context_change: Type of context change
-            current_skill: Current skill
-            new_skill: Recommended new skill
-            recent_tools: Recent tool usage
-
-        Returns:
-            Human-readable explanation
-        """
         if context_change == ContextChange.SIGNIFICANT:
             return (
                 f"Context shift detected: {current_skill} → {new_skill}. "
@@ -459,12 +317,6 @@ class SessionContext:
         )
 
     def record_route_decision(self, query: str, selected_skill: str) -> None:
-        """Record a routing decision for habit learning.
-
-        Args:
-            query: User query that led to the routing decision
-            selected_skill: Skill that was selected
-        """
         with self._lock:
             self._route_history.append(
                 RouteDecision(
@@ -476,17 +328,6 @@ class SessionContext:
             self._update_habit_patterns()
 
     def get_habit_boost(self, query: str) -> dict[str, float]:
-        """Return skill→boost mapping for learned habits.
-
-        If the user has consistently chosen the same skill for a
-        similar query pattern (3+ times), boost that skill.
-
-        Args:
-            query: Current user query
-
-        Returns:
-            Dictionary mapping skill_id to boost value
-        """
         with self._lock:
             query_pattern = self._extract_pattern(query)
             skill = self._habit_patterns.get(query_pattern)
@@ -495,19 +336,6 @@ class SessionContext:
             return {}
 
     def _extract_pattern(self, query: str) -> str:
-        """Extract a normalized pattern from a query for habit matching.
-
-        Uses a simple keyword-based normalization:
-        - Lowercase
-        - Extract significant keywords (nouns/verbs)
-        - Sort alphabetically for canonical form
-
-        Args:
-            query: Raw user query
-
-        Returns:
-            Normalized pattern string
-        """
         query_lower = query.lower()
         # Simple keyword extraction: remove common stop words
         stop_words = {
@@ -566,11 +394,6 @@ class SessionContext:
         }
 
     def get_session_summary(self) -> dict[str, Any]:
-        """Get summary of current session.
-
-        Returns:
-            Dictionary with session statistics
-        """
         with self._lock:
             duration = time.time() - self._session_start_time
 
@@ -586,11 +409,6 @@ class SessionContext:
             }
 
     def to_dict(self) -> dict[str, Any]:
-        """Serialize session state to dictionary.
-
-        Returns:
-            Dictionary representation of session state
-        """
         with self._lock:
             return {
                 "session_id": self.session_id,
@@ -625,16 +443,6 @@ class SessionContext:
         project_root: str = ".",
         router: UnifiedRouter | None = None,
     ) -> SessionContext:
-        """Deserialize session state from dictionary.
-
-        Args:
-            data: Dictionary from to_dict()
-            project_root: Path to project root
-            router: Optional external UnifiedRouter instance
-
-        Returns:
-            Reconstructed SessionContext
-        """
         ctx = cls(
             project_root=project_root,
             router=router,
@@ -665,15 +473,6 @@ class SessionContext:
         return ctx
 
     def save(self, storage_dir: str | Path | None = None) -> Path:
-        """Persist session state to disk.
-
-        Args:
-            storage_dir: Directory to save session file. Defaults to
-                project_root / .vibe / session
-
-        Returns:
-            Path to saved file
-        """
         if storage_dir is None:
             storage_dir = self.project_root / ".vibe" / "session"
         else:
@@ -696,18 +495,6 @@ class SessionContext:
         router: UnifiedRouter | None = None,
         storage_dir: str | Path | None = None,
     ) -> SessionContext:
-        """Load session state from disk.
-
-        Args:
-            session_id: Session identifier
-            project_root: Path to project root
-            router: Optional external UnifiedRouter instance
-            storage_dir: Directory to load session file from. Defaults to
-                project_root / .vibe / session
-
-        Returns:
-            Loaded SessionContext, or fresh instance if no saved state exists
-        """
         if storage_dir is None:
             storage_dir = Path(project_root).resolve() / ".vibe" / "session"
         else:
