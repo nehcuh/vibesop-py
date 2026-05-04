@@ -96,48 +96,18 @@ class SkillStorage:
     }
 
     def __init__(self, dry_run: bool = False) -> None:
-        """Initialize skill storage.
-
-        Args:
-            dry_run: If True, don't make actual changes
-        """
         self.dry_run = dry_run
         self._path_safety = PathSafety()
 
     def get_skill_path(self, skill_id: str) -> Path:
-        """Get the central storage path for a skill.
-
-        Args:
-            skill_id: Skill identifier (e.g., "systematic-debugging")
-
-        Returns:
-            Path to skill directory in central storage
-        """
         return self.CENTRAL_SKILLS_DIR / skill_id
 
     def get_platform_skill_path(self, skill_id: str, platform: str) -> Path:
-        """Get the platform-specific path for a skill.
-
-        Args:
-            skill_id: Skill identifier
-            platform: Platform name (claude-code, kimi-cli, opencode, etc.)
-
-        Returns:
-            Path to skill directory in platform
-        """
         if platform not in self.PLATFORM_SKILLS_DIRS:
             raise ValueError(f"Unknown platform: {platform}")
         return self.PLATFORM_SKILLS_DIRS[platform] / skill_id
 
     def skill_exists(self, skill_id: str) -> bool:
-        """Check if a skill exists in central storage.
-
-        Args:
-            skill_id: Skill identifier
-
-        Returns:
-            True if skill exists
-        """
         skill_path = self.get_skill_path(skill_id)
         return skill_path.exists() and (skill_path / "SKILL.md").exists()
 
@@ -147,16 +117,7 @@ class SkillStorage:
         source_path: Path,
         overwrite: bool = False,
     ) -> tuple[bool, str]:
-        """Install a skill to central storage.
-
-        Args:
-            skill_id: Skill identifier
-            source_path: Path to skill source directory
-            overwrite: Overwrite if already exists
-
-        Returns:
-            Tuple of (success, message)
-        """
+        """Install a skill to central storage."""
         skill_path = self.get_skill_path(skill_id)
         source_path = Path(source_path).expanduser().resolve()
 
@@ -197,16 +158,7 @@ class SkillStorage:
         url: str,
         overwrite: bool = False,
     ) -> tuple[bool, str]:
-        """Install a skill from a remote URL.
-
-        Args:
-            skill_id: Skill identifier
-            url: URL to skill archive or raw file
-            overwrite: Overwrite if already exists
-
-        Returns:
-            Tuple of (success, message)
-        """
+        """Install a skill from a remote URL."""
         if self.dry_run:
             return True, f"Would download {skill_id} from {url}"
 
@@ -241,16 +193,7 @@ class SkillStorage:
         platform: str,
         force: bool = False,
     ) -> tuple[bool, str]:
-        """Create symlink from platform to central storage.
-
-        Args:
-            skill_id: Skill identifier
-            platform: Platform name
-            force: Remove existing file/link before creating symlink
-
-        Returns:
-            Tuple of (success, message)
-        """
+        """Create symlink from platform to central storage."""
         if platform not in self.PLATFORM_SKILLS_DIRS:
             return False, f"Unknown platform: {platform}"
 
@@ -302,15 +245,7 @@ class SkillStorage:
         skill_id: str,
         platform: str,
     ) -> tuple[bool, str]:
-        """Remove symlink from platform.
-
-        Args:
-            skill_id: Skill identifier
-            platform: Platform name
-
-        Returns:
-            Tuple of (success, message)
-        """
+        """Remove symlink from platform."""
         platform_path = self.get_platform_skill_path(skill_id, platform)
 
         if not platform_path.exists():
@@ -331,15 +266,7 @@ class SkillStorage:
             return False, f"Failed to unlink: {e}"
 
     def remove_skill(self, skill_id: str, unlink_all: bool = False) -> tuple[bool, str]:
-        """Remove a skill from central storage.
-
-        Args:
-            skill_id: Skill identifier
-            unlink_all: Also remove from all platforms
-
-        Returns:
-            Tuple of (success, message)
-        """
+        """Remove a skill from central storage."""
         skill_path = self.get_skill_path(skill_id)
 
         if not skill_path.exists():
@@ -358,11 +285,6 @@ class SkillStorage:
         return True, f"Removed {skill_id} from central storage"
 
     def list_skills(self) -> dict[str, SkillManifest]:
-        """List all installed skills.
-
-        Returns:
-            Dictionary mapping skill_id to SkillManifest
-        """
         skills = {}
 
         if not self.CENTRAL_SKILLS_DIR.exists():
@@ -379,14 +301,6 @@ class SkillStorage:
         return skills
 
     def get_linked_skills(self, platform: str) -> list[str]:
-        """Get list of skills linked to a platform.
-
-        Args:
-            platform: Platform name
-
-        Returns:
-            List of skill IDs linked to the platform
-        """
         if platform not in self.PLATFORM_SKILLS_DIRS:
             raise ValueError(f"Unknown platform: {platform}")
 
@@ -407,16 +321,7 @@ class SkillStorage:
         platform: str,
         force: bool = False,
     ) -> tuple[int, int, list[str]]:
-        """Sync all skills from project to platform.
-
-        Args:
-            project_root: Path to VibeSOP project root
-            platform: Target platform
-            force: Force overwrite existing links
-
-        Returns:
-            Tuple of (installed_count, linked_count, messages)
-        """
+        """Sync all skills from project to platform."""
         from pathlib import Path as StdPath
 
         project_root = StdPath(project_root).resolve()
@@ -464,12 +369,6 @@ class SkillStorage:
         return installed, linked, messages
 
     def _write_metadata(self, skill_id: str, source_path: Path) -> None:
-        """Write skill metadata.
-
-        Args:
-            skill_id: Skill identifier
-            source_path: Source path
-        """
         skill_path = self.get_skill_path(skill_id)
         metadata_path = skill_path / ".vibe-manifest.json"
 
@@ -517,14 +416,6 @@ class SkillStorage:
             json.dump(manifest_dict, f, indent=2)
 
     def _read_metadata(self, skill_id: str) -> SkillManifest | None:
-        """Read skill metadata.
-
-        Args:
-            skill_id: Skill identifier
-
-        Returns:
-            SkillManifest or None
-        """
         skill_path = self.get_skill_path(skill_id)
         metadata_path = skill_path / ".vibe-manifest.json"
 
@@ -553,7 +444,6 @@ class SkillStorage:
 
 # Convenience functions
 def get_storage() -> SkillStorage:
-    """Get the global skill storage instance."""
     return SkillStorage()
 
 
@@ -561,15 +451,6 @@ def install_skill_from_project(
     skill_id: str,
     project_root: str | Path = ".",
 ) -> tuple[bool, str]:
-    """Install a skill from the project.
-
-    Args:
-        skill_id: Skill identifier
-        project_root: Path to VibeSOP project root
-
-    Returns:
-        Tuple of (success, message)
-    """
     storage = SkillStorage()
     source_path = Path(project_root) / "core" / "skills" / skill_id
     return storage.install_skill(skill_id, source_path)
@@ -580,15 +461,5 @@ def link_all_to_platform(
     project_root: str | Path = ".",
     force: bool = False,
 ) -> tuple[int, int, list[str]]:
-    """Link all project skills to a platform.
-
-    Args:
-        platform: Target platform
-        project_root: Path to VibeSOP project root
-        force: Force overwrite existing links
-
-    Returns:
-        Tuple of (installed_count, linked_count, messages)
-    """
     storage = SkillStorage()
     return storage.sync_project_skills(Path(project_root), platform, force)

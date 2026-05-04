@@ -43,18 +43,7 @@ class StepType(StrEnum):
 
 @dataclass
 class WorkflowStep:
-    """A single step in a workflow.
-
-    Attributes:
-        type: Step type
-        description: Human-readable description
-        instruction: Detailed instruction (for instruction steps)
-        tool_name: Tool to call (for tool_call steps)
-        tool_params: Parameters for tool call (for tool_call steps)
-        condition: Condition expression (for conditional steps)
-        condition_value: Value to compare (for conditional steps)
-        max_iterations: Maximum loop iterations (for loop steps)
-    """
+    """A single step in a workflow."""
 
     type: StepType
     description: str
@@ -66,11 +55,7 @@ class WorkflowStep:
     max_iterations: int | None = None
 
     def validate(self) -> list[str]:
-        """Validate step configuration.
-
-        Returns:
-            List of error messages (empty if valid)
-        """
+        """Validate step configuration."""
         errors = []
 
         # Common validation
@@ -98,7 +83,6 @@ class WorkflowStep:
         return errors
 
     def to_dict(self) -> dict[str, Any]:
-        """Convert to dictionary."""
         return {
             "type": self.type.value,
             "description": self.description,
@@ -112,18 +96,7 @@ class WorkflowStep:
 
 
 class Workflow(BaseModel):
-    """Workflow definition for a skill.
-
-    A workflow is a sequence of steps that define how a skill should be executed.
-    This model represents the parsed workflow from SKILL.md files.
-
-    Attributes:
-        skill_id: Skill identifier
-        name: Workflow name
-        description: Workflow description
-        steps: Sequence of workflow steps
-        metadata: Additional metadata
-    """
+    """Workflow definition parsed from SKILL.md files."""
 
     skill_id: str
     name: str
@@ -140,11 +113,7 @@ class Workflow(BaseModel):
         return v
 
     def validate_workflow(self) -> list[str]:
-        """Validate workflow configuration.
-
-        Returns:
-            List of error messages (empty if valid)
-        """
+        """Validate workflow configuration."""
         errors = []
 
         # Validate each step
@@ -191,15 +160,7 @@ class Workflow(BaseModel):
 
 @dataclass
 class ExecutionContext:
-    """Context for workflow execution.
-
-    Attributes:
-        skill_id: Skill being executed
-        variables: Variables accessible to workflow
-        metadata: Execution metadata
-        step_index: Current step index (during execution)
-        outputs: Accumulated outputs from steps
-    """
+    """Context for workflow execution."""
 
     skill_id: str
     variables: dict[str, Any] = field(default_factory=dict)
@@ -208,29 +169,18 @@ class ExecutionContext:
     outputs: list[str] = field(default_factory=list)
 
     def get_variable(self, name: str, default: Any = None) -> Any:
-        """Get variable value."""
         return self.variables.get(name, default)
 
     def set_variable(self, name: str, value: Any) -> None:
-        """Set variable value."""
         self.variables[name] = value
 
     def add_output(self, output: str) -> None:
-        """Add output from a step."""
         self.outputs.append(output)
 
 
 @dataclass
 class WorkflowResult:
-    """Result of workflow execution.
-
-    Attributes:
-        success: Whether execution succeeded
-        output: Combined output from all steps
-        error: Error message (if failed)
-        executed_steps: Number of steps executed
-        final_context: Final execution context
-    """
+    """Result of workflow execution."""
 
     success: bool
     output: str
@@ -244,26 +194,7 @@ class TimeoutError(Exception):
 
 
 class WorkflowEngine:
-    """Workflow execution engine.
-
-    This engine executes workflows for testing and validation purposes.
-    Production execution should be done by AI agents.
-
-    Features:
-    - Execute workflow steps sequentially
-    - Handle conditional branches
-    - Handle loops (with iteration limits)
-    - Timeout enforcement
-    - Error handling and recovery
-    - Variable substitution
-    - Expression evaluation
-
-    Example:
-        >>> engine = WorkflowEngine(timeout=30.0)
-        >>> context = ExecutionContext(skill_id="test", variables={"x": 1})
-        >>> result = engine.execute(workflow, context)
-        >>> print(result.output)
-    """
+    """Workflow execution engine for testing and validation."""
 
     def __init__(
         self,
@@ -271,13 +202,6 @@ class WorkflowEngine:
         max_steps: int = 100,
         enable_tools: bool = False,
     ) -> None:
-        """Initialize workflow engine.
-
-        Args:
-            timeout: Maximum execution time (seconds)
-            max_steps: Maximum number of steps to execute
-            enable_tools: Whether to enable actual tool execution (vs. placeholders)
-        """
         self.timeout = timeout
         self.max_steps = max_steps
         self.enable_tools = enable_tools
@@ -288,8 +212,6 @@ class WorkflowEngine:
         self._register_builtin_tools()
 
     def _register_builtin_tools(self) -> None:
-        """Register built-in tool implementations."""
-        # Built-in tools for testing
         self._tool_registry = {
             "echo": self._tool_echo,
             "set": self._tool_set,
@@ -298,31 +220,21 @@ class WorkflowEngine:
         }
 
     def _tool_echo(self, **kwargs: Any) -> str:
-        """Echo tool - returns input as output."""
         return str(kwargs)
 
     def _tool_set(self, name: str, value: Any, context: ExecutionContext) -> str:
-        """Set variable tool."""
         context.set_variable(name, value)
         return f"Set {name} = {value}"
 
     def _tool_get(self, name: str, context: ExecutionContext) -> str:
-        """Get variable tool."""
         value = context.get_variable(name, "<not set>")
         return f"{name} = {value}"
 
     def _tool_log(self, message: str, **_kwargs: Any) -> str:
-        """Log tool."""
         logger.info(f"Workflow log: {message}")
         return f"Logged: {message}"
 
     def register_tool(self, name: str, func: Any) -> None:
-        """Register a custom tool.
-
-        Args:
-            name: Tool name
-            func: Tool function (should accept **kwargs and return str)
-        """
         self._tool_registry[name] = func
         logger.debug(f"Registered tool: {name}")
 
@@ -331,18 +243,7 @@ class WorkflowEngine:
         workflow: Workflow,
         context: ExecutionContext,
     ) -> WorkflowResult:
-        """Execute workflow with timeout using ThreadPoolExecutor.
-
-        Args:
-            workflow: Workflow to execute
-            context: Execution context
-
-        Returns:
-            WorkflowResult
-
-        Raises:
-            ValueError: If workflow is invalid
-        """
+        """Execute workflow with timeout using ThreadPoolExecutor."""
         # Validate workflow
         errors = workflow.validate_workflow()
         if errors:
@@ -418,15 +319,6 @@ class WorkflowEngine:
         step: WorkflowStep,
         context: ExecutionContext,
     ) -> str | None:
-        """Execute a single workflow step.
-
-        Args:
-            step: Step to execute
-            context: Execution context
-
-        Returns:
-            Step output (if any)
-        """
         if step.type == StepType.INSTRUCTION:
             return self._execute_instruction(step, context)
 
@@ -451,18 +343,6 @@ class WorkflowEngine:
         step: WorkflowStep,
         context: ExecutionContext,
     ) -> str:
-        """Execute instruction step.
-
-        Instruction steps are for AI agents to follow.
-        In local execution, we perform variable substitution and return the instruction.
-
-        Args:
-            step: Instruction step
-            context: Execution context
-
-        Returns:
-            Processed instruction string
-        """
         logger.debug(f"Instruction: {step.instruction}")
 
         instruction = step.instruction or step.description
@@ -479,18 +359,6 @@ class WorkflowEngine:
         step: WorkflowStep,
         context: ExecutionContext,
     ) -> str:
-        """Execute verification step.
-
-        Verification steps check conditions or validate results.
-        Can evaluate simple expressions against context variables.
-
-        Args:
-            step: Verification step
-            context: Execution context
-
-        Returns:
-            Verification result message
-        """
         logger.debug(f"Verification: {step.description}")
 
         instruction = step.instruction or step.description
@@ -514,18 +382,6 @@ class WorkflowEngine:
         step: WorkflowStep,
         context: ExecutionContext,
     ) -> str:
-        """Execute tool call step.
-
-        If enable_tools is True, attempts to call actual registered tools.
-        Otherwise, returns a placeholder message.
-
-        Args:
-            step: Tool call step
-            context: Execution context
-
-        Returns:
-            Tool execution result
-        """
         logger.debug(f"Tool call: {step.tool_name}")
 
         if not step.tool_name:
@@ -562,18 +418,6 @@ class WorkflowEngine:
         step: WorkflowStep,
         context: ExecutionContext,
     ) -> str | None:
-        """Execute conditional step.
-
-        Evaluates the condition and returns message if true.
-        Supports simple equality checks and boolean logic.
-
-        Args:
-            step: Conditional step
-            context: Execution context
-
-        Returns:
-            Condition result message, or None if condition not met
-        """
         if not step.condition:
             # No condition specified, check instruction
             instruction = step.instruction or step.description
@@ -611,17 +455,6 @@ class WorkflowEngine:
         instruction: str,
         context: ExecutionContext,
     ) -> str | None:
-        """Execute conditional from natural language instruction.
-
-        Args:
-            instruction: Instruction containing "if" clause
-            context: Execution context
-
-        Returns:
-            Result message if condition met, None otherwise
-        """
-        # Simple pattern matching for common conditional patterns
-        # e.g., "If x == 1, do something"
         import re
 
         pattern = r"if\s+(\w+)\s*(==|!=|>|<|>=|<=)\s*(\S+),?\s*(.+)"
@@ -672,18 +505,6 @@ class WorkflowEngine:
         step: WorkflowStep,
         context: ExecutionContext,
     ) -> str:
-        """Execute loop step.
-
-        Simulates loop execution by reporting what would happen.
-        In production, would execute loop body multiple times.
-
-        Args:
-            step: Loop step
-            context: Execution context
-
-        Returns:
-            Loop execution summary
-        """
         if not step.max_iterations:
             return "Error: No max_iterations specified"
 
@@ -725,17 +546,6 @@ class WorkflowEngine:
         text: str,
         context: ExecutionContext,
     ) -> str:
-        """Substitute variables in text.
-
-        Supports {variable} syntax.
-
-        Args:
-            text: Text with variable placeholders
-            context: Execution context
-
-        Returns:
-            Text with variables substituted
-        """
         import re
 
         def replace_var(match: re.Match[str]) -> str:
@@ -746,18 +556,6 @@ class WorkflowEngine:
         return re.sub(r"\{(\w+)\}", replace_var, text)
 
     def _evaluate_condition(self, condition: str, context: ExecutionContext) -> bool:
-        """Evaluate a simple condition string using safe AST parsing.
-
-        Supports basic operators: ==, !=, >, <, >=, <=, in, and, or, not
-
-        Args:
-            condition: Condition string
-            context: Execution context
-
-        Returns:
-            True if condition evaluates to True, False otherwise
-        """
-        # Substitute variables first
         condition = self._substitute_variables(condition, context)
 
         try:
@@ -926,23 +724,7 @@ class WorkflowEngine:
 
 
 def parse_workflow_from_markdown(markdown_content: str, skill_id: str) -> Workflow:
-    """Parse workflow from SKILL.md markdown content.
-
-    Enhanced parser that extracts workflow information from markdown files.
-    Supports multiple step formats and structures.
-
-    Args:
-        markdown_content: Raw markdown content
-        skill_id: Skill identifier
-
-    Returns:
-        Parsed Workflow
-
-    Example:
-        >>> with open("SKILL.md") as f:
-        ...     content = f.read()
-        >>> workflow = parse_workflow_from_markdown(content, "my-skill")
-    """
+    """Parse workflow from SKILL.md markdown content."""
     lines = markdown_content.split("\n")
 
     # Extract metadata from frontmatter if present
@@ -1133,18 +915,6 @@ def parse_workflow_from_markdown(markdown_content: str, skill_id: str) -> Workfl
 
 
 def _detect_step_type(description: str, instruction: str) -> StepType:
-    """Detect step type from description and instruction.
-
-    Uses conservative matching to avoid false positives.
-    Default to INSTRUCTION unless there's a clear signal.
-
-    Args:
-        description: Step description
-        instruction: Step instruction
-
-    Returns:
-        Detected StepType
-    """
     import re
 
     text = (description + " " + instruction).lower()

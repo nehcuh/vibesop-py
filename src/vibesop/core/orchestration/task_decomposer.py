@@ -11,7 +11,7 @@ from typing import Any
 from pydantic import BaseModel, Field, ValidationError
 
 from vibesop.core.orchestration.patterns import (
-    DECOMPOSITION_CONJUNCTIONS,
+    MULTI_INTENT_CONJUNCTIONS,
     INTENT_DOMAIN_KEYWORDS,
 )
 
@@ -288,7 +288,7 @@ class TaskDecomposer:
 
     def _segment_by_conjunctions(self, query: str) -> list[str]:
         """Split query on conjunctions to identify candidate segments."""
-        pattern = "|".join(re.escape(c) for c in DECOMPOSITION_CONJUNCTIONS)
+        pattern = "|".join(re.escape(c) for c in MULTI_INTENT_CONJUNCTIONS)
         return [s.strip() for s in re.split(pattern, query) if s.strip()]
 
     def _merge_short_segments(self, segments: list[str]) -> list[str]:

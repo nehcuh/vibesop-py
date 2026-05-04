@@ -28,14 +28,7 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class LoadedSkill:
-    """A skill definition loaded from a file.
-
-    Attributes:
-        metadata: Skill metadata
-        content: Skill content (prompt template, workflow steps, etc.)
-        source_file: Path to the source file
-        external_metadata: External skill metadata (if from external pack)
-    """
+    """A skill definition loaded from a file."""
 
     metadata: SkillMetadata
     content: str | dict[str, Any]
@@ -66,14 +59,6 @@ class SkillLoader:
         enable_external: bool = True,
         require_audit: bool = True,
     ) -> None:
-        """Initialize the skill loader.
-
-        Args:
-            project_root: Project root directory
-            search_paths: Additional paths to search for skills
-            enable_external: Whether to load external skills from ~/.claude/skills/
-            require_audit: Whether to require security audit for external skills
-        """
         self.project_root = Path(project_root).resolve()
         self._project_hash = self._compute_project_hash()
         self._search_paths = self._default_search_paths()
@@ -96,11 +81,6 @@ class SkillLoader:
             )
 
     def _default_search_paths(self) -> list[Path]:
-        """Get default skill search paths.
-
-        Returns:
-            List of default search paths
-        """
         return [
             self.project_root / "skills",
             self.project_root / ".vibe" / "skills",
@@ -108,25 +88,15 @@ class SkillLoader:
         ]
 
     def _compute_project_hash(self) -> str:
-        """Compute a stable project identity for scope isolation."""
         import hashlib
-
         return hashlib.md5(str(self.project_root).encode()).hexdigest()[:12]
 
     @property
     def project_hash(self) -> str:
-        """Get the current project hash."""
         return self._project_hash
 
     def discover_all(self, force_reload: bool = False) -> dict[str, LoadedSkill]:
-        """Discover all available skills.
-
-        Args:
-            force_reload: Force rediscovery even if cached
-
-        Returns:
-            Dictionary mapping skill IDs to definitions
-        """
+        """Discover all available skills."""
         if self._skill_cache and not force_reload:
             return self._skill_cache
 
@@ -190,11 +160,6 @@ class SkillLoader:
         return self._skill_cache
 
     def _load_external_skills(self) -> None:
-        """Load skills from external packs.
-
-        Discovers skills from ~/.claude/skills/, ~/.config/skills/, etc.
-        Only loads skills that pass security audit.
-        """
         if not self._external_loader:
             return
 
@@ -229,14 +194,6 @@ class SkillLoader:
                 self._skill_cache[skill_id] = definition
 
     def _convert_external_skill(self, ext_metadata: Any) -> LoadedSkill | None:
-        """Convert external skill metadata to internal LoadedSkill.
-
-        Args:
-            ext_metadata: ExternalSkillMetadata from ExternalSkillLoader
-
-        Returns:
-            LoadedSkill or None if conversion failed
-        """
         from vibesop.core.skills.external_loader import ExternalSkillMetadata
 
         if not isinstance(ext_metadata, ExternalSkillMetadata):
@@ -295,31 +252,13 @@ class SkillLoader:
         )
 
     def get_skill(self, skill_id: str) -> LoadedSkill | None:
-        """Get a skill definition by ID.
-
-        Args:
-            skill_id: Skill identifier
-
-        Returns:
-            Skill definition or None if not found
-        """
         if not self._skill_cache:
             self.discover_all()
 
         return self._skill_cache.get(skill_id)
 
     def read_skill_content(self, skill_id: str) -> str:
-        """Read the full SKILL.md content for a skill.
-
-        Returns the complete file content (including frontmatter) so
-        AI agents can access the skill definition without loading it.
-
-        Args:
-            skill_id: Skill identifier (e.g., "gstack/review")
-
-        Returns:
-            Full SKILL.md content as string, or empty string if not found
-        """
+        """Read the full SKILL.md content for a skill."""
         skill = self.get_skill(skill_id)
         if skill is None:
             return ""
@@ -339,14 +278,6 @@ class SkillLoader:
         self,
         namespace: str | None = None,
     ) -> list[LoadedSkill]:
-        """List all discovered skills.
-
-        Args:
-            namespace: Optional namespace filter
-
-        Returns:
-            List of skill definitions
-        """
         if not self._skill_cache:
             self.discover_all()
 
@@ -358,14 +289,6 @@ class SkillLoader:
         return skills
 
     def instantiate(self, skill_id: str) -> Skill | None:
-        """Create a Skill instance from a definition.
-
-        Args:
-            skill_id: Skill identifier
-
-        Returns:
-            Skill instance or None if not found
-        """
         definition = self.get_skill(skill_id)
         if not definition:
             return None
@@ -470,7 +393,6 @@ class SkillLoader:
             pass
 
     def _validate_algorithms(self, metadata: SkillMetadata) -> None:
-        """Warn if a skill declares algorithms that are not registered."""
         if not metadata.algorithms:
             return
         from vibesop.core.algorithms import AlgorithmRegistry
@@ -484,19 +406,10 @@ class SkillLoader:
         data: dict[str, Any],
         source_file: Path | None = None,
     ) -> SkillMetadata:
-        """Parse skill metadata from dictionary (delegates to unified parser)."""
         skill_id = data.get("id", self._generate_id_from_path(source_file))
         return skill_parser.build_metadata(data, skill_id, source_file or Path())
 
     def _generate_id_from_path(self, path: Path | None) -> str:
-        """Generate a skill ID from file path.
-
-        Args:
-            path: File path
-
-        Returns:
-            Generated skill ID
-        """
         if not path:
             return "unknown/skill"
 
@@ -525,15 +438,9 @@ class SkillLoader:
         return f"project/{name}"
 
     def _extract_trigger_from_description(self, description: str) -> str:
-        """Extract trigger conditions from skill description (delegates to parser)."""
         return skill_parser.extract_trigger_from_description(description)
 
     def _metadata_keys(self) -> set[str]:
-        """Get keys that are part of metadata.
-
-        Returns:
-            Set of metadata key names
-        """
         return {
             "id",
             "name",
@@ -547,5 +454,4 @@ class SkillLoader:
         }
 
     def clear_cache(self) -> None:
-        """Clear the skill cache."""
         self._skill_cache = {}

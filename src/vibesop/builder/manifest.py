@@ -23,26 +23,12 @@ logger = logging.getLogger(__name__)
 
 
 class ManifestBuilder:
-    """Builder for creating configuration manifests.
-
-    Loads skills, policies, and metadata from various sources
-    and combines them into a complete Manifest.
-
-    Example:
-        >>> builder = ManifestBuilder()
-        >>> manifest = builder.build()
-        >>> print(f"Built manifest with {len(manifest.skills)} skills")
-    """
+    """Builder for creating configuration manifests."""
 
     def __init__(
         self,
         project_root: str | Path = ".",
     ) -> None:
-        """Initialize the manifest builder.
-
-        Args:
-            project_root: Path to project root containing core/ directory
-        """
         self.project_root = Path(project_root).resolve()
         self.config_loader = ConfigManager(project_root)
 
@@ -52,16 +38,7 @@ class ManifestBuilder:
         platform: str = "claude-code",
         version: str = "1.0.0",
     ) -> Manifest:
-        """Build a complete manifest from all sources.
-
-        Args:
-            overlay_path: Optional path to overlay file for customization
-            platform: Target platform
-            version: Manifest version
-
-        Returns:
-            Complete Manifest with skills, policies, and metadata
-        """
+        """Build a complete manifest from all sources."""
         # Load skills from registry
         skills = self._load_skills()
 
@@ -92,15 +69,6 @@ class ManifestBuilder:
         platform: str = "claude-code",
         version: str = "1.0.0",
     ) -> Manifest:
-        """Build manifest from registry only (no custom policies).
-
-        Args:
-            platform: Target platform
-            version: Manifest version
-
-        Returns:
-            Manifest with skills from registry and default policies
-        """
         return self.build(
             overlay_path=None,
             platform=platform,
@@ -111,18 +79,7 @@ class ManifestBuilder:
         self,
         manifest_path: Path,
     ) -> Manifest:
-        """Build manifest from a manifest YAML file.
-
-        Args:
-            manifest_path: Path to manifest YAML file
-
-        Returns:
-            Manifest loaded from file
-
-        Raises:
-            FileNotFoundError: If file doesn't exist
-            ValueError: If file is invalid
-        """
+        """Build manifest from a manifest YAML file."""
         from ruamel.yaml import YAML
 
         yaml = YAML()
@@ -144,11 +101,6 @@ class ManifestBuilder:
             raise ValueError(msg) from e
 
     def _load_skills(self) -> list[SkillDefinition]:
-        """Load skills from registry.
-
-        Returns:
-            List of SkillDefinition objects
-        """
         try:
             skill_dicts = self.config_loader.get_all_skills()
 
@@ -189,17 +141,6 @@ class ManifestBuilder:
             return []
 
     def _load_skill_description(self, skill_id: str, _skill_dict: dict) -> str:
-        """Load skill description from skill file.
-
-        Args:
-            skill_id: Skill identifier (e.g., "gstack/review")
-            skill_dict: Skill dictionary from registry
-
-        Returns:
-            Description text from skill file (empty if not found)
-        """
-        # Try to find skill file
-        # For external skills, check ~/.config/skills/
         skill_parts = skill_id.split("/")
         if len(skill_parts) >= 2:
             namespace = skill_parts[0]
@@ -249,19 +190,6 @@ class ManifestBuilder:
         return ""
 
     def _extract_trigger_from_description(self, description: str) -> str:
-        """Extract trigger conditions from skill description.
-
-        Looks for patterns like:
-        - "Use when asked to X, Y, Z"
-        - "Triggered when X"
-        - "Auto-trigger on X"
-
-        Args:
-            description: Skill description text
-
-        Returns:
-            Extracted trigger conditions (empty string if none found)
-        """
         if not description:
             return ""
 
@@ -290,13 +218,6 @@ class ManifestBuilder:
         return ""
 
     def _merge_discovered_skills(self, existing_skills: list[SkillDefinition]) -> None:
-        """Discover skills from installed packs and add new ones to the list.
-
-        Skills already present in the registry are not duplicated.
-
-        Args:
-            existing_skills: List of SkillDefinition objects to extend in place
-        """
         try:
             from vibesop.core.routing.dynamic_discovery import DynamicSkillDiscovery
 
@@ -325,11 +246,6 @@ class ManifestBuilder:
             logger.warning("Dynamic skill discovery failed: %s", e)
 
     def _load_policies(self) -> PolicySet:
-        """Load policies from config files.
-
-        Returns:
-            PolicySet with loaded or default policies
-        """
         try:
             policy_dict = self.config_loader.load_policy()
 
@@ -351,14 +267,6 @@ class ManifestBuilder:
             return PolicySet()
 
     def _dict_to_security_policy(self, data: dict[str, Any]) -> SecurityPolicy:
-        """Convert dict to SecurityPolicy.
-
-        Args:
-            data: Dictionary with security policy values
-
-        Returns:
-            SecurityPolicy instance
-        """
         return SecurityPolicy(
             scan_external_content=data.get("scan_external_content", True),
             allow_path_traversal=data.get("allow_path_traversal", False),
@@ -367,15 +275,6 @@ class ManifestBuilder:
         )
 
     def _dict_to_routing_policy(self, data: dict[str, Any]) -> RoutingPolicy:
-        """Convert dict to RoutingPolicy.
-
-        Args:
-            data: Dictionary with routing config values
-
-        Returns:
-            RoutingPolicy instance
-        """
-        # Handle preference_learning
         preference_learning = data.get("preference_learning", {})
 
         return RoutingPolicy(
@@ -386,15 +285,6 @@ class ManifestBuilder:
         )
 
     def _dict_to_manifest(self, data: dict[str, Any]) -> Manifest:
-        """Convert dict to Manifest.
-
-        Args:
-            data: Dictionary with manifest data
-
-        Returns:
-            Manifest instance
-        """
-        # Convert metadata
         metadata_dict = data.get("metadata", {})
         metadata = ManifestMetadata(
             platform=metadata_dict.get("platform", "claude-code"),
@@ -438,19 +328,7 @@ class ManifestBuilder:
         manifest: Manifest,
         overlay_path: Path,
     ) -> Manifest:
-        """Apply overlay customizations to manifest.
-
-        Args:
-            manifest: Base manifest
-            overlay_path: Path to overlay YAML file
-
-        Returns:
-            Modified manifest with overlay applied
-
-        Raises:
-            FileNotFoundError: If overlay file doesn't exist
-            ValueError: If overlay is invalid
-        """
+        """Apply overlay customizations to manifest."""
         from vibesop.builder.overlay import OverlayMerger
 
         merger = OverlayMerger()
@@ -458,39 +336,15 @@ class ManifestBuilder:
 
 
 class QuickBuilder:
-    """Quick builder for common manifest scenarios.
-
-    Provides convenience methods for building manifests without
-    needing to configure ManifestBuilder.
-
-    Example:
-        >>> manifest = QuickBuilder.default()
-        >>> manifest = QuickBuilder.with_skills(["skill-1", "skill-2"])
-    """
+    """Quick builder for common manifest scenarios."""
 
     @staticmethod
     def default(platform: str = "claude-code") -> Manifest:
-        """Create a default manifest.
-
-        Args:
-            platform: Target platform
-
-        Returns:
-            Default manifest with registry skills and default policies
-        """
         builder = ManifestBuilder()
         return builder.build_from_registry(platform=platform)
 
     @staticmethod
     def minimal(platform: str = "claude-code") -> Manifest:
-        """Create a minimal manifest (no skills).
-
-        Args:
-            platform: Target platform
-
-        Returns:
-            Minimal manifest with no skills
-        """
         metadata = ManifestMetadata(platform=platform)
         return Manifest(
             skills=[],
@@ -504,16 +358,6 @@ class QuickBuilder:
         routing: dict[str, Any] | None = None,
         platform: str = "claude-code",
     ) -> Manifest:
-        """Create manifest with custom policies.
-
-        Args:
-            security: Security policy overrides
-            routing: Routing config overrides
-            platform: Target platform
-
-        Returns:
-            Manifest with custom policies
-        """
         builder = ManifestBuilder()
         base_manifest = builder.build_from_registry(platform=platform)
 

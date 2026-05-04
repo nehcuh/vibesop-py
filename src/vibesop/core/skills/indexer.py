@@ -1,17 +1,4 @@
-"""Skill Semantic Indexer.
-
-Builds a semantic index of all available skills by calling an LLM to analyze
-each skill's content and generate deep usage profiles (scenarios, query patterns,
-differentiation, confidence boosters).
-
-The index is stored at `.vibe/skill-index.json` and used by the routing layer
-to improve skill matching accuracy.
-
-Usage:
-    indexer = SkillIndexer(project_root=Path("."))
-    result = indexer.build_index()
-    print(f"Indexed {result.indexed_count} skills")
-"""
+"""Skill Semantic Indexer."""
 
 from __future__ import annotations
 
@@ -70,18 +57,7 @@ Rules:
 
 @dataclass
 class SkillProfile:
-    """Deep semantic profile for a single skill.
-
-    ``pack_owner`` identifies which external pack the skill belongs to
-    (e.g. ``"gstack"``, ``"superpowers"``). Empty string means: builtin,
-    project-local, or a profile written by an older indexer that didn't
-    yet record ownership. Used by
-    :meth:`SkillIndexer.update_global_index_for_pack` to identify stale
-    entries during incremental re-indexing — without this, packs whose
-    skill IDs don't follow the ``<pack>/<skill>`` naming convention
-    (e.g. ``superpowers``'s flat ``brainstorming``) couldn't be cleanly
-    re-indexed across renames.
-    """
+    """Deep semantic profile for a single skill."""
 
     skill_id: str
     scenarios: list[str] = field(default_factory=list)
@@ -138,16 +114,7 @@ class IndexResult:
 
 
 class SkillIndexer:
-    """Builds and manages the skill semantic index.
-
-    Usage:
-        indexer = SkillIndexer(project_root=Path("."))
-        result = indexer.build_index()
-
-        # Load existing index
-        index = indexer.load_index()
-        profile = index.get("gstack/review")
-    """
+    """Builds and manages the skill semantic index."""
 
     INDEX_FILENAME = "skill-index.json"
 
@@ -156,12 +123,6 @@ class SkillIndexer:
         project_root: str | Path = ".",
         index_dir: str | Path | None = None,
     ) -> None:
-        """Initialize the skill indexer.
-
-        Args:
-            project_root: Project root directory
-            index_dir: Directory to store the index (default: project_root/.vibe)
-        """
         self.project_root = Path(project_root).resolve()
         if index_dir is None:
             self.index_dir = self.project_root / ".vibe"
@@ -180,7 +141,6 @@ class SkillIndexer:
         return Path.home() / ".vibe" / self.INDEX_FILENAME
 
     def _get_llm(self) -> Any | None:
-        """Get or create the LLM provider for skill analysis."""
         if self._llm_provider is not None:
             return self._llm_provider
 
@@ -207,11 +167,6 @@ class SkillIndexer:
     def _classify_skill_source(
         self, loaded_skill: Any
     ) -> Literal["global", "project"]:
-        """Classify a skill as project-local or global based on its source path.
-
-        Project-local: {project_root}/skills/ or {project_root}/.vibe/skills/
-        Global: everything else (builtin, external packs in ~/.config/skills/)
-        """
         source = loaded_skill.source_file
         if not source:
             return "global"
@@ -224,19 +179,6 @@ class SkillIndexer:
         return "global"
 
     def _infer_pack_owner(self, loaded_skill: Any) -> str:
-        """Infer which pack a skill belongs to from its resolved source path.
-
-        Convention: skills installed under ``~/.config/skills/<pack>/...``
-        belong to ``<pack>``. We ``.resolve()`` first so platform symlinks
-        (e.g. ``~/.kimi/skills/<flat>/SKILL.md``) point back to central
-        storage before classification.
-
-        Skills outside the central-storage layout — builtin, project-local,
-        or installed in non-standard locations — return ``""``. Empty
-        ownership is intentionally indistinguishable from "legacy profile
-        from a pre-v1.2 indexer", so :meth:`update_global_index_for_pack`
-        falls back to namespace-prefix matching for those.
-        """
         source = loaded_skill.source_file
         if not source:
             return ""
@@ -258,13 +200,6 @@ class SkillIndexer:
         description: str,
         show: bool,
     ) -> Iterator[Any]:
-        """Yield an ``advance()`` callable for batch progress reporting.
-
-        When ``show`` is False (or there's nothing to do), yields a no-op
-        so callers don't need to branch on the flag — they just call
-        ``advance()`` after each unit. Tests pass ``show_progress=False``
-        and rely on this silence.
-        """
         if not show or total == 0:
             yield (lambda: None)
             return
@@ -301,31 +236,7 @@ class SkillIndexer:
         force: bool = False,
         max_workers: int = 8,
     ) -> IndexResult:
-        """Build the semantic index for available skills.
-
-        Skills are analyzed concurrently (up to ``max_workers`` LLM calls in
-        flight), and a content-hash cache lets a re-run skip the LLM entirely
-        for skills whose prompt is byte-identical to the last index. The
-        existing index files are the only cache backing — there is no
-        separate state to clean up.
-
-        Args:
-            scope: Which skills to index.
-                - "all":     Index all skills, split into project and global files.
-                - "project": Only index project-local skills (to project index).
-                - "global":  Only index global skills (to global index).
-            show_progress: Whether to show a Rich progress bar.
-            force: If True, bypass the content-hash cache and re-analyze
-                every skill via the LLM. Use when prompt formatting or the
-                LLM model itself has changed.
-            max_workers: Maximum concurrent LLM calls. Python's GIL releases
-                during HTTP I/O, so threads scale linearly with provider
-                response time. 8 is a safe default for hosted APIs; raise
-                cautiously if your provider has tight per-key concurrency.
-
-        Returns:
-            IndexResult with indexing statistics.
-        """
+        """Build the semantic index for available skills."""
         from vibesop.core.skills.loader import SkillLoader
 
         result = IndexResult()
@@ -484,11 +395,6 @@ class SkillIndexer:
 
     @staticmethod
     def _compute_profile_text(profile: SkillProfile) -> str:
-        """Concatenate all profile text fields into a single string for encoding.
-
-        Scenarios and query_patterns carry the strongest semantic signal,
-        followed by confidence_boosters and differentiation.
-        """
         parts: list[str] = []
         parts.extend(profile.scenarios)
         parts.extend(profile.query_patterns)
@@ -498,12 +404,6 @@ class SkillIndexer:
         return " ".join(parts)
 
     def _compute_embeddings(self, profiles: dict[str, SkillProfile]) -> None:
-        """Compute sentence embeddings for all profiles when sentence-transformers is available.
-
-        This is a best-effort operation: if the library is missing, or the
-        model fails to load, we silently skip and leave embeddings as None.
-        The INDEX layer will fall back to token-overlap matching.
-        """
         try:
             from sentence_transformers import (
                 SentenceTransformer,  # pyright: ignore[reportMissingImports]
@@ -539,12 +439,6 @@ class SkillIndexer:
             logger.warning("Failed to compute embeddings: %s", e)
 
     def _build_prompt(self, loaded_skill: Any) -> str:
-        """Build the LLM analysis prompt for a single skill.
-
-        Extracted so :meth:`_analyze_skill` and the cache-check path can both
-        derive a deterministic prompt (and therefore a deterministic hash)
-        without duplicating the formatting logic.
-        """
         meta = loaded_skill.metadata
         content = (
             loaded_skill.content
@@ -564,24 +458,9 @@ class SkillIndexer:
 
     @staticmethod
     def _hash_prompt(prompt: str) -> str:
-        """Hash the prompt string for incremental-cache lookup.
-
-        Truncated to 16 hex chars (~64 bits) — collision-resistant enough
-        for ~10^4 skills, fits a json line cleanly, and matches what users
-        already see in `git rev-parse --short=16`.
-        """
         return hashlib.sha256(prompt.encode("utf-8")).hexdigest()[:16]
 
     def _analyze_skill(self, loaded_skill: Any, llm: Any) -> SkillProfile | None:
-        """Analyze a single skill using LLM.
-
-        Args:
-            loaded_skill: LoadedSkill instance
-            llm: LLM provider instance
-
-        Returns:
-            SkillProfile or None if analysis failed
-        """
         prompt = self._build_prompt(loaded_skill)
         skill_id = loaded_skill.metadata.id
 
@@ -600,16 +479,6 @@ class SkillIndexer:
             return None
 
     def _parse_profile(self, content: str, skill_id: str) -> SkillProfile | None:
-        """Parse LLM response into SkillProfile.
-
-        Args:
-            content: Raw LLM response text
-            skill_id: Skill identifier
-
-        Returns:
-            SkillProfile or None if parsing failed
-        """
-        # Extract JSON from response (handle markdown code blocks)
         text = content.strip()
         if text.startswith("```"):
             # Remove markdown code fences
@@ -645,13 +514,6 @@ class SkillIndexer:
     def _save_index(
         self, profiles: dict[str, SkillProfile], scope: str = "global"
     ) -> None:
-        """Save the index to disk.
-
-        Args:
-            profiles: Dictionary of skill_id -> SkillProfile.
-            scope: "global" saves to ~/.vibe/skill-index.json;
-                   "project" saves to project_root/.vibe/skill-index.json.
-        """
         index_path = (
             self.global_index_path if scope == "global" else self.project_index_path
         )
@@ -693,14 +555,6 @@ class SkillIndexer:
                     temp_path.unlink()
 
     def _load_single_index(self, index_path: Path) -> dict[str, SkillProfile]:
-        """Load a single index file.
-
-        Args:
-            index_path: Path to the index JSON file.
-
-        Returns:
-            Dictionary of skill_id -> SkillProfile.
-        """
         try:
             data = json.loads(index_path.read_text(encoding="utf-8"))
             skills_data = data.get("skills", {})
@@ -713,14 +567,7 @@ class SkillIndexer:
             return {}
 
     def load_index(self) -> dict[str, SkillProfile]:
-        """Load the skill index, merging global and project layers.
-
-        Global skills are loaded first, then project-local skills are
-        overlaid on top (project overrides global for the same skill_id).
-
-        Returns:
-            Dictionary of skill_id -> SkillProfile. Empty if no index exists.
-        """
+        """Load the skill index, merging global and project layers."""
         merged: dict[str, SkillProfile] = {}
 
         # Layer 1: global index
@@ -734,16 +581,7 @@ class SkillIndexer:
         return merged
 
     def has_index(self) -> bool:
-        """Check if a usable index exists (project-local or global).
-
-        Returns True only when at least one layer parses successfully and
-        contains at least one skill — corrupt or empty files don't count,
-        otherwise the router would fall through to ``IndexLayer`` thinking
-        the index is healthy when it isn't.
-
-        Returns:
-            True if any layer has at least one decodable skill profile.
-        """
+        """Check if a usable index exists."""
         for path in (self.global_index_path, self.project_index_path):
             if not path.exists():
                 continue
@@ -759,44 +597,7 @@ class SkillIndexer:
         force: bool = False,
         max_workers: int = 8,
     ) -> IndexResult:
-        """Incrementally update the global index for one pack.
-
-        Loads the existing global index, identifies skills installed under
-        ``pack_storage / pack_name`` (resolving symlinks so platform paths
-        like ``~/.kimi/skills/<pack>-<skill>/SKILL.md`` map back to
-        ``~/.config/skills/<pack>/<skill>/SKILL.md``), re-analyzes only those
-        via LLM, then merges the fresh profiles back in. Profiles for skills
-        outside this pack are preserved as-is. Skills whose prompt hashes
-        unchanged from the existing index reuse their cached profile and
-        skip the LLM call entirely.
-
-        Stale entries are dropped via two mechanisms (in priority order):
-
-        1. **Ownership match (v1.2+)**: any existing entry whose
-           ``pack_owner`` equals ``pack_name`` but is no longer in the fresh
-           pack discovery is dropped. This catches renames and removals
-           regardless of skill_id naming convention — including
-           non-namespaced packs (e.g. ``superpowers``'s flat
-           ``brainstorming``) which the prefix-only scheme couldn't clean.
-        2. **Namespace prefix (legacy fallback)**: for entries written by
-           pre-v1.2 indexers (no ``pack_owner``), we still drop entries
-           whose skill_id starts with ``<pack_name>/``. This keeps existing
-           indexes self-healing as users upgrade.
-
-        Args:
-            pack_name: Non-empty pack identifier matching the directory
-                under ``pack_storage``.
-            pack_storage: Central storage root containing pack directories
-                (e.g. ``~/.config/skills``).
-            show_progress: Whether to print progress + a status line.
-            force: If True, bypass content-hash cache and re-analyze every
-                pack skill via LLM. Use after a prompt-template change.
-            max_workers: Maximum concurrent LLM calls.
-
-        Returns:
-            IndexResult. ``indexed_count`` reflects only this pack's skills,
-            not the total in the merged index.
-        """
+        """Incrementally update the global index for one pack."""
         from vibesop.core.skills.loader import SkillLoader
 
         result = IndexResult()
@@ -951,14 +752,6 @@ class SkillIndexer:
         return result
 
     def get_profile(self, skill_id: str) -> SkillProfile | None:
-        """Get a single skill's profile from the index.
-
-        Args:
-            skill_id: Skill identifier
-
-        Returns:
-            SkillProfile or None if not found
-        """
         index = self.load_index()
         return index.get(skill_id)
 

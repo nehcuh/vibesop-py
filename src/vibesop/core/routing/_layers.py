@@ -28,7 +28,6 @@ def try_explicit_layer(
     query: str,
     candidates: list[dict[str, Any]],
 ) -> tuple[SkillRoute | None, LayerDetail]:
-    """Try explicit override layer."""
     explicit_skill, cleaned_query = check_explicit_override(query, candidates)
     if not explicit_skill:
         return None, LayerDetail(
@@ -68,7 +67,6 @@ def try_scenario_layer(
     query: str,
     candidates: list[dict[str, Any]],
 ) -> tuple[SkillRoute | None, LayerDetail]:
-    """Try scenario pattern layer."""
     if router._scenario_cache is None:
         router._scenario_cache = load_merged_scenario_config(router.project_root)
     scenarios = router._scenario_cache.get("strategies", [])
@@ -166,12 +164,6 @@ def try_ai_triage_layer(
     context: RoutingContext | None,
     force: bool = False,
 ) -> tuple[SkillRoute | None, LayerDetail]:
-    """Try AI triage layer.
-
-    Args:
-        force: If True, skip the short-query word-count bypass.
-               Used when keyword routing is already disabled for long queries.
-    """
     triage_start = time.perf_counter()
 
     # Respect skip_ai_triage from context (used by PlanBuilder for sub-task routing)
@@ -225,7 +217,6 @@ def try_ai_triage_layer(
 
 
 def build_fallback_detail(_config: Any) -> LayerDetail:
-    """Build fallback layer detail."""
     return LayerDetail(
         layer=RoutingLayer.FALLBACK_LLM,
         matched=True,
@@ -234,7 +225,6 @@ def build_fallback_detail(_config: Any) -> LayerDetail:
 
 
 def _get_ai_triage_skip_reason(router: RoutingCore) -> str:
-    """Determine why AI triage was skipped."""
     if not router._config.enable_ai_triage:
         return "AI triage disabled in config"
     if getattr(router._triage_service, "_llm", None) is None:
@@ -253,12 +243,7 @@ def _get_ai_triage_skip_reason(router: RoutingCore) -> str:
 # --- Skill Semantic Index layer ---
 
 def _tokenize_query(query: str) -> set[str]:
-    """Tokenize a query for index matching.
-
-    Handles both CJK (character-based) and Latin (word-based) text.
-    """
     import re
-
     tokens: set[str] = set()
     # English words
     for word in re.findall(r"[a-zA-Z]{2,}", query.lower()):
@@ -273,10 +258,6 @@ def _tokenize_query(query: str) -> set[str]:
 def _compute_index_score(  # pyright: ignore[reportUnusedFunction]
     query_tokens: set[str], profile: Any
 ) -> float:
-    """Compute match score between query tokens and a skill profile.
-
-    Returns a score between 0.0 and 1.0 based on keyword overlap.
-    """
     if not query_tokens:
         return 0.0
 
@@ -287,11 +268,6 @@ def _compute_index_score(  # pyright: ignore[reportUnusedFunction]
 
 
 def _score_overlap(query_tokens: set[str], profile_tokens: set[str]) -> float:
-    """Score overlap between two pre-tokenized sets.
-
-    Extracted so the index layer can score against pre-tokenized profiles
-    (cached once at index load) without re-tokenizing per route.
-    """
     if not query_tokens or not profile_tokens:
         return 0.0
 
@@ -302,12 +278,6 @@ def _score_overlap(query_tokens: set[str], profile_tokens: set[str]) -> float:
 
 
 def _build_profile_token_index(index: dict[str, Any]) -> dict[str, set[str]]:
-    """Pre-tokenize each profile's combined text once.
-
-    Tokenization over 100+ profiles per route call dominated INDEX latency
-    (~370ms in the simple-route benchmark). Pre-computing once at first
-    cache hit keeps subsequent routes O(profile-count * set-intersection).
-    """
     tokens_by_id: dict[str, set[str]] = {}
     for skill_id, profile in index.items():
         all_text = " ".join(
@@ -318,7 +288,6 @@ def _build_profile_token_index(index: dict[str, Any]) -> dict[str, set[str]]:
 
 
 def _cosine_similarity(a: list[float], b: list[float]) -> float:
-    """Compute cosine similarity between two dense vectors (pure Python)."""
     dot = sum(x * y for x, y in zip(a, b, strict=True))
     norm_a = sum(x * x for x in a) ** 0.5
     norm_b = sum(x * x for x in b) ** 0.5
@@ -332,14 +301,6 @@ def _try_embedding_fallback(
     candidates: list[dict[str, Any]],
     index_start: float,
 ) -> tuple[SkillRoute | None, LayerDetail]:
-    """Try cosine-similarity matching against pre-computed skill embeddings.
-
-    This is invoked only when the fast token-overlap path did not produce
-    a match above the regular index threshold.  It requires the index to
-    contain embedding vectors (built by SkillIndexer v1.3+) and
-    sentence-transformers to be installed.
-    """
-    # Quick check: does any profile carry an embedding?
     profiles_with_emb: dict[str, Any] = {
         sid: prof
         for sid, prof in index.items()
@@ -448,16 +409,7 @@ def try_index_layer(
     query: str,
     candidates: list[dict[str, Any]],
 ) -> tuple[SkillRoute | None, LayerDetail]:
-    """Try skill semantic index layer.
-
-    Uses the pre-built skill-index.json to match queries against skill
-    scenarios and query patterns without calling an LLM. Fast, local,
-    and complements AI Triage.
-
-    Returns:
-        (SkillRoute, LayerDetail) if index hit, (None, LayerDetail) otherwise.
-        The match is reported as AI_TRIAGE layer with metadata["index_hit"]=True.
-    """
+    """Try skill semantic index layer."""
     index_start = time.perf_counter()
 
     # Cache the loaded index on the router to avoid repeatedly re-parsing

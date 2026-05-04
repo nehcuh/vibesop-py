@@ -1,26 +1,5 @@
 # pyright: reportPrivateUsage=false
-"""VibeSOP Agent Integration.
-
-This module provides direct Python API for AI Agents (like Claude Code)
-to use VibeSOP routing with their internal LLM, without requiring
-external API key configuration.
-
-Usage:
-    >>> from vibesop.agent import AgentRouter
-    >>>
-    >>> # Create a simple LLM wrapper
-    >>> class AgentLLM:
-    ...     def call(self, prompt, max_tokens=100, temperature=0.1):
-    ...         # Use Agent's internal LLM here
-    ...         response = agent_internal_llm(prompt)
-    ...         return SimpleResponse(content=response)
-    >>>
-    >>> # Route with Agent's LLM
-    >>> router = AgentRouter()
-    >>> router.set_llm(AgentLLM())
-    >>> result = router.route("帮我审查代码质量")
-    >>> print(result.primary.skill_id)  # gstack/review
-"""
+"""VibeSOP Agent Integration."""
 
 from __future__ import annotations
 
@@ -29,10 +8,7 @@ from typing import Any
 
 
 class SimpleResponse:
-    """Simple response wrapper for LLM output.
-
-    Matches the interface expected by TriageService.
-    """
+    """Simple response wrapper for LLM output."""
 
     def __init__(
         self,
@@ -49,106 +25,29 @@ class SimpleResponse:
 
 
 class SimpleLLM:
-    """Simple LLM wrapper interface for Agent integration.
-
-    Subclasses should implement the `call` method.
-
-    Example:
-        >>> class MyLLM(SimpleLLM):
-        ...     def call(self, prompt, max_tokens=100, temperature=0.1):
-        ...         response = my_llm_generate(prompt)
-        ...         return SimpleResponse(content=response)
-    """
+    """Simple LLM wrapper interface for Agent integration."""
 
     def configured(self) -> bool:
-        """Check if the LLM is configured and ready to use.
-
-        Returns:
-            True if the LLM can generate responses
-        """
         return True
 
     def call(self, prompt: str, max_tokens: int = 100, temperature: float = 0.1) -> SimpleResponse:
-        """Call the LLM with the given prompt.
-
-        Args:
-            prompt: The prompt to send to the LLM
-            max_tokens: Maximum tokens to generate
-            temperature: Sampling temperature
-
-        Returns:
-            SimpleResponse with the LLM output
-        """
         raise NotImplementedError("Subclasses must implement call()")
 
 
 class AgentRouter:
-    """Router wrapper for AI Agent integration.
-
-    This class provides a simplified API for Agents to use VibeSOP routing
-    with their internal LLM.
-
-    Example:
-        >>> from vibesop.agent import AgentRouter, SimpleResponse
-        >>>
-        >>> # Define LLM wrapper
-        >>> class MyLLM:
-        ...     def call(self, prompt, max_tokens=100, temperature=0.1):
-        ...         response = self._agent.generate(prompt)
-        ...         return SimpleResponse(content=response)
-        >>>
-        >>> # Route with Agent's LLM
-        >>> router = AgentRouter()
-        >>> router.set_llm(MyLLM())
-        >>> result = router.route("debug the failing test")
-        >>> if result.has_match:
-        ...     skill_id = result.primary.skill_id
-        ...     confidence = result.primary.confidence
-    """
+    """Router wrapper for AI Agent integration."""
 
     def __init__(self, project_root: str | Path = "."):
-        """Initialize the Agent router.
-
-        Args:
-            project_root: Path to project root directory
-        """
         from vibesop.core.routing import UnifiedRouter
 
         self._router = UnifiedRouter(project_root=project_root)
 
     def set_llm(self, llm_provider: Any) -> None:
-        """Inject the Agent's LLM for AI triage.
-
-        The LLM provider must have a `call` method with signature:
-            call(prompt: str, max_tokens: int, temperature: float) -> Response
-
-        The Response object must have a `content` attribute with the LLM output.
-
-        Args:
-            llm_provider: Agent's LLM wrapper
-
-        Example:
-            >>> class AgentLLM:
-            ...     def call(self, prompt, max_tokens=100, temperature=0.1):
-            ...         return SimpleResponse(content=self._generate(prompt))
-            >>> router.set_llm(AgentLLM())
-        """
+        """Inject the Agent's LLM for AI triage."""
         self._router.set_llm(llm_provider)
 
     def route(self, query: str, enable_ai_triage: bool = True) -> Any:
-        """Route a query to the best matching skill.
-
-        Args:
-            query: User query or intent
-            enable_ai_triage: Whether to use AI triage (requires LLM to be set)
-
-        Returns:
-            RoutingResult object with primary match, alternatives, and metadata
-
-        Note:
-            When enable_ai_triage=True and an LLM is set via set_llm(),
-            AI triage will be used for this call regardless of global config.
-        """
+        """Route a query to the best matching skill."""
         # If AI triage is requested and LLM is available, temporarily enable it
         if enable_ai_triage and self._router._llm is not None:
             # Store original configs
@@ -177,24 +76,7 @@ class AgentRouter:
         current_skill: str,
         enable_ai_triage: bool = True,
     ) -> dict[str, Any]:
-        """Check if re-routing is suggested for a new message.
-
-        This is useful for multi-turn conversations to detect when the
-        user's intent has shifted.
-
-        Args:
-            new_message: The latest user message
-            current_skill: The skill currently being used
-            enable_ai_triage: Whether to use AI triage (requires LLM to be set)
-
-        Returns:
-            Dictionary with:
-                - should_reroute: bool
-                - recommended_skill: str | None
-                - confidence: float
-                - reason: str
-                - current_skill: str
-        """
+        """Check if re-routing is suggested for a new message."""
         from vibesop.core.sessions import SessionContext
 
         # Enable AI triage temporarily if requested and LLM is available
@@ -227,11 +109,6 @@ class AgentRouter:
         }
 
     def get_session_summary(self) -> dict[str, Any]:
-        """Get summary of current routing session.
-
-        Returns:
-            Dictionary with session statistics
-        """
         from vibesop.core.sessions import SessionContext
 
         ctx = SessionContext.load(project_root=str(self._router.project_root))
@@ -242,18 +119,7 @@ class AgentRouter:
     # ================================================================
 
     def detect_intents(self, query: str) -> dict[str, Any]:
-        """Detect if a query contains multiple distinct intents.
-
-        Args:
-            query: User query to analyze
-
-        Returns:
-            Dictionary with:
-                - is_multi_intent: bool
-                - confidence: float
-                - reason: str
-                - sub_queries: list[str] (if multi-intent detected)
-        """
+        """Detect if a query contains multiple distinct intents."""
         from vibesop.core.orchestration import MultiIntentDetector
 
         # First, get single routing result for context
@@ -275,17 +141,7 @@ class AgentRouter:
         }
 
     def decompose(self, query: str) -> list[dict[str, str]]:
-        """Decompose a complex query into independent sub-tasks.
-
-        Args:
-            query: User query that may contain multiple intents
-
-        Returns:
-            List of sub-task dictionaries with:
-                - intent: str - brief description
-                - query: str - self-contained sub-query
-                - skill_id: str | None - LLM-assigned skill, if any
-        """
+        """Decompose a complex query into independent sub-tasks."""
         from vibesop.core.orchestration import TaskDecomposer
 
         # Initialize decomposer with injected LLM
@@ -310,20 +166,7 @@ class AgentRouter:
     def build_plan(
         self, query: str, sub_tasks: list[dict[str, str]] | None = None
     ) -> dict[str, Any]:
-        """Build an execution plan for a complex query.
-
-        Args:
-            query: Original user query
-            sub_tasks: Optional list of sub-tasks (if None, will auto-decompose)
-
-        Returns:
-            Dictionary with execution plan:
-                - plan_id: str
-                - original_query: str
-                - steps: list[dict] - execution steps
-                - detected_intents: list[str]
-                - reasoning: str
-        """
+        """Build an execution plan for a complex query."""
         from vibesop.core.orchestration import PlanBuilder, SubTask, TaskDecomposer
 
         # Auto-decompose if sub_tasks not provided. Keep SubTask objects directly
@@ -369,19 +212,7 @@ class AgentRouter:
         }
 
     def orchestrate(self, query: str) -> dict[str, Any]:
-        """Full orchestration: detect intents, decompose, and build plan.
-
-        This is the main entry point for complex multi-intent queries.
-
-        Args:
-            query: User query that may contain multiple intents
-
-        Returns:
-            Dictionary with:
-                - is_multi_intent: bool
-                - plan: dict (execution plan if multi-intent)
-                - single_result: dict (routing result if single-intent)
-        """
+        """Full orchestration: detect intents, decompose, and build plan."""
         # Step 1: Detect intents
         intent_detection = self.detect_intents(query)
 
@@ -408,14 +239,7 @@ class AgentRouter:
         }
 
     def load_skill(self, skill_id: str) -> str | None:
-        """Load a skill's content for execution.
-
-        Args:
-            skill_id: Skill identifier (e.g., "gstack/review", "systematic-debugging")
-
-        Returns:
-            Skill file content or None if not found
-        """
+        """Load a skill's content for execution."""
         from vibesop.core.skills import SkillLoader
 
         loader = SkillLoader(project_root=self._router.project_root)
@@ -432,19 +256,7 @@ class AgentRouter:
     # ================================================================
 
     def get_parallel_preview(self, plan: dict[str, Any]) -> dict[str, Any]:
-        """Get preview of parallel execution for a plan.
-
-        Args:
-            plan: Execution plan dictionary from build_plan()
-
-        Returns:
-            Dictionary with parallel execution preview:
-                - total_steps: int
-                - parallel_batches: int
-                - max_parallel_steps: int
-                - estimated_speedup: float
-                - batches: list[dict] - details of each batch
-        """
+        """Get preview of parallel execution for a plan."""
         from vibesop.core.models import ExecutionPlan, ExecutionStep
         from vibesop.core.orchestration.parallel_scheduler import ParallelScheduler
 
@@ -482,30 +294,7 @@ class AgentRouter:
         step_executor: Any,
         max_parallel: int = 5,
     ) -> dict[str, Any]:
-        """Execute an execution plan with parallel step support.
-
-        Args:
-            plan: Execution plan dictionary from build_plan()
-            step_executor: Function to execute a single step.
-                          Called with ExecutionStep dict, should return result.
-            max_parallel: Maximum number of steps to run concurrently
-
-        Returns:
-            Dictionary with:
-                - results: List of step results in order
-                - duration_ms: Total execution time
-                - steps_executed: Number of steps executed
-                - parallel_batches: Number of parallel batches
-
-        Example:
-            >>> def my_executor(step):
-            ...     skill_id = step["skill_id"]
-            ...     query = step["input_query"]
-            ...     # Execute skill and return result
-            ...     return f"Executed {skill_id}"
-            >>> plan = router.build_plan("测试并审查")
-            >>> results = router.execute_plan(plan, my_executor)
-        """
+        """Execute an execution plan with parallel step support."""
         from vibesop.core.models import ExecutionPlan, ExecutionStep
         from vibesop.core.orchestration.parallel_scheduler import execute_plan_sync
 
@@ -542,30 +331,7 @@ class AgentRouter:
         query: str,
         project_root: str | Path = ".",
     ) -> Any:
-        """Create a StepRunner for a multi-intent query.
-
-        Shortcut that runs orchestrate() and wraps the result in a StepRunner
-        for immediate step-by-step execution.
-
-        Args:
-            query: User query that may contain multiple intents.
-            project_root: Project root directory.
-
-        Returns:
-            StepRunner instance ready for iteration or execute_all().
-
-        Raises:
-            ValueError: If the query is not multi-intent (no plan generated).
-
-        Example:
-            >>> router = AgentRouter()
-            >>> runner = router.create_runner("先分析架构, 再审查代码, 最后优化性能")
-            >>> for step in runner.pending_steps():
-            ...     ctx = runner.get_context(step)
-            ...     result = agent.run_skill(step.skill_id, ctx.format_for_prompt())
-            ...     runner.mark_completed(step, result)
-            >>> print(f"Done: {runner.completed_count}/{runner.total_steps} steps")
-        """
+        """Create a StepRunner for a multi-intent query."""
         from vibesop.agent.step_runner import StepRunner
 
         orch = self.orchestrate(query)
