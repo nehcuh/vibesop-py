@@ -1,22 +1,14 @@
-"""CLI commands for badge management.
-
-Usage:
-    vibe badges list
-"""
+"""CLI commands for badge management."""
 
 from __future__ import annotations
 
 import typer
 from rich.console import Console
-from rich.panel import Panel
 from rich.table import Table
 
 from vibesop.core.badges import BadgeTracker, get_badge_display
 
-app = typer.Typer(
-    name="badges",
-    help="View earned badges and achievements",
-)
+app = typer.Typer(name="badges", help="View earned badges and achievements")
 console = Console()
 
 
@@ -27,17 +19,7 @@ def list_badges() -> None:
     badges = tracker.list_badges()
 
     if not badges:
-        console.print(
-            Panel(
-                "No badges yet!\n\n"
-                "Earn badges by:\n"
-                "  • Giving feedback on skills (vibe skills feedback)\n"
-                "  • Using skills repeatedly\n"
-                "  • Maintaining high-quality skills",
-                title="🎖️ Badges",
-                border_style="dim",
-            )
-        )
+        console.print("[dim]No badges yet. Earn them by using skills and giving feedback.[/dim]")
         return
 
     table = Table(title="🎖️ Earned Badges", show_header=True, header_style="bold")

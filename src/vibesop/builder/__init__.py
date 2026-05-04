@@ -18,9 +18,14 @@ Functions:
     - validate_overlay: Validate overlay files
 """
 
-from vibesop.builder.doc_generators import DocContentGenerator
-from vibesop.builder.doc_renderer import DocConfig, DocRenderer, DocSection
-from vibesop.builder.doc_templates import DocTemplates, DocType
+from vibesop.builder.docs import (
+    DocConfig,
+    DocContentGenerator,
+    DocRenderer,
+    DocSection,
+    DocTemplates,
+    DocType,
+)
 from vibesop.builder.dynamic_renderer import ConfigDrivenRenderer, RenderRule
 from vibesop.builder.manifest import ManifestBuilder, QuickBuilder
 from vibesop.builder.overlay import OverlayMerger, create_overlay, validate_overlay

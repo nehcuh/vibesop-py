@@ -50,25 +50,13 @@ from vibesop.cli.commands import (
     session_cmd as session_mod,
 )
 from vibesop.cli.commands import (
-    skill_add as skill_add_mod,
-)
-from vibesop.cli.commands import (
-    skill_cmd as skill_cmd_mod,
+    skill_commands as skill_commands_mod,
 )
 from vibesop.cli.commands import (
     skill_craft as skill_craft_mod,
 )
 from vibesop.cli.commands import (
-    skills_cmd as skills_mod,
-)
-from vibesop.cli.commands import (
-    skills_rate_cmd as skills_rate_mod,
-)
-from vibesop.cli.commands import (
-    skills_recommended_cmd as skills_recommended_mod,
-)
-from vibesop.cli.commands import (
-    skills_suggest_cmd as skills_suggest_mod,
+    skills_commands as skills_mod,
 )
 from vibesop.cli.commands import (
     switch as switch_mod,
@@ -113,7 +101,7 @@ def register(app: typer.Typer) -> None:
     app.command()(analyze_mod.analyze)
 
     # Skills management subcommands
-    skills_app.command("add")(skill_add_mod.add)
+    skills_app.command("add")(skill_commands_mod.add)
     skills_app.command("list")(skills_mod.list_skills)
     skills_app.command("available")(skills_mod.available)
     skills_app.command("info")(skills_mod.info)
@@ -131,12 +119,12 @@ def register(app: typer.Typer) -> None:
     skills_app.command("feedback")(skills_mod.feedback)
     skills_app.command("create")(skills_mod.create)
     skills_app.command("lifecycle")(skills_mod.lifecycle)
-    skills_app.command("suggestions")(skills_suggest_mod.suggestions)
-    skills_app.command("rate")(skills_rate_mod.rate)
-    skills_app.command("ratings")(skills_rate_mod.ratings)
-    skills_app.command("recommended")(skills_recommended_mod.recommended)
-    skills_app.command("stale")(skill_cmd_mod.stale)
-    skills_app.command("end-check")(skill_cmd_mod.end_check)
+    skills_app.command("suggestions")(skills_mod.suggestions)
+    skills_app.command("rate")(skills_mod.rate)
+    skills_app.command("ratings")(skills_mod.ratings)
+    skills_app.command("recommended")(skills_mod.recommended)
+    skills_app.command("stale")(skill_commands_mod.stale)
+    skills_app.command("end-check")(skill_commands_mod.end_check)
     skills_app.command("share")(community_mod.share)
     skills_app.command("discover")(community_mod.discover)
     skills_app.command("cleanup")(cleanup_mod.cleanup)

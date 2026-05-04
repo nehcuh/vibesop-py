@@ -2,8 +2,7 @@
 
 from pathlib import Path
 
-from vibesop.builder.doc_models import DocConfig, DocSection
-from vibesop.builder.doc_templates import DocType
+from vibesop.builder.docs import DocConfig, DocSection, DocType
 
 
 class TestDocSection:

@@ -7,6 +7,7 @@ for skill discovery. No extra infrastructure needed.
 from __future__ import annotations
 
 import os
+import warnings
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -70,6 +71,7 @@ class SkillPublisher:
         Returns:
             Dict with issue_url, issue_number, repo_name
         """
+        warnings.warn("Market module is experimental and may change significantly", FutureWarning, stacklevel=2)
         if "/" not in repo_name:
             return {"error": "repo_name must be in 'owner/repo' format"}
 
@@ -140,6 +142,7 @@ class SkillPublisher:
         Returns:
             List of SkillListing objects
         """
+        warnings.warn("Market module is experimental and may change significantly", FutureWarning, stacklevel=2)
         q_parts = [f"repo:{self.registry_repo}", f"label:{PUBLISH_LABEL}", "state:open"]
         if query:
             q_parts.append(query)

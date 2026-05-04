@@ -7,7 +7,7 @@ from unittest.mock import Mock, patch
 import pytest
 from typer.testing import CliRunner
 
-from vibesop.cli.commands.skills import skills_app
+from vibesop.cli.commands.skill_commands import app as skills_app
 from vibesop.core.skills.base import SkillMetadata
 
 runner = CliRunner()
@@ -18,7 +18,7 @@ class TestSkillAddCommand:
 
     def test_command_exists(self):
         """Test that skill_add command can be imported."""
-        from vibesop.cli.commands.skill_add import add
+        from vibesop.cli.commands.skill_commands import add
         assert add is not None
         assert callable(add)
 
@@ -26,7 +26,7 @@ class TestSkillAddCommand:
         """Test command signature has correct parameters."""
         import inspect
 
-        from vibesop.cli.commands.skill_add import add
+        from vibesop.cli.commands.skill_commands import add
 
         sig = inspect.signature(add)
         params = list(sig.parameters.keys())
@@ -36,7 +36,7 @@ class TestSkillAddCommand:
         assert "auto_config" in params
         assert "force" in params
 
-    @patch("vibesop.cli.commands.skill_add._detect_and_load_skill")
+    @patch("vibesop.cli.commands.skill_commands._detect_and_load_skill")
     def test_detect_skill_from_directory(self, mock_detect):
         """Test skill detection from directory."""
 
@@ -55,7 +55,7 @@ class TestSkillAddCommand:
 
     def test_extract_keywords(self):
         """Test keyword extraction for routing patterns."""
-        from vibesop.cli.commands.skill_add import _extract_keywords
+        from vibesop.cli.commands.skill_commands import _extract_keywords
 
         text = "使用 Tushare API 获取股票数据并开发量化交易策略"
         keywords = _extract_keywords(text)
@@ -68,7 +68,7 @@ class TestSkillAddCommand:
     def test_save_auto_config(self, tmp_path):
         """Test auto-configuration file generation."""
 
-        from vibesop.cli.commands.skill_add import _save_auto_config
+        from vibesop.cli.commands.skill_commands import _save_auto_config
 
         # Create test config
         config = {
@@ -79,16 +79,16 @@ class TestSkillAddCommand:
         }
 
         # Mock the config file path
-        with patch("vibesop.cli.commands.skill_add.Path") as mock_path:
+        with patch("vibesop.cli.commands.skill_commands.Path") as mock_path:
             mock_path.return_value = tmp_path / "auto-config.yaml"
             _save_auto_config(config)
 
         # Verify file was created (this would need actual implementation)
 
-    @patch("vibesop.cli.commands.skill_add.questionary")
-    @patch("vibesop.cli.commands.skill_add._detect_and_load_skill")
-    @patch("vibesop.cli.commands.skill_add.SkillSecurityAuditor")
-    @patch("vibesop.cli.commands.skill_add.SkillInstaller")
+    @patch("vibesop.cli.commands.skill_commands.questionary")
+    @patch("vibesop.cli.commands.skill_commands._detect_and_load_skill")
+    @patch("vibesop.security.skill_auditor.SkillSecurityAuditor")
+    @patch("vibesop.installer.skill_installer.SkillInstaller")
     def test_full_installation_flow(
         self,
         mock_installer,
@@ -151,7 +151,7 @@ class TestKeywordExtraction:
 
     def test_extract_keywords_from_english(self):
         """Test extraction from English text."""
-        from vibesop.cli.commands.skill_add import _extract_keywords
+        from vibesop.cli.commands.skill_commands import _extract_keywords
 
         text = "Use Tushare API to get stock market data"
         keywords = _extract_keywords(text)
@@ -161,7 +161,7 @@ class TestKeywordExtraction:
 
     def test_extract_keywords_from_chinese(self):
         """Test extraction from Chinese text."""
-        from vibesop.cli.commands.skill_add import _extract_keywords
+        from vibesop.cli.commands.skill_commands import _extract_keywords
 
         text = "使用 Tushare API 获取股票数据"
         keywords = _extract_keywords(text)
@@ -171,7 +171,7 @@ class TestKeywordExtraction:
 
     def test_extract_keywords_removes_stop_words(self):
         """Test that stop words are removed."""
-        from vibesop.cli.commands.skill_add import _extract_keywords
+        from vibesop.cli.commands.skill_commands import _extract_keywords
 
         text = "Get the stock data from the API"
         keywords = _extract_keywords(text)
@@ -201,7 +201,7 @@ class TestConfigurationGeneration:
 
     def test_routing_pattern_generation(self):
         """Test routing patterns are generated correctly."""
-        from vibesop.cli.commands.skill_add import _extract_keywords
+        from vibesop.cli.commands.skill_commands import _extract_keywords
 
         description = "Use Tushare API for stock trading"
         keywords = _extract_keywords(description)
@@ -214,7 +214,7 @@ class TestConfigurationGeneration:
 class TestSecurityAudit:
     """Test security audit integration."""
 
-    @patch("vibesop.cli.commands.skill_add.SkillSecurityAuditor")
+    @patch("vibesop.security.skill_auditor.SkillSecurityAuditor")
     def test_safe_skill_passes_audit(self, mock_auditor):
         """Test that safe skills pass audit."""
 
@@ -226,7 +226,7 @@ class TestSecurityAudit:
         # Test would verify safe skills proceed
         assert mock_audit_result.risk_level == "safe"
 
-    @patch("vibesop.cli.commands.skill_add.SkillSecurityAuditor")
+    @patch("vibesop.security.skill_auditor.SkillSecurityAuditor")
     def test_critical_skill_fails_audit(self, mock_auditor):
         """Test that critical skills fail audit."""
         mock_audit_result = Mock()
@@ -243,7 +243,7 @@ class TestDocumentation:
 
     def test_skill_add_command_has_docstring(self):
         """Test that command has proper documentation."""
-        from vibesop.cli.commands.skill_add import add
+        from vibesop.cli.commands.skill_commands import add
 
         assert add.__doc__ is not None
         assert "skill" in add.__doc__.lower()
@@ -251,7 +251,7 @@ class TestDocumentation:
 
     def test_helper_functions_have_docstrings(self):
         """Test that helper functions are documented."""
-        from vibesop.cli.commands.skill_add import (
+        from vibesop.cli.commands.skill_commands import (
             _detect_and_load_skill,
             _extract_keywords,
             _save_auto_config,
@@ -266,7 +266,7 @@ class TestErrorHandling:
 
     def test_invalid_skill_path(self):
         """Test handling of invalid skill path."""
-        from vibesop.cli.commands.skill_add import _detect_and_load_skill
+        from vibesop.cli.commands.skill_commands import _detect_and_load_skill
 
         # Test with non-existent path
         result = _detect_and_load_skill("/nonexistent/path")
@@ -282,9 +282,9 @@ class TestErrorHandling:
 class TestAgentEnvironmentBranch:
     """Test Agent-aware installation path (Step 1 enhancement)."""
 
-    @patch("vibesop.cli.commands.skill_add.is_in_agent_environment")
-    @patch("vibesop.cli.commands.skill_add.AIEnhancer")
-    @patch("vibesop.cli.commands.skill_add.understand_skill_from_file")
+    @patch("vibesop.core.llm_config.is_in_agent_environment")
+    @patch("vibesop.core.ai_enhancer.AIEnhancer")
+    @patch("vibesop.core.skills.understander.understand_skill_from_file")
     def test_agent_environment_skips_ai_enhancer(
         self,
         mock_understand: Any,
@@ -292,7 +292,7 @@ class TestAgentEnvironmentBranch:
         mock_is_agent: Any,
     ) -> None:
         """When in Agent env, AIEnhancer should NOT be instantiated."""
-        from vibesop.cli.commands.skill_add import _auto_configure_skill_with_llm
+        from vibesop.cli.commands.skill_commands import _auto_configure_skill_with_llm
         from vibesop.core.skills.understander import AutoGeneratedConfig
 
         mock_is_agent.return_value = True
@@ -323,15 +323,15 @@ class TestAgentEnvironmentBranch:
 
         mock_ai_enhancer_cls.assert_not_called()
 
-    @patch("vibesop.cli.commands.skill_add.is_in_agent_environment")
-    @patch("vibesop.cli.commands.skill_add.understand_skill_from_file")
+    @patch("vibesop.core.llm_config.is_in_agent_environment")
+    @patch("vibesop.core.skills.understander.understand_skill_from_file")
     def test_agent_environment_uses_rule_engine_only(
         self,
         mock_understand: Any,
         mock_is_agent: Any,
     ) -> None:
         """Agent env should call understand_skill_from_file and save config."""
-        from vibesop.cli.commands.skill_add import _auto_configure_skill_with_llm
+        from vibesop.cli.commands.skill_commands import _auto_configure_skill_with_llm
         from vibesop.core.skills.understander import AutoGeneratedConfig
 
         mock_is_agent.return_value = True
@@ -361,9 +361,9 @@ class TestAgentEnvironmentBranch:
 
         mock_understand.assert_called_once()
 
-    @patch("vibesop.cli.commands.skill_add.is_in_agent_environment")
-    @patch("vibesop.cli.commands.skill_add.AIEnhancer")
-    @patch("vibesop.cli.commands.skill_add.understand_skill_from_file")
+    @patch("vibesop.core.llm_config.is_in_agent_environment")
+    @patch("vibesop.core.ai_enhancer.AIEnhancer")
+    @patch("vibesop.core.skills.understander.understand_skill_from_file")
     def test_non_agent_environment_uses_ai_enhancer_fallback(
         self,
         mock_understand: Any,
@@ -371,7 +371,7 @@ class TestAgentEnvironmentBranch:
         mock_is_agent: Any,
     ) -> None:
         """Low confidence in non-Agent env should trigger AIEnhancer fallback."""
-        from vibesop.cli.commands.skill_add import _auto_configure_skill_with_llm
+        from vibesop.cli.commands.skill_commands import _auto_configure_skill_with_llm
         from vibesop.core.skills.understander import AutoGeneratedConfig
 
         mock_is_agent.return_value = False
@@ -411,7 +411,7 @@ class TestAgentEnvironmentBranch:
 
     def test_prompt_agent_for_config_accepts_json_adjustments(self) -> None:
         """_prompt_agent_for_config should parse JSON adjustments."""
-        from vibesop.cli.commands.skill_add import _prompt_agent_for_config
+        from vibesop.cli.commands.skill_commands import _prompt_agent_for_config
         from vibesop.core.skills.understander import AutoGeneratedConfig
 
         config = AutoGeneratedConfig(
@@ -428,7 +428,7 @@ class TestAgentEnvironmentBranch:
             intent="Test",
         )
 
-        with patch("vibesop.cli.commands.skill_add.questionary") as mock_q:
+        with patch("vibesop.cli.commands.skill_commands.questionary") as mock_q:
             mock_q.confirm.return_value.ask.return_value = False
             mock_q.text.return_value.ask.return_value = '{"category": "review", "priority": 75}'
 
@@ -440,7 +440,7 @@ class TestAgentEnvironmentBranch:
 
     def test_prompt_agent_for_config_defaults_on_invalid_json(self) -> None:
         """Invalid JSON adjustments should fall back to draft config."""
-        from vibesop.cli.commands.skill_add import _prompt_agent_for_config
+        from vibesop.cli.commands.skill_commands import _prompt_agent_for_config
         from vibesop.core.skills.understander import AutoGeneratedConfig
 
         config = AutoGeneratedConfig(
@@ -456,7 +456,7 @@ class TestAgentEnvironmentBranch:
             intent="Test",
         )
 
-        with patch("vibesop.cli.commands.skill_add.questionary") as mock_q:
+        with patch("vibesop.cli.commands.skill_commands.questionary") as mock_q:
             mock_q.confirm.return_value.ask.return_value = False
             mock_q.text.return_value.ask.return_value = "not-json"
 

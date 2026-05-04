@@ -1,20 +1,27 @@
 # pyright: reportPrivateUsage=false
 # pyright: ignore[reportPrivateUsage, reportMissingParameterType]
-"""VibeSOP skill add command - One-click smart skill installation.
+"""VibeSOP skill command group - All `vibe skill *` subcommands.
 
-This command provides the user-friendly installation experience:
-1. vibe skill add tushare.skill
-2. Auto-detect skill metadata
-3. Interactive configuration wizard
-4. Auto-generate routing rules and priorities
+Consolidated from: skill_cmd.py, skill_add.py, skill_config.py.
 
 Usage:
-    vibe skill add <skill-file>
-    vibe skill add tushare.skill
-    vibe skill add https://example.com/skills/tushare.skill
+    vibe skill                        — Show skill ecosystem overview
+    vibe skill list [--all] [--project]
+    vibe skill enable <skill_id>
+    vibe skill disable <skill_id>
+    vibe skill status <skill_id>
+    vibe skill stale [--auto] [--json]
+    vibe skill end-check [--json]
+    vibe skill add <source> [--global] [--auto-config/--manual-config] [--force]
+    vibe skill share <skill_id>
+    vibe skill discover [query] [--json]
+    vibe skill cleanup [--auto] [--dry-run]
 """
 
+from __future__ import annotations
+
 import json
+import logging
 from pathlib import Path
 from typing import Any
 
@@ -22,23 +29,385 @@ import questionary
 import typer
 from rich.console import Console
 from rich.panel import Panel
+from rich.table import Table
 
-from vibesop.core.ai_enhancer import AIEnhancer
-from vibesop.core.llm_config import (
-    LLMConfigResolver,
-    is_in_agent_environment,
-)
-from vibesop.core.routing.unified import UnifiedRouter
-from vibesop.core.session_analyzer import SkillSuggestion
-from vibesop.core.skills.base import SkillMetadata
-from vibesop.core.skills.parser import parse_skill_md
-from vibesop.core.skills.understander import SkillAutoConfigurator, understand_skill_from_file
-from vibesop.installer.skill_installer import SkillInstaller
-from vibesop.security.skill_auditor import SkillSecurityAuditor, ThreatLevel
+from vibesop.cli.commands.cleanup_cmd import cleanup
+from vibesop.cli.commands.community_cmd import discover, share
+from vibesop.core.skills.config_manager import SkillConfigManager
+
+logger = logging.getLogger(__name__)
 
 console = Console()
 
 
+# ---------------------------------------------------------------------------
+# Skill ecosystem overview (callback)
+# ---------------------------------------------------------------------------
+
+app = typer.Typer(name="skill", help="Manage skill lifecycle", no_args_is_help=False)
+
+
+@app.callback(invoke_without_command=True)
+def _skill_overview(  # pyright: ignore[reportUnusedFunction]
+    ctx: typer.Context,
+) -> None:
+    """Show skill ecosystem overview when no subcommand is given."""
+    if ctx.invoked_subcommand is not None:
+        return
+
+    from pathlib import Path
+
+    project_root = Path.cwd()
+
+    try:
+        from vibesop.core.routing.candidate_manager import CandidateManager
+
+        mgr = CandidateManager(project_root)
+        candidates = mgr.get_candidates()
+        total = len(candidates)
+    except Exception:
+        total = 0
+
+    try:
+        from vibesop.core.skills.evaluator import RoutingEvaluator
+
+        evaluator = RoutingEvaluator(project_root=project_root)
+        low = evaluator.get_low_quality_skills(threshold=0.3, min_routes=3)
+        low_count = len(low)
+    except Exception:
+        low_count = 0
+
+    try:
+        from vibesop.core.skills.feedback_loop import FeedbackLoop
+
+        loop = FeedbackLoop(project_root=project_root)
+        stale = loop.analyze_all(auto_deprecate=False)
+        stale_count = sum(1 for s in stale if s.action in ("deprecate", "archive"))
+    except Exception:
+        stale_count = 0
+
+    console.print()
+    console.rule("[bold cyan]VibeSOP Skill Management[/bold cyan]")
+    console.print()
+
+    status_parts = [f"[bold]{total}[/bold] skills installed"]
+    if low_count > 0:
+        status_parts.append(f"[yellow]{low_count} need attention[/yellow]")
+    if stale_count > 0:
+        status_parts.append(f"[yellow]{stale_count} stale[/yellow]")
+    if low_count == 0 and stale_count == 0:
+        status_parts.append("[green]all healthy[/green]")
+
+    console.print(f"  {' · '.join(status_parts)}")
+    console.print()
+
+    from rich.box import ROUNDED
+
+    actions = (
+        "[cyan]vibe skill list[/cyan]            [dim]— browse all installed skills[/dim]\n"
+        "[cyan]vibe skill discover[/cyan]        [dim]— find community skills[/dim]\n"
+        "[cyan]vibe skill cleanup[/cyan]         [dim]— review and prune stale skills[/dim]\n"
+        "[cyan]vibe skill enable/disable[/cyan]  [dim]— toggle skills on/off[/dim]\n"
+        "[cyan]vibe skill stale[/cyan]           [dim]— detailed health analysis[/dim]\n"
+        "[cyan]vibe skill share[/cyan]           [dim]— publish your skill to the community[/dim]"
+    )
+
+    console.print(
+        Panel(actions, title="[bold]Quick Actions[/bold]", border_style="cyan", box=ROUNDED)
+    )
+
+    console.print()
+    console.print("[dim]Also try:[/dim] [cyan]vibe status[/cyan] [dim]for full ecosystem health[/dim]")
+    console.print()
+
+
+# ---------------------------------------------------------------------------
+# list
+# ---------------------------------------------------------------------------
+
+def _load_skills(project_root: str = ".") -> list[dict[str, Any]]:
+    """Load all available skills."""
+    from vibesop.core.routing import UnifiedRouter
+
+    router = UnifiedRouter(project_root=project_root)
+    return router.get_candidates() or []
+
+
+@app.command("list")
+def list_skills(
+    show_all: bool = typer.Option(False, "--all", "-a", help="Show all skills including archived"),
+    project_only: bool = typer.Option(
+        False, "--project", "-p", help="Show only project-scoped skills"
+    ),
+) -> None:
+    """List all skills with their lifecycle state."""
+    skills = _load_skills()
+
+    table = Table(title="Skills")
+    table.add_column("ID", style="bold")
+    table.add_column("Name")
+    table.add_column("State", justify="center")
+    table.add_column("Scope", justify="center")
+    table.add_column("Version")
+
+    for skill in skills:
+        lifecycle = skill.get("lifecycle", "active")
+        if not show_all and lifecycle == "archived":
+            continue
+        if project_only and skill.get("scope", "global") != "project":
+            continue
+
+        enabled = skill.get("enabled", True)
+        state_color = {
+            "active": "green" if enabled else "yellow",
+            "deprecated": "yellow",
+            "draft": "dim",
+            "archived": "red",
+        }.get(lifecycle, "white")
+
+        state_text = f"[{state_color}]{lifecycle}[/{state_color}]"
+        if not enabled:
+            state_text += " [dim](disabled)[/dim]"
+
+        table.add_row(
+            skill.get("id", "unknown"),
+            skill.get("name", "")[:30],
+            state_text,
+            skill.get("scope", "global"),
+            skill.get("version", "1.0.0"),
+        )
+
+    console.print(table)
+
+
+# ---------------------------------------------------------------------------
+# enable / disable
+# ---------------------------------------------------------------------------
+
+@app.command()
+def enable(
+    skill_id: str = typer.Argument(..., help="Skill ID to enable"),
+) -> None:
+    """Enable a skill for routing."""
+    from vibesop.core.skills import SkillManager
+
+    manager = SkillManager()
+    skill_info = manager.get_skill_info(skill_id)
+    if not skill_info:
+        console.print(f"[red]✗[/red] Skill '{skill_id}' not found")
+        raise typer.Exit(1)
+
+    config = SkillConfigManager.get_skill_config(skill_id)
+    if config and config.enabled:
+        console.print(f"[yellow]⚠ Skill '{skill_id}' is already enabled[/yellow]")
+        return
+
+    SkillConfigManager.update_skill_config(skill_id, {"enabled": True})
+    console.print(f"[green]✓[/green] Skill '{skill_id}' enabled")
+
+
+@app.command()
+def disable(
+    skill_id: str = typer.Argument(..., help="Skill ID to disable"),
+) -> None:
+    """Disable a skill from routing."""
+    from vibesop.core.skills import SkillManager
+
+    manager = SkillManager()
+    skill_info = manager.get_skill_info(skill_id)
+    if not skill_info:
+        console.print(f"[red]✗[/red] Skill '{skill_id}' not found")
+        raise typer.Exit(1)
+
+    config = SkillConfigManager.get_skill_config(skill_id)
+    if config and not config.enabled:
+        console.print(f"[yellow]⚠ Skill '{skill_id}' is already disabled[/yellow]")
+        return
+
+    SkillConfigManager.update_skill_config(skill_id, {"enabled": False})
+    console.print(f"[yellow]✓[/yellow] Skill '{skill_id}' disabled")
+
+
+# ---------------------------------------------------------------------------
+# status
+# ---------------------------------------------------------------------------
+
+@app.command()
+def status(
+    skill_id: str = typer.Argument(..., help="Skill ID to check"),
+) -> None:
+    """Show detailed status of a skill."""
+    from vibesop.core.skills.lifecycle import SkillLifecycle, SkillLifecycleManager
+
+    skills = _load_skills()
+    skill = next((s for s in skills if s.get("id") == skill_id), None)
+
+    if not skill:
+        console.print(f"[red]✗[/red] Skill '{skill_id}' not found")
+        raise typer.Exit(1)
+
+    lifecycle = skill.get("lifecycle", "active")
+    enabled = skill.get("enabled", True)
+
+    current = (
+        SkillLifecycle(lifecycle)
+        if lifecycle in [s.value for s in SkillLifecycle]
+        else SkillLifecycle.ACTIVE
+    )
+    valid_next = SkillLifecycleManager._valid_transitions().get(current, frozenset())  # pyright: ignore[reportPrivateUsage]
+    next_states = ", ".join(s.value for s in valid_next) if valid_next else "none (terminal)"
+
+    console.print(
+        Panel(
+            f"[bold]ID:[/bold] {skill_id}\n"
+            f"[bold]Name:[/bold] {skill.get('name', 'N/A')}\n"
+            f"[bold]State:[/bold] {lifecycle}\n"
+            f"[bold]Enabled:[/bold] {'Yes' if enabled else 'No'}\n"
+            f"[bold]Scope:[/bold] {skill.get('scope', 'global')}\n"
+            f"[bold]Version:[/bold] {skill.get('version', '1.0.0')}\n"
+            f"[bold]Valid transitions:[/bold] {next_states}",
+            title=f"Skill Status: {skill_id}",
+            border_style="blue" if enabled else "yellow",
+        )
+    )
+
+
+# ---------------------------------------------------------------------------
+# stale
+# ---------------------------------------------------------------------------
+
+@app.command()
+def stale(
+    auto_deprecate: bool = typer.Option(
+        False, "--auto", "-a", help="Automatically deprecate stale skills"
+    ),
+    json_output: bool = typer.Option(False, "--json", "-j", help="Output as JSON"),
+) -> None:
+    """Detect stale or underperforming skills.
+
+    Analyzes usage statistics to identify skills that haven't been used
+    recently or have low quality scores. Skills with no recorded usage
+    data are shown separately — these may be newly installed or never triggered.
+
+    Examples:
+        vibe skill stale              # Show report only
+        vibe skill stale --auto       # Auto-deprecate F-grade skills
+        vibe skill stale --json       # Machine-readable output
+    """
+    from vibesop.core.skills.feedback_loop import FeedbackLoop
+
+    loop = FeedbackLoop()
+    suggestions = loop.analyze_all(auto_deprecate=auto_deprecate)
+
+    if json_output:
+        import json as json_mod
+
+        report_data = loop.generate_report()
+        console.print(json_mod.dumps(report_data, indent=2, default=str))
+        return
+
+    if not suggestions:
+        console.print("[green]✓[/green] No stale or underperforming skills detected.")
+        return
+
+    to_archive = [s for s in suggestions if s.action == "archive"]
+    to_deprecate = [s for s in suggestions if s.action == "deprecate"]
+    to_warn = [s for s in suggestions if s.action == "warn"]
+    to_boost = [s for s in suggestions if s.action == "boost"]
+
+    table = Table(title="Skill Health Analysis", show_header=True)
+    table.add_column("Skill ID", style="cyan")
+    table.add_column("Action", style="bold")
+    table.add_column("Grade", justify="center")
+    table.add_column("Unused (days)", justify="right")
+    table.add_column("Routes", justify="right")
+    table.add_column("Reason", style="dim")
+
+    action_styles = {
+        "archive": ("[red]ARCHIVE[/red]", "red"),
+        "deprecate": ("[red]DEPRECATE[/red]", "red"),
+        "warn": ("[yellow]WARN[/yellow]", "yellow"),
+        "boost": ("[green]BOOST[/green]", "green"),
+    }
+
+    for s in suggestions:
+        label, _ = action_styles.get(s.action, (s.action.upper(), "white"))
+        days = str(s.days_since_last_use) if s.days_since_last_use is not None else "?"
+        table.add_row(s.skill_id, label, s.grade, days, str(s.total_routes), s.reason)
+
+    console.print(table)
+
+    summary_parts = []
+    if to_archive:
+        summary_parts.append(f"[red]{len(to_archive)} to archive[/red]")
+    if to_deprecate:
+        summary_parts.append(f"[red]{len(to_deprecate)} to deprecate[/red]")
+    if to_warn:
+        summary_parts.append(f"[yellow]{len(to_warn)} to warn[/yellow]")
+    if to_boost:
+        summary_parts.append(f"[green]{len(to_boost)} performing well[/green]")
+    console.print(f"\n[bold]Summary:[/bold] {', '.join(summary_parts)}")
+
+    if (to_deprecate or to_archive) and not auto_deprecate:
+        console.print(
+            "\n[dim]Run `vibe skill stale --auto` to apply deprecations and archives automatically.[/dim]"
+        )
+
+
+# ---------------------------------------------------------------------------
+# end-check
+# ---------------------------------------------------------------------------
+
+@app.command()
+def end_check(
+    json_output: bool = typer.Option(False, "--json", "-j", help="Output as JSON"),
+) -> None:
+    """Run end-of-session checks: retention + skill suggestions.
+
+    Called automatically by the session-end hook, or manually
+    to review skill health and auto-detected patterns.
+
+    \b
+    Examples:
+        vibe skill end-check
+        vibe skill end-check --json
+    """
+    from vibesop.core.skills.feedback_loop import FeedbackLoop
+
+    loop = FeedbackLoop()
+    result = loop.end_of_session_check()
+
+    if json_output:
+        import json as json_mod
+
+        console.print(json_mod.dumps(result, indent=2, default=str))
+        return
+
+    retention = result.get("retention_actions", [])
+    if retention:
+        console.print(
+            f"\n[yellow]Skill Health:[/yellow] [bold]{len(retention)}[/bold] action(s) suggested"
+        )
+        for r in retention:
+            console.print(f"  [dim]{r['skill_id']}:[/dim] {r['action']} — {r['reason']}")
+        console.print("  [dim]Run `vibe skill stale` for details.[/dim]")
+
+    if result.get("should_prompt_suggestions"):
+        pending = result.get("skill_suggestions_pending", 0)
+        console.print(
+            f"\n[bold cyan]Skill Suggestions:[/bold cyan] [bold]{pending}[/bold] pattern(s) detected"
+        )
+        console.print("  [dim]Run `vibe skills suggestions` to review and create skills.[/dim]")
+
+    if not retention and not result.get("should_prompt_suggestions"):
+        console.print("[green]All skills healthy. No new pattern suggestions.[/green]")
+
+
+# ---------------------------------------------------------------------------
+# add (from skill_add.py)
+# ---------------------------------------------------------------------------
+
+@app.command()
 def add(
     skill_source: str = typer.Argument(..., help="Skill file (.skill), directory, or URL"),
     global_: bool = typer.Option(
@@ -84,7 +453,6 @@ def add(
     """
     console.print("\n[bold cyan]🚀 Smart Skill Installation[/bold cyan]\n")
 
-    # Phase 1: Detect and load skill
     console.print("[dim]Phase 1: Detecting skill...[/dim]")
     skill_path, metadata = _detect_and_load_skill(skill_source)
 
@@ -97,8 +465,9 @@ def add(
     console.print(f"[dim]  ID:[/dim] {metadata.id}")
     console.print(f"[dim]  Description:[/dim] {metadata.description}")
 
-    # Phase 2: Security audit
     console.print("\n[dim]Phase 2: Security audit...[/dim]")
+    from vibesop.security.skill_auditor import SkillSecurityAuditor, ThreatLevel
+
     auditor = SkillSecurityAuditor(strict_mode=False, project_root=".")
     auditor.add_allowed_path(skill_path)
     audit_result = auditor.audit_skill_file(skill_path / "SKILL.md")
@@ -115,7 +484,6 @@ def add(
     else:
         console.print("[green]✓ Security audit passed[/green]")
 
-    # Phase 3: Determine installation scope
     console.print("\n[dim]Phase 3: Installation scope[/dim]")
 
     if global_:
@@ -131,8 +499,9 @@ def add(
             default="project",
         ).ask()
 
-    # Phase 4: Install the skill
     console.print(f"\n[dim]Phase 4: Installing {scope}...[/dim]")
+    from vibesop.installer.skill_installer import SkillInstaller
+
     installer = SkillInstaller()
 
     project_path = Path() if scope == "project" else Path.home() / ".vibe"
@@ -150,7 +519,6 @@ def add(
 
     console.print(f"[green]✓ Installed to:[/green] {install_result['installed_path']}")
 
-    # Phase 5: Intelligent configuration with LLM
     if auto_config:
         console.print("\n[dim]Phase 5: Auto-configuring with LLM understanding...[/dim]")
         _auto_configure_skill_with_llm(metadata, scope, skill_source)
@@ -158,7 +526,6 @@ def add(
         console.print("\n[dim]Phase 5: Manual configuration[/dim]")
         _manual_configure_skill(metadata, scope)
 
-    # Phase 6: Verify and sync
     console.print("\n[dim]Phase 6: Verifying...[/dim]")
     _verify_and_sync(metadata.id, scope)
 
@@ -175,24 +542,15 @@ def add(
     )
 
 
-def _detect_and_load_skill(source: str) -> tuple[Path, SkillMetadata | None]:
-    """Detect skill type and load metadata.
+def _detect_and_load_skill(source: str) -> tuple[Path, Any]:
+    """Detect skill type and load metadata."""
+    from vibesop.core.skills.base import SkillMetadata
+    from vibesop.core.skills.parser import parse_skill_md
 
-    Args:
-        source: Skill file path, directory, or URL
-
-    Returns:
-        Tuple of (skill_path, metadata)
-    """
     source_path = Path(source)
 
-    # Case 1: .skill file
     if source_path.suffix == ".skill":
-        # .skill files are essentially tarballs or JSON manifests
         console.print("[dim]Detected: .skill file[/dim]")
-
-        # For now, assume it's a directory with .skill extension
-        # In production, this would handle tarballs
         skill_path = source_path
         metadata_file = source_path / "SKILL.md"
 
@@ -200,7 +558,6 @@ def _detect_and_load_skill(source: str) -> tuple[Path, SkillMetadata | None]:
             metadata = parse_skill_md(metadata_file)
             return skill_path, metadata
 
-        # Try to generate metadata from skill name
         metadata = SkillMetadata(
             id=source_path.stem,
             name=source_path.stem.replace("-", " ").title(),
@@ -210,7 +567,6 @@ def _detect_and_load_skill(source: str) -> tuple[Path, SkillMetadata | None]:
         )
         return skill_path, metadata
 
-    # Case 2: Directory with SKILL.md
     if source_path.is_dir():
         metadata_file = source_path / "SKILL.md"
         if metadata_file.exists():
@@ -218,7 +574,6 @@ def _detect_and_load_skill(source: str) -> tuple[Path, SkillMetadata | None]:
             metadata = parse_skill_md(metadata_file)
             return source_path, metadata
 
-    # Case 3: URL (future)
     if source.startswith(("http://", "https://")):
         console.print("[dim]Detected: remote URL[/dim]")
         console.print("[yellow]⚠ URL installation not yet implemented[/yellow]")
@@ -228,20 +583,13 @@ def _detect_and_load_skill(source: str) -> tuple[Path, SkillMetadata | None]:
     return source_path, None
 
 
-def _auto_configure_skill(metadata: SkillMetadata, scope: str, _source: str) -> None:
-    """Auto-generate routing rules and priorities.
+def _auto_configure_skill(metadata: Any, scope: str, _source: str) -> None:
+    """Auto-generate routing rules and priorities (AIEnhancer path)."""
+    from vibesop.core.ai_enhancer import AIEnhancer
+    from vibesop.core.session_analyzer import SkillSuggestion
 
-    Uses AI to analyze the skill description and generate
-    appropriate configuration.
-
-    Args:
-        metadata: Skill metadata
-        scope: Installation scope (project/global)
-        source: Original skill source
-    """
     console.print("[dim]Analyzing skill for auto-configuration...[/dim]")
 
-    # Create a mock SkillSuggestion for AI enhancement
     suggestion = SkillSuggestion(
         skill_name=metadata.name,
         description=metadata.description,
@@ -251,7 +599,6 @@ def _auto_configure_skill(metadata: SkillMetadata, scope: str, _source: str) -> 
         estimated_value="medium",
     )
 
-    # Use AI to enhance the skill
     try:
         enhancer = AIEnhancer()
         enhanced = enhancer.enhance_suggestion(suggestion)
@@ -259,7 +606,6 @@ def _auto_configure_skill(metadata: SkillMetadata, scope: str, _source: str) -> 
         console.print(f"[green]✓ Category:[/green] {enhanced.category}")
         console.print(f"[green]✓ Tags:[/green] {', '.join(enhanced.tags)}")
 
-        # Auto-generate priority based on category
         priority_map = {
             "development": 70,
             "testing": 65,
@@ -273,16 +619,13 @@ def _auto_configure_skill(metadata: SkillMetadata, scope: str, _source: str) -> 
 
         priority = priority_map.get(enhanced.category, 50)
 
-        # Generate routing pattern
         if enhanced.trigger_conditions:
             primary_trigger = enhanced.trigger_conditions[0]
-            # Extract keywords for pattern matching
             keywords = _extract_keywords(primary_trigger)
             pattern = "|".join(keywords) if keywords else metadata.id.replace("-", ".*")
         else:
             pattern = metadata.id.replace("-", ".*")
 
-        # Auto-generate configuration
         config = {
             "skill_id": metadata.id,
             "priority": priority,
@@ -296,7 +639,6 @@ def _auto_configure_skill(metadata: SkillMetadata, scope: str, _source: str) -> 
             },
         }
 
-        # Save configuration
         _save_auto_config(config)
 
         console.print(f"[green]✓ Priority:[/green] {priority}")
@@ -306,7 +648,6 @@ def _auto_configure_skill(metadata: SkillMetadata, scope: str, _source: str) -> 
         console.print(f"[yellow]⚠ Auto-configuration failed: {e}[/yellow]")
         console.print("[dim]Falling back to default configuration[/dim]")
 
-        # Fallback config
         config = {
             "skill_id": metadata.id,
             "priority": 50,
@@ -321,19 +662,17 @@ def _auto_configure_skill(metadata: SkillMetadata, scope: str, _source: str) -> 
         _save_auto_config(config)
 
 
-def _auto_configure_skill_with_llm(metadata: SkillMetadata, scope: str, skill_source: str) -> None:
+def _auto_configure_skill_with_llm(metadata: Any, scope: str, skill_source: str) -> None:
     """Auto-configure skill using the understander module.
 
     When running inside an Agent environment (Claude Code, Kimi, Cursor, etc.),
     this function skips external LLM calls and relies on the rule engine or
     prompts the Agent itself for refinement. In standalone CLI mode, it falls
     back to AIEnhancer for low-confidence results.
-
-    Args:
-        metadata: Skill metadata
-        scope: Installation scope (project/global)
-        skill_source: Original skill source path
     """
+    from vibesop.core.llm_config import is_in_agent_environment
+    from vibesop.core.skills.understander import SkillAutoConfigurator, understand_skill_from_file
+
     in_agent = is_in_agent_environment()
 
     try:
@@ -346,10 +685,8 @@ def _auto_configure_skill_with_llm(metadata: SkillMetadata, scope: str, skill_so
             _fallback_auto_configure(metadata, scope, skill_source, in_agent)
             return
 
-        # Phase 1: Rule-based understanding
         config = understand_skill_from_file(actual_path, scope)
 
-        # Phase 2: Handle low confidence based on environment
         if config.confidence < 0.7:
             if in_agent:
                 console.print(
@@ -374,19 +711,12 @@ def _auto_configure_skill_with_llm(metadata: SkillMetadata, scope: str, skill_so
 
 
 def _fallback_auto_configure(
-    metadata: SkillMetadata, scope: str, skill_source: str, in_agent: bool
+    metadata: Any, scope: str, skill_source: str, in_agent: bool
 ) -> None:
-    """Fallback configuration when understander fails or SKILL.md is missing.
+    """Fallback configuration when understander fails or SKILL.md is missing."""
+    from vibesop.core.skills.understander import SkillAnalysis, SkillAutoConfigurator
 
-    Args:
-        metadata: Skill metadata
-        scope: Installation scope
-        skill_source: Original skill source path
-        in_agent: Whether running inside an Agent environment
-    """
     if in_agent:
-        from vibesop.core.skills.understander import SkillAnalysis, SkillAutoConfigurator
-
         configurator = SkillAutoConfigurator()
         analysis = SkillAnalysis()
         analysis.primary_category = "development"
@@ -398,23 +728,11 @@ def _fallback_auto_configure(
 
 
 def _prompt_agent_for_config(
-    _metadata: SkillMetadata,
+    _metadata: Any,
     config: Any,
     scope: str,
 ):
-    """When running inside an Agent environment, emit a structured review prompt.
-
-    Instead of calling an external LLM API, we present the draft configuration
-    so the executing Agent itself can review and adjust if needed.
-
-    Args:
-        metadata: Skill metadata
-        config: Auto-generated configuration draft
-        scope: Installation scope
-
-    Returns:
-        The configuration (possibly adjusted by Agent input)
-    """
+    """When running inside an Agent environment, emit a structured review prompt."""
     console.print("\n[bold cyan]🤖 Agent Configuration Review[/bold cyan]")
     console.print(
         "[dim]Running inside an Agent environment. Skipping external LLM call. "
@@ -442,8 +760,6 @@ def _prompt_agent_for_config(
         "To adjust later, modify .vibe/skills/auto-config.yaml or use --manual-config.[/dim]"
     )
 
-    # In true Agent environments the Agent may supply adjustments via stdin.
-    # We attempt a non-blocking read so that headless usage is not blocked.
     try:
         adjust = questionary.confirm(
             "Agent: Accept draft configuration?",
@@ -464,18 +780,16 @@ def _prompt_agent_for_config(
                     config.routing_patterns = adjustments["patterns"]
                 console.print("[green]✓ Adjustments applied[/green]")
     except (EOFError, KeyboardInterrupt, json.JSONDecodeError):
-        # Non-interactive / headless — continue with draft
         pass
 
     return config
 
 
 def _display_and_save_config(config: Any) -> None:
-    """Display configuration details and save to disk.
+    """Display configuration details and save to disk."""
+    from vibesop.core.llm_config import LLMConfigResolver
+    from vibesop.core.skills.understander import SkillAutoConfigurator
 
-    Args:
-        config: Auto-generated skill configuration
-    """
     console.print(f"[green]✓ Category:[/green] {config.category}")
     console.print(f"[green]✓ Priority:[/green] {config.priority}")
 
@@ -518,16 +832,10 @@ def _display_and_save_config(config: Any) -> None:
     console.print(f"[green]✓ Configuration saved:[/green] {config_file}")
 
 
-def _manual_configure_skill(metadata: SkillMetadata, scope: str) -> None:
-    """Interactive manual configuration wizard.
-
-    Args:
-        metadata: Skill metadata
-        scope: Installation scope
-    """
+def _manual_configure_skill(metadata: Any, scope: str) -> None:
+    """Interactive manual configuration wizard."""
     console.print("[dim]Starting manual configuration wizard...[/dim]\n")
 
-    # Ask for priority
     priority = questionary.select(
         "What priority should this skill have?",
         choices=[
@@ -539,7 +847,6 @@ def _manual_configure_skill(metadata: SkillMetadata, scope: str) -> None:
         default=questionary.Choice("🟡 Medium (50) - Default priority", value=50),
     ).ask()
 
-    # Ask about routing
     auto_routing = questionary.confirm(
         "Generate automatic routing rules from skill description?",
         default=True,
@@ -556,7 +863,6 @@ def _manual_configure_skill(metadata: SkillMetadata, scope: str) -> None:
         ).ask()
         routing_patterns = [pattern]
 
-    # Save configuration
     config = {
         "skill_id": metadata.id,
         "priority": priority,
@@ -574,123 +880,54 @@ def _manual_configure_skill(metadata: SkillMetadata, scope: str) -> None:
 
 
 def _save_auto_config(config: dict[str, Any]) -> None:
-    """Save auto-generated configuration.
-
-    Args:
-        config: Configuration dictionary
-    """
+    """Save auto-generated configuration."""
     import yaml
 
     config_file = Path(".vibe") / "skills" / "auto-config.yaml"
 
-    # Load existing config
     if config_file.exists():
         with config_file.open() as f:
             existing = yaml.safe_load(f) or {}
     else:
         existing = {"skills": {}}
 
-    # Update with new config
     skill_id = config["skill_id"]
     existing["skills"][skill_id] = config
 
-    # Save
     config_file.parent.mkdir(parents=True, exist_ok=True)
     with config_file.open("w") as f:
         yaml.dump(existing, f, default_flow_style=False)
 
 
 def _extract_keywords(text: str) -> list[str]:
-    """Extract keywords from text for pattern matching.
-
-    Args:
-        text: Text to extract from
-
-    Returns:
-        List of keywords
-    """
+    """Extract keywords from text for pattern matching."""
     import re
+    from collections import Counter
 
-    # Extract meaningful words (2+ characters)
     words = re.findall(r"\b\w{2,}\b", text.lower())
 
-    # Filter common words (expanded stop words list)
     stop_words = {
-        # English stop words
-        "the",
-        "a",
-        "an",
-        "is",
-        "are",
-        "was",
-        "were",
-        "be",
-        "been",
-        "being",
-        "have",
-        "has",
-        "had",
-        "do",
-        "does",
-        "did",
-        "will",
-        "would",
-        "could",
-        "should",
-        "may",
-        "might",
-        "must",
-        "shall",
-        "can",
-        "need",
-        "for",
-        "with",
-        "from",
-        "this",
-        "that",
-        "these",
-        "those",
-        "use",
-        "using",
-        "get",
-        "got",
-        "make",
-        "made",
-        "take",
-        "took",
-        "help",
-        "user",
-        "ask",
-        "want",
-        "like",  # Chinese stop words
-        "用户",
-        "帮助",
-        "使用",
-        "需要",
-        "想要",
-        "可以",
+        "the", "a", "an", "is", "are", "was", "were", "be", "been", "being",
+        "have", "has", "had", "do", "does", "did", "will", "would", "could",
+        "should", "may", "might", "must", "shall", "can", "need", "for",
+        "with", "from", "this", "that", "these", "those", "use", "using",
+        "get", "got", "make", "made", "take", "took", "help", "user", "ask",
+        "want", "like",
+        "用户", "帮助", "使用", "需要", "想要", "可以",
     }
 
     keywords = [w for w in words if w not in stop_words and len(w) >= 3]
-
-    # Return top 5 most frequent
-    from collections import Counter
 
     counter = Counter(keywords)
     return [word for word, _ in counter.most_common(5)]
 
 
 def _verify_and_sync(skill_id: str, _scope: str) -> None:
-    """Verify installation and sync to platform.
+    """Verify installation and sync to platform."""
+    from vibesop.core.routing.unified import UnifiedRouter
 
-    Args:
-        skill_id: Skill identifier
-        scope: Installation scope
-    """
-    # Test routing
     router = UnifiedRouter(project_root=Path())
 
-    # Try to route a query that should match this skill
     test_queries = [
         skill_id.replace("-", " "),
         f"help with {skill_id.replace('-', ' ')}",
@@ -707,7 +944,36 @@ def _verify_and_sync(skill_id: str, _scope: str) -> None:
     if not matched:
         console.print("[yellow]⚠ Routing test: No direct match (this is OK)[/yellow]")
 
-    # Sync to platform
     console.print("[dim]Syncing to platform...[/dim]")
-    # In production, this would call `vibe build`
     console.print("[green]✓ Synced[/green]")
+
+
+# ---------------------------------------------------------------------------
+# Community commands (delegated)
+# ---------------------------------------------------------------------------
+
+@app.command(name="share", help="Publish a skill to the community via GitHub Issues")
+def _share_cmd(  # pyright: ignore[reportUnusedFunction]
+    skill_id: str = typer.Argument(..., help="Skill ID to share"),
+) -> None:
+    share(skill_id)
+
+
+@app.command(name="discover", help="Discover community-shared skills from GitHub Issues")
+def _discover_cmd(  # pyright: ignore[reportUnusedFunction]
+    query: str | None = typer.Argument(None, help="Search keywords"),
+    json_output: bool = typer.Option(False, "--json", "-j", help="Output as JSON"),
+) -> None:
+    discover(query=query, json_output=json_output)
+
+
+@app.command(name="cleanup", help="Interactively review and clean up low-quality or stale skills")
+def _cleanup_cmd(  # pyright: ignore[reportUnusedFunction]
+    auto: bool = typer.Option(
+        False, "--auto", "-a", help="Apply all suggested actions automatically"
+    ),
+    dry_run: bool = typer.Option(
+        False, "--dry-run", "-n", help="Preview without making changes"
+    ),
+) -> None:
+    cleanup(auto=auto, dry_run=dry_run)

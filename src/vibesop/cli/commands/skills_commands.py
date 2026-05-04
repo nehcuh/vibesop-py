@@ -1,15 +1,31 @@
 # pyright: ignore[reportPossiblyUnboundVariable, reportUnnecessaryComparison]
-"""VibeSOP skills command - Manage skill storage.
+"""VibeSOP skills command group - All `vibe skills *` subcommands.
+
+Consolidated from: skills_cmd.py, skills_suggest_cmd.py,
+skills_recommended_cmd.py, skills_rate_cmd.py.
 
 Usage:
-    vibe skills list
-    vibe skills available
+    vibe skills list [--all] [--platform P] [--show-scope] [--show-status]
+    vibe skills available [--namespace N] [--verbose]
     vibe skills info <skill_id>
-    vibe skills install <skill_id>
-    vibe skills link <skill_id> <platform>
+    vibe skills install <skill_id> [--source PATH] [--url URL] [--force]
+    vibe skills link <skill_id> <platform> [--force]
     vibe skills unlink <skill_id> <platform>
-    vibe skills remove <skill_id>
-    vibe skills sync
+    vibe skills remove <skill_id> [--unlink-all]
+    vibe skills sync <platform> [--root PATH] [--force]
+    vibe skills status
+    vibe skills health [--pack P] [--verbose] [--ecosystem]
+    vibe skills enable <skill_id>
+    vibe skills disable <skill_id>
+    vibe skills report [--grade G] [--suggest-removal]
+    vibe skills scope <skill_id> [--set SCOPE]
+    vibe skills feedback --skill ID --query Q [--helpful yes/no] ...
+    vibe skills create [--name N] [--from TEMPLATE] [--from-suggestion ID]
+    vibe skills lifecycle <skill_id> [--set STATE] [--reason R] [--auto-review]
+    vibe skills suggestions [--dismiss] [--json]
+    vibe skills rate <skill_id> <1-5> [--review R]
+    vibe skills ratings [skill_id] [--limit N]
+    vibe skills recommended [--collaborative] [--install]
 """
 
 from pathlib import Path
@@ -21,13 +37,16 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
-from vibesop.cli.commands.skills_suggest_cmd import create_from_suggestion
 from vibesop.core.skills import SkillManager, SkillStorage
 from vibesop.core.skills.config_manager import SkillConfigManager
 from vibesop.core.skills.evaluator import RoutingEvaluator
 
 console = Console()
 
+
+# ---------------------------------------------------------------------------
+# list
+# ---------------------------------------------------------------------------
 
 def list_skills(
     all_: bool = typer.Option(
@@ -69,7 +88,6 @@ def list_skills(
     storage = SkillStorage()
 
     if platform:
-        # Show skills linked to a specific platform
         if platform not in storage.PLATFORM_SKILLS_DIRS:
             console.print(f"[red]✗ Unknown platform: {platform}[/red]")
             raise typer.Exit(1)
@@ -85,7 +103,6 @@ def list_skills(
                 console.print(f"  {link_type} {skill_id}")
 
     elif all_ or show_scope or show_status:
-        # Show detailed information
         skills = storage.list_skills()
 
         table = Table(title="Installed Skills")
@@ -100,9 +117,6 @@ def list_skills(
         table.add_column("Source", style="dim")
         table.add_column("Installed", style="dim")
 
-        # Load evaluations once for quality warnings
-        from vibesop.core.skills.evaluator import RoutingEvaluator
-
         evaluator = RoutingEvaluator()
         evals = evaluator.evaluate_all_skills()
 
@@ -111,7 +125,6 @@ def list_skills(
             if manifest.source.version:
                 source_str += f"@{manifest.source.version}"
 
-            # Quality warning for low-grade skills
             evaluation = evals.get(skill_id)
             if evaluation and evaluation.total_routes >= 3:
                 grade_colors = {
@@ -150,7 +163,6 @@ def list_skills(
         console.print(f"\n[dim]Total: {len(skills)} skills[/dim]")
 
     else:
-        # Simple list
         skills = storage.list_skills()
         console.print("\n[bold]Installed Skills:[/bold]")
         console.print(f"  {len(skills)} skills\n")
@@ -158,6 +170,10 @@ def list_skills(
         for skill_id in skills:
             console.print(f"  [cyan]{skill_id}[/cyan]")
 
+
+# ---------------------------------------------------------------------------
+# install
+# ---------------------------------------------------------------------------
 
 def install(
     skill_id: str = typer.Argument(..., help="Skill identifier"),
@@ -198,14 +214,12 @@ def install(
     """
     storage = SkillStorage()
 
-    # Determine source
     if url:
         console.print(f"[dim]Downloading {skill_id} from {url}...[/dim]")
         success, msg = storage.install_from_remote(skill_id, url, overwrite)
     elif source:
         success, msg = storage.install_skill(skill_id, source, overwrite)
     else:
-        # Try to find in project
         project_skills = Path("core") / "skills" / skill_id
         if project_skills.exists():
             success, msg = storage.install_skill(skill_id, project_skills, overwrite)
@@ -220,6 +234,10 @@ def install(
         console.print(f"[red]✗ {msg}[/red]")
         raise typer.Exit(1)
 
+
+# ---------------------------------------------------------------------------
+# link / unlink
+# ---------------------------------------------------------------------------
 
 def link(
     skill_id: str = typer.Argument(..., help="Skill identifier"),
@@ -278,6 +296,10 @@ def unlink(
         raise typer.Exit(1)
 
 
+# ---------------------------------------------------------------------------
+# remove
+# ---------------------------------------------------------------------------
+
 def remove(
     skill_id: str = typer.Argument(..., help="Skill identifier"),
     unlink_all: bool = typer.Option(
@@ -301,7 +323,6 @@ def remove(
     """
     storage = SkillStorage()
 
-    # Check if skill is linked to any platforms
     linked_platforms = []
     for platform_name in storage.PLATFORM_SKILLS_DIRS:
         platform_path = storage.PLATFORM_SKILLS_DIRS[platform_name] / skill_id
@@ -324,6 +345,10 @@ def remove(
         console.print(f"[red]✗ {msg}[/red]")
         raise typer.Exit(1)
 
+
+# ---------------------------------------------------------------------------
+# sync
+# ---------------------------------------------------------------------------
 
 def sync(
     platform: str = typer.Argument(..., help="Target platform"),
@@ -379,15 +404,17 @@ def sync(
     console.print(f"  [dim]Linked:[/dim] {linked} skills")
 
 
+# ---------------------------------------------------------------------------
+# status
+# ---------------------------------------------------------------------------
+
 def status() -> None:
     """Show skill storage and health status."""
     storage = SkillStorage()
 
-    # Check central storage
     central_exists = storage.CENTRAL_SKILLS_DIR.exists()
     central_count = len(storage.list_skills())
 
-    # Collect platform info
     platform_info = {}
     for platform_name, platform_dir in storage.PLATFORM_SKILLS_DIRS.items():
         if platform_dir.exists():
@@ -406,34 +433,29 @@ def status() -> None:
                 "symlinks": 0,
             }
 
-    # Display status
     console.print("\n[bold]Skill Storage Status[/bold]\n")
 
-    # Central storage
     central_status = "[green]✓[/green]" if central_exists else "[red]✗[/red]"
     console.print(f"{central_status} Central Storage: {storage.CENTRAL_SKILLS_DIR}")
     console.print(f"    [dim]Skills installed: {central_count}[/dim]\n")
 
-    # Platform directories
     console.print("[bold]Platform Directories:[/bold]\n")
     for platform_name, info in platform_info.items():
         if info["exists"]:
-            status = f"[green]{info['linked']} linked[/green]"
+            status_str = f"[green]{info['linked']} linked[/green]"
             symlink_count = info["symlinks"]
-            console.print(f"  {platform_name}: {status} ({symlink_count} symlinks)")
+            console.print(f"  {platform_name}: {status_str} ({symlink_count} symlinks)")
         else:
             console.print(f"  {platform_name}: [dim]not created[/dim]")
 
     console.print("")
 
-    # Health check (summary only)
     try:
         from vibesop.integrations.health_monitor import SkillHealthMonitor
 
         monitor = SkillHealthMonitor()
         summary = monitor.get_health_summary()
 
-        # Display brief health summary
         console.print("[bold]Skill Pack Health:[/bold]\n")
         console.print(f"  Total: {summary['total']} packs, {summary['total_skills']} skills")
         console.print(
@@ -445,6 +467,10 @@ def status() -> None:
     except Exception as e:
         console.print(f"[yellow]⚠ Could not check skill health: {e}[/yellow]\n")
 
+
+# ---------------------------------------------------------------------------
+# health / ecosystem
+# ---------------------------------------------------------------------------
 
 def health(
     pack: str | None = typer.Option(
@@ -486,24 +512,20 @@ def health(
 
     monitor = SkillHealthMonitor()
 
-    # Ecosystem gamified report
     if ecosystem:
         _show_ecosystem_report(monitor)
         return
 
     if pack:
-        # Check single pack
-        status = monitor.check_local_health(pack)
-        _display_health_status(status, verbose=verbose)
+        status_result = monitor.check_local_health(pack)
+        _display_health_status(status_result, verbose=verbose)
     else:
-        # Check all packs
         all_health = monitor.check_all_local()
 
         if not all_health:
             console.print("[yellow]No skill packs found[/yellow]")
             return
 
-        # Show summary
         summary = monitor.get_health_summary()
         console.print("\n[bold]Skill Pack Health Check[/bold]\n")
         console.print(
@@ -513,11 +535,9 @@ def health(
             f"[red]✗ {summary['critical']} critical[/red]\n"
         )
 
-        # Show details for each pack
         for _pack_name, health_status in sorted(all_health.items()):
             _display_health_status(health_status, verbose=verbose)
 
-        # Show evaluation metrics (Phase 3)
         try:
             evaluator = RoutingEvaluator()
             all_evals = evaluator.evaluate_all_skills()
@@ -557,7 +577,6 @@ def _show_ecosystem_report(monitor: Any) -> None:
         f"\n[bold]📊 Your Skill Ecosystem Health[/bold] [dim]({datetime.now().strftime('%Y-%m-%d')})[/dim]\n"
     )
 
-    # Gather data
     summary = monitor.get_health_summary()
     try:
         evaluator = RoutingEvaluator()
@@ -569,7 +588,6 @@ def _show_ecosystem_report(monitor: Any) -> None:
         console.print("[dim]No evaluation data yet. Use skills to generate feedback![/dim]")
         return
 
-    # Group by grade
     top_performers = []
     needs_attention = []
     at_risk = []
@@ -585,7 +603,6 @@ def _show_ecosystem_report(monitor: Any) -> None:
         else:
             at_risk.append((skill_id, ev))
 
-    # Top Performers
     if top_performers:
         console.print("[bold green]🏆 Top Performers[/bold green]")
         for sid, ev in top_performers[:5]:
@@ -596,7 +613,6 @@ def _show_ecosystem_report(monitor: Any) -> None:
             )
         console.print()
 
-    # Needs Attention
     if needs_attention:
         console.print("[bold yellow]⚠️  Needs Attention[/bold yellow]")
         for sid, ev in needs_attention[:5]:
@@ -606,7 +622,6 @@ def _show_ecosystem_report(monitor: Any) -> None:
             )
         console.print()
 
-    # At Risk
     if at_risk:
         console.print("[bold red]🗑️  At Risk[/bold red]")
         for sid, ev in at_risk[:5]:
@@ -618,7 +633,6 @@ def _show_ecosystem_report(monitor: Any) -> None:
         )
         console.print()
 
-    # Insufficient Data
     if insufficient:
         console.print("[bold blue]💡 Feedback Opportunities[/bold blue]")
         console.print(
@@ -629,13 +643,11 @@ def _show_ecosystem_report(monitor: Any) -> None:
             console.print(f"    • {sid}: {ev.total_routes}/3 routes (needs {needed} more)")
         console.print()
 
-    # Summary stats
     console.print("[bold]📈 Ecosystem Stats[/bold]")
     console.print(f"  Total skills evaluated: {len(all_evals)}")
     console.print(f"  Packs: {summary.get('total', 0)} total, {summary.get('healthy', 0)} healthy")
     console.print()
 
-    # Badges
     from vibesop.core.badges import BadgeTracker, get_badge_display
 
     tracker = BadgeTracker()
@@ -652,13 +664,7 @@ def _show_ecosystem_report(monitor: Any) -> None:
 
 
 def _display_health_status(health_status: Any, verbose: bool = False) -> None:
-    """Display health status for a single pack.
-
-    Args:
-        health_status: HealthStatus object
-        verbose: Show detailed information
-    """
-    # Determine icon and color
+    """Display health status for a single pack."""
     icon_map = {
         "healthy": ("✓", "green"),
         "warning": ("⚠", "yellow"),
@@ -668,7 +674,6 @@ def _display_health_status(health_status: Any, verbose: bool = False) -> None:
 
     icon, color = icon_map.get(health_status.health, ("?", "dim"))
 
-    # Display pack status
     console.print(
         f"[{color}]{icon}[/{color}] {health_status.name}: "
         f"[bold {color}]{health_status.health}[/bold {color}] "
@@ -678,13 +683,16 @@ def _display_health_status(health_status: Any, verbose: bool = False) -> None:
     if verbose and health_status.version != "unknown":
         console.print(f"  [dim]Version: {health_status.version}[/dim]")
 
-    # Display reasons if verbose or if not healthy
     if verbose or health_status.health != "healthy":
         for reason in health_status.reasons:
             console.print(f"  [dim]• {reason}[/dim]")
 
     console.print("")
 
+
+# ---------------------------------------------------------------------------
+# available
+# ---------------------------------------------------------------------------
 
 def available(
     namespace: str | None = typer.Option(None, "--namespace", "-n", help="Filter by namespace"),
@@ -745,6 +753,10 @@ def available(
     console.print(f"[dim]Namespaces: {', '.join(stats['namespaces'])}[/dim]")
 
 
+# ---------------------------------------------------------------------------
+# info
+# ---------------------------------------------------------------------------
+
 def info(
     skill_id: str = typer.Argument(..., help="Skill ID (e.g., gstack/review)"),
 ) -> None:
@@ -787,7 +799,6 @@ def info(
     if skill_info_data.get("source_file"):
         console.print(f"\n[dim]Source file: {skill_info_data['source_file']}[/dim]")
 
-    # Show evaluation metrics if available
     try:
         evaluator = RoutingEvaluator()
         evaluation = evaluator.evaluate_skill(skill_id)
@@ -810,9 +821,12 @@ def info(
             if evaluation.last_used:
                 console.print(f"  [dim]Last Used:[/dim] {evaluation.last_used[:10]}")
     except (OSError, ValueError):
-        # Silently skip if evaluation data is not available
         pass
 
+
+# ---------------------------------------------------------------------------
+# enable / disable
+# ---------------------------------------------------------------------------
 
 def enable(
     skill_id: str = typer.Argument(..., help="Skill ID to enable"),
@@ -827,7 +841,6 @@ def enable(
         # Enable a namespaced skill
         vibe skills enable gstack/review
     """
-    # Verify skill exists
     manager = SkillManager()
     skill_info_data = manager.get_skill_info(skill_id)
     if not skill_info_data:
@@ -858,7 +871,6 @@ def disable(
         # Disable a namespaced skill
         vibe skills disable gstack/review
     """
-    # Verify skill exists
     manager = SkillManager()
     skill_info_data = manager.get_skill_info(skill_id)
     if not skill_info_data:
@@ -873,6 +885,10 @@ def disable(
     SkillConfigManager.update_skill_config(skill_id, {"enabled": False})
     console.print(f"[yellow]✓ Skill '{skill_id}' disabled[/yellow]")
 
+
+# ---------------------------------------------------------------------------
+# report
+# ---------------------------------------------------------------------------
 
 def report(
     grade: str | None = typer.Option(
@@ -910,7 +926,6 @@ def report(
         console.print("[dim]Use skills to generate feedback data.[/dim]")
         raise typer.Exit(0)
 
-    # Filter
     filtered = list(all_evals.values())
     if suggest_removal:
         filtered = [e for e in filtered if e.grade == "F"]
@@ -921,7 +936,6 @@ def report(
         console.print("[dim]No skills match the filter criteria.[/dim]")
         raise typer.Exit(0)
 
-    # Sort by quality score descending
     filtered.sort(key=lambda e: e.quality_score, reverse=True)
 
     table = Table(title="Skill Quality Report")
@@ -947,7 +961,6 @@ def report(
         "D": "⚠️",
         "F": "🗑️",
     }
-    # Routing impact from quality_boost adjustments
     impact_map = {
         "A": "[green]+0.05 boost[/green]",
         "B": "[green]+0.02 boost[/green]",
@@ -960,7 +973,6 @@ def report(
         color = grade_colors.get(evaluation.grade, "dim")
         icon = grade_icons.get(evaluation.grade, "")
         impact = impact_map.get(evaluation.grade, "—")
-        # Only show impact if sufficient data
         if evaluation.total_routes < 3:
             impact = "[dim]insufficient data[/dim]"
         table.add_row(
@@ -977,6 +989,10 @@ def report(
     console.print(f"\n[dim]Total: {len(filtered)} skills[/dim]")
     console.print("[dim]Routing impact only applies when total_routes >= 3[/dim]")
 
+
+# ---------------------------------------------------------------------------
+# scope
+# ---------------------------------------------------------------------------
 
 def scope(
     skill_id: str = typer.Argument(..., help="Skill ID"),
@@ -1040,6 +1056,10 @@ def scope(
             f"  [dim]Bound to project: {updates.get('evaluation_context', {}).get('project_hash', 'unknown')}[/dim]"
         )
 
+
+# ---------------------------------------------------------------------------
+# feedback
+# ---------------------------------------------------------------------------
 
 def feedback(
     skill_id: str = typer.Option(..., "--skill", "-s", help="Skill ID"),
@@ -1107,7 +1127,6 @@ def feedback(
         icon = "✅" if execution_success else "❌"
         console.print(f"  [dim]Execution: {icon}[/dim]")
 
-    # Check for newly earned badges
     from vibesop.core.badges import BadgeTracker, get_badge_display
 
     tracker = BadgeTracker()
@@ -1118,6 +1137,10 @@ def feedback(
         console.print(f"[bold yellow]{meta['icon']}  New Badge: {meta['title']}[/bold yellow]")
         console.print(f"   [dim]{meta['description']}[/dim]")
 
+
+# ---------------------------------------------------------------------------
+# create
+# ---------------------------------------------------------------------------
 
 def create(
     name: str | None = typer.Option(None, help="Skill name (kebab-case)"),
@@ -1149,12 +1172,10 @@ def create(
     """
     manager = SkillManager()
 
-    # Create from auto-detected suggestion
     if from_suggestion:
-        create_from_suggestion(from_suggestion)
+        _create_from_suggestion(from_suggestion)
         return
 
-    # Copy from template if specified
     if from_template:
         template_info = manager.get_skill_info(from_template)
         if not template_info:
@@ -1173,11 +1194,9 @@ def create(
         skill_dir = Path.cwd() / ".vibe" / "skills" / name
         skill_dir.mkdir(parents=True, exist_ok=True)
 
-        # Copy SKILL.md and modify header
         template_path = template_info.get("source_file")
         if template_path:
             template_text = Path(template_path).read_text()
-            # Replace header fields
             new_text = template_text.replace(
                 f"id: {from_template}", f"id: {namespace}/{name}"
             ).replace(f"name: {from_template.split('/')[-1]}", f"name: {name}")
@@ -1188,7 +1207,6 @@ def create(
                 )
             (skill_dir / "SKILL.md").write_text(new_text)
         else:
-            # Generate minimal SKILL.md
             _generate_skill_md(skill_dir, name, description or f"{name} skill", namespace)
 
         console.print(f"[green]✓ Created skill from template:[/green] {skill_dir}")
@@ -1200,7 +1218,6 @@ def create(
 
     keywords: str | None = None
 
-    # Interactive wizard (when no --from specified)
     if interactive and not name:
         console.print("[bold]✨ Skill Creation Wizard[/bold]\n")
         name = questionary.text(
@@ -1250,6 +1267,10 @@ def create(
     console.print(f"  3. Run [bold]vibe skills enable {namespace}/{name}[/bold]")
 
 
+# ---------------------------------------------------------------------------
+# lifecycle
+# ---------------------------------------------------------------------------
+
 def lifecycle(
     skill_id: str = typer.Argument(..., help="Skill ID to inspect or modify"),
     set_state: str | None = typer.Option(
@@ -1295,7 +1316,6 @@ def lifecycle(
     current_state = config.lifecycle
 
     if set_state is None:
-        # Show current state
         state_colors = {
             "draft": "blue",
             "active": "green",
@@ -1310,7 +1330,6 @@ def lifecycle(
             console.print(f"  [dim]Reason: {config.deprecation_reason}[/dim]")
         return
 
-    # Validate state
     valid_states = [s.value for s in SkillLifecycleState]
     if set_state not in valid_states:
         console.print(
@@ -1318,7 +1337,6 @@ def lifecycle(
         )
         raise typer.Exit(1)
 
-    # Update state
     config.lifecycle = SkillLifecycleState(set_state)
     if reason:
         config.deprecation_reason = reason
@@ -1373,56 +1391,16 @@ def _lifecycle_auto_review() -> None:
         return
 
     console.print("[bold]🔍 Lifecycle Auto-Review[/bold]\n")
-    for skill_id, suggested_state, reason in suggestions:
+    for skill_id, suggested_state, reason_text in suggestions:
         console.print(
-            f"  [cyan]{skill_id}[/cyan] → [yellow]{suggested_state}[/yellow] [dim]({reason})[/dim]"
+            f"  [cyan]{skill_id}[/cyan] → [yellow]{suggested_state}[/yellow] [dim]({reason_text})[/dim]"
         )
     console.print("\n[dim]Run `vibe skills lifecycle <skill> --set <state>` to apply.[/dim]")
 
 
-def _generate_skill_md(
-    skill_dir: Path,
-    name: str,
-    description: str,
-    namespace: str,
-    keywords: str | None = None,
-) -> None:
-    """Generate a minimal SKILL.md file."""
-    tags = ""
-    if keywords:
-        tag_list = [k.strip() for k in keywords.split(",") if k.strip()]
-        tags = f"\ntags: [{', '.join(tag_list)}]"
-
-    content = f"""---
-id: {namespace}/{name}
-name: {name}
-description: {description}{tags}
-intent: general
-namespace: {namespace}
-version: 1.0.0
-type: prompt
----
-
-# {name.replace("-", " ").title()}
-
-## Overview
-
-{description}
-
-## Workflow
-
-1. Step one
-2. Step two
-3. Step three
-
-## Usage
-
-```bash
-vibe route "your query here"
-```
-"""
-    (skill_dir / "SKILL.md").write_text(content)
-
+# ---------------------------------------------------------------------------
+# optimize
+# ---------------------------------------------------------------------------
 
 def skill_optimize(
     skill_id: str = typer.Argument(..., help="Skill ID to analyze (e.g., 'gstack/investigate')"),
@@ -1449,7 +1427,6 @@ def skill_optimize(
     collector = FeedbackCollector()
     mismatches = collector.get_top_mismatches(top_n=100)
 
-    # Find mismatches where this skill was the correct answer
     candidate_queries: list[str] = []
     for m in mismatches:
         if m["actual_skill"] == skill_id and m["avg_confidence"] >= min_confidence:
@@ -1460,7 +1437,6 @@ def skill_optimize(
         console.print("[dim]Use `vibe feedback record` to collect routing feedback first[/dim]")
         raise typer.Exit(0)
 
-    # Extract keyword candidates from queries (simple frequency-based)
     import re
     from collections import Counter
 
@@ -1511,3 +1487,389 @@ def skill_optimize(
     console.print(table)
     console.print()
     console.print("[dim]To add a keyword: add it to the skill's trigger_when field in registry.yaml[/dim]")
+
+
+# ---------------------------------------------------------------------------
+# suggestions (from skills_suggest_cmd.py)
+# ---------------------------------------------------------------------------
+
+def suggestions(
+    dismiss: bool = typer.Option(False, "--dismiss", "-d", help="Dismiss all pending suggestions"),
+    json_output: bool = typer.Option(False, "--json", "-j", help="Output as JSON"),
+) -> None:
+    """Show auto-detected skill suggestions from usage patterns.
+
+    VibeSOP learns from your repeated workflows and suggests creating
+    reusable skills. Each suggestion is based on a sequence of tool
+    calls you've made successfully at least 5 times.
+
+    \b
+    Examples:
+        # View pending suggestions
+        vibe skills suggestions
+
+        # Dismiss all
+        vibe skills suggestions --dismiss
+
+        # Machine-readable output
+        vibe skills suggestions --json
+    """
+    from vibesop.core.skills.suggestion_collector import SkillSuggestionCollector
+
+    collector = SkillSuggestionCollector()
+
+    if json_output:
+        import json
+
+        suggestions_data = [s.to_dict() for s in collector.get_pending()]
+        console.print(
+            json.dumps(
+                {"suggestions": suggestions_data, **collector.get_stats()}, indent=2, default=str
+            )
+        )
+        return
+
+    if dismiss:
+        count = collector.dismiss_all()
+        console.print(f"[green]\u2713[/green] Dismissed [bold]{count}[/bold] pending suggestions.")
+        return
+
+    pending = collector.get_pending()
+    if not pending:
+        console.print(
+            "[dim]No pending skill suggestions. Keep working \u2014 VibeSOP learns from your workflows![/dim]"
+        )
+        stats = collector.get_stats()
+        if stats["created"] > 0:
+            console.print(
+                f"[dim]{stats['created']} skill(s) created from suggestions so far.[/dim]"
+            )
+        return
+
+    console.print(
+        f"\n[bold]\U0001f4a1 Pending Skill Suggestions[/bold] [dim]({len(pending)} total)[/dim]\n"
+    )
+
+    for i, s in enumerate(pending, 1):
+        steps_str = " \u2192 ".join(s.pattern_steps[:5])
+        if len(s.pattern_steps) > 5:
+            steps_str += f" \u2192 ... (+{len(s.pattern_steps) - 5} more)"
+        tags_str = f" [dim]{', '.join(s.context_tags)}[/dim]" if s.context_tags else ""
+
+        console.print(
+            f"[bold cyan]{i}.[/bold cyan] [bold]{s.suggested_name}[/bold] (confidence: {s.confidence:.0%})"
+        )
+        console.print(f"    Pattern: {steps_str}")
+        console.print(
+            f"    Occurrences: {s.occurrences} times, {s.success_rate:.0%} success{tags_str}"
+        )
+        console.print(f"    ID: [dim]{s.id}[/dim]")
+        console.print()
+
+    console.print("[bold]Actions:[/bold]")
+    console.print("  [green]vibe skills create --from-suggestion <id>[/green] \u2014 Create skill")
+    console.print("  [dim]vibe skills suggestions --dismiss[/dim] \u2014 Dismiss all")
+    console.print()
+
+
+def _create_from_suggestion(suggestion_id: str) -> None:
+    """Create a skill from an auto-detected pattern suggestion."""
+    from vibesop.core.skills.suggestion_collector import SkillSuggestionCollector
+    from vibesop.core.skills.understander import SkillAutoConfigurator, understand_skill_from_file
+
+    collector = SkillSuggestionCollector()
+    suggestion = collector.get(suggestion_id)
+
+    if not suggestion:
+        console.print(f"[red]\u2717 Suggestion not found: {suggestion_id}[/red]")
+        console.print("[dim]Run `vibe skills suggestions` to see available suggestions.[/dim]")
+        raise typer.Exit(1)
+
+    if suggestion.status == "created":
+        console.print(
+            f"[yellow]\u26a0 Suggestion already created as skill: {suggestion.skill_id}[/yellow]"
+        )
+        return
+
+    console.print("\n[bold]\u2728 Creating skill from pattern...[/bold]")
+    console.print(f"  Name: [cyan]{suggestion.suggested_name}[/cyan]")
+    console.print(f"  Pattern: [dim]{' \u2192 '.join(suggestion.pattern_steps)}[/dim]")
+    console.print(
+        f"  Confidence: {suggestion.confidence:.0%} ({suggestion.occurrences} occurrences)"
+    )
+
+    skill_dir = Path.cwd() / ".vibe" / "skills" / suggestion.suggested_name
+    skill_dir.mkdir(parents=True, exist_ok=True)
+
+    steps_md = "\n".join(f"   - {step}" for step in suggestion.pattern_steps)
+    content = f"""---
+id: custom/{suggestion.suggested_name}
+name: {suggestion.suggested_name}
+description: {suggestion.suggested_description}
+tags: [{", ".join(suggestion.context_tags) or "workflow, auto-generated"}]
+intent: general
+namespace: custom
+version: 1.0.0
+type: workflow
+auto_generated: true
+source_suggestion: {suggestion.id}
+---
+
+# {suggestion.suggested_name.replace("-", " ").title()}
+
+> Auto-generated from your workflow patterns
+> Confidence: {suggestion.confidence:.0%} | Occurrences: {suggestion.occurrences}
+
+## Overview
+
+{suggestion.suggested_description}
+
+## Detected Workflow Steps
+
+{steps_md}
+
+## Usage
+
+This skill was auto-detected from your successful tool call sequences.
+Edit this file to add context, refine steps, and improve accuracy.
+
+```bash
+vibe route "your query related to {" \u2192 ".join(suggestion.pattern_steps[:3])}"
+```
+"""
+    (skill_dir / "SKILL.md").write_text(content)
+    console.print(f"[green]\u2713[/green] SKILL.md created: {skill_dir}/SKILL.md")
+
+    try:
+        config = understand_skill_from_file(skill_dir, scope="project")
+        configurator = SkillAutoConfigurator()
+        configurator.save_config(config, Path.cwd() / ".vibe" / "skills")
+
+        console.print(
+            f"[green]\u2713[/green] Auto-analyzed: category={config.category}, priority={config.priority}"
+        )
+        console.print(f"  Routing patterns: {len(config.routing_patterns)} generated")
+    except Exception as e:
+        console.print(f"[yellow]\u26a0 Auto-config skipped: {e}[/yellow]")
+
+    skill_id = f"custom/{suggestion.suggested_name}"
+    collector.mark_created(suggestion.id, skill_id)
+    console.print(f"[green]\u2713[/green] Registered as: [bold]{skill_id}[/bold]")
+
+    console.print('\n[dim]Next: `vibe route "your query"` will now match this skill[/dim]')
+
+
+# ---------------------------------------------------------------------------
+# rate / ratings (from skills_rate_cmd.py)
+# ---------------------------------------------------------------------------
+
+def rate(
+    skill_id: str = typer.Argument(..., help="Skill ID to rate"),
+    score: int = typer.Argument(..., help="Rating score (1-5)"),
+    review: str | None = typer.Option(None, "--review", "-r", help="Optional text review"),
+) -> None:
+    """Rate a skill (1-5 stars) with optional review.
+
+    \b
+    Examples:
+        # Rate a skill 5 stars
+        vibe skills rate gstack/review 5
+
+        # Rate with review
+        vibe skills rate gstack/review 4 --review "Good but slow"
+    """
+    from vibesop.core.skills.ratings import SkillRatingStore
+
+    if not 1 <= score <= 5:
+        console.print("[red]\u2717 Score must be 1-5[/red]")
+        raise typer.Exit(1)
+
+    store = SkillRatingStore()
+    store.rate(skill_id, score, review or "")
+
+    stars = "\u2b50" * score + "\u2606" * (5 - score)
+    avg = store.get_avg_score(skill_id)
+    count = store.get_count(skill_id)
+    console.print(f"[green]\u2713[/green] Rated {skill_id}: {stars}")
+    console.print(f"  Average: {avg:.1f}/5 ({count} review(s))")
+    if review:
+        console.print(f"  Review: [dim]{review}[/dim]")
+
+
+def ratings(
+    skill_id: str | None = typer.Argument(None, help="Skill ID or omit for top-rated"),
+    limit: int = typer.Option(10, "--limit", "-n", help="Number of top skills to show"),
+) -> None:
+    """View skill ratings and reviews.
+
+    \b
+    Examples:
+        # Show ratings for a specific skill
+        vibe skills ratings gstack/review
+
+        # Show top-rated skills
+        vibe skills ratings
+    """
+    from vibesop.core.skills.ratings import SkillRatingStore
+
+    store = SkillRatingStore()
+
+    if skill_id:
+        ratings_list = store.get_ratings(skill_id)
+        avg = store.get_avg_score(skill_id)
+
+        if not ratings_list:
+            console.print(f"[dim]No ratings yet for {skill_id}[/dim]")
+            console.print(f"[dim]Rate it: vibe skills rate {skill_id} 5[/dim]")
+            return
+
+        stars = "\u2b50" * round(avg or 0) + "\u2606" * (5 - round(avg or 0))
+        console.print(
+            f"\n[bold]{skill_id}[/bold] \u2014 {stars} {avg:.1f}/5 ({len(ratings_list)} reviews)\n"
+        )
+
+        for r in sorted(ratings_list, key=lambda x: x.created_at, reverse=True)[:10]:
+            stars_str = "\u2b50" * r.score
+            review_text = f"[dim]\u2014 {r.review}[/dim]" if r.review else ""
+            console.print(f"  {stars_str} {review_text}")
+            console.print(f"  [dim]{r.created_at[:10]}[/dim]")
+    else:
+        top = store.get_top_rated(limit=limit)
+        if not top:
+            console.print(
+                "[dim]No ratings yet. Rate your skills with: vibe skills rate <id> <1-5>[/dim]"
+            )
+            return
+
+        console.print("\n[bold]Top Rated Skills[/bold]\n")
+        for i, (sid, score, count) in enumerate(top, 1):
+            stars = "\u2b50" * round(score) + "\u2606" * (5 - round(score))
+            console.print(
+                f"  {i:2}. [cyan]{sid}[/cyan] {stars} {score:.1f}/5 ([dim]{count} reviews[/dim])"
+            )
+
+
+# ---------------------------------------------------------------------------
+# recommended (from skills_recommended_cmd.py)
+# ---------------------------------------------------------------------------
+
+def recommended(
+    collaborative: bool = typer.Option(
+        False, "--collaborative", "-c", help="Show collaborative filtering recommendations"
+    ),
+    install: bool = typer.Option(False, "--install", "-i", help="Install all recommended skills"),
+) -> None:
+    """Show personalized skill recommendations.
+
+    Recommends skills based on your project's tech stack and
+    what other users with similar setups have installed.
+
+    \b
+    Examples:
+        # Stack-based recommendations
+        vibe skills recommended
+
+        # Collaborative filtering
+        vibe skills recommended --collaborative
+
+        # Install all in one go
+        vibe skills recommended --install
+    """
+    from vibesop.core.skills.recommender import SkillRecommender
+
+    recommender = SkillRecommender()
+
+    if collaborative:
+        recs = recommender.recommend_collaborative()
+        title = "Collaborative Recommendations"
+    else:
+        stack_recs = recommender.recommend_for_project()
+        missing_recs = recommender.detect_missing_skills()
+        recs = stack_recs + [
+            r for r in missing_recs if r.skill_id not in {s.skill_id for s in stack_recs}
+        ]
+        title = "Recommended for This Project"
+
+    if not recs:
+        console.print(
+            "[dim]No recommendations available. You might have all essential skills installed![/dim]"
+        )
+        return
+
+    from rich.table import Table
+
+    table = Table(title=title)
+    table.add_column("#", style="dim", justify="right")
+    table.add_column("Skill", style="cyan")
+    table.add_column("Reason", style="dim")
+    table.add_column("Status", justify="center")
+
+    for i, r in enumerate(recs, 1):
+        status_str = "[green]installed[/green]" if r.installed else "[yellow]not installed[/yellow]"
+        table.add_row(str(i), r.skill_id, r.reason, status_str)
+
+    console.print(table)
+
+    uninstalled = [r for r in recs if not r.installed]
+    if uninstalled:
+        console.print(f"\n[bold]{len(uninstalled)}[/bold] skill(s) not installed.")
+        if install:
+            for r in uninstalled:
+                try:
+                    from vibesop.installer.pack_installer import PackInstaller
+
+                    installer = PackInstaller()
+                    installer.install_skill_from_github(r.skill_id)
+                    console.print(f"[green]\u2713[/green] Installed: {r.skill_id}")
+                except Exception as e:
+                    console.print(f"[red]\u2717[/red] {r.skill_id}: {e}")
+        else:
+            console.print("[dim]Run with --install to install all recommendations.[/dim]")
+
+
+# ---------------------------------------------------------------------------
+# helpers
+# ---------------------------------------------------------------------------
+
+def _generate_skill_md(
+    skill_dir: Path,
+    name: str,
+    description: str,
+    namespace: str,
+    keywords: str | None = None,
+) -> None:
+    """Generate a minimal SKILL.md file."""
+    tags = ""
+    if keywords:
+        tag_list = [k.strip() for k in keywords.split(",") if k.strip()]
+        tags = f"\ntags: [{', '.join(tag_list)}]"
+
+    content = f"""---
+id: {namespace}/{name}
+name: {name}
+description: {description}{tags}
+intent: general
+namespace: {namespace}
+version: 1.0.0
+type: prompt
+---
+
+# {name.replace("-", " ").title()}
+
+## Overview
+
+{description}
+
+## Workflow
+
+1. Step one
+2. Step two
+3. Step three
+
+## Usage
+
+```bash
+vibe route "your query here"
+```
+"""
+    (skill_dir / "SKILL.md").write_text(content)

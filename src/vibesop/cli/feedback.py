@@ -10,18 +10,12 @@ import questionary
 
 logger = logging.getLogger(__name__)
 
-
 if TYPE_CHECKING:
     from rich.console import Console
 
 
 def _collect_feedback(result: Any, router: Any, console: Console) -> None:  # pyright: ignore[reportUnusedFunction]
-    """Collect user satisfaction feedback after orchestration.
-
-    Writes to AnalyticsStore (analytics.jsonl) and synchronizes with
-    ExecutionFeedbackCollector (execution_feedback.json) so the
-    RoutingEvaluator quality_boost can consume the data.
-    """
+    """Collect user satisfaction feedback after orchestration."""
     try:
         feedback = questionary.select(
             "Did this decomposition match your intent?",
@@ -54,16 +48,14 @@ def _collect_feedback(result: Any, router: Any, console: Console) -> None:  # py
                 with contextlib.suppress(Exception):
                     router.record_selection(step.skill_id, result.original_query, was_helpful=True)
 
-        # Synchronize feedback with evaluator data source
         _sync_to_evaluator(result, satisfied)
 
         if not satisfied:
             console.print("[dim]Thanks for the feedback. We'll use this to improve routing.[/dim]")
-            record_deviation = questionary.confirm(
+            if questionary.confirm(
                 "Would you like to record this as a routing deviation for analysis?",
                 default=False,
-            ).ask()
-            if record_deviation:
+            ).ask():
                 console.print(
                     '[dim]Use: vibe deviation record "<query>" "<skill>" <confidence> "<layer>"[/dim]'
                 )
@@ -72,13 +64,7 @@ def _collect_feedback(result: Any, router: Any, console: Console) -> None:  # py
 
 
 def _sync_to_evaluator(result: Any, satisfied: bool) -> None:
-    """Sync feedback to ExecutionFeedbackCollector for evaluator consumption.
-
-    The RoutingEvaluator reads from ExecutionFeedbackCollector
-    (execution_feedback.json) to compute quality scores. Without this
-    sync, feedback collected by the CLI would never reach the evaluator,
-    making the quality_boost in OptimizationService a no-op.
-    """
+    """Sync feedback to ExecutionFeedbackCollector for evaluator consumption."""
     try:
         from pathlib import Path
 

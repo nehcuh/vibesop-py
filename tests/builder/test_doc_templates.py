@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 from jinja2 import Environment, Template
 
-from vibesop.builder.doc_templates import DocTemplates, DocType
+from vibesop.builder.docs import DocTemplates, DocType
 
 
 class TestDocType:

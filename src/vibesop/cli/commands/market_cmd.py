@@ -43,6 +43,7 @@ def search(
         # Search page 2
         vibe market search git --page 2
     """
+    console.print("[yellow]⚠️ Market features are experimental[/yellow]")
     crawler = GitHubSkillCrawler()
     results = crawler.search(query, page=page)
     results = _enrich_with_local_quality(results)
@@ -136,6 +137,7 @@ def install(
         # Install without confirmation prompt
         vibe market install user/repo --yes
     """
+    console.print("[yellow]⚠️ Market features are experimental[/yellow]")
     import questionary
 
     from vibesop.installer.pack_installer import PackInstaller
@@ -210,6 +212,7 @@ def publish(
         # Preview without publishing
         vibe market publish --dry-run
     """
+    console.print("[yellow]⚠️ Market features are experimental[/yellow]")
     if not repo:
         repo = _detect_git_remote()
         if not repo:
