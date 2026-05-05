@@ -110,10 +110,14 @@ class TriageService:
         if cached:
             return LayerResult(match=cached, layer=RoutingLayer.AI_TRIAGE)
 
-        skills_summary = "\n".join(
-            f"- {c['id']}: {c.get('intent', c.get('description', 'N/A'))}"
-            for c in triage_candidates
-        )
+        def _skill_summary(c: dict[str, Any]) -> str:
+            text = c.get("intent", c.get("description", "N/A"))
+            triggers = c.get("triggers", [])
+            if triggers:
+                return f"- {c['id']}: {text} [triggers: {', '.join(triggers)}]"
+            return f"- {c['id']}: {text}"
+
+        skills_summary = "\n".join(_skill_summary(c) for c in triage_candidates)
 
         prompt = self.build_ai_triage_prompt(augmented_query, skills_summary)
 

@@ -220,6 +220,7 @@ class SkillLoader:
             tags=getattr(base, "tags", None),
             skill_type=skill_type,
             trigger_when=getattr(base, "trigger_when", ""),
+            triggers=getattr(base, "triggers", None),
             algorithms=getattr(base, "algorithms", None),
         )
         self._validate_algorithms(metadata)

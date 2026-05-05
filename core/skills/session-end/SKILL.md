@@ -2,14 +2,28 @@
 id: builtin/session-end
 name: session-end
 description: Session wrap-up - update handoff + commit + auto-record experience
-tags: [session, wrap, handoff, commit, summary, end, 会话, 结束, 总结]
+tags: [session, wrap, handoff, commit, summary, end, 会话, 结束, 总结,
+       done, finished, leaving, heading out, wrap up, that's all, gotta go,
+       离开, 走了, 拜拜, 再见, 先撤, 就到这里, 今天就到这里]
+triggers:
+  - "that's all for now"
+  - "heading out"
+  - "I'm leaving"
+  - "I'm done"
+  - "gotta go"
+  - "我要离开了"
+  - "先走了"
+  - "拜拜"
+  - "今天就到这里"
+  - "session end"
+  - "/session-end"
 version: 2.1.0
 allowed-tools:
   - Read
   - Write
   - Edit
   - Bash
-intent: wrap-up
+intent: Session end and wrap-up — capture handoff, update memory, and commit changes when the user signals they are leaving or done
 namespace: builtin
 type: prompt
 ---
