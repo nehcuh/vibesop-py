@@ -24,32 +24,30 @@
 3. **Code Review Defect Fixes** ✅ (Completed - April 27)
 4. **CLI `vibe build --platform=all`** ✅ (Completed)
 
-### Current Week (May 1-3, 2026)
+### Previous Week (May 1-3, 2026) — Completed
 
 1. **Test Coverage Backfill** ✅ (Completed - May 3)
-   - 341 new tests across 24 files covering previously untested core modules
-   - Orchestration, Memory, Routing, Matching, Models, Skills, Optimization, Preference, Instinct, Algorithms, Checkpoint
-   - Fixed pytest basename collision issues (3 files renamed)
-   - All new tests passing
-
 2. **Documentation YAML→TOML Migration** ✅ (Completed - May 3)
-   - 15+ docs updated to reference `.toml` instead of `.yaml`
-   - CONTRIBUTING, CLI_REFERENCE, README, troubleshooting, etc.
+3. **Agent Override Protocol Cross-Platform Sync** ✅ (Completed - May 3)
 
-3. **Coverage Threshold Recovery** ⏳ (Pending)
-   - Temporarily lowered to `fail_under = 0` during mass test addition
-   - Need to restore to 75%+ once coverage is verified
+### Current Week (May 4-10, 2026)
 
-4. **Agent Override Protocol Cross-Platform Sync** ✅ (Completed - May 3)
-   - Synced Agent Override Protocol + Disagreement Protocol to Claude Code templates
-   - `CLAUDE.md.j2` and `CLAUDE.md.project.j2` now consistent with opencode/kimi_cli
+1. **Vibe Coding Article Revision** ✅ (Completed - May 5)
+   - Added "Core Problems + Survival Principles" overview chapter to docs/vibe-coding-article.md
+   - Structured as: answers first → story second → methodology third
+
+2. **Routing Quality Improvements** ✅ (Completed - May 5)
+   - Candidate deduplication by canonical ID
+   - Management-only skill tagging (slash-* prefix exclusion from semantic matching)
+   - Triage prompt v3 with office-hours/plan routing rules
+   - Committed and pushed: `2380ec2`
 
 ---
 
 ## Projects Summary
 
 ### VibeSOP (vibesop-py)
-**Status**: v5.4.1 (Test Coverage Backfill Complete)
+**Status**: v5.4.1 (Routing refinements + docs)
 **Description**: AI-assisted development intelligent routing engine with skill-level LLM configuration and Agent Runtime layer
 **Coverage**: TBD — 341 new tests added, threshold temporarily at 0%
 **Key Metrics**:
@@ -59,11 +57,16 @@
 - Test speed: 39s fast suite / ~4.5min full suite
 - Total tests: ~2300+ (including 341 new)
 
+**Recent Changes** (2026-05-05):
+- ✅ vibe-coding-article.md: added core problems + survival principles overview
+- ✅ Routing: candidate dedup, management-only skill exclusion, triage prompt v3
+- ✅ Committed and pushed: `2380ec2`
+
 **Recent Changes** (2026-05-03):
-- ✅ 341 new tests added across 24 test files (orchestration, memory, routing, matching, skills, optimization, preference, instinct, algorithms, checkpoint)
+- ✅ 341 new tests added across 24 test files
 - ✅ Fixed pytest basename collisions (3 test files renamed)
 - ✅ Document YAML→TOML migration complete (15+ files)
-- ✅ Session storage path confusion clarified (SessionContext vs GenericSessionTracker)
+- ✅ Session storage path confusion clarified
 
 **Recent Changes** (2026-04-27):
 - ✅ 9 P0/P1 routing/feedback defects fixed (IndexError, Chinese bypass, ConfigSource, etc.)

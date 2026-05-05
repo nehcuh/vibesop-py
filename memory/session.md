@@ -800,5 +800,36 @@ Coverage: temporarily lowered fail_under=0 from 75% (massive new test additions)
 
 ## Current Session
 
+### S8 (2026-05-05 18:49~19:00) 公众号文章修订 + 代码提交推送
+
+**Session**: 用户离开前的收尾工作
+
+**Summary**:
+1. **文档修订**: 为 `docs/vibe-coding-article.md` 新增 "零、先回答两个关键问题" 章节
+   - 五个核心问题（AI 失忆 / 跑偏 / 不听话 / 边界崩溃 / 技术债累积）
+   - 五条生存原则（用表格一一对应问题→解法）
+   - 一句话总结：vibe coding 是"为 AI 的不可靠性设计补偿系统"
+   - 文章结构变为：先给答案 → 再给故事 → 最后给方法论
+
+2. **Git 提交推送**: 将此前未提交的路由改进代码推送到远程 main
+   - Commit: `2380ec2` — feat(routing): dedup candidates, exclude mgmt skills from triage, prompt v3
+   - CandidateManager: canonical ID 去重 + management-only 技能标记
+   - TriageService: 修复 candidate lookup bug，排除 management-only 技能
+   - TriagePromptRegistry: v3 升级，新增 office-hours/plan 路由规则，禁止 slash-* 技能
+   - 新增 candidate dedup 测试
+
+**Files Modified**:
+- `docs/vibe-coding-article.md` — 新增核心问题/原则概览章节
+- `src/vibesop/core/routing/candidate_manager.py` — 去重 + management 标记
+- `src/vibesop/core/routing/triage_service.py` — candidate lookup 修复 + 过滤
+- `src/vibesop/llm/triage_prompts.py` — prompt v3
+- `tests/core/routing/test_candidate_dedup_and_management.py` — 新增
+
+**Next Steps**: None — 用户已离开
+
+**Recorded**: no — 内容为文档写作，无新增技术知识
+
+---
+
 *No active session.*
 
