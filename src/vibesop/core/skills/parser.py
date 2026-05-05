@@ -93,7 +93,8 @@ def build_metadata(
         triggers = [t.strip() for t in triggers.split(",") if t.strip()]
 
     trigger_when = data.get("trigger_when", "")
-    if not trigger_when and description:
+    # Only extract from description if neither trigger_when nor triggers are provided
+    if not trigger_when and not triggers and description:
         trigger_when = extract_trigger_from_description(description)
 
     algorithms = data.get("algorithms") or []
@@ -138,7 +139,9 @@ def extract_trigger_from_description(description: str) -> str:
     for pattern in patterns:
         match = re.search(pattern[0], description, re.IGNORECASE)
         if match:
-            return match.group(1).strip()
+            # Truncate at newline to avoid pulling in multi-line YAML descriptions
+            raw = match.group(1).strip().split("\n")[0]
+            return raw
 
     return ""
 
