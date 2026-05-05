@@ -460,6 +460,29 @@ Follow the steps defined in the SKILL.md exactly.
 
 **Step 4**: Run verification after completion.
 
+## Session Lifecycle Events
+
+Routing applies to **user tasks**. But some events are **Agent lifecycle
+signals** and MUST be handled even when `vibe route` does not return a
+confident match.
+
+### Session End
+
+When the user signals the end of a session, you MUST run `session-end`:
+
+**English signals**: "that's all for now", "heading out", "I'm leaving",
+"I'm done", "gotta go", "wrap it up", "call it a day"
+
+**Chinese signals**: "我要离开了", "先走了", "拜拜", "再见",
+"今天就到这里", "就到这里吧", "收工"
+
+**Explicit command**: `/session-end`
+
+**If routing fails** (short-query bypass, no confident match):
+- Do NOT skip session-end because `vibe route` returned fallback-llm
+- Run the skill directly: `read skills/session-end/SKILL.md` and execute
+- This is a P0 mandatory skill — skipping it is a protocol violation
+
 ## Skill Catalog
 
 The complete skill catalog with descriptions, triggers, and usage guides
@@ -620,6 +643,29 @@ For skill management commands, use:
             'export CONVERSATION_ID="opencode-$(python3 -c "import os, hashlib; print(hashlib.sha256(os.getcwd().encode()).hexdigest()[:16])")"',
             'vibe route --conversation "$CONVERSATION_ID" "<user_request>"',
             "```",
+            "",
+            "## Session Lifecycle Events",
+            "",
+            "Routing applies to **user tasks**. But some events are **Agent lifecycle",
+            "signals** and MUST be handled even when `vibe route` does not return a",
+            "confident match.",
+            "",
+            "### Session End",
+            "",
+            "When the user signals the end of a session, you MUST run `session-end`:",
+            "",
+            "**English signals**: \"that's all for now\", \"heading out\", \"I'm leaving\",",
+            "\"I'm done\", \"gotta go\", \"wrap it up\", \"call it a day\"",
+            "",
+            "**Chinese signals**: \"我要离开了\", \"先走了\", \"拜拜\", \"再见\",",
+            "\"今天就到这里\", \"就到这里吧\", \"收工\"",
+            "",
+            "**Explicit command**: `/session-end`",
+            "",
+            "**If routing fails** (short-query bypass, no confident match):",
+            "- Do NOT skip session-end because `vibe route` returned fallback-llm",
+            "- Run the skill directly: `read skills/session-end/SKILL.md` and execute",
+            "- This is a P0 mandatory skill — skipping it is a protocol violation",
             "",
             "## Auto-Routing Setup",
             "",
