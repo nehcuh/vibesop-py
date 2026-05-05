@@ -163,7 +163,9 @@ class TriageService:
             self._circuit_breaker.maybe_trip_on_latency()
 
             if skill_id:
-                candidate = next((c for c in candidates if c["id"] == skill_id), None)
+                candidate = next((c for c in triage_candidates if c["id"] == skill_id), None)
+                if candidate is None:
+                    candidate = next((c for c in triage_candidates if c["id"].lower() == skill_id.lower()), None)
                 if candidate:
                     source = self._get_skill_source(skill_id, candidate.get("namespace", "builtin"))
                     # Dynamic confidence: structured JSON gets higher trust than regex fallback
@@ -203,24 +205,26 @@ class TriageService:
     ) -> list[dict[str, Any]]:
         """Pre-filter candidates for AI Triage using fast keyword matching.
 
+        Excludes management-only skills (slash-*) from semantic matching.
         Instead of sending all candidates to the LLM (wasteful), we use the
         KeywordMatcher to rank them by relevance and only send the top N.
         """
-        if len(candidates) <= max_skills:
-            return candidates
+        eligible = [c for c in candidates if not c.get("management_only")]
+        if len(eligible) <= max_skills:
+            return eligible
 
         matcher_config = MatcherConfig(
             min_confidence=0.0,
             use_cache=False,
         )
         matcher = KeywordMatcher(matcher_config)
-        matches = matcher.match(query, candidates, top_k=max_skills)
+        matches = matcher.match(query, eligible, top_k=max_skills)
         matched_ids = {m.skill_id for m in matches}
 
         # Preserve original order for matched candidates, then backfill if needed
-        prefiltered = [c for c in candidates if c["id"] in matched_ids]
+        prefiltered = [c for c in eligible if c["id"] in matched_ids]
         if len(prefiltered) < max_skills:
-            remaining = [c for c in candidates if c["id"] not in matched_ids]
+            remaining = [c for c in eligible if c["id"] not in matched_ids]
             prefiltered.extend(remaining[: max_skills - len(prefiltered)])
 
         return prefiltered[:max_skills]

@@ -107,8 +107,15 @@ class CandidateManager:
                 )
             )
 
+    MANAGEMENT_SKILL_PREFIXES = ("slash-", "builtin/slash-", "builtin-slash-")
+
     def get_candidates(self) -> list[dict[str, Any]]:
-        """Discover and return all skill candidates."""
+        """Discover and return all skill candidates.
+
+        Deduplicates by canonical ID (lowercased) and marks management-only
+        skills (slash-* prefix) so downstream layers can exclude them from
+        semantic matching.
+        """
         if self._skill_loader is None:
             self._search_paths = self._build_search_paths()
             from vibesop.core.skills import SkillLoader
@@ -125,8 +132,15 @@ class CandidateManager:
         cold_start = get_cold_start_strategy(self.project_root)
         p0_skills = set(cold_start.get_p0_skills())
         candidates: list[dict[str, Any]] = []
+        seen_ids: set[str] = set()
         for _skill_id, definition in definitions.items():
             metadata = definition.metadata
+            raw_id = metadata.id.lower()
+            canonical_id = raw_id.replace("/", "-")
+            if canonical_id in seen_ids:
+                continue
+            seen_ids.add(canonical_id)
+
             tags = metadata.tags or []
             if not tags:
                 tags = self._extract_name_keywords(metadata.name)
@@ -135,6 +149,7 @@ class CandidateManager:
             enabled = skill_config.enabled if skill_config else True
             scope = skill_config.scope if skill_config else "global"
             lifecycle = skill_config.lifecycle if skill_config else "active"
+            is_management = metadata.id.startswith(self.MANAGEMENT_SKILL_PREFIXES)
 
             candidates.append(
                 {
@@ -151,6 +166,7 @@ class CandidateManager:
                     "scope": scope,
                     "lifecycle": lifecycle,
                     "source_file": str(definition.source_file) if definition.source_file else None,
+                    "management_only": is_management,
                 }
             )
         return candidates

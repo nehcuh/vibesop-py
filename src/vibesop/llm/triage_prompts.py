@@ -48,7 +48,9 @@ class TriagePromptRegistry:
             "2. Consider the CONTEXT: Is this debugging, testing, reviewing, or planning?\n"
             "3. Match to the skill whose PRIMARY PURPOSE aligns with the user's goal.\n"
             "4. Prefer specific skills over general ones (e.g., 'gstack/qa' over 'superpowers/tdd' for testing).\n"
-            "5. If multiple skills could apply, choose the one that best matches the specific scenario.\n\n"
+            "5. If multiple skills could apply, choose the one that best matches the specific scenario.\n"
+            "6. NEVER select slash-* or management skills (e.g., slash-route, slash-help). "
+            "These are routing infrastructure, not user-facing skills.\n\n"
             "Common patterns:\n"
             "- 'review code', 'check PR' → gstack/review or superpowers/review\n"
             "- 'test this', 'QA' → gstack/qa (for browser testing) or superpowers/tdd (for test-writing)\n"
@@ -56,6 +58,9 @@ class TriagePromptRegistry:
             "- 'design', 'architecture' → gstack/architect (system design) or gstack/plan-design-review (review)\n"
             "- 'refactor', 'clean up' → superpowers/refactor\n"
             "- 'debug', 'error', 'broken' → gstack/investigate or superpowers/debug\n"
+            "- 'brainstorm', 'I have an idea', 'analyze this idea', 'is this worth building' → gstack/office-hours\n"
+            "- '分析想法', '帮我分析', '头脑风暴', '这个想法怎么样' → gstack/office-hours\n"
+            "- 'plan', '规划', '策略' → omx/ralplan or superpowers/architect\n"
             "- Session end signals ('that's all for now', 'heading out', 'I'm done', '我要离开了') → builtin/session-end\n\n"
             "User request: {query}\n\n"
             "Available skills:\n{skills_summary}\n\n"
@@ -64,7 +69,7 @@ class TriagePromptRegistry:
         ),
     }
 
-    DEFAULT_VERSION = "v1"
+    DEFAULT_VERSION = "v3"
 
     @classmethod
     def get_prompt(cls, version: str | None = None) -> str:
