@@ -141,6 +141,9 @@ def extract_trigger_from_description(description: str) -> str:
         if match:
             # Truncate at newline to avoid pulling in multi-line YAML descriptions
             raw = match.group(1).strip().split("\n")[0]
+            # Cap length to avoid matching entire descriptions that lack punctuation
+            if len(raw) > 80:
+                raw = raw[:80].rsplit(" ", 1)[0] + "..."
             return raw
 
     return ""
