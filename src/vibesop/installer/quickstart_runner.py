@@ -216,10 +216,9 @@ class QuickstartRunner:
                     Path.home() / ".claude" if config.global_install else install_target
                 )
                 hooks_result = installer.install(config.platform, hooks_install_target)
-                hooks_installed = sum(
-                    1 for v in hooks_result.get("hooks_installed", {}).values() if v
-                )
-                total_hooks = len(hooks_result.get("hooks_installed", {}))
+                hooks_installed_list = hooks_result.get("hooks_installed", [])
+                hooks_installed = len(hooks_installed_list) if isinstance(hooks_installed_list, list) else sum(1 for v in hooks_installed_list.values() if v)
+                total_hooks = len(hooks_installed_list)
                 if hooks_installed > 0:
                     console.print(f"✓ Hooks installed: {hooks_installed}/{total_hooks}")
                 else:
