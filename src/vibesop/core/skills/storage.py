@@ -319,7 +319,64 @@ class SkillStorage:
             if manifest:
                 skills[skill_dir.name] = manifest
 
+        # Discover pack-installed skills from platform symlinks.
+        # Pack skills are installed to e.g. ~/.config/skills/omx/skills/analyze/
+        # and symlinked into platform dirs with flat names like "omx-analyze".
+        # We resolve symlinks backwards to find the actual skill directories.
+        for platform_dir in self.PLATFORM_SKILLS_DIRS.values():
+            if not platform_dir.exists():
+                continue
+            for entry in platform_dir.iterdir():
+                if not entry.is_symlink():
+                    continue
+                skill_id = entry.name
+                if skill_id in skills:
+                    continue
+
+                target = entry.resolve()
+                # Only include symlinks pointing into central storage
+                try:
+                    target.relative_to(self.CENTRAL_SKILLS_DIR)
+                except ValueError:
+                    continue
+
+                manifest = self._build_manifest_from_skill_md(skill_id, target / "SKILL.md")
+                if manifest:
+                    skills[skill_id] = manifest
+
         return skills
+
+    def _build_manifest_from_skill_md(
+        self, skill_id: str, skill_file: Path
+    ) -> SkillManifest | None:
+        """Build a SkillManifest from a SKILL.md file for pack-installed skills."""
+        if not skill_file.exists():
+            return None
+
+        try:
+            from vibesop.core.skills.parser import parse_skill_md
+
+            metadata = parse_skill_md(skill_file)
+        except Exception:
+            return None
+
+        if metadata is None:
+            return None
+
+        return SkillManifest(
+            id=skill_id,
+            name=metadata.name,
+            description=metadata.description,
+            version=metadata.version,
+            source=SkillSource(
+                type="pack",
+                path=str(skill_file.parent),
+                version=None,
+                ref=metadata.namespace if metadata.namespace else "",
+            ),
+            installed_at="",
+            checksum="",
+        )
 
     def get_linked_skills(self, platform: str) -> list[str]:
         if platform not in self.PLATFORM_SKILLS_DIRS:
