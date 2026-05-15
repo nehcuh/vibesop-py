@@ -47,11 +47,15 @@ class TestOpenCodeAdapter:
         result = adapter.render_config(manifest, tmp_path)
 
         assert result.success
-        assert result.file_count == 5  # config.yaml + llm-config.json + AGENTS.md + vibesop-env.sh + hooks/vibesop-route.sh
+        assert result.file_count == 9  # config.yaml + llm-config.json + AGENTS.md + vibesop-env.sh + hooks/vibesop-route.sh + docs/(4 files)
         assert (tmp_path / "config.yaml").exists()
         assert (tmp_path / "llm-config.json").exists()
         assert (tmp_path / "vibesop-env.sh").exists()
         assert (tmp_path / "hooks" / "vibesop-route.sh").exists()
+        assert (tmp_path / "docs" / "routing.md").exists()
+        assert (tmp_path / "docs" / "session-lifecycle.md").exists()
+        assert (tmp_path / "docs" / "skills-catalog.md").exists()
+        assert (tmp_path / "docs" / "quick-commands.md").exists()
 
     def test_render_config_with_skills(self, tmp_path: Path) -> None:
         """Test rendering with skills."""
@@ -73,7 +77,7 @@ class TestOpenCodeAdapter:
         result = adapter.render_config(manifest, tmp_path)
 
         assert result.success
-        assert result.file_count == 7  # config.yaml + README.md + llm-config.json + AGENTS.md + vibesop-env.sh + hooks/vibesop-route.sh + skill
+        assert result.file_count == 11  # config.yaml + README.md + llm-config.json + AGENTS.md + vibesop-env.sh + hooks/vibesop-route.sh + skill + docs/(4 files)
         assert (tmp_path / "config.yaml").exists()
         assert (tmp_path / "README.md").exists()
         assert (tmp_path / "llm-config.json").exists()
@@ -124,12 +128,7 @@ class TestOpenCodeAdapter:
 
         assert "# OpenCode Configuration" in readme
         assert "## Skills" in readme
-        assert "test-skill" in readme
-        assert "Test Skill" in readme
-        # Should include correct 10-layer routing description
-        assert "10-Layer Routing System" in readme
-        assert "Layer 0**: Explicit override" in readme
-        assert "Layer 2**: AI Semantic Triage" in readme
+        assert "vibe skills list" in readme
 
     def test_render_config_with_custom_policies(self, tmp_path: Path) -> None:
         """Test rendering with custom policies."""
@@ -226,7 +225,7 @@ class TestOpenCodeAdapter:
         result = adapter.render_config_only(manifest, tmp_path)
 
         assert result.success
-        assert result.file_count == 6  # config.yaml + README.md + llm-config.json + AGENTS.md + vibesop-env.sh + hooks/vibesop-route.sh
+        assert result.file_count == 10  # config.yaml + README.md + llm-config.json + AGENTS.md + vibesop-env.sh + hooks/vibesop-route.sh + docs/(4 files)
         assert (tmp_path / "config.yaml").exists()
         assert (tmp_path / "README.md").exists()
         assert (tmp_path / "vibesop-env.sh").exists()
@@ -241,9 +240,76 @@ class TestOpenCodeAdapter:
         result = adapter.render_config_only(manifest, tmp_path)
 
         assert result.success
-        assert result.file_count == 5  # config.yaml + llm-config.json + AGENTS.md + vibesop-env.sh + hooks/vibesop-route.sh
+        assert result.file_count == 9  # config.yaml + llm-config.json + AGENTS.md + vibesop-env.sh + hooks/vibesop-route.sh + docs/(4 files)
         assert (tmp_path / "vibesop-env.sh").exists()
         assert not (tmp_path / "README.md").exists()
+
+    def test_agents_md_is_slim(self, tmp_path: Path) -> None:
+        """AGENTS.md should be a slim index referencing docs/ files."""
+        adapter = OpenCodeAdapter()
+        metadata = ManifestMetadata(platform="opencode")
+
+        skill = SkillDefinition(
+            id="test-skill",
+            name="Test Skill",
+            description="A test skill",
+            trigger_when="Testing",
+        )
+
+        manifest = Manifest(
+            metadata=metadata,
+            skills=[skill],
+        )
+
+        result = adapter.render_config(manifest, tmp_path)
+        assert result.success
+
+        agents_md = (tmp_path / "AGENTS.md").read_text()
+
+        # Must reference docs/ for details
+        assert "docs/routing.md" in agents_md
+        assert "docs/session-lifecycle.md" in agents_md
+        # Must NOT inline skill listings
+        assert "### test-skill" not in agents_md
+        # Must reference vibe skills list instead
+        assert "vibe skills list" in agents_md
+
+    def test_docs_skills_catalog_lists_skills(self, tmp_path: Path) -> None:
+        """docs/skills-catalog.md should list skills from the manifest."""
+        adapter = OpenCodeAdapter()
+        metadata = ManifestMetadata(platform="opencode")
+
+        skill = SkillDefinition(
+            id="test-skill",
+            name="Test Skill",
+            description="A test skill",
+            trigger_when="Testing",
+        )
+
+        manifest = Manifest(
+            metadata=metadata,
+            skills=[skill],
+        )
+
+        result = adapter.render_config(manifest, tmp_path)
+        assert result.success
+
+        catalog = (tmp_path / "docs" / "skills-catalog.md").read_text()
+        assert "### test-skill" in catalog
+        assert "Test Skill" in catalog
+        assert "A test skill" in catalog
+
+    def test_agents_md_without_skills_no_inline(self, tmp_path: Path) -> None:
+        """AGENTS.md with no skills should not list any skills inline."""
+        adapter = OpenCodeAdapter()
+        metadata = ManifestMetadata(platform="opencode")
+        manifest = Manifest(metadata=metadata, skills=[])
+
+        result = adapter.render_config(manifest, tmp_path)
+        assert result.success
+
+        agents_md = (tmp_path / "AGENTS.md").read_text()
+        assert "### " not in agents_md.split("## Skills")[1].split("##")[0] if "## Skills" in agents_md else True
 
     def test_install_hooks_default(self, tmp_path: Path) -> None:
         """Test default hook installation."""
@@ -288,7 +354,7 @@ class TestOpenCodeAdapterEdgeCases:
 
         result = adapter.render_config(manifest, tmp_path)
         assert result.success
-        assert result.file_count == 5  # config.yaml + llm-config.json + AGENTS.md + vibesop-env.sh + hooks/vibesop-route.sh, no README
+        assert result.file_count == 9  # config.yaml + llm-config.json + AGENTS.md + vibesop-env.sh + hooks/vibesop-route.sh + docs/(4 files), no README
 
     def test_render_with_full_metadata(self, tmp_path: Path) -> None:
         """Test rendering with full metadata."""

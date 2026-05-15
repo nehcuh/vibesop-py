@@ -83,6 +83,13 @@ class OpenCodeAdapter(PlatformAdapter):
             )
             result.add_file(agents_path)
 
+            # Generate docs/ directory with detailed content
+            from vibesop.adapters._shared import render_docs_files
+
+            docs_paths = render_docs_files(output_dir, manifest.skills)
+            for doc_path in docs_paths:
+                result.add_file(doc_path)
+
             # Also generate minimal AGENTS.md at project root
             # (not the full catalog — that lives in global config)
             project_agents_path = self._project_root / "AGENTS.md"
@@ -191,518 +198,63 @@ class OpenCodeAdapter(PlatformAdapter):
             f"**Version**: {manifest.metadata.version}",
             f"**Generated**: {manifest.metadata.created_at.strftime('%Y-%m-%d %H:%M:%S')}",
             "",
-            "## CRITICAL AGENT INSTRUCTION",
+            "## Routing Protocol",
             "",
-            "**Do NOT guess or hallucinate rules.** When you need information from any category below, you **MUST** use the appropriate tool to fetch the file contents before proceeding.",
+            "**MANDATORY: Call `vibe route` before any non-trivial task.**",
             "",
-            "## AI-Powered Skill Routing",
+            '```bash',
+            'vibe route "<user_request>"',
+            '```',
             "",
-            "**⚠️ MANDATORY: ALWAYS call vibe route before starting ANY non-trivial task**",
-            "This is NOT optional — routing ensures the correct skill is loaded for the task.",
+            "Then read `skills/<matched-skill>/SKILL.md` and follow its steps.",
             "",
-            "### MANDATORY Workflow (必须遵循 - 无条件执行)",
+            "## Quick Commands",
             "",
-            "**Step 1**: Call routing to get recommendations",
-            '```bash\nvibe route "<user_request>"\n```',
-            "",
-            "**Step 2**: Read the recommended skill file ⚠️ CRITICAL STEP",
-            "```markdown\nread skills/<matched-skill>/SKILL.md\n```",
-            "",
-            "**Step 3**: Execute according to the skill's steps",
-            "- Do not skip skill definitions",
-            "- Strictly follow the workflow described in the skill",
-            "",
-            "**Step 4**: Run verification after completion",
-            "```bash\n# Run appropriate verification commands as required by the skill\n```",
-            "",
-            "",
-            "### Quick Commands (快捷命令)",
-            "",
-            "VibeSOP provides CLI quick commands for common tasks. When the user's query starts with `/vibe-`, call `vibe route --slash` to handle it:",
-            "",
-            "```bash",
-            '# Example: user types "/vibe-help"',
+            '```bash',
             'vibe route --slash "/vibe-help"',
-            "",
-            '# Example: user types "/vibe-list --installed"',
-            'vibe route --slash "/vibe-list --installed"',
-            "```",
-            "",
-            "**Available quick commands:**",
-            "- `/vibe-route <query>` — Force-trigger skill routing",
-            "- `/vibe-install <pack>` — Install a skill pack",
-            "- `/vibe-analyze [--deep]` — Analyze the current project",
-            "- `/vibe-evaluate [--skill <id>]` — Evaluate skill quality",
-            "- `/vibe-orchestrate <query>` — Multi-skill orchestration",
-            "- `/vibe-list [--installed|--available]` — List skills",
-            "- `/vibe-help [command]` — Show quick command help",
-            "",
-            "",
-            "### Example",
-            "```bash",
-            '# Step 1: Get recommendation\nvibe route "帮我调试这个 bug"\n# Output: Matched skill: systematic-debugging (95% confidence)',
-            "",
-            "# Step 2: Read skill definition (MANDATORY)",
-            "read skills/systematic-debugging/SKILL.md",
-            "",
-            "# Step 3: Follow systematic debugging workflow",
-            "# Gather info → Identify patterns → Form hypotheses → Test → Fix root cause",
-            "",
-            "# Step 4: Run verification",
-            "```",
-            "",
-            "**Why use AI routing?**",
-            "- ✅ **Multi-layer matching** - keyword, TF-IDF, embedding, fuzzy",
-            "- ✅ **Semantic understanding** - understands intent, not just keywords",
-            "- ✅ **Preference learning** - gets better the more you use it",
-            "- ✅ **Context-aware** - considers conversation history and recent work",
-            "",
-            "**10-Layer Routing System:**",
-            "- **Layer 0**: Explicit override (`/review`, `use tdd`)",
-            "- **Layer 1**: Scenario patterns (debug, review, refactor, etc.)",
-            "- **Layer 2**: AI Semantic Triage (Haiku/GPT, optional)",
-            "- **Layer 3**: Keyword matching (exact token matching)",
-            "- **Layer 4**: TF-IDF semantic matching (cosine similarity)",
-            "- **Layer 5**: Embedding-based matching (vector similarity)",
-            "- **Layer 6**: Fuzzy matching (Levenshtein distance for typos)",
-            "",
-            "### Conversation Context (Multi-turn Awareness)",
-            "",
-            "To enable context-aware routing across multiple turns, use a stable conversation ID:",
-            "```bash",
-            "# Generate a stable conversation ID for this session (cross-platform)",
-            'export CONVERSATION_ID="opencode-$(python3 -c "import os, hashlib; print(hashlib.sha256(os.getcwd().encode()).hexdigest()[:16])")"',
-            "",
-            "# Pass it on every vibe route call",
-            'vibe route --conversation "$CONVERSATION_ID" "<user_request>"',
-            "```",
-            "",
-            "This enables:",
-            "- **Session stickiness**: consecutive related queries keep the same skill",
-            "- **Habit learning**: repeated query patterns get preferred skills boosted",
-            "- **Follow-up detection**: phrases like 'continue', 'try again', 'still broken' automatically link to previous queries",
-            "",
-            "",
-            "## Auto-Routing Setup (Recommended)",
-            "",
-            "OpenCode does not support automatic shell hooks like Claude Code.",
-            "To get automatic conversation tracking and simplified routing,",
-            "source the VibeSOP environment script before starting OpenCode:",
-            "",
-            "```bash",
-            "source ~/.config/opencode/vibesop-env.sh",
-            "# Then launch OpenCode normally",
-            "opencode",
-            "```",
-            "",
-            "This script does the following:",
-            "- Generates a stable `CONVERSATION_ID` for multi-turn context",
-            "- Wraps the `vibe` command so `--conversation` is passed automatically",
-            "- Ensures session stickiness and habit learning work correctly",
-            "",
-            "**Without this setup**, you must manually pass `--conversation` on every",
-            "`vibe route` call to enable context-aware routing.",
-            "",
-            "## Configuration",
-            "",
-            "This configuration was generated by VibeSOP.",
+            'vibe route --slash "/vibe-list"',
+            'vibe route --slash "/vibe-install <pack>"',
+            '```',
             "",
             "## Skills",
             "",
-        ]
-
-        if manifest.skills:
-            for skill in manifest.skills:
-                lines.extend(
-                    [
-                        f"### {skill.id}",
-                        "",
-                        f"**Name**: {skill.name}",
-                        f"**Description**: {skill.description}",
-                        f"**Trigger**: {skill.trigger_when}",
-                        "",
-                    ]
-                )
-        else:
-            lines.append("No skills configured.")
-            lines.append("")
-
-        lines.extend(
-            [
-                "## Security",
-                "",
-                f"- Scan External Content: {manifest.get_effective_security_policy().scan_external_content}",
-                f"- Max File Size: {manifest.get_effective_security_policy().max_file_size / (1024 * 1024):.1f} MB",
-                "",
-                "## Routing",
-                "",
-                f"- AI Routing: {manifest.get_effective_routing_policy().enable_ai_routing}",
-                f"- Confidence Threshold: {manifest.get_effective_routing_policy().confidence_threshold}",
-                "",
-                "---",
-                "*Generated by VibeSOP*",
-            ]
-        )
+            "Run `vibe skills list` to see available skills.",
+            "",
+            "## Auto-Routing Setup",
+            "",
+            "OpenCode does not support automatic shell hooks.",
+            "For multi-turn context, source the environment script:",
+            "",
+            "```bash",
+            "source ~/.config/opencode/vibesop-env.sh",
+            "opencode",
+            "```",
+            "",
+             "---",
+             "*Generated by VibeSOP*",
+         ]
 
         return "\n".join(lines)
 
     @staticmethod
     def _generate_project_agents_md() -> str:
         """Generate minimal project-level AGENTS.md."""
-        from datetime import datetime
+        from vibesop.adapters._shared import generate_slim_agents_index
 
-        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-        return f"""# VibeSOP Configuration
-
-> **Version**: 1.0.0
-> **Generated**: {now}
-
-## CRITICAL AGENT INSTRUCTION — ROUTING ENFORCEMENT
-
-**MANDATORY: You MUST call `vibe route` before attempting ANY non-trivial task.**
-
-This is a **hard requirement**, not a suggestion. Every user request that is not
-trivial (simple greetings, one-word answers, reading a specified file) MUST be
-routed through VibeSOP first. The routing engine determines the correct skill,
-decomposes multi-intent requests, and provides full decision transparency.
-
-**How to comply** (for every non-trivial user message):
-```bash
-vibe route "<user_request>"
-```
-
-**Why this is required**:
-- VibeSOP manages 45+ skills across multiple domains; guessing which to use leads to poor outcomes
-- Multi-intent requests require orchestration (detecting >1 task and planning execution)
-- Routing decisions are now transparent by default, showing why each skill was chosen
-- Skipping routing means losing the entire SkillOS capability layer
-
-### Non-Compliance Detection
-
-If you find yourself about to perform a non-trivial task without first running
-`vibe route`, STOP and route it first. Examples of tasks that MUST be routed:
-- Debugging / fixing bugs
-- Code review / analysis
-- Writing or modifying features
-- Architecture / design work
-- Security audits
-- Performance optimization
-- Any multi-step or multi-domain request
-
-Examples of tasks that do NOT need routing:
-- "What does git status do?"
-- "Show me the current directory"
-- "Open file X" (when user provides the exact file path)
-- Simple follow-ups to existing routed context
-
-> **注意**：`vibe route` 输出是**建议性**的，但 Agent 偏离推荐时必须**透明化决策**。
->
-> **MANDATORY — Agent Override Protocol**：
-> 如果你决定**不采纳**路由推荐的技能，你必须：
-> 1. **明确声明**："我选择不使用推荐技能 `<skill_id>`"
-> 2. **展示理由**：具体说明为什么该技能不适用（技能描述不匹配、能力缺失、置信度过低等）
-> 3. **提供替代**：说明你计划使用的替代方案（另一个技能、原始 LLM、自定义流程）
-> 4. **获取用户确认**：向用户呈现你的理由和替代方案，等待用户明确同意后再继续
->
-> 没有以上 4 步的 Override 视为违规操作。用户拥有最终决策权，而非 Agent。
-
-**FAILURE MODE**: If you called `vibe route` but then did NOT use the recommended
-skill (e.g., you loaded a different skill from your system prompt or proceeded
-without reading the skill file), you have failed. You MUST restart the task.
-The `vibe route` output is authoritative.
-
-### Disagreement Protocol (When the Routed Skill Doesn't Fit)
-
-If you read the recommended skill's SKILL.md and determine it does NOT match
-the user's request (wrong domain, inappropriate approach, or clearly mismatched):
-
-**DO NOT** proceed with the wrong skill. Instead:
-
-1. **State your reasoning explicitly** — explain WHY the skill is unsuitable
-   (description mismatch, capability gap, low confidence, etc.).
-
-2. **Present alternatives** — show the user the routing output's alternative
-   skills and explain why each is or isn't viable.
-
-3. **Propose your plan** — describe exactly what you intend to do instead
-   (use a different skill, raw LLM, custom workflow).
-
-4. **Get user confirmation** — WAIT for the user to explicitly approve your
-   override before proceeding. The user has the final say, not the Agent.
-
-5. **Re-route with refinement** — if the user wants a better match, clarify
-   the intent with a more specific query.
-
-6. **Fall back to raw LLM** — only if the user explicitly approves proceeding
-   without a skill.
-
-7. **Never force-fit** — do not contort the user's request to match a skill.
-   The SkillOS is a tool to assist, not a constraint to obey blindly.
-
-### Workflow (execute in order — DO NOT skip)
-
-**Step 1**: Route the user request — this determines what skill to use:
-```bash
-vibe route "<user_request>"
-```
-The output will show the matched skill_id (e.g., `gstack/review`) and a
-`NEXT STEP` instruction. Follow it.
-
-**Step 2**: Read the recommended skill file — this is NOT optional:
-```markdown
-read skills/<matched-skill>/SKILL.md
-```
-You MUST read the skill file. Without it, you are guessing.
-
-**Step 3**: Execute according to the skill's workflow.
-Follow the steps defined in the SKILL.md exactly.
-
-**Step 4**: Run verification after completion.
-
-## Session Lifecycle Events
-
-Routing applies to **user tasks**. But some events are **Agent lifecycle
-signals** and MUST be handled even when `vibe route` does not return a
-confident match.
-
-### Session End
-
-When the user signals the end of a session, you MUST run `session-end`:
-
-**English signals**: "that's all for now", "heading out", "I'm leaving",
-"I'm done", "gotta go", "wrap it up", "call it a day"
-
-**Chinese signals**: "我要离开了", "先走了", "拜拜", "再见",
-"今天就到这里", "就到这里吧", "收工"
-
-**Explicit command**: `/session-end`
-
-**If routing fails** (short-query bypass, no confident match):
-- Do NOT skip session-end because `vibe route` returned fallback-llm
-- Run the skill directly: `read skills/session-end/SKILL.md` and execute
-- This is a P0 mandatory skill — skipping it is a protocol violation
-
-## Skill Catalog
-
-The complete skill catalog with descriptions, triggers, and usage guides
-is maintained in the global OpenCode configuration:
-  `~/.config/opencode/AGENTS.md`
-
-For skill management commands, use:
-  `vibe skills list`
-  `vibe skills status`
-
----
-
-*Generated by VibeSOP*
-"""
-
-    def _generate_agents_md(self, manifest: Manifest) -> str:
-        """Generate AGENTS.md for OpenCode AI instructions."""
-        lines = [
-            "# VibeSOP Configuration",
-            "",
-            f"> **Version**: {manifest.metadata.version}",
-            f"> **Generated**: {manifest.metadata.created_at.strftime('%Y-%m-%d %H:%M:%S')}",
-            "",
-            "## CRITICAL AGENT INSTRUCTION — ROUTING ENFORCEMENT",
-            "",
-            "**Do NOT guess or hallucinate rules.** When you need information from any category below, you **MUST** use the `read` tool to fetch the file contents before proceeding.",
-            "",
-            "**MANDATORY: Call `vibe route` before attempting ANY non-trivial task.**",
-            "",
-            "This is a **hard requirement**. Every non-trivial user request MUST pass through",
-            "VibeSOP routing first. The routing engine provides:",
-            "- **Skill matching**: 10-layer pipeline to find the correct skill",
-            "- **Multi-intent orchestration**: Detects and decomposes complex requests",
-            "- **Decision transparency**: Shows WHY each skill was chosen (default-on since v5.2)",
-            "- **Confidence-gated degradation**: Falls back gracefully when no skill matches",
-            "",
-            "Skipping routing means losing all of the above. Do not skip.",
-            "",
-            "### Non-Compliance Detection",
-            "",
-            "If you find yourself about to perform a non-trivial task without first running",
-            "`vibe route`, STOP and route it first. Examples of tasks that MUST be routed:",
-            "- Debugging / fixing bugs",
-            "- Code review / analysis",
-            "- Writing or modifying features",
-            "- Architecture / design work",
-            "- Security audits",
-            "- Performance optimization",
-            "- Any multi-step or multi-domain request",
-            "",
-            "Examples of tasks that do NOT need routing:",
-            '- "What does git status do?"',
-            '- "Show me the current directory"',
-            '- "Open file X" (when user provides the exact file path)',
-            "- Simple follow-ups to existing routed context",
-            "",
-            "> **NOTE**: `vibe route` output is **advisory**, but Agent deviation must be **transparent**.",
-            ">",
-            "> **MANDATORY — Agent Override Protocol**:",
-            "> If you decide **not to adopt** the routed skill, you MUST:",
-            "> 1. **Explicitly declare**: \"I choose not to use the recommended skill `<skill_id>`\"",
-            "> 2. **Show your reasoning**: specifically explain why the skill is unsuitable (description mismatch, capability gap, low confidence, etc.)",
-            "> 3. **Propose an alternative**: describe what you plan to do instead (another skill, raw LLM, custom workflow)",
-            "> 4. **Get user confirmation**: present your reasoning and alternative to the user, WAIT for explicit user approval before proceeding",
-            ">",
-            "> Override without the above 4 steps is a violation. The user has the final say, not the Agent.",
-            "",
-            "**FAILURE MODE**: If you called `vibe route` but then did NOT use the recommended",
-            "skill (e.g., you loaded a different skill from your system prompt or proceeded",
-            "without reading the skill file), you have failed Step 2. You MUST restart the",
-            "task from Step 1. The `vibe route` output is authoritative — your internal skill",
-            "selection is irrelevant.",
-            "",
-            "### Workflow (execute in order — DO NOT skip or reorder)",
-            "",
-            "**Step 1**: Route the user request — this determines what skill to use:",
-            "```bash",
-            'vibe route "<user_request>"',
-            "```",
-            "",
-            "**IMPORTANT**: After running `vibe route`, you will see output like:",
-            '```',
-            '🎯 VibeSOP routed: gstack/review (87% confidence)',
-            'NEXT STEP: read skills/gstack-review/SKILL.md',
-            '```',
-            "The skill_id shown (e.g., `gstack/review`) is what you MUST read next.",
-            "",
-            "**Step 2**: Read the recommended skill file — this is NOT optional:",
-            "```markdown",
-            "read skills/<matched-skill>/SKILL.md",
-            "```",
-            "",
-            "**⚠️ CRITICAL**: You MUST read the SKILL.md file. Do NOT proceed without it.",
-            "The file contains the exact workflow steps, required tools, and execution",
-            "rules for this skill. Without reading it, you are guessing.",
-            "",
-            "**Step 3**: Execute according to the skill's workflow.",
-            "Follow the steps defined in the SKILL.md exactly. Do not substitute",
-            "with your own approach. Do not combine with other skills.",
-            "",
-            "**Step 4**: Run verification after completion.",
-            "",
-            "### Routing Decision Visibility",
-            "",
-            "Since v5.2, routing decisions are transparent by default. The CLI shows:",
-            "- The detected intent(s) and matched skill(s)",
-            "- Confidence scores and matching layer",
-            "- Alternative candidates and why they were rejected",
-            "- Orchestration plan for multi-intent requests",
-            "",
-            "To suppress the decision tree and see only a compact summary, use:",
-            "```bash",
-            'vibe route --quiet "<user_request>"',
-            "```",
-            "",
-            "### Tasks That MUST Be Routed",
-            "",
-            "- Debugging / fixing bugs, errors, or unexpected behavior",
-            "- Code review, analysis, or quality assessment",
-            "- Writing, modifying, or refactoring features",
-            "- Architecture design, planning, or documentation",
-            "- Security auditing or threat modeling",
-            "- Performance optimization or profiling",
-            "- Multi-step or cross-domain tasks",
-            "- Test-driven development and test writing",
-            "- Brainstorming, ideation, or product design",
-            "",
-            "### Tasks That Do NOT Need Routing",
-            "",
-            '- Trivial one-shot questions ("what does X do?")',
-            "- Reading a file at a user-specified path",
-            "- Listing directory contents",
-            "- Simple follow-up clarifications within an existing routed context",
-            "",
-            "### 快捷命令 (Quick Commands)",
-            "",
-            "When the user types a `/vibe-*` command, execute it directly with `vibe route --slash`:",
-            "```bash",
-            'vibe route --slash "/vibe-help"',
-            'vibe route --slash "/vibe-list"',
-            'vibe route --slash "/vibe-analyze --deep"',
-            'vibe route --slash "/vibe-install gstack"',
-            "```",
-            "",
-            "Available quick commands:",
-            "- `/vibe-help` — Show all available commands",
-            "- `/vibe-list` — List installed skills and available packs",
-            "- `/vibe-route <query>` — Force trigger routing with transparency",
-            "- `/vibe-install <pack>` — Install a skill pack",
-            "- `/vibe-analyze [--deep]` — Analyze project architecture",
-            "- `/vibe-evaluate [--skill <id>]` — Evaluate skill quality",
-            "- `/vibe-orchestrate <query>` — Multi-skill orchestration",
-            "",
-            "### Conversation Context",
-            "",
-            "For multi-turn awareness, use a stable conversation ID:",
-            "```bash",
-            'export CONVERSATION_ID="opencode-$(python3 -c "import os, hashlib; print(hashlib.sha256(os.getcwd().encode()).hexdigest()[:16])")"',
-            'vibe route --conversation "$CONVERSATION_ID" "<user_request>"',
-            "```",
-            "",
-            "## Session Lifecycle Events",
-            "",
-            "Routing applies to **user tasks**. But some events are **Agent lifecycle",
-            "signals** and MUST be handled even when `vibe route` does not return a",
-            "confident match.",
-            "",
-            "### Session End",
-            "",
-            "When the user signals the end of a session, you MUST run `session-end`:",
-            "",
-            "**English signals**: \"that's all for now\", \"heading out\", \"I'm leaving\",",
-            "\"I'm done\", \"gotta go\", \"wrap it up\", \"call it a day\"",
-            "",
-            "**Chinese signals**: \"我要离开了\", \"先走了\", \"拜拜\", \"再见\",",
-            "\"今天就到这里\", \"就到这里吧\", \"收工\"",
-            "",
-            "**Explicit command**: `/session-end`",
-            "",
-            "**If routing fails** (short-query bypass, no confident match):",
-            "- Do NOT skip session-end because `vibe route` returned fallback-llm",
-            "- Run the skill directly: `read skills/session-end/SKILL.md` and execute",
-            "- This is a P0 mandatory skill — skipping it is a protocol violation",
-            "",
-            "## Auto-Routing Setup",
-            "",
-            "Source the VibeSOP environment script before starting OpenCode:",
-            "```bash",
-            "source ~/.config/opencode/vibesop-env.sh",
-            "opencode",
-            "```",
-            "",
-        ]
-
-        if manifest.skills:
-            lines.extend(
-                [
-                    "## Skills",
-                    "",
-                ]
-            )
-            for skill in manifest.skills:
-                lines.extend(
-                    [
-                        f"### {skill.id}",
-                        f"- **Name**: {skill.name}",
-                        f"- **Description**: {skill.description}",
-                        f"- **Trigger**: {skill.trigger_when}",
-                        "",
-                    ]
-                )
-
-        lines.extend(
-            [
-                "---",
-                f"*Generated by VibeSOP v{manifest.metadata.version}*",
-            ]
+        return generate_slim_agents_index(
+            include_skills_reference=False,
         )
 
-        return "\n".join(lines)
+    def _generate_agents_md(self, manifest: Manifest) -> str:
+        """Generate slim AGENTS.md index referencing docs/ for details."""
+        from vibesop.adapters._shared import generate_slim_agents_index
+
+        return generate_slim_agents_index(
+            version=manifest.metadata.version,
+            platform_name="OpenCode",
+            config_dir_label="~/.config/opencode",
+            include_skills_reference=True,
+        )
 
     def get_settings_schema(self) -> dict[str, Any]:
         return {

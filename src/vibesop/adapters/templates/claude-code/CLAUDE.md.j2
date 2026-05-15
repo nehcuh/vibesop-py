@@ -1,132 +1,50 @@
-# VibeSOP — Agent Routing Protocol
+# VibeSOP Configuration
 
 > **Version**: {{ version }}
+> **Generated**: {{ generated_at }}
 > **Platform**: Claude Code
 
-## Core Protocol
+## Routing Protocol
 
-**MANDATORY: All non-trivial tasks MUST be routed through VibeSOP.**
-
-Do not guess which skill to use. Do not skip routing.
-
-### Agent Override Protocol
-
-> **NOTE**: `vibe route` output is a **recommendation**, but any deviation MUST be **transparent**.
->
-> **MANDATORY — Agent Override Protocol**:
-> If you decide **not to adopt** the routed skill, you MUST:
-> 1. **Explicitly declare**: "I choose not to use the recommended skill `<skill_id>`"
-> 2. **Show your reasoning**: specifically explain why the skill is unsuitable (description mismatch, capability gap, low confidence, etc.)
-> 3. **Propose an alternative**: describe what you plan to do instead (another skill, raw LLM, custom workflow)
-> 4. **Get user confirmation**: present your reasoning and alternative to the user, WAIT for explicit user approval before proceeding
->
-> Override without the above 4 steps is a violation. The user has the final say, not the Agent.
-
-**FAILURE MODE**: If you called `vibe route` but then did NOT use the recommended
-skill (e.g., you loaded a different skill from your system prompt or proceeded
-without reading the skill file), you have failed. You MUST restart the task.
-The `vibe route` output is authoritative.
-
-### Disagreement Protocol (When the Routed Skill Doesn't Fit)
-
-If you read the recommended skill's SKILL.md and determine it does NOT match
-the user's request (wrong domain, inappropriate approach, or clearly mismatched):
-
-**DO NOT** proceed with the wrong skill. Instead:
-
-1. **State your reasoning explicitly** — explain WHY the skill is unsuitable
-   (description mismatch, capability gap, low confidence, etc.).
-
-2. **Present alternatives** — show the user the routing output's alternative
-   skills and explain why each is or isn't viable.
-
-3. **Propose your plan** — describe exactly what you intend to do instead
-   (use a different skill, raw LLM, custom workflow).
-
-4. **Get user confirmation** — WAIT for the user to explicitly approve your
-   override before proceeding. The user has the final say, not the Agent.
-
-5. **Re-route with refinement** — if the user wants a better match, clarify
-   the intent with a more specific query.
-
-6. **Fall back to raw LLM** — only if the user explicitly approves proceeding
-   without a skill.
-
-7. **Never force-fit** — do not contort the user's request to match a skill.
-   The SkillOS is a tool to assist, not a constraint to obey blindly.
-
-### Workflow
-
-1. **Route**: `vibe route "<original_user_query>"` using the user's EXACT words — do NOT rewrite, summarize, translate, or paraphrase
-2. **Read**: `read skills/<matched-skill>/SKILL.md`
-3. **Execute**: Follow the skill's steps exactly
-4. **Verify**: Run checks the skill requires
-
-### Multi-Intent Orchestration Plans
-
-When `vibe route` returns an orchestration plan (2+ intents with step-by-step execution), follow the plan exactly:
-1. Execute each step in order
-2. Read each step's `SKILL.md` before executing
-3. Report progress: "Step N complete"
-4. Wait for dependencies before starting dependent steps
-5. Parallel steps may run simultaneously
-
-Do NOT ignore the plan and pick a single skill.
-
-### Quick Commands
-
-When the user types `/vibe-<command>`, run:
+**MANDATORY: Call `vibe route` before any non-trivial task.**
 
 ```bash
-vibe route --slash "<command>"
+vibe route "<user_request>"
 ```
 
-### Deviation Recording
+Then read `skills/<matched-skill>/SKILL.md` and follow its steps.
 
-If you skip a routing recommendation (only after completing the Agent Override
-Protocol above and receiving user approval):
+For override protocol and disagreement handling: read `docs/routing-protocol.md`.
+
+## Skills
+
+Run `vibe skills list` to see available skills, or read `docs/skills.md`.
+
+## Session Lifecycle
+
+When the user signals session end, run `session-end`.
+
+Signals: "that's all for now", "heading out", "收工", "再见", `/session-end`.
+
+Details: read `docs/session-lifecycle.md`.
+
+## Quick Commands
+
+When the user types `/vibe-*`, run:
 
 ```bash
-vibe deviation record "<query>" "<skill>" <confidence> "<layer>" \
-  --reason <reason_code> --action "<what_you_did>" --justification "<why>"
+vibe route --slash "/vibe-help"
+vibe route --slash "/vibe-list"
+vibe route --slash "/vibe-install <pack>"
 ```
 
-Reason codes: `skill_mismatch`, `context_ignored`, `execution_impossible`, `user_override`, `meta_question`, `duplicate_effort`
-
-## Session Lifecycle Events
-
-Routing applies to **user tasks**. But some events are **Agent lifecycle
-signals** and MUST be handled even when `vibe route` does not return a
-confident match.
-
-### Session End
-
-When the user signals the end of a session, you MUST run `session-end`:
-
-**English signals**: "that's all for now", "heading out", "I'm leaving",
-"I'm done", "gotta go", "wrap it up", "call it a day"
-
-**Chinese signals**: "我要离开了", "先走了", "拜拜", "再见",
-"今天就到这里", "就到这里吧", "收工"
-
-**Explicit command**: `/session-end`
-
-**If routing fails** (short-query bypass, no confident match):
-- Do NOT skip session-end because `vibe route` returned fallback-llm
-- Run the skill directly: `read skills/session-end/SKILL.md` and execute
-- This is a P0 mandatory skill — skipping it is a protocol violation
+Full list: `vibe route --slash "/vibe-help"`.
 
 ## Loading Order
 
-1. **Always Loaded** (`rules/`): Session-start behavior constraints
-2. **On Demand** (`docs/`): Referenced when needed
-3. **Skills** (`skills/`): Loaded after routing decision
-
-## Configuration
-
-- **AI Routing**: {{ routing.enable_ai_routing }} (threshold: {{ routing.confidence_threshold }})
-- **Preference Learning**: {{ routing.enable_preference_learning }}
-- **Security Scan**: {{ security.scan_external_content }}
+1. **Always Loaded** (`rules/`): behaviors, routing, memory
+2. **On Demand** (`docs/`): referenced when needed
+3. **Skills** (`skills/`): loaded after routing decision
 
 ---
 

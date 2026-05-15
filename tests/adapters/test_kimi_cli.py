@@ -47,10 +47,12 @@ class TestKimiCliAdapter:
         result = adapter.render_config(manifest, tmp_path)
 
         assert result.success
-        assert result.file_count == 3  # config.toml + AGENTS.md + hook
+        assert result.file_count == 7  # config.toml + AGENTS.md + hook + docs/(4 files)
         assert (tmp_path / "config.toml").exists()
         assert (tmp_path / "AGENTS.md").exists()
         assert (tmp_path / "hooks" / "vibesop-route.sh").exists()
+        assert (tmp_path / "docs" / "routing.md").exists()
+        assert (tmp_path / "docs" / "session-lifecycle.md").exists()
 
     def test_render_config_with_skills(self, tmp_path: Path) -> None:
         """Test rendering with skills."""
@@ -72,7 +74,7 @@ class TestKimiCliAdapter:
         result = adapter.render_config(manifest, tmp_path)
 
         assert result.success
-        assert result.file_count == 5  # config.toml + README.md + skill + AGENTS.md + hook
+        assert result.file_count == 9  # config.toml + README.md + skill + AGENTS.md + hook + docs/(4 files)
         assert (tmp_path / "config.toml").exists()
         assert (tmp_path / "README.md").exists()
         assert (tmp_path / "AGENTS.md").exists()
@@ -128,14 +130,8 @@ class TestKimiCliAdapter:
 
         assert "# Kimi Code CLI Configuration" in readme
         assert "## Skills" in readme
-        assert "test-skill" in readme
-        assert "Test Skill" in readme
-        # Should include correct 10-layer routing description
+        assert "vibe skills list" in readme
         assert "10-Layer Routing System" in readme
-        assert "Layer 0**: Explicit override" in readme
-        assert "Layer 2**: AI Semantic Triage" in readme
-        # Should mention Kimi Code CLI skill directories
-        assert "~/.kimi/skills/" in readme
 
     def test_render_config_with_custom_policies(self, tmp_path: Path) -> None:
         """Test rendering with custom policies."""
@@ -296,6 +292,56 @@ class TestKimiCliAdapter:
         assert 'command = "bash ~/.kimi/hooks/vibesop-route.sh"' in config_toml
         # Kimi Code CLI doesn't use file-based hooks
 
+    def test_agents_md_is_slim(self, tmp_path: Path) -> None:
+        """AGENTS.md should be a slim index, not inlining skills."""
+        adapter = KimiCliAdapter()
+        metadata = ManifestMetadata(platform="kimi-cli")
+
+        skill = SkillDefinition(
+            id="test-skill",
+            name="Test Skill",
+            description="A test skill",
+            trigger_when="Testing",
+        )
+
+        manifest = Manifest(
+            metadata=metadata,
+            skills=[skill],
+        )
+
+        result = adapter.render_config(manifest, tmp_path)
+        assert result.success
+
+        agents_md = (tmp_path / "AGENTS.md").read_text()
+
+        assert "docs/routing.md" in agents_md
+        assert "### test-skill" not in agents_md
+        assert "vibe skills list" in agents_md
+
+    def test_docs_skills_catalog_lists_skills(self, tmp_path: Path) -> None:
+        """docs/skills-catalog.md should list skills from manifest."""
+        adapter = KimiCliAdapter()
+        metadata = ManifestMetadata(platform="kimi-cli")
+
+        skill = SkillDefinition(
+            id="test-skill",
+            name="Test Skill",
+            description="A test skill",
+            trigger_when="Testing",
+        )
+
+        manifest = Manifest(
+            metadata=metadata,
+            skills=[skill],
+        )
+
+        result = adapter.render_config(manifest, tmp_path)
+        assert result.success
+
+        catalog = (tmp_path / "docs" / "skills-catalog.md").read_text()
+        assert "### test-skill" in catalog
+        assert "Test Skill" in catalog
+
     def test_toml_is_valid(self, tmp_path: Path) -> None:
         """Test that generated TOML is valid."""
         adapter = KimiCliAdapter()
@@ -332,7 +378,7 @@ class TestKimiCliAdapterEdgeCases:
 
         result = adapter.render_config(manifest, tmp_path)
         assert result.success
-        assert result.file_count == 3  # config.toml + AGENTS.md + hook, no README
+        assert result.file_count == 7  # config.toml + AGENTS.md + hook + docs/(4 files), no README
 
     def test_render_with_full_metadata(self, tmp_path: Path) -> None:
         """Test rendering with full metadata."""

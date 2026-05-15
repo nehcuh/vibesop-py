@@ -89,13 +89,6 @@ class ClaudeCodeAdapter(PlatformAdapter):
                 validate_security=False,
             )
             self._render_and_write(
-                "rules/skill-triggers.md.j2",
-                output_dir / "rules" / "skill-triggers.md",
-                manifest,
-                result,
-                validate_security=False,
-            )
-            self._render_and_write(
                 "rules/memory-flush.md.j2",
                 output_dir / "rules" / "memory-flush.md",
                 manifest,
@@ -104,6 +97,20 @@ class ClaudeCodeAdapter(PlatformAdapter):
             )
 
             # Render docs (on-demand)
+            self._render_and_write(
+                "docs/routing-protocol.md.j2",
+                output_dir / "docs" / "routing-protocol.md",
+                manifest,
+                result,
+                validate_security=False,
+            )
+            self._render_and_write(
+                "docs/session-lifecycle.md.j2",
+                output_dir / "docs" / "session-lifecycle.md",
+                manifest,
+                result,
+                validate_security=False,
+            )
             self._render_and_write(
                 "docs/safety.md.j2",
                 output_dir / "docs" / "safety.md",
@@ -195,13 +202,6 @@ class ClaudeCodeAdapter(PlatformAdapter):
                 validate_security=False,
             )
             self._render_and_write(
-                "rules/skill-triggers.md.j2",
-                output_dir / "rules" / "skill-triggers.md",
-                manifest,
-                result,
-                validate_security=False,
-            )
-            self._render_and_write(
                 "rules/memory-flush.md.j2",
                 output_dir / "rules" / "memory-flush.md",
                 manifest,
@@ -210,6 +210,20 @@ class ClaudeCodeAdapter(PlatformAdapter):
             )
 
             # Render docs (on-demand)
+            self._render_and_write(
+                "docs/routing-protocol.md.j2",
+                output_dir / "docs" / "routing-protocol.md",
+                manifest,
+                result,
+                validate_security=False,
+            )
+            self._render_and_write(
+                "docs/session-lifecycle.md.j2",
+                output_dir / "docs" / "session-lifecycle.md",
+                manifest,
+                result,
+                validate_security=False,
+            )
             self._render_and_write(
                 "docs/safety.md.j2",
                 output_dir / "docs" / "safety.md",

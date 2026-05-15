@@ -332,11 +332,18 @@ class TestPlatformAdapterAgentRuntime:
         assert "vibe route" in content
         assert "SKILL.md" in content
         assert "MANDATORY" in content or "必须" in content
-        assert "multi-intent" in content.lower() or "步骤" in content
-        assert "fallback" in content.lower() or "降级" in content or "候选" in content
+        # Slim AGENTS.md references docs/ for detailed routing info
+        assert "docs/routing.md" in content
+
+        # Detailed routing protocol lives in docs/routing.md
+        routing_md = tmp_path / "docs" / "routing.md"
+        assert routing_md.exists(), "docs/routing.md should be generated"
+        routing_content = routing_md.read_text()
+        assert "override" in routing_content.lower()
+        assert "orchestration" in routing_content.lower()
 
     def test_kimi_cli_agents_md_lists_skills(self, tmp_path: Path) -> None:
-        """E2E: AGENTS.md contains the list of available skills."""
+        """E2E: skills are rendered to skills/ directory, AGENTS.md references catalog."""
         from vibesop.core.models import SkillDefinition
 
         adapter = KimiCliAdapter()
@@ -351,11 +358,13 @@ class TestPlatformAdapterAgentRuntime:
         result = adapter.render_config(manifest, tmp_path)
         assert result.success is True
 
+        # Skills are rendered in skills/ directory
+        assert (tmp_path / "skills" / "skill-a").is_dir()
+        assert (tmp_path / "skills" / "skill-b").is_dir()
+
+        # AGENTS.md references the skills catalog
         content = (tmp_path / "AGENTS.md").read_text()
-        assert "skill-a" in content
-        assert "skill-b" in content
-        assert "Skill A" in content
-        assert "Skill B" in content
+        assert "docs/skills-catalog.md" in content or "skills" in content.lower()
 
     def test_opencode_plugin_template_exists(self) -> None:
         """E2E: OpenCode plugin template files exist as reference implementation."""

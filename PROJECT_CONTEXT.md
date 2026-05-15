@@ -3,6 +3,27 @@
 ## Session Handoff
 
 <!-- handoff:start -->
+### 2026-05-15 15:30
+**Session**: Fix `vibe skills list` + PyPI release v5.4.5
+
+**Completed**:
+- Diagnosed `SkillStorage.list_skills()` bug: non-recursive + manifest-dependent, missing pack skills
+- Fix: resolve platform symlinks backwards to discover pack-installed skills
+- `vibe skills list`: 13 → 209 skills
+- All 46 related tests pass
+- Version bump: 5.4.4 → 5.4.5, pushed tag v5.4.5 for PyPI release via GitHub Actions OIDC
+
+**Key Learnings**:
+- Two divergent skill discovery mechanisms in same codebase: `SkillStorage.list_skills()` (manifest-based, non-recursive) vs `SkillLoader` (recursive rglob)
+- Pack skills have varying directory structures: gstack flat, omx/superpowers nested under `skills/`
+
+**Files Modified**:
+- `src/vibesop/core/skills/storage.py`
+
+**Next Steps**: Monitor CI for v5.4.5 PyPI publish
+
+---
+
 ### 2026-05-05 18:50
 **Session**: 公众号文章修订 + 路由代码提交推送
 
@@ -19,26 +40,4 @@
 - `tests/core/routing/test_candidate_dedup_and_management.py`
 
 **Next Steps**: None — user left
-
----
-
-### 2026-05-03 15:35
-**Session**: Claude Code template sync — Agent Override Protocol
-
-**Completed**:
-- Synced Agent Override Protocol (4-step) + Disagreement Protocol (7-step) to Claude Code templates
-- Updated `CLAUDE.md.j2` with mandatory override rules, failure mode, deviation recording guardrails
-- Updated `CLAUDE.md.project.j2` with simplified override protocol for project-level context
-- Verified with `pytest -k "claude"`: 29 passed
-- Committed and pushed: `ffc9bcd`
-
-**Key Learnings**:
-- Cross-platform template consistency requires explicit checks after updating one platform
-- "我要离开了" = "heading out" is a session-end trigger (was missed)
-
-**Files Modified**: 2 files
-- `src/vibesop/adapters/templates/claude-code/CLAUDE.md.j2`
-- `src/vibesop/adapters/templates/claude-code/CLAUDE.md.project.j2`
-
-**Next Steps**: None — template sync complete
 <!-- handoff:end -->

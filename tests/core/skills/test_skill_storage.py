@@ -207,3 +207,106 @@ class TestConvenienceFunctions:
         installed, linked, _messages = link_all_to_platform("claude-code", project_root=tmp_path)
         assert installed == 0
         assert linked == 0
+
+
+class TestSkillStorageUncovered:
+    """Additional tests for uncovered storage methods."""
+
+    def test_install_from_remote_dry_run(self, tmp_path: Path):
+        storage = SkillStorage(dry_run=True)
+        success, msg = storage.install_from_remote("test", "https://example.com/skill.tar.gz")
+        assert success is True
+        assert "Would download" in msg
+
+    def test_install_from_remote_invalid_url(self, tmp_path: Path):
+        storage = SkillStorage(dry_run=False)
+        success, msg = storage.install_from_remote("test", "not-a-valid-url")
+        assert success is False
+
+    def test_unlink_from_platform_real(self, tmp_path: Path):
+        storage = SkillStorage(dry_run=False)
+        original_central = storage.CENTRAL_SKILLS_DIR
+        storage.CENTRAL_SKILLS_DIR = tmp_path / "central"
+
+        try:
+            skill_path = storage.get_skill_path("test")
+            skill_path.mkdir(parents=True)
+            (skill_path / "SKILL.md").write_text("# Test")
+
+            platform_dir = storage.PLATFORM_SKILLS_DIRS["claude-code"]
+            platform_skill_path = platform_dir / "test"
+            platform_skill_path.parent.mkdir(parents=True, exist_ok=True)
+            platform_skill_path.symlink_to(skill_path)
+
+            assert platform_skill_path.exists()
+            success, _msg = storage.unlink_from_platform("test", "claude-code")
+            assert success is True
+        finally:
+            storage.CENTRAL_SKILLS_DIR = original_central
+
+    def test_remove_skill_with_unlink_all(self, tmp_path: Path):
+        storage = SkillStorage(dry_run=False)
+        original_central = storage.CENTRAL_SKILLS_DIR
+        storage.CENTRAL_SKILLS_DIR = tmp_path / "central"
+
+        try:
+            source = tmp_path / "source"
+            source.mkdir()
+            (source / "SKILL.md").write_text("# Test")
+            storage.install_skill("test", source)
+
+            success, _msg = storage.remove_skill("test", unlink_all=True)
+            assert success is True
+            assert not storage.skill_exists("test")
+        finally:
+            storage.CENTRAL_SKILLS_DIR = original_central
+
+    def test_get_linked_skills(self, tmp_path: Path):
+        storage = SkillStorage(dry_run=False)
+        linked = storage.get_linked_skills("claude-code")
+        assert isinstance(linked, list)
+
+    def test_get_linked_skills_unknown_platform(self):
+        storage = SkillStorage(dry_run=True)
+        with pytest.raises(ValueError, match="Unknown platform"):
+            storage.get_linked_skills("unknown")
+
+    def test_list_skills_includes_symlinked_pack_skills(self, tmp_path: Path):
+        storage = SkillStorage(dry_run=False)
+        original_central = storage.CENTRAL_SKILLS_DIR
+        storage.CENTRAL_SKILLS_DIR = tmp_path / "central"
+
+        try:
+            # Install a skill
+            source = tmp_path / "source"
+            source.mkdir()
+            (source / "SKILL.md").write_text("---\nname: Test\ndescription: Desc\n---\n# Test")
+            storage.install_skill("test-skill", source)
+
+            # Create a symlink in a platform dir
+            platform_dir = tmp_path / "platform"
+            storage.PLATFORM_SKILLS_DIRS["test-platform"] = platform_dir
+            platform_dir.mkdir(parents=True)
+            skill_path = storage.get_skill_path("test-skill")
+            link = platform_dir / "test-skill"
+            link.symlink_to(skill_path)
+
+            skills = storage.list_skills()
+            assert "test-skill" in skills
+        finally:
+            storage.CENTRAL_SKILLS_DIR = original_central
+            storage.PLATFORM_SKILLS_DIRS.pop("test-platform", None)
+
+    def test_build_manifest_from_skill_md_invalid(self, tmp_path: Path):
+        storage = SkillStorage(dry_run=True)
+        result = storage._build_manifest_from_skill_md("test", tmp_path / "missing.md")
+        assert result is None
+
+    def test_sync_project_skills_no_source(self, tmp_path: Path):
+        storage = SkillStorage(dry_run=True)
+        import os
+        project = tmp_path / "empty-project"
+        project.mkdir()
+        installed, linked, msgs = storage.sync_project_skills(project, "claude-code")
+        assert installed == 0
+        assert linked == 0

@@ -3,7 +3,7 @@
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import yaml
 from rich.console import Console
@@ -141,6 +141,8 @@ class SkillConfigManager:
         skill_configs = {}
 
         for skill_id, skill_data in config_data.get("skills", {}).items():
+            if not isinstance(skill_data, dict):
+                continue
             skill_configs[skill_id] = SkillConfig(
                 skill_id=skill_id,
                 enabled=skill_data.get("enabled", True),
@@ -247,36 +249,28 @@ class SkillConfigManager:
 
     @classmethod
     def _load_skill_config_file(cls) -> dict[str, Any]:
-        # Build path list: prefer .toml over .yaml for global configs
-        paths_to_try = [cls.SKILL_CONFIG_FILE]
-        for base in [cls.GLOBAL_CONFIG_FILE, cls.GLOBAL_CONFIG_HOME]:
-            toml_path = base.with_suffix(".toml")
-            if toml_path.exists() or not base.exists():
-                paths_to_try.append(toml_path)
-            if base.exists():
-                paths_to_try.append(base)
+        config_path = cls.SKILL_CONFIG_FILE
+        if not config_path.exists():
+            return {}
 
-        for config_path in paths_to_try:
-            if not config_path.exists():
-                continue
-            try:
-                mtime = config_path.stat().st_mtime
-                cached = _CONFIG_FILE_CACHE.get(config_path)
-                if cached is not None and cached[0] == mtime:
-                    return cached[1]
+        try:
+            mtime = config_path.stat().st_mtime
+            cached = _CONFIG_FILE_CACHE.get(config_path)
+            if cached is not None and cached[0] == mtime:
+                return cast(dict[str, Any], cached[1])
 
-                if config_path.suffix.lower() == ".toml":
-                    import tomllib
-                    with config_path.open("rb") as f:
-                        data = tomllib.load(f) or {}
-                else:
-                    with config_path.open() as f:
-                        data = yaml.safe_load(f) or {}
-                if isinstance(data, dict):
-                    _CONFIG_FILE_CACHE[config_path] = (mtime, data)
-                return data
-            except Exception as e:
-                console.print(f"[yellow]⚠ Failed to load {config_path}: {e}[/yellow]")
+            if config_path.suffix.lower() == ".toml":
+                import tomllib
+                with config_path.open("rb") as f:
+                    data = tomllib.load(f) or {}
+            else:
+                with config_path.open() as f:
+                    data = yaml.safe_load(f) or {}
+            if isinstance(data, dict):
+                _CONFIG_FILE_CACHE[config_path] = (mtime, data)
+            return cast(dict[str, Any], data)
+        except Exception as e:
+            console.print(f"[yellow]⚠ Failed to load {config_path}: {e}[/yellow]")
 
         return {}
 
