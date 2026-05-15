@@ -21,7 +21,7 @@ console = Console()
 def record(
     query: str = typer.Argument(..., help="User's query text"),
     skill: str = typer.Argument(..., help="Routed skill ID"),
-    correct: bool = typer.Option(True, "--correct", "--wrong", help="Whether routing was correct"),
+    correct: bool = typer.Option(True, "--correct/--wrong", help="Whether routing was correct"),
     actual_skill: str = typer.Option(None, help="Correct skill if routing was wrong"),
     confidence: float = typer.Option(0.0, "--confidence", "-c", help="Confidence score (0.0-1.0)"),
 ) -> None:

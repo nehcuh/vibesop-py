@@ -1,0 +1,37 @@
+# .vibe/config.toml — VibeSOP project-level configuration
+platform = "claude-code"
+
+[routing]
+min_confidence = 0.6
+enable_ai_triage = true
+enable_embedding = false
+max_candidates = 3
+confirmation_mode = "always"
+degradation_enabled = true
+degradation_auto_threshold = 0.6
+degradation_suggest_threshold = 0.4
+degradation_degrade_threshold = 0.2
+degradation_fallback_always_ask = true
+session_aware = true
+
+[orchestration]
+enabled = true
+
+[security]
+threat_level = "medium"
+scan_external = true
+
+[skills]
+namespaces = ["builtin", "omx", "superpowers", "gstack"]
+
+[skills.namespace_priorities]
+# omx skills get priority over gstack when both match a query
+# e.g., omx/analyze vs gstack/plan-* for analysis-type requests
+builtin = 100
+omx = 95
+superpowers = 80
+gstack = 70
+project = 100
+
+[preferences]
+learning_enabled = true

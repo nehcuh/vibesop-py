@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [5.4.4] - 2026-05-15
+
+### Fixed
+
+- **feedback CLI**: `--wrong` flag now correctly sets `was_correct=false`. Changed Typer option from `"--correct", "--wrong"` (both treated as True aliases) to `"--correct/--wrong"` (proper Click boolean flag pair).
+
+### Added
+
+- **Project config**: `.vibe/config.toml` with namespace priority tuning (omx > gstack) for analysis-type queries.
+
 ## [5.4.0] - 2026-04-30
 
 ### Philosophy Alignment — Build Fix & SkillOS Boundary
