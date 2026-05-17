@@ -3,6 +3,36 @@
 ## Session Handoff
 
 <!-- handoff:start -->
+### 2026-05-17 16:00
+**Session**: Test coverage improvement — 172 new tests + config fix + adapter refactor + push
+
+**Completed**:
+- Fixed `config_manager._load_skill_config_file()` cross-format TOML loading bug (isinstance guard)
+- Fixed Kimi CLI E2E tests for slim AGENTS.md format
+- 172 new tests: instinct learner (36), skills loader (47 new file), external_loader (25), storage (9), matching strategies (55 new file)
+- Adapter refactoring: slim AGENTS.md index, routing-protocol/session-lifecycle migrated to docs/
+- Coverage: 72.61 → 73.75%, 2647 → 2766 passing tests
+- Committed + pushed: `335c082`
+
+**Key Learnings**:
+- `SkillMetadata` requires `intent` as positional arg (not defaulted) — test instantiations need all 4 required fields
+- `PromptSkill._prompt_template` is private (underscore prefix)
+- `SkillLoader` coverage went from 0 tests to 47 tests — most impactful new file
+
+**Files Modified**:
+- `src/vibesop/core/skills/config_manager.py`
+- `tests/core/skills/test_loader.py` (new)
+- `tests/core/matching/test_strategies.py` (new)
+- `tests/core/skills/test_external_loader.py`
+- `tests/core/skills/test_skill_storage.py`
+- `tests/core/test_instinct_learner.py`
+- `tests/e2e/test_agent_runtime.py`
+- Adapter files: `_shared.py`, `claude_code.py`, `kimi_cli.py`, `opencode.py`, templates
+
+**Next Steps**: Phase 3 complete; next session could target integration/e2e tests or remaining low-coverage modules
+
+---
+
 ### 2026-05-15 15:30
 **Session**: Fix `vibe skills list` + PyPI release v5.4.5
 
@@ -21,23 +51,4 @@
 - `src/vibesop/core/skills/storage.py`
 
 **Next Steps**: Monitor CI for v5.4.5 PyPI publish
-
----
-
-### 2026-05-05 18:50
-**Session**: 公众号文章修订 + 路由代码提交推送
-
-**Completed**:
-- Revised `docs/vibe-coding-article.md`: added "Core Problems + Survival Principles" overview chapter (5 problems mapped to 5 principles via table)
-- Article structure now: answers first → story second → methodology third
-- Git commit + push: `2380ec2` — routing candidate dedup, management-only skill exclusion, triage prompt v3
-
-**Files Modified**:
-- `docs/vibe-coding-article.md`
-- `src/vibesop/core/routing/candidate_manager.py`
-- `src/vibesop/core/routing/triage_service.py`
-- `src/vibesop/llm/triage_prompts.py`
-- `tests/core/routing/test_candidate_dedup_and_management.py`
-
-**Next Steps**: None — user left
 <!-- handoff:end -->
