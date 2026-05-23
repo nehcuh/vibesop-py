@@ -247,6 +247,7 @@ exclude_lines = [
 [dependency-groups]
 dev = [
     "pdoc>=16.0.0",
+    "pytest-asyncio>=0.26.0",
     "pytest-cov>=6.3.0",
     "pytest-mock>=3.15.1",
     "pytest-rerunfailures>=16.1",

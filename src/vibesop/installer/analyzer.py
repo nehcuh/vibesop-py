@@ -42,24 +42,93 @@ class RepoAnalysis:
 
 
 class RepoAnalyzer:
+
+    _GITHUB_TREE_RE = re.compile(
+        r"^https://github\.com/([^/]+)/([^/]+)/tree/([^/]+)/(.+)$"
+    )
+    _GITHUB_BLOB_RE = re.compile(
+        r"^https://github\.com/([^/]+)/([^/]+)/blob/([^/]+)/(.+)$"
+    )
+
+    @staticmethod
+    def _parse_github_url(url: str) -> tuple[str, str | None]:
+        """Decompose a GitHub web URL into (clone_url, subdirectory)."""
+        m = RepoAnalyzer._GITHUB_TREE_RE.match(url)
+        if m:
+            owner, repo, _branch, subdir = m.groups()
+            return f"https://github.com/{owner}/{repo}.git", subdir.rstrip("/")
+
+        m = RepoAnalyzer._GITHUB_BLOB_RE.match(url)
+        if m:
+            owner, repo, _branch, filepath = m.groups()
+            parts = filepath.split("/")
+            subdir = "/".join(parts[:-1]) if len(parts) > 1 else None
+            return f"https://github.com/{owner}/{repo}.git", subdir
+
+        return url, None
+
     def analyze(self, url: str, pack_name: str | None = None) -> RepoAnalysis:
         inferred_name = pack_name or self.infer_pack_name(url)
         result = RepoAnalysis(pack_name=inferred_name, source_url=url)
 
+        repo_url, subdirectory = self._parse_github_url(url)
+
         with tempfile.TemporaryDirectory(prefix="vibe-install-") as tmpdir:
             tmpdir_path = Path(tmpdir)
-            if not self.git_clone(url, tmpdir_path):
-                result.errors.append(f"Failed to clone repository: {url}")
+            if not self.git_clone(repo_url, tmpdir_path):
+                result.errors.append(f"Failed to clone repository: {repo_url}")
                 return result
 
+            search_root = tmpdir_path
+            if subdirectory:
+                search_root = tmpdir_path / subdirectory
+                if not search_root.is_dir():
+                    result.errors.append(
+                        f"Subdirectory '{subdirectory}' not found in repository"
+                    )
+                    return result
+
             for readme_name in ("README.md", "README.rst", "README.txt", "README"):
-                readme = tmpdir_path / readme_name
+                readme = search_root / readme_name
+                if not readme.exists():
+                    readme = tmpdir_path / readme_name
                 if readme.exists():
                     result.readme_path = readme
                     result.readme_install_hint = self._extract_install_hint(readme)
                     break
 
-            result.skill_files = list(tmpdir_path.rglob("SKILL.md"))
+            # Discover SKILL.md files (standard format)
+            result.skill_files = list(search_root.rglob("SKILL.md"))
+
+            # Also discover via .claude-plugin/plugin.json (mattpocock format)
+            plugin_json = tmpdir_path / ".claude-plugin" / "plugin.json"
+            if plugin_json.exists():
+                try:
+                    import json
+                    plugin_data = json.loads(plugin_json.read_text())
+                    plugin_skills = plugin_data.get("skills", [])
+                    for skill_entry in plugin_skills:
+                        if isinstance(skill_entry, str):
+                            skill_dir = tmpdir_path / skill_entry
+                            skill_md = skill_dir / "SKILL.md" if skill_dir.is_dir() else tmpdir_path / f"{skill_entry}.md"
+                        elif isinstance(skill_entry, dict):
+                            skill_path = skill_entry.get("path", "")
+                            skill_dir = tmpdir_path / skill_path
+                            skill_md = skill_dir / "SKILL.md" if skill_dir.is_dir() else None
+                        else:
+                            continue
+
+                        if skill_md and skill_md.exists() and skill_md not in result.skill_files:
+                            result.skill_files.append(skill_md)
+                except (json.JSONDecodeError, KeyError) as e:
+                    logger.debug("Failed to parse plugin.json: %s", e)
+
+            # If no SKILL.md found but README mentions skills, flag for LLM-based analysis
+            if not result.skill_files and result.readme_path:
+                result.readme_install_hint = (
+                    result.readme_install_hint + "\n\n"
+                    "[Note] No SKILL.md files found. Use --smart to analyze README with LLM for installation instructions."
+                )
 
             for script_name in (
                 "setup.py", "pyproject.toml", "package.json",

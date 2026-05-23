@@ -101,6 +101,77 @@ def test_analyze_repo(fake_repo):
     assert result.detected_namespace == "testpack"
 
 
+def test_parse_github_url_tree():
+    analyzer = RepoAnalyzer()
+    repo_url, subdir = analyzer._parse_github_url(
+        "https://github.com/wquguru/skills/tree/main/skills/pi-setup"
+    )
+    assert repo_url == "https://github.com/wquguru/skills.git"
+    assert subdir == "skills/pi-setup"
+
+
+def test_parse_github_url_tree_trailing_slash():
+    analyzer = RepoAnalyzer()
+    repo_url, subdir = analyzer._parse_github_url(
+        "https://github.com/wquguru/skills/tree/main/skills/pi-setup/"
+    )
+    assert repo_url == "https://github.com/wquguru/skills.git"
+    assert subdir == "skills/pi-setup"
+
+
+def test_parse_github_url_blob():
+    analyzer = RepoAnalyzer()
+    repo_url, subdir = analyzer._parse_github_url(
+        "https://github.com/user/repo/blob/main/docs/guide.md"
+    )
+    assert repo_url == "https://github.com/user/repo.git"
+    assert subdir == "docs"
+
+
+def test_parse_github_url_blob_root_file():
+    analyzer = RepoAnalyzer()
+    repo_url, subdir = analyzer._parse_github_url(
+        "https://github.com/user/repo/blob/main/README.md"
+    )
+    assert repo_url == "https://github.com/user/repo.git"
+    assert subdir is None
+
+
+def test_parse_github_url_plain():
+    analyzer = RepoAnalyzer()
+    repo_url, subdir = analyzer._parse_github_url("https://github.com/user/repo")
+    assert repo_url == "https://github.com/user/repo"
+    assert subdir is None
+
+
+def test_parse_github_url_git_suffix():
+    analyzer = RepoAnalyzer()
+    repo_url, subdir = analyzer._parse_github_url("https://github.com/user/repo.git")
+    assert repo_url == "https://github.com/user/repo.git"
+    assert subdir is None
+
+
+def test_analyze_with_subdirectory(fake_repo):
+    """When a /tree/ URL is used, SKILL.md discovery should be restricted to the subdirectory."""
+    analyzer = RepoAnalyzer()
+    url = "https://github.com/wquguru/skills/tree/main/skills/debug"
+    with (
+        patch("tempfile.TemporaryDirectory") as mock_tmp,
+        patch.object(analyzer, "git_clone", return_value=True) as mock_clone,
+        patch("vibesop.installer.analyzer.parse_skill_md", return_value=MagicMock(namespace="debug")),
+    ):
+        mock_tmp.return_value.__enter__ = MagicMock(return_value=str(fake_repo))
+        mock_tmp.return_value.__exit__ = MagicMock(return_value=False)
+        result = analyzer.analyze(url)
+
+    assert result.pack_name == "debug"
+    assert len(result.errors) == 0
+    # git_clone should receive the repo URL, not the web UI URL
+    mock_clone.assert_called_once()
+    clone_arg = mock_clone.call_args[0][0]
+    assert clone_arg == "https://github.com/wquguru/skills.git"
+
+
 def test_analyze_repo_clone_failure():
     analyzer = RepoAnalyzer()
     with patch.object(analyzer, "git_clone", return_value=False):

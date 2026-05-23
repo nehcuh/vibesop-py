@@ -3,6 +3,32 @@
 ## Session Handoff
 
 <!-- handoff:start -->
+### 2026-05-23 16:50
+**Session**: Fix GitHub URL clone bug + add --platform flag to install
+
+**Completed**:
+- Fixed `RepoAnalyzer.analyze()` passing GitHub web URLs (`/tree/...`, `/blob/...`) directly to `git clone` — invalid git remote
+- Added `_parse_github_url()` to decompose URLs into (clone_url, subdirectory) pairs
+- Added `--platform`/`-p` flag to `vibe install` (claude-code, kimi-cli, opencode, cursor)
+- `PackInstaller.install_pack()` already supported `platforms=` param — CLI just needed to expose it
+- Added `_validate_platform()` with early validation against `SkillStorage.PLATFORM_SKILLS_DIRS`
+- 16 analyzer tests + 14 install tests all pass
+
+**Key Learnings**:
+- `git clone` silently fails on GitHub web UI URLs with `/tree/` or `/blob/` path segments
+- `patch.object(analyzer, "git_clone") as mock_clone` pattern needed for asserting on instance method calls
+
+**Files Modified**:
+- `src/vibesop/installer/analyzer.py`
+- `src/vibesop/cli/commands/install.py`
+- `tests/installer/test_analyzer.py`
+- `tests/cli/test_install_command.py`
+- `pyproject.toml` (added pytest-asyncio dev dep)
+
+**Next Steps**: Can now use `vibe install <url-with-subdir> --platform <target>`
+
+---
+
 ### 2026-05-17 16:00
 **Session**: Test coverage improvement — 172 new tests + config fix + adapter refactor + push
 
@@ -30,25 +56,4 @@
 - Adapter files: `_shared.py`, `claude_code.py`, `kimi_cli.py`, `opencode.py`, templates
 
 **Next Steps**: Phase 3 complete; next session could target integration/e2e tests or remaining low-coverage modules
-
----
-
-### 2026-05-15 15:30
-**Session**: Fix `vibe skills list` + PyPI release v5.4.5
-
-**Completed**:
-- Diagnosed `SkillStorage.list_skills()` bug: non-recursive + manifest-dependent, missing pack skills
-- Fix: resolve platform symlinks backwards to discover pack-installed skills
-- `vibe skills list`: 13 → 209 skills
-- All 46 related tests pass
-- Version bump: 5.4.4 → 5.4.5, pushed tag v5.4.5 for PyPI release via GitHub Actions OIDC
-
-**Key Learnings**:
-- Two divergent skill discovery mechanisms in same codebase: `SkillStorage.list_skills()` (manifest-based, non-recursive) vs `SkillLoader` (recursive rglob)
-- Pack skills have varying directory structures: gstack flat, omx/superpowers nested under `skills/`
-
-**Files Modified**:
-- `src/vibesop/core/skills/storage.py`
-
-**Next Steps**: Monitor CI for v5.4.5 PyPI publish
 <!-- handoff:end -->

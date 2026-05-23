@@ -29,7 +29,7 @@ class TestInstallCommand:
         result = runner.invoke(app, ["install", "gstack"])
         assert result.exit_code == 0
         assert "gstack installed successfully" in result.output
-        mock_installer.install_pack.assert_called_once_with("gstack", None)
+        mock_installer.install_pack.assert_called_once_with("gstack", None, platforms=None)
 
     @patch("vibesop.cli.commands.install.PackInstaller")
     @patch("vibesop.cli.commands.install.ExternalSkillLoader")
@@ -53,7 +53,7 @@ class TestInstallCommand:
         assert result.exit_code == 0
         assert "my-skills installed successfully" in result.output
         mock_installer.install_pack.assert_called_once_with(
-            "my-skills", "https://github.com/user/my-skills"
+            "my-skills", "https://github.com/user/my-skills", platforms=None
         )
 
     @patch("vibesop.cli.commands.install.PackInstaller")
@@ -93,7 +93,7 @@ class TestInstallCommand:
 
         result = runner.invoke(app, ["install", "superpowers", "--force"])
         assert result.exit_code == 0
-        mock_installer.install_pack.assert_called_once_with("superpowers", None)
+        mock_installer.install_pack.assert_called_once_with("superpowers", None, platforms=None)
 
     @patch("vibesop.cli.commands.install.ExternalSkillLoader")
     def test_install_list(self, mock_loader_cls: Any) -> None:
@@ -118,17 +118,18 @@ class TestInstallCommand:
         mock_installer_cls.return_value = mock_installer
 
         mock_loader = MagicMock()
-        # TRUSTED_PACKS includes superpowers, gstack, omx
+        # TRUSTED_PACKS includes superpowers, gstack, omx, mattpocock
         mock_loader.get_supported_packs.return_value = {
             "superpowers": {"installed": True},
             "gstack": {"installed": False},
             "omx": {"installed": True},
+            "mattpocock": {"installed": True},
         }
         mock_loader_cls.return_value = mock_loader
 
         result = runner.invoke(app, ["install", "--auto"])
         assert result.exit_code == 0
-        mock_installer.install_pack.assert_called_once_with("gstack", None)
+        mock_installer.install_pack.assert_called_once_with("gstack", None, platforms=None)
 
     @patch("vibesop.cli.commands.install.PackInstaller")
     @patch("vibesop.cli.commands.install.ExternalSkillLoader")
@@ -143,6 +144,7 @@ class TestInstallCommand:
             "gstack": {"installed": True},
             "superpowers": {"installed": True},
             "omx": {"installed": True},
+            "mattpocock": {"installed": True},
         }
         mock_loader_cls.return_value = mock_loader
 
@@ -190,3 +192,72 @@ class TestInstallCommand:
         assert result.exit_code == 0
         assert "gstack installed successfully" in result.output
         assert "No skills discovered" in result.output
+
+    @patch("vibesop.cli.commands.install.PackInstaller")
+    @patch("vibesop.cli.commands.install.ExternalSkillLoader")
+    def test_install_with_platform_flag(
+        self, mock_loader_cls: Any, mock_installer_cls: Any
+    ) -> None:
+        mock_installer = MagicMock()
+        mock_installer.install_pack.return_value = (True, "Installed gstack for claude-code")
+        mock_installer_cls.return_value = mock_installer
+
+        mock_loader = MagicMock()
+        mock_loader.get_supported_packs.return_value = {}
+        mock_loader_cls.return_value = mock_loader
+
+        result = runner.invoke(app, ["install", "gstack", "--platform", "claude-code"])
+        assert result.exit_code == 0
+        assert "gstack installed successfully" in result.output
+        assert "Platform: claude-code" in result.output
+        mock_installer.install_pack.assert_called_once_with(
+            "gstack", None, platforms=["claude-code"]
+        )
+
+    @patch("vibesop.cli.commands.install.PackInstaller")
+    @patch("vibesop.cli.commands.install.ExternalSkillLoader")
+    def test_install_with_platform_flag_cursor(
+        self, mock_loader_cls: Any, mock_installer_cls: Any
+    ) -> None:
+        mock_installer = MagicMock()
+        mock_installer.install_pack.return_value = (True, "Installed gstack for cursor")
+        mock_installer_cls.return_value = mock_installer
+
+        mock_loader = MagicMock()
+        mock_loader.get_supported_packs.return_value = {}
+        mock_loader_cls.return_value = mock_loader
+
+        result = runner.invoke(app, ["install", "gstack", "--platform", "cursor"])
+        assert result.exit_code == 0
+        mock_installer.install_pack.assert_called_once_with(
+            "gstack", None, platforms=["cursor"]
+        )
+
+    def test_install_invalid_platform(self) -> None:
+        result = runner.invoke(app, ["install", "gstack", "--platform", "vscode"])
+        assert result.exit_code == 1
+        assert "Unknown platform: vscode" in result.output
+
+    @patch("vibesop.cli.commands.install.PackInstaller")
+    @patch("vibesop.cli.commands.install.ExternalSkillLoader")
+    def test_install_auto_with_platform(
+        self, mock_loader_cls: Any, mock_installer_cls: Any
+    ) -> None:
+        mock_installer = MagicMock()
+        mock_installer.install_pack.return_value = (True, "Installed")
+        mock_installer_cls.return_value = mock_installer
+
+        mock_loader = MagicMock()
+        mock_loader.get_supported_packs.return_value = {
+            "superpowers": {"installed": True},
+            "gstack": {"installed": False},
+            "omx": {"installed": True},
+            "mattpocock": {"installed": True},
+        }
+        mock_loader_cls.return_value = mock_loader
+
+        result = runner.invoke(app, ["install", "--auto", "--platform", "opencode"])
+        assert result.exit_code == 0
+        mock_installer.install_pack.assert_called_once_with(
+            "gstack", None, platforms=["opencode"]
+        )

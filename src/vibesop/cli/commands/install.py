@@ -7,6 +7,7 @@ Usage:
     vibe install <NAME|URL>
     vibe install --auto
     vibe install --list
+    vibe install gstack --platform claude-code
 
 Examples:
     # Install a trusted skill pack
@@ -14,6 +15,9 @@ Examples:
 
     # Install from any Git URL
     vibe install https://github.com/obra/superpowers
+
+    # Install for a specific platform only
+    vibe install gstack --platform claude-code
 
     # Auto-install all recommended packs
     vibe install --auto
@@ -29,10 +33,16 @@ from rich.table import Table
 
 from vibesop.constants import TRUSTED_PACKS
 from vibesop.core.skills.external_loader import ExternalSkillLoader
+from vibesop.core.skills.storage import SkillStorage
 from vibesop.core.skills.trust import TrustStore
 from vibesop.installer.pack_installer import PackInstaller
 
 console = Console()
+
+_INSTALL_DOCSTRING_PLATFORM_HELP = (
+    "Target platform for skill symlinks (claude-code, kimi-cli, opencode, cursor). "
+    "If omitted, installs to all supported platforms."
+)
 
 
 def install(
@@ -63,8 +73,17 @@ def install(
         "--skip-verify",
         help="Skip post-install verification",
     ),
+    platform: str | None = typer.Option(
+        None,
+        "--platform",
+        "-p",
+        help=_INSTALL_DOCSTRING_PLATFORM_HELP,
+    ),
 ) -> None:
     """Install skill packs from trusted names or arbitrary Git URLs."""
+    # Validate platform early
+    platforms_list = _validate_platform(platform)
+
     # List mode
     if list_available:
         _list_available()
@@ -72,7 +91,7 @@ def install(
 
     # Auto mode
     if auto:
-        _auto_install(force, skip_verify)
+        _auto_install(force, skip_verify, platforms_list)
         return
 
     # Manual mode - require name_or_url
@@ -90,7 +109,7 @@ def install(
         )
         raise typer.Exit(1)
 
-    _install_pack(name_or_url, force, skip_verify)
+    _install_pack(name_or_url, force, skip_verify, platforms=platforms_list)
 
 
 def _list_available() -> None:
@@ -121,7 +140,25 @@ def _list_available() -> None:
     )
 
 
-def _auto_install(force: bool, skip_verify: bool) -> None:
+def _validate_platform(platform: str | None) -> list[str] | None:
+    """Validate and normalize the --platform value.
+
+    Returns a list to pass to PackInstaller.install_pack(platforms=...).
+    Returns None if no platform specified (install to all).
+    """
+    if platform is None:
+        return None
+    valid = SkillStorage.PLATFORM_SKILLS_DIRS.keys()
+    if platform not in valid:
+        console.print(
+            f"[red]✗ Unknown platform: {platform}[/red]\n"
+            f"[dim]Valid platforms: {', '.join(sorted(valid))}[/dim]"
+        )
+        raise typer.Exit(1)
+    return [platform]
+
+
+def _auto_install(force: bool, skip_verify: bool, platforms: list[str] | None = None) -> None:
     """Auto-install recommended skill packs."""
     console.print(f"\n[bold cyan]🚀 Auto-Installing Recommended Packs[/bold cyan]\n{'=' * 40}\n")
 
@@ -137,7 +174,7 @@ def _auto_install(force: bool, skip_verify: bool) -> None:
             continue
 
         console.print(f"[dim]Installing {name}...[/dim]")
-        result = _install_pack(name, force, skip_verify, quiet=True)
+        result = _install_pack(name, force, skip_verify, quiet=True, platforms=platforms)
         results[name] = result
 
     # Summary
@@ -190,6 +227,7 @@ def _install_pack(
     force: bool,
     skip_verify: bool,
     quiet: bool = False,
+    platforms: list[str] | None = None,
 ) -> str:
     """Install a skill pack by name or URL.
 
@@ -214,6 +252,8 @@ def _install_pack(
         source = pack_url or pack_name
         console.print(f"\n[bold cyan]📦 Installing {pack_name}[/bold cyan]\n{'=' * 40}\n")
         console.print(f"[dim]Source:[/dim] {source}\n")
+        if platforms:
+            console.print(f"[dim]Platform:[/dim] {', '.join(platforms)}\n")
 
     installer = PackInstaller()
     loader = ExternalSkillLoader()
@@ -231,7 +271,7 @@ def _install_pack(
 
     # Execute installation with progress bar
     if quiet:
-        success, msg = installer.install_pack(pack_name, pack_url)
+        success, msg = installer.install_pack(pack_name, pack_url, platforms=platforms)
     else:
         with Progress(
             SpinnerColumn(),
@@ -245,7 +285,7 @@ def _install_pack(
             # The installer does the heavy lifting; we just show completion
             # since install_pack doesn't expose incremental progress.
             progress.update(task, completed=30, description="Analyzing repository...")
-            success, msg = installer.install_pack(pack_name, pack_url)
+            success, msg = installer.install_pack(pack_name, pack_url, platforms=platforms)
             progress.update(task, completed=100, description="Installation complete")
 
     if success:
