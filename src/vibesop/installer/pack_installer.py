@@ -11,7 +11,7 @@ from rich.console import Console
 
 from vibesop.constants import TRUSTED_PACKS
 from vibesop.core.skills.storage import SkillStorage
-from vibesop.installer.analyzer import RepoAnalyzer
+from vibesop.installer.analyzer import RepoAnalyzer, parse_github_url
 from vibesop.installer.planner import InstallPlanner
 from vibesop.security import SkillSecurityAuditor
 
@@ -104,9 +104,10 @@ class PackInstaller:
 
             target_path.mkdir(parents=True, exist_ok=True)
 
-            clone_ok = analyzer.git_clone(pack_url, target_path)
+            repo_url, _ = parse_github_url(pack_url)
+            clone_ok = analyzer.git_clone(repo_url, target_path)
             if not clone_ok:
-                return False, f"Failed to clone {pack_url} to {target_path}"
+                return False, f"Failed to clone {repo_url} to {target_path}"
 
             git_dir = target_path / ".git"
             if git_dir.exists():

@@ -41,31 +41,37 @@ class RepoAnalysis:
         return ids
 
 
-class RepoAnalyzer:
+_GITHUB_TREE_RE = re.compile(
+    r"^https://github\.com/([^/]+)/([^/]+)/tree/([^/]+)/(.+)$"
+)
+_GITHUB_BLOB_RE = re.compile(
+    r"^https://github\.com/([^/]+)/([^/]+)/blob/([^/]+)/(.+)$"
+)
 
-    _GITHUB_TREE_RE = re.compile(
-        r"^https://github\.com/([^/]+)/([^/]+)/tree/([^/]+)/(.+)$"
-    )
-    _GITHUB_BLOB_RE = re.compile(
-        r"^https://github\.com/([^/]+)/([^/]+)/blob/([^/]+)/(.+)$"
-    )
+
+def parse_github_url(url: str) -> tuple[str, str | None]:
+    """Decompose a GitHub web URL into (clone_url, subdirectory)."""
+    m = _GITHUB_TREE_RE.match(url)
+    if m:
+        owner, repo, _branch, subdir = m.groups()
+        return f"https://github.com/{owner}/{repo}.git", subdir.rstrip("/")
+
+    m = _GITHUB_BLOB_RE.match(url)
+    if m:
+        owner, repo, _branch, filepath = m.groups()
+        parts = filepath.split("/")
+        subdir = "/".join(parts[:-1]) if len(parts) > 1 else None
+        return f"https://github.com/{owner}/{repo}.git", subdir
+
+    return url, None
+
+
+class RepoAnalyzer:
 
     @staticmethod
     def _parse_github_url(url: str) -> tuple[str, str | None]:
         """Decompose a GitHub web URL into (clone_url, subdirectory)."""
-        m = RepoAnalyzer._GITHUB_TREE_RE.match(url)
-        if m:
-            owner, repo, _branch, subdir = m.groups()
-            return f"https://github.com/{owner}/{repo}.git", subdir.rstrip("/")
-
-        m = RepoAnalyzer._GITHUB_BLOB_RE.match(url)
-        if m:
-            owner, repo, _branch, filepath = m.groups()
-            parts = filepath.split("/")
-            subdir = "/".join(parts[:-1]) if len(parts) > 1 else None
-            return f"https://github.com/{owner}/{repo}.git", subdir
-
-        return url, None
+        return parse_github_url(url)
 
     def analyze(self, url: str, pack_name: str | None = None) -> RepoAnalysis:
         inferred_name = pack_name or self.infer_pack_name(url)
