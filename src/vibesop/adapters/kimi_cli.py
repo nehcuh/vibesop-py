@@ -359,7 +359,7 @@ class KimiCliAdapter(PlatformAdapter):
             'vibe route --slash "/vibe-help"',
             'vibe route --slash "/vibe-list"',
             'vibe route --slash "/vibe-analyze --deep"',
-            'vibe route --slash "/vibe-install gstack"',
+            'vibe route --slash "/vibe-install superpowers"',
             "```",
             "",
             "Available quick commands:",

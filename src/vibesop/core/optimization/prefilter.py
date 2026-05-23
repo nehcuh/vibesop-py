@@ -33,7 +33,6 @@ COMPLEXITY_INDICATORS = [
 # Default namespace keywords (fallback if dynamic discovery fails)
 # These provide sensible defaults for well-known skill packs
 _DEFAULT_NAMESPACE_KEYWORDS: dict[str, list[str]] = {
-    "gstack": ["gstack", "g stack", "gee stack"],
     "superpowers": ["superpowers", "super powers", "超能力"],
     "omx": ["omx", "oh-my-codex", "codex"],
 }

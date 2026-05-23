@@ -10,7 +10,7 @@ class TestCandidatePrefilterInit:
     def test_default_init(self):
         prefilter = CandidatePrefilter()
         assert prefilter._cluster_index is None
-        assert "gstack" in prefilter._namespace_keywords
+        assert "superpowers" in prefilter._namespace_keywords
 
     def test_custom_namespace_keywords(self):
         prefilter = CandidatePrefilter(namespace_keywords={"custom": ["kw1"]})
@@ -29,29 +29,29 @@ class TestFromCandidates:
 
     def test_from_candidates_merges_defaults(self):
         candidates = [
-            {"id": "gstack/skill", "namespace": "gstack", "tags": ["review"]},
+            {"id": "superpowers/skill", "namespace": "superpowers", "tags": ["review"]},
         ]
         prefilter = CandidatePrefilter.from_candidates(candidates)
-        assert "gstack" in prefilter._namespace_keywords
-        assert "review" in prefilter._namespace_keywords["gstack"]
+        assert "superpowers" in prefilter._namespace_keywords
+        assert "review" in prefilter._namespace_keywords["superpowers"]
 
     def test_from_candidates_empty(self):
         prefilter = CandidatePrefilter.from_candidates([])
-        assert "gstack" in prefilter._namespace_keywords
+        assert "superpowers" in prefilter._namespace_keywords
 
 
 class TestGetTriggeredNamespaces:
     """Test namespace triggering."""
 
-    def test_trigger_gstack(self):
-        prefilter = CandidatePrefilter()
-        triggered = prefilter._get_triggered_namespaces("use gstack")
-        assert "gstack" in triggered
-
     def test_trigger_superpowers(self):
         prefilter = CandidatePrefilter()
-        triggered = prefilter._get_triggered_namespaces("superpowers help")
+        triggered = prefilter._get_triggered_namespaces("use superpowers")
         assert "superpowers" in triggered
+
+    def test_trigger_omx(self):
+        prefilter = CandidatePrefilter()
+        triggered = prefilter._get_triggered_namespaces("use omx")
+        assert "omx" in triggered
 
     def test_no_trigger(self):
         prefilter = CandidatePrefilter()
@@ -60,8 +60,8 @@ class TestGetTriggeredNamespaces:
 
     def test_case_insensitive(self):
         prefilter = CandidatePrefilter()
-        triggered = prefilter._get_triggered_namespaces("GSTACK")
-        assert "gstack" in triggered
+        triggered = prefilter._get_triggered_namespaces("SUPERPOWERS")
+        assert "superpowers" in triggered
 
 
 class TestFilterByPriority:
@@ -94,9 +94,9 @@ class TestFilterByPriority:
     def test_triggered_namespace_included(self):
         prefilter = CandidatePrefilter()
         candidates = [
-            {"id": "g", "priority": "P2", "namespace": "gstack"},
+            {"id": "g", "priority": "P2", "namespace": "superpowers"},
         ]
-        result = prefilter._filter_by_priority("use gstack", candidates)
+        result = prefilter._filter_by_priority("use superpowers", candidates)
         assert len(result) == 1
 
     def test_non_triggered_p2_excluded(self):
@@ -114,27 +114,27 @@ class TestFilterByNamespace:
     def test_triggered_namespace_filters(self):
         prefilter = CandidatePrefilter()
         candidates = [
-            {"id": "g1", "namespace": "gstack"},
+            {"id": "omx1", "namespace": "omx"},
             {"id": "s1", "namespace": "superpowers"},
         ]
-        result = prefilter._filter_by_namespace("use gstack", candidates)
+        result = prefilter._filter_by_namespace("use omx", candidates)
         assert len(result) == 1
-        assert result[0]["id"] == "g1"
+        assert result[0]["id"] == "omx1"
 
     def test_p0_kept_when_namespace_triggered(self):
         prefilter = CandidatePrefilter()
         candidates = [
             {"id": "p0", "priority": "P0", "namespace": "builtin"},
-            {"id": "g1", "namespace": "gstack"},
+            {"id": "s1", "namespace": "superpowers"},
         ]
-        result = prefilter._filter_by_namespace("use gstack", candidates)
+        result = prefilter._filter_by_namespace("use superpowers", candidates)
         assert len(result) == 2
 
     def test_no_trigger_passes_through(self):
         prefilter = CandidatePrefilter()
         candidates = [
-            {"id": "g1", "namespace": "gstack"},
             {"id": "s1", "namespace": "superpowers"},
+            {"id": "s2", "namespace": "superpowers"},
         ]
         result = prefilter._filter_by_namespace("hello", candidates)
         assert len(result) == 2
@@ -151,13 +151,13 @@ class TestFilter:
         prefilter = CandidatePrefilter()
         candidates = [
             {"id": "p0", "priority": "P0", "namespace": "builtin"},
-            {"id": "g1", "priority": "P2", "namespace": "gstack"},
+            {"id": "s1", "priority": "P2", "namespace": "superpowers"},
             {"id": "ext", "priority": "P2", "namespace": "external"},
         ]
-        result = prefilter.filter("use gstack", candidates)
+        result = prefilter.filter("use superpowers", candidates)
         ids = [c["id"] for c in result]
         assert "p0" in ids
-        assert "g1" in ids
+        assert "s1" in ids
         assert "ext" not in ids
 
     def test_complex_query_keeps_all(self):

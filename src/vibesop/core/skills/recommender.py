@@ -42,36 +42,42 @@ class SkillRecommender:
     STACK_RECOMMENDATIONS: ClassVar[dict[str, list[tuple[str, str]]]] = {
         "python": [
             ("superpowers/tdd", "Test-driven development for Python projects"),
-            ("gstack/review", "Pre-merge code review"),
             ("superpowers/refactor", "Systematic refactoring with safety checks"),
         ],
         "javascript": [
-            ("gstack/review", "Pre-merge code review"),
-            ("gstack/qa", "QA testing for web applications"),
-            ("superpowers/tdd", "Test-driven development workflow"),
+            ("mattpocock/tdd", "Test-driven development with red-green-refactor"),
+            ("mattpocock/diagnose", "Disciplined diagnosis loop for hard bugs"),
         ],
         "typescript": [
-            ("gstack/review", "Pre-merge code review"),
-            ("gstack/qa", "QA testing for web applications"),
+            ("mattpocock/tdd", "Test-driven development with red-green-refactor"),
+            ("mattpocock/diagnose", "Disciplined diagnosis loop for hard bugs"),
+            ("mattpocock/improve-codebase-architecture", "Architecture improvement with domain language"),
             ("superpowers/refactor", "Systematic refactoring"),
         ],
         "rust": [
-            ("gstack/review", "Pre-merge code review"),
             ("superpowers/optimize", "Performance profiling and optimization"),
         ],
         "go": [
-            ("gstack/review", "Pre-merge code review"),
             ("superpowers/architect", "System architecture design"),
         ],
         "default": [
-            ("gstack/investigate", "Systematic root-cause debugging"),
-            ("gstack/review", "Pre-merge code review"),
-            ("superpowers/tdd", "Test-driven development"),
+            ("mattpocock/diagnose", "Disciplined diagnosis loop for hard bugs"),
+            ("mattpocock/tdd", "Test-driven development"),
         ],
     }
 
+    _featured_registry: Any = None  # type: FeaturedRegistry | None
+
     def __init__(self, project_root: Path | None = None) -> None:
         self._project_root = project_root or Path.cwd()
+
+    def _get_featured_registry(self) -> Any:
+        """Lazy-load the featured skills registry."""
+        if self._featured_registry is None:
+            from vibesop.core.skills.featured_registry import FeaturedRegistry
+
+            self._featured_registry = FeaturedRegistry(self._project_root)
+        return self._featured_registry
 
     def recommend_for_project(self) -> list[SkillRecommendation]:
         project_info = self._analyze_project()
@@ -79,13 +85,34 @@ class SkillRecommender:
         installed = self._get_installed_skill_ids()
 
         analytics_recs = self._get_analytics_recommendations(lang, installed)
-
         if analytics_recs:
             return analytics_recs
 
-        recs: list[SkillRecommendation] = []
-        candidates = self.STACK_RECOMMENDATIONS.get(lang, self.STACK_RECOMMENDATIONS["default"])
+        # Use featured registry as primary source, fall back to hardcoded
+        try:
+            registry = self._get_featured_registry()
+            featured = registry.for_stack_or_default(lang, limit=8)
+            if featured:
+                recs: list[SkillRecommendation] = []
+                for fs in featured:
+                    if fs.skill_id in installed:
+                        continue
+                    recs.append(
+                        SkillRecommendation(
+                            skill_id=fs.skill_id,
+                            reason=f"[{lang.title()}] {fs.description[:80]}",
+                            confidence=fs.quality_rating,
+                            installed=False,
+                        )
+                    )
+                if recs:
+                    return recs
+        except (ImportError, OSError):
+            pass
 
+        # Fallback to hardcoded recommendations (legacy)
+        recs = []
+        candidates = self.STACK_RECOMMENDATIONS.get(lang, self.STACK_RECOMMENDATIONS["default"])
         for skill_id, reason in candidates:
             recs.append(
                 SkillRecommendation(
@@ -95,7 +122,6 @@ class SkillRecommender:
                     installed=skill_id in installed,
                 )
             )
-
         return recs
 
     def _get_analytics_recommendations(
@@ -149,37 +175,37 @@ class SkillRecommender:
         installed = self._get_installed_packs()
         recs: list[SkillRecommendation] = []
 
-        has_gstack = any("gstack" in p for p in installed)
         has_superpowers = any("superpowers" in p for p in installed)
+        has_mattpocock = any("mattpocock" in p for p in installed)
 
-        if has_gstack and not has_superpowers:
+        if has_superpowers and not has_mattpocock:
+            recs.append(
+                SkillRecommendation(
+                    skill_id="mattpocock/diagnose",
+                    reason="Users with superpowers often also use mattpocock skills for debugging",
+                    confidence=0.72,
+                )
+            )
+            recs.append(
+                SkillRecommendation(
+                    skill_id="mattpocock/tdd",
+                    reason="Structured TDD complement to superpowers/tdd",
+                    confidence=0.68,
+                )
+            )
+
+        if has_mattpocock and not has_superpowers:
             recs.append(
                 SkillRecommendation(
                     skill_id="superpowers/tdd",
-                    reason="Users with gstack often also use superpowers",
+                    reason="Users with mattpocock skills often also use superpowers",
                     confidence=0.75,
                 )
             )
             recs.append(
                 SkillRecommendation(
                     skill_id="superpowers/refactor",
-                    reason="Complementary to gstack/review",
-                    confidence=0.70,
-                )
-            )
-
-        if has_superpowers and not has_gstack:
-            recs.append(
-                SkillRecommendation(
-                    skill_id="gstack/review",
-                    reason="Users with superpowers often also use gstack",
-                    confidence=0.75,
-                )
-            )
-            recs.append(
-                SkillRecommendation(
-                    skill_id="gstack/qa",
-                    reason="Complementary to superpowers/tdd",
+                    reason="Complementary to mattpocock/diagnose",
                     confidence=0.70,
                 )
             )
@@ -192,7 +218,8 @@ class SkillRecommender:
 
         essential = [
             ("systematic-debugging", "Essential debugging workflow"),
-            ("gstack/review", "Essential pre-merge review"),
+            ("mattpocock/diagnose", "Disciplined diagnosis loop for hard bugs"),
+            ("mattpocock/tdd", "Test-driven development with red-green-refactor"),
         ]
         for skill_id, reason in essential:
             if skill_id not in installed:
@@ -212,9 +239,17 @@ class SkillRecommender:
 
             analyzer = ProjectAnalyzer(self._project_root)
             result = analyzer.analyze()
-            return result if isinstance(result, dict) else {}
+            if isinstance(result, dict):
+                return result
+            # ProjectProfile dataclass — extract relevant fields
+            project_type = getattr(result, "project_type", None)
+            tech_stack = getattr(result, "tech_stack", [])
+            primary = project_type or (tech_stack[0] if tech_stack else None)
+            if primary:
+                return {"primary_language": primary}
         except (ImportError, RuntimeError, OSError):
-            return self._simple_detect()
+            pass
+        return self._simple_detect()
 
     def _simple_detect(self) -> dict[str, str]:
         counts: dict[str, int] = {}

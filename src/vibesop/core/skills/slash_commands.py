@@ -159,7 +159,7 @@ class SlashCommandHandler:
                 description="Install skill pack to central storage with symlinks",
                 handler=self._handle_install,
                 args_schema=["pack_name", "--platform"],
-                examples=["/vibe-install gstack", "/vibe-install superpowers"],
+                examples=["/vibe-install superpowers", "/vibe-install omx"],
             )
         )
 

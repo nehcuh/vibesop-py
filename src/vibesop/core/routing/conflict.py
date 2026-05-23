@@ -109,7 +109,6 @@ class NamespacePriorityStrategy(ResolutionStrategy):
     DEFAULT_PRIORITIES: ClassVar[dict[str, int]] = {
         "project": 100,
         "superpowers": 80,
-        "gstack": 70,
         "omx": 60,
         "builtin": 60,
     }

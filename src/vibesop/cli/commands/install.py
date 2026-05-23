@@ -7,17 +7,17 @@ Usage:
     vibe install <NAME|URL>
     vibe install --auto
     vibe install --list
-    vibe install gstack --platform claude-code
+    vibe install superpowers --platform claude-code
 
 Examples:
     # Install a trusted skill pack
-    vibe install gstack
+    vibe install superpowers
 
     # Install from any Git URL
     vibe install https://github.com/obra/superpowers
 
     # Install for a specific platform only
-    vibe install gstack --platform claude-code
+    vibe install superpowers --platform claude-code
 
     # Auto-install all recommended packs
     vibe install --auto
@@ -48,7 +48,7 @@ _INSTALL_DOCSTRING_PLATFORM_HELP = (
 def install(
     name_or_url: str | None = typer.Argument(
         None,
-        help="Trusted pack name (gstack, superpowers) or Git URL",
+        help="Trusted pack name (superpowers, omx) or Git URL",
     ),
     auto: bool = typer.Option(
         False,
@@ -99,8 +99,8 @@ def install(
         console.print(
             "[red]✗ No pack name or URL specified[/red]\n"
             "[dim]Examples:[/dim]\n"
-            "  [cyan]vibe install gstack[/cyan]\n"
             "  [cyan]vibe install superpowers[/cyan]\n"
+            "  [cyan]vibe install omx[/cyan]\n"
             "  [cyan]vibe install https://github.com/user/skills[/cyan]\n"
             "\n"
             "[dim]Or use:[/dim]\n"

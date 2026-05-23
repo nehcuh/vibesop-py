@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
+import shutil
 from typing import Any
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
@@ -17,6 +18,70 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 from vibesop._version import __version__
 
 logger = logging.getLogger(__name__)
+
+
+def detect_tool_environment() -> str:
+    """Detect nvm and uv availability and return guidance text.
+
+    Checks if nvm (Node Version Manager) and uv (Python package manager)
+    are available on the system. Returns Markdown guidance to be inserted
+    at the top of CLAUDE.md / AGENTS.md global configuration files.
+
+    Returns:
+        Markdown string with tool environment guidance, or empty string
+        if neither nvm nor uv is detected.
+    """
+    tools_found: list[str] = []
+    guidance_lines: list[str] = []
+
+    # Detect nvm
+    nvm_found = False
+    nvm_candidates = [
+        Path.home() / ".nvm" / "nvm.sh",
+        Path("/usr/local/opt/nvm/nvm.sh"),
+    ]
+    for candidate in nvm_candidates:
+        if candidate.exists():
+            nvm_found = True
+            break
+    if not nvm_found:
+        nvm_in_path = shutil.which("nvm") is not None
+        if nvm_in_path:
+            nvm_found = True
+
+    if nvm_found:
+        tools_found.append("nvm")
+        guidance_lines.append(
+            "- **nvm** (Node Version Manager): When working with Node.js "
+            "projects, use `nvm use` to switch to the correct Node.js version "
+            "before running any Node.js commands. Run `nvm ls` to see "
+            "available versions."
+        )
+
+    # Detect uv
+    uv_found = shutil.which("uv") is not None
+    if uv_found:
+        tools_found.append("uv")
+        guidance_lines.append(
+            "- **uv** (Python package manager): When working with Python "
+            "projects, **always use `uv` instead of `pip`** for package "
+            "management.\n"
+            "  - Use `uv run python` or `uv run pytest` to run Python scripts "
+            "and tests\n"
+            "  - Use `uv add <package>` to install project dependencies\n"
+            "  - Use `uv pip install <package>` for ad-hoc installations\n"
+            "  - Use `uv sync` to sync the project environment"
+        )
+
+    if not tools_found:
+        return ""
+
+    header = (
+        "## Tool Environment\n\n"
+        "The following development tools are available on this system. "
+        "Use them when working with the corresponding ecosystems:\n\n"
+    )
+    return header + "\n".join(guidance_lines) + "\n"
 
 
 def find_skill_content(skill_id: str, project_root: Path) -> str | None:
@@ -273,11 +338,16 @@ def generate_slim_agents_index(
 Run `vibe skills list` to see available skills, or read `docs/skills-catalog.md`.
 """
 
+    tool_env = detect_tool_environment()
+    if tool_env:
+        tool_env = tool_env + "\n---\n"
+
     return f"""# VibeSOP Configuration
 
 > **Version**: {version}
 > **Generated**: {now}
 
+{tool_env}
 ## Routing Protocol
 
 **MANDATORY: Call `vibe route` before any non-trivial task.**
@@ -519,7 +589,7 @@ When the user types a `/vibe-*` command, execute it via `vibe route --slash`.
 vibe route --slash "/vibe-help"
 vibe route --slash "/vibe-list --installed"
 vibe route --slash "/vibe-analyze --deep"
-vibe route --slash "/vibe-install gstack"
+vibe route --slash "/vibe-install superpowers"
 ```
 """
 

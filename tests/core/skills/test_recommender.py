@@ -69,24 +69,23 @@ class TestSkillRecommenderRecommendations:
     """Test recommendation methods."""
 
     def test_recommend_collaborative_gstack_only(self, tmp_path: Path):
+        """gstack-only installs no longer trigger recommendations (not a default pack)."""
         recommender = SkillRecommender(project_root=tmp_path)
         with patch.object(recommender, "_get_installed_packs", return_value={"gstack"}):
             recs = recommender.recommend_collaborative()
-        skill_ids = [r.skill_id for r in recs]
-        assert "superpowers/tdd" in skill_ids
-        assert "superpowers/refactor" in skill_ids
+        assert recs == []
 
     def test_recommend_collaborative_superpowers_only(self, tmp_path: Path):
         recommender = SkillRecommender(project_root=tmp_path)
         with patch.object(recommender, "_get_installed_packs", return_value={"superpowers"}):
             recs = recommender.recommend_collaborative()
         skill_ids = [r.skill_id for r in recs]
-        assert "gstack/review" in skill_ids
-        assert "gstack/qa" in skill_ids
+        assert "mattpocock/diagnose" in skill_ids
+        assert "mattpocock/tdd" in skill_ids
 
     def test_recommend_collaborative_both(self, tmp_path: Path):
         recommender = SkillRecommender(project_root=tmp_path)
-        with patch.object(recommender, "_get_installed_packs", return_value={"gstack", "superpowers"}):
+        with patch.object(recommender, "_get_installed_packs", return_value={"superpowers", "mattpocock"}):
             recs = recommender.recommend_collaborative()
         assert recs == []
 
@@ -96,14 +95,15 @@ class TestSkillRecommenderRecommendations:
             recs = recommender.detect_missing_skills()
         skill_ids = [r.skill_id for r in recs]
         assert "systematic-debugging" in skill_ids
-        assert "gstack/review" in skill_ids
+        assert "mattpocock/diagnose" in skill_ids
+        assert "mattpocock/tdd" in skill_ids
 
     def test_detect_missing_skills_none_missing(self, tmp_path: Path):
         recommender = SkillRecommender(project_root=tmp_path)
         with patch.object(
             recommender,
             "_get_installed_skill_ids",
-            return_value={"systematic-debugging", "gstack/review"},
+            return_value={"systematic-debugging", "mattpocock/diagnose", "mattpocock/tdd"},
         ):
             recs = recommender.detect_missing_skills()
         assert recs == []
@@ -118,7 +118,7 @@ class TestSkillRecommenderRecommendations:
         assert len(recs) > 0
         skill_ids = [r.skill_id for r in recs]
         assert "superpowers/tdd" in skill_ids
-        assert "gstack/review" in skill_ids
+        assert "superpowers/refactor" in skill_ids
 
     def test_recommend_for_project_default(self, tmp_path: Path):
         recommender = SkillRecommender(project_root=tmp_path)
@@ -127,7 +127,7 @@ class TestSkillRecommenderRecommendations:
                 recs = recommender.recommend_for_project()
 
         skill_ids = [r.skill_id for r in recs]
-        assert "gstack/investigate" in skill_ids
+        assert "mattpocock/diagnose" in skill_ids
 
     def test_recommend_for_project_with_analytics(self, tmp_path: Path):
         recommender = SkillRecommender(project_root=tmp_path)

@@ -8,6 +8,23 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from vibesop.core.matching import RoutingContext
+
+# Built-in management tools that should never be assigned to sub-tasks.
+# These are VibeSOP's own CLI/slash-command tools, not domain skills.
+_MANAGEMENT_SKILL_IDS: frozenset[str] = frozenset({
+    "builtin/slash-orchestrate",
+    "builtin/slash-route",
+    "builtin/slash-help",
+    "builtin/slash-list",
+    "builtin/slash-install",
+    "builtin/slash-evaluate",
+    "slash-orchestrate",
+    "slash-route",
+    "slash-help",
+    "slash-list",
+    "slash-install",
+    "slash-evaluate",
+})
 from vibesop.core.models import (
     ExecutionMode,
     ExecutionPlan,
@@ -188,7 +205,7 @@ class PlanBuilder:
             # Route to best skill for this sub-task
             # Prefer LLM-assigned skill_id from decomposition if available
             pre_assigned = getattr(sub_task, "skill_id", None)
-            if pre_assigned and pre_assigned != "null":
+            if pre_assigned and pre_assigned != "null" and pre_assigned not in _MANAGEMENT_SKILL_IDS:
                 skill_id = pre_assigned
                 confidence = 0.99
             else:
@@ -229,10 +246,30 @@ class PlanBuilder:
 
                 skill_id = route_result.primary.skill_id
                 confidence = route_result.primary.confidence
+                alternatives = getattr(route_result, "alternatives", [])
+
+                # Never assign VibeSOP management tools (slash-*) to sub-tasks.
+                # These are CLI meta-tools, not domain skills. Try the best
+                # alternative instead; if none, skip the step.
+                if skill_id in _MANAGEMENT_SKILL_IDS:
+                    if alternatives:
+                        alt = alternatives[0]
+                        logger.info(
+                            "Sub-task %d: management skill '%s' → alternative '%s'",
+                            i, skill_id, alt.skill_id,
+                        )
+                        skill_id = alt.skill_id
+                        confidence = alt.confidence
+                    else:
+                        logger.warning(
+                            "Sub-task %d: management skill '%s' matched but no "
+                            "alternatives available — skipping step",
+                            i, skill_id,
+                        )
+                        continue
 
                 # Apply capability matching boost when sub-task has a task_type
                 task_type = getattr(sub_task, "task_type", None) or ""
-                alternatives = getattr(route_result, "alternatives", [])
                 if task_type and alternatives:
                     adjusted_id, adjusted_conf = self._select_best_by_capability(
                         skill_id,

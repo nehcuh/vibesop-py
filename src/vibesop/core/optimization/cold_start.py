@@ -48,25 +48,19 @@ class ColdStartStrategy:
         # Debugging scenarios
         {
             "pattern": "debug",
-            "skill_id": "gstack/investigate",
+            "skill_id": "superpowers/debug",
             "keywords": ["debug", "调试", "bug", "error", "错误", "fix", "修复"],
         },
         {
             "pattern": "test fail",
-            "skill_id": "gstack/investigate",
+            "skill_id": "superpowers/debug",
             "keywords": ["test failure", "测试失败", "failing test"],
         },
         # Code review
         {
             "pattern": "review",
-            "skill_id": "gstack/review",
+            "skill_id": "superpowers/review",
             "keywords": ["review", "审查", "code review", "代码审查"],
-        },
-        # Deployment
-        {
-            "pattern": "deploy",
-            "skill_id": "gstack/ship",
-            "keywords": ["deploy", "部署", "release", "发布"],
         },
         # Testing
         {
@@ -118,7 +112,6 @@ class ColdStartStrategy:
 
     # Priority skills to always include in candidate set
     _P0_SKILLS: ClassVar[list[str]] = [
-        "gstack/investigate",
         "session-end",
     ]
 
@@ -126,7 +119,6 @@ class ColdStartStrategy:
     _NAMESPACE_PRIORITIES: ClassVar[dict[str, int]] = {
         "builtin": 100,  # Highest priority
         "superpowers": 80,
-        "gstack": 70,
         "omx": 60,
         "external": 50,
     }

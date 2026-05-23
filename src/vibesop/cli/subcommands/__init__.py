@@ -81,6 +81,7 @@ def register(app: typer.Typer) -> None:
     """Register all subcommands with the main app."""
     app.add_typer(config_app, name="config")
     app.add_typer(skills_app, name="skills")
+    app.add_typer(skill_commands_mod.app, name="skill")  # singular alias (GOALS.md / docs convention)
     app.add_typer(session_app, name="session")
     app.add_typer(feedback_app, name="feedback")
 
@@ -123,6 +124,7 @@ def register(app: typer.Typer) -> None:
     skills_app.command("rate")(skills_mod.rate)
     skills_app.command("ratings")(skills_mod.ratings)
     skills_app.command("recommended")(skills_mod.recommended)
+    skills_app.command("featured")(skills_mod.featured)
     skills_app.command("stale")(skill_commands_mod.stale)
     skills_app.command("end-check")(skill_commands_mod.end_check)
     skills_app.command("share")(community_mod.share)

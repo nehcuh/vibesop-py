@@ -27,18 +27,16 @@ class Recommendation:
 
 _USE_CASE_MAP: dict[str, list[tuple[str, RecommendationPriority, str]]] = {
     "software-development": [
-        ("gstack", RecommendationPriority.HIGH, "Essential for software development workflows"),
         ("superpowers", RecommendationPriority.HIGH, "Essential for software development workflows"),
     ],
-    "code-review": [("gstack", RecommendationPriority.HIGH, "Provides specialized code review skills")],
+    "code-review": [("superpowers", RecommendationPriority.HIGH, "Provides code review skills")],
     "brainstorming": [("superpowers", RecommendationPriority.MEDIUM, "Great for ideation and brainstorming")],
-    "testing": [("gstack", RecommendationPriority.HIGH, "Includes automated QA skills")],
-    "architecture": [("gstack", RecommendationPriority.HIGH, "Provides architecture review skills")],
+    "testing": [("superpowers", RecommendationPriority.HIGH, "Includes test-driven development skills")],
+    "architecture": [("superpowers", RecommendationPriority.HIGH, "Provides architecture design skills")],
     "productivity": [("superpowers", RecommendationPriority.MEDIUM, "General productivity enhancements")],
 }
 
 _DEFAULT_REASONS: dict[str, str] = {
-    "gstack": "Virtual engineering team skills for code review and QA",
     "superpowers": "General productivity skills for development",
 }
 
@@ -80,8 +78,8 @@ class IntegrationRecommender:
         self, integration_ids: list[str], platform: str,
     ) -> dict[str, Any]:
         return {
-            "compatible": [i for i in integration_ids if i in ("gstack", "superpowers")],
-            "incompatible": [{"integration_id": i, "reason": "Unknown integration"} for i in integration_ids if i not in ("gstack", "superpowers")],
+            "compatible": [i for i in integration_ids if i in ("superpowers", "omx", "mattpocock")],
+            "incompatible": [{"integration_id": i, "reason": "Unknown integration"} for i in integration_ids if i not in ("superpowers", "omx", "mattpocock")],
             "warnings": [],
             "platform": platform,
         }

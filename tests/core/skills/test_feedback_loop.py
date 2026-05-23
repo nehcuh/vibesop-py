@@ -32,9 +32,13 @@ class TestFeedbackLoop:
         )
 
     def test_f_grade_deprecates(self) -> None:
+        """F-grade + 30+ days unused + < 3 uses → deprecate."""
         evaluator = MagicMock()
         evaluator.evaluate_all_skills.return_value = {
-            "test/skill": self._make_evaluation("test/skill", "F", total_routes=5, quality=0.3),
+            "test/skill": self._make_evaluation(
+                "test/skill", "F", total_routes=1, quality=0.3,
+                last_used="2026-04-01T00:00:00",
+            ),
         }
         loop = FeedbackLoop(evaluator=evaluator)
         suggestions = loop.analyze_all(auto_deprecate=False)
@@ -43,9 +47,13 @@ class TestFeedbackLoop:
         assert suggestions[0].grade == "F"
 
     def test_d_grade_warns(self) -> None:
+        """D-grade + 60+ days unused → warn."""
         evaluator = MagicMock()
         evaluator.evaluate_all_skills.return_value = {
-            "test/skill": self._make_evaluation("test/skill", "D", total_routes=5, quality=0.45),
+            "test/skill": self._make_evaluation(
+                "test/skill", "D", total_routes=5, quality=0.45,
+                last_used="2026-03-01T00:00:00",
+            ),
         }
         loop = FeedbackLoop(evaluator=evaluator)
         suggestions = loop.analyze_all(auto_deprecate=False)
@@ -115,7 +123,10 @@ class TestFeedbackLoop:
     def test_auto_deprecate_applies(self) -> None:
         evaluator = MagicMock()
         evaluator.evaluate_all_skills.return_value = {
-            "test/bad": self._make_evaluation("test/bad", "F", total_routes=5, quality=0.3),
+            "test/bad": self._make_evaluation(
+                "test/bad", "F", total_routes=1, quality=0.3,
+                last_used="2026-04-01T00:00:00",
+            ),
         }
         loop = FeedbackLoop(evaluator=evaluator)
         with patch.object(loop, "_apply_deprecation") as mock_apply:
@@ -126,7 +137,10 @@ class TestFeedbackLoop:
         evaluator = MagicMock()
         evaluator.evaluate_all_skills.return_value = {
             "test/good": self._make_evaluation("test/good", "A", total_routes=5, quality=0.95),
-            "test/bad": self._make_evaluation("test/bad", "F", total_routes=5, quality=0.3),
+            "test/bad": self._make_evaluation(
+                "test/bad", "F", total_routes=1, quality=0.3,
+                last_used="2026-04-01T00:00:00",
+            ),
         }
         loop = FeedbackLoop(evaluator=evaluator)
         suggestions = loop.analyze_all(auto_deprecate=False)
@@ -138,7 +152,10 @@ class TestFeedbackLoop:
         evaluator = MagicMock()
         evaluator.evaluate_all_skills.return_value = {
             "test/a": self._make_evaluation("test/a", "A", total_routes=5, quality=0.95),
-            "test/f": self._make_evaluation("test/f", "F", total_routes=5, quality=0.3),
+            "test/f": self._make_evaluation(
+                "test/f", "F", total_routes=1, quality=0.3,
+                last_used="2026-04-01T00:00:00",
+            ),
         }
         loop = FeedbackLoop(evaluator=evaluator)
         report = loop.generate_report()

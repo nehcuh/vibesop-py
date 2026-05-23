@@ -92,12 +92,12 @@ class TestNamespacePriorityStrategy:
         strategy = NamespacePriorityStrategy()
         matches = [
             _make_match("a", 0.9, "builtin"),
-            _make_match("b", 0.8, "gstack"),
+            _make_match("b", 0.8, "superpowers"),
         ]
-        # builtin=60, gstack=70 → diff=10 which is >5, so there IS a winner
+        # builtin=60, superpowers=80 → diff=20 which is >5, so there IS a winner
         result = strategy.resolve(matches, "query")
         assert result is not None
-        assert result.primary == "b"  # gstack has higher priority
+        assert result.primary == "b"  # superpowers has higher priority
 
     def test_clear_winner(self) -> None:
         """One namespace clearly dominates."""

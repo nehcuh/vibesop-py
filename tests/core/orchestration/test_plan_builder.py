@@ -392,5 +392,59 @@ class TestPreAssignedSkillIdPropagation:
         assert len(plan.steps) == 2
         assert plan.steps[0].skill_id == "superpowers/architect"
         assert plan.steps[1].skill_id == "router_default"
+
+    def test_management_skill_filtered(self) -> None:
+        """Management skills (slash-*) are replaced by the best alternative."""
+        from unittest.mock import patch
+
+        # Use a router whose _single_skill_route returns slash-orchestrate as primary
+        # with superpowers/architect as an alternative.
+        mgmt_route = SkillRoute(
+            skill_id="builtin/slash-orchestrate",
+            confidence=0.6,
+            layer=RoutingLayer.KEYWORD,
+            source="test",
+        )
+        alt_route = SkillRoute(
+            skill_id="superpowers/architect",
+            confidence=0.55,
+            layer=RoutingLayer.KEYWORD,
+            source="test",
+        )
+        router = FakeRouter(responses={"架构评审": mgmt_route})
+
+        # Monkey-patch _single_skill_route to include alternatives
+        original = router._single_skill_route
+
+        def _with_alt(query, context=None, **kw):
+            result = original(query, context, **kw)
+            if result and result.primary and result.primary.skill_id == "builtin/slash-orchestrate":
+                result.alternatives = [alt_route]
+            return result
+
+        router._single_skill_route = _with_alt  # type: ignore[method-assign]
+
+        builder = PlanBuilder(router)
+        sub_tasks = [
+            SubTask(intent="架构评审", query="架构评审"),
+        ]
+        plan = builder.build_plan("评审架构", sub_tasks)
+
+        assert len(plan.steps) == 1
+        assert plan.steps[0].skill_id == "superpowers/architect"
+
+    def test_pre_assigned_management_skill_rejected(self) -> None:
+        """LLM-assigned management skill is rejected; falls through to routing."""
+        router = FakeRouter(default=self._route("superpowers/review"))
+        builder = PlanBuilder(router)
+
+        sub_tasks = [
+            SubTask(intent="review", query="review code", skill_id="builtin/slash-orchestrate"),
+        ]
+        plan = builder.build_plan("review code", sub_tasks)
+
+        assert len(plan.steps) == 1
+        # Pre-assigned management skill rejected → falls through to router default
+        assert plan.steps[0].skill_id == "superpowers/review"
         # Exactly one routing call (for the unset sub-task).
         assert len(router._calls) == 1

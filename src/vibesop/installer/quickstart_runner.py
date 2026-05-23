@@ -38,7 +38,6 @@ class QuickstartRunner:
         self._available_integrations = {
             name: desc
             for name, desc in [
-                ("gstack", "Virtual engineering team skills"),
                 ("superpowers", "General-purpose productivity skills"),
                 ("omx", "oh-my-codex — autonomous agent skills"),
             ]
@@ -76,7 +75,7 @@ class QuickstartRunner:
 
             if config.install_integrations is None:
                 config.install_integrations = self._ask_yes_no(
-                    "Install skill pack integrations (gstack, superpowers)?", default=True,
+                    "Install skill pack integrations (superpowers, omx)?", default=True,
                 )
             console.print()
 

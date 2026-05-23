@@ -3,57 +3,28 @@
 ## Session Handoff
 
 <!-- handoff:start -->
-### 2026-05-23 16:50
-**Session**: Fix GitHub URL clone bug + add --platform flag to install
+### 2026-05-24 00:40
+**Session**: Deep review + GOALS.md alignment fixes + gstack removal + engineering charter integration + slash-orchestrate routing bug fix
 
 **Completed**:
-- Fixed `RepoAnalyzer.analyze()` passing GitHub web URLs (`/tree/...`, `/blob/...`) directly to `git clone` — invalid git remote
-- Added `_parse_github_url()` to decompose URLs into (clone_url, subdirectory) pairs
-- Added `--platform`/`-p` flag to `vibe install` (claude-code, kimi-cli, opencode, cursor)
-- `PackInstaller.install_pack()` already supported `platforms=` param — CLI just needed to expose it
-- Added `_validate_platform()` with early validation against `SkillStorage.PLATFORM_SKILLS_DIRS`
-- 16 analyzer tests + 14 install tests all pass
+- Comprehensive multi-dimensional review (philosophy, architecture, design, code quality) against GOALS.md
+- Fixed `feedback_loop.py` vs `retention.py` threshold inconsistency (duplicate RetentionSuggestion models with conflicting rules)
+- Registered `vibe skill` (singular) CLI command group alongside existing `vibe skills` (plural)
+- Integrated META v2.0 charter into `rules/behaviors.md` + `behaviors.md.j2` template (6 rules selected, Zero-Pause layer rejected)
+- Removed gstack from TRUSTED_PACKS, all recommenders, cold start, featured registry, namespace priorities, quickstart, onboard — 11 source + 5 test files
+- Fixed `slash-orchestrate` leaking into sub-task routing via `_MANAGEMENT_SKILL_IDS` blacklist in PlanBuilder
+- Updated docs: cold-start-guide.md, install.py help/docstrings, adapter templates, slash_commands
 
 **Key Learnings**:
-- `git clone` silently fails on GitHub web UI URLs with `/tree/` or `/blob/` path segments
-- `patch.object(analyzer, "git_clone") as mock_clone` pattern needed for asserting on instance method calls
+- Duplicate data models across files can silently diverge — grep for class names
+- Management/meta skills need explicit exclusion from domain routing (keyword matching can't distinguish "tools that manage the system" from "skills that do the work")
+- META charter integration: selective adoption (6/11 rules) better than wholesale replacement for VibeSOP's route-confirm-orchestrate model
 
-**Files Modified**:
-- `src/vibesop/installer/analyzer.py`
-- `src/vibesop/cli/commands/install.py`
-- `tests/installer/test_analyzer.py`
-- `tests/cli/test_install_command.py`
-- `pyproject.toml` (added pytest-asyncio dev dep)
-
-**Next Steps**: Can now use `vibe install <url-with-subdir> --platform <target>`
+**Files Modified**: 55 files, +913/-387 lines
 
 ---
 
-### 2026-05-17 16:00
-**Session**: Test coverage improvement — 172 new tests + config fix + adapter refactor + push
-
-**Completed**:
-- Fixed `config_manager._load_skill_config_file()` cross-format TOML loading bug (isinstance guard)
-- Fixed Kimi CLI E2E tests for slim AGENTS.md format
-- 172 new tests: instinct learner (36), skills loader (47 new file), external_loader (25), storage (9), matching strategies (55 new file)
-- Adapter refactoring: slim AGENTS.md index, routing-protocol/session-lifecycle migrated to docs/
-- Coverage: 72.61 → 73.75%, 2647 → 2766 passing tests
-- Committed + pushed: `335c082`
-
-**Key Learnings**:
-- `SkillMetadata` requires `intent` as positional arg (not defaulted) — test instantiations need all 4 required fields
-- `PromptSkill._prompt_template` is private (underscore prefix)
-- `SkillLoader` coverage went from 0 tests to 47 tests — most impactful new file
-
-**Files Modified**:
-- `src/vibesop/core/skills/config_manager.py`
-- `tests/core/skills/test_loader.py` (new)
-- `tests/core/matching/test_strategies.py` (new)
-- `tests/core/skills/test_external_loader.py`
-- `tests/core/skills/test_skill_storage.py`
-- `tests/core/test_instinct_learner.py`
-- `tests/e2e/test_agent_runtime.py`
-- Adapter files: `_shared.py`, `claude_code.py`, `kimi_cli.py`, `opencode.py`, templates
-
-**Next Steps**: Phase 3 complete; next session could target integration/e2e tests or remaining low-coverage modules
+### 2026-05-23 (S2)
+**Session**: Fix incomplete URL parse fix — second clone in PackInstaller still used raw web URL
+**Next Steps**: Can now use `vibe install <url-with-subdir> --platform <target>`
 <!-- handoff:end -->

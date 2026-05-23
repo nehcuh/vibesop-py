@@ -24,15 +24,12 @@ VibeSOP includes pre-configured mappings for common queries:
 
 | Query Pattern | Default Skill | Keywords |
 |---------------|---------------|----------|
-| `debug`, `bug`, `error` | `systematic-debugging` | debug, 调试, bug, error |
-| `review`, `代码审查` | `gstack/review` | review, 审查 |
-| `deploy`, `部署` | `gstack/ship` | deploy, 部署, release |
+| `debug`, `bug`, `error` | `superpowers/debug` | debug, 调试, bug, error |
+| `review`, `代码审查` | `superpowers/review` | review, 审查 |
 | `test`, `测试` | `superpowers/tdd` | test, 测试, tdd |
 | `brainstorm`, `头脑风暴` | `superpowers/brainstorm` | brainstorm, 头脑风暴 |
 | `architect`, `架构` | `superpowers/architect` | architect, 架构, design |
 | `plan`, `计划` | `riper-workflow` | plan, 计划, planning |
-| `optimize`, `优化` | `superpowers/optimize` | optimize, 优化, performance |
-| `refactor`, `重构` | `superpowers/refactor` | refactor, 重构, clean up |
 
 These mappings provide sensible defaults for 90%+ of common queries.
 
@@ -51,8 +48,6 @@ When no historical data exists, matchers use default confidence weights:
 ### 3. P0 Skills Always Included
 
 Core skills are always in the candidate set:
-- `systematic-debugging`
-- `verification-before-completion`
 - `session-end`
 
 ### 4. Namespace Priority
@@ -63,7 +58,6 @@ When queries are ambiguous, namespaces are prioritized:
 |-----------|----------|-----------|
 | `builtin` | 100 | Core, most tested |
 | `superpowers` | 80 | General-purpose, high quality |
-| `gstack` | 70 | Engineering-focused |
 | `omx` | 60 | Specialized workflows |
 
 ## Performance Characteristics

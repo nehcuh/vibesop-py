@@ -50,6 +50,9 @@ class FeedbackLoop:
 
     F_QUALITY_THRESHOLD = 0.30
     F_MIN_ROUTES = 3
+    F_STALE_DAYS = 30  # Must be unused 30+ days before F-grade triggers deprecation
+    D_STALE_DAYS = 60  # Must be unused 60+ days before D-grade triggers warning
+    ARCHIVE_DAYS = 90  # Unused 90+ days with C/D/F grade → auto-archive
     A_QUALITY_THRESHOLD = 0.90
 
     def __init__(
@@ -91,11 +94,17 @@ class FeedbackLoop:
     def _analyze_skill(
         self, skill_id: str, evaluation: SkillEvaluation
     ) -> RetentionSuggestion | None:
-        """Analyze a single skill evaluation and produce a suggestion."""
+        """Analyze a single skill evaluation and produce a suggestion.
+
+        Rules (aligned with RetentionPolicy and GOALS.md):
+        - Grade F, 30+ days unused, < 3 uses → deprecate
+        - Grade D, 60+ days unused → warn
+        - Grade C/D/F, 90+ days unused → archive
+        - Grade A, sufficient data → boost
+        """
         grade = evaluation.grade
         quality = evaluation.quality_score
 
-        # Compute days since last use
         days_since = None
         if evaluation.last_used:
             try:
@@ -107,35 +116,51 @@ class FeedbackLoop:
             except (ValueError, TypeError):
                 days_since = None
 
-        # F-grade: strong suggestion to deprecate
-        if grade == "F" and evaluation.total_routes >= self.F_MIN_ROUTES:
-            delay_msg = ""
-            if days_since is not None and days_since >= 30:
-                delay_msg = f" (unused for {days_since}d)"
+        # Rule: Grade F, 30+ days unused, < 3 uses → deprecate
+        if (
+            grade == "F"
+            and days_since is not None
+            and days_since >= self.F_STALE_DAYS
+            and evaluation.total_routes < self.F_MIN_ROUTES
+        ):
             return RetentionSuggestion(
                 skill_id=skill_id,
                 action="deprecate",
-                reason=f"Quality score {quality:.0%}, grade {grade}{delay_msg}",
+                reason=(
+                    f"Grade F, only {evaluation.total_routes} use(s), "
+                    f"unused for {days_since}d — quality {quality:.0%}"
+                ),
                 grade=grade,
                 days_since_last_use=days_since,
                 total_routes=evaluation.total_routes,
                 quality_score=quality,
             )
 
-        # D-grade: warn but don't deprecate
-        if grade == "D" and evaluation.total_routes >= self.F_MIN_ROUTES:
+        # Rule: Grade D, 60+ days unused → warn
+        if (
+            grade == "D"
+            and days_since is not None
+            and days_since >= self.D_STALE_DAYS
+        ):
             return RetentionSuggestion(
                 skill_id=skill_id,
                 action="warn",
-                reason=f"Quality score {quality:.0%}, grade {grade} — consider reviewing",
+                reason=(
+                    f"Grade D, unused for {days_since}d — "
+                    f"consider reviewing (quality {quality:.0%})"
+                ),
                 grade=grade,
                 days_since_last_use=days_since,
                 total_routes=evaluation.total_routes,
                 quality_score=quality,
             )
 
-        # 90+ days unused with grade C/D/F → archive
-        if days_since is not None and days_since >= 90 and grade in ("C", "D", "F"):
+        # Rule: 90+ days unused with grade C/D/F → archive
+        if (
+            days_since is not None
+            and days_since >= self.ARCHIVE_DAYS
+            and grade in ("C", "D", "F")
+        ):
             return RetentionSuggestion(
                 skill_id=skill_id,
                 action="archive",
@@ -146,7 +171,7 @@ class FeedbackLoop:
                 quality_score=quality,
             )
 
-        # A-grade: boost
+        # Rule: Grade A, sufficient data → boost
         if grade == "A" and evaluation.total_routes >= self.F_MIN_ROUTES:
             return RetentionSuggestion(
                 skill_id=skill_id,

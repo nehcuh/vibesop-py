@@ -104,8 +104,8 @@ def onboard(
     if not skip_integrations:
         console.print("[bold]Step 4: Integrations[/bold]\n")
         console.print("[dim]Available integrations:[/dim]")
-        console.print("  • gstack - Virtual engineering team")
-        console.print("  • superpowers - Productivity skills\n")
+        console.print("  • superpowers - Productivity skills")
+        console.print("  • omx - Autonomous agent skills\n")
     else:
         console.print("[bold]Step 4: Integrations[/bold] [dim](skipped)[/dim]\n")
 

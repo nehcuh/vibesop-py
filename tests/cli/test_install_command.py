@@ -99,15 +99,15 @@ class TestInstallCommand:
     def test_install_list(self, mock_loader_cls: Any) -> None:
         mock_loader = MagicMock()
         mock_loader.get_supported_packs.return_value = {
-            "gstack": {"installed": True},
-            "superpowers": {"installed": False},
+            "superpowers": {"installed": True},
+            "omx": {"installed": False},
         }
         mock_loader_cls.return_value = mock_loader
 
         result = runner.invoke(app, ["install", "--list"])
         assert result.exit_code == 0
-        assert "gstack" in result.output
         assert "superpowers" in result.output
+        assert "omx" in result.output
         assert "Installed" in result.output
 
     @patch("vibesop.cli.commands.install.PackInstaller")
@@ -118,18 +118,16 @@ class TestInstallCommand:
         mock_installer_cls.return_value = mock_installer
 
         mock_loader = MagicMock()
-        # TRUSTED_PACKS includes superpowers, gstack, omx, mattpocock
         mock_loader.get_supported_packs.return_value = {
             "superpowers": {"installed": True},
-            "gstack": {"installed": False},
-            "omx": {"installed": True},
+            "omx": {"installed": False},
             "mattpocock": {"installed": True},
         }
         mock_loader_cls.return_value = mock_loader
 
         result = runner.invoke(app, ["install", "--auto"])
         assert result.exit_code == 0
-        mock_installer.install_pack.assert_called_once_with("gstack", None, platforms=None)
+        mock_installer.install_pack.assert_called_once_with("omx", None, platforms=None)
 
     @patch("vibesop.cli.commands.install.PackInstaller")
     @patch("vibesop.cli.commands.install.ExternalSkillLoader")
@@ -250,8 +248,7 @@ class TestInstallCommand:
         mock_loader = MagicMock()
         mock_loader.get_supported_packs.return_value = {
             "superpowers": {"installed": True},
-            "gstack": {"installed": False},
-            "omx": {"installed": True},
+            "omx": {"installed": False},
             "mattpocock": {"installed": True},
         }
         mock_loader_cls.return_value = mock_loader
@@ -259,5 +256,5 @@ class TestInstallCommand:
         result = runner.invoke(app, ["install", "--auto", "--platform", "opencode"])
         assert result.exit_code == 0
         mock_installer.install_pack.assert_called_once_with(
-            "gstack", None, platforms=["opencode"]
+            "omx", None, platforms=["opencode"]
         )

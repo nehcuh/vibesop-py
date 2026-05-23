@@ -44,13 +44,13 @@ class TestColdStartStrategy:
         strategy = ColdStartStrategy()
         mapping = strategy.get_mapping_for_query("debug this error")
         assert mapping is not None
-        assert mapping.skill_id == "gstack/investigate"
+        assert mapping.skill_id == "superpowers/debug"
 
     def test_get_mapping_for_query_keyword_match(self):
         strategy = ColdStartStrategy()
         mapping = strategy.get_mapping_for_query("修复这个bug")
         assert mapping is not None
-        assert mapping.skill_id == "gstack/investigate"
+        assert mapping.skill_id == "superpowers/debug"
 
     def test_get_mapping_for_query_no_match(self):
         strategy = ColdStartStrategy()
@@ -75,7 +75,6 @@ class TestColdStartStrategy:
     def test_get_p0_skills(self):
         strategy = ColdStartStrategy()
         skills = strategy.get_p0_skills()
-        assert "gstack/investigate" in skills
         assert "session-end" in skills
 
     def test_get_p0_skills_returns_copy(self):
@@ -89,8 +88,9 @@ class TestColdStartStrategy:
         assert strategy.get_namespace_priority("builtin") == 100
 
     def test_get_namespace_priority_gstack(self):
+        """gstack namespace returns default priority (not in priority map)."""
         strategy = ColdStartStrategy()
-        assert strategy.get_namespace_priority("gstack") == 70
+        assert strategy.get_namespace_priority("gstack") == 50  # external default
 
     def test_get_namespace_priority_unknown(self):
         strategy = ColdStartStrategy()
