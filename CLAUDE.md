@@ -2,19 +2,11 @@
 
 > **Project-level CLAUDE.md** — highest priority in Claude Code
 
-## VibeSOP Routing
-
-All non-trivial tasks must be routed:
-
-```bash
-vibe route "<user_request>"
-```
-
-Then read `skills/<matched-skill>/SKILL.md` and follow its steps.
+System-wide routing, tool environment, and session lifecycle are defined in `~/.claude/CLAUDE.md`.
 
 ## Project-Specific Context
 
-<!-- Add project conventions below. Examples: -->
+<!-- Add project conventions below. Examples:
 
 ### Tech Stack
 
@@ -26,3 +18,4 @@ Then read `skills/<matched-skill>/SKILL.md` and follow its steps.
 
 ### Deployment
 
+-->
