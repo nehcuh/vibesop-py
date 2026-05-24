@@ -831,5 +831,27 @@ Coverage: temporarily lowered fail_under=0 from 75% (massive new test additions)
 
 ---
 
-*No active session.*
+### S9 (2026-05-24 10:00~10:10) Pi Agent Skill 冲突修复
 
+**Session**: 修复 pi agent 启动时的技能冲突警告
+
+**Summary**:
+1. **Invalid chars fix**: 27 个 gstack-*/superpowers-* SKILL.md 文件中 name 字段包含 `/` 改为 `-`
+   - gstack/browse → gstack-browse, superpowers/architect → superpowers-architect 等
+   - Pi 要求 skill name 只能是 lowercase a-z, 0-9, hyphens
+2. **Duplicate removal**: 删除 14 个因名称冲突被跳过的重复技能目录
+   - builtin-autonomous-experiment, experience-evolution, instinct-learning, omx-review, omx-tdd 等
+   - 保留版本因 auto-resolution 已选中, 删除被判跳过的目录
+
+**Key Discovery**:
+- VibeSOP 生成的 SKILL.md 用 `id: gstack/browse` 格式但目录名已是 `gstack-browse`, name 字段里的 `/` 导致 pi 拒绝加载
+- 126 个技能最终保留, 零冲突, 零非法字符
+
+**Files Modified**:
+- `~/.pi/agent/skills/gstack-*/SKILL.md` (20 files) — name field fix
+- `~/.pi/agent/skills/superpowers-*/SKILL.md` (7 files) — name field fix
+- 14 directories deleted
+
+**Next Steps**: 重启 pi agent 验证冲突消失
+
+**Recorded**: no — 一次性清理操作

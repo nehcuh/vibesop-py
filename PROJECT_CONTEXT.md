@@ -3,6 +3,14 @@
 ## Session Handoff
 
 <!-- handoff:start -->
+
+### 2026-05-24 (S6) pi-skill-conflict-fix
+**Session**: 修复 pi agent 启动时的技能冲突警告 (技能名非法字符 + 重复目录)
+**Completed**:
+- 27 个 gstack/superpowers SKILL.md name 字段 `/` → `-` (规范化为 lowercase a-z, 0-9, hyphens)
+- 删除 14 个因名称冲突被跳过的重复技能目录
+- 验证: 126 skills, 零冲突, 零非法字符
+**Files**: 27 SKILL.md edited, 14 directories removed (~/.pi/agent/skills/)
 ### 2026-05-24 (S5) pi-agent-adapter
 **Session**: Full Pi Coding Agent (pi) platform adapter implementation
 **Completed**:

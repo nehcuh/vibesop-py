@@ -1,6 +1,6 @@
 # Overview - VibeSOP Project
 
-**Last Updated**: 2026-05-03 (Test Coverage Backfill + 341 New Tests)
+**Last Updated**: 2026-05-24 (Pi agent skill conflict cleanup)
 
 ---
 
@@ -48,7 +48,7 @@
 
 ### VibeSOP (vibesop-py)
 **Status**: v5.4.1 (Routing refinements + docs)
-**Description**: AI-assisted development intelligent routing engine with skill-level LLM configuration and Agent Runtime layer
+**Description**: AI SkillOS — full skill lifecycle management (discovery, routing, orchestration, evaluation, retention) with Agent Runtime layer
 **Coverage**: TBD — 341 new tests added, threshold temporarily at 0%
 **Key Metrics**:
 - Routing accuracy: 94%
