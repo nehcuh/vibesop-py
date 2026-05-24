@@ -1,0 +1,8 @@
+---
+description: Install a VibeSOP skill package
+argument-hint: "<package_name>"
+---
+
+Run `vibe install $ARGUMENTS` to install the specified skill package.
+
+Then run `vibe sync` to update the skill index and make the new skills available for routing.

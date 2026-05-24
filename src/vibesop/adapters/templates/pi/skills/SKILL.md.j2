@@ -1,0 +1,19 @@
+---
+id: {{ skill.id }}
+name: {{ skill.name }}
+description: {{ skill.description }}
+trigger_when: {{ skill.trigger_when }}
+type: prompt
+generated_by: VibeSOP v{{ version }}
+---
+{% if skill.description %}
+# {{ skill.name }}
+{% endif %}
+
+This skill was automatically generated and deployed by VibeSOP.
+
+Please follow the skill's instructions as originally defined.
+
+{% if skill.trigger_when %}
+**Trigger**: This skill should be used when asked to {{ skill.trigger_when }}.
+{% endif %}

@@ -1,0 +1,43 @@
+# Safety Guidelines
+
+> **On-Demand**: Loaded when referenced
+
+## Principles
+
+1. **Security First**: All external inputs validated
+2. **No Trust Without Verification**: Even "safe" sources are checked
+3. **Defense in Depth**: Path validation, content scanning, permission checks
+
+## Threat Detection
+
+{% if security.scan_external_content %}
+Scanned automatically for:
+- Prompt injection ("Ignore all previous instructions")
+- Role hijacking ("You are now [different role]")
+- Instruction injection ("New instruction: ...")
+- Privilege escalation ("Enable admin mode")
+- Indirect injection (encoding bypass attempts)
+{% else %}
+Content scanning is DISABLED. Manually review all external content.
+{% endif %}
+
+## Path Safety
+
+- Blocked: `../../../etc/passwd`, `..\..\windows\system32`
+- All paths resolved to absolute and validated against base directory
+- Symlinks followed and validated
+
+## Limits
+
+- Max file size: {{ (security.max_file_size / 1024 / 1024) | round(2) }} MB
+- Atomic operations: temp file + rename
+
+## Pi-Specific Safety Notes
+
+- Pi's built-in tools (read, write, edit, bash) operate within the working directory
+- Use `read` tool with explicit paths — Pi validates file access
+- Bash commands run with full user permissions — review commands before execution
+- The vibesop-route extension sanitizes input before passing to `vibe route`
+
+---
+*Part of VibeSOP security documentation*

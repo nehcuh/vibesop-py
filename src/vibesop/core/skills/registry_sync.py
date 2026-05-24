@@ -61,6 +61,7 @@ class RegistrySync:
                         "claude-code": "native-skill",
                         "kimi-cli": "native-skill",
                         "opencode": "native-skill",
+                        "pi": "native-skill",
                     },
                     "safety_level": "trusted_builtin",
                 }

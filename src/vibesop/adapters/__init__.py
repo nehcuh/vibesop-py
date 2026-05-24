@@ -7,6 +7,8 @@ Available Adapters:
     - Claude Code
     - Kimi Code CLI
     - OpenCode
+    - Cursor IDE
+    - Pi Coding Agent
 
 Example:
     >>> from vibesop.adapters import ClaudeCodeAdapter, Manifest
@@ -29,6 +31,8 @@ from vibesop.adapters.models import (
     SecurityPolicy,
 )
 from vibesop.adapters.opencode import OpenCodeAdapter
+from vibesop.adapters.cursor import CursorAdapter
+from vibesop.adapters.pi_coding_agent import PiCodingAgentAdapter
 from vibesop.adapters.protocol import AdapterProtocol
 
 __all__ = [
@@ -40,8 +44,10 @@ __all__ = [
     "Manifest",
     "ManifestMetadata",
     "OpenCodeAdapter",
+    "CursorAdapter",
     # Base classes
     "PlatformAdapter",
+    "PiCodingAgentAdapter",
     "PolicySet",
     "RenderResult",
     "RoutingPolicy",

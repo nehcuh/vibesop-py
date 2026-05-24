@@ -100,6 +100,18 @@ HOOK_DEFINITIONS: dict[str, dict[str, dict[str, Any]]] = {
             "description": "Intercept user prompts for VibeSOP route detection",
         },
     },
+    "pi": {
+        "pre-session-end": {
+            "file": "extensions/vibesop-track.ts",
+            "executable": False,
+            "description": "Track session end signals via Pi extension",
+        },
+        "post-session-start": {
+            "file": "extensions/vibesop-route.ts",
+            "executable": False,
+            "description": "Intercept user prompts for VibeSOP route detection via Pi extension",
+        },
+    },
 }
 
 

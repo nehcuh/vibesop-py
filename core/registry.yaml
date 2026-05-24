@@ -9,6 +9,7 @@ _templates:
     supported_targets:
       claude-code: external-skill
       opencode: external-skill
+      pi: external-skill
     safety_level: external_reviewed
     conditional: superpowers_installed
 
@@ -19,6 +20,7 @@ _templates:
     supported_targets:
       claude-code: external-skill
       opencode: external-skill
+      pi: external-skill
     safety_level: external_reviewed
     conditional: gstack_installed
 
@@ -29,6 +31,7 @@ _templates:
     supported_targets:
       claude-code: external-skill
       opencode: external-skill
+      pi: external-skill
     safety_level: external_reviewed
     conditional: omx_installed
 
@@ -358,6 +361,7 @@ skills:
     supported_targets:
       claude-code: native-skill
       opencode: native-skill
+      pi: native-skill
     requires_tools:
       - Read
       - Edit
@@ -374,6 +378,7 @@ skills:
     supported_targets:
       claude-code: native-skill
       opencode: native-skill
+      pi: native-skill
     requires_tools:
       - Read
       - Bash
@@ -388,6 +393,7 @@ skills:
     supported_targets:
       claude-code: native-skill
       opencode: native-skill
+      pi: native-skill
     requires_tools:
       - Read
       - Write
@@ -541,6 +547,7 @@ skills:
     supported_targets:
       claude-code: native-skill
       opencode: native-skill
+      pi: native-skill
     requires_tools:
       - Read
       - Grep
@@ -556,6 +563,7 @@ skills:
     supported_targets:
       claude-code: native-skill
       opencode: native-skill
+      pi: native-skill
     requires_tools:
       - Read
       - Write
@@ -574,6 +582,7 @@ skills:
     supported_targets:
       claude-code: native-skill
       opencode: native-skill
+      pi: native-skill
     requires_tools:
       - Read
       - Write
@@ -633,6 +642,7 @@ skills:
     supported_targets:
       claude-code: slash-command
       opencode: slash-command
+      pi: prompt-template
     command: "/vibe-route"
     safety_level: trusted_builtin
 
@@ -645,6 +655,7 @@ skills:
     supported_targets:
       claude-code: slash-command
       opencode: slash-command
+      pi: prompt-template
     command: "/vibe-install"
     safety_level: trusted_builtin
 
@@ -658,6 +669,7 @@ skills:
     supported_targets:
       claude-code: slash-command
       opencode: slash-command
+      pi: prompt-template
     command: "/vibe-evaluate"
     safety_level: trusted_builtin
 
@@ -670,6 +682,7 @@ skills:
     supported_targets:
       claude-code: slash-command
       opencode: slash-command
+      pi: prompt-template
     command: "/vibe-orchestrate"
     safety_level: trusted_builtin
 
@@ -682,6 +695,7 @@ skills:
     supported_targets:
       claude-code: slash-command
       opencode: slash-command
+      pi: prompt-template
     command: "/vibe-list"
     safety_level: trusted_builtin
 
@@ -694,5 +708,6 @@ skills:
     supported_targets:
       claude-code: slash-command
       opencode: slash-command
+      pi: prompt-template
     command: "/vibe-help"
     safety_level: trusted_builtin
