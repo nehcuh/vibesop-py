@@ -4,6 +4,16 @@
 
 <!-- handoff:start -->
 
+### 2026-05-27 (S7) repo-cleanup-sync
+**Session**: Save + sync project, delete stale branches
+**Completed**:
+- Staged all changes, committed as "chore: update vibesop" (63 files, +2986/-178)
+- Pushed to origin/main
+- Deleted 5 stale dependabot remote branches (mypy, numpy, openai, packaging, sentence-transformers)
+- Remote now only has origin/main
+- Briefly explored autonomous-experiment skill setup (no experiment.yaml yet)
+**Files**: 63 committed, 5 remote branches deleted
+
 ### 2026-05-24 (S6) pi-skill-conflict-fix
 **Session**: 修复 pi agent 启动时的技能冲突警告 (技能名非法字符 + 重复目录)
 **Completed**:
