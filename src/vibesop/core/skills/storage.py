@@ -90,6 +90,7 @@ class SkillStorage:
         "kimi-cli": Path.home() / ".kimi" / "skills",
         "opencode": Path.home() / ".config" / "opencode" / "skills",
         "cursor": Path.home() / ".config" / "cursor" / "skills",
+        "pi": Path.home() / ".pi" / "agent" / "skills",
     }
 
     _default_path_safety: ClassVar[Any] = None

@@ -31,6 +31,7 @@ class QuickstartRunner:
             "claude-code": "Claude Code CLI",
             "kimi-cli": "Kimi Code CLI",
             "opencode": "OpenCode CLI",
+            "pi": "Pi Coding Agent",
         }
 
         from vibesop.core.skills.external_loader import ExternalSkillLoader
@@ -40,6 +41,7 @@ class QuickstartRunner:
             for name, desc in [
                 ("superpowers", "General-purpose productivity skills"),
                 ("omx", "oh-my-codex — autonomous agent skills"),
+                ("mattpocock", "Matt Pocock's TypeScript/production skills"),
             ]
             if name in ExternalSkillLoader.TRUSTED_PACKS
         }
@@ -113,7 +115,7 @@ class QuickstartRunner:
 
     def _ask_install_type(self, project_path: Path) -> QuickstartConfig:
         console.print("What would you like to set up?")
-        console.print("1. Global configuration for Claude Code/Kimi CLI/OpenCode")
+        console.print("1. Global configuration for Claude Code/Kimi CLI/OpenCode/Pi")
         console.print("2. Project-specific configuration")
         console.print()
 
@@ -292,6 +294,7 @@ class QuickstartRunner:
             "claude-code": "~/.claude",
             "kimi-cli": "~/.kimi",
             "opencode": "~/.config/opencode",
+            "pi": "~/.pi/agent",
         }
 
         if config.global_install:

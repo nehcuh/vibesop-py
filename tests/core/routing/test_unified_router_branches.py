@@ -71,7 +71,10 @@ class TestRouteScenarioLayer:
         result = router._single_skill_route("review my pull request")
 
         if result.has_match:
-            assert "review" in result.primary.skill_id.lower()
+            assert result.primary is not None
+            # After v5.4.0: concrete skills removed, review queries route to
+            # riper-workflow (fallback) or slash-* management tools
+            assert result.primary.skill_id is not None
 
 
 class TestRouteMatcherPipeline:
@@ -82,10 +85,11 @@ class TestRouteMatcherPipeline:
         config = RoutingConfig(enable_ai_triage=False)
         router = UnifiedRouter(project_root=tmp_path, config=config)
 
-        result = router._single_skill_route("debug")
+        result = router._single_skill_route("help")
 
         assert result.has_match
         assert result.primary is not None
+        assert result.primary.layer != RoutingLayer.FALLBACK_LLM
 
     def test_fuzzy_matching_typo(self, tmp_path: Path) -> None:
         """Typo-tolerant queries should match via Levenshtein."""

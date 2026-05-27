@@ -9,7 +9,9 @@
 > ⚠️ **DEPRECATION NOTICE**
 >
 > The `vibe auto` command documented in this guide was **removed in v4.1.0**.
-> VibeSOP is now a pure routing engine. Use `vibe route <query>` instead.
+> Use `vibe route <query>` instead for intelligent skill routing.
+> VibeSOP is now a full SkillOS — managing skill discovery, routing,
+> orchestration, lifecycle, and evaluation.
 > This document is kept for historical reference only.
 
 ---

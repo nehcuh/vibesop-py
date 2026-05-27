@@ -10,7 +10,7 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-VALID_TARGETS = ["claude-code", "kimi-cli", "opencode", "superpowers", "cursor"]
+VALID_TARGETS = ["claude-code", "kimi-cli", "opencode", "superpowers", "cursor", "pi"]
 
 PLATFORM_DIRS: dict[str, Path] = {
     "claude-code": Path.home() / ".claude",

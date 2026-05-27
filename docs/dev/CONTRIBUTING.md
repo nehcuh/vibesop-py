@@ -38,7 +38,7 @@ uv run ruff check .
 
 Before contributing, read [docs/PHILOSOPHY.md](../PHILOSOPHY.md). Key points:
 
-- **Discovery > Execution**: SkillOS manages, AI agents execute
+- **Lifecycle > Execution**: SkillOS manages full lifecycle, AI agents execute
 - **Matching > Guessing**: Use multi-layer matching
 - **Memory > Intelligence**: Leverage preference learning
 - **Open > Closed**: Support any SKILL.md skill

@@ -83,7 +83,7 @@ class SessionTracker(ABC):
         """Get platform identifier.
 
         Returns:
-            Platform name (e.g., 'claude-code', 'kimi-cli', 'opencode')
+            Platform name (e.g., 'claude-code', 'kimi-cli', 'opencode', 'pi')
         """
         pass
 
@@ -352,7 +352,7 @@ def get_tracker(
     """Get the appropriate session tracker for a platform.
 
     Args:
-        platform: Platform identifier ('auto', 'claude-code', 'kimi-cli', 'opencode', 'generic')
+        platform: Platform identifier ('auto', 'claude-code', 'kimi-cli', 'opencode', 'pi', 'generic')
         project_root: Path to VibeSOP project root
 
     Returns:

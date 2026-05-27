@@ -1,0 +1,34 @@
+{
+  "version": "1.3.0",
+  "indexed_at": "2026-05-23T16:41:22.362709+00:00",
+  "scope": "project",
+  "indexed_count": 1,
+  "skills": {
+    "project/auto-config.yaml/auto-config": {
+      "skill_id": "project/auto-config.yaml/auto-config",
+      "scenarios": [
+        "Managing skill configuration files",
+        "Enabling or disabling project skills",
+        "Setting skill routing patterns and priorities",
+        "Deprecating outdated skills",
+        "Tracking skill usage statistics"
+      ],
+      "query_patterns": [
+        "configure skill settings",
+        "enable test skill",
+        "update skill routing priority",
+        "check skill usage stats",
+        "deprecate a skill"
+      ],
+      "differentiation": "This skill manages the auto-configuration and metadata of other skills, unlike skills that perform tasks or answer queries directly.",
+      "confidence_boosters": [
+        "auto-config",
+        "skill configuration",
+        "routing patterns",
+        "usage stats"
+      ],
+      "pack_owner": "",
+      "content_hash": "0340f8a08b961f95"
+    }
+  }
+}

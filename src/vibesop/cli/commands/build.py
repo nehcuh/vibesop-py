@@ -39,7 +39,7 @@ from vibesop.builder.renderer import ConfigRenderer
 console = Console()
 logger = logging.getLogger(__name__)
 
-VALID_TARGETS = ["claude-code", "kimi-cli", "opencode", "superpowers", "cursor"]
+VALID_TARGETS = ["claude-code", "kimi-cli", "opencode", "superpowers", "cursor", "pi"]
 
 PROFILES: dict[str, str] = {
     "default": "Full configuration with all skills",
@@ -192,7 +192,7 @@ def _get_configured_platform() -> str | None:
 def build(
     target: str | None = typer.Argument(
         None,
-        help="Target platform (claude-code, kimi-cli, opencode, superpowers, cursor). "
+        help="Target platform (claude-code, kimi-cli, opencode, superpowers, cursor, pi). "
         "Defaults to platform from config.yaml or claude-code",
     ),
     profile: str = typer.Option(

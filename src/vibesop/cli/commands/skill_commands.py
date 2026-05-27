@@ -575,9 +575,33 @@ def _detect_and_load_skill(source: str) -> tuple[Path, Any]:
             return source_path, metadata
 
     if source.startswith(("http://", "https://")):
-        console.print("[dim]Detected: remote URL[/dim]")
-        console.print("[yellow]⚠ URL installation not yet implemented[/yellow]")
-        raise typer.Exit(1)
+        console.print("[dim]Detected: remote URL — cloning and analyzing...[/dim]")
+        from vibesop.installer.analyzer import RepoAnalyzer
+
+        analyzer = RepoAnalyzer()
+        analysis = analyzer.analyze(source)
+        if analysis.errors:
+            console.print(f"[red]✗ Failed to analyze URL: {analysis.errors[0]}[/red]")
+            raise typer.Exit(1)
+
+        if not analysis.skill_files:
+            console.print(
+                "[yellow]No SKILL.md files found in this repository.[/yellow]\n"
+                "[dim]This URL may not be a valid skill pack. Look for repositories "
+                "with SKILL.md files or a .claude-plugin/plugin.json registry.[/dim]\n"
+                "[dim]Tip: try installing via pack name instead:[/dim] "
+                f"[cyan]vibe install {analysis.pack_name}[/cyan]"
+            )
+            raise typer.Exit(1)
+
+        # Use the first skill file found
+        skill_dir = analysis.skill_files[0].parent
+        metadata = parse_skill_md(analysis.skill_files[0])
+        console.print(f"[green]✓ Found {len(analysis.skill_files)} skill(s)[/green]")
+        console.print(f"[dim]  Pack: {analysis.pack_name}[/dim]")
+        if analysis.readme_install_hint:
+            console.print(f"[dim]  README: {analysis.readme_install_hint[:100]}...[/dim]")
+        return skill_dir, metadata
 
     console.print("[red]✗ Could not detect skill type[/red]")
     return source_path, None

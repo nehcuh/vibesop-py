@@ -1,0 +1,12 @@
+{
+  "extensions": [
+    "extensions/vibesop-route.ts",
+    "extensions/vibesop-track.ts"
+  ],
+  "skills": [
+    "skills"
+  ],
+  "prompts": [
+    "prompts"
+  ]
+}

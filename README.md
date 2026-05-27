@@ -6,8 +6,8 @@
 
 [![Python](https://img.shields.io/badge/Python-3.12+-blue.svg)](https://www.python.org/downloads/)
 [![Ruff](https://img.shields.io/badge/Ruff-Enabled-black.svg)](https://github.com/astral-sh/ruff)
-[![Coverage](https://img.shields.io/badge/Coverage-~25%25-red.svg)]()
-[![Version](https://img.shields.io/badge/Version-5.4.1-blue.svg)](https://github.com/nehcuh/vibesop-py)
+[![Coverage](https://img.shields.io/badge/Coverage-73%25-yellow.svg)]()
+[![Version](https://img.shields.io/badge/Version-5.4.5-blue.svg)](https://github.com/nehcuh/vibesop-py)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 ---
@@ -905,7 +905,7 @@ VibeSOP provides built-in support and intelligent routing for the following comm
 
 VibeSOP 不仅仅是这些技能包的集合，而是一个**统一的智能路由层**：
 
-VibeSOP is not just a collection of these skill packs, but a **unified intelligent routing layer**:
+VibeSOP is not just a collection of these skill packs, but a **Skill Operating System (SkillOS)** that provides:
 
 - 🧠 **智能路由** (94% 准确率) - 自动选择最合适的技能
 - 🔄 **统一管理** - 一个工具管理所有技能包
@@ -994,6 +994,6 @@ vibe skills add code-reviewer
 
 ---
 
-**版本 Version**: 5.4.1
-**更新时间 Last Updated**: 2026-04-28
+**版本 Version**: 5.4.5
+**更新时间 Last Updated**: 2026-05-23
 **状态 Status**: ✅ 生产就绪 Production Ready

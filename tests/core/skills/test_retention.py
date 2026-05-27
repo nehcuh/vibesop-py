@@ -36,7 +36,7 @@ class TestRetentionPolicy:
         result = policy.analyze_skill("bad-skill")
         assert result.action == "remove"
         assert result.grade == "F"
-        assert result.total_uses == 2
+        assert result.total_routes == 2
 
     def test_warn_for_grade_d(self):
         """Grade D + 60+ days should warn."""

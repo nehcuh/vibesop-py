@@ -57,7 +57,7 @@ class PlatformAdapter(ABC):
         """Platform identifier.
 
         Returns:
-            Unique platform name (e.g., 'claude-code', 'kimi-cli', 'opencode')
+            Unique platform name (e.g., 'claude-code', 'kimi-cli', 'opencode', 'pi')
         """
         ...
 
@@ -338,7 +338,14 @@ class PlatformAdapter(ABC):
             "metadata": manifest.metadata,
             "platform": self.platform_name,
             "version": manifest.metadata.version,
+            "tool_environment": self._get_tool_environment(),
         }
+
+    def _get_tool_environment(self) -> str:
+        """Get tool environment guidance (nvm/uv detection)."""
+        from vibesop.adapters._shared import detect_tool_environment
+
+        return detect_tool_environment()
 
     def create_render_result(
         self,

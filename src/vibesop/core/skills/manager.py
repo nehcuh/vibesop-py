@@ -1,19 +1,20 @@
 """High-level skill management API.
 
-**⚠️ POSITIONING**: VibeSOP is a ROUTING ENGINE, not an execution engine.
+Part of the SkillOS (Skill Operating System) — manages the full lifecycle of
+skills: discovery, metadata access, lifecycle state transitions, quality
+evaluation, and retention policies.
 
-This module provides skill discovery, metadata access, and workflow definitions:
-- list_skills(): Discover available skills
-- get_skill_info(): Get skill metadata
+This module provides:
+- list_skills(): Discover available skills with lifecycle state
+- get_skill_info(): Get skill metadata including quality grade
 - get_skill_definition(): Get workflow definition for AI agents
-- execute_skill(): Execute skill locally (for testing/validation)
+- execute_skill(): Execute skill locally (for testing/validation only)
 - search_skills(): Search by keyword
-- get_skill_instance(): Get skill object for instantiation
 
-For routing (discovery), use UnifiedRouter.route() instead:
+For routing, use UnifiedRouter.orchestrate():
     from vibesop.core.routing import UnifiedRouter
     router = UnifiedRouter()
-    result = router.route("your query")
+    result = router.orchestrate("your query")
 """
 
 import logging
@@ -30,17 +31,19 @@ logger = logging.getLogger(__name__)
 
 
 class SkillManager:
-    """High-level API for skill management.
+    """High-level API for skill lifecycle management.
 
-    **⚠️ POSITIONING**: VibeSOP is a routing engine, NOT an execution engine.
-
-    This class provides skill discovery and metadata access for the routing engine.
+    Part of the SkillOS — manages the full skill lifecycle:
+    discovery, metadata access, quality evaluation, and retention.
 
     Core Functions:
         • list_skills()     - Discover available skills
         • get_skill_info()  - Get skill metadata
         • search_skills()   - Search by keyword
         • get_skill_instance() - Get skill object for instantiation
+
+    Lifecycle states: DRAFT → ACTIVE → DEPRECATED → ARCHIVED
+    Quality grades: A through F, with auto-archiving for stale D/F skills.
 
     Usage:
         manager = SkillManager()

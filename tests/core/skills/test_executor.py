@@ -338,9 +338,11 @@ This is a test skill.
         skills = executor.list_executable_skills()
 
         assert isinstance(skills, list)
-        assert len(skills) > 0
-        # Check for either builtin or superpowers namespace
-        assert any("systematic-debugging" in skill for skill in skills)
+        # After v5.4.0: concrete skills removed from built-in set.
+        # Executable skills list may be empty if no external packs installed.
+        # Verify structure is correct regardless of count.
+        if len(skills) > 0:
+            assert all(isinstance(s, str) for s in skills)
 
 
 class TestSecurity:

@@ -3,9 +3,15 @@
 
 Built with Typer for modern CLI UX.
 
-Note: v4.1.0 removed the `execute` command and `--run` flag from `route`.
-Skills should be executed by AI Agents (Claude Code, OpenCode), not VibeSOP.
-VibeSOP is a routing engine, not an executor.
+VibeSOP is a Skill Operating System (SkillOS) that manages the full lifecycle
+of AI development skills: discovery → installation → routing → orchestration →
+evaluation → retention/deprecation. Simple tasks are handled end-to-end by
+VibeSOP (route → inject → guide execution); complex tasks are delegated to
+AI Agents (Claude Code, Cursor, OpenCode).
+
+Note: v4.1.0 removed the `execute` CLI command — skill execution is the
+responsibility of AI Agents. VibeSOP provides lightweight guided execution
+for task orchestration, not full skill execution.
 """
 
 from __future__ import annotations
@@ -30,8 +36,14 @@ from vibesop.cli.commands import (
     matcher_cmd,
     plan_cmd,
     snapshot_cmd,
+    sync_cmd,
+    trace_cmd,
+    workflows_cmd,
 )
 from vibesop.cli.commands import trust as trust_module
+from vibesop.cli.commands import (
+    instinct_cmd,
+)
 from vibesop.cli.commands.status_cmd import status as status_command
 from vibesop.cli.confirmation import _needs_confirmation, _run_confirmation_flow
 from vibesop.cli.feedback import _collect_feedback
@@ -134,6 +146,10 @@ app.add_typer(deviation_cmd.app, name="deviation")
 app.add_typer(badges_cmd.app, name="badges")
 app.add_typer(market_cmd.app, name="market")
 app.add_typer(snapshot_cmd.app, name="snapshot")
+app.add_typer(trace_cmd.app, name="trace")
+app.add_typer(sync_cmd.app, name="sync-registry")
+app.add_typer(workflows_cmd.app, name="workflows")
+app.add_typer(instinct_cmd.app, name="instinct")
 app.command(name="trust")(trust_module.trust)
 
 
@@ -185,6 +201,14 @@ def route(
     no_session: bool = typer.Option(
         False, "--no-session", help="Disable session-state-aware routing for this query"
     ),
+    trace: bool = typer.Option(
+        False, "--trace", help="Enable per-layer routing trace (inspired by SkillTree)"
+    ),
+    agents: str | None = typer.Option(
+        None,
+        "--agents",
+        help="Comma-separated agent pool for orchestration (claude-code,opencode,kimi-cli,cursor)",
+    ),
     strategy: str | None = typer.Option(
         None,
         "--strategy",
@@ -204,9 +228,10 @@ def route(
     queries, decomposes into sub-tasks and builds an execution plan.
     For single-intent queries, routes to the best matching skill directly.
 
-    VibeSOP is a routing engine - it tells you which skill to use,
-    but does not execute skills. Use your AI Agent (Claude Code, OpenCode)
-    to execute the recommended skill.
+    VibeSOP is a Skill Operating System (SkillOS) — it manages the full
+    lifecycle of skills: discovers, routes, orchestrates, evaluates, and
+    retains or deprecates. Skill execution is delegated to your AI Agent
+    (Claude Code, Cursor, OpenCode).
 
     By default, VibeSOP asks for confirmation before selecting a skill.
     Set routing.confirmation_mode to 'never' for automatic selection,
@@ -308,6 +333,10 @@ def route(
             prompt_builder=_build_prompt_builder(),
         )
 
+    # Enable routing trace if --trace flag is set
+    if trace:
+        router.enable_trace()
+
     # Build routing context with conversation ID for multi-turn support
     from vibesop.core.matching import RoutingContext
 
@@ -355,7 +384,9 @@ def route(
         import json
 
         print(json.dumps(result.to_dict(), indent=2, default=str, ensure_ascii=False))
-        raise typer.Exit(0 if result.has_match else 1)
+        # In JSON mode: exit 0 for successful routing (caller inspects has_match field).
+        # A completed routing attempt is not an error even when no match found.
+        raise typer.Exit(0)
 
     # Full transparency: show routing decision tree (default)
     already_rendered = False
@@ -378,6 +409,23 @@ def route(
     else:
         # Compact mode: show compact summary only
         render_compact_orchestration(result, console=console)
+
+    # Show trace summary if --trace flag was used
+    if trace and router.tracer.enabled:
+        recent = router.tracer.list_traces(limit=1)
+        if recent:
+            t = recent[0]
+            trace_id = t.get("trace_id", "")
+            trace_file = Path.cwd() / ".vibe" / "traces" / f"{trace_id}.json"
+            console.print()
+            console.print(
+                f"[bold cyan]🔍 Routing Trace[/bold cyan] [dim](SkillTree mode)[/dim]"
+            )
+            console.print(f"  Trace ID: [cyan]{trace_id}[/cyan]")
+            console.print(f"  Layers: [bold]{t.get('layer_count', 0)}[/bold] attempted")
+            console.print(f"  Saved: [dim]{trace_file}[/dim]")
+            console.print("  [dim]View full trace:[/dim] [cyan]vibe trace show {trace_id}[/cyan]")
+            console.print()
 
     # Handle result with unified confirmation flow
     if result.mode.value == "orchestrated" and result.execution_plan:

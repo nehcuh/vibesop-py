@@ -26,21 +26,16 @@ logger = logging.getLogger(__name__)
 class RetentionSuggestion:
     """A single retention recommendation for a skill.
 
-    Attributes:
-        skill_id: Target skill
-        action: "remove" | "warn" | "highlight" | "archive" | "none"
-        reason: Human-readable explanation
-        grade: Current letter grade
-        days_since_last_use: Number of days
-        total_uses: Total usage count
+    DEPRECATED: Use feedback_loop.RetentionSuggestion instead.
+    This class is kept for backwards compatibility.
     """
 
     skill_id: str
-    action: str  # remove, warn, highlight, archive, none
+    action: str  # deprecate, warn, boost, none, archive
     reason: str
     grade: str
-    days_since_last_use: int | None
-    total_uses: int
+    days_since_last_use: int | None = None
+    total_routes: int = 0
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -49,7 +44,7 @@ class RetentionSuggestion:
             "reason": self.reason,
             "grade": self.grade,
             "days_since_last_use": self.days_since_last_use,
-            "total_uses": self.total_uses,
+            "total_routes": self.total_routes,
         }
 
 
@@ -76,7 +71,7 @@ class RetentionPolicy:
                 reason="No evaluation data available",
                 grade="?",
                 days_since_last_use=None,
-                total_uses=0,
+                total_routes=0,
             )
 
         days_since = self._days_since(evaluation.last_used)
@@ -91,7 +86,7 @@ class RetentionPolicy:
                 reason=f"Grade F, only {uses} use(s), last used {days_since} days ago",
                 grade=grade,
                 days_since_last_use=days_since,
-                total_uses=uses,
+                total_routes=uses,
             )
 
         # Rule: Grade D for 60+ days with no improvement → warn
@@ -102,7 +97,7 @@ class RetentionPolicy:
                 reason=f"Grade D, no improvement for {days_since} days",
                 grade=grade,
                 days_since_last_use=days_since,
-                total_uses=uses,
+                total_routes=uses,
             )
 
         # Rule: 90+ days unused with grade C/D/F → auto-archive
@@ -113,7 +108,7 @@ class RetentionPolicy:
                 reason=f"Unused for {days_since} days, grade {grade} — auto-archive candidate",
                 grade=grade,
                 days_since_last_use=days_since,
-                total_uses=uses,
+                total_routes=uses,
             )
 
         # Rule: Grade A for 7+ days of active use → highlight
@@ -124,7 +119,7 @@ class RetentionPolicy:
                 reason=f"Grade A, actively used ({uses} routes)",
                 grade=grade,
                 days_since_last_use=days_since,
-                total_uses=uses,
+                total_routes=uses,
             )
 
         return RetentionSuggestion(
@@ -133,7 +128,7 @@ class RetentionPolicy:
             reason=f"Grade {grade}, {uses} route(s)",
             grade=grade,
             days_since_last_use=days_since,
-            total_uses=uses,
+            total_routes=uses,
         )
 
     def analyze_all(self) -> list[RetentionSuggestion]:

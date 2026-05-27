@@ -15,6 +15,7 @@ PYTHON_MIN_VERSION = (3, 12)
 # ============================================
 TRUSTED_PACKS: dict[str, str] = {
     "superpowers": "https://github.com/obra/superpowers",
+    "gstack": "https://github.com/anthropics/gstack",
     "omx": "https://github.com/Yeachan-Heo/oh-my-codex",
     "mattpocock": "https://github.com/mattpocock/skills",
 }

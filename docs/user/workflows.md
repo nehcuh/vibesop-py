@@ -7,16 +7,17 @@
 
 ## Current Status
 
-**Workflow CLI commands are not exposed in VibeSOP v4.0.0.**
+**Workflow orchestration is available via `vibe workflows` CLI (v5.3.0+).**
 
-VibeSOP has transitioned to a pure **routing engine** philosophy. As of v4.1.0, the following commands were removed:
+VibeSOP manages the full skill lifecycle including cross-cutting workflows.
+Historical commands removed in v4.1.0 (now superseded):
 
-- ❌ `vibe workflow run`
-- ❌ `vibe workflow list`
-- ❌ `vibe workflow resume`
-- ❌ `vibe workflow validate`
+- ❌ `vibe workflow run` → Use `vibe route` or `vibe orchestrate`
+- ❌ `vibe workflow list` → Use `vibe workflows list`
+- ❌ `vibe workflow resume` → Use orchestration plan resumption
+- ❌ `vibe workflow validate` → Use `vibe workflows show <id>`
 
-This aligns with the core principle that VibeSOP **routes** queries to the right skill (via `SKILL.md` definitions), but does **not** execute them. Execution is the responsibility of your AI Agent (Claude Code, OpenCode, Cursor, etc.).
+Skills are defined via SKILL.md; execution is the responsibility of your AI Agent (Claude Code, Cursor, OpenCode). VibeSOP provides routing, orchestration, and lifecycle management.
 
 ---
 

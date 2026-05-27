@@ -50,14 +50,17 @@ class TestExternalSkillIntegration:
             assert all("namespace" in s for s in external)
 
     def test_external_skill_instantiation(self):
-        """Test that external skills can be instantiated."""
+        """Test that external skills can be instantiated if available."""
         manager = SkillManager()
 
-        # Try to instantiate some common external skills
-        # Use builtin/* namespace since those are discovered from filesystem
+        # After v5.4.0: builtin concrete skills (systematic-debugging,
+        # verification-before-completion) were removed.
+        # Test builtin management tools which ARE still available.
         test_skills = [
-            "builtin/systematic-debugging",
-            "builtin/verification-before-completion",
+            "builtin/riper-workflow",
+            "builtin/slash-route",
+            "builtin/slash-help",
+            "builtin/instinct-learning",
             "gstack/office-hours",
         ]
 
@@ -67,9 +70,11 @@ class TestExternalSkillIntegration:
             if skill:
                 instantiated.append(skill_id)
                 print(f"✅ Instantiated: {skill_id}")
+            else:
+                print(f"⚠️  Not found: {skill_id}")
 
-        # At least some should be instantiable
-        assert len(instantiated) > 0, "Should be able to instantiate external skills"
+        # At least some built-in management tools should be instantiable
+        assert len(instantiated) > 0, f"Should be able to instantiate at least one skill, found {instantiated}"
 
     def test_gstack_skills_loaded(self):
         """Test that gstack skills are loaded if installed."""

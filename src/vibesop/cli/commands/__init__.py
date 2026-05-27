@@ -2,10 +2,10 @@
 
 This package contains all CLI command implementations.
 
-Removed Commands (v4.1.0):
-    - execute: Removed as it violated the "router not executor" principle
-    - memory: Internalized as routing engine feature
-    - instinct: Internalized as automatic learning
+Historical note — Removed Commands (v4.1.0):
+    - execute: Removed; skill execution delegated to AI Agents
+    - memory: Internalized as SkillOS lifecycle management feature
+    - instinct: Internalized as automatic pattern learning
     - scan: Merged into analyze security
     - detect: Merged into analyze integrations
     - auto-analyze: Merged into analyze session

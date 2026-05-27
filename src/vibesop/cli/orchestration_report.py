@@ -128,11 +128,27 @@ def _render_orchestrated_result(result: OrchestrationResult, console: Console) -
     console.print(flow_tree)
     console.print()
 
+    # Agent assignment
+    agent_ids: list[str] = []
+    try:
+        from vibesop.core.orchestration.agent_capability import AgentRegistry
+        registry = AgentRegistry(installed_only=False)
+        steps_data = [
+            {"skill_id": s.skill_id, "skill_tags": [], "category": s.intent or "general"}
+            for s in plan.steps
+        ]
+        assigned = registry.assign_agents_to_steps(steps_data)
+        agent_ids = [a.get("assigned_agent", "") for a in assigned]
+    except ImportError:
+        agent_ids = [""] * len(plan.steps)
+
     # Steps table
     table = Table(show_header=True, box=box.SIMPLE)
     table.add_column("Step", style="dim", justify="right")
     table.add_column("Skill", style="bold")
     table.add_column("Intent", style="italic")
+    if any(agent_ids):
+        table.add_column("Agent", style="dim")
     table.add_column("Status")
 
     status_icons = {
@@ -142,7 +158,14 @@ def _render_orchestrated_result(result: OrchestrationResult, console: Console) -
         StepStatus.SKIPPED: "⏭️",
     }
 
-    for step in plan.steps:
+    agent_display_names = {
+        "claude-code": "Claude Code",
+        "opencode": "OpenCode",
+        "kimi-cli": "Kimi CLI",
+        "cursor": "Cursor",
+    }
+
+    for i, step in enumerate(plan.steps):
         icon = status_icons.get(step.status, "❓")
         status_color = {
             StepStatus.PENDING: "dim",
@@ -151,12 +174,16 @@ def _render_orchestrated_result(result: OrchestrationResult, console: Console) -
             StepStatus.SKIPPED: "dim",
         }.get(step.status, "white")
 
-        table.add_row(
+        row = [
             str(step.step_number),
             step.skill_id,
             step.intent,
-            f"[{status_color}]{icon} {step.status.value}[/{status_color}]",
-        )
+        ]
+        if any(agent_ids):
+            agent = agent_ids[i] if i < len(agent_ids) else ""
+            row.append(agent_display_names.get(agent, agent) if agent else "-")
+        row.append(f"[{status_color}]{icon} {step.status.value}[/{status_color}]")
+        table.add_row(*row)
 
     console.print(table)
 

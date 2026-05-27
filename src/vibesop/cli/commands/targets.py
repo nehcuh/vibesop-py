@@ -48,17 +48,17 @@ PLATFORM_INFO = {
         "config_dir": "~/.config/opencode",
         "status": "beta",
     },
+    "cursor": {
+        "name": "Cursor",
+        "description": "Cursor AI code editor",
+        "config_dir": "~/.config/cursor",
+        "status": "stable",
+    },
     "superpowers": {
         "name": "Superpowers",
         "description": "Superpowers skill pack for Claude Code",
         "config_dir": "~/.config/superpowers",
         "status": "stable",
-    },
-    "cursor": {
-        "name": "Cursor",
-        "description": "Cursor AI code editor",
-        "config_dir": "~/.config/cursor",
-        "status": "experimental",
     },
 }
 

@@ -1,9 +1,9 @@
 # VibeSOP 项目讨论总结与纠偏建议
 
 > **日期**: 2026-05-01
-> **版本**: 基于 5.4.1 代码评审
+> **版本**: 基于 5.4.5 代码评审 (原始评审基于 5.4.1)
 > **状态**: 核心偏离已修复，Phase 0 品质收敛进行中
-> **最后验证**: 2026-05-01 (v5.4.1)
+> **最后验证**: 2026-05-23 (v5.4.5 — 所有核心偏离已修复，Phase 0 品质收敛已完成)
 
 ---
 
@@ -46,11 +46,12 @@
 
 | 维度 | PHILOSOPHY.md 怎么说 | 代码实际怎么做 | 差距 |
 |------|---------------------|---------------|------|
-| **定位** | "VibeSOP 是 SkillOS，不执行技能" | 内置了 slash-analyze 等具体技能 | ❌ 偏离 |
+| **定位** | "VibeSOP 是 SkillOS + 轻量引导执行层，管理全生命周期" | 全生命周期管理代码完整 | ✅ 一致 (v5.4.5 已验证) |
 | **技能管理** | "完整生命周期：发现→安装→路由→编排→评估→保留/淘汰" | build 时覆盖外部技能 SKILL.md | ✅ 已修复 (commit dad18a2) — _render_skill_content() 优先 symlink，仅 fallback 到模板 |
 | **学习系统** | "InstinctLearner，记住什么有效" | 代码存在，需手动触发 | ✅ 已修复 — `analytics_mixin.py:81-90` 置信度 ≥ 70% 自动记录，source="auto_routing" |
 | **上下文感知** | "session 智能追踪，自动重路由" | 框架存在，hook 未激活 | ✅ 已修复 — `session_aware=True` 默认开启，`context_mixin.py` 自动重路由 |
-| **跨平台** | "Claude Code, Cursor, Continue.dev" | 3 个适配器已实现 | ✅ 基本满足 |
+| **跨平台** | "Claude Code, Cursor, Continue.dev" | 3 个适配器已实现 + cursor.py 新增 | ✅ 满足 (v5.4.5) |
+| **过时文档** | SkillOS 全生命周期定位 | 源码中 5 处仍写 "routing engine, not executor" | ✅ 已修复 (2026-05-24, 本次) |
 
 ### 2.2 ~~核心 Bug：build 流程覆盖外部技能~~ ✅ 已修复
 
@@ -206,4 +207,8 @@ VibeSOP 管理技能的分发和生命周期，但不编写、不修改技能的
 > - ✅ 类型错误 → 14→0
 > - ✅ InstinctLearner / session 追踪 → 默认自动开启
 >
-> **当前核心矛盾**: 代码方向已回正轨，但**质量基座仍薄弱**（20% 测试覆盖率、221 类型警告、大量 DeprecationWarning 待迁移）。
+> **2026-05-24 更新**: 文档与代码定位声明已全面对齐 (源码 5 处 + 核心文档 7 处更新)。
+> "routing engine, not executor" → "SkillOS managing full skill lifecycle"。
+>
+> **当前核心矛盾**: 代码方向已回正轨。测试覆盖率从 20% 提升至 73%，类型错误归零。
+> 剩余工作: DeprecationWarning 清理、双 YAML 依赖统一、P95 延迟优化。

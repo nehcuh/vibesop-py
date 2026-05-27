@@ -1,12 +1,12 @@
 # VibeSOP Roadmap
 
-> **Version**: 5.4.1
-> **Last Updated**: 2026-05-01
-> **Status**: Active Development
+> **Version**: 5.4.5
+> **版本 Version**: 5.4.5
+> **最后更新 Last Updated**: 2026-05-23
 
 ---
 
-## Current State (v5.4.0)
+## Current State (v5.4.5)
 
 ### ✅ Completed
 
@@ -48,8 +48,8 @@
 
 | Metric | Current | Target | Status |
 |--------|---------|--------|--------|
-| Test Count | 2,118 | 2,000+ | ✅ |
-| Test Coverage | ~25% (full run) | >75% | ⚠️ Significant gap, quality sprint needed |
+| Test Count | 2,873 | 2,000+ | ✅ |
+| Test Coverage | ~73% (full run) | >75% | ⚠️ Near target |
 | Pure Routing P95 | ~50ms | <100ms | ✅ |
 | LLM Triage P95 | ~220ms | <300ms | ✅ |
 | Skills Supported | 45+ | 45+ | ✅ |
@@ -195,7 +195,7 @@ Improve routing accuracy with context awareness, multi-turn conversations, direc
 - ✅ Agent Runtime API stability: v1.0
 - ✅ Quick command coverage: 7 commands, CLI + hook integration
 - ✅ Service layer: 4 services, zero duplication with CLI
-- ✅ Test count: 1751+ (+64 from v4.2.0)
+- ✅ Test count: 2,873 (+1,122 from v4.2.0)
 
 ---
 
@@ -268,7 +268,7 @@ Transform VibeSOP from a routing tool into a complete Skill Operating System.
 
 - [x] **Quality Gates** (Completed)
   - Fix remaining lint errors → 0 ✅
-  - Increase coverage from 25% → 60% → 75% (quality sprint in progress)
+  - Increase coverage from 73% → 75% (near target, sprint nearly done)
 
 ### Success Metrics
 
@@ -279,7 +279,7 @@ Transform VibeSOP from a routing tool into a complete Skill Operating System.
 - ✅ Pure routing P95: ~50ms (target <100ms)
 - ✅ LLM Triage P95: ~220ms (target <300ms)
 - ✅ Lint errors: 0
-- ⚠️ Test coverage: ~25% (target 75%, quality sprint needed)
+- ⚠️ Test coverage: ~73% (target 75%, close to completion)
 
 ---
 
@@ -430,7 +430,7 @@ Proactive skill recommendations, transparent fallback, active discovery.
 - [ ] Mobile app for skill discovery → **Deferred: post-v5.2 evaluation**
 - [ ] Voice command support → **Deferred: post-v5.2 evaluation**
 - [ ] Real-time collaboration → **Deferred: post-v5.2 evaluation**
-- [ ] Skill execution (not just routing) → **Deferred: post-v5.2 evaluation**
+- [ ] Managed skill execution sandbox (for testing/validation only) → **Deferred: post-v5.2 evaluation**
 
 ### Technical Debt
 
@@ -487,4 +487,4 @@ See something missing? Want to accelerate a feature?
 
 ---
 
-*Last updated: 2026-05-01 (v5.4.1 — quality convergence; all v5.x ADR phases complete; v6.0 planning)*
+*Last updated: 2026-05-23 (v5.4.5 — quality convergence; all v5.x ADR phases complete; v6.0 planning)*

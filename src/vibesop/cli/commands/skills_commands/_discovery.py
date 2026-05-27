@@ -1,5 +1,5 @@
 # pyright: ignore[reportPossiblyUnboundVariable, reportUnnecessaryComparison]
-"""Discovery commands: suggestions, recommended, create."""
+"""Discovery commands: suggestions, recommended, featured, create."""
 
 from pathlib import Path
 
@@ -417,3 +417,87 @@ vibe route "your query here"
 ```
 """
     (skill_dir / "SKILL.md").write_text(content)
+
+
+def featured(
+    stack: str | None = typer.Option(None, "--stack", "-s", help="Filter by tech stack (python, typescript, etc.)"),
+    json_output: bool = typer.Option(False, "--json", "-j", help="Output as JSON"),
+    install: bool = typer.Option(False, "--install", "-i", help="Install all featured skills for stack"),
+) -> None:
+    """Browse the curated featured skills registry.
+
+    Shows high-quality, community-curated skills organized by tech stack.
+    Use --stack to filter by your project's primary language.
+
+    Examples:
+        vibe skills featured                   # All featured skills
+        vibe skills featured --stack python    # Python-specific
+        vibe skills featured --stack typescript --install
+    """
+    from vibesop.core.skills.featured_registry import FeaturedRegistry
+
+    registry = FeaturedRegistry()
+
+    if stack:
+        skills = registry.for_stack(stack)
+        title = f"Featured Skills for [cyan]{stack.title()}[/cyan]"
+    else:
+        skills = registry.skills
+        title = "All Featured Skills"
+
+    if json_output:
+        import json
+
+        console.print(
+            json.dumps(
+                [s.to_dict() for s in skills], indent=2, ensure_ascii=False
+            )
+        )
+        return
+
+    if not skills:
+        console.print(f"[dim]No featured skills found for stack '{stack}'.[/dim]")
+        stacks = registry.stacks_available()
+        console.print(
+            f"[dim]Available stacks: {', '.join(stacks) if stacks else 'none'}[/dim]"
+        )
+        return
+
+    from rich.table import Table
+
+    table = Table(title=title)
+    table.add_column("#", style="dim", justify="right")
+    table.add_column("Skill", style="cyan")
+    table.add_column("Rating", justify="center")
+    table.add_column("Stacks", style="dim")
+    table.add_column("Description", max_width=50, style="dim")
+
+    for i, s in enumerate(skills, 1):
+        rating_style = "green" if s.quality_rating >= 0.85 else "yellow" if s.quality_rating >= 0.7 else "dim"
+        rating_str = f"[{rating_style}]{s.quality_rating:.0%}[/{rating_style}]"
+        stacks_str = ", ".join(s.stacks[:3]) if s.stacks else "any"
+        table.add_row(
+            str(i),
+            s.skill_id,
+            rating_str,
+            stacks_str,
+            s.description[:80],
+        )
+
+    console.print()
+    console.print(table)
+    console.print()
+    console.print(f"[dim]{len(skills)} featured skills shown.[/dim]")
+
+    if stack:
+        console.print(
+            "[dim]Install with:[/dim] [cyan]vibe skills featured --stack "
+            f"{stack} --install[/cyan]"
+        )
+    else:
+        stacked = registry.stacks_available()
+        if stacked:
+            console.print(
+                f"[dim]Filter by stack: {', '.join(stacked[:8])}[/dim]"
+            )
+    console.print()

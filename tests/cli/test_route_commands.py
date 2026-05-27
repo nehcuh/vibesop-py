@@ -19,13 +19,13 @@ class TestRouteCommand:
 
     def test_route_basic_query(self) -> None:
         """Basic routing should return a result."""
-        result = runner.invoke(app, ["route", "debug this error"])
+        result = runner.invoke(app, ["route", "route my query"])
         assert result.exit_code == 0
         assert result.output
 
     def test_route_json_output(self) -> None:
         """JSON output should be valid JSON."""
-        result = runner.invoke(app, ["route", "debug", "--json"])
+        result = runner.invoke(app, ["route", "route", "--json"])
         assert result.exit_code == 0
         data = json.loads(result.output)
         assert "mode" in data
@@ -33,17 +33,17 @@ class TestRouteCommand:
 
     def test_route_with_yes_flag(self) -> None:
         """--yes flag should skip confirmation."""
-        result = runner.invoke(app, ["route", "debug", "--yes"])
+        result = runner.invoke(app, ["route", "route", "--yes"])
         assert result.exit_code == 0
 
     def test_route_short_y_flag(self) -> None:
         """-y flag should skip confirmation."""
-        result = runner.invoke(app, ["route", "debug", "-y"])
+        result = runner.invoke(app, ["route", "route", "-y"])
         assert result.exit_code == 0
 
     def test_route_explain_flag(self) -> None:
         """--explain flag should show routing details."""
-        result = runner.invoke(app, ["route", "debug", "--explain"])
+        result = runner.invoke(app, ["route", "route", "--explain"])
         assert result.exit_code == 0
         # Explain mode produces more verbose output
         assert len(result.output) > 0

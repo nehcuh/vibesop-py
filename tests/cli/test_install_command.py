@@ -120,6 +120,7 @@ class TestInstallCommand:
         mock_loader = MagicMock()
         mock_loader.get_supported_packs.return_value = {
             "superpowers": {"installed": True},
+            "gstack": {"installed": True},
             "omx": {"installed": False},
             "mattpocock": {"installed": True},
         }
@@ -248,6 +249,7 @@ class TestInstallCommand:
         mock_loader = MagicMock()
         mock_loader.get_supported_packs.return_value = {
             "superpowers": {"installed": True},
+            "gstack": {"installed": True},
             "omx": {"installed": False},
             "mattpocock": {"installed": True},
         }

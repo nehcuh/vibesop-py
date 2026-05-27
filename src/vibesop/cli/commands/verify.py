@@ -64,6 +64,31 @@ PLATFORM_CONFIGS: dict[str, dict[str, Any]] = {
             "hook_executable": "vibesop-route.sh is executable",
         },
     },
+    "cursor": {
+        "name": "Cursor IDE",
+        "config_dir": Path.home() / ".config" / "cursor",
+        "checks": {
+            "config_dir": "Configuration directory exists",
+            "agents_md_config": "AGENTS.md in config dir exists",
+            "agents_md_project": "AGENTS.md in project root exists",
+            "env_script": "vibesop-env.sh exists",
+            "hook_script": "hooks/vibesop-route.sh exists",
+            "hook_executable": "vibesop-route.sh is executable",
+        },
+    },
+    "pi": {
+        "name": "Pi Coding Agent",
+        "config_dir": Path(".") / ".pi",
+        "checks": {
+            "config_dir": "Project .pi/ directory exists",
+            "agents_md": "AGENTS.md in project root exists",
+            "extensions_dir": ".pi/extensions/ directory exists",
+            "skills_dir": ".pi/skills/ directory exists",
+            "route_extension": "vibesop-route.ts extension exists",
+            "track_extension": "vibesop-track.ts extension exists",
+            "prompts_dir": ".pi/prompts/ directory exists",
+        },
+    },
 }
 
 console = Console()
@@ -72,7 +97,7 @@ console = Console()
 def verify(
     platform: str | None = typer.Argument(
         None,
-        help="Platform to verify (claude-code, kimi-cli, opencode, all)",
+        help="Platform to verify (claude-code, kimi-cli, opencode, cursor, pi, all)"
     ),
     verbose: bool = typer.Option(
         False,

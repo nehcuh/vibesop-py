@@ -23,6 +23,7 @@ class PlatformType(StrEnum):
     CLAUDE_CODE = "claude-code"
     OPENCODE = "opencode"
     KIMI_CLI = "kimi-cli"
+    PI = "pi"
     GENERIC = "generic"
 
 
@@ -104,6 +105,8 @@ class SkillInjector:
             return self._inject_opencode(skill_id, skill_content, truncated)
         elif platform == PlatformType.KIMI_CLI:
             return self._inject_kimi_cli(skill_id, skill_content, truncated)
+        elif platform == PlatformType.PI:
+            return self._inject_pi(skill_id, skill_content, truncated)
         else:
             return self._inject_generic(skill_id, skill_content, truncated)
 
@@ -248,6 +251,30 @@ You MUST follow this skill's workflow. Do not skip steps.
             skill_id=skill_id,
         )
 
+    def _inject_pi(
+        self,
+        skill_id: str,
+        skill_content: str,
+        truncated: bool = False,
+    ) -> str:
+        """Generate Pi Coding Agent injection payload.
+
+        Pi uses AGENTS.md context + prompt templates. Inject skill content
+        as a section the agent should read before proceeding.
+        """
+        truncation_note = (
+            f"\n[Content truncated at {self.MAX_INJECT_LENGTH} chars — "
+            "refer to skill file for full content]"
+            if truncated
+            else ""
+        )
+        return (
+            f"<vibesop-skill platform=\"pi\">\n"
+            f"## Skill: {skill_id}\n"
+            f"Read the SKILL.md for `{skill_id}` before proceeding.\n"
+            f"```markdown\n{skill_content}{truncation_note}\n```\n"
+            f"</vibesop-skill>"
+        )
     def _inject_generic(
         self,
         skill_id: str,

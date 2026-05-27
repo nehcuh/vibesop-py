@@ -1,6 +1,6 @@
 # VibeSOP CLI Reference
 
-Complete reference for all VibeSOP CLI commands.
+Complete reference for all VibeSOP CLI commands (v5.4.5+).
 
 ---
 
@@ -829,6 +829,97 @@ For You              refactor — your project has 12 TODOs, try this skill
 Warnings             my-old-skill — grade F, quality 25%
 Community Trending   django-test-helper  👍 23
 Skill Suggestions    3 new pattern(s) detected from your workflows
+```
+
+---
+
+#### `vibe instinct` (v5.4.5+)
+
+Instinct learning system — record, review, and evolve workflow patterns into formal skills.
+
+```bash
+vibe instinct [command]
+```
+
+**Subcommands:**
+- `learn <pattern> <action>` — Manually record a successful workflow pattern
+- `eval` — Review auto-detected sequence patterns, convert to skill suggestions
+- `status [--tag <tag>]` — View learned instincts by confidence level
+- `export [--output <path>]` — Export instincts to JSON for team sharing
+- `import <file>` — Import instincts from JSON export
+- `evolve [--index <n>]` — Upgrade high-confidence instinct to formal SKILL.md
+
+**Examples:**
+```bash
+vibe instinct learn "run tests before commit" "pytest && git commit" --tag testing
+vibe instinct status
+vibe instinct eval
+vibe instinct export --output team-instincts.json
+vibe instinct evolve --index 0
+```
+
+---
+
+#### `vibe trace` (v5.4.5+)
+
+Inspect routing traces for debugging and transparency.
+
+```bash
+vibe trace [command]
+```
+
+**Subcommands:**
+- `list-traces` — List recent routing traces from .vibe/traces/
+- `show <id>` — Show full detail of a routing trace (layer matches, rejected candidates)
+- `clean` — Remove old routing traces, keep most recent
+
+**Examples:**
+```bash
+vibe trace list-traces
+vibe trace show abc123
+trace clean
+```
+
+---
+
+#### `vibe verify` (v5.4.5+)
+
+Verify platform configuration integrity across all supported platforms.
+
+```bash
+vibe verify [platform] [--verbose]
+```
+
+**Arguments:**
+- `platform` — Platform to verify: claude-code, kimi-cli, opencode, cursor, or all (default)
+
+**Examples:**
+```bash
+vibe verify
+vibe verify claude-code --verbose
+```
+
+---
+
+#### `vibe workflows` (v5.4.5+)
+
+Manage cross-cutting multi-skill workflows.
+
+```bash
+vibe workflows [command]
+```
+
+**Subcommands:**
+- `list` — List all cross-cutting workflows
+- `show <id>` — Show workflow details (depends_on, steps)
+- `create` — Interactive wizard to create a workflow
+- `match <skill_ids>` — Find workflows covering given skills
+
+**Examples:**
+```bash
+vibe workflows list
+vibe workflows show full-stack-feature
+vibe workflows match skill-a skill-b
 ```
 
 ---

@@ -50,12 +50,12 @@ class TestSkillsRemovedCommands:
         # Should fail with "No such command"
         assert result.exit_code != 0
 
-    def test_instinct_command_removed(self) -> None:
-        """Test that instinct command no longer exists."""
-        result = runner.invoke(app, ["instinct", "list"])
+    def test_instinct_command_accessibility(self) -> None:
+        """Test that instinct command is accessible."""
+        result = runner.invoke(app, ["instinct", "--help"])
 
-        # Should fail with "No such command"
-        assert result.exit_code != 0
+        # Should exist and show usage
+        assert result.exit_code == 0
 
     def test_scan_command_removed(self) -> None:
         """Test that scan command no longer exists."""

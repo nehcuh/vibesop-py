@@ -40,7 +40,7 @@ from vibesop.installer.pack_installer import PackInstaller
 console = Console()
 
 _INSTALL_DOCSTRING_PLATFORM_HELP = (
-    "Target platform for skill symlinks (claude-code, kimi-cli, opencode, cursor). "
+    "Target platform for skill symlinks (claude-code, kimi-cli, opencode, cursor, pi). "
     "If omitted, installs to all supported platforms."
 )
 

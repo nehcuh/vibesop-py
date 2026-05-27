@@ -43,6 +43,7 @@ from vibesop.cli.commands.skills_commands._crud import (
 )
 from vibesop.cli.commands.skills_commands._discovery import (
     create,
+    featured,
     recommended,
     suggestions,
 )
@@ -68,6 +69,7 @@ __all__ = [
     "create",
     "disable",
     "enable",
+    "featured",
     "feedback",
     "health",
     "info",

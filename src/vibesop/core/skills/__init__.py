@@ -1,31 +1,34 @@
 """VibeSOP Skill Management System.
 
-This module provides a comprehensive skill management system including:
+Part of the SkillOS (Skill Operating System) — manages the full lifecycle of
+AI development skills: discovery → installation → routing → orchestration →
+evaluation → retention/deprecation.
+
+This module provides:
 - Base skill classes and interfaces
 - Skill discovery and loading from filesystem
 - Central storage with platform symlinks
 - High-level skill management API
-
-**⚠️ POSITIONING**: VibeSOP is a ROUTING ENGINE (discovery), not execution.
+- Lifecycle state management (DRAFT → ACTIVE → DEPRECATED → ARCHIVED)
+- Quality evaluation and retention policies
 
 Usage:
     from vibesop.core.skills import SkillManager, SkillStorage
-    from vibesop.core.routing import UnifiedRouter  # For routing
+    from vibesop.core.routing import UnifiedRouter
 
     # Storage management
     storage = SkillStorage()
     storage.install_skill("systematic-debugging", Path("core/skills/systematic-debugging"))
     storage.link_to_platform("systematic-debugging", "claude-code")
 
-    # Skill discovery (routing engine)
+    # Skill discovery and lifecycle management
     manager = SkillManager()
     skills = manager.list_skills()
     info = manager.get_skill_info("gstack/review")
 
-    # Route queries to skills (RECOMMENDED)
+    # Route queries to skills
     router = UnifiedRouter()
-    result = router.route("review my code")  # Returns which skill matches
-    # For execution, use `vibe execute` CLI command or your own logic
+    result = router.route("review my code")
 """
 
 from vibesop.core.skills.base import (

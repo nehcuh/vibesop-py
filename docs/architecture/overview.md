@@ -1,13 +1,13 @@
 # VibeSOP Architecture Overview
 
-> **Version**: 4.0.0
-> **Last Updated**: 2026-04-06
+> **Version**: 5.4.5
+> **Last Updated**: 2026-05-24
 
 ## System Purpose
 
-VibeSOP is a **Skill Operating System (SkillOS)** for AI-assisted development. It manages the full lifecycle of skills — discovering, routing, orchestrating, and evaluating — without executing skill code itself.
+VibeSOP is a **Skill Operating System (SkillOS)** for AI-assisted development. It manages the full lifecycle of skills — discovering, routing, orchestrating, evaluating, and applying retention policies — with lightweight guided execution for simple tasks.
 
-**Key Principle**: Discovery > Execution. VibeSOP manages, AI Agents execute.
+**Key Principle**: Lifecycle > Accumulation. VibeSOP manages the full skill lifecycle (discover → install → route → orchestrate → evaluate → retain/deprecate). AI Agents execute the skills themselves; VibeSOP provides routing, orchestration, and quality management.
 
 ## High-Level Architecture
 

@@ -22,6 +22,10 @@ class VibeSOPInstaller:
                 "config_dir": Path.home() / ".config" / "opencode",
                 "description": "OpenCode CLI",
             },
+            "pi": {
+                "config_dir": Path.home() / ".pi" / "agent",
+                "description": "Pi Coding Agent",
+            },
         }
 
     def install(
@@ -242,5 +246,8 @@ class VibeSOPInstaller:
         elif platform == "opencode":
             if not (config_dir / "config.yaml").exists():
                 issues.append("config.yaml not found")
+        elif platform == "pi":
+            if not (config_dir / "AGENTS.md").exists():
+                issues.append("AGENTS.md not found")
 
         return issues

@@ -7,11 +7,14 @@ Procedures) for AI-assisted development. It is NOT a consumer of the skills it p
 
 ### Two Roles
 
-**VibeSOP (this project)** — The "skill router":
-- Discovers skills from filesystem (gstack, superpowers, builtin)
+**VibeSOP (this project)** — The Skill Operating System (SkillOS):
+- Discovers skills from filesystem and remote registries
 - Routes natural language queries to the right skill (10-layer routing)
-- Generates platform configuration (Claude Code, OpenCode)
-- Manages skill installations and integrations
+- Orchestrates multi-skill execution plans for complex tasks
+- Manages full skill lifecycle (DRAFT → ACTIVE → DEPRECATED → ARCHIVED)
+- Evaluates skill quality (A-F grading) and applies retention policies
+- Generates platform configuration (Claude Code, Cursor, OpenCode)
+- Manages skill installations, scope, and cross-platform symlinks
 
 **Your project** — The "skill consumer":
 - Run `vibe install claude-code` to generate `.claude/` config

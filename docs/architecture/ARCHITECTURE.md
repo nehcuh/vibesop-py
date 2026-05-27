@@ -1,7 +1,7 @@
 # VibeSOP Architecture
 
-> **Version**: 5.4.1
-> **Last Updated**: 2026-05-01
+> **Version**: 5.4.5
+> **Last Updated**: 2026-05-23
 
 ---
 
@@ -417,7 +417,7 @@ tests/
 
 ### Why Separate Management from Execution?
 
-1. **Single Responsibility** — SkillOS manages, AI agents execute
+1. **Lifecycle Management** — SkillOS manages full lifecycle, AI agents execute
 2. **Tool Agnostic** — Works with any AI agent
 3. **Security** — No arbitrary code execution in management layer
 4. **Testability** — Management logic easily testable

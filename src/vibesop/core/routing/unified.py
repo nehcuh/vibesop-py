@@ -53,6 +53,7 @@ from vibesop.core.optimization import (
 )
 from vibesop.core.routing.cache import CacheManager
 from vibesop.core.routing.candidate_manager import CandidateManager
+from vibesop.core.routing.tracer import RoutingTracer
 from vibesop.core.routing.conflict import (
     ConfidenceGapStrategy,
     ConflictResolver,
@@ -258,6 +259,12 @@ class UnifiedRouter(
         # Session context for multi-turn state persistence (lazy init)
         self._session_context = None
 
+        # Routing tracer for per-layer diagnostic traces
+        self._tracer = RoutingTracer(
+            enabled=False,
+            traces_dir=self.project_root / ".vibe" / "traces",
+        )
+
         # Flush usage buffer on normal exit to prevent data loss.
         # Use a weak reference so the atexit handler does not keep the
         # CandidateManager (and thus the router) alive indefinitely.
@@ -422,6 +429,9 @@ class UnifiedRouter(
         with self._stats_lock:
             self._total_routes += 1
 
+        # Start routing trace if enabled
+        self._tracer.start_trace(query, mode="single")
+
         original_query = query
         conversation = None
         if context and context.conversation_id:
@@ -450,13 +460,27 @@ class UnifiedRouter(
             start_time, deprecated_warnings, conversation, original_query,
         )
         if result is not None:
+            trace = self._tracer.finish_trace(
+                final_skill=result.primary.skill_id if result.primary else None,
+                final_confidence=result.primary.confidence if result.primary else 0.0,
+                final_layer=result.primary.layer.value if result.primary else None,
+                alternatives=[a.to_dict() for a in result.alternatives],
+            )
+            self._tracer.save(trace)
             return result
 
         duration_ms = (time.perf_counter() - start_time) * 1000
-        return self._finalize_no_match(
+        final_result = self._finalize_no_match(
             query, original_query, candidates, context,
             routing_path, layer_details, duration_ms,
         )
+        trace = self._tracer.finish_trace(
+            final_skill=None,
+            final_confidence=0.0,
+            final_layer="no_match",
+        )
+        self._tracer.save(trace)
+        return final_result
 
     def _try_layers(
         self,
@@ -476,6 +500,7 @@ class UnifiedRouter(
         match, detail = _layers.try_explicit_layer(self, query, candidates)  # pyright: ignore[reportArgumentType]
         routing_path.append(RoutingLayer.EXPLICIT)
         layer_details.append(detail)
+        self._tracer.record_layer(RoutingLayer.EXPLICIT, detail, len(candidates))
         if match:
             self._record_layer(RoutingLayer.EXPLICIT)
             return self._build_match_result(
@@ -503,6 +528,7 @@ class UnifiedRouter(
         )
         routing_path.append(RoutingLayer.AI_TRIAGE)
         layer_details.append(detail)
+        self._tracer.record_layer(RoutingLayer.AI_TRIAGE, detail, len(candidates))
         if match and match.confidence >= self._config.min_confidence:
             self._record_layer(RoutingLayer.AI_TRIAGE)
             return self._build_match_result(
@@ -516,6 +542,7 @@ class UnifiedRouter(
         )
         routing_path.append(detail.layer)
         layer_details.append(detail)
+        self._tracer.record_layer(detail.layer, detail, len(candidates))
         if primary:
             self._record_layer(detail.layer)
             return self._build_match_result(
@@ -541,10 +568,12 @@ class UnifiedRouter(
             scen_match, scen_detail = _layers.try_scenario_layer(self, query, candidates)  # pyright: ignore[reportArgumentType]
             routing_path.append(RoutingLayer.SCENARIO)
             layer_details.append(scen_detail)
+            self._tracer.record_layer(RoutingLayer.SCENARIO, scen_detail, len(candidates))
 
             idx_match, idx_detail = _layers.try_index_layer(self, query, candidates)  # pyright: ignore[reportArgumentType]
             routing_path.append(RoutingLayer.AI_TRIAGE)
             layer_details.append(idx_detail)
+            self._tracer.record_layer(RoutingLayer.AI_TRIAGE, idx_detail, len(candidates))
 
             best = max(
                 (m for m in (scen_match, idx_match) if m is not None),
@@ -558,10 +587,29 @@ class UnifiedRouter(
             match, detail = _layers.try_index_layer(self, query, candidates)  # pyright: ignore[reportArgumentType]
             routing_path.append(RoutingLayer.AI_TRIAGE)
             layer_details.append(detail)
+            self._tracer.record_layer(RoutingLayer.AI_TRIAGE, detail, len(candidates))
             if match and match.confidence >= self._config.min_confidence:
                 return match
 
         return None
+
+    def enable_trace(self) -> None:
+        """Enable per-layer routing trace recording.
+
+        When enabled, every route() call captures per-layer decisions
+        and saves them to .vibe/traces/. Inspired by SkillTree's
+        routing trace mode.
+        """
+        self._tracer.enabled = True
+
+    def disable_trace(self) -> None:
+        """Disable routing trace recording."""
+        self._tracer.enabled = False
+
+    @property
+    def tracer(self) -> RoutingTracer:
+        """Access the routing tracer for listing past traces."""
+        return self._tracer
 
     def _should_use_keyword_routing(self, query: str, context: RoutingContext | None = None) -> bool:
         """Determine whether to use keyword-based routing or LLM semantic triage."""

@@ -4,6 +4,12 @@
 > **Generated**: {{ generated_at }}
 > **Platform**: Claude Code
 
+{% if tool_environment %}
+{{ tool_environment }}
+
+---
+{% endif %}
+
 ## Routing Protocol
 
 **MANDATORY: Call `vibe route` before any non-trivial task.**
