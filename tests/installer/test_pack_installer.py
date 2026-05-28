@@ -251,10 +251,10 @@ class TestSkillSymlinks:
         pack = central / "testpack"
         review_dir = pack / "review"
         review_dir.mkdir(parents=True)
-        (review_dir / "SKILL.md").write_text("---\nname: review\n---\n# Test skill")
+        (review_dir / "SKILL.md").write_text("---\nname: review\ndescription: Review code changes\n---\n# Test skill")
         qa_dir = pack / "qa"
         qa_dir.mkdir(parents=True)
-        (qa_dir / "SKILL.md").write_text("---\nname: qa\n---\n# QA skill")
+        (qa_dir / "SKILL.md").write_text("---\nname: qa\ndescription: QA test the application\n---\n# QA skill")
 
         platform = tmp_path / "platform"
         platform.mkdir(parents=True)
@@ -345,7 +345,7 @@ class TestPostInstallHook:
         central = tmp_path / "central"
         pack = central / "testpack"
         pack.mkdir(parents=True)
-        (pack / "SKILL.md").write_text("---\nname: testpack\n---\n# Pack manifest")
+        (pack / "SKILL.md").write_text("---\nname: testpack\ndescription: Root level test pack skill\n---\n# Pack manifest")
 
         platform = tmp_path / "platform"
         platform.mkdir(parents=True)

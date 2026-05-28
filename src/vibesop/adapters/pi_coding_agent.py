@@ -287,6 +287,59 @@ class PiCodingAgentAdapter(PlatformAdapter):
             skill, skill_dir, result, manifest=manifest,
         )
 
+        # Namespace external pack skills to avoid name collisions in pi agent.
+        self._namespace_skill_name(skill, skill_dir)
+
+    @staticmethod
+    def _namespace_skill_name(skill: Any, skill_dir: Path) -> None:
+        """Prefix external skill names with pack namespace to avoid collisions.
+
+        When multiple packs provide a skill named "qa", the pi agent's flat
+        skill registry sees a collision.  Prefixing ``name: qa`` →
+        ``name: gstack-qa`` ensures each pack's skills occupy a unique name.
+        """
+        skill_id = skill.id if hasattr(skill, "id") else skill.get("id", "")
+        if "/" not in skill_id:
+            return  # builtin skill — no namespace needed
+
+        namespace = skill_id.split("/", 1)[0]
+        skill_file = skill_dir / "SKILL.md"
+        if not skill_file.exists():
+            return
+
+        try:
+            content = skill_file.read_text(encoding="utf-8")
+        except Exception:
+            return
+
+        if not content.startswith("---"):
+            return
+
+        parts = content.split("---", 2)
+        if len(parts) < 3:
+            return
+
+        import re
+
+        frontmatter = parts[1]
+        # Only rewrite if the name does NOT already start with the namespace
+        if not re.search(rf"^name:\s*{re.escape(namespace)}-", frontmatter, flags=re.MULTILINE):
+            new_fm = re.sub(
+                r"^name:\s*(.+)$",
+                rf"name: {namespace}-\1",
+                frontmatter,
+                count=1,
+                flags=re.MULTILINE,
+            )
+            new_content = f"---{new_fm}---{parts[2]}"
+
+            # If the file is a symlink we must replace it with a real file
+            # so we don't mutate the original pack content.
+            if skill_file.is_symlink():
+                skill_file.unlink()
+
+            skill_file.write_text(new_content, encoding="utf-8")
+
     def _fallback_skill_content(
         self,
         skill: Any,

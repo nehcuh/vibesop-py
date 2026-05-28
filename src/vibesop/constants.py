@@ -20,6 +20,10 @@ TRUSTED_PACKS: dict[str, str] = {
     "mattpocock": "https://github.com/mattpocock/skills",
 }
 
+# Packs installed by --auto and quickstart by default.
+# gstack is deliberately excluded — users must install it explicitly via `vibe install gstack`.
+DEFAULT_AUTO_INSTALL_PACKS: list[str] = ["superpowers", "omx", "mattpocock"]
+
 
 # ============================================
 # Cache Configuration

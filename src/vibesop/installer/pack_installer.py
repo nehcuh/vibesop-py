@@ -248,6 +248,25 @@ class PackInstaller:
             return pack_name
         return pack_name + "-" + str(rel_path).replace("/", "-")
 
+    @staticmethod
+    def _is_valid_skill(skill_file: Path) -> bool:
+        """Check that a SKILL.md has a non-empty description."""
+        try:
+            content = skill_file.read_text(encoding="utf-8")
+            if not content.startswith("---"):
+                return False
+            parts = content.split("---", 2)
+            if len(parts) < 3:
+                return False
+            import yaml as _yaml
+            fm = _yaml.safe_load(parts[1])
+            if not isinstance(fm, dict):
+                return False
+            desc = fm.get("description", "")
+            return isinstance(desc, str) and len(desc.strip()) >= 10
+        except Exception:
+            return False
+
     def _create_skill_symlinks(
         self,
         central_path: Path,
@@ -256,6 +275,9 @@ class PackInstaller:
     ) -> int:
         count = 0
         for skill_file in central_path.rglob("SKILL.md"):
+            if not self._is_valid_skill(skill_file):
+                logger.warning("Skipping empty/invalid skill: %s", skill_file)
+                continue
             skill_dir = skill_file.parent
             rel_path = skill_dir.relative_to(central_path)
             flat_name = self._flatten_skill_name(pack_name, str(rel_path))
@@ -285,6 +307,9 @@ class PackInstaller:
     ) -> int:
         count = 0
         for skill_file in central_path.rglob("SKILL.md"):
+            if not self._is_valid_skill(skill_file):
+                logger.warning("Skipping empty/invalid skill: %s", skill_file)
+                continue
             skill_dir = skill_file.parent
             rel_path = skill_dir.relative_to(central_path)
             flat_name = self._flatten_skill_name(pack_name, str(rel_path))

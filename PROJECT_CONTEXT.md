@@ -4,57 +4,21 @@
 
 <!-- handoff:start -->
 
-### 2026-05-27 (S7) repo-cleanup-sync
-**Session**: Save + sync project, delete stale branches
+### 2026-05-28 (S9) pi-skill-namespace-collisions
+**Session**: Fix pi agent skill name collisions + gstack default install removal
 **Completed**:
-- Staged all changes, committed as "chore: update vibesop" (63 files, +2986/-178)
-- Pushed to origin/main
-- Deleted 5 stale dependabot remote branches (mypy, numpy, openai, packaging, sentence-transformers)
-- Remote now only has origin/main
-- Briefly explored autonomous-experiment skill setup (no experiment.yaml yet)
-**Files**: 63 committed, 5 remote branches deleted
+- Added `DEFAULT_AUTO_INSTALL_PACKS` (excludes gstack) in constants.py; `_auto_install()` and `_sync_platform_symlinks()` now use filtered lists
+- Added `_is_valid_skill()` in pack_installer to skip SKILL.md files with empty descriptions
+- Added `_namespace_skill_name()` in pi adapter to prefix `name:` field with pack namespace (e.g., `name: qa` → `name: gstack-qa`)
+**Root cause**: Pi agent resolves name collisions by alphabetical directory order; VibeSOP's routing conflict resolution runs before pi loads skills
+**Files**: constants.py, install.py, quickstart_runner.py, pack_installer.py, pi_coding_agent.py, test_pack_installer.py
 
-### 2026-05-24 (S6) pi-skill-conflict-fix
-**Session**: 修复 pi agent 启动时的技能冲突警告 (技能名非法字符 + 重复目录)
+### 2026-05-28 (S8) reinstall-pypi-publish
+**Session**: Reinstall project with uv + publish v5.4.6 to PyPI
 **Completed**:
-- 27 个 gstack/superpowers SKILL.md name 字段 `/` → `-` (规范化为 lowercase a-z, 0-9, hyphens)
-- 删除 14 个因名称冲突被跳过的重复技能目录
-- 验证: 126 skills, 零冲突, 零非法字符
-**Files**: 27 SKILL.md edited, 14 directories removed (~/.pi/agent/skills/)
-### 2026-05-24 (S5) pi-agent-adapter
-**Session**: Full Pi Coding Agent (pi) platform adapter implementation
-**Completed**:
-- Created PiCodingAgentAdapter with full PlatformAdapter interface (15 methods)
-- 16 Jinja2 templates for Pi config (AGENTS.md, extensions, skills, prompts, docs, settings)
-- 15 pi targets added to core/registry.yaml (parity with claude-code)
-- TypeScript extensions for route interception (vibesop-route.ts, vibesop-track.ts)
-- Fixed runtime bug: RouteResult interface matched to actual vibe route --json output
-- Fixed settings.json paths to resolve correctly relative to .pi/
-**Key Decisions**:
-- Pi uses AGENTS.md (project root) instead of CLAUDE.md (~/.claude/)
-- Pi uses TypeScript extensions instead of shell hooks for event interception
-- Pi uses prompt templates (.pi/prompts/) instead of slash commands
-- Project-local .pi/ directory chosen over global ~/.pi/agent/ for per-project deployment
-- skills/ paths written relative to .pi/ per Pi's settings resolution rules
-**Files**: 1 adapter + 16 templates + 5 modified (registry, init, renderer, hooks, registry_sync)
+- `uv sync` reinstall locally; `uv tool install --force --editable .` to override global vibesop
+- Version bump 5.4.5 → 5.4.6 (v5.4.5 files already existed on PyPI)
+- Built sdist + wheel with `uv build`, published via `uv publish` with token auth from `~/.pypirc`
+**Files**: pyproject.toml (version bump)
 
----
-
-### 2026-05-24 (S4) config-dedup
-**Session**: Clean up duplicate content between system-level and project-level CLAUDE.md/AGENTS.md
-**Completed**:
-- Removed routing/tool-env/lifecycle/quick-commands from project-level CLAUDE.md and AGENTS.md
-- Updated CLAUDE.md.project.j2 template (removed tool_environment + routing sections)
-- System-level ~/.claude/CLAUDE.md now sole source for tool env, routing, lifecycle, quick commands
-**Key Decisions**:
-- CLAUDE.md.project.j2 no longer emits tool_environment or routing — these are system-level concerns
-- AGENTS.md slimmed to multi-platform index (other platforms get full config via `vibe build`)
-**Files Modified**: 3 files (CLAUDE.md, AGENTS.md, CLAUDE.md.project.j2)
-
----
-
-### 2026-05-24 00:40 (S3)
-**Session**: Deep review + GOALS.md alignment fixes + gstack removal + engineering charter + slash-orchestrate routing fix
-**Key Learnings**: Duplicate data models diverge silently; management skills need explicit routing exclusion; selective META charter adoption
-**Files Modified**: 55 files
 <!-- handoff:end -->

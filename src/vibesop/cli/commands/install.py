@@ -31,7 +31,7 @@ from rich.console import Console
 from rich.progress import BarColumn, Progress, SpinnerColumn, TaskProgressColumn, TextColumn
 from rich.table import Table
 
-from vibesop.constants import TRUSTED_PACKS
+from vibesop.constants import DEFAULT_AUTO_INSTALL_PACKS, TRUSTED_PACKS
 from vibesop.core.skills.external_loader import ExternalSkillLoader
 from vibesop.core.skills.storage import SkillStorage
 from vibesop.core.skills.trust import TrustStore
@@ -166,7 +166,7 @@ def _auto_install(force: bool, skip_verify: bool, platforms: list[str] | None = 
     supported = loader.get_supported_packs()
     results: dict[str, str] = {}
 
-    for name in TRUSTED_PACKS:
+    for name in DEFAULT_AUTO_INSTALL_PACKS:
         info = supported.get(name, {})
         if info.get("installed") and not force:
             console.print(f"[dim]⊘ {name}: already installed, skipping[/dim]")

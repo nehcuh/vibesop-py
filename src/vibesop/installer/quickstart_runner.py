@@ -265,7 +265,6 @@ class QuickstartRunner:
             console.print(f"[yellow]⊘[/yellow] {integration} installation failed: {e}")
 
     def _sync_platform_symlinks(self, platform: str) -> None:
-        from vibesop.constants import TRUSTED_PACKS
         from vibesop.core.skills.storage import SkillStorage
         from vibesop.installer.pack_installer import PackInstaller
 
@@ -278,7 +277,7 @@ class QuickstartRunner:
 
         installer = PackInstaller()
         total = 0
-        for pack_name in TRUSTED_PACKS:
+        for pack_name in self._available_integrations:
             central_path = Path.home() / ".config" / "skills" / pack_name
             if not central_path.exists():
                 continue
