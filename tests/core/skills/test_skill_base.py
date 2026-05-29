@@ -4,7 +4,6 @@ from pathlib import Path
 
 from vibesop.core.skills.base import (
     SkillContext,
-    SkillDefinition,
     SkillMetadata,
     SkillResult,
     SkillType,
@@ -90,14 +89,3 @@ class TestSkillResult:
         result = SkillResult(success=False, output="", error="failed")
         assert result.success is False
         assert result.error == "failed"
-
-
-class TestSkillDefinition:
-    """Test SkillDefinition dataclass."""
-
-    def test_creation(self):
-        meta = SkillMetadata(id="t", name="T", description="D", intent="I")
-        definition = SkillDefinition(metadata=meta)
-        assert definition.metadata.id == "t"
-        assert definition.source == "builtin"
-        assert definition.source_file is None

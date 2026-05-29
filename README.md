@@ -7,7 +7,9 @@
 [![Python](https://img.shields.io/badge/Python-3.12+-blue.svg)](https://www.python.org/downloads/)
 [![Ruff](https://img.shields.io/badge/Ruff-Enabled-black.svg)](https://github.com/astral-sh/ruff)
 [![Coverage](https://img.shields.io/badge/Coverage-73%25-yellow.svg)]()
-[![Version](https://img.shields.io/badge/Version-5.4.5-blue.svg)](https://github.com/nehcuh/vibesop-py)
+[![Version](https://img.shields.io/badge/Version-5.5.0-blue.svg)](https://github.com/nehcuh/vibesop-py)
+[![Spec](https://img.shields.io/badge/Spec-v3.0-green.svg)](docs/skill-format-spec-v3.md)
+[![Conformance](https://img.shields.io/badge/Conformance-85%20tests-brightgreen.svg)]()
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 ---
@@ -136,21 +138,6 @@ uv sync
 pip install -e .
 ```
 
-### 可选系统依赖 Optional System Dependencies
-
-部分技能包（如 gstack）使用模板生成 SKILL.md，安装时会自动检测并编译。如需完整支持，建议提前安装：
-
-Some skill packs (e.g., gstack) use templates to generate SKILL.md and will auto-detect and compile during installation. For full support, install beforehand:
-
-```bash
-# Bun (gstack 使用 bun run gen:skill-docs 编译模板)
-# gstack uses bun run gen:skill-docs to compile templates
-curl -fsSL https://bun.sh/install | bash
-```
-
-> 如果未安装 bun，gstack 仍可安装，但基于 `.tmpl` 模板的技能可能无法完整生成。VibeSOP 会静默跳过编译步骤，不会阻断安装。
-> If bun is not installed, gstack can still be installed, but template-based skills may not be fully generated. VibeSOP will silently skip the compilation step without blocking installation.
-
 ### 第一次使用 First Use
 
 ```bash
@@ -165,7 +152,7 @@ Layer        scenario
 Duration     12.3ms
 
 💡 Alternatives:
-   • gstack/investigate (82%)
+   • mattpocock/diagnose (82%)
    • superpowers/debug (75%)
 ```
 
@@ -214,13 +201,13 @@ Plan:
 AI 辅助开发工具正在爆发：
 - Claude Code, Cursor, Continue.dev, Aider...
 - 每个工具都有自己的命令和技能
-- superpowers, gstack, omx 等技能包蓬勃发展
+- superpowers, mattpocock, omx 等技能包蓬勃发展
 - **你不知道该用哪个**
 
 AI-assisted development tools are exploding:
 - Claude Code, Cursor, Continue.dev, Aider...
 - Each tool has its own commands and skills
-- Skill packs like superpowers, gstack, omx are booming
+- Skill packs like superpowers, mattpocock, omx are booming
 - **You don't know which one to use**
 
 ### 解决方案 The Solution
@@ -231,10 +218,10 @@ vibe route "debug this database error"
 # → Routes to: systematic-debugging (95% confidence)
 
 vibe route "帮我扫描安全漏洞"
-# → Routes to: gstack/cso (88% confidence)
+# → Routes to: mattpocock/diagnose (88% confidence)
 
 vibe route "review my PR"
-# → Routes to: gstack/review (92% confidence)
+# → Routes to: mattpocock/tdd (92% confidence)
 ```
 
 VibeSOP:
@@ -406,7 +393,7 @@ $ vibe route "database connection failed after deployment"
 ```bash
 $ vibe route "review my changes before pushing"
 
-✅ Matched: gstack/review
+✅ Matched: mattpocock/tdd
    Confidence: 93%
 ```
 
@@ -429,7 +416,7 @@ $ vibe route "代码覆盖率太低怎么办"
 ```bash
 $ vibe route "I need ideas for a new feature"
 
-✅ Matched: gstack/office-hours
+✅ Matched: mattpocock/grill-with-docs
    Confidence: 87%
    Rationale: "ideas" + "new feature" → design thinking
 ```
@@ -516,7 +503,7 @@ vibe skills list
 vibe skills info <skill-id>
 
 # Install from URL or name
-vibe install gstack
+vibe install mattpocock
 vibe install https://github.com/user/skills
 
 # Sync skills to platform
@@ -603,8 +590,9 @@ security:
 skills:
   namespaces:
     - builtin
-    - gstack
+    - mattpocock
     - superpowers
+    - omx
 ```
 
 #### 用户确认模式 User Confirmation Mode
@@ -614,7 +602,7 @@ skills:
 ```bash
 $ vibe route "帮我 review 代码"
 ╭────────── 🔍 Routing Decision Report ──────────╮
-│ Selected: gstack/review (confidence: 87%)      │
+│ Selected: mattpocock/tdd (confidence: 87%)      │
 │ ...                                            │
 ╰────────────────────────────────────────────────╯
 How would you like to proceed?
@@ -684,6 +672,14 @@ vibe build opencode --output ~/.continue
 ---
 
 ## 架构 Architecture
+
+VibeSOP v5.5.0 introduces a **3-pillar architecture**:
+
+| Pillar | Purpose | Artifacts |
+|--------|---------|-----------|
+| **The Spec** | Canonical SKILL.md v3.0 format | `spec/models.py`, 29 fields, `SpecValidator` |
+| **The Reference** | 3 integration patterns | File-based, Hook-based, SDK-based adapters |
+| **The Conformance Suite** | Any platform can verify compliance | 85 tests, `vibe spec conformance --all` |
 
 ```
 ┌─────────────────────────────────────────────────┐
@@ -852,6 +848,7 @@ uv run pytest --cov=src/vibesop --cov-report=html
 - [x] v5.1.0: 技能市场 + 反馈闭环 SkillMarket + Feedback Loop
 - [x] v5.2.0: 智能生态系统 Intelligent Ecosystem — 推荐 + 退化 + 发现
 - [x] v5.3.0: 产品体验重塑 Product Experience — 仪表盘 + 清理 + 社区 + 徽章 + 引导
+- [x] v5.5.0: 技能协议标准 Skill Protocol Standard — Spec v3.0 + 参考实现 + 兼容性套件 (85 tests)
 
 详见: [docs/ROADMAP.md](docs/ROADMAP.md) | [version_05.md ADR](docs/version_05.md)
 
@@ -875,12 +872,11 @@ VibeSOP 内置了对以下社区技能包的支持，并提供统一的智能路
 
 VibeSOP provides built-in support and intelligent routing for the following community skill packs:
 
-- **[gstack](https://github.com/anthropics/gstack)** by [@brandonrobertz](https://github.com/brandonrobertz)
-  - 🎯 **定位**: 虚拟工程团队 - 工程技能和浏览器自动化
-  - 📦 **技能数**: 19 个技能 (review, qa, ship, office-hours, browse, etc.)
-  - 🎨 **特点**: 角色-based 技能 (产品、工程、设计、QA)
-  - 📖 **文档**: [OMX_GUIDE.md](docs/OMX_GUIDE.md) (参见对比章节)
-  - ⚡ **前置依赖**: [Bun](https://bun.sh)（安装时自动编译 `.tmpl` 模板生成 SKILL.md）
+- **[mattpocock/skills](https://github.com/mattpocock/skills)** by [@mattpocock](https://github.com/mattpocock)
+  - 🎯 **定位**: 高质量工程技能 — TDD、诊断、架构改进、代码审查
+  - 📦 **技能数**: 6+ 个技能 (tdd, diagnose, grill-with-docs, improve-codebase-architecture, handoff, grill-me)
+  - 🎨 **特点**: `.claude-plugin/plugin.json` 注册表格式，专注技能设计范式
+  - ⚡ **默认安装**: `vibe install` 自动安装
 
 - **[superpowers](https://github.com/obra/superpowers)** by [@obra](https://github.com/obra)
   - 🎯 **定位**: 基础开发工作流 - TDD、重构、调试、优化
@@ -888,11 +884,17 @@ VibeSOP provides built-in support and intelligent routing for the following comm
   - 🎨 **特点**: 开发最佳实践，red-green-refactor 循环
   - 💡 **适用**: 日常开发任务，个人工作流优化
 
-- **[oh-my-codex (OMX)](https://github.com/mill173/omx)** by [@mill173](https://github.com/mill173)
+- **[oh-my-codex (OMX)](https://github.com/Yeachan-Heo/oh-my-codex)** by [@Yeachan-Heo](https://github.com/Yeachan-Heo)
   - 🎯 **定位**: 高级工程方法论 - 结构化思维和系统化执行
   - 📦 **技能数**: 7 个技能 (deep-interview, ralph, ralplan, team, ultrawork, autopilot, ultraqa)
   - 🎨 **特点**: 需求澄清、持久执行、共识规划、多代理并行
   - 📖 **文档**: [OMX_GUIDE.md](docs/OMX_GUIDE.md) (完整使用指南)
+
+- **[gstack](https://github.com/anthropics/gstack)** by [@brandonrobertz](https://github.com/brandonrobertz)
+  - 🎯 **定位**: 虚拟工程团队 - 工程技能和浏览器自动化
+  - 📦 **技能数**: 19 个技能 (review, qa, ship, office-hours, browse, etc.)
+  - 🎨 **特点**: 角色-based 技能 (产品、工程、设计、QA)
+  - 💡 **适用**: 需显式安装 `vibe install gstack`（非默认）
 
 ### 🏗️ 核心技术基础 Core Technologies
 
@@ -919,15 +921,16 @@ VibeSOP is not just a collection of these skill packs, but a **Skill Operating S
 
 ```
 需求不明确？ → OMX deep-interview (深度澄清)
-产品头脑风暴？ → GStack office-hours (重新框定)
-TDD 开发？ → Superpowers tdd (red-green-refactor)
-代码审查？ → GStack review (SQL 安全 + 自动修复)
-调试错误？ → Systematic debugging (内置，根因分析)
+TDD 开发？ → mattpocock/tdd (red-green-refactor)
+代码审查？ → mattpocock/grill-me (深度审视)
+调试错误？ → mattpocock/diagnose (系统化诊断)
+架构改进？ → mattpocock/improve-codebase-architecture (领域驱动重构)
+文档设计？ → mattpocock/grill-with-docs (领域模型挑战)
 完整实现？ → OMX ralph (持久执行 + deslop)
 团队决策？ → OMX ralplan (共识规划 + ADR)
 并行任务？ → OMX team (多代理协作)
-QA 测试？ → GStack qa (浏览器自动化) 或 OMX ultraqa (架构驱动)
-准备发布？ → GStack ship (完整发布流程)
+QA 测试？ → OMX ultraqa (架构驱动)
+会话交接？ → mattpocock/handoff (会话沉甸)
 ```
 
 ### 💬 致谢社区 Thanks to the Community
@@ -936,9 +939,10 @@ QA 测试？ → GStack qa (浏览器自动化) 或 OMX ultraqa (架构驱动)
 
 Thanks to the authors and maintainers of these projects for making AI-native development more powerful:
 
-- [@brandonrobertz](https://github.com/brandonrobertz) - gstack
+- [@mattpocock](https://github.com/mattpocock) - mattpocock/skills
 - [@obra](https://github.com/obra) - superpowers
-- [@mill173](https://github.com/mill173) - oh-my-codex (OMX)
+- [@Yeachan-Heo](https://github.com/Yeachan-Heo) - oh-my-codex (OMX)
+- [@brandonrobertz](https://github.com/brandonrobertz) - gstack
 - Anthropic Team - Claude Code
 
 ---
@@ -994,6 +998,6 @@ vibe skills add code-reviewer
 
 ---
 
-**版本 Version**: 5.4.5
-**更新时间 Last Updated**: 2026-05-23
+**版本 Version**: 5.5.0
+**更新时间 Last Updated**: 2026-05-29
 **状态 Status**: ✅ 生产就绪 Production Ready

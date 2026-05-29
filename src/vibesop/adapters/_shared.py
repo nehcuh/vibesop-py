@@ -630,6 +630,51 @@ def render_docs_files(output_dir: Path, skills: list[Any]) -> list[Path]:
     return created
 
 
+def render_skill_md(
+    skill: Any,
+    *,
+    version: str = __version__,
+) -> str:
+    """Render a SKILL.md from the shared Jinja2 template.
+
+    Uses ``templates/shared/SKILL.md.j2`` — the canonical template shared
+    by all adapters that render fallback skill content (Claude Code, Pi).
+    """
+    from datetime import datetime
+
+    template_dir = Path(__file__).parent / "templates" / "shared"
+    env = Environment(
+        loader=FileSystemLoader(template_dir),
+        autoescape=select_autoescape(),
+        trim_blocks=True,
+        lstrip_blocks=True,
+    )
+    template = env.get_template("SKILL.md.j2")
+
+    skill_dict: dict[str, Any] = {}
+    if hasattr(skill, "model_dump"):
+        skill_dict = skill.model_dump()
+    elif hasattr(skill, "__dataclass_fields__"):
+        import dataclasses
+        skill_dict = dataclasses.asdict(skill)  # type: ignore[arg-type]
+    elif isinstance(skill, dict):
+        skill_dict = skill
+    else:
+        for attr in ("id", "name", "description", "trigger_when", "skill_type",
+                     "namespace", "version", "author", "tags", "metadata"):
+            if hasattr(skill, attr):
+                skill_dict[attr] = getattr(skill, attr)
+
+    return template.render(
+        skill=skill_dict,
+        metadata={
+            "created_at": datetime.now(),
+            "version": version,
+        },
+        version=version,
+    )
+
+
 __all__ = [
     "find_skill_content",
     "generate_docs_quick_commands",
@@ -642,4 +687,5 @@ __all__ = [
     "normalize_skill_type",
     "render_docs_files",
     "render_route_hook",
+    "render_skill_md",
 ]

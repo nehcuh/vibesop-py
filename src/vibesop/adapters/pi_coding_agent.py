@@ -17,20 +17,17 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from jinja2 import Environment, FileSystemLoader, select_autoescape
-
-from vibesop.adapters.base import PlatformAdapter
 from vibesop.adapters.models import Manifest, RenderResult
+from vibesop.adapters.sdk_based import SdkBasedAdapter
 
 logger = logging.getLogger(__name__)
 
 
-class PiCodingAgentAdapter(PlatformAdapter):
-    """Adapter for Pi Coding Agent platform."""
+class PiCodingAgentAdapter(SdkBasedAdapter):
+    """Adapter for Pi Coding Agent platform (SDK-based integration pattern)."""
 
     def __init__(self, project_root: str | Path = ".") -> None:
         super().__init__()
-        self._template_env: Environment | None = None
         self._project_root = Path(project_root).resolve()
 
     @property
@@ -44,16 +41,8 @@ class PiCodingAgentAdapter(PlatformAdapter):
         # but VibeSOP deploys per-project so .pi/ is the right target.
         return self._project_root / ".pi"
 
-    def _get_template_env(self) -> Environment:
-        if self._template_env is None:
-            template_dir = Path(__file__).parent / "templates" / "pi"
-            self._template_env = Environment(
-                loader=FileSystemLoader(template_dir),
-                autoescape=select_autoescape(),
-                trim_blocks=True,
-                lstrip_blocks=True,
-            )
-        return self._template_env
+    def _get_template_dir(self) -> Path:
+        return Path(__file__).parent / "templates" / "pi"
 
     def render_config(self, manifest: Manifest, output_dir: Path) -> RenderResult:
         """Render Pi Coding Agent configuration from manifest."""
@@ -249,33 +238,6 @@ class PiCodingAgentAdapter(PlatformAdapter):
 
         return result
 
-    def _render_and_write(
-        self,
-        template_name: str,
-        output_path: Path,
-        manifest: Manifest,
-        result: RenderResult,
-        validate_security: bool = True,
-        **extra_context: Any,
-    ) -> None:
-        """Render a template and write to file."""
-        try:
-            env = self._get_template_env()
-            template = env.get_template(template_name)
-
-            # Build context
-            context = self.get_template_context(manifest)
-            context.update(extra_context)
-
-            # Render and write
-            content = template.render(**context)
-            self.write_file_atomic(output_path, content, validate_security=validate_security)
-
-            result.add_file(output_path)
-
-        except Exception as e:
-            result.add_error(f"Failed to render {template_name}: {e}")
-
     def _render_skill_content(
         self,
         skill: Any,
@@ -347,16 +309,13 @@ class PiCodingAgentAdapter(PlatformAdapter):
         result: RenderResult,
         *,
         dir_name: str | None = None,  # noqa: ARG002
-        manifest: Manifest | None = None,
+        manifest: Manifest | None = None,  # noqa: ARG002
     ) -> None:
-        self._render_and_write(
-            "skills/SKILL.md.j2",
-            skill_output_path,
-            manifest,
-            result,
-            skill=skill,
-            validate_security=False,
-        )
+        from vibesop.adapters._shared import render_skill_md
+
+        content = render_skill_md(skill)
+        self.write_file_atomic(skill_output_path, content, validate_security=False)
+        result.add_file(skill_output_path)
 
     def _render_project_agents_md(self, manifest: Manifest, result: RenderResult) -> None:
         """Write project-level AGENTS.md if it doesn't exist."""

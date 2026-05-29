@@ -1,7 +1,41 @@
 # VibeSOP Architecture
 
-> **Version**: 5.4.5
-> **Last Updated**: 2026-05-23
+> **Version**: 5.5.0
+> **Last Updated**: 2026-05-29
+
+## Three-Pillar Architecture (v5.5.0)
+
+VibeSOP v5.5.0 introduces a 3-pillar architecture that defines the AI-assisted
+development skill protocol standard:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    VibeSOP Skill Protocol                       │
+├───────────────────┬───────────────────┬─────────────────────────┤
+│   The Spec        │  The Reference     │  The Conformance Suite │
+│                   │                    │                        │
+│  SKILL.md v3.0    │  3 Integration    │  tests/conformance/    │
+│  Canonical Model  │  Patterns         │  85 compliance tests   │
+│  29 Fields        │  File/Hook/SDK    │  CLI: vibe spec conf.  │
+├───────────────────┼───────────────────┼─────────────────────────┤
+│  spec/models.py   │  adapters/        │  test_spec_compliance  │
+│  spec/validator.py│   file_based.py   │  test_platform_adapters│
+│  spec/version.py  │   hook_based.py   │  test_agent_runtime    │
+│                   │   sdk_based.py    │                        │
+└───────────────────┴───────────────────┴─────────────────────────┘
+```
+
+**Pillar 1 — The Spec**: A single, unambiguous, versioned SKILL.md format
+specification. `SkillSpec` captures all 29 frontmatter fields including the
+12 that were previously discarded by the parser.
+
+**Pillar 2 — The Reference**: Three clean reference implementation patterns:
+- **File-based** (`FileBasedAdapter`): AGENTS.md + docs/ + skills/ symlinks
+- **Hook-based** (`HookBasedAdapter`): CLAUDE.md + Jinja2 rules/ + settings.json hook
+- **SDK-based** (`SdkBasedAdapter`): TypeScript extensions + prompt templates
+
+**Pillar 3 — The Conformance Suite**: Any platform can run the suite to verify
+compliance. `vibe spec conformance --all` runs all 85 tests.
 
 ---
 
@@ -63,46 +97,55 @@ vibe analyze session              → SessionAnalyzer.analyze()
 
 ---
 
-### 2. Agent Runtime Layer (`src/vibesop/agent/`) ✨ v4.4.0
+### 2. Agent Runtime Layer (`src/vibesop/agent/`) ✨ v5.5.0
 
-Direct Python API for AI Agents to use VibeSOP routing with their internal LLM, without requiring external API key configuration.
-
-> **⚠️ Process boundary**: The `set_llm()` API only works for in-process Python integration. When VibeSOP is invoked as a CLI subprocess (`vibe route`), it runs in a separate process and cannot access the Agent's LLM — separate LLM configuration is required for CLI usage.
+Fully wired entry point connecting all runtime components. Platform adapters use
+`AgentRuntime.handle_query()` instead of shelling out to `vibe route` via a
+subprocess.
 
 ```python
-# Entry point for AI Agents
-from vibesop.agent import AgentRouter, SimpleLLM, SimpleResponse
+from vibesop.agent.runtime import AgentRuntime
 
-# Wrap Agent's internal LLM
-class AgentLLM(SimpleLLM):
-    def call(self, prompt, max_tokens=100, temperature=0.1):
-        # Use Agent's internal LLM here
-        response = agent_internal_llm(prompt)
-        return SimpleResponse(content=response)
+# One-call entry point for platform hooks
+runtime = AgentRuntime()
+result = runtime.handle_query("review my code", platform="claude-code")
 
-# Route with Agent's LLM
-router = AgentRouter()
-router.set_llm(AgentLLM())
-result = router.route("帮我审查代码质量")
-print(result.primary.skill_id)  # gstack/review
+# Or get platform-specific hook response JSON
+hook_json = runtime.handle_query_for_hook(
+    "review my code",
+    platform="claude-code",
+    hook_event_name="UserPromptSubmit",
+)
 ```
 
+**Wired Pipeline** (7 stages):
+1. Slash command detection → `SlashCommandExecutor`
+2. Intent interception → `IntentInterceptor.should_intercept()`
+3. Route query → `AgentRouter.route()`
+4. Present decision → `DecisionPresenter` (with `--explain`)
+5. Extract match details → `AgentRuntimeResult`
+6. Inject skill content → `SkillInjector.inject_single_skill()`
+7. Format hook response → `AgentRuntimeResult.to_hook_response()`
+
 **Key Components**:
-- `AgentRouter` — UnifiedRouter wrapper for Agent integration
-- `SimpleLLM` — Base class for LLM wrapper
-- `SimpleResponse` — Response object matching TriageService interface
+- `AgentRuntime` — Unified entry point (wires 7 components)
+- `AgentRuntimeResult` — Structured result with `to_hook_json()` and `to_hook_response()`
+- `IntentInterceptor` — Decides whether to trigger routing (short query skip, meta-query skip, explicit override, slash command detection)
+- `SkillInjector` — Loads skill content for platform context injection
+- `DecisionPresenter` — Transparent routing explanation (why this skill, alternatives, rejected near-misses)
+- `SlashCommandExecutor` — Execute built-in `/vibe-*` commands
+- `PlanExecutor` — Guide agents through multi-step orchestration
+- `StepContextInjector` — Inject step dependencies and context into agent
+- `ExecutionProtocol` — Serialize/deserialize execution plans
 
-**Runtime Services** (`runtime/`):
-- `skill_injector.py` — Inject skill definitions into Agent context
-- `decision_presenter.py` — Present routing decisions to Agent
-- `plan_executor.py` — Execute multi-step plans within Agent
-- `intent_interceptor.py` — Intercept and interpret complex intents
+**Shell Hook Elimination**: The `vibesop-route.sh` hook was reduced from 221→46
+lines. All routing logic now lives in Python's `AgentRuntime` — the shell script
+is a thin wrapper that calls `handle_query_for_hook()`. This eliminates logic
+duplication between bash and Python.
 
-**Why Agent Runtime?**
-- ✅ No external API key needed (uses Agent's internal LLM, **in-process only**)
-- ✅ Direct Python API (no subprocess overhead)
-- ✅ Deep integration with Agent's session state
-- ✅ Platform adaptation (Claude Code, Cursor, Continue.dev)
+**HookPoint.ROUTE_INTERCEPTOR**: Wired in `HOOK_DEFINITIONS` for all 4 platforms
+(claude-code, kimi-cli, opencode, pi). Each entry maps to the Python
+`AgentRuntime` class.
 
 ---
 

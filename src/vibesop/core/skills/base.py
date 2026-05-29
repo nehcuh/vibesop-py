@@ -123,25 +123,6 @@ class SkillResult:
             self.metadata = {}
 
 
-@dataclass
-class SkillDefinition:
-    """Complete skill definition with metadata and source.
-
-    .. deprecated:: 5.5.0
-        Use ``vibesop.spec.SkillSpec`` directly. SkillSpec includes all
-        metadata fields and the source_file/source can be derived from context.
-
-    Attributes:
-        metadata: Skill metadata
-        source_file: Path to SKILL.md file (if external)
-        source: Source type (builtin, external, project)
-    """
-
-    metadata: SkillMetadata
-    source_file: Path | None = None
-    source: str = "builtin"
-
-
 class Skill(ABC):
     """Base class for all skills.
 

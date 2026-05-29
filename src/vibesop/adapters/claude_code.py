@@ -284,16 +284,13 @@ class ClaudeCodeAdapter(HookBasedAdapter):
         result: RenderResult,
         *,
         dir_name: str | None = None,  # noqa: ARG002
-        manifest: Manifest | None = None,
+        manifest: Manifest | None = None,  # noqa: ARG002
     ) -> None:
-        self._render_and_write(
-            "skills/SKILL.md.j2",
-            skill_output_path,
-            manifest,
-            result,
-            skill=skill,
-            validate_security=False,
-        )
+        from vibesop.adapters._shared import render_skill_md
+
+        content = render_skill_md(skill)
+        self.write_file_atomic(skill_output_path, content, validate_security=False)
+        result.add_file(skill_output_path)
 
     def _render_project_claude_md(self, manifest: Manifest, result: RenderResult) -> None:
         """Write project-level CLAUDE.md if it doesn't exist."""

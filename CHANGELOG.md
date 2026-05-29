@@ -9,6 +9,76 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [5.5.0] - 2026-05-29
+
+### Architecture — 3-Pillar Skill Protocol Standard (v5.5.0)
+
+VibeSOP transitions from "skill router" to **skill protocol standard definer**, built on
+3 pillars: Spec, Reference, and Conformance Suite.
+
+#### Pillar 1 — The Spec
+
+- **New `src/vibesop/spec/` package**: Canonical `SkillSpec` Pydantic model capturing all
+  29 SKILL.md frontmatter fields (previously 12 were discarded by the parser).
+- **`SkillType.STANDARD` enum value**: 6 core skills previously used `"standard"` which
+  was silently downgraded to `PROMPT`. Now correctly mapped.
+- **`SpecValidator`**: Validates any SKILL.md file against the v3.0 spec. REQUIRED_FIELDS
+  are `id`, `name`, `description`, `version`. v1/v2 files with missing v3-only fields
+  produce warnings, not errors.
+- **`keywords` and `tags` separated**: Previously merged by the parser into a single
+  field. Now stored independently.
+- **`populate_by_name=True` Pydantic fix**: When `type` alias is used, Pydantic v2
+  ignores the Python field name `skill_type` without this setting.
+- **CLI**: `vibe spec validate --path`, `vibe spec validate --all`, `vibe spec version`.
+
+#### Pillar 2 — The Reference
+
+- **3 unified adapter base classes**: `FileBasedAdapter` (OpenCode, Cursor, Kimi CLI),
+  `HookBasedAdapter` (Claude Code), `SdkBasedAdapter` (Pi Coding Agent reference pattern).
+- **Shared template rendering**: `render_route_hook()` in `_shared.py` produces
+  platform-specific hook scripts from a single template source.
+- **`IntegrationMode` enum**: `FILE_BASED`, `HOOK_BASED`, `SDK_BASED` in
+  `spec/integration.py`.
+- **TOML config merge**: Kimi CLI adapter uses regex-based `[[hooks]]` section merging.
+
+#### Pillar 3 — Agent Runtime + Shell Hook Elimination
+
+- **`AgentRuntime` entry point**: Wires 7 runtime components (IntentInterceptor,
+  AgentRouter, SkillInjector, DecisionPresenter, SlashCommandExecutor, PlanExecutor,
+  StepContextInjector) through a single `handle_query()` call.
+- **Shell hook elimination**: `vibesop-route.sh` reduced from 221→46 lines. All routing
+  logic (query length check, slash command detection, explicit override, orchestration
+  plan injection, JSON output building) moved to Python `AgentRuntime`.
+- **`HookPoint.ROUTE_INTERCEPTOR`** wired in all 4 platforms' HOOK_DEFINITIONS
+  (claude-code, kimi-cli, opencode, pi), each mapping to the Python AgentRuntime class.
+- **`AgentRuntimeResult.to_hook_response()`**: Platform-specific hook JSON format
+  (`systemMessage` + `hookSpecificOutput.additionalContext`).
+- **`--explain` flag**: `vibe route "query" --explain` shows DecisionPresenter output
+  (why this skill, alternatives, rejected near-misses).
+
+#### Pillar 4 — Conformance Suite
+
+- **85 conformance tests** across 3 files:
+  - `test_spec_compliance.py` (23 tests) — all 29 fields, type mapping, v1/v2 migration
+  - `test_platform_adapters.py` (32 tests) — inheritance, core files, AgentRuntime delegation
+  - `test_agent_runtime.py` (30 tests) — handle_query, hook responses, lazy init
+- **CLI**: `vibe spec conformance --all`, `vibe spec conformance --platform <name>`,
+  `vibe spec conformance --self`.
+
+### Removed
+
+- **`SkillDefinition` dataclass** (`core/skills/base.py`): Removed. Had zero src/
+  consumers. Use `vibesop.spec.SkillSpec` directly.
+
+### Deprecated
+
+- **`SkillMetadata` dataclass** (`core/skills/base.py`): Still used by parser/loader/
+  understander — deferred removal to v6.0.
+- **`SkillConfig` dataclass** (`core/skills/config_manager.py`): Serves runtime
+  persistence (lifecycle, usage stats) — different concern from SkillSpec.
+- **`SkillDefinition` Pydantic** (`core/models.py`): Still used by builder/manifest/
+  adapters — deferred removal to v6.0.
+
 ## [5.4.4] - 2026-05-15
 
 ### Fixed

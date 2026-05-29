@@ -16,9 +16,11 @@ console = Console()
 
 
 def spec(
-    action: str = typer.Argument("version", help="Action: validate, version"),
+    action: str = typer.Argument("version", help="Action: validate, version, conformance"),
     path: str | None = typer.Option(None, "--path", "-p", help="Path to SKILL.md file or skill directory"),
-    all_skills: bool = typer.Option(False, "--all", help="Validate all installed skills"),
+    all_skills: bool = typer.Option(False, "--all", help="Validate all installed skills / run all conformance tests"),
+    platform: str | None = typer.Option(None, "--platform", help="Platform to check conformance for"),
+    self_check: bool = typer.Option(False, "--self", help="Run spec self-conformance check"),
 ) -> None:
     """Manage the SKILL.md specification standard.
 
@@ -26,14 +28,18 @@ def spec(
         vibe spec version              # Show current spec version
         vibe spec validate -p ./SKILL.md  # Validate a single file
         vibe spec validate --all          # Validate all installed skills
+        vibe spec conformance --all       # Run full conformance suite
+        vibe spec conformance --platform claude-code
     """
     if action == "version":
         _show_version()
     elif action == "validate":
         _run_validation(path, all_skills)
+    elif action == "conformance":
+        _run_conformance(platform, all_skills, self_check)
     else:
         console.print(f"[red]Unknown action: {action}[/red]")
-        console.print("Available actions: version, validate")
+        console.print("Available actions: version, validate, conformance")
         raise typer.Exit(code=1)
 
 
@@ -124,3 +130,59 @@ def _validate_all(validator: SpecValidator) -> None:
     console.print()
     console.print(f"[bold]Summary:[/bold] {valid_count}/{len(all_results)} valid, "
                   f"{error_count} errors, {warning_count} warnings")
+
+
+def _run_conformance(platform: str | None, all_platforms: bool, self_only: bool) -> None:
+    """Run the conformance test suite."""
+    import subprocess
+    import sys
+
+    # tests/conformance/ is at repo root
+    repo_root = Path(__file__).resolve().parent.parent.parent.parent.parent
+    test_dir = repo_root / "tests" / "conformance"
+
+    if not test_dir.exists():
+        console.print("[red]Conformance test directory not found.[/red]")
+        console.print(f"Expected: {test_dir}")
+        raise typer.Exit(code=1)
+
+    if self_only:
+        console.print("[bold]Spec Self-Conformance Check[/bold]\n")
+        # Run spec compliance tests only (language-level, no platform deps)
+        cmd = [sys.executable, "-m", "pytest", str(test_dir / "test_spec_compliance.py"), "-v", "-q"]
+        result = subprocess.run(cmd, capture_output=False)
+        raise typer.Exit(code=result.returncode)
+
+    if platform:
+        console.print(f"[bold]Conformance check for: {platform}[/bold]\n")
+        if platform not in ("claude-code", "opencode", "cursor", "kimi-cli", "pi"):
+            console.print(f"[red]Unknown platform: {platform}[/red]")
+            console.print("Supported: claude-code, opencode, cursor, kimi-cli, pi")
+            raise typer.Exit(code=1)
+        # Run platform adapter tests for the specific platform
+        cmd = [
+            sys.executable, "-m", "pytest",
+            str(test_dir / "test_platform_adapters.py"),
+            "-v", "-q",
+            "-k", platform.replace("-", "_"),
+        ]
+        result = subprocess.run(cmd, capture_output=False)
+        raise typer.Exit(code=result.returncode)
+
+    if all_platforms:
+        console.print("[bold]Full Conformance Suite[/bold]\n")
+        console.print("Running: spec compliance + platform adapters + agent runtime\n")
+        cmd = [sys.executable, "-m", "pytest", str(test_dir), "-v", "-q"]
+        result = subprocess.run(cmd, capture_output=False)
+        if result.returncode == 0:
+            console.print("\n[bold green]All conformance tests passed.[/bold green]")
+        else:
+            console.print("\n[bold red]Some conformance tests failed.[/bold red]")
+        raise typer.Exit(code=result.returncode)
+
+    console.print("[yellow]Specify --platform <name>, --all, or --self[/yellow]")
+    console.print("Examples:")
+    console.print("  vibe spec conformance --platform claude-code")
+    console.print("  vibe spec conformance --all")
+    console.print("  vibe spec conformance --self")
+    raise typer.Exit(code=1)
