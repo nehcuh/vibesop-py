@@ -1072,6 +1072,30 @@ return value
 type grep  # If "grep is an alias for rg", need fix
 ```
 
+### `python3` in Hook Scripts Breaks for uv-Managed Projects (2026-05-29)
+
+**Issue**: `vibesop-route.sh` hook uses bare `python3` to inline-import `vibesop.agent.runtime.AgentRuntime`. When project uses `uv` for Python management (the standard), system `python3` has no `vibesop` package → `ModuleNotFoundError` → `UserPromptSubmit hook error`.
+
+**Root Cause**: Other hooks (`pre-session-end.sh`, `pre-tool-use.sh`) call `vibe` CLI directly — `vibe` is a uv tool with its own Python env including `vibesop`. But `vibesop-route.sh` inlines Python, bypassing the uv-managed environment.
+
+**Pattern**: Any generated shell script that calls Python MUST detect the environment — do NOT assume `python3` has the project's packages.
+
+**Solution**: Auto-detect Python in the hook template:
+```bash
+# Detect Python with vibesop available (uv project > system)
+_VIBESOP_PYTHON="python3"
+if command -v uv &> /dev/null && uv run python -c "import vibesop" 2>/dev/null; then
+    _VIBESOP_PYTHON="uv run python"
+fi
+$_VIBESOP_PYTHON -c "..."
+```
+
+**Files**: `src/vibesop/adapters/templates/shared/vibesop-route.sh.j2`, `~/.claude/hooks/vibesop-route.sh`
+
+**Prevention**: When generating hook/shell scripts in uv-managed Python projects, always:
+1. Prefer CLI invocation (`vibe route`) over inline `python3 -c`
+2. If inline Python needed, auto-detect: `uv run python` → fallback `python3`
+3. Never hardcode `python3` assuming project packages are globally installed
 ---
 
 ## Quality Convergence Sprint — Lessons (2026-04-29)

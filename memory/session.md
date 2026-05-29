@@ -436,6 +436,20 @@ Lint: 0 errors ✅
 - **Next steps**: 用户重启会话测试验证
 - **Recorded**: yes — ripgrep 兼容性陷阱记录到 project-knowledge.md
 
+### S2 (2026-05-29 23:19~23:30) python3 ModuleNotFoundError in Claude Code Hook
+
+- **用户报告**: `UserPromptSubmit hook error` + `ModuleNotFoundError: No module named 'vibesop'` 输入中文长 query 时出现
+- **根因分析**: `vibesop-route.sh` hook 使用裸 `python3` 内联导入 `vibesop.agent.runtime.AgentRuntime`，但项目用 `uv` 管理 Python 环境，系统 `python3` 没有 `vibesop` 包
+- **对比**: 其他三个 hook (`pre-session-end.sh`, `post-session-start.sh`, `pre-tool-use.sh`) 调用 `vibe` CLI 正常——`vibe` 是 uv tool，自带含 `vibesop` 的独立 Python 环境
+- **修复**:
+  1. 模板 `src/vibesop/adapters/templates/shared/vibesop-route.sh.j2` 添加环境检测
+  2. 已安装 hook `~/.claude/hooks/vibesop-route.sh` 同步修复
+  3. 逻辑: `uv run python` → 回退 `python3`
+- **修改文件**: `vibesop-route.sh.j2` (模板), `~/.claude/hooks/vibesop-route.sh` (实例), `memory/project-knowledge.md` (知识记录)
+- **验证**: 39 conformance/hook tests pass; hook 手动执行返回正确 JSON
+- **影响范围**: 后续所有 `vibe deploy` 生成的 Claude Code/OpenCode/Kimi CLI hook 均自动包含环境检测
+- **Recorded**: yes — `python3` in uv-managed projects 陷阱记录到 project-knowledge.md
+
 ---
 
 ### S3 (2026-04-28 18:30~19:15) Hook Template Bug Fixes + CLI JSON Priority + Slash-Route Architecture Fix
