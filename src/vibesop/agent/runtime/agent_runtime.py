@@ -18,6 +18,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from vibesop.agent.runtime.intent_interceptor import InterceptionMode
+
 logger = logging.getLogger(__name__)
 
 
@@ -362,45 +364,64 @@ class AgentRuntime:
 
         # 3. Route the query
         try:
-            routing_result = self.router.route(query, enable_ai_triage=True)
+            if decision.mode == InterceptionMode.ORCHESTRATE:
+                orch_result = self.router.orchestrate(query)
+                if orch_result.get("is_multi_intent"):
+                    result.mode = "orchestrate"
+                    plan = orch_result.get("plan", {})
+                    result.plan = plan
+                    steps = plan.get("steps", [])
+                    if steps:
+                        result.skill_id = steps[0].get("skill_id", "")
+                        result.confidence = 0.8
+                        result.skill_name = steps[0].get("intent", "")
+                    for step in steps[1:5]:
+                        result.alternatives.append({
+                            "skill_id": step.get("skill_id", ""),
+                            "confidence": 0.7,
+                        })
+                else:
+                    single = orch_result.get("single_result", {})
+                    result.skill_id = single.get("skill_id", "") or ""
+                    result.confidence = single.get("confidence", 0.0)
+                    result.mode = "single"
+            else:
+                routing_result = self.router.route(query, enable_ai_triage=True)
+
+                # 4. Present the decision
+                try:
+                    present = self.presenter.present_single_result(routing_result, platform)
+                    result.decision_message = present.message if explain else ""
+                except Exception as e:
+                    logger.debug(f"Decision presentation failed: {e}")
+
+                # 5. Extract match details
+                if hasattr(routing_result, "has_match") and routing_result.has_match:
+                    primary = routing_result.primary if hasattr(routing_result, "primary") else None
+                    if primary:
+                        result.skill_id = getattr(primary, "skill_id", "")
+                        result.skill_name = getattr(primary, "skill_name", "")
+                        result.confidence = getattr(primary, "confidence", 0.0)
+
+                    # Capture alternatives
+                    if hasattr(routing_result, "alternatives"):
+                        for alt in routing_result.alternatives[:5]:
+                            result.alternatives.append({
+                                "skill_id": getattr(alt, "skill_id", ""),
+                                "confidence": getattr(alt, "confidence", 0.0),
+                            })
+
+                    # Capture orchestration plan
+                    if hasattr(routing_result, "plan") and routing_result.plan:
+                        try:
+                            from vibesop.agent.execution_protocol import ExecutionProtocol
+
+                            result.plan = ExecutionProtocol.plan_to_json(routing_result.plan)
+                        except Exception as e:
+                            logger.debug(f"Plan serialization failed: {e}")
         except Exception as e:
             result.errors.append(f"Routing failed: {e}")
             return result
-
-        # 4. Present the decision
-        try:
-            if decision.mode.value == "orchestrate" if hasattr(decision.mode, "value") else False:
-                present = self.presenter.present_orchestration_result(routing_result, platform)
-            else:
-                present = self.presenter.present_single_result(routing_result, platform)
-            result.decision_message = present.message if explain else ""
-        except Exception as e:
-            logger.debug(f"Decision presentation failed: {e}")
-
-        # 5. Extract match details
-        if hasattr(routing_result, "has_match") and routing_result.has_match:
-            primary = routing_result.primary if hasattr(routing_result, "primary") else None
-            if primary:
-                result.skill_id = getattr(primary, "skill_id", "")
-                result.skill_name = getattr(primary, "skill_name", "")
-                result.confidence = getattr(primary, "confidence", 0.0)
-
-            # Capture alternatives
-            if hasattr(routing_result, "alternatives"):
-                for alt in routing_result.alternatives[:5]:
-                    result.alternatives.append({
-                        "skill_id": getattr(alt, "skill_id", ""),
-                        "confidence": getattr(alt, "confidence", 0.0),
-                    })
-
-            # Capture orchestration plan
-            if hasattr(routing_result, "plan") and routing_result.plan:
-                try:
-                    from vibesop.agent.execution_protocol import ExecutionProtocol
-
-                    result.plan = ExecutionProtocol.plan_to_json(routing_result.plan)
-                except Exception as e:
-                    logger.debug(f"Plan serialization failed: {e}")
 
         # 6. Inject skill content (load actual SKILL.md)
         if result.skill_id:
