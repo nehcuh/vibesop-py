@@ -12,6 +12,7 @@ components via their respective hook/plugin/prompt mechanisms.
 
 from __future__ import annotations
 
+from vibesop.agent.runtime.agent_runtime import AgentRuntime, AgentRuntimeResult
 from vibesop.agent.runtime.context_injector import (
     DEFAULT_MARKER_TEMPLATE,
     StepContextInjector,
@@ -44,6 +45,8 @@ from vibesop.agent.runtime.slash_command_executor import (
 )
 
 __all__ = [
+    "AgentRuntime",
+    "AgentRuntimeResult",
     "COMPLETION_MARKER_PREFIX",
     "DEFAULT_MARKER_TEMPLATE",
     "DecisionPresenter",

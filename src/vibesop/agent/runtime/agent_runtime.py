@@ -1,0 +1,282 @@
+"""AgentRuntime — unified entry point for the VibeSOP agent runtime.
+
+Wires together all runtime components (interception, routing, injection,
+presentation, execution) that were previously isolated or used only
+piecemeal by the CLI. Platform adapters can call ``AgentRuntime.handle_query()``
+instead of shelling out to ``vibe route`` via a subprocess.
+
+Refactored in v5.5.0 as part of Phase 3 — see the plan for details.
+"""
+
+from __future__ import annotations
+
+import json
+import logging
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class AgentRuntimeResult:
+    """Structured result from AgentRuntime.handle_query().
+
+    Attributes:
+        intercepted: Whether the query was intercepted for routing.
+        mode: Interception mode (none, single, orchestrate, slash_command).
+        skill_id: Matched skill ID (if single match).
+        skill_name: Matched skill name (if available).
+        confidence: Routing confidence score (0.0-1.0).
+        alternatives: Alternative skill candidates.
+        plan: Orchestration plan (if multi-intent).
+        decision_message: Human-readable decision explanation.
+        skill_content: Injected skill content (if any).
+        slash_result: Slash command execution result (if applicable).
+        errors: Any errors encountered during processing.
+    """
+
+    intercepted: bool = False
+    mode: str = "none"
+    skill_id: str = ""
+    skill_name: str = ""
+    confidence: float = 0.0
+    alternatives: list[dict[str, Any]] = field(default_factory=list)
+    plan: dict[str, Any] | None = None
+    decision_message: str = ""
+    skill_content: str = ""
+    slash_result: dict[str, Any] | None = None
+    errors: list[str] = field(default_factory=list)
+
+    @property
+    def has_match(self) -> bool:
+        return self.intercepted and self.mode in ("single", "orchestrate")
+
+    @property
+    def success(self) -> bool:
+        return len(self.errors) == 0
+
+    def to_hook_json(self) -> str:
+        """Serialize to JSON for consumption by shell hook wrappers.
+
+        Returns a compact JSON string suitable for parsing by a thin
+        shell wrapper (vibesop-route.sh). The shell hook reads this
+        output and translates it into the platform-specific hook
+        response format.
+        """
+        return json.dumps(
+            {
+                "intercepted": self.intercepted,
+                "mode": self.mode,
+                "skillId": self.skill_id,
+                "skillName": self.skill_name,
+                "confidence": self.confidence,
+                "alternatives": self.alternatives,
+                "plan": self.plan,
+                "decisionMessage": self.decision_message,
+                "skillContent": self.skill_content[:3000] if self.skill_content else "",
+                "slashResult": self.slash_result,
+                "errors": self.errors,
+            },
+            ensure_ascii=False,
+        )
+
+
+class AgentRuntime:
+    """Wired runtime connecting all VibeSOP agent components.
+
+    Platform adapters use this as their primary integration point instead
+    of shelling out to ``vibe route``. The runtime handles the full
+    pipeline: interception → routing → presentation → injection.
+
+    Example:
+        >>> runtime = AgentRuntime()
+        >>> result = runtime.handle_query("review my code", platform="claude-code")
+        >>> if result.has_match:
+        ...     print(runtime.injector.inject_single_skill(result.skill_id, "claude-code"))
+    """
+
+    def __init__(self, project_root: str | Path = ".") -> None:
+        self.project_root = Path(project_root).resolve()
+
+        # Lazy-initialized components (created on first use)
+        self._interceptor: Any = None
+        self._router: Any = None
+        self._injector: Any = None
+        self._presenter: Any = None
+        self._slash_executor: Any = None
+        self._plan_executor: Any = None
+        self._context_injector: Any = None
+
+    # ---- Lazy component accessors ----
+
+    @property
+    def interceptor(self):
+        if self._interceptor is None:
+            from vibesop.agent.runtime.intent_interceptor import IntentInterceptor
+
+            self._interceptor = IntentInterceptor()
+        return self._interceptor
+
+    @property
+    def router(self):
+        if self._router is None:
+            from vibesop.agent import AgentRouter
+
+            self._router = AgentRouter(project_root=self.project_root)
+        return self._router
+
+    @property
+    def injector(self):
+        if self._injector is None:
+            from vibesop.agent.runtime.skill_injector import SkillInjector
+
+            self._injector = SkillInjector(project_root=self.project_root)
+        return self._injector
+
+    @property
+    def presenter(self):
+        if self._presenter is None:
+            from vibesop.agent.runtime.decision_presenter import DecisionPresenter
+
+            self._presenter = DecisionPresenter()
+        return self._presenter
+
+    @property
+    def slash_executor(self):
+        if self._slash_executor is None:
+            from vibesop.agent.runtime.slash_command_executor import SlashCommandExecutor
+
+            self._slash_executor = SlashCommandExecutor(project_root=self.project_root)
+        return self._slash_executor
+
+    @property
+    def plan_executor(self):
+        if self._plan_executor is None:
+            from vibesop.agent.runtime.plan_executor import PlanExecutor
+
+            self._plan_executor = PlanExecutor(project_root=self.project_root)
+        return self._plan_executor
+
+    @property
+    def context_injector(self):
+        if self._context_injector is None:
+            from vibesop.agent.runtime.context_injector import StepContextInjector
+
+            self._context_injector = StepContextInjector(project_root=self.project_root)
+        return self._context_injector
+
+    # ---- Main entry point ----
+
+    def handle_query(
+        self,
+        query: str,
+        *,
+        platform: str = "generic",
+        session_id: str = "default",
+        explain: bool = False,
+    ) -> AgentRuntimeResult:
+        """Handle a user query through the full routing pipeline.
+
+        Args:
+            query: The user's natural language query.
+            platform: Platform identifier (claude-code, opencode, kimi-cli, pi).
+            session_id: Session identifier for context-aware routing.
+            explain: When True, include full decision transparency output.
+
+        Returns:
+            AgentRuntimeResult with routing decision, skill content, and metadata.
+        """
+        result = AgentRuntimeResult()
+
+        # 1. Check for slash commands (/vibe-help, /vibe-list, etc.)
+        if self.slash_executor.is_slash_command(query):
+            try:
+                slash_result = self.slash_executor.execute_query(query)
+                result.intercepted = True
+                result.mode = "slash_command"
+                result.slash_result = {
+                    "success": slash_result.success,
+                    "message": slash_result.message,
+                    "command": slash_result.command,
+                }
+                return result
+            except Exception as e:
+                logger.debug(f"Slash command execution failed: {e}")
+                # Fall through to normal routing
+
+        # 2. Check if interception is needed
+        from vibesop.agent.runtime.intent_interceptor import InterceptionContext
+
+        context = InterceptionContext(
+            session_id=session_id,
+            platform=platform,
+        )
+        try:
+            decision = self.interceptor.should_intercept(query, _context=context)
+        except Exception as e:
+            result.errors.append(f"Interception failed: {e}")
+            return result
+
+        if not decision.should_route:
+            return result  # Not intercepted — agent handles normally
+
+        result.intercepted = True
+        result.mode = decision.mode.value if hasattr(decision.mode, "value") else str(decision.mode)
+
+        # 3. Route the query
+        try:
+            routing_result = self.router.route(query, enable_ai_triage=True)
+        except Exception as e:
+            result.errors.append(f"Routing failed: {e}")
+            return result
+
+        # 4. Present the decision
+        try:
+            if decision.mode.value == "orchestrate" if hasattr(decision.mode, "value") else False:
+                present = self.presenter.present_orchestration_result(routing_result, platform)
+            else:
+                present = self.presenter.present_single_result(routing_result, platform)
+            result.decision_message = present.message if explain else ""
+        except Exception as e:
+            logger.debug(f"Decision presentation failed: {e}")
+
+        # 5. Extract match details
+        if hasattr(routing_result, "has_match") and routing_result.has_match:
+            primary = routing_result.primary if hasattr(routing_result, "primary") else None
+            if primary:
+                result.skill_id = getattr(primary, "skill_id", "")
+                result.skill_name = getattr(primary, "skill_name", "")
+                result.confidence = getattr(primary, "confidence", 0.0)
+
+            # Capture alternatives
+            if hasattr(routing_result, "alternatives"):
+                for alt in routing_result.alternatives[:5]:
+                    result.alternatives.append({
+                        "skill_id": getattr(alt, "skill_id", ""),
+                        "confidence": getattr(alt, "confidence", 0.0),
+                    })
+
+            # Capture orchestration plan
+            if hasattr(routing_result, "plan") and routing_result.plan:
+                try:
+                    from vibesop.agent.execution_protocol import ExecutionProtocol
+
+                    result.plan = ExecutionProtocol.plan_to_json(routing_result.plan)
+                except Exception as e:
+                    logger.debug(f"Plan serialization failed: {e}")
+
+        # 6. Inject skill content (load actual SKILL.md)
+        if result.skill_id:
+            try:
+                injection = self.injector.inject_single_skill(result.skill_id, platform)
+                if isinstance(injection.payload, str):
+                    result.skill_content = injection.payload
+                elif isinstance(injection.payload, dict):
+                    result.skill_content = injection.payload.get("content", "")
+            except Exception as e:
+                logger.debug(f"Skill injection failed: {e}")
+                # Non-fatal — routing decision is still valid
+
+        return result
