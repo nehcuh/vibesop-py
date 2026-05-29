@@ -1,4 +1,3 @@
-# pyright: reportPrivateUsage=false
 """Instinct learning system CLI commands.
 
 Provides:
@@ -271,19 +270,19 @@ def import_(
     updated = 0
 
     for instinct in incoming:
-        if instinct.id not in learner._instincts:
-            learner._instincts[instinct.id] = instinct
+        if not learner.has_instinct(instinct.id):
+            learner.set_instinct(instinct)
             with learner.storage_path.open("a") as f:
                 f.write(json.dumps(instinct.to_dict(), default=str) + "\n")
             imported += 1
         elif force:
-            learner._instincts[instinct.id] = instinct
+            learner.set_instinct(instinct)
             updated += 1
         else:
             skipped += 1
 
     if imported or updated:
-        learner._save()
+        learner.save()
 
     parts = []
     if imported:

@@ -1,4 +1,3 @@
-# pyright: reportPrivateUsage=false
 """VibeSOP CLI - Main entry point.
 
 Built with Typer for modern CLI UX.
@@ -362,7 +361,7 @@ def route(
 
     # Determine transparency mode: config value or CLI flags
     # --quiet forces compact; --verbose forces full even if config says compact
-    router_config = router._config
+    router_config = router.routing_config
     transparency_mode = (
         "full"
         if verbose
@@ -542,8 +541,8 @@ def decompose(
         llm_factory=_build_llm_factory(),
         prompt_builder=_build_prompt_builder(),
     )
-    decomposer = TaskDecomposer(llm_client=getattr(router, "_llm", None))
-    skills = router._build_decomposition_skills(query=query)
+    decomposer = TaskDecomposer(llm_client=router.llm)
+    skills = router.build_decomposition_skills(query=query)
     sub_tasks = decomposer.decompose(query, skills=skills)
 
     if json_output:
