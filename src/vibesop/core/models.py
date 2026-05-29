@@ -469,7 +469,12 @@ class OrchestrationResult(BaseModel):
 
 
 class SkillDefinition(BaseModel):
-    """Definition of a skill."""
+    """Definition of a skill.
+
+    .. deprecated:: 5.5.0
+        Use ``vibesop.spec.SkillSpec`` instead. This model is maintained for
+        backward compatibility in the registry layer.
+    """
 
     id: str = Field(..., min_length=1, description="Skill ID")
     name: str = Field(..., min_length=1, description="Skill name")

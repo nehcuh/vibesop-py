@@ -1,14 +1,21 @@
-"""Kimi Code CLI platform adapter."""
+"""Kimi Code CLI platform adapter.
 
+Refactored in v5.5.0 to inherit from FileBasedAdapter, sharing common logic
+with OpenCode and Cursor adapters.
+"""
+
+import logging
 import re
 from pathlib import Path
 from typing import Any
 
-from vibesop.adapters.base import PlatformAdapter
+from vibesop.adapters.file_based import FileBasedAdapter
 from vibesop.adapters.models import Manifest, RenderResult
 
+logger = logging.getLogger(__name__)
 
-class KimiCliAdapter(PlatformAdapter):
+
+class KimiCliAdapter(FileBasedAdapter):
     """Adapter for Kimi Code CLI platform."""
 
     def __init__(self, project_root: str | Path = ".") -> None:
@@ -23,106 +30,29 @@ class KimiCliAdapter(PlatformAdapter):
     def config_dir(self) -> Path:
         return Path("~/.kimi").expanduser()
 
-    def render_config_only(
-        self,
-        manifest: Manifest,
-        output_dir: Path,
-    ) -> RenderResult:
-        """Render configuration without skills."""
-        result = self.create_render_result(success=True)
+    @property
+    def platform_label(self) -> str:
+        return "Kimi CLI"
 
-        try:
-            errors = self.validate_manifest(manifest)
-            if errors:
-                for error in errors:
-                    result.add_error(error)
-                result.success = False
-                return result
+    @property
+    def config_dir_label(self) -> str:
+        return "~/.kimi"
 
-            output_dir = self.ensure_output_dir(output_dir)
+    @property
+    def config_format(self) -> str:
+        return "toml"
 
-            # Generate VibeSOP configuration fragment
-            config_content = self._generate_config(manifest)
-            config_path = output_dir / "config.toml"
+    # ---- Hook configuration ----
+    def _get_hook_event_name(self) -> str:
+        return "UserPromptSubmit"
 
-            # Auto-merge with existing config if present (preserves auth/providers)
-            if config_path.exists():
-                config_content = self._merge_config_with_existing(config_path, config_content)
-            else:
-                result.add_warning(
-                    "Kimi CLI first-time setup: "
-                    "1. Run 'kimi' to generate default config, "
-                    "2. Run '/login' to authenticate, "
-                    "3. Then run 'vibe switch kimi-cli -f' to add VibeSOP hooks"
-                )
+    def _get_include_additional_context(self) -> bool:
+        return True
 
-            self.write_file_atomic(
-                config_path,
-                config_content,
-                validate_security=False,
-            )
-            result.add_file(config_path)
+    def _get_no_match_message(self) -> bool:
+        return True
 
-            # Generate README if skills exist
-            if manifest.skills:
-                readme_content = self._generate_readme(manifest)
-                readme_path = output_dir / "README.md"
-                self.write_file_atomic(
-                    readme_path,
-                    readme_content,
-                    validate_security=False,
-                )
-                result.add_file(readme_path)
-
-            # Render auto-routing hook script
-            self._render_route_hook(output_dir, result)
-
-        except Exception as e:
-            result.add_error(f"Failed to render configuration: {e}")
-            result.success = False
-
-        return result
-
-    def render_config(self, manifest: Manifest, output_dir: Path) -> RenderResult:
-        """Render Kimi Code CLI configuration from manifest."""
-        result = self.render_config_only(manifest, output_dir)
-        if not result.success:
-            return result
-
-        try:
-            # Render skill definitions
-            skills_dir = output_dir / "skills"
-            skills_dir.mkdir(parents=True, exist_ok=True)
-
-            for skill in manifest.skills:
-                dir_name = skill.id.replace("/", "-")
-                skill_dir = skills_dir / dir_name
-                skill_dir.mkdir(parents=True, exist_ok=True)
-                self._render_skill_content(skill, skill_dir, result, dir_name=dir_name)
-
-            # Generate AGENTS.md for project-level VibeSOP routing rules
-            agents_content = self._generate_agents_md(manifest)
-            agents_path = output_dir / "AGENTS.md"
-            self.write_file_atomic(
-                agents_path,
-                agents_content,
-                validate_security=False,
-            )
-            result.add_file(agents_path)
-
-            # Generate docs/ directory with detailed content
-            from vibesop.adapters._shared import render_docs_files
-
-            docs_paths = render_docs_files(output_dir, manifest.skills)
-            for doc_path in docs_paths:
-                result.add_file(doc_path)
-
-        except Exception as e:
-            result.add_error(f"Failed to render skills: {e}")
-            result.success = False
-
-        return result
-
+    # ---- Config generation (TOML format) ----
     def _generate_config(self, manifest: Manifest) -> str:
         lines: list[str] = [
             "# VibeSOP Configuration for Kimi Code CLI",
@@ -154,107 +84,70 @@ class KimiCliAdapter(PlatformAdapter):
             "",
         ]
 
-        # Add metadata if present
         if manifest.metadata.author:
-            lines.extend(
-                [
-                    f"# Author: {manifest.metadata.author}",
-                    "",
-                ]
-            )
+            lines.extend([
+                f"# Author: {manifest.metadata.author}",
+                "",
+            ])
         if manifest.metadata.description:
-            lines.extend(
-                [
-                    f"# Description: {manifest.metadata.description}",
-                    "",
-                ]
-            )
+            lines.extend([
+                f"# Description: {manifest.metadata.description}",
+                "",
+            ])
 
-        # Add security settings
         security = manifest.get_effective_security_policy()
-        lines.extend(
-            [
-                "[vibesop.security]",
-                f"scan_external_content = {str(security.scan_external_content).lower()}",
-                f"max_file_size_mb = {security.max_file_size / (1024 * 1024):.1f}",
-                "",
-            ]
-        )
+        lines.extend([
+            "[vibesop.security]",
+            f"scan_external_content = {str(security.scan_external_content).lower()}",
+            f"max_file_size_mb = {security.max_file_size / (1024 * 1024):.1f}",
+            "",
+        ])
 
-        # Add routing settings
         routing = manifest.get_effective_routing_policy()
-        lines.extend(
-            [
-                "[vibesop.routing]",
-                f"enable_ai_routing = {str(routing.enable_ai_routing).lower()}",
-                f"confidence_threshold = {routing.confidence_threshold}",
-                "",
-            ]
-        )
+        lines.extend([
+            "[vibesop.routing]",
+            f"enable_ai_routing = {str(routing.enable_ai_routing).lower()}",
+            f"confidence_threshold = {routing.confidence_threshold}",
+            "",
+        ])
 
-        # Add skills note
         if manifest.skills:
-            lines.extend(
-                [
-                    "# VibeSOP Skills",
-                    f"# {len(manifest.skills)} skills configured.",
-                    "# Install them to ~/.kimi/skills/ (or .kimi/skills/ for project-level)",
-                    "# and set merge_all_available_skills = true to load from multiple sources.",
-                    "",
-                ]
-            )
+            lines.extend([
+                "# VibeSOP Skills",
+                f"# {len(manifest.skills)} skills configured.",
+                "# Install them to ~/.kimi/skills/ (or .kimi/skills/ for project-level)",
+                "# and set merge_all_available_skills = true to load from multiple sources.",
+                "",
+            ])
 
-        # Add hook configuration for automatic VibeSOP routing
-        lines.extend(
-            [
-                "# ==============================================",
-                "# VibeSOP Auto-Routing Hook",
-                "# ==============================================",
-                "#",
-                "# This hook automatically calls 'vibe route' before each user prompt",
-                "# to enable context-aware skill routing. Requires the hook script",
-                "# to be installed at ~/.kimi/hooks/vibesop-route.sh",
-                "#",
-                "# NOTE: Kimi CLI event names vary by version. Valid values:",
-                "#   - 'UserPromptSubmit' : before sending user message to AI",
-                "#   - 'PreToolUse'       : before tool execution",
-                "# Adjust the event below to match your Kimi CLI version.",
-                "",
-                "[[hooks]]",
-                'name = "vibesop-route"',
-                'event = "UserPromptSubmit"',
-                'command = "bash ~/.kimi/hooks/vibesop-route.sh"',
-                "",
-            ]
-        )
+        lines.extend([
+            "# ==============================================",
+            "# VibeSOP Auto-Routing Hook",
+            "# ==============================================",
+            "#",
+            "# This hook automatically calls 'vibe route' before each user prompt",
+            "# to enable context-aware skill routing. Requires the hook script",
+            "# to be installed at ~/.kimi/hooks/vibesop-route.sh",
+            "#",
+            "# NOTE: Kimi CLI event names vary by version. Valid values:",
+            "#   - 'UserPromptSubmit' : before sending user message to AI",
+            "#   - 'PreToolUse'       : before tool execution",
+            "# Adjust the event below to match your Kimi CLI version.",
+            "",
+            "[[hooks]]",
+            'name = "vibesop-route"',
+            'event = "UserPromptSubmit"',
+            'command = "bash ~/.kimi/hooks/vibesop-route.sh"',
+            "",
+        ])
 
         return "\n".join(lines)
-
-    def _escape_toml_string(self, text: str) -> str:
-        if not text:
-            return ""
-
-        # Remove newlines and replace with spaces
-        text = text.replace("\n", " ")
-        text = text.replace("\r", " ")
-
-        # Collapse multiple spaces into one
-        import re
-
-        text = re.sub(r"\s+", " ", text)
-
-        # Escape backslashes and quotes
-        text = text.replace("\\", "\\\\")
-        text = text.replace('"', '\\"')
-
-        return text.strip()
 
     def _merge_config_with_existing(self, config_path: Path, new_config: str) -> str:
         """Merge new VibeSOP config fragment into existing config.toml."""
         existing = config_path.read_text()
         lines = existing.split("\n")
 
-        # Remove existing [[hooks]] sections (line-based to preserve formatting)
         result_lines = []
         in_hooks_section = False
         for line in lines:
@@ -268,11 +161,9 @@ class KimiCliAdapter(PlatformAdapter):
                 continue
             result_lines.append(line)
 
-        # Trim trailing blank lines
         while result_lines and result_lines[-1].strip() == "":
             result_lines.pop()
 
-        # Append fresh [[hooks]] section from new config
         hooks_match = re.search(r"(\[\[hooks\]\].*)", new_config, flags=re.DOTALL)
         if hooks_match:
             hooks_section = hooks_match.group(1).rstrip()
@@ -280,15 +171,107 @@ class KimiCliAdapter(PlatformAdapter):
 
         return "\n".join(result_lines)
 
-    def _render_skill_content(
-        self,
-        skill: Any,
-        skill_dir: Path,
-        result: RenderResult,
-        dir_name: str | None = None,
+    # ---- Custom config file rendering with merge support ----
+    def _render_config_file(
+        self, manifest: Manifest, output_dir: Path, result: RenderResult
     ) -> None:
-        super()._render_skill_content(skill, skill_dir, result, dir_name=dir_name)
+        config_content = self._generate_config(manifest)
+        config_path = output_dir / "config.toml"
 
+        if config_path.exists():
+            config_content = self._merge_config_with_existing(config_path, config_content)
+        else:
+            result.add_warning(
+                "Kimi CLI first-time setup: "
+                "1. Run 'kimi' to generate default config, "
+                "2. Run '/login' to authenticate, "
+                "3. Then run 'vibe switch kimi-cli -f' to add VibeSOP hooks"
+            )
+
+        self.write_file_atomic(config_path, config_content, validate_security=False)
+        result.add_file(config_path)
+
+    # ---- Override pipeline: Kimi has simpler render_config_only ----
+    def render_config_only(
+        self,
+        manifest: Manifest,
+        output_dir: Path,
+    ) -> RenderResult:
+        """Render configuration without skills.
+
+        Kimi CLI has a simpler pipeline than other file-based adapters:
+        no llm-config.json, no env script, no project-level AGENTS.md.
+        AGENTS.md and docs/ are rendered in render_config() instead.
+        """
+        result = self.create_render_result(success=True)
+
+        try:
+            errors = self.validate_manifest(manifest)
+            if errors:
+                for error in errors:
+                    result.add_error(error)
+                result.success = False
+                return result
+
+            output_dir = self.ensure_output_dir(output_dir)
+
+            # 1. Config file (TOML with merge support)
+            self._render_config_file(manifest, output_dir, result)
+
+            # 2. README if skills exist
+            if manifest.skills:
+                readme_content = self._generate_readme(manifest)
+                readme_path = output_dir / "README.md"
+                self.write_file_atomic(readme_path, readme_content, validate_security=False)
+                result.add_file(readme_path)
+
+            # 3. Route hook
+            self._render_route_hook(output_dir, result)
+
+        except Exception as e:
+            result.add_error(str(e))
+            result.success = False
+
+        return result
+
+    def render_config(self, manifest: Manifest, output_dir: Path) -> RenderResult:
+        """Full render: config + skills + AGENTS.md + docs."""
+        result = self.render_config_only(manifest, output_dir)
+        if not result.success:
+            return result
+
+        try:
+            # Render skill definitions
+            skills_dir = output_dir / "skills"
+            for skill in manifest.skills:
+                dir_name = skill.id.replace("/", "-")
+                skill_dir = skills_dir / dir_name
+                skill_dir.mkdir(parents=True, exist_ok=True)
+                self._render_skill_content(
+                    skill, skill_dir, result,
+                    dir_name=dir_name, manifest=manifest,
+                )
+
+            # AGENTS.md context file
+            agents_content = self._generate_agents_md(manifest)
+            agents_path = output_dir / "AGENTS.md"
+            self.write_file_atomic(agents_path, agents_content, validate_security=False)
+            result.add_file(agents_path)
+
+            # Docs files
+            from vibesop.adapters._shared import render_docs_files
+
+            docs_paths = render_docs_files(output_dir, manifest.skills)
+            for doc_path in docs_paths:
+                result.add_file(doc_path)
+
+        except Exception as e:
+            result.add_error(f"Failed to render skills: {e}")
+            result.success = False
+
+        return result
+
+    # ---- Kimi-specific generators ----
     def _generate_readme(self, manifest: Manifest) -> str:
         lines = [
             "# Kimi Code CLI Configuration",
@@ -435,23 +418,23 @@ class KimiCliAdapter(PlatformAdapter):
             "- Run the skill directly: `read skills/session-end/SKILL.md` and execute",
             "- This is a P0 mandatory skill — skipping it is a protocol violation",
             "",
-             "## Skills",
-             "",
-             "Run `vibe skills list` to see available skills, or read `docs/skills-catalog.md`.",
-             "",
-             "## Security",
-             "",
-             f"- Scan External Content: {manifest.get_effective_security_policy().scan_external_content}",
-             f"- Max File Size: {manifest.get_effective_security_policy().max_file_size / (1024 * 1024):.1f} MB",
-             "",
-             "## Routing",
-             "",
-             f"- AI Routing: {manifest.get_effective_routing_policy().enable_ai_routing}",
-             f"- Confidence Threshold: {manifest.get_effective_routing_policy().confidence_threshold}",
-             "",
-             "---",
-             "*Generated by VibeSOP*",
-         ]
+            "## Skills",
+            "",
+            "Run `vibe skills list` to see available skills, or read `docs/skills-catalog.md`.",
+            "",
+            "## Security",
+            "",
+            f"- Scan External Content: {manifest.get_effective_security_policy().scan_external_content}",
+            f"- Max File Size: {manifest.get_effective_security_policy().max_file_size / (1024 * 1024):.1f} MB",
+            "",
+            "## Routing",
+            "",
+            f"- AI Routing: {manifest.get_effective_routing_policy().enable_ai_routing}",
+            f"- Confidence Threshold: {manifest.get_effective_routing_policy().confidence_threshold}",
+            "",
+            "---",
+            "*Generated by VibeSOP*",
+        ]
 
         return "\n".join(lines)
 
@@ -465,6 +448,10 @@ class KimiCliAdapter(PlatformAdapter):
             config_dir_label="~/.kimi",
             include_skills_reference=True,
         )
+
+    # ---- No-op: Kimi CLI doesn't use env scripts ----
+    def _render_env_script(self, output_dir: Path, result: RenderResult) -> None:
+        """Kimi CLI does not use environment scripts."""
 
     def get_settings_schema(self) -> dict[str, Any]:
         return {
@@ -504,30 +491,3 @@ class KimiCliAdapter(PlatformAdapter):
                 },
             },
         }
-
-    def _render_route_hook(
-        self,
-        output_dir: Path,
-        result: RenderResult,
-    ) -> None:
-        """Render the vibesop-route.sh hook script using the shared template."""
-        try:
-            from vibesop.adapters._shared import render_route_hook as _shared_route_hook
-
-            hook_content = _shared_route_hook(
-                platform="kimi-cli",
-                platform_name="Kimi CLI",
-                purpose="Auto-routing via [[hooks]] in config.toml",
-                hook_event_name="UserPromptSubmit",
-                enable_explicit_overrides=True,
-                enable_orchestration=True,
-                include_additional_context=True,
-                no_match_message=True,
-            )
-            hook_path = output_dir / "hooks" / "vibesop-route.sh"
-            hook_path.parent.mkdir(parents=True, exist_ok=True)
-            self.write_file_atomic(hook_path, hook_content, validate_security=False)
-            hook_path.chmod(0o755)
-            result.add_file(hook_path)
-        except Exception as e:
-            result.add_warning(f"Failed to write vibesop-route.sh for Kimi CLI: {e}")

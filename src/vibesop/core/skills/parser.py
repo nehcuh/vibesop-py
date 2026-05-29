@@ -4,12 +4,15 @@ This module parses SKILL.md files and extracts metadata for routing.
 It supports the frontmatter format used by VibeSOP skills.
 
 Enhanced in v4.1.0 to support workflow parsing for external skill execution.
+Updated in v5.5.0 to use SkillSpec (spec v3) internally, with build_metadata()
+maintained for backward compatibility.
 """
 
 from __future__ import annotations
 
 import logging
 import re
+import warnings
 from pathlib import Path
 from typing import Any
 
@@ -71,56 +74,184 @@ def extract_frontmatter(content: str) -> tuple[dict[str, Any] | None, str]:
         return None, content
 
 
+def build_spec(
+    data: dict[str, Any],
+    skill_id: str,
+    skill_file: Path,
+) -> "SkillSpec":
+    """Build a SkillSpec from parsed frontmatter (spec v3 canonical path).
+
+    Captures all 29 fields including the 12 previously discarded by build_metadata().
+    This is the preferred path for new code.
+
+    Args:
+        data: Parsed YAML frontmatter dict.
+        skill_id: Fallback skill ID (from directory name).
+        skill_file: Path to the SKILL.md file (for source inference).
+
+    Returns:
+        SkillSpec with all available metadata.
+    """
+    from vibesop.spec.models import SkillSpec, SkillType as SpecSkillType, SkillLifecycle as SpecSkillLifecycle
+
+    description = data.get("description", "")
+
+    # Resolve type -- accept both 'type' and 'skill_type', spec v3 standardizes on 'type'
+    skill_type_str = data.get("type") or data.get("skill_type") or "prompt"
+    try:
+        skill_type = SpecSkillType(skill_type_str)
+    except ValueError:
+        skill_type = SpecSkillType.PROMPT
+
+    # tags and keywords are now separate concepts
+    tags = _parse_list_field(data.get("tags"))
+    keywords = _parse_list_field(data.get("keywords"))
+
+    triggers = _parse_list_field(data.get("triggers"))
+
+    trigger_when = data.get("trigger_when", "")
+    if not trigger_when and not triggers and description:
+        trigger_when = extract_trigger_from_description(description)
+
+    # intent is optional; auto-derive only when None and only during routing (not parsing)
+    intent = data.get("intent")
+
+    algorithms = _parse_list_field(data.get("algorithms"))
+    capabilities = _parse_list_field(data.get("capabilities"))
+
+    # v3 fields that were previously discarded
+    commands = _parse_list_field(data.get("commands"))
+    user_invocable = bool(data.get("user_invocable", False))
+    allowed_tools = _parse_list_field(data.get("allowed_tools") or data.get("allowed-tools"))
+    mode = data.get("mode", "")
+    routing_patterns = _parse_list_field(data.get("routing_patterns") or data.get("routing-patterns"))
+    priority = int(data.get("priority", 50))
+    category = str(data.get("category", "development"))
+    dependencies = _parse_list_field(data.get("dependencies"))
+    env_vars = _parse_list_field(data.get("env_vars") or data.get("env-vars"))
+    deprecation_reason = data.get("deprecation_reason")
+
+    # LLM config (v2 spec)
+    llm_config = None
+    if data.get("llm_config"):
+        from vibesop.spec.models import LLMConfigSpec
+
+        lc = data["llm_config"]
+        if isinstance(lc, dict):
+            llm_config = LLMConfigSpec(
+                provider=lc.get("provider"),
+                model=lc.get("model"),
+                temperature=lc.get("temperature"),
+                api_key=lc.get("api_key"),
+                api_base=lc.get("api_base"),
+                parameters=lc.get("parameters", {}),
+                fallback=lc.get("fallback"),
+            )
+
+    # Source config (v2 spec)
+    source_config = None
+    if data.get("source_config"):
+        from vibesop.spec.models import SourceConfigSpec
+
+        sc = data["source_config"]
+        if isinstance(sc, dict):
+            source_config = SourceConfigSpec(
+                type=sc.get("type", "github"),
+                repository=sc.get("repository"),
+                checksum=sc.get("checksum"),
+                ref=sc.get("ref"),
+            )
+
+    source = infer_source(skill_file)
+
+    # Lifecycle
+    lifecycle_str = data.get("lifecycle", "active")
+    try:
+        lifecycle = SpecSkillLifecycle(lifecycle_str)
+    except ValueError:
+        lifecycle = SpecSkillLifecycle.ACTIVE
+
+    return SkillSpec(
+        id=data.get("id", skill_id),
+        name=data.get("name", skill_id),
+        description=description,
+        version=data.get("version", "1.0.0"),
+        author=data.get("author", ""),
+        namespace=data.get("namespace", source),
+        skill_type=skill_type,
+        intent=intent,
+        trigger_when=trigger_when,
+        triggers=triggers,
+        routing_patterns=routing_patterns,
+        priority=priority,
+        tags=tags,
+        keywords=keywords,
+        category=category,
+        capabilities=capabilities,
+        algorithms=algorithms,
+        commands=commands,
+        user_invocable=user_invocable,
+        allowed_tools=allowed_tools,
+        mode=mode,
+        lifecycle=lifecycle,
+        scope=str(data.get("scope", "global")),
+        enabled=bool(data.get("enabled", True)),
+        deprecation_reason=deprecation_reason,
+        dependencies=dependencies,
+        env_vars=env_vars,
+        llm_config=llm_config,
+        source_config=source_config,
+        confidence=float(data.get("confidence", 0.5)),
+        auto_configured=bool(data.get("auto_configured", False)),
+        metadata=data.get("metadata", {}),
+    )
+
+
+def _parse_list_field(value: Any) -> list[str]:
+    """Parse a frontmatter field that can be a list or comma-separated string."""
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return [str(v).strip() for v in value if str(v).strip()]
+    if isinstance(value, str):
+        return [v.strip() for v in value.split(",") if v.strip()]
+    return []
+
+
 def build_metadata(
     data: dict[str, Any],
     skill_id: str,
     skill_file: Path,
 ) -> SkillMetadata:
-    """Build SkillMetadata from parsed frontmatter."""
-    description = data.get("description", "")
-    skill_type_str = data.get("type", "prompt")
+    """Build SkillMetadata from parsed frontmatter.
+
+    Deprecated: prefer build_spec() which returns the canonical SkillSpec.
+    This function now delegates to build_spec() internally and converts the result.
+    """
+    spec = build_spec(data, skill_id, skill_file)
+
+    # Map SkillSpec back to SkillMetadata for backward compatibility.
+    # Note: SkillType is the old enum; STANDARD maps to PROMPT in the old model.
+    old_skill_type = SkillType.PROMPT
     try:
-        skill_type = SkillType(skill_type_str)
+        old_skill_type = SkillType(spec.skill_type.value)
     except ValueError:
-        skill_type = SkillType.PROMPT
-
-    tags = data.get("tags") or data.get("keywords") or []
-    if isinstance(tags, str):
-        tags = [t.strip() for t in tags.split(",") if t.strip()]
-
-    triggers = data.get("triggers") or []
-    if isinstance(triggers, str):
-        triggers = [t.strip() for t in triggers.split(",") if t.strip()]
-
-    trigger_when = data.get("trigger_when", "")
-    # Only extract from description if neither trigger_when nor triggers are provided
-    if not trigger_when and not triggers and description:
-        trigger_when = extract_trigger_from_description(description)
-
-    algorithms = data.get("algorithms") or []
-    if isinstance(algorithms, str):
-        algorithms = [a.strip() for a in algorithms.split(",") if a.strip()]
-
-    capabilities = data.get("capabilities") or []
-    if isinstance(capabilities, str):
-        capabilities = [c.strip() for c in capabilities.split(",") if c.strip()]
-
-    source = infer_source(skill_file)
+        old_skill_type = SkillType.PROMPT
 
     return SkillMetadata(
-        id=data.get("id", skill_id),
-        name=data.get("name", skill_id),
-        description=description,
-        intent=data.get("intent", description),
-        namespace=data.get("namespace", source),
-        version=data.get("version", "1.0.0"),
-        author=data.get("author", ""),
-        tags=tags,
-        triggers=triggers,
-        skill_type=skill_type,
-        trigger_when=trigger_when,
-        algorithms=algorithms,
-        capabilities=capabilities,
+        id=spec.id,
+        name=spec.name,
+        description=spec.description,
+        intent=spec.intent or spec.description,
+        namespace=spec.namespace,
+        version=spec.version,
+        author=spec.author,
+        tags=spec.tags if spec.tags else spec.keywords,
+        triggers=spec.triggers,
+        skill_type=old_skill_type,
+        trigger_when=spec.trigger_when,
+        algorithms=spec.algorithms,
+        capabilities=spec.capabilities,
     )
 
 
@@ -274,6 +405,7 @@ __all__ = [
     "SkillMetadata",
     "SkillParser",
     "build_metadata",
+    "build_spec",
     "extract_frontmatter",
     "extract_trigger_from_description",
     "infer_skill_id",

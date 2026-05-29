@@ -70,6 +70,9 @@ from vibesop.cli.commands import (
 from vibesop.cli.commands import (
     verify as verify_mod,
 )
+from vibesop.cli.commands import (
+    spec_cmd as spec_mod,
+)
 
 config_app = typer.Typer(help="Configuration management")
 skills_app = typer.Typer(help="Skill storage management")
@@ -133,6 +136,7 @@ def register(app: typer.Typer) -> None:
 
     # Platform verification
     app.command()(verify_mod.verify)
+    app.command("spec")(spec_mod.spec)
 
     # Experimental commands
     app.command("skill-craft")(skill_craft_mod.skill_craft)

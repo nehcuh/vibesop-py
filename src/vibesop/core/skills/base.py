@@ -1,5 +1,6 @@
 """Base skill class and interfaces."""
 
+import warnings
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
@@ -8,7 +9,12 @@ from typing import Any
 
 
 class SkillType(Enum):
-    """Types of skills."""
+    """Types of skills.
+
+    .. deprecated:: 5.5.0
+        Use ``vibesop.spec.SkillType`` instead. The new enum includes
+        STANDARD which was previously missing.
+    """
 
     PROMPT = "prompt"  # LLM prompt-based skill
     WORKFLOW = "workflow"  # Multi-step workflow
@@ -19,6 +25,10 @@ class SkillType(Enum):
 @dataclass
 class SkillMetadata:
     """Metadata for a skill.
+
+    .. deprecated:: 5.5.0
+        Use ``vibesop.spec.SkillSpec`` instead. This dataclass is maintained
+        for backward compatibility and delegates to SkillSpec internally.
 
     Attributes:
         id: Unique skill identifier (e.g., "gstack/review")
@@ -48,7 +58,17 @@ class SkillMetadata:
     algorithms: list[str] | None = None
     capabilities: list[str] | None = None
 
+    _deprecated_warned: bool = False
+
     def __post_init__(self) -> None:
+        if not SkillMetadata._deprecated_warned:
+            warnings.warn(
+                "SkillMetadata is deprecated since v5.5.0. "
+                "Use vibesop.spec.SkillSpec instead.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            SkillMetadata._deprecated_warned = True
         if self.tags is None:
             self.tags = []
         if self.triggers is None:
@@ -106,6 +126,10 @@ class SkillResult:
 @dataclass
 class SkillDefinition:
     """Complete skill definition with metadata and source.
+
+    .. deprecated:: 5.5.0
+        Use ``vibesop.spec.SkillSpec`` directly. SkillSpec includes all
+        metadata fields and the source_file/source can be derived from context.
 
     Attributes:
         metadata: Skill metadata

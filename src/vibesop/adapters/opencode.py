@@ -1,15 +1,19 @@
-"""OpenCode platform adapter."""
+"""OpenCode platform adapter.
+
+Refactored in v5.5.0 to inherit from FileBasedAdapter, sharing common logic
+with Cursor and Kimi CLI adapters.
+"""
 
 import json
 import os
 from pathlib import Path
 from typing import Any
 
-from vibesop.adapters.base import PlatformAdapter
+from vibesop.adapters.file_based import FileBasedAdapter
 from vibesop.adapters.models import Manifest, RenderResult
 
 
-class OpenCodeAdapter(PlatformAdapter):
+class OpenCodeAdapter(FileBasedAdapter):
     """Adapter for OpenCode platform."""
 
     def __init__(self, project_root: str | Path = ".") -> None:
@@ -24,119 +28,26 @@ class OpenCodeAdapter(PlatformAdapter):
     def config_dir(self) -> Path:
         return Path("~/.config/opencode").expanduser()
 
-    def render_config_only(
-        self,
-        manifest: Manifest,
-        output_dir: Path,
-    ) -> RenderResult:
-        """Render configuration without skills."""
-        result = self.create_render_result(success=True)
+    @property
+    def platform_label(self) -> str:
+        return "OpenCode"
 
-        try:
-            errors = self.validate_manifest(manifest)
-            if errors:
-                for error in errors:
-                    result.add_error(error)
-                result.success = False
-                return result
+    @property
+    def config_dir_label(self) -> str:
+        return "~/.config/opencode"
 
-            output_dir = self.ensure_output_dir(output_dir)
+    # ---- Provider detection ----
+    def _detect_provider(self) -> str:
+        explicit = os.getenv("VIBE_LLM_PROVIDER")
+        if explicit and explicit in ("anthropic", "openai"):
+            return explicit
+        if os.getenv("ANTHROPIC_API_KEY"):
+            return "anthropic"
+        if os.getenv("OPENAI_API_KEY"):
+            return "openai"
+        return "anthropic"
 
-            # Generate configuration content
-            config_content = self._generate_config(manifest)
-            config_path = output_dir / "config.yaml"
-            self.write_file_atomic(
-                config_path,
-                config_content,
-                validate_security=False,
-            )
-            result.add_file(config_path)
-
-            # Generate README if skills exist
-            if manifest.skills:
-                readme_content = self._generate_readme(manifest)
-                readme_path = output_dir / "README.md"
-                self.write_file_atomic(
-                    readme_path,
-                    readme_content,
-                    validate_security=False,
-                )
-                result.add_file(readme_path)
-
-            # Generate llm-config.json
-            llm_config_content = self._generate_llm_config()
-            llm_config_path = output_dir / "llm-config.json"
-            self.write_file_atomic(
-                llm_config_path,
-                llm_config_content,
-                validate_security=False,
-            )
-            result.add_file(llm_config_path)
-
-            # Generate AGENTS.md for OpenCode AI instructions
-            agents_content = self._generate_agents_md(manifest)
-            agents_path = output_dir / "AGENTS.md"
-            self.write_file_atomic(
-                agents_path,
-                agents_content,
-                validate_security=False,
-            )
-            result.add_file(agents_path)
-
-            # Generate docs/ directory with detailed content
-            from vibesop.adapters._shared import render_docs_files
-
-            docs_paths = render_docs_files(output_dir, manifest.skills)
-            for doc_path in docs_paths:
-                result.add_file(doc_path)
-
-            # Also generate minimal AGENTS.md at project root
-            # (not the full catalog — that lives in global config)
-            project_agents_path = self._project_root / "AGENTS.md"
-            if not project_agents_path.exists():
-                project_agents = self._generate_project_agents_md()
-                self.write_file_atomic(
-                    project_agents_path,
-                    project_agents,
-                    validate_security=False,
-                )
-                result.add_file(project_agents_path)
-
-            # Generate VibeSOP environment setup script
-            self._render_env_script(output_dir, result)
-
-            # Generate route hook script for quick command support
-            self._render_route_hook(output_dir, result)
-
-        except Exception as e:
-            result.add_error(f"Failed to render configuration: {e}")
-            result.success = False
-
-        return result
-
-    def render_config(self, manifest: Manifest, output_dir: Path) -> RenderResult:
-        """Render OpenCode configuration from manifest."""
-        result = self.render_config_only(manifest, output_dir)
-        if not result.success:
-            return result
-
-        try:
-            # Render skill definitions
-            skills_dir = output_dir / "skills"
-            skills_dir.mkdir(parents=True, exist_ok=True)
-
-            for skill in manifest.skills:
-                dir_name = skill.id.replace("/", "-")
-                skill_dir = skills_dir / dir_name
-                skill_dir.mkdir(parents=True, exist_ok=True)
-                self._render_skill_content(skill, skill_dir, result, dir_name=dir_name)
-
-        except Exception as e:
-            result.add_error(f"Failed to render skills: {e}")
-            result.success = False
-
-        return result
-
+    # ---- Config generation (OpenCode-specific YAML format) ----
     def _generate_config(self, manifest: Manifest) -> str:
         from ruamel.yaml import YAML
 
@@ -144,7 +55,6 @@ class OpenCodeAdapter(PlatformAdapter):
         yaml.preserve_quotes = True
         yaml.default_flow_style = False
 
-        # Build configuration dictionary
         config = {
             "version": manifest.metadata.version,
             "platform": manifest.metadata.platform,
@@ -168,125 +78,49 @@ class OpenCodeAdapter(PlatformAdapter):
                 for skill in manifest.skills
             ],
         }
-
-        # Add metadata if present
         if manifest.metadata.author:
             config["author"] = manifest.metadata.author
         if manifest.metadata.description:
             config["description"] = manifest.metadata.description
 
-        # Convert to YAML string
         from io import StringIO
 
         stream = StringIO()
         yaml.dump(config, stream)
         return stream.getvalue()
 
-    def _render_skill_content(
-        self,
-        skill: Any,
-        skill_dir: Path,
-        result: RenderResult,
-        dir_name: str | None = None,
-    ) -> None:
-        super()._render_skill_content(skill, skill_dir, result, dir_name=dir_name)
-
     def _generate_readme(self, manifest: Manifest) -> str:
-        lines = [
-            "# OpenCode Configuration",
-            "",
-            f"**Version**: {manifest.metadata.version}",
-            f"**Generated**: {manifest.metadata.created_at.strftime('%Y-%m-%d %H:%M:%S')}",
-            "",
-            "## Routing Protocol",
-            "",
-            "**MANDATORY: Call `vibe route` before any non-trivial task.**",
-            "",
-            '```bash',
-            'vibe route "<user_request>"',
-            '```',
-            "",
-            "Then read `skills/<matched-skill>/SKILL.md` and follow its steps.",
-            "",
-            "## Quick Commands",
-            "",
-            '```bash',
-            'vibe route --slash "/vibe-help"',
-            'vibe route --slash "/vibe-list"',
-            'vibe route --slash "/vibe-install <pack>"',
-            '```',
-            "",
-            "## Skills",
-            "",
-            "Run `vibe skills list` to see available skills.",
-            "",
-            "## Auto-Routing Setup",
-            "",
-            "OpenCode does not support automatic shell hooks.",
-            "For multi-turn context, source the environment script:",
-            "",
-            "```bash",
-            "source ~/.config/opencode/vibesop-env.sh",
-            "opencode",
-            "```",
-            "",
-             "---",
-             "*Generated by VibeSOP*",
-         ]
-
-        return "\n".join(lines)
-
-    @staticmethod
-    def _generate_project_agents_md() -> str:
-        """Generate minimal project-level AGENTS.md."""
-        from vibesop.adapters._shared import generate_slim_agents_index
-
-        return generate_slim_agents_index(
-            include_skills_reference=False,
+        return (
+            f"# OpenCode Configuration\n\n"
+            f"**Version**: {manifest.metadata.version}\n"
+            f"**Generated**: {manifest.metadata.created_at.strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+            "## Routing Protocol\n\n"
+            "**MANDATORY: Call `vibe route` before any non-trivial task.**\n\n"
+            "```bash\n"
+            'vibe route "<user_request>"\n'
+            "```\n\n"
+            "Then read `skills/<matched-skill>/SKILL.md` and follow its steps.\n\n"
+            "## Quick Commands\n\n"
+            "```bash\n"
+            'vibe route --slash "/vibe-help"\n'
+            'vibe route --slash "/vibe-list"\n'
+            'vibe route --slash "/vibe-install <pack>"\n'
+            "```\n\n"
+            "## Skills\n\n"
+            "Run `vibe skills list` to see available skills.\n\n"
+            "## Auto-Routing Setup\n\n"
+            "OpenCode does not support automatic shell hooks.\n"
+            "For multi-turn context, source the environment script:\n\n"
+            "```bash\n"
+            "source ~/.config/opencode/vibesop-env.sh\n"
+            "opencode\n"
+            "```\n\n"
+            "---\n"
+            "*Generated by VibeSOP*\n"
         )
-
-    def _generate_agents_md(self, manifest: Manifest) -> str:
-        """Generate slim AGENTS.md index referencing docs/ for details."""
-        from vibesop.adapters._shared import generate_slim_agents_index
-
-        return generate_slim_agents_index(
-            version=manifest.metadata.version,
-            platform_name="OpenCode",
-            config_dir_label="~/.config/opencode",
-            include_skills_reference=True,
-        )
-
-    def get_settings_schema(self) -> dict[str, Any]:
-        return {
-            "$schema": "https://json.schemastore.org/claude-code-settings.json",
-            "title": "OpenCode Settings",
-            "type": "object",
-            "properties": {
-                "editor": {
-                    "type": "object",
-                    "properties": {
-                        "theme": {"type": "string"},
-                        "fontSize": {"type": "integer"},
-                    },
-                },
-                "security": {
-                    "type": "object",
-                    "properties": {
-                        "scanContent": {"type": "boolean"},
-                        "maxFileSize": {"type": "integer"},
-                    },
-                },
-            },
-        }
-
-    # Note: install_hooks uses the default implementation from PlatformAdapter
-    # which returns an empty dict (OpenCode doesn't support hooks)
 
     def _generate_llm_config(self) -> str:
-        # Detect provider from environment
         provider = self._detect_provider()
-
-        # Build configuration
         config = {
             "version": "1.0.0",
             "default_provider": provider,
@@ -328,27 +162,35 @@ class OpenCodeAdapter(PlatformAdapter):
                 "max_tokens": 4096,
             },
         }
-
         return json.dumps(config, indent=2)
 
-    def _detect_provider(self) -> str:
-        explicit_provider = os.getenv("VIBE_LLM_PROVIDER")
-        if explicit_provider and explicit_provider in ("anthropic", "openai"):
-            return explicit_provider
+    def _generate_env_script(self) -> str:
+        return (
+            "#!/bin/bash\n"
+            "# VibeSOP Environment Setup for OpenCode\n"
+            "# Generated by VibeSOP v5.5.0\n"
+            "#\n"
+            "# Usage: source ~/.config/opencode/vibesop-env.sh\n"
+            "# Then launch OpenCode normally: opencode\n\n"
+            "# Generate a stable conversation ID for this project session\n"
+            "if command -v python3 &> /dev/null; then\n"
+            '    export CONVERSATION_ID="opencode-$(python3 -c '
+            '"import os, hashlib; print(hashlib.sha256(os.getcwd().encode()).hexdigest()[:16])"'
+            ')"\n'
+            "fi\n\n"
+            "# Wrap the vibe command to automatically pass --conversation\n"
+            "vibe() {\n"
+            '    if [ -n "$CONVERSATION_ID" ]; then\n'
+            '        command vibe --conversation "$CONVERSATION_ID" "$@"\n'
+            "    else\n"
+            '        command vibe "$@"\n'
+            "    fi\n"
+            "}\n\n"
+            "export -f vibe 2>/dev/null || true\n"
+        )
 
-        if os.getenv("ANTHROPIC_API_KEY"):
-            return "anthropic"
-        if os.getenv("OPENAI_API_KEY"):
-            return "openai"
-
-        return "anthropic"
-
-    def _render_route_hook(
-        self,
-        output_dir: Path,
-        result: RenderResult,
-    ) -> None:
-        """Render the vibesop-route.sh hook script using the shared template."""
+    def _render_route_hook(self, output_dir: Path, result: RenderResult) -> None:
+        """Render route hook with OpenCode-specific parameters."""
         try:
             from vibesop.adapters._shared import render_route_hook as _shared_route_hook
 
@@ -370,40 +212,35 @@ class OpenCodeAdapter(PlatformAdapter):
         except Exception as e:
             result.add_warning(f"Failed to write vibesop-route.sh for OpenCode: {e}")
 
-    def _render_env_script(
-        self,
-        output_dir: Path,
-        result: RenderResult,
-    ) -> None:
-        """Render the vibesop-env.sh environment setup script for OpenCode."""
-        script_content = """#!/bin/bash
-# VibeSOP Environment Setup for OpenCode
-# Generated by VibeSOP v5.2.0
-#
-# Usage: source ~/.config/opencode/vibesop-env.sh
-# Then launch OpenCode normally: opencode
-
-# Generate a stable conversation ID for this project session
-# Uses cross-platform Python fallback (works on macOS and Linux)
-if command -v python3 &> /dev/null; then
-    export CONVERSATION_ID="opencode-$(python3 -c "import os, hashlib; print(hashlib.sha256(os.getcwd().encode()).hexdigest()[:16])")"
-fi
-
-# Wrap the vibe command to automatically pass --conversation
-vibe() {
-    if [ -n "$CONVERSATION_ID" ]; then
-        command vibe --conversation "$CONVERSATION_ID" "$@"
-    else
-        command vibe "$@"
-    fi
-}
-
-export -f vibe 2>/dev/null || true
-"""
+    def _render_env_script(self, output_dir: Path, result: RenderResult) -> None:
+        """Render OpenCode-specific env script."""
         try:
             script_path = output_dir / "vibesop-env.sh"
-            self.write_file_atomic(script_path, script_content, validate_security=False)
+            self.write_file_atomic(script_path, self._generate_env_script(), validate_security=False)
             script_path.chmod(0o755)
             result.add_file(script_path)
         except Exception as e:
             result.add_warning(f"Failed to write vibesop-env.sh for OpenCode: {e}")
+
+    def get_settings_schema(self) -> dict[str, Any]:
+        return {
+            "$schema": "https://json.schemastore.org/claude-code-settings.json",
+            "title": "OpenCode Settings",
+            "type": "object",
+            "properties": {
+                "editor": {
+                    "type": "object",
+                    "properties": {
+                        "theme": {"type": "string"},
+                        "fontSize": {"type": "integer"},
+                    },
+                },
+                "security": {
+                    "type": "object",
+                    "properties": {
+                        "scanContent": {"type": "boolean"},
+                        "maxFileSize": {"type": "integer"},
+                    },
+                },
+            },
+        }

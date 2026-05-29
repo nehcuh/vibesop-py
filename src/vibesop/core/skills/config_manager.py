@@ -29,7 +29,12 @@ SkillLifecycleState = SkillLifecycle
 
 @dataclass
 class SkillConfig:
-    """技能配置"""
+    """技能配置
+
+    .. deprecated:: 5.5.0
+        Use ``vibesop.spec.SkillSpec`` instead. SkillSpec now includes all
+        configuration fields (llm_config, routing_patterns, lifecycle, scope, etc.).
+    """
 
     skill_id: str
     enabled: bool = True
