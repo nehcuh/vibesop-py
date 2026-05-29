@@ -14,6 +14,25 @@ if TYPE_CHECKING:
     from vibesop.core.routing.triage_service import TriageService
 
 
+class LLMFactory(Protocol):
+    """Callable that returns an LLM provider."""
+
+    def __call__(self) -> Any: ...
+
+
+class PromptBuilder(Protocol):
+    """Callable that builds an AI triage prompt."""
+
+    def __call__(self, query: str, skills_summary: str, version: str) -> str: ...
+
+
+class SkillLoaderProtocol(Protocol):
+    """Duck-typing interface for skill loading subsystems."""
+
+    def discover_all(self, force_reload: bool = False) -> dict[str, Any]: ...
+    def get_skill(self, skill_id: str) -> Any | None: ...
+
+
 class RoutingStatsProvider(Protocol):
     """Protocol for router stats access."""
 

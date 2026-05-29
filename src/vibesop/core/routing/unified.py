@@ -56,6 +56,7 @@ from vibesop.core.routing.stats_mixin import RouterStatsMixin
 from vibesop.core.routing.triage_service import TriageService
 from vibesop.core.routing.router_factory import RouterFactory
 from vibesop.core.routing.orchestrator import Orchestrator
+from vibesop.core.routing._protocols import LLMFactory, PromptBuilder, SkillLoaderProtocol
 from vibesop.core.routing import _layers
 from vibesop.core.routing import _pipeline
 
@@ -102,9 +103,9 @@ class UnifiedRouter(
         self,
         project_root: str | Path = ".",
         config: ConfigRoutingConfig | ConfigManager | None = None,
-        skill_loader: Any | None = None,
-        llm_factory: Any | None = None,
-        prompt_builder: Any | None = None,
+        skill_loader: SkillLoaderProtocol | None = None,
+        llm_factory: LLMFactory | None = None,
+        prompt_builder: PromptBuilder | None = None,
     ):
         self.project_root = Path(project_root).resolve()
         self._llm_factory = llm_factory
@@ -751,6 +752,49 @@ class UnifiedRouter(
     # ================================================================
     # Utilities
     # ================================================================
+
+    @property
+    def llm(self) -> Any | None:
+        """Currently injected LLM provider, or None."""
+        return self._llm
+
+    @property
+    def routing_config(self) -> ConfigRoutingConfig:
+        """Active routing configuration."""
+        return self._config
+
+    @routing_config.setter
+    def routing_config(self, value: ConfigRoutingConfig) -> None:
+        self._config = value
+
+    @property
+    def triage_service(self) -> TriageService:
+        """The AI triage service used by this router."""
+        return self._triage_service
+
+    def route_single(
+        self,
+        query: str,
+        candidates: list[dict[str, Any]] | None = None,
+        context: RoutingContext | None = None,
+    ) -> RoutingResult:
+        """Route a query to the best matching skill (public entry point).
+
+        This is the public counterpart to ``_single_skill_route``.
+        """
+        return self._single_skill_route(query, candidates, context)
+
+    def build_decomposition_skills(
+        self,
+        candidates: list[dict[str, Any]] | None = None,
+        limit: int = 50,
+        query: str | None = None,
+    ) -> list[str]:
+        """Build the skill catalog string list for task decomposition.
+
+        Public counterpart to ``_build_decomposition_skills``.
+        """
+        return self._build_decomposition_skills(candidates, limit, query)
 
     def set_llm(self, llm_provider: Any) -> None:
         """Inject an LLM provider for AI triage.
