@@ -298,6 +298,7 @@ class AgentRuntime:
         session_id: str = "default",
         conversation_id: str = "",
         explain: bool = False,
+        callbacks: Any | None = None,
     ) -> AgentRuntimeResult:
         """Handle a user query through the full routing pipeline.
 
@@ -308,6 +309,7 @@ class AgentRuntime:
             conversation_id: Conversation ID for multi-turn continuity.
                 Auto-generated from project path if empty.
             explain: When True, include full decision transparency output.
+            callbacks: Optional orchestration callbacks (e.g. LiveOrchestrationCallbacks).
 
         Returns:
             AgentRuntimeResult with routing decision, skill content, and metadata.
@@ -365,7 +367,7 @@ class AgentRuntime:
         # 3. Route the query
         try:
             if decision.mode == InterceptionMode.ORCHESTRATE:
-                orch_result = self.router.orchestrate(query)
+                orch_result = self.router.orchestrate(query, callbacks=callbacks)
                 if orch_result.get("is_multi_intent"):
                     result.mode = "orchestrate"
                     plan = orch_result.get("plan", {})

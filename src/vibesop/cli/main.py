@@ -243,7 +243,6 @@ def route(
 
     # -- Route through IntentInterceptor to respect full Agent Runtime logic --
     from vibesop.agent.runtime import IntentInterceptor, InterceptionMode, SlashCommandExecutor
-    from vibesop.core.routing import RoutingConfig, UnifiedRouter
 
     # When --slash is explicitly passed, treat as a CLI quick command
     if slash:
@@ -308,33 +307,29 @@ def route(
                 console.print(f"[bold yellow]⚠[/bold yellow] {result.message}")
             raise typer.Exit(0 if result.success else 1)
 
-    # TODO(phase2.3): Migrate to AgentRuntime.handle_query().
-    # AgentRuntime now supports orchestration (multi-intent detection + plan building)
-    # via router.orchestrate() since commit a271e67. CLI migration is unblocked.
-    # See architecture review 2026-05-29.
+    # Phase 2.3: CLI now uses AgentRuntime components (interceptor, presenter,
+    # injector) while retaining direct UnifiedRouter access for detailed
+    # OrchestrationResult handling (routing paths, layer details, execution plans).
 
-    # Set up router with optional overrides
-    routing_kwargs: dict[str, Any] = {}
+    from vibesop.agent.runtime import AgentRuntime
+
+    runtime = AgentRuntime(project_root=Path.cwd())
+    # Inject LLM factory for AI triage (same as before)
+    runtime.router.set_llm_factory(_build_llm_factory())
+
+    # Apply CLI overrides to the underlying router config
+    router = runtime.router._router
     if min_confidence is not None:
-        routing_kwargs["min_confidence"] = min_confidence
-    if no_session:
-        routing_kwargs["session_aware"] = False
-    if strategy is not None:
-        routing_kwargs["default_strategy"] = strategy
-
-    if routing_kwargs:
-        config = RoutingConfig(**routing_kwargs)
-        router = UnifiedRouter(
-            project_root=Path.cwd(),
-            config=config,
-            llm_factory=_build_llm_factory(),
-            prompt_builder=_build_prompt_builder(),
+        router.routing_config = router.routing_config.model_copy(
+            update={"min_confidence": min_confidence}
         )
-    else:
-        router = UnifiedRouter(
-            project_root=Path.cwd(),
-            llm_factory=_build_llm_factory(),
-            prompt_builder=_build_prompt_builder(),
+    if no_session:
+        router.routing_config = router.routing_config.model_copy(
+            update={"session_aware": False}
+        )
+    if strategy is not None:
+        router.routing_config = router.routing_config.model_copy(
+            update={"default_strategy": strategy}
         )
 
     # Enable routing trace if --trace flag is set

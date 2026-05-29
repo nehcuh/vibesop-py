@@ -78,6 +78,15 @@ class AgentRouter:
         """
         self._router.set_llm(llm_provider)
 
+    def set_llm_factory(self, llm_factory: Any) -> None:
+        """Inject an LLM factory for lazy provider creation.
+
+        Args:
+            llm_factory: Callable that returns an LLM provider.
+        """
+        self._router._llm_factory = llm_factory
+        self._router._triage_service._llm_factory = llm_factory
+
     def route(self, query: str, enable_ai_triage: bool = True) -> Any:
         """Route a query to the best matching skill.
 
