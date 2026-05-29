@@ -1,23 +1,24 @@
-"""Claude Code platform adapter."""
+"""Claude Code platform adapter.
+
+Refactored in v5.5.0 to inherit from HookBasedAdapter, sharing Jinja2
+template infrastructure with the hook-based adapter reference pattern.
+"""
 
 import logging
 from pathlib import Path
 from typing import Any
 
-from jinja2 import Environment, FileSystemLoader, select_autoescape
-
-from vibesop.adapters.base import PlatformAdapter
+from vibesop.adapters.hook_based import HookBasedAdapter
 from vibesop.adapters.models import Manifest, RenderResult
 
 logger = logging.getLogger(__name__)
 
 
-class ClaudeCodeAdapter(PlatformAdapter):
+class ClaudeCodeAdapter(HookBasedAdapter):
     """Adapter for Claude Code platform."""
 
     def __init__(self, project_root: str | Path = ".") -> None:
         super().__init__()
-        self._template_env: Environment | None = None
         self._project_root = Path(project_root).resolve()
 
     @property
@@ -28,16 +29,22 @@ class ClaudeCodeAdapter(PlatformAdapter):
     def config_dir(self) -> Path:
         return Path("~/.claude").expanduser()
 
-    def _get_template_env(self) -> Environment:
-        if self._template_env is None:
-            template_dir = Path(__file__).parent / "templates" / "claude-code"
-            self._template_env = Environment(
-                loader=FileSystemLoader(template_dir),
-                autoescape=select_autoescape(),
-                trim_blocks=True,
-                lstrip_blocks=True,
-            )
-        return self._template_env
+    # ---- Template directory ----
+    def _get_template_dir(self) -> Path:
+        return Path(__file__).parent / "templates" / "claude-code"
+
+    # ---- Hook configuration overrides ----
+    def _get_hook_purpose(self) -> str:
+        return "Trigger VibeSOP routing and inject skill context"
+
+    def _get_hook_event_name(self) -> str:
+        return "UserPromptSubmit"
+
+    def _get_include_additional_context(self) -> bool:
+        return True
+
+    def _get_no_match_message(self) -> bool:
+        return True
 
     def render_config(self, manifest: Manifest, output_dir: Path) -> RenderResult:
         """Render Claude Code configuration from manifest."""
@@ -259,33 +266,6 @@ class ClaudeCodeAdapter(PlatformAdapter):
 
         return result
 
-    def _render_and_write(
-        self,
-        template_name: str,
-        output_path: Path,
-        manifest: Manifest,
-        result: RenderResult,
-        validate_security: bool = True,
-        **extra_context: Any,
-    ) -> None:
-        """Render a template and write to file."""
-        try:
-            env = self._get_template_env()
-            template = env.get_template(template_name)
-
-            # Build context
-            context = self.get_template_context(manifest)
-            context.update(extra_context)
-
-            # Render and write
-            content = template.render(**context)
-            self.write_file_atomic(output_path, content, validate_security=validate_security)
-
-            result.add_file(output_path)
-
-        except Exception as e:
-            result.add_error(f"Failed to render {template_name}: {e}")
-
     def _render_skill_content(
         self,
         skill: Any,
@@ -424,32 +404,6 @@ class ClaudeCodeAdapter(PlatformAdapter):
                 },
             },
         }
-
-    def _render_route_hook(
-        self,
-        output_dir: Path,
-        result: RenderResult,
-    ) -> None:
-        """Render the vibesop-route.sh hook script using the shared template."""
-        try:
-            from vibesop.adapters._shared import render_route_hook as _shared_route_hook
-
-            hook_content = _shared_route_hook(
-                platform="claude-code",
-                platform_name="Claude Code",
-                purpose="Trigger VibeSOP routing and inject skill context",
-                hook_event_name="UserPromptSubmit",
-                enable_explicit_overrides=True,
-                enable_orchestration=True,
-                include_additional_context=True,
-                no_match_message=True,
-            )
-            hook_path = output_dir / "hooks" / "vibesop-route.sh"
-            self.write_file_atomic(hook_path, hook_content, validate_security=False)
-            hook_path.chmod(0o755)
-            result.add_file(hook_path)
-        except Exception as e:
-            result.add_warning(f"Failed to write vibesop-route.sh: {e}")
 
     def _render_track_hook(
         self,
