@@ -25,7 +25,7 @@ class TestKimiCliAdapter:
     def test_config_dir(self) -> None:
         """Test config directory."""
         adapter = KimiCliAdapter()
-        assert adapter.config_dir == Path("~/.kimi").expanduser()
+        assert adapter.config_dir == Path("~/.kimi-code").expanduser()
 
     def test_get_settings_schema(self) -> None:
         """Test settings schema generation."""
@@ -289,7 +289,7 @@ class TestKimiCliAdapter:
         assert "[[hooks]]" in config_toml
         assert 'name = "vibesop-route"' in config_toml
         assert 'event = "UserPromptSubmit"' in config_toml
-        assert 'command = "bash ~/.kimi/hooks/vibesop-route.sh"' in config_toml
+        assert 'command = "bash ~/.kimi-code/hooks/vibesop-route.sh"' in config_toml
         # Kimi Code CLI doesn't use file-based hooks
 
     def test_agents_md_is_slim(self, tmp_path: Path) -> None:

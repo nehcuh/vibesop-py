@@ -48,7 +48,7 @@ _INTEGRATION_CHECKS: ClassVar[dict[str, dict[str, Any]]] = {
 
 _CONFIG_PATHS: ClassVar[dict[str, list[Path]]] = {
     "claude-code": [Path(".claude/skills"), Path(".vibe/skills")],
-    "kimi-cli": [Path(".kimi/skills"), Path(".vibe/skills")],
+    "kimi-cli": [Path(".kimi-code/skills"), Path(".vibe/skills")],
     "opencode": [Path(".config/skills")],
 }
 

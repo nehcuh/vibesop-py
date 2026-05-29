@@ -251,7 +251,7 @@ AI 辅助开发的工具爆炸式增长：
 
 ### 目标 4: 支持 10+ 平台
 
-**当前**: 3 平台 (Claude Code, OpenCode, Kimi CLI)
+**当前**: 3 平台 (Claude Code, OpenCode, Kimi Code CLI)
 **目标**: 10+ 平台
 **方法**: 适配器生态
 
@@ -477,7 +477,7 @@ VibeSOP 使用以下目录存储配置和数据。所有路径遵循 XDG 规范�
 | `.vibe/session/` | 会话状态持久化（自动维护） | 项目 |
 | `~/.vibe/config.toml` | 全局默认配置 | 用户 |
 | `~/.config/skills/` | 外部技能包中央存储（gstack/superpowers/omx） | 用户 |
-| `~/.claude/`, `~/.config/opencode/`, `~/.kimi/` | 各平台配置文件目录 | 用户 |
+| `~/.claude/`, `~/.config/opencode/`, `~/.kimi-code/` | 各平台配置文件目录 | 用户 |
 
 **优先级**: 环境变量 > 项目配置 > 全局配置 > 默认值
 

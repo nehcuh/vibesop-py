@@ -157,7 +157,7 @@ vibe build claude-code --output ~/.claude
 ### Kimi Code CLI
 
 ```bash
-vibe build kimi-cli --output ~/.kimi
+vibe build kimi-cli --output ~/.kimi-code
 ```
 
 ### Cursor

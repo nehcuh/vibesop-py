@@ -156,7 +156,7 @@ class SkillInjector:
 
         Tries multiple locations in priority order:
         1. core/skills/{skill_id}/SKILL.md
-        2. ~/.kimi/skills/{flattened_id}/SKILL.md
+        2. ~/.kimi-code/skills/{flattened_id}/SKILL.md
         3. ~/.config/skills/{skill_id}/SKILL.md
         """
         # Try core/skills/
@@ -170,9 +170,9 @@ class SkillInjector:
         # Try flattened name (for namespaced skills like gstack/review)
         flat_id = skill_id.replace("/", "-")
 
-        # Try ~/.kimi/skills/
+        # Try ~/.kimi-code/skills/
         home = Path.home()
-        kimi_path = home / ".kimi" / "skills" / flat_id / "SKILL.md"
+        kimi_path = home / ".kimi-code" / "skills" / flat_id / "SKILL.md"
         if kimi_path.exists():
             try:
                 return kimi_path.read_text(encoding="utf-8")
@@ -240,8 +240,8 @@ You MUST follow this skill's workflow. Do not skip steps.
         """Build Kimi CLI instruction (AI must read skill file itself)."""
         flat_id = skill_id.replace("/", "-")
         instruction = (
-            f"请先读取 ~/.kimi/skills/{flat_id}/SKILL.md "
-            f"（或 .kimi/skills/{flat_id}/SKILL.md），"
+            f"请先读取 ~/.kimi-code/skills/{flat_id}/SKILL.md "
+            f"（或 .kimi-code/skills/{flat_id}/SKILL.md），"
             f"然后严格按照该 skill 的工作流程执行「{skill_id}」。"
             f"不得跳过任何步骤。"
         )

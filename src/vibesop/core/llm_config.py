@@ -131,8 +131,8 @@ class AgentEnvironmentDetector:
         "kimi-cli": {
             "name": "Kimi Code CLI",
             "config_files": [
-                Path(".kimi/settings.json"),
-                Path.home() / ".kimi" / "settings.json",
+                Path(".kimi-code/settings.json"),
+                Path.home() / ".kimi-code" / "settings.json",
             ],
             "provider": "mixed",
             "model_detection": "model",

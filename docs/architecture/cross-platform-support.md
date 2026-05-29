@@ -182,7 +182,7 @@ vibe session enable-tracking  # Enable automatic tracking
 **Strengths**:
 - ✅ Agent Skills open standard compatible
 - ✅ Single TOML configuration file
-- ✅ Skills automatically discovered from ~/.kimi/skills/
+- ✅ Skills automatically discovered from ~/.kimi-code/skills/
 - ✅ Supports inline hooks via [[hooks]] arrays
 - ✅ Fast startup (minimal files)
 
@@ -192,7 +192,7 @@ vibe session enable-tracking  # Enable automatic tracking
 
 **Configuration Output**:
 ```
-~/.kimi/
+~/.kimi-code/
 ├── config.toml            # Main configuration
 ├── skills/                # Skill definitions
 │   ├── systematic-debugging/
@@ -208,7 +208,7 @@ vibe switch kimi-cli
 
 Kimi Code CLI uses the Agent Skills open standard, making its skill format
 fully compatible with Claude Code skills. Skills are automatically loaded
-from `~/.kimi/skills/` at startup.
+from `~/.kimi-code/skills/` at startup.
 
 ### OpenCode
 
@@ -350,7 +350,7 @@ vibe build claude-code
 
 # Switch to Kimi Code CLI
 vibe build kimi-cli
-# → Uses ~/.kimi/
+# → Uses ~/.kimi-code/
 # → Same routing, same skills, different config format
 
 # Switch to OpenCode

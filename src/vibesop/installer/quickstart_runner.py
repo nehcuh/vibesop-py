@@ -290,7 +290,7 @@ class QuickstartRunner:
 
         platform_dirs = {
             "claude-code": "~/.claude",
-            "kimi-cli": "~/.kimi",
+            "kimi-cli": "~/.kimi-code",
             "opencode": "~/.config/opencode",
             "pi": "~/.pi/agent",
         }
