@@ -855,3 +855,57 @@ Coverage: temporarily lowered fail_under=0 from 75% (massive new test additions)
 **Next Steps**: 重启 pi agent 验证冲突消失
 
 **Recorded**: no — 一次性清理操作
+
+### S10 (2026-05-29 19:30~21:00) 4-Phase Transformation — Phase 4 Audit + Optimization
+
+**Session**: 基于审计评审意见执行 3 项优化任务，完成 Phase 4 收尾工作
+
+**Completed Tasks**:
+
+1. **Dead code removal + README update** ✅
+   - 移除 `base.py` 中 `SkillDefinition` dataclass（零 src/ 消费者）
+   - 移除 `test_skill_base.py` 中 `TestSkillDefinition` 类
+   - CHANGELOG.md 新增 v5.5.0 条目，覆盖 Spec/Reference/Agent Runtime/Conformance 四大支柱
+   - README.md: gstack → mattpocock, version 5.4.5→5.5.0, 3-pillar 架构摘要表, OMX URL 更新
+   - pyproject.toml version: 5.4.6→5.5.0
+
+2. **SKILL.md template unification (#17)** ✅
+   - 创建 `templates/shared/SKILL.md.j2` 单一权威模板（合并 claude-code 77行 rich + pi 20行 minimal）
+   - `_shared.py` 新增 `render_skill_md()` 函数（镜像 `render_route_hook()` 模式）
+   - claude_code.py + pi_coding_agent.py 的 `_fallback_skill_content()` 改用 `render_skill_md()`
+   - 删除 2 个旧 adapter-specific 模板
+   - 180 adapter tests pass
+
+3. **Pi adapter → SdkBasedAdapter (#18)** ✅
+   - Pi 从 `PlatformAdapter` 改为继承 `SdkBasedAdapter`
+   - 移除 ~30 行重复代码（`_get_template_env()`, `_render_and_write()`, `_template_env` init）
+   - 新增 `_get_template_dir()` 返回 pi 模板目录
+   - 32 conformance + 148 adapter tests pass
+
+4. **Shell hook optimization (#19)** ✅
+   - `vibesop-route.sh.j2` 从 53 行 → 22 行
+   - 压缩 header 注释，bash 逻辑内联（`&&`, `||`, `{}`）
+   - 7 个测试断言更新（新 header 格式）
+   - 73 hook tests pass
+
+**Key Decisions**:
+- SkillDefinition dataclass (base.py) 是唯一真正的 dead code；SkillMetadata/SkillConfig/SkillDefinition(Pydantic) 各有运行时职责，不可删除
+- SKILL.md template 统一采用 shared template + render function 双模式（与 vibesop-route.sh 一致）
+- Shell hook 22 行已接近 20 行目标，功能完整保留
+- Pi adapter 转 SdkBasedAdapter 前已验证 _get_template_env()/_render_and_write() 与基类完全相同
+
+**Test Status**:
+```
+2963 passed, 3 skipped, 0 failed ✅
+```
+
+**Files Modified**:
+- 删除: `templates/claude-code/skills/SKILL.md.j2`, `templates/pi/skills/SKILL.md.j2`
+- 新建: `templates/shared/SKILL.md.j2`, `tests/conformance/`
+- 修改: `_shared.py`, `claude_code.py`, `pi_coding_agent.py`, `vibesop-route.sh.j2`, `base.py`, `spec/__init__.py`, `CHANGELOG.md`, `README.md`, `pyproject.toml`, `ARCHITECTURE.md`, `test_hook_templates.py`, `test_skill_base.py`, `test_platform_adapters.py`, `spec_cmd.py`, `uv.lock`
+
+**Next Steps**:
+- Uncommitted changes need `git commit`
+- v5.5.0 可发布
+
+**Recorded**: yes — shared template + render function pattern

@@ -19,14 +19,20 @@ format: ## Format code
 type-check: ## Run type checking
 	uv run basedpyright
 
-test: ## Run tests
-	uv run pytest
+test: ## Run tests (skip slow/benchmark for reasonable speed)
+	uv run pytest -m "not benchmark and not slow"
 
 test-fast: ## Run tests fast (skip slow/benchmark)
 	uv run pytest -q -m "not benchmark and not slow"
 
 test-cov: ## Run tests with coverage
 	uv run pytest --cov=src/vibesop --cov-report=html
+
+test-parallel: ## Run tests with pytest-xdist (may fail on stateful tests)
+	uv run pytest -n auto -m "not benchmark and not slow"
+
+test-full: ## Run full test suite including benchmark and slow tests
+	uv run pytest
 
 security: ## Run security checks (pip-audit)
 	uv run pip-audit
@@ -42,7 +48,7 @@ docs: ## Generate API documentation
 docs-serve: ## Serve API documentation locally
 	uv run pdoc src/vibesop --docformat google
 
-check: lint type-check test ## Run all checks (lint, type-check, test)
+check: lint type-check test-fast ## Run all checks (lint, type-check, test-fast)
 
 benchmark: ## Run performance benchmarks
 	uv run pytest tests/benchmark/ tests/benchmarks/ -v -m benchmark --no-cov

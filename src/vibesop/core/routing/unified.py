@@ -71,6 +71,8 @@ from vibesop.core.routing.orchestration_mixin import RouterOrchestrationMixin
 from vibesop.core.routing.result_mixin import RouterResultMixin
 from vibesop.core.routing.stats_mixin import RouterStatsMixin
 from vibesop.core.routing.triage_service import TriageService
+from vibesop.core.routing import _layers
+from vibesop.core.routing import _pipeline
 
 if TYPE_CHECKING:
     from vibesop.core.instinct import InstinctLearner
@@ -494,8 +496,6 @@ class UnifiedRouter(
         conversation: Any,
         original_query: str,
     ) -> RoutingResult | None:
-        from vibesop.core.routing import _layers, _pipeline
-
         # Layer 0: Explicit Override (always first)
         match, detail = _layers.try_explicit_layer(self, query, candidates)  # pyright: ignore[reportArgumentType]
         routing_path.append(RoutingLayer.EXPLICIT)
@@ -561,8 +561,6 @@ class UnifiedRouter(
         use_keyword: bool,
     ) -> SkillRoute | None:
         """Try early layers: scenario+index best-of (keyword) or index alone (LLM)."""
-        from vibesop.core.routing import _layers
-
         if use_keyword:
             # Scenario + Index best-of
             scen_match, scen_detail = _layers.try_scenario_layer(self, query, candidates)  # pyright: ignore[reportArgumentType]
@@ -646,8 +644,6 @@ class UnifiedRouter(
         layer_details: list[LayerDetail],
         duration_ms: float,
     ) -> RoutingResult:
-        from vibesop.core.routing import _pipeline
-
         self._record_layer(RoutingLayer.NO_MATCH)
 
         if self._config.fallback_mode == "disabled":
@@ -1042,13 +1038,9 @@ class UnifiedRouter(
         }
 
     def _apply_optimizations(self, matches: Any, query: str, context: Any = None) -> Any:
-        from vibesop.core.routing import _pipeline
-
         return _pipeline.apply_optimizations(self, matches, query, context)
 
     def _try_ai_triage(self, query: str, candidates: list[dict[str, Any]], context: Any = None):
-        from vibesop.core.routing import _layers
-
         match, _ = _layers.try_ai_triage_layer(self, query, candidates, context)  # pyright: ignore[reportArgumentType]
         if match is None:
             return None

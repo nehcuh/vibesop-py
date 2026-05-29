@@ -1,20 +1,23 @@
 # VibeSOP Documentation Index
 
-> **Last Updated**: 2026-05-01
-> **Version**: 5.4.1
+> **Last Updated**: 2026-05-29
+> **Version**: 5.5.0
 
 This document serves as the central index for all VibeSOP documentation, organized by purpose and audience.
 
-## 📚 Documentation Structure
+---
 
-### Root Directory (Essential Files)
+## 📂 Root Directory (Essential Files)
 
 These files remain in the project root for discoverability and tool integration:
 
-- **[README.md](../README.md)** - Main project entry point and overview
-- **[README.zh-CN.md](../README.zh-CN.md)** - Chinese language overview
-- **[LICENSE](../LICENSE)** - License information
-- **[CHANGELOG.md](../CHANGELOG.md)** - Version history and changes
+- **[README.md](../README.md)** — Main project entry point, vision, quick start
+- **[AGENTS.md](../AGENTS.md)** — Agent configuration and routing protocol
+- **[GOALS.md](../GOALS.md)** — Project goals and objective checklist
+- **[CLAUDE.md](../CLAUDE.md)** — Claude Code specific integration notes
+- **[CHANGELOG.md](../CHANGELOG.md)** — Version history and changes
+- **[LICENSE](../LICENSE)** — MIT License
+- **[CONTRIBUTING.md](../CONTRIBUTING.md)** — Contribution guidelines (mirrors dev/CONTRIBUTING.md)
 
 ---
 
@@ -22,36 +25,41 @@ These files remain in the project root for discoverability and tool integration:
 
 ### Getting Started
 
-- **🆕 [Skills Ecosystem Guide](SKILLS_GUIDE.md)** - Complete guide to the VibeSOP skills ecosystem
+- **[Skills Ecosystem Guide](SKILLS_GUIDE.md)** — Complete guide to the VibeSOP skills ecosystem
   - 50+ skills explained (builtin, superpowers, gstack, omx)
   - 10-layer routing system详解
-  - Priority decision mechanism
-  - How to switch between skills
-  - Scenario-based selection guide
-- **[Quick Start - Users](QUICKSTART_USERS.md)** - User-facing installation and basic usage
-- **[Quick Start - Developers](QUICKSTART_DEVELOPERS.md)** - Developer setup and contribution workflow
-- **[Cold Start Guide](cold-start-guide.md)** - First-time configuration guide
+  - Priority decision mechanism and scenario-based selection
+- **[Quick Start - Users](QUICKSTART_USERS.md)** — User-facing installation and basic usage
+- **[Quick Start - Developers](QUICKSTART_DEVELOPERS.md)** — Developer setup and contribution workflow
+- **[Cold Start Guide](cold-start-guide.md)** — First-time configuration guide
 
 ### Project Overview
 
-- **[Project Context](PROJECT_CONTEXT.md)** - Project background, goals, and scope
-- **[Project Status](PROJECT_STATUS.md)** - Current development status and milestones
-- **[Philosophy](PHILOSOPHY.md)** - Design principles and core philosophy
-- **[Roadmap](ROADMAP.md)** - Future development plans and timeline
+- **[Project Context](PROJECT_CONTEXT.md)** — Project background, goals, and scope
+- **[Project Status](PROJECT_STATUS.md)** — Current development status and milestones
+- **[Philosophy](PHILOSOPHY.md)** — Design principles and core philosophy (Discovery > Execution, Matching > Guessing, Memory > Intelligence, Open > Closed)
+- **[Roadmap](ROADMAP.md)** — Future development plans and timeline (v4.x → v6.0)
 
 ### Governance
 
-- **[Code of Conduct](CODE_OF_CONDUCT.md)** - Community guidelines
-- **[Security](SECURITY.md)** - Security policy and vulnerability reporting
+- **[Code of Conduct](CODE_OF_CONDUCT.md)** — Community guidelines
+- **[Security](SECURITY.md)** — Security policy and vulnerability reporting
 
 ---
 
 ## 🏗️ Architecture & Design
 
-- **[Architecture](architecture/ARCHITECTURE.md)** - System architecture and technical design
-  - Component structure
-  - Data flow
-  - Design patterns
+- **[Architecture Overview](architecture/ARCHITECTURE.md)** — System architecture and technical design
+  - 3-Pillar architecture (Spec / Reference / Conformance)
+  - 10-layer routing pipeline
+  - Agent Runtime layer
+  - Component structure and data flow
+- **[Skill Runtime Interface](architecture/skill-runtime-interface.md)** — SkillRuntime contract and lifecycle state machine
+- **[Agent Integration Patterns](architecture/agent-integration-patterns.md)** — Platform adapter patterns
+- **[Session Management](architecture/session-management.md)** — Session context and intelligent routing
+- **[Orchestration Design](architecture/orchestration-design.md)** — Multi-intent detection and task decomposition
+- **[Routing Transparency](architecture/routing-transparency.md)** — Rejected candidates and decision explainability
+- **[Performance Benchmarks](architecture/performance-benchmarks.md)** — Latency, throughput, and optimization strategies
 
 ---
 
@@ -59,30 +67,31 @@ These files remain in the project root for discoverability and tool integration:
 
 ### Guides & References
 
-- **[CLI Reference](user/CLI_REFERENCE.md)** - Complete command-line interface reference
-  - All commands and options
-  - Usage examples
-  - Best practices
+- **[CLI Reference](user/CLI_REFERENCE.md)** — Complete command-line interface reference
+- **[Getting Started](user/getting-started.md)** — Step-by-step first-time user guide
+- **[Session Intelligent Routing](user/session-intelligent-routing.md)** — Multi-turn conversation and context-aware routing
+- **[Workflows](user/workflows.md)** — Cross-cutting workflow definitions and usage
+- **[Troubleshooting](user/troubleshooting.md)** — Common issues and solutions
 
 ### External Skills
 
-- **🆕 [Skills Ecosystem Guide](SKILLS_GUIDE.md)** - Complete guide to all 50+ skills
-  - Builtin, Superpowers, GStack, OMX skills explained
-  - 10-layer routing system详解
-  - Priority decision mechanism
-  - How to switch between skills manually
-  - Scenario-based selection guide with decision tree
-- **🆕 [Kimi CLI Setup Guide](KIMI_CLI_SETUP.md)** - Complete guide to VibeSOP's Kimi CLI adapter
-  - Configuration generation (config.toml, skills/)
-  - Provider and model setup
-  - Troubleshooting common issues
-  - 44 skills deployment
-- **[OMX Guide](OMX_GUIDE.md)** - Complete guide to oh-my-codex (OMX) skill pack
+- **[External Skills Guide](EXTERNAL_SKILLS_GUIDE.md)** — Creating and integrating custom skills
+- **[External Skills Examples](EXTERNAL_SKILLS_EXAMPLES.md)** — Sample implementations
+- **[SKILL.md Format Spec v3](skill-format-spec-v3.md)** — Canonical SKILL.md frontmatter specification (29 fields)
+- **[SKILL.md Format Spec v2](skill-format-spec-v2.md)** — Legacy v2 specification (for migration reference)
+- **[SKILL.md Format Spec v1](skill-format-spec.md)** — Original specification (for migration reference)
+
+### Platform & Configuration
+
+- **[Kimi CLI Setup Guide](KIMI_CLI_SETUP.md)** — VibeSOP's Kimi CLI adapter configuration
+- **[SKILL LLM Config Guide](SKILL_LLM_CONFIG_GUIDE.md)** — LLM provider setup for VibeSOP CLI subprocess mode
+- **[Agent Integration](agent-integration.md)** — Integrating VibeSOP with AI agents
+
+### Skill Pack Guides
+
+- **[OMX Guide](OMX_GUIDE.md)** — oh-my-codex (OMX) skill pack complete guide
   - deep-interview, ralph, ralplan, team, ultrawork, autopilot, ultraqa
-  - Usage scenarios and best practices
-  - Comparison with other skill packs
-- **[External Skills Guide](EXTERNAL_SKILLS_GUIDE.md)** - Creating and integrating custom skills
-- **[External Skills Examples](EXTERNAL_SKILLS_EXAMPLES.md)** - Sample implementations
+- **[Superpowers Plans](superpowers/plans/)** — Implementation plans and delivery summaries for superpowers integration
 
 ---
 
@@ -90,74 +99,73 @@ These files remain in the project root for discoverability and tool integration:
 
 ### Development Workflow
 
-- **[Contributing Guide](dev/CONTRIBUTING.md)** - How to contribute to VibeSOP
-  - Development setup
-  - Code style
-  - Pull request process
+- **[Contributing Guide](dev/CONTRIBUTING.md)** — How to contribute to VibeSOP
+- **[Releasing](dev/releasing.md)** — Release process and versioning
+- **[Testing](dev/testing.md)** — Testing strategies and conventions
 
 ### Technical Planning
 
-- **[CLI Optimization Plan](dev/CLI_OPTIMIZATION_PLAN.md)** - Performance improvement initiatives
-- **[Production Readiness Review](dev/PRODUCTION_READINESS_REVIEW.md)** - Production readiness assessment
+- **[CLI Optimization Plan](dev/CLI_OPTIMIZATION_PLAN.md)** — Performance improvement initiatives
+- **[Production Readiness Review](dev/PRODUCTION_READINESS_REVIEW.md)** — Production readiness assessment
+- **[Roadmap Index](dev/roadmap-index.md)** — Detailed roadmap breakdown
 
 ### Deep Dives
 
-- **[Semantic Routing](semantic/)** - AI-powered skill routing system
-- **[Triggers](triggers/)** - Automatic skill invocation system
+- **[Architecture Overview](dev/architecture-overview.md)** — Developer-facing architecture summary
+- **[Architecture Deep Dive](dev/architecture.md)** — In-depth technical architecture
+- **[API Reference](dev/api-reference.md)** — Auto-generated API documentation
+- **[Hooks Guide](dev/hooks-guide.md)** — Platform hook development
 
 ---
 
-## 📂 Directory Structure
+## 🧠 Specialized Systems
 
-```
-docs/
-├── architecture/          # Architecture and design docs
-│   └── ARCHITECTURE.md
-├── dev/                   # Developer-facing documentation
-│   ├── CONTRIBUTING.md
-│   ├── CLI_OPTIMIZATION_PLAN.md
-│   └── PRODUCTION_READINESS_REVIEW.md
-├── user/                  # User-facing documentation
-│   └── CLI_REFERENCE.md
-├── semantic/              # Semantic routing system docs
-├── triggers/              # Trigger system documentation
-├── INDEX.md               # This file
-├── QUICKSTART_USERS.md
-├── QUICKSTART_DEVELOPERS.md
-├── cold-start-guide.md
-├── EXTERNAL_SKILLS_GUIDE.md
-├── EXTERNAL_SKILLS_EXAMPLES.md
-├── PROJECT_CONTEXT.md
-├── PROJECT_STATUS.md
-├── PHILOSOPHY.md
-├── ROADMAP.md
-├── CODE_OF_CONDUCT.md
-└── SECURITY.md
-```
+- **[Semantic Routing](semantic/)** — AI-powered semantic matching system (Sentence Transformers, embeddings, score fusion)
+- **[Trigger System](triggers/)** — Automatic skill invocation system (keywords, regex, semantic triggers)
 
 ---
 
-## 🎯 Quick Navigation by Role
+## 📋 Proposals & ADRs
 
-### For Users
+### Architecture Decision Records
 
-1. Start with [Quick Start - Users](QUICKSTART_USERS.md)
-2. Reference [CLI Reference](user/CLI_REFERENCE.md) for commands
-3. Explore [External Skills Guide](EXTERNAL_SKILLS_GUIDE.md) for customization
+- **[adr/README.md](adr/README.md)** — ADR index
+- **[ADR 001](adr/001-skill-ecosystem-evolution.md)** — Skill Ecosystem Evolution (v5.x Roadmap)
+- **[ADR 002](adr/002-optimization-roadmap-v55.md)** — v5.4 → v5.5 Quality Convergence Roadmap
+- **[ADR 003](adr/003-plan-completion-criteria.md)** — Plan Completion Criteria
 
-### For Developers
+### Proposals
 
-1. Start with [Quick Start - Developers](QUICKSTART_DEVELOPERS.md)
-2. Read [Contributing Guide](dev/CONTRIBUTING.md) for workflow
-3. Study [Architecture](architecture/ARCHITECTURE.md) for system design
-4. Check [Project Status](PROJECT_STATUS.md) for current priorities
+- **[proposals/](proposals/)** — Design proposals for upcoming features
 
-### For Contributors
+---
 
-1. Review [Code of Conduct](CODE_OF_CONDUCT.md)
-2. Read [Contributing Guide](dev/CONTRIBUTING.md)
-3. Check [Roadmap](ROADMAP.md) for planned features
-4. Review [Project Context](PROJECT_CONTEXT.md) for background
+## 📂 Archive
+
+- **[archive/README.md](archive/README.md)** — Archive index
+- **[archive/](archive/)** — Historical documents, delivery summaries, and superseded plans
+
+---
+
+## 🌐 Community & Articles
+
+- **[Discussion Summary](DISCUSSION_SUMMARY.md)** — Community discussion summaries
+- **[Vibe Coding Article](vibe-coding-article.md)** — Article on vibe coding philosophy
+- **[Version 0.5 ADR](version_05.md)** — v5.x architecture decision record (detailed)
+
+---
+
+## 📊 Key Metrics (v5.5.0)
+
+| Metric | Value |
+|--------|-------|
+| **Version** | 5.5.0 |
+| **Tests** | 2,972 pytest collected (85 conformance tests) |
+| **Coverage** | ~73% (target: 75%) |
+| **Skills Supported** | 50+ |
+| **Platforms** | Claude Code, OpenCode, Kimi CLI, Cursor |
+| **Routing Layers** | 10 |
+| **Spec Version** | SKILL.md v3.0 (29 fields) |
 
 ---
 
@@ -176,12 +184,13 @@ docs/
 - **Include table of contents** for documents > 500 lines
 - **Add "Last Updated" timestamp** for frequently changed docs
 - **Use relative paths** for internal links
+- **Maintain version consistency** — all docs should reference the current release version
 
 ### Review Schedule
 
 - **Monthly**: Review and update quickstart guides
 - **Quarterly**: Review and update architecture docs
-- **Per Release**: Update project status and roadmap
+- **Per Release**: Update project status, roadmap, and this index
 
 ---
 
@@ -189,7 +198,7 @@ docs/
 
 - **GitHub Repository**: [https://github.com/nehcuh/vibesop-py](https://github.com/nehcuh/vibesop-py)
 - **Issue Tracker**: [GitHub Issues](https://github.com/nehcuh/vibesop-py/issues)
-- **Documentation Website**: (Coming soon)
+- **Changelog**: [../CHANGELOG.md](../CHANGELOG.md)
 
 ---
 

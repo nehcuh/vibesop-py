@@ -1396,3 +1396,41 @@ if not isinstance(router._index_layer_cache, dict):
 
 **Files**: `tests/core/` — 24 new/updated test files
 
+---
+
+### Shared Template + Render Function Pattern (2026-05-29)
+
+**Pattern**: For adapter-agnostic content generation, place Jinja2 templates in `templates/shared/` and expose a module-level render function in `_shared.py` that accepts keyword arguments. Each adapter calls the shared function instead of rendering its own template copy.
+
+**Why**: Previously each adapter (claude-code, pi) had its own copy of `SKILL.md.j2` — a 77-line rich version and a 20-line minimal version. When the SKILL.md format changes, both templates need updating, and skill content diverges across platforms.
+
+**Structure**:
+```
+adapters/templates/shared/
+    vibesop-route.sh.j2    ← render_route_hook() in _shared.py
+    SKILL.md.j2            ← render_skill_md() in _shared.py
+    vibesop-track.sh.j2    (future)
+```
+
+**Key design**:
+- Render function handles skill object introspection (model_dump/asdict/dict fallback)
+- Template uses Jinja2 conditionals for per-platform variation (not per-platform copies)
+- `__all__` export makes it public API
+
+**Result**: 2 adapter-specific templates deleted, both adapters now use shared template via `render_skill_md()`. 180 adapter tests pass.
+
+**Example**:
+```python
+# _shared.py
+def render_skill_md(skill: Any, *, version: str = __version__) -> str:
+    env = Environment(loader=FileSystemLoader(templates/shared))
+    template = env.get_template("SKILL.md.j2")
+    return template.render(skill=skill_dict, ...)
+
+# claude_code.py + pi_coding_agent.py
+from vibesop.adapters._shared import render_skill_md
+content = render_skill_md(skill)
+```
+
+**Files**: `src/vibesop/adapters/_shared.py`, `templates/shared/SKILL.md.j2`
+

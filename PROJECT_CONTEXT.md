@@ -4,6 +4,17 @@
 
 <!-- handoff:start -->
 
+### 2026-05-29 (S10) 4-phase-transformation-audit-optimization
+**Session**: Phase 4 audit review optimization — 3 tasks completed
+**Completed**:
+- Dead code removal: SkillDefinition dataclass removed from base.py; CHANGELOG v5.5.0 entry; README gstack→mattpocock sync
+- SKILL.md template unification: `templates/shared/SKILL.md.j2` + `render_skill_md()` in `_shared.py`; 2 old adapter templates deleted
+- Pi adapter → SdkBasedAdapter: ~30 lines duplicated code removed; Pi now correctly inherits from SdkBasedAdapter
+- Shell hook optimization: `vibesop-route.sh.j2` 53→22 lines; all logic in Python AgentRuntime
+**Test**: 2963 passed, 3 skipped, 0 failures
+**Files**: _shared.py, claude_code.py, pi_coding_agent.py, vibesop-route.sh.j2, base.py, spec/__init__.py, CHANGELOG.md, README.md, pyproject.toml, ARCHITECTURE.md, spec_cmd.py, test files, SKILL.md.j2 (new), tests/conformance/ (new)
+**Next**: git commit pending changes; v5.5.0 ready for release
+
 ### 2026-05-28 (S9) pi-skill-namespace-collisions
 **Session**: Fix pi agent skill name collisions + gstack default install removal
 **Completed**:
@@ -12,13 +23,5 @@
 - Added `_namespace_skill_name()` in pi adapter to prefix `name:` field with pack namespace (e.g., `name: qa` → `name: gstack-qa`)
 **Root cause**: Pi agent resolves name collisions by alphabetical directory order; VibeSOP's routing conflict resolution runs before pi loads skills
 **Files**: constants.py, install.py, quickstart_runner.py, pack_installer.py, pi_coding_agent.py, test_pack_installer.py
-
-### 2026-05-28 (S8) reinstall-pypi-publish
-**Session**: Reinstall project with uv + publish v5.4.6 to PyPI
-**Completed**:
-- `uv sync` reinstall locally; `uv tool install --force --editable .` to override global vibesop
-- Version bump 5.4.5 → 5.4.6 (v5.4.5 files already existed on PyPI)
-- Built sdist + wheel with `uv build`, published via `uv publish` with token auth from `~/.pypirc`
-**Files**: pyproject.toml (version bump)
 
 <!-- handoff:end -->

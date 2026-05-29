@@ -1,10 +1,22 @@
 # Overview - VibeSOP Project
 
-**Last Updated**: 2026-05-24 (Pi agent skill conflict cleanup)
+**Last Updated**: 2026-05-29 (v5.5.0 — 4-phase transformation complete)
 
 ---
 
 ## Goals
+
+### Previous Week (May 24-30, 2026) — Completed
+
+1. **4-Phase Transformation** ✅ (Completed - May 29)
+   - Phase 1: Spec v3.0 (SkillSpec Pydantic model, SpecValidator, SkillType.STANDARD)
+   - Phase 2: Reference (3 base classes: FileBased/HookBased/SdkBased, shared templates)
+   - Phase 3: Wire (AgentRuntime wiring, shell hook elimination 221→22 lines, HookPoint.ROUTE_INTERCEPTOR)
+   - Phase 4: Conformance Suite (85 tests, dead code removal, SKILL.md template unification, Pi→SdkBasedAdapter)
+2. **Audit Optimization** ✅ (Completed - May 29)
+   - SKILL.md template unified across all adapters
+   - Pi adapter inherits from SdkBasedAdapter (~30 lines removed)
+   - Shell hook template 53→22 lines
 
 ### Previous Week (April 21-22, 2026) — Completed
 
@@ -47,26 +59,21 @@
 ## Projects Summary
 
 ### VibeSOP (vibesop-py)
-**Status**: v5.4.1 (Routing refinements + docs)
-**Description**: AI SkillOS — full skill lifecycle management (discovery, routing, orchestration, evaluation, retention) with Agent Runtime layer
-**Coverage**: TBD — 341 new tests added, threshold temporarily at 0%
+**Status**: v5.5.0 (4-phase transformation complete: Spec + Reference + AgentRuntime + Conformance)
+**Description**: AI SkillOS — skill protocol standard definer with 3-pillar architecture (Spec, Reference, Conformance Suite)
+**Coverage**: 2963 tests passing
 **Key Metrics**:
 - Routing accuracy: 94%
 - Performance: 44 QPS (target: 40+ QPS)
-- Skills supported: 91 skills across 4 packs
-- Test speed: 39s fast suite / ~4.5min full suite
-- Total tests: ~2300+ (including 341 new)
+- Skills supported: 126 skills across 4 packs (mattpocock default, gstack explicit)
+- Total tests: 2963 passed, 3 skipped, 0 failures
 
-**Recent Changes** (2026-05-05):
-- ✅ vibe-coding-article.md: added core problems + survival principles overview
-- ✅ Routing: candidate dedup, management-only skill exclusion, triage prompt v3
-- ✅ Committed and pushed: `2380ec2`
-
-**Recent Changes** (2026-05-03):
-- ✅ 341 new tests added across 24 test files
-- ✅ Fixed pytest basename collisions (3 test files renamed)
-- ✅ Document YAML→TOML migration complete (15+ files)
-- ✅ Session storage path confusion clarified
+**Recent Changes** (2026-05-29):
+- ✅ Phase 4 complete: conformance suite (85 tests), dead code removal, README sync
+- ✅ SKILL.md template unification (shared template + render_skill_md function)
+- ✅ Pi adapter inherits SdkBasedAdapter (~30 lines duplicated code removed)
+- ✅ Shell hook template optimized 53→22 lines
+- ✅ Version bumped 5.4.6→5.5.0, pyproject.toml + CHANGELOG updated
 
 **Recent Changes** (2026-04-27):
 - ✅ 9 P0/P1 routing/feedback defects fixed (IndexError, Chinese bypass, ConfigSource, etc.)

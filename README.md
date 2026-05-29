@@ -226,13 +226,13 @@ vibe route "review my PR"
 
 VibeSOP:
 1. **理解你的意图** (自然语言，支持中英文)
-2. **找到正确的技能** (从 45+ 技能中选择)
+2. **找到正确的技能** (从 50+ 技能中选择)
 3. **学习你的偏好** (越用越准确)
 4. **跨平台通用** (Claude Code, Cursor, Continue.dev 等)
 
 VibeSOP:
 1. **Understands your intent** (natural language, English + Chinese)
-2. **Finds the right skill** (from 45+ available skills)
+2. **Finds the right skill** (from 50+ available skills)
 3. **Learns your preferences** (gets better over time)
 4. **Works with any AI tool** (Claude Code, Cursor, Continue.dev, etc.)
 

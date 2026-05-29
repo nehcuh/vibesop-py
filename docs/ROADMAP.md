@@ -1,8 +1,8 @@
 # VibeSOP Roadmap
 
-> **Version**: 5.4.5
-> **版本 Version**: 5.4.5
-> **最后更新 Last Updated**: 2026-05-23
+> **Version**: 5.5.0
+> **版本 Version**: 5.5.0
+> **最后更新 Last Updated**: 2026-05-29
 
 ---
 
@@ -48,7 +48,7 @@
 
 | Metric | Current | Target | Status |
 |--------|---------|--------|--------|
-| Test Count | 2,873 | 2,000+ | ✅ |
+| Test Count | 2,972 | 2,000+ | ✅ |
 | Test Coverage | ~73% (full run) | >75% | ⚠️ Near target |
 | Pure Routing P95 | ~50ms | <100ms | ✅ |
 | LLM Triage P95 | ~220ms | <300ms | ✅ |
@@ -195,7 +195,7 @@ Improve routing accuracy with context awareness, multi-turn conversations, direc
 - ✅ Agent Runtime API stability: v1.0
 - ✅ Quick command coverage: 7 commands, CLI + hook integration
 - ✅ Service layer: 4 services, zero duplication with CLI
-- ✅ Test count: 2,873 (+1,122 from v4.2.0)
+- ✅ Test count: 2,972 (+1,122 from v4.2.0)
 
 ---
 

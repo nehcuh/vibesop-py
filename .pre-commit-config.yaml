@@ -21,10 +21,13 @@ repos:
         language: system
         types: [python]
         pass_filenames: false
-      - id: pytest
-        name: Run tests
-        entry: uv run pytest tests/ -x -q --ignore=tests/benchmark
-        language: system
-        types: [python]
-        pass_filenames: false
-        always_run: true
+      # Note: Pre-commit runs on every commit. Running 2,900+ tests here
+      # makes commits unbearably slow and encourages --no-verify bypass.
+      # Tests are enforced in CI and should be run locally via `make test`.
+      # - id: pytest
+      #   name: Run tests
+      #   entry: uv run pytest tests/ -x -q --ignore=tests/benchmark
+      #   language: system
+      #   types: [python]
+      #   pass_filenames: false
+      #   always_run: true
