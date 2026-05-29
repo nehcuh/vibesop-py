@@ -224,7 +224,7 @@ class PackInstaller:
 
             try:
                 platform_dir.mkdir(parents=True, exist_ok=True)
-                skill_count = self._create_skill_symlinks(
+                skill_count = self.create_skill_symlinks(
                     central_path, platform_dir, pack_name
                 )
                 results.append((platform, f"Linked to {platform} ({skill_count} skills)"))
@@ -267,7 +267,7 @@ class PackInstaller:
         except Exception:
             return False
 
-    def _create_skill_symlinks(
+    def create_skill_symlinks(
         self,
         central_path: Path,
         platform_dir: Path,
@@ -325,8 +325,6 @@ class PackInstaller:
             count += 1
 
         return count
-
-    create_skill_symlinks = _create_skill_symlinks
 
     def _rebuild_global_index(self, pack_name: str) -> None:
         recovery_hint = "[dim]Run `vibe quickstart` to rebuild the index from scratch.[/dim]"

@@ -1,4 +1,3 @@
-# pyright: reportPrivateUsage=false
 # pyright: reportMissingTypeArgument=false
 """Quickstart runner for interactive installation."""
 
@@ -281,7 +280,7 @@ class QuickstartRunner:
             central_path = Path.home() / ".config" / "skills" / pack_name
             if not central_path.exists():
                 continue
-            total += installer._create_skill_symlinks(central_path, platform_dir, pack_name)
+            total += installer.create_skill_symlinks(central_path, platform_dir, pack_name)
 
         if total > 0:
             console.print(f"  Synced {total} skill(s) to {platform}")
