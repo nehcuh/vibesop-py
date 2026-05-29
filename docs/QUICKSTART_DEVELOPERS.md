@@ -69,7 +69,7 @@ $ vibe route "database connection failed"
 ```bash
 $ vibe route "review my PR"
 
-✅ Matched: gstack/review (93%)
+✅ Matched: superpowers/review (93%)
 ```
 
 ### 场景 3: 性能优化 Performance Optimization
@@ -184,7 +184,7 @@ vibe feedback record "debug this" "systematic-debugging" --correct
 
 # 记录错误的路由
 vibe feedback record "test this" "superpowers/tdd" \\
-    --wrong "gstack/qa" --confidence 0.7
+    --wrong "omx/ultraqa" --confidence 0.7
 
 # 查看反馈报告
 vibe feedback report
@@ -251,7 +251,7 @@ vibe skills available
 # 查看技能详情
 vibe skills info <skill-id>
 
-# 安装技能包
+# 安装技能包（gstack 是可选推荐包，非默认）
 vibe install gstack
 
 # 检查环境

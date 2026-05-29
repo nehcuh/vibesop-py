@@ -57,7 +57,7 @@ VibeSOP 让你：
 
 例如：
 - `systematic-debugging` - 系统化调试工作流
-- `gstack/review` - 代码审查技能
+- `superpowers/review` - 代码审查技能
 - `superpowers/tdd` - 测试驱动开发
 
 ### 2. 路由 Routing
@@ -112,8 +112,8 @@ $ vibe route "帮我调试这个错误"
    Source: builtin
 
 💡 Alternatives:
-   • gstack/investigate (82%)
-   • superpowers/debug (75%)
+   • superpowers/debug (82%)
+   • superpowers/investigate (75%)
 ```
 
 **完成！** 你已经成功使用 VibeSOP 路由到最合适的技能。
@@ -139,10 +139,10 @@ $ vibe route "我的测试失败了"
 ```bash
 $ vibe route "review my PR"
 
-✅ Matched: gstack/review (93%)
+✅ Matched: superpowers/review (93%)
 ```
 
-**解读**: VibeSOP 理解你想审查 PR，推荐使用 gstack 的代码审查技能。
+**解读**: VibeSOP 理解你想审查 PR，推荐使用 superpowers 的代码审查技能。
 
 ### 场景 3: 我想优化性能 I Want to Optimize Performance
 
@@ -180,14 +180,15 @@ builtin (17 skills)
   • verification-before-completion - 完成前必须验证
   ...
 
-gstack (19 skills)
-  • gstack/review - PR 前审查
-  • gstack/qa - 系统化 QA 测试
+superpowers (7 skills)
+  • superpowers/review - PR 前审查
+  • superpowers/tdd - 测试驱动开发
+  • superpowers/brainstorm - 结构化头脑风暴
   ...
 
-superpowers (7 skills)
-  • tdd - 测试驱动开发
-  • brainstorm - 结构化头脑风暴
+omx (7 skills)
+  • omx/deep-interview - 深度面试
+  • omx/ralph -  Ralph 代理
   ...
 ```
 
@@ -209,9 +210,10 @@ $ vibe skills info systematic-debugging
 ╰──────────────────────────────────────────────╯
 ```
 
-### 安装新技能包
+### 安装新技能包（可选）
 
 ```bash
+# gstack 是可选的推荐技能包，不是默认安装的
 $ vibe install gstack
 
 📦 Found skill pack: gstack
@@ -238,9 +240,9 @@ $ vibe feedback record "调试错误" "systematic-debugging" --correct
 
 ```bash
 $ vibe feedback record "测试功能" "superpowers/tdd" \\
-    --wrong "gstack/qa" --confidence 0.7
+    --wrong "omx/ultraqa" --confidence 0.7
 
-⚠ Recorded incorrect routing: 测试功能 → superpowers/tdd (should be: gstack/qa)
+⚠ Recorded incorrect routing: 测试功能 → superpowers/tdd (should be: omx/ultraqa)
 ```
 
 ### 查看反馈报告
@@ -259,7 +261,7 @@ Accuracy by Skill:
 ┃ Skill               ┃ Correct ┃ Wrong ┃ Accuracy ┃
 ┡━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━╇━━━━━━━╇━━━━━━━━┩
 │ superpowers/review  │ 8      │ 0     │ 100.0%  │
-│ gstack/qa           │ 6      │ 1     │ 85.7%   │
+│ omx/ultraqa         │ 6      │ 1     │ 85.7%   │
 └─────────────────────┴────────┴───────┴─────────┘
 ```
 

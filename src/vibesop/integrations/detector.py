@@ -93,7 +93,9 @@ class IntegrationDetector:
         / "skills",  # ← Contains fine-grained symlinks (gstack-browse/, etc.)
     ]
 
-    # Known integrations
+    # Known integrations installed by quickstart / --auto by default.
+    # gstack is deliberately excluded — it is an optional recommended pack that
+    # users must install explicitly via `vibe install gstack`.
     KNOWN_INTEGRATIONS: ClassVar[dict[str, dict]] = {
         "superpowers": {
             "description": "General-purpose productivity skills",
@@ -106,20 +108,6 @@ class IntegrationDetector:
                 "superpowers/architect",
                 "superpowers/review",
                 "superpowers/optimize",
-            ],
-        },
-        "gstack": {
-            "description": "Virtual engineering team skills",
-            "paths": ["gstack"],
-            "skills": [
-                "gstack/office-hours",
-                "gstack/plan-ceo-review",
-                "gstack/plan-eng-review",
-                "gstack/review",
-                "gstack/investigate",
-                "gstack/qa",
-                "gstack/ship",
-                "gstack/careful",
             ],
         },
     }
