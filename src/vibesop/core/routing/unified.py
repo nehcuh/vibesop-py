@@ -32,11 +32,7 @@ from vibesop.core.config import RoutingConfig as ConfigRoutingConfig
 from vibesop.core.exceptions import MatcherError
 from vibesop.core.matching import (
     IMatcher,
-    KeywordMatcher,
-    LevenshteinMatcher,
-    MatcherConfig,
     RoutingContext,
-    TFIDFMatcher,
 )
 from vibesop.core.models import (
     LayerDetail,
@@ -48,22 +44,10 @@ from vibesop.core.models import (
 )
 from vibesop.core.optimization import (
     CandidatePrefilter,
-    PreferenceBooster,
-    SkillClusterIndex,
 )
-from vibesop.core.routing.cache import CacheManager
-from vibesop.core.routing.candidate_manager import CandidateManager
 from vibesop.core.routing.tracer import RoutingTracer
-from vibesop.core.routing.conflict import (
-    ConfidenceGapStrategy,
-    ConflictResolver,
-    ExplicitOverrideStrategy,
-    FallbackStrategy,
-    NamespacePriorityStrategy,
-    RecencyStrategy,
-)
+from vibesop.core.routing.conflict import ConflictResolver
 from vibesop.core.routing.context_mixin import RouterContextMixin
-from vibesop.core.routing.cost_tracker import TriageCostTracker
 from vibesop.core.routing.degradation import DegradationManager
 from vibesop.core.routing.matcher_pipeline import MatcherPipeline
 from vibesop.core.routing.optimization_service import OptimizationService
@@ -71,6 +55,7 @@ from vibesop.core.routing.orchestration_mixin import RouterOrchestrationMixin
 from vibesop.core.routing.result_mixin import RouterResultMixin
 from vibesop.core.routing.stats_mixin import RouterStatsMixin
 from vibesop.core.routing.triage_service import TriageService
+from vibesop.core.routing.router_factory import RouterFactory
 from vibesop.core.routing import _layers
 from vibesop.core.routing import _pipeline
 
@@ -122,97 +107,43 @@ class UnifiedRouter(
         prompt_builder: Any | None = None,
     ):
         self.project_root = Path(project_root).resolve()
-
-        if isinstance(config, ConfigManager):
-            self._config_manager = config
-        elif config is None:
-            self._config_manager = ConfigManager(project_root=self.project_root)
-        else:
-            self._config_manager = self._create_config_manager_from_config(config)
-
-        self._config: ConfigRoutingConfig = self._config_manager.get_routing_config()
         self._llm_factory = llm_factory
         self._prompt_builder = prompt_builder
         if skill_loader is not None:
             self._skill_loader = skill_loader
 
-        matcher_config = MatcherConfig(
-            min_confidence=self._config.min_confidence,
-            use_cache=self._config.use_cache,
+        # =====================================================================
+        # Component construction via RouterFactory
+        # =====================================================================
+        factory = RouterFactory(self.project_root)
+
+        self._config_manager = factory.build_config_manager(config)
+        self._config: ConfigRoutingConfig = self._config_manager.get_routing_config()
+
+        self._matchers, self._embedding_enabled, self._plugin_registry = factory.build_matchers(
+            self._config,
         )
-
-        self._matchers: list[tuple[RoutingLayer, IMatcher]] = [  # pyright: ignore[reportAttributeAccessIssue]
-            (RoutingLayer.KEYWORD, KeywordMatcher(matcher_config)),
-            (RoutingLayer.TFIDF, TFIDFMatcher(matcher_config)),
-        ]
-
-        self._embedding_enabled = self._config.enable_embedding
-        if self._embedding_enabled:
-            from vibesop.core.matching.lazy_matcher import LazyEmbeddingMatcher
-
-            self._matchers.append((RoutingLayer.EMBEDDING, LazyEmbeddingMatcher(matcher_config)))  # pyright: ignore[reportArgumentType]
-
-        self._matchers.append((RoutingLayer.LEVENSHTEIN, LevenshteinMatcher(matcher_config)))  # pyright: ignore[reportArgumentType]
-
-        # Load custom matcher plugins from .vibe/matchers/
-        self._plugin_registry = None
-        try:
-            from vibesop.core.matching.plugin import MatcherPluginRegistry
-
-            self._plugin_registry = MatcherPluginRegistry(self.project_root)
-            for plugin in self._plugin_registry.list_plugins():
-                self._matchers.append((RoutingLayer.CUSTOM, plugin))  # pyright: ignore[reportArgumentType]
-        except ImportError:
-            pass
-
-        # Warm up matchers to prevent cold-start latency on first route()
-        # This ensures EmbeddingMatcher model is loaded during initialization
         self._matchers_warmed = False
 
         self._optimization_config = self._config_manager.get_optimization_config()
-        self._cluster_index = SkillClusterIndex()
-        self._prefilter = CandidatePrefilter(cluster_index=self._cluster_index)
+        (
+            self._cluster_index,
+            self._prefilter,
+            self._conflict_resolver,
+            self._preference_booster,
+        ) = factory.build_optimization_infrastructure(self._optimization_config)
 
-        # Production-grade conflict resolver
-        self._conflict_resolver = ConflictResolver()
-        self._conflict_resolver.add_strategy(ExplicitOverrideStrategy())
-        self._conflict_resolver.add_strategy(
-            ConfidenceGapStrategy(
-                gap_threshold=self._optimization_config.clustering.confidence_gap_threshold,
-            ),
-        )
-        self._conflict_resolver.add_strategy(NamespacePriorityStrategy())
-        self._conflict_resolver.add_strategy(
-            RecencyStrategy(
-                storage_path=str(self.project_root / ".vibe" / "preferences.json"),
-            ),
-        )
-        self._conflict_resolver.add_strategy(FallbackStrategy())
-
-        pref_config = self._optimization_config.preference_boost
-        self._preference_booster = PreferenceBooster(
-            enabled=self._optimization_config.enabled and pref_config.enabled,
-            weight=pref_config.weight,
-            min_samples=pref_config.min_samples,
-            storage_path=str(self.project_root / ".vibe" / "preferences.json"),
+        self._cache_manager, self._candidate_manager, self._cost_tracker = (
+            factory.build_infrastructure()
         )
 
-        # Cached SkillRecommender instance (from integrations)
-        self._skill_recommender: Any = None
+        self._tracer = factory.build_tracer()
+        factory.register_atexit(self._candidate_manager)
 
-        # Memory and instinct systems for context-aware routing (lazy init)
-        self._memory_manager: MemoryManager | None = None
-        self._instinct_learner: InstinctLearner | None = None
-
-        self._cache_manager = CacheManager(cache_dir=self.project_root / ".vibe" / "cache")
-        self._candidate_manager = CandidateManager(self.project_root)
-
-        self._cost_tracker = TriageCostTracker(storage_dir=self.project_root / ".vibe")
-
-        # Explicitly init _llm for type checker and test mocking
+        # =====================================================================
+        # Services (depend on self methods, kept in __init__ for now)
+        # =====================================================================
         self._llm: Any | None = None
-
-        # Build sub-services
         self._optimization_service = OptimizationService(
             config=self._config,
             optimization_config=self._optimization_config,
@@ -221,7 +152,6 @@ class UnifiedRouter(
             conflict_resolver=self._conflict_resolver,
             get_instinct_learner=self._get_instinct_learner,
         )
-
         self._triage_service = TriageService(
             config=self._config,
             cost_tracker=self._cost_tracker,
@@ -231,7 +161,6 @@ class UnifiedRouter(
             llm_factory=llm_factory,
             prompt_builder=prompt_builder,
         )
-
         self._matcher_pipeline = MatcherPipeline(
             matchers=self._matchers,
             config=self._config,
@@ -240,16 +169,15 @@ class UnifiedRouter(
             optimization_service=self._optimization_service,
             get_skill_source=self._get_skill_source,
         )
-
         self._degradation_manager = DegradationManager(self._config)
 
+        # =====================================================================
+        # State & lazy-init placeholders
+        # =====================================================================
         self._total_routes = 0
         self._layer_distribution: dict[str, int] = {}
         self._stats_lock = threading.Lock()
-
         self._scenario_cache: dict[str, Any] | None = None
-
-        # Project analyzer cache (expensive: ~2s filesystem scan)
         self._project_analyzer: Any | None = None
 
         # Orchestration components (lazy init)
@@ -261,25 +189,12 @@ class UnifiedRouter(
         # Session context for multi-turn state persistence (lazy init)
         self._session_context = None
 
-        # Routing tracer for per-layer diagnostic traces
-        self._tracer = RoutingTracer(
-            enabled=False,
-            traces_dir=self.project_root / ".vibe" / "traces",
-        )
+        # Cached SkillRecommender instance (from integrations)
+        self._skill_recommender: Any = None
 
-        # Flush usage buffer on normal exit to prevent data loss.
-        # Use a weak reference so the atexit handler does not keep the
-        # CandidateManager (and thus the router) alive indefinitely.
-        import weakref
-
-        _cm_ref = weakref.ref(self._candidate_manager)
-
-        def _flush_usage_buffer() -> None:
-            cm = _cm_ref()
-            if cm is not None:
-                cm._flush_usage_buffer()
-
-        atexit.register(_flush_usage_buffer)
+        # Memory and instinct systems for context-aware routing (lazy init)
+        self._memory_manager: MemoryManager | None = None
+        self._instinct_learner: InstinctLearner | None = None
 
         # Router-level coarse lock for thread safety
         self._route_lock = threading.Lock()
@@ -910,13 +825,6 @@ class UnifiedRouter(
     # ================================================================
     # Result building
     # ================================================================
-
-    def _create_config_manager_from_config(self, config: ConfigRoutingConfig) -> ConfigManager:
-        manager = ConfigManager(project_root=self.project_root)
-        for field_name in type(config).model_fields:
-            value = getattr(config, field_name)
-            manager.set_cli_override(f"routing.{field_name}", value)
-        return manager
 
     # ================================================================
     # Analytics and execution recording
