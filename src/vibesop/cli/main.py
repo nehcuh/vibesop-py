@@ -309,6 +309,13 @@ def route(
                 console.print(f"[bold yellow]⚠[/bold yellow] {result.message}")
             raise typer.Exit(0 if result.success else 1)
 
+    # TODO(phase2.3-blocked): Migrate to AgentRuntime.handle_query() once
+    # AgentRuntime supports orchestration (multi-intent detection + plan building).
+    # Currently AgentRuntime only calls AgentRouter.route() → _single_skill_route(),
+    # which breaks orchestrated queries. Blocked until AgentRuntime.handle_query()
+    # delegates to router.orchestrate() for multi-intent queries.
+    # See architecture review 2026-05-29.
+
     # Set up router with optional overrides
     routing_kwargs: dict[str, Any] = {}
     if min_confidence is not None:
