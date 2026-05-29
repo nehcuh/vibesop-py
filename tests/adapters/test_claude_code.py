@@ -81,8 +81,8 @@ class TestClaudeCodeHookRendering:
         result.add_file.assert_called_once_with(hook_path)
         result.add_warning.assert_not_called()
 
-    def test_route_hook_has_cross_platform_hash(self, adapter, tmp_path):
-        """Hook must include macOS (shasum) and Python fallback for hashing."""
+    def test_route_hook_delegates_to_agent_runtime(self, adapter, tmp_path):
+        """Hook must delegate to AgentRuntime.handle_query_for_hook via Python."""
         result = MagicMock()
         result.add_file = MagicMock()
         result.add_warning = MagicMock()
@@ -90,12 +90,12 @@ class TestClaudeCodeHookRendering:
         adapter._render_route_hook(tmp_path, result)
 
         content = (tmp_path / "hooks" / "vibesop-route.sh").read_text()
-        assert "shasum -a 256" in content, "macOS shasum fallback missing"
-        assert "python3 -c" in content, "Python hash fallback missing"
-        assert "sha256sum" in content, "Linux sha256sum path missing"
+        assert "AgentRuntime" in content, "AgentRuntime delegation missing"
+        assert "handle_query_for_hook" in content, "handle_query_for_hook call missing"
+        assert "python3 -c" in content, "Python invocation missing"
 
     def test_route_hook_has_slash_command_detection(self, adapter, tmp_path):
-        """Hook must detect /vibe-* slash commands."""
+        """Hook must pass query to AgentRuntime (slash commands handled in Python)."""
         result = MagicMock()
         result.add_file = MagicMock()
         result.add_warning = MagicMock()
@@ -103,11 +103,14 @@ class TestClaudeCodeHookRendering:
         adapter._render_route_hook(tmp_path, result)
 
         content = (tmp_path / "hooks" / "vibesop-route.sh").read_text()
-        assert "vibe-" in content, "Slash command detection missing"
-        assert "vibe route" in content, "vibe route call missing"
+        assert "vibe" in content, "vibe reference missing"
+        # AgentRuntime handles slash commands, hook just delegates
+        assert "from vibesop.agent.runtime import AgentRuntime" in content, (
+            "AgentRuntime import missing"
+        )
 
-    def test_route_hook_has_conversation_id_passing(self, adapter, tmp_path):
-        """Hook must pass --conversation to vibe route."""
+    def test_route_hook_passes_hook_config_params(self, adapter, tmp_path):
+        """Hook must pass platform and hook config to AgentRuntime."""
         result = MagicMock()
         result.add_file = MagicMock()
         result.add_warning = MagicMock()
@@ -115,11 +118,13 @@ class TestClaudeCodeHookRendering:
         adapter._render_route_hook(tmp_path, result)
 
         content = (tmp_path / "hooks" / "vibesop-route.sh").read_text()
-        assert "--conversation" in content, "Conversation ID argument missing"
-        assert "CONVERSATION_ID" in content, "Conversation ID variable missing"
+        assert "hook_event_name=" in content, "hook_event_name param missing"
+        assert "include_additional_context=" in content, "include_additional_context param missing"
+        assert "no_match_message=" in content, "no_match_message param missing"
+        assert "platform=" in content, "platform param missing"
 
-    def test_route_hook_skips_short_queries(self, adapter, tmp_path):
-        """Hook must skip empty or very short queries."""
+    def test_route_hook_skips_empty_queries(self, adapter, tmp_path):
+        """Hook must skip empty queries before calling Python."""
         result = MagicMock()
         result.add_file = MagicMock()
         result.add_warning = MagicMock()
@@ -127,11 +132,11 @@ class TestClaudeCodeHookRendering:
         adapter._render_route_hook(tmp_path, result)
 
         content = (tmp_path / "hooks" / "vibesop-route.sh").read_text()
-        assert "-lt 10" in content, "Short-query guard missing"
         assert "echo '{}'" in content, "Empty JSON fallback missing"
+        assert "-z" in content, "Empty query check missing"
 
-    def test_route_hook_has_meta_query_guard(self, adapter, tmp_path):
-        """Hook must skip meta queries about VibeSOP itself."""
+    def test_route_hook_parses_json_input(self, adapter, tmp_path):
+        """Hook must parse JSON input for user_prompt field."""
         result = MagicMock()
         result.add_file = MagicMock()
         result.add_warning = MagicMock()
@@ -139,10 +144,11 @@ class TestClaudeCodeHookRendering:
         adapter._render_route_hook(tmp_path, result)
 
         content = (tmp_path / "hooks" / "vibesop-route.sh").read_text()
-        assert "vibe\\s+(route|skill|config)" in content, "Meta-query guard missing"
+        assert "user_prompt" in content, "JSON user_prompt parsing missing"
+        assert "jq" in content, "jq JSON parsing missing"
 
-    def test_route_hook_has_explicit_override_detection(self, adapter, tmp_path):
-        """Hook must detect explicit skill overrides like /skill or @skill."""
+    def test_route_hook_has_no_bash_routing_logic(self, adapter, tmp_path):
+        """Hook must NOT contain duplicate routing logic — all in Python AgentRuntime."""
         result = MagicMock()
         result.add_file = MagicMock()
         result.add_warning = MagicMock()
@@ -150,8 +156,14 @@ class TestClaudeCodeHookRendering:
         adapter._render_route_hook(tmp_path, result)
 
         content = (tmp_path / "hooks" / "vibesop-route.sh").read_text()
-        assert "EXPLICIT SKILL" in content, "Explicit override output missing"
-        assert "OVERRIDE" in content, "Override detection missing"
+        # These patterns were in the old 221-line bash hook and should now be absent
+        assert "vibe route" not in content, "vibe route subprocess call should be removed"
+        assert "OVERRIDE" not in content, "override detection should be in Python"
+        assert "CONVERSATION_ID" not in content, "conversation ID should be in Python"
+        assert "sha256sum" not in content, "hashing should be in Python"
+        assert "shasum" not in content, "hashing should be in Python"
+        assert "MODE=" not in content, "routing mode parsing should be in Python"
+        assert "ALTERNATIVES_JSON" not in content, "alternatives parsing should be in Python"
 
 
 class TestSkillContentRender:

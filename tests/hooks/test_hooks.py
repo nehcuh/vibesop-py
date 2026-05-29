@@ -167,8 +167,9 @@ class TestGetHookDefinitions:
         definitions = get_hook_definitions("opencode")
 
         assert isinstance(definitions, dict)
-        assert len(definitions) == 1  # OpenCode supports post-session-start for route interception
+        assert len(definitions) == 2  # post-session-start + route-interceptor
         assert "post-session-start" in definitions
+        assert "route-interceptor" in definitions
 
     def test_get_unknown_platform(self) -> None:
         """Test getting hooks for unknown platform."""

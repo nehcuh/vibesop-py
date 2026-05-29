@@ -10,8 +10,10 @@ Refactored in v5.5.0 as part of Phase 3 — see the plan for details.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -82,6 +84,117 @@ class AgentRuntimeResult:
             ensure_ascii=False,
         )
 
+    def to_hook_response(
+        self,
+        platform: str = "generic",
+        hook_event_name: str = "",
+        include_additional_context: bool = True,
+        no_match_message: bool = True,
+    ) -> str:
+        """Serialize to a platform-specific hook response format.
+
+        Produces the JSON structure expected by Claude Code, OpenCode,
+        and Kimi CLI hook interfaces with systemMessage and optional
+        hookSpecificOutput.additionalContext.
+
+        Args:
+            platform: Platform identifier (claude-code, opencode, kimi-cli).
+            hook_event_name: Hook event name for hookSpecificOutput.
+            include_additional_context: When True, attach skill content/plan
+                as additionalContext in hookSpecificOutput.
+            no_match_message: When True, produce a fallback message when
+                no skill matches.
+
+        Returns:
+            JSON string in the platform hook response format.
+        """
+        # Not intercepted — empty response
+        if not self.intercepted:
+            return "{}"
+
+        # Slash command result
+        if self.mode == "slash_command" and self.slash_result:
+            msg = self.slash_result.get("message", "")
+            return json.dumps(
+                {"systemMessage": f"📎 VibeSOP: {msg}"},
+                ensure_ascii=False,
+            )
+
+        # Orchestration mode
+        if self.mode == "orchestrate" and self.plan:
+            plan_text = json.dumps(self.plan, indent=2, ensure_ascii=False)
+            response: dict[str, Any] = {
+                "systemMessage": (
+                    "🔀 VibeSOP detected multiple intents. "
+                    "Execution plan injected."
+                ),
+            }
+            if include_additional_context:
+                ctx = f"[VibeSOP Execution Plan]\n{plan_text}"
+                ho: dict[str, Any] = {"additionalContext": ctx}
+                if hook_event_name:
+                    ho["hookEventName"] = hook_event_name
+                response["hookSpecificOutput"] = ho
+            return json.dumps(response, ensure_ascii=False)
+
+        # No match — fallback
+        if not self.skill_id or self.skill_id == "fallback-llm":
+            if no_match_message:
+                return json.dumps(
+                    {
+                        "systemMessage": (
+                            "🤖 VibeSOP: No matching skill found. "
+                            "Proceeding in normal mode."
+                        )
+                    },
+                    ensure_ascii=False,
+                )
+            return "{}"
+
+        # Single skill match — build full response
+        skill_flat = self.skill_id.replace("/", "-")
+        conf_pct = int(self.confidence * 100)
+
+        # Build alternatives message
+        alt_msg = ""
+        if self.alternatives:
+            alt_lines = [
+                f"  {i+1}. {a['skill_id']} "
+                f"({int(a.get('confidence', 0) * 100)}%)"
+                for i, a in enumerate(self.alternatives[:5])
+            ]
+            alt_msg = (
+                "\nALTERNATIVE SKILLS "
+                f"(if '{self.skill_id}' doesn't fit, load one of these):\n"
+                + "\n".join(alt_lines)
+                + "\n"
+            )
+
+        system_message = (
+            f"🎯 VibeSOP routed: {self.skill_id} ({conf_pct}% confidence)"
+            f"{alt_msg}"
+            f"\n\nNEXT STEP (MANDATORY): read skills/{skill_flat}/SKILL.md\n"
+            "Do NOT proceed without reading this file.\n"
+            "If the skill doesn't match, load an alternative skill above."
+        )
+
+        resp: dict[str, Any] = {"systemMessage": system_message}
+
+        if include_additional_context and self.skill_content:
+            additional_context = (
+                f"[ACTIVE SKILL: {self.skill_id}]\n"
+                "You MUST follow this skill's workflow. Do not skip steps.\n\n"
+                f"{self.skill_content[:3000]}"
+            )
+            hook_output: dict[str, Any] = {
+                "additionalContext": additional_context,
+            }
+            if hook_event_name:
+                hook_output["hookEventName"] = hook_event_name
+            resp["hookSpecificOutput"] = hook_output
+
+        return json.dumps(resp, ensure_ascii=False)
+
 
 class AgentRuntime:
     """Wired runtime connecting all VibeSOP agent components.
@@ -96,6 +209,12 @@ class AgentRuntime:
         >>> if result.has_match:
         ...     print(runtime.injector.inject_single_skill(result.skill_id, "claude-code"))
     """
+
+    # Patterns for route-like slash commands that strip prefix and route
+    _ROUTE_LIKE_RE = re.compile(
+        r'^/(?:vibe-route|slash-route|vibe-orchestrate|orchestrate)\s+["\']?(.+?)["\']?\s*$',
+        re.DOTALL,
+    )
 
     def __init__(self, project_root: str | Path = ".") -> None:
         self.project_root = Path(project_root).resolve()
@@ -175,6 +294,7 @@ class AgentRuntime:
         *,
         platform: str = "generic",
         session_id: str = "default",
+        conversation_id: str = "",
         explain: bool = False,
     ) -> AgentRuntimeResult:
         """Handle a user query through the full routing pipeline.
@@ -183,6 +303,8 @@ class AgentRuntime:
             query: The user's natural language query.
             platform: Platform identifier (claude-code, opencode, kimi-cli, pi).
             session_id: Session identifier for context-aware routing.
+            conversation_id: Conversation ID for multi-turn continuity.
+                Auto-generated from project path if empty.
             explain: When True, include full decision transparency output.
 
         Returns:
@@ -190,18 +312,31 @@ class AgentRuntime:
         """
         result = AgentRuntimeResult()
 
+        # Generate conversation ID if not provided
+        if not conversation_id:
+            project_hash = hashlib.sha256(
+                str(self.project_root).encode()
+            ).hexdigest()[:16]
+            conversation_id = project_hash
+
         # 1. Check for slash commands (/vibe-help, /vibe-list, etc.)
         if self.slash_executor.is_slash_command(query):
             try:
-                slash_result = self.slash_executor.execute_query(query)
-                result.intercepted = True
-                result.mode = "slash_command"
-                result.slash_result = {
-                    "success": slash_result.success,
-                    "message": slash_result.message,
-                    "command": slash_result.command,
-                }
-                return result
+                # Handle route-like slash commands: strip prefix and route
+                route_match = self._ROUTE_LIKE_RE.match(query.strip())
+                if route_match:
+                    query = route_match.group(1).strip()
+                    # Fall through to normal routing below
+                else:
+                    slash_result = self.slash_executor.execute_query(query)
+                    result.intercepted = True
+                    result.mode = "slash_command"
+                    result.slash_result = {
+                        "success": slash_result.success,
+                        "message": slash_result.message,
+                        "command": slash_result.command,
+                    }
+                    return result
             except Exception as e:
                 logger.debug(f"Slash command execution failed: {e}")
                 # Fall through to normal routing
@@ -280,3 +415,45 @@ class AgentRuntime:
                 # Non-fatal — routing decision is still valid
 
         return result
+
+    def handle_query_for_hook(
+        self,
+        query: str,
+        *,
+        platform: str = "generic",
+        hook_event_name: str = "",
+        include_additional_context: bool = True,
+        no_match_message: bool = True,
+        session_id: str = "default",
+        conversation_id: str = "",
+    ) -> str:
+        """Handle a query and return a platform hook response JSON string.
+
+        This is the primary entry point for shell hook wrappers. It runs
+        the full handle_query pipeline and formats the result as a hook
+        response suitable for direct output to the platform.
+
+        Args:
+            query: The user's natural language query.
+            platform: Platform identifier (claude-code, opencode, kimi-cli).
+            hook_event_name: Hook event name for hookSpecificOutput.
+            include_additional_context: Attach skill content as additionalContext.
+            no_match_message: Produce fallback message when no skill matches.
+            session_id: Session identifier for context-aware routing.
+            conversation_id: Conversation ID for multi-turn continuity.
+
+        Returns:
+            JSON string in the platform hook response format.
+        """
+        result = self.handle_query(
+            query,
+            platform=platform,
+            session_id=session_id,
+            conversation_id=conversation_id,
+        )
+        return result.to_hook_response(
+            platform=platform,
+            hook_event_name=hook_event_name,
+            include_additional_context=include_additional_context,
+            no_match_message=no_match_message,
+        )

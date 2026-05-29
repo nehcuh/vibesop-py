@@ -21,11 +21,12 @@ class TestHookInstaller:
 
         results = installer.install_hooks("claude-code", tmp_path)
 
-        # Should install 3 hooks
-        assert len(results) == 3
+        # Should install 4 hooks (including route-interceptor)
+        assert len(results) == 4
         assert "pre-session-end" in results
         assert "pre-tool-use" in results
         assert "post-session-start" in results
+        assert "route-interceptor" in results
 
         # All should succeed
         assert all(results.values())
@@ -41,9 +42,10 @@ class TestHookInstaller:
 
         results = installer.install_hooks("opencode", tmp_path)
 
-        # OpenCode supports post-session-start hook (route interception)
-        assert len(results) == 1
+        # OpenCode supports post-session-start + route-interceptor
+        assert len(results) == 2
         assert results.get("post-session-start") is True
+        assert results.get("route-interceptor") is True
 
     def test_install_hooks_specific(self, tmp_path: Path) -> None:
         """Test installing specific hooks."""
@@ -111,12 +113,13 @@ class TestHookInstaller:
         # Then uninstall
         results = installer.uninstall_hooks("claude-code", tmp_path)
 
-        assert len(results) == 3
+        assert len(results) == 4
         assert all(results.values())
 
         # Files should be removed
         assert not (tmp_path / "hooks" / "pre-session-end.sh").exists()
         assert not (tmp_path / "hooks" / "pre-tool-use.sh").exists()
+        assert not (tmp_path / "hooks" / "route-interceptor.sh").exists()
 
     def test_uninstall_hooks_specific(self, tmp_path: Path) -> None:
         """Test uninstalling specific hooks."""
@@ -145,14 +148,14 @@ class TestHookInstaller:
 
         # Before installation
         results = installer.verify_hooks("claude-code", tmp_path)
-        assert len(results) == 3
+        assert len(results) == 4
         assert not any(results.values())  # All should be False
 
         # After installation
         installer.install_hooks("claude-code", tmp_path)
         results = installer.verify_hooks("claude-code", tmp_path)
 
-        assert len(results) == 3
+        assert len(results) == 4
         assert all(results.values())  # All should be True
 
     def test_verify_hooks_partial(self, tmp_path: Path) -> None:
@@ -253,10 +256,11 @@ class TestHookInstallerIntegration:
         claude_results = installer.install_hooks("claude-code", claude_dir)
         opencode_results = installer.install_hooks("opencode", opencode_dir)
 
-        # Claude Code should have hooks
-        assert len(claude_results) == 3
+        # Claude Code should have 4 hooks (including route-interceptor)
+        assert len(claude_results) == 4
         assert all(claude_results.values())
 
-        # OpenCode should have 1 hook (post-session-start)
-        assert len(opencode_results) == 1
+        # OpenCode should have 2 hooks (post-session-start + route-interceptor)
+        assert len(opencode_results) == 2
         assert opencode_results.get("post-session-start") is True
+        assert opencode_results.get("route-interceptor") is True

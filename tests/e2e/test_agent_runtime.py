@@ -264,9 +264,10 @@ class TestPlatformAdapterAgentRuntime:
         assert track_stat.st_mode & stat.S_IXUSR, "vibesop-track.sh should be executable"
 
         route_content = route_hook.read_text()
-        assert "vibe route" in route_content
-        assert "additionalContext" in route_content
-        assert "orchestrate" in route_content or "orchestrated" in route_content
+        assert "AgentRuntime" in route_content
+        assert "handle_query_for_hook" in route_content
+        assert "python3 -c" in route_content
+        assert "UserPromptSubmit" in route_content
 
         track_content = track_hook.read_text()
         assert "tool" in track_content

@@ -5,40 +5,22 @@
 # Platform: {{ platform_name }}
 # Purpose: {{ purpose }}
 #
+# Thin shell wrapper — all routing logic lives in AgentRuntime.handle_query().
 # Input: JSON via stdin with field "user_prompt", or plain text
 # Output: JSON with optional "systemMessage" and "hookSpecificOutput"
-#
-# Usage:
 {% if platform == "claude-code" %}
-#   Configure in .claude/settings.json under hooks.UserPromptSubmit
-#   Or call manually: bash ~/.claude/hooks/vibesop-route.sh
+# Usage: configure in .claude/settings.json under hooks.UserPromptSubmit
 {% elif platform == "opencode" %}
-#   echo "/vibe-help" | bash ~/.config/opencode/hooks/vibesop-route.sh
-#   Or source vibesop-env.sh for automatic handling.
+# Usage: echo "/vibe-help" | bash ~/.config/opencode/hooks/vibesop-route.sh
 {% elif platform == "kimi-cli" %}
-#   Configure [[hooks]] in config.toml:
-#   [[hooks]]
-#   name = "vibesop-route"
-#   event = "UserPromptSubmit"
-#   command = "bash ~/.kimi/hooks/vibesop-route.sh"
+# Usage: configure [[hooks]] in config.toml
 {% endif %}
 
 set -e
 
-# Cross-platform timeout wrapper (macOS doesn't ship with `timeout`)
-_run_cmd() {
-    if command -v timeout &> /dev/null; then
-        timeout 15 "$@"
-    elif command -v gtimeout &> /dev/null; then
-        gtimeout 15 "$@"
-    else
-        "$@"
-    fi
-}
-
 INPUT=$(cat)
 
-# Try JSON parsing first; fall back to raw input for plain-text use
+# Try JSON parsing first; fall back to raw input
 QUERY=""
 if command -v jq &> /dev/null; then
     QUERY=$(echo "$INPUT" | jq -r '.user_prompt // empty' 2>/dev/null || true)
@@ -47,175 +29,24 @@ if [ -z "$QUERY" ]; then
     QUERY="$INPUT"
 fi
 
-# Skip empty or very short queries (avoid over-routing trivial input)
-if [ -z "$QUERY" ] || [ "$(printf '%s' "$QUERY" | wc -m | tr -d ' ')" -lt 10 ]; then
+# Skip empty queries
+if [ -z "$QUERY" ]; then
     echo '{}'
     exit 0
 fi
 
-# Skip meta queries about VibeSOP itself
-if echo "$QUERY" | command grep -qiE 'vibe\s+(route|skill|config)|why.*routing|how.*skill'; then
-    echo '{}'
-    exit 0
-fi
+# Delegate to AgentRuntime (Python)
+python3 -c "
+import sys, json
+from vibesop.agent.runtime import AgentRuntime
 
-# Generate stable conversation ID for multi-turn context
-CONVERSATION_ID=""
-PROJECT_DIR="${CLAUDE_PROJECT_DIR:-${PWD:-$(pwd)}}"
-if command -v sha256sum &> /dev/null; then
-    CONVERSATION_ID=$(printf '%s' "$PROJECT_DIR" | sha256sum | cut -c1-16)
-elif command -v shasum &> /dev/null; then
-    CONVERSATION_ID=$(printf '%s' "$PROJECT_DIR" | shasum -a 256 | cut -c1-16)
-elif command -v python3 &> /dev/null; then
-    CONVERSATION_ID=$(printf '%s' "$PROJECT_DIR" | python3 -c "import sys, hashlib; print(hashlib.sha256(sys.stdin.read().encode()).hexdigest()[:16])")
-fi
-
-CONVERSATION_ARG=""
-if [ -n "$CONVERSATION_ID" ]; then
-    CONVERSATION_ARG="--conversation $CONVERSATION_ID"
-fi
-
-# Detect VibeSOP informational slash commands (non-routing: help, list, install, etc.)
-# These return a text message to be shown as systemMessage.
-# /vibe-route{% if enable_orchestration %} and /vibe-orchestrate{% endif %} are handled below —
-# they need full structured routing results for the AI Agent to follow.
-if echo "$QUERY" | command grep -qE '^/(vibe-)?(install|analyze|evaluate|list|help)'; then
-    SLASH_RESULT=""
-    if command -v vibe &> /dev/null; then
-        SLASH_RESULT=$(_run_cmd vibe route $CONVERSATION_ARG --yes --json "$QUERY" 2>/dev/null || true)
-    fi
-    if [ -n "$SLASH_RESULT" ]; then
-        SLASH_MSG=$(echo "$SLASH_RESULT" | jq -r '.message // empty')
-        if [ -n "$SLASH_MSG" ]; then
-            echo "{\"systemMessage\": \"📎 VibeSOP: $SLASH_MSG\"}"
-            exit 0
-        fi
-    fi
-    echo "{\"systemMessage\": \"📎 VibeSOP quick command: $QUERY\"}"
-    exit 0
-fi
-
-# Strip /vibe-route, /slash-route{% if enable_orchestration %}, /vibe-orchestrate, /orchestrate{% endif %} prefix
-# and let the underlying query go through normal routing so the full
-# result (with skill_id, execution_plan, etc.) is available for
-# structured injection by the platform adapter.
-if echo "$QUERY" | command grep -qE '^/(vibe-route|slash-route{% if enable_orchestration %}|vibe-orchestrate|orchestrate{% endif %})\b'; then
-    QUERY=$(echo "$QUERY" | sed -E 's/^\/[a-z-]+[[:space:]]*"?//; s/"$//')
-    if [ -z "$QUERY" ]; then
-        echo "{\"systemMessage\": \"⚠️  VibeSOP: this command requires a query.\"}"
-        exit 0
-    fi
-fi
-
-{% if enable_explicit_overrides %}
-# Detect explicit skill overrides (bypass routing)
-OVERRIDE=$(echo "$QUERY" | command grep -owE '/[a-z-]+|@[a-z-]+|使用\s+[a-z-]+' | head -1)
-if [ -n "$OVERRIDE" ]; then
-    SKILL_ID="${OVERRIDE#/}"
-    SKILL_ID="${SKILL_ID#@}"
-    SKILL_ID=$(echo "$SKILL_ID" | sed 's/使用 *//')
-{% if hook_event_name %}
-    echo "{\"systemMessage\": \"🎯 Explicit skill override: $SKILL_ID\", \"hookSpecificOutput\": {\"hookEventName\": \"{{ hook_event_name }}\", \"additionalContext\": \"[EXPLICIT SKILL: $SKILL_ID]\nPlease load and follow this skill.\"}}"
-{% else %}
-    echo "{\"systemMessage\": \"🎯 Explicit skill override: $SKILL_ID\", \"hookSpecificOutput\": {\"additionalContext\": \"[EXPLICIT SKILL: $SKILL_ID]\nPlease load and follow this skill.\"}}"
-{% endif %}
-    exit 0
-fi
-{% endif %}
-
-# Call VibeSOP routing (with timeout to avoid blocking)
-RESULT=""
-if command -v vibe &> /dev/null; then
-    RESULT=$(_run_cmd vibe route --yes $CONVERSATION_ARG --json "$QUERY" 2>/dev/null || true)
-fi
-
-if [ -z "$RESULT" ]; then
-    echo '{}'
-    exit 0
-fi
-
-{% if enable_orchestration %}
-# Parse routing result (orchestration-aware)
-MODE=$(echo "$RESULT" | jq -r '.mode // "single"')
-PRIMARY=$(echo "$RESULT" | jq -r '.primary.skill_id // empty')
-CONFIDENCE=$(echo "$RESULT" | jq -r '.primary.confidence // "0"')
-
-# Extract alternatives for Agent fallback
-ALTERNATIVES_JSON=$(echo "$RESULT" | jq -r '[.alternatives[]? | {skill_id, confidence, description: (.description // "")}] | .[0:5]' 2>/dev/null || echo "[]")
-ALT_COUNT=$(echo "$ALTERNATIVES_JSON" | jq -r 'length' 2>/dev/null || echo "0")
-
-if [ "$MODE" = "orchestrated" ] || [ "$MODE" = "orchestrate" ]; then
-    PLAN=$(echo "$RESULT" | jq -r '.execution_plan // empty')
-    if [ -n "$PLAN" ]; then
-{% if hook_event_name %}
-        echo "{\"systemMessage\": \"🔀 VibeSOP detected multiple intents. Execution plan injected.\", \"hookSpecificOutput\": {\"hookEventName\": \"{{ hook_event_name }}\", \"additionalContext\": \"[VibeSOP Execution Plan]\n$PLAN\"}}"
-{% else %}
-        echo "{\"systemMessage\": \"🔀 VibeSOP detected multiple intents. Execution plan injected.\", \"hookSpecificOutput\": {\"additionalContext\": \"[VibeSOP Execution Plan]\n$PLAN\"}}"
-{% endif %}
-    else
-        echo "{\"systemMessage\": \"🔀 VibeSOP detected multiple intents.\"}"
-    fi
-fi
-{% else %}
-PRIMARY=$(echo "$RESULT" | jq -r '.primary.skill_id // empty')
-CONFIDENCE=$(echo "$RESULT" | jq -r '.primary.confidence // "0"')
-{% endif %}
-
-# Check for context-shift reroute suggestion (session-aware routing)
-REROUTE_FROM=""
-REROUTE_TO=""
-REROUTE_CONF=""
-REROUTE_REASON=""
-if command -v jq &> /dev/null; then
-    REROUTE_FROM=$(echo "$RESULT" | jq -r '.primary.metadata.reroute_suggestion.from_skill // empty' 2>/dev/null || true)
-    REROUTE_TO=$(echo "$RESULT" | jq -r '.primary.metadata.reroute_suggestion.to_skill // empty' 2>/dev/null || true)
-    REROUTE_CONF=$(echo "$RESULT" | jq -r '.primary.metadata.reroute_suggestion.confidence // "0"' 2>/dev/null || true)
-    REROUTE_REASON=$(echo "$RESULT" | jq -r '.primary.metadata.reroute_suggestion.reason // empty' 2>/dev/null || true)
-fi
-REROUTE_NOTICE=""
-if [ -n "$REROUTE_FROM" ] && [ -n "$REROUTE_TO" ]; then
-    REROUTE_CONF_FLOAT=$(echo "$REROUTE_CONF" | awk '{printf "%.0f", $1 * 100}')
-    REROUTE_NOTICE=" [Context shift: $REROUTE_FROM → $REROUTE_TO (${REROUTE_CONF_FLOAT}%)]"
-fi
-
-if [ -n "$PRIMARY" ] && [ "$PRIMARY" != "fallback-llm" ]; then
-    SKILL_CONTENT=""
-    if command -v vibe &> /dev/null; then
-        SKILL_CONTENT=$(_run_cmd vibe skills read "$PRIMARY" 2>/dev/null | head -c 3000 || true)
-    fi
-    SKILL_FLAT=$(echo "$PRIMARY" | tr '/' '-')
-    CONF_PCT=$(echo "$CONFIDENCE" | awk '{printf "%.0f", $1 * 100}')
-
-    ALT_MSG=""
-    if [ "$ALT_COUNT" -gt 0 ]; then
-        ALT_MSG=$(echo "$ALTERNATIVES_JSON" | jq -r 'to_entries | map("  \(.key+1). \(.value.skill_id) (\(.value.confidence*100|floor)%): \(.value.description[0:50])") | join("\n")' 2>/dev/null || echo "")
-        if [ -n "$ALT_MSG" ]; then
-            ALT_MSG=$'\n'"ALTERNATIVE SKILLS (if '$PRIMARY' doesn't fit, load one of these):"$'\n'"$ALT_MSG"$'\n'
-        fi
-    fi
-
-{% if include_additional_context %}
-    if [ -n "$SKILL_CONTENT" ]; then
-{% if hook_event_name %}
-        echo "{\"systemMessage\": \"🎯 VibeSOP routed: $PRIMARY (${CONF_PCT}% confidence)${REROUTE_NOTICE}${ALT_MSG}\\n\\nNEXT STEP (MANDATORY): read skills/$SKILL_FLAT/SKILL.md\\nDo NOT proceed without reading this file.\\nIf the skill doesn't match, load an alternative skill above.\", \"hookSpecificOutput\": {\"hookEventName\": \"{{ hook_event_name }}\", \"additionalContext\": \"[ACTIVE SKILL: $PRIMARY]\nYou MUST follow this skill's workflow. Do not skip steps.\\n\\n$SKILL_CONTENT\"}}"
-{% else %}
-        echo "{\"systemMessage\": \"🎯 VibeSOP routed: $PRIMARY (${CONF_PCT}% confidence)${REROUTE_NOTICE}${ALT_MSG}\\n\\nNEXT STEP (MANDATORY): read skills/$SKILL_FLAT/SKILL.md\\nDo NOT proceed without reading this file.\\nIf the skill doesn't match, load an alternative skill above.\", \"hookSpecificOutput\": {\"additionalContext\": \"[ACTIVE SKILL: $PRIMARY]\nYou MUST follow this skill's workflow. Do not skip steps.\\n\\n$SKILL_CONTENT\"}}"
-{% endif %}
-    else
-        echo "{\"systemMessage\": \"🎯 VibeSOP routed: $PRIMARY (${CONF_PCT}% confidence)${REROUTE_NOTICE}${ALT_MSG}\\n\\nNEXT STEP (MANDATORY): read skills/$SKILL_FLAT/SKILL.md\\nDo NOT proceed without reading this file.\\nIf the skill doesn't match, load an alternative skill above.\"}"
-    fi
-{% else %}
-    if [ -n "$SKILL_CONTENT" ]; then
-        echo "{\"systemMessage\": \"🎯 VibeSOP routed: $PRIMARY (${CONF_PCT}% confidence)${REROUTE_NOTICE}${ALT_MSG}\\n\\nNEXT STEP (MANDATORY): read skills/$SKILL_FLAT/SKILL.md\\nDo NOT proceed without reading this file.\\nIf the skill doesn't match, load an alternative skill above.\"}"
-    else
-        echo "{\"systemMessage\": \"🎯 VibeSOP routed: $PRIMARY (${CONF_PCT}% confidence)${REROUTE_NOTICE}${ALT_MSG}\\n\\nNEXT STEP (MANDATORY): read skills/$SKILL_FLAT/SKILL.md\\nDo NOT proceed without reading this file.\\nIf the skill doesn't match, load an alternative skill above.\"}"
-    fi
-{% endif %}
-{% if no_match_message %}
-elif [ "$PRIMARY" = "fallback-llm" ]; then
-    echo "{\"systemMessage\": \"🤖 VibeSOP: No matching skill found. Proceeding in normal mode.\"}"
-{% else %}
-else
-    echo '{}'
-{% endif %}
-fi
+query = sys.argv[1] if len(sys.argv) > 1 else ''
+runtime = AgentRuntime()
+print(runtime.handle_query_for_hook(
+    query,
+    platform='{{ platform }}',
+    hook_event_name='{{ hook_event_name }}',
+    include_additional_context={{ 'True' if include_additional_context else 'False' }},
+    no_match_message={{ 'True' if no_match_message else 'False' }},
+))
+" "$QUERY"

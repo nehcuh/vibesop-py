@@ -1,9 +1,8 @@
 """Tests for the shared hook template rendering.
 
 Verifies that ``render_route_hook()`` in ``_shared.py`` produces valid
-shell scripts for all three platform adapters.
+shell scripts that delegate to AgentRuntime.handle_query_for_hook().
 """
-
 
 from vibesop.adapters._shared import render_route_hook
 
@@ -16,13 +15,16 @@ class TestRenderRouteHook:
         result = render_route_hook()
         assert result.startswith("#!/bin/bash")
         assert "VibeSOP Route Hook for OpenCode" in result
+        assert "AgentRuntime" in result
+        assert "handle_query_for_hook" in result
 
     def test_claude_code_config(self) -> None:
-        """Claude Code config enables overrides, orchestration, context."""
+        """Claude Code config passes hook params to AgentRuntime."""
         result = render_route_hook(
             platform="claude-code",
             platform_name="Claude Code",
             purpose="Trigger VibeSOP routing and inject skill context",
+            hook_event_name="UserPromptSubmit",
             enable_explicit_overrides=True,
             enable_orchestration=True,
             include_additional_context=True,
@@ -30,13 +32,15 @@ class TestRenderRouteHook:
         )
         assert result.startswith("#!/bin/bash")
         assert "VibeSOP Route Hook for Claude Code" in result
-        assert "EXPLICIT SKILL" in result
-        assert "orchestrate" in result
-        assert "No matching skill found" in result
-        assert "additionalContext" in result
+        assert "AgentRuntime" in result
+        assert "handle_query_for_hook" in result
+        # Params passed to Python
+        assert "include_additional_context=True" in result
+        assert "no_match_message=True" in result
+        assert "UserPromptSubmit" in result
 
     def test_opencode_config(self) -> None:
-        """OpenCode config disables overrides, orchestration, context."""
+        """OpenCode config passes hook params to AgentRuntime."""
         result = render_route_hook(
             platform="opencode",
             platform_name="OpenCode",
@@ -48,17 +52,17 @@ class TestRenderRouteHook:
         )
         assert result.startswith("#!/bin/bash")
         assert "VibeSOP Route Hook for OpenCode" in result
-        assert "EXPLICIT SKILL" not in result
-        assert "orchestrate" not in result
-        assert "No matching skill found" not in result
-        assert "additionalContext" not in result
+        assert "AgentRuntime" in result
+        assert "include_additional_context=False" in result
+        assert "no_match_message=False" in result
 
     def test_kimi_cli_config(self) -> None:
-        """Kimi CLI config enables context and no-match message."""
+        """Kimi CLI config passes hook params to AgentRuntime."""
         result = render_route_hook(
             platform="kimi-cli",
             platform_name="Kimi CLI",
             purpose="Auto-routing via [[hooks]] in config.toml",
+            hook_event_name="UserPromptSubmit",
             enable_explicit_overrides=False,
             enable_orchestration=False,
             include_additional_context=True,
@@ -66,10 +70,9 @@ class TestRenderRouteHook:
         )
         assert result.startswith("#!/bin/bash")
         assert "VibeSOP Route Hook for Kimi CLI" in result
-        assert "EXPLICIT SKILL" not in result
-        assert "orchestrate" not in result
-        assert "No matching skill found" in result
-        assert "additionalContext" in result
+        assert "AgentRuntime" in result
+        assert "include_additional_context=True" in result
+        assert "no_match_message=True" in result
 
     def test_platforms_differ(self) -> None:
         """Each platform config produces distinct output."""
@@ -81,7 +84,6 @@ class TestRenderRouteHook:
         assert "Kimi CLI" in kimi
         assert claude != opencode
         assert claude != kimi
-        assert opencode != kimi
 
     def test_version_in_header(self) -> None:
         """Version string appears in the generated header."""
@@ -99,3 +101,25 @@ class TestRenderRouteHook:
         assert result.startswith("#!/bin/bash")
         # Should not have any platform-specific usage block rendered
         assert "claude-code" not in result
+
+    def test_no_bash_routing_logic(self) -> None:
+        """Template must contain no routing logic — all in Python AgentRuntime."""
+        result = render_route_hook(
+            platform="claude-code",
+            platform_name="Claude Code",
+            enable_explicit_overrides=True,
+            enable_orchestration=True,
+            include_additional_context=True,
+            no_match_message=True,
+        )
+        # These patterns were in the old 221-line bash hook
+        assert "EXPLICIT SKILL" not in result
+        assert "OVERRIDE" not in result
+        assert "vibe route" not in result
+        assert "CONVERSATION_ID" not in result
+        assert "sha256sum" not in result
+        assert "shasum" not in result
+        assert "MODE=" not in result
+        assert "PRIMARY=" not in result
+        assert "SKILL_CONTENT=" not in result
+        assert "ALTERNATIVES_JSON" not in result

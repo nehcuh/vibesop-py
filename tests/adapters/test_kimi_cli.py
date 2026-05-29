@@ -258,7 +258,7 @@ class TestKimiCliAdapter:
         assert result == {}
 
     def test_hook_script_content(self, tmp_path: Path) -> None:
-        """Generated hook script contains critical cross-platform logic."""
+        """Generated hook script delegates routing to AgentRuntime (Python)."""
         adapter = KimiCliAdapter()
         metadata = ManifestMetadata(platform="kimi-cli")
         manifest = Manifest(metadata=metadata)
@@ -271,10 +271,10 @@ class TestKimiCliAdapter:
         assert hook_path.stat().st_mode & 0o111  # executable
 
         content = hook_path.read_text()
-        assert "shasum -a 256" in content, "macOS hash fallback missing"
-        assert "python3 -c" in content, "Python hash fallback missing"
-        assert "vibe-" in content, "Slash command detection missing"
-        assert "vibe route" in content, "vibe route call missing"
+        assert "AgentRuntime" in content, "AgentRuntime delegation missing"
+        assert "handle_query_for_hook" in content, "handle_query_for_hook call missing"
+        assert "python3 -c" in content, "Python invocation missing"
+        assert "vibe" in content, "vibe reference missing"
 
     def test_config_toml_has_hooks_section(self, tmp_path: Path) -> None:
         """config.toml includes [[hooks]] configuration for auto-routing."""

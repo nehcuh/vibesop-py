@@ -54,6 +54,7 @@ class HookPoint(Enum):
             cls.PRE_SESSION_END: "Execute before AI session ends",
             cls.PRE_TOOL_USE: "Execute before a tool is used",
             cls.POST_SESSION_START: "Execute after AI session starts",
+            cls.ROUTE_INTERCEPTOR: "Intercept user prompt for VibeSOP skill routing",
         }
         return descriptions.get(point, "Unknown hook point")
 
@@ -88,16 +89,32 @@ HOOK_DEFINITIONS: dict[str, dict[str, dict[str, Any]]] = {
             "executable": True,
             "description": "Initialize session logging",
         },
+        "route-interceptor": {
+            "file": "hooks/vibesop-route.sh",
+            "executable": True,
+            "class": "vibesop.agent.runtime.agent_runtime.AgentRuntime",
+            "description": "Intercept user prompts for VibeSOP skill routing",
+        },
     },
     "kimi-cli": {
-        # Kimi Code CLI supports hooks via inline [[hooks]] arrays in config.toml,
-        # which is a different mechanism from file-based hooks
+        "route-interceptor": {
+            "file": "hooks/vibesop-route.sh",
+            "executable": True,
+            "class": "vibesop.agent.runtime.agent_runtime.AgentRuntime",
+            "description": "Intercept user prompts for VibeSOP skill routing",
+        },
     },
     "opencode": {
         "post-session-start": {
             "file": "hooks/vibesop-route.sh",
             "executable": True,
             "description": "Intercept user prompts for VibeSOP route detection",
+        },
+        "route-interceptor": {
+            "file": "hooks/vibesop-route.sh",
+            "executable": True,
+            "class": "vibesop.agent.runtime.agent_runtime.AgentRuntime",
+            "description": "Intercept user prompts for VibeSOP skill routing",
         },
     },
     "pi": {
@@ -110,6 +127,12 @@ HOOK_DEFINITIONS: dict[str, dict[str, dict[str, Any]]] = {
             "file": "extensions/vibesop-route.ts",
             "executable": False,
             "description": "Intercept user prompts for VibeSOP route detection via Pi extension",
+        },
+        "route-interceptor": {
+            "file": "extensions/vibesop-route.ts",
+            "executable": False,
+            "class": "vibesop.agent.runtime.agent_runtime.AgentRuntime",
+            "description": "Intercept user prompts for VibeSOP skill routing via Pi extension",
         },
     },
 }
