@@ -35,6 +35,22 @@ class SkillFormatConverter:
         """
         raise NotImplementedError
 
+    @staticmethod
+    def _yaml_safe_value(value: str) -> str:
+        """Ensure a value is safe for YAML (bare) inline embedding.
+
+        If the value could be misinterpreted by a YAML parser (starts with
+        ``[``, ``{``, ``>``, ``|``, ``!``, or contains ``: ``), wrap it in
+        double quotes with proper escaping.
+        """
+        if not value:
+            return '""'
+        # YAML flow indicators and indicators that cause trouble as bare values
+        if value[0] in "[{}>|!&*#%@`,'\"" or ": " in value or " #" in value:
+            safe = value.replace("\\", "\\\\").replace('"', '\\"')
+            return f'"{safe}"'
+        return value
+
     def _parse_yaml_front_matter(self, content: str) -> dict[str, Any]:
         """Parse YAML front matter from content.
 
@@ -180,7 +196,8 @@ class GstackConverter(SkillFormatConverter):
         """Build YAML front matter from metadata."""
         lines = ["---"]
         for key, value in metadata.items():
-            lines.append(f"{key}: {value}")
+            safe_value = self._yaml_safe_value(value)
+            lines.append(f"{key}: {safe_value}")
         lines.append("---")
         return "\n".join(lines)
 
@@ -245,7 +262,8 @@ class SuperpowersConverter(SkillFormatConverter):
         """Build YAML front matter from metadata."""
         lines = ["---"]
         for key, value in metadata.items():
-            lines.append(f"{key}: {value}")
+            safe_value = self._yaml_safe_value(value)
+            lines.append(f"{key}: {safe_value}")
         lines.append("---")
         return "\n".join(lines)
 

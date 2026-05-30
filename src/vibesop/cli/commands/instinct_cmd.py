@@ -346,7 +346,7 @@ def evolve(
     skill_md = f"""---
 id: {skill_id}
 name: {skill_id}
-description: {ins.pattern} (evolved from instinct)
+description: "{ins.pattern} (evolved from instinct)"
 tags: {ins.tags}
 intent: workflow
 namespace: custom

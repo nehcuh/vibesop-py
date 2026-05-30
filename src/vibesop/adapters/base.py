@@ -429,6 +429,19 @@ class PlatformAdapter(ABC):
         from vibesop.adapters._shared import is_pack_installed
 
         installed_path = is_pack_installed(skill_id)
+
+        # Fallback: use source_path from skill metadata (set by DynamicSkillDiscovery)
+        if not installed_path:
+            metadata = (
+                skill.metadata if hasattr(skill, "metadata")
+                else skill.get("metadata", {})
+            )
+            source_path = metadata.get("source_path", "") if isinstance(metadata, dict) else ""
+            if source_path:
+                sp = Path(source_path).expanduser()
+                if sp.exists() and (sp / "SKILL.md").exists():
+                    installed_path = sp
+
         if installed_path:
             resolved_installed = installed_path.resolve()
 

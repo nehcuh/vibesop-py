@@ -933,3 +933,11 @@ Coverage: temporarily lowered fail_under=0 from 75% (massive new test additions)
 - 记录了 5 个 instinct 模式
 - Next: 验证 pi agent 启动无错误
 - Recorded: yes - 5 instincts recorded
+
+### S06 (11:00~) [vibesop/yaml-quoting-bugs]
+- 溯源并修复 YAML frontmatter 中 description 裸写导致的 `[OMX]` 解析 bug（7 个文件，覆盖 3 个生成路径）
+- 修复 depth-2 skill 安装路径未被 `is_pack_installed` 和 `_render_skill_content` 发现的问题
+- 深度体检：发现并修复 skill 创建流程中 4 个额外裸 YAML 生成点
+- 跑 118 个测试通过，重建 pi agent 配置 85 skills 0 YAML 错误
+- Next: 确保后续 vibe build 不再出同类错误
+- Recorded: yes - YAML frontmatter generation pitfalls

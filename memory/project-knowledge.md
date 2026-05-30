@@ -2,6 +2,35 @@
 
 ## Technical Pitfalls
 
+### YAML Frontmatter Generation: Multiple Code Paths, Same Bug (2026-05-30)
+
+**Issue**: `vibe build` generates SKILL.md files with invalid YAML when `description` contains `[`, `{`, `: `, or other YAML flow indicators. Three independent code paths each build YAML frontmatter by raw string interpolation without quoting.
+
+**Root Cause**: YAML parsers interpret bare `[OMX]` as a flow sequence. When `description: [OMX] ...` appears without quotes, the parser fails with "Unexpected scalar at node end". This affected:
+1. Jinja2 template `shared/SKILL.md.j2` → `{{ skill.description }}` raw interpolation
+2. f-string YAML in `_discovery.py`, `instinct_cmd.py`, `cross_cutting.py`
+3. `format_converter.py` `_build_yaml_front_matter()` bare `f"{key}: {value}"`
+
+**Second Bug**: `is_pack_installed()` and `_render_skill_content()` both missed depth-2 skill installs (e.g., `~/.config/skills/instinct-learning/` instead of `~/.config/skills/builtin/instinct-learning/`), and `source_path` metadata from DynamicSkillDiscovery was discarded, causing fallback empty templates for "builtin-*" skills.
+
+**Solution**:
+- Added `_yaml_dquote(value)` → wraps in double quotes with `\\` and `"` escaping. Used in `render_skill_md()` pre-processing and `generate_fallback_skill_content()`.
+- Added `_yaml_safe_value()` to `SkillFormatConverter` base class → used by all converter subclasses.
+- `_render_skill_content()`: fallback to `skill.metadata["source_path"]` when `is_pack_installed()` fails.
+- `is_pack_installed()`: added depth-2 candidate `central_base / skill_name`.
+- Fixed all skill creation f-string paths (`_discovery.py`, `instinct_cmd.py`, `cross_cutting.py`).
+
+**Key Lesson**: Whenever generating YAML frontmatter from free-text user data, ALWAYS use a centralized YAML-safe quoting function. Never trust raw interpolation across f-strings, Jinja2, or str.replace().
+
+**Files**:
+- `src/vibesop/adapters/_shared.py` — core fix (3 locations)
+- `src/vibesop/adapters/base.py` — depth-2 source_path fallback
+- `src/vibesop/core/skills/format_converter.py` — YAML-safe converter
+- `src/vibesop/cli/commands/skills_commands/_discovery.py` — 2 locations
+- `src/vibesop/cli/commands/instinct_cmd.py` — 1 location
+- `src/vibesop/core/orchestration/cross_cutting.py` — 1 location
+- `src/vibesop/adapters/templates/pi/skills/SKILL.md.j2` — dead code, defense-in-depth
+
 ### Typer CLI Testing: Function vs App Instance (2026-04-20)
 
 **Issue**: `typer.testing.CliRunner.invoke()` requires a `typer.Typer` app instance or `click.Command`, not a decorated function. When tests import the command function directly from the module, `runner.invoke(func, ["--help"])` raises `AttributeError: 'function' object has no attribute '_add_completion'`.
