@@ -43,7 +43,7 @@ export default function (pi: ExtensionAPI) {
     if (event.source === "extension") return { action: "continue" };
 
     if (isSessionEndSignal(event.text)) {
-      const newText = `Use the \`read\` tool to load \`.pi/skills/session-end/SKILL.md\` and follow its instructions exactly.\n\n---\n\nUser request: ${event.text}`;
+      const newText = `Use the \`read\` tool to load \`.pi/skills/builtin-session-end/SKILL.md\` and follow its instructions exactly.\n\n---\n\nUser request: ${event.text}`;
       return { action: "transform", text: newText };
     }
 

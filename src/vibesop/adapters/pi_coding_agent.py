@@ -140,6 +140,9 @@ class PiCodingAgentAdapter(SdkBasedAdapter):
                 skill_dir.mkdir(parents=True, exist_ok=True)
                 self._render_skill_content(skill, skill_dir, manifest, result)
 
+            # Clean orphan skills not in the current manifest
+            self.clean_orphan_skills(manifest, output_dir)
+
         except Exception as e:
             result.add_error(f"Failed to render configuration: {e}")
             result.success = False

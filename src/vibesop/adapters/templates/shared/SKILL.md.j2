@@ -1,3 +1,13 @@
+---
+id: {{ skill.id }}
+name: {{ skill.name }}
+description: {{ skill.description }}
+version: "{{ skill.version or '1.0.0' }}"
+{% if skill.namespace %}
+namespace: {{ skill.namespace }}
+{% endif %}
+---
+
 # {{ skill.name }}
 
 {% if skill.description %}

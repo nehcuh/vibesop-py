@@ -923,3 +923,13 @@ Coverage: temporarily lowered fail_under=0 from 75% (massive new test additions)
 - v5.5.0 可发布
 
 **Recorded**: yes — shared template + render function pattern
+### S05 (08:00~) [vibesop/pi-agent-config]
+- 修复 pi agent 技能文件缺 YAML frontmatter 导致 "[Skill conflicts] description is required" 错误（66 个文件批量补）
+- 发现并修复 PiCodingAgentAdapter 缺少 clean_orphan_skills() 调用的 bug
+- 发现 Vibe CLI 是 uv tool 安装，本地源码修改需同步到安装路径
+- 从 registry.yaml/config.toml/平台目录彻底移除 gstack 技能包
+- 修复 vibesop-track.ts 模板硬编码 session-end 路径缺失 builtin- 前缀的 bug
+- 修复 shared SKILL.md.j2 模板缺少 YAML frontmatter
+- 记录了 5 个 instinct 模式
+- Next: 验证 pi agent 启动无错误
+- Recorded: yes - 5 instincts recorded

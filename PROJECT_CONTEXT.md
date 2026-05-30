@@ -4,6 +4,18 @@
 
 <!-- handoff:start -->
 
+### 2026-05-30 (S11) pi-agent-config-cleanup
+**Session**: Fix pi agent skill conflicts — frontmatter + orphan cleanup + gstack removal + extension path bug
+**Completed**:
+- Batch-fixed 66 SKILL.md files missing YAML frontmatter (description is required)
+- Fixed PiCodingAgentAdapter missing clean_orphan_skills() call
+- Fixed shared SKILL.md.j2 template generating files without frontmatter (synced to uv tool install path)
+- Removed gstack from core/registry.yaml, .vibe/config.toml, and all platform skill dirs
+- Fixed vibesop-track.ts template hardcoding session-end path without builtin- prefix
+- Recorded 5 instincts for reusable patterns
+**Files**: pi_coding_agent.py, SKILL.md.j2, registry.yaml, config.toml, vibesop-track.ts.j2, vibesop-track.ts
+**Next**: Verify pi agent starts without errors; consider adding namespace-aware skill path resolution in extensions
+
 ### 2026-05-29 (S10) 4-phase-transformation-audit-optimization
 **Session**: Phase 4 audit review optimization — 3 tasks completed
 **Completed**:
