@@ -228,6 +228,7 @@ class SkillSecurityAuditor:
 
         # 4.5. Trust store override — downgrade HIGH threats to MEDIUM
         # for packs the user has explicitly trusted
+        is_trusted = False
         if pack_name or source_url:
             try:
                 from vibesop.core.skills.trust import TrustStore
@@ -267,8 +268,16 @@ class SkillSecurityAuditor:
         threat_names = [t.name for t in threats]
         reason = f"Detected {len(threats)} threat(s): {', '.join(threat_names)}"
 
-        # Determine if safe based on mode
+        # Determine if safe based on mode and trust status
         is_safe = self._determine_safety(highest_risk)
+
+        # Trusted packs: downgrade + accept MEDIUM as safe
+        if is_trusted and highest_risk in (
+            ThreatLevel.SAFE,
+            ThreatLevel.LOW,
+            ThreatLevel.MEDIUM,
+        ):
+            is_safe = True
 
         return AuditResult(
             is_safe=is_safe,

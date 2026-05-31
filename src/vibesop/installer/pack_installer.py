@@ -105,7 +105,9 @@ class PackInstaller:
             if target_path.exists() and any(target_path.iterdir()):
                 installed_skill_files = list(target_path.rglob("SKILL.md"))
                 if installed_skill_files:
-                    audit_results = self._audit_skills(installed_skill_files)
+                    audit_results = self._audit_skills(
+                        installed_skill_files, pack_name=pack_name
+                    )
                     symlink_results = self._create_symlinks(pack_name, platforms)
                     msg = self._build_install_msg(
                         pack_name, installed_skill_files, audit_results,
@@ -128,7 +130,9 @@ class PackInstaller:
             build_output = self._run_post_install(target_path, analysis)
 
             installed_skill_files = list(target_path.rglob("SKILL.md"))
-            audit_results = self._audit_skills(installed_skill_files)
+            audit_results = self._audit_skills(
+                installed_skill_files, pack_name=pack_name
+            )
             symlink_results = self._create_symlinks(pack_name, platforms)
 
             msg = self._build_install_msg(
@@ -141,10 +145,14 @@ class PackInstaller:
         except Exception as e:
             return False, f"Failed to install {pack_name}: {e}"
 
-    def _audit_skills(self, skill_files: list[Path]) -> list[str]:
+    def _audit_skills(
+        self, skill_files: list[Path], pack_name: str | None = None
+    ) -> list[str]:
         results = []
         for skill_file in skill_files:
-            audit = self._auditor.audit_skill_file(skill_file)
+            audit = self._auditor.audit_skill_file(
+                skill_file, pack_name=pack_name
+            )
             results.append(f"{skill_file.parent.name}: {'PASS' if audit.is_safe else 'WARN'}")
         return results
 
