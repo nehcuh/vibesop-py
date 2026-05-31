@@ -280,7 +280,15 @@ class QuickstartRunner:
             central_path = Path.home() / ".config" / "skills" / pack_name
             if not central_path.exists():
                 continue
-            total += installer.create_skill_symlinks(central_path, platform_dir, pack_name)
+            try:
+                total += installer.create_skill_symlinks(central_path, platform_dir, pack_name)
+            except OSError:
+                try:
+                    total += installer._copy_skill_dirs(central_path, platform_dir, pack_name)
+                except Exception as copy_err:
+                    console.print(
+                        f"  [yellow]⊘[/yellow] {pack_name}: copy fallback failed: {copy_err}"
+                    )
 
         if total > 0:
             console.print(f"  Synced {total} skill(s) to {platform}")
@@ -314,9 +322,9 @@ class QuickstartRunner:
         console.print("   Edit this file to switch provider (Anthropic, OpenAI, DeepSeek, etc.):")
         console.print()
         console.print("   [dim]  [llm][/dim]")
-        console.print("   [dim]  provider = \"anthropic\"[/dim]")
-        console.print("   [dim]  model = \"claude-sonnet-4-6-20250514\"[/dim]")
-        console.print("   [dim]  api_key = \"sk-...\"[/dim]")
+        console.print('   [dim]  provider = "anthropic"[/dim]')
+        console.print('   [dim]  model = "claude-sonnet-4-6-20250514"[/dim]')
+        console.print('   [dim]  api_key = "sk-..."[/dim]')
 
         console.print("\n[bold]📖 Documentation:[/bold]")
         console.print("   - Quick Start: README.md")

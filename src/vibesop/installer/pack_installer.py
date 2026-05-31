@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import logging
+import os
 import shutil
+import stat
 from pathlib import Path
 from typing import Any, ClassVar
 
@@ -17,6 +19,16 @@ from vibesop.security import SkillSecurityAuditor
 
 logger = logging.getLogger(__name__)
 console = Console()
+
+
+def _safe_rmtree(path: Path) -> None:
+    """Remove a directory tree, handling read-only files on Windows."""
+    def _onerror(_func: Any, _path: str, _excinfo: Any) -> None:
+        # Change read-only files to writable and retry
+        os.chmod(_path, stat.S_IWRITE)
+        _func(_path)
+
+    shutil.rmtree(path, onerror=_onerror)
 
 
 class PackInstaller:
@@ -111,7 +123,7 @@ class PackInstaller:
 
             git_dir = target_path / ".git"
             if git_dir.exists():
-                shutil.rmtree(git_dir)
+                _safe_rmtree(git_dir)
 
             build_output = self._run_post_install(target_path, analysis)
 
@@ -290,7 +302,7 @@ class PackInstaller:
                         continue
                     link_path.unlink()
                 elif link_path.is_dir():
-                    shutil.rmtree(link_path)
+                    _safe_rmtree(link_path)
                 else:
                     link_path.unlink()
 
@@ -319,7 +331,7 @@ class PackInstaller:
                 if dest_path.is_symlink() or dest_path.is_file():
                     dest_path.unlink()
                 elif dest_path.is_dir():
-                    shutil.rmtree(dest_path)
+                    _safe_rmtree(dest_path)
 
             shutil.copytree(skill_dir, dest_path)
             count += 1
