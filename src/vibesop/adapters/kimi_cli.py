@@ -32,7 +32,7 @@ class KimiCliAdapter(FileBasedAdapter):
 
     @property
     def platform_label(self) -> str:
-        return "Kimi CLI"
+        return "Kimi Code CLI"
 
     @property
     def config_dir_label(self) -> str:

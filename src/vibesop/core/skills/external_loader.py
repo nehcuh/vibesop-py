@@ -147,11 +147,7 @@ class ExternalSkillLoader:
                 #       -> pack_name = "awesome-skills"
                 # e.g., ~/.config/skills/systematic-debugging/SKILL.md
                 #       -> pack_name = None
-                try:
-                    rel_path = skill_file.relative_to(search_path)
-                    pack_name = rel_path.parts[0] if len(rel_path.parts) >= 3 else None
-                except ValueError:
-                    pack_name = None
+                pack_name = self._resolve_pack_name(search_path, skill_file)
 
                 # Parse and audit the skill
                 is_trusted = pack_name in self.TRUSTED_PACKS if pack_name else False
@@ -243,12 +239,12 @@ class ExternalSkillLoader:
         """Audit skill file first, then parse only if safe."""
         auditor = self._ensure_auditor()
         if auditor is not None:
-            audit_result = auditor.audit_skill_file(skill_file)
+            audit_result = auditor.audit_skill_file(skill_file, pack_name=pack_name)
 
             if not audit_result.is_safe and not is_trusted:
                 has_high = any(t.level.value == "high" for t in audit_result.threats)
                 if has_high:
-                    logger.warning(
+                    logger.debug(
                         "Security audit rejected: %s (%s)",
                         skill_file,
                         [t.name for t in audit_result.threats if t.level.value == "high"],
@@ -297,6 +293,58 @@ class ExternalSkillLoader:
                 pass
 
         return None
+
+    def _resolve_pack_name(self, search_path: Path, skill_file: Path) -> str | None:
+        """Infer pack name from directory structure, falling back to manifest files.
+
+        If the directory name itself is not in TRUSTED_PACKS, we:
+        1. Walk up looking for pack.json or package.json and match repository URLs
+        2. Match directory names against known trusted repo names extracted from URLs
+
+        This handles cases like:
+            ~/.claude/skills/omx-plugins/oh-my-codex/skills/ultraqa/SKILL.md
+        where the outer folder (omx-plugins) is not trusted, but the inner
+        oh-my-codex repo belongs to the trusted "omx" pack.
+        """
+        try:
+            rel_path = skill_file.relative_to(search_path)
+            if len(rel_path.parts) < 3:
+                return None
+            candidate = rel_path.parts[0]
+            if candidate in self.TRUSTED_PACKS:
+                return candidate
+
+            # Walk up and inspect manifest files for repository URL matches
+            current = skill_file.parent
+            while current != search_path and search_path in current.parents:
+                for manifest_name in ("pack.json", "package.json"):
+                    manifest_path = current / manifest_name
+                    if manifest_path.exists():
+                        try:
+                            with manifest_path.open() as f:
+                                data = json.load(f)
+                            repo = data.get("repository")
+                            repo_url = repo.get("url") if isinstance(repo, dict) else repo
+                            homepage = data.get("homepage")
+                            for trusted_name, trusted_url in self.TRUSTED_PACKS.items():
+                                if repo_url and trusted_url in repo_url:
+                                    return trusted_name
+                                if homepage and trusted_url in homepage:
+                                    return trusted_name
+                        except (OSError, json.JSONDecodeError):
+                            pass
+                current = current.parent
+
+            # Fallback: match directory names against trusted repo names from URLs
+            from urllib.parse import urlparse
+            for trusted_name, trusted_url in self.TRUSTED_PACKS.items():
+                repo_name = urlparse(trusted_url).path.rstrip("/").split("/")[-1]
+                if repo_name and repo_name in rel_path.parts:
+                    return trusted_name
+
+            return candidate
+        except ValueError:
+            return None
 
     def get_supported_packs(self) -> dict[str, dict[str, Any]]:
         packs = {}

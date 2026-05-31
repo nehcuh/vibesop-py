@@ -170,8 +170,9 @@ class QuickstartRunner:
             console.print(f"Please choose one of: {'/'.join(options)}")
 
     def _show_summary(self, config: QuickstartConfig) -> None:
+        platform_name = self._supported_platforms.get(config.platform, config.platform)
         console.print("┌─ Installation Summary ─────────────────────┐")
-        console.print(f"│ Platform: {config.platform:<20} │")
+        console.print(f"│ Platform: {platform_name:<20} │")
         console.print(f"│ Type: {'Global' if config.global_install else 'Project':<20} │")
         console.print(f"│ Integrations: {'Yes' if config.install_integrations else 'No':<20} │")
         console.print(f"│ Hooks: {'Yes' if config.install_hooks else 'No':<20} │")
@@ -212,9 +213,10 @@ class QuickstartRunner:
                 console.print("⊘ Integrations skipped")
 
             if config.install_hooks:
-                hooks_install_target = (
-                    Path.home() / ".claude" if config.global_install else install_target
-                )
+                if config.global_install:
+                    hooks_install_target = installer._platforms[config.platform]["config_dir"]
+                else:
+                    hooks_install_target = install_target
                 hooks_result = installer.install(config.platform, hooks_install_target)
                 hooks_installed_list = hooks_result.get("hooks_installed", [])
                 hooks_installed = len(hooks_installed_list) if isinstance(hooks_installed_list, list) else sum(1 for v in hooks_installed_list.values() if v)
