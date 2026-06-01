@@ -97,9 +97,15 @@ def find_skill_content(skill_id: str, project_root: Path) -> str | None:
     Returns:
         Skill file content or None if not found
     """
+    # Strip namespace prefix for directory lookup (e.g. "builtin/instinct" → "instinct")
+    name_only = skill_id.split("/", 1)[1] if "/" in skill_id else skill_id
+
     skill_paths = [
+        project_root / "core" / "skills" / name_only / "SKILL.md",
         project_root / "core" / "skills" / skill_id / "SKILL.md",
+        project_root / "skills" / name_only / "SKILL.md",
         project_root / "skills" / skill_id / "SKILL.md",
+        Path(__file__).parent.parent / "core" / "skills" / name_only / "SKILL.md",
         Path(__file__).parent.parent / "core" / "skills" / skill_id / "SKILL.md",
     ]
 
