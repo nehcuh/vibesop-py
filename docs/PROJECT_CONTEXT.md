@@ -3,26 +3,22 @@
 ## Session Handoff
 
 <!-- handoff:start -->
-### 2026-04-19 10:47
-**Session Summary**: 文档改进 - 会话追踪 opt-in 设计强调
+### 2026-05-29 23:30
+**Session Summary**: 修复 Claude Code UserPromptSubmit hook - python3 在 uv 项目中找不到 vibesop
 
 **Completed**:
-- 确认会话追踪默认为关闭状态（opt-in 设计）
-- 检查文档发现配置表格有记录但缺乏醒目强调
-- 改进 README.md：添加醒目的警告框，解释为什么默认关闭
-- 改进用户文档：添加专门的"⚠️ Opt-In Design"章节
-- 使用视觉元素（⚠️ 图标、引用块）吸引注意
+- 定位根因: `vibesop-route.sh` 用裸 `python3`，系统 Python 无 `vibesop`
+- 模板修复: `vibesop-route.sh.j2` 添加 `uv run python` → `python3` 自动检测
+- 实例修复: `~/.claude/hooks/vibesop-route.sh` 同步更新
+- 知识记录: `memory/project-knowledge.md` 添加 uv/python3 陷阱条目
 
 **Files Modified**:
-- `README.md`: 在会话智能路由部分添加 opt-in 警告框
-- `docs/user/session-intelligent-routing.md`: 添加专门的 Opt-In Design 章节
+- `src/vibesop/adapters/templates/shared/vibesop-route.sh.j2`
+- `~/.claude/hooks/vibesop-route.sh`
+- `memory/project-knowledge.md`
+- `memory/session.md`
 
-**Key Improvements**:
-- 用户现在能立即看到这是 opt-in 功能
-- 清晰解释三个原因：性能、隐私、用户控制
-- 避免用户误以为会话追踪是默认启用的
-
-**Commit**: d5b04b9 - docs: emphasize opt-in nature of session tracking
+**Verified**: 39 tests pass; hook 手动执行返回正确 JSON
 
 **Next Steps**: 无
 <!-- handoff:end -->

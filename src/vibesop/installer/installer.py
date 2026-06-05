@@ -15,7 +15,7 @@ class VibeSOPInstaller:
                 "description": "Claude Code CLI",
             },
             "kimi-cli": {
-                "config_dir": Path.home() / ".kimi",
+                "config_dir": Path.home() / ".kimi-code",
                 "description": "Kimi Code CLI",
             },
             "opencode": {

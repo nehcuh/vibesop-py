@@ -12,7 +12,7 @@
 
 ### 1.1 核心断层
 
-当前架构实现了强大的**路由引擎**（UnifiedRouter）和**编排引擎**（Orchestration），但 AI Agent（Claude Code / OpenCode / Kimi CLI）**并不知道在何时、如何调用它们**。
+当前架构实现了强大的**路由引擎**（UnifiedRouter）和**编排引擎**（Orchestration），但 AI Agent（Claude Code / OpenCode / Kimi Code CLI）**并不知道在何时、如何调用它们**。
 
 ```
 用户消息: "分析架构并优化性能"
@@ -31,12 +31,12 @@
 |------|------------------|-------------------|---------------|----------|
 | **Claude Code** | ✅ UserPromptSubmit（可 block + 注入 additionalContext） | ⚠️ 间接（CLAUDE.md + additionalContext） | ✅ PreToolUse | **Hooks + 提示词混合** |
 | **OpenCode** | ✅ chat.message | ✅ experimental.chat.system.transform | ✅ tool.execute.before | **Plugin 完整方案** |
-| **Kimi CLI** | ❌ 无 | ⚠️ AGENTS.md + skill 元数据 | ❌ 无 | **纯提示词降级** |
+| **Kimi Code CLI** | ❌ 无 | ⚠️ AGENTS.md + skill 元数据 | ❌ 无 | **纯提示词降级** |
 
 ### 1.3 优化原则
 
 1. **平台优先**：根据平台能力上限设计方案，不假设不存在的能力
-2. **渐进降级**：Claude Code → OpenCode → Kimi CLI，能力递减但体验连贯
+2. **渐进降级**：Claude Code → OpenCode → Kimi Code CLI，能力递减但体验连贯
 3. **透明可控**：用户始终能看到决策过程，能干预、能关闭
 4. **复用现有**：不重复造轮子，基于已有 `AgentRouter` + `OrchestrationResult` 构建
 
@@ -49,13 +49,13 @@
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
 │                        AI Agent Platform                             │
-│  (Claude Code / OpenCode / Kimi CLI)                                │
+│  (Claude Code / OpenCode / Kimi Code CLI)                                │
 └───────────────────────────┬─────────────────────────────────────────┘
                             │
         ┌───────────────────┼───────────────────┐
         │                   │                   │
 ┌───────▼───────┐  ┌────────▼────────┐  ┌──────▼──────┐
-│ Claude Code   │  │   OpenCode      │  │  Kimi CLI   │
+│ Claude Code   │  │   OpenCode      │  │  Kimi Code CLI   │
 │ Adapter       │  │   Plugin        │  │  Prompt     │
 │ (Hooks)       │  │   (TypeScript)  │  │  (AGENTS.md)│
 └───────┬───────┘  └────────┬────────┘  └──────┬──────┘
@@ -95,7 +95,7 @@ class IntentInterceptor:
     Platform-specific implementations:
     - Claude Code: UserPromptSubmit hook calls this
     - OpenCode: chat.message plugin hook calls this  
-    - Kimi CLI: System prompt instructs AI to self-trigger
+    - Kimi Code CLI: System prompt instructs AI to self-trigger
     """
     
     def should_intercept(self, query: str, context: InterceptionContext) -> InterceptionDecision:
@@ -139,7 +139,7 @@ class IntentInterceptor:
 |------|----------|------|
 | Claude Code | `UserPromptSubmit` hook | Shell script 调用 `vibe route --auto "<query>"` |
 | OpenCode | `chat.message` plugin | TypeScript plugin 直接调用 AgentRouter API |
-| Kimi CLI | System prompt 指令 | AGENTS.md 中写入 "收到非平凡任务时先调用 vibe route" |
+| Kimi Code CLI | System prompt 指令 | AGENTS.md 中写入 "收到非平凡任务时先调用 vibe route" |
 
 ---
 
@@ -156,7 +156,7 @@ class SkillInjector:
     Platform-specific injection methods:
     - Claude Code: additionalContext via hook JSON output
     - OpenCode: output.system.push() in system.transform hook
-    - Kimi CLI: Cannot inject → AI must ReadFile skill content
+    - Kimi Code CLI: Cannot inject → AI must ReadFile skill content
     """
     
     def inject_single_skill(
@@ -185,7 +185,7 @@ class SkillInjector:
             # Kimi cannot inject → return ReadFile instruction
             return InjectionResult(
                 method="instruction",
-                payload=f"请先读取 ~/.kimi/skills/{skill_id.replace('/', '-')}/SKILL.md，然后按照 skill 指导执行。",
+                payload=f"请先读取 ~/.kimi-code/skills/{skill_id.replace('/', '-')}/SKILL.md，然后按照 skill 指导执行。",
             )
     
     def inject_execution_plan(
@@ -301,7 +301,7 @@ class DecisionPresenter:
 **展示时机**：
 - Claude Code: `UserPromptSubmit` hook 返回 `systemMessage` 字段展示在 UI
 - OpenCode: plugin 调用 `client.tui.showToast()` 或注入消息
-- Kimi CLI: 由于无法拦截，展示在 `vibe route` CLI 输出中
+- Kimi Code CLI: 由于无法拦截，展示在 `vibe route` CLI 输出中
 
 ---
 
@@ -558,13 +558,13 @@ export default {
 
 ---
 
-### 4.3 Kimi CLI（纯提示词降级方案）
+### 4.3 Kimi Code CLI（纯提示词降级方案）
 
 **约束**：
 - 无 hooks
 - 无 system prompt 动态修改
 - 有 `AGENTS.md`（项目级静态上下文）
-- 有 `~/.kimi/skills/`（skill 目录）
+- 有 `~/.kimi-code/skills/`（skill 目录）
 
 **降级策略**：
 
@@ -610,7 +610,7 @@ export default {
 
 #### B. CLI 输出增强（决策透明化）
 
-由于 Kimi CLI 无法拦截消息，所有路由交互发生在 `vibe route` CLI 命令中：
+由于 Kimi Code CLI 无法拦截消息，所有路由交互发生在 `vibe route` CLI 命令中：
 
 ```bash
 $ vibe route "分析架构并优化性能"
@@ -689,7 +689,7 @@ $ vibe route "分析架构并优化性能"
 | Day 11-12 | Claude Code hook 模板生成 | `templates/claude-code/hooks/vibesop-route.sh.j2` |
 | Day 13-14 | Claude Code `rules/routing.md.j2` 更新 | 注入 skill 后 AI 行为规则 |
 | Day 15-17 | OpenCode plugin 模板 | `templates/opencode/plugin/vibesop/` |
-| Day 18-19 | Kimi CLI AGENTS.md 生成 + README 增强 | `KimiCliAdapter` 更新 |
+| Day 18-19 | Kimi Code CLI AGENTS.md 生成 + README 增强 | `KimiCliAdapter` 更新 |
 | Day 20 | 跨平台一致性测试 | 验证三种平台输出一致性 |
 
 ### Phase 3: 集成验证（Week 5）
@@ -719,7 +719,7 @@ $ vibe route "分析架构并优化性能"
 |------|----------|------|
 | Claude Code | additionalContext | 官方推荐方式，不影响原始 system prompt |
 | OpenCode | system.transform | 最灵活，可直接修改 prompt |
-| Kimi CLI | 指令（让 AI ReadFile） | 唯一可行方式 |
+| Kimi Code CLI | 指令（让 AI ReadFile） | 唯一可行方式 |
 
 ### 6.3 多技能编排的执行策略
 
@@ -758,7 +758,7 @@ $ vibe route "分析架构并优化性能"
 - [ ] system prompt 中动态注入 skill 内容
 - [ ] 多意图时展示 toast 通知
 
-### 8.3 Kimi CLI
+### 8.3 Kimi Code CLI
 - [ ] `vibe build kimi-cli` 生成强化版 AGENTS.md
 - [ ] AGENTS.md 中包含完整的自动路由规则
 - [ ] `vibe route` CLI 输出包含可复制的执行指令
@@ -777,7 +777,7 @@ $ vibe route "分析架构并优化性能"
 |------|------|------|
 | Claude Code hook 超时（3秒） | 高 | 路由结果缓存；使用 `--quick` 模式跳过 AI Triage |
 | OpenCode experimental API 变更 | 中 | 封装抽象层，API 变更时只需改 adapter |
-| Kimi CLI AI 不遵守 AGENTS.md | 高 | 在 CLI 输出中强化指令；定期评估遵守率 |
+| Kimi Code CLI AI 不遵守 AGENTS.md | 高 | 在 CLI 输出中强化指令；定期评估遵守率 |
 | Skill 内容过长（>4000 tokens） | 中 | 注入时截断到 2000 tokens；提供 ReadFile 指引 |
 | 多意图检测误触发 | 中 | IntentInterceptor 保守策略；用户可关闭自动路由 |
 

@@ -1,5 +1,4 @@
-# pyright: reportPrivateUsage=false
-# pyright: ignore[reportPrivateUsage, reportMissingParameterType]
+# pyright: ignore[reportMissingParameterType]
 """VibeSOP skill command group - All `vibe skill *` subcommands.
 
 Consolidated from: skill_cmd.py, skill_add.py, skill_config.py.
@@ -737,7 +736,7 @@ def _fallback_auto_configure(
         configurator = SkillAutoConfigurator()
         analysis = SkillAnalysis()
         analysis.primary_category = "development"
-        config = configurator._generate_config(metadata, analysis, scope)
+        config = configurator.generate_config(metadata, analysis, scope)
         config = _prompt_agent_for_config(metadata, config, scope)
         _display_and_save_config(config)
     else:
@@ -948,7 +947,7 @@ def _verify_and_sync(skill_id: str, _scope: str) -> None:
 
     matched = False
     for query in test_queries:
-        result = router._single_skill_route(query)
+        result = router.route_single(query)
         if result.primary and result.primary.skill_id == skill_id:
             matched = True
             console.print(f"[green]✓ Routing test passed:[/green] {query}")

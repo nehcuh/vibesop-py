@@ -97,9 +97,15 @@ def find_skill_content(skill_id: str, project_root: Path) -> str | None:
     Returns:
         Skill file content or None if not found
     """
+    # Strip namespace prefix for directory lookup (e.g. "builtin/instinct" → "instinct")
+    name_only = skill_id.split("/", 1)[1] if "/" in skill_id else skill_id
+
     skill_paths = [
+        project_root / "core" / "skills" / name_only / "SKILL.md",
         project_root / "core" / "skills" / skill_id / "SKILL.md",
+        project_root / "skills" / name_only / "SKILL.md",
         project_root / "skills" / skill_id / "SKILL.md",
+        Path(__file__).parent.parent / "core" / "skills" / name_only / "SKILL.md",
         Path(__file__).parent.parent / "core" / "skills" / skill_id / "SKILL.md",
     ]
 
@@ -134,6 +140,8 @@ def is_pack_installed(skill_id: str) -> Path | None:
     candidates = [
         central_base / namespace / skill_name,
         central_base / namespace / "skills" / skill_name,
+        # depth-2: skill installed directly under ~/.config/skills/ (no pack dir)
+        central_base / skill_name,
     ]
     for candidate in candidates:
         if candidate.exists() and (candidate / "SKILL.md").exists():
@@ -212,8 +220,8 @@ def generate_fallback_skill_content(
     )
     # Collapse multi-line descriptions to a single line for valid YAML
     description = " ".join(description.split()) if description else ""
-    # Escape embedded double quotes
-    description = description.replace('"', '\\"')
+    # YAML double-quote: escape backslashes and embedded double quotes
+    description = description.replace("\\", "\\\\").replace('"', '\\"')
     trigger = (
         skill.trigger_when if hasattr(skill, "trigger_when") else skill.get("trigger_when", "")
     )
@@ -630,6 +638,22 @@ def render_docs_files(output_dir: Path, skills: list[Any]) -> list[Path]:
     return created
 
 
+def _yaml_dquote(value: str) -> str:
+    """Wrap a string in YAML double quotes, escaping \\ and ".
+
+    YAML bare strings break when the value starts with ``[``, ``{``,
+    ``>``, ``|``, ``!``, or contains ``: `` (colon-space), ``#``
+    (comment), or ``$var`` patterns.  Wrapping in double quotes is the
+    simplest way to produce safe frontmatter for any free-form
+    description.
+    """
+    if not value:
+        return '""'
+    # Escape backslashes first, then double quotes
+    safe = str(value).replace('\\', '\\\\').replace('"', '\\"')
+    return f'"{safe}"'
+
+
 def render_skill_md(
     skill: Any,
     *,
@@ -664,6 +688,10 @@ def render_skill_md(
                      "namespace", "version", "author", "tags", "metadata"):
             if hasattr(skill, attr):
                 skill_dict[attr] = getattr(skill, attr)
+
+    # YAML-safe the description before handing to template
+    if "description" in skill_dict and skill_dict["description"]:
+        skill_dict["description"] = _yaml_dquote(skill_dict["description"])
 
     return template.render(
         skill=skill_dict,

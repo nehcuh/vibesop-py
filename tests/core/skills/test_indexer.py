@@ -832,7 +832,7 @@ class TestUpdateGlobalIndexForPack:
         global_home: Path,
         tmp_path: Path,
     ) -> None:
-        """Platform symlinks (e.g., ~/.kimi/skills/<flat>/SKILL.md) must
+        """Platform symlinks (e.g., ~/.kimi-code/skills/<flat>/SKILL.md) must
         resolve back to the central storage so the source classifier can
         correctly attribute them to the pack."""
         central = global_home / ".config" / "skills"
@@ -841,7 +841,7 @@ class TestUpdateGlobalIndexForPack:
         real_skill.write_text("# real")
 
         # Create a symlinked copy as a platform would
-        platform_dir = global_home / ".kimi" / "skills" / "newpack-a"
+        platform_dir = global_home / ".kimi-code" / "skills" / "newpack-a"
         platform_dir.parent.mkdir(parents=True, exist_ok=True)
         platform_dir.symlink_to(real_skill.parent, target_is_directory=True)
         symlinked_skill = platform_dir / "SKILL.md"

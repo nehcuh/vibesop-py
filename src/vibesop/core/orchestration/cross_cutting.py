@@ -222,10 +222,11 @@ class CrossCuttingDiscovery:
                 intent = step.get("intent", "")
                 steps_yaml += f"\n  - skill: {skill}\n    intent: {intent}\n    order: {i}"
 
+        safe_desc = description.replace('\\', '\\\\').replace('"', '\\"')
         content = f"""---
 id: {wf_id}
 name: {name}
-description: {description}
+description: "{safe_desc}"
 type: cross-cutting
 namespace: cross-cutting
 version: 1.0.0

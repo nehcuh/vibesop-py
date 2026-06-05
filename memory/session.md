@@ -436,6 +436,20 @@ Lint: 0 errors ✅
 - **Next steps**: 用户重启会话测试验证
 - **Recorded**: yes — ripgrep 兼容性陷阱记录到 project-knowledge.md
 
+### S2 (2026-05-29 23:19~23:30) python3 ModuleNotFoundError in Claude Code Hook
+
+- **用户报告**: `UserPromptSubmit hook error` + `ModuleNotFoundError: No module named 'vibesop'` 输入中文长 query 时出现
+- **根因分析**: `vibesop-route.sh` hook 使用裸 `python3` 内联导入 `vibesop.agent.runtime.AgentRuntime`，但项目用 `uv` 管理 Python 环境，系统 `python3` 没有 `vibesop` 包
+- **对比**: 其他三个 hook (`pre-session-end.sh`, `post-session-start.sh`, `pre-tool-use.sh`) 调用 `vibe` CLI 正常——`vibe` 是 uv tool，自带含 `vibesop` 的独立 Python 环境
+- **修复**:
+  1. 模板 `src/vibesop/adapters/templates/shared/vibesop-route.sh.j2` 添加环境检测
+  2. 已安装 hook `~/.claude/hooks/vibesop-route.sh` 同步修复
+  3. 逻辑: `uv run python` → 回退 `python3`
+- **修改文件**: `vibesop-route.sh.j2` (模板), `~/.claude/hooks/vibesop-route.sh` (实例), `memory/project-knowledge.md` (知识记录)
+- **验证**: 39 conformance/hook tests pass; hook 手动执行返回正确 JSON
+- **影响范围**: 后续所有 `vibe deploy` 生成的 Claude Code/OpenCode/Kimi CLI hook 均自动包含环境检测
+- **Recorded**: yes — `python3` in uv-managed projects 陷阱记录到 project-knowledge.md
+
 ---
 
 ### S3 (2026-04-28 18:30~19:15) Hook Template Bug Fixes + CLI JSON Priority + Slash-Route Architecture Fix
@@ -909,3 +923,34 @@ Coverage: temporarily lowered fail_under=0 from 75% (massive new test additions)
 - v5.5.0 可发布
 
 **Recorded**: yes — shared template + render function pattern
+### S05 (08:00~) [vibesop/pi-agent-config]
+- 修复 pi agent 技能文件缺 YAML frontmatter 导致 "[Skill conflicts] description is required" 错误（66 个文件批量补）
+- 发现并修复 PiCodingAgentAdapter 缺少 clean_orphan_skills() 调用的 bug
+- 发现 Vibe CLI 是 uv tool 安装，本地源码修改需同步到安装路径
+- 从 registry.yaml/config.toml/平台目录彻底移除 gstack 技能包
+- 修复 vibesop-track.ts 模板硬编码 session-end 路径缺失 builtin- 前缀的 bug
+- 修复 shared SKILL.md.j2 模板缺少 YAML frontmatter
+- 记录了 5 个 instinct 模式
+- Next: 验证 pi agent 启动无错误
+- Recorded: yes - 5 instincts recorded
+
+### S06 (11:00~) [vibesop/yaml-quoting-bugs]
+- 溯源并修复 YAML frontmatter 中 description 裸写导致的 `[OMX]` 解析 bug（7 个文件，覆盖 3 个生成路径）
+- 修复 depth-2 skill 安装路径未被 `is_pack_installed` 和 `_render_skill_content` 发现的问题
+- 深度体检：发现并修复 skill 创建流程中 4 个额外裸 YAML 生成点
+- 跑 118 个测试通过，重建 pi agent 配置 85 skills 0 YAML 错误
+- Next: 确保后续 vibe build 不再出同类错误
+- Recorded: yes - YAML frontmatter generation pitfalls
+
+### S11 (2026-06-05 14:00~15:30) [vibesop/v6.2-doc-sync-and-workflow-docs]
+- 版本号同步 pyproject.toml 5.5.0 → 6.2.0，20+ 文档版本/日期批量更新
+- 新增 Dynamic Workflow Engine 文档：ARCHITECTURE.md 完整章节（架构图、6 模式表、组件表、CLI flags、平台兼容矩阵）
+- README.md 集成章节更新（4 平台）+ Workflow 子章节
+- CHANGELOG.md 新增 v6.0/v6.1/v6.2 三个版本条目
+- ROADMAP.md v6.0.0 标记为 COMPLETED
+- 4 个 adapter 模板更新（routing-protocol.md.j2 × 2, vibe-orchestrate.md.j2, kimi_cli.py, opencode.py）
+- 修复 2 个预存测试 bug（hook 断言适配 uv run python，_Skill.get() AttributeError）
+- 修复 adapters/base.py metadata 访问 AttributeError
+- 提交: b6daa4d docs(v6.2): bump version + Workflow docs + test fixes (29 files)
+- Next: PR to main
+- Recorded: yes - 4 technical pitfalls

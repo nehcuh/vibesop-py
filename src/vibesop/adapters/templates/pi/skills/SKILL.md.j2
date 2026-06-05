@@ -1,8 +1,8 @@
 ---
 id: {{ skill.id }}
 name: {{ skill.name }}
-description: {{ skill.description }}
-trigger_when: {{ skill.trigger_when }}
+description: "{{ skill.description | replace('\\', '\\\\') | replace('"', '\\"') }}"
+trigger_when: "{{ skill.trigger_when | replace('\\', '\\\\') | replace('"', '\\"') }}"
 type: prompt
 generated_by: VibeSOP v{{ version }}
 ---

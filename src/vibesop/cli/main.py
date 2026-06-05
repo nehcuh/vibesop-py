@@ -1,4 +1,3 @@
-# pyright: reportPrivateUsage=false
 """VibeSOP CLI - Main entry point.
 
 Built with Typer for modern CLI UX.
@@ -221,6 +220,22 @@ def route(
         "-C",
         help="Conversation ID for multi-turn context (auto-generated if omitted)",
     ),
+    pattern: str | None = typer.Option(
+        None,
+        "--pattern",
+        "-p",
+        help="Force workflow pattern: sequential, parallel, fan_out, adversarial",
+    ),
+    verify: bool = typer.Option(
+        False,
+        "--verify",
+        help="Enable adversarial verification for execution steps",
+    ),
+    strictness: str = typer.Option(
+        "standard",
+        "--strictness",
+        help="Verification strictness: lenient, standard, strict",
+    ),
 ) -> None:
     """Route a query to the appropriate skill using unified orchestration.
 
@@ -244,7 +259,6 @@ def route(
 
     # -- Route through IntentInterceptor to respect full Agent Runtime logic --
     from vibesop.agent.runtime import IntentInterceptor, InterceptionMode, SlashCommandExecutor
-    from vibesop.core.routing import RoutingConfig, UnifiedRouter
 
     # When --slash is explicitly passed, treat as a CLI quick command
     if slash:
@@ -309,28 +323,29 @@ def route(
                 console.print(f"[bold yellow]⚠[/bold yellow] {result.message}")
             raise typer.Exit(0 if result.success else 1)
 
-    # Set up router with optional overrides
-    routing_kwargs: dict[str, Any] = {}
-    if min_confidence is not None:
-        routing_kwargs["min_confidence"] = min_confidence
-    if no_session:
-        routing_kwargs["session_aware"] = False
-    if strategy is not None:
-        routing_kwargs["default_strategy"] = strategy
+    # Phase 2.3: CLI now uses AgentRuntime components (interceptor, presenter,
+    # injector) while retaining direct UnifiedRouter access for detailed
+    # OrchestrationResult handling (routing paths, layer details, execution plans).
 
-    if routing_kwargs:
-        config = RoutingConfig(**routing_kwargs)
-        router = UnifiedRouter(
-            project_root=Path.cwd(),
-            config=config,
-            llm_factory=_build_llm_factory(),
-            prompt_builder=_build_prompt_builder(),
+    from vibesop.agent.runtime import AgentRuntime
+
+    runtime = AgentRuntime(project_root=Path.cwd())
+    # Inject LLM factory for AI triage (same as before)
+    runtime.router.set_llm_factory(_build_llm_factory())
+
+    # Apply CLI overrides to the underlying router config
+    router = runtime.router._router
+    if min_confidence is not None:
+        router.routing_config = router.routing_config.model_copy(
+            update={"min_confidence": min_confidence}
         )
-    else:
-        router = UnifiedRouter(
-            project_root=Path.cwd(),
-            llm_factory=_build_llm_factory(),
-            prompt_builder=_build_prompt_builder(),
+    if no_session:
+        router.routing_config = router.routing_config.model_copy(
+            update={"session_aware": False}
+        )
+    if strategy is not None:
+        router.routing_config = router.routing_config.model_copy(
+            update={"default_strategy": strategy}
         )
 
     # Enable routing trace if --trace flag is set
@@ -350,12 +365,18 @@ def route(
         project_hash = hashlib.sha256(str(Path.cwd()).encode()).hexdigest()[:8]
         context.conversation_id = f"cli-{project_hash}"
 
+    # Apply workflow pattern and verification hints
+    if pattern:
+        context.strategy_hint = f"workflow_pattern:{pattern}"
+    if verify:
+        context.strategy_hint = f"{context.strategy_hint or ''} verify:{strictness}".strip()
+
     # Merge --explain alias into verbose flag for backward compatibility
     verbose = verbose or explain
 
     # Determine transparency mode: config value or CLI flags
     # --quiet forces compact; --verbose forces full even if config says compact
-    router_config = router._config
+    router_config = router.routing_config
     transparency_mode = (
         "full"
         if verbose
@@ -461,6 +482,22 @@ def orchestrate(
         "-C",
         help="Conversation ID for multi-turn context",
     ),
+    pattern: str | None = typer.Option(
+        None,
+        "--pattern",
+        "-p",
+        help="Force workflow pattern: sequential, parallel, fan_out, adversarial",
+    ),
+    verify: bool = typer.Option(
+        False,
+        "--verify",
+        help="Enable adversarial verification for execution steps",
+    ),
+    strictness: str = typer.Option(
+        "standard",
+        "--strictness",
+        help="Verification strictness: lenient, standard, strict",
+    ),
 ) -> None:
     """Orchestrate a complex query into an execution plan.
 
@@ -503,6 +540,11 @@ def orchestrate(
         project_hash = hashlib.sha256(str(Path.cwd()).encode()).hexdigest()[:8]
         context.conversation_id = f"cli-{project_hash}"
 
+    if pattern:
+        context.strategy_hint = f"workflow_pattern:{pattern}"
+    if verify:
+        context.strategy_hint = f"{context.strategy_hint or ''} verify:{strictness}".strip()
+
     result = router.orchestrate(query, context=context)
 
     if json_output:
@@ -535,8 +577,8 @@ def decompose(
         llm_factory=_build_llm_factory(),
         prompt_builder=_build_prompt_builder(),
     )
-    decomposer = TaskDecomposer(llm_client=getattr(router, "_llm", None))
-    skills = router._build_decomposition_skills(query=query)
+    decomposer = TaskDecomposer(llm_client=router.llm)
+    skills = router.build_decomposition_skills(query=query)
     sub_tasks = decomposer.decompose(query, skills=skills)
 
     if json_output:

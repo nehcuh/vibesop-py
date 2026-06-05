@@ -37,6 +37,22 @@ When `vibe route` returns an orchestration plan (2+ intents):
 
 Do NOT ignore the plan and pick a single skill.
 
+### Workflow Patterns (v6.2.0)
+
+VibeSOP supports 6 workflow patterns for complex tasks:
+
+| Pattern | When | Behavior |
+|---------|------|----------|
+| `SEQUENTIAL` | Steps have dependencies | Execute in order |
+| `PARALLEL` | Steps are independent | Execute concurrently |
+| `FAN_OUT` | One task, multiple perspectives | Distribute and merge |
+| `ADVERSARIAL` | Output needs verification | Execute → Verify → Accept/Reject |
+| `LOOP_UNTIL_DRY` | Iterative discovery | Loop until no new findings |
+| `TOURNAMENT` | Multiple candidates | Pairwise compare → Select best |
+
+Force a pattern: `vibe route --pattern <pattern> "<query>"`
+Enable verification: `vibe route --verify "<query>"`
+
 ## Deviation Recording
 
 If you skip a routing recommendation (after completing Override Protocol):

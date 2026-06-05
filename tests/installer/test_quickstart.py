@@ -24,6 +24,18 @@ class TestQuickstartRunner:
         runner = QuickstartRunner()
         assert len(runner._supported_platforms) >= 2
 
+    def test_available_integrations_excludes_gstack(self) -> None:
+        """gstack is deliberately excluded from default quickstart installs.
+
+        Users must install gstack explicitly via `vibe install gstack`.
+        See constants.DEFAULT_AUTO_INSTALL_PACKS.
+        """
+        runner = QuickstartRunner()
+        assert "gstack" not in runner._available_integrations
+        assert "superpowers" in runner._available_integrations
+        assert "omx" in runner._available_integrations
+        assert "mattpocock" in runner._available_integrations
+
     def test_ask_yes_no_default_yes(self) -> None:
         """Test _ask_yes_no with default yes and empty input."""
         runner = QuickstartRunner()

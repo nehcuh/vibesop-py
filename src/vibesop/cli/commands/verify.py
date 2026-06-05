@@ -43,7 +43,7 @@ PLATFORM_CONFIGS: dict[str, dict[str, Any]] = {
     },
     "kimi-cli": {
         "name": "Kimi Code CLI",
-        "config_dir": Path.home() / ".kimi",
+        "config_dir": Path.home() / ".kimi-code",
         "checks": {
             "config_dir": "Configuration directory exists",
             "config_toml": "config.toml exists",

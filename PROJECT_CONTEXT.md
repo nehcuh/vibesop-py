@@ -4,24 +4,25 @@
 
 <!-- handoff:start -->
 
-### 2026-05-29 (S10) 4-phase-transformation-audit-optimization
-**Session**: Phase 4 audit review optimization — 3 tasks completed
+### 2026-06-05 (S14) v6.2-doc-sync-and-workflow-documentation
+**Session**: Version bump + comprehensive documentation sync + Workflow Engine docs
 **Completed**:
-- Dead code removal: SkillDefinition dataclass removed from base.py; CHANGELOG v5.5.0 entry; README gstack→mattpocock sync
-- SKILL.md template unification: `templates/shared/SKILL.md.j2` + `render_skill_md()` in `_shared.py`; 2 old adapter templates deleted
-- Pi adapter → SdkBasedAdapter: ~30 lines duplicated code removed; Pi now correctly inherits from SdkBasedAdapter
-- Shell hook optimization: `vibesop-route.sh.j2` 53→22 lines; all logic in Python AgentRuntime
-**Test**: 2963 passed, 3 skipped, 0 failures
-**Files**: _shared.py, claude_code.py, pi_coding_agent.py, vibesop-route.sh.j2, base.py, spec/__init__.py, CHANGELOG.md, README.md, pyproject.toml, ARCHITECTURE.md, spec_cmd.py, test files, SKILL.md.j2 (new), tests/conformance/ (new)
-**Next**: git commit pending changes; v5.5.0 ready for release
+- Bumped pyproject.toml 5.5.0 → 6.2.0 (CLI now reports VibeSOP v6.2.0)
+- Batch updated 20+ docs: version 5.5.0 → 6.2.0, dates to 2026-06-05
+- Added Dynamic Workflow Engine section to ARCHITECTURE.md (architecture diagram, 6 patterns, components table, CLI flags, platform compatibility matrix)
+- Updated README.md integrations (4 platforms) + Workflow section with pattern table + platform matrix
+- Added CHANGELOG.md entries for v6.0.0, v6.1.0, v6.2.0
+- Fixed ROADMAP.md: v6.0.0 marked COMPLETED, release dates corrected
+- Updated INDEX.md: Workflow Engine entry, platform list, metrics
+- Updated 5 adapter templates/sources with Workflow Patterns (routing-protocol.md.j2 × 2, vibe-orchestrate.md.j2, kimi_cli.py, opencode.py)
+- Fixed 2 pre-existing test bugs (hook template assertions, _Skill.get() AttributeError)
+**Key Insight**: Claude Code has native sub-agent parallelism; other platforms execute workflow steps serially
+**Commit**: b6daa4d docs(v6.2): bump version + Workflow docs + test fixes (29 files)
+**Branch**: refactor/router-orchestrator-split
+**Next**: Create PR to main, verify all docs render correctly
 
-### 2026-05-28 (S9) pi-skill-namespace-collisions
-**Session**: Fix pi agent skill name collisions + gstack default install removal
-**Completed**:
-- Added `DEFAULT_AUTO_INSTALL_PACKS` (excludes gstack) in constants.py; `_auto_install()` and `_sync_platform_symlinks()` now use filtered lists
-- Added `_is_valid_skill()` in pack_installer to skip SKILL.md files with empty descriptions
-- Added `_namespace_skill_name()` in pi adapter to prefix `name:` field with pack namespace (e.g., `name: qa` → `name: gstack-qa`)
-**Root cause**: Pi agent resolves name collisions by alphabetical directory order; VibeSOP's routing conflict resolution runs before pi loads skills
-**Files**: constants.py, install.py, quickstart_runner.py, pack_installer.py, pi_coding_agent.py, test_pack_installer.py
+### 2026-06-05 (S13) v6.x-dynamic-workflow-engine-complete
+**Session**: Full Dynamic Workflow Engine v6.0-v6.2 implemented, reviewed, and fixed
+**Completed**: ClassifierAgent, VerifierAgent, VerificationLoop, WorkflowEngine, Reorchestrator, TournamentRunner
 
 <!-- handoff:end -->

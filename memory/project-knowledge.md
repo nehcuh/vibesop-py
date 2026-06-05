@@ -2,6 +2,98 @@
 
 ## Technical Pitfalls
 
+### Hook Template Test Assertions Must Track Template Changes (2026-06-05)
+
+**Issue**: After changing `vibesop-route.sh.j2` from `python3 -c` to `uv run python` auto-detection, two adapter tests (`test_claude_code.py`, `test_kimi_cli.py`) still asserted `"python3 -c" in content`, failing on every run.
+
+**Root Cause**: Hook template refactored but test assertions not updated in the same commit. The template change happened in a different PR/session than the test update.
+
+**Solution**: When refactoring shared templates (`templates/shared/*.j2`), grep ALL test files that assert on rendered content:
+```bash
+grep -rn "python3 -c" tests/adapters/
+```
+Update assertions to accept both old and new patterns during transition:
+```python
+assert ("python3 -c" in content or "uv run python" in content)
+```
+
+**Files**: `tests/adapters/test_claude_code.py`, `tests/adapters/test_kimi_cli.py`
+
+---
+
+### Version Drift: pyproject.toml Not Bumped After Feature Development (2026-06-05)
+
+**Issue**: Git history showed v6.0-v6.2 commits, but `pyproject.toml` still read `version = "5.5.0"`. 20+ markdown docs referenced `5.5.0` and stale dates.
+
+**Root Cause**: Feature development (classifier, verifier, workflow engine) done via commit messages mentioning versions, but the actual `pyproject.toml` version field was never updated. Documentation timestamps frozen at last manual update (2026-05-29).
+
+**Solution**: After any feature branch completion:
+1. Bump `pyproject.toml` version first
+2. `grep -rl "old_version" --include="*.md" .` to find all stale refs
+3. Batch update version + date across all docs
+
+**Prevention**: Consider a pre-merge CI check that `pyproject.toml` version >= version mentioned in recent commit messages.
+
+---
+
+### `_Skill` Object Lacks `.get()` — Adapter Base Bug (2026-06-05)
+
+**Issue**: `adapters/base.py:437` called `skill.get("metadata", {})` but `skill` is a `_Skill` object (no `.get()` method), causing `AttributeError` when pack-installed skill path not found.
+
+**Root Cause**: `_render_skill_content()` assumed `skill` could be either a dict or an object, but only checked `hasattr(skill, "metadata")` before falling through to `skill.get()`.
+
+**Solution**: Use `getattr()` with proper fallback:
+```python
+metadata = getattr(skill, "metadata", None) or (
+    skill.get("metadata", {}) if isinstance(skill, dict) else {}
+)
+```
+
+**Files**: `src/vibesop/adapters/base.py:435-438`
+
+---
+
+### Platform Native Workflow Capability Matrix (2026-06-05)
+
+**Finding**: VibeSOP's Workflow Engine (6 patterns) works on all 4 platforms, but execution model differs:
+- **Claude Code**: Native `Workflow` tool with `parallel()`/`pipeline()` — true concurrent sub-agents
+- **Kimi CLI / Pi Agent / OpenCode**: No native sub-agent mechanism — VibeSOP generates execution plan, platform's single agent executes steps sequentially
+
+**Implication**: `LOOP_UNTIL_DRY` and `TOURNAMENT` patterns are truly parallel only on Claude Code. On other platforms, they loop within a single agent session. Documentation must reflect this to set correct user expectations.
+
+**Files**: `docs/architecture/ARCHITECTURE.md` (Platform Compatibility section)
+
+---
+
+### YAML Frontmatter Generation: Multiple Code Paths, Same Bug (2026-05-30)
+
+**Issue**: `vibe build` generates SKILL.md files with invalid YAML when `description` contains `[`, `{`, `: `, or other YAML flow indicators. Three independent code paths each build YAML frontmatter by raw string interpolation without quoting.
+
+**Root Cause**: YAML parsers interpret bare `[OMX]` as a flow sequence. When `description: [OMX] ...` appears without quotes, the parser fails with "Unexpected scalar at node end". This affected:
+1. Jinja2 template `shared/SKILL.md.j2` → `{{ skill.description }}` raw interpolation
+2. f-string YAML in `_discovery.py`, `instinct_cmd.py`, `cross_cutting.py`
+3. `format_converter.py` `_build_yaml_front_matter()` bare `f"{key}: {value}"`
+
+**Second Bug**: `is_pack_installed()` and `_render_skill_content()` both missed depth-2 skill installs (e.g., `~/.config/skills/instinct-learning/` instead of `~/.config/skills/builtin/instinct-learning/`), and `source_path` metadata from DynamicSkillDiscovery was discarded, causing fallback empty templates for "builtin-*" skills.
+
+**Solution**:
+- Added `_yaml_dquote(value)` → wraps in double quotes with `\\` and `"` escaping. Used in `render_skill_md()` pre-processing and `generate_fallback_skill_content()`.
+- Added `_yaml_safe_value()` to `SkillFormatConverter` base class → used by all converter subclasses.
+- `_render_skill_content()`: fallback to `skill.metadata["source_path"]` when `is_pack_installed()` fails.
+- `is_pack_installed()`: added depth-2 candidate `central_base / skill_name`.
+- Fixed all skill creation f-string paths (`_discovery.py`, `instinct_cmd.py`, `cross_cutting.py`).
+
+**Key Lesson**: Whenever generating YAML frontmatter from free-text user data, ALWAYS use a centralized YAML-safe quoting function. Never trust raw interpolation across f-strings, Jinja2, or str.replace().
+
+**Files**:
+- `src/vibesop/adapters/_shared.py` — core fix (3 locations)
+- `src/vibesop/adapters/base.py` — depth-2 source_path fallback
+- `src/vibesop/core/skills/format_converter.py` — YAML-safe converter
+- `src/vibesop/cli/commands/skills_commands/_discovery.py` — 2 locations
+- `src/vibesop/cli/commands/instinct_cmd.py` — 1 location
+- `src/vibesop/core/orchestration/cross_cutting.py` — 1 location
+- `src/vibesop/adapters/templates/pi/skills/SKILL.md.j2` — dead code, defense-in-depth
+
 ### Typer CLI Testing: Function vs App Instance (2026-04-20)
 
 **Issue**: `typer.testing.CliRunner.invoke()` requires a `typer.Typer` app instance or `click.Command`, not a decorated function. When tests import the command function directly from the module, `runner.invoke(func, ["--help"])` raises `AttributeError: 'function' object has no attribute '_add_completion'`.
@@ -1072,6 +1164,30 @@ return value
 type grep  # If "grep is an alias for rg", need fix
 ```
 
+### `python3` in Hook Scripts Breaks for uv-Managed Projects (2026-05-29)
+
+**Issue**: `vibesop-route.sh` hook uses bare `python3` to inline-import `vibesop.agent.runtime.AgentRuntime`. When project uses `uv` for Python management (the standard), system `python3` has no `vibesop` package → `ModuleNotFoundError` → `UserPromptSubmit hook error`.
+
+**Root Cause**: Other hooks (`pre-session-end.sh`, `pre-tool-use.sh`) call `vibe` CLI directly — `vibe` is a uv tool with its own Python env including `vibesop`. But `vibesop-route.sh` inlines Python, bypassing the uv-managed environment.
+
+**Pattern**: Any generated shell script that calls Python MUST detect the environment — do NOT assume `python3` has the project's packages.
+
+**Solution**: Auto-detect Python in the hook template:
+```bash
+# Detect Python with vibesop available (uv project > system)
+_VIBESOP_PYTHON="python3"
+if command -v uv &> /dev/null && uv run python -c "import vibesop" 2>/dev/null; then
+    _VIBESOP_PYTHON="uv run python"
+fi
+$_VIBESOP_PYTHON -c "..."
+```
+
+**Files**: `src/vibesop/adapters/templates/shared/vibesop-route.sh.j2`, `~/.claude/hooks/vibesop-route.sh`
+
+**Prevention**: When generating hook/shell scripts in uv-managed Python projects, always:
+1. Prefer CLI invocation (`vibe route`) over inline `python3 -c`
+2. If inline Python needed, auto-detect: `uv run python` → fallback `python3`
+3. Never hardcode `python3` assuming project packages are globally installed
 ---
 
 ## Quality Convergence Sprint — Lessons (2026-04-29)

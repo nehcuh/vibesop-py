@@ -6,7 +6,7 @@
 
 ## 项目定位
 
-VibeSOP 是一个 **SkillOS（技能操作系统）**，管理 AI 辅助开发中技能的全生命周期：发现 → 安装 → 路由 → 编排 → 评估 → 保留/淘汰。简单任务由 VibeSOP 端到端完成（路由→注入→引导执行），复杂任务由 AI Agent（Claude Code, Cursor, OpenCode, Kimi CLI）接手。
+VibeSOP 是一个 **SkillOS（技能操作系统）**，管理 AI 辅助开发中技能的全生命周期：发现 → 安装 → 路由 → 编排 → 评估 → 保留/淘汰。简单任务由 VibeSOP 端到端完成（路由→注入→引导执行），复杂任务由 AI Agent（Claude Code, Cursor, OpenCode, Kimi Code CLI）接手。
 
 ---
 
@@ -116,7 +116,7 @@ VibeSOP 是一个 **SkillOS（技能操作系统）**，管理 AI 辅助开发�
 
 #### 13. 多平台中央存储 + 软链接
 - 中央存储：`~/.config/skills/`（实际文件）
-- 平台软链接：`~/.claude/skills/`, `~/.config/opencode/skills/`, `~/.kimi/skills/`, `~/.config/cursor/skills/`
+- 平台软链接：`~/.claude/skills/`, `~/.config/opencode/skills/`, `~/.kimi-code/skills/`, `~/.config/cursor/skills/`
 - `vibe verify` 验证各平台配置完整性（hooks, AGENTS.md, 脚本权限）
 - `SkillInjector` 将技能内容注入 Agent 上下文
 - Windows 不支持软链接时自动 fallback 复制
@@ -130,7 +130,7 @@ VibeSOP 是一个 **SkillOS（技能操作系统）**，管理 AI 辅助开发�
 - 4 个 Agent Profile：
   - **Claude Code** — 复杂推理、架构设计、调试、多步骤分析
   - **OpenCode** — 代码编辑、重构、多文件变更
-  - **Kimi CLI** — 中文工作流、文档、双语任务
+  - **Kimi Code CLI** — 中文工作流、文档、双语任务
   - **Cursor** — 交互式编辑、IDE 集成工作流
 - `AgentRegistry.assign_agents_to_steps()`：编排时自动分配最佳 Agent
 - `--agents` 指定可用 Agent 池

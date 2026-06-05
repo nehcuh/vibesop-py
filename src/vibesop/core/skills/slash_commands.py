@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import shlex
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -114,7 +115,7 @@ class SlashCommandRegistry:
             return None, []
 
         try:
-            parts = shlex.split(user_input)
+            parts = shlex.split(user_input, posix=(os.name != "nt"))
         except ValueError:
             parts = user_input.split()
 

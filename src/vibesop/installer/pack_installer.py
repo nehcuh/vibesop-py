@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import logging
+import os
 import shutil
+import stat
 from pathlib import Path
 from typing import Any, ClassVar
 
@@ -17,6 +19,16 @@ from vibesop.security import SkillSecurityAuditor
 
 logger = logging.getLogger(__name__)
 console = Console()
+
+
+def _safe_rmtree(path: Path) -> None:
+    """Remove a directory tree, handling read-only files on Windows."""
+    def _onerror(_func: Any, _path: str, _excinfo: Any) -> None:
+        # Change read-only files to writable and retry
+        os.chmod(_path, stat.S_IWRITE)
+        _func(_path)
+
+    shutil.rmtree(path, onerror=_onerror)
 
 
 class PackInstaller:
@@ -93,7 +105,9 @@ class PackInstaller:
             if target_path.exists() and any(target_path.iterdir()):
                 installed_skill_files = list(target_path.rglob("SKILL.md"))
                 if installed_skill_files:
-                    audit_results = self._audit_skills(installed_skill_files)
+                    audit_results = self._audit_skills(
+                        installed_skill_files, pack_name=pack_name
+                    )
                     symlink_results = self._create_symlinks(pack_name, platforms)
                     msg = self._build_install_msg(
                         pack_name, installed_skill_files, audit_results,
@@ -111,12 +125,14 @@ class PackInstaller:
 
             git_dir = target_path / ".git"
             if git_dir.exists():
-                shutil.rmtree(git_dir)
+                _safe_rmtree(git_dir)
 
             build_output = self._run_post_install(target_path, analysis)
 
             installed_skill_files = list(target_path.rglob("SKILL.md"))
-            audit_results = self._audit_skills(installed_skill_files)
+            audit_results = self._audit_skills(
+                installed_skill_files, pack_name=pack_name
+            )
             symlink_results = self._create_symlinks(pack_name, platforms)
 
             msg = self._build_install_msg(
@@ -129,10 +145,14 @@ class PackInstaller:
         except Exception as e:
             return False, f"Failed to install {pack_name}: {e}"
 
-    def _audit_skills(self, skill_files: list[Path]) -> list[str]:
+    def _audit_skills(
+        self, skill_files: list[Path], pack_name: str | None = None
+    ) -> list[str]:
         results = []
         for skill_file in skill_files:
-            audit = self._auditor.audit_skill_file(skill_file)
+            audit = self._auditor.audit_skill_file(
+                skill_file, pack_name=pack_name
+            )
             results.append(f"{skill_file.parent.name}: {'PASS' if audit.is_safe else 'WARN'}")
         return results
 
@@ -224,7 +244,7 @@ class PackInstaller:
 
             try:
                 platform_dir.mkdir(parents=True, exist_ok=True)
-                skill_count = self._create_skill_symlinks(
+                skill_count = self.create_skill_symlinks(
                     central_path, platform_dir, pack_name
                 )
                 results.append((platform, f"Linked to {platform} ({skill_count} skills)"))
@@ -267,7 +287,7 @@ class PackInstaller:
         except Exception:
             return False
 
-    def _create_skill_symlinks(
+    def create_skill_symlinks(
         self,
         central_path: Path,
         platform_dir: Path,
@@ -290,7 +310,7 @@ class PackInstaller:
                         continue
                     link_path.unlink()
                 elif link_path.is_dir():
-                    shutil.rmtree(link_path)
+                    _safe_rmtree(link_path)
                 else:
                     link_path.unlink()
 
@@ -319,14 +339,12 @@ class PackInstaller:
                 if dest_path.is_symlink() or dest_path.is_file():
                     dest_path.unlink()
                 elif dest_path.is_dir():
-                    shutil.rmtree(dest_path)
+                    _safe_rmtree(dest_path)
 
             shutil.copytree(skill_dir, dest_path)
             count += 1
 
         return count
-
-    create_skill_symlinks = _create_skill_symlinks
 
     def _rebuild_global_index(self, pack_name: str) -> None:
         recovery_hint = "[dim]Run `vibe quickstart` to rebuild the index from scratch.[/dim]"

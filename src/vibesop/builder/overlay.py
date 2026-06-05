@@ -1,4 +1,4 @@
-# pyright: reportPrivateUsage=false, reportUnnecessaryIsInstance=false
+# pyright: reportUnnecessaryIsInstance=false
 """Overlay merging utilities for customizing manifests.
 
 This module provides functionality for merging overlay configurations
@@ -57,12 +57,12 @@ class OverlayMerger:
             raise FileNotFoundError(msg)
 
         # Load overlay
-        overlay_data = self._load_overlay(overlay_path)
+        overlay_data = self.load_overlay(overlay_path)
 
         # Apply overlay to manifest
         return self._apply_overlay(manifest, overlay_data)
 
-    def _load_overlay(self, overlay_path: Path) -> dict[str, Any]:
+    def load_overlay(self, overlay_path: Path) -> dict[str, Any]:
         """Load overlay from YAML file.
 
         Args:
@@ -266,7 +266,7 @@ def validate_overlay(overlay_path: Path) -> list[str]:
 
     try:
         merger = OverlayMerger()
-        overlay_data = merger._load_overlay(overlay_path)
+        overlay_data = merger.load_overlay(overlay_path)
 
         # Validate structure
         if not isinstance(overlay_data, dict):

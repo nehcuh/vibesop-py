@@ -25,22 +25,17 @@ import logging
 import threading
 import time
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, ClassVar, cast
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from vibesop.core.config import ConfigManager
 from vibesop.core.config import RoutingConfig as ConfigRoutingConfig
 from vibesop.core.exceptions import MatcherError
 from vibesop.core.matching import (
     IMatcher,
-    KeywordMatcher,
-    LevenshteinMatcher,
-    MatcherConfig,
     RoutingContext,
-    TFIDFMatcher,
 )
 from vibesop.core.models import (
     LayerDetail,
-    OrchestrationMode,
     OrchestrationResult,
     RoutingLayer,
     RoutingResult,
@@ -48,22 +43,10 @@ from vibesop.core.models import (
 )
 from vibesop.core.optimization import (
     CandidatePrefilter,
-    PreferenceBooster,
-    SkillClusterIndex,
 )
-from vibesop.core.routing.cache import CacheManager
-from vibesop.core.routing.candidate_manager import CandidateManager
 from vibesop.core.routing.tracer import RoutingTracer
-from vibesop.core.routing.conflict import (
-    ConfidenceGapStrategy,
-    ConflictResolver,
-    ExplicitOverrideStrategy,
-    FallbackStrategy,
-    NamespacePriorityStrategy,
-    RecencyStrategy,
-)
+from vibesop.core.routing.conflict import ConflictResolver
 from vibesop.core.routing.context_mixin import RouterContextMixin
-from vibesop.core.routing.cost_tracker import TriageCostTracker
 from vibesop.core.routing.degradation import DegradationManager
 from vibesop.core.routing.matcher_pipeline import MatcherPipeline
 from vibesop.core.routing.optimization_service import OptimizationService
@@ -71,6 +54,9 @@ from vibesop.core.routing.orchestration_mixin import RouterOrchestrationMixin
 from vibesop.core.routing.result_mixin import RouterResultMixin
 from vibesop.core.routing.stats_mixin import RouterStatsMixin
 from vibesop.core.routing.triage_service import TriageService
+from vibesop.core.routing.router_factory import RouterFactory
+from vibesop.core.routing.orchestrator import Orchestrator
+from vibesop.core.routing._protocols import LLMFactory, PromptBuilder, SkillLoaderProtocol
 from vibesop.core.routing import _layers
 from vibesop.core.routing import _pipeline
 
@@ -117,102 +103,48 @@ class UnifiedRouter(
         self,
         project_root: str | Path = ".",
         config: ConfigRoutingConfig | ConfigManager | None = None,
-        skill_loader: Any | None = None,
-        llm_factory: Any | None = None,
-        prompt_builder: Any | None = None,
+        skill_loader: SkillLoaderProtocol | None = None,
+        llm_factory: LLMFactory | None = None,
+        prompt_builder: PromptBuilder | None = None,
     ):
         self.project_root = Path(project_root).resolve()
-
-        if isinstance(config, ConfigManager):
-            self._config_manager = config
-        elif config is None:
-            self._config_manager = ConfigManager(project_root=self.project_root)
-        else:
-            self._config_manager = self._create_config_manager_from_config(config)
-
-        self._config: ConfigRoutingConfig = self._config_manager.get_routing_config()
         self._llm_factory = llm_factory
         self._prompt_builder = prompt_builder
         if skill_loader is not None:
             self._skill_loader = skill_loader
 
-        matcher_config = MatcherConfig(
-            min_confidence=self._config.min_confidence,
-            use_cache=self._config.use_cache,
+        # =====================================================================
+        # Component construction via RouterFactory
+        # =====================================================================
+        factory = RouterFactory(self.project_root)
+
+        self._config_manager = factory.build_config_manager(config)
+        self._config: ConfigRoutingConfig = self._config_manager.get_routing_config()
+
+        self._matchers, self._embedding_enabled, self._plugin_registry = factory.build_matchers(
+            self._config,
         )
-
-        self._matchers: list[tuple[RoutingLayer, IMatcher]] = [  # pyright: ignore[reportAttributeAccessIssue]
-            (RoutingLayer.KEYWORD, KeywordMatcher(matcher_config)),
-            (RoutingLayer.TFIDF, TFIDFMatcher(matcher_config)),
-        ]
-
-        self._embedding_enabled = self._config.enable_embedding
-        if self._embedding_enabled:
-            from vibesop.core.matching.lazy_matcher import LazyEmbeddingMatcher
-
-            self._matchers.append((RoutingLayer.EMBEDDING, LazyEmbeddingMatcher(matcher_config)))  # pyright: ignore[reportArgumentType]
-
-        self._matchers.append((RoutingLayer.LEVENSHTEIN, LevenshteinMatcher(matcher_config)))  # pyright: ignore[reportArgumentType]
-
-        # Load custom matcher plugins from .vibe/matchers/
-        self._plugin_registry = None
-        try:
-            from vibesop.core.matching.plugin import MatcherPluginRegistry
-
-            self._plugin_registry = MatcherPluginRegistry(self.project_root)
-            for plugin in self._plugin_registry.list_plugins():
-                self._matchers.append((RoutingLayer.CUSTOM, plugin))  # pyright: ignore[reportArgumentType]
-        except ImportError:
-            pass
-
-        # Warm up matchers to prevent cold-start latency on first route()
-        # This ensures EmbeddingMatcher model is loaded during initialization
         self._matchers_warmed = False
 
         self._optimization_config = self._config_manager.get_optimization_config()
-        self._cluster_index = SkillClusterIndex()
-        self._prefilter = CandidatePrefilter(cluster_index=self._cluster_index)
+        (
+            self._cluster_index,
+            self._prefilter,
+            self._conflict_resolver,
+            self._preference_booster,
+        ) = factory.build_optimization_infrastructure(self._optimization_config)
 
-        # Production-grade conflict resolver
-        self._conflict_resolver = ConflictResolver()
-        self._conflict_resolver.add_strategy(ExplicitOverrideStrategy())
-        self._conflict_resolver.add_strategy(
-            ConfidenceGapStrategy(
-                gap_threshold=self._optimization_config.clustering.confidence_gap_threshold,
-            ),
-        )
-        self._conflict_resolver.add_strategy(NamespacePriorityStrategy())
-        self._conflict_resolver.add_strategy(
-            RecencyStrategy(
-                storage_path=str(self.project_root / ".vibe" / "preferences.json"),
-            ),
-        )
-        self._conflict_resolver.add_strategy(FallbackStrategy())
-
-        pref_config = self._optimization_config.preference_boost
-        self._preference_booster = PreferenceBooster(
-            enabled=self._optimization_config.enabled and pref_config.enabled,
-            weight=pref_config.weight,
-            min_samples=pref_config.min_samples,
-            storage_path=str(self.project_root / ".vibe" / "preferences.json"),
+        self._cache_manager, self._candidate_manager, self._cost_tracker = (
+            factory.build_infrastructure()
         )
 
-        # Cached SkillRecommender instance (from integrations)
-        self._skill_recommender: Any = None
+        self._tracer = factory.build_tracer()
+        factory.register_atexit(self._candidate_manager)
 
-        # Memory and instinct systems for context-aware routing (lazy init)
-        self._memory_manager: MemoryManager | None = None
-        self._instinct_learner: InstinctLearner | None = None
-
-        self._cache_manager = CacheManager(cache_dir=self.project_root / ".vibe" / "cache")
-        self._candidate_manager = CandidateManager(self.project_root)
-
-        self._cost_tracker = TriageCostTracker(storage_dir=self.project_root / ".vibe")
-
-        # Explicitly init _llm for type checker and test mocking
+        # =====================================================================
+        # Services (depend on self methods, kept in __init__ for now)
+        # =====================================================================
         self._llm: Any | None = None
-
-        # Build sub-services
         self._optimization_service = OptimizationService(
             config=self._config,
             optimization_config=self._optimization_config,
@@ -221,7 +153,6 @@ class UnifiedRouter(
             conflict_resolver=self._conflict_resolver,
             get_instinct_learner=self._get_instinct_learner,
         )
-
         self._triage_service = TriageService(
             config=self._config,
             cost_tracker=self._cost_tracker,
@@ -231,7 +162,6 @@ class UnifiedRouter(
             llm_factory=llm_factory,
             prompt_builder=prompt_builder,
         )
-
         self._matcher_pipeline = MatcherPipeline(
             matchers=self._matchers,
             config=self._config,
@@ -240,17 +170,19 @@ class UnifiedRouter(
             optimization_service=self._optimization_service,
             get_skill_source=self._get_skill_source,
         )
-
         self._degradation_manager = DegradationManager(self._config)
 
+        # =====================================================================
+        # State & lazy-init placeholders
+        # =====================================================================
         self._total_routes = 0
         self._layer_distribution: dict[str, int] = {}
         self._stats_lock = threading.Lock()
-
         self._scenario_cache: dict[str, Any] | None = None
-
-        # Project analyzer cache (expensive: ~2s filesystem scan)
         self._project_analyzer: Any | None = None
+
+        # Orchestrator (lazy init)
+        self._orchestrator: Orchestrator | None = None
 
         # Orchestration components (lazy init)
         self._multi_intent_detector: MultiIntentDetector | None = None
@@ -261,25 +193,12 @@ class UnifiedRouter(
         # Session context for multi-turn state persistence (lazy init)
         self._session_context = None
 
-        # Routing tracer for per-layer diagnostic traces
-        self._tracer = RoutingTracer(
-            enabled=False,
-            traces_dir=self.project_root / ".vibe" / "traces",
-        )
+        # Cached SkillRecommender instance (from integrations)
+        self._skill_recommender: Any = None
 
-        # Flush usage buffer on normal exit to prevent data loss.
-        # Use a weak reference so the atexit handler does not keep the
-        # CandidateManager (and thus the router) alive indefinitely.
-        import weakref
-
-        _cm_ref = weakref.ref(self._candidate_manager)
-
-        def _flush_usage_buffer() -> None:
-            cm = _cm_ref()
-            if cm is not None:
-                cm._flush_usage_buffer()
-
-        atexit.register(_flush_usage_buffer)
+        # Memory and instinct systems for context-aware routing (lazy init)
+        self._memory_manager: MemoryManager | None = None
+        self._instinct_learner: InstinctLearner | None = None
 
         # Router-level coarse lock for thread safety
         self._route_lock = threading.Lock()
@@ -724,6 +643,12 @@ class UnifiedRouter(
         """
         return self._single_skill_route(query, candidates, context)
 
+    def _get_orchestrator(self) -> Orchestrator:
+        """Lazy-init Orchestrator to avoid heavy construction during router init."""
+        if self._orchestrator is None:
+            self._orchestrator = Orchestrator(self)
+        return self._orchestrator
+
     def orchestrate(
         self,
         query: str,
@@ -733,190 +658,13 @@ class UnifiedRouter(
     ) -> OrchestrationResult:
         """Orchestrate a query — detect multi-intent and build execution plan if needed.
 
-        Single-skill queries route directly. Multi-intent queries are decomposed
-        into an ExecutionPlan with dependency-ordered steps.
-
-        Args:
-            query: User's natural language query.
-            candidates: Optional skill candidates list.
-            context: Optional routing context for conversation/memory state.
-            callbacks: Optional orchestration callbacks for streaming progress.
+        Delegates to Orchestrator to keep UnifiedRouter focused on routing.
         """
-        from vibesop.core.orchestration.callbacks import (
-            ErrorPolicy,
-            NoOpCallbacks,
-            OrchestrationPhase,
-            PhaseInfo,
-        )
-
-        cb = callbacks if callbacks is not None else NoOpCallbacks()
-        start_time = time.perf_counter()
-
-        # 1. Single-skill routing (fast path)
-        cb.on_phase_start(
-            PhaseInfo(
-                phase=OrchestrationPhase.ROUTING,
-                message="Analyzing query for skill match...",
-                progress=0.0,
-            )
-        )
-        single_result = self._single_skill_route(query, candidates, context)
-        cb.on_phase_complete(
-            PhaseInfo(
-                phase=OrchestrationPhase.ROUTING,
-                message=f"Single-skill match: {single_result.primary.skill_id if single_result.primary else 'none'}",
-                progress=0.2,
-                metadata={
-                    "primary_confidence": single_result.primary.confidence
-                    if single_result.primary
-                    else 0.0
-                },
-            )
-        )
-
-        # 2. Check if orchestration is enabled
-        if not self._config.enable_orchestration:
-            return self._to_orchestration_result(single_result, query)
-
-        # 3. Multi-intent detection
-        cb.on_phase_start(
-            PhaseInfo(
-                phase=OrchestrationPhase.DETECTION,
-                message="Detecting multiple intents...",
-                progress=0.2,
-            )
-        )
-        detector = self._get_multi_intent_detector()
-        should_decompose = detector.should_decompose(query, single_result, llm_client=self._llm)
-        cb.on_phase_complete(
-            PhaseInfo(
-                phase=OrchestrationPhase.DETECTION,
-                message=f"Multi-intent detected: {should_decompose}",
-                progress=0.4,
-                metadata={"should_decompose": should_decompose},
-            )
-        )
-
-        if not should_decompose:
-            return self._to_orchestration_result(single_result, query)
-
-        # 4. Decompose into sub-tasks
-        cb.on_phase_start(
-            PhaseInfo(
-                phase=OrchestrationPhase.DECOMPOSITION,
-                message="Decomposing query into sub-tasks...",
-                progress=0.4,
-            )
-        )
-        decomposer = self._get_task_decomposer()
-        try:
-            skills = self._build_decomposition_skills(candidates, query=query)
-            sub_tasks = decomposer.decompose(query, skills=skills)
-        except Exception as e:
-            policy = cb.on_phase_error(
-                PhaseInfo(
-                    phase=OrchestrationPhase.DECOMPOSITION,
-                    message="Task decomposition failed",
-                    progress=0.4,
-                ),
-                e,
-                ErrorPolicy.ABORT,
-            )
-            if policy == ErrorPolicy.ABORT:
-                return self._to_orchestration_result(single_result, query)
-            sub_tasks = []
-
-        cb.on_phase_complete(
-            PhaseInfo(
-                phase=OrchestrationPhase.DECOMPOSITION,
-                message=f"Decomposed into {len(sub_tasks)} sub-tasks",
-                progress=0.6,
-                metadata={"sub_task_count": len(sub_tasks)},
-            )
-        )
-
-        if len(sub_tasks) <= 1:
-            return self._to_orchestration_result(single_result, query)
-
-        # 5. Build execution plan
-        cb.on_phase_start(
-            PhaseInfo(
-                phase=OrchestrationPhase.PLAN_BUILDING,
-                message="Building execution plan...",
-                progress=0.6,
-            )
-        )
-        builder = self._get_plan_builder()
-        try:
-            plan = builder.build_plan(query, sub_tasks)
-        except Exception as e:
-            policy = cb.on_phase_error(
-                PhaseInfo(
-                    phase=OrchestrationPhase.PLAN_BUILDING,
-                    message="Plan building failed",
-                    progress=0.6,
-                ),
-                e,
-                ErrorPolicy.ABORT,
-            )
-            if policy == ErrorPolicy.ABORT:
-                return self._to_orchestration_result(single_result, query)
-            plan = cast("Any", None)
-
-        if not plan or not plan.steps:
-            cb.on_phase_complete(
-                PhaseInfo(
-                    phase=OrchestrationPhase.PLAN_BUILDING,
-                    message="No valid plan could be built, falling back to single skill",
-                    progress=0.8,
-                )
-            )
-            return self._to_orchestration_result(single_result, query)
-
-        cb.on_phase_complete(
-            PhaseInfo(
-                phase=OrchestrationPhase.PLAN_BUILDING,
-                message=f"Execution plan built with {len(plan.steps)} steps",
-                progress=0.9,
-                metadata={"step_count": len(plan.steps), "strategy": plan.execution_mode.value},
-            )
-        )
-
-        duration_ms = (time.perf_counter() - start_time) * 1000
-
-        result = OrchestrationResult(
-            mode=OrchestrationMode.ORCHESTRATED,
-            original_query=query,
-            execution_plan=plan,
-            single_fallback=single_result.primary,
-            layer_details=single_result.layer_details,
-            duration_ms=duration_ms,
-        )
-
-        # Record execution analytics
-        self._record_execution(query, result)
-
-        cb.on_plan_ready(plan)
-        cb.on_phase_complete(
-            PhaseInfo(
-                phase=OrchestrationPhase.COMPLETE,
-                message="Orchestration complete",
-                progress=1.0,
-            )
-        )
-
-        return result
+        return self._get_orchestrator().orchestrate(query, candidates, context, callbacks)
 
     # ================================================================
     # Result building
     # ================================================================
-
-    def _create_config_manager_from_config(self, config: ConfigRoutingConfig) -> ConfigManager:
-        manager = ConfigManager(project_root=self.project_root)
-        for field_name in type(config).model_fields:
-            value = getattr(config, field_name)
-            manager.set_cli_override(f"routing.{field_name}", value)
-        return manager
 
     # ================================================================
     # Analytics and execution recording
@@ -1004,6 +752,49 @@ class UnifiedRouter(
     # ================================================================
     # Utilities
     # ================================================================
+
+    @property
+    def llm(self) -> Any | None:
+        """Currently injected LLM provider, or None."""
+        return self._llm
+
+    @property
+    def routing_config(self) -> ConfigRoutingConfig:
+        """Active routing configuration."""
+        return self._config
+
+    @routing_config.setter
+    def routing_config(self, value: ConfigRoutingConfig) -> None:
+        self._config = value
+
+    @property
+    def triage_service(self) -> TriageService:
+        """The AI triage service used by this router."""
+        return self._triage_service
+
+    def route_single(
+        self,
+        query: str,
+        candidates: list[dict[str, Any]] | None = None,
+        context: RoutingContext | None = None,
+    ) -> RoutingResult:
+        """Route a query to the best matching skill (public entry point).
+
+        This is the public counterpart to ``_single_skill_route``.
+        """
+        return self._single_skill_route(query, candidates, context)
+
+    def build_decomposition_skills(
+        self,
+        candidates: list[dict[str, Any]] | None = None,
+        limit: int = 50,
+        query: str | None = None,
+    ) -> list[str]:
+        """Build the skill catalog string list for task decomposition.
+
+        Public counterpart to ``_build_decomposition_skills``.
+        """
+        return self._build_decomposition_skills(candidates, limit, query)
 
     def set_llm(self, llm_provider: Any) -> None:
         """Inject an LLM provider for AI triage.

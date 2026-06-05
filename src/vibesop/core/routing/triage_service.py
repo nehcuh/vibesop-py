@@ -10,6 +10,7 @@ from vibesop.core.matching import KeywordMatcher, MatcherConfig
 from vibesop.core.models import RoutingLayer, SkillRoute
 from vibesop.core.routing.circuit_breaker import TriageCircuitBreaker
 from vibesop.core.routing.layers import LayerResult
+from vibesop.core.routing._protocols import LLMFactory, PromptBuilder
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -32,8 +33,8 @@ class TriageService:
         prefilter: CandidatePrefilter,
         cache_manager: CacheManager,
         get_skill_source: Callable[..., str],
-        llm_factory: Callable[[], Any] | None = None,
-        prompt_builder: Callable[[str, str, str], str] | None = None,
+        llm_factory: LLMFactory | None = None,
+        prompt_builder: PromptBuilder | None = None,
     ) -> None:
         self._config = config
         self._cost_tracker = cost_tracker
@@ -51,6 +52,15 @@ class TriageService:
             ),
             cooldown_seconds=getattr(config, "ai_triage_circuit_breaker_cooldown_seconds", 60),
         )
+
+    @property
+    def config(self) -> RoutingConfig:
+        """Current routing configuration used by this service."""
+        return self._config
+
+    @config.setter
+    def config(self, value: RoutingConfig) -> None:
+        self._config = value
 
     def try_ai_triage(
         self,

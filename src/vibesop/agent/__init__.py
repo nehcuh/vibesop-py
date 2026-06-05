@@ -1,4 +1,3 @@
-# pyright: reportPrivateUsage=false
 """VibeSOP Agent Integration."""
 
 from __future__ import annotations
@@ -79,6 +78,15 @@ class AgentRouter:
         """
         self._router.set_llm(llm_provider)
 
+    def set_llm_factory(self, llm_factory: Any) -> None:
+        """Inject an LLM factory for lazy provider creation.
+
+        Args:
+            llm_factory: Callable that returns an LLM provider.
+        """
+        self._router._llm_factory = llm_factory
+        self._router._triage_service._llm_factory = llm_factory
+
     def route(self, query: str, enable_ai_triage: bool = True) -> Any:
         """Route a query to the best matching skill.
 
@@ -87,24 +95,24 @@ class AgentRouter:
             enable_ai_triage: Temporarily enable AI triage for this call.
         """
         # If AI triage is requested and LLM is available, temporarily enable it
-        if enable_ai_triage and self._router._llm is not None:
+        if enable_ai_triage and self._router.llm is not None:
             # Store original configs
-            original_router_config = self._router._config
-            original_triage_config = self._router._triage_service._config
+            original_router_config = self._router.routing_config
+            original_triage_config = self._router.triage_service.config
             try:
                 # Create modified configs with AI triage enabled
                 modified_config = original_router_config.model_copy(
                     update={"enable_ai_triage": True}
                 )
-                self._router._config = modified_config
-                self._router._triage_service._config = modified_config
-                result = self._router._single_skill_route(query)
+                self._router.routing_config = modified_config
+                self._router.triage_service.config = modified_config
+                result = self._router.route_single(query)
             finally:
                 # Restore original configs
-                self._router._config = original_router_config
-                self._router._triage_service._config = original_triage_config
+                self._router.routing_config = original_router_config
+                self._router.triage_service.config = original_triage_config
         else:
-            result = self._router._single_skill_route(query)
+            result = self._router.route_single(query)
 
         return result
 
@@ -118,21 +126,21 @@ class AgentRouter:
         from vibesop.core.sessions import SessionContext
 
         # Enable AI triage temporarily if requested and LLM is available
-        if enable_ai_triage and self._router._llm is not None:
-            original_router_config = self._router._config
-            original_triage_config = self._router._triage_service._config
+        if enable_ai_triage and self._router.llm is not None:
+            original_router_config = self._router.routing_config
+            original_triage_config = self._router.triage_service.config
             try:
                 modified_config = original_router_config.model_copy(
                     update={"enable_ai_triage": True}
                 )
-                self._router._config = modified_config
-                self._router._triage_service._config = modified_config
+                self._router.routing_config = modified_config
+                self._router.triage_service.config = modified_config
                 ctx = SessionContext(project_root=str(self._router.project_root), router=self._router)
                 ctx.set_current_skill(current_skill)
                 suggestion = ctx.check_reroute_needed(new_message)
             finally:
-                self._router._config = original_router_config
-                self._router._triage_service._config = original_triage_config
+                self._router.routing_config = original_router_config
+                self._router.triage_service.config = original_triage_config
         else:
             ctx = SessionContext(project_root=str(self._router.project_root), router=self._router)
             ctx.set_current_skill(current_skill)
@@ -183,12 +191,12 @@ class AgentRouter:
         from vibesop.core.orchestration import TaskDecomposer
 
         # Initialize decomposer with injected LLM
-        decomposer = TaskDecomposer(llm_client=self._router._llm)
+        decomposer = TaskDecomposer(llm_client=self._router.llm)
 
         # Pass the skill catalog so the LLM can pre-assign skill_id per sub-task —
         # without it, PlanBuilder falls back to skip_ai_triage routing and every
         # sub-task ends up at whichever skill the SCENARIO/INDEX layers pick first.
-        skills = self._router._build_decomposition_skills(query=query)
+        skills = self._router.build_decomposition_skills(query=query)
 
         sub_tasks = decomposer.decompose(query, skills=skills)
 
@@ -210,8 +218,8 @@ class AgentRouter:
         # Auto-decompose if sub_tasks not provided. Keep SubTask objects directly
         # so the LLM-assigned skill_id (and task_type) are preserved into PlanBuilder.
         if sub_tasks is None:
-            decomposer = TaskDecomposer(llm_client=self._router._llm)
-            skills = self._router._build_decomposition_skills(query=query)
+            decomposer = TaskDecomposer(llm_client=self._router.llm)
+            skills = self._router.build_decomposition_skills(query=query)
             sub_task_objects = decomposer.decompose(query, skills=skills)
         else:
             # External caller provided dicts — read skill_id/task_type if present.

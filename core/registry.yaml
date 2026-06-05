@@ -14,7 +14,7 @@ _templates:
     conditional: superpowers_installed
 
   gstack_base: &gstack_base
-    namespace: gstack
+#     namespace: gstack
     entrypoint: external
     priority: P2
     supported_targets:
@@ -22,7 +22,7 @@ _templates:
       opencode: external-skill
       pi: external-skill
     safety_level: external_reviewed
-    conditional: gstack_installed
+#     conditional: gstack_installed
 
   omx_base: &omx_base
     namespace: omx
@@ -46,10 +46,11 @@ namespaces:
     default_trust: review_required
     purpose: Third-party skill packs such as Superpowers that extend the built-in workflow.
 
-  gstack:
-    owner: external_skill_pack
-    default_trust: review_required
-    purpose: Virtual engineering team — role-based skills for product thinking, code review, browser QA, and release automation.
+# gstack pack removed
+#  gstack:
+#    owner: external_skill_pack
+#    default_trust: review_required
+#    purpose: Virtual engineering team — role-based skills for product thinking, code review, browser QA, and release automation.
 
   project:
     owner: project_maintainer
@@ -65,7 +66,6 @@ merge_policy:
   precedence:
     - builtin
     - superpowers
-    - gstack
     - omx
     - project
   name_collision: require_namespace_or_explicit_alias
@@ -177,25 +177,25 @@ conflict_resolution:
     # Debugging: gstack/investigate is primary, superpowers/debug as alternative
     - scenario: debugging
       primary: /investigate
-      primary_source: gstack
+#       primary_source: gstack
       alternatives:
         - skill: /debug
           source: superpowers
           trigger: "需要高级调试工作流"
       override_keywords:
-        - "用 gstack"
+#         - "用 gstack"
         - "用 superpowers"
 
     # Code review: prefer gstack for pre-landing (SQL safety, auto-fixes)
     - scenario: code_review
       primary: /review
-      primary_source: gstack
+#       primary_source: gstack
       alternatives:
         - skill: /receiving-code-review
           source: superpowers
           trigger: "需要全面质量检查"
         - skill: /codex
-          source: gstack
+#           source: gstack
           trigger: "需要跨模型审查"
       override_keywords:
         - "用 superpowers"
@@ -203,7 +203,7 @@ conflict_resolution:
     # Product thinking: gstack for early (reframing), superpowers for refinement
     - scenario: product_thinking
       primary: /office-hours
-      primary_source: gstack
+#       primary_source: gstack
       alternatives:
         - skill: /brainstorming
           source: superpowers
@@ -217,22 +217,22 @@ conflict_resolution:
       primary_source: builtin
       alternatives:
         - skill: /plan-ceo-review
-          source: gstack
+#           source: gstack
           trigger: "CEO/产品角度"
         - skill: /plan-eng-review
-          source: gstack
+#           source: gstack
           trigger: "架构技术角度"
         - skill: /plan-design-review
-          source: gstack
+#           source: gstack
           trigger: "设计/UX 角度"
         - skill: /autoplan
-          source: gstack
+#           source: gstack
           trigger: "完整自动审查"
         - skill: /writing-plans
           source: superpowers
           trigger: "创建设计文档"
       override_keywords:
-        - "用 gstack"
+#         - "用 gstack"
         - "用 superpowers"
 
     # Refactoring: prefer superpowers
@@ -241,10 +241,10 @@ conflict_resolution:
       primary_source: superpowers
       alternatives:
         - skill: /review
-          source: gstack
+#           source: gstack
           trigger: "重构后审查"
       override_keywords:
-        - "用 gstack"
+#         - "用 gstack"
 
     # Architecture: prefer superpowers
     - scenario: architecture
@@ -252,18 +252,18 @@ conflict_resolution:
       primary_source: superpowers
       alternatives:
         - skill: /plan-eng-review
-          source: gstack
+#           source: gstack
           trigger: "架构审查"
       override_keywords:
-        - "用 gstack"
+#         - "用 gstack"
 
     # Requirements clarification: omx/deep-interview is primary
     - scenario: requirements_clarification
       primary: omx/deep-interview
       primary_source: omx
       alternatives:
-        - skill: gstack/office-hours
-          source: gstack
+#         - skill: gstack/office-hours
+#           source: gstack
           trigger: "产品头脑风暴"
         - skill: superpowers/brainstorm
           source: superpowers
@@ -283,8 +283,8 @@ conflict_resolution:
       primary: omx/ralplan
       primary_source: omx
       alternatives:
-        - skill: gstack/plan-eng-review
-          source: gstack
+#         - skill: gstack/plan-eng-review
+#           source: gstack
           trigger: "架构审查"
 
     # Parallel execution: omx/team is primary
@@ -304,11 +304,11 @@ conflict_resolution:
       primary: omx/ultraqa
       primary_source: omx
       alternatives:
-        - skill: gstack/qa
-          source: gstack
+#         - skill: gstack/qa
+#           source: gstack
           trigger: "浏览器测试"
-        - skill: gstack/qa-only
-          source: gstack
+#         - skill: gstack/qa-only
+#           source: gstack
           trigger: "仅报告"
 
 # Skill detection and routing hints
@@ -316,15 +316,15 @@ routing_hints:
   # When user mentions these keywords, suggest specific skills
   suggestions:
     - keywords: ["发布", "提交", "ship", "merge", "PR"]
-      suggest: gstack/ship
+#       suggest: gstack/ship
       message: "检测到发布意图，建议使用 /ship"
 
     - keywords: ["测试网站", "QA", "端到端", "浏览器测试"]
-      suggest: gstack/qa
+#       suggest: gstack/qa
       message: "建议使用 /qa 进行浏览器测试"
 
     - keywords: ["bug", "错误", "调试", "不工作", "卡住了"]
-      suggest: gstack/investigate
+#       suggest: gstack/investigate
       message: "建议先找根因再修复"
 
     - keywords: ["复杂", "很多文件", "麻烦"]
@@ -336,15 +336,15 @@ routing_hints:
       message: "建议使用自主实验循环进行优化"
 
     - keywords: ["新功能", "新想法", "feature", "要不要做"]
-      suggest: gstack/office-hours
+#       suggest: gstack/office-hours
       message: "新想法建议先用 /office-hours 重新框定问题"
 
 external_pack_template:
   namespace_examples:
     - superpowers/tdd
     - superpowers/brainstorm
-    - gstack/office-hours
-    - gstack/review
+#     - gstack/office-hours
+#     - gstack/review
     - project/domain-audit
   onboarding_rules:
     - Register metadata here before enabling triggers.
@@ -438,106 +438,106 @@ skills:
 
   # External gstack skill pack (conditional on installation)
   # Sprint pipeline: Think → Plan → Build → Review → Test → Ship → Reflect
-  - id: gstack/office-hours
-    <<: *gstack_base
-    intent: Product brainstorming with forcing questions — reframes problems before code is written.
-    trigger_mode: suggest
-
-  - id: gstack/plan-ceo-review
-    <<: *gstack_base
-    intent: CEO/founder perspective review — find the 10-star product hiding in the request.
-    trigger_mode: suggest
-
-  - id: gstack/plan-eng-review
-    <<: *gstack_base
-    intent: Engineering architecture review with diagrams, edge cases, and test plans.
-    trigger_mode: suggest
-
-  - id: gstack/plan-design-review
-    <<: *gstack_base
-    intent: Design review with 0-10 ratings per dimension and AI slop detection.
-    trigger_mode: manual
-
-  - id: gstack/design-consultation
-    <<: *gstack_base
-    intent: Build a complete design system — research landscape, propose creative risks, generate mockups.
-    trigger_mode: manual
-
-  - id: gstack/review
-    <<: *gstack_base
-    intent: Pre-landing PR review — SQL safety, LLM trust boundaries, structural issues, auto-fixes.
-    trigger_mode: suggest
-
-  - id: gstack/design-review
-    <<: *gstack_base
-    intent: Visual design audit with fixes — audits implemented design and applies changes.
-    trigger_mode: manual
-
-  - id: gstack/codex
-    <<: *gstack_base
-    intent: Cross-model second opinion via OpenAI Codex CLI — independent review from a different AI.
-    trigger_mode: manual
-
-  - id: gstack/investigate
-    <<: *gstack_base
-    intent: Systematic root-cause debugging with auto-freeze scope boundary.
-    trigger_mode: suggest
-
-  - id: gstack/qa
-    <<: *gstack_base
-    intent: Browser QA — test app in real Chromium, find bugs, fix with atomic commits, generate regression tests.
-    trigger_mode: suggest
-
-  - id: gstack/qa-only
-    <<: *gstack_base
-    intent: QA reporting without code changes — pure bug report from browser testing.
-    trigger_mode: manual
-
-  - id: gstack/browse
-    <<: *gstack_base
-    intent: Headless Chromium browser — navigate, click, screenshot, assert element states.
-    trigger_mode: manual
-
-  - id: gstack/setup-browser-cookies
-    <<: *gstack_base
-    intent: Import cookies from real browser (Chrome, Arc, Brave, Edge) into headless session.
-    trigger_mode: manual
-
-  - id: gstack/ship
-    <<: *gstack_base
-    intent: Release workflow — sync main, run tests, audit coverage, push, open PR.
-    trigger_mode: suggest
-
-  - id: gstack/document-release
-    <<: *gstack_base
-    intent: Auto-update all project docs to match what was just shipped.
-    trigger_mode: suggest
-
-  - id: gstack/retro
-    <<: *gstack_base
-    intent: Team-aware weekly retrospective with per-person breakdowns and shipping streaks.
-    trigger_mode: manual
-
-  - id: gstack/careful
-    <<: *gstack_base
-    intent: Safety guardrails — warns before destructive commands.
-    trigger_mode: suggest
-
-  - id: gstack/freeze
-    <<: *gstack_base
-    intent: Edit scope lock — restrict file edits to one directory during debugging.
-    trigger_mode: manual
-
-  - id: gstack/guard
-    <<: *gstack_base
-    intent: Maximum safety — careful + freeze combined.
-    trigger_mode: manual
-
-  - id: gstack/unfreeze
-    <<: *gstack_base
-    intent: Remove edit scope lock set by /freeze.
-    trigger_mode: manual
-
+#   - id: gstack/office-hours
+#     <<: *gstack_base
+#     intent: Product brainstorming with forcing questions — reframes problems before code is written.
+#     trigger_mode: suggest
+# 
+#   - id: gstack/plan-ceo-review
+#     <<: *gstack_base
+#     intent: CEO/founder perspective review — find the 10-star product hiding in the request.
+#     trigger_mode: suggest
+# 
+#   - id: gstack/plan-eng-review
+#     <<: *gstack_base
+#     intent: Engineering architecture review with diagrams, edge cases, and test plans.
+#     trigger_mode: suggest
+# 
+#   - id: gstack/plan-design-review
+#     <<: *gstack_base
+#     intent: Design review with 0-10 ratings per dimension and AI slop detection.
+#     trigger_mode: manual
+# 
+#   - id: gstack/design-consultation
+#     <<: *gstack_base
+#     intent: Build a complete design system — research landscape, propose creative risks, generate mockups.
+#     trigger_mode: manual
+# 
+#   - id: gstack/review
+#     <<: *gstack_base
+#     intent: Pre-landing PR review — SQL safety, LLM trust boundaries, structural issues, auto-fixes.
+#     trigger_mode: suggest
+# 
+#   - id: gstack/design-review
+#     <<: *gstack_base
+#     intent: Visual design audit with fixes — audits implemented design and applies changes.
+#     trigger_mode: manual
+# 
+#   - id: gstack/codex
+#     <<: *gstack_base
+#     intent: Cross-model second opinion via OpenAI Codex CLI — independent review from a different AI.
+#     trigger_mode: manual
+# 
+#   - id: gstack/investigate
+#     <<: *gstack_base
+#     intent: Systematic root-cause debugging with auto-freeze scope boundary.
+#     trigger_mode: suggest
+# 
+#   - id: gstack/qa
+#     <<: *gstack_base
+#     intent: Browser QA — test app in real Chromium, find bugs, fix with atomic commits, generate regression tests.
+#     trigger_mode: suggest
+# 
+#   - id: gstack/qa-only
+#     <<: *gstack_base
+#     intent: QA reporting without code changes — pure bug report from browser testing.
+#     trigger_mode: manual
+# 
+#   - id: gstack/browse
+#     <<: *gstack_base
+#     intent: Headless Chromium browser — navigate, click, screenshot, assert element states.
+#     trigger_mode: manual
+# 
+#   - id: gstack/setup-browser-cookies
+#     <<: *gstack_base
+#     intent: Import cookies from real browser (Chrome, Arc, Brave, Edge) into headless session.
+#     trigger_mode: manual
+# 
+#   - id: gstack/ship
+#     <<: *gstack_base
+#     intent: Release workflow — sync main, run tests, audit coverage, push, open PR.
+#     trigger_mode: suggest
+# 
+#   - id: gstack/document-release
+#     <<: *gstack_base
+#     intent: Auto-update all project docs to match what was just shipped.
+#     trigger_mode: suggest
+# 
+#   - id: gstack/retro
+#     <<: *gstack_base
+#     intent: Team-aware weekly retrospective with per-person breakdowns and shipping streaks.
+#     trigger_mode: manual
+# 
+#   - id: gstack/careful
+#     <<: *gstack_base
+#     intent: Safety guardrails — warns before destructive commands.
+#     trigger_mode: suggest
+# 
+#   - id: gstack/freeze
+#     <<: *gstack_base
+#     intent: Edit scope lock — restrict file edits to one directory during debugging.
+#     trigger_mode: manual
+# 
+#   - id: gstack/guard
+#     <<: *gstack_base
+#     intent: Maximum safety — careful + freeze combined.
+#     trigger_mode: manual
+# 
+#   - id: gstack/unfreeze
+#     <<: *gstack_base
+#     intent: Remove edit scope lock set by /freeze.
+#     trigger_mode: manual
+# 
   - id: riper-workflow
     namespace: builtin
     entrypoint: skills/riper-workflow/SKILL.md

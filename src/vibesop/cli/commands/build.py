@@ -131,7 +131,7 @@ def execute_build(
                 "\n[dim]✓ Deployed to Claude Code config directory[/dim]\n"
                 "[dim]Restart Claude Code to apply changes.[/dim]\n"
             )
-        elif str(output_dir) == str(Path.home() / ".kimi"):
+        elif str(output_dir) == str(Path.home() / ".kimi-code"):
             console.print(
                 "\n[dim]✓ Deployed to Kimi Code CLI config directory[/dim]\n"
                 "[dim]Restart Kimi Code CLI to apply changes.[/dim]\n"
@@ -144,7 +144,7 @@ def execute_build(
         else:
             platform_deploy_dirs = {
                 "claude-code": "~/.claude",
-                "kimi-cli": "~/.kimi",
+                "kimi-cli": "~/.kimi-code",
                 "opencode": "~/.config/opencode",
             }
             deploy_dir = platform_deploy_dirs.get(target, f"~/.{target}")
@@ -205,7 +205,7 @@ def build(
         None,
         "--output",
         "-o",
-        help="Output directory (default: .vibe/dist/<target>). Use ~/.claude, ~/.config/opencode, or ~/.kimi to deploy directly.",
+        help="Output directory (default: .vibe/dist/<target>). Use ~/.claude, ~/.config/opencode, or ~/.kimi-code to deploy directly.",
         exists=False,
     ),
     overlay: Path | None = typer.Option(

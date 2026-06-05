@@ -1,8 +1,22 @@
+---
+id: {{ skill.id }}
+name: {{ skill.name }}
+description: {{ skill.description | replace('\n', ' ') | trim }}
+{% if skill.tags %}
+tags: [{{ skill.tags | join(', ') }}]
+{% endif %}
+version: {{ skill.version or '1.0.0' }}
+{% if skill.namespace %}
+namespace: {{ skill.namespace }}
+{% else %}
+namespace: builtin
+{% endif %}
+type: {{ skill.skill_type or 'prompt' }}
+---
+
 # {{ skill.name }}
 
-{% if skill.description %}
 > {{ skill.description }}
-{% endif %}
 
 **Skill ID**: `{{ skill.id }}`
 **Namespace**: {{ skill.namespace or 'builtin' }}

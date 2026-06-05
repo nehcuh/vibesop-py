@@ -183,6 +183,24 @@ class InstinctLearner:
                 f.write(json.dumps(instinct.to_dict()) + "\n")
         self._save_sequences()
 
+    @property
+    def instincts(self) -> dict[str, Instinct]:
+        """Read-only view of learned instincts."""
+        return dict(self._instincts)
+
+    def has_instinct(self, instinct_id: str) -> bool:
+        """Check if an instinct with the given ID exists."""
+        return instinct_id in self._instincts
+
+    def set_instinct(self, instinct: Instinct) -> None:
+        """Add or replace an instinct."""
+        self._instincts[instinct.id] = instinct
+        self._embedding_cache.clear()
+
+    def save(self) -> None:
+        """Persist all instincts to storage."""
+        self._save()
+
     def learn(
         self,
         pattern: str,

@@ -140,6 +140,9 @@ class PiCodingAgentAdapter(SdkBasedAdapter):
                 skill_dir.mkdir(parents=True, exist_ok=True)
                 self._render_skill_content(skill, skill_dir, manifest, result)
 
+            # Clean orphan skills not in the current manifest
+            self.clean_orphan_skills(manifest, output_dir)
+
         except Exception as e:
             result.add_error(f"Failed to render configuration: {e}")
             result.success = False
@@ -259,6 +262,9 @@ class PiCodingAgentAdapter(SdkBasedAdapter):
         When multiple packs provide a skill named "qa", the pi agent's flat
         skill registry sees a collision.  Prefixing ``name: qa`` →
         ``name: gstack-qa`` ensures each pack's skills occupy a unique name.
+
+        Also normalizes names to satisfy pi agent's ``[a-z0-9-]+`` rule by
+        replacing ``/``, ``_``, and embedded quotes with hyphens.
         """
         skill_id = skill.id if hasattr(skill, "id") else skill.get("id", "")
         if "/" not in skill_id:
@@ -284,23 +290,53 @@ class PiCodingAgentAdapter(SdkBasedAdapter):
         import re
 
         frontmatter = parts[1]
-        # Only rewrite if the name does NOT already start with the namespace
-        if not re.search(rf"^name:\s*{re.escape(namespace)}-", frontmatter, flags=re.MULTILINE):
-            new_fm = re.sub(
-                r"^name:\s*(.+)$",
-                rf"name: {namespace}-\1",
-                frontmatter,
-                count=1,
-                flags=re.MULTILINE,
-            )
-            new_content = f"---{new_fm}---{parts[2]}"
 
-            # If the file is a symlink we must replace it with a real file
-            # so we don't mutate the original pack content.
-            if skill_file.is_symlink():
-                skill_file.unlink()
+        # Extract current name value
+        name_match = re.search(r"^name:\s*(.+)$", frontmatter, re.MULTILINE)
+        if not name_match:
+            return
 
-            skill_file.write_text(new_content, encoding="utf-8")
+        current_name = name_match.group(1).strip()
+
+        # Strip ALL leading namespace prefixes (handles double-prefix from
+        # prior _namespace_skill_name runs: "gstack-gstack/browse" → "browse")
+        ns_slash = namespace + "/"
+        ns_prefix = namespace + "-"
+        while current_name.startswith(ns_prefix) or current_name.startswith(ns_slash):
+            if current_name.startswith(ns_slash):
+                current_name = current_name[len(ns_slash):]
+            elif current_name.startswith(ns_prefix):
+                current_name = current_name[len(ns_prefix):]
+
+        # Normalize to [a-z0-9-]: replace / _ and embedded quotes with -
+        for char in ("/", "_", '"'):
+            current_name = current_name.replace(char, "-")
+
+        # Collapse consecutive hyphens
+        while "--" in current_name:
+            current_name = current_name.replace("--", "-")
+
+        # Strip leading/trailing hyphens
+        current_name = current_name.strip("-")
+
+        # Always prefix namespace
+        new_name = ns_prefix + current_name
+
+        new_fm = re.sub(
+            r"^name:\s*(.+)$",
+            f"name: {new_name}",
+            frontmatter,
+            count=1,
+            flags=re.MULTILINE,
+        )
+        new_content = f"---{new_fm}---{parts[2]}"
+
+        # If the file is a symlink we must replace it with a real file
+        # so we don't mutate the original pack content.
+        if skill_file.is_symlink():
+            skill_file.unlink()
+
+        skill_file.write_text(new_content, encoding="utf-8")
 
     def _fallback_skill_content(
         self,

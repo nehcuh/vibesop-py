@@ -1,7 +1,7 @@
 # VibeSOP Architecture Overview
 
-> **Version**: 5.5.0
-> **Last Updated**: 2026-05-29
+> **Version**: 6.2.0
+> **Last Updated**: 2026-06-05
 
 ## System Purpose
 

@@ -7,7 +7,7 @@
 [![Python](https://img.shields.io/badge/Python-3.12+-blue.svg)](https://www.python.org/downloads/)
 [![Ruff](https://img.shields.io/badge/Ruff-Enabled-black.svg)](https://github.com/astral-sh/ruff)
 [![Coverage](https://img.shields.io/badge/Coverage-73%25-yellow.svg)]()
-[![Version](https://img.shields.io/badge/Version-5.5.0-blue.svg)](https://github.com/nehcuh/vibesop-py)
+[![Version](https://img.shields.io/badge/Version-6.2.0-blue.svg)](https://github.com/nehcuh/vibesop-py)
 [![Spec](https://img.shields.io/badge/Spec-v3.0-green.svg)](docs/skill-format-spec-v3.md)
 [![Conformance](https://img.shields.io/badge/Conformance-85%20tests-brightgreen.svg)]()
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -645,35 +645,68 @@ preferences:
 ### Claude Code
 
 ```bash
-# Build and deploy to Claude Code
 vibe build claude-code --output ~/.claude
-
-# Claude Code will now use VibeSOP for routing
+# Shell hooks auto-trigger routing on UserPromptSubmit
 ```
 
-### Cursor
+### Kimi CLI
 
 ```bash
-# Build for Cursor
-vibe build cursor --output ~/.cursor
-
-# Skills available in Cursor sessions
+vibe build kimi-cli --output ~/.kimi-code
+# Config hooks auto-trigger routing via config.toml
 ```
 
-### Continue.dev
+### Pi Agent
 
 ```bash
-# Build for Continue
-vibe build opencode --output ~/.continue
-
-# Use in Continue.dev configurations
+vibe build pi --output .pi
+# TypeScript extensions auto-trigger routing
 ```
+
+### OpenCode
+
+```bash
+vibe build opencode --output ~/.config/opencode
+# Manual: source ~/.config/opencode/vibesop-env.sh && opencode
+```
+
+### Workflow Engine (v6.2.0)
+
+VibeSOP 的动态工作流引擎支持 6 种编排模式，自动分类用户意图并选择最佳执行策略。
+
+**6 种工作流模式 / Workflow Patterns:**
+
+| 模式 Pattern | 用途 Use Case |
+|-------------|--------------|
+| `SEQUENTIAL` | 线性依赖链 / Linear dependency chain |
+| `PARALLEL` | 独立并发任务 / Independent concurrent tasks |
+| `FAN_OUT` | 一对多分发 / One-to-many distribution |
+| `ADVERSARIAL` | 独立验证 / Independent critic verification |
+| `LOOP_UNTIL_DRY` | 迭代到无新发现 / Iterate until no new findings |
+| `TOURNAMENT` | 最佳选择 / Best-of-N pairwise comparison |
+
+```bash
+# 强制指定工作流模式
+vibe route --pattern fan_out "分析架构并优化性能"
+
+# 启用对抗式验证
+vibe route --verify "重构认证模块"
+```
+
+**平台支持 / Platform Support:**
+
+| Platform | Workflow | Native Parallel | Trigger |
+|----------|----------|-----------------|---------|
+| Claude Code | ✅ | ✅ Sub-agents | Auto (hooks) |
+| Kimi CLI | ✅ | ⚠️ Serial only | Auto (config) |
+| Pi Agent | ✅ | ⚠️ Serial only | Auto (extensions) |
+| OpenCode | ✅ | ⚠️ Serial only | Manual |
 
 ---
 
 ## 架构 Architecture
 
-VibeSOP v5.5.0 introduces a **3-pillar architecture**:
+VibeSOP v6.2.0 introduces a **3-pillar architecture** (enhanced with Dynamic Workflow Engine):
 
 | Pillar | Purpose | Artifacts |
 |--------|---------|-----------|
@@ -849,6 +882,9 @@ uv run pytest --cov=src/vibesop --cov-report=html
 - [x] v5.2.0: 智能生态系统 Intelligent Ecosystem — 推荐 + 退化 + 发现
 - [x] v5.3.0: 产品体验重塑 Product Experience — 仪表盘 + 清理 + 社区 + 徽章 + 引导
 - [x] v5.5.0: 技能协议标准 Skill Protocol Standard — Spec v3.0 + 参考实现 + 兼容性套件 (85 tests)
+- [x] v6.0.0: Dynamic Workflow Engine Phase 1 — ClassifierAgent
+- [x] v6.1.0: Dynamic Workflow Engine Phase 2 — VerifierAgent + VerificationLoop
+- [x] v6.2.0: Dynamic Workflow Engine Phase 3 — WorkflowEngine + Reorchestrator + Tournament
 
 详见: [docs/ROADMAP.md](docs/ROADMAP.md) | [version_05.md ADR](docs/version_05.md)
 
@@ -998,6 +1034,6 @@ vibe skills add code-reviewer
 
 ---
 
-**版本 Version**: 5.5.0
-**更新时间 Last Updated**: 2026-05-29
+**版本 Version**: 6.2.0
+**更新时间 Last Updated**: 2026-06-05
 **状态 Status**: ✅ 生产就绪 Production Ready

@@ -305,8 +305,10 @@ def _do_init(
 def _detect_and_show_integrations() -> None:
     """Detect and display integration status.
 
-    Shows which skill pack integrations (gstack, superpowers) are installed
-    and provides install suggestions for missing ones.
+    Shows which skill pack integrations (superpowers, omx, mattpocock) are
+    installed and provides install suggestions for missing ones.
+    gstack is an optional recommended pack — install it explicitly via
+    `vibe install gstack` if needed.
     """
     manager = IntegrationManager()
     all_integrations = manager.list_integrations(refresh=True)

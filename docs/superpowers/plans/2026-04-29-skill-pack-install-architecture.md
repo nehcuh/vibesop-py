@@ -4,7 +4,7 @@
 
 **Goal:** Redesign the external skill pack installation pipeline so that `vibe install`, `vibe build`, and the routing engine work together correctly for both trusted packs (gstack/superpowers/omx) and arbitrary third-party packs from Git URLs.
 
-**Architecture:** Central storage (`~/.config/skills/<pack>/`) holds full pack clones for auditing and updates. Platform skill directories (`~/.kimi/skills/`) contain only per-skill symlinks pointing to individual skill directories in central storage. The routing engine discovers installed skills dynamically from central storage rather than relying solely on the static `registry.yaml`.
+**Architecture:** Central storage (`~/.config/skills/<pack>/`) holds full pack clones for auditing and updates. Platform skill directories (`~/.kimi-code/skills/`) contain only per-skill symlinks pointing to individual skill directories in central storage. The routing engine discovers installed skills dynamically from central storage rather than relying solely on the static `registry.yaml`.
 
 **Tech Stack:** Python 3.12+, dataclasses, pathlib, ruamel.yaml, Jinja2
 
@@ -168,7 +168,7 @@ def create_or_update_skill_symlink(
 
     Args:
         skill_id: Skill identifier (e.g., 'gstack/review')
-        skill_dir_on_disk: Platform path (e.g., ~/.kimi/skills/gstack-review/)
+        skill_dir_on_disk: Platform path (e.g., ~/.kimi-code/skills/gstack-review/)
         source_path: Central storage path (e.g., ~/.config/skills/gstack/review/)
 
     Returns:

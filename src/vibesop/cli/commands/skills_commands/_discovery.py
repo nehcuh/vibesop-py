@@ -224,10 +224,22 @@ def create(
                 f"id: {from_template}", f"id: {namespace}/{name}"
             ).replace(f"name: {from_template.split('/')[-1]}", f"name: {name}")
             if description:
-                new_text = new_text.replace(
-                    f"description: {template_info.get('description', '')}",
-                    f"description: {description}",
+                # YAML-safe the description (handle [, {, :, etc.)
+                from vibesop.adapters._shared import _yaml_dquote
+                safe_desc = _yaml_dquote(description)
+                old_desc = template_info.get('description', '')
+                old_desc_alt = _yaml_dquote(old_desc) if old_desc else None
+                # Try quoted first, then bare
+                replaced = new_text.replace(
+                    f"description: {old_desc}",
+                    f"description: {safe_desc}",
                 )
+                if replaced == new_text and old_desc_alt and old_desc_alt != f'"{old_desc}"':
+                    replaced = new_text.replace(
+                        f"description: {old_desc_alt}",
+                        f"description: {safe_desc}",
+                    )
+                new_text = replaced
             (skill_dir / "SKILL.md").write_text(new_text)
         else:
             _generate_skill_md(skill_dir, name, description or f"{name} skill", namespace)
@@ -319,11 +331,14 @@ def _create_from_suggestion(suggestion_id: str) -> None:
     skill_dir.mkdir(parents=True, exist_ok=True)
 
     steps_md = "\n".join(f"   - {step}" for step in suggestion.pattern_steps)
+    tags_str = ", ".join(suggestion.context_tags) or "workflow, auto-generated"
+    # YAML-safe: wrap description in double quotes
+    safe_desc = suggestion.suggested_description.replace('\\', '\\\\').replace('"', '\\"')
     content = f"""---
 id: custom/{suggestion.suggested_name}
 name: {suggestion.suggested_name}
-description: {suggestion.suggested_description}
-tags: [{", ".join(suggestion.context_tags) or "workflow, auto-generated"}]
+description: "{safe_desc}"
+tags: [{tags_str}]
 intent: general
 namespace: custom
 version: 1.0.0
@@ -391,7 +406,7 @@ def _generate_skill_md(
     content = f"""---
 id: {namespace}/{name}
 name: {name}
-description: {description}{tags}
+description: "{description}"{tags}
 intent: general
 namespace: {namespace}
 version: 1.0.0

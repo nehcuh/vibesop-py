@@ -69,7 +69,7 @@ $ vibe route "database connection failed"
 ```bash
 $ vibe route "review my PR"
 
-✅ Matched: gstack/review (93%)
+✅ Matched: superpowers/review (93%)
 ```
 
 ### 场景 3: 性能优化 Performance Optimization
@@ -157,7 +157,7 @@ vibe build claude-code --output ~/.claude
 ### Kimi Code CLI
 
 ```bash
-vibe build kimi-cli --output ~/.kimi
+vibe build kimi-cli --output ~/.kimi-code
 ```
 
 ### Cursor
@@ -184,7 +184,7 @@ vibe feedback record "debug this" "systematic-debugging" --correct
 
 # 记录错误的路由
 vibe feedback record "test this" "superpowers/tdd" \\
-    --wrong "gstack/qa" --confidence 0.7
+    --wrong "omx/ultraqa" --confidence 0.7
 
 # 查看反馈报告
 vibe feedback report
@@ -251,7 +251,7 @@ vibe skills available
 # 查看技能详情
 vibe skills info <skill-id>
 
-# 安装技能包
+# 安装技能包（gstack 是可选推荐包，非默认）
 vibe install gstack
 
 # 检查环境
@@ -302,5 +302,5 @@ A: 可以。没有 API key 时，VibeSOP 使用关键词和 TF-IDF 匹配（准�
 
 ---
 
-**版本 Version**: 5.5.0
-**更新时间 Last Updated**: 2026-05-29
+**版本 Version**: 6.2.0
+**更新时间 Last Updated**: 2026-06-05

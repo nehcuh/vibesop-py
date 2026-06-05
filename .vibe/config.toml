@@ -22,7 +22,7 @@ threat_level = "medium"
 scan_external = true
 
 [skills]
-namespaces = ["builtin", "omx", "superpowers", "gstack"]
+namespaces = ["builtin", "omx", "superpowers"]
 
 [skills.namespace_priorities]
 # omx skills get priority over gstack when both match a query
@@ -30,7 +30,6 @@ namespaces = ["builtin", "omx", "superpowers", "gstack"]
 builtin = 100
 omx = 95
 superpowers = 80
-gstack = 70
 project = 100
 
 [preferences]

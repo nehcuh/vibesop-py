@@ -8,7 +8,12 @@ if command -v jq &> /dev/null; then
 fi
 [ -z "$QUERY" ] && QUERY="$INPUT"
 [ -z "$QUERY" ] && { echo '{}'; exit 0; }
-python3 -c "
+# Detect Python with vibesop available (uv project > system)
+_VIBESOP_PYTHON="python3"
+if command -v uv &> /dev/null && uv run python -c "import vibesop" 2>/dev/null; then
+    _VIBESOP_PYTHON="uv run python"
+fi
+$_VIBESOP_PYTHON -c "
 import sys
 from vibesop.agent.runtime import AgentRuntime
 r = AgentRuntime()

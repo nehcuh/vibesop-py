@@ -247,6 +247,57 @@ class ExecutionMode(StrEnum):
     MIXED = "mixed"  # Automatically determine based on dependencies
 
 
+class WorkflowPattern(StrEnum):
+    """Dynamic workflow pattern for orchestration.
+
+    Patterns are selected at plan-generation time by the ClassifierAgent
+    based on query semantics.  Each pattern maps to a specific execution
+    strategy without changing the underlying skill definitions.
+    """
+
+    SEQUENTIAL = "sequential"  # Default: steps run in order (existing behaviour)
+    PARALLEL = "parallel"  # Independent steps run concurrently
+    FAN_OUT = "fan_out"  # Multiple sub-tasks in parallel → synthesise results
+    ADVERSARIAL = "adversarial"  # Execute → independent verification
+    LOOP_UNTIL_DRY = "loop_until_dry"  # Iterative refinement until no new discoveries
+    TOURNAMENT = "tournament"  # Multiple contestants → judge picks champion
+
+
+class DynamicNodeStatus(StrEnum):
+    """Status of a node in the dynamic execution graph."""
+
+    PENDING = "pending"
+    RUNNING = "running"
+    AWAITING_VERIFICATION = "awaiting_verification"
+    COMPLETED = "completed"
+    LOOPING = "looping"
+    FAILED = "failed"
+
+
+class ReorchestrationDecision(StrEnum):
+    """Decision after re-orchestration analysis."""
+
+    CONTINUE = "continue"  # Proceed to next planned step
+    APPEND_STEPS = "append_steps"  # New sub-tasks discovered
+    LOOP_BACK = "loop_back"  # Re-execute a previous step
+    ESCALATE = "escalate"  # User intervention needed
+    TERMINATE_EARLY = "terminate_early"  # All goals met
+
+
+class TrustLevel(StrEnum):
+    """Runtime trust level for agents and skills.
+
+    Trust levels control the execution context and restrictions:
+    - TRUSTED: Normal execution, can modify files and run commands
+    - QUARANTINE: Read-only execution, cannot modify system state
+    - SANDBOX: Full isolation, runs in temporary environment
+    """
+
+    TRUSTED = "trusted"  # Normal execution, can modify files and run commands
+    QUARANTINE = "quarantine"  # Read-only, no side effects (default for verifier)
+    SANDBOX = "sandbox"  # Full isolation in temporary environment
+
+
 class ExecutionStep(BaseModel):
     """A single step in a multi-skill execution plan."""
 
@@ -276,6 +327,28 @@ class ExecutionStep(BaseModel):
         default=None,
         description="Group ID for parallel execution (steps in same group run together)",
     )
+    # Phase 2 (v6.1.0): Verification fields
+    is_verification_step: bool = Field(
+        default=False, description="Whether this step is a verification step (adversarial workflow)"
+    )
+    verification_result: dict[str, Any] | None = Field(
+        default=None, description="Verification result (if this is a verification step)"
+    )
+    # Phase 2 (v6.1.0): Trust level for execution
+    trust_level: TrustLevel = Field(
+        default=TrustLevel.TRUSTED,
+        description="Trust level for this step's execution",
+    )
+    # Phase 3 (v6.2.0): Dynamic execution fields
+    dynamic_status: DynamicNodeStatus | None = Field(
+        default=None, description="Dynamic graph node status (Phase 3 patterns only)"
+    )
+    loop_iteration: int = Field(
+        default=0, description="Current loop iteration (for LOOP_UNTIL_DRY pattern)"
+    )
+    contestant_index: int | None = Field(
+        default=None, description="Contestant index (for TOURNAMENT pattern, None = not a contestant)"
+    )
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -293,6 +366,12 @@ class ExecutionStep(BaseModel):
             "dependencies": self.dependencies,
             "can_parallel": self.can_parallel,
             "parallel_group": self.parallel_group,
+            "is_verification_step": self.is_verification_step,
+            "verification_result": self.verification_result,
+            "trust_level": self.trust_level.value,
+            "dynamic_status": self.dynamic_status.value if self.dynamic_status else None,
+            "loop_iteration": self.loop_iteration,
+            "contestant_index": self.contestant_index,
         }
 
 
@@ -311,6 +390,23 @@ class ExecutionPlan(BaseModel):
     execution_mode: ExecutionMode = Field(
         default=ExecutionMode.SEQUENTIAL, description="How steps should be executed"
     )
+    workflow_pattern: WorkflowPattern = Field(
+        default=WorkflowPattern.SEQUENTIAL,
+        description="Dynamic workflow pattern selected by ClassifierAgent",
+    )
+    # Phase 3 (v6.2.0): Dynamic execution metadata
+    is_dynamic: bool = Field(
+        default=False, description="Whether this plan uses dynamic execution (WorkflowEngine)"
+    )
+    dry_threshold: int = Field(
+        default=2, description="Consecutive rounds with no change to declare dry (LOOP_UNTIL_DRY)"
+    )
+    max_reorchestration_rounds: int = Field(
+        default=5, description="Maximum re-orchestration rounds before forced termination"
+    )
+    reorchestration_history: list[dict[str, Any]] = Field(
+        default_factory=list, description="History of re-orchestration decisions"
+    )
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -322,6 +418,11 @@ class ExecutionPlan(BaseModel):
             "created_at": self.created_at,
             "status": self.status.value,
             "execution_mode": self.execution_mode.value,
+            "workflow_pattern": self.workflow_pattern.value,
+            "is_dynamic": self.is_dynamic,
+            "dry_threshold": self.dry_threshold,
+            "max_reorchestration_rounds": self.max_reorchestration_rounds,
+            "reorchestration_history": self.reorchestration_history,
         }
 
     def get_parallel_groups(self) -> list[list["ExecutionStep"]]:
@@ -374,6 +475,7 @@ class ExecutionPlan(BaseModel):
             "plan_id": self.plan_id,
             "total_steps": len(self.steps),
             "execution_mode": self.execution_mode.value,
+            "workflow_pattern": self.workflow_pattern.value,
             "parallel_groups": len(parallel_groups),
             "max_parallel": max(len(g) for g in parallel_groups) if parallel_groups else 0,
             "groups": [
@@ -384,6 +486,52 @@ class ExecutionPlan(BaseModel):
                 }
                 for i, group in enumerate(parallel_groups)
             ],
+        }
+
+
+class ClassifierResult(BaseModel):
+    """Result from ClassifierAgent — dynamic workflow pattern selection.
+
+    Attributes:
+        pattern: Selected workflow pattern (sequential/parallel/fan_out/adversarial)
+        confidence: Confidence score for the pattern selection (0.0-1.0)
+        reasoning: Human-readable explanation of why this pattern was chosen
+        task_type: Primary task type detected (analysis, review, debug, etc.)
+        complexity: Complexity level (simple, medium, complex)
+    """
+
+    model_config = {"arbitrary_types_allowed": True}
+
+    pattern: WorkflowPattern = Field(
+        default=WorkflowPattern.SEQUENTIAL,
+        description="Selected workflow pattern",
+    )
+    confidence: float = Field(
+        default=0.0,
+        ge=0.0,
+        le=1.0,
+        description="Pattern selection confidence",
+    )
+    reasoning: str = Field(
+        default="",
+        description="Why this pattern was selected",
+    )
+    task_type: str = Field(
+        default="",
+        description="Primary task type (analysis, review, debug, etc.)",
+    )
+    complexity: str = Field(
+        default="simple",
+        description="Task complexity: simple, medium, complex",
+    )
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "pattern": self.pattern.value,
+            "confidence": self.confidence,
+            "reasoning": self.reasoning,
+            "task_type": self.task_type,
+            "complexity": self.complexity,
         }
 
 

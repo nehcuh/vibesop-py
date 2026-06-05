@@ -1,8 +1,8 @@
 # VibeSOP 技能生态系统完整指南
 
 > **版本**: 1.1.0
-> **更新时间**: 2026-05-29
-> **适用版本**: VibeSOP 5.5.0+
+> **更新时间**: 2026-06-05
+> **适用版本**: VibeSOP 6.2.0+
 
 ---
 
@@ -38,11 +38,12 @@
 VibeSOP 技能生态
 │
 ├─ 📦 Builtin (17 个)    - 内置核心技能
-├─ 📦 Superpowers (7 个) - 基础开发工作流
-├─ 📦 GStack (19 个)     - 虚拟工程团队
-├─ 📦 OMX (7 个)         - 高级工程方法论
-└─ 📦 Project (自定义)   - 项目特定技能
-
+├─ 📦 Superpowers (7 个) - 基础开发工作流（默认安装）
+├─ 📦 OMX (7 个)         - 高级工程方法论（默认安装）
+├─ 📦 Project (自定义)   - 项目特定技能
+├─ 📦 GStack (19 个)     - 虚拟工程团队（可选推荐，需显式安装）
+│                         `vibe install gstack`
+│
 总计: 50+ 个技能，持续增长中
 ```
 
@@ -91,7 +92,10 @@ VibeSOP 技能生态
 - `superpowers/refactor` - 代码重构
 - `superpowers/optimize` - 性能优化
 
-#### 3. GStack (虚拟工程团队)
+#### 3. GStack (虚拟工程团队) ⭐ 可选推荐
+
+> **注意**: GStack 不是默认安装的。如需使用，请显式安装：
+> `vibe install gstack`
 
 **来源**: [github.com/anthropics/gstack](https://github.com/anthropics/gstack)
 

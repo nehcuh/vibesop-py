@@ -8,7 +8,6 @@ Features:
 - Word-level semantic matching for query boosting
 """
 
-import fcntl
 import json
 import math
 import re
@@ -16,6 +15,11 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
+
+try:
+    import fcntl
+except ImportError:
+    fcntl = None
 
 from pydantic import BaseModel, Field
 
@@ -202,11 +206,13 @@ class PreferenceLearner:
         try:
             with self.storage_path.open("r") as f:
                 # Acquire shared lock for reading
-                fcntl.flock(f.fileno(), fcntl.LOCK_SH)
+                if fcntl:
+                    fcntl.flock(f.fileno(), fcntl.LOCK_SH)
                 try:
                     data = json.load(f)
                 finally:
-                    fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+                    if fcntl:
+                        fcntl.flock(f.fileno(), fcntl.LOCK_UN)
                 ngram_data = data.get("ngram_associations", {})
                 storage = PreferenceStorage(
                     selections=data.get("selections", []),
@@ -225,7 +231,8 @@ class PreferenceLearner:
         # Use a separate lock file to coordinate concurrent writers
         lock_path = self.storage_path.with_suffix(".lock")
         with lock_path.open("w") as lock_file:
-            fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+            if fcntl:
+                fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
             try:
                 # Re-read latest state under lock to avoid overwriting concurrent changes
                 latest = self._load_storage()
@@ -271,7 +278,8 @@ class PreferenceLearner:
                 self._recalculate_scores()
                 write_text(self.storage_path, json.dumps(self._storage.model_dump(), indent=2))
             finally:
-                fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+                if fcntl:
+                    fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
 
     def _update_word_associations(
         self,

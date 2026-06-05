@@ -83,7 +83,7 @@ AGENT_CAPABILITIES: list[AgentCapability] = [
         strengths=["chinese", "documentation", "bilingual", "translation"],
         preferred_categories=["documentation", "general", "design"],
         max_context_tokens=200000,
-        platform_dir="~/.kimi",
+        platform_dir="~/.kimi-code",
     ),
     AgentCapability(
         agent_id="cursor",
