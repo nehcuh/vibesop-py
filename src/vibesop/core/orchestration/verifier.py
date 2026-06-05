@@ -190,13 +190,13 @@ class VerifierAgent:
         try:
             response = self._llm.call(
                 prompt,
-                response_format={"type": "json_object"},
                 temperature=0.2,  # Low temperature for consistent verification
             )
 
             import json
 
-            parsed = json.loads(response)
+            content = getattr(response, "content", str(response))
+            parsed = json.loads(content)
             return self._parse_llm_response(parsed, rubric_dimensions)
         except Exception as e:
             logger.warning("LLM verification failed: %s", e)
@@ -295,21 +295,26 @@ Criteria:
         )
 
     def _apply_strictness(self, result: VerificationResult) -> VerificationResult:
-        """Apply strictness-based adjustments to the verification result."""
+        """Apply strictness-based adjustments to the verification result.
+
+        Returns a new VerificationResult rather than mutating in place.
+        """
+        new_status = result.status
+
         if self._strictness == VerificationStrictness.LENIENT:
-            # Lenient: only fail if critical issues
             has_critical = any(i.severity == "critical" for i in result.issues)
-            if result.status == VerificationStatus.FAILED and not has_critical:
-                result.status = VerificationStatus.NEEDS_REVISION
-            elif result.status == VerificationStatus.NEEDS_REVISION:
-                result.status = VerificationStatus.PASSED
+            if new_status == VerificationStatus.FAILED and not has_critical:
+                new_status = VerificationStatus.NEEDS_REVISION
+            elif new_status == VerificationStatus.NEEDS_REVISION:
+                new_status = VerificationStatus.PASSED
 
         elif self._strictness == VerificationStrictness.STRICT:
-            # Strict: needs_revision becomes failed if any medium+ issues
             has_medium_or_worse = any(i.severity in ("medium", "high", "critical") for i in result.issues)
-            if result.status == VerificationStatus.NEEDS_REVISION and has_medium_or_worse:
-                result.status = VerificationStatus.FAILED
+            if new_status == VerificationStatus.NEEDS_REVISION and has_medium_or_worse:
+                new_status = VerificationStatus.FAILED
 
+        if new_status != result.status:
+            return result.model_copy(update={"status": new_status})
         return result
 
 
@@ -319,6 +324,7 @@ def verify_step_with_retry(
     step: ExecutionStep,
     execution_output: str,
     max_retries: int = 3,
+    executor: Any = None,
 ) -> tuple[VerificationResult, int]:
     """Verify a step with retry logic for NEEDS_REVISION status.
 
@@ -328,12 +334,19 @@ def verify_step_with_retry(
         step: Execution step
         execution_output: Execution output
         max_retries: Maximum number of verification retries
+        executor: Optional callable to re-execute the step with modified query.
+                  If provided, retry will re-execute the step with verification
+                  feedback incorporated into the query. If None, only re-verifies
+                  (useful when executor is not available).
 
     Returns:
         Tuple of (final verification result, retry count)
     """
+    from vibesop.core.orchestration.verification_loop import VerificationLoop, VerificationLoopConfig
+
     retry_count = 0
-    current_result = verifier.verify(original_query, step, execution_output)
+    current_output = execution_output
+    current_result = verifier.verify(original_query, step, current_output)
 
     while current_result.status == VerificationStatus.NEEDS_REVISION and retry_count < max_retries:
         retry_count += 1
@@ -343,8 +356,21 @@ def verify_step_with_retry(
             max_retries,
             step.step_id,
         )
-        # In a real implementation, we would re-execute the step with
-        # the verification feedback. For now, we just log and continue.
-        current_result = verifier.verify(original_query, step, execution_output)
+
+        if executor is not None:
+            # Build retry query with verification feedback
+            loop = VerificationLoop(VerificationLoopConfig(max_retries=max_retries))
+            retry_query = loop.build_retry_query(step, current_result.to_dict())
+            retry_step = step.model_copy(update={"input_query": retry_query})
+
+            # Re-execute with feedback
+            try:
+                new_output = executor(retry_step)
+                current_output = str(new_output) if new_output else current_output
+            except Exception as e:
+                logger.warning("Re-execution failed for step %s: %s", step.step_id, e)
+                break
+
+        current_result = verifier.verify(original_query, step, current_output)
 
     return current_result, retry_count

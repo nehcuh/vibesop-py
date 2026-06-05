@@ -645,3 +645,164 @@ def test_execution_order_with_dependencies() -> None:
 
     # Should respect dependencies: 1 -> 2 -> 3
     assert order == [1, 2, 3]
+
+
+# --- Phase 2.5 Fix Verification Tests ---
+
+
+def test_strategy_hint_multi_key_value_parsing() -> None:
+    """Test strategy_hint correctly parses multiple key:value pairs."""
+    hint = "workflow_pattern:fan_out verify:strict"
+    tokens = {}
+    for token in hint.split():
+        if ":" in token:
+            k, v = token.split(":", 1)
+            tokens[k.strip()] = v.strip()
+
+    assert tokens["workflow_pattern"] == "fan_out"
+    assert tokens["verify"] == "strict"
+
+
+def test_strategy_hint_single_key_value() -> None:
+    """Test strategy_hint correctly parses single key:value pair."""
+    hint = "workflow_pattern:adversarial"
+    tokens = {}
+    for token in hint.split():
+        if ":" in token:
+            k, v = token.split(":", 1)
+            tokens[k.strip()] = v.strip()
+
+    assert tokens["workflow_pattern"] == "adversarial"
+    assert "verify" not in tokens
+
+
+def test_execution_plan_to_dict_includes_workflow_pattern() -> None:
+    """Test ExecutionPlan.to_dict() includes workflow_pattern."""
+    from vibesop.core.models import ExecutionMode, ExecutionPlan, PlanStatus
+
+    plan = ExecutionPlan(
+        plan_id="test-plan",
+        original_query="Test",
+        steps=[],
+        execution_mode=ExecutionMode.PARALLEL,
+        workflow_pattern=WorkflowPattern.FAN_OUT,
+    )
+
+    result = plan.to_dict()
+    assert "workflow_pattern" in result
+    assert result["workflow_pattern"] == "fan_out"
+
+
+def test_execution_plan_summary_includes_workflow_pattern() -> None:
+    """Test get_execution_summary() includes workflow_pattern."""
+    from vibesop.core.models import ExecutionMode, ExecutionPlan
+
+    plan = ExecutionPlan(
+        plan_id="test-plan",
+        original_query="Test",
+        steps=[],
+        execution_mode=ExecutionMode.SEQUENTIAL,
+        workflow_pattern=WorkflowPattern.ADVERSARIAL,
+    )
+
+    summary = plan.get_execution_summary()
+    assert "workflow_pattern" in summary
+    assert summary["workflow_pattern"] == "adversarial"
+
+
+def test_verify_step_with_retry_accepts_executor() -> None:
+    """Test verify_step_with_retry uses executor for re-execution."""
+    call_count = [0]
+    verify_count = [0]
+
+    class MockLLM:
+        def call(self, prompt: str, **kwargs: object) -> str:
+            verify_count[0] += 1
+            if verify_count[0] <= 1:
+                return '{"status": "needs_revision", "confidence": 0.6, "reasoning": "Incomplete", "rubric_scores": {}, "issues": []}'
+            return '{"status": "passed", "confidence": 0.9, "reasoning": "Fixed", "rubric_scores": {}, "issues": []}'
+
+    def mock_executor(step):
+        call_count[0] += 1
+        return f"Re-executed output (attempt {call_count[0]})"
+
+    llm = MockLLM()
+    verifier = VerifierAgent(llm)
+
+    step = ExecutionStep(
+        step_id="test-1",
+        step_number=1,
+        skill_id="test",
+        intent="Test step",
+        input_query="Original query",
+    )
+
+    result, retries = verify_step_with_retry(
+        verifier, "Test query", step, "Initial output",
+        max_retries=3, executor=mock_executor,
+    )
+
+    assert result.status == VerificationStatus.PASSED
+    assert call_count[0] > 0  # Executor was called
+
+
+def test_verify_step_with_retry_no_executor() -> None:
+    """Test verify_step_with_retry works without executor (backward compat)."""
+    call_count = [0]
+
+    class MockLLM:
+        def call(self, prompt: str, **kwargs: object) -> str:
+            call_count[0] += 1
+            if call_count[0] <= 2:
+                return '{"status": "needs_revision", "confidence": 0.6, "reasoning": "Test", "rubric_scores": {}, "issues": []}'
+            return '{"status": "passed", "confidence": 0.9, "reasoning": "OK", "rubric_scores": {}, "issues": []}'
+
+    llm = MockLLM()
+    verifier = VerifierAgent(llm)
+
+    step = ExecutionStep(
+        step_id="test-1",
+        step_number=1,
+        skill_id="test",
+        intent="Test step",
+    )
+
+    result, retries = verify_step_with_retry(
+        verifier, "Test query", step, "Output",
+        max_retries=5, executor=None,
+    )
+
+    assert result.status == VerificationStatus.PASSED
+
+
+def test_apply_strictness_returns_new_object() -> None:
+    """Test _apply_strictness returns a copy, not mutating original."""
+    class MockLLM:
+        def call(self, prompt: str, **kwargs: object) -> str:
+            return "never called"
+
+    llm = MockLLM()
+    verifier = VerifierAgent(llm, strictness=VerificationStrictness.STRICT)
+
+    original = VerificationResult(
+        status=VerificationStatus.NEEDS_REVISION,
+        confidence=0.6,
+        reasoning="Test",
+        issues=[
+            VerificationIssue(
+                category="completeness",
+                severity="high",
+                description="Missing X",
+            )
+        ],
+    )
+
+    result = verifier._apply_strictness(original)
+
+    # Original should be unchanged
+    assert original.status == VerificationStatus.NEEDS_REVISION
+    # Result should be modified
+    assert result.status == VerificationStatus.FAILED
+    # They should be different objects
+    assert original is not result
+

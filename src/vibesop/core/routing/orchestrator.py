@@ -10,10 +10,13 @@ Usage:
 
 from __future__ import annotations
 
+import logging
 import time
 from typing import TYPE_CHECKING, Any, cast
 
 from vibesop.core.models import OrchestrationMode, OrchestrationResult
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from vibesop.core.routing.context_mixin import RoutingContext
@@ -145,11 +148,18 @@ class Orchestrator:
         classifier = ClassifierAgent(llm_client=self._router._llm)
         classification = classifier.classify(query, sub_tasks)
 
-        # Check for explicit pattern override from CLI (e.g. --pattern fan_out)
+        # Check for explicit overrides from CLI (e.g. --pattern fan_out --verify)
         if context is not None:
             hint = getattr(context, "strategy_hint", None) or ""
-            if hint.startswith("workflow_pattern:"):
-                override = hint.split(":", 1)[1].strip()
+            # Parse space-separated key:value pairs from strategy_hint
+            hint_tokens = {}
+            for token in hint.split():
+                if ":" in token:
+                    k, v = token.split(":", 1)
+                    hint_tokens[k.strip()] = v.strip()
+
+            if "workflow_pattern" in hint_tokens:
+                override = hint_tokens["workflow_pattern"]
                 try:
                     classification = ClassifierResult(
                         pattern=WorkflowPattern(override),
@@ -158,6 +168,10 @@ class Orchestrator:
                     )
                 except ValueError:
                     pass  # Invalid override, keep classifier result
+
+            # Store verify hint for plan execution phase
+            if "verify" in hint_tokens:
+                context._verify_hint = hint_tokens["verify"]
         cb.on_phase_complete(
             PhaseInfo(
                 phase=OrchestrationPhase.PLAN_BUILDING,
@@ -207,6 +221,29 @@ class Orchestrator:
                 )
             )
             return self._router._to_orchestration_result(single_result, query)
+
+        # 7. Apply --verify override: force adversarial pattern if verification requested
+        verify_hint = getattr(context, "_verify_hint", None) if context else None
+        if verify_hint and plan.workflow_pattern != WorkflowPattern.ADVERSARIAL:
+            from vibesop.core.models import ExecutionMode, TrustLevel
+
+            original_pattern = plan.workflow_pattern
+            plan.workflow_pattern = WorkflowPattern.ADVERSARIAL
+            plan.execution_mode = ExecutionMode.SEQUENTIAL
+
+            # Append verification step to the plan
+            from vibesop.core.orchestration.plan_builder import PlanBuilder
+            PlanBuilder._apply_adversarial(plan.steps, query)
+            # Mark the new verification step with QUARANTINE trust
+            if plan.steps:
+                plan.steps[-1].is_verification_step = True
+                plan.steps[-1].trust_level = TrustLevel.QUARANTINE
+
+            logger.info(
+                "--verify: upgraded plan from %s to adversarial (%d steps)",
+                original_pattern.value,
+                len(plan.steps),
+            )
 
         cb.on_phase_complete(
             PhaseInfo(

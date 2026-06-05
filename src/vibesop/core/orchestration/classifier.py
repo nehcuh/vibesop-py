@@ -11,7 +11,6 @@ import logging
 from typing import Any
 
 from vibesop.core.models import ClassifierResult, WorkflowPattern
-from vibesop.core.orchestration.patterns import INTENT_DOMAIN_KEYWORDS
 
 logger = logging.getLogger(__name__)
 

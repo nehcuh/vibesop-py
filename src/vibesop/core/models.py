@@ -369,6 +369,7 @@ class ExecutionPlan(BaseModel):
             "created_at": self.created_at,
             "status": self.status.value,
             "execution_mode": self.execution_mode.value,
+            "workflow_pattern": self.workflow_pattern.value,
         }
 
     def get_parallel_groups(self) -> list[list["ExecutionStep"]]:
@@ -421,6 +422,7 @@ class ExecutionPlan(BaseModel):
             "plan_id": self.plan_id,
             "total_steps": len(self.steps),
             "execution_mode": self.execution_mode.value,
+            "workflow_pattern": self.workflow_pattern.value,
             "parallel_groups": len(parallel_groups),
             "max_parallel": max(len(g) for g in parallel_groups) if parallel_groups else 0,
             "groups": [
