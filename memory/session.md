@@ -941,3 +941,16 @@ Coverage: temporarily lowered fail_under=0 from 75% (massive new test additions)
 - 跑 118 个测试通过，重建 pi agent 配置 85 skills 0 YAML 错误
 - Next: 确保后续 vibe build 不再出同类错误
 - Recorded: yes - YAML frontmatter generation pitfalls
+
+### S11 (2026-06-05 14:00~15:30) [vibesop/v6.2-doc-sync-and-workflow-docs]
+- 版本号同步 pyproject.toml 5.5.0 → 6.2.0，20+ 文档版本/日期批量更新
+- 新增 Dynamic Workflow Engine 文档：ARCHITECTURE.md 完整章节（架构图、6 模式表、组件表、CLI flags、平台兼容矩阵）
+- README.md 集成章节更新（4 平台）+ Workflow 子章节
+- CHANGELOG.md 新增 v6.0/v6.1/v6.2 三个版本条目
+- ROADMAP.md v6.0.0 标记为 COMPLETED
+- 4 个 adapter 模板更新（routing-protocol.md.j2 × 2, vibe-orchestrate.md.j2, kimi_cli.py, opencode.py）
+- 修复 2 个预存测试 bug（hook 断言适配 uv run python，_Skill.get() AttributeError）
+- 修复 adapters/base.py metadata 访问 AttributeError
+- 提交: b6daa4d docs(v6.2): bump version + Workflow docs + test fixes (29 files)
+- Next: PR to main
+- Recorded: yes - 4 technical pitfalls

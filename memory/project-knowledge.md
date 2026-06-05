@@ -2,6 +2,69 @@
 
 ## Technical Pitfalls
 
+### Hook Template Test Assertions Must Track Template Changes (2026-06-05)
+
+**Issue**: After changing `vibesop-route.sh.j2` from `python3 -c` to `uv run python` auto-detection, two adapter tests (`test_claude_code.py`, `test_kimi_cli.py`) still asserted `"python3 -c" in content`, failing on every run.
+
+**Root Cause**: Hook template refactored but test assertions not updated in the same commit. The template change happened in a different PR/session than the test update.
+
+**Solution**: When refactoring shared templates (`templates/shared/*.j2`), grep ALL test files that assert on rendered content:
+```bash
+grep -rn "python3 -c" tests/adapters/
+```
+Update assertions to accept both old and new patterns during transition:
+```python
+assert ("python3 -c" in content or "uv run python" in content)
+```
+
+**Files**: `tests/adapters/test_claude_code.py`, `tests/adapters/test_kimi_cli.py`
+
+---
+
+### Version Drift: pyproject.toml Not Bumped After Feature Development (2026-06-05)
+
+**Issue**: Git history showed v6.0-v6.2 commits, but `pyproject.toml` still read `version = "5.5.0"`. 20+ markdown docs referenced `5.5.0` and stale dates.
+
+**Root Cause**: Feature development (classifier, verifier, workflow engine) done via commit messages mentioning versions, but the actual `pyproject.toml` version field was never updated. Documentation timestamps frozen at last manual update (2026-05-29).
+
+**Solution**: After any feature branch completion:
+1. Bump `pyproject.toml` version first
+2. `grep -rl "old_version" --include="*.md" .` to find all stale refs
+3. Batch update version + date across all docs
+
+**Prevention**: Consider a pre-merge CI check that `pyproject.toml` version >= version mentioned in recent commit messages.
+
+---
+
+### `_Skill` Object Lacks `.get()` — Adapter Base Bug (2026-06-05)
+
+**Issue**: `adapters/base.py:437` called `skill.get("metadata", {})` but `skill` is a `_Skill` object (no `.get()` method), causing `AttributeError` when pack-installed skill path not found.
+
+**Root Cause**: `_render_skill_content()` assumed `skill` could be either a dict or an object, but only checked `hasattr(skill, "metadata")` before falling through to `skill.get()`.
+
+**Solution**: Use `getattr()` with proper fallback:
+```python
+metadata = getattr(skill, "metadata", None) or (
+    skill.get("metadata", {}) if isinstance(skill, dict) else {}
+)
+```
+
+**Files**: `src/vibesop/adapters/base.py:435-438`
+
+---
+
+### Platform Native Workflow Capability Matrix (2026-06-05)
+
+**Finding**: VibeSOP's Workflow Engine (6 patterns) works on all 4 platforms, but execution model differs:
+- **Claude Code**: Native `Workflow` tool with `parallel()`/`pipeline()` — true concurrent sub-agents
+- **Kimi CLI / Pi Agent / OpenCode**: No native sub-agent mechanism — VibeSOP generates execution plan, platform's single agent executes steps sequentially
+
+**Implication**: `LOOP_UNTIL_DRY` and `TOURNAMENT` patterns are truly parallel only on Claude Code. On other platforms, they loop within a single agent session. Documentation must reflect this to set correct user expectations.
+
+**Files**: `docs/architecture/ARCHITECTURE.md` (Platform Compatibility section)
+
+---
+
 ### YAML Frontmatter Generation: Multiple Code Paths, Same Bug (2026-05-30)
 
 **Issue**: `vibe build` generates SKILL.md files with invalid YAML when `description` contains `[`, `{`, `: `, or other YAML flow indicators. Three independent code paths each build YAML frontmatter by raw string interpolation without quoting.

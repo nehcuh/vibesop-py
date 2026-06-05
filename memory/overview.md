@@ -1,6 +1,6 @@
 # Overview - VibeSOP Project
 
-**Last Updated**: 2026-05-29 (v5.5.0 — 4-phase transformation complete)
+**Last Updated**: 2026-06-05 (v6.2.0 — Dynamic Workflow Engine + doc sync)
 
 ---
 
@@ -59,16 +59,24 @@
 ## Projects Summary
 
 ### VibeSOP (vibesop-py)
-**Status**: v5.5.0 (4-phase transformation complete: Spec + Reference + AgentRuntime + Conformance)
-**Description**: AI SkillOS — skill protocol standard definer with 3-pillar architecture (Spec, Reference, Conformance Suite)
-**Coverage**: 2963 tests passing
+**Status**: v6.2.0 (Dynamic Workflow Engine: 6 patterns, 4 platforms)
+**Description**: AI SkillOS — skill protocol standard with Dynamic Workflow Engine, 3-pillar architecture, 4-platform support
+**Coverage**: 2968 tests passing
 **Key Metrics**:
 - Routing accuracy: 94%
 - Performance: 44 QPS (target: 40+ QPS)
-- Skills supported: 126 skills across 4 packs (mattpocock default, gstack explicit)
-- Total tests: 2963 passed, 3 skipped, 0 failures
+- Skills supported: 207 skills across 4 packs
+- Total tests: 2968 passed
+- Workflow patterns: 6 (SEQUENTIAL, PARALLEL, FAN_OUT, ADVERSARIAL, LOOP_UNTIL_DRY, TOURNAMENT)
+- Platforms: Claude Code, Kimi CLI, Pi Agent, OpenCode
 
-**Recent Changes** (2026-05-29):
+**Recent Changes** (2026-06-05):
+- ✅ Version bumped 5.5.0 → 6.2.0, 29 files synced
+- ✅ Dynamic Workflow Engine documentation (ARCHITECTURE.md, README.md, templates)
+- ✅ Platform compatibility matrix documented (native sub-agent vs serial)
+- ✅ Adapter templates updated with Workflow Patterns sections
+- ✅ Fixed hook template test assertions and _Skill.get() AttributeError
+- ✅ Commit: b6daa4d on refactor/router-orchestrator-split
 - ✅ Phase 4 complete: conformance suite (85 tests), dead code removal, README sync
 - ✅ SKILL.md template unification (shared template + render_skill_md function)
 - ✅ Pi adapter inherits SdkBasedAdapter (~30 lines duplicated code removed)
