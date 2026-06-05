@@ -4,24 +4,24 @@
 
 <!-- handoff:start -->
 
-### 2026-06-05 (S12) v6.1.0-phase2-adversarial-verification
-**Session**: Implemented Phase 2 (v6.1.0): Adversarial Verification for Dynamic Workflow Engine
+### 2026-06-05 (S13) v6.x-dynamic-workflow-engine-complete
+**Session**: Full Dynamic Workflow Engine v6.0-v6.2 implemented, reviewed, and fixed
 **Completed**:
-- Created `verifier.py`: VerifierAgent with isolated context LLM verification (receives query+intent+output only, NOT executor reasoning)
-- Created `verification_loop.py`: VerificationLoop with retry logic, configurable max retries (default 3), escalation on exceeded retries
-- Added TrustLevel enum (TRUSTED/QUARANTINE/SANDBOX) to ExecutionStep model; verification steps auto-marked QUARANTINE
-- Added --verify and --strictness CLI flags to route/orchestrate commands
-- ADVERSARIAL workflow pattern now appends verification step with QUARANTINE trust level
-**Test**: 28 new tests (test_verification_phase2.py), 52 total Phase tests pass, zero regressions
-**Files**: verifier.py, verification_loop.py, models.py, plan_builder.py, main.py, __init__.py, ROADMAP.md
-**Next**: Phase 3 (v6.2.0) — Full Execution Dynamic with WorkflowEngine, runtime re-orchestration
+- Phase 1 (v6.0.0): ClassifierAgent with rule+LLM hybrid pattern selection
+- Phase 2 (v6.1.0): VerifierAgent, VerificationLoop, TrustLevel, --verify/--strictness CLI flags
+- Phase 2.5: Review-driven fixes (strategy_hint parsing, wire --verify, fix retry loop, standardize LLM interface)
+- Phase 3 (v6.2.0): WorkflowEngine (LOOP_UNTIL_DRY + TOURNAMENT), Reorchestrator, TournamentRunner
+- Phase 3 review fixes (LOOP_BACK handling, to_dict, config dedup, StepRunner LLM injection)
+**Test**: 81 Phase tests pass, 167 orchestration tests zero regressions
+**Commits** (branch refactor/router-orchestrator-split):
+- 799cfbf feat(v6.0-v6.1): Phase 1-2
+- c571143 fix(v6.1): Phase 2.5 review fixes
+- 6386399 feat(v6.2): Phase 3
+- e18e279 fix(v6.2): Phase 3 review fixes
+**Next**: Create PR to main
 
-### 2026-06-01 (S11) pi-agent-skill-generation-fixes
-**Session**: Fixed 3 bugs causing pi agent validation errors ("description is required" / "name contains invalid characters")
-**Completed**:
-- `find_skill_content()` now strips namespace prefix for directory lookup
-- `SKILL.md.j2` template now generates proper YAML frontmatter
-- `_namespace_skill_name()` rewritten for proper name normalization
-**Test**: 857 passed, 11 skipped; 148 passed (adapter tests)
+### 2026-06-05 (S12) v6.1.0-phase2-adversarial-verification
+**Session**: Implemented Phase 2 (v6.1.0): Adversarial Verification
+**Completed**: VerifierAgent, VerificationLoop, TrustLevel, CLI --verify flag
 
 <!-- handoff:end -->
