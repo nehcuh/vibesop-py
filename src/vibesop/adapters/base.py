@@ -432,9 +432,8 @@ class PlatformAdapter(ABC):
 
         # Fallback: use source_path from skill metadata (set by DynamicSkillDiscovery)
         if not installed_path:
-            metadata = (
-                skill.metadata if hasattr(skill, "metadata")
-                else skill.get("metadata", {})
+            metadata = getattr(skill, "metadata", None) or (
+                skill.get("metadata", {}) if isinstance(skill, dict) else {}
             )
             source_path = metadata.get("source_path", "") if isinstance(metadata, dict) else ""
             if source_path:

@@ -5,4 +5,15 @@ argument-hint: "<workflow_description>"
 
 Run `vibe orchestrate "$ARGUMENTS"` to create and execute a multi-step workflow.
 
+VibeSOP supports 6 workflow patterns (v6.2.0):
+- **SEQUENTIAL**: Linear dependency chain
+- **PARALLEL**: Independent concurrent tasks (serial on Pi)
+- **FAN_OUT**: One task, multiple perspectives
+- **ADVERSARIAL**: Execute → Verify → Accept/Reject
+- **LOOP_UNTIL_DRY**: Iterate until no new findings
+- **TOURNAMENT**: Pairwise compare → Select best
+
+Force a pattern: `vibe route --pattern <pattern> "<query>"`
+Enable verification: `vibe route --verify "<query>"`
+
 Follow the orchestration plan exactly, reading each skill file before executing its step.

@@ -1,7 +1,7 @@
 # VibeSOP Documentation Index
 
-> **Last Updated**: 2026-05-29
-> **Version**: 5.5.0
+> **Last Updated**: 2026-06-05
+> **Version**: 6.2.0
 
 This document serves as the central index for all VibeSOP documentation, organized by purpose and audience.
 
@@ -58,6 +58,7 @@ These files remain in the project root for discoverability and tool integration:
 - **[Agent Integration Patterns](architecture/agent-integration-patterns.md)** — Platform adapter patterns
 - **[Session Management](architecture/session-management.md)** — Session context and intelligent routing
 - **[Orchestration Design](architecture/orchestration-design.md)** — Multi-intent detection and task decomposition
+- **[Workflow Engine](architecture/ARCHITECTURE.md#dynamic-workflow-engine-v60v62)** — Dynamic workflow engine: 6 patterns, platform compatibility, CLI flags
 - **[Routing Transparency](architecture/routing-transparency.md)** — Rejected candidates and decision explainability
 - **[Performance Benchmarks](architecture/performance-benchmarks.md)** — Latency, throughput, and optimization strategies
 
@@ -155,16 +156,17 @@ These files remain in the project root for discoverability and tool integration:
 
 ---
 
-## 📊 Key Metrics (v5.5.0)
+## 📊 Key Metrics (v6.2.0)
 
 | Metric | Value |
 |--------|-------|
-| **Version** | 5.5.0 |
+| **Version** | 6.2.0 |
 | **Tests** | 2,972 pytest collected (85 conformance tests) |
 | **Coverage** | ~73% (target: 75%) |
 | **Skills Supported** | 50+ |
-| **Platforms** | Claude Code, OpenCode, Kimi CLI, Cursor |
+| **Platforms** | Claude Code, Kimi CLI, Pi Agent, OpenCode |
 | **Routing Layers** | 10 |
+| **Workflow Patterns** | 6 (SEQUENTIAL, PARALLEL, FAN_OUT, ADVERSARIAL, LOOP_UNTIL_DRY, TOURNAMENT) |
 | **Spec Version** | SKILL.md v3.0 (29 fields) |
 
 ---

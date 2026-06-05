@@ -9,6 +9,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [6.2.0] - 2026-06-05
+
+### Full Execution Dynamic — Phase 3
+
+- feat: WorkflowEngine — dynamic execution engine for LOOP_UNTIL_DRY and TOURNAMENT patterns
+- feat: Reorchestrator — runtime re-orchestration decision system
+- feat: TournamentRunner — pair-wise comparison execution
+- feat: PlanBuilder enhancements for complex workflow patterns
+
+## [6.1.0] - 2026-06-05
+
+### Adversarial Verification Pipeline — Phase 2
+
+- feat: VerifierAgent — independent verification with TrustLevel (TRUSTED/QUARANTINE/SANDBOX)
+- feat: VerificationLoop — retry loop with feedback aggregation
+- feat: `--verify` and `--strictness` CLI flags
+- fix: wire verification pipeline and review findings
+
+## [6.0.0] - 2026-06-05
+
+### Dynamic Workflow Engine Foundation — Phase 1
+
+- feat: ClassifierAgent — LLM-based workflow pattern selection replacing static keyword matching
+- feat: Orchestration layer (core/orchestration/) — classifier, plan_builder, verifier
+- refactor: router-orchestrator split for cleaner separation of concerns
+- refactor: dependency inversion — core no longer imports llm/security
+- refactor: eliminate core/services facade, inline into slash_commands
+
 ## [5.5.0] - 2026-05-29
 
 ### Architecture — 3-Pillar Skill Protocol Standard (v5.5.0)

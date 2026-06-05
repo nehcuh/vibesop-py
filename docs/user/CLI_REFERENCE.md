@@ -1,6 +1,6 @@
 # VibeSOP CLI Reference
 
-Complete reference for all VibeSOP CLI commands (v5.5.0+).
+Complete reference for all VibeSOP CLI commands (v6.2.0+).
 
 ---
 

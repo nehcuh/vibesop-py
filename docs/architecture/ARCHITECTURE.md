@@ -1,11 +1,11 @@
 # VibeSOP Architecture
 
-> **Version**: 5.5.0
-> **Last Updated**: 2026-05-29
+> **Version**: 6.2.0
+> **Last Updated**: 2026-06-05
 
-## Three-Pillar Architecture (v5.5.0)
+## Three-Pillar Architecture (v6.2.0)
 
-VibeSOP v5.5.0 introduces a 3-pillar architecture that defines the AI-assisted
+VibeSOP v6.2.0 introduces a 3-pillar architecture that defines the AI-assisted
 development skill protocol standard:
 
 ```
@@ -97,7 +97,7 @@ vibe analyze session              → SessionAnalyzer.analyze()
 
 ---
 
-### 2. Agent Runtime Layer (`src/vibesop/agent/`) ✨ v5.5.0
+### 2. Agent Runtime Layer (`src/vibesop/agent/`) ✨ v6.2.0
 
 Fully wired entry point connecting all runtime components. Platform adapters use
 `AgentRuntime.handle_query()` instead of shelling out to `vibe route` via a
@@ -372,6 +372,7 @@ vibe install <url>
 - ✅ Security auditing
 - ✅ Configuration
 - ✅ Matching infrastructure
+- ✅ Dynamic Workflow orchestration
 
 ### What's NOT in Core?
 
@@ -478,6 +479,110 @@ tests/
 2. **Performance** — Fast layers first, slow layers as fallback
 3. **Flexibility** — Easy to add new matchers
 4. **Observability** — Clear routing path for debugging
+
+---
+
+## Dynamic Workflow Engine (v6.0–v6.2)
+
+The Dynamic Workflow Engine provides intelligent multi-step orchestration that goes beyond
+single-skill routing. It classifies user intent, selects an execution pattern, and
+optionally re-orchestrates the plan at runtime based on intermediate results.
+
+### Architecture
+
+```
+User Query (multi-intent or complex)
+    │
+    ▼
+┌─────────────────┐
+│  ClassifierAgent │  ← Pattern selection (keyword fast-path + LLM semantic)
+└────────┬────────┘
+         │ WorkflowPattern
+         ▼
+┌─────────────────┐
+│   PlanBuilder    │  ← Build ExecutionPlan with pattern-aware step layout
+└────────┬────────┘
+         │ ExecutionPlan
+         ▼
+┌─────────────────────────────────────────────────┐
+│               WorkflowEngine                     │
+│                                                  │
+│  Static patterns: SEQUENTIAL, PARALLEL, FAN_OUT  │
+│  → ParallelScheduler (topological batch exec)    │
+│                                                  │
+│  Dynamic patterns: LOOP_UNTIL_DRY, TOURNAMENT    │
+│  → Reorchestrator (runtime plan mutation)        │
+│  → TournamentRunner (pairwise comparison)        │
+└────────┬────────────────────────────────────────┘
+         │
+         ▼
+┌─────────────────┐
+│  VerifierAgent   │  ← Optional adversarial verification (adversarial pattern)
+│  TrustLevel:     │     TRUSTED / QUARANTINE / SANDBOX
+└─────────────────┘
+```
+
+### 6 Workflow Patterns
+
+| Pattern | Type | Use Case | Example |
+|---------|------|----------|---------|
+| `SEQUENTIAL` | Static | Linear dependency chain | Analyze → Fix → Verify |
+| `PARALLEL` | Static | Independent concurrent tasks | Lint + Type-check + Test |
+| `FAN_OUT` | Static | One-to-many distribution | Review across 3 dimensions |
+| `ADVERSARIAL` | Static | Verify via independent critic | Generate → Verify → Accept |
+| `LOOP_UNTIL_DRY` | Dynamic | Iterative until no new findings | Bug hunting, exhaustive audit |
+| `TOURNAMENT` | Dynamic | Best-of-N via pairwise judge | Design selection, approach comparison |
+
+### Key Components
+
+| Component | File | Purpose |
+|-----------|------|---------|
+| ClassifierAgent | `core/orchestration/classifier.py` | Two-phase classification: keyword rules (85% fast-path) + LLM semantic |
+| PlanBuilder | `core/orchestration/plan_builder.py` | Convert sub-tasks into pattern-aware ExecutionPlan |
+| WorkflowEngine | `core/orchestration/workflow_engine.py` | Route static vs dynamic execution, manage engine lifecycle |
+| VerifierAgent | `core/orchestration/verifier.py` | Independent verification with isolated context window |
+| VerificationLoop | `core/orchestration/verification_loop.py` | Retry loop with feedback aggregation |
+| Reorchestrator | `core/orchestration/reorchestrator.py` | Post-step analysis: CONTINUE / APPEND / LOOP_BACK / ESCALATE / TERMINATE |
+| TournamentRunner | `core/orchestration/tournament.py` | Pairwise comparison with isolated judge |
+| StepRunner | `agent/step_runner.py` | Execute plans; routes dynamic plans to WorkflowEngine |
+
+### CLI Flags
+
+```bash
+# Force a specific workflow pattern
+vibe route --pattern fan_out "analyze architecture and performance"
+
+# Enable adversarial verification
+vibe route --verify "refactor the auth module"
+
+# Configure verifier strictness (lenient / standard / strict)
+vibe route --verify --strictness strict "security audit this code"
+```
+
+### Platform Compatibility
+
+The Workflow Engine runs inside VibeSOP's process and is platform-independent.
+However, **execution model** varies based on each platform's native capabilities:
+
+| Platform | VibeSOP Workflow | Native Sub-Agent | Execution Model | Auto-Trigger |
+|----------|-----------------|-------------------|-----------------|-------------|
+| **Claude Code** | ✅ Full | ✅ `parallel()`, `pipeline()` | Parallel sub-agents | Shell hooks |
+| **Kimi CLI** | ✅ Full | ❌ | Serial (single agent) | Config hooks |
+| **Pi Agent** | ✅ Full | ❌ | Serial (single agent) | TS extensions |
+| **OpenCode** | ✅ Full | ❌ | Serial (single agent) | Manual `source` |
+
+**What this means in practice:**
+
+- On **Claude Code**: The platform can spawn real sub-agents for `PARALLEL` and `FAN_OUT`.
+  `LOOP_UNTIL_DRY` and `TOURNAMENT` leverage the native `Workflow` tool for true
+  concurrent execution.
+- On **Kimi CLI / Pi / OpenCode**: VibeSOP generates the full execution plan, but the
+  platform's single agent executes steps sequentially. Dynamic patterns (`LOOP_UNTIL_DRY`,
+  `TOURNAMENT`) still work — the engine loops within a single agent session, but without
+  true parallelism.
+
+**All patterns produce the same structured output** (`DynamicExecutionResult`) regardless
+of platform. The difference is purely in execution concurrency.
 
 ---
 
