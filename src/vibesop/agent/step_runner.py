@@ -94,11 +94,13 @@ class StepRunner:
         project_root: str | Path = ".",
         max_parallel: int = 5,
         track_state: bool = True,
+        llm_client: Any = None,
     ):
         self._plan = plan
         self._project_root = Path(project_root)
         self._max_parallel = max_parallel
         self._track_state = track_state
+        self._llm_client = llm_client
 
         self._states: dict[str, PlanStepState] = {}
         for step in plan.steps:
@@ -290,7 +292,7 @@ class StepRunner:
         from vibesop.core.orchestration.workflow_engine import WorkflowEngine
 
         if WorkflowEngine.is_dynamic(self._plan):
-            engine = WorkflowEngine(llm_client=None)
+            engine = WorkflowEngine(llm_client=self._llm_client)
             # Wrap executor to accept just the step (WorkflowEngine interface)
             def _wrap_executor(step):
                 ctx = self.get_context(step)

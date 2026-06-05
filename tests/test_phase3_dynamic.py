@@ -332,7 +332,7 @@ def test_workflow_engine_loop_until_dry() -> None:
         call_count[0] += 1
         return f"Output {call_count[0]}"
 
-    engine = WorkflowEngine(WorkflowEngineConfig(dry_threshold=2))
+    engine = WorkflowEngine()
 
     plan = ExecutionPlan(
         plan_id="test",
@@ -394,8 +394,7 @@ def test_workflow_engine_tournament() -> None:
 
 def test_workflow_engine_config_defaults() -> None:
     config = WorkflowEngineConfig()
-    assert config.dry_threshold == 2
-    assert config.max_reorchestration_rounds == 5
+    assert config.max_tournament_contestants == 3
 
 
 def test_dynamic_execution_result_model() -> None:

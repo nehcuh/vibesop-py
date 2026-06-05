@@ -35,10 +35,13 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class WorkflowEngineConfig:
-    """Configuration for the dynamic workflow engine."""
+    """Configuration for the dynamic workflow engine.
 
-    dry_threshold: int = 2
-    max_reorchestration_rounds: int = 5
+    Note: dry_threshold and max_reorchestration_rounds are stored on
+    ExecutionPlan and read from there at runtime. This config holds
+    engine-level settings only.
+    """
+
     max_tournament_contestants: int = 3
     token_budget_multiplier: float = 3.0
 
@@ -54,6 +57,18 @@ class DynamicExecutionResult(BaseModel):
     champion_index: int | None = Field(default=None, description="Tournament champion")
     results: dict[str, Any] = Field(default_factory=dict)
     reorchestration_history: list[dict[str, Any]] = Field(default_factory=list)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "plan_id": self.plan_id,
+            "pattern": self.pattern.value,
+            "total_steps_executed": self.total_steps_executed,
+            "reorchestration_rounds": self.reorchestration_rounds,
+            "final_status": self.final_status,
+            "champion_index": self.champion_index,
+            "results": self.results,
+            "reorchestration_history": self.reorchestration_history,
+        }
 
 
 class WorkflowEngine:
@@ -130,8 +145,11 @@ class WorkflowEngine:
         round_count = 0
         history: list[dict[str, Any]] = []
 
-        for step in plan.steps:
+        step_idx = 0
+        while step_idx < len(plan.steps):
+            step = plan.steps[step_idx]
             if step.is_verification_step:
+                step_idx += 1
                 continue
 
             # Execute step
@@ -152,7 +170,7 @@ class WorkflowEngine:
                 break
 
             # Re-orchestrate after each step
-            if reorchestrator is not None and round_count < self._config.max_reorchestration_rounds:
+            if reorchestrator is not None and round_count < plan.max_reorchestration_rounds:
                 round_count += 1
                 analysis = reorchestrator.analyze(
                     plan, step, accumulated.get(step.output_as, ""), accumulated
@@ -179,12 +197,35 @@ class WorkflowEngine:
                     new_steps = self._create_steps_from_analysis(plan, analysis.new_sub_tasks)
                     plan.steps.extend(new_steps)
                     logger.info("Appended %d new steps at round %d", len(new_steps), round_count)
+
+                elif analysis.decision == ReorchestrationDecision.LOOP_BACK:
+                    dry_count = 0
+                    target_id = analysis.loop_target_step_id
+                    target_step = next(
+                        (s for s in plan.steps if s.step_id == target_id),
+                        None,
+                    )
+                    if target_step:
+                        target_step.status = StepStatus.PENDING
+                        target_step.dynamic_status = DynamicNodeStatus.LOOPING
+                        target_step.loop_iteration += 1
+                        logger.info(
+                            "Loop-until-dry: looping back to step %s (iteration %d)",
+                            target_id,
+                            target_step.loop_iteration,
+                        )
+                    else:
+                        logger.warning("LOOP_BACK target step %s not found", target_id)
+
                 else:
+                    # CONTINUE or unknown — counts toward dry threshold
                     dry_count += 1
 
                 if dry_count >= plan.dry_threshold:
                     logger.info("Loop-until-dry: dry after %d consecutive rounds", dry_count)
                     break
+
+            step_idx += 1
 
         plan.status = PlanStatus.COMPLETED
         plan.reorchestration_history = history
