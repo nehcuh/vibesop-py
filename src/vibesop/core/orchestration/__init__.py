@@ -11,6 +11,9 @@ Provides:
 - ClassifierAgent: dynamic workflow pattern selection (v6.0.0)
 - VerifierAgent: independent verification for adversarial workflow (v6.1.0)
 - VerificationLoop: retry logic for NEEDS_REVISION status (v6.1.0)
+- WorkflowEngine: dynamic execution for loop-until-dry and tournament (v6.2.0)
+- Reorchestrator: post-step analysis for runtime re-evaluation (v6.2.0)
+- TournamentRunner: multi-contestant comparison with judge (v6.2.0)
 """
 
 from __future__ import annotations
@@ -31,8 +34,15 @@ from vibesop.core.orchestration.parallel_scheduler import (
 )
 from vibesop.core.orchestration.plan_builder import PlanBuilder
 from vibesop.core.orchestration.plan_tracker import PlanTracker
+from vibesop.core.orchestration.reorchestrator import Reorchestrator, ReorchestrationAnalysis
 from vibesop.core.orchestration.summary import generate_execution_summary
 from vibesop.core.orchestration.task_decomposer import SubTask, TaskDecomposer
+from vibesop.core.orchestration.tournament import (
+    ComparisonResult,
+    TournamentConfig,
+    TournamentResult,
+    TournamentRunner,
+)
 from vibesop.core.orchestration.verifier import (
     VerificationIssue,
     VerificationResult,
@@ -48,9 +58,16 @@ from vibesop.core.orchestration.verification_loop import (
     VerificationLoopState,
     execute_plan_with_verification,
 )
+from vibesop.core.orchestration.workflow_engine import (
+    DynamicExecutionResult,
+    WorkflowEngine,
+    WorkflowEngineConfig,
+)
 
 __all__ = [
     "ClassifierAgent",
+    "ComparisonResult",
+    "DynamicExecutionResult",
     "ErrorPolicy",
     "MultiIntentDetector",
     "NoOpCallbacks",
@@ -60,9 +77,14 @@ __all__ = [
     "PhaseInfo",
     "PlanBuilder",
     "PlanTracker",
+    "Reorchestrator",
+    "ReorchestrationAnalysis",
     "StepResult",
     "SubTask",
     "TaskDecomposer",
+    "TournamentConfig",
+    "TournamentResult",
+    "TournamentRunner",
     "VerifierAgent",
     "VerificationIssue",
     "VerificationResult",
@@ -72,6 +94,8 @@ __all__ = [
     "VerificationLoopAction",
     "VerificationLoopConfig",
     "VerificationLoopState",
+    "WorkflowEngine",
+    "WorkflowEngineConfig",
     "execute_plan_sync",
     "execute_plan_with_verification",
     "generate_execution_summary",

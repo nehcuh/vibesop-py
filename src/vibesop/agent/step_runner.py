@@ -269,6 +269,7 @@ class StepRunner:
         """Execute all pending steps in topological order.
 
         Independent steps within each batch run via ParallelScheduler.
+        For dynamic plans (LOOP_UNTIL_DRY, TOURNAMENT), delegates to WorkflowEngine.
 
         Args:
             step_executor: Callable(ExecutionStep, StepRunContext) -> str (output)
@@ -284,6 +285,26 @@ class StepRunner:
                 - skipped: int
                 - results: list[dict] with step_id, output, error per step
         """
+
+        # Route dynamic plans to WorkflowEngine
+        from vibesop.core.orchestration.workflow_engine import WorkflowEngine
+
+        if WorkflowEngine.is_dynamic(self._plan):
+            engine = WorkflowEngine(llm_client=None)
+            # Wrap executor to accept just the step (WorkflowEngine interface)
+            def _wrap_executor(step):
+                ctx = self.get_context(step)
+                return step_executor(step, ctx)
+
+            dyn_result = engine.run(self._plan, _wrap_executor)
+            return {
+                "completed": dyn_result.total_steps_executed,
+                "failed": 0,
+                "skipped": 0,
+                "results": dyn_result.results,
+                "dynamic": True,
+                "pattern": dyn_result.pattern.value,
+            }
 
         results: list[dict[str, Any]] = []
 

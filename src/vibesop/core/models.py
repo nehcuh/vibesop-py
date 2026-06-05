@@ -258,7 +258,30 @@ class WorkflowPattern(StrEnum):
     SEQUENTIAL = "sequential"  # Default: steps run in order (existing behaviour)
     PARALLEL = "parallel"  # Independent steps run concurrently
     FAN_OUT = "fan_out"  # Multiple sub-tasks in parallel → synthesise results
-    ADVERSARIAL = "adversarial"  # Execute → independent verification (preview of Phase 2)
+    ADVERSARIAL = "adversarial"  # Execute → independent verification
+    LOOP_UNTIL_DRY = "loop_until_dry"  # Iterative refinement until no new discoveries
+    TOURNAMENT = "tournament"  # Multiple contestants → judge picks champion
+
+
+class DynamicNodeStatus(StrEnum):
+    """Status of a node in the dynamic execution graph."""
+
+    PENDING = "pending"
+    RUNNING = "running"
+    AWAITING_VERIFICATION = "awaiting_verification"
+    COMPLETED = "completed"
+    LOOPING = "looping"
+    FAILED = "failed"
+
+
+class ReorchestrationDecision(StrEnum):
+    """Decision after re-orchestration analysis."""
+
+    CONTINUE = "continue"  # Proceed to next planned step
+    APPEND_STEPS = "append_steps"  # New sub-tasks discovered
+    LOOP_BACK = "loop_back"  # Re-execute a previous step
+    ESCALATE = "escalate"  # User intervention needed
+    TERMINATE_EARLY = "terminate_early"  # All goals met
 
 
 class TrustLevel(StrEnum):
@@ -316,6 +339,16 @@ class ExecutionStep(BaseModel):
         default=TrustLevel.TRUSTED,
         description="Trust level for this step's execution",
     )
+    # Phase 3 (v6.2.0): Dynamic execution fields
+    dynamic_status: DynamicNodeStatus | None = Field(
+        default=None, description="Dynamic graph node status (Phase 3 patterns only)"
+    )
+    loop_iteration: int = Field(
+        default=0, description="Current loop iteration (for LOOP_UNTIL_DRY pattern)"
+    )
+    contestant_index: int | None = Field(
+        default=None, description="Contestant index (for TOURNAMENT pattern, None = not a contestant)"
+    )
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -336,6 +369,9 @@ class ExecutionStep(BaseModel):
             "is_verification_step": self.is_verification_step,
             "verification_result": self.verification_result,
             "trust_level": self.trust_level.value,
+            "dynamic_status": self.dynamic_status.value if self.dynamic_status else None,
+            "loop_iteration": self.loop_iteration,
+            "contestant_index": self.contestant_index,
         }
 
 
@@ -358,6 +394,19 @@ class ExecutionPlan(BaseModel):
         default=WorkflowPattern.SEQUENTIAL,
         description="Dynamic workflow pattern selected by ClassifierAgent",
     )
+    # Phase 3 (v6.2.0): Dynamic execution metadata
+    is_dynamic: bool = Field(
+        default=False, description="Whether this plan uses dynamic execution (WorkflowEngine)"
+    )
+    dry_threshold: int = Field(
+        default=2, description="Consecutive rounds with no change to declare dry (LOOP_UNTIL_DRY)"
+    )
+    max_reorchestration_rounds: int = Field(
+        default=5, description="Maximum re-orchestration rounds before forced termination"
+    )
+    reorchestration_history: list[dict[str, Any]] = Field(
+        default_factory=list, description="History of re-orchestration decisions"
+    )
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -370,6 +419,10 @@ class ExecutionPlan(BaseModel):
             "status": self.status.value,
             "execution_mode": self.execution_mode.value,
             "workflow_pattern": self.workflow_pattern.value,
+            "is_dynamic": self.is_dynamic,
+            "dry_threshold": self.dry_threshold,
+            "max_reorchestration_rounds": self.max_reorchestration_rounds,
+            "reorchestration_history": self.reorchestration_history,
         }
 
     def get_parallel_groups(self) -> list[list["ExecutionStep"]]:

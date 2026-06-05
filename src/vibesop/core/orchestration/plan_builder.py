@@ -437,6 +437,10 @@ class PlanBuilder:
         if pattern == WorkflowPattern.ADVERSARIAL:
             # Adversarial runs sequentially (execute → verify)
             return ExecutionMode.SEQUENTIAL
+        if pattern == WorkflowPattern.LOOP_UNTIL_DRY:
+            return ExecutionMode.SEQUENTIAL
+        if pattern == WorkflowPattern.TOURNAMENT:
+            return ExecutionMode.PARALLEL
         return detected_mode
 
     def _apply_pattern(
@@ -456,6 +460,10 @@ class PlanBuilder:
             return self._apply_adversarial(steps, original_query)
         if pattern == WorkflowPattern.PARALLEL:
             return self._apply_parallel(steps)
+        if pattern == WorkflowPattern.LOOP_UNTIL_DRY:
+            return self._apply_loop_until_dry(steps, original_query)
+        if pattern == WorkflowPattern.TOURNAMENT:
+            return self._apply_tournament(steps, original_query)
         # SEQUENTIAL: nothing to change
         return steps
 
@@ -534,6 +542,69 @@ class PlanBuilder:
             step.dependencies = []
             step.can_parallel = True
         return steps
+
+    def _apply_loop_until_dry(
+        self,
+        steps: list[ExecutionStep],
+        original_query: str,
+    ) -> list[ExecutionStep]:
+        """LOOP_UNTIL_DRY: mark steps for iterative refinement."""
+        for step in steps:
+            step.loop_iteration = 0
+        # Steps run sequentially; the WorkflowEngine will handle the loop logic
+        return steps
+
+    def _apply_tournament(
+        self,
+        steps: list[ExecutionStep],
+        original_query: str,
+        num_contestants: int = 3,
+    ) -> list[ExecutionStep]:
+        """TOURNAMENT: create N contestant copies + judge step."""
+        if not steps:
+            return steps
+
+        tournament_steps: list[ExecutionStep] = []
+
+        # Create contestant copies for each original step
+        for step in steps:
+            for i in range(num_contestants):
+                contestant = step.model_copy(update={
+                    "step_id": str(uuid.uuid4())[:8],
+                    "step_number": len(tournament_steps) + 1,
+                    "intent": f"{step.intent} (contestant {i + 1})",
+                    "output_as": f"contestant_{i + 1}_step_{step.step_number}_result",
+                    "dependencies": [],
+                    "can_parallel": True,
+                    "contestant_index": i,
+                    "trust_level": TrustLevel.TRUSTED,
+                })
+                tournament_steps.append(contestant)
+
+        # Append judge step
+        contestant_ids = [s.step_id for s in tournament_steps]
+        judge_step = ExecutionStep(
+            step_id=str(uuid.uuid4())[:8],
+            step_number=len(tournament_steps) + 1,
+            skill_id="builtin/slash-orchestrate",
+            intent="评估所有方案并选出最优解",
+            original_query_segment=original_query,
+            input_query=(
+                f"评估以下 {num_contestants} 个方案，选出最优解:\n"
+                + "\n".join(
+                    f"- 方案 {s.contestant_index is not None and s.contestant_index + 1}: {s.intent}"
+                    for s in tournament_steps
+                )
+            ),
+            output_as="tournament_result",
+            status=StepStatus.PENDING,
+            dependencies=contestant_ids,
+            can_parallel=False,
+            is_verification_step=True,
+            trust_level=TrustLevel.QUARANTINE,
+        )
+        tournament_steps.append(judge_step)
+        return tournament_steps
 
     def _build_step_query(
         self,

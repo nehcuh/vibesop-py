@@ -248,9 +248,9 @@ class Orchestrator:
         cb.on_phase_complete(
             PhaseInfo(
                 phase=OrchestrationPhase.PLAN_BUILDING,
-                message=f"Execution plan built with {len(plan.steps)} steps",
+                message=f"Execution plan built with {len(plan.steps)} steps ({'dynamic' if WorkflowPattern(plan.workflow_pattern) in (WorkflowPattern.LOOP_UNTIL_DRY, WorkflowPattern.TOURNAMENT) else 'static'})",
                 progress=0.9,
-                metadata={"step_count": len(plan.steps), "strategy": plan.execution_mode.value},
+                metadata={"step_count": len(plan.steps), "strategy": plan.execution_mode.value, "pattern": plan.workflow_pattern.value},
             )
         )
 

@@ -44,13 +44,13 @@ class TestClassifierAgentRuleClassification:
         result = agent.classify("review my code", sub_tasks)
         assert result.pattern == WorkflowPattern.FAN_OUT
 
-    def test_task_type_debug_selects_adversarial(self):
+    def test_task_type_debug_selects_loop_until_dry(self):
         agent = ClassifierAgent()
         sub_tasks = [
             SubTask(intent="debug error", query="debug error", task_type="debug"),
         ]
         result = agent.classify("debug this error", sub_tasks)
-        assert result.pattern == WorkflowPattern.ADVERSARIAL
+        assert result.pattern == WorkflowPattern.LOOP_UNTIL_DRY
 
 
 class TestClassifierAgentLLMClassification:

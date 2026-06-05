@@ -37,7 +37,6 @@ _PATTERN_KEYWORDS: dict[WorkflowPattern, set[str]] = {
         "验证",
         "确认",
         "check",
-        "检查",
         "确保",
         "double check",
         "复核",
@@ -52,15 +51,38 @@ _PATTERN_KEYWORDS: dict[WorkflowPattern, set[str]] = {
         "以及",
         "并且",
     },
+    WorkflowPattern.LOOP_UNTIL_DRY: {
+        "iterative",
+        "loop",
+        "反复",
+        "迭代",
+        "until",
+        "keep going",
+        "until no more",
+        "exhaustive",
+        "彻底",
+        "全面排查",
+    },
+    WorkflowPattern.TOURNAMENT: {
+        "tournament",
+        "compare",
+        "best approach",
+        "alternatives",
+        "对比",
+        "multiple approaches",
+        "哪种更好",
+        "best solution",
+        "compare approaches",
+    },
 }
 
 # Task-type → preferred pattern mapping
 _TASK_TYPE_PATTERNS: dict[str, WorkflowPattern] = {
     "review": WorkflowPattern.FAN_OUT,
-    "debug": WorkflowPattern.ADVERSARIAL,
+    "debug": WorkflowPattern.LOOP_UNTIL_DRY,
     "security": WorkflowPattern.ADVERSARIAL,
     "test": WorkflowPattern.FAN_OUT,
-    "brainstorm": WorkflowPattern.FAN_OUT,
+    "brainstorm": WorkflowPattern.TOURNAMENT,
     "optimize": WorkflowPattern.ADVERSARIAL,
 }
 
@@ -198,9 +220,13 @@ class ClassifierAgent:
             "- fan_out: Multiple analysis/review tasks in parallel, then synthesise results\n"
             "  (best for: code review, bug hunting, security audit, multi-angle analysis)\n"
             "- adversarial: Execute then independently verify results\n"
-            "  (best for: critical fixes, complex debugging, high-stakes changes)\n\n"
+            "  (best for: critical fixes, complex debugging, high-stakes changes)\n"
+            "- loop_until_dry: Iterative refinement, keep going until no new discoveries\n"
+            "  (best for: exhaustive debugging, iterative fixing, thorough investigation)\n"
+            "- tournament: Multiple approaches compete, independent judge picks best\n"
+            "  (best for: comparing solutions, brainstorming, choosing best approach)\n\n"
             "Output ONLY a JSON object with this exact format:\n"
-            '{"pattern": "one of sequential/parallel/fan_out/adversarial", '
+            '{"pattern": "one of sequential/parallel/fan_out/adversarial/loop_until_dry/tournament", '
             '"confidence": 0.0-1.0, "reasoning": "brief explanation", '
             '"task_type": "primary task type", "complexity": "simple/medium/complex"}\n'
             "No markdown, no explanation outside the JSON."
