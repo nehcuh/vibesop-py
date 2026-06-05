@@ -4,26 +4,24 @@
 
 <!-- handoff:start -->
 
-### 2026-05-30 (S12) yaml-quoting-bugs
-**Session**: Deep audit + fix YAML frontmatter generation bugs across VibeSOP
+### 2026-06-05 (S12) v6.1.0-phase2-adversarial-verification
+**Session**: Implemented Phase 2 (v6.1.0): Adversarial Verification for Dynamic Workflow Engine
 **Completed**:
-- Traced root cause of `[OMX]` YAML parse errors: `[` interpreted as flow sequence in bare strings
-- Fixed 7 files: _shared.py (3 locations), base.py, format_converter.py, _discovery.py (2), instinct_cmd.py, cross_cutting.py, pi/skills/SKILL.md.j2
-- Added `_yaml_dquote()` and `_yaml_safe_value()` centralized helpers for YAML-safe description quoting
-- Fixed depth-2 skill install path not discovered by is_pack_installed() — added source_path fallback
-- All 118 tests pass; rebuilt pi config: 85 skills, 0 YAML errors
-**Root cause pattern**: Three independent code paths (Jinja2, f-string, str.replace) all generated YAML without quoting free-text values
-**Files**: _shared.py, base.py, format_converter.py, _discovery.py, instinct_cmd.py, cross_cutting.py, pi/skills/SKILL.md.j2
-**Next**: None — all known YAML generation paths audited and fixed
+- Created `verifier.py`: VerifierAgent with isolated context LLM verification (receives query+intent+output only, NOT executor reasoning)
+- Created `verification_loop.py`: VerificationLoop with retry logic, configurable max retries (default 3), escalation on exceeded retries
+- Added TrustLevel enum (TRUSTED/QUARANTINE/SANDBOX) to ExecutionStep model; verification steps auto-marked QUARANTINE
+- Added --verify and --strictness CLI flags to route/orchestrate commands
+- ADVERSARIAL workflow pattern now appends verification step with QUARANTINE trust level
+**Test**: 28 new tests (test_verification_phase2.py), 52 total Phase tests pass, zero regressions
+**Files**: verifier.py, verification_loop.py, models.py, plan_builder.py, main.py, __init__.py, ROADMAP.md
+**Next**: Phase 3 (v6.2.0) — Full Execution Dynamic with WorkflowEngine, runtime re-orchestration
 
-### 2026-05-30 (S11) pi-agent-config-cleanup
-**Session**: Fix pi agent skill conflicts — frontmatter + orphan cleanup + gstack removal + extension path bug
+### 2026-06-01 (S11) pi-agent-skill-generation-fixes
+**Session**: Fixed 3 bugs causing pi agent validation errors ("description is required" / "name contains invalid characters")
 **Completed**:
-- Batch-fixed 66 SKILL.md files missing YAML frontmatter (description is required)
-- Fixed shared SKILL.md.j2 template generating files without frontmatter
-- Removed gstack from registry/config/platform dirs
-- Fixed vibesop-track.ts template hardcoding session-end path
-**Files**: pi_coding_agent.py, SKILL.md.j2, registry.yaml, config.toml, vibesop-track.ts.j2
-**Next**: Verify pi agent starts without errors
+- `find_skill_content()` now strips namespace prefix for directory lookup
+- `SKILL.md.j2` template now generates proper YAML frontmatter
+- `_namespace_skill_name()` rewritten for proper name normalization
+**Test**: 857 passed, 11 skipped; 148 passed (adapter tests)
 
 <!-- handoff:end -->

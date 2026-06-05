@@ -247,6 +247,34 @@ class ExecutionMode(StrEnum):
     MIXED = "mixed"  # Automatically determine based on dependencies
 
 
+class WorkflowPattern(StrEnum):
+    """Dynamic workflow pattern for orchestration.
+
+    Patterns are selected at plan-generation time by the ClassifierAgent
+    based on query semantics.  Each pattern maps to a specific execution
+    strategy without changing the underlying skill definitions.
+    """
+
+    SEQUENTIAL = "sequential"  # Default: steps run in order (existing behaviour)
+    PARALLEL = "parallel"  # Independent steps run concurrently
+    FAN_OUT = "fan_out"  # Multiple sub-tasks in parallel → synthesise results
+    ADVERSARIAL = "adversarial"  # Execute → independent verification (preview of Phase 2)
+
+
+class TrustLevel(StrEnum):
+    """Runtime trust level for agents and skills.
+
+    Trust levels control the execution context and restrictions:
+    - TRUSTED: Normal execution, can modify files and run commands
+    - QUARANTINE: Read-only execution, cannot modify system state
+    - SANDBOX: Full isolation, runs in temporary environment
+    """
+
+    TRUSTED = "trusted"  # Normal execution, can modify files and run commands
+    QUARANTINE = "quarantine"  # Read-only, no side effects (default for verifier)
+    SANDBOX = "sandbox"  # Full isolation in temporary environment
+
+
 class ExecutionStep(BaseModel):
     """A single step in a multi-skill execution plan."""
 
@@ -276,6 +304,18 @@ class ExecutionStep(BaseModel):
         default=None,
         description="Group ID for parallel execution (steps in same group run together)",
     )
+    # Phase 2 (v6.1.0): Verification fields
+    is_verification_step: bool = Field(
+        default=False, description="Whether this step is a verification step (adversarial workflow)"
+    )
+    verification_result: dict[str, Any] | None = Field(
+        default=None, description="Verification result (if this is a verification step)"
+    )
+    # Phase 2 (v6.1.0): Trust level for execution
+    trust_level: TrustLevel = Field(
+        default=TrustLevel.TRUSTED,
+        description="Trust level for this step's execution",
+    )
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -293,6 +333,9 @@ class ExecutionStep(BaseModel):
             "dependencies": self.dependencies,
             "can_parallel": self.can_parallel,
             "parallel_group": self.parallel_group,
+            "is_verification_step": self.is_verification_step,
+            "verification_result": self.verification_result,
+            "trust_level": self.trust_level.value,
         }
 
 
@@ -310,6 +353,10 @@ class ExecutionPlan(BaseModel):
     status: PlanStatus = Field(default=PlanStatus.PENDING, description="Plan status")
     execution_mode: ExecutionMode = Field(
         default=ExecutionMode.SEQUENTIAL, description="How steps should be executed"
+    )
+    workflow_pattern: WorkflowPattern = Field(
+        default=WorkflowPattern.SEQUENTIAL,
+        description="Dynamic workflow pattern selected by ClassifierAgent",
     )
 
     def to_dict(self) -> dict[str, Any]:
@@ -384,6 +431,52 @@ class ExecutionPlan(BaseModel):
                 }
                 for i, group in enumerate(parallel_groups)
             ],
+        }
+
+
+class ClassifierResult(BaseModel):
+    """Result from ClassifierAgent — dynamic workflow pattern selection.
+
+    Attributes:
+        pattern: Selected workflow pattern (sequential/parallel/fan_out/adversarial)
+        confidence: Confidence score for the pattern selection (0.0-1.0)
+        reasoning: Human-readable explanation of why this pattern was chosen
+        task_type: Primary task type detected (analysis, review, debug, etc.)
+        complexity: Complexity level (simple, medium, complex)
+    """
+
+    model_config = {"arbitrary_types_allowed": True}
+
+    pattern: WorkflowPattern = Field(
+        default=WorkflowPattern.SEQUENTIAL,
+        description="Selected workflow pattern",
+    )
+    confidence: float = Field(
+        default=0.0,
+        ge=0.0,
+        le=1.0,
+        description="Pattern selection confidence",
+    )
+    reasoning: str = Field(
+        default="",
+        description="Why this pattern was selected",
+    )
+    task_type: str = Field(
+        default="",
+        description="Primary task type (analysis, review, debug, etc.)",
+    )
+    complexity: str = Field(
+        default="simple",
+        description="Task complexity: simple, medium, complex",
+    )
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "pattern": self.pattern.value,
+            "confidence": self.confidence,
+            "reasoning": self.reasoning,
+            "task_type": self.task_type,
+            "complexity": self.complexity,
         }
 
 

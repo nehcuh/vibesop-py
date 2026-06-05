@@ -131,7 +131,47 @@ class Orchestrator:
         if len(sub_tasks) <= 1:
             return self._router._to_orchestration_result(single_result, query)
 
-        # 5. Build execution plan
+        # 5. Classify workflow pattern (Phase 1: generative dynamic)
+        cb.on_phase_start(
+            PhaseInfo(
+                phase=OrchestrationPhase.PLAN_BUILDING,
+                message="Selecting workflow pattern...",
+                progress=0.55,
+            )
+        )
+        from vibesop.core.orchestration.classifier import ClassifierAgent
+        from vibesop.core.models import ClassifierResult, WorkflowPattern
+
+        classifier = ClassifierAgent(llm_client=self._router._llm)
+        classification = classifier.classify(query, sub_tasks)
+
+        # Check for explicit pattern override from CLI (e.g. --pattern fan_out)
+        if context is not None:
+            hint = getattr(context, "strategy_hint", None) or ""
+            if hint.startswith("workflow_pattern:"):
+                override = hint.split(":", 1)[1].strip()
+                try:
+                    classification = ClassifierResult(
+                        pattern=WorkflowPattern(override),
+                        confidence=1.0,
+                        reasoning=f"User explicitly selected {override} pattern",
+                    )
+                except ValueError:
+                    pass  # Invalid override, keep classifier result
+        cb.on_phase_complete(
+            PhaseInfo(
+                phase=OrchestrationPhase.PLAN_BUILDING,
+                message=f"Pattern: {classification.pattern.value} ({classification.confidence:.0%})",
+                progress=0.6,
+                metadata={
+                    "pattern": classification.pattern.value,
+                    "confidence": classification.confidence,
+                    "reasoning": classification.reasoning,
+                },
+            )
+        )
+
+        # 6. Build execution plan with pattern awareness
         cb.on_phase_start(
             PhaseInfo(
                 phase=OrchestrationPhase.PLAN_BUILDING,
@@ -141,7 +181,9 @@ class Orchestrator:
         )
         builder = self._router._get_plan_builder()
         try:
-            plan = builder.build_plan(query, sub_tasks)
+            plan = builder.build_plan(
+                query, sub_tasks, workflow_pattern=classification.pattern
+            )
         except Exception as e:
             policy = cb.on_phase_error(
                 PhaseInfo(

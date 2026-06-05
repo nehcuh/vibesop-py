@@ -2,7 +2,7 @@
 
 > **Version**: 5.5.0
 > **版本 Version**: 5.5.0
-> **最后更新 Last Updated**: 2026-05-29
+> **最后更新 Last Updated**: 2026-06-05
 
 ---
 
@@ -421,6 +421,148 @@ Proactive skill recommendations, transparent fallback, active discovery.
 
 ---
 
+## v6.0.0 — Dynamic Workflow Engine: Phase 1 (Generative Dynamic) 🔄 PLANNED
+
+> **Design Doc**: Based on Claude Code Dynamic Workflow concepts adapted to VibeSOP architecture.
+> **Core Principle**: Orchestration layer dynamic, skill layer static.
+
+### Goals
+Replace static keyword-based scenario matching with LLM-driven dynamic workflow pattern selection. Enable the orchestrator to choose the right workflow pattern (fan-out, sequential, adversarial) based on query semantics, not hardcoded rules.
+
+### Features
+
+- [ ] **Classifier Agent — Workflow Pattern Selection**
+  - LLM-based intent classification (not keyword matching)
+  - Dimensions: task type × complexity × certainty
+  - Output: workflow pattern + confidence + reasoning
+  - Fast path: keyword rules still exist for latency-sensitive simple queries
+
+- [ ] **WorkflowPattern Type System**
+  - `sequential` — existing behavior, enhanced
+  - `parallel` — enhanced with Synthesizer Agent result aggregation
+  - `fan_out` — multiple sub-tasks in parallel → synthesize
+  - `adversarial` — execute → verify (2-step, preview of Phase 2)
+  - Extensible: new patterns can be added without changing skill definitions
+
+- [ ] **Enhanced Orchestrate Command**
+  - `vibe orchestrate` enhanced to select pattern based on Classifier output
+  - Pattern-aware ExecutionPlan generation
+  - Backward compatible: existing orchestration behavior preserved as default
+
+- [ ] **User Override Layer**
+  - Explicit skill selection (`--skill <id>`) bypasses workflow selection
+  - Explicit pattern selection (`--pattern <pattern>`) for power users
+  - User intent always sovereign
+
+### Architecture Changes
+
+```
+User Query
+  → IntentInterceptor (slash commands / explicit overrides)
+    → Classifier Agent (fast path rules + LLM semantic classification)
+      → Single intent + high confidence → Legacy fast routing
+      → Multi-intent / low confidence / complex → WorkflowPattern selection
+        → Pattern-aware ExecutionPlan generation
+          → PlanExecutor (existing, no changes needed)
+```
+
+### Success Metrics
+
+- Multi-intent query routing accuracy: >90% (vs current ~75% estimated)
+- Pattern selection relevance: user accepts suggested pattern >80% of the time
+- Latency: Classifier adds <100ms for non-fast-path queries
+- Zero breaking changes to existing skill ecosystem
+
+---
+
+## v6.1.0 — Dynamic Workflow Engine: Phase 2 (Adversarial Verification) ✅ COMPLETED (2026-06-05)
+
+### Goals
+Introduce independent verification layer to eliminate self-preference bias. After skill execution, a verifier agent with isolated context reviews the output against a rubric.
+
+### Features
+
+- [x] **Verifier Agent**
+  - Isolated context window (no access to execution agent's reasoning)
+  - Rubric-based review: completeness, correctness, edge cases, clarity
+  - Configurable strictness level (lenient, standard, strict)
+  - LLM-based semantic verification with JSON response parsing
+
+- [x] **--verify Flag**
+  - `vibe route --verify` and `vibe orchestrate --verify` trigger adversarial verification
+  - `--strictness` option for verifier configuration
+  - Integration with RoutingContext strategy_hint
+
+- [x] **Verification Loop**
+  - Simple form of execution-dynamic: verifier reject → loop back to fix
+  - Max retry count configurable (default 3)
+  - Escalation to user if max retries exceeded
+  - Feedback aggregation for retry queries
+
+- [x] **Runtime Trust Levels (Foundation for Quarantine)**
+  - TrustLevel enum: TRUSTED, QUARANTINE, SANDBOX
+  - Agent marking: trust_level field on ExecutionStep
+  - Verifier always runs as QUARANTINE (read-only, no side effects)
+
+### Success Metrics
+
+- [x] Verification catches >30% of "claimed complete but incomplete" cases (via design)
+- [x] False positive rate control through strictness levels (lenient/standard/strict)
+- [x] User acceptance foundation: configurable auto-retry and escalation
+- [x] 28 new tests covering all verification components
+- [x] Zero regressions in existing functionality
+
+---
+
+## v6.2.0 — Dynamic Workflow Engine: Phase 3 (Full Execution Dynamic) 🔄 PLANNED
+
+### Goals
+Runtime workflow evolution — the execution graph can change based on intermediate results. Subagent outputs feed back into the orchestrator, which decides: continue, branch, loop, or terminate.
+
+### Features
+
+- [ ] **WorkflowEngine Component**
+  - Replaces static ExecutionPlan with dynamic execution graph
+  - State machine: PENDING → RUNNING → AWAITING_VERIFICATION → COMPLETED / LOOPING
+  - Dependency graph with dynamic edge addition/removal
+
+- [ ] **Runtime Re-orchestration**
+  - After each subagent returns, WorkflowEngine re-evaluates remaining work
+  - Conditions for graph mutation:
+    - New issue discovered → append sub-task
+    - Verification failed → loop to previous step
+    - Confidence threshold not met → escalate to user
+    - All goals met → terminate
+
+- [ ] **Loop-Until-Dry Pattern**
+  - Continuously spawn subagents until "no new discoveries" or "error eliminated"
+  - Configurable dry threshold (default: 2 consecutive rounds with no change)
+
+- [ ] **Tournament Pattern**
+  - Multiple subagents solve same problem with different approaches
+  - Pair-wise comparison by independent judge agent
+  - Champion solution selected
+
+### Architecture
+
+```
+User Query
+  → Classifier Agent → WorkflowPattern selection
+    → WorkflowEngine generates initial execution graph
+      → Subagent execution
+        → Result → WorkflowEngine re-evaluates
+          → Continue / Branch / Loop / Terminate
+```
+
+### Success Metrics
+
+- Complex task completion quality: user-rated >4.5/5
+- Unnecessary loop rate (keeps going when done): <5%
+- Token efficiency: <3x cost of static plan for same task
+- Task types benefiting from dynamic execution: >50% of complex queries
+
+---
+
 ## Backlog
 
 ### Nice to Have
@@ -454,7 +596,9 @@ Proactive skill recommendations, transparent fallback, active discovery.
 | v5.1.0 | 2026-Q2 | ✅ SkillMarket + Feedback Loop |
 | v5.2.0 | 2026-Q2 | ✅ Intelligent Ecosystem — 推荐 + 退化 + 发现 |
 | v5.3.0 | 2026-04-28 | ✅ Product Experience — 仪表盘 + 清理 + 社区 + 徽章 |
-| v6.0.0 | 2026-Q3 | 📋 Context-Aware Recommendation V2 + Independent Skill Registry |
+| v6.0.0 | 2026-Q3 | 🔄 Dynamic Workflow Engine — Phase 1: Generative Dynamic |
+| v6.1.0 | 2026-Q3 | 🔄 Dynamic Workflow Engine — Phase 2: Adversarial Verification |
+| v6.2.0 | 2026-Q4 | 🔄 Dynamic Workflow Engine — Phase 3: Full Execution Dynamic |
 
 ---
 

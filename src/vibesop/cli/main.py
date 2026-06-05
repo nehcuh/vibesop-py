@@ -220,6 +220,22 @@ def route(
         "-C",
         help="Conversation ID for multi-turn context (auto-generated if omitted)",
     ),
+    pattern: str | None = typer.Option(
+        None,
+        "--pattern",
+        "-p",
+        help="Force workflow pattern: sequential, parallel, fan_out, adversarial",
+    ),
+    verify: bool = typer.Option(
+        False,
+        "--verify",
+        help="Enable adversarial verification for execution steps",
+    ),
+    strictness: str = typer.Option(
+        "standard",
+        "--strictness",
+        help="Verification strictness: lenient, standard, strict",
+    ),
 ) -> None:
     """Route a query to the appropriate skill using unified orchestration.
 
@@ -349,6 +365,12 @@ def route(
         project_hash = hashlib.sha256(str(Path.cwd()).encode()).hexdigest()[:8]
         context.conversation_id = f"cli-{project_hash}"
 
+    # Apply workflow pattern and verification hints
+    if pattern:
+        context.strategy_hint = f"workflow_pattern:{pattern}"
+    if verify:
+        context.strategy_hint = f"{context.strategy_hint or ''} verify:{strictness}".strip()
+
     # Merge --explain alias into verbose flag for backward compatibility
     verbose = verbose or explain
 
@@ -460,6 +482,22 @@ def orchestrate(
         "-C",
         help="Conversation ID for multi-turn context",
     ),
+    pattern: str | None = typer.Option(
+        None,
+        "--pattern",
+        "-p",
+        help="Force workflow pattern: sequential, parallel, fan_out, adversarial",
+    ),
+    verify: bool = typer.Option(
+        False,
+        "--verify",
+        help="Enable adversarial verification for execution steps",
+    ),
+    strictness: str = typer.Option(
+        "standard",
+        "--strictness",
+        help="Verification strictness: lenient, standard, strict",
+    ),
 ) -> None:
     """Orchestrate a complex query into an execution plan.
 
@@ -501,6 +539,11 @@ def orchestrate(
 
         project_hash = hashlib.sha256(str(Path.cwd()).encode()).hexdigest()[:8]
         context.conversation_id = f"cli-{project_hash}"
+
+    if pattern:
+        context.strategy_hint = f"workflow_pattern:{pattern}"
+    if verify:
+        context.strategy_hint = f"{context.strategy_hint or ''} verify:{strictness}".strip()
 
     result = router.orchestrate(query, context=context)
 

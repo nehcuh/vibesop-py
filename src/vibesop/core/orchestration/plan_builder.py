@@ -32,6 +32,8 @@ from vibesop.core.models import (
     PlanStatus,
     RoutingLayer,
     StepStatus,
+    TrustLevel,
+    WorkflowPattern,
 )
 from vibesop.core.orchestration.patterns import (
     DEPENDENCY_INDICATORS,
@@ -183,10 +185,19 @@ class PlanBuilder:
         self,
         original_query: str,
         sub_tasks: list[Any],  # SubTask from task_decomposer
+        workflow_pattern: WorkflowPattern = WorkflowPattern.SEQUENTIAL,
     ) -> ExecutionPlan:
-        """Build execution plan from sub-tasks with parallel support."""
-        # Detect execution mode
+        """Build execution plan from sub-tasks with parallel support.
+
+        Args:
+            original_query: The user's original query
+            sub_tasks: Decomposed sub-tasks
+            workflow_pattern: Dynamic workflow pattern selected by ClassifierAgent
+        """
+        # Detect execution mode (legacy) or use pattern-driven mode
         execution_mode = self._detect_execution_mode(original_query, sub_tasks)
+        # Override mode based on workflow pattern
+        execution_mode = self._pattern_to_execution_mode(workflow_pattern, execution_mode)
 
         steps: list[ExecutionStep] = []
         detected_intents: list[str] = []
@@ -315,6 +326,9 @@ class PlanBuilder:
             )
             last_step_id = step_id
 
+        # Apply pattern-specific step adjustments
+        steps = self._apply_pattern(steps, workflow_pattern, original_query)
+
         return ExecutionPlan(
             plan_id=str(uuid.uuid4())[:12],
             original_query=original_query,
@@ -326,6 +340,7 @@ class PlanBuilder:
             created_at=datetime.now(UTC).isoformat(),
             status=PlanStatus.PENDING,
             execution_mode=execution_mode,
+            workflow_pattern=workflow_pattern,
         )
 
     def _detect_execution_mode(
@@ -398,6 +413,127 @@ class PlanBuilder:
             return [previous_step_id], False
 
         return [], True
+
+    # ── Pattern-aware plan generation ────────────────────────────────────────
+
+    @staticmethod
+    def _pattern_to_execution_mode(
+        pattern: WorkflowPattern,
+        detected_mode: ExecutionMode,
+    ) -> ExecutionMode:
+        """Map workflow pattern to execution mode.
+
+        Patterns drive the high-level structure; execution_mode controls
+        how the agent executor interprets dependencies.
+
+        Only override the detected mode when the pattern explicitly demands
+        it.  SEQUENTIAL (the default) preserves legacy keyword-based
+        detection so existing tests and callers keep their behaviour.
+        """
+        if pattern == WorkflowPattern.SEQUENTIAL:
+            return detected_mode
+        if pattern in (WorkflowPattern.PARALLEL, WorkflowPattern.FAN_OUT):
+            return ExecutionMode.PARALLEL
+        if pattern == WorkflowPattern.ADVERSARIAL:
+            # Adversarial runs sequentially (execute → verify)
+            return ExecutionMode.SEQUENTIAL
+        return detected_mode
+
+    def _apply_pattern(
+        self,
+        steps: list[ExecutionStep],
+        pattern: WorkflowPattern,
+        original_query: str,
+    ) -> list[ExecutionStep]:
+        """Apply workflow pattern to step list.
+
+        May modify dependencies, can_parallel flags, or append
+        synthetic steps (e.g. synthesise for FAN_OUT, verify for ADVERSARIAL).
+        """
+        if pattern == WorkflowPattern.FAN_OUT:
+            return self._apply_fan_out(steps, original_query)
+        if pattern == WorkflowPattern.ADVERSARIAL:
+            return self._apply_adversarial(steps, original_query)
+        if pattern == WorkflowPattern.PARALLEL:
+            return self._apply_parallel(steps)
+        # SEQUENTIAL: nothing to change
+        return steps
+
+    def _apply_fan_out(
+        self,
+        steps: list[ExecutionStep],
+        original_query: str,
+    ) -> list[ExecutionStep]:
+        """FAN_OUT: all sub-tasks parallel, then synthesise step."""
+        if len(steps) <= 1:
+            return steps
+
+        # Clear dependencies so all run in parallel
+        for step in steps:
+            step.dependencies = []
+            step.can_parallel = True
+
+        # Append a synthesise step
+        synthesise_step = ExecutionStep(
+            step_id=str(uuid.uuid4())[:8],
+            step_number=len(steps) + 1,
+            skill_id="builtin/slash-orchestrate",  # meta skill for synthesis
+            intent="综合所有并行步骤的结果",
+            original_query_segment=original_query,
+            input_query=(
+                f"综合以下并行分析的结果，给出统一结论:\n"
+                + "\n".join(f"- 步骤 {s.step_number} ({s.skill_id}): {s.intent}" for s in steps)
+            ),
+            output_as="synthesis_result",
+            status=StepStatus.PENDING,
+            dependencies=[s.step_id for s in steps],
+            can_parallel=False,
+        )
+        steps.append(synthesise_step)
+        return steps
+
+    def _apply_adversarial(
+        self,
+        steps: list[ExecutionStep],
+        original_query: str,
+    ) -> list[ExecutionStep]:
+        """ADVERSARIAL: execute steps, then verify."""
+        if not steps:
+            return steps
+
+        # Steps run sequentially (existing dependency chain)
+        # Append a verify step that depends on all previous steps
+        last_step = steps[-1]
+        verify_step = ExecutionStep(
+            step_id=str(uuid.uuid4())[:8],
+            step_number=len(steps) + 1,
+            skill_id="gstack/investigate",  # investigation/review skill for verification
+            intent="独立验证执行结果",
+            original_query_segment=original_query,
+            input_query=(
+                f"独立验证以下步骤的执行结果是否完整、正确:\n"
+                + "\n".join(f"- 步骤 {s.step_number} ({s.skill_id}): {s.intent}" for s in steps)
+                + "\n\n请检查:\n"
+                "1. 所有要求是否都已满足\n"
+                "2. 是否有遗漏或错误\n"
+                "3. 边缘情况是否被考虑"
+            ),
+            output_as="verification_result",
+            status=StepStatus.PENDING,
+            dependencies=[last_step.step_id],
+            can_parallel=False,
+            is_verification_step=True,  # Mark as verification step for Phase 2
+            trust_level=TrustLevel.QUARANTINE,  # Verifier runs in quarantine mode
+        )
+        steps.append(verify_step)
+        return steps
+
+    def _apply_parallel(self, steps: list[ExecutionStep]) -> list[ExecutionStep]:
+        """PARALLEL: clear dependencies so all steps run concurrently."""
+        for step in steps:
+            step.dependencies = []
+            step.can_parallel = True
+        return steps
 
     def _build_step_query(
         self,
