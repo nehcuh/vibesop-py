@@ -4,6 +4,16 @@
 
 <!-- handoff:start -->
 
+### 2026-06-09 (S18) prompt-chain-quality-fix-round-2
+**Session**: Fixed 3 remaining PromptChainGenerator quality issues
+**Completed**:
+- plan_builder.py: `_resolve_step_files()` returns project source dirs as fallback for external skills (omx/*, superpowers/*, etc.) instead of empty list
+- prompt_chain_generator.py: `_generate_key_points()` rewritten to prioritize `step_type` over keyword matching — 6 analysis subcategories (philosophy/architecture/code/doc/security/generic), quick_win/refactor/security/implementation defaults
+- prompt_chain_generator.py: `_generate_phase_0()` distinguishes fallback exploration hints from precise file paths
+- prompt_chain_generator.py: `_generate_final_phase()` enhanced with red team attack surface analysis (4 dimensions), five-dimension radar + health scoring, P0/P1/P2 prioritized action items
+**Verification**: 35/35 prompt_chain tests, 196/196 orchestration tests, e2e `vibe route` regeneration confirms all 3 fixes
+**Next**: Consider further prompt chain testing with non-review tasks to verify no regression
+
 ### 2026-06-09 (S17) classifier-review-detection-fix
 **Session**: Fixed ClassifierAgent to correctly route multi-dimensional review tasks to PROMPT_CHAIN
 **Completed**:
@@ -13,17 +23,5 @@
 - 7 new tests: Chinese/English multi-dim review → PROMPT_CHAIN, single-dim review → FAN_OUT, simple fix → SEQUENTIAL
 **Verification**: basedpyright 0 errors, 43/43 classifier+phase3 tests, full suite 1431/1432 (1 pre-existing)
 **Next**: e2e verification with `vibe route`, then commit
-
-### 2026-06-09 (S16) v7.0-prompt-chain-quality-fix
-**Session**: Fixed 5 P0 issues in PromptChainGenerator identified by Phase 0 diagnostic
-**Completed**:
-- ExecutionStep: +4 fields (step_type, estimated_risk, estimated_file_count, source_files) in models.py
-- PromptFile: +6 enrichment fields (output_artifacts, downstream_phases, risk_level, rollback_strategy, estimated_file_changes, completion_marker)
-- plan_builder.py: SKILL_FILE_MAP + _classify_step_type() + _estimate_risk() — real file paths + semantic classification
-- prompt_chain_generator.py: Full rewrite of all _generate_phase_* methods — dynamic key points (4 domains), keyword-driven checklists, completion markers, cross-phase verification in Final Phase
-- Tests updated for new Phase 1 behavior (step_type-based filtering)
-**Files changed**: 4 modified (models.py, plan_builder.py, prompt_chain_generator.py, test_prompt_chain_generator.py)
-**Verification**: basedpyright 0 errors, 107/107 orchestration tests, 1431/1432 full suite (1 pre-existing failure), all 5 P0 fixes verified independently
-**Next**: Commit v7.0 quality fix + original v7.0 changes
 
 <!-- handoff:end -->

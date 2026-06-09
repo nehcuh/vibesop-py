@@ -1,3 +1,13 @@
+## Current Session
+
+### S18 (2026-06-09) prompt-chain-quality-fix-round-2
+- Fixed 3 remaining issues in PromptChainGenerator: (1) Phase 0 empty file paths → fallback project dirs for external skills, (2) Phase key points wrong template → step_type-prioritized classification with 6 analysis subcategories, (3) Final Phase missing sections → added red team analysis (4 dimensions), five-dimension radar scoring, health scoring, P0/P1/P2 action items
+- Key insight: `step_type` must take priority over keyword matching — "design" in "philosophical foundations and design principles" was incorrectly matching architecture template
+- Verified: 35/35 prompt_chain tests, 196/196 orchestration tests, e2e regeneration confirms all 3 fixes
+- Recorded: 2 technical pitfalls in project-knowledge.md
+
+---
+
 # Session Memory - VibeSOP 系统化代码加固
 
 **会话日期**: 2026-04-12

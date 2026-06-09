@@ -1,6 +1,6 @@
 # Overview - VibeSOP Project
 
-**Last Updated**: 2026-06-05 (v6.2.0 — Dynamic Workflow Engine + doc sync)
+**Last Updated**: 2026-06-09 (v7.0.0-dev — Prompt Chain Generator quality fixes)
 
 ---
 
@@ -42,17 +42,24 @@
 2. **Documentation YAML→TOML Migration** ✅ (Completed - May 3)
 3. **Agent Override Protocol Cross-Platform Sync** ✅ (Completed - May 3)
 
-### Current Week (May 4-10, 2026)
+### Current Week (June 9, 2026)
 
-1. **Vibe Coding Article Revision** ✅ (Completed - May 5)
-   - Added "Core Problems + Survival Principles" overview chapter to docs/vibe-coding-article.md
-   - Structured as: answers first → story second → methodology third
+1. **v7.0 Prompt Chain Generator** ✅ (Completed - June 9)
+   - Classifier multi-dimensional review detection → PROMPT_CHAIN trigger
+   - Dynamic Workflow Prompt Chain — 4-phase implementation
+   - Quality fixes: step_type-based key points, fallback file resolution, Final Phase red team/scoring/action items
 
 2. **Routing Quality Improvements** ✅ (Completed - May 5)
    - Candidate deduplication by canonical ID
    - Management-only skill tagging (slash-* prefix exclusion from semantic matching)
    - Triage prompt v3 with office-hours/plan routing rules
    - Committed and pushed: `2380ec2`
+
+### Previous Week (May 4-10, 2026)
+
+1. **Vibe Coding Article Revision** ✅ (Completed - May 5)
+   - Added "Core Problems + Survival Principles" overview chapter to docs/vibe-coding-article.md
+   - Structured as: answers first → story second → methodology third
 
 ---
 
@@ -67,8 +74,14 @@
 - Performance: 44 QPS (target: 40+ QPS)
 - Skills supported: 207 skills across 4 packs
 - Total tests: 2968 passed
-- Workflow patterns: 6 (SEQUENTIAL, PARALLEL, FAN_OUT, ADVERSARIAL, LOOP_UNTIL_DRY, TOURNAMENT)
+- Workflow patterns: 7 (SEQUENTIAL, PARALLEL, FAN_OUT, ADVERSARIAL, LOOP_UNTIL_DRY, TOURNAMENT, PROMPT_CHAIN)
 - Platforms: Claude Code, Kimi CLI, Pi Agent, OpenCode
+
+**Recent Changes** (2026-06-09):
+- ✅ Prompt Chain Generator quality: step_type-based key points (6 analysis subcategories), fallback file resolution for external skills
+- ✅ Final Phase enhanced: red team attack surface analysis (4 dimensions), five-dimension radar scoring, P0/P1/P2 action items
+- ✅ Classifier multi-dimensional review detection → PROMPT_CHAIN trigger
+- ✅ 35/35 prompt_chain tests, 196/196 orchestration tests passing
 
 **Recent Changes** (2026-06-05):
 - ✅ Version bumped 5.5.0 → 6.2.0, 29 files synced

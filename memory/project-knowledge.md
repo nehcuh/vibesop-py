@@ -2,6 +2,30 @@
 
 ## Technical Pitfalls
 
+### step_type Must Take Priority Over Keyword Matching for Task Classification (2026-06-09)
+
+**Issue**: `_generate_key_points()` used keyword matching on `intent` text. "philosophical foundations and design principles" matched "design" → architecture template, producing wrong implementation points for an analysis task.
+
+**Root Cause**: Keyword-only classification is ambiguous — "design" appears in both analysis and implementation contexts. The `step_type` field already classified the step correctly as "analysis" via `_classify_step_type()`, but `_generate_key_points()` ignored it.
+
+**Solution**: Prioritize `step_type` over keyword matching. If `step_type == "analysis" | "review"`, use analysis-oriented points (evidence-driven, structured output). Only fall back to keyword matching for `step_type == "implementation"`.
+
+**Files**: `src/vibesop/core/orchestration/prompt_chain_generator.py`
+
+---
+
+### External Skills Return Empty File Paths — Need Fallback Resolution (2026-06-09)
+
+**Issue**: `_resolve_step_files()` in plan_builder.py returned `[]` for external skills (omx/*, superpowers/*, mattpocock/*), causing Phase 0 to show "(无已知文件路径，请根据 skill_id 自行定位)".
+
+**Root Cause**: `_SKILL_FILE_MAP` only covered internal modules (core/routing, core/orchestration, etc.). External skill packs have no file mapping.
+
+**Solution**: Return project source directories as fallback (`["src/", "tests/", "docs/", "README.md", "pyproject.toml"]`). In Phase 0, distinguish fallback entries from precise paths — show exploration guidance instead of literal paths.
+
+**Files**: `src/vibesop/core/orchestration/plan_builder.py`, `src/vibesop/core/orchestration/prompt_chain_generator.py`
+
+---
+
 ### Hook Template Test Assertions Must Track Template Changes (2026-06-05)
 
 **Issue**: After changing `vibesop-route.sh.j2` from `python3 -c` to `uv run python` auto-detection, two adapter tests (`test_claude_code.py`, `test_kimi_cli.py`) still asserted `"python3 -c" in content`, failing on every run.
