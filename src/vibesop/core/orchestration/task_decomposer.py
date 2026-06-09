@@ -249,7 +249,14 @@ class TaskDecomposer:
                 continue
 
             contextualized = self._contextualize_query(query, cleaned, intent)
-            sub_tasks.append(SubTask(intent=intent, query=contextualized, source="rule_fallback", original_intent=cleaned))
+            task_type = self._infer_task_type(cleaned, query)
+            sub_tasks.append(SubTask(
+                intent=intent,
+                query=contextualized,
+                source="rule_fallback",
+                original_intent=cleaned,
+                task_type=task_type,
+            ))
 
         # If we only got one subtask but the original query has multiple intents,
         # try to split by intent boundaries on the original query directly
@@ -271,15 +278,23 @@ class TaskDecomposer:
                         if intent == "single task":
                             continue
                         contextualized = self._contextualize_query(query, cleaned, intent)
+                        task_type = self._infer_task_type(cleaned, query)
                         forced_tasks.append(
-                            SubTask(intent=intent, query=contextualized, source="rule_fallback", original_intent=cleaned)
+                            SubTask(
+                                intent=intent,
+                                query=contextualized,
+                                source="rule_fallback",
+                                original_intent=cleaned,
+                                task_type=task_type,
+                            )
                         )
                     if len(forced_tasks) >= 2:
                         sub_tasks = forced_tasks
 
         if not sub_tasks:
             intent = self._detect_intent(query)
-            return [SubTask(intent=intent, query=query, source="rule_fallback", original_intent=query)]
+            task_type = self._infer_task_type(query, query)
+            return [SubTask(intent=intent, query=query, source="rule_fallback", original_intent=query, task_type=task_type)]
 
         if len(sub_tasks) == 1:
             return sub_tasks
@@ -416,6 +431,33 @@ class TaskDecomposer:
         if intent != "single task":
             return f"[{intent}] {segment}"
         return segment
+
+    @staticmethod
+    def _infer_task_type(subtask_query: str, parent_query: str) -> str:
+        """Infer task_type from sub-task description using keyword scoring."""
+        q = (subtask_query + " " + parent_query).lower()
+
+        type_markers: dict[str, list[str]] = {
+            "analysis": ["分析", "了解", "探索", "阅读", "检查", "audit", "analyze", "explore"],
+            "implementation": ["实现", "添加", "创建", "修改", "implement", "add", "create"],
+            "review": ["评审", "review", "审查", "评估"],
+            "refactor": ["重构", "refactor", "重写", "rewrite"],
+            "documentation": ["文档", "doc", "记录"],
+            "testing": ["测试", "test", "验证", "verify"],
+            "security": ["安全", "security", "漏洞"],
+            "architecture": ["架构", "design", "设计", "architecture"],
+            "philosophy": ["哲学", "理念", "philosophy", "principle"],
+        }
+
+        scores: dict[str, int] = {
+            tt: sum(1 for m in markers if m in q)
+            for tt, markers in type_markers.items()
+        }
+
+        best = max(scores, key=lambda k: scores[k])
+        if scores[best] > 0:
+            return best
+        return "implementation"
 
     def _apply_guardrails(self, sub_tasks: list[SubTask]) -> list[SubTask]:
         """Apply guardrails to prevent over-decomposition."""

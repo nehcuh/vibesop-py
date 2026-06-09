@@ -100,6 +100,26 @@ _TASK_TYPE_PATTERNS: dict[str, WorkflowPattern] = {
     "optimize": WorkflowPattern.ADVERSARIAL,
 }
 
+# ── Multi-dimensional review detection ────────────────────────────────────────
+
+_REVIEW_EXACT_KEYWORDS: list[str] = [
+    "评审", "review", "审计", "audit",
+    "多维度", "multi-dimensional", "multi dimensional",
+    "全面评审", "comprehensive review", "deep review",
+    "深入评审", "thorough review",
+]
+
+_REVIEW_SEMANTIC_CLUSTERS: dict[str, list[str]] = {
+    "philosophy": ["哲学", "理念", "设计理念", "philosophy", "principle", "设计哲学"],
+    "architecture": ["架构", "体系结构", "architecture", "模块", "耦合", "component"],
+    "code": ["代码", "实现", "code", "implementation", "编码", "质量"],
+    "documentation": ["文档", "documentation", "doc", "匹配", "一致性", "consistency"],
+    "security": ["安全", "security", "漏洞", "风险", "跨平台"],
+}
+
+_REVIEW_MIN_DIMENSIONS = 2
+_REVIEW_MIN_KEYWORDS = 3
+
 
 class ClassifierAgent:
     """Selects workflow pattern based on query semantics.
@@ -131,6 +151,11 @@ class ClassifierAgent:
         Returns:
             ClassifierResult with selected pattern, confidence, and reasoning
         """
+        # Phase 0: Multi-dimensional review detection (highest priority)
+        review_result = self._detect_review_task(query)
+        if review_result is not None:
+            return review_result
+
         # Phase 1: Fast-path rule classification
         rule_result = self._rule_classify(query, sub_tasks)
         if rule_result.confidence >= 0.85:
@@ -151,6 +176,64 @@ class ClassifierAgent:
                 logger.warning("LLM classification failed: %s, using rule result", e)
 
         return rule_result
+
+    # ── Multi-dimensional review detection ─────────────────────────────────────
+
+    def _detect_review_task(self, query: str) -> ClassifierResult | None:
+        """Detect multi-dimensional review tasks that should use PROMPT_CHAIN.
+
+        Returns a ClassifierResult with PROMPT_CHAIN if the query covers 2+
+        semantic dimensions (philosophy, architecture, code, documentation, security)
+        AND contains review-related keywords.  Returns None otherwise, letting
+        the standard keyword/rule path handle it.
+        """
+        query_lower = query.lower()
+
+        # Count exact keyword matches
+        exact_matches = sum(
+            1 for kw in _REVIEW_EXACT_KEYWORDS
+            if kw in query_lower or kw in query
+        )
+
+        # Count per-dimension hits
+        dimension_hits: dict[str, int] = {}
+        for dim, keywords in _REVIEW_SEMANTIC_CLUSTERS.items():
+            dimension_hits[dim] = sum(
+                1 for kw in keywords if kw in query_lower or kw in query
+            )
+
+        covered_dimensions = [dim for dim, hits in dimension_hits.items() if hits > 0]
+        total_hits = sum(dimension_hits.values())
+
+        # Need at least 1 review keyword AND 2+ dimensions
+        if exact_matches < 1 or len(covered_dimensions) < _REVIEW_MIN_DIMENSIONS:
+            return None
+
+        # Calculate confidence
+        confidence = 0.0
+        confidence += min(exact_matches * 0.1, 0.3)
+        confidence += min(len(covered_dimensions) * 0.15, 0.45)
+        if len(covered_dimensions) >= 3:
+            confidence += 0.1
+        if total_hits >= 5:
+            confidence += 0.1
+        confidence = min(confidence, 0.95)
+
+        return ClassifierResult(
+            pattern=WorkflowPattern.PROMPT_CHAIN,
+            confidence=confidence,
+            reasoning=(
+                f"Multi-dimensional review detected: "
+                f"{len(covered_dimensions)} dimensions ({', '.join(covered_dimensions)})"
+            ),
+            task_type="review",
+            complexity="complex",
+            complexity_level="multi_agent",
+            metadata={
+                "review_type": "multi_dimensional",
+                "review_dimensions": covered_dimensions,
+            },
+        )
 
     # ── Rule-based classification ────────────────────────────────────────────
 
@@ -281,7 +364,8 @@ class ClassifierAgent:
             "  (best for: comparing solutions, brainstorming, choosing best approach)\n"
             "- prompt_chain: Generate structured prompt files for multi-agent execution\n"
             "  (best for: multi-file, multi-stage tasks with 3+ different skill domains,\n"
-            "   cross-cutting concerns requiring coordinated agent collaboration)\n\n"
+            "   cross-cutting concerns requiring coordinated agent collaboration,\n"
+            "   multi-dimensional review/audit across philosophy, architecture, code, docs, security)\n\n"
             "Output ONLY a JSON object with this exact format:\n"
             '{"pattern": "one of sequential/parallel/fan_out/adversarial/loop_until_dry/tournament/prompt_chain", '
             '"confidence": 0.0-1.0, "reasoning": "brief explanation", '

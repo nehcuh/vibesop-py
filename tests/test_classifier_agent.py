@@ -156,3 +156,60 @@ class TestClassifierResultModel:
             ClassifierResult(confidence=1.5)
         with pytest.raises(ValueError):
             ClassifierResult(confidence=-0.1)
+
+
+class TestClassifierReviewDetection:
+    """Multi-dimensional review task detection tests."""
+
+    def test_chinese_multi_dimensional_review(self):
+        agent = ClassifierAgent()
+        result = agent.classify(
+            "对当前项目从哲学理念、架构设计、代码实现进行深入评审"
+        )
+        assert result.pattern == WorkflowPattern.PROMPT_CHAIN
+        assert result.confidence >= 0.6
+        assert "multi_dimensional" in result.metadata.get("review_type", "")
+
+    def test_chinese_five_dimension_review(self):
+        agent = ClassifierAgent()
+        result = agent.classify(
+            "对项目进行全面评审：哲学、架构、实现、文档、安全"
+        )
+        assert result.pattern == WorkflowPattern.PROMPT_CHAIN
+        assert result.confidence >= 0.6
+        assert len(result.metadata.get("review_dimensions", [])) >= 4
+
+    def test_english_multi_dimensional_review(self):
+        agent = ClassifierAgent()
+        result = agent.classify(
+            "Review this project from philosophy, architecture, and code implementation perspectives"
+        )
+        assert result.pattern == WorkflowPattern.PROMPT_CHAIN
+
+    def test_simple_review_stays_fan_out(self):
+        """Single-dimension 'review my code' should NOT trigger PROMPT_CHAIN."""
+        agent = ClassifierAgent()
+        result = agent.classify("review my code for bugs and performance issues")
+        assert result.pattern == WorkflowPattern.FAN_OUT
+
+    def test_single_file_fix_stays_sequential(self):
+        agent = ClassifierAgent()
+        result = agent.classify(
+            "帮我把这个函数的返回值类型从 any 改成具体类型"
+        )
+        assert result.pattern == WorkflowPattern.SEQUENTIAL
+
+    def test_single_security_fix_not_prompt_chain(self):
+        agent = ClassifierAgent()
+        result = agent.classify("修复 login 页面的 CSRF 漏洞")
+        assert result.pattern != WorkflowPattern.PROMPT_CHAIN
+
+    def test_review_dimensions_in_metadata(self):
+        agent = ClassifierAgent()
+        result = agent.classify(
+            "从架构和代码实现两个维度评审项目"
+        )
+        if result.pattern == WorkflowPattern.PROMPT_CHAIN:
+            dims = result.metadata.get("review_dimensions", [])
+            assert "architecture" in dims
+            assert "code" in dims

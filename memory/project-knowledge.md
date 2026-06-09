@@ -1550,3 +1550,17 @@ content = render_skill_md(skill)
 
 **Files**: `src/vibesop/adapters/_shared.py`, `templates/shared/SKILL.md.j2`
 
+---
+
+### Classifier Keyword Overlap: Specific Pattern Must Take Priority (2026-06-09)
+
+**Issue**: "评审" keyword in `_PATTERN_KEYWORDS[FAN_OUT]` catches ALL review queries — including multi-dimensional reviews that should route to `PROMPT_CHAIN`. Single-dimension "review my code" correctly maps to `FAN_OUT`, but "从哲学、架构、代码实现进行深入评审" (3 dimensions) also hits `FAN_OUT` because the keyword "评审" matches first.
+
+**Root Cause**: Keyword matching is first-come-first-serve within `_PATTERN_KEYWORDS`. FAN_OUT contains "review"/"评审", which matches before any complexity analysis runs. The multi-agent auto-promotion path (`unique_task_types >= 3`) only triggers AFTER keyword matching, and only when `task_decomposer` has already decomposed the query.
+
+**Solution**: Add a pre-keyword detection layer (`_detect_review_task`) that runs BEFORE keyword matching. It checks for BOTH review keywords AND semantic dimension coverage (philosophy/architecture/code/documentation/security). Only returns PROMPT_CHAIN when 2+ dimensions are hit alongside a review keyword.
+
+**Key Design**: The detection must be strict enough to not override single-dimension reviews (which correctly use FAN_OUT), but broad enough to catch Chinese/English multi-dimensional phrasing. Threshold: ≥1 review keyword AND ≥2 dimensions.
+
+**Files**: `src/vibesop/core/orchestration/classifier.py` (`_detect_review_task`), `src/vibesop/core/orchestration/task_decomposer.py` (`_infer_task_type`)
+

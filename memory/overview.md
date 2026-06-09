@@ -59,9 +59,9 @@
 ## Projects Summary
 
 ### VibeSOP (vibesop-py)
-**Status**: v6.2.0 (Dynamic Workflow Engine: 6 patterns, 4 platforms)
+**Status**: v7.0.0-dev (Dynamic Workflow Engine + Prompt Chain: 7 patterns, 4 platforms)
 **Description**: AI SkillOS — skill protocol standard with Dynamic Workflow Engine, 3-pillar architecture, 4-platform support
-**Coverage**: 2968 tests passing
+**Coverage**: 2968+ tests passing
 **Key Metrics**:
 - Routing accuracy: 94%
 - Performance: 44 QPS (target: 40+ QPS)

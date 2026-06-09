@@ -954,3 +954,11 @@ Coverage: temporarily lowered fail_under=0 from 75% (massive new test additions)
 - 提交: b6daa4d docs(v6.2): bump version + Workflow docs + test fixes (29 files)
 - Next: PR to main
 - Recorded: yes - 4 technical pitfalls
+
+### S12 (2026-06-09 19:00~19:20) [vibesop/classifier-review-fix]
+- 修复 ClassifierAgent 无法识别多维度评审任务 → PROMPT_CHAIN 的 bug
+- 三个文件修改：classifier.py（review 检测层）、task_decomposer.py（task_type 推断）、models.py（metadata 字段）
+- 7 个新测试用例覆盖中文/英文多维度评审、单维度回归、简单修复不受影响
+- basedpyright 0 errors，43 个 classifier+phase3 测试全部通过
+- Next: e2e 验证 `vibe route` 实际输出
+- Recorded: yes - 1 reusable pattern (classifier keyword overlap priority)

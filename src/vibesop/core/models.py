@@ -554,6 +554,10 @@ class ClassifierResult(BaseModel):
         default="simple",
         description="Execution complexity tier: simple, composite, multi_agent",
     )
+    metadata: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Extra classification metadata (e.g. review dimensions, hints)",
+    )
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -563,6 +567,7 @@ class ClassifierResult(BaseModel):
             "task_type": self.task_type,
             "complexity": self.complexity,
             "complexity_level": self.complexity_level,
+            "metadata": self.metadata,
         }
 
 
