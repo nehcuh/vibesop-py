@@ -219,21 +219,103 @@ class PromptChainGenerator:
 
     @staticmethod
     def _generate_key_points(step: ExecutionStep) -> str:
-        """Generate key implementation points based on step attributes."""
+        """Generate key implementation points based on step attributes.
+
+        Prioritizes ``step_type`` (analysis/review/quick_win/implementation/refactor)
+        over keyword matching, so that review tasks produce analysis-oriented points
+        even when the intent contains ambiguous keywords like "design".
+        """
         skill_id = (step.skill_id or "").lower()
         intent = (step.intent or "").lower()
-        text = f"{skill_id} {intent}"
+        step_type = getattr(step, "step_type", "implementation") or "implementation"
 
-        for domain, keywords in [
-            ("security", ["security", "安全", "漏洞", "vulnerability"]),
-            ("architecture", ["architecture", "架构", "design", "设计", "core"]),
-            ("refactor", ["refactor", "重构", "restructure", "rewrite", "重写"]),
-        ]:
-            if any(kw in text for kw in keywords):
-                points = _KEY_POINTS_BY_DOMAIN[domain]
-                break
+        points: list[tuple[str, str]] = []
+
+        # ── Analysis / Review tasks ──────────────────────────────────────────
+        if step_type in ("analysis", "review"):
+            if any(kw in intent for kw in ("philosophy", "哲学", "principle", "理念")):
+                points = [
+                    ("哲学一致性", "检查所有文档中的核心主张是否自洽，无内部矛盾"),
+                    ("术语一致性", "同一概念在不同文档中使用相同的术语，无混用"),
+                    ("证据基础", "声称的指标（如95%准确率）有实际数据或测试支撑"),
+                    ("产出要求", "每个发现必须附带文件引用和具体证据，非主观判断"),
+                ]
+            elif any(kw in intent for kw in ("architecture", "架构", "design", "设计")):
+                points = [
+                    ("模块边界", "各模块职责清晰，接口明确定义，无职责重叠"),
+                    ("依赖方向", "依赖指向核心层（core 不依赖 cli），无循环依赖"),
+                    ("抽象层次", "抽象完整且无泄漏（调用者不需了解实现细节）"),
+                    ("扩展点", "新增功能时需修改的文件数量最少"),
+                ]
+            elif any(kw in intent for kw in ("code", "代码", "implementation", "实现", "quality", "质量")):
+                points = [
+                    ("类型安全", "TypeScript/Python 类型标注完整，无 any 滥用"),
+                    ("错误处理", "所有错误路径有处理，无空 catch，错误信息有上下文"),
+                    ("资源管理", "连接/文件/定时器在停止时正确清理，无泄漏"),
+                    ("安全审计", "检查命令注入、路径遍历、敏感信息泄漏风险"),
+                ]
+            elif any(kw in intent for kw in ("doc", "文档", "documentation")):
+                points = [
+                    ("文档覆盖", "所有公共 API 和功能模块有对应文档"),
+                    ("文档-代码匹配", "文档描述的行为与实际代码实现一致"),
+                    ("版本一致性", "版本号在不同文档中保持一致"),
+                    ("新鲜度", "无过时内容，废弃功能有 deprecated 标记"),
+                ]
+            elif any(kw in intent for kw in ("security", "安全", "跨平台", "cross-platform")):
+                points = [
+                    ("纵深防御", "检查从输入到输出的每一层安全防护"),
+                    ("权限最小化", "进程和文件访问按最小权限原则"),
+                    ("跨平台兼容", "macOS/Linux/Windows 三平台均通过基本验证"),
+                    ("可观测性", "日志分级、有调试模式、关键操作有审计记录"),
+                ]
+            else:
+                # Generic analysis
+                points = [
+                    ("阅读优先", "先完整阅读相关文件，再输出分析结论"),
+                    ("证据驱动", "每个结论附带文件引用和行号"),
+                    ("结构化输出", "按严重度（Critical/Major/Minor/Note）分级"),
+                ]
+
+        # ── Quick win tasks ──────────────────────────────────────────────────
+        elif step_type == "quick_win":
+            points = [
+                ("最小改动", "只改必须改的代码，不重构无关部分"),
+                ("原子提交", "每个 quick win 独立提交，互不干扰"),
+                ("测试验证", "改动后运行相关测试，确保不破坏现有功能"),
+            ]
+
+        # ── Refactor tasks ───────────────────────────────────────────────────
+        elif step_type == "refactor":
+            points = [
+                ("行为保持", "重构前后功能行为不变，测试覆盖所有路径"),
+                ("渐进替换", "大重构分步进行，每步可独立验证"),
+                ("删除旧代码", "旧代码标记 deprecated 后确认无引用再删除"),
+            ]
+
+        # ── Security tasks ──────────────────────────────────────────────────
+        elif step_type == "security":
+            points = [
+                ("输入验证", "所有外部输入必须经过清洗和校验"),
+                ("最小权限", "子进程和文件访问按最小权限原则"),
+                ("审计日志", "敏感操作必须记录审计日志"),
+            ]
+
+        # ── Implementation (default) ────────────────────────────────────────
         else:
-            points = _KEY_POINTS_BY_DOMAIN["default"]
+            points = [
+                ("接口兼容", "不改变现有函数签名，通过新增字段扩展"),
+                ("向后兼容", "默认值与现有行为一致"),
+                ("错误处理", "遵循项目现有的错误处理模式"),
+                ("测试覆盖", "新增代码有对应的测试覆盖"),
+            ]
+
+        logger.debug(
+            "Key points for step %s: step_type=%s, intent=%s, category=%s",
+            getattr(step, "step_number", "?"),
+            step_type,
+            intent[:50],
+            "analysis" if step_type in ("analysis", "review") else step_type,
+        )
 
         lines = ["| 要点 | 实现方式 |", "|------|----------|"]
         for name, desc in points:
@@ -278,12 +360,23 @@ class PromptChainGenerator:
             for s in steps
         ]
 
-        # File path details
-        file_refs = (
-            [f"- `{f}`" for f in required_files]
-            if required_files
-            else ["- (无已知文件路径，请根据 skill_id 自行定位)"]
-        )
+        # Distinguish precise paths from fallback exploration hints
+        _FALLBACK_ENTRIES = frozenset({"src/", "tests/", "docs/", "README.md", "pyproject.toml"})
+        is_all_fallback = required_files and all(f in _FALLBACK_ENTRIES for f in required_files)
+
+        if is_all_fallback:
+            file_refs = [
+                "本任务涉及外部 skill（如 omx/analyze），没有映射到具体文件。请自行探索：",
+                "- **src/vibesop/** — 核心代码",
+                "- **docs/** — 文档",
+                "- **tests/** — 测试",
+                "- **README.md** — 项目概述",
+                "- **pyproject.toml** — 项目配置",
+            ]
+        elif required_files:
+            file_refs = [f"- `{f}`" for f in required_files]
+        else:
+            file_refs = ["- (无已知文件路径，请根据 skill_id 自行定位)"]
 
         prerequisites = [
             "项目已在本地可用",
@@ -557,22 +650,86 @@ class PromptChainGenerator:
                 "- [ ] 所有 Phase 的 completion_marker 文件已创建",
             ]
 
+        # ── Red team attack surface analysis ────────────────────────────────
+        red_team_section = (
+            "## 红队攻击面分析\n\n"
+            "从攻击者视角思考以下问题：\n\n"
+            "### 入口攻击\n"
+            "- [ ] 如果有恶意输入，最容易被利用的入口是什么？\n"
+            "- [ ] CLI 命令参数是否被正确清洗？\n"
+            "- [ ] 配置中的 API Key 是否可能泄漏？\n"
+            "- [ ] WebSocket 消息是否有大小限制？\n\n"
+            "### 提权路径\n"
+            "- [ ] 普通用户能否通过功能组合获得未授权访问？\n"
+            "- [ ] skill 加载是否检查路径遍历？\n"
+            "- [ ] 外部 skill 安装是否经过安全审计？\n\n"
+            "### 拒绝服务\n"
+            "- [ ] 哪些操作可能导致系统不可用？\n"
+            "- [ ] 是否存在无限循环/递归？\n"
+            "- [ ] 是否存在未限制的资源消耗？\n\n"
+            "### 数据泄漏\n"
+            "- [ ] 敏感信息是否可能被未授权访问？\n"
+            "- [ ] API Key 是否在日志中打印？\n"
+            "- [ ] 配置文件权限是否严格（0700）？\n\n"
+        )
+
+        # ── Comprehensive scoring ───────────────────────────────────────────
+        scoring_section = (
+            "## 综合评分\n\n"
+            "### 五维雷达评估\n\n"
+            "| 维度 | 评分 (1-5) | 说明 |\n"
+            "|:-----|:----------:|:-----|\n"
+            "| 哲学理念 | /5 | 价值主张清晰度、术语一致性、设计原则落地 |\n"
+            "| 架构设计 | /5 | 模块化、耦合度、可扩展性、抽象层次 |\n"
+            "| 代码实现 | /5 | 类型安全、错误处理、资源管理、代码清晰度 |\n"
+            "| 文档匹配 | /5 | 文档-代码一致性、完整性、新鲜度 |\n"
+            "| 安全/跨平台 | /5 | 纵深防御、权限最小化、跨平台兼容 |\n\n"
+            "### 综合健康度\n\n"
+            "| 指标 | 评分 (1-10) | 趋势 | 说明 |\n"
+            "|:-----|:-----------:|:----:|:-----|\n"
+            "| 项目健康度 | /10 | ↑/↓/→ | |\n"
+            "| 代码质量 | /10 | ↑/↓/→ | |\n"
+            "| 安全态势 | /10 | ↑/↓/→ | |\n"
+            "| 文档质量 | /10 | ↑/↓/→ | |\n"
+            "| 可维护性 | /10 | ↑/↓/→ | |\n\n"
+        )
+
+        # ── Prioritized action items ────────────────────────────────────────
+        action_section = (
+            "## 优先级行动清单\n\n"
+            "### P0 — 必须修复（功能阻塞 / 安全风险）\n"
+            "| # | 问题 | 涉及文件 | 建议修复 |\n"
+            "|:-:|:-----|:---------|:---------|\n"
+            "| 1 | (由 Phase 1-3 评审结果填充) | | |\n\n"
+            "### P1 — 应该修复（体验 / 质量）\n"
+            "| # | 问题 | 涉及文件 | 建议修复 |\n"
+            "|:-:|:-----|:---------|:---------|\n"
+            "| 1 | (由 Phase 1-3 评审结果填充) | | |\n\n"
+            "### P2 — 可以优化（后续迭代）\n"
+            "| # | 问题 | 涉及文件 | 建议修复 |\n"
+            "|:-:|:-----|:---------|:---------|\n"
+            "| 1 | (由 Phase 1-3 评审结果填充) | | |\n\n"
+            "> **注意**：以上行动项由评审 Agent 在执行 Final Phase 时，"
+            "基于 Phase 1-3 的发现自动填充。\n\n"
+        )
+
         content = (
             "# Final Phase：对抗式审查\n\n"
             "## 前置条件\n"
             "- [ ] 所有 Phase 0-N 的改动已实施\n"
             "- [ ] 所有中间验证 checklist 已通过\n\n"
-            "## 全量文件清单验证\n\n"
+            "## Step 1：全量文件清单验证\n\n"
             "| 文件 | 阶段 | 验证项数 |\n"
             "|------|------|----------|\n"
             + "\n".join(file_table_rows)
             + "\n\n"
-            "## 安全审查\n"
+            "## Step 2：安全审查\n"
             "- [ ] 无命令注入风险（不拼接用户输入到 shell 命令）\n"
             "- [ ] 无路径遍历风险（已验证所有路径参数）\n"
             "- [ ] 无子进程权限泄露（子进程不继承多余权限）\n"
             "- [ ] 无 DoS 风险（循环/递归有边界限制）\n\n"
-            "## 编译验证\n"
+            + red_team_section
+            + "## Step 4：编译验证\n"
             "- [ ] `uv run pytest tests/` 全部通过\n"
             "- [ ] 无 import 错误\n"
             "- [ ] 无类型错误（如使用 type checker）\n\n"
@@ -580,16 +737,18 @@ class PromptChainGenerator:
 
         if cross_phase_checks:
             content += (
-                "## 跨维度交叉验证\n"
+                "## Step 5：跨维度交叉验证\n"
                 + "\n".join(cross_phase_checks)
                 + "\n\n"
             )
 
         content += (
-            "## 功能验证清单\n"
+            "## Step 6：功能验证清单\n"
             + "\n".join(all_checklist)
             + "\n\n"
-            "## 输出\n"
+            + scoring_section
+            + action_section
+            + "## 输出\n"
             "确认所有验证项通过后，输出最终完成报告。\n"
             + _ROUTING_HINT
         )
@@ -606,8 +765,11 @@ class PromptChainGenerator:
             required_files=all_required,
             verification_checklist=[
                 "安全审查通过",
+                "红队攻击面分析完成",
                 "编译验证通过",
                 "功能验证清单全部通过",
+                "综合评分已填写",
+                "优先级行动清单已填写",
             ],
             risk_level="low",
         )

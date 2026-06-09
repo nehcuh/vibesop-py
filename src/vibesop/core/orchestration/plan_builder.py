@@ -236,7 +236,10 @@ class PlanBuilder:
         for prefix, files in _SKILL_FILE_MAP.items():
             if skill_id.startswith(prefix):
                 return list(files)
-        return []
+        # Fallback: external skill packs (omx/*, superpowers/*, mattpocock/*, etc.)
+        # These don't map to specific files — return project source directories
+        # so the agent at least knows where to explore.
+        return ["src/", "tests/", "docs/", "README.md", "pyproject.toml"]
 
     @staticmethod
     def _estimate_risk(step_type: str, intent: str) -> str:
