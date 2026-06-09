@@ -261,6 +261,7 @@ class WorkflowPattern(StrEnum):
     ADVERSARIAL = "adversarial"  # Execute → independent verification
     LOOP_UNTIL_DRY = "loop_until_dry"  # Iterative refinement until no new discoveries
     TOURNAMENT = "tournament"  # Multiple contestants → judge picks champion
+    PROMPT_CHAIN = "prompt_chain"  # Generate structured prompt files for Claude Code Agent SDK
 
 
 class DynamicNodeStatus(StrEnum):
@@ -493,11 +494,15 @@ class ClassifierResult(BaseModel):
     """Result from ClassifierAgent — dynamic workflow pattern selection.
 
     Attributes:
-        pattern: Selected workflow pattern (sequential/parallel/fan_out/adversarial)
+        pattern: Selected workflow pattern (sequential/parallel/fan_out/adversarial/prompt_chain)
         confidence: Confidence score for the pattern selection (0.0-1.0)
         reasoning: Human-readable explanation of why this pattern was chosen
         task_type: Primary task type detected (analysis, review, debug, etc.)
         complexity: Complexity level (simple, medium, complex)
+        complexity_level: Execution complexity tier determining routing strategy:
+            - simple: single skill suffices
+            - composite: orchestration of multiple skills
+            - multi_agent: generate Claude Code Prompt Chain (3+ skill domains)
     """
 
     model_config = {"arbitrary_types_allowed": True}
@@ -524,6 +529,10 @@ class ClassifierResult(BaseModel):
         default="simple",
         description="Task complexity: simple, medium, complex",
     )
+    complexity_level: str = Field(
+        default="simple",
+        description="Execution complexity tier: simple, composite, multi_agent",
+    )
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -532,6 +541,7 @@ class ClassifierResult(BaseModel):
             "reasoning": self.reasoning,
             "task_type": self.task_type,
             "complexity": self.complexity,
+            "complexity_level": self.complexity_level,
         }
 
 

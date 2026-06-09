@@ -74,6 +74,20 @@ _PATTERN_KEYWORDS: dict[WorkflowPattern, set[str]] = {
         "best solution",
         "compare approaches",
     },
+    WorkflowPattern.PROMPT_CHAIN: {
+        "prompt chain",
+        "链式",
+        "逐步执行",
+        "多agent",
+        "multi-agent",
+        "multi agent",
+        "agent chain",
+        "分步执行",
+        "step by step prompt",
+        "生成执行链",
+        "workflow chain",
+        "pipeline",
+    },
 }
 
 # Task-type → preferred pattern mapping
@@ -147,6 +161,7 @@ class ClassifierAgent:
     ) -> ClassifierResult:
         """Fast keyword-based classification."""
         query_lower = query.lower()
+        complexity_level = self._infer_complexity_level(query, sub_tasks)
 
         # Check explicit pattern keywords
         for pattern, keywords in _PATTERN_KEYWORDS.items():
@@ -156,6 +171,7 @@ class ClassifierAgent:
                     pattern=pattern,
                     confidence=min(0.7 + len(matches) * 0.1, 0.95),
                     reasoning=f"Matched keywords: {', '.join(matches)}",
+                    complexity_level=complexity_level,
                 )
 
         # Check sub-task task types
@@ -173,16 +189,54 @@ class ClassifierAgent:
                         confidence=0.8,
                         reasoning=f"Task type '{tt}' suggests {pattern.value} pattern",
                         task_type=tt,
+                        complexity_level=complexity_level,
                     )
+
+        # Override to PROMPT_CHAIN when complexity_level is multi_agent
+        if complexity_level == "multi_agent":
+            return ClassifierResult(
+                pattern=WorkflowPattern.PROMPT_CHAIN,
+                confidence=0.75,
+                reasoning="Multi-agent complexity detected: 3+ skill domains, auto-promoting to prompt_chain",
+                complexity_level=complexity_level,
+            )
 
         # Default: sequential
         return ClassifierResult(
             pattern=WorkflowPattern.SEQUENTIAL,
             confidence=0.6,
             reasoning="No strong pattern indicators detected, defaulting to sequential",
+            complexity_level=complexity_level,
         )
 
     # ── LLM-based classification ─────────────────────────────────────────────
+
+    @staticmethod
+    def _infer_complexity_level(
+        query: str,
+        sub_tasks: list[Any] | None = None,
+    ) -> str:
+        """Infer execution complexity tier from query and sub-tasks.
+
+        Returns:
+            "simple" — single skill suffices
+            "composite" — needs orchestration of multiple skills
+            "multi_agent" — needs prompt chain generation (3+ skill domains)
+        """
+        if not sub_tasks:
+            return "simple"
+
+        unique_task_types = set()
+        for st in sub_tasks:
+            tt = getattr(st, "task_type", "")
+            if tt:
+                unique_task_types.add(tt)
+
+        if len(unique_task_types) >= 3:
+            return "multi_agent"
+        if len(unique_task_types) >= 2 or len(sub_tasks) >= 3:
+            return "composite"
+        return "simple"
 
     def _llm_classify(
         self,
@@ -224,11 +278,17 @@ class ClassifierAgent:
             "- loop_until_dry: Iterative refinement, keep going until no new discoveries\n"
             "  (best for: exhaustive debugging, iterative fixing, thorough investigation)\n"
             "- tournament: Multiple approaches compete, independent judge picks best\n"
-            "  (best for: comparing solutions, brainstorming, choosing best approach)\n\n"
+            "  (best for: comparing solutions, brainstorming, choosing best approach)\n"
+            "- prompt_chain: Generate structured prompt files for multi-agent execution\n"
+            "  (best for: multi-file, multi-stage tasks with 3+ different skill domains,\n"
+            "   cross-cutting concerns requiring coordinated agent collaboration)\n\n"
             "Output ONLY a JSON object with this exact format:\n"
-            '{"pattern": "one of sequential/parallel/fan_out/adversarial/loop_until_dry/tournament", '
+            '{"pattern": "one of sequential/parallel/fan_out/adversarial/loop_until_dry/tournament/prompt_chain", '
             '"confidence": 0.0-1.0, "reasoning": "brief explanation", '
-            '"task_type": "primary task type", "complexity": "simple/medium/complex"}\n'
+            '"task_type": "primary task type", "complexity": "simple/medium/complex", '
+            '"complexity_level": "simple/composite/multi_agent"}\n'
+            "complexity_level rules: simple (1 skill), composite (2-2 skills orchestrated), "
+            "multi_agent (3+ skill domains, multi-file, multi-stage dependencies).\n"
             "No markdown, no explanation outside the JSON."
         )
 
@@ -271,6 +331,7 @@ class ClassifierAgent:
                 reasoning=data.get("reasoning", "LLM classification"),
                 task_type=data.get("task_type", ""),
                 complexity=data.get("complexity", "simple"),
+                complexity_level=data.get("complexity_level", "simple"),
             )
         except (json.JSONDecodeError, ValueError) as e:
             logger.debug("Failed to parse LLM classification response: %s", e)
@@ -304,6 +365,7 @@ class ClassifierAgent:
                 reasoning=f"Rule + LLM agree: {rule_result.reasoning}; {llm_result.reasoning}",
                 task_type=llm_result.task_type or rule_result.task_type,
                 complexity=llm_result.complexity or rule_result.complexity,
+                complexity_level=llm_result.complexity_level or rule_result.complexity_level,
             )
 
         # Disagreement — pick the higher-confidence result

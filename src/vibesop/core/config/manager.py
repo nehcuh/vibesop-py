@@ -229,6 +229,25 @@ class SemanticConfig(BaseModel):
     batch_size: int = 32
 
 
+class PromptChainConfig(BaseModel):
+    """Configuration for prompt chain generation (v7.0)."""
+
+    enabled: bool = Field(
+        default=True,
+        description="Enable prompt chain generation for multi-agent workflows",
+    )
+    multi_agent_complexity_threshold: int = Field(
+        default=3,
+        ge=2,
+        le=10,
+        description="Number of distinct skill domains to trigger multi_agent mode",
+    )
+    output_dir: str = Field(
+        default=".vibe/prompts",
+        description="Directory for generated prompt chain files (relative to project root)",
+    )
+
+
 class ConfigManager:
     """Unified configuration manager.
 
@@ -249,6 +268,7 @@ class ConfigManager:
         "routing": RoutingConfig().model_dump(),
         "security": SecurityConfig().model_dump(),
         "semantic": SemanticConfig().model_dump(),
+        "prompt_chain": PromptChainConfig().model_dump(),
         "optimization": {
             "enabled": True,
             "prefilter": {
@@ -390,6 +410,9 @@ class ConfigManager:
 
     def get_semantic_config(self) -> SemanticConfig:
         return SemanticConfig(**self._get_section("semantic"))
+
+    def get_prompt_chain_config(self) -> PromptChainConfig:
+        return PromptChainConfig(**self._get_section("prompt_chain"))
 
     def get_optimization_config(self) -> OptimizationConfig:
         from vibesop.core.config.optimization_config import OptimizationConfig

@@ -439,6 +439,33 @@ class AgentRuntime:
 
         return result
 
+    def route_step(
+        self,
+        step_query: str,
+        step_number: int = 0,
+        phase: int = 0,
+    ) -> dict[str, Any]:
+        """Lightweight step-level routing for Prompt Chain execution.
+
+        Called by sub-agents or step runners to dynamically select skills
+        for individual steps within a prompt chain.
+
+        Args:
+            step_query: The step's task description.
+            step_number: Current step number (for context).
+            phase: Current phase number (for context).
+
+        Returns:
+            Minimal routing dict with skill_id, confidence, etc.
+        """
+        from vibesop.core.routing.lightweight_api import LightweightRouter
+
+        lw = LightweightRouter(project_root=self.project_root)
+        return lw.route(
+            step_query,
+            context={"step": step_number, "phase": phase},
+        )
+
     def handle_query_for_hook(
         self,
         query: str,

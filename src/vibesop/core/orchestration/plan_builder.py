@@ -441,6 +441,9 @@ class PlanBuilder:
             return ExecutionMode.SEQUENTIAL
         if pattern == WorkflowPattern.TOURNAMENT:
             return ExecutionMode.PARALLEL
+        if pattern == WorkflowPattern.PROMPT_CHAIN:
+            # Prompt chain runs sequentially — each prompt depends on prior output
+            return ExecutionMode.SEQUENTIAL
         return detected_mode
 
     def _apply_pattern(

@@ -72,7 +72,7 @@ class DynamicExecutionResult(BaseModel):
 
 
 class WorkflowEngine:
-    """Dynamic execution engine for LOOP_UNTIL_DRY and TOURNAMENT patterns.
+    """Dynamic execution engine for LOOP_UNTIL_DRY, TOURNAMENT, and PROMPT_CHAIN patterns.
 
     Unlike the static ParallelScheduler which executes a pre-built plan,
     the WorkflowEngine re-evaluates after each step and can:
@@ -80,26 +80,34 @@ class WorkflowEngine:
     - Loop back to re-execute previous steps with feedback
     - Terminate early when all goals are met
     - Run tournaments with judge-selected champions
+    - Generate prompt chain files for multi-agent workflows
     """
 
     def __init__(
         self,
         config: WorkflowEngineConfig | None = None,
         llm_client: Any = None,
+        prompt_chain_output_dir: str = ".vibe/prompts",
     ):
         """Initialize the workflow engine.
 
         Args:
             config: Engine configuration
             llm_client: LLM client for re-orchestration analysis
+            prompt_chain_output_dir: Output directory for prompt chain files
         """
         self._config = config or WorkflowEngineConfig()
         self._llm = llm_client
+        self._prompt_chain_output_dir = prompt_chain_output_dir
 
     @staticmethod
     def is_dynamic(plan: ExecutionPlan) -> bool:
         """Check if a plan requires dynamic execution."""
-        return plan.workflow_pattern in (WorkflowPattern.LOOP_UNTIL_DRY, WorkflowPattern.TOURNAMENT)
+        return plan.workflow_pattern in (
+            WorkflowPattern.LOOP_UNTIL_DRY,
+            WorkflowPattern.TOURNAMENT,
+            WorkflowPattern.PROMPT_CHAIN,
+        )
 
     def run(
         self,
@@ -122,6 +130,8 @@ class WorkflowEngine:
             return self._run_loop_until_dry(plan, executor)
         if plan.workflow_pattern == WorkflowPattern.TOURNAMENT:
             return self._run_tournament(plan, executor)
+        if plan.workflow_pattern == WorkflowPattern.PROMPT_CHAIN:
+            return self._run_prompt_chain(plan)
 
         # Fallback: treat as sequential
         return self._run_sequential(plan, executor)
@@ -291,6 +301,38 @@ class WorkflowEngine:
             reorchestration_rounds=0,
             final_status="completed",
             champion_index=tournament_result.champion_index,
+            results=results,
+        )
+
+    def _run_prompt_chain(
+        self,
+        plan: ExecutionPlan,
+    ) -> DynamicExecutionResult:
+        """Execute PROMPT_CHAIN pattern — generate prompt files, no live execution."""
+        from vibesop.core.orchestration.prompt_chain_generator import PromptChainGenerator
+
+        generator = PromptChainGenerator(
+            llm_client=self._llm,
+            output_dir=self._prompt_chain_output_dir,
+        )
+        prompt_files = generator.generate(plan)
+        written = generator.write_files(prompt_files)
+
+        plan.status = PlanStatus.COMPLETED
+
+        results = {
+            "prompt_files": [
+                {"phase": pf.phase, "filename": pf.filename, "path": str(p)}
+                for pf, p in zip(prompt_files, written)
+            ],
+        }
+
+        return DynamicExecutionResult(
+            plan_id=plan.plan_id,
+            pattern=WorkflowPattern.PROMPT_CHAIN,
+            total_steps_executed=0,
+            reorchestration_rounds=0,
+            final_status="prompts_generated",
             results=results,
         )
 

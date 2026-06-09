@@ -150,4 +150,4 @@ class TestWorkflowPatternEnum:
 
     def test_pattern_values(self):
         values = {p.value for p in WorkflowPattern}
-        assert values == {"sequential", "parallel", "fan_out", "adversarial", "loop_until_dry", "tournament"}
+        assert values == {"sequential", "parallel", "fan_out", "adversarial", "loop_until_dry", "tournament", "prompt_chain"}

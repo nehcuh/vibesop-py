@@ -224,7 +224,7 @@ def route(
         None,
         "--pattern",
         "-p",
-        help="Force workflow pattern: sequential, parallel, fan_out, adversarial",
+        help="Force workflow pattern: sequential, parallel, fan_out, adversarial, prompt_chain",
     ),
     verify: bool = typer.Option(
         False,
@@ -235,6 +235,18 @@ def route(
         "standard",
         "--strictness",
         help="Verification strictness: lenient, standard, strict",
+    ),
+    output_dir: str | None = typer.Option(
+        None,
+        "--output-dir",
+        "-O",
+        help="Output directory for prompt chain files (default: .vibe/prompts)",
+    ),
+    minimal: bool = typer.Option(
+        False,
+        "--minimal",
+        "-m",
+        help="Minimal JSON output for sub-agent consumption (requires --json)",
     ),
 ) -> None:
     """Route a query to the appropriate skill using unified orchestration.
@@ -404,7 +416,16 @@ def route(
     if json_output:
         import json
 
-        print(json.dumps(result.to_dict(), indent=2, default=str, ensure_ascii=False))
+        if minimal:
+            # Minimal output for sub-agent consumption
+            from vibesop.core.routing.lightweight_api import LightweightRouter
+
+            lw = LightweightRouter(project_root=Path.cwd())
+            # Re-use the orchestration result directly
+            minimal_result = LightweightRouter._format_result(result)
+            print(json.dumps(minimal_result, ensure_ascii=False))
+        else:
+            print(json.dumps(result.to_dict(), indent=2, default=str, ensure_ascii=False))
         # In JSON mode: exit 0 for successful routing (caller inspects has_match field).
         # A completed routing attempt is not an error even when no match found.
         raise typer.Exit(0)
@@ -450,6 +471,18 @@ def route(
 
     # Handle result with unified confirmation flow
     if result.mode.value == "orchestrated" and result.execution_plan:
+        # Prompt chain generation (--pattern prompt_chain or auto-detected)
+        plan = result.execution_plan
+        from vibesop.core.models import WorkflowPattern
+
+        if plan.workflow_pattern == WorkflowPattern.PROMPT_CHAIN or (
+            pattern and pattern == "prompt_chain"
+        ):
+            _handle_prompt_chain_output(
+                result, json_output, console, output_dir=output_dir,
+            )
+            return
+
         _handle_orchestrated_result(
             result, router, yes, execute, json_output, console,
             already_rendered=already_rendered,
@@ -611,6 +644,87 @@ def decompose(
         for i, task in enumerate(sub_tasks, 1):
             skill_hint = f" → [magenta]{task.skill_id}[/magenta]" if task.skill_id else ""
             console.print(f"  {i}. [cyan]{task.intent}[/cyan] — {task.query}{skill_hint}")
+
+
+def _handle_prompt_chain_output(
+    result: Any,
+    json_output: bool,
+    console: Console,
+    output_dir: str | None = None,
+) -> None:
+    """Generate and write prompt chain files for PROMPT_CHAIN pattern."""
+    from pathlib import Path
+
+    from vibesop.core.models import WorkflowPattern
+    from vibesop.core.orchestration.prompt_chain_generator import PromptChainGenerator
+
+    plan = result.execution_plan
+    if not plan:
+        console.print("[yellow]No execution plan available for prompt chain generation.[/yellow]")
+        return
+
+    # Override pattern if forced via --pattern flag
+    if plan.workflow_pattern != WorkflowPattern.PROMPT_CHAIN:
+        plan.workflow_pattern = WorkflowPattern.PROMPT_CHAIN
+
+    target_dir = output_dir or ".vibe/prompts"
+
+    generator = PromptChainGenerator(output_dir=target_dir)
+    prompt_files = generator.generate(plan)
+
+    if not prompt_files:
+        console.print(
+            "[yellow]Task does not require prompt chain (complexity too low). "
+            "Using normal routing.[/yellow]"
+        )
+        return
+
+    written = generator.write_files(prompt_files)
+
+    if json_output:
+        import json
+
+        output = {
+            "pattern": "prompt_chain",
+            "plan_id": plan.plan_id,
+            "total_phases": len(prompt_files),
+            "output_dir": target_dir,
+            "files": [
+                {"phase": pf.phase, "filename": pf.filename, "path": str(p)}
+                for pf, p in zip(prompt_files, written)
+            ],
+        }
+        print(json.dumps(output, indent=2, ensure_ascii=False))
+        return
+
+    # Rich display
+    skill_count = len({s.skill_id for s in plan.steps})
+    console.print()
+    console.print(
+        Panel(
+            f"[bold]Complexity[/bold]    multi_agent\n"
+            f"[bold]Pattern[/bold]       PROMPT_CHAIN\n"
+            f"[bold]Skills[/bold]        {skill_count} ({', '.join(sorted({s.skill_id for s in plan.steps}))})\n"
+            f"[bold]Output[/bold]        {target_dir} ({len(prompt_files)} files)",
+            title="[bold cyan]🔍 Routing Summary[/bold cyan]",
+            border_style="cyan",
+        )
+    )
+
+    console.print()
+    console.print("[bold]📋 Prompt Chain Generated[/bold]")
+    for pf in prompt_files:
+        phase_label = "Final" if pf.phase == -1 else f"Phase {pf.phase}"
+        console.print(f"  {phase_label}: {pf.name} → {target_dir}/{pf.filename}")
+
+    console.print()
+    console.print(
+        "[bold green]⏩ 请在 Claude Code 中按顺序执行：[/bold green]"
+    )
+    first_file = next((p for p in written if "phase-0" in p.name), written[0] if written else None)
+    if first_file:
+        console.print(f"   cat {first_file} | pbcopy")
+        console.print("   # 然后粘贴到 Claude Code")
 
 
 def _handle_orchestrated_result(
