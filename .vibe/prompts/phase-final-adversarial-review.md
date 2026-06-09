@@ -4,20 +4,25 @@
 - [ ] 所有 Phase 0-N 的改动已实施
 - [ ] 所有中间验证 checklist 已通过
 
-## Step 1：全量文件清单验证
+## 全量文件清单验证
 
 | 文件 | 阶段 | 验证项数 |
 |------|------|----------|
 | phase-0-fan-out-diagnosis.md | Phase 0 | 3 项 |
 | phase-1-review-the-philosophical-foundations-and.md | Phase 1 | 2 项 |
 | phase-2-review-the-architectural-design-of-the-p.md | Phase 2 | 2 项 |
-| phase-3-review-the-code-implementation-for-quali.md | Phase 3 | 2 项 |
+| phase-3-review-the-code-implementation-quality-a.md | Phase 3 | 2 项 |
 
-## Step 2：安全审查
+## 安全审查
 - [ ] 无命令注入风险（不拼接用户输入到 shell 命令）
 - [ ] 无路径遍历风险（已验证所有路径参数）
 - [ ] 无子进程权限泄露（子进程不继承多余权限）
 - [ ] 无 DoS 风险（循环/递归有边界限制）
+
+## 编译验证
+- [ ] `uv run pytest tests/` 全部通过
+- [ ] 无 import 错误
+- [ ] 无类型错误（如使用 type checker）
 
 ## 红队攻击面分析
 
@@ -44,26 +49,10 @@
 - [ ] API Key 是否在日志中打印？
 - [ ] 配置文件权限是否严格（0700）？
 
-## Step 4：编译验证
-- [ ] `uv run pytest tests/` 全部通过
-- [ ] 无 import 错误
-- [ ] 无类型错误（如使用 type checker）
-
-## Step 5：跨维度交叉验证
+## 跨维度交叉验证
 - [ ] 各 Phase 的输出被后续 Phase 正确消费，数据流无断裂
 - [ ] 多个 Phase 对同一文件的修改无冲突（git diff 无矛盾）
 - [ ] 所有 Phase 的 completion_marker 文件已创建
-
-## Step 6：功能验证清单
-- [ ] [phase-0-fan-out-diagnosis.md] 所有 P0 问题已识别并列出涉及文件
-- [ ] [phase-0-fan-out-diagnosis.md] 文件依赖关系已描述
-- [ ] [phase-0-fan-out-diagnosis.md] 分析报告格式符合要求
-- [ ] [phase-1-review-the-philosophical-foundations-and.md] Phase 1 的实现符合需求描述
-- [ ] [phase-1-review-the-philosophical-foundations-and.md] 现有测试全部通过
-- [ ] [phase-2-review-the-architectural-design-of-the-p.md] Phase 2 的实现符合需求描述
-- [ ] [phase-2-review-the-architectural-design-of-the-p.md] 现有测试全部通过
-- [ ] [phase-3-review-the-code-implementation-for-quali.md] Phase 3 的实现符合需求描述
-- [ ] [phase-3-review-the-code-implementation-for-quali.md] 现有测试全部通过
 
 ## 综合评分
 

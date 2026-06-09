@@ -1,9 +1,9 @@
-# Phase 2：Review the architectural design of the project
+# Phase 2：Review the project's architectural design and structure
 
 ## 前置条件
 - [ ] Phase 0 诊断报告已完成
 - [ ] 以下前置步骤已完成：
-- Phase 1: Review the philosophical foundations and guiding principles of the project (`ls .vibe/prompts/.phase-1-done`)
+- Phase 1: Review the project's philosophical foundations and guiding principles (`ls .vibe/prompts/.phase-1-done`)
 
 ## 你必须先阅读的当前文件
 - `src/`
@@ -15,10 +15,10 @@
 ## 需求
 
 ### 任务描述
-Analyze the project's architecture, including module structure, data flow, dependency graph, and design patterns. Identify strengths, weaknesses, coupling issues, and adherence to architectural principles. Provide concrete file references.
+Analyze the current project's architecture, including module structure, data flow, dependency graph, and design patterns used. Evaluate the overall architectural decisions and their consistency.
 
 Context from previous steps:
-- Review the philosophical foundations and guiding principles of the project (completed)
+- Review the project's philosophical foundations and guiding principles (completed)
 
 ### 目标技能
 `omx/analyze`

@@ -12,9 +12,9 @@
 
 ### Step 1：阅读核心文件来理解项目架构
 以下是与本任务相关的技能/模块：
-- **omx/analyze** — Review the philosophical foundations and design principles of the project
+- **omx/analyze** — Review the philosophical foundations and guiding principles of the project
 - **omx/analyze** — Review the architectural design of the project
-- **omx/code-review** — Review the code implementation for quality and adherence to standards
+- **omx/code-review** — Review the code implementation quality and standards
 
 #### 具体文件路径
 本任务涉及外部 skill（如 omx/analyze），没有映射到具体文件。请自行探索：

@@ -196,7 +196,9 @@ class Orchestrator:
         builder = self._router._get_plan_builder()
         try:
             plan = builder.build_plan(
-                query, sub_tasks, workflow_pattern=classification.pattern
+                query, sub_tasks,
+                workflow_pattern=classification.pattern,
+                metadata=getattr(classification, 'metadata', None) or {},
             )
         except Exception as e:
             policy = cb.on_phase_error(

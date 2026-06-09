@@ -258,6 +258,7 @@ class PlanBuilder:
         original_query: str,
         sub_tasks: list[Any],  # SubTask from task_decomposer
         workflow_pattern: WorkflowPattern = WorkflowPattern.SEQUENTIAL,
+        metadata: dict[str, Any] | None = None,
     ) -> ExecutionPlan:
         """Build execution plan from sub-tasks with parallel support.
 
@@ -422,6 +423,7 @@ class PlanBuilder:
             status=PlanStatus.PENDING,
             execution_mode=execution_mode,
             workflow_pattern=workflow_pattern,
+            metadata=metadata or {},
         )
 
     def _detect_execution_mode(

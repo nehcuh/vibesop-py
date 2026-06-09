@@ -1,4 +1,4 @@
-# Phase 3：Review the code implementation for quality and adherence to standards
+# Phase 3：Review the code implementation quality and standards
 
 ## 前置条件
 - [ ] Phase 0 诊断报告已完成
@@ -15,10 +15,10 @@
 ## 需求
 
 ### 任务描述
-Perform a comprehensive code review of the project, focusing on code quality, adherence to coding standards, potential bugs, and areas for improvement. Provide specific file references and recommendations.
+Review the code implementation for adherence to coding standards, best practices, readability, maintainability, and potential bugs or anti-patterns. Focus on the main source files and recent changes.
 
 Context from previous steps:
-- Review the philosophical foundations and design principles of the project (completed)
+- Review the philosophical foundations and guiding principles of the project (completed)
 - Review the architectural design of the project (completed)
 
 ### 目标技能

@@ -1,4 +1,4 @@
-# Phase 1：Review the philosophical foundations and guiding principles of the project
+# Phase 1：Review the project's philosophical foundations and guiding principles
 
 ## 前置条件
 - [ ] Phase 0 诊断报告已完成
@@ -13,7 +13,7 @@
 ## 需求
 
 ### 任务描述
-Analyze the project's philosophy, including its core principles, design motivations, and conceptual foundations. Identify any documented philosophy in CONTEXT.md, ADRs, or design docs, and evaluate consistency and clarity.
+Analyze the current project's philosophical underpinnings, including its core principles, design philosophy, and any documented mission or vision statements. Identify how these philosophies manifest in the codebase and documentation.
 
 ### 目标技能
 `omx/analyze`
