@@ -350,6 +350,23 @@ class ExecutionStep(BaseModel):
     contestant_index: int | None = Field(
         default=None, description="Contestant index (for TOURNAMENT pattern, None = not a contestant)"
     )
+    # Phase 7.0 (v7.0.0): Prompt Chain enrichment
+    step_type: str = Field(
+        default="implementation",
+        description="步骤类型: analysis / quick_win / implementation / refactor / review / security",
+    )
+    estimated_risk: str = Field(
+        default="low",
+        description="预估风险: low / medium / high",
+    )
+    estimated_file_count: int = Field(
+        default=0,
+        description="预估涉及的文件数量",
+    )
+    source_files: list[str] = Field(
+        default_factory=list,
+        description="本步骤涉及的源文件路径列表",
+    )
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -373,6 +390,10 @@ class ExecutionStep(BaseModel):
             "dynamic_status": self.dynamic_status.value if self.dynamic_status else None,
             "loop_iteration": self.loop_iteration,
             "contestant_index": self.contestant_index,
+            "step_type": self.step_type,
+            "estimated_risk": self.estimated_risk,
+            "estimated_file_count": self.estimated_file_count,
+            "source_files": self.source_files,
         }
 
 

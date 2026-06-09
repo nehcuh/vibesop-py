@@ -63,6 +63,44 @@ CAPABILITY_TO_TASK_TYPE: dict[str, str] = {
     "document": "document",
 }
 
+# Step type classification keywords
+_STEP_TYPE_KEYWORDS: dict[str, list[str]] = {
+    "analysis": ["分析", "评审", "review", "audit", "read", "了解", "analyze", "诊断", "diagnosis"],
+    "quick_win": ["快速", "quick", "简单", "small", "minor", "tiny", "快速修复"],
+    "refactor": ["重构", "refactor", "restructure", "重写", "rewrite"],
+    "security": ["安全", "security", "漏洞", "vulnerability"],
+    "review": ["测试", "test", "验证", "verify", "检查", "check"],
+}
+
+# Skill → source file mapping for prompt chain generation
+_SKILL_FILE_MAP: dict[str, list[str]] = {
+    "core/routing": [
+        "src/vibesop/core/routing/unified.py",
+        "src/vibesop/core/routing/_pipeline.py",
+        "src/vibesop/core/routing/_layers.py",
+        "src/vibesop/core/routing/orchestrator.py",
+    ],
+    "core/orchestration": [
+        "src/vibesop/core/orchestration/workflow_engine.py",
+        "src/vibesop/core/orchestration/classifier.py",
+        "src/vibesop/core/orchestration/prompt_chain_generator.py",
+        "src/vibesop/core/orchestration/plan_builder.py",
+    ],
+    "core/skills": [
+        "src/vibesop/core/skills/manager.py",
+        "src/vibesop/core/skills/loader.py",
+        "src/vibesop/core/skills/parser.py",
+    ],
+    "core/models": ["src/vibesop/core/models.py"],
+    "core/protocols": ["src/vibesop/core/protocols.py"],
+    "core/exceptions": ["src/vibesop/core/exceptions.py"],
+    "adapters": ["src/vibesop/adapters/base.py", "src/vibesop/adapters/claude_code.py"],
+    "llm": ["src/vibesop/llm/base.py", "src/vibesop/llm/anthropic.py"],
+    "cli": ["src/vibesop/cli/main.py"],
+    "security": ["src/vibesop/security/"],
+    "docs": ["README.md", "docs/"],
+}
+
 
 
 class PlanBuilder:
@@ -180,6 +218,37 @@ class PlanBuilder:
                 best_skill = alt.skill_id
 
         return best_skill, min(best_score, 1.0)
+
+    @staticmethod
+    def _classify_step_type(intent: str, query: str = "") -> str:
+        """Classify step type based on intent and query keywords."""
+        text = f"{intent} {query}".lower()
+        for step_type, keywords in _STEP_TYPE_KEYWORDS.items():
+            if any(kw in text for kw in keywords):
+                return step_type
+        return "implementation"
+
+    @staticmethod
+    def _resolve_step_files(skill_id: str) -> list[str]:
+        """Resolve skill_id to real source file paths."""
+        if skill_id in _SKILL_FILE_MAP:
+            return list(_SKILL_FILE_MAP[skill_id])
+        for prefix, files in _SKILL_FILE_MAP.items():
+            if skill_id.startswith(prefix):
+                return list(files)
+        return []
+
+    @staticmethod
+    def _estimate_risk(step_type: str, intent: str) -> str:
+        """Estimate risk level for a step."""
+        if step_type in ("analysis", "review"):
+            return "low"
+        if step_type in ("security", "refactor"):
+            return "high"
+        core_kw = ["核心", "core", "架构", "architecture", "引擎", "engine"]
+        if any(kw in intent.lower() for kw in core_kw):
+            return "high"
+        return "medium"
 
     def build_plan(
         self,
@@ -310,6 +379,11 @@ class PlanBuilder:
                 step_number, sub_task, execution_mode, last_step_id
             )
 
+            # Classify step type and resolve files
+            classified_type = self._classify_step_type(sub_task.intent, sub_task.query)
+            source_files = self._resolve_step_files(skill_id)
+            risk = self._estimate_risk(classified_type, sub_task.intent)
+
             steps.append(
                 ExecutionStep(
                     step_id=step_id,
@@ -322,6 +396,10 @@ class PlanBuilder:
                     status=StepStatus.PENDING,
                     dependencies=dependencies,
                     can_parallel=can_parallel,
+                    step_type=classified_type,
+                    estimated_risk=risk,
+                    estimated_file_count=len(source_files),
+                    source_files=source_files,
                 )
             )
             last_step_id = step_id

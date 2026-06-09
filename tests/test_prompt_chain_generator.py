@@ -25,6 +25,7 @@ def _make_step(
     skill_id: str = "test/skill",
     intent: str = "test intent",
     dependencies: list[str] | None = None,
+    source_files: list[str] | None = None,
 ) -> ExecutionStep:
     return ExecutionStep(
         step_id=f"step-{step_number}",
@@ -35,6 +36,7 @@ def _make_step(
         output_as=f"step_{step_number}_result",
         status=StepStatus.PENDING,
         dependencies=dependencies or [],
+        source_files=source_files or [f"src/vibesop/{skill_id.replace('/', '/')}/main.py"],
     )
 
 
@@ -43,9 +45,9 @@ def _make_chain_plan(
     pattern: WorkflowPattern = WorkflowPattern.PROMPT_CHAIN,
 ) -> ExecutionPlan:
     if steps is None:
-        s1 = _make_step(1, "core/router", "路由层改造")
-        s2 = _make_step(2, "core/engine", "引擎重写", dependencies=[s1.step_id])
-        s3 = _make_step(3, "core/adapter", "适配器扩展", dependencies=[s2.step_id])
+        s1 = _make_step(1, "core/router", "路由层改造", source_files=["src/vibesop/core/routing/unified.py"])
+        s2 = _make_step(2, "core/engine", "引擎重写", dependencies=[s1.step_id], source_files=["src/vibesop/core/engine.py"])
+        s3 = _make_step(3, "core/adapter", "适配器扩展", dependencies=[s2.step_id], source_files=["src/vibesop/adapters/base.py"])
         steps = [s1, s2, s3]
     return ExecutionPlan(
         plan_id="test-plan-001",
@@ -176,13 +178,26 @@ class TestPromptChainGeneration:
         phase0 = result[0]
         assert len(phase0.required_files) > 0
 
-    def test_phase_1_quick_wins_independent_steps(self):
+    def test_phase_1_quick_wins_only_when_step_type_matches(self):
+        # Steps without step_type="quick_win" should NOT appear in Phase 1
         s1 = _make_step(1, "core/a", "独立任务A")
         s2 = _make_step(2, "core/b", "独立任务B")
         plan = _make_chain_plan(steps=[s1, s2])
         gen = PromptChainGenerator()
         result = gen.generate(plan)
-        # Phase 0 + Phase 1 (both independent) + Final = 3
+        # No quick_win steps → Phase 1 skipped → Phase 0 + Phase 1 (s1) + Phase 2 (s2) + Final = 4
+        assert len(result) == 4
+        assert result[1].phase == 1
+        assert "quick" not in result[1].name.lower()
+
+    def test_phase_1_appears_for_quick_win_steps(self):
+        s1 = _make_step(1, "core/a", "快速修复A")
+        s1.step_type = "quick_win"
+        s2 = _make_step(2, "core/b", "独立任务B")
+        plan = _make_chain_plan(steps=[s1, s2])
+        gen = PromptChainGenerator()
+        result = gen.generate(plan)
+        # Phase 0 + Phase 1 (quick win) + Phase 2 (s2) + Final = 4
         phase1 = result[1]
         assert phase1.phase == 1
         assert "quick" in phase1.name.lower() or "Quick" in phase1.content
