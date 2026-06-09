@@ -48,6 +48,7 @@
    - Classifier multi-dimensional review detection → PROMPT_CHAIN trigger
    - Dynamic Workflow Prompt Chain — 4-phase implementation
    - Quality fixes: step_type-based key points, fallback file resolution, Final Phase red team/scoring/action items
+   - Final Phase conditional branching: review tasks get red team + scoring + action items; non-review tasks get functional verification checklist
 
 2. **Routing Quality Improvements** ✅ (Completed - May 5)
    - Candidate deduplication by canonical ID
@@ -78,6 +79,8 @@
 - Platforms: Claude Code, Kimi CLI, Pi Agent, OpenCode
 
 **Recent Changes** (2026-06-09):
+- ✅ Final Phase conditional branching: review tasks get red team + scoring + action items; non-review tasks get functional verification checklist
+- ✅ ExecutionPlan.metadata field for passing classification context downstream
 - ✅ Prompt Chain Generator quality: step_type-based key points (6 analysis subcategories), fallback file resolution for external skills
 - ✅ Final Phase enhanced: red team attack surface analysis (4 dimensions), five-dimension radar scoring, P0/P1/P2 action items
 - ✅ Classifier multi-dimensional review detection → PROMPT_CHAIN trigger

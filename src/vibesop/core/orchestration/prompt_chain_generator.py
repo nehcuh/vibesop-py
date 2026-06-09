@@ -624,6 +624,9 @@ class PromptChainGenerator:
         previous_files: list[PromptFile],
     ) -> PromptFile:
         """Final phase — adversarial review of all changes."""
+        plan_metadata = getattr(_plan, 'metadata', None) or {}
+        is_review = plan_metadata.get("review_type") == "multi_dimensional"
+
         all_required = sorted({f for pf in previous_files for f in pf.required_files})
         all_checklist: list[str] = []
         for pf in previous_files:
@@ -718,40 +721,50 @@ class PromptChainGenerator:
             "## 前置条件\n"
             "- [ ] 所有 Phase 0-N 的改动已实施\n"
             "- [ ] 所有中间验证 checklist 已通过\n\n"
-            "## Step 1：全量文件清单验证\n\n"
+            "## 全量文件清单验证\n\n"
             "| 文件 | 阶段 | 验证项数 |\n"
             "|------|------|----------|\n"
             + "\n".join(file_table_rows)
             + "\n\n"
-            "## Step 2：安全审查\n"
+            "## 安全审查\n"
             "- [ ] 无命令注入风险（不拼接用户输入到 shell 命令）\n"
             "- [ ] 无路径遍历风险（已验证所有路径参数）\n"
             "- [ ] 无子进程权限泄露（子进程不继承多余权限）\n"
             "- [ ] 无 DoS 风险（循环/递归有边界限制）\n\n"
-            + red_team_section
-            + "## Step 4：编译验证\n"
+            "## 编译验证\n"
             "- [ ] `uv run pytest tests/` 全部通过\n"
             "- [ ] 无 import 错误\n"
             "- [ ] 无类型错误（如使用 type checker）\n\n"
         )
 
-        if cross_phase_checks:
-            content += (
-                "## Step 5：跨维度交叉验证\n"
-                + "\n".join(cross_phase_checks)
-                + "\n\n"
-            )
+        if is_review:
+            content += red_team_section
+            if cross_phase_checks:
+                content += (
+                    "## 跨维度交叉验证\n"
+                    + "\n".join(cross_phase_checks)
+                    + "\n\n"
+                )
+            content += scoring_section + action_section
+        else:
+            content += "## 功能验证清单\n" + "\n".join(all_checklist) + "\n\n"
 
-        content += (
-            "## Step 6：功能验证清单\n"
-            + "\n".join(all_checklist)
-            + "\n\n"
-            + scoring_section
-            + action_section
-            + "## 输出\n"
-            "确认所有验证项通过后，输出最终完成报告。\n"
-            + _ROUTING_HINT
-        )
+        content += "## 输出\n确认所有验证项通过后，输出最终完成报告。\n" + _ROUTING_HINT
+
+        if is_review:
+            final_checklist = [
+                "安全审查通过",
+                "红队攻击面分析完成",
+                "编译验证通过",
+                "综合评分已填写",
+                "优先级行动清单已填写",
+            ]
+        else:
+            final_checklist = [
+                "安全审查通过",
+                "编译验证通过",
+                "功能验证清单全部通过",
+            ]
 
         return PromptFile(
             phase=-1,
@@ -763,13 +776,6 @@ class PromptChainGenerator:
                 "所有中间验证通过",
             ],
             required_files=all_required,
-            verification_checklist=[
-                "安全审查通过",
-                "红队攻击面分析完成",
-                "编译验证通过",
-                "功能验证清单全部通过",
-                "综合评分已填写",
-                "优先级行动清单已填写",
-            ],
+            verification_checklist=final_checklist,
             risk_level="low",
         )

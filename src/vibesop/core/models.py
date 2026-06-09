@@ -429,6 +429,10 @@ class ExecutionPlan(BaseModel):
     reorchestration_history: list[dict[str, Any]] = Field(
         default_factory=list, description="History of re-orchestration decisions"
     )
+    metadata: dict[str, Any] = Field(
+        default_factory=dict,
+        description="额外元数据，如 review_type、dimensions 等",
+    )
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -445,6 +449,7 @@ class ExecutionPlan(BaseModel):
             "dry_threshold": self.dry_threshold,
             "max_reorchestration_rounds": self.max_reorchestration_rounds,
             "reorchestration_history": self.reorchestration_history,
+            "metadata": self.metadata,
         }
 
     def get_parallel_groups(self) -> list[list["ExecutionStep"]]:
