@@ -464,9 +464,12 @@ class SkillIndexer:
         skill_id = loaded_skill.metadata.id
 
         try:
+            # max_tokens=4000 (bumped from 800 in v7.3.2): thinking-capable
+            # models like Qwen3.x spend reasoning tokens before emitting JSON.
+            # 800 cut them off mid-thought and produced 0 valid profiles.
             response = llm.call(
                 prompt=prompt,
-                max_tokens=800,
+                max_tokens=4000,
                 temperature=0.0,
             )
             profile = self._parse_profile(response.content, skill_id)

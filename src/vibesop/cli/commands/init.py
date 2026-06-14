@@ -274,9 +274,20 @@ def _do_init(
         # Build skill semantic index (layered: global first, then project)
         if not skip_index:
             from vibesop.core.skills.indexer import SkillIndexer
+            from vibesop.core.llm_config import LLMConfigResolver
             from vibesop.llm.factory import create_provider
 
             def _llm_factory() -> Any:
+                # Honor ~/.vibe/config.toml first (S5 P1-A priority order);
+                # fall back to env-based detection if config is absent.
+                resolver = LLMConfigResolver()
+                cfg = resolver.get_llm_for_understanding()
+                if cfg and cfg.provider and cfg.model:
+                    return create_provider(
+                        provider=cfg.provider,
+                        api_key=cfg.api_key,
+                        base_url=cfg.api_base,
+                    )
                 return create_provider()
 
             indexer = SkillIndexer(project_root=project_path, llm_factory=_llm_factory)
