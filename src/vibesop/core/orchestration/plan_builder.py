@@ -445,6 +445,16 @@ class PlanBuilder:
             analysis = (metadata or {}).get("intent_analysis")
             if analysis is not None:
                 steps, squad = self._build_squad_steps(analysis, workflow_pattern)
+                # v7.3.6 fix (Round 4 P2): regenerate reasoning from the
+                # squad's actual skill assignments. Before this, reasoning
+                # was built from the standard-path routing (which runs
+                # first and produces e.g. "Step 1: 设计微服务架构 →
+                # mattpocock/grill-me (99%)"), but then steps got replaced
+                # by squad steps whose skill_id came from skill_composer
+                # (often "fallback-llm" when role-keyword matching found
+                # nothing). Result: Reasoning section showed real skills,
+                # Execution Summary showed fallback-llm — confusing.
+                reasoning_parts = self._build_squad_reasoning(steps, squad)
 
         plan_metadata = dict(metadata or {})
         if squad is not None:
@@ -644,6 +654,45 @@ class PlanBuilder:
             )
 
         return execution_steps, squad
+
+    def _build_squad_reasoning(
+        self,
+        steps: list[ExecutionStep],
+        squad: Any,
+    ) -> list[str]:
+        """Generate reasoning strings that match the squad's actual skill assignments.
+
+        v7.3.6 addition (Round 4 P2 fix). Before this, ``plan.reasoning`` was
+        built from the standard routing path (which runs first and produces
+        e.g. "Step 1: '设计微服务架构' → mattpocock/grill-me (99%)"), then the
+        squad path replaced ``steps`` with squad-composed steps whose
+        ``skill_id`` came from ``SkillComposer`` (often ``"fallback-llm"``
+        when role-keyword matching found nothing).
+
+        Result: ``Reasoning`` section showed real skills, ``Execution Summary``
+        section showed ``fallback-llm`` — confusing and inconsistent.
+
+        This method rebuilds reasoning from the FINAL squad steps so both
+        sections stay in sync. Each entry follows the same format as the
+        standard path::
+
+            Step {n}: '{role}' → {skill_id} (squad)
+
+        The trailing ``(squad)`` tag distinguishes squad-assigned skills
+        from routing-derived ones in the reasoning string.
+        """
+        reasoning_parts: list[str] = []
+        for step in steps:
+            role = getattr(step, "assigned_role", "") or f"step-{step.step_number}"
+            skill = step.skill_id or "fallback-llm"
+            # Show top role_skill if available — gives users a hint of the
+            # full allowlist beyond the primary skill_id.
+            role_skills = getattr(step, "role_skills", None) or []
+            extras = f" [+{len(role_skills) - 1} more]" if len(role_skills) > 1 else ""
+            reasoning_parts.append(
+                f"Step {step.step_number}: '{role}' → {skill}{extras} (squad)"
+            )
+        return reasoning_parts
 
     def _collect_global_skills(self) -> list[dict[str, Any]]:
         """Collect all available skills as dicts for SkillComposer."""
