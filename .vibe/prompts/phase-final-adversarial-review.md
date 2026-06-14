@@ -35,18 +35,6 @@
 - [ ] [phase-3-适配器扩展.md] Phase 3 的实现符合需求描述
 - [ ] [phase-3-适配器扩展.md] 现有测试全部通过
 
-## Phase 6 新增修复验收
-- [ ] [P0] CLI `route()` 按 `InterceptionMode` 分支：
-  - `SINGLE` → `router.route()`
-  - `SINGLE_AGENT` → `router.route()` + `role_context`
-  - `MULTI_AGENT_SQUAD` → `router.orchestrate()` + `intent_analysis` metadata
-  - `ORCHESTRATE` → `router.orchestrate()`（向后兼容）
-  - `NONE` → fallback 响应
-- [ ] [P1] `semantic_intent_analyzer.py` 用户输入用 `<user_query>` 标签包裹并转义 `</`、`{`、`}`
-- [ ] [P1] `prompt_chain_generator.py` `write_files` 对 `filename` 做 `.name` 截取、`..`/`/`/`\` 过滤、`resolve()` 路径校验
-- [ ] [P1] `tests/e2e/test_agent_runtime.py` hook 断言兼容 `$_VIBESOP_PYTHON -c` 与 `python3 -c`
-- [ ] [P2] `npx basedpyright src/vibesop/core/orchestration/ src/vibesop/agent/runtime/ src/vibesop/cli/` 0 errors
-
 ## 输出
 确认所有验证项通过后，输出最终完成报告。
 
