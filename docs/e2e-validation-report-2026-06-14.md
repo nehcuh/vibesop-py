@@ -1,9 +1,124 @@
-# VibeSOP 端到端集成验证报告 (Round 2)
+# VibeSOP 端到端集成验证报告 (Round 3)
 
-> **Date**: 2026-06-14 (round 2)
-> **Validation target**: ADR-004 cleanup + P1 hook fix + Kimi CLI install + Ollama setup
-> **Commit verified**: `f599328` (origin/main, pushed)
-> **Round 1 report**: same file, scroll down for round 1
+> **Date**: 2026-06-14 (round 3)
+> **Validation target**: Full LLM-based routing with proper indexer config + max_tokens
+> **Commit verified**: `08cee6b` (origin/main, pushed)
+> **Round 1 + 2 reports**: scroll down
+
+---
+
+## 环境（Round 3 增量）
+
+| 组件 | 变化 |
+|---|---|
+| LLM Provider | **DeepSeek API** (was: Ollama qwen2.5 local) |
+| Model | **deepseek-v4-flash** (was: qwen2.5:0.5b/1.5b/35B oMLX) |
+| Skill index | **102/102 indexed** (was: 0) |
+| Container env | `DEEPSEEK_API_KEY` passed from host |
+
+---
+
+## Round 3 修复项
+
+### P2b-fix-1: indexer 配置接线 ✅ FIXED (commit `08cee6b`)
+
+**Bug**: `cli/commands/init.py:280` 的 `_llm_factory` 直接调 `create_provider()` 不带参数，bypass 了 `~/.vibe/config.toml`。Indexer 默认走 ollama@localhost:11434，但容器内没 ollama → 100% skills 失败。
+
+**Fix**: 改为 `LLMConfigResolver.get_llm_for_understanding()` 先解析 config（与 S5 P1-A 同优先级链：Agent → VibeSOP config → env → default），再传给 `create_provider()`。
+
+### P2b-fix-2: indexer max_tokens 800 → 4000 ✅ FIXED (commit `08cee6b`)
+
+**Bug**: `_analyze_skill()` 硬编码 `max_tokens=800`。Thinking-capable models（Qwen3.x、DeepSeek-R1、deepseek-v4-flash）先输出推理 tokens，再 emit JSON。800 在 thinking 中段就被截断，response 全是推理文本没有 JSON → `_parse_profile()` 返回 None → 静默失败。
+
+**Verification**（直接对比，Qwen3.6-35B-A3B-mxfp8）：
+| max_tokens | Response 长度 | Profile 解析 |
+|:---:|:---:|:---:|
+| 800 (旧) | 3525 chars（thinking only） | None |
+| 4000 (新) | 989 chars（clean JSON） | SkillProfile OK |
+
+### Skill index 终于建成 ✅
+
+```
+=== IndexResult ===
+success: True
+indexed_count: 102
+failed_count: 0
+Total time: 1 min 4 sec (DeepSeek API)
+```
+
+对比 Round 2：oMLX 35B 跑 27 分钟只索引 1 个，101 静默失败。DeepSeek API 1 分钟全完。
+
+---
+
+## 验证结果（Round 3）
+
+### A. CLI 路由（DeepSeek + 102 skills indexed）
+
+| 测试项 | Round 2 | Round 3 | 改善 |
+|:---|:---:|:---:|:---|
+| **A1** 短查询 | FALLBACK_LLM | **✅ Selected: diagnose (72%)** via AI_TRIAGE | 巨大改善 |
+| A2 多意图 (短) | FALLBACK_LLM | FALLBACK_LLM (14 chars too short) | 持平 |
+| **A3** 长语义 | 3-step plan | **✅ 3-step plan, omx/plan (99%) per step** | 略改善 |
+| **A4** 多角色 squad | 4-step plan | **✅ 4-step plan with distinct skills** (mattpocock/grill-me / superpowers/writing-plans / omx/security-review) | 改善 |
+
+### B. Hook 集成（新发现 P0 bug）
+
+| 测试项 | Round 2 | Round 3 | 状态 |
+|:---|:---:|:---:|:---|
+| B1 Hook 文件 | ✅ | ✅ | 持平 |
+| B2 Hook JSON 解析 | ✅ P1 修 | ✅ | 持平 |
+| B3 CLAUDE.md 协议 | ✅ | ✅ | 持平 |
+| B4 技能注入 | ✅ | ✅ | 持平 |
+| **B6 Hook 路由决策** | (未测) | **❌ AgentRuntime returns no-match** | **新发现 P0** |
+
+**Round 3 新发现 P0 bug**：
+- `vibe route "调试 TypeError"` CLI → AI_TRIAGE 选中 `diagnose` (72%)
+- 同样 query 通过 hook → `AgentRuntime.handle_query()` → "No matching skill found"
+- 调试显示：interceptor 正确判定 mode=orchestrate，但 `router.orchestrate()` 返回 `is_multi_intent=False`，落到 single 分支且 skill_id=''
+- **根因猜测**：ORCHESTRATE 分支没有把 interceptor 的 analysis 传给 router（squad_ctx 只在 MULTI_AGENT_SQUAD 时构造，ORCHESTRATE 时是 None）
+- **影响**：Claude Code 真实使用场景下，hook 不会推荐技能给 agent
+- **优先级**：P0（生产阻塞）
+
+### C. InterceptionMode 分支
+
+5 个 mode 仍在 `cli/main.py` 有分支。✅ 与前轮一致。
+
+### D. 单元测试
+
+`tests/cli/test_init_command.py + tests/core/skills/test_indexer.py` = **82 passed / 0 failed**。✅
+
+---
+
+## 关键发现汇总（3 轮累计）
+
+### 已修复（commit 在 main）
+1. ✅ **P1 Hook JSON envelope**（`f599328`）— jq filter 改为多字段 fallback 链
+2. ✅ **P2b indexer config wiring**（`08cee6b`）— `_llm_factory` 用 LLMConfigResolver
+3. ✅ **P2b indexer max_tokens**（`08cee6b`）— 800 → 4000 适配 thinking models
+4. ✅ Kimi Code 0.14.3 安装 + 配置生成
+
+### 待修复（按优先级）
+| # | Bug | 影响 | 优先级 |
+|:---:|:---|:---|:---:|
+| 1 | **AgentRuntime.handle_query ORCHESTRATE 分支不传 analysis** → hook 不返回 skill 建议 | 生产阻塞（Claude Code/Kimi Code 真实使用时无路由推荐） | **P0** |
+| 2 | Multi-intent decomposition Reasoning 正确但 Execution Summary 全 fallback-llm | 显示问题，CLI 文本输出误导 | P1 |
+| 3 | Skill index 必须手动建（`vibe quickstart` 交互式不易自动化） | UX 问题 | P2 |
+| 4 | Kimi Code 0.14.3 ACP 协议适配 | 功能扩展 | P3 |
+| 5 | 6 个 Dependabot + 4 个 Bandit MEDIUM | 独立轨道 | P2/P3 |
+
+### Round 3 核心结论
+
+**真实 e2e 验证（with DeepSeek + 102 skills indexed）通过**：
+- ✅ A1/A3/A4 CLI 路由正确（AI_TRIAGE + 多步分解 + squad）
+- ❌ B6 Hook 路由有 P0 bug（AgentRuntime 路径与 CLI 路径不一致）
+
+**核心发现**：CLI 入口与 hook 入口走了不同的 routing 路径，导致相同 query 在两边结果不同。这是 v7.0.x 之后引入的回归，需要在 v7.3.3 修复。
+
+---
+
+## Round 2 报告（保留）
+
+
 
 ---
 
