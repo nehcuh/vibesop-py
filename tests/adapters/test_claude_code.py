@@ -136,7 +136,7 @@ class TestClaudeCodeHookRendering:
         assert "-z" in content, "Empty query check missing"
 
     def test_route_hook_parses_json_input(self, adapter, tmp_path):
-        """Hook must parse JSON input for user_prompt field."""
+        """Hook must parse JSON input for prompt field (with multi-agent fallbacks)."""
         result = MagicMock()
         result.add_file = MagicMock()
         result.add_warning = MagicMock()
@@ -144,7 +144,10 @@ class TestClaudeCodeHookRendering:
         adapter._render_route_hook(tmp_path, result)
 
         content = (tmp_path / "hooks" / "vibesop-route.sh").read_text()
-        assert "user_prompt" in content, "JSON user_prompt parsing missing"
+        # Claude Code uses .prompt; some agents use .user_prompt / .query / .message.
+        # Hook tries all in order via jq fallback chain.
+        assert ".prompt" in content, "JSON .prompt parsing missing"
+        assert "user_prompt" in content, "user_prompt fallback missing"
         assert "jq" in content, "jq JSON parsing missing"
 
     def test_route_hook_has_no_bash_routing_logic(self, adapter, tmp_path):

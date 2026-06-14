@@ -8,8 +8,15 @@ set -e
 export PATH="$HOME/.local/bin:$HOME/.cargo/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
 
 INPUT=$(cat); QUERY=""
+# Different agents use different JSON envelope field names for the user's
+# prompt. Try them in order; fall back to raw stdin if none match (or if jq
+# is not installed, or if the input is plain text rather than JSON).
 if command -v jq &> /dev/null; then
-    QUERY=$(echo "$INPUT" | jq -r '.user_prompt // empty' 2>/dev/null || true)
+    QUERY=$(echo "$INPUT" | jq -r '
+        if type == "object"
+        then (.prompt // .user_prompt // .query // .message // .text // empty)
+        else empty
+        end' 2>/dev/null || true)
 fi
 [ -z "$QUERY" ] && QUERY="$INPUT"
 [ -z "$QUERY" ] && { echo '{}'; exit 0; }
