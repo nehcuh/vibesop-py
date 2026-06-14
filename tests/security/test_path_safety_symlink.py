@@ -291,6 +291,76 @@ class TestValidateFilenameNulHardening:
             safety.validate_filename("evil.txt\x00")
 
 
+class TestResolvePathLexicalHardening:
+    """v7.0.8: _resolve_path uses lexical normalization, NOT resolve().
+
+    Previously _resolve_path called Path.resolve() which follows symlinks.
+    That defeated the v7.0.5 check_traversal rewrite: ensure_safe_output_path
+    would resolve a symlinked input to its target (possibly outside base),
+    then check_traversal would lexically inspect the resolved path which
+    appeared inside base. Switching to _lexical_normalize closes the gap.
+    """
+
+    def test_resolve_path_does_not_follow_symlink(self, tmp_path: Path) -> None:
+        if os.name == "nt":
+            pytest.skip("Symlink semantics differ on Windows")
+        safety = PathSafety()
+        base = tmp_path / "base"
+        base.mkdir()
+        outside = tmp_path / "outside.txt"
+        outside.write_text("evil")
+        # Plant a symlink inside base pointing outside.
+        link = base / "link"
+        link.symlink_to(outside)
+        # _resolve_path must return the lexical path that still says "link",
+        # NOT the resolved path that says "outside.txt".
+        result = safety._resolve_path(link, base)
+        # The result is the lexical form of the link itself (still inside base).
+        assert result.name == "link"
+        # And critically, it has NOT been resolved to outside.txt:
+        assert "outside" not in str(result)
+
+    def test_resolve_path_lexical_collapses_dotdot(self, tmp_path: Path) -> None:
+        """.. in input is collapsed lexically without resolving."""
+        safety = PathSafety()
+        base = tmp_path / "base"
+        base.mkdir()
+        result = safety._resolve_path(Path("sub/../file.txt"), base)
+        # Lexically, sub/../file.txt collapses to file.txt under base.
+        assert result == safety._lexical_normalize(base / "file.txt")
+
+    def test_resolve_path_absolute_input_lexical(self) -> None:
+        """Absolute input is normalized lexically (no symlink resolution)."""
+        safety = PathSafety()
+        result = safety._resolve_path(Path("/tmp/foo/../bar"), Path("/base"))
+        assert str(result) == "/tmp/bar"
+
+    def test_ensure_safe_output_path_symlink_now_caught(
+        self, tmp_path: Path
+    ) -> None:
+        """v7.0.8 regression: a symlinked output path must now be caught
+        because _resolve_path no longer silently follows the symlink to a
+        target outside base that lexically appears inside base."""
+        if os.name == "nt":
+            pytest.skip("Symlink semantics differ on Windows")
+        safety = PathSafety()
+        base = tmp_path / "base"
+        base.mkdir()
+        outside = tmp_path / "outside"
+        outside.mkdir()
+        # Plant a symlink that, when resolved, points outside.
+        link = base / "out_link"
+        link.symlink_to(outside, target_is_directory=True)
+        # Pre-v7.0.8: resolve() followed the link to outside, check_traversal
+        # saw the outside path lexically and correctly rejected it. But
+        # for symlinks pointing INSIDE base that lexically point outside,
+        # the previous resolve() would mask the symlink. v7.0.8 makes
+        # _resolve_path return the lexical form so check_traversal + the
+        # new _no_symlinks_in_chain both see the symlink.
+        with pytest.raises(PathTraversalError):
+            safety.ensure_safe_output_path("out_link/file.txt", base)
+
+
 if __name__ == "__main__":
     import pytest as _pytest
 

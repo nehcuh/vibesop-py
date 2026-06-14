@@ -301,7 +301,14 @@ class TestPathSafety:
         assert "depth exceeds maximum" in str(exc_info.value)
 
     def test_symbolic_link_handling(self, tmp_path: Path) -> None:
-        """Test path safety with symbolic links."""
+        """Test path safety with symbolic links.
+
+        v7.0.8 contract update: a symlink in the output path is now
+        REJECTED (defense in depth against TOCTOU). Previously this test
+        expected symlinks inside base to be accepted; that contract
+        conflicts with the v7.0.5 ``test_symlinked_output_path_rejected``
+        test and with the S23 red-team threat model.
+        """
         safety = PathSafety()
 
         # Create a file
@@ -312,13 +319,16 @@ class TestPathSafety:
         try:
             link_file = tmp_path / "link.txt"
             link_file.symlink_to(target_file)
-
-            # Safe path should work
-            result = safety.ensure_safe_output_path(link_file, tmp_path)
-            assert result.exists()
         except OSError:
             # Symlinks not supported on this system
             pytest.skip("Symbolic links not supported")
+
+        # v7.0.5+: a symlink as the leaf of an output path must be
+        # rejected — the lstat check in _no_symlinks_in_chain catches it.
+        from vibesop.security.exceptions import PathTraversalError
+
+        with pytest.raises(PathTraversalError):
+            safety.ensure_safe_output_path(link_file, tmp_path)
 
     def test_path_with_current_dir_prefix(self, tmp_path: Path) -> None:
         """Test path safety with ./ prefix."""

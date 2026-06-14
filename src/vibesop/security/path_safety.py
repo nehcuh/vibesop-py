@@ -331,21 +331,30 @@ class PathSafety:
                 )
 
     def _resolve_path(self, path: Path, base: Path) -> Path:
-        """Resolve a path relative to a base directory.
+        """Resolve a path relative to a base directory (lexically, no symlinks).
+
+        v7.0.8 change: previously used ``Path.resolve()`` which follows
+        symlinks. That defeated the v7.0.5 ``check_traversal`` rewrite:
+        ``ensure_safe_output_path`` would resolve a symlinked input into
+        its target (potentially outside ``base``), then ``check_traversal``
+        would lexically inspect the resolved path which now appeared
+        inside base. Switching to ``_lexical_normalize`` ensures the path
+        that ``check_traversal`` sees is the same path the caller wrote,
+        with no silent symlink traversal in between.
 
         Args:
             path: Path to resolve
-            base: Base directory
+            base: Base directory (already trusted / resolved)
 
         Returns:
-            Resolved absolute path
+            Lexically-normalized absolute path (no symlink resolution).
         """
-        # If path is absolute, use it directly
+        # If path is absolute, normalize lexically — do NOT resolve symlinks.
         if path.is_absolute():
-            return path.resolve()
+            return self._lexical_normalize(path)
 
-        # Otherwise, resolve relative to base
-        return (base / path).resolve()
+        # Otherwise, join with base and normalize lexically.
+        return self._lexical_normalize(base / path)
 
     def validate_filename(self, filename: str) -> bool:
         """Validate a filename is safe (no path separators, no NUL bytes).
