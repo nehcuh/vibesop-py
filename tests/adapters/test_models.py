@@ -14,7 +14,7 @@ from vibesop.adapters.models import (
     RoutingPolicy,
     SecurityPolicy,
 )
-from vibesop.core.models import SkillDefinition
+from vibesop.spec import SkillSpec
 
 
 class TestSecurityPolicy:
@@ -196,7 +196,7 @@ class TestManifest:
 
     def test_create_full(self) -> None:
         """Test creating Manifest with all fields."""
-        skill = SkillDefinition(
+        skill = SkillSpec(
             id="test-skill",
             name="Test Skill",
             description="A test skill",

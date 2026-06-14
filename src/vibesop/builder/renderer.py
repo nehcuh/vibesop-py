@@ -266,7 +266,7 @@ class ConfigRenderer:
         from datetime import datetime
 
         from vibesop.adapters.models import ManifestMetadata, PolicySet
-        from vibesop.core.models import SkillDefinition
+        from vibesop.spec import SkillSpec
 
         # Create metadata
         metadata = ManifestMetadata(
@@ -280,7 +280,7 @@ class ConfigRenderer:
         if skills:
             for skill_id in skills:
                 manifest_skills.append(
-                    SkillDefinition(
+                    SkillSpec(
                         id=skill_id,
                         name=skill_id.replace("-", " ").title(),
                         description=f"Skill: {skill_id}",

@@ -13,6 +13,8 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from vibesop.spec import SkillSpec
+
 
 class RoutingLayer(StrEnum):
     """Routing layers in priority order (Layer 0 → Layer 9)."""
@@ -976,50 +978,18 @@ class AgentSkillBinding(BaseModel):
         }
 
 
-class SkillDefinition(BaseModel):
-    """Definition of a skill.
+class SkillRegistry(BaseModel):
+    """Registry of all available skills.
 
-    .. deprecated:: 5.5.0
-        Use ``vibesop.spec.SkillSpec`` instead. This model is maintained for
-        backward compatibility in the registry layer.
+    .. note::
+        ``SkillDefinition`` (deprecated since v5.5.0) was removed in v7.1.0.
+        Skills are now typed as ``vibesop.spec.SkillSpec`` — the canonical
+        SKILL.md spec model. See ADR-004.
     """
 
-    id: str = Field(..., min_length=1, description="Skill ID")
-    name: str = Field(..., min_length=1, description="Skill name")
-    description: str = Field(..., description="Skill description")
-    trigger_when: str = Field(..., description="Trigger condition")
-    metadata: dict[str, Any] = Field(
+    skills: dict[str, SkillSpec] = Field(
         default_factory=dict,
-        description="Additional metadata",
-    )
-    lifecycle: SkillLifecycle = Field(
-        default=SkillLifecycle.ACTIVE,
-        description="Lifecycle state: draft, active, deprecated, archived",
-    )
-    scope: str = Field(
-        default="global",
-        description="Scope: global (all projects) or project (specific project)",
-    )
-    enabled: bool = Field(
-        default=True,
-        description="Whether this skill is enabled for routing",
-    )
-    version: str = Field(
-        default="1.0.0",
-        description="Skill version",
-    )
-    capabilities: list[str] = Field(
-        default_factory=list,
-        description="Capability tags: analysis, review, design, debug, refactor, plan, test, etc.",
-    )
-
-
-class SkillRegistry(BaseModel):
-    """Registry of all available skills."""
-
-    skills: dict[str, SkillDefinition] = Field(
-        default_factory=dict,
-        description="Available skills",
+        description="Available skills keyed by id",
     )
     version: str = Field(default="1.0.0", description="Registry version")
 

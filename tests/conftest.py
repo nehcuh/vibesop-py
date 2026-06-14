@@ -6,7 +6,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from vibesop.core.models import SkillDefinition
+from vibesop.spec import SkillSpec
 
 
 @pytest.fixture
@@ -33,8 +33,8 @@ def mock_llm_client(mock_llm_response: dict[str, object]) -> Generator[Mock, Non
 
 
 @pytest.fixture
-def sample_skill() -> SkillDefinition:
-    return SkillDefinition(
+def sample_skill() -> SkillSpec:
+    return SkillSpec(
         id="/test",
         name="Test Skill",
         description="A test skill for unit testing",
@@ -43,16 +43,16 @@ def sample_skill() -> SkillDefinition:
 
 
 @pytest.fixture
-def sample_skills(sample_skill: SkillDefinition) -> list[SkillDefinition]:
+def sample_skills(sample_skill: SkillSpec) -> list[SkillSpec]:
     return [
         sample_skill,
-        SkillDefinition(
+        SkillSpec(
             id="/review",
             name="Code Review",
             description="Review code for issues",
             trigger_when="review, audit, check",
         ),
-        SkillDefinition(
+        SkillSpec(
             id="/debug",
             name="Debug",
             description="Debug issues in code",
@@ -62,7 +62,7 @@ def sample_skills(sample_skill: SkillDefinition) -> list[SkillDefinition]:
 
 
 @pytest.fixture
-def mock_skill_loader(sample_skills: list[SkillDefinition]) -> Generator[Mock, None, None]:
+def mock_skill_loader(sample_skills: list[SkillSpec]) -> Generator[Mock, None, None]:
     with patch("vibesop.core.skills.loader.SkillLoader") as mock_cls:
         mock_instance = Mock()
         mock_instance.load_skills.return_value = sample_skills

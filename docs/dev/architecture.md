@@ -57,6 +57,6 @@ VibeSOP is a multi-platform workflow SOP system for AI-assisted development.
 All data models use Pydantic v2 for runtime validation:
 - `SkillRoute`: Routing result
 - `RoutingRequest`: User query + context
-- `SkillDefinition`: Skill metadata
+- `SkillSpec` (from `vibesop.spec`): Canonical skill metadata (ADR-004 Phase 1; `core.models.SkillDefinition` removed in v7.1.0)
 - `WorkflowDefinition`: Workflow structure
 - `AppSettings`: Environment configuration

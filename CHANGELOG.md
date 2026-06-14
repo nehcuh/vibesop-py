@@ -9,6 +9,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### v7.1.0 — ADR-004 Phase 1: Remove `core.models.SkillDefinition`
+
+First of three planned phases to retire the four parallel skill metadata
+models. Phase 1 removes the Pydantic variant — `SkillDefinition` defined
+in `core/models.py` (deprecated since v5.5.0, two major-version windows
+past the promised removal date).
+
+**What changed**
+- All ~14 src call sites + ~25 test call sites migrated to `vibesop.spec.SkillSpec`.
+- `core.models.SkillRegistry.skills` is now typed `dict[str, SkillSpec]`.
+- `adapters.models.Manifest.skills` is now typed `list[SkillSpec]`.
+- `builder.{manifest,overlay,renderer}` import `SkillSpec` directly from `vibesop.spec`.
+- `vibesop.spec.SkillSpec` is a strict field superset of the removed
+  `SkillDefinition`, and uses `populate_by_name=True`, so the
+  `model_dump()` → `SkillSpec(**dumped)` round-trip in
+  `OverlayMerger._dict_to_manifest()` continues to work without a
+  `from_legacy_dict()` factory (the original ADR draft referenced one
+  that does not exist).
+
+**Acceptance gate** (ADR-003): `grep -rn "SkillDefinition" src/` returns
+0 hits excluding docstrings. Full test suite passes (251 adapter/builder/e2e
+tests + ~3000 broader sweep).
+
+**Tracking**: `docs/adr/004-deprecated-types-cleanup.md` Phase 1 marked ✅.
+Phases 2 (`SkillConfig`, v7.2) and 3 (`SkillMetadata`, v7.3) remain.
+
+---
+
 ### v7.0.5 — Path Safety Symlink / TOCTOU Hardening
 
 Closes Phase 5 (the final item) of the S23 Multi-Agent Squad

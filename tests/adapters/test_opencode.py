@@ -11,7 +11,7 @@ from vibesop.adapters.models import (
     RoutingPolicy,
     SecurityPolicy,
 )
-from vibesop.core.models import SkillDefinition
+from vibesop.spec import SkillSpec
 
 
 class TestOpenCodeAdapter:
@@ -62,7 +62,7 @@ class TestOpenCodeAdapter:
         adapter = OpenCodeAdapter()
         metadata = ManifestMetadata(platform="opencode")
 
-        skill = SkillDefinition(
+        skill = SkillSpec(
             id="test-skill",
             name="Test Skill",
             description="A test skill",
@@ -109,7 +109,7 @@ class TestOpenCodeAdapter:
         adapter = OpenCodeAdapter()
         metadata = ManifestMetadata(platform="opencode")
 
-        skill = SkillDefinition(
+        skill = SkillSpec(
             id="test-skill",
             name="Test Skill",
             description="A test skill",
@@ -175,13 +175,13 @@ class TestOpenCodeAdapter:
         metadata = ManifestMetadata(platform="opencode")
 
         skills = [
-            SkillDefinition(
+            SkillSpec(
                 id="skill-1",
                 name="Skill 1",
                 description="First skill",
                 trigger_when="Scenario 1",
             ),
-            SkillDefinition(
+            SkillSpec(
                 id="skill-2",
                 name="Skill 2",
                 description="Second skill",
@@ -210,7 +210,7 @@ class TestOpenCodeAdapter:
         adapter = OpenCodeAdapter()
         metadata = ManifestMetadata(platform="opencode")
 
-        skill = SkillDefinition(
+        skill = SkillSpec(
             id="test-skill",
             name="Test Skill",
             description="A test skill",
@@ -249,7 +249,7 @@ class TestOpenCodeAdapter:
         adapter = OpenCodeAdapter()
         metadata = ManifestMetadata(platform="opencode")
 
-        skill = SkillDefinition(
+        skill = SkillSpec(
             id="test-skill",
             name="Test Skill",
             description="A test skill",
@@ -279,7 +279,7 @@ class TestOpenCodeAdapter:
         adapter = OpenCodeAdapter()
         metadata = ManifestMetadata(platform="opencode")
 
-        skill = SkillDefinition(
+        skill = SkillSpec(
             id="test-skill",
             name="Test Skill",
             description="A test skill",

@@ -1,6 +1,6 @@
 [project]
 name = "vibesop"
-version = "7.0.12"
+version = "7.1.0"
 description = "AI SkillOS — discover skills, route queries, orchestrate tasks, manage lifecycles. Unified dashboard, interactive cleanup, community sharing."
 readme = "README.md"
 requires-python = ">=3.12"

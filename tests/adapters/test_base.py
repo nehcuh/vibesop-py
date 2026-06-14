@@ -12,7 +12,7 @@ from vibesop.adapters.models import (
     RenderResult,
     SecurityPolicy,
 )
-from vibesop.core.models import SkillDefinition
+from vibesop.spec import SkillSpec
 
 
 class DummyAdapter(PlatformAdapter):
@@ -179,7 +179,7 @@ class TestPlatformAdapter:
         """Test get_template_context."""
         adapter = DummyAdapter()
         metadata = ManifestMetadata(platform="dummy-platform")
-        skill = SkillDefinition(
+        skill = SkillSpec(
             id="test-skill",
             name="Test Skill",
             description="Test",
@@ -289,7 +289,7 @@ class TestPlatformAdapterEdgeCases:
         """Test validate_manifest with complete manifest."""
         adapter = DummyAdapter()
         metadata = ManifestMetadata(platform="dummy-platform")
-        skill = SkillDefinition(
+        skill = SkillSpec(
             id="test",
             name="Test",
             description="Test",
@@ -323,7 +323,7 @@ class TestPlatformAdapterEdgeCases:
         metadata = ManifestMetadata(platform="dummy-platform")
         manifest = Manifest(
             metadata=metadata,
-            skills=[SkillDefinition(id="valid-skill", name="Valid", description="desc", trigger_when="")],
+            skills=[SkillSpec(id="valid-skill", name="Valid", description="desc", trigger_when="")],
         )
 
         removed = adapter.clean_orphan_skills(manifest, tmp_path)

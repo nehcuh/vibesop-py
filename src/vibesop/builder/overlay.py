@@ -148,15 +148,15 @@ class OverlayMerger:
             PolicySet,
             RoutingPolicy,
             SecurityPolicy,
-            SkillDefinition,
         )
+        from vibesop.spec import SkillSpec
 
         metadata_dict = data.get("metadata", {})
         metadata = ManifestMetadata(**metadata_dict)
 
         # Convert skills
         skills_dicts = data.get("skills", [])
-        skills = [SkillDefinition(**s) if isinstance(s, dict) else s for s in skills_dicts]
+        skills = [SkillSpec(**s) if isinstance(s, dict) else s for s in skills_dicts]
 
         # Convert policies
         policies_dict = data.get("policies", {})

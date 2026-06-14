@@ -195,11 +195,11 @@ class TestConfigPerformance:
         manifest = QuickBuilder.default(platform="claude-code")
 
         # Add many skills to the manifest
-        from vibesop.core.models import SkillDefinition
+        from vibesop.spec import SkillSpec
 
         for i in range(100):
             manifest.skills.append(
-                SkillDefinition(
+                SkillSpec(
                     id=f"skill-{i}",
                     name=f"Skill {i}",
                     description=f"Description for skill {i}",

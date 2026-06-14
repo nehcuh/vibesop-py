@@ -22,29 +22,36 @@ removes one deprecated type per release, with each release independently
 revertible if a missed call site surfaces. The order is chosen by call
 site count (smallest blast radius first).
 
-### Phase 1 — v7.1: Remove `core.models.SkillDefinition`
+### Phase 1 — v7.1: Remove `core.models.SkillDefinition` ✅ SHIPPED
 
-**Blast radius**: 3 import sites
-(`adapters/models.py:13`, `builder/overlay.py:151`,
-`builder/renderer.py:269`).
+**Actual blast radius** (originally claimed "3 import sites"):
+- `src/`: 5 modules, ~14 sites (`adapters/models.py`, `builder/{manifest,overlay,renderer}.py`, `core/models.py` SkillRegistry)
+- `tests/`: 6 files, ~25 sites (conftest + 4 adapter tests + perf test + e2e test)
+- **Hidden re-export**: `vibesop/__init__.py:55` exports `SkillRegistry` which embeds `dict[str, SkillDefinition]`
 
 **Why first**: Pydantic v2 variant has the fewest production references
 and is the easiest to mechanically translate to `SkillSpec` (both are
 Pydantic models, just different field sets).
 
-**Migration script** (per file):
+**Migration** (shipped in v7.1.0):
 ```python
 # Before
 from vibesop.core.models import SkillDefinition
 sd = SkillDefinition(id="x", ...)
 
-# After
+# After — direct class substitution, no factory method needed
 from vibesop.spec import SkillSpec
-sd = SkillSpec.from_legacy_dict({"id": "x", ...})
+sd = SkillSpec(id="x", ...)
 ```
 
-**Acceptance gate**: `grep -rn "SkillDefinition" src/` returns 0 hits
-(excluding docstrings that reference the historical name).
+`SkillSpec` is a strict superset of `SkillDefinition`'s fields and uses
+`populate_by_name=True`, so the `model_dump()` → `SkillSpec(**dumped)`
+round-trip in `OverlayMerger._dict_to_manifest()` works without a
+`from_legacy_dict()` factory (the original ADR draft referenced one
+that does not exist on `SkillSpec`).
+
+**Acceptance gate**: ✅ `grep -rn "SkillDefinition" src/` returns 0 hits
+(remaining matches are docstrings referencing the historical name).
 
 ### Phase 2 — v7.2: Remove `core.skills.config_manager.SkillConfig`
 
@@ -123,7 +130,7 @@ More work than direct migration.
 
 ## Tracking
 
-- [ ] v7.1: Phase 1 (SkillDefinition removal) — issue TBD
+- [x] v7.1: Phase 1 (SkillDefinition removal) — shipped 2026-06-14
 - [ ] v7.2: Phase 2 (SkillConfig removal) — issue TBD
 - [ ] v7.3: Phase 3 (SkillMetadata removal) — issue TBD
 

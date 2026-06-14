@@ -310,12 +310,12 @@ class TestPlatformAdapterAgentRuntime:
 
     def test_kimi_cli_generates_agents_md(self, tmp_path: Path) -> None:
         """E2E: Kimi CLI adapter generates AGENTS.md with mandatory routing rules."""
-        from vibesop.core.models import SkillDefinition
+        from vibesop.spec import SkillSpec
 
         adapter = KimiCliAdapter()
         metadata = ManifestMetadata(platform="kimi-cli", version="1.0.0")
 
-        skill = SkillDefinition(
+        skill = SkillSpec(
             id="systematic-debugging",
             name="Systematic Debugging",
             description="Debug errors systematically",
@@ -345,14 +345,14 @@ class TestPlatformAdapterAgentRuntime:
 
     def test_kimi_cli_agents_md_lists_skills(self, tmp_path: Path) -> None:
         """E2E: skills are rendered to skills/ directory, AGENTS.md references catalog."""
-        from vibesop.core.models import SkillDefinition
+        from vibesop.spec import SkillSpec
 
         adapter = KimiCliAdapter()
         metadata = ManifestMetadata(platform="kimi-cli", version="1.0.0")
 
         skills = [
-            SkillDefinition(id="skill-a", name="Skill A", description="Desc A", trigger_when="Trigger A"),
-            SkillDefinition(id="skill-b", name="Skill B", description="Desc B", trigger_when="Trigger B"),
+            SkillSpec(id="skill-a", name="Skill A", description="Desc A", trigger_when="Trigger A"),
+            SkillSpec(id="skill-b", name="Skill B", description="Desc B", trigger_when="Trigger B"),
         ]
         manifest = Manifest(metadata=metadata, skills=skills)
 
@@ -471,10 +471,10 @@ class TestCrossPlatformConsistency:
 
     def test_all_adapters_have_mandatory_routing_instruction(self, tmp_path: Path) -> None:
         """E2E: All platform configs mention mandatory vibe route workflow."""
-        from vibesop.core.models import SkillDefinition
+        from vibesop.spec import SkillSpec
 
         metadata = ManifestMetadata(platform="claude-code", version="1.0.0")
-        skill = SkillDefinition(
+        skill = SkillSpec(
             id="test-skill",
             name="Test Skill",
             description="A test skill",

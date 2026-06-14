@@ -10,7 +10,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field, field_validator
 
-from vibesop.core.models import SkillDefinition
+from vibesop.spec import SkillSpec
 
 
 class SecurityPolicy(BaseModel):
@@ -211,9 +211,9 @@ class Manifest(BaseModel):
         overlay: Optional overlay for customizations
     """
 
-    skills: list[SkillDefinition] = Field(
+    skills: list[SkillSpec] = Field(
         default_factory=list,
-        description="List of skill definitions",
+        description="List of skill specs",
     )
     policies: PolicySet = Field(
         default_factory=PolicySet,

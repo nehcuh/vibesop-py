@@ -11,7 +11,7 @@ from vibesop.adapters.models import (
     RoutingPolicy,
     SecurityPolicy,
 )
-from vibesop.core.models import SkillDefinition
+from vibesop.spec import SkillSpec
 
 
 class TestKimiCliAdapter:
@@ -59,7 +59,7 @@ class TestKimiCliAdapter:
         adapter = KimiCliAdapter()
         metadata = ManifestMetadata(platform="kimi-cli")
 
-        skill = SkillDefinition(
+        skill = SkillSpec(
             id="test-skill",
             name="Test Skill",
             description="A test skill",
@@ -111,7 +111,7 @@ class TestKimiCliAdapter:
         adapter = KimiCliAdapter()
         metadata = ManifestMetadata(platform="kimi-cli")
 
-        skill = SkillDefinition(
+        skill = SkillSpec(
             id="test-skill",
             name="Test Skill",
             description="A test skill",
@@ -179,13 +179,13 @@ class TestKimiCliAdapter:
         metadata = ManifestMetadata(platform="kimi-cli")
 
         skills = [
-            SkillDefinition(
+            SkillSpec(
                 id="skill-1",
                 name="Skill 1",
                 description="First skill",
                 trigger_when="Scenario 1",
             ),
-            SkillDefinition(
+            SkillSpec(
                 id="skill-2",
                 name="Skill 2",
                 description="Second skill",
@@ -215,7 +215,7 @@ class TestKimiCliAdapter:
         adapter = KimiCliAdapter()
         metadata = ManifestMetadata(platform="kimi-cli")
 
-        skill = SkillDefinition(
+        skill = SkillSpec(
             id="test-skill",
             name="Test Skill",
             description="A test skill",
@@ -297,7 +297,7 @@ class TestKimiCliAdapter:
         adapter = KimiCliAdapter()
         metadata = ManifestMetadata(platform="kimi-cli")
 
-        skill = SkillDefinition(
+        skill = SkillSpec(
             id="test-skill",
             name="Test Skill",
             description="A test skill",
@@ -323,7 +323,7 @@ class TestKimiCliAdapter:
         adapter = KimiCliAdapter()
         metadata = ManifestMetadata(platform="kimi-cli")
 
-        skill = SkillDefinition(
+        skill = SkillSpec(
             id="test-skill",
             name="Test Skill",
             description="A test skill",

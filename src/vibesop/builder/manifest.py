@@ -15,9 +15,9 @@ from vibesop.adapters.models import (
     PolicySet,
     RoutingPolicy,
     SecurityPolicy,
-    SkillDefinition,
 )
 from vibesop.core.config import ConfigManager
+from vibesop.spec import SkillSpec
 
 logger = logging.getLogger(__name__)
 
@@ -100,7 +100,7 @@ class ManifestBuilder:
             msg = f"Failed to load manifest from {manifest_path}: {e}"
             raise ValueError(msg) from e
 
-    def _load_skills(self) -> list[SkillDefinition]:
+    def _load_skills(self) -> list[SkillSpec]:
         try:
             skill_dicts = self.config_loader.get_all_skills()
 
@@ -119,7 +119,7 @@ class ManifestBuilder:
                     if not description:
                         description = skill_dict.get("intent", "")
 
-                    skill = SkillDefinition(
+                    skill = SkillSpec(
                         id=skill_id,
                         name=skill_dict.get("name") or skill_id,  # Fallback to id if name is empty
                         description=description,
@@ -217,7 +217,7 @@ class ManifestBuilder:
 
         return ""
 
-    def _merge_discovered_skills(self, existing_skills: list[SkillDefinition]) -> None:
+    def _merge_discovered_skills(self, existing_skills: list[SkillSpec]) -> None:
         try:
             from vibesop.core.routing.dynamic_discovery import DynamicSkillDiscovery
 
@@ -227,7 +227,7 @@ class ManifestBuilder:
 
             for skill in discovered:
                 if skill.id not in existing_ids:
-                    new_skill = SkillDefinition(
+                    new_skill = SkillSpec(
                         id=skill.id,
                         name=skill.name or skill.id,
                         description=skill.description,
@@ -296,7 +296,7 @@ class ManifestBuilder:
         # Convert skills
         skills_dicts = data.get("skills", [])
         skills = [
-            SkillDefinition(
+            SkillSpec(
                 id=s.get("id", ""),
                 name=s.get("name") or s.get("id", ""),  # Fallback to id if name is empty
                 description=s.get("description", ""),
