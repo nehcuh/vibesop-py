@@ -251,7 +251,47 @@ class AgentRuntime:
             from vibesop.agent import AgentRouter
 
             self._router = AgentRouter(project_root=self.project_root)
+            # v7.3.4 fix (Round 3 P0, part 2): auto-inject LLM factory so
+            # AI triage works for hook callers (which don't go through the
+            # CLI's explicit runtime.router.set_llm_factory() call).
+            # Without this, _single_skill_route sees _llm=None and falls
+            # back to keyword-only routing → "No matching skill found"
+            # even when CLI 'vibe route' on the same query succeeds.
+            try:
+                factory = self._build_llm_factory()
+                if factory is not None:
+                    self._router.set_llm_factory(factory)
+            except Exception as e:
+                logger.debug(f"LLM factory auto-inject failed (degraded mode): {e}")
         return self._router
+
+    @staticmethod
+    def _build_llm_factory() -> Any:
+        """Build an LLM factory that honors ~/.vibe/config.toml.
+
+        Mirrors cli/main.py:_build_llm_factory() — uses LLMConfigResolver
+        so hook callers get the same provider/model as `vibe route` CLI.
+        Returns None if no provider can be resolved (degraded mode).
+        """
+        try:
+            from vibesop.core.llm_config import LLMConfigResolver
+            from vibesop.llm.factory import create_provider
+
+            resolver = LLMConfigResolver()
+            cfg = resolver.get_llm_for_understanding()
+            if not cfg or not cfg.provider:
+                return None
+
+            def _factory():
+                return create_provider(
+                    provider=cfg.provider,
+                    api_key=cfg.api_key,
+                    base_url=cfg.api_base,
+                )
+
+            return _factory
+        except Exception:
+            return None
 
     @property
     def injector(self):
@@ -372,21 +412,33 @@ class AgentRuntime:
         # 3. Route the query
         try:
             if decision.mode in (InterceptionMode.ORCHESTRATE, InterceptionMode.MULTI_AGENT_SQUAD):
-                # MULTI_AGENT_SQUAD: carry the interceptor's analysis via a
-                # minimal routing context so PlanBuilder enters the squad
-                # branch (per-role steps + agent_squad metadata).
+                # v7.3.4 fix (Round 3 P0): build routing context for BOTH
+                # modes, not just MULTI_AGENT_SQUAD. Previously ORCHESTRATE
+                # passed squad_ctx=None, causing router.orchestrate() to
+                # re-decompose without the interceptor's analysis. The
+                # orchestrator reads context.intent_analysis (orchestrator.py:204+),
+                # so without it the squad plan structure was lost and the
+                # hook returned "No matching skill found" while CLI worked.
+                #
+                # The interception_mode tag tells PlanBuilder which branch
+                # to enter: "multi_agent_squad" → per-role steps, anything
+                # else → standard multi-intent decomposition.
                 squad_ctx: Any = None
-                if decision.mode == InterceptionMode.MULTI_AGENT_SQUAD and decision.analysis is not None:
+                if decision.analysis is not None:
                     from vibesop.core.matching import RoutingContext
 
+                    mode_tag = (
+                        "multi_agent_squad"
+                        if decision.mode == InterceptionMode.MULTI_AGENT_SQUAD
+                        else "orchestrate"
+                    )
                     squad_ctx = RoutingContext()
-                    # First-class fields (preferred by readers post-v7.0.3):
-                    squad_ctx.interception_mode = "multi_agent_squad"
+                    squad_ctx.interception_mode = mode_tag
                     squad_ctx.intent_analysis = decision.analysis.to_dict()
-                    # Legacy backchannel (kept for any reader that has not
-                    # yet migrated; will be removed in v7.1):
+                    # Legacy backchannel (kept for readers not yet migrated
+                    # to first-class fields; deprecated, will be removed in v7.1).
                     squad_ctx.metadata["intent_analysis"] = squad_ctx.intent_analysis
-                    squad_ctx.metadata["_interception_mode"] = "multi_agent_squad"
+                    squad_ctx.metadata["_interception_mode"] = mode_tag
 
                 orch_result = self.router.orchestrate(
                     query, callbacks=callbacks, context=squad_ctx

@@ -51,6 +51,9 @@ from vibesop.cli.commands.skills_commands._health import (
     health,
     status,
 )
+from vibesop.cli.commands.skills_commands._index import (
+    index,
+)
 from vibesop.cli.commands.skills_commands._listing import (
     available,
     info,
@@ -72,6 +75,7 @@ __all__ = [
     "featured",
     "feedback",
     "health",
+    "index",
     "info",
     "install",
     "lifecycle",

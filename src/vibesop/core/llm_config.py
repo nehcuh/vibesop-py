@@ -2,6 +2,7 @@
 """VibeSOP LLM 配置管理 - 统一的 LLM 配置和降级策略."""
 
 import json
+import logging
 import os
 from dataclasses import dataclass
 from enum import Enum
@@ -12,6 +13,7 @@ import yaml
 from rich.console import Console
 
 console = Console()
+logger = logging.getLogger(__name__)
 
 
 class LLMSource(Enum):
@@ -455,8 +457,14 @@ class LLMConfigResolver:
         # 2. VibeSOP 配置 (用户显式声明优先于环境变量)
         vibesop_config = VibeSOPConfigManager.get_llm_config()
         if vibesop_config:
-            self.logger.print(
-                f"[dim]  Using VibeSOP config for understanding: {vibesop_config.provider}/{vibesop_config.model}[/dim]"
+            # v7.3.4: changed from logger.print() to logger.debug() — the print
+            # polluted JSON output of `vibe route --json` and other commands
+            # that auto-resolve LLM provider via AgentRuntime (which now calls
+            # this resolver on every hook invocation, post-Round 3 P0 fix).
+            logger.debug(
+                "Using VibeSOP config for understanding: %s/%s",
+                vibesop_config.provider,
+                vibesop_config.model,
             )
             return vibesop_config
 
