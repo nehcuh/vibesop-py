@@ -6,6 +6,14 @@ from typing import Any
 from unittest.mock import MagicMock, patch
 
 from vibesop.installer.pack_installer import PackInstaller
+from vibesop.security.skill_auditor import PackAuditResult
+
+
+def _clean_pack_audit() -> PackAuditResult:
+    """Helper: a passing pre-install audit result for use in tests that mock
+    SkillSecurityAuditor. Returns no critical/high threats so the install
+    proceeds past the pre-audit gate introduced in v7.0.1."""
+    return PackAuditResult(is_safe=True, files_scanned=1)
 
 
 class TestPackInstaller:
@@ -119,6 +127,7 @@ class TestPackInstaller:
         mock_audit.is_safe = True
         mock_auditor = MagicMock()
         mock_auditor.audit_skill_file.return_value = mock_audit
+        mock_auditor.audit_pack_files.return_value = _clean_pack_audit()
         mock_auditor_cls.return_value = mock_auditor
 
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -161,12 +170,17 @@ class TestPackInstaller:
         mock_audit.is_safe = True
         mock_auditor = MagicMock()
         mock_auditor.audit_skill_file.return_value = mock_audit
+        mock_auditor.audit_pack_files.return_value = _clean_pack_audit()
         mock_auditor_cls.return_value = mock_auditor
 
         with tempfile.TemporaryDirectory() as tmpdir:
             target_path = Path(tmpdir) / "test-pack"
 
-            installer = PackInstaller(external_paths=[Path(tmpdir)])
+            installer = PackInstaller(
+                external_paths=[Path(tmpdir)],
+                sandbox_builds=False,
+                allow_unsafe_build=True,
+            )
 
             def _mock_clone(url: str, dest: Path) -> bool:
                 dest.mkdir(parents=True, exist_ok=True)
@@ -204,6 +218,7 @@ class TestPackInstaller:
         mock_audit.is_safe = True
         mock_auditor = MagicMock()
         mock_auditor.audit_skill_file.return_value = mock_audit
+        mock_auditor.audit_pack_files.return_value = _clean_pack_audit()
         mock_auditor_cls.return_value = mock_auditor
 
         with tempfile.TemporaryDirectory() as tmpdir:

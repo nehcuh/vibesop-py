@@ -4,6 +4,18 @@
 
 <!-- handoff:start -->
 
+### 2026-06-14 (S24) pack-install-security-ordering-fix (v7.0.1)
+**Session**: P0 RCE fix from Multi-Agent Squad deep analysis (S23 → S24).
+**Trigger**: S23 squad red-team flagged `PackInstaller._run_post_install` running BUILD.sh with local privileges BEFORE `SkillSecurityAuditor` ever saw the file.
+**Completed**:
+- `src/vibesop/security/skill_auditor.py` — added `PackAuditResult` dataclass, `SHELL_THREAT_PATTERNS` (5 patterns: curl|sh, reverse shell, process substitution, SSH authorized_keys, cron/launch agent), `JS_THREAT_PATTERNS` (2 patterns: eval(remote), child_process), `PACK_FILE_SIZE_LIMIT=1MiB`, `PACK_AUDITED_EXTENSIONS` frozenset, and `audit_pack_files(pack_dir, pack_name)` method scanning all .sh/.bash/.js/.mjs/.cjs/.py/.md/.yaml/.yml/.json files. CRITICAL never downgraded; HIGH downgrades only for trusted packs.
+- `src/vibesop/installer/pack_installer.py` — `PackInstaller.__init__` gains `sandbox_builds=True` + `allow_unsafe_build=False` flags. `install_pack` reordered: pre-audit → reject CRITICAL or untrusted+HIGH → `_run_post_install(sandbox=...)` → existing post-install SKILL.md audit. `_run_post_install` split into `_detect_container_runtime` / `_run_build_in_container` (`--network=none --memory=512m --cpus=0.5`, read-only mount) / `_run_build_local` (legacy fallback). `_build_install_msg` shows pre-audit summary.
+- `tests/installer/test_pack_install_order.py` (NEW) — 13 tests: TestPreInstallAuditGate, TestSandboxedBuild (3 tests), TestPackAuditResult (4 tests), TestAuditPackFiles (4 tests: curl|sh detection, clean pack pass, oversized file skip, JS eval remote detection).
+- `tests/installer/test_pack_installer.py` — updated 3 existing tests to mock `audit_pack_files` with `_clean_pack_audit()` helper; added `sandbox_builds=False, allow_unsafe_build=True` to BUILD.sh tests to preserve original semantics.
+- `CHANGELOG.md` — v7.0.1 section with full background, threat model, fix description, verification matrix.
+**Verification**: 13/13 new tests pass; 228/228 tests/installer + tests/security pass; basedpyright 0 new errors on touched files; 9 unrelated failures (tests/{integration,integrations,core/skills}) confirmed via `git stash` to pre-exist on main.
+**Next**: Phase 2 (jinja hooks `autoescape`/`shlex.quote` hardening) and Phase 3 (`_interception_mode` → RoutingContext first-class field) from the S23 squad plan remain pending.
+
 ### 2026-06-14 (S23) prompt-chain-validator-skill-integration
 **Session**: Packaged the dynamic-workflow + container-validation pattern as a reusable cross-cutting skill + CLI.
 **Completed**:

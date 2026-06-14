@@ -70,6 +70,47 @@ class AuditResult:
         }
 
 
+@dataclass
+class PackAuditResult:
+    """Result of auditing all files in a pack directory.
+
+    Used as a pre-install gate before any build script (BUILD.sh / setup.sh /
+    .vibesop-build / package.json scripts) is executed. ``has_critical`` and
+    ``has_high`` drive the install rejection logic; trusted packs downgrade
+    HIGH to MEDIUM consistent with ``audit_skill_file``.
+    """
+
+    is_safe: bool
+    has_critical: bool = False
+    has_high: bool = False
+    files_scanned: int = 0
+    threats_by_file: dict[str, list[ThreatPattern]] = field(default_factory=dict)
+
+    @property
+    def summary(self) -> str:
+        affected = len(self.threats_by_file)
+        if self.has_critical:
+            return f"CRITICAL threats in {affected} file(s)"
+        if self.has_high:
+            return f"HIGH threats in {affected} file(s)"
+        return f"{self.files_scanned} file(s) scanned, no critical/high threats"
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "is_safe": self.is_safe,
+            "has_critical": self.has_critical,
+            "has_high": self.has_high,
+            "files_scanned": self.files_scanned,
+            "threats_by_file": {
+                path: [
+                    {"name": t.name, "level": t.level.value, "category": t.category}
+                    for t in threats
+                ]
+                for path, threats in self.threats_by_file.items()
+            },
+        }
+
+
 class SkillSecurityAuditor:
     """Security auditor for skill files."""
 
@@ -140,6 +181,84 @@ class SkillSecurityAuditor:
             description="Attempts to bypass safety measures",
         ),
     ]
+
+    # Shell-script-specific threat patterns (applied to .sh/.bash files).
+    # These catch RCE primitives that prompt-injection patterns miss because
+    # they look like normal shell idioms inside markdown prose.
+    SHELL_THREAT_PATTERNS: ClassVar[list[ThreatPattern]] = [
+        ThreatPattern(
+            name="Curl Pipe Shell",
+            pattern=r"(curl|wget)\s+[^|<>]+\|\s*(sh|bash|zsh|fish)\b",
+            level=ThreatLevel.CRITICAL,
+            category="remote_code_execution",
+            description="Downloads and executes a remote shell payload",
+        ),
+        ThreatPattern(
+            name="Reverse Shell",
+            pattern=r"(bash|sh|zsh)\s+-i\s+>|/dev/tcp/|nc\s+-e|ncat\s+-e|socat\s+.*EXEC",
+            level=ThreatLevel.CRITICAL,
+            category="reverse_shell",
+            description="Classic reverse-shell pattern",
+        ),
+        ThreatPattern(
+            name="Shell Exfiltration via Process Substitution",
+            pattern=r"<\s*\(\s*(curl|wget)|\$\(\s*(curl|wget)",
+            level=ThreatLevel.HIGH,
+            category="data_exfiltration",
+            description="Process substitution with HTTP client for exfiltration",
+        ),
+        ThreatPattern(
+            name="SSH Authorized Keys Modification",
+            pattern=r"authorized_keys|~/?\.ssh/authorized_keys",
+            level=ThreatLevel.HIGH,
+            category="persistence",
+            description="Modifies SSH authorized_keys for persistence",
+        ),
+        ThreatPattern(
+            name="Cron / Launch Agent Persistence",
+            pattern=r"(crontab\s+-|/etc/cron\.|~/Library/LaunchAgents/|/etc/systemd/system/)",
+            level=ThreatLevel.HIGH,
+            category="persistence",
+            description="Installs a cron job or launch agent for persistence",
+        ),
+    ]
+
+    # JavaScript / TypeScript-specific threat patterns.
+    JS_THREAT_PATTERNS: ClassVar[list[ThreatPattern]] = [
+        ThreatPattern(
+            name="Eval Of Remote Payload",
+            pattern=r"eval\s*\(\s*(atob|Buffer\.from|fetch|axios|require\(\s*['\"]http)",
+            level=ThreatLevel.CRITICAL,
+            category="code_injection",
+            description="eval() of remote or encoded payload",
+        ),
+        ThreatPattern(
+            name="Child Process Exec",
+            pattern=r"(child_process|execSync|spawnSync|exec\()\s*[\(.]",
+            level=ThreatLevel.HIGH,
+            category="code_injection",
+            description="Spawns a child process from JS",
+        ),
+    ]
+
+    # Max file size to scan (1 MiB) — avoids DoS on huge files in cloned packs.
+    PACK_FILE_SIZE_LIMIT: ClassVar[int] = 1_048_576
+
+    # File extensions audited by ``audit_pack_files`` (everything else skipped).
+    PACK_AUDITED_EXTENSIONS: ClassVar[frozenset[str]] = frozenset(
+        {
+            ".sh",
+            ".bash",
+            ".js",
+            ".mjs",
+            ".cjs",
+            ".py",
+            ".md",
+            ".yaml",
+            ".yml",
+            ".json",
+        }
+    )
 
     def __init__(
         self,
@@ -349,6 +468,118 @@ class SkillSecurityAuditor:
             reason=f"Directory audit: {len(all_threats)} threat(s) across {len(skill_files)} file(s)",
         )
 
+    def audit_pack_files(
+        self,
+        pack_dir: Path,
+        pack_name: str | None = None,
+    ) -> PackAuditResult:
+        """Audit ALL files in a pack directory before any build script runs.
+
+        Unlike ``audit_skill_directory`` (which only scans .md/.yaml), this
+        method scans shell scripts, JS, JSON package.json scripts, and Python
+        files. It exists to gate ``_run_post_install`` in ``PackInstaller``:
+        if a CRITICAL pattern (curl|sh, reverse shell, eval(remote)) is found,
+        installation is rejected before the build script ever executes.
+
+        Args:
+            pack_dir: Root directory of the cloned pack.
+            pack_name: Pack name — used to consult the trust store for HIGH
+                downgrades (consistent with ``audit_skill_file``).
+
+        Returns:
+            ``PackAuditResult`` with ``has_critical`` / ``has_high`` flags
+            and per-file threat mapping.
+        """
+        pack_dir = Path(pack_dir)
+        if not pack_dir.exists():
+            return PackAuditResult(
+                is_safe=False,
+                has_critical=True,
+                files_scanned=0,
+            )
+
+        type_patterns = self._pack_file_type_patterns()
+        threats_by_file: dict[str, list[ThreatPattern]] = {}
+        files_scanned = 0
+        has_critical = False
+        has_high = False
+
+        for file_path in pack_dir.rglob("*"):
+            if not file_path.is_file():
+                continue
+            suffix = file_path.suffix.lower()
+            if suffix not in type_patterns:
+                continue
+            try:
+                if file_path.stat().st_size > self.PACK_FILE_SIZE_LIMIT:
+                    continue
+                content = file_path.read_text(encoding="utf-8", errors="ignore")
+            except OSError:
+                continue
+
+            files_scanned += 1
+            file_threats = [p for p in type_patterns[suffix] if p.matches(content)]
+            if not file_threats:
+                continue
+
+            try:
+                rel = str(file_path.relative_to(pack_dir))
+            except ValueError:
+                rel = str(file_path)
+            threats_by_file[rel] = file_threats
+
+            for threat in file_threats:
+                if threat.level == ThreatLevel.CRITICAL:
+                    has_critical = True
+                elif threat.level == ThreatLevel.HIGH:
+                    has_high = True
+
+        # Trust store downgrade for HIGH (consistent with audit_skill_file).
+        # CRITICAL is never downgraded — trust is not a license for RCE.
+        is_trusted = self._is_pack_trusted(pack_name)
+        effective_has_high = has_high and not is_trusted
+
+        return PackAuditResult(
+            is_safe=not has_critical and not effective_has_high,
+            has_critical=has_critical,
+            has_high=effective_has_high,
+            files_scanned=files_scanned,
+            threats_by_file=threats_by_file,
+        )
+
+    def _pack_file_type_patterns(self) -> dict[str, list[ThreatPattern]]:
+        """Build suffix → patterns mapping for pack auditing."""
+        shell_patterns = self.THREAT_PATTERNS + self.SHELL_THREAT_PATTERNS
+        js_patterns = self.THREAT_PATTERNS + self.JS_THREAT_PATTERNS
+        base_patterns = self.THREAT_PATTERNS
+        return {
+            ".sh": shell_patterns,
+            ".bash": shell_patterns,
+            ".js": js_patterns,
+            ".mjs": js_patterns,
+            ".cjs": js_patterns,
+            ".py": base_patterns,
+            ".md": base_patterns,
+            ".yaml": base_patterns,
+            ".yml": base_patterns,
+            ".json": base_patterns,
+        }
+
+    @staticmethod
+    def _is_pack_trusted(pack_name: str | None) -> bool:
+        if not pack_name:
+            return False
+        try:
+            from vibesop.constants import TRUSTED_PACKS
+            from vibesop.core.skills.trust import TrustStore
+
+            store = TrustStore()
+            return bool(
+                store.is_trusted_pack(pack_name) or pack_name in TRUSTED_PACKS
+            )
+        except Exception:
+            return False
+
     def validate_path(self, path: Path) -> bool:
         try:
             self._validate_path(Path(path))
@@ -423,6 +654,7 @@ def audit_skill(
 
 __all__ = [
     "AuditResult",
+    "PackAuditResult",
     "SkillSecurityAuditor",
     "ThreatLevel",
     "ThreatPattern",

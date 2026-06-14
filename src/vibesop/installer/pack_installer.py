@@ -49,6 +49,8 @@ class PackInstaller:
         platform_paths: list[Path] | None = None,
         strict_mode: bool = True,
         project_root: str | Path | None = None,
+        sandbox_builds: bool = True,
+        allow_unsafe_build: bool = False,
     ):
         if external_paths is not None:
             self.central_storage = central_storage or external_paths[0]
@@ -58,6 +60,8 @@ class PackInstaller:
             self.platform_paths = platform_paths or self.PLATFORM_PATHS.copy()
 
         self._strict_mode = strict_mode
+        self._sandbox_builds = sandbox_builds
+        self._allow_unsafe_build = allow_unsafe_build
         self._auditor = SkillSecurityAuditor(
             strict_mode=strict_mode,
             project_root=project_root or Path.cwd(),
@@ -127,7 +131,27 @@ class PackInstaller:
             if git_dir.exists():
                 _safe_rmtree(git_dir)
 
-            build_output = self._run_post_install(target_path, analysis)
+            # Pre-install audit: scan ALL files (incl. BUILD.sh / setup.sh /
+            # package.json scripts) BEFORE any build script is executed.
+            # This closes the RCE where a malicious pack's BUILD.sh runs with
+            # local privileges before the audit ever sees it.
+            pre_audit = self._auditor.audit_pack_files(target_path, pack_name=pack_name)
+            if pre_audit.has_critical:
+                _safe_rmtree(target_path)
+                return False, f"Pack rejected (pre-install CRITICAL): {pre_audit.summary}"
+            if pre_audit.has_high:
+                _safe_rmtree(target_path)
+                return False, f"Pack rejected (HIGH risk, untrusted): {pre_audit.summary}"
+
+            # Run build with sandbox preference. Falls back to local only when
+            # no container runtime exists; otherwise runs in an isolated
+            # --network=none container so the build script cannot exfiltrate.
+            build_output = self._run_post_install(
+                target_path,
+                analysis,
+                sandbox=self._sandbox_builds,
+                allow_unsafe_build=self._allow_unsafe_build,
+            )
 
             installed_skill_files = list(target_path.rglob("SKILL.md"))
             audit_results = self._audit_skills(
@@ -138,6 +162,8 @@ class PackInstaller:
             msg = self._build_install_msg(
                 pack_name, installed_skill_files, audit_results,
                 symlink_results, build_output=build_output,
+                pre_audit_summary=pre_audit.summary,
+                pre_audit_files=pre_audit.files_scanned,
             )
             self._rebuild_global_index(pack_name)
             return True, msg
@@ -164,6 +190,8 @@ class PackInstaller:
         symlink_results: list[tuple[str, str]],
         already_installed: bool = False,
         build_output: str = "",
+        pre_audit_summary: str | None = None,
+        pre_audit_files: int = 0,
     ) -> str:
         parts: list[str] = []
 
@@ -173,6 +201,8 @@ class PackInstaller:
             parts.append(f"Installed {pack_name} to {self.central_storage / pack_name}")
             parts.append(f"Skills found: {len(skill_files)}")
 
+        if pre_audit_summary is not None:
+            parts.append(f"Pre-audit ({pre_audit_files} files): {pre_audit_summary}")
         if audit_results:
             parts.append(f"Audit: {', '.join(audit_results)}")
         if build_output:
@@ -185,22 +215,144 @@ class PackInstaller:
 
         return "\n".join(parts)
 
-    def _run_post_install(self, target_path: Path, _analysis: object) -> str:
-        """Run post-install build scripts for template-based skill packs."""
-        import subprocess
+    def _run_post_install(
+        self,
+        target_path: Path,
+        _analysis: object,
+        *,
+        sandbox: bool = False,
+        allow_unsafe_build: bool = False,
+    ) -> str:
+        """Run post-install build scripts for template-based skill packs.
 
+        Args:
+            target_path: Cloned pack root directory.
+            _analysis: Reserved for future use (currently introspected for
+                pack-level metadata).
+            sandbox: When True, prefer running build inside an ephemeral
+                ``--network=none`` container so the script cannot exfiltrate.
+                Falls back to local execution only if ``allow_unsafe_build``
+                is also True; otherwise the build is skipped with a notice.
+            allow_unsafe_build: Explicit opt-in for local execution when no
+                container runtime is available.
+        """
         build_scripts = [".vibesop-build", "BUILD.sh", "setup.sh"]
         script_path: Path | None = next(
             (target_path / s for s in build_scripts if (target_path / s).exists()),
             None,
         )
 
+        has_bun_fallback = (
+            script_path is None
+            and (target_path / "package.json").exists()
+            and shutil.which("bun") is not None
+        )
+        has_build = script_path is not None or has_bun_fallback
+
+        if not has_build:
+            return ""
+
+        if sandbox:
+            runtime = self._detect_container_runtime()
+            if runtime is not None and script_path is not None:
+                return self._run_build_in_container(target_path, script_path, runtime)
+            if not allow_unsafe_build:
+                return (
+                    "BUILD skipped (no container runtime available; "
+                    "pass allow_unsafe_build=True to override)"
+                )
+            # Local fallback explicitly opted in.
+
+        return self._run_build_local(target_path, script_path)
+
+    @staticmethod
+    def _detect_container_runtime() -> str | None:
+        """Return the first available container runtime, or None.
+
+        Order matches prompt_chain/validator.py convention so the two
+        sandboxes share detection logic.
+        """
+        for tool in ("orbstack", "docker", "lima"):
+            if shutil.which(tool):
+                return tool
+        return None
+
+    @staticmethod
+    def _run_build_in_container(
+        target_path: Path,
+        script_path: Path,
+        runtime: str,
+    ) -> str:
+        """Run a build script in an ephemeral, network-blocked container.
+
+        Security properties:
+        - ``--network=none`` blocks egress even if the script tries curl|sh.
+        - ``--read-only`` mount of the source tree: the script can read its
+          own files but cannot persist backdoors into the pack directory.
+        - 60s timeout, 512 MB memory cap, 0.5 CPU: contains runaway builds.
+        """
+        import subprocess
+
+        image = "ubuntu:22.04"
+        # All three supported runtimes accept the docker-CLI shape for our
+        # purposes (orbstack via docker-compat, lima via its docker wrapper).
+        # We use the docker CLI regardless and let the runtime shim translate.
+        runtime_bin = "docker" if runtime in ("orbstack", "docker") else "docker"
+        cmd = [
+            runtime_bin,
+            "run",
+            "--rm",
+            "-v",
+            f"{target_path}:/work:ro",
+            "-w",
+            "/work",
+            "--network",
+            "none",
+            "--memory",
+            "512m",
+            "--cpus",
+            "0.5",
+            image,
+            "/bin/sh",
+            script_path.name,
+        ]
+        try:
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=60,
+                check=False,
+            )
+        except (subprocess.TimeoutExpired, OSError) as e:
+            return f"{script_path.name} sandbox error: {e}"
+
+        if result.returncode == 0:
+            return f"{script_path.name} OK (sandboxed, network blocked)"
+        return (
+            f"{script_path.name} blocked/failed in sandbox: "
+            f"{result.stderr.strip()[:80]}"
+        )
+
+    @staticmethod
+    def _run_build_local(
+        target_path: Path,
+        script_path: Path | None,
+    ) -> str:
+        """Legacy local execution path. Retained as opt-in fallback."""
+        import subprocess
+
         if script_path is None:
+            # Bun fallback for template-based packs without a shell script.
             if (target_path / "package.json").exists() and shutil.which("bun"):
                 try:
                     result = subprocess.run(
                         ["bun", "run", "gen:skill-docs"],
-                        cwd=target_path, capture_output=True, text=True, timeout=60, check=False,
+                        cwd=target_path,
+                        capture_output=True,
+                        text=True,
+                        timeout=60,
+                        check=False,
                     )
                     if result.returncode == 0:
                         return "bun run gen:skill-docs OK"
@@ -213,7 +365,11 @@ class PackInstaller:
         try:
             result = subprocess.run(
                 [str(script_path)],
-                cwd=target_path, capture_output=True, text=True, timeout=120, check=False,
+                cwd=target_path,
+                capture_output=True,
+                text=True,
+                timeout=120,
+                check=False,
             )
             if result.returncode == 0:
                 return f"{script_path.name} OK"
