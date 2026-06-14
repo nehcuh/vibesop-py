@@ -320,43 +320,249 @@ _描述..._
 
 ✅ Phase 0-5 已完成
 
+## 验证目标
+
+三层验证（缺一不可）：
+1. **VibeSOP 自身** — CLI 路由 pipeline + skill index + 单元测试
+2. **VibeSOP × Agent 配置生成** — hook 文件、settings.json、CLAUDE.md / AGENTS.md
+3. **VibeSOP × Agent 真实集成** — hook 触发后返回有效的 skill 推荐（最易遗漏，必须验证）
+
 ## 验证清单
 
-### 环境
+### A. 容器与依赖（必须按顺序，否则后续步骤失败）
 
-- 容器工具: orbstack → docker → lima（自动检测）
-- 镜像: ubuntu:22.04
-- 挂载项目到 `/app`
+容器：orbstack → docker → lima（自动检测）；镜像 `ubuntu:22.04`；挂载项目到 `/app`。
 
-### 步骤
+```bash
+# A1. 创建容器
+docker run -d --name vibesop-e2e --hostname vibesop-e2e \\
+  -v $PWD:/app -w /app ubuntu:22.04 sleep infinity
 
-1. **安装依赖**: `apt-get install` + `uv sync` + `npm install -g @anthropic-ai/claude-code`
-2. **构建 hook**: `vibe build claude-code --output ~/.claude`
-3. **安装技能**: `vibe install mattpocock && vibe install superpowers`
-4. **类型检查**: `npx basedpyright src/`
-5. **单元测试**: `pytest tests/agent/ tests/core/ tests/cli/ -v`
-6. **CLI 验证**: `vibe route` 5 种 InterceptionMode（SINGLE / SINGLE_AGENT / MULTI_AGENT_SQUAD / ORCHESTRATE / SLASH_COMMAND）
-7. **Hook 验证**: `echo '{{"user_prompt":"...}}' | bash ~/.claude/hooks/vibesop-route.sh`
+# A2. apt 基础包（jq 必装 — hook 用 jq 解析 JSON envelope）
+docker exec vibesop-e2e bash -c "apt-get update -qq && \\
+  DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \\
+  python3 python3-venv git curl npm ca-certificates gnupg build-essential jq zstd"
 
-### 输出
+# A3. Node 20（Ubuntu 22.04 自带 Node 12 太旧，Claude Code 需 18+；
+#     必须先 remove libnode-dev/libnode72/npm 否则 NodeSource 冲突）
+docker exec vibesop-e2e bash -c "curl -fsSL https://deb.nodesource.com/setup_20.x | sh - && \\
+  apt-get remove -y -qq libnode-dev libnode72 npm && apt-get install -y nodejs"
 
-JSON 格式验证报告，包含：
+# A4. uv（自动下载 Python 3.12，无需 deadsnakes PPA）
+docker exec vibesop-e2e bash -c "curl -LsSf https://astral.sh/uv/install.sh | sh"
+
+# A5. VibeSOP
+docker exec -w /app vibesop-e2e bash -c "export PATH=/root/.local/bin:$PATH && uv sync"
+```
+
+### B. AI Agent 安装
+
+```bash
+# B1. Claude Code（npm）
+docker exec vibesop-e2e npm install -g @anthropic-ai/claude-code
+docker exec vibesop-e2e claude --version  # 期望：2.x.x
+
+# B2. Kimi Code（官方 install.sh，ACP 协议）
+docker exec vibesop-e2e bash -c \\
+  "curl -fsSL https://code.kimi.com/kimi-code/install.sh -o /tmp/kimi-install.sh && \\
+   bash /tmp/kimi-install.sh"
+docker exec vibesop-e2e /root/.kimi-code/bin/kimi --version  # 期望：0.14+
+
+# B3. Pi Agent：当前 npm 注册表无官方包，跳过实际安装，仅验证 vibe build pi 配置文件生成
+```
+
+### C. LLM Provider 配置（关键 — 不配置 indexer 100% 失败）
+
+**选其一**：
+
+```bash
+# C1a. 方案一：宿主机 oMLX（OpenAI 兼容，端口 11434）
+cat > /tmp/vibe-config.toml <<EOF
+[llm]
+provider = "openai"
+model = "Qwen3.6-35B-A3B-mxfp8"
+api_base = "http://host.docker.internal:11434/v1"
+api_key = "local-omlx-fake-key-min-11-chars"
+EOF
+docker cp /tmp/vibe-config.toml vibesop-e2e:/root/.vibe/config.toml
+
+# C1b. 方案二：DeepSeek API（速度更快，需要 host 提供 DEEPSEEK_API_KEY）
+cat > /tmp/vibe-config.toml <<EOF
+[llm]
+provider = "deepseek"
+model = "deepseek-v4-flash"
+EOF
+docker cp /tmp/vibe-config.toml vibesop-e2e:/root/.vibe/config.toml
+# 后续命令必须 -e DEEPSEEK_API_KEY=$DEEPSEEK_API_KEY 透传
+```
+
+**已知坑**：
+- 本地小模型（<7B，如 qwen2.5:0.5b/1.5b）无法产出 indexer 期望的结构化 JSON → `indexed_count` 永远为 0
+- thinking-capable 模型（Qwen3.x、DeepSeek-R1、deepseek-v4-flash）需 `max_tokens>=4000`（v7.3.2 已修）
+
+### D. Skill Index 构建（漏掉这步 → AI_TRIAGE 永远 "No embeddings in index"）
+
+```bash
+# D1. 安装技能包
+docker exec -w /app vibesop-e2e bash -c \\
+  "export PATH=/root/.local/bin:$PATH && \\
+   uv run vibe install mattpocock && uv run vibe install superpowers"
+
+# D2. 构建 skill embedding index（vibe quickstart 交互式不易自动化，用 Python 直调）
+docker exec -e DEEPSEEK_API_KEY=$DEEPSEEK_API_KEY -w /app vibesop-e2e bash -c \\
+  "export PATH=/root/.local/bin:$PATH && uv run python -c \"
+from vibesop.core.skills.indexer import SkillIndexer
+from vibesop.core.llm_config import LLMConfigResolver
+from vibesop.llm.factory import create_provider
+
+resolver = LLMConfigResolver()
+cfg = resolver.get_llm_for_understanding()
+factory = lambda: create_provider(provider=cfg.provider, api_key=cfg.api_key, base_url=cfg.api_base)
+idx = SkillIndexer(project_root='/app', llm_factory=factory)
+result = idx.build_index(scope='global', show_progress=True, force=True, max_workers=4)
+print(f'indexed: {{result.indexed_count}}/{{result.failed_count + result.indexed_count}}')
+\""
+
+# D3. 验证 index 非空
+docker exec vibesop-e2e cat /root/.vibe/skill-index.json | \\
+  python3 -c "import json,sys; d=json.loads(sys.stdin.read()); print(f'indexed: {{d.get(\"indexed_count\")}}'); assert d.get('indexed_count',0) > 0, 'INDEX EMPTY'"
+```
+
+### E. VibeSOP 配置生成（每个 Agent 都跑一遍）
+
+```bash
+docker exec -w /app vibesop-e2e bash -c "export PATH=/root/.local/bin:$PATH && \\
+  uv run vibe build claude-code --output /root/.claude && \\
+  uv run vibe build kimi-cli --output /root/.kimi-code && \\
+  uv run vibe build pi --output /app/.pi"
+```
+
+### F. CLI 路由验证（5 种 InterceptionMode）
+
+```bash
+# F1. SINGLE — 短查询，AI_TRIAGE 应选中具体技能
+docker exec -e DEEPSEEK_API_KEY=$DEEPSEEK_API_KEY -w /app vibesop-e2e bash -c \\
+  "export PATH=/root/.local/bin:$PATH && uv run vibe route '帮我调试 TypeError NoneType 错误' --yes"
+# 期望：Selected: <skill_id> (confidence > 60%)，不是 FALLBACK_LLM
+
+# F2. ORCHESTRATE — 长语义，多步分解
+docker exec -e DEEPSEEK_API_KEY=$DEEPSEEK_API_KEY -w /app vibesop-e2e bash -c \\
+  "export PATH=/root/.local/bin:$PATH && uv run vibe route '请设计一个高可用的微服务架构，包括服务拆分、API 网关和监控方案' --yes"
+# 期望：Steps: >=2，每个 Step 有 skill_id（不是全 fallback-llm）
+
+# F3. MULTI_AGENT_SQUAD — 多角色
+docker exec -e DEEPSEEK_API_KEY=$DEEPSEEK_API_KEY -w /app vibesop-e2e bash -c \\
+  "export PATH=/root/.local/bin:$PATH && uv run vibe route '设计微服务架构、用Python实现核心模块、做安全审查' --yes"
+# 期望：Agent Squad（architect/implementer/reviewer/red_team）
+
+# F4. SLASH_COMMAND
+docker exec -w /app vibesop-e2e bash -c \\
+  "export PATH=/root/.local/bin:$PATH && uv run vibe route '/vibe-list' --yes"
+# 期望：列出已安装技能
+
+# F5. EXPLICIT（@skill_id 语法）
+docker exec -w /app vibesop-e2e bash -c \\
+  "export PATH=/root/.local/bin:$PATH && uv run vibe route '@builtin/instinct 学习最近的会话' --yes"
+```
+
+### G. Hook 集成验证（最关键，最易出问题）
+
+```bash
+# G1. 文件存在性
+docker exec vibesop-e2e ls -la /root/.claude/hooks/  # 应有 vibesop-route.sh + vibesop-track.sh
+docker exec vibesop-e2e cat /root/.claude/settings.json  # UserPromptSubmit hook 已注册
+
+# G2. CLAUDE.md 协议注入
+docker exec vibesop-e2e grep "MANDATORY.*vibe route" /root/.claude/CLAUDE.md
+
+# G3. Hook JSON envelope 解析（关键 — Round 2 修过 P1 bug）
+# 正确字段名是 .prompt（不是 .user_prompt）
+echo '{{"prompt":"帮我调试 TypeError NoneType 错误","session_id":"test","cwd":"/app","hook_event_name":"UserPromptSubmit","transcript_path":"/tmp/x.jsonl"}}' | \\
+  docker exec -e DEEPSEEK_API_KEY=$DEEPSEEK_API_KEY -i vibesop-e2e /root/.claude/hooks/vibesop-route.sh
+
+# G4. 必须验证：hook 返回的 additionalContext 包含 skill_id（不只是 hook 能跑）
+# 上述命令的输出应包含：
+#   "additionalContext": "..." 中含 "skill_id": "<具体技能>"
+# 如果是 "No matching skill found" → AgentRuntime 路径有 P0 bug，需修
+```
+
+### H. 类型检查 + 单元测试
+
+```bash
+# H1. basedpyright
+docker exec -w /app vibesop-e2e bash -c \\
+  "export PATH=/root/.local/bin:$PATH && uv run --extra dev basedpyright src/ 2>&1 | tail -3"
+# 期望：0 errors（warnings OK）
+
+# H2. 单元测试
+docker exec -w /app vibesop-e2e bash -c \\
+  "export PATH=/root/.local/bin:$PATH && \\
+   uv run pytest tests/core/orchestration/ tests/agent/runtime/ tests/cli/ -q --no-cov"
+# 期望：>=592 passed, 0 failed
+```
+
+## 输出：验证报告
+
+完成上述 8 大类（A-H）后，按以下结构输出 JSON 报告：
 
 ```json
 {{
-  "environment": {{ "container_tool": "...", "python": "..." }},
-  "results": {{ "unit_tests": {{...}}, "cli_modes": {{...}}, "hook_path": {{...}} }},
+  "environment": {{
+    "container_tool": "orbstack|docker|lima",
+    "image": "ubuntu:22.04",
+    "python": "3.12.x",
+    "node": "20.x",
+    "claude_code": "2.x.x",
+    "kimi_code": "0.14+",
+    "vibesop": "7.3.x",
+    "llm_provider": "deepseek|omlx|ollama",
+    "skills_indexed": 102
+  }},
+  "results": {{
+    "A.container_setup": {{"passed": true}},
+    "B.agents_installed": {{"claude_code": true, "kimi_code": true, "pi_agent": "skipped"}},
+    "C.llm_provider": {{"configured": true, "indexer_resolved_provider": "deepseek/deepseek-v4-flash"}},
+    "D.skill_index": {{"indexed_count": 102, "failed_count": 0}},
+    "E.config_generation": {{"claude_code": true, "kimi_cli": true, "pi": true}},
+    "F.cli_routing": {{
+      "F1_single": "diagnose (72%)",
+      "F2_orchestrate": "3 steps with skill_ids",
+      "F3_squad": "architect+implementer+reviewer+red_team",
+      "F4_slash": "/vibe-list OK",
+      "F5_explicit": "OK"
+    }},
+    "G.hook_integration": {{
+      "G1_files_exist": true,
+      "G2_claude_md_protocol": true,
+      "G3_json_envelope_parsed": true,
+      "G4_hook_returns_skill": "critical: must contain skill_id, not No matching skill found"
+    }},
+    "H.tests": {{"basedpyright_errors": 0, "pytest_passed": 592}}
+  }},
   "p0_issues": [],
   "p1_issues": [],
-  "conclusion": "✅ 验证通过"
+  "conclusion": "pass: VibeSOP itself + agent config gen OK; G4 hook-to-skill is known P0"
 }}
 ```
 
-或直接调用：
+## 已知问题（不算验证失败，但要在报告中标记）
+
+| ID | 描述 | 当前状态 |
+|---|---|---|
+| P0-hook-routing | `AgentRuntime.handle_query()` ORCHESTRATE 分支不传 analysis 给 router，导致 hook 返回 "No matching skill found"（CLI 同 query 正常） | 待修 v7.3.3 |
+| P1-squad-summary | Multi-intent Reasoning 显示正确 skill，Execution Summary 全 fallback-llm | 显示 bug |
+| P2-kimi-acp | Kimi Code 0.14.3 用新 ACP 协议，VibeSOP 当前生成旧 AGENTS.md 协议 | 配置可用但未利用 ACP |
+| P3-pi-agent | 无官方 npm 包，仅验证配置文件生成 | 上游分发问题 |
+
+## 直接调用
+
+如果不想手动跑，可调内置 validator（覆盖 A/B/E/G1/H，不含 LLM/Index/Hook→Skill 验证）：
 
 ```bash
 vibe prompt-chain validate --json
 ```
+
+但**完整 e2e 必须手动跑 C/D/G3/G4** — 这些是 Round 1-3 教训显示 validator 还未覆盖的关键路径。
 """
 
     # ── 辅助 ──────────────────────────────────────────────────────────────

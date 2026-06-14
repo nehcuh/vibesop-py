@@ -126,9 +126,39 @@ class TestGenerate:
         out = tmp_path / "prompts"
         prompts = gen.generate(feature="X", output_dir=out)
         final = prompts[-1]
+        # Baseline tokens (kept across v7.3.3 rewrite)
         assert "vibe build" in final.content
         assert "pytest" in final.content
         assert "ubuntu:22.04" in final.content
+
+    def test_generate_final_includes_round3_lessons(self, tmp_path: Path) -> None:
+        """v7.3.3 expanded prompt — covers lessons from 3 rounds of e2e validation.
+
+        Round 1 found: hook JSON envelope used wrong field name (.user_prompt vs .prompt)
+        Round 2 found: indexer _llm_factory bypassed ~/.vibe/config.toml
+        Round 3 found: AgentRuntime ORCHESTRATE branch doesn't propagate analysis
+        """
+        gen = PromptChainGenerator(project_root=tmp_path)
+        out = tmp_path / "prompts"
+        prompts = gen.generate(feature="X", output_dir=out)
+        final = prompts[-1]
+        # Round 2 P1: hook must parse .prompt field (not .user_prompt)
+        assert '"prompt":' in final.content, "JSON envelope must use .prompt field"
+        # Round 2 P2a fix: jq must be installed (hook depends on it)
+        assert "jq" in final.content, "jq install step missing"
+        # Round 2 P2b: Node 20 explicit (Ubuntu 22.04 default is Node 12)
+        assert "setup_20.x" in final.content, "Node 20 NodeSource setup missing"
+        # Round 3: LLM provider config step (without it, indexer fails 100%)
+        assert "DEEPSEEK_API_KEY" in final.content, "DeepSeek API key propagation missing"
+        assert "host.docker.internal" in final.content, "host oMLX option missing"
+        # Round 3: skill index build step (without it, AI_TRIAGE always empty)
+        assert "indexed_count" in final.content, "skill index verification missing"
+        # Round 3 P0: hook → skill recommendation check (not just file exists)
+        assert "G4_hook_returns_skill" in final.content, "hook→skill verification missing"
+        # Round 3 P0 known bug documented
+        assert "P0-hook-routing" in final.content, "known P0 issue not documented"
+        # Kimi Code install (Round 2 addition)
+        assert "code.kimi.com/kimi-code/install.sh" in final.content, "Kimi install missing"
 
     def test_generate_uses_project_name_from_pyproject(self, tmp_path: Path) -> None:
         (tmp_path / "pyproject.toml").write_text(
