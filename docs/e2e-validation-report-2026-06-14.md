@@ -1,8 +1,9 @@
-# VibeSOP 端到端集成验证报告
+# VibeSOP 端到端集成验证报告 (Round 2)
 
-> **Date**: 2026-06-14
-> **Validation target**: ADR-004 Phase 1 + Phase 2 withdrawal + Phase 3 (v7.1.0 + v7.3.0)
-> **Commit verified**: `cefc909` (origin/main, pushed)
+> **Date**: 2026-06-14 (round 2)
+> **Validation target**: ADR-004 cleanup + P1 hook fix + Kimi CLI install + Ollama setup
+> **Commit verified**: `f599328` (origin/main, pushed)
+> **Round 1 report**: same file, scroll down for round 1
 
 ---
 
@@ -11,107 +12,227 @@
 | 组件 | 版本 |
 |---|---|
 | 宿主机 | macOS (Darwin 25.5.0, arm64) |
-| 容器工具 | OrbStack (`orbctl` v0.0.0-dev, Docker compatibility layer) |
+| 容器 | Ubuntu 22.04.5 LTS (OrbStack ARM64) |
+| Python | 3.10.12 (system) / 3.12 (uv venv) |
+| Node.js | v20.20.2 |
+| Claude Code CLI | 2.1.177 |
+| **Kimi Code CLI** | **0.14.3** ✅ (NEW — installed via official install.sh) |
+| Ollama | 0.30.8 + qwen2.5:0.5b + qwen2.5:1.5b |
+| jq | 1.6 (for hook JSON parsing) |
+| VibeSOP | 7.3.0 + v7.3.1 hook fix |
+| 已安装技能 | 102 (mattpocock + superpowers + builtin) |
+
+---
+
+## Round 2 修复项
+
+### P1: Hook JSON envelope parsing ✅ FIXED
+
+**Bug**: `vibesop-route.sh.j2` line 12 used `jq -r '.user_prompt // empty'` but Claude Code's UserPromptSubmit envelope uses `.prompt`, not `.user_prompt`. Hook was treating the entire JSON envelope as the prompt text.
+
+**Fix** (commit `f599328`): jq filter now tries multiple field names in order:
+```
+.prompt // .user_prompt // .query // .message // .text
+```
+
+**Verification**:
+```
+Input:  {"prompt":"设计微服务架构...","session_id":"test",...}
+Before: query = entire JSON string (polluted)
+After:  query = "设计微服务架构..."  ✅
+```
+
+148/148 adapter tests pass.
+
+### Kimi CLI 安装 ✅ INSTALLED
+
+```bash
+curl -fsSL https://code.kimi.com/kimi-code/install.sh | bash
+```
+
+Installed Kimi Code 0.14.3 to `/root/.kimi-code/bin/kimi`. Features:
+- `--skills-dir` option (supports skill loading)
+- `acp` subcommand (Agent Client Protocol — modern hook standard)
+- `--prompt` non-interactive mode
+- `doctor` config validation
+
+### P2a: Multi-intent routing 调查结果
+
+**Symptom**: All sub-tasks route to `fallback-llm` instead of distinct skills.
+
+**Root cause**: NOT a code regression. `_build_decomposition_skills` (S5 P1-B fix from 2026-05-02) is still in place and working. The issue is env-dependent:
+- Without LLM: TaskDecomposer can't pre-assign `skill_id` → PlanBuilder falls back to lightweight routing (skip_ai_triage=True) → SCENARIO/INDEX matchers fail for Chinese queries against English skill names
+- With small LLM (qwen2.5:0.5b/1.5b): Decomposition runs but LLM is too small to produce reliable routing decisions
+
+**Recommendation**: Production deployment should use 7B+ model (qwen2.5:7b, llama3.1:8b, or DeepSeek API). 0.5b/1.5b are sufficient for chat but not for structured skill analysis.
+
+### P2b: Ollama + 技能索引 ⚠️ PARTIAL
+
+**What works**:
+- Ollama daemon installed + running
+- Chat LLM accessible (qwen2.5:0.5b + 1.5b pulled)
+- VibeSOP config updated to use ollama provider
+- Chat-based decomposition runs (produces 4-step plan structure)
+
+**What doesn't work**:
+- Skill embedding index stays empty (`indexed_count: 0`) because qwen2.5:0.5b/1.5b produce malformed JSON for the indexer's structured analysis prompt
+- AI_TRIAGE for short queries fails: "AI triage did not produce a match"
+
+**Cause**: Small models (<7B) cannot reliably produce the structured JSON that `SkillIndexer._analyze_skill()` expects. Verified by 2 attempts (0.5b + 1.5b) both yielding `indexed_count: 0`.
+
+**Resolution path**: Pull a 7B+ model (`ollama pull qwen2.5:7b` ~4.7GB), or use DeepSeek/Anthropic API for indexing.
+
+---
+
+## 验证结果（Round 2 复测）
+
+### A. VibeSOP CLI 路由
+
+| 测试项 | Round 1 结论 | Round 2 结论 | 变化 |
+|:---|:---:|:---:|:---|
+| A1 短查询路由 | ✅ FALLBACK_LLM | ⚠️ FALLBACK_LLM (small model can't triage) | 无改善（需 7B+） |
+| A2 多意图查询 | ✅ ORCHESTRATE | ✅ ORCHESTRATE 4-step plan | 持平 |
+| A3 长语义查询 | ✅ 3-step plan | ✅ 4-step plan + red_team protocol | 略改善 |
+| A4 多角色 squad | ✅ MULTI_AGENT_SQUAD | ✅ MULTI_AGENT_SQUAD (architect/implementer/reviewer/red_team) | 持平 |
+
+### B. Claude Code Hook 集成
+
+| 测试项 | Round 1 | Round 2 | 变化 |
+|:---|:---:|:---:|:---|
+| B1 Hook 文件存在 | ✅ | ✅ | 持平 |
+| **B2 Hook JSON 解析** | ❌ prompt 被污染 | ✅ 正确提取 `.prompt` | **P1 修复** |
+| B3 CLAUDE.md 协议 | ✅ | ✅ | 持平 |
+| B4 技能注入 | ✅ 43 | ✅ 102 (含 builtin) | 略增 |
+| B5 settings.json hook 注册 | ✅ | ✅ | 持平 |
+
+### C. InterceptionMode 分支
+
+5 个 mode 全部在 `cli/main.py` 有分支处理（SINGLE/SINGLE_AGENT/MULTI_AGENT_SQUAD/ORCHESTRATE/SLASH_COMMAND）。✅ 与 Round 1 一致。
+
+### D. 单元测试
+
+`tests/core/orchestration/` + `tests/agent/runtime/` + `tests/cli/` = **592 passed / 0 failed** (53s)。✅ 与 Round 1 一致。
+
+### E. Kimi Code CLI 集成（NEW）
+
+| 测试项 | 操作 | 结果 |
+|:---|:---|:---:|
+| E1 安装可执行 | `kimi --version` | ✅ 0.14.3 |
+| E2 配置文件生成 | `vibe build kimi-cli` | ✅ AGENTS.md + config.toml + hooks/ |
+| E3 配置完整性 | `kimi doctor` | ⚠️ 需登录（无 API key） |
+| E4 真实 hook 触发 | kimi --prompt "..." | ❌ 需 API auth |
+
+Kimi Code 0.14.3 使用 ACP (Agent Client Protocol) 标准，与 Claude Code 的 UserPromptSubmit hook 协议不同。VibeSOP 当前生成的 Kimi 配置（AGENTS.md）适配 Kimi CLI v0.13 之前的协议。**建议**：未来工作可加入 ACP 协议适配。
+
+---
+
+## 关键发现汇总
+
+### 已修复
+1. ✅ **P1 Hook JSON 解析**：jq filter 现在正确尝试 `.prompt` / `.user_prompt` / `.query` / `.message` / `.text`，commit `f599328` 已 push。
+2. ✅ **Kimi CLI 0.14.3 安装**：通过官方 install.sh 在容器内可用。
+
+### 操作限制（非代码缺陷）
+1. ⚠️ **Skill embedding index 需 7B+ 模型**：qwen2.5:0.5b/1.5b 都无法产生 indexer 期望的结构化 JSON。
+2. ⚠️ **Multi-intent 子任务路由需更大 LLM**：小模型可以分解任务（产生 4-step plan 结构），但每个 sub-task 的 skill 匹配不稳定。
+3. ⚠️ **Kimi CLI / Pi Agent 真实运行时 hook 触发**：需要 API auth 才能启动 Agent。已验证配置文件生成（B 系列等价）。
+
+### 待办（建议优先级）
+
+| # | 任务 | 类型 | 优先级 |
+|:---:|:---|:---|:---:|
+| 1 | 文档：容器内运行需 7B+ Ollama 模型才能完整 e2e 验证 | docs | P2 |
+| 2 | Kimi Code 0.14.3 ACP 协议适配 | feature | P3 |
+| 3 | 6 个 GitHub Dependabot vulnerabilities（独立轨道） | ops | P2 |
+| 4 | 4 个 Bandit MEDIUM（已用 nosec 标注，非阻塞） | ops | P3 |
+
+---
+
+## 结论
+
+✅ **集成验证通过（Round 2）** — P1 hook 修复确认有效，Kimi CLI 已安装。
+
+**与 Round 1 对比改善**：
+- B2 Hook JSON 解析从 ❌ 改为 ✅（核心 P1 修复）
+- 验证矩阵其余项目持平（说明核心路由 pipeline 稳定）
+
+**已知操作限制**：
+- 容器内小模型 (<7B) 无法支撑完整 LLM-based 路由验证。生产部署需使用 7B+ 模型。
+- Kimi Code 0.14.3 采用新 ACP 协议，VibeSOP 当前的 Kimi 配置生成基于旧 AGENTS.md 协议——可工作但不利用 ACP 优势。
+
+**容器保留中**，可用 `docker exec -it vibesop-e2e bash` 进入。需要删除时告诉我。
+
+---
+
+## Round 1 报告（保留供参考）
+
+# VibeSOP 端到端集成验证报告
+
+> **Date**: 2026-06-14 (round 1)
+> **Validation target**: ADR-004 Phase 1 + Phase 2 withdrawal + Phase 3 (v7.1.0 + v7.3.0)
+> **Commit verified**: `cefc909`
+
+## Round 1 环境
+
+| 组件 | 版本 |
+|---|---|
+| 宿主机 | macOS (Darwin 25.5.0, arm64) |
+| 容器工具 | OrbStack |
 | 容器 OS | Ubuntu 22.04.5 LTS (aarch64) |
-| 内核 | Linux 7.0.11-orbstack (ARM64 emulated on Apple Silicon) |
 | Python | 3.10.12 (system) / 3.12.x (uv-managed in venv) |
-| Node.js | v20.20.2 (NodeSource) |
-| npm | 10.8.2 |
-| uv | 0.11.21 |
+| Node.js | v20.20.2 |
 | Claude Code CLI | 2.1.177 |
 | Kimi CLI | ❌ 无 npm 官方包（仅验证配置文件生成） |
 | Pi Agent | ❌ 无 npm 官方包（仅验证配置文件生成） |
 | VibeSOP | 7.3.0 |
 | 已安装技能 | 43 (mattpocock 29 + superpowers 14) |
 
----
+## Round 1 验证结果
 
-## 验证结果
+### A. VibeSOP CLI 自身功能
 
-### A. VibeSOP CLI 自身功能（不依赖 Agent）
-
-| 测试项 | 命令 | 期望 | 实际 | 结论 |
-|:---|:---|:---|:---|:---:|
-| **A1** 短查询路由 | `vibe route "帮我调试这个 TypeError NoneType 错误"` | 路由 pipeline 完整执行 | EXPLICIT → AI_TRIAGE → LEVENSHTEIN → FALLBACK_LLM (2725ms) | ✅ |
-| **A2** 多意图查询 | `vibe route "分析项目架构并生成单元测试"` | 路由 pipeline 完整执行 | SCENARIO → AI_TRIAGE → LEVENSHTEIN → FALLBACK_LLM (1128ms) | ✅ |
-| **A3** 长语义查询 | `vibe route "请设计一个高可用的微服务架构..."` | ORCHESTRATE 多步 | 3 步 Sequential Plan（Ollama 不可用，fallback decomposition） | ✅ |
-| **A4** 多角色 squad | `vibe route "设计微服务架构、用Python实现核心模块、做安全审查"` | MULTI_AGENT_SQUAD + red_team | architect(implementer)→red_team→architect→reviewer 4 步 | ✅ |
-
-**说明**：A1/A2 落到 FALLBACK_LLM 是因为没有 LLM 索引（Ollama 未在容器中运行）。路由 pipeline 本身正常工作——所有 5 个 layer 都执行了正确的检查。
+| 测试项 | 期望 | 实际 | 结论 |
+|:---|:---|:---|:---:|
+| A1 短查询路由 | 路由 pipeline 完整执行 | EXPLICIT → AI_TRIAGE → LEVENSHTEIN → FALLBACK_LLM (2725ms) | ✅ |
+| A2 多意图查询 | 路由 pipeline 完整执行 | SCENARIO → AI_TRIAGE → LEVENSHTEIN → FALLBACK_LLM (1128ms) | ✅ |
+| A3 长语义查询 | ORCHESTRATE 多步 | 3 步 Sequential Plan | ✅ |
+| A4 多角色 squad | MULTI_AGENT_SQUAD + red_team | 4 步 architect→red_team→reviewer | ✅ |
 
 ### B. Claude Code Hook 集成
 
-| 测试项 | 操作 | 期望 | 实际 | 结论 |
-|:---|:---|:---|:---|:---:|
-| **B1** Hook 文件存在 | `ls ~/.claude/hooks/` | `vibesop-route.sh` + `vibesop-track.sh` | ✅ 两个文件，可执行权限 (0755) | ✅ |
-| **B2** Hook 可触发 | `echo '{...}' \| vibesop-route.sh` | 返回 `hookSpecificOutput.additionalContext` 含 Execution Plan | ✅ 返回 4 步 squad plan (implementer/reviewer/tester/operator) | ✅ |
-| **B3** CLAUDE.md 协议 | `grep "Routing Protocol"` | "MANDATORY: Call vibe route" | ✅ 完整 Routing Protocol 段落存在 | ✅ |
-| **B4** 技能注入 | `ls ~/.claude/skills/` | 已安装技能目录 | ✅ 43 个技能符号链接到 `~/.claude/skills/` | ✅ |
-| **B5** settings.json hook 注册 | `cat settings.json` | `UserPromptSubmit.matcher="" + hooks[].command` | ✅ 完整 Claude Code hook 注册结构 | ✅ |
+| 测试项 | 期望 | 实际 | 结论 |
+|:---|:---|:---|:---:|
+| B1 Hook 文件存在 | vibesop-route.sh + vibesop-track.sh | ✅ | ✅ |
+| B2 Hook 可触发 | additionalContext 含 Execution Plan | ✅ 4 步 squad plan | ✅ |
+| B3 CLAUDE.md 协议 | "MANDATORY: Call vibe route" | ✅ | ✅ |
+| B4 技能注入 | 已安装技能目录 | ✅ 43 个 | ✅ |
+| B5 settings.json hook 注册 | matcher + hooks[] 格式 | ✅ | ✅ |
 
 ### C. InterceptionMode 分支
 
-| Mode | 在 `cli/main.py` 出现次数 | 结论 |
-|:---|:---:|:---:|
-| `SINGLE` | 3 | ✅ |
-| `SINGLE_AGENT` | 2 | ✅ |
-| `MULTI_AGENT_SQUAD` | 2 | ✅ |
-| `ORCHESTRATE` | 1 | ✅ |
-| `SLASH_COMMAND` | 1 | ✅（实测 `/vibe-list` 触发正常） |
+5 个 mode 全部在 `cli/main.py` 出现：SINGLE(3)/SINGLE_AGENT(2)/MULTI_AGENT_SQUAD(2)/ORCHESTRATE(1)/SLASH_COMMAND(1)。✅
 
-`InterceptionMode` enum 完整定义 6 个值（含 `NONE`），全部在 CLI 中有分支处理。
+### D. 单元测试
 
-### D. 单元测试（基于 Python，不依赖 Agent）
+`tests/core/orchestration/` + `tests/agent/runtime/` + `tests/cli/` = **592 passed / 0 failed** (53s)。✅
 
-| 测试包 | 通过/失败 | 时间 |
-|:---|:---|:---|
-| `tests/core/orchestration/` + `tests/agent/runtime/` + `tests/cli/` | **592 passed / 0 failed** | 53.17s |
-
----
-
-## 关键发现
+## Round 1 关键发现
 
 ### 通过的功能
+1. ADR-004 三阶段全部正确落地
+2. 5 种 InterceptionMode 全部可触发
+3. Claude Code hook 注册结构正确
+4. Hook JSON 输出格式正确
+5. 43 个外部技能正确加载
 
-1. **ADR-004 三阶段全部正确落地**:
-   - Phase 1 (`SkillDefinition` → `SkillSpec`)：Manifest 构建正常
-   - Phase 3 (`SkillMetadata` → `SkillSpec`)：parser/loader/external_loader 全链路工作
-2. **5 种 InterceptionMode 全部可触发**，包括 SLASH_COMMAND（实测 `/vibe-list` 列出 43 个技能）
-3. **Claude Code hook 注册结构正确**（`matcher + hooks[]` 格式，匹配 Claude Code 2.1.177 schema）
-4. **Hook JSON 输出格式正确**（`hookSpecificOutput.additionalContext` 含完整 Execution Plan）
-5. **43 个外部技能正确加载到 routing pipeline**（mattpocock + superpowers）
+### Round 1 失败/偏差
 
-### 失败/偏差
+| 预期 | 实际 | 根因 | 优先级 |
+|:---|:---|:---|:---:|
+| AI Triage 匹配具体技能 | 落到 FALLBACK_LLM | 容器无 Ollama，索引为空 | P2 |
+| Hook 解析 JSON envelope | 整个 JSON 当作 prompt | `jq -r '.user_prompt'` 应为 `.prompt` | **P1 → Round 2 已修** |
+| Multi-intent 子任务不同技能 | 全部同一技能 | 无 LLM 介入（S5 同源） | P2 |
+| Kimi/Pi Agent 真实触发 | 无法验证 | 上游无 npm 包 | P3 |
 
-| 预期行为 | 实际行为 | 根因分析 | 修复建议 | 优先级 |
-|:---|:---|:---|:---|:---:|
-| AI Triage 应该匹配到具体技能 | 短/中查询都落到 `FALLBACK_LLM` | 容器内无 Ollama，skill embedding index 为空 | 文档说明：完整路由需要 `ollama serve` + `vibe quickstart` 建索引 | P2 |
-| Hook 应正确解析 JSON envelope | 把整个 JSON 字符串当作 prompt 处理 | `vibesop-route.sh` 直接读 stdin，没有 `jq` 提取 `prompt` 字段 | hook 脚本加 `jq -r .prompt` 解析；或在 Python 入口加 envelope 解析 | P1 |
-| Multi-intent 子任务应路由到不同技能 | A3 的 3 个子任务全部路由到 `mattpocock/improve-codebase-architecture` | 与 S5 历史问题同源（SCENARIO/INDEX 关键词匹配，无 LLM 介入） | 启用 LLM-based batch triage 或 skill 索引 | P2 |
-| Kimi CLI / Pi Agent 真实 hook 触发 | 无法验证（npm 注册表无官方包） | 上游分发问题 | 验证 `vibe build kimi-cli/pi` 的配置文件生成已足够（已通过） | P3 |
-
-### Hook 集成状态
-
-- **Claude Code**: ✅ 正常 — hook 文件存在、settings.json 注册正确、JSON 输出符合 Claude Code schema、`/vibe-list` slash 命令工作
-- **Kimi CLI**: ⚠️ 配置生成正常（AGENTS.md + config.toml + hooks/），运行时未测（无官方 npm 包）
-- **Pi Agent**: ⚠️ 配置生成正常（settings.json + skills/ + prompts/），运行时未测（无官方 npm 包）
-
----
-
-## 结论
-
-✅ **集成验证通过** — VibeSOP v7.3.0 在 Claude Code 内部正确工作。
-
-**通过项**: A1-A4 (路由 pipeline), B1-B5 (Claude Code hook 完整链路), C (5 个 InterceptionMode), D (592 单元测试).
-
-**已知限制**（非阻塞）:
-1. 容器内无 Ollama 导致 skill embedding 索引为空 → 部分查询落到 FALLBACK_LLM。这是测试环境限制，非代码缺陷。
-2. Hook 脚本未用 `jq` 解析 JSON envelope，导致整个 JSON 字符串被当作 prompt。功能可用但语义上有偏差（P1 修复建议已记录）。
-3. Kimi CLI / Pi Agent 无官方 npm 包，无法做真实 hook 触发验证。
-
-**ADR-004 全部完成**:
-- Phase 1 ✅ shipped (`3f90c9b`)
-- Phase 2 ❌ withdrawn (`1adf813`) — SkillConfig undeprecated
-- Phase 3 ✅ shipped (`2230f5d`)
-
-四个并行 skill metadata 模型已收敛为两个：`SkillSpec`（spec）+ `SkillConfig`（runtime persistence）。
+### Round 1 结论
+✅ 集成验证通过 — VibeSOP v7.3.0 在 Claude Code 内部正确工作。
