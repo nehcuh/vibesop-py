@@ -13,9 +13,10 @@ from pathlib import Path
 import shutil
 from typing import Any
 
-from jinja2 import Environment, FileSystemLoader, select_autoescape
+from jinja2 import FileSystemLoader, select_autoescape
 
 from vibesop._version import __version__
+from vibesop.utils.jinja_safety import make_shell_safe_env
 
 logger = logging.getLogger(__name__)
 
@@ -292,7 +293,7 @@ def render_route_hook(
         Rendered shell script text.
     """
     template_dir = Path(__file__).parent / "templates" / "shared"
-    env = Environment(
+    env = make_shell_safe_env(
         loader=FileSystemLoader(template_dir),
         autoescape=select_autoescape(),
         trim_blocks=True,
@@ -667,7 +668,7 @@ def render_skill_md(
     from datetime import datetime
 
     template_dir = Path(__file__).parent / "templates" / "shared"
-    env = Environment(
+    env = make_shell_safe_env(
         loader=FileSystemLoader(template_dir),
         autoescape=select_autoescape(),
         trim_blocks=True,

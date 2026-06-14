@@ -57,7 +57,9 @@ class HookBasedAdapter(PlatformAdapter):
     def _get_template_env(self) -> Environment:
         """Lazy-initialize and return the Jinja2 template environment."""
         if self._template_env is None:
-            self._template_env = Environment(
+            from vibesop.utils.jinja_safety import make_shell_safe_env
+
+            self._template_env = make_shell_safe_env(
                 loader=FileSystemLoader(self._get_template_dir()),
                 autoescape=select_autoescape(),
                 trim_blocks=True,

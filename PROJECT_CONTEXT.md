@@ -4,6 +4,27 @@
 
 <!-- handoff:start -->
 
+### 2026-06-14 (S25) jinja2-shell-python-injection-hardening (v7.0.2)
+**Session**: Second P0/P1 fix from S23 Multi-Agent Squad deep analysis.
+**Trigger**: S23 red-team flagged that `vibesop-route.sh.j2` rendered `{{ platform }}` into a Python single-quoted string literal inside `python3 -c "..."` — a Python code injection vector (not shell injection).
+**Completed**:
+- `src/vibesop/utils/jinja_safety.py` (NEW) — centralized helper exposing 4 filters (`pyquote`, `shellquote`, `shellvar`, `safe_text`) plus `make_shell_safe_env(**kwargs)` factory that registers all filters + a `None→""` finalize hook.
+  - `pyquote`: escapes `\\` and `'`; rejects newline/CR/NUL with `ValueError` (would break out of single-line Python literal).
+  - `safe_text`: strips `; & | $ \` " < >` and control chars; keeps spaces, dots, `~`, `#` for readability in comments.
+- 9 Environment instantiations switched to `make_shell_safe_env`:
+  - `hooks/installer.py`, `hooks/base.py`
+  - `adapters/_shared.py` (route hook + SKILL.md renderers), `adapters/hook_based.py`, `adapters/sdk_based.py`
+  - `builder/dynamic_renderer.py`
+  - `builder/docs.py` left untouched (Markdown-only, no shell surface).
+- Template hardening:
+  - `vibesop-route.sh.j2`: `{{ platform }}|pyquote` and `{{ hook_event_name }}|pyquote` (Python literal context); `{{ platform_name }}|safe_text`, `{{ purpose }}|safe_text`, `{{ version }}|safe_text` (comment header).
+  - `pre-tool-use.sh.j2`, `pre-session-end.sh.j2`, `post-session-start.sh.j2`: all `{{ platform }}` and `{{ hook_point }}` use `|safe_text` (comment + double-quoted echo args).
+  - `vibesop-track.sh.j2`: `{{ version }}|safe_text`.
+- `tests/hooks/test_shell_injection.py` (NEW) — 28 tests across 6 suites (TestPyquoteFilter, TestShellquoteFilter, TestShellvarFilter, TestSafeTextFilter, TestMakeShellSafeEnv, TestRouteHookTemplateInjection) including the PoC verification that `'claude'; __import__('os').system('pwned'); x='` no longer injects.
+- `CHANGELOG.md` — v7.0.2 section.
+**Verification**: 520/520 tests in tests/hooks + tests/installer + tests/security + tests/adapters + tests/builder pass; basedpyright 0 errors on all touched files; classic Python injection PoC verified neutralized.
+**Next**: Phase 3 (`_interception_mode` → RoutingContext first-class field) and Phase 4 (README.zh-CN.md deprecation + intent_interceptor tests) remain pending from the S23 squad plan.
+
 ### 2026-06-14 (S24) pack-install-security-ordering-fix (v7.0.1)
 **Session**: P0 RCE fix from Multi-Agent Squad deep analysis (S23 → S24).
 **Trigger**: S23 squad red-team flagged `PackInstaller._run_post_install` running BUILD.sh with local privileges BEFORE `SkillSecurityAuditor` ever saw the file.

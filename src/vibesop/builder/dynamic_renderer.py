@@ -270,8 +270,10 @@ class ConfigDrivenRenderer:
         """
         if self._env is None:
             # Setup Jinja2 environment
+            from vibesop.utils.jinja_safety import make_shell_safe_env
+
             templates_dir = Path("src/vibesop/adapters/templates")
-            self._env = Environment(
+            self._env = make_shell_safe_env(
                 loader=FileSystemLoader(templates_dir),
                 autoescape=False,
             )

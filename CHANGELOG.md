@@ -9,6 +9,72 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### v7.0.2 — Jinja2 Shell / Python Injection Hardening
+
+Closes the second P0/P1 from S23 Multi-Agent Squad deep analysis:
+`vibesop-route.sh.j2` rendered `{{ platform }}` and `{{ hook_event_name }}`
+into Python single-quoted string literals inside a `python3 -c "..."`
+block. A malicious value containing `'` would close the literal and
+inject arbitrary Python code — e.g. `platform='claude'; __import__('os').system('rm -rf ~'); x=''`
+would execute the `os.system` call when Claude Code invoked the hook.
+Similarly, `{{ hook_point }}` in hook echo statements flowed unescaped
+into shell `echo "[...]"` arguments, allowing shell injection.
+
+#### Centralized jinja_safety helper (new module)
+
+- feat(utils): `src/vibesop/utils/jinja_safety.py` exposes four filters
+  plus a `make_shell_safe_env(**kwargs)` factory:
+  - `pyquote` — escape for Python single-quoted literals (`\\` and `'`
+    escaped; newline/CR/NUL rejected with `ValueError`).
+  - `shellquote` — `shlex.quote` wrapper for shell arguments.
+  - `shellvar` — reduce to `[A-Za-z0-9_-]+` for identifiers / version
+    strings / path components where no quoting is acceptable.
+  - `safe_text` — strip shell-breaking chars (`; & | $ \` " < >`) plus
+    control chars (newline/CR/NUL); keep spaces, dots, `~`, `#` for
+    readability in comments and log headers.
+- feat(utils): factory registers all four filters and a `finalize` hook
+  that converts `None` → empty string (so `{{ missing_var }}` does not
+  render the literal "None" into a shell script).
+
+#### All 9 Environment instantiations upgraded
+
+- fix(hooks): `hooks/installer.py` + `hooks/base.py` — use factory.
+- fix(adapters): `_shared.py` (route hook + SKILL.md renderers) +
+  `hook_based.py` + `sdk_based.py` — use factory.
+- fix(builder): `dynamic_renderer.py` — use factory.
+- (builder/docs.py Markdown-only environments left untouched — no shell
+  surface.)
+
+#### Templates hardened
+
+- fix(templates): `vibesop-route.sh.j2` — `{{ platform }}` and
+  `{{ hook_event_name }}` now use `|pyquote` (Python literal safety).
+  Comment-header variables (`platform_name`, `purpose`, `version`) use
+  `|safe_text` to preserve readability while stripping shell-breaking chars.
+- fix(templates): `pre-tool-use.sh.j2`, `pre-session-end.sh.j2`,
+  `post-session-start.sh.j2` — all `{{ platform }}` and `{{ hook_point }}`
+  interpolations now use `|safe_text` (comments + double-quoted echo args).
+- fix(templates): `vibesop-track.sh.j2` — `{{ version }}` uses `|safe_text`.
+
+#### Tests
+
+- test(hooks): `tests/hooks/test_shell_injection.py` — 28 tests across
+  5 suites: TestPyquoteFilter (7), TestShellquoteFilter (5),
+  TestShellvarFilter (5), TestSafeTextFilter (10), TestMakeShellSafeEnv (4),
+  TestRouteHookTemplateInjection (4 end-to-end tests verifying that the
+  classic Python injection attack `'claude'; __import__('os').system(...)`
+  is neutralized).
+
+#### Verification
+
+- 520/520 tests in tests/hooks + tests/installer + tests/security +
+  tests/adapters + tests/builder pass.
+- basedpyright: 0 errors on all touched files.
+- The classic Python injection PoC is verified neutralized by
+  `test_platform_python_injection_neutralized`.
+
+---
+
 ### v7.0.1 — Pack Install Security Ordering Fix
 
 Closes the P0 RCE in `PackInstaller`: prior to this release, a malicious

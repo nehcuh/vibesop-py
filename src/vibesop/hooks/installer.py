@@ -13,6 +13,7 @@ from jinja2 import Environment, FileSystemLoader
 
 from vibesop.hooks.base import Hook
 from vibesop.hooks.points import HOOK_DEFINITIONS, HookPoint
+from vibesop.utils.jinja_safety import make_shell_safe_env
 
 
 class HookInstaller:
@@ -41,7 +42,7 @@ class HookInstaller:
         if self._template_env is None:
             # Get templates directory
             templates_dir = Path(__file__).parent / "templates"
-            self._template_env = Environment(
+            self._template_env = make_shell_safe_env(
                 loader=FileSystemLoader(templates_dir),
                 autoescape=False,
             )

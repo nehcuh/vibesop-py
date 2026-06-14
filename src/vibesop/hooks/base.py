@@ -192,16 +192,18 @@ class TemplateHook(Hook):
             template_vars: Variables for template rendering
         """
         super().__init__()  # Initialize _enabled from base class
-        from jinja2 import Environment, FileSystemLoader
+        from jinja2 import FileSystemLoader
+
+        from vibesop.utils.jinja_safety import make_shell_safe_env
 
         self._hook_name = hook_name
         self._hook_point = hook_point
         self._template_path = Path(template_path)
         self._vars = template_vars or {}
 
-        # Setup Jinja2 environment
+        # Setup Jinja2 environment with shell-safe filters registered
         template_dir = self._template_path.parent
-        self._env = Environment(
+        self._env = make_shell_safe_env(
             loader=FileSystemLoader(template_dir),
             autoescape=False,
         )
