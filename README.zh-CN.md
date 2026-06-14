@@ -1,6 +1,6 @@
 # VibeSOP - Python 版本
 
-> ⚠️ **本文档已过时（最后更新: v5.3.0，落后当前版本 v7.0.3 共 4 个大版本）**
+> ⚠️ **本文档已过时（最后更新: v5.3.0，落后当前版本 v7.0.6 共 5 个补丁版本）**
 >
 > 本文件保留作为历史参考，**不再同步更新**。具体差距：
 > - 路线图停在 v5.3.0；缺 v5.5 / v6.0 / v6.1 / v6.2 / v7.0 / v7.0.1-3 全部条目
@@ -28,7 +28,7 @@
 [![Ruff](https://img.shields.io/badge/Ruff-Enabled-black.svg)](https://github.com/astral-sh/ruff)
 [![Basedpyright](https://img.shields.io/badge/Basedpyright-Strict-blue.svg)](https://github.com/DetachHead/basedpyright)
 [![Coverage](https://img.shields.io/badge/Coverage-65%25-green.svg)]()
-[![Version](https://img.shields.io/badge/Version-7.0.0-blue.svg)](https://github.com/nehcuh/vibesop-py)
+[![Version](https://img.shields.io/badge/Version-7.0.6-blue.svg)](https://github.com/nehcuh/vibesop-py)
 
 ---
 

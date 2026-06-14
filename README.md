@@ -7,7 +7,7 @@
 [![Python](https://img.shields.io/badge/Python-3.12+-blue.svg)](https://www.python.org/downloads/)
 [![Ruff](https://img.shields.io/badge/Ruff-Enabled-black.svg)](https://github.com/astral-sh/ruff)
 [![Coverage](https://img.shields.io/badge/Coverage-73%25-yellow.svg)]()
-[![Version](https://img.shields.io/badge/Version-7.0.0-blue.svg)](https://github.com/nehcuh/vibesop-py)
+[![Version](https://img.shields.io/badge/Version-7.0.6-blue.svg)](https://github.com/nehcuh/vibesop-py)
 [![Spec](https://img.shields.io/badge/Spec-v3.0-green.svg)](docs/skill-format-spec-v3.md)
 [![Conformance](https://img.shields.io/badge/Conformance-85%20tests-brightgreen.svg)]()
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -1056,6 +1056,6 @@ vibe skills add code-reviewer
 
 ---
 
-**版本 Version**: 7.0.0
+**版本 Version**: 7.0.6
 **更新时间 Last Updated**: 2026-06-14
 **状态 Status**: ✅ 生产就绪 Production Ready（含 Multi-Agent Squad + Hook 加固 + prompt-chain-validator）
