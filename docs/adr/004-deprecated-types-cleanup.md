@@ -84,9 +84,6 @@ sites + 4 test assertions for zero spec-coherence gain.
 from its docstring). Update docstring to state the spec/persistence
 split explicitly. Phase 2 is dropped from the cleanup roadmap.
 
-### Phase 3 — v7.3: Remove `core.skills.base.SkillMetadata`
-
-**Blast radius**: largest — `parser.build_metadata()` is called from
 ### Phase 3 — v7.3: Remove `core.skills.base.SkillMetadata` ✅ SHIPPED
 
 **Actual blast radius** (largest of the three phases):
