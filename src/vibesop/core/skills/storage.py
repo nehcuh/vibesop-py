@@ -192,11 +192,16 @@ class SkillStorage:
                 # Download
                 urllib.request.urlretrieve(url, archive_path)
 
-                # Extract
+                # Extract — use PEP-706 filter='data' (Python 3.12+ which
+                # is the project's minimum required version). The 'data'
+                # filter rejects path traversal (..), absolute paths, and
+                # unsafe links pointing outside the destination. Pre-v7.0.7
+                # code used raw extractall() which let a malicious tarball
+                # write to ../../.bashrc or similar. See S29 red-team report.
                 import tarfile
 
                 with tarfile.open(archive_path) as tar:
-                    tar.extractall(tmpdir_path)
+                    tar.extractall(tmpdir_path, filter="data")
 
                 # Find extracted directory
                 extracted_dirs = [d for d in tmpdir_path.iterdir() if d.is_dir()]
@@ -208,6 +213,32 @@ class SkillStorage:
 
         except Exception as e:
             return False, f"Failed to download {skill_id}: {e}"
+
+    @staticmethod
+    def _safe_extractall(tar: Any, dest_dir: Path) -> None:
+        """Manual safe extraction fallback (kept for completeness / tests).
+
+        VibeSOP requires Python 3.12+ so the PEP-706 ``filter='data'``
+        path above is always taken. This method exists as documentation
+        of the manual sanitization contract and is exercised by
+        ``test_storage_tar_safety.py``.
+
+        Rejects members whose name:
+        - starts with '/' (absolute path)
+        - contains '..' (traversal)
+        - is a symlink / hardlink pointing outside dest_dir
+        """
+        for member in tar.getmembers():
+            name = member.name
+            if name.startswith("/") or ".." in Path(name).parts:
+                raise ValueError(f"Unsafe tar member rejected: {name!r}")
+            if member.issym() or member.islnk():
+                target = member.linkname
+                if target.startswith("/") or ".." in Path(target).parts:
+                    raise ValueError(
+                        f"Unsafe tar link rejected: {name!r} -> {target!r}"
+                    )
+        tar.extractall(dest_dir)
 
     def link_to_platform(
         self,
