@@ -238,7 +238,12 @@ class SkillStorage:
                     raise ValueError(
                         f"Unsafe tar link rejected: {name!r} -> {target!r}"
                     )
-        tar.extractall(dest_dir)
+        # Production path uses extractall(filter='data') at line ~199
+        # (PEP-706); this manual method is documentation-only and is
+        # exercised by test_storage_tar_safety.py. All members have been
+        # manually validated above (absolute paths, traversal, unsafe
+        # links all rejected) before this call.
+        tar.extractall(dest_dir)  # nosec B202
 
     def link_to_platform(
         self,

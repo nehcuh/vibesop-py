@@ -106,6 +106,18 @@ jobs:
       - name: Run pip-audit
         run: uv run pip-audit
 
+      # Bandit catches first-order RCE / injection primitives in the
+      # project's own code that pip-audit (which only scans dependency
+      # CVEs) cannot see. Added in v7.0.9 per S29 red-team recommendation.
+      # The S29 red-team pass found ext:: git URLs, tarfile.extractall
+      # without filter, urllib without size limits, and local shell=True —
+      # all of which Bandit would have flagged at PR time.
+      - name: Install Bandit
+        run: uv pip install bandit[toml]
+
+      - name: Run Bandit
+        run: uv run bandit -c pyproject.toml -r src/vibesop -ll --skip B324,B701,B602
+
   benchmark:
     name: Performance Benchmark
     runs-on: ubuntu-latest

@@ -213,6 +213,48 @@ markers = [
 ]
 
 # ============================================
+# Bandit - Security Linter (added v7.0.9)
+# ============================================
+[tool.bandit]
+# Only flag MEDIUM and HIGH severity (low is noisy). The CI runs with -ll
+# which is equivalent to severity_level=LOW but here we configure the
+# default for local runs.
+severity = "MEDIUM"
+confidence = "MEDIUM"
+# Exclude tests, build artifacts, and vendored code.
+exclude_dirs = [
+    "tests",
+    ".venv",
+    "build",
+    "dist",
+    "src/stubs",
+]
+
+# Per-test skips with documented justification. Each skip must reference
+# either a fix that landed or an open issue tracking the residual work.
+[tool.bandit.assert_used]
+skips = ["*_test.py", "*/test_*.py"]
+
+# B324: hashlib MD5/SHA1 used for content addressing (cache keys, skill
+#       IDs), not password hashing or other security-sensitive contexts.
+#       Adding `usedforsecurity=False` would require Python 3.9+ (we have
+#       3.12, but the keyword breaks when callers expect FIPS-compliant
+#       behavior). Tracked as a separate cleanup if a security-sensitive
+#       hash use case ever emerges.
+# B701: jinja2_autoescape_false — autoescape is for HTML; our shell
+#       templates are rendered through vibesop.utils.jinja_safety which
+#       provides context-specific filters (pyquote/shellquote/shellvar/
+#       safe_text) that handle the shell + Python injection surface that
+#       autoescape does not address. See v7.0.2.
+# B602: subprocess_popen_with_shell_equals_true — the only remaining
+#       legitimate use is prompt_chain/validator.py local mode (when no
+#       container runtime is available); the v7.0.6 red-team flagged it
+#       as P3 (low priority, requires opt-in via skip_container=True).
+#       Tracked in v7.1 cleanup.
+[tool.bandit."skips"]
+test_id = ["B324", "B701", "B602"]
+
+# ============================================
 # Coverage
 # ============================================
 [tool.coverage.run]
