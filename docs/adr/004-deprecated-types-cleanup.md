@@ -1,14 +1,14 @@
 # ADR-004: Deprecated Skill Metadata Types Cleanup
 
 > **Date**: 2026-06-14
-> **Status**: Proposed (tracking v7.1-v7.3 migration)
+> **Status**: Phase 1 ✅ shipped (v7.1.0). Phase 2 ❌ withdrawn after architect review. Phase 3 pending.
 > **Context**: VibeSOP currently maintains **four parallel skill metadata
 > models** — `vibesop.spec.SkillSpec` (the v5.5.0 canonical source of
 > truth) plus three deprecated predecessors that are still on hot
 > production paths:
 > - `core.skills.base.SkillMetadata`
-> - `core.skills.config_manager.SkillConfig`
-> - `core.models.SkillDefinition` (Pydantic v2 variant)
+> - `core.skills.config_manager.SkillConfig` — **undeprecated 2026-06-14**: see Phase 2 withdrawal below.
+> - `core.models.SkillDefinition` (Pydantic v2 variant) — ✅ removed v7.1.0
 >
 > The deprecation comments all promise "removed in v6.0"; current
 > version is v7.0.12. Two major-version windows have passed without
@@ -17,10 +17,11 @@
 
 ## Decision
 
-Adopt a **3-release phased migration** (v7.1 / v7.2 / v7.3) that
-removes one deprecated type per release, with each release independently
-revertible if a missed call site surfaces. The order is chosen by call
-site count (smallest blast radius first).
+Adopt a **phased migration** that removes genuinely-redundant deprecated
+types, with each release independently revertible if a missed call site
+surfaces. The order is chosen by call-site count (smallest blast radius
+first). **Phase 2 was withdrawn after architect review determined
+`SkillConfig` is not actually redundant with `SkillSpec` — see below.**
 
 ### Phase 1 — v7.1: Remove `core.models.SkillDefinition` ✅ SHIPPED
 
@@ -53,21 +54,35 @@ that does not exist on `SkillSpec`).
 **Acceptance gate**: ✅ `grep -rn "SkillDefinition" src/` returns 0 hits
 (remaining matches are docstrings referencing the historical name).
 
-### Phase 2 — v7.2: Remove `core.skills.config_manager.SkillConfig`
+### Phase 2 — v7.2: ~~Remove `core.skills.config_manager.SkillConfig`~~ WITHDRAWN
 
-**Blast radius**: 5 import sites
-(`feedback_loop.py:17`, `retention.py:166`, `evaluator.py:176`,
-`routing/candidate_manager.py:260`, 5 CLI command modules).
+**Original plan**: Replace `SkillConfig` with `SkillSpec`, claiming
+"SkillSpec already has the same fields plus extras."
 
-**Why second**: Larger blast radius but confined to the skills
-subsystem. Tests already cover the wrapping `SkillConfigManager`.
+**Withdrawal rationale** (2026-06-14 architect review): The premise
+that `SkillSpec` is a strict superset of `SkillConfig` is **factually
+wrong**. `SkillConfig` has 5 fields with no `SkillSpec` equivalent:
 
-**Migration approach**: Replace each `SkillConfig` instance with
-`SkillSpec`, since `SkillSpec` already has the same fields plus extras.
-`SkillConfigManager` becomes a thin compatibility shim that returns
-`SkillSpec` objects.
+| SkillConfig field | Read by | Purpose |
+|---|---|---|
+| `usage_stats: dict[str, Any]` | `loader.py:135`, `candidate_manager.py:292`, `evaluator.py:179` | Runtime usage state (last_used, route counts); persisted to `.vibe/skills/auto-config.yaml` |
+| `evaluation_context: dict[str, Any]` | `loader.py:154`, `cli/commands/skills_commands/_config.py:108,125` | Project-scope isolation (project_hash) |
+| `version_history: list[dict]` | (none) | Write-only at config-save sites; future read site |
+| `requires_llm: bool` | `config_manager.py:105` | Gate on skill-level LLM config |
+| `llm_provider`/`llm_model`/`llm_temperature`/`llm_api_key`/`llm_api_base` | `config_manager.py:109-113` | Individual LLM fields (SkillSpec nests these in `llm_config: LLMConfigSpec`) |
 
-**Acceptance gate**: `grep -rn "SkillConfig\b" src/` returns 0 hits.
+**Architectural correction**: `SkillSpec` and `SkillConfig` serve
+**different concerns**:
+- `SkillSpec`: Immutable spec — loaded from SKILL.md frontmatter at startup. Describes *what a skill is*.
+- `SkillConfig`: Runtime persistence — written by `SkillConfigManager` to `.vibe/skills/auto-config.yaml`. Tracks *how a skill is configured at runtime* (usage state, project scope, LLM choice).
+
+Forcing SkillConfig into SkillSpec (or its `metadata` dict) would either
+pollute the spec layer with mutable runtime state, or break 6 read
+sites + 4 test assertions for zero spec-coherence gain.
+
+**Action**: Undeprecate `SkillConfig` (remove `.. deprecated:: 5.5.0`
+from its docstring). Update docstring to state the spec/persistence
+split explicitly. Phase 2 is dropped from the cleanup roadmap.
 
 ### Phase 3 — v7.3: Remove `core.skills.base.SkillMetadata`
 
@@ -130,8 +145,8 @@ More work than direct migration.
 
 ## Tracking
 
-- [x] v7.1: Phase 1 (SkillDefinition removal) — shipped 2026-06-14
-- [ ] v7.2: Phase 2 (SkillConfig removal) — issue TBD
+- [x] v7.1: Phase 1 (SkillDefinition removal) — shipped 2026-06-14 (commit 3f90c9b)
+- [~] v7.2: Phase 2 (SkillConfig removal) — **WITHDRAWN** 2026-06-14 after architect review (spec/persistence split)
 - [ ] v7.3: Phase 3 (SkillMetadata removal) — issue TBD
 
 Each phase requires its own pre-implementation plan per ADR-003

@@ -29,11 +29,21 @@ SkillLifecycleState = SkillLifecycle
 
 @dataclass
 class SkillConfig:
-    """技能配置
+    """Runtime persistence model for skill configuration.
 
-    .. deprecated:: 5.5.0
-        Use ``vibesop.spec.SkillSpec`` instead. SkillSpec now includes all
-        configuration fields (llm_config, routing_patterns, lifecycle, scope, etc.).
+    Distinct from ``vibesop.spec.SkillSpec`` (the immutable SKILL.md spec):
+    - ``SkillSpec`` is loaded from SKILL.md frontmatter at startup; it describes
+      *what a skill is* (id, name, type, triggers, capabilities).
+    - ``SkillConfig`` is written by ``SkillConfigManager`` to
+      ``.vibe/skills/auto-config.yaml``; it tracks *how a skill is configured at
+      runtime* (usage_stats, project scope, LLM choice, evaluation_context).
+
+    The two models have intentionally disjoint field sets: spec fields belong
+    on SkillSpec, runtime/persistence fields belong on SkillConfig. Mixing them
+    pollutes the spec layer with mutable state.
+
+    See ADR-004 Phase 2 (withdrawn 2026-06-14) for the original (incorrect)
+    unification plan and its rationale for rejection.
     """
 
     skill_id: str

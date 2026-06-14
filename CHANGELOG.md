@@ -9,31 +9,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### v7.1.0 — ADR-004 Phase 1: Remove `core.models.SkillDefinition`
+### v7.1.0 — ADR-004 Phase 1: Remove `core.models.SkillDefinition` + Phase 2 withdrawal
 
-First of three planned phases to retire the four parallel skill metadata
-models. Phase 1 removes the Pydantic variant — `SkillDefinition` defined
-in `core/models.py` (deprecated since v5.5.0, two major-version windows
-past the promised removal date).
+**Phase 1 — shipped**: Removed `core.models.SkillDefinition` (Pydantic variant,
+deprecated since v5.5.0). Migrated ~14 src + ~25 test sites to
+`vibesop.spec.SkillSpec`. `SkillSpec` is a strict field superset and uses
+`populate_by_name=True`, so `model_dump()` → `SkillSpec(**dumped)` round-trip
+in `OverlayMerger._dict_to_manifest()` continues to work without a
+`from_legacy_dict()` factory (which the original ADR draft referenced but
+never existed).
 
-**What changed**
-- All ~14 src call sites + ~25 test call sites migrated to `vibesop.spec.SkillSpec`.
-- `core.models.SkillRegistry.skills` is now typed `dict[str, SkillSpec]`.
-- `adapters.models.Manifest.skills` is now typed `list[SkillSpec]`.
-- `builder.{manifest,overlay,renderer}` import `SkillSpec` directly from `vibesop.spec`.
-- `vibesop.spec.SkillSpec` is a strict field superset of the removed
-  `SkillDefinition`, and uses `populate_by_name=True`, so the
-  `model_dump()` → `SkillSpec(**dumped)` round-trip in
-  `OverlayMerger._dict_to_manifest()` continues to work without a
-  `from_legacy_dict()` factory (the original ADR draft referenced one
-  that does not exist).
+**Phase 2 — withdrawn**: Architect review determined `SkillConfig` is
+**not redundant** with `SkillSpec`. The two serve disjoint concerns:
+- `SkillSpec`: immutable SKILL.md spec — *what a skill is*
+- `SkillConfig`: runtime persistence — *how a skill is configured at runtime*
+  (`usage_stats`, `evaluation_context`, `requires_llm`, LLM fields)
 
-**Acceptance gate** (ADR-003): `grep -rn "SkillDefinition" src/` returns
-0 hits excluding docstrings. Full test suite passes (251 adapter/builder/e2e
-tests + ~3000 broader sweep).
+`SkillConfig` has 5 fields with no `SkillSpec` equivalent; forcing unification
+would either pollute the spec layer with mutable runtime state or break 6
+read sites + 4 test assertions. `SkillConfig` is undeprecated; ADR-004 Phase 2
+is dropped from the roadmap.
 
-**Tracking**: `docs/adr/004-deprecated-types-cleanup.md` Phase 1 marked ✅.
-Phases 2 (`SkillConfig`, v7.2) and 3 (`SkillMetadata`, v7.3) remain.
+**Acceptance gate** (ADR-003): `grep -rn "SkillDefinition" src/` returns 0
+hits excluding docstrings. Full test suite passes (1580 passed, 2 skipped,
+1 pre-existing failure unrelated to this migration).
+
+**Tracking**: `docs/adr/004-deprecated-types-cleanup.md` Phase 1 ✅, Phase 2 ❌.
+Phase 3 (`SkillMetadata`, v7.3) remains — that alias IS genuinely redundant.
 
 ---
 
