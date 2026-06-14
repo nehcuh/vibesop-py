@@ -4,6 +4,19 @@
 
 <!-- handoff:start -->
 
+### 2026-06-14 (S27) doc-hygiene-and-interceptor-hardening (v7.0.4)
+**Session**: Phase 4 from S23 Multi-Agent Squad remediation plan.
+**Completed**:
+- `README.zh-CN.md` — top-of-file deprecation banner. Lists the 4-major-version gap (last update v5.3.0, current v7.0.3), specific drift items (CLI ~70% missing, platform list wrong, config format wrong, zero v7.0+ security feature coverage), points to README.md as single source of truth, announces v7.1.0 deletion.
+- `tests/agent/runtime/test_intent_interceptor_hardening.py` (NEW) — 20 tests across 4 suites:
+  - TestExtractExplicitSkillChineseHardening (5): S21 regression pin for the `isascii()` guard. Includes the actual customer-reported case `"用 高可用 的方式实现微服务"` that the S21 fix addressed.
+  - TestDetectRolesContract (6): direct unit tests for `_detect_roles` covering dedup, case-insensitivity, and dict-iteration order contract.
+  - TestQuickSquadProtocolPriority (7): protocol inference priority (red_team > review_gate > debate > parallel > sequential) plus per_agent_skills + handoff_points shape.
+  - TestShouldInterceptEndToEndWithHardening (2): end-to-end smoke tests confirming hardened paths still flow.
+- `CHANGELOG.md` — v7.0.4 section.
+**Verification**: 20/20 new tests pass; 209/209 tests in tests/agent/runtime + tests/core/routing pass; S21 customer case `"用 高可用"` pinned at both unit and end-to-end levels.
+**Next**: Phase 5 (path_safety symlink/TOCTOU hardening) is the last remaining item from the S23 squad plan.
+
 ### 2026-06-14 (S26) routing-context-first-class-fields (v7.0.3)
 **Session**: P1 fix from S23 Multi-Agent Squad deep analysis (implementer technical-debt #1).
 **Trigger**: S23 implementer flagged `_interception_mode` and `intent_analysis` riding RoutingContext.metadata backchannel — fragile, type-unsafe, dead-code field already existed for one of them.

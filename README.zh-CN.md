@@ -1,5 +1,25 @@
 # VibeSOP - Python 版本
 
+> ⚠️ **本文档已过时（最后更新: v5.3.0，落后当前版本 v7.0.3 共 4 个大版本）**
+>
+> 本文件保留作为历史参考，**不再同步更新**。具体差距：
+> - 路线图停在 v5.3.0；缺 v5.5 / v6.0 / v6.1 / v6.2 / v7.0 / v7.0.1-3 全部条目
+> - CLI 命令参考缺约 70% 命令（`vibe orchestrate` / `vibe decompose` /
+>   `vibe workflows` / `vibe prompt-chain` / `vibe trace` 等）
+> - 集成平台列表错乱（列 Continue.dev 但代码已删除；缺 Kimi CLI / Pi Agent）
+> - 配置文件示例用 `.vibe/config.yaml` 但实际加载器是 Pydantic Settings
+> - 缺 Multi-Agent Squad、Prompt Chain Validator、Pre-install Audit Gate
+>   等 v7.0+ 安全特性的说明
+>
+> **请以 [README.md](README.md)（双语版，含中文段落）为唯一真相源。**
+>
+> 计划在 **v7.1.0** 删除本文件。如需保留翻译，欢迎在 PR 中以
+> README.md 为底稿重新生成对齐版本。
+
+---
+
+# VibeSOP - Python 版本（历史存档）
+
 > **AI 辅助开发的技能操作系统（SkillOS）**
 >
 > 发现、路由、编排、管理——技能的全生命周期

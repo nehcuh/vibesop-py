@@ -9,6 +9,59 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### v7.0.4 — Documentation Hygiene + Interceptor Hardening Tests
+
+Closes Phase 4 of the S23 Multi-Agent Squad remediation plan. Two
+distinct concerns bundled because neither warrants its own release:
+
+1. **README.zh-CN.md deprecation**: S23 reviewer flagged that the
+   Chinese README is a v5.3.0 snapshot — 4 major versions behind, with
+   ~70% of current CLI commands missing, wrong platform list (mentions
+   Continue.dev which was deleted, missing Kimi CLI / Pi Agent), wrong
+   config file format, and zero coverage of v7.0+ security features.
+
+2. **Intent interceptor hardening tests**: S23 implementer noted that
+   ``intent_interceptor.py`` had no direct unit tests for ``_detect_roles``
+   or for the S21 non-ASCII capture rejection fix. The existing
+   ``tests/agent/runtime/test_intent_interceptor.py`` has 22 happy-path
+   tests but doesn't pin these two contracts directly.
+
+#### README.zh-CN.md
+
+- docs(readme): top-of-file deprecation banner explaining the 4-version
+  gap, listing specific drift (CLI commands, platform list, config
+  format, security features), pointing to README.md as the single source
+  of truth, and announcing v7.1.0 deletion.
+
+#### Intent interceptor hardening tests
+
+- test(agent): ``tests/agent/runtime/test_intent_interceptor_hardening.py``
+  — 20 new tests across 4 suites:
+  - TestExtractExplicitSkillChineseHardening (5): S21 regression tests
+    pinning that ``_extract_explicit_skill`` rejects non-ASCII captures
+    (``高可用``, fullwidth ``Ａrchitect``, ``数据库``, etc.). The actual
+    S21 customer-reported case ``"用 高可用 的方式实现微服务"`` is
+    pinned by ``test_chinese_text_capture_rejected`` and the end-to-end
+    ``test_high_availability_phrase_does_not_hijack_to_skill``.
+  - TestDetectRolesContract (6): direct unit tests for ``_detect_roles``
+    pinning the deduplication, case-insensitive matching, and
+    dict-iteration order contract.
+  - TestQuickSquadProtocolPriority (7): pin the protocol inference
+    priority order (red_team > review_gate > debate > parallel >
+    sequential) plus per_agent_skills and handoff_points shape.
+  - TestShouldInterceptEndToEndWithHardening (2): smoke tests
+    confirming the hardened paths still flow correctly through
+    ``should_intercept``.
+
+#### Verification
+
+- 20/20 new tests pass.
+- 209/209 tests in tests/agent/runtime + tests/core/routing pass.
+- The original S21 customer-reported case ``"用 高可用 的方式实现微服务"``
+  is now pinned by both a unit test and an end-to-end test.
+
+---
+
 ### v7.0.3 — RoutingContext First-Class Fields (de-backchannel)
 
 Closes the third P1 from S23 Multi-Agent Squad deep analysis. The
