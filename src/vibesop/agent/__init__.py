@@ -210,9 +210,13 @@ class AgentRouter:
         ]
 
     def build_plan(
-        self, query: str, sub_tasks: list[dict[str, str]] | None = None
+        self,
+        query: str,
+        sub_tasks: list[dict[str, str]] | None = None,
+        plan_metadata: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Build an execution plan for a complex query."""
+        from vibesop.core.models import WorkflowPattern
         from vibesop.core.orchestration import PlanBuilder, SubTask, TaskDecomposer
 
         # Auto-decompose if sub_tasks not provided. Keep SubTask objects directly
@@ -235,7 +239,31 @@ class AgentRouter:
 
         # Build plan
         plan_builder = PlanBuilder(router=self._router)
-        plan = plan_builder.build_plan(query, sub_task_objects)
+
+        # When the caller supplied intent_analysis (e.g. fast multi-role path)
+        # pick a squad-oriented workflow pattern so PlanBuilder enters the
+        # _build_squad_steps branch and produces per-role steps.
+        effective_pattern: WorkflowPattern | None = None
+        metadata_for_plan: dict[str, Any] = dict(plan_metadata or {})
+        analysis_dict = metadata_for_plan.get("intent_analysis")
+        if analysis_dict is not None:
+            protocol = analysis_dict.get("collaboration_protocol", "sequential")
+            if protocol == "debate":
+                effective_pattern = WorkflowPattern.DEBATE
+            elif protocol == "red_team":
+                effective_pattern = WorkflowPattern.RED_TEAM
+            else:
+                effective_pattern = WorkflowPattern.AGENT_SQUAD
+
+        if effective_pattern is not None:
+            plan = plan_builder.build_plan(
+                query,
+                sub_task_objects,
+                workflow_pattern=effective_pattern,
+                metadata=metadata_for_plan,
+            )
+        else:
+            plan = plan_builder.build_plan(query, sub_task_objects)
 
         return {
             "plan_id": plan.plan_id,
@@ -257,8 +285,26 @@ class AgentRouter:
             "status": plan.status.value,
         }
 
-    def orchestrate(self, query: str) -> dict[str, Any]:
-        """Full orchestration: detect intents, decompose, and build plan."""
+    def orchestrate(
+        self,
+        query: str,
+        callbacks: Any | None = None,
+        context: Any | None = None,
+    ) -> dict[str, Any]:
+        """Full orchestration: detect intents, decompose, and build plan.
+
+        Args:
+            query: User query string.
+            callbacks: Optional orchestration callbacks (e.g. LiveOrchestrationCallbacks).
+                Currently unused by this synchronous path but accepted for
+                API compatibility with ``AgentRuntime.handle_query`` so callers
+                can pass it through without triggering ``TypeError``.
+            context: Optional routing context. When its ``metadata`` carries
+                an ``intent_analysis`` payload (e.g. from IntentInterceptor's
+                fast multi-role path), the analysis is forwarded to
+                :meth:`build_plan` so the squad-oriented workflow pattern
+                triggers per-role steps and ``agent_squad`` metadata.
+        """
         # Step 1: Detect intents
         intent_detection = self.detect_intents(query)
 
@@ -276,8 +322,14 @@ class AgentRouter:
                 },
             }
 
-        # Step 2: Decompose and build plan
-        plan = self.build_plan(query)
+        # Step 2: Decompose and build plan. Pass intent_analysis through when
+        # the caller attached one (e.g. IntentInterceptor fast multi-role path)
+        # so PlanBuilder can enter the squad branch.
+        ctx_metadata: dict[str, Any] = {}
+        if context is not None:
+            ctx_metadata = dict(getattr(context, "metadata", None) or {})
+
+        plan = self.build_plan(query, plan_metadata=ctx_metadata or None)
 
         return {
             "is_multi_intent": True,

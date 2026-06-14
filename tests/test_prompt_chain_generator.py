@@ -6,15 +6,20 @@ import tempfile
 from pathlib import Path
 
 from vibesop.core.models import (
+    AgentRole,
+    AgentSquad,
     ExecutionPlan,
     ExecutionStep,
     PlanStatus,
+    SquadStep,
     StepStatus,
     WorkflowPattern,
 )
 from vibesop.core.orchestration.prompt_chain_generator import (
+    AgentPrompt,
     PromptChainGenerator,
     PromptFile,
+    SquadPromptGenerator,
 )
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
@@ -252,6 +257,88 @@ class TestWriteFiles:
             assert custom.exists()
             assert len(written) == len(prompt_files)
 
+    def test_write_files_blocks_path_traversal(self):
+        """Malicious filenames must be sanitized to basename and contained."""
+        from vibesop.core.orchestration.prompt_chain_generator import PromptFile
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output = Path(tmpdir) / "prompts"
+            gen = PromptChainGenerator(output_dir=str(output))
+            malicious_names = [
+                "../../../etc/passwd",
+                "../../.ssh/authorized_keys",
+                "subdir/../../evil",
+                "..\\..\\windows\\system32\\evil",
+                "normal-filename",  # control case
+            ]
+            prompt_files = [
+                PromptFile(phase=0, name="x", filename=name, content=f"content for {name}")
+                for name in malicious_names
+            ]
+            written = gen.write_files(prompt_files)
+
+            # The control file (basename-only) should be written; traversal
+            # variants are sanitized to their basename and still land inside
+            # the output dir (with .md suffix appended).
+            written_names = {p.name for p in written}
+            assert "passwd.md" in written_names
+            assert "authorized_keys.md" in written_names
+            assert "evil.md" in written_names
+            assert "normal-filename.md" in written_names
+
+            # Critical: every written path must live inside the output dir
+            # (no escape via traversal or prefix collision).
+            output_resolved = output.resolve()
+            for path in written:
+                assert str(path.resolve()).startswith(
+                    str(output_resolved) + "/"
+                ) or str(path.resolve()) == str(output_resolved), (
+                    f"Path escaped output dir: {path}"
+                )
+
+            # No file should have been written outside the output dir.
+            # Walk tmpdir and assert no `etc/passwd` style files exist.
+            outside_artifacts = list((Path(tmpdir) / "..").resolve().glob("passwd"))
+            assert not outside_artifacts
+
+    def test_write_files_rejects_null_byte_filename(self):
+        """NUL bytes in filenames must be rejected (potential ANSI/XSI bypass)."""
+        from vibesop.core.orchestration.prompt_chain_generator import PromptFile
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output = Path(tmpdir) / "prompts"
+            gen = PromptChainGenerator(output_dir=str(output))
+            prompt_files = [
+                PromptFile(phase=0, name="x", filename="evil\x00.md", content="payload"),
+                PromptFile(phase=0, name="x", filename="safe.md", content="ok"),
+            ]
+            written = gen.write_files(prompt_files)
+            # Only the safe file is written; NUL byte is rejected.
+            assert len(written) == 1
+            assert written[0].name == "safe.md"
+
+    def test_write_files_prefix_collision_safety(self):
+        """output_dir /tmp/foo must not match destination /tmp/foobar/x.md."""
+        from vibesop.core.orchestration.prompt_chain_generator import PromptFile
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Create output_dir = tmpdir/foo, then attempt to write a file
+            # whose basename collides with a sibling dir name.
+            output = Path(tmpdir) / "foo"
+            sibling = Path(tmpdir) / "foobar"
+            sibling.mkdir(parents=True)
+            (sibling / "secret.md").write_text("secret")
+
+            gen = PromptChainGenerator(output_dir=str(output))
+            prompt_files = [
+                PromptFile(phase=0, name="x", filename="bar", content="ok"),  # → foo/bar.md
+            ]
+            written = gen.write_files(prompt_files)
+            assert len(written) == 1
+            assert written[0].resolve() == (output / "bar.md").resolve()
+            # The sibling file must remain untouched.
+            assert (sibling / "secret.md").read_text() == "secret"
+
 
 class TestWorkflowEnginePromptChain:
     def test_engine_dispatches_prompt_chain(self):
@@ -281,3 +368,78 @@ class TestWorkflowEnginePromptChain:
             result = engine.run(plan, executor=None)
             assert result.pattern == WorkflowPattern.PROMPT_CHAIN
             assert result.final_status == "prompts_generated"
+
+
+class TestSquadPromptGenerator:
+    """Per-role prompt generation for agent squads."""
+
+    def _make_squad(self) -> AgentSquad:
+        return AgentSquad(
+            squad_id="squad-test",
+            roles=[
+                AgentRole(role_id="architect", name="架构师", required_skills=["architecture-analysis"]),
+                AgentRole(role_id="implementer", name="实现者", required_skills=["python-coding"]),
+            ],
+            steps=[
+                SquadStep(
+                    step_id="arch",
+                    role_id="architect",
+                    agent_platform="claude-code",
+                    skill_ids=["architecture-analysis", "design-doc"],
+                    input_from=[],
+                ),
+                SquadStep(
+                    step_id="impl",
+                    role_id="implementer",
+                    agent_platform="opencode",
+                    skill_ids=["python-coding", "microservice"],
+                    input_from=["arch"],
+                ),
+            ],
+            collaboration_protocol="sequential",
+            execution_order=["arch", "impl"],
+        )
+
+    def test_generate_for_squad_returns_one_prompt_per_step(self) -> None:
+        squad = self._make_squad()
+        generator = SquadPromptGenerator()
+        prompts = generator.generate_for_squad(squad, "design a microservice")
+
+        assert len(prompts) == 2
+        assert all(isinstance(p, AgentPrompt) for p in prompts)
+
+    def test_prompt_contains_role_template_and_skills(self) -> None:
+        squad = self._make_squad()
+        generator = SquadPromptGenerator()
+        prompts = generator.generate_for_squad(squad, "design a microservice")
+
+        architect_prompt = next(p for p in prompts if p.role.role_id == "architect")
+        assert "architecture-analysis" in architect_prompt.prompt
+        assert "design-doc" in architect_prompt.prompt
+        assert "原始需求" in architect_prompt.prompt
+        assert architect_prompt.agent_id == "architect@claude-code"
+
+    def test_prompt_includes_handoff_context(self) -> None:
+        squad = self._make_squad()
+        generator = SquadPromptGenerator()
+        prompts = generator.generate_for_squad(squad, "design a microservice")
+
+        implementer_prompt = next(p for p in prompts if p.role.role_id == "implementer")
+        assert implementer_prompt.input_from == "arch"
+        assert "输入上下文" in implementer_prompt.prompt
+        assert "architect" in implementer_prompt.prompt
+
+    def test_prompt_chain_generator_exposes_squad_prompts(self) -> None:
+        squad = self._make_squad()
+        plan = ExecutionPlan(
+            plan_id="plan-squad",
+            original_query="design a microservice",
+            workflow_pattern=WorkflowPattern.PROMPT_CHAIN,
+            metadata={"agent_squad": squad.to_dict()},
+        )
+        generator = PromptChainGenerator()
+        prompts = generator.generate_squad_prompts(plan)
+
+        assert len(prompts) == 2
+        assert prompts[0].role.role_id == "architect"
+        assert prompts[1].role.role_id == "implementer"

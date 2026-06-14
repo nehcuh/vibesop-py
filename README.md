@@ -7,7 +7,7 @@
 [![Python](https://img.shields.io/badge/Python-3.12+-blue.svg)](https://www.python.org/downloads/)
 [![Ruff](https://img.shields.io/badge/Ruff-Enabled-black.svg)](https://github.com/astral-sh/ruff)
 [![Coverage](https://img.shields.io/badge/Coverage-73%25-yellow.svg)]()
-[![Version](https://img.shields.io/badge/Version-6.2.0-blue.svg)](https://github.com/nehcuh/vibesop-py)
+[![Version](https://img.shields.io/badge/Version-7.0.0-blue.svg)](https://github.com/nehcuh/vibesop-py)
 [![Spec](https://img.shields.io/badge/Spec-v3.0-green.svg)](docs/skill-format-spec-v3.md)
 [![Conformance](https://img.shields.io/badge/Conformance-85%20tests-brightgreen.svg)]()
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -509,6 +509,28 @@ vibe install https://github.com/user/skills
 # Sync skills to platform
 vibe skills sync claude-code
 ```
+
+### 跨域工作流 Cross-Cutting Workflows (v7.0)
+
+跨域工作流把多个技能编排成一条完整的开发流水线（如"诊断 → 实现 → 验证 → 审查"）。VibeSOP 内置的 `prompt-chain-validator` 工作流为本仓库验证过的"动态提示词链 + 容器端到端验证"模式：
+
+```bash
+# 列出所有跨域工作流
+vibe workflows list-workflows
+
+# 查看工作流详情
+vibe workflows show prompt-chain-validator
+
+# 一站式：诊断 → 生成分阶段提示词 → 容器验证
+vibe prompt-chain run "为 VibeSOP 增加 Multi-Agent Squad 能力"
+
+# 分步执行
+vibe prompt-chain diagnose "Multi-Agent Squad" --files="src/core/*.py"
+vibe prompt-chain generate "Multi-Agent Squad" --output ./prompts
+vibe prompt-chain validate --container orbstack --json
+```
+
+`vibe prompt-chain generate` 输出 7 个 `.md` 提示词文件（Phase 0 扇出诊断 → Phase 1-5 分阶段实现 → Final 端到端验证），每个文件可独立喂给 Claude Code。`vibe prompt-chain validate` 在 Linux 容器（orbstack/docker/lima 自动检测，或 `--container local` 走宿主机）中跑完整验证流水线，输出 JSON 报告。
 
 ### 反馈收集 Feedback Collection
 
@@ -1034,6 +1056,6 @@ vibe skills add code-reviewer
 
 ---
 
-**版本 Version**: 6.2.0
-**更新时间 Last Updated**: 2026-06-05
-**状态 Status**: ✅ 生产就绪 Production Ready
+**版本 Version**: 7.0.0
+**更新时间 Last Updated**: 2026-06-14
+**状态 Status**: ✅ 生产就绪 Production Ready（含 Multi-Agent Squad + Hook 加固 + prompt-chain-validator）

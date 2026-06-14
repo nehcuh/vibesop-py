@@ -15,16 +15,16 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class RoutingLayer(StrEnum):
     """Routing layers in priority order (Layer 0 → Layer 9)."""
 
-    EXPLICIT = "explicit"           # Layer 0
-    SCENARIO = "scenario"           # Layer 1
-    AI_TRIAGE = "ai_triage"         # Layer 2
-    KEYWORD = "keyword"             # Layer 3
-    TFIDF = "tfidf"                 # Layer 4
-    EMBEDDING = "embedding"         # Layer 5
-    LEVENSHTEIN = "levenshtein"     # Layer 6
-    CUSTOM = "custom"               # Layer 7
-    NO_MATCH = "no_match"           # Layer 8
-    FALLBACK_LLM = "fallback_llm"   # Layer 9
+    EXPLICIT = "explicit"  # Layer 0
+    SCENARIO = "scenario"  # Layer 1
+    AI_TRIAGE = "ai_triage"  # Layer 2
+    KEYWORD = "keyword"  # Layer 3
+    TFIDF = "tfidf"  # Layer 4
+    EMBEDDING = "embedding"  # Layer 5
+    LEVENSHTEIN = "levenshtein"  # Layer 6
+    CUSTOM = "custom"  # Layer 7
+    NO_MATCH = "no_match"  # Layer 8
+    FALLBACK_LLM = "fallback_llm"  # Layer 9
 
     @property
     def layer_number(self) -> int:
@@ -262,6 +262,9 @@ class WorkflowPattern(StrEnum):
     LOOP_UNTIL_DRY = "loop_until_dry"  # Iterative refinement until no new discoveries
     TOURNAMENT = "tournament"  # Multiple contestants → judge picks champion
     PROMPT_CHAIN = "prompt_chain"  # Generate structured prompt files for Claude Code Agent SDK
+    AGENT_SQUAD = "agent_squad"  # Multi-role agent squad with per-role skills
+    DEBATE = "debate"  # Contestants argue, orchestrator judges
+    RED_TEAM = "red_team"  # Implement → red-team challenge → fix
 
 
 class DynamicNodeStatus(StrEnum):
@@ -289,11 +292,13 @@ class TrustLevel(StrEnum):
     """Runtime trust level for agents and skills.
 
     Trust levels control the execution context and restrictions:
+    - NORMAL: Default execution trust for routine agent steps
     - TRUSTED: Normal execution, can modify files and run commands
     - QUARANTINE: Read-only execution, cannot modify system state
     - SANDBOX: Full isolation, runs in temporary environment
     """
 
+    NORMAL = "normal"  # Default execution trust for routine agent steps
     TRUSTED = "trusted"  # Normal execution, can modify files and run commands
     QUARANTINE = "quarantine"  # Read-only, no side effects (default for verifier)
     SANDBOX = "sandbox"  # Full isolation in temporary environment
@@ -348,7 +353,8 @@ class ExecutionStep(BaseModel):
         default=0, description="Current loop iteration (for LOOP_UNTIL_DRY pattern)"
     )
     contestant_index: int | None = Field(
-        default=None, description="Contestant index (for TOURNAMENT pattern, None = not a contestant)"
+        default=None,
+        description="Contestant index (for TOURNAMENT pattern, None = not a contestant)",
     )
     # Phase 7.0 (v7.0.0): Prompt Chain enrichment
     step_type: str = Field(
@@ -366,6 +372,19 @@ class ExecutionStep(BaseModel):
     source_files: list[str] = Field(
         default_factory=list,
         description="本步骤涉及的源文件路径列表",
+    )
+    # Phase 3 (v7.1.0): Agent squad fields
+    assigned_role: str | None = Field(
+        default=None,
+        description="Role ID assigned to this step in an agent squad",
+    )
+    agent_squad_id: str | None = Field(
+        default=None,
+        description="Agent squad ID this step belongs to",
+    )
+    role_skills: list[str] = Field(
+        default_factory=list,
+        description="Skills available to the assigned role for this step",
     )
 
     def to_dict(self) -> dict[str, Any]:
@@ -394,6 +413,9 @@ class ExecutionStep(BaseModel):
             "estimated_risk": self.estimated_risk,
             "estimated_file_count": self.estimated_file_count,
             "source_files": self.source_files,
+            "assigned_role": self.assigned_role,
+            "agent_squad_id": self.agent_squad_id,
+            "role_skills": self.role_skills,
         }
 
 
@@ -576,6 +598,70 @@ class ClassifierResult(BaseModel):
         }
 
 
+class IntentAnalysis(BaseModel):
+    """Semantic output from SemanticIntentAnalyzer.
+
+    Describes the deep structure of a user request: complexity tier,
+    semantic facets, whether a multi-agent squad is needed, recommended
+    roles, collaboration protocol, per-agent skill bindings, handoff
+    points, and the analyzer's confidence.
+    """
+
+    model_config = {"arbitrary_types_allowed": True}
+
+    complexity: Literal["trivial", "simple", "composite", "multi_agent"] = Field(
+        default="simple",
+        description="Complexity tier: trivial/simple/composite/multi_agent",
+    )
+    facets: list[str] = Field(
+        default_factory=list,
+        description="Semantic facets of the request, e.g. ['architecture', 'security']",
+    )
+    squad_needed: bool = Field(
+        default=False,
+        description="Whether 2+ distinct professional facets require a squad",
+    )
+    suggested_roles: list[str] = Field(
+        default_factory=list,
+        description="Recommended agent roles: architect, implementer, reviewer, ...",
+    )
+    collaboration_protocol: str = Field(
+        default="sequential",
+        description="Collaboration protocol: sequential/parallel/debate/red_team/review_gate",
+    )
+    per_agent_skills: dict[str, list[str]] = Field(
+        default_factory=dict,
+        description="role -> list of recommended skill IDs",
+    )
+    handoff_points: list[int] = Field(
+        default_factory=list,
+        description="Step indices where upstream output must be handed off",
+    )
+    confidence: float = Field(
+        default=0.0,
+        ge=0.0,
+        le=1.0,
+        description="Analyzer confidence",
+    )
+    reasoning: str = Field(
+        default="",
+        description="Human-readable reasoning for the analysis",
+    )
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "complexity": self.complexity,
+            "facets": self.facets,
+            "squad_needed": self.squad_needed,
+            "suggested_roles": self.suggested_roles,
+            "collaboration_protocol": self.collaboration_protocol,
+            "per_agent_skills": self.per_agent_skills,
+            "handoff_points": self.handoff_points,
+            "confidence": self.confidence,
+            "reasoning": self.reasoning,
+        }
+
+
 class OrchestrationMode(StrEnum):
     """Mode of orchestration result."""
 
@@ -655,6 +741,153 @@ class OrchestrationResult(BaseModel):
             duration_ms=self.duration_ms,
             query=self.original_query,
         )
+
+
+class AgentRole(BaseModel):
+    """Definition of an agent role within a squad.
+
+    A role captures a professional responsibility (e.g. architect) and the
+    skills that role may, must, or must not use.
+    """
+
+    model_config = {"arbitrary_types_allowed": True}
+
+    role_id: str = Field(..., min_length=1, description="Role identifier")
+    name: str = Field(..., min_length=1, description="Human-readable role name")
+    description: str = Field(default="", description="Role responsibilities")
+    required_skills: list[str] = Field(
+        default_factory=list,
+        description="Skill IDs this role must have access to",
+    )
+    excluded_skills: list[str] = Field(
+        default_factory=list,
+        description="Skill IDs this role must not use",
+    )
+    system_prompt_template: str = Field(
+        default="",
+        description="Key or path to the system prompt template for this role",
+    )
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "role_id": self.role_id,
+            "name": self.name,
+            "description": self.description,
+            "required_skills": self.required_skills,
+            "excluded_skills": self.excluded_skills,
+            "system_prompt_template": self.system_prompt_template,
+        }
+
+
+class SquadStep(BaseModel):
+    """A single step executed by a role inside an agent squad."""
+
+    model_config = {"arbitrary_types_allowed": True}
+
+    step_id: str = Field(..., min_length=1, description="Step identifier")
+    role_id: str = Field(..., min_length=1, description="Role that executes this step")
+    agent_platform: str = Field(
+        default="claude-code",
+        description="Target agent platform: claude-code, opencode, kimi-cli, ...",
+    )
+    skill_ids: list[str] = Field(
+        default_factory=list,
+        description="Skills available to this step",
+    )
+    input_from: list[str] = Field(
+        default_factory=list,
+        description="Upstream step IDs that feed into this step",
+    )
+    output_schema: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Expected structured output schema",
+    )
+    trust_level: TrustLevel = Field(
+        default=TrustLevel.NORMAL,
+        description="Runtime trust level for this step",
+    )
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "step_id": self.step_id,
+            "role_id": self.role_id,
+            "agent_platform": self.agent_platform,
+            "skill_ids": self.skill_ids,
+            "input_from": self.input_from,
+            "output_schema": self.output_schema,
+            "trust_level": self.trust_level.value,
+        }
+
+
+class AgentSquad(BaseModel):
+    """A team of agent roles collaborating on a single user request."""
+
+    model_config = {"arbitrary_types_allowed": True}
+
+    squad_id: str = Field(..., min_length=1, description="Squad identifier")
+    roles: list[AgentRole] = Field(default_factory=list, description="Roles in the squad")
+    steps: list[SquadStep] = Field(default_factory=list, description="Squad execution steps")
+    collaboration_protocol: str = Field(
+        default="sequential",
+        description="Collaboration protocol: sequential/parallel/debate/red_team/review_gate",
+    )
+    lead_role: str = Field(
+        default="",
+        description="Role ID that leads and finalizes outputs",
+    )
+    max_rounds: int = Field(
+        default=3,
+        ge=1,
+        description="Maximum rounds for debate/review protocols",
+    )
+    execution_order: list[str] = Field(
+        default_factory=list,
+        description="Ordered step IDs defining execution sequence",
+    )
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "squad_id": self.squad_id,
+            "roles": [r.to_dict() for r in self.roles],
+            "steps": [s.to_dict() for s in self.steps],
+            "collaboration_protocol": self.collaboration_protocol,
+            "lead_role": self.lead_role,
+            "max_rounds": self.max_rounds,
+            "execution_order": self.execution_order,
+        }
+
+
+class AgentSkillBinding(BaseModel):
+    """Binding between an agent role/platform and its allowed skills."""
+
+    model_config = {"arbitrary_types_allowed": True}
+
+    role_id: str = Field(..., min_length=1, description="Role identifier")
+    agent_platform: str = Field(
+        default="claude-code",
+        description="Agent platform for this binding",
+    )
+    skill_allowlist: list[str] = Field(
+        default_factory=list,
+        description="Skills this role/platform may use",
+    )
+    skill_denylist: list[str] = Field(
+        default_factory=list,
+        description="Skills this role/platform must not use",
+    )
+    required_skills: list[str] = Field(
+        default_factory=list,
+        description="Skills that must be present in the allowlist",
+    )
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "role_id": self.role_id,
+            "agent_platform": self.agent_platform,
+            "skill_allowlist": self.skill_allowlist,
+            "skill_denylist": self.skill_denylist,
+            "required_skills": self.required_skills,
+        }
 
 
 class SkillDefinition(BaseModel):
@@ -782,6 +1015,7 @@ class ExecutionManifest:
     strategy: str = "sequential"
     steps: list[StepManifest] = field(default_factory=list)
     context_file: str = ""
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     @property
     def total_steps(self) -> int:
@@ -799,6 +1033,7 @@ class ExecutionManifest:
             "steps": [s.to_dict() for s in self.steps],
             "context_file": self.context_file,
             "total_steps": self.total_steps,
+            "metadata": self.metadata,
         }
 
     def to_markdown(self) -> str:

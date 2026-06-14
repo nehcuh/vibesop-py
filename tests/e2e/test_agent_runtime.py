@@ -266,7 +266,7 @@ class TestPlatformAdapterAgentRuntime:
         route_content = route_hook.read_text()
         assert "AgentRuntime" in route_content
         assert "handle_query_for_hook" in route_content
-        assert "python3 -c" in route_content
+        assert "$_VIBESOP_PYTHON -c" in route_content or "python3 -c" in route_content
         assert "UserPromptSubmit" in route_content
 
         track_content = track_hook.read_text()

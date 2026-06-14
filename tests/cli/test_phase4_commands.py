@@ -50,7 +50,7 @@ class TestRouteValidateCommand:
 
     def test_route_verbose_short_flag(self) -> None:
         """Test route --verbose with short flag."""
-        result = runner.invoke(app, ["route", "test", "-v"])
+        result = runner.invoke(app, ["route", "review my code", "-v"])
         assert result.exit_code == 0
         assert "Routing Decision Report" in result.stdout
 
@@ -62,7 +62,7 @@ class TestRouteValidateCommand:
 
     def test_route_explain_short_flag_backward_compat(self) -> None:
         """Test route -e still works as alias for -v."""
-        result = runner.invoke(app, ["route", "test", "-e"])
+        result = runner.invoke(app, ["route", "review my code", "-e"])
         assert result.exit_code == 0
         assert "Routing Decision Report" in result.stdout
 

@@ -8,7 +8,6 @@
 
 The following development tools are available on this system. Use them when working with the corresponding ecosystems:
 
-- **nvm** (Node Version Manager): When working with Node.js projects, use `nvm use` to switch to the correct Node.js version before running any Node.js commands. Run `nvm ls` to see available versions.
 - **uv** (Python package manager): When working with Python projects, **always use `uv` instead of `pip`** for package management.
   - Use `uv run python` or `uv run pytest` to run Python scripts and tests
   - Use `uv add <package>` to install project dependencies

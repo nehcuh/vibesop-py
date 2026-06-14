@@ -9,18 +9,39 @@ import pytest
 from vibesop.core.matching import RoutingContext
 from vibesop.core.models import (
     ExecutionMode,
+    IntentAnalysis,
     RoutingLayer,
     RoutingResult,
     SkillRoute,
+    WorkflowPattern,
 )
 from vibesop.core.orchestration.plan_builder import PARALLEL_KEYWORDS, PlanBuilder
 from vibesop.core.orchestration.task_decomposer import SubTask
 
 
+class FakeLoadedSkill:
+    """Minimal stand-in for LoadedSkill with metadata attributes."""
+
+    def __init__(self, **kwargs: Any) -> None:
+        self.metadata = type("Meta", (), kwargs)()
+
+
+class FakeSkillLoader:
+    """Minimal skill loader returning a fixed skill catalog."""
+
+    def __init__(self, skills: dict[str, FakeLoadedSkill]) -> None:
+        self._skills = skills
+
+    def discover_all(self, force_reload: bool = False) -> dict[str, FakeLoadedSkill]:
+        return self._skills
+
+
 class FakeRouter:
     """Minimal stub for UnifiedRouter with controllable _single_skill_route results."""
 
-    def __init__(self, responses: dict[str, SkillRoute] | None = None, default: SkillRoute | None = None) -> None:
+    def __init__(
+        self, responses: dict[str, SkillRoute] | None = None, default: SkillRoute | None = None
+    ) -> None:
         self._responses = responses or {}
         self._default = default
         self._calls: list[str] = []
@@ -70,10 +91,12 @@ class TestPlanBuilder:
         )
 
     def test_build_sequential_plan(self) -> None:
-        router = FakeRouter({
-            "analyze_architecture": self._make_skill_route("architect"),
-            "code_review": self._make_skill_route("review"),
-        })
+        router = FakeRouter(
+            {
+                "analyze_architecture": self._make_skill_route("architect"),
+                "code_review": self._make_skill_route("review"),
+            }
+        )
         builder = PlanBuilder(router)
         sub_tasks = [
             SubTask(intent="architectural_analysis", query="analyze_architecture"),
@@ -83,7 +106,9 @@ class TestPlanBuilder:
         plan = builder.build_plan("analyze architecture and review code", sub_tasks)
 
         assert len(plan.steps) == 2
-        assert plan.execution_mode == ExecutionMode.PARALLEL  # Multiple tasks without "then" → parallel
+        assert (
+            plan.execution_mode == ExecutionMode.PARALLEL
+        )  # Multiple tasks without "then" → parallel
         assert plan.steps[0].skill_id == "architect"
         assert plan.steps[1].skill_id == "review"
         assert plan.detected_intents == ["architectural_analysis", "code_review"]
@@ -127,9 +152,11 @@ class TestPlanBuilder:
         assert plan.execution_mode == ExecutionMode.SEQUENTIAL
 
     def test_low_confidence_step_included(self) -> None:
-        router = FakeRouter({
-            "analyze": self._make_skill_route("architect", confidence=0.3),
-        })
+        router = FakeRouter(
+            {
+                "analyze": self._make_skill_route("architect", confidence=0.3),
+            }
+        )
         builder = PlanBuilder(router)
 
         plan = builder.build_plan("analyze this", [SubTask(intent="analyze", query="analyze")])
@@ -142,7 +169,9 @@ class TestPlanBuilder:
         router = FakeRouter({})  # No matching route
         builder = PlanBuilder(router)
 
-        plan = builder.build_plan("something obscure", [SubTask(intent="unknown", query="something obscure")])
+        plan = builder.build_plan(
+            "something obscure", [SubTask(intent="unknown", query="something obscure")]
+        )
 
         assert len(plan.steps) == 0
         assert plan.detected_intents == []
@@ -197,10 +226,12 @@ class TestPlanBuilder:
 
     @pytest.mark.parametrize("keyword", PARALLEL_KEYWORDS)
     def test_parallel_keywords_detection(self, keyword: str) -> None:
-        router = FakeRouter({
-            "a": self._make_skill_route("skill_a"),
-            "b": self._make_skill_route("skill_b"),
-        })
+        router = FakeRouter(
+            {
+                "a": self._make_skill_route("skill_a"),
+                "b": self._make_skill_route("skill_b"),
+            }
+        )
         builder = PlanBuilder(router)
         sub_tasks = [
             SubTask(intent="intent_a", query="a"),
@@ -213,9 +244,11 @@ class TestPlanBuilder:
 
     def test_skip_ai_triage_context_passed(self) -> None:
         """Verify PlanBuilder passes skip_ai_triage=True through RoutingContext."""
-        router = FakeRouter({
-            "analyze": self._make_skill_route("architect"),
-        })
+        router = FakeRouter(
+            {
+                "analyze": self._make_skill_route("architect"),
+            }
+        )
         builder = PlanBuilder(router)
 
         plan = builder.build_plan(
@@ -366,7 +399,9 @@ class TestPreAssignedSkillIdPropagation:
         builder = PlanBuilder(router)
 
         sub_tasks = [
-            SubTask(intent="analyze", query="analyze architecture", skill_id="superpowers/architect"),
+            SubTask(
+                intent="analyze", query="analyze architecture", skill_id="superpowers/architect"
+            ),
             SubTask(intent="review", query="review security", skill_id="gstack/review"),
             SubTask(intent="test", query="run tests", skill_id="gstack/test"),
         ]
@@ -384,7 +419,9 @@ class TestPreAssignedSkillIdPropagation:
         builder = PlanBuilder(router)
 
         sub_tasks = [
-            SubTask(intent="analyze", query="analyze architecture", skill_id="superpowers/architect"),
+            SubTask(
+                intent="analyze", query="analyze architecture", skill_id="superpowers/architect"
+            ),
             SubTask(intent="review", query="review security"),  # no skill_id → must route
         ]
         plan = builder.build_plan("analyze, review", sub_tasks)
@@ -395,8 +432,6 @@ class TestPreAssignedSkillIdPropagation:
 
     def test_management_skill_filtered(self) -> None:
         """Management skills (slash-*) are replaced by the best alternative."""
-        from unittest.mock import patch
-
         # Use a router whose _single_skill_route returns slash-orchestrate as primary
         # with superpowers/architect as an alternative.
         mgmt_route = SkillRoute(
@@ -448,3 +483,151 @@ class TestPreAssignedSkillIdPropagation:
         assert plan.steps[0].skill_id == "superpowers/review"
         # Exactly one routing call (for the unset sub-task).
         assert len(router._calls) == 1
+
+
+class TestPlanBuilderSquadIntegration:
+    """PlanBuilder integration with AgentSquadComposer and SkillComposer."""
+
+    def _route(self, skill_id: str, confidence: float = 0.9) -> SkillRoute:
+        return SkillRoute(
+            skill_id=skill_id,
+            confidence=confidence,
+            layer=RoutingLayer.AI_TRIAGE,
+            source="test",
+        )
+
+    def _make_router_with_skills(self) -> FakeRouter:
+        skills = {
+            "system-design": FakeLoadedSkill(
+                name="System Design",
+                description="Design system architecture",
+                capabilities=["design", "architecture"],
+            ),
+            "security-audit": FakeLoadedSkill(
+                name="Security Audit",
+                description="Audit security",
+                capabilities=["security", "audit"],
+            ),
+            "code-review": FakeLoadedSkill(
+                name="Code Review",
+                description="Review code",
+                capabilities=["review"],
+            ),
+        }
+        router = FakeRouter(default=self._route("generic"))
+        router._skill_loader = FakeSkillLoader(skills)
+        return router
+
+    def test_agent_squad_pattern_replaces_steps(self) -> None:
+        router = self._make_router_with_skills()
+        builder = PlanBuilder(router)
+        analysis = IntentAnalysis(
+            complexity="multi_agent",
+            facets=["architecture", "security"],
+            squad_needed=True,
+            suggested_roles=["architect", "red_team"],
+            collaboration_protocol="red_team",
+            per_agent_skills={
+                "architect": ["system-design"],
+                "red_team": ["security-audit"],
+            },
+            confidence=0.9,
+        )
+
+        plan = builder.build_plan(
+            "design and audit",
+            [SubTask(intent="placeholder", query="placeholder")],
+            workflow_pattern=WorkflowPattern.AGENT_SQUAD,
+            metadata={"intent_analysis": analysis},
+        )
+
+        assert plan.workflow_pattern == WorkflowPattern.AGENT_SQUAD
+        assert len(plan.steps) == 2
+        role_ids = {s.assigned_role for s in plan.steps}
+        assert role_ids == {"architect", "red_team"}
+        assert plan.steps[0].agent_squad_id is not None
+        assert (
+            "system-design" in plan.steps[0].role_skills
+            or "system-design" in plan.steps[1].role_skills
+        )
+
+    def test_debate_pattern_adds_orchestrator_judge(self) -> None:
+        router = self._make_router_with_skills()
+        builder = PlanBuilder(router)
+        analysis = IntentAnalysis(
+            complexity="multi_agent",
+            facets=["brainstorm"],
+            squad_needed=True,
+            suggested_roles=["debater"],
+            collaboration_protocol="debate",
+            per_agent_skills={"debater": ["code-review"]},
+            confidence=0.9,
+        )
+
+        plan = builder.build_plan(
+            "debate approach",
+            [SubTask(intent="placeholder", query="placeholder")],
+            workflow_pattern=WorkflowPattern.DEBATE,
+            metadata={"intent_analysis": analysis},
+        )
+
+        roles = [s.assigned_role for s in plan.steps]
+        assert "orchestrator" in roles
+        assert len(roles) >= 3
+        assert plan.execution_mode == ExecutionMode.SEQUENTIAL
+
+    def test_red_team_pattern_orders_implementer_before_red_team(self) -> None:
+        router = self._make_router_with_skills()
+        builder = PlanBuilder(router)
+        analysis = IntentAnalysis(
+            complexity="multi_agent",
+            facets=["implement_feature", "security_audit"],
+            squad_needed=True,
+            suggested_roles=["implementer", "red_team"],
+            collaboration_protocol="red_team",
+            per_agent_skills={
+                "implementer": ["code-review"],
+                "red_team": ["security-audit"],
+            },
+            confidence=0.9,
+        )
+
+        plan = builder.build_plan(
+            "implement and challenge",
+            [SubTask(intent="placeholder", query="placeholder")],
+            workflow_pattern=WorkflowPattern.RED_TEAM,
+            metadata={"intent_analysis": analysis},
+        )
+
+        roles = [s.assigned_role for s in plan.steps]
+        assert roles.index("implementer") < roles.index("red_team")
+
+    def test_squad_step_dependencies_wired(self) -> None:
+        router = self._make_router_with_skills()
+        builder = PlanBuilder(router)
+        analysis = IntentAnalysis(
+            complexity="composite",
+            facets=["implement_feature"],
+            squad_needed=False,
+            suggested_roles=["implementer", "reviewer"],
+            collaboration_protocol="review_gate",
+            per_agent_skills={
+                "implementer": ["code-review"],
+                "reviewer": ["code-review"],
+            },
+            confidence=0.9,
+        )
+
+        plan = builder.build_plan(
+            "review gate",
+            [SubTask(intent="placeholder", query="placeholder")],
+            workflow_pattern=WorkflowPattern.AGENT_SQUAD,
+            metadata={"intent_analysis": analysis},
+        )
+
+        implementer_step = next(s for s in plan.steps if s.assigned_role == "implementer")
+        reviewer_step = next(s for s in plan.steps if s.assigned_role == "reviewer")
+        assert (
+            reviewer_step.step_id in implementer_step.dependencies
+            or implementer_step.step_id in reviewer_step.dependencies
+        )

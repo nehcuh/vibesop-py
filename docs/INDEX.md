@@ -1,7 +1,7 @@
 # VibeSOP Documentation Index
 
-> **Last Updated**: 2026-06-05
-> **Version**: 6.2.0
+> **Last Updated**: 2026-06-14
+> **Version**: 7.0.0
 
 This document serves as the central index for all VibeSOP documentation, organized by purpose and audience.
 
@@ -156,15 +156,16 @@ These files remain in the project root for discoverability and tool integration:
 
 ---
 
-## 📊 Key Metrics (v6.2.0)
+## 📊 Key Metrics (v7.0.0)
 
 | Metric | Value |
 |--------|-------|
-| **Version** | 6.2.0 |
-| **Tests** | 2,972 pytest collected (85 conformance tests) |
+| **Version** | 7.0.0 |
+| **Tests** | 1,867+ pytest passing (28 prompt-chain, 20 interceptor, 10 security) |
 | **Coverage** | ~73% (target: 75%) |
-| **Skills Supported** | 50+ |
+| **Skills Supported** | 50+ builtin + 43 community (mattpocock + superpowers) |
 | **Platforms** | Claude Code, Kimi CLI, Pi Agent, OpenCode |
+| **Cross-Cutting Workflows** | `prompt-chain-validator` (v7.0) |
 | **Routing Layers** | 10 |
 | **Workflow Patterns** | 6 (SEQUENTIAL, PARALLEL, FAN_OUT, ADVERSARIAL, LOOP_UNTIL_DRY, TOURNAMENT) |
 | **Spec Version** | SKILL.md v3.0 (29 fields) |

@@ -1,0 +1,45 @@
+# Skill Catalog
+
+> **On-Demand**: Loaded when referenced
+
+## How to Use Skills
+
+```bash
+# Route to the best skill for your request
+vibe route "<your request>"
+
+# View a specific skill's definition
+vibe skills info <skill-id>
+
+# List all available skills
+vibe skills list
+```
+
+Skill definitions are at `.pi/skills/<skill-id>/SKILL.md`.
+
+Use Pi's `read` tool to load a skill file when the routing result recommends one:
+```
+read .pi/skills/<skill-id>/SKILL.md
+```
+
+## Installing New Skill Packs
+
+```bash
+vibe install <pack-name>
+vibe install https://github.com/user/skills
+```
+
+After installation, run `vibe sync` to update the skill index.
+
+## Pi Prompt Templates
+
+Pi-specific commands are available as prompt templates (type `/` in the editor):
+
+- `/vibe-route` — Route a request to a skill
+- `/vibe-install` — Install a skill package
+- `/vibe-list` — List all skills
+- `/vibe-help` — Show help
+- `/vibe-orchestrate` — Multi-skill orchestration
+
+---
+*Part of VibeSOP skill documentation*

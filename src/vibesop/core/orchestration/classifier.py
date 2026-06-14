@@ -11,6 +11,7 @@ import logging
 from typing import Any
 
 from vibesop.core.models import ClassifierResult, WorkflowPattern
+from vibesop.core.orchestration.semantic_intent_analyzer import SemanticIntentAnalyzer
 
 logger = logging.getLogger(__name__)
 
@@ -78,15 +79,20 @@ _PATTERN_KEYWORDS: dict[WorkflowPattern, set[str]] = {
         "prompt chain",
         "链式",
         "逐步执行",
-        "多agent",
-        "multi-agent",
-        "multi agent",
         "agent chain",
         "分步执行",
         "step by step prompt",
         "生成执行链",
         "workflow chain",
         "pipeline",
+    },
+    WorkflowPattern.AGENT_SQUAD: {
+        "multi-agent",
+        "multi agent",
+        "agent squad",
+        "agent team",
+        "多agent",
+        "agent 团队",
     },
 }
 
@@ -246,8 +252,24 @@ class ClassifierAgent:
         query_lower = query.lower()
         complexity_level = self._infer_complexity_level(query, sub_tasks)
 
+        # Check squad keywords first (more specific than generic pattern keywords)
+        squad_keywords = _PATTERN_KEYWORDS.get(WorkflowPattern.AGENT_SQUAD, set())
+        matches = [kw for kw in squad_keywords if kw in query_lower]
+        if matches:
+            analysis = SemanticIntentAnalyzer(llm_client=self._llm).analyze(query)
+            pattern = self._squad_pattern_from_protocol(analysis.collaboration_protocol)
+            return ClassifierResult(
+                pattern=pattern,
+                confidence=min(0.7 + len(matches) * 0.1, 0.95),
+                reasoning=f"Squad keyword match: {', '.join(matches)}; protocol={analysis.collaboration_protocol}",
+                complexity_level=complexity_level,
+                metadata={"intent_analysis": analysis.to_dict()},
+            )
+
         # Check explicit pattern keywords
         for pattern, keywords in _PATTERN_KEYWORDS.items():
+            if pattern == WorkflowPattern.AGENT_SQUAD:
+                continue
             matches = [kw for kw in keywords if kw in query_lower]
             if matches:
                 return ClassifierResult(
@@ -277,11 +299,17 @@ class ClassifierAgent:
 
         # Override to PROMPT_CHAIN when complexity_level is multi_agent
         if complexity_level == "multi_agent":
+            analysis = SemanticIntentAnalyzer(llm_client=self._llm).analyze(query)
+            pattern = self._squad_pattern_from_protocol(analysis.collaboration_protocol)
             return ClassifierResult(
-                pattern=WorkflowPattern.PROMPT_CHAIN,
-                confidence=0.75,
-                reasoning="Multi-agent complexity detected: 3+ skill domains, auto-promoting to prompt_chain",
+                pattern=pattern,
+                confidence=analysis.confidence,
+                reasoning=(
+                    f"Multi-agent squad detected: {analysis.suggested_roles} "
+                    f"using {analysis.collaboration_protocol} protocol"
+                ),
                 complexity_level=complexity_level,
+                metadata={"intent_analysis": analysis.to_dict()},
             )
 
         # Default: sequential
@@ -291,6 +319,18 @@ class ClassifierAgent:
             reasoning="No strong pattern indicators detected, defaulting to sequential",
             complexity_level=complexity_level,
         )
+
+    @staticmethod
+    def _squad_pattern_from_protocol(protocol: str) -> WorkflowPattern:
+        """Map a collaboration protocol to a squad workflow pattern."""
+        mapping = {
+            "debate": WorkflowPattern.DEBATE,
+            "red_team": WorkflowPattern.RED_TEAM,
+            "review_gate": WorkflowPattern.AGENT_SQUAD,
+            "sequential": WorkflowPattern.AGENT_SQUAD,
+            "parallel": WorkflowPattern.AGENT_SQUAD,
+        }
+        return mapping.get(protocol, WorkflowPattern.AGENT_SQUAD)
 
     # ── LLM-based classification ─────────────────────────────────────────────
 

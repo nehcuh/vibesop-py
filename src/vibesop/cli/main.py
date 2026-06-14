@@ -34,6 +34,7 @@ from vibesop.cli.commands import (
     market_cmd,
     matcher_cmd,
     plan_cmd,
+    prompt_chain_cmd,
     snapshot_cmd,
     sync_cmd,
     trace_cmd,
@@ -149,6 +150,7 @@ app.add_typer(trace_cmd.app, name="trace")
 app.add_typer(sync_cmd.app, name="sync-registry")
 app.add_typer(workflows_cmd.app, name="workflows")
 app.add_typer(instinct_cmd.app, name="instinct")
+app.add_typer(prompt_chain_cmd.app, name="prompt-chain")
 app.command(name="trust")(trust_module.trust)
 
 
@@ -163,6 +165,89 @@ def status(
 
 
 # -- Core routing commands --
+
+
+def _print_fallback(query: str, reason: str, *, json_output: bool) -> None:
+    """Print a fallback response when the interceptor declines routing."""
+    if json_output:
+        import json
+
+        print(
+            json.dumps(
+                {
+                    "intercepted": False,
+                    "query": query,
+                    "reason": reason,
+                },
+                indent=2,
+                ensure_ascii=False,
+            )
+        )
+    else:
+        console.print(f"[dim]{reason} — passing query to agent.[/dim]")
+
+
+def _copy_context(base: Any | None) -> Any:
+    """Return a shallow copy of a RoutingContext, preserving all fields."""
+    import dataclasses
+
+    from vibesop.core.matching import RoutingContext
+
+    if base is None:
+        return RoutingContext()
+    copied = dataclasses.replace(base)
+    # Ensure mutable metadata is not shared between contexts.
+    copied.metadata = dict(copied.metadata)
+    return copied
+
+
+def _build_single_agent_context(
+    context: Any | None,
+    decision: Any,
+) -> Any:
+    """Build a RoutingContext enriched with role/skill isolation for SINGLE_AGENT."""
+    from vibesop.core.orchestration.role_templates import ORCHESTRATOR_PROMPT, ROLE_PROMPTS
+
+    analysis = decision.analysis
+    if not analysis or not analysis.suggested_roles:
+        return context
+
+    role_id = analysis.suggested_roles[0]
+    skills = analysis.per_agent_skills.get(role_id, [])
+    role_ctx = {
+        "role": role_id,
+        "role_prompt": ROLE_PROMPTS.get(role_id, ORCHESTRATOR_PROMPT),
+        "allowed_skills": skills,
+        "interception_mode": "single_agent",
+    }
+    enriched = _copy_context(context)
+    enriched.interception_mode = "single_agent"
+    enriched.role_context = role_ctx
+    enriched.metadata.update(
+        {
+            "intent_analysis": analysis.to_dict(),
+            "_interception_mode": "single_agent",
+        }
+    )
+    return enriched
+
+
+def _build_multi_agent_squad_context(
+    context: Any | None,
+    decision: Any,
+) -> Any:
+    """Build a RoutingContext carrying intent analysis for MULTI_AGENT_SQUAD."""
+    analysis = decision.analysis
+    enriched = _copy_context(context)
+    enriched.interception_mode = "multi_agent_squad"
+    if analysis is not None:
+        enriched.metadata.update(
+            {
+                "intent_analysis": analysis.to_dict(),
+                "_interception_mode": "multi_agent_squad",
+            }
+        )
+    return enriched
 
 
 @app.command()
@@ -404,13 +489,57 @@ def route(
     # Use live progress display for interactive non-verbose, non-json mode
     use_live_progress = not verbose and not json_output and sys.stdin.isatty()
 
-    if use_live_progress:
-        from vibesop.cli.progress import LiveOrchestrationCallbacks
+    # Phase 6: dispatch by interception mode
+    if not decision.should_route:
+        _print_fallback(query, decision.reason, json_output=json_output)
+        raise typer.Exit(0)
 
-        with LiveOrchestrationCallbacks(console=console) as callbacks:
-            result = router.orchestrate(query, context=context, callbacks=callbacks)
+    if decision.mode == InterceptionMode.SINGLE:
+        routing_result = router.route(decision.query, context=context)
+        result = router._to_orchestration_result(routing_result, decision.query)
+    elif decision.mode == InterceptionMode.SINGLE_AGENT:
+        enriched_ctx = _build_single_agent_context(context, decision)
+        routing_result = router.route(decision.query, context=enriched_ctx)
+        result = router._to_orchestration_result(routing_result, decision.query)
+    elif decision.mode == InterceptionMode.MULTI_AGENT_SQUAD:
+        enriched_ctx = _build_multi_agent_squad_context(context, decision)
+        if use_live_progress:
+            from vibesop.cli.progress import LiveOrchestrationCallbacks
+
+            with LiveOrchestrationCallbacks(console=console) as callbacks:
+                result = router.orchestrate(
+                    decision.query, context=enriched_ctx, callbacks=callbacks
+                )
+        else:
+            result = router.orchestrate(decision.query, context=enriched_ctx)
+    elif decision.mode == InterceptionMode.ORCHESTRATE:
+        if use_live_progress:
+            from vibesop.cli.progress import LiveOrchestrationCallbacks
+
+            with LiveOrchestrationCallbacks(console=console) as callbacks:
+                result = router.orchestrate(
+                    decision.query, context=context, callbacks=callbacks
+                )
+        else:
+            result = router.orchestrate(decision.query, context=context)
     else:
-        result = router.orchestrate(query, context=context)
+        # Unknown mode: fall back to orchestration for backward compatibility
+        if use_live_progress:
+            from vibesop.cli.progress import LiveOrchestrationCallbacks
+
+            with LiveOrchestrationCallbacks(console=console) as callbacks:
+                result = router.orchestrate(
+                    decision.query, context=context, callbacks=callbacks
+                )
+        else:
+            result = router.orchestrate(decision.query, context=context)
+
+    # Phase 4: render Agent Squad summary when the plan contains a squad
+    squad_already_rendered = False
+    squad = _extract_squad_from_result(result)
+    if squad is not None and not json_output:
+        console.print(_format_squad_summary(squad, decision.analysis))
+        squad_already_rendered = True
 
     # JSON output mode: skip all Rich rendering, write structured result to stdout
     if json_output:
@@ -420,7 +549,6 @@ def route(
             # Minimal output for sub-agent consumption
             from vibesop.core.routing.lightweight_api import LightweightRouter
 
-            lw = LightweightRouter(project_root=Path.cwd())
             # Re-use the orchestration result directly
             minimal_result = LightweightRouter._format_result(result)
             print(json.dumps(minimal_result, ensure_ascii=False))
@@ -431,7 +559,7 @@ def route(
         raise typer.Exit(0)
 
     # Full transparency: show routing decision tree (default)
-    already_rendered = False
+    already_rendered = squad_already_rendered
     if transparency_mode == "full":
         if result.mode.value == "single":
             from vibesop.core.models import RoutingResult
@@ -485,7 +613,7 @@ def route(
 
         _handle_orchestrated_result(
             result, router, yes, execute, json_output, console,
-            already_rendered=already_rendered,
+            already_rendered=already_rendered, squad=squad,
         )
         return
 
@@ -653,8 +781,6 @@ def _handle_prompt_chain_output(
     output_dir: str | None = None,
 ) -> None:
     """Generate and write prompt chain files for PROMPT_CHAIN pattern."""
-    from pathlib import Path
-
     from vibesop.core.models import WorkflowPattern
     from vibesop.core.orchestration.prompt_chain_generator import PromptChainGenerator
 
@@ -735,13 +861,14 @@ def _handle_orchestrated_result(
     json_output: bool,
     console: Console,
     already_rendered: bool = False,
+    squad: Any | None = None,
 ) -> None:
     plan = result.execution_plan
 
     # 1. Confirmation flow (when needed)
     confirmed = _orchestration_confirmation_flow(
         result, yes, execute, json_output, console, router,
-        already_rendered=already_rendered,
+        already_rendered=already_rendered, squad=squad,
     )
     if not confirmed:
         return
@@ -763,6 +890,7 @@ def _orchestration_confirmation_flow(
     console: Console,
     router: Any,
     already_rendered: bool = False,
+    squad: Any | None = None,
 ) -> bool:
     """Interactive confirmation for orchestrated result."""
     plan = result.execution_plan
@@ -782,6 +910,17 @@ def _orchestration_confirmation_flow(
         ),
         questionary.Choice("📝 Skip skills, use raw LLM", value="skip"),
     ]
+
+    if squad is not None:
+        choices = [
+            questionary.Choice("✅ Execute squad", value="confirm"),
+            questionary.Choice("✏️  Edit squad", value="edit"),
+            questionary.Choice(
+                f"🔀 Switch to single agent: {result.single_fallback.skill_id if result.single_fallback else 'none'}",
+                value="single",
+            ),
+            questionary.Choice("📝 Skip", value="skip"),
+        ]
 
     if execute and sys.stdin.isatty():
         choices.insert(1, questionary.Choice("▶️  Execute plan step-by-step", value="execute"))
@@ -1323,6 +1462,82 @@ def _check_hooks() -> tuple[bool, str]:
         return False, "No platforms checked"
     except Exception as e:
         return False, f"Failed to check: {e}"
+
+
+# ── Phase 4: Agent Squad CLI helpers ─────────────────────────────────────────
+
+
+def _extract_squad_from_result(result: Any) -> Any | None:
+    """Return AgentSquad from an OrchestrationResult if present."""
+    plan = getattr(result, "execution_plan", None)
+    if plan is None:
+        return None
+    squad_data = plan.metadata.get("agent_squad") if hasattr(plan, "metadata") else None
+    if not squad_data:
+        return None
+    from vibesop.core.models import AgentSquad
+
+    return AgentSquad(**squad_data)
+
+
+def _format_squad_summary(squad: Any, analysis: Any | None = None) -> str:
+    """Format a human-readable Agent Squad summary for CLI output."""
+    from vibesop.core.orchestration.agent_squad_composer import ROLE_METADATA
+
+    role_icons = {
+        "architect": "🏗️",
+        "implementer": "💻",
+        "reviewer": "👁️",
+        "red_team": "🛡️",
+        "debater": "⚡",
+        "tester": "🧪",
+        "orchestrator": "🎯",
+        "documenter": "📝",
+        "operator": "🚀",
+    }
+
+    lines: list[str] = []
+
+    # Semantic analysis header
+    if analysis is not None:
+        lines.append("\n🔍 Semantic Analysis")
+        lines.append("─────────────────────────────")
+        lines.append(f"Mode         {getattr(analysis, 'complexity', 'unknown').upper()}")
+        lines.append(f"Complexity   {getattr(analysis, 'complexity', 'unknown')}")
+        lines.append(f"Confidence   {int(getattr(analysis, 'confidence', 0.0) * 100)}%")
+        lines.append("")
+
+    # Squad roster
+    lines.append("🤖 Agent Squad")
+    lines.append("─────────────────────────────")
+
+    step_by_role: dict[str, Any] = {}
+    for step in squad.steps:
+        step_by_role[step.role_id] = step
+
+    for role in squad.roles:
+        icon = role_icons.get(role.role_id, "🤖")
+        meta = ROLE_METADATA.get(role.role_id, {})
+        name = meta.get("name", role.role_id)
+        step = step_by_role.get(role.role_id)
+        platform = step.agent_platform if step else "claude-code"
+        skills = ", ".join(step.skill_ids[:3]) if step and step.skill_ids else "-"
+
+        lines.append(f"  {icon}  {name} → {platform}")
+        lines.append(f"     Skills: {skills}")
+
+    # Protocol & rounds
+    lines.append("")
+    lines.append(f"🔄 Protocol: {squad.collaboration_protocol}")
+    order_names = [
+        step_by_role[rid].role_id if rid in step_by_role else rid
+        for rid in squad.execution_order
+    ]
+    lines.append(f"   Round 1: {' → '.join(order_names)} → review")
+    lines.append(f"   Max Rounds: {squad.max_rounds}")
+    lines.append("")
+
+    return "\n".join(lines)
 
 
 # Register all subcommands

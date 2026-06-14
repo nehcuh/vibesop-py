@@ -66,6 +66,10 @@ class RoutingContext:
     habit_boosts: dict[str, float] = field(default_factory=dict)
     strategy_hint: str | None = None
     skip_ai_triage: bool = False
+    # Phase 6: interception mode and role context for agent routing
+    interception_mode: str | None = None
+    role_context: dict[str, Any] | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization."""
@@ -78,6 +82,9 @@ class RoutingContext:
             "conversation_id": self.conversation_id,
             "recent_queries": self.recent_queries,
             "current_skill": self.current_skill,
+            "interception_mode": self.interception_mode,
+            "role_context": self.role_context,
+            "metadata": self.metadata,
         }
 
     @property

@@ -194,11 +194,42 @@ class Orchestrator:
             )
         )
         builder = self._router._get_plan_builder()
+
+        # Carry intent analysis from the routing context so PlanBuilder can
+        # enter the squad path (per-role steps + agent_squad metadata) when
+        # the interceptor decided MULTI_AGENT_SQUAD. Without this passthrough,
+        # the analysis attached to RoutingContext.metadata is silently dropped.
+        plan_metadata: dict[str, Any] = dict(getattr(classification, "metadata", None) or {})
+        effective_pattern = classification.pattern
+        if context is not None:
+            ctx_metadata = getattr(context, "metadata", None) or {}
+            ctx_analysis_dict = ctx_metadata.get("intent_analysis")
+            interception_mode = ctx_metadata.get("_interception_mode", "")
+            if ctx_analysis_dict is not None:
+                # Prefer the context's analysis — the interceptor already
+                # committed to MULTI_AGENT_SQUAD and built a complete analysis.
+                plan_metadata["intent_analysis"] = ctx_analysis_dict
+
+                # Force a squad-oriented pattern when the interceptor flagged
+                # multi_agent_squad; otherwise PlanBuilder skips _build_squad_steps.
+                if interception_mode == "multi_agent_squad" and effective_pattern not in (
+                    WorkflowPattern.AGENT_SQUAD,
+                    WorkflowPattern.DEBATE,
+                    WorkflowPattern.RED_TEAM,
+                ):
+                    protocol = ctx_analysis_dict.get("collaboration_protocol", "sequential")
+                    if protocol == "debate":
+                        effective_pattern = WorkflowPattern.DEBATE
+                    elif protocol == "red_team":
+                        effective_pattern = WorkflowPattern.RED_TEAM
+                    else:
+                        effective_pattern = WorkflowPattern.AGENT_SQUAD
+
         try:
             plan = builder.build_plan(
                 query, sub_tasks,
-                workflow_pattern=classification.pattern,
-                metadata=getattr(classification, 'metadata', None) or {},
+                workflow_pattern=effective_pattern,
+                metadata=plan_metadata,
             )
         except Exception as e:
             policy = cb.on_phase_error(

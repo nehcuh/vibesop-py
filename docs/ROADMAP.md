@@ -1,12 +1,23 @@
 # VibeSOP Roadmap
 
-> **Version**: 6.2.0
-> **版本 Version**: 6.2.0
-> **最后更新 Last Updated**: 2026-06-05
+> **Version**: 7.0.0
+> **版本 Version**: 7.0.0
+> **最后更新 Last Updated**: 2026-06-14
 
 ---
 
-## Current State (v6.2.0)
+## Current State (v7.0.0)
+
+### ✅ Completed in v7.0 (2026-06-14)
+
+- [x] **Hook path P0 fix** — `AgentRouter.orchestrate` accepts `callbacks`; `vibesop-route.sh` finds project root + PATH-robust (orbs / docker / non-interactive shells)
+- [x] **Multi-Agent Squad auto-trigger** — `IntentInterceptor.ROLE_KEYWORDS` fast path promotes ≥2-role queries to `MULTI_AGENT_SQUAD` without LLM; `Orchestrator` reads `context.metadata["intent_analysis"]`; `AgentRuntime.handle_query` unifies ORCHESTRATE + SQUAD paths
+- [x] **Prompt injection + path traversal hardening** — `_escape_query` strips C0 control chars; `write_files` rejects NUL bytes + uses separator-suffixed prefix check
+- [x] **`prompt-chain-validator` cross-cutting skill** — `.vibe/skills/cross-cutting/prompt-chain-validator.skill/` + `vibe prompt-chain {diagnose,generate,validate,run}` CLI + `core/prompt_chain/{generator,validator}.py`
+
+### ✅ Completed in v6.2.0 (2026-06-05)
+
+- [x] Core SkillOS engine with 10-layer pipeline
 
 ### ✅ Completed
 
@@ -600,6 +611,7 @@ User Query
 | v6.0.0 | 2026-06-05 | ✅ Dynamic Workflow Engine — Phase 1: Generative Dynamic |
 | v6.1.0 | 2026-06-05 | ✅ Dynamic Workflow Engine — Phase 2: Adversarial Verification |
 | v6.2.0 | 2026-06-05 | ✅ Dynamic Workflow Engine — Phase 3: Full Execution Dynamic |
+| v7.0.0 | 2026-06-14 | ✅ Hook Path Hardening + Multi-Agent Squad + prompt-chain-validator skill |
 
 ---
 
@@ -632,4 +644,4 @@ See something missing? Want to accelerate a feature?
 
 ---
 
-*Last updated: 2026-06-05 (v6.2.0 — full execution dynamic; all v6.x workflow engine phases complete)*
+*Last updated: 2026-06-14 (v7.0.0 — hook reliability + multi-agent squad + prompt-chain-validator; see [CHANGELOG](../CHANGELOG.md#unreleased) for details)*

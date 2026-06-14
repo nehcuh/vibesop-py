@@ -4,10 +4,13 @@ from __future__ import annotations
 
 from vibesop.agent.runtime.plan_executor import PlanExecutor
 from vibesop.core.models import (
+    AgentRole,
+    AgentSquad,
     ExecutionMode,
     ExecutionPlan,
     ExecutionStep,
     PlanStatus,
+    SquadStep,
     StepStatus,
 )
 
@@ -236,3 +239,37 @@ class TestPlanExecutor:
         assert "严格按顺序" in guide.prompt
         assert "明确报告" in guide.prompt
         assert "失败处理" in guide.prompt
+
+    def test_build_manifest_includes_squad_metadata(self) -> None:
+        executor = PlanExecutor()
+        squad = AgentSquad(
+            squad_id="squad-test",
+            roles=[
+                AgentRole(role_id="architect", name="Architect", required_skills=["design"]),
+            ],
+            steps=[SquadStep(step_id="s1", role_id="architect", skill_ids=["design"])],
+            collaboration_protocol="sequential",
+            execution_order=["s1"],
+        )
+        plan = ExecutionPlan(
+            plan_id="plan-squad",
+            original_query="design architecture",
+            steps=[
+                ExecutionStep(
+                    step_id="s1",
+                    step_number=1,
+                    skill_id="design",
+                    intent="Design architecture",
+                ),
+            ],
+            execution_mode=ExecutionMode.SEQUENTIAL,
+            metadata={"agent_squad": squad.to_dict()},
+        )
+
+        manifest = executor.build_manifest(plan)
+
+        assert "squad" in manifest.metadata
+        assert manifest.metadata["squad"]["id"] == "squad-test"
+        assert manifest.metadata["squad"]["protocol"] == "sequential"
+        assert any(r["role_id"] == "architect" for r in manifest.metadata["squad"]["roles"])
+        assert manifest.metadata["squad"]["execution_order"] == ["s1"]

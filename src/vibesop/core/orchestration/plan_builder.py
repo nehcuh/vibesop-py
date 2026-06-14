@@ -8,24 +8,8 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from vibesop.core.matching import RoutingContext
-
-# Built-in management tools that should never be assigned to sub-tasks.
-# These are VibeSOP's own CLI/slash-command tools, not domain skills.
-_MANAGEMENT_SKILL_IDS: frozenset[str] = frozenset({
-    "builtin/slash-orchestrate",
-    "builtin/slash-route",
-    "builtin/slash-help",
-    "builtin/slash-list",
-    "builtin/slash-install",
-    "builtin/slash-evaluate",
-    "slash-orchestrate",
-    "slash-route",
-    "slash-help",
-    "slash-list",
-    "slash-install",
-    "slash-evaluate",
-})
 from vibesop.core.models import (
+    AgentSquad,
     ExecutionMode,
     ExecutionPlan,
     ExecutionStep,
@@ -35,16 +19,37 @@ from vibesop.core.models import (
     TrustLevel,
     WorkflowPattern,
 )
+from vibesop.core.orchestration.agent_squad_composer import AgentSquadComposer
 from vibesop.core.orchestration.patterns import (
     DEPENDENCY_INDICATORS,
     PARALLEL_KEYWORDS,
     SEQUENTIAL_KEYWORDS,
 )
+from vibesop.core.orchestration.skill_composer import SkillComposer
 
 if TYPE_CHECKING:
     from vibesop.core.routing.unified import UnifiedRouter
 
 logger = logging.getLogger(__name__)
+
+# Built-in management tools that should never be assigned to sub-tasks.
+# These are VibeSOP's own CLI/slash-command tools, not domain skills.
+_MANAGEMENT_SKILL_IDS: frozenset[str] = frozenset(
+    {
+        "builtin/slash-orchestrate",
+        "builtin/slash-route",
+        "builtin/slash-help",
+        "builtin/slash-list",
+        "builtin/slash-install",
+        "builtin/slash-evaluate",
+        "slash-orchestrate",
+        "slash-route",
+        "slash-help",
+        "slash-list",
+        "slash-install",
+        "slash-evaluate",
+    }
+)
 
 # Standard capability tags and their task_type mapping
 # When a sub-task has task_type X, prefer skills with capability X
@@ -102,7 +107,6 @@ _SKILL_FILE_MAP: dict[str, list[str]] = {
 }
 
 
-
 class PlanBuilder:
     """Builds an ExecutionPlan from decomposed sub-tasks.
 
@@ -125,6 +129,20 @@ class PlanBuilder:
     def __init__(self, router: UnifiedRouter):
         self._router = router
         self._capability_cache: dict[str, list[str]] = {}
+        self._squad_composer: AgentSquadComposer | None = None
+        self._skill_composer: SkillComposer | None = None
+
+    @property
+    def _squad_composer_instance(self) -> AgentSquadComposer:
+        if self._squad_composer is None:
+            self._squad_composer = AgentSquadComposer()
+        return self._squad_composer
+
+    @property
+    def _skill_composer_instance(self) -> SkillComposer:
+        if self._skill_composer is None:
+            self._skill_composer = SkillComposer()
+        return self._skill_composer
 
     def _get_skill_capabilities(self, skill_id: str) -> list[str]:
         """Fetch capability tags for a skill from the skill loader.
@@ -206,9 +224,7 @@ class PlanBuilder:
 
         primary_caps = self._get_skill_capabilities(primary_skill_id)
         best_skill = primary_skill_id
-        best_score = (
-            primary_confidence + self._capability_score(primary_caps, task_type) * 0.15
-        )
+        best_score = primary_confidence + self._capability_score(primary_caps, task_type) * 0.15
 
         for alt in alternatives:
             alt_caps = self._get_skill_capabilities(alt.skill_id)
@@ -289,7 +305,11 @@ class PlanBuilder:
             # Route to best skill for this sub-task
             # Prefer LLM-assigned skill_id from decomposition if available
             pre_assigned = getattr(sub_task, "skill_id", None)
-            if pre_assigned and pre_assigned != "null" and pre_assigned not in _MANAGEMENT_SKILL_IDS:
+            if (
+                pre_assigned
+                and pre_assigned != "null"
+                and pre_assigned not in _MANAGEMENT_SKILL_IDS
+            ):
                 skill_id = pre_assigned
                 confidence = 0.99
             else:
@@ -340,7 +360,9 @@ class PlanBuilder:
                         alt = alternatives[0]
                         logger.info(
                             "Sub-task %d: management skill '%s' → alternative '%s'",
-                            i, skill_id, alt.skill_id,
+                            i,
+                            skill_id,
+                            alt.skill_id,
                         )
                         skill_id = alt.skill_id
                         confidence = alt.confidence
@@ -348,7 +370,8 @@ class PlanBuilder:
                         logger.warning(
                             "Sub-task %d: management skill '%s' matched but no "
                             "alternatives available — skipping step",
-                            i, skill_id,
+                            i,
+                            skill_id,
                         )
                         continue
 
@@ -411,6 +434,22 @@ class PlanBuilder:
         # Apply pattern-specific step adjustments
         steps = self._apply_pattern(steps, workflow_pattern, original_query)
 
+        # Agent squad path: replace sub-task steps with squad steps when the
+        # pattern is squad-oriented and an IntentAnalysis is present in metadata.
+        squad: Any | None = None
+        if workflow_pattern in (
+            WorkflowPattern.AGENT_SQUAD,
+            WorkflowPattern.DEBATE,
+            WorkflowPattern.RED_TEAM,
+        ):
+            analysis = (metadata or {}).get("intent_analysis")
+            if analysis is not None:
+                steps, squad = self._build_squad_steps(analysis, workflow_pattern)
+
+        plan_metadata = dict(metadata or {})
+        if squad is not None:
+            plan_metadata["agent_squad"] = squad.to_dict()
+
         return ExecutionPlan(
             plan_id=str(uuid.uuid4())[:12],
             original_query=original_query,
@@ -423,7 +462,7 @@ class PlanBuilder:
             status=PlanStatus.PENDING,
             execution_mode=execution_mode,
             workflow_pattern=workflow_pattern,
-            metadata=metadata or {},
+            metadata=plan_metadata,
         )
 
     def _detect_execution_mode(
@@ -527,6 +566,13 @@ class PlanBuilder:
         if pattern == WorkflowPattern.PROMPT_CHAIN:
             # Prompt chain runs sequentially — each prompt depends on prior output
             return ExecutionMode.SEQUENTIAL
+        if pattern in (
+            WorkflowPattern.AGENT_SQUAD,
+            WorkflowPattern.DEBATE,
+            WorkflowPattern.RED_TEAM,
+        ):
+            # Squad-oriented patterns respect their own execution order
+            return ExecutionMode.SEQUENTIAL
         return detected_mode
 
     def _apply_pattern(
@@ -553,6 +599,112 @@ class PlanBuilder:
         # SEQUENTIAL: nothing to change
         return steps
 
+    def _build_squad_steps(
+        self,
+        analysis: Any,
+        workflow_pattern: WorkflowPattern,
+    ) -> tuple[list[ExecutionStep], AgentSquad]:
+        """Build ExecutionStep list from an agent squad for squad-oriented patterns."""
+        from vibesop.core.models import IntentAnalysis
+
+        if not isinstance(analysis, IntentAnalysis):
+            analysis = IntentAnalysis.model_validate(analysis)
+
+        squad = self._squad_composer_instance.compose(analysis)
+        global_skills = self._collect_global_skills()
+        squad = self._skill_composer_instance.compose_for_squad(squad, global_skills)
+
+        step_by_id = {s.step_id: s for s in squad.steps}
+        execution_steps: list[ExecutionStep] = []
+
+        for idx, step_id in enumerate(squad.execution_order, start=1):
+            squad_step = step_by_id[step_id]
+            dependencies = [dep_id for dep_id in squad_step.input_from if dep_id in step_by_id]
+
+            execution_steps.append(
+                ExecutionStep(
+                    step_id=squad_step.step_id,
+                    step_number=idx,
+                    skill_id=squad_step.skill_ids[0] if squad_step.skill_ids else "fallback-llm",
+                    intent=f"{squad_step.role_id}: {workflow_pattern.value}",
+                    original_query_segment="",
+                    input_query="",
+                    output_as=f"step_{idx}_result",
+                    status=StepStatus.PENDING,
+                    dependencies=dependencies,
+                    can_parallel=len(dependencies) == 0,
+                    step_type=self._infer_step_type(squad_step.role_id),
+                    estimated_risk=squad_step.trust_level.value,
+                    estimated_file_count=0,
+                    source_files=[],
+                    assigned_role=squad_step.role_id,
+                    agent_squad_id=squad.squad_id,
+                    role_skills=squad_step.skill_ids,
+                )
+            )
+
+        return execution_steps, squad
+
+    def _collect_global_skills(self) -> list[dict[str, Any]]:
+        """Collect all available skills as dicts for SkillComposer."""
+        skills: list[dict[str, Any]] = []
+
+        # Try router's skill_loader
+        skill_loader = getattr(self._router, "_skill_loader", None)
+        if skill_loader is not None:
+            try:
+                discovered = getattr(skill_loader, "discover_all", lambda: {})()
+                for skill_id, loaded in discovered.items():
+                    skills.append(self._loaded_skill_to_dict(skill_id, loaded))
+            except Exception:
+                pass
+
+        # Try candidate_manager's skill_loader
+        if not skills:
+            candidate_manager = getattr(self._router, "_candidate_manager", None)
+            if candidate_manager is not None:
+                cm_loader = getattr(candidate_manager, "_skill_loader", None)
+                if cm_loader is not None:
+                    try:
+                        discovered = getattr(cm_loader, "discover_all", lambda: {})()
+                        for skill_id, loaded in discovered.items():
+                            skills.append(self._loaded_skill_to_dict(skill_id, loaded))
+                    except Exception:
+                        pass
+
+        return skills
+
+    @staticmethod
+    def _loaded_skill_to_dict(skill_id: str, loaded: Any) -> dict[str, Any]:
+        """Convert a LoadedSkill-like object to a plain dict."""
+        metadata = getattr(loaded, "metadata", None) or {}
+        return {
+            "id": skill_id,
+            "skill_id": skill_id,
+            "name": getattr(metadata, "name", skill_id),
+            "description": getattr(metadata, "description", ""),
+            "intent": getattr(metadata, "intent", ""),
+            "tags": getattr(metadata, "tags", None) or [],
+            "capabilities": getattr(metadata, "capabilities", None) or [],
+            "triggers": getattr(metadata, "triggers", None) or [],
+        }
+
+    @staticmethod
+    def _infer_step_type(role_id: str) -> str:
+        """Map a squad role to a step type."""
+        mapping: dict[str, str] = {
+            "architect": "analysis",
+            "implementer": "implementation",
+            "reviewer": "review",
+            "tester": "test",
+            "red_team": "security",
+            "debater": "analysis",
+            "orchestrator": "analysis",
+            "documenter": "document",
+            "operator": "deploy",
+        }
+        return mapping.get(role_id, "implementation")
+
     def _apply_fan_out(
         self,
         steps: list[ExecutionStep],
@@ -575,7 +727,7 @@ class PlanBuilder:
             intent="综合所有并行步骤的结果",
             original_query_segment=original_query,
             input_query=(
-                f"综合以下并行分析的结果，给出统一结论:\n"
+                "综合以下并行分析的结果，给出统一结论:\n"
                 + "\n".join(f"- 步骤 {s.step_number} ({s.skill_id}): {s.intent}" for s in steps)
             ),
             output_as="synthesis_result",
@@ -605,7 +757,7 @@ class PlanBuilder:
             intent="独立验证执行结果",
             original_query_segment=original_query,
             input_query=(
-                f"独立验证以下步骤的执行结果是否完整、正确:\n"
+                "独立验证以下步骤的执行结果是否完整、正确:\n"
                 + "\n".join(f"- 步骤 {s.step_number} ({s.skill_id}): {s.intent}" for s in steps)
                 + "\n\n请检查:\n"
                 "1. 所有要求是否都已满足\n"
@@ -632,7 +784,7 @@ class PlanBuilder:
     def _apply_loop_until_dry(
         self,
         steps: list[ExecutionStep],
-        original_query: str,
+        _original_query: str,
     ) -> list[ExecutionStep]:
         """LOOP_UNTIL_DRY: mark steps for iterative refinement."""
         for step in steps:
@@ -655,16 +807,18 @@ class PlanBuilder:
         # Create contestant copies for each original step
         for step in steps:
             for i in range(num_contestants):
-                contestant = step.model_copy(update={
-                    "step_id": str(uuid.uuid4())[:8],
-                    "step_number": len(tournament_steps) + 1,
-                    "intent": f"{step.intent} (contestant {i + 1})",
-                    "output_as": f"contestant_{i + 1}_step_{step.step_number}_result",
-                    "dependencies": [],
-                    "can_parallel": True,
-                    "contestant_index": i,
-                    "trust_level": TrustLevel.TRUSTED,
-                })
+                contestant = step.model_copy(
+                    update={
+                        "step_id": str(uuid.uuid4())[:8],
+                        "step_number": len(tournament_steps) + 1,
+                        "intent": f"{step.intent} (contestant {i + 1})",
+                        "output_as": f"contestant_{i + 1}_step_{step.step_number}_result",
+                        "dependencies": [],
+                        "can_parallel": True,
+                        "contestant_index": i,
+                        "trust_level": TrustLevel.TRUSTED,
+                    }
+                )
                 tournament_steps.append(contestant)
 
         # Append judge step

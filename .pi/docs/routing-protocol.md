@@ -1,0 +1,68 @@
+# Routing Protocol
+
+> **On-Demand**: Loaded when override or disagreement occurs
+
+## Agent Override Protocol
+
+If you decide **not to adopt** the routed skill, you MUST:
+
+1. **Explicitly declare**: "I choose not to use the recommended skill `<skill_id>`"
+2. **Show your reasoning**: specifically explain why the skill is unsuitable
+3. **Propose an alternative**: describe what you plan to do instead
+4. **Get user confirmation**: WAIT for explicit user approval before proceeding
+
+Override without the above 4 steps is a violation.
+
+## Disagreement Protocol
+
+If the recommended SKILL.md does NOT match the user's request:
+
+1. **State your reasoning explicitly** — WHY the skill is unsuitable
+2. **Present alternatives** — show routing output's alternative skills
+3. **Propose your plan** — what you intend to do instead
+4. **Get user confirmation** — WAIT for explicit approval
+5. **Re-route with refinement** — if user wants a better match
+6. **Fall back to raw LLM** — only if user explicitly approves
+7. **Never force-fit** — do not contort the request to match a skill
+
+## Multi-Intent Orchestration
+
+When `vibe route` returns an orchestration plan (2+ intents):
+
+1. Execute each step in order
+2. Read each step's `SKILL.md` before executing
+3. Report progress: "Step N complete"
+4. Wait for dependencies before starting dependent steps
+5. Parallel steps may run simultaneously
+
+Do NOT ignore the plan and pick a single skill.
+
+### Workflow Patterns (v6.2.0)
+
+VibeSOP supports 6 workflow patterns for complex tasks:
+
+| Pattern | When | Behavior |
+|---------|------|----------|
+| `SEQUENTIAL` | Steps have dependencies | Execute in order |
+| `PARALLEL` | Steps are independent | Execute sequentially (no native parallelism on Pi) |
+| `FAN_OUT` | One task, multiple perspectives | Distribute and merge |
+| `ADVERSARIAL` | Output needs verification | Execute → Verify → Accept/Reject |
+| `LOOP_UNTIL_DRY` | Iterative discovery | Loop until no new findings |
+| `TOURNAMENT` | Multiple candidates | Pairwise compare → Select best |
+
+Force a pattern: `vibe route --pattern <pattern> "<query>"`
+Enable verification: `vibe route --verify "<query>"`
+
+## Deviation Recording
+
+If you skip a routing recommendation (after completing Override Protocol):
+
+```bash
+vibe deviation record "<query>" "<skill>" <confidence> "<layer>" \
+  --reason <reason_code> --action "<what_you_did>" --justification "<why>"
+```
+
+Reason codes: `skill_mismatch`, `context_ignored`, `execution_impossible`, `user_override`, `meta_question`, `duplicate_effort`
+
+---
+*Part of VibeSOP routing configuration*

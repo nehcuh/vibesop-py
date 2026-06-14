@@ -8,7 +8,7 @@
 [![Ruff](https://img.shields.io/badge/Ruff-Enabled-black.svg)](https://github.com/astral-sh/ruff)
 [![Basedpyright](https://img.shields.io/badge/Basedpyright-Strict-blue.svg)](https://github.com/DetachHead/basedpyright)
 [![Coverage](https://img.shields.io/badge/Coverage-65%25-green.svg)]()
-[![Version](https://img.shields.io/badge/Version-5.4.5-blue.svg)](https://github.com/nehcuh/vibesop-py)
+[![Version](https://img.shields.io/badge/Version-7.0.0-blue.svg)](https://github.com/nehcuh/vibesop-py)
 
 ---
 
@@ -283,6 +283,25 @@ vibe install https://github.com/anthropics/gstack
 ✅ gstack 安装成功
    运行 'vibe skills list --namespace gstack' 查看技能
 ```
+
+### 5. 跨域工作流（v7.0 新增）
+
+跨域工作流把多个技能编排成一条完整的开发流水线。VibeSOP 内置的 `prompt-chain-validator` 把"动态提示词链 + 容器端到端验证"模式打包成可复用工作流：
+
+```bash
+# 列出所有跨域工作流
+vibe workflows list-workflows
+
+# 一站式：诊断 → 生成分阶段提示词 → 容器验证
+vibe prompt-chain run "为 VibeSOP 增加 Multi-Agent Squad 能力"
+
+# 分步执行
+vibe prompt-chain diagnose "Multi-Agent Squad" --files="src/core/*.py"
+vibe prompt-chain generate "Multi-Agent Squad" --output ./prompts
+vibe prompt-chain validate --container orbstack --json
+```
+
+`vibe prompt-chain generate` 输出 7 个 `.md` 提示词文件（Phase 0 扇出诊断 → Phase 1-5 分阶段实现 → Final 端到端验证），每个文件可独立喂给 Claude Code。`vibe prompt-chain validate` 在 Linux 容器（orbstack / docker / lima 自动检测，或 `--container local` 走宿主机）中跑完整验证流水线，输出 JSON 报告。
 
 ---
 

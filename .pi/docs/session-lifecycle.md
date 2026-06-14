@@ -1,0 +1,34 @@
+# Session Lifecycle (Pi Coding Agent)
+
+## Session End Workflow
+
+When the user signals they are ending the session, Pi should:
+
+1. Read the session-end skill: `.pi/skills/session-end/SKILL.md`
+2. Follow all steps including:
+   - Recording experiences and learnings
+   - Updating session memory files
+   - Updating PROJECT_CONTEXT.md handoff
+   - Committing changes (if any)
+   - Learning instincts from the session
+
+## Pi-Specific Notes
+
+Pi uses auto-compaction for long sessions. The session-end skill handles:
+- Experience recording
+- Handoff updates
+- Git commits
+
+Pi does not require explicit memory flushing — session data is persisted automatically.
+
+## Signals
+
+The vibesop-track extension automatically detects these signals and triggers the session-end workflow:
+
+- "that's all for now"
+- "heading out" 
+- "I'm leaving"
+- "I'm done"
+- "gotta go"
+- "收工" / "再见"
+- "/session-end"

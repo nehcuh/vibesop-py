@@ -1,0 +1,43 @@
+# Custom Routing Configuration
+
+> **On-Demand**: Loaded when referenced
+
+## Adding Scenario Patterns
+
+Edit `.vibe/task-routing.yaml`:
+
+```yaml
+scenario_patterns:
+  - trigger: "my specific scenario"
+    skill: "my-skill"
+    mode: "suggest"  # or "mandatory"
+```
+
+## Adjusting Thresholds
+
+```yaml
+# .vibe/config.yaml
+routing:
+  min_confidence: 0.6
+  keyword_match_max_chars: 5
+```
+
+## Disabling Auto-Triggers
+
+Set a skill's trigger mode to `manual` in the registry to prevent automatic invocation.
+
+## Pi-Specific Configuration
+
+Pi uses `.pi/settings.json` for project-level settings. The vibesop-route extension configuration lives in the route interceptor extension at `.pi/extensions/vibesop-route.ts`.
+
+To disable automatic routing, remove the `vibesop-route.ts` entry from `.pi/settings.json`:
+```json
+{
+  "extensions": [
+    ".pi/extensions/vibesop-track.ts"
+  ]
+}
+```
+
+---
+*Part of VibeSOP routing configuration*

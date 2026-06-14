@@ -806,3 +806,60 @@ def test_apply_strictness_returns_new_object() -> None:
     # They should be different objects
     assert original is not result
 
+
+def test_verify_step_role_aware_reviewer() -> None:
+    """Test verify_step runs role-aware review for reviewer/red_team roles."""
+    loop = VerificationLoop()
+
+    reviewer_step = ExecutionStep(
+        step_id="rev-1",
+        step_number=1,
+        skill_id="review",
+        intent="Review output",
+        assigned_role="reviewer",
+    )
+
+    assert loop.verify_step(reviewer_step, "This is a meaningful review output.") is True
+    assert loop.verify_step(reviewer_step, "") is False
+
+    red_team_step = ExecutionStep(
+        step_id="rt-1",
+        step_number=1,
+        skill_id="security",
+        intent="Security review",
+        assigned_role="red_team",
+    )
+
+    assert loop.verify_step(red_team_step, "Found XSS vulnerability") is True
+
+
+def test_verify_step_quarantine_fallback() -> None:
+    """Test verify_step falls back to quarantine check for non-reviewer steps."""
+    loop = VerificationLoop()
+
+    step = ExecutionStep(
+        step_id="impl-1",
+        step_number=1,
+        skill_id="coding",
+        intent="Implement feature",
+        trust_level=TrustLevel.QUARANTINE,
+    )
+
+    assert loop.verify_step(step, "some output") is True
+    assert loop.verify_step(step, "") is False
+
+
+def test_verify_step_trusted_defaults_to_true() -> None:
+    """Test verify_step returns True for trusted steps by default."""
+    loop = VerificationLoop()
+
+    step = ExecutionStep(
+        step_id="impl-1",
+        step_number=1,
+        skill_id="coding",
+        intent="Implement feature",
+        trust_level=TrustLevel.TRUSTED,
+    )
+
+    assert loop.verify_step(step, "") is True
+

@@ -2,27 +2,22 @@
 
 ## 前置条件
 - [ ] 项目已在本地可用
-- [ ] 检测到 3 个执行步骤，涉及 2 个技能域
+- [ ] 检测到 3 个执行步骤，涉及 3 个技能域
 
 ## 你的任务
 全面理解当前任务的改造范围，识别所有改造点。
 
 ### 原始需求
-> 对当前项目从哲学理念、架构设计、代码实现进行深入评审
+> 重构路由引擎并扩展适配器
 
 ### Step 1：阅读核心文件来理解项目架构
 以下是与本任务相关的技能/模块：
-- **omx/analyze** — Review the philosophical foundations and guiding principles of the project
-- **omx/analyze** — Review the architectural design of the project
-- **omx/code-review** — Review the code implementation quality and standards
+- **core/router** — 路由层改造
+- **core/engine** — 引擎重写
+- **core/adapter** — 适配器扩展
 
 #### 具体文件路径
-本任务涉及外部 skill（如 omx/analyze），没有映射到具体文件。请自行探索：
-- **src/vibesop/** — 核心代码
-- **docs/** — 文档
-- **tests/** — 测试
-- **README.md** — 项目概述
-- **pyproject.toml** — 项目配置
+- (无已知文件路径，请根据 skill_id 自行定位)
 
 ### Step 2：识别核心问题
 请找出以下关键问题的答案：

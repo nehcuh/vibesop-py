@@ -256,7 +256,7 @@ You MUST follow this skill's workflow. Do not skip steps.
         skill_id: str,
         skill_content: str,
         truncated: bool = False,
-    ) -> str:
+    ) -> InjectionResult:
         """Generate Pi Coding Agent injection payload.
 
         Pi uses AGENTS.md context + prompt templates. Inject skill content
@@ -268,12 +268,18 @@ You MUST follow this skill's workflow. Do not skip steps.
             if truncated
             else ""
         )
-        return (
+        payload = (
             f"<vibesop-skill platform=\"pi\">\n"
             f"## Skill: {skill_id}\n"
             f"Read the SKILL.md for `{skill_id}` before proceeding.\n"
             f"```markdown\n{skill_content}{truncation_note}\n```\n"
             f"</vibesop-skill>"
+        )
+        return InjectionResult(
+            method=InjectionMethod.TEXT,
+            payload=payload,
+            skill_id=skill_id,
+            truncated=truncated,
         )
     def _inject_generic(
         self,

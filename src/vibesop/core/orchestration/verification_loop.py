@@ -10,11 +10,14 @@ Phase 2 (v6.1.0): Adversarial Verification
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, Field
+
+from vibesop.core.models import TrustLevel
 
 if TYPE_CHECKING:
     from vibesop.core.models import ExecutionPlan, ExecutionStep
@@ -206,6 +209,55 @@ class VerificationLoop:
         # Verification steps are handled by the verifier, not the executor
         return not getattr(step, "is_verification_step", False)
 
+    def verify_step(self, step: ExecutionStep, output: Any) -> bool:
+        """Verify a step's output.
+
+        Runs role-aware verification when the step is assigned to a reviewer
+        or red_team role. Otherwise falls back to trust-level checks.
+        """
+        if step.assigned_role in ("reviewer", "red_team"):
+            verdict = self._run_review(step, output)
+            return verdict.passed
+
+        if step.trust_level == TrustLevel.QUARANTINE:
+            return self._verify_quarantine(step, output)
+
+        return True
+
+    def _run_review(self, step: ExecutionStep, output: Any) -> Any:
+        """Run a review verdict for reviewer/red_team steps.
+
+        Performs lightweight heuristics when no LLM is configured.
+        """
+        from vibesop.core.orchestration.collaboration_protocol import ReviewVerdict
+
+        output_text = str(output) if output is not None else ""
+        issues: list[str] = []
+        passed = True
+
+        if not output_text.strip():
+            issues.append("Output is empty")
+            passed = False
+        elif len(output_text.strip()) < 10:
+            issues.append("Output is too short to be a meaningful review")
+            passed = False
+
+        return ReviewVerdict(
+            passed=passed,
+            reviewer_role=step.assigned_role or "reviewer",
+            target_role="unknown",
+            issues=issues,
+            score=8.0 if passed else 4.0,
+            requires_revision=not passed,
+            revision_feedback="" if passed else "Please provide a more complete review.",
+        )
+
+    def _verify_quarantine(self, step: ExecutionStep, output: Any) -> bool:
+        """Default verification for quarantine-mode steps."""
+        _ = step
+        output_text = str(output) if output is not None else ""
+        return bool(output_text.strip())
+
     def get_summary(self) -> dict[str, Any]:
         """Get summary of verification loop activity.
 
@@ -226,8 +278,8 @@ class VerificationLoop:
 
 def execute_plan_with_verification(
     plan: ExecutionPlan,
-    executor,
-    verifier,
+    executor: Callable[[ExecutionStep], Any],
+    verifier: Any,
     loop_config: VerificationLoopConfig | None = None,
 ) -> dict[str, Any]:
     """Execute an execution plan with verification loop.
@@ -244,8 +296,6 @@ def execute_plan_with_verification(
     Returns:
         Dictionary with execution results and verification summary
     """
-    from vibesop.core.orchestration.parallel_scheduler import execute_plan_sync
-
     loop = VerificationLoop(loop_config)
     results = {}
     verification_summary = []
@@ -331,7 +381,6 @@ def _get_execution_order(plan: ExecutionPlan) -> list[int]:
     """
     # Build dependency graph
     step_map = {s.step_id: s.step_number for s in plan.steps}
-    dependencies = {s.step_number: s.dependencies for s in plan.steps}
 
     # Simple topological sort
     executed: set[int] = set()

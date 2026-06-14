@@ -38,6 +38,7 @@ from vibesop.cli.commands import skill_craft as skill_craft_module
 from vibesop.cli.commands import skills_commands as skills_cmd_module
 from vibesop.cli.commands import switch as switch_module
 from vibesop.cli.commands import targets as targets_module
+from vibesop.cli.commands import prompt_chain_cmd as prompt_chain_module
 from vibesop.cli.commands import tools_cmd as tools_module
 
 __all__ = [
@@ -58,6 +59,7 @@ __all__ = [
     "switch_module",
     "targets_module",
     "tools_module",
+    "prompt_chain_module",
 ]
 
 

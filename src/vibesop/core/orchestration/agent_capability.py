@@ -13,7 +13,7 @@ Supported agents:
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import ClassVar
+from typing import Any, ClassVar
 
 
 @dataclass
@@ -47,13 +47,74 @@ class AgentCapability:
                 score = min(1.0, score + 0.1)
         return min(1.0, score)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "agent_id": self.agent_id,
             "name": self.name,
             "strengths": self.strengths,
             "preferred_categories": self.preferred_categories,
         }
+
+
+class RoleToPlatformMapper:
+    """Maps an agent role to the best AI agent platform.
+
+    VibeSOP historically modeled agents by platform (claude-code, opencode,
+    kimi-cli, ...).  As the system moves toward role-based squads, this mapper
+    provides the bridge: given a role (architect, implementer, reviewer, ...)
+    it returns the most suitable platform, optionally restricted to a pool of
+    available/installed platforms.
+    """
+
+    DEFAULT_MAPPING: ClassVar[dict[str, list[str]]] = {
+        "architect": ["claude-code", "opencode"],
+        "implementer": ["opencode", "claude-code"],
+        "reviewer": ["kimi-cli", "claude-code"],
+        "tester": ["opencode", "claude-code"],
+        "red_team": ["claude-code", "kimi-cli"],
+        "debater": ["claude-code"],
+        "orchestrator": ["claude-code", "opencode", "kimi-cli"],
+        "documenter": ["kimi-cli", "claude-code"],
+        "operator": ["opencode", "claude-code"],
+    }
+
+    FALLBACK_PLATFORM: ClassVar[str] = "claude-code"
+
+    def __init__(self, mapping: dict[str, list[str]] | None = None) -> None:
+        """Initialize with an optional custom role → platforms mapping."""
+        self._mapping = mapping or self.DEFAULT_MAPPING
+
+    def best_platform_for_role(
+        self,
+        role_id: str,
+        available_platforms: list[str] | None = None,
+    ) -> str:
+        """Return the best platform for a role.
+
+        Args:
+            role_id: Agent role identifier (e.g. "architect", "red_team").
+            available_platforms: Optional pool of platforms to choose from.
+                If provided, the first mapping entry that is also in the pool
+                is returned.  If none match, the first pool member is returned.
+
+        Returns:
+            Selected agent platform identifier.
+        """
+        candidates = self._mapping.get(role_id, [self.FALLBACK_PLATFORM])
+
+        if available_platforms:
+            for platform in candidates:
+                if platform in available_platforms:
+                    return platform
+            # No preferred candidate available; fall back to the pool itself.
+            if available_platforms:
+                return available_platforms[0]
+
+        return candidates[0] if candidates else self.FALLBACK_PLATFORM
+
+    def platforms_for_role(self, role_id: str) -> list[str]:
+        """Return the full ordered platform preference list for a role."""
+        return list(self._mapping.get(role_id, [self.FALLBACK_PLATFORM]))
 
 
 # Default agent capability profiles
@@ -110,9 +171,7 @@ class AgentRegistry:
     """Registry of available AI agents with capability profiles."""
 
     def __init__(self, installed_only: bool = False) -> None:
-        self._agents: dict[str, AgentCapability] = {
-            a.agent_id: a for a in AGENT_CAPABILITIES
-        }
+        self._agents: dict[str, AgentCapability] = {a.agent_id: a for a in AGENT_CAPABILITIES}
         if installed_only:
             self._filter_installed()
 
@@ -144,10 +203,7 @@ class AgentRegistry:
         """Find the best agent for a given skill, optionally from a pool."""
         candidates = self._agents
         if available_agents:
-            candidates = {
-                aid: a for aid, a in self._agents.items()
-                if aid in available_agents
-            }
+            candidates = {aid: a for aid, a in self._agents.items() if aid in available_agents}
 
         if not candidates:
             return None
@@ -160,9 +216,9 @@ class AgentRegistry:
 
     def assign_agents_to_steps(
         self,
-        steps: list[dict],
+        steps: list[dict[str, Any]],
         available_agents: list[str] | None = None,
-    ) -> list[dict]:
+    ) -> list[dict[str, Any]]:
         """Assign the best agent to each orchestration step.
 
         Each step dict should have 'skill_id', 'skill_tags' (optional),
@@ -173,7 +229,5 @@ class AgentRegistry:
             category = step.get("category", "general")
             best = self.best_for_skill(tags, category, available_agents)
             step["assigned_agent"] = best.agent_id if best else "claude-code"
-            step["agent_score"] = (
-                best.score_for_skill(tags, category) if best else 0.5
-            )
+            step["agent_score"] = best.score_for_skill(tags, category) if best else 0.5
         return steps

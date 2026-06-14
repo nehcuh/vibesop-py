@@ -267,6 +267,7 @@ class StepRunner:
         on_step_complete: Callable[..., Any] | None = None,
         on_step_error: Callable[..., Any] | None = None,
         fail_fast: bool = False,
+        context: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Execute all pending steps in topological order.
 
@@ -279,6 +280,7 @@ class StepRunner:
             on_step_error: Optional callback(ExecutionStep, error: Exception) called on failure.
                 Return True to continue, False to abort.
             fail_fast: If True, abort on first failure. If False, skip failed steps and continue.
+            context: Optional base context for squad-oriented plans.
 
         Returns:
             Dict with:
@@ -288,17 +290,47 @@ class StepRunner:
                 - results: list[dict] with step_id, output, error per step
         """
 
+        results: list[dict[str, Any]] = []
+
+        # Route squad-oriented plans through role-aware execution.
+        is_squad = any(s.agent_squad_id for s in self._plan.steps)
+        if is_squad:
+            squad_results = self._execute_squad(self._plan.steps, context or {}, step_executor)
+            for step in self._plan.steps:
+                result = squad_results.get(step.step_id)
+                self.mark_completed(step, str(result) if result is not None else "")
+                results.append(
+                    {
+                        "step_id": step.step_id,
+                        "output": result,
+                        "error": None,
+                        "status": "completed",
+                    }
+                )
+            return {
+                "completed": self.completed_count,
+                "failed": self.failed_count,
+                "skipped": 0,
+                "results": results,
+                "dynamic": False,
+                "pattern": self._plan.workflow_pattern.value,
+            }
+
         # Route dynamic plans to WorkflowEngine
-        from vibesop.core.orchestration.workflow_engine import WorkflowEngine
+        from vibesop.core.orchestration.workflow_engine import DynamicExecutionResult, WorkflowEngine
 
         if WorkflowEngine.is_dynamic(self._plan):
             engine = WorkflowEngine(llm_client=self._llm_client)
             # Wrap executor to accept just the step (WorkflowEngine interface)
-            def _wrap_executor(step):
+            def _wrap_executor(step: ExecutionStep):
                 ctx = self.get_context(step)
                 return step_executor(step, ctx)
 
             dyn_result = engine.run(self._plan, _wrap_executor)
+            if not isinstance(dyn_result, DynamicExecutionResult):
+                raise TypeError(
+                    f"Expected DynamicExecutionResult, got {type(dyn_result).__name__}"
+                )
             return {
                 "completed": dyn_result.total_steps_executed,
                 "failed": 0,
@@ -307,8 +339,6 @@ class StepRunner:
                 "dynamic": True,
                 "pattern": dyn_result.pattern.value,
             }
-
-        results: list[dict[str, Any]] = []
 
         while True:
             batch = self.pending_steps()
@@ -443,6 +473,54 @@ class StepRunner:
             "skipped": skipped,
             "results": results,
         }
+
+    def _execute_squad(
+        self,
+        steps: list[ExecutionStep],
+        context: dict[str, Any],
+        step_executor: Callable[..., Any],
+    ) -> dict[str, Any]:
+        """Execute squad steps grouped by role with prompt/skill injection.
+
+        Steps are grouped by ``assigned_role`` so each role receives its
+        system prompt and allowed skill list once.  The enriched context is
+        passed to ``step_executor`` for every step in the group.
+        """
+        from itertools import groupby
+
+        sorted_steps = sorted(steps, key=lambda s: s.assigned_role or "")
+        grouped = {
+            role: list(role_steps)
+            for role, role_steps in groupby(
+                sorted_steps, key=lambda s: s.assigned_role or ""
+            )
+        }
+
+        results: dict[str, Any] = {}
+        for role, role_steps in grouped.items():
+            role_prompt = self._get_role_prompt(role, role_steps)
+            skills = role_steps[0].role_skills if role_steps else []
+            skill_context = {"allowed_skills": skills}
+
+            enriched_context = {
+                **context,
+                "role": role,
+                "role_prompt": role_prompt,
+                "skill_isolation": skill_context,
+            }
+
+            for step in role_steps:
+                result = step_executor(step, enriched_context)
+                results[step.step_id] = result
+
+        return results
+
+    def _get_role_prompt(self, role: str, role_steps: list[ExecutionStep]) -> str:
+        """Return the rendered system prompt for a role."""
+        from vibesop.core.orchestration.role_templates import render_role_prompt
+
+        skills = role_steps[0].role_skills if role_steps else []
+        return render_role_prompt(role, skills)
 
     def _dependencies_satisfied(self, step: ExecutionStep) -> bool:
         for dep_id in step.dependencies:

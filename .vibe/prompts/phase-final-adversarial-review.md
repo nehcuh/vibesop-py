@@ -9,9 +9,9 @@
 | 文件 | 阶段 | 验证项数 |
 |------|------|----------|
 | phase-0-fan-out-diagnosis.md | Phase 0 | 3 项 |
-| phase-1-review-the-philosophical-foundations-and.md | Phase 1 | 2 项 |
-| phase-2-review-the-architectural-design-of-the-p.md | Phase 2 | 2 项 |
-| phase-3-review-the-code-implementation-quality-a.md | Phase 3 | 2 项 |
+| phase-1-路由层改造.md | Phase 1 | 2 项 |
+| phase-2-引擎重写.md | Phase 2 | 2 项 |
+| phase-3-适配器扩展.md | Phase 3 | 2 项 |
 
 ## 安全审查
 - [ ] 无命令注入风险（不拼接用户输入到 shell 命令）
@@ -24,76 +24,28 @@
 - [ ] 无 import 错误
 - [ ] 无类型错误（如使用 type checker）
 
-## 红队攻击面分析
+## 功能验证清单
+- [ ] [phase-0-fan-out-diagnosis.md] 所有 P0 问题已识别并列出涉及文件
+- [ ] [phase-0-fan-out-diagnosis.md] 文件依赖关系已描述
+- [ ] [phase-0-fan-out-diagnosis.md] 分析报告格式符合要求
+- [ ] [phase-1-路由层改造.md] Phase 1 的实现符合需求描述
+- [ ] [phase-1-路由层改造.md] 现有测试全部通过
+- [ ] [phase-2-引擎重写.md] Phase 2 的实现符合需求描述
+- [ ] [phase-2-引擎重写.md] 现有测试全部通过
+- [ ] [phase-3-适配器扩展.md] Phase 3 的实现符合需求描述
+- [ ] [phase-3-适配器扩展.md] 现有测试全部通过
 
-从攻击者视角思考以下问题：
-
-### 入口攻击
-- [ ] 如果有恶意输入，最容易被利用的入口是什么？
-- [ ] CLI 命令参数是否被正确清洗？
-- [ ] 配置中的 API Key 是否可能泄漏？
-- [ ] WebSocket 消息是否有大小限制？
-
-### 提权路径
-- [ ] 普通用户能否通过功能组合获得未授权访问？
-- [ ] skill 加载是否检查路径遍历？
-- [ ] 外部 skill 安装是否经过安全审计？
-
-### 拒绝服务
-- [ ] 哪些操作可能导致系统不可用？
-- [ ] 是否存在无限循环/递归？
-- [ ] 是否存在未限制的资源消耗？
-
-### 数据泄漏
-- [ ] 敏感信息是否可能被未授权访问？
-- [ ] API Key 是否在日志中打印？
-- [ ] 配置文件权限是否严格（0700）？
-
-## 跨维度交叉验证
-- [ ] 各 Phase 的输出被后续 Phase 正确消费，数据流无断裂
-- [ ] 多个 Phase 对同一文件的修改无冲突（git diff 无矛盾）
-- [ ] 所有 Phase 的 completion_marker 文件已创建
-
-## 综合评分
-
-### 五维雷达评估
-
-| 维度 | 评分 (1-5) | 说明 |
-|:-----|:----------:|:-----|
-| 哲学理念 | /5 | 价值主张清晰度、术语一致性、设计原则落地 |
-| 架构设计 | /5 | 模块化、耦合度、可扩展性、抽象层次 |
-| 代码实现 | /5 | 类型安全、错误处理、资源管理、代码清晰度 |
-| 文档匹配 | /5 | 文档-代码一致性、完整性、新鲜度 |
-| 安全/跨平台 | /5 | 纵深防御、权限最小化、跨平台兼容 |
-
-### 综合健康度
-
-| 指标 | 评分 (1-10) | 趋势 | 说明 |
-|:-----|:-----------:|:----:|:-----|
-| 项目健康度 | /10 | ↑/↓/→ | |
-| 代码质量 | /10 | ↑/↓/→ | |
-| 安全态势 | /10 | ↑/↓/→ | |
-| 文档质量 | /10 | ↑/↓/→ | |
-| 可维护性 | /10 | ↑/↓/→ | |
-
-## 优先级行动清单
-
-### P0 — 必须修复（功能阻塞 / 安全风险）
-| # | 问题 | 涉及文件 | 建议修复 |
-|:-:|:-----|:---------|:---------|
-| 1 | (由 Phase 1-3 评审结果填充) | | |
-
-### P1 — 应该修复（体验 / 质量）
-| # | 问题 | 涉及文件 | 建议修复 |
-|:-:|:-----|:---------|:---------|
-| 1 | (由 Phase 1-3 评审结果填充) | | |
-
-### P2 — 可以优化（后续迭代）
-| # | 问题 | 涉及文件 | 建议修复 |
-|:-:|:-----|:---------|:---------|
-| 1 | (由 Phase 1-3 评审结果填充) | | |
-
-> **注意**：以上行动项由评审 Agent 在执行 Final Phase 时，基于 Phase 1-3 的发现自动填充。
+## Phase 6 新增修复验收
+- [ ] [P0] CLI `route()` 按 `InterceptionMode` 分支：
+  - `SINGLE` → `router.route()`
+  - `SINGLE_AGENT` → `router.route()` + `role_context`
+  - `MULTI_AGENT_SQUAD` → `router.orchestrate()` + `intent_analysis` metadata
+  - `ORCHESTRATE` → `router.orchestrate()`（向后兼容）
+  - `NONE` → fallback 响应
+- [ ] [P1] `semantic_intent_analyzer.py` 用户输入用 `<user_query>` 标签包裹并转义 `</`、`{`、`}`
+- [ ] [P1] `prompt_chain_generator.py` `write_files` 对 `filename` 做 `.name` 截取、`..`/`/`/`\` 过滤、`resolve()` 路径校验
+- [ ] [P1] `tests/e2e/test_agent_runtime.py` hook 断言兼容 `$_VIBESOP_PYTHON -c` 与 `python3 -c`
+- [ ] [P2] `npx basedpyright src/vibesop/core/orchestration/ src/vibesop/agent/runtime/ src/vibesop/cli/` 0 errors
 
 ## 输出
 确认所有验证项通过后，输出最终完成报告。

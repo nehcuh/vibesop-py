@@ -17,9 +17,10 @@ from typing import TYPE_CHECKING, Any
 from pydantic import BaseModel, Field
 
 from vibesop.core.models import WorkflowPattern
+from vibesop.core.orchestration.role_templates import ROLE_PROMPTS
 
 if TYPE_CHECKING:
-    from vibesop.core.models import ExecutionPlan, ExecutionStep
+    from vibesop.core.models import AgentSquad, ExecutionPlan, ExecutionStep, SquadStep
 
 logger = logging.getLogger(__name__)
 
@@ -117,6 +118,35 @@ class PromptFile(BaseModel):
     )
 
 
+class AgentPrompt(BaseModel):
+    """A single prompt targeted at one agent role in a squad."""
+
+    model_config = {"arbitrary_types_allowed": True}
+
+    agent_id: str = Field(..., description="Role + platform identifier, e.g. architect@claude-code")
+    role: Any = Field(..., description="AgentRole definition")
+    prompt: str = Field(..., description="Full prompt text for the agent")
+    expected_output: dict[str, Any] = Field(
+        default_factory=dict, description="Expected output schema"
+    )
+    input_from: str | None = Field(
+        default=None, description="Upstream step_id that feeds into this prompt"
+    )
+    output_to: list[str] = Field(
+        default_factory=list, description="Downstream step_ids that consume this output"
+    )
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "agent_id": self.agent_id,
+            "role": self.role.to_dict() if hasattr(self.role, "to_dict") else self.role,
+            "prompt": self.prompt,
+            "expected_output": self.expected_output,
+            "input_from": self.input_from,
+            "output_to": self.output_to,
+        }
+
+
 # ── Generator ────────────────────────────────────────────────────────────────
 
 
@@ -207,13 +237,63 @@ class PromptChainGenerator:
         """Write generated prompts to disk and return written paths."""
         target = Path(output_dir) if output_dir else self._output_dir
         target.mkdir(parents=True, exist_ok=True)
+        target_resolved = target.resolve()
+        # Use a separator-suffixed prefix for the containment check so that
+        # an output_dir like /tmp/foo does NOT match a destination like
+        # /tmp/foobar/baz.md (prefix collision attack).
+        import os
+
+        target_prefix = f"{target_resolved}{os.sep}"
         written: list[Path] = []
         for pf in prompt_files:
-            path = target / pf.filename
-            path.write_text(pf.content, encoding="utf-8")
-            written.append(path)
+            # Path-traversal protection: keep only the basename and reject
+            # directory components or parent-directory references.
+            raw_name = pf.filename
+            if "\x00" in raw_name:
+                logger.warning("Skipping filename with NUL byte: %r", raw_name)
+                continue
+            safe_name = Path(raw_name).name
+            if not safe_name or ".." in safe_name or "/" in safe_name or "\\" in safe_name:
+                logger.warning("Skipping unsafe filename: %s", raw_name)
+                continue
+            if not safe_name.endswith(".md"):
+                safe_name = f"{safe_name}.md"
+            destination = (target_resolved / safe_name).resolve()
+            # Containment check: destination must live strictly inside target.
+            # Compare with the separator-suffixed prefix to defeat prefix
+            # collisions (e.g. /tmp/foo vs /tmp/foobar).
+            if str(destination) != str(target_resolved) and not str(destination).startswith(
+                target_prefix
+            ):
+                logger.warning(
+                    "Path traversal detected: %s blocked (resolves to %s)",
+                    raw_name,
+                    destination,
+                )
+                continue
+            destination.write_text(pf.content, encoding="utf-8")
+            written.append(destination)
         logger.info("Wrote %d prompt files to %s", len(written), target)
         return written
+
+    def generate_squad_prompts(
+        self,
+        plan: ExecutionPlan,
+    ) -> list[AgentPrompt]:
+        """Generate per-role AgentPrompt list when plan contains an AgentSquad.
+
+        Returns an empty list when no squad metadata is present.
+        """
+        squad_data = plan.metadata.get("agent_squad")
+        if not squad_data:
+            return []
+
+        from vibesop.core.models import AgentSquad
+
+        squad = AgentSquad(**squad_data)
+        return SquadPromptGenerator(llm_client=self._llm).generate_for_squad(
+            squad, plan.original_query
+        )
 
     # ── Dynamic content generators ────────────────────────────────────────────
 
@@ -225,7 +305,6 @@ class PromptChainGenerator:
         over keyword matching, so that review tasks produce analysis-oriented points
         even when the intent contains ambiguous keywords like "design".
         """
-        skill_id = (step.skill_id or "").lower()
         intent = (step.intent or "").lower()
         step_type = getattr(step, "step_type", "implementation") or "implementation"
 
@@ -779,3 +858,122 @@ class PromptChainGenerator:
             verification_checklist=final_checklist,
             risk_level="low",
         )
+
+
+class SquadPromptGenerator:
+    """Generate per-role prompt chains for an AgentSquad.
+
+    Each collaboration round produces N prompts (N = len(squad.roles)), one for
+    each role.  Prompts include the role system template, the skills assigned to
+    that role, handoff context from upstream roles, and an expected output schema.
+    """
+
+    _ROLE_ICONS: dict[str, str] = {
+        "architect": "🏗️",
+        "implementer": "💻",
+        "reviewer": "👁️",
+        "red_team": "🛡️",
+        "debater": "⚡",
+        "tester": "🧪",
+        "orchestrator": "🎯",
+        "documenter": "📝",
+        "operator": "🚀",
+    }
+
+    def __init__(self, llm_client: Any | None = None) -> None:
+        self._llm = llm_client
+
+    def generate_for_squad(self, squad: AgentSquad, query: str) -> list[AgentPrompt]:
+        """Generate a prompt for every squad step."""
+        step_by_id = {s.step_id: s for s in squad.steps}
+        prompts: list[AgentPrompt] = []
+        for step_id in squad.execution_order:
+            step = step_by_id.get(step_id)
+            if step is None:
+                continue
+            prompts.append(self._build_role_prompt(step, squad, query))
+        return prompts
+
+    def _build_role_prompt(
+        self,
+        step: SquadStep,
+        squad: AgentSquad,
+        query: str,
+    ) -> AgentPrompt:
+        """Build a single role prompt with skill isolation and handoff context."""
+        from vibesop.core.models import AgentRole
+        from vibesop.core.orchestration.role_templates import ORCHESTRATOR_PROMPT
+
+        template = ROLE_PROMPTS.get(step.role_id, ORCHESTRATOR_PROMPT)
+        skill_list = ", ".join(step.skill_ids) if step.skill_ids else "（无特定技能限制）"
+
+        # Build handoff / input context from upstream steps
+        input_context = ""
+        if step.input_from:
+            upstream_descriptions: list[str] = []
+            for upstream_id in step.input_from:
+                upstream = next((s for s in squad.steps if s.step_id == upstream_id), None)
+                if upstream:
+                    upstream_descriptions.append(
+                        f"- {upstream.role_id} ({upstream.agent_platform}) 的输出"
+                    )
+            if upstream_descriptions:
+                input_context = (
+                    "## 输入上下文\n"
+                    "以下来自前序角色的输出：\n"
+                    + "\n".join(upstream_descriptions)
+                    + "\n请在执行时参考上述上下文。\n"
+                )
+
+        prompt_text = template.format(skill_list=skill_list)
+        prompt_text = (
+            f"# 原始需求\n{query}\n\n"
+            f"{input_context}\n"
+            f"{prompt_text}\n"
+        )
+
+        role = AgentRole(
+            role_id=step.role_id,
+            name=self._role_name(step.role_id),
+            description="",
+            required_skills=step.skill_ids,
+        )
+
+        return AgentPrompt(
+            agent_id=f"{step.role_id}@{step.agent_platform}",
+            role=role,
+            prompt=prompt_text,
+            expected_output=self._infer_output_schema(step.role_id),
+            input_from=step.input_from[0] if step.input_from else None,
+            output_to=self._infer_output_to(step, squad),
+        )
+
+    def _role_name(self, role_id: str) -> str:
+        from vibesop.core.orchestration.agent_squad_composer import ROLE_METADATA
+
+        return ROLE_METADATA.get(role_id, {}).get("name", role_id)
+
+    def _infer_output_schema(self, role_id: str) -> dict[str, Any]:
+        """Return the expected output schema for a role."""
+        if role_id in ("reviewer", "red_team"):
+            return {
+                "schema_type": "markdown",
+                "required_sections": ["summary", "issues", "score", "recommendations"],
+            }
+        if role_id == "orchestrator":
+            return {
+                "schema_type": "markdown",
+                "required_sections": ["summary", "decision", "final_deliverable"],
+            }
+        return {
+            "schema_type": "markdown",
+            "required_sections": ["summary", "details", "artifacts"],
+        }
+
+    def _infer_output_to(self, step: SquadStep, squad: AgentSquad) -> list[str]:
+        """Find downstream steps that consume this step's output."""
+        downstream: list[str] = []
+        for other in squad.steps:
+            if step.step_id in other.input_from:
+                downstream.append(other.step_id)
+        return downstream

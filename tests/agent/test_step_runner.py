@@ -5,15 +5,18 @@ from __future__ import annotations
 import uuid
 from pathlib import Path
 
+from typing import Any
+
 import pytest
 
-from vibesop.agent.step_runner import StepRunner
+from vibesop.agent.step_runner import StepRunner, StepRunContext
 from vibesop.core.models import (
     ExecutionMode,
     ExecutionPlan,
     ExecutionStep,
     PlanStatus,
     StepStatus,
+    WorkflowPattern,
 )
 
 
@@ -219,7 +222,7 @@ class TestExecuteAll:
         ])
         runner = StepRunner(plan, track_state=False)
 
-        def executor(step, ctx):
+        def executor(step: ExecutionStep, ctx: StepRunContext) -> str:
             ctx_str = ctx.format_for_prompt()
             return f"Executed {step.skill_id} with ctx_len={len(ctx_str)}"
 
@@ -240,13 +243,13 @@ class TestExecuteAll:
         ])
         runner = StepRunner(plan, track_state=False)
 
-        def executor(step, ctx):
+        def executor(step: ExecutionStep, ctx: StepRunContext) -> str:
             if step.skill_id == "skill-b":
                 raise RuntimeError("Intentional failure")
             return f"OK {step.skill_id}"
 
-        errors_called = []
-        def on_error(step, error):
+        errors_called: list[str] = []
+        def on_error(step: ExecutionStep, error: Exception) -> bool:
             errors_called.append(step.skill_id)
             return True  # continue
 
@@ -263,8 +266,8 @@ class TestExecuteAll:
         ])
         runner = StepRunner(plan, track_state=False)
 
-        call_order = []
-        def executor(step, ctx):
+        call_order: list[str] = []
+        def executor(step: ExecutionStep, ctx: StepRunContext) -> str:
             call_order.append(step.skill_id)
             raise RuntimeError(f"Fail {step.skill_id}")
 
@@ -328,3 +331,62 @@ class TestStepRunnerWithDeps:
         assert len(ctx.dependency_outputs) == 2
         assert "step-1" in ctx.dependency_outputs
         assert "step-2" in ctx.dependency_outputs
+
+
+class TestStepRunnerSquadMode:
+    """Squad-oriented plan execution with role injection."""
+
+    def test_execute_all_squad_injects_role_prompt_and_skills(self):
+        plan = ExecutionPlan(
+            plan_id=f"plan-{uuid.uuid4().hex[:8]}",
+            original_query="squad test",
+            workflow_pattern=WorkflowPattern.AGENT_SQUAD,
+            execution_mode=ExecutionMode.SEQUENTIAL,
+            steps=[
+                ExecutionStep(
+                    step_id="impl",
+                    step_number=1,
+                    skill_id="coding",
+                    intent="implement",
+                    input_query="implement",
+                    assigned_role="implementer",
+                    agent_squad_id="squad-1",
+                    role_skills=["coding", "refactor"],
+                ),
+                ExecutionStep(
+                    step_id="rev",
+                    step_number=2,
+                    skill_id="review",
+                    intent="review",
+                    input_query="review",
+                    assigned_role="reviewer",
+                    agent_squad_id="squad-1",
+                    role_skills=["review", "code_review"],
+                ),
+            ],
+        )
+        runner = StepRunner(plan, track_state=False)
+
+        calls: list[tuple[str, str, dict[str, Any]]] = []
+
+        def executor(step: ExecutionStep, ctx: dict[str, Any]) -> str:
+            calls.append((step.step_id, step.assigned_role or "", ctx))
+            return f"output-{step.step_id}"
+
+        result = runner.execute_all(executor, context={"base": "value"})
+
+        assert result["completed"] == 2
+        assert result["failed"] == 0
+        assert runner.is_complete
+
+        # Each role group receives its own enriched context
+        impl_ctx = next(ctx for sid, _role, ctx in calls if sid == "impl")
+        assert impl_ctx["role"] == "implementer"
+        assert "Implementer" in impl_ctx["role_prompt"]
+        assert impl_ctx["skill_isolation"]["allowed_skills"] == ["coding", "refactor"]
+        assert impl_ctx["base"] == "value"
+
+        rev_ctx = next(ctx for sid, _role, ctx in calls if sid == "rev")
+        assert rev_ctx["role"] == "reviewer"
+        assert "Reviewer" in rev_ctx["role_prompt"]
+        assert rev_ctx["skill_isolation"]["allowed_skills"] == ["review", "code_review"]

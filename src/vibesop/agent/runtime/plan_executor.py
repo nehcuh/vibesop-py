@@ -135,16 +135,38 @@ class PlanExecutor:
             )
             steps.append(manifest_step)
 
+        from vibesop.core.models import AgentSquad
+
         plan_dir = self._project_root / ".vibe" / "plans" / plan.plan_id
         context_file = str(plan_dir / "context.md")
 
-        return ExecutionManifest(
+        manifest = ExecutionManifest(
             plan_id=plan.plan_id,
             original_query=plan.original_query,
             strategy=plan.execution_mode.value,
             steps=steps,
             context_file=context_file,
         )
+
+        # Phase 4: include squad metadata when present
+        squad_data = plan.metadata.get("agent_squad")
+        if squad_data:
+            squad = AgentSquad(**squad_data)
+            manifest.metadata["squad"] = {
+                "id": squad.squad_id,
+                "protocol": squad.collaboration_protocol,
+                "roles": [
+                    {
+                        "role_id": r.role_id,
+                        "name": r.name,
+                        "skills": r.required_skills,
+                    }
+                    for r in squad.roles
+                ],
+                "execution_order": squad.execution_order,
+            }
+
+        return manifest
 
     def _resolve_input_context(self, plan: ExecutionPlan, current_step: ExecutionStep) -> str:
         """Resolve the input context for a step from its upstream dependencies."""

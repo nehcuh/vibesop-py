@@ -382,5 +382,85 @@ Scores all skills but **penalizes already-used skills** (×0.2 weight), favoring
 
 ---
 
+## Interception Modes (v7.0)
+
+Before the 10-layer pipeline runs, `IntentInterceptor.should_intercept()`
+decides *whether* to route and *how*. The decision tree below is the
+single entry point for both the CLI (`vibe route`) and the hook path
+(`vibesop-route.sh` → `AgentRuntime.handle_query_for_hook`).
+
+### 5 InterceptionModes
+
+| Mode | When | Output |
+|:---|:---|:---|
+| `SLASH_COMMAND` | Query starts with `/vibe-*` | Built-in slash execution |
+| `SINGLE` | Explicit skill override (`use gstack/review`) **or** short focused query | `router.route()` → primary skill |
+| `SINGLE_AGENT` | Single complex role in short query (e.g. architect, red_team) | Route + role prompt + per-agent skill allowlist |
+| `MULTI_AGENT_SQUAD` | ≥ 2 distinct professional roles detected | Per-role squad steps (see [Squad Decision Tree](#squad-decision-tree)) |
+| `ORCHESTRATE` | Multi-intent markers (`然后`/`最后`/`and then`) without multi-role | Decompose + PlanBuilder sequential/parallel plan |
+
+### Squad Decision Tree
+
+```
+                   ┌─────────────────────────────────┐
+                   │ IntentInterceptor.should_intercept │
+                   └─────────────┬───────────────────┘
+                                 │
+       ┌─────────────────────────┼──────────────────────────┐
+       │                         │                          │
+   /vibe-*                  query ≥ 10 chars           < 10 chars
+       │                         │                          │
+       ▼                         ▼                          ▼
+  SLASH_COMMAND      ┌────────────────────┐         no_route (passthrough)
+                     │ 1. extract_explicit_skill (ASCII-only)
+                     │    + _detect_roles  │
+                     └────────┬───────────┘
+                              │
+              ┌───────────────┼───────────────┐
+              │               │               │
+        ≥ 2 roles        1 role +        multi-intent
+        detected         multi_intent       markers only
+              │           marker            │
+              ▼               │             ▼
+       MULTI_AGENT_SQUAD      │        ORCHESTRATE
+                              ▼
+                          SINGLE_AGENT (if role ∈ {architect, red_team})
+                          or SINGLE
+```
+
+### Role Keyword Fast Path
+
+`IntentInterceptor.ROLE_KEYWORDS` is a static dictionary mapping 6
+professional roles (architect / implementer / reviewer / tester /
+red_team / debater) to Chinese + English keyword tuples. ≥ 2 distinct
+roles in the query short-circuit to `MULTI_AGENT_SQUAD` without
+consulting the LLM. The fast path covers ≥ 80% of real squad-worthy
+queries observed in container e2e tests.
+
+When the fast path doesn't fire (single role or no role detected),
+queries longer than 50 chars fall through to
+`SemanticIntentAnalyzer.analyze()`, which uses an LLM when configured
+or a heuristic facet detector otherwise.
+
+### Orchestrate → Squad Bridge
+
+`Orchestrator.orchestrate` (the path used by both CLI and hook)
+reads `context.metadata["intent_analysis"]` and, when
+`_interception_mode == "multi_agent_squad"`, forces the workflow
+pattern to `AGENT_SQUAD` / `DEBATE` / `RED_TEAM` regardless of what
+the rule classifier would otherwise pick. This bridges the
+IntentInterceptor's commitment with PlanBuilder's `_build_squad_steps`
+branch.
+
+### Hook Path Parity (v7.0 fix)
+
+Before v7.0, `AgentRuntime.handle_query` only handled
+`InterceptionMode.ORCHESTRATE`; `MULTI_AGENT_SQUAD` silently fell
+through to single-route, dropping the analysis. v7.0 unifies both
+modes through the same orchestrate path so the hook JSON matches the
+CLI output.
+
+---
+
 *For system overview, see [overview.md](overview.md)*
 *For layer details, see [three-layers.md](three-layers.md)*

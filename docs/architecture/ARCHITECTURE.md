@@ -608,6 +608,93 @@ of platform. The difference is purely in execution concurrency.
 
 ---
 
+## Hook Reliability + Multi-Agent Squad (v7.0)
+
+### Hook Path Hardening
+
+The shell hook wrapper (`vibesop-route.sh`, generated from
+`adapters/templates/shared/vibesop-route.sh.j2`) is the integration
+point Claude Code / Kimi CLI / OpenCode actually invoke. v7.0 hardens
+it for non-interactive shells:
+
+- `export PATH` adds `~/.local/bin` / `~/.cargo/bin` / `/opt/homebrew/bin`
+  so the hook can find `uv` regardless of how the parent process was
+  launched.
+- The script walks up from `${BASH_SOURCE[0]}` looking for
+  `pyproject.toml` with `name = "vibesop"`, falling back to
+  `$CLAUDE_PROJECT_DIR` / `$PWD` / `$VIBESOP_PROJECT_ROOT`.
+- Once the project root is located, `uv run python` is invoked from
+  there so the project venv is used.
+
+### AgentRouter ↔ AgentRuntime API
+
+`AgentRouter.orchestrate(query, callbacks=None, context=None)` is the
+single entry point for both CLI and hook paths. v7.0 added `callbacks`
+and `context` parameters (both default None for backward compatibility):
+
+- `callbacks` is reserved for future live-progress hooks; currently
+  unused but accepts the same `LiveOrchestrationCallbacks` shape as
+  `UnifiedRouter.orchestrate`.
+- `context` carries `metadata["intent_analysis"]` (a serialized
+  `IntentAnalysis`) from `IntentInterceptor._build_quick_squad_analysis`
+  through to `PlanBuilder._build_squad_steps`.
+
+### Multi-Agent Squad Pipeline
+
+```
+   User query
+       │
+       ▼
+   IntentInterceptor.should_intercept
+       │
+       │  (≥ 2 distinct ROLE_KEYWORDS hit)
+       ▼
+   MULTI_AGENT_SQUAD + IntentAnalysis{
+       suggested_roles, collaboration_protocol,
+       per_agent_skills (via SkillComposer.infer_skills_for_role)
+   }
+       │
+       ▼
+   AgentRuntime.handle_query
+       │  (builds RoutingContext.metadata["intent_analysis"])
+       ▼
+   AgentRouter.orchestrate(query, context=ctx)
+       │
+       ▼
+   build_plan(query, plan_metadata=ctx.metadata)
+       │  (picks AGENT_SQUAD / DEBATE / RED_TEAM from protocol)
+       ▼
+   PlanBuilder._build_squad_steps(analysis)
+       │
+       ▼
+   AgentSquadComposer.compose(analysis)
+       │  (creates AgentRole + SquadStep per role,
+       │   wires input_from dependencies per protocol)
+       ▼
+   SkillComposer.compose_for_squad(squad, global_skills)
+       │  (assigns per-role skill allowlists via priority + relevance)
+       ▼
+   ExecutionPlan{steps: [per-role ExecutionStep], metadata: {agent_squad}}
+```
+
+CLI output renders the squad summary via
+`_format_squad_summary(squad, analysis)` (Rich table with role icons
+🏗️ architect / 💻 implementer / 👁️ reviewer / 🛡️ red_team / ⚡ debater).
+Hook output attaches the plan as `hookSpecificOutput.additionalContext`
+so the host agent receives the squad plan as context.
+
+### Cross-Cutting Skill: prompt-chain-validator
+
+`.vibe/skills/cross-cutting/prompt-chain-validator.skill/SKILL.md`
+encodes the dynamic-workflow + container-validation pattern as a
+discoverable `type: cross-cutting` skill. `CrossCuttingDiscovery`
+picks it up automatically — `vibe workflows list-workflows` shows it
+without any extra registration. The matching CLI `vibe prompt-chain`
+is implemented in `cli/commands/prompt_chain_cmd.py` and backed by
+`core/prompt_chain/{generator,validator}.py`.
+
+---
+
 ## References
 
 - [Principles](docs/PRINCIPLES.md)

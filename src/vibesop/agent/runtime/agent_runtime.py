@@ -10,6 +10,7 @@ Refactored in v5.5.0 as part of Phase 3 — see the plan for details.
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import logging
@@ -55,7 +56,11 @@ class AgentRuntimeResult:
 
     @property
     def has_match(self) -> bool:
-        return self.intercepted and self.mode in ("single", "orchestrate")
+        return self.intercepted and self.mode in (
+            "single",
+            "orchestrate",
+            "multi_agent_squad",
+        )
 
     @property
     def success(self) -> bool:
@@ -366,8 +371,21 @@ class AgentRuntime:
 
         # 3. Route the query
         try:
-            if decision.mode == InterceptionMode.ORCHESTRATE:
-                orch_result = self.router.orchestrate(query, callbacks=callbacks)
+            if decision.mode in (InterceptionMode.ORCHESTRATE, InterceptionMode.MULTI_AGENT_SQUAD):
+                # MULTI_AGENT_SQUAD: carry the interceptor's analysis via a
+                # minimal routing context so PlanBuilder enters the squad
+                # branch (per-role steps + agent_squad metadata).
+                squad_ctx: Any = None
+                if decision.mode == InterceptionMode.MULTI_AGENT_SQUAD and decision.analysis is not None:
+                    from vibesop.core.matching import RoutingContext
+
+                    squad_ctx = RoutingContext()
+                    squad_ctx.metadata["intent_analysis"] = decision.analysis.to_dict()
+                    squad_ctx.metadata["_interception_mode"] = "multi_agent_squad"
+
+                orch_result = self.router.orchestrate(
+                    query, callbacks=callbacks, context=squad_ctx
+                )
                 if orch_result.get("is_multi_intent"):
                     result.mode = "orchestrate"
                     plan = orch_result.get("plan", {})
@@ -507,3 +525,120 @@ class AgentRuntime:
             include_additional_context=include_additional_context,
             no_match_message=no_match_message,
         )
+
+    # ── Async query dispatch (Phase 4) ───────────────────────────────────────
+
+    async def process_query(
+        self,
+        query: str,
+        context: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Process a user query asynchronously based on the interception mode.
+
+        Args:
+            query: The user's natural language query.
+            context: Optional context passed through to handlers.
+
+        Returns:
+            Dict with interception decision, routing result, and payload.
+        """
+        context = context or {}
+        decision = self.interceptor.should_intercept(query)
+
+        if not decision.should_route:
+            return await self._default_handler(query, context)
+
+        if decision.mode == InterceptionMode.SINGLE:
+            return await self._single_route(query, context)
+
+        if decision.mode == InterceptionMode.SINGLE_AGENT:
+            analysis = decision.analysis
+            if analysis is None or not analysis.suggested_roles:
+                return await self._single_route(query, context)
+            role = analysis.suggested_roles[0]
+            skills = analysis.per_agent_skills.get(role, [])
+            return await self._single_agent_with_skills(query, role, skills, context)
+
+        if decision.mode == InterceptionMode.MULTI_AGENT_SQUAD:
+            return await self._orchestrate(
+                query, decision.analysis, context, mode=decision.mode
+            )
+
+        if decision.mode == InterceptionMode.ORCHESTRATE:
+            return await self._orchestrate(query, None, context, mode=decision.mode)
+
+        # Fallback for unhandled modes (e.g. slash commands)
+        return {
+            "intercepted": decision.should_route,
+            "mode": decision.mode.value,
+            "query": query,
+            "reason": decision.reason,
+        }
+
+    async def _default_handler(self, query: str, context: dict[str, Any]) -> dict[str, Any]:
+        """Default handler when the query is not intercepted."""
+        _ = context
+        return {"intercepted": False, "query": query}
+
+    async def _single_route(self, query: str, context: dict[str, Any]) -> dict[str, Any]:
+        """Route a query to a single skill asynchronously."""
+        loop = asyncio.get_event_loop()
+        route_result = await loop.run_in_executor(None, self.router.route, query)
+
+        primary: dict[str, Any] = {}
+        if route_result.primary is not None:
+            primary = {
+                "skill_id": route_result.primary.skill_id,
+                "confidence": route_result.primary.confidence,
+                "layer": route_result.primary.layer.value,
+            }
+
+        return {
+            "intercepted": True,
+            "mode": InterceptionMode.SINGLE.value,
+            "query": query,
+            "context": context,
+            "primary": primary,
+            "alternatives": [
+                {"skill_id": alt.skill_id, "confidence": alt.confidence}
+                for alt in getattr(route_result, "alternatives", [])[:5]
+            ],
+        }
+
+    async def _single_agent_with_skills(
+        self,
+        query: str,
+        role: str,
+        skills: list[str],
+        context: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Route a query for a single agent with an assigned role and skills."""
+        result = await self._single_route(query, context)
+        result["mode"] = InterceptionMode.SINGLE_AGENT.value
+        result["role"] = role
+        result["skills"] = skills
+        return result
+
+    async def _orchestrate(
+        self,
+        query: str,
+        analysis: Any | None,
+        context: dict[str, Any],
+        mode: InterceptionMode = InterceptionMode.ORCHESTRATE,
+    ) -> dict[str, Any]:
+        """Orchestrate a query into a multi-step plan asynchronously."""
+        loop = asyncio.get_event_loop()
+        orch_result = await loop.run_in_executor(None, self.router.orchestrate, query)
+
+        plan = getattr(orch_result, "execution_plan", None)
+        plan_dict = plan.to_dict() if plan is not None else None
+
+        return {
+            "intercepted": True,
+            "mode": mode.value,
+            "query": query,
+            "context": context,
+            "analysis": analysis.to_dict() if analysis is not None else None,
+            "plan": plan_dict,
+            "is_multi_intent": getattr(orch_result, "is_multi_intent", plan is not None),
+        }

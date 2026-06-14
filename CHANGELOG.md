@@ -9,6 +9,84 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### v7.0 — Hook Reliability + Multi-Agent Squad Auto-Trigger + Skill Validator
+
+This release closes the gap between the CLI path (`vibe route`) and the
+hook path (Claude Code / Kimi CLI / OpenCode invoking `vibesop-route.sh`):
+both now reach the same orchestration decisions, including the new
+fast multi-role detection that promotes multi-role queries to
+`MULTI_AGENT_SQUAD` without an LLM round-trip.
+
+#### Hook Path Hardening (P0)
+
+- fix(agent): `AgentRouter.orchestrate` now accepts a `callbacks` keyword
+  so `AgentRuntime.handle_query` stops swallowing `TypeError` on the
+  orchestrate path. Hook JSON for multi-intent queries no longer
+  collapses to "No matching skill found".
+- fix(adapters): `vibesop-route.sh.j2` exports `PATH` with the common
+  uv install locations (`~/.local/bin`, `~/.cargo/bin`, `/opt/homebrew/bin`)
+  and walks up from the hook script directory to find the project root
+  via `pyproject.toml`. Hooks now run from non-interactive shells and
+  arbitrary working directories.
+
+#### Multi-Agent Squad Auto-Trigger (P1)
+
+- feat(interceptor): `IntentInterceptor` gains `ROLE_KEYWORDS` and a
+  `_detect_roles()` fast path. ≥ 2 distinct professional roles
+  (architect / implementer / reviewer / tester / red_team / debater)
+  short-circuit to `MULTI_AGENT_SQUAD` without consulting the LLM.
+- feat(orchestrator): `Orchestrator.orchestrate` now reads
+  `context.metadata["intent_analysis"]` and forces a squad-oriented
+  workflow pattern (`AGENT_SQUAD` / `DEBATE` / `RED_TEAM`) when the
+  interceptor committed to `multi_agent_squad`. Previously the
+  context-attached analysis was silently dropped.
+- feat(runtime): `AgentRuntime.handle_query` routes `MULTI_AGENT_SQUAD`
+  through orchestrate (was: single-route), populating `result.plan`
+  with per-role squad steps. `AgentRuntimeResult.has_match` now
+  accepts the `multi_agent_squad` mode.
+- feat(skill_composer): `ROLE_DEFAULT_SKILLS` + public
+  `infer_skills_for_role()` populate `per_agent_skills` on the fast
+  path without consulting the global catalog or LLM.
+- feat(analyzer): `SemanticIntentAnalyzer._build_prompt` rewritten
+  with an explicit role-keyword matrix and 4 worked examples; LLM
+  responses now consistently produce `squad_needed=true` for
+  multi-role queries.
+- fix(interceptor): `_extract_explicit_skill` rejects non-ASCII captures
+  so "高可用" (containing "用") no longer hijacks the "用 X" pattern.
+
+#### Prompt Injection + Path Traversal Hardening
+
+- security(analyzer): `_escape_query` now strips C0 control characters
+  (incl. NUL / BEL / ESC / CR) in addition to XML tag closure and
+  curly-brace templating. LLM prompt trailer includes a JSON fallback
+  directive for unparseable input.
+- security(prompt_chain_generator): `write_files` rejects NUL bytes
+  in filenames and uses a separator-suffixed prefix check so that
+  `/tmp/foo` cannot be confused with `/tmp/foobar` (prefix collision).
+
+#### Cross-Cutting Skill: `prompt-chain-validator`
+
+- feat(skill): new `.vibe/skills/cross-cutting/prompt-chain-validator.skill/`
+  defines the dynamic-workflow + container-validation pattern as a
+  reusable skill with 4 role-bound steps (`diagnose` / `generate` /
+  `validate` / `review`) and 4 `depends_on` skills.
+- feat(cli): `vibe prompt-chain {diagnose,generate,validate,run}`
+  exposes the workflow as a first-class CLI subcommand.
+- feat(core): `vibesop.core.prompt_chain` module —
+  `PromptChainGenerator` (Phase 0 glob fan-out + Phase 1-6 markdown
+  rendering with ASCII slug fallback) and `ContainerValidator`
+  (orbstack → docker → lima → local runtime detection, 5-bucket
+  validation pipeline, JSON report).
+
+#### Verification
+
+- 588 → 1867 tests passing across the four sprints (P0 / P1 / safety
+  / skill-validator integration).
+- basedpyright: 0 errors on touched modules.
+- Container e2e (Ubuntu 22.04 + Python 3.12 + uv + Node 20): all
+  InterceptionMode dispatch paths, hook JSON, and squad summary
+  render correctly.
+
 ## [6.2.0] - 2026-06-05
 
 ### Full Execution Dynamic — Phase 3

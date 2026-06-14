@@ -16,10 +16,12 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Any
 
+from vibesop.core.models import IntentAnalysis
 from vibesop.core.orchestration.patterns import (
     EXPLICIT_SKILL_PATTERNS,
     MULTI_INTENT_REGEX_PATTERNS,
 )
+from vibesop.core.orchestration.semantic_intent_analyzer import SemanticIntentAnalyzer
 
 
 class InterceptionMode(StrEnum):
@@ -27,6 +29,8 @@ class InterceptionMode(StrEnum):
 
     NONE = "none"  # Don't route, let agent handle normally
     SINGLE = "single"  # Route to single best skill
+    SINGLE_AGENT = "single_agent"  # Single agent with a role and per-agent skills
+    MULTI_AGENT_SQUAD = "multi_agent_squad"  # Multiple agents collaborating as a squad
     ORCHESTRATE = "orchestrate"  # Detect multi-intent and build execution plan
     SLASH_COMMAND = "slash_command"  # Execute built-in slash command directly
 
@@ -54,25 +58,29 @@ class InterceptionDecision:
 
     Attributes:
         should_route: Whether to trigger VibeSOP routing
-        mode: Routing mode (none/single/orchestrate)
+        mode: Routing mode (none/single/single_agent/multi_agent_squad/orchestrate)
         reason: Human-readable explanation
         query: Normalized query to route (may differ from original)
+        analysis: Optional semantic analysis (populated for agent modes)
     """
 
     should_route: bool
     mode: InterceptionMode = InterceptionMode.NONE
     reason: str = ""
     query: str = ""
+    analysis: IntentAnalysis | None = None
 
 
 class IntentInterceptor:
     """Intercepts user messages and decides whether to trigger skill routing.
 
-    Uses a conservative heuristic to avoid over-intercepting:
-    - Short messages (< 10 chars) are fast-pathed
-    - Meta-queries about VibeSOP itself are skipped
-    - Explicit skill overrides are fast-pathed to single routing
-    - Everything else defaults to orchestrate (multi-intent detection)
+    Uses a tiered decision strategy:
+    - Slash commands and meta-queries are handled first.
+    - Explicit skill overrides fast-path to single-skill routing.
+    - Short, focused queries use a fast heuristic and remain SINGLE for
+      backward compatibility.
+    - Longer or ambiguous queries are analyzed by SemanticIntentAnalyzer,
+      which may select SINGLE_AGENT or MULTI_AGENT_SQUAD modes.
 
     Example:
         >>> interceptor = IntentInterceptor()
@@ -80,7 +88,7 @@ class IntentInterceptor:
         >>> decision.should_route
         True
         >>> decision.mode
-        <InterceptionMode.ORCHESTRATE: 'orchestrate'>
+        <InterceptionMode.SINGLE: 'single'>
     """
 
     # Minimum query length to consider routing
@@ -102,6 +110,53 @@ class IntentInterceptor:
     EXPLICIT_SKILL_PATTERNS: tuple[str, ...] = EXPLICIT_SKILL_PATTERNS
 
     MULTI_INTENT_PATTERNS: tuple[str, ...] = MULTI_INTENT_REGEX_PATTERNS
+
+    # Roles that, when detected alone in a short query, should promote to
+    # SINGLE_AGENT so downstream can attach per-agent skills and role prompts.
+    _SINGLE_AGENT_ROLES: frozenset[str] = frozenset({"architect", "red_team"})
+
+    # Role keyword dictionary for the fast multi-role detection path.
+    # When ≥ SQUAD_ROLE_THRESHOLD distinct roles are matched in a query, the
+    # interceptor short-circuits to MULTI_AGENT_SQUAD without calling an LLM.
+    ROLE_KEYWORDS: dict[str, tuple[str, ...]] = {
+        "architect": (
+            "架构", "架构设计", "设计架构", "系统设计", "技术选型", "模块划分",
+            "architecture", "system design", "tech selection",
+        ),
+        "implementer": (
+            "实现", "编码", "编程", "写代码", "开发", "用python实现", "用go实现",
+            "implement", "develop",
+        ),
+        "reviewer": (
+            "审查", "评审", "代码审查", "质量检查", "review", "code review",
+        ),
+        "tester": (
+            "测试", "单元测试", "集成测试", "覆盖率", "test", "testing", "coverage",
+        ),
+        "red_team": (
+            "安全", "安全审查", "安全审计", "渗透", "漏洞", "威胁建模",
+            "security", "audit", "vulnerability", "penetration",
+        ),
+        "debater": (
+            "对比", "方案对比", "选型对比", "trade-off", "pros and cons",
+            "方案选择",
+        ),
+    }
+
+    SQUAD_ROLE_THRESHOLD: int = 2
+
+    def __init__(
+        self,
+        semantic_analyzer: SemanticIntentAnalyzer | None = None,
+    ) -> None:
+        """Initialize the interceptor.
+
+        Args:
+            semantic_analyzer: Optional analyzer for deep intent analysis.
+                If None, a default analyzer with no LLM client is created,
+                which uses only the fast heuristic path.
+        """
+        self._semantic_analyzer = semantic_analyzer or SemanticIntentAnalyzer()
 
     def should_intercept(
         self,
@@ -142,9 +197,13 @@ class IntentInterceptor:
                 reason="Meta-query about VibeSOP system",
             )
 
-        # 3. Check for explicit skill override → fast-path single routing
+        # 3. Check for explicit skill override → fast-path single routing.
+        #    Skip this check when multi-role detection would yield a richer
+        #    squad decision (e.g. "用Python实现" alone shouldn't pin the query
+        #    to a single skill when other roles are also mentioned).
         explicit_skill = self._extract_explicit_skill(original_query)
-        if explicit_skill:
+        detected_roles_for_skill = self._detect_roles(original_query)
+        if explicit_skill and len(detected_roles_for_skill) < self.SQUAD_ROLE_THRESHOLD:
             return InterceptionDecision(
                 should_route=True,
                 mode=InterceptionMode.SINGLE,
@@ -152,23 +211,114 @@ class IntentInterceptor:
                 query=original_query,
             )
 
-        # 4. Short, focused query → single routing (conservative)
-        if len(original_query) <= self.MAX_SHORT_QUERY and not self._has_multi_intent_markers(
-            original_query
-        ):
+        # 4. Fast multi-role detection: ≥ threshold distinct professional roles
+        #    → MULTI_AGENT_SQUAD (no LLM needed). Checked before multi-intent
+        #    markers so that "design + implement + audit" yields a squad even
+        #    when sequential markers ("然后"/"最后") are present.
+        if len(detected_roles_for_skill) >= self.SQUAD_ROLE_THRESHOLD:
+            analysis = self._build_quick_squad_analysis(original_query, detected_roles_for_skill)
             return InterceptionDecision(
                 should_route=True,
-                mode=InterceptionMode.SINGLE,
-                reason="Short focused query, likely single intent",
+                mode=InterceptionMode.MULTI_AGENT_SQUAD,
+                reason=f"Multi-role detected: {', '.join(detected_roles_for_skill)}",
+                query=original_query,
+                analysis=analysis,
+            )
+
+        # 5. Explicit multi-intent markers without multi-role → orchestrate.
+        if self._has_multi_intent_markers(original_query):
+            return InterceptionDecision(
+                should_route=True,
+                mode=InterceptionMode.ORCHESTRATE,
+                reason="Multi-intent markers detected",
                 query=original_query,
             )
 
-        # 5. Default: orchestrate (let multi-intent detector decide)
+        # 6. Short, focused query → fast path.
+        if len(original_query) <= self.MAX_SHORT_QUERY:
+            return self._analyze_short_query(original_query)
+
+        # 6. Longer queries without explicit markers → deep semantic analysis.
+        analysis = self._semantic_analyzer.analyze(original_query)
+        return self._decision_from_analysis(original_query, analysis)
+
+    def _analyze_short_query(self, query: str) -> InterceptionDecision:
+        """Fast path for short queries; uses heuristic analyzer (no LLM)."""
+        analysis = self._semantic_analyzer.analyze(query)
+
+        # Preserve legacy behavior: multi-intent short queries go to ORCHESTRATE.
+        if len(analysis.suggested_roles) >= 2 or analysis.complexity in (
+            "composite",
+            "multi_agent",
+        ):
+            return InterceptionDecision(
+                should_route=True,
+                mode=InterceptionMode.ORCHESTRATE,
+                reason=f"Short query with composite intent: {analysis.facets}",
+                query=query,
+                analysis=analysis,
+            )
+
+        # Promote complex single-role short queries to SINGLE_AGENT.
+        if analysis.suggested_roles and analysis.suggested_roles[0] in self._SINGLE_AGENT_ROLES:
+            return InterceptionDecision(
+                should_route=True,
+                mode=InterceptionMode.SINGLE_AGENT,
+                reason=f"Short query with complex role: {analysis.suggested_roles[0]}",
+                query=query,
+                analysis=analysis,
+            )
+
+        # Default legacy behavior: short focused query → SINGLE.
+        return InterceptionDecision(
+            should_route=True,
+            mode=InterceptionMode.SINGLE,
+            reason="Short focused query, likely single intent",
+            query=query,
+            analysis=analysis,
+        )
+
+    def _decision_from_analysis(
+        self,
+        query: str,
+        analysis: IntentAnalysis,
+    ) -> InterceptionDecision:
+        """Map a semantic IntentAnalysis to an InterceptionDecision."""
+        if analysis.squad_needed or analysis.complexity == "multi_agent":
+            return InterceptionDecision(
+                should_route=True,
+                mode=InterceptionMode.MULTI_AGENT_SQUAD,
+                reason=f"Multi-agent squad needed: {analysis.suggested_roles}",
+                query=query,
+                analysis=analysis,
+            )
+
+        if analysis.complexity == "composite":
+            return InterceptionDecision(
+                should_route=True,
+                mode=InterceptionMode.ORCHESTRATE,
+                reason=f"Composite task: {analysis.facets}",
+                query=query,
+                analysis=analysis,
+            )
+
+        # Simple but specific role → give it per-agent skills and role context.
+        if analysis.suggested_roles:
+            return InterceptionDecision(
+                should_route=True,
+                mode=InterceptionMode.SINGLE_AGENT,
+                reason=f"Single agent with role: {analysis.suggested_roles[0]}",
+                query=query,
+                analysis=analysis,
+            )
+
+        # Default backward-compatible fallback.
         return InterceptionDecision(
             should_route=True,
             mode=InterceptionMode.ORCHESTRATE,
             reason="Default: check for multi-intent via orchestration",
-            query=original_query,
+            query=query,
+            analysis=analysis,
         )
 
     def _is_meta_query(self, query: str) -> bool:
@@ -183,6 +333,12 @@ class IntentInterceptor:
             if match:
                 # Return the captured group (skill identifier)
                 skill = match.group(1).lower().strip()
+                # Reject false positives like "高可用 的微服务架构" — the "用"
+                # in "高可用" matches the "用 X" pattern but captures Chinese
+                # text that cannot be a real skill ID. Real skill IDs are
+                # ASCII (slashes, dashes, underscores, alphanumerics).
+                if not skill.isascii():
+                    continue
                 return skill
         return None
 
@@ -193,6 +349,69 @@ class IntentInterceptor:
             if re.search(pattern, query_lower, re.IGNORECASE):
                 return True
         return False
+
+    def _detect_roles(self, query: str) -> list[str]:
+        """Detect which professional roles a query mentions.
+
+        Each role is counted at most once even if multiple of its keywords
+        appear.  Matching is case-insensitive on the lowercased query.
+
+        Args:
+            query: User query string.
+
+        Returns:
+            Deduplicated list of role IDs in first-seen order.
+        """
+        query_lower = query.lower()
+        detected: list[str] = []
+        for role_id, keywords in self.ROLE_KEYWORDS.items():
+            for kw in keywords:
+                if kw.lower() in query_lower:
+                    detected.append(role_id)
+                    break
+        return detected
+
+    def _build_quick_squad_analysis(
+        self,
+        query: str,
+        roles: list[str],
+    ) -> IntentAnalysis:
+        """Build an IntentAnalysis for the fast multi-role path (no LLM).
+
+        Args:
+            query: Original user query.
+            roles: Detected role IDs (≥ SQUAD_ROLE_THRESHOLD).
+
+        Returns:
+            IntentAnalysis with squad_needed=True, per-role skill hints, and
+            a collaboration protocol inferred from the role combination.
+        """
+        from vibesop.core.orchestration.skill_composer import infer_skills_for_role
+
+        per_agent_skills = {role: infer_skills_for_role(role) for role in roles}
+
+        if "red_team" in roles:
+            protocol = "red_team"
+        elif "reviewer" in roles and "implementer" in roles:
+            protocol = "review_gate"
+        elif "debater" in roles:
+            protocol = "debate"
+        elif len(roles) >= 3:
+            protocol = "parallel"
+        else:
+            protocol = "sequential"
+
+        return IntentAnalysis(
+            complexity="multi_agent",
+            facets=roles,
+            squad_needed=True,
+            suggested_roles=roles,
+            collaboration_protocol=protocol,
+            per_agent_skills=per_agent_skills,
+            handoff_points=list(range(1, len(roles))),
+            confidence=0.8,
+            reasoning=f"Fast role-keyword detection: {', '.join(roles)}",
+        )
 
 
 __all__ = [
