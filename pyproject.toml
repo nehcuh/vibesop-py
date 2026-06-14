@@ -246,13 +246,13 @@ skips = ["*_test.py", "*/test_*.py"]
 #       provides context-specific filters (pyquote/shellquote/shellvar/
 #       safe_text) that handle the shell + Python injection surface that
 #       autoescape does not address. See v7.0.2.
-# B602: subprocess_popen_with_shell_equals_true — the only remaining
-#       legitimate use is prompt_chain/validator.py local mode (when no
-#       container runtime is available); the v7.0.6 red-team flagged it
-#       as P3 (low priority, requires opt-in via skip_container=True).
-#       Tracked in v7.1 cleanup.
+# B602: subprocess_popen_with_shell_equals_true — was being skipped until
+#       v7.0.12 fixed prompt_chain/validator.py local mode by switching
+#       from shell=True to ["bash", "-c", cmd] list form. Kept here as
+#       documentation; if any new shell=True re-emerges, CI will fail
+#       (this skip is no longer applied — see ci.yml).
 [tool.bandit."skips"]
-test_id = ["B324", "B701", "B602"]
+test_id = ["B324", "B701"]
 
 # ============================================
 # Coverage

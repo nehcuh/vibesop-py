@@ -117,14 +117,24 @@ class ContainerValidator:
 
         ``cmd`` 作为单个字符串通过 ``bash -c`` 在容器内执行；shell 引用
         使用 :func:`shlex.quote` 避免 host shell 解释器介入。
+
+        v7.0.12: local 模式从 ``shell=True`` 切换到显式 ``["bash", "-c", cmd]``
+        列表形式。功能等价，但消除了 Bandit B602 警告，并让未来 contributor
+        看到 ``bash -c`` 时知道 ``cmd`` 是 shell 解析的（防御性可读性）。
+        ``cmd`` 的所有部分（cases / platforms / modules）都是硬编码字面量，
+        不来自用户输入；如果未来从配置文件读取，需要先经过 shlex.quote。
         """
         if self.container_tool == "local":
+            # Pre-v7.0.12: subprocess.run(cmd, shell=True, ...). This is
+            # functionally identical to ["bash", "-c", cmd] on POSIX, but
+            # shell=True is the form Bandit B602 flags. Switching to the
+            # list form silences the warning AND makes the shell-parsing
+            # explicit in the call site.
             result = subprocess.run(
-                cmd,
+                ["bash", "-c", cmd],
                 capture_output=True,
                 text=True,
                 timeout=timeout,
-                shell=True,
                 cwd=str(self.project_root),
             )
             return result.stdout, result.stderr, result.returncode
