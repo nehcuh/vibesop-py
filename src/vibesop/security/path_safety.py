@@ -3,11 +3,16 @@
 This module provides the PathSafety class that validates file paths
 to prevent directory traversal and other path-based attacks.
 
-Security model (v7.0.5+): ``check_traversal`` uses lexical normalization
-plus per-component ``lstat`` checks. It does NOT follow symlinks. The
-``resolve()`` calls that remain in ``check_overlap`` / ``verify_writable``
-/ ``ensure_no_overlap`` are intentional — those methods deal with
-already-trusted paths, not adversarial input.
+Security model (v7.0.5 + v7.0.8): ``check_traversal`` uses lexical
+normalization plus per-component ``lstat`` checks. It does NOT follow
+symlinks. v7.0.8 extended the lexical-only policy to ``_resolve_path``
+(called by ``ensure_safe_output_path``) — previously it used
+``Path.resolve()`` which silently followed symlinks, defeating the
+v7.0.5 ``check_traversal`` rewrite.
+
+The ``resolve()`` calls that remain in ``check_overlap`` /
+``verify_writable`` / ``ensure_no_overlap`` are intentional — those
+methods deal with already-trusted paths, not adversarial input.
 """
 
 import logging
@@ -86,7 +91,10 @@ class PathSafety:
             msg = f"Path contains NUL byte: {path!r}"
             raise ValueError(msg)
 
-        # Resolve to absolute path
+        # Resolve to absolute path. _resolve_path uses _lexical_normalize
+        # (v7.0.8) so symlinks in the input survive for check_traversal's
+        # _no_symlinks_in_chain to catch them — see path_safety.py module
+        # docstring for the v7.0.5 + v7.0.8 layered defense explanation.
         resolved = self._resolve_path(path, base_dir)
 
         # Validate the leaf filename — defends against suspicious shell-like
@@ -126,7 +134,7 @@ class PathSafety:
     def check_traversal(self, path: Path | str, base_dir: Path | str) -> bool:
         """Check if a path attempts to traverse outside base directory.
 
-        Security properties (v7.0.5):
+        Security properties (v7.0.5 + v7.0.8):
             - **Lexical normalization only** — does NOT follow symlinks.
               ``Path.resolve()`` is unsafe here because a symlink inside
               ``base_dir`` pointing outside would be followed silently.
@@ -137,6 +145,12 @@ class PathSafety:
             - **Prefix-collision resistant** — ``/tmp/foo`` cannot bypass
               to ``/tmp/foobar`` because the containment check uses
               ``os.sep``-suffix matching rather than naive ``startswith``.
+
+        v7.0.8: ``_resolve_path`` (called by ``ensure_safe_output_path``
+        before this method) also uses lexical normalization, so symlinks
+        in the input path are preserved for ``_no_symlinks_in_chain`` to
+        detect. Before v7.0.8, ``_resolve_path`` used ``Path.resolve()``
+        which silently followed symlinks, defeating this check.
 
         Args:
             path: Path to check (relative paths are treated as relative
