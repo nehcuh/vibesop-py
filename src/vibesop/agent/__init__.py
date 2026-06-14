@@ -355,33 +355,13 @@ class AgentRouter:
 
     def get_parallel_preview(self, plan: dict[str, Any]) -> dict[str, Any]:
         """Get preview of parallel execution for a plan."""
-        from vibesop.core.models import ExecutionPlan, ExecutionStep
+        from vibesop.core.models import ExecutionPlan
         from vibesop.core.orchestration.parallel_scheduler import ParallelScheduler
 
-        # Reconstruct ExecutionPlan from dict
-        execution_plan = ExecutionPlan(
-            plan_id=plan["plan_id"],
-            original_query=plan["original_query"],
-            steps=[
-                ExecutionStep(
-                    step_id=s["step_id"],
-                    step_number=s["step_number"],
-                    skill_id=s["skill_id"],
-                    intent=s["intent"],
-                    input_query=s["input_query"],
-                    output_as=s["output_as"],
-                    status=s["status"],
-                    dependencies=s.get("dependencies", []),
-                    can_parallel=s.get("can_parallel", True),
-                )
-                for s in plan["steps"]
-            ],
-            detected_intents=plan["detected_intents"],
-            reasoning=plan["reasoning"],
-            created_at=plan.get("created_at", ""),
-            status=plan.get("status", "pending"),
-            execution_mode=plan.get("execution_mode", "sequential"),
-        )
+        # v7.0.10: use ExecutionPlan.from_dict instead of manual field-by-field
+        # reconstruction. Previously each call site picked a different subset
+        # of fields, silently dropping parallel_group / metadata / step_type.
+        execution_plan = ExecutionPlan.from_dict(plan)
 
         scheduler = ParallelScheduler()
         return scheduler.get_execution_preview(execution_plan)
@@ -393,33 +373,11 @@ class AgentRouter:
         max_parallel: int = 5,
     ) -> dict[str, Any]:
         """Execute an execution plan with parallel step support."""
-        from vibesop.core.models import ExecutionPlan, ExecutionStep
+        from vibesop.core.models import ExecutionPlan
         from vibesop.core.orchestration.parallel_scheduler import execute_plan_sync
 
-        # Reconstruct ExecutionPlan from dict
-        execution_plan = ExecutionPlan(
-            plan_id=plan["plan_id"],
-            original_query=plan["original_query"],
-            steps=[
-                ExecutionStep(
-                    step_id=s["step_id"],
-                    step_number=s["step_number"],
-                    skill_id=s["skill_id"],
-                    intent=s["intent"],
-                    input_query=s["input_query"],
-                    output_as=s["output_as"],
-                    status=s["status"],
-                    dependencies=s.get("dependencies", []),
-                    can_parallel=s.get("can_parallel", True),
-                )
-                for s in plan["steps"]
-            ],
-            detected_intents=plan["detected_intents"],
-            reasoning=plan["reasoning"],
-            created_at=plan.get("created_at", ""),
-            status=plan.get("status", "pending"),
-            execution_mode=plan.get("execution_mode", "sequential"),
-        )
+        # v7.0.10: see get_parallel_preview — from_dict closes schema drift.
+        execution_plan = ExecutionPlan.from_dict(plan)
 
         # Execute the plan
         return execute_plan_sync(execution_plan, step_executor, max_parallel)
@@ -439,39 +397,11 @@ class AgentRouter:
             )
 
         plan_dict = orch["plan"]
-        from vibesop.core.models import (
-            ExecutionMode,
-            ExecutionPlan,
-            ExecutionStep,
-            PlanStatus,
-            StepStatus,
-        )
+        from vibesop.core.models import ExecutionPlan
 
-        steps = [
-            ExecutionStep(
-                step_id=s["step_id"],
-                step_number=s["step_number"],
-                skill_id=s["skill_id"],
-                intent=s.get("intent", ""),
-                input_query=s.get("input_query", ""),
-                output_as=s.get("output_as", ""),
-                status=StepStatus(s.get("status", "pending")),
-                dependencies=s.get("dependencies", []),
-                can_parallel=s.get("can_parallel", True),
-                parallel_group=s.get("parallel_group"),
-            )
-            for s in plan_dict["steps"]
-        ]
-        plan = ExecutionPlan(
-            plan_id=plan_dict["plan_id"],
-            original_query=plan_dict.get("original_query", query),
-            steps=steps,
-            detected_intents=plan_dict.get("detected_intents", []),
-            reasoning=plan_dict.get("reasoning", ""),
-            created_at=plan_dict.get("created_at", ""),
-            status=PlanStatus(plan_dict.get("status", "pending")),
-            execution_mode=ExecutionMode(plan_dict.get("execution_mode", "sequential")),
-        )
+        # v7.0.10: use from_dict to avoid manual field-by-field rebuild that
+        # silently dropped step_type / metadata / estimated_* fields.
+        plan = ExecutionPlan.from_dict(plan_dict)
         return StepRunner(plan, project_root=project_root)
 
 

@@ -4,6 +4,8 @@ All data structures use Pydantic v2 for runtime validation and type safety.
 This module is the single source of truth for routing models.
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Any, Literal
@@ -418,6 +420,53 @@ class ExecutionStep(BaseModel):
             "role_skills": self.role_skills,
         }
 
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> ExecutionStep:
+        """Reconstruct an ExecutionStep from ``to_dict()`` output.
+
+        Tolerates missing keys by falling back to model defaults. Closes
+        the v7.0.10 schema-drift gap where three call sites in
+        ``agent/__init__.py`` each manually rebuilt ExecutionStep with a
+        different subset of fields, silently dropping any field added
+        after the original call site was written.
+
+        Args:
+            data: Dict shaped like ``ExecutionStep.to_dict()`` output.
+                Stray keys are ignored; missing keys use model defaults.
+
+        Returns:
+            A fully-populated ExecutionStep.
+        """
+        return cls(
+            step_id=data["step_id"],
+            step_number=data["step_number"],
+            skill_id=data["skill_id"],
+            intent=data.get("intent", ""),
+            original_query_segment=data.get("original_query_segment", ""),
+            input_query=data.get("input_query", ""),
+            output_as=data.get("output_as", ""),
+            status=data.get("status", StepStatus.PENDING),
+            result_summary=data.get("result_summary"),
+            started_at=data.get("started_at"),
+            completed_at=data.get("completed_at"),
+            dependencies=data.get("dependencies", []),
+            can_parallel=data.get("can_parallel", True),
+            parallel_group=data.get("parallel_group"),
+            is_verification_step=data.get("is_verification_step", False),
+            verification_result=data.get("verification_result"),
+            trust_level=data.get("trust_level", TrustLevel.TRUSTED),
+            dynamic_status=data.get("dynamic_status"),
+            loop_iteration=data.get("loop_iteration", 0),
+            contestant_index=data.get("contestant_index"),
+            step_type=data.get("step_type", "implementation"),
+            estimated_risk=data.get("estimated_risk", "low"),
+            estimated_file_count=data.get("estimated_file_count", 0),
+            source_files=data.get("source_files", []),
+            assigned_role=data.get("assigned_role"),
+            agent_squad_id=data.get("agent_squad_id"),
+            role_skills=data.get("role_skills", []),
+        )
+
 
 class ExecutionPlan(BaseModel):
     """A multi-skill execution plan."""
@@ -473,6 +522,43 @@ class ExecutionPlan(BaseModel):
             "reorchestration_history": self.reorchestration_history,
             "metadata": self.metadata,
         }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> ExecutionPlan:
+        """Reconstruct an ExecutionPlan from ``to_dict()`` output.
+
+        Recursively rebuilds each ``ExecutionStep`` via its own
+        ``from_dict``. Closes the v7.0.10 schema-drift gap where three
+        call sites in ``agent/__init__.py`` each manually rebuilt the
+        plan with a different subset of fields, silently dropping any
+        field added after the original call site was written (e.g.
+        ``parallel_group``, ``metadata``, ``step_type``).
+
+        Args:
+            data: Dict shaped like ``ExecutionPlan.to_dict()`` output.
+
+        Returns:
+            A fully-populated ExecutionPlan.
+        """
+        steps_data = data.get("steps", [])
+        return cls(
+            plan_id=data["plan_id"],
+            original_query=data.get("original_query", ""),
+            steps=[ExecutionStep.from_dict(s) for s in steps_data],
+            detected_intents=data.get("detected_intents", []),
+            reasoning=data.get("reasoning", ""),
+            created_at=data.get("created_at", ""),
+            status=data.get("status", PlanStatus.PENDING),
+            execution_mode=data.get("execution_mode", ExecutionMode.SEQUENTIAL),
+            workflow_pattern=data.get(
+                "workflow_pattern", WorkflowPattern.SEQUENTIAL
+            ),
+            is_dynamic=data.get("is_dynamic", False),
+            dry_threshold=data.get("dry_threshold", 2),
+            max_reorchestration_rounds=data.get("max_reorchestration_rounds", 5),
+            reorchestration_history=data.get("reorchestration_history", []),
+            metadata=data.get("metadata", {}),
+        )
 
     def get_parallel_groups(self) -> list[list["ExecutionStep"]]:
         """Group steps into parallel batches based on dependencies.
