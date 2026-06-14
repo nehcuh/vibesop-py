@@ -248,6 +248,25 @@ class PromptChainConfig(BaseModel):
     )
 
 
+class PlatformsConfig(BaseModel):
+    """Configuration for which AI agent platforms receive skill installs.
+
+    VibeSOP supports multiple AI coding agents (Claude Code, Kimi CLI,
+    OpenCode, Cursor, Pi). To avoid surprise writes to ``~/.pi/`` or
+    ``~/.kimi-code/`` for users who only use one agent, the default scope
+    is just ``claude-code``. Set ``install_targets`` to declare the full set.
+    """
+
+    install_targets: list[str] = Field(
+        default_factory=lambda: ["claude-code"],
+        description=(
+            "Platforms that receive symlinks when ``vibe install`` runs "
+            "without --platform. Valid values: claude-code, kimi-cli, "
+            "opencode, cursor, pi. Default: ['claude-code']."
+        ),
+    )
+
+
 class ConfigManager:
     """Unified configuration manager.
 
@@ -269,6 +288,7 @@ class ConfigManager:
         "security": SecurityConfig().model_dump(),
         "semantic": SemanticConfig().model_dump(),
         "prompt_chain": PromptChainConfig().model_dump(),
+        "platforms": PlatformsConfig().model_dump(),
         "optimization": {
             "enabled": True,
             "prefilter": {
@@ -413,6 +433,9 @@ class ConfigManager:
 
     def get_prompt_chain_config(self) -> PromptChainConfig:
         return PromptChainConfig(**self._get_section("prompt_chain"))
+
+    def get_platforms_config(self) -> PlatformsConfig:
+        return PlatformsConfig(**self._get_section("platforms"))
 
     def get_optimization_config(self) -> OptimizationConfig:
         from vibesop.core.config.optimization_config import OptimizationConfig

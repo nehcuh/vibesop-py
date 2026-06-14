@@ -27,6 +27,7 @@ Examples:
 """
 
 import typer
+from pathlib import Path
 from rich.console import Console
 from rich.progress import BarColumn, Progress, SpinnerColumn, TaskProgressColumn, TextColumn
 from rich.table import Table
@@ -81,8 +82,22 @@ def install(
     ),
 ) -> None:
     """Install skill packs from trusted names or arbitrary Git URLs."""
-    # Validate platform early
-    platforms_list = _validate_platform(platform)
+    # Resolve target platforms (flag > project config > user config > default)
+    platforms_list, platforms_source = _resolve_platforms(platform)
+
+    if platforms_source == "default":
+        console.print(
+            "[dim]No platform preference found — defaulting to claude-code only.[/dim]\n"
+            "[dim]To target other agents (kimi-cli, opencode, cursor, pi), run:[/dim]\n"
+            "  [cyan]vibe config platforms claude-code,kimi-cli[/cyan]\n"
+            "[dim]Or pass --platform <list> per install. Use --platform all for legacy behavior.[/dim]\n"
+        )
+    elif platforms_source != "cli-flag":
+        label = "project" if platforms_source == "project-config" else "user"
+        target_str = "all platforms" if platforms_list is None else ", ".join(platforms_list)
+        console.print(
+            f"[dim]Using {label} config platforms: {target_str}[/dim]\n"
+        )
 
     # List mode
     if list_available:
@@ -143,19 +158,76 @@ def _list_available() -> None:
 def _validate_platform(platform: str | None) -> list[str] | None:
     """Validate and normalize the --platform value.
 
-    Returns a list to pass to PackInstaller.install_pack(platforms=...).
-    Returns None if no platform specified (install to all).
+    Accepts comma-separated values (``--platform claude-code,kimi-cli``) and
+    the special sentinel ``all`` (returns ``None`` to signal PackInstaller's
+    "install to every platform" path).
+
+    Returns a list of validated platform names, or ``None`` when ``platform``
+    is ``None`` (caller should then fall back to config-based resolution).
     """
     if platform is None:
         return None
     valid = SkillStorage.PLATFORM_SKILLS_DIRS.keys()
-    if platform not in valid:
+    raw_items = [p.strip() for p in platform.split(",") if p.strip()]
+    if not raw_items:
+        return None
+    if len(raw_items) == 1 and raw_items[0] == "all":
+        return None
+    unknown = [p for p in raw_items if p not in valid]
+    if unknown:
         console.print(
-            f"[red]✗ Unknown platform: {platform}[/red]\n"
-            f"[dim]Valid platforms: {', '.join(sorted(valid))}[/dim]"
+            f"[red]✗ Unknown platform: {', '.join(unknown)}[/red]\n"
+            f"[dim]Valid platforms: {', '.join(sorted(valid))} (or 'all')[/dim]"
         )
         raise typer.Exit(1)
-    return [platform]
+    return raw_items
+
+
+def _resolve_platforms(
+    cli_platform: str | None,
+    project_root: Path | None = None,
+) -> tuple[list[str] | None, str]:
+    """Resolve the install target platforms.
+
+    Order: ``--platform`` flag > project config > user config > built-in default.
+
+    Returns ``(platforms, source)`` where ``platforms`` is a list of validated
+    platform names (or ``None`` to signal "all platforms") and ``source`` is
+    one of ``"cli-flag"``, ``"project-config"``, ``"user-config"``,
+    ``"default"``.
+    """
+    if cli_platform is not None:
+        return _validate_platform(cli_platform), "cli-flag"
+
+    from vibesop.core.config.manager import ConfigManager, ConfigSourcePriority
+
+    manager = ConfigManager(project_root or Path.cwd())
+    targets = manager.get_platforms_config().install_targets
+
+    project_src = manager._sources.get(ConfigSourcePriority.PROJECT)
+    user_src = manager._sources.get(ConfigSourcePriority.GLOBAL)
+    if project_src and "platforms" in project_src.data:
+        source = "project-config"
+    elif user_src and "platforms" in user_src.data:
+        source = "user-config"
+    else:
+        source = "default"
+
+    if not targets:
+        return None, source
+
+    valid = SkillStorage.PLATFORM_SKILLS_DIRS.keys()
+    unknown = [p for p in targets if p not in valid]
+    if unknown:
+        console.print(
+            f"[yellow]⚠ Ignoring unknown platform(s) in config: "
+            f"{', '.join(unknown)}[/yellow]\n"
+            f"[dim]Valid: {', '.join(sorted(valid))}[/dim]"
+        )
+    resolved = [p for p in targets if p in valid]
+    if not resolved:
+        return list(valid), "default"
+    return resolved, source
 
 
 def _auto_install(force: bool, skip_verify: bool, platforms: list[str] | None = None) -> None:

@@ -89,6 +89,7 @@ def register(app: typer.Typer) -> None:
     app.add_typer(feedback_app, name="feedback")
 
     config_app.callback(invoke_without_command=True)(config_mod.config)
+    config_app.command("platforms")(config_mod.platforms)
 
     # Core commands
     app.command()(init_mod.init)
