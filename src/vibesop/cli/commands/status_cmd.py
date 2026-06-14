@@ -263,9 +263,12 @@ def _load_community_trending() -> Panel | None:
             "https://api.github.com/repos/nehcuh/vibesop-py/issues"
             "?labels=skill-share&state=open&per_page=5&sort=reactions&direction=desc"
         )
+        # v7.0.11: safe_urlopen enforces https + private-host blocking.
+        from vibesop.utils.url_safety import safe_urlopen
+
         req = urllib.request.Request(url, headers=headers)
-        with urllib.request.urlopen(req, timeout=5) as resp:
-            issues = json.loads(resp.read())
+        body = safe_urlopen(req, max_bytes=10 * 1024 * 1024, timeout=5)
+        issues = json.loads(body)
 
         if not issues:
             return None

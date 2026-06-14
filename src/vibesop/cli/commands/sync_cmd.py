@@ -64,11 +64,14 @@ def sync(
     try:
         import urllib.request
 
+        # v7.0.11: safe_urlopen enforces https + private-host blocking.
+        from vibesop.utils.url_safety import safe_urlopen
+
         req = urllib.request.Request(url, headers={"Accept": "application/json"})
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            data = json.loads(resp.read())
-            remote_skills = data.get("skills", [])
-            added = registry.merge_remote(remote_skills)
+        body = safe_urlopen(req, max_bytes=50 * 1024 * 1024, timeout=10)
+        data = json.loads(body)
+        remote_skills = data.get("skills", [])
+        added = registry.merge_remote(remote_skills)
     except Exception as e:
         logger.debug("Remote sync failed: %s", e)
         if url != DEFAULT_REGISTRY_URL:

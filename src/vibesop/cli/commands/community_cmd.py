@@ -60,11 +60,12 @@ def _fetch_community_skills(
     url = f"{GITHUB_ISSUES_API}?labels={label}&state=open&per_page={per_page}&sort=reactions&direction=desc"
 
     try:
-        import urllib.request
+        # v7.0.11: safe_urlopen enforces https + private-host blocking.
+        from vibesop.utils.url_safety import safe_urlopen
 
         req = urllib.request.Request(url, headers=headers)
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            return json.loads(resp.read())
+        body = safe_urlopen(req, max_bytes=10 * 1024 * 1024, timeout=10)
+        return json.loads(body)
     except Exception:
         return []
 

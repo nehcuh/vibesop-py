@@ -285,12 +285,23 @@ class EnvVarLLMDetector:
         try:
             import urllib.request
 
+            # v7.0.11: use safe_urlopen with block_private_hosts=False
+            # because Ollama legitimately runs on localhost. Scheme is
+            # hardcoded to http://localhost:11434 so no SSRF surface.
+            from vibesop.utils.url_safety import safe_urlopen
+
             req = urllib.request.Request(
                 "http://localhost:11434/api/tags",
                 method="GET",
             )
-            with urllib.request.urlopen(req, timeout=0.5) as resp:
-                return resp.status == 200
+            body = safe_urlopen(
+                req,
+                max_bytes=1024 * 1024,
+                timeout=2,
+                allowed_schemes=("http", "https"),
+                block_private_hosts=False,
+            )
+            return bool(body)
         except Exception:
             return False
 

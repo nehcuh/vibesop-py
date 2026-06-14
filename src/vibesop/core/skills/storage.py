@@ -189,8 +189,14 @@ class SkillStorage:
                 tmpdir_path = Path(tmpdir)
                 archive_path = tmpdir_path / "skill.tar.gz"
 
-                # Download
-                urllib.request.urlretrieve(url, archive_path)
+                # Download — v7.0.11: route through safe_urlretrieve which
+                # enforces scheme allowlist (https only), private-host
+                # blocking (SSRF defense), and a 50 MiB size cap. Pre-v7.0.11
+                # code used raw urlretrieve which let a malicious skill URL
+                # reach cloud metadata endpoints or stream 10 GB into /tmp.
+                from vibesop.utils.url_safety import safe_urlretrieve
+
+                safe_urlretrieve(url, archive_path)
 
                 # Extract — use PEP-706 filter='data' (Python 3.12+ which
                 # is the project's minimum required version). The 'data'

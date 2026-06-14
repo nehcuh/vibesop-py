@@ -93,13 +93,15 @@ class TestInstallFromUrlTarSafety:
 
         storage = SkillStorage()
 
-        # Monkeypatch urlretrieve to return our malicious tarball.
-        def fake_urlretrieve(_url: str, dest: str | Path) -> None:
+        # v7.0.11: install_from_remote now uses safe_urlretrieve (which
+        # validates scheme + private hosts); patch safe_urlretrieve so the
+        # test doesn't hit DNS validation.
+        def fake_retrieve(_url: str, dest, **_kwargs) -> Path:
             Path(dest).write_bytes(malicious_tar)
+            return Path(dest)
 
         monkeypatch.setattr(
-            "vibesop.core.skills.storage.urllib.request.urlretrieve",
-            fake_urlretrieve,
+            "vibesop.utils.url_safety.safe_urlretrieve", fake_retrieve
         )
 
         # install_from_remote must return failure (not raise, not escape).
@@ -120,12 +122,12 @@ class TestInstallFromUrlTarSafety:
 
         storage = SkillStorage()
 
-        def fake_urlretrieve(_url: str, dest: str | Path) -> None:
+        def fake_retrieve(_url: str, dest, **_kwargs) -> Path:
             Path(dest).write_bytes(clean_tar)
+            return Path(dest)
 
         monkeypatch.setattr(
-            "vibesop.core.skills.storage.urllib.request.urlretrieve",
-            fake_urlretrieve,
+            "vibesop.utils.url_safety.safe_urlretrieve", fake_retrieve
         )
 
         # install_skill is called from install_from_remote; patch it to
