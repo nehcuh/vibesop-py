@@ -9,6 +9,62 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### v7.3.0 — ADR-004 Phase 3: Remove `core.skills.base.SkillMetadata` + local `SkillType` enum
+
+Final phase of ADR-004's deprecated-types cleanup. Removes the dataclass form
+that parser/loader/understander used directly. This was the largest blast
+radius of the three phases (~14 src sites + ~30 test sites across 6 src
+modules + 8 test files).
+
+**What changed**
+- `core.skills.parser.parse_skill_md()` returns `SkillSpec | None` directly
+  (was: `SkillMetadata | None` constructed via `build_metadata()`)
+- `core.skills.parser.build_metadata()` is now a thin deprecated alias for
+  `build_spec()` — kept for callers in transition
+- `core.skills.base.SkillMetadata` class **deleted** (55 LOC)
+- `core.skills.base.SkillType` enum **deleted** (replaced by spec's
+  `SkillType`, which adds STANDARD value — fixes the long-standing bug
+  where `type: standard` in frontmatter would silently fall back to PROMPT)
+- `core.skills.base.Skill/PromptSkill/WorkflowSkill.__init__` `metadata`
+  param now typed `SkillSpec`
+- `core.skills.loader.LoadedSkill.metadata: SkillSpec`
+- `core.skills.loader._convert_external_skill` simplified (was 30 LOC
+  manual field-by-field copy with SkillType enum conversion; now uses
+  `SkillSpec.model_copy(update={"id": ..., "namespace": ...})`)
+- `core.skills.external_loader.ExternalSkillMetadata.base_metadata: SkillSpec`
+- `core.skills.understander` all 6 SkillMetadata param hints → SkillSpec
+- `core.skills.__init__` no longer exports SkillMetadata or local SkillType
+- `cli.commands.skill_commands` fallback construction uses SkillSpec
+- 8 test files migrated (including `TestSkillMetadata` class renamed to
+  `TestSkillSpec`)
+
+**Bonus fixes** (bugs exposed by `SkillSpec.intent: str | None = None`
+whereas `SkillMetadata.intent` was required `str`):
+- `core.optimization.clustering._cluster_by_intent`: `.get("intent", "other")`
+  → `.get("intent") or "other"` (None-safe)
+- `core.skills.manager.search_skills`: `.get("intent", "")` → `.get("intent") or ""`
+- `core.config.manager.search_skills_by_intent`: same fix
+- `core.routing.unified._relevance_score`: same fix
+
+**Test updates**
+- `test_loader.py::test_converts_unknown_skill_type_to_prompt` renamed to
+  `test_invalid_skill_type_in_frontmatter_normalized_to_prompt` — the old
+  test directly constructed `SkillSpec(skill_type="nonexistent_type")` which
+  is impossible now (Pydantic enum validation rejects at construction).
+  The replacement verifies the normalization path through `build_metadata()`
+  which still handles invalid `type:` values in raw frontmatter via
+  try/except (parser.py:100-104).
+
+**Acceptance gate** (ADR-003): `grep -rn "SkillMetadata\b" src/` returns 0
+hits (remaining matches are docstrings). Full test suite: 1580 passed,
+2 skipped, 1 pre-existing failure (test_backward_compatibility_get_info —
+env-dependent gstack/freeze issue).
+
+**Tracking**: `docs/adr/004-deprecated-types-cleanup.md` Phase 3 marked ✅.
+ADR-004 cleanup complete: Phase 1 ✅ + Phase 2 ❌ withdrawn + Phase 3 ✅.
+
+---
+
 ### v7.1.0 — ADR-004 Phase 1: Remove `core.models.SkillDefinition` + Phase 2 withdrawal
 
 **Phase 1 — shipped**: Removed `core.models.SkillDefinition` (Pydantic variant,

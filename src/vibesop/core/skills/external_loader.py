@@ -11,11 +11,11 @@ from typing import TYPE_CHECKING, Any, ClassVar
 
 from vibesop.constants import TRUSTED_PACKS
 from vibesop.core.skills.parser import parse_skill_md
+from vibesop.spec.models import SkillSpec
 
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
-    from vibesop.core.skills.base import SkillMetadata
     from vibesop.security import AuditResult
 
 
@@ -32,7 +32,7 @@ class SkillSource(StrEnum):
 class ExternalSkillMetadata:
     """Extended metadata for external skills."""
 
-    base_metadata: SkillMetadata
+    base_metadata: SkillSpec
     source: SkillSource
     pack_name: str | None = None
     pack_version: str | None = None

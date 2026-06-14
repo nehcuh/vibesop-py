@@ -4,10 +4,9 @@ from pathlib import Path
 
 from vibesop.core.skills.base import (
     SkillContext,
-    SkillMetadata,
     SkillResult,
-    SkillType,
 )
+from vibesop.spec.models import SkillSpec, SkillType
 
 
 class TestSkillType:
@@ -20,11 +19,11 @@ class TestSkillType:
         assert SkillType.HYBRID.value == "hybrid"
 
 
-class TestSkillMetadata:
-    """Test SkillMetadata dataclass."""
+class TestSkillSpec:
+    """Test SkillSpec dataclass."""
 
     def test_creation(self):
-        meta = SkillMetadata(
+        meta = SkillSpec(
             id="test/skill",
             name="Test",
             description="Desc",
@@ -39,7 +38,7 @@ class TestSkillMetadata:
         assert meta.capabilities == []
 
     def test_creation_with_lists(self):
-        meta = SkillMetadata(
+        meta = SkillSpec(
             id="test",
             name="Test",
             description="D",
@@ -53,7 +52,7 @@ class TestSkillMetadata:
         assert meta.triggers == ["t1"]
 
     def test_skill_type_default(self):
-        meta = SkillMetadata(id="t", name="T", description="D", intent="I")
+        meta = SkillSpec(id="t", name="T", description="D", intent="I")
         assert meta.skill_type == SkillType.PROMPT
 
 

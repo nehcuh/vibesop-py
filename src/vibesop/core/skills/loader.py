@@ -17,11 +17,10 @@ from vibesop.core.skills import parser as skill_parser
 from vibesop.core.skills.base import (
     PromptSkill,
     Skill,
-    SkillMetadata,
-    SkillType,
     WorkflowSkill,
 )
 from vibesop.core.skills.external_loader import ExternalSkillLoader
+from vibesop.spec.models import SkillSpec, SkillType
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +29,7 @@ logger = logging.getLogger(__name__)
 class LoadedSkill:
     """A skill definition loaded from a file."""
 
-    metadata: SkillMetadata
+    metadata: SkillSpec
     content: str | dict[str, Any]
     source_file: Path | None = None
     external_metadata: Any = None  # ExternalSkillMetadata if from external pack
@@ -201,28 +200,12 @@ class SkillLoader:
         # Build skill ID with namespace
         skill_id = f"{ext_metadata.pack_name}/{base.id}" if ext_metadata.pack_name else base.id
 
-        # Convert skill type string to enum
-        skill_type_str = getattr(base, "skill_type", "prompt")
-        try:
-            skill_type = SkillType(skill_type_str)
-        except ValueError:
-            skill_type = SkillType.PROMPT
-
-        # Create metadata
-        metadata = SkillMetadata(
-            id=skill_id,
-            name=base.name,
-            description=base.description,
-            intent=base.intent or base.description,
-            namespace=ext_metadata.pack_name or "external",
-            version=getattr(base, "version", "1.0.0"),
-            author=getattr(base, "author", ""),
-            tags=getattr(base, "tags", None),
-            skill_type=skill_type,
-            trigger_when=getattr(base, "trigger_when", ""),
-            triggers=getattr(base, "triggers", None),
-            algorithms=getattr(base, "algorithms", None),
-        )
+        # Override id + namespace on a copy of the parsed SkillSpec.
+        # parse_skill_md() already returns SkillSpec; no field-by-field copy needed.
+        metadata = base.model_copy(update={
+            "id": skill_id,
+            "namespace": ext_metadata.pack_name or "external",
+        })
         self._validate_algorithms(metadata)
 
         # Read skill content from source file
@@ -294,7 +277,7 @@ class SkillLoader:
         metadata = definition.metadata
 
         match metadata.skill_type:
-            case SkillType.PROMPT:
+            case SkillType.PROMPT | SkillType.STANDARD:
                 if isinstance(definition.content, str):
                     return PromptSkill(
                         metadata=metadata,
@@ -390,7 +373,7 @@ class SkillLoader:
         except (OSError, Exception):
             pass
 
-    def _validate_algorithms(self, metadata: SkillMetadata) -> None:
+    def _validate_algorithms(self, metadata: SkillSpec) -> None:
         if not metadata.algorithms:
             return
         from vibesop.core.algorithms import AlgorithmRegistry
@@ -403,7 +386,7 @@ class SkillLoader:
         self,
         data: dict[str, Any],
         source_file: Path | None = None,
-    ) -> SkillMetadata:
+    ) -> SkillSpec:
         skill_id = data.get("id", self._generate_id_from_path(source_file))
         return skill_parser.build_metadata(data, skill_id, source_file or Path())
 

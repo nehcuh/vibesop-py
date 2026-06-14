@@ -287,7 +287,7 @@ class UnifiedRouter(
                 score = 0.0
                 cid = c.get("id", "").lower()
                 desc = c.get("description", "").lower()
-                intent = c.get("intent", "").lower()
+                intent = (c.get("intent") or "").lower()
                 keywords = [k.lower() for k in c.get("keywords", [])]
                 triggers = [t.lower() for t in c.get("triggers", [])]
 

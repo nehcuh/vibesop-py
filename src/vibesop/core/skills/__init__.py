@@ -35,9 +35,7 @@ from vibesop.core.skills.base import (
     PromptSkill,
     Skill,
     SkillContext,
-    SkillMetadata,
     SkillResult,
-    SkillType,
     WorkflowSkill,
 )
 from vibesop.core.skills.external_loader import (
@@ -80,11 +78,9 @@ __all__ = [
     "SkillLoader",
     "SkillManager",
     "SkillManifest",
-    "SkillMetadata",
     "SkillResult",
     "SkillSource",
     "SkillStorage",
-    "SkillType",
     "SuperpowersConverter",
     "WorkflowSkill",
     "discover_external_skills",

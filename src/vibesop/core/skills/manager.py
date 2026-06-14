@@ -213,7 +213,7 @@ class SkillManager:
                 [
                     skill.get("name", ""),
                     skill.get("description", ""),
-                    skill.get("intent", ""),
+                    skill.get("intent") or "",
                     " ".join(skill.get("tags") or []),
                 ]
             ).lower()

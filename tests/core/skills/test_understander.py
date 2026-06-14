@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from vibesop.core.skills.base import SkillMetadata, SkillType
+from vibesop.spec.models import SkillSpec, SkillType
 from vibesop.core.skills.understander import (
     CategoryRules,
     ComplexityLevel,
@@ -52,7 +52,7 @@ class TestCategoryRulesInferById:
     )
     def test_infer_category_from_skill_id(self, skill_id: str, expected_category: str) -> None:
         """Category should be inferred from skill ID prefixes."""
-        metadata = SkillMetadata(
+        metadata = SkillSpec(
             id=skill_id,
             name="Test",
             description="",
@@ -63,7 +63,7 @@ class TestCategoryRulesInferById:
 
     def test_tag_override_when_id_is_ambiguous(self) -> None:
         """Tags should still take priority when ID is generic."""
-        metadata = SkillMetadata(
+        metadata = SkillSpec(
             id="helper-tool",
             name="Test",
             description="",
@@ -75,7 +75,7 @@ class TestCategoryRulesInferById:
 
     def test_description_fallback_when_no_id_match(self) -> None:
         """Description keywords should work when ID has no known prefix."""
-        metadata = SkillMetadata(
+        metadata = SkillSpec(
             id="foo-bar",
             name="Test",
             description="This tool helps you debug errors in production",
@@ -141,7 +141,7 @@ class TestSkillAutoConfiguratorIntegration:
     def test_understand_and_configure_debug_skill(self) -> None:
         """End-to-end: debug skill gets correct category and priority."""
         configurator = SkillAutoConfigurator()
-        metadata = SkillMetadata(
+        metadata = SkillSpec(
             id="debug-helper",
             name="Debug Helper",
             description="Helps you debug errors and fix bugs",
@@ -159,7 +159,7 @@ class TestSkillAutoConfiguratorIntegration:
     def test_understand_and_configure_planning_skill(self) -> None:
         """End-to-end: planning skill gets correct category."""
         configurator = SkillAutoConfigurator()
-        metadata = SkillMetadata(
+        metadata = SkillSpec(
             id="plan-sprint",
             name="Sprint Planner",
             description="Plan your sprint",
@@ -176,7 +176,7 @@ class TestSkillAutoConfiguratorIntegration:
     def test_confidence_boosted_by_keywords(self) -> None:
         """Skills with clear keywords should have higher confidence."""
         configurator = SkillAutoConfigurator()
-        metadata = SkillMetadata(
+        metadata = SkillSpec(
             id="security-scan",
             name="Security Scan",
             description="Scan for vulnerabilities",

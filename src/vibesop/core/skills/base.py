@@ -1,82 +1,17 @@
-"""Base skill class and interfaces."""
+"""Base skill class and interfaces.
 
-import warnings
+Updated in v7.3.0 (ADR-004 Phase 3): the deprecated ``SkillMetadata``
+dataclass and local ``SkillType`` enum were removed. Skill subclasses
+now accept ``vibesop.spec.SkillSpec`` directly as their ``metadata``
+parameter; callers should import ``SkillType`` from ``vibesop.spec``.
+"""
+
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from enum import Enum
 from pathlib import Path
 from typing import Any
 
-
-class SkillType(Enum):
-    """Types of skills.
-
-    .. deprecated:: 5.5.0
-        Use ``vibesop.spec.SkillType`` instead. The new enum includes
-        STANDARD which was previously missing.
-    """
-
-    PROMPT = "prompt"  # LLM prompt-based skill
-    WORKFLOW = "workflow"  # Multi-step workflow
-    COMMAND = "command"  # Shell command
-    HYBRID = "hybrid"  # Combination of types
-
-
-@dataclass
-class SkillMetadata:
-    """Metadata for a skill.
-
-    .. deprecated:: 5.5.0
-        Use ``vibesop.spec.SkillSpec`` instead. This dataclass is maintained
-        for backward compatibility and delegates to SkillSpec internally.
-
-    Attributes:
-        id: Unique skill identifier (e.g., "gstack/review")
-        name: Human-readable name
-        description: Short description
-        intent: What the skill does (used for routing)
-        namespace: Skill namespace (builtin, gstack, superpowers, project)
-        version: Skill version
-        author: Skill author
-        tags: List of tags for categorization
-        triggers: List of trigger phrases for routing
-        skill_type: Type of skill
-        trigger_when: When to trigger this skill (extracted from description)
-    """
-
-    id: str
-    name: str
-    description: str
-    intent: str
-    namespace: str = "builtin"
-    version: str = "1.0.0"
-    author: str = ""
-    tags: list[str] | None = None
-    triggers: list[str] | None = None
-    skill_type: SkillType = SkillType.PROMPT
-    trigger_when: str = ""
-    algorithms: list[str] | None = None
-    capabilities: list[str] | None = None
-
-    _deprecated_warned: bool = False
-
-    def __post_init__(self) -> None:
-        if not SkillMetadata._deprecated_warned:
-            warnings.warn(
-                "SkillMetadata is deprecated since v5.5.0. "
-                "Use vibesop.spec.SkillSpec instead.",
-                DeprecationWarning,
-                stacklevel=2,
-            )
-            SkillMetadata._deprecated_warned = True
-        if self.tags is None:
-            self.tags = []
-        if self.triggers is None:
-            self.triggers = []
-        if self.algorithms is None:
-            self.algorithms = []
-        if self.capabilities is None:
-            self.capabilities = []
+from vibesop.spec.models import SkillSpec
 
 
 @dataclass
@@ -130,16 +65,16 @@ class Skill(ABC):
     to handle specific user requests.
     """
 
-    def __init__(self, metadata: SkillMetadata) -> None:
+    def __init__(self, metadata: SkillSpec) -> None:
         """Initialize the skill.
 
         Args:
-            metadata: Skill metadata
+            metadata: Skill metadata (canonical SkillSpec since v7.3.0)
         """
         self._metadata = metadata
 
     @property
-    def metadata(self) -> SkillMetadata:
+    def metadata(self) -> SkillSpec:
         """Get skill metadata."""
         return self._metadata
 
@@ -189,14 +124,14 @@ class PromptSkill(Skill):
 
     def __init__(
         self,
-        metadata: SkillMetadata,
+        metadata: SkillSpec,
         prompt_template: str,
         system_prompt: str | None = None,
     ) -> None:
         """Initialize the prompt skill.
 
         Args:
-            metadata: Skill metadata
+            metadata: Skill metadata (canonical SkillSpec since v7.3.0)
             prompt_template: Template for the user prompt
             system_prompt: Optional system prompt
         """
@@ -262,13 +197,13 @@ class WorkflowSkill(Skill):
 
     def __init__(
         self,
-        metadata: SkillMetadata,
+        metadata: SkillSpec,
         steps: list[dict[str, Any]],
     ) -> None:
         """Initialize the workflow skill.
 
         Args:
-            metadata: Skill metadata
+            metadata: Skill metadata (canonical SkillSpec since v7.3.0)
             steps: List of workflow steps
         """
         super().__init__(metadata)

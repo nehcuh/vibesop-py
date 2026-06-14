@@ -28,7 +28,7 @@ class SkillClusterIndex:
     def _cluster_by_intent(self, skills: list[dict[str, Any]]) -> dict[str, list[str]]:
         clusters: dict[str, list[str]] = defaultdict(list)
         for skill in skills:
-            intent = skill.get("intent", "other").lower().strip()
+            intent = (skill.get("intent") or "other").lower().strip()
             cluster_name = self._normalize_intent(intent)
             clusters[cluster_name].append(skill["id"])
         self._clusters = dict(clusters)

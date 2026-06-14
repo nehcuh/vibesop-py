@@ -5,13 +5,14 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from vibesop.core.skills.base import PromptSkill, SkillMetadata, SkillType, WorkflowSkill
+from vibesop.core.skills.base import PromptSkill, WorkflowSkill
+from vibesop.spec.models import SkillSpec, SkillType
 from vibesop.core.skills.external_loader import ExternalSkillMetadata, SkillSource
 from vibesop.core.skills.loader import LoadedSkill, SkillLoader
 
 
 def _make_meta(skill_id="test", **kwargs):
-    return SkillMetadata(
+    return SkillSpec(
         id=skill_id, name="Test", description="Desc", intent=kwargs.pop("intent", "Do things"), **kwargs
     )
 
@@ -413,17 +414,26 @@ class TestConvertExternalSkill:
         result = loader._convert_external_skill(MagicMock())
         assert result is None
 
-    def test_converts_unknown_skill_type_to_prompt(self, tmp_path: Path):
-        base_meta = _make_meta("test", skill_type="nonexistent_type")
-        ext_meta = ExternalSkillMetadata(
-            base_metadata=base_meta,
-            source=SkillSource.PACK,
-            pack_name="test-pack",
+    def test_invalid_skill_type_in_frontmatter_normalized_to_prompt(self, tmp_path: Path) -> None:
+        """Invalid ``type:`` values in SKILL.md frontmatter fall back to PROMPT.
+
+        SkillSpec itself rejects invalid skill_type values at construction
+        (Pydantic enum validation). The normalization happens earlier — in
+        ``parser.build_spec()`` (lines 100-104), which catches ValueError
+        from ``SpecSkillType(invalid_str)`` and defaults to PROMPT.
+
+        This test verifies that path end-to-end: parse frontmatter with an
+        unknown ``type:`` and confirm the resulting SkillSpec.skill_type is
+        PROMPT.
+        """
+        from vibesop.core.skills.parser import build_metadata
+
+        spec = build_metadata(
+            {"id": "test", "name": "Test", "description": "desc", "type": "nonexistent_type"},
+            "test",
+            tmp_path / "SKILL.md",
         )
-        loader = SkillLoader(project_root=tmp_path, enable_external=False)
-        result = loader._convert_external_skill(ext_meta)
-        assert result is not None
-        assert result.metadata.skill_type == SkillType.PROMPT
+        assert spec.skill_type == SkillType.PROMPT
 
 
 class TestLoadMarkdownSkill:

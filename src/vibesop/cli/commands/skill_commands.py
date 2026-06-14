@@ -555,9 +555,9 @@ def _detect_and_load_skill(source: str) -> tuple[Path, Any]:
             metadata = parse_skill_md(metadata_file)
             return skill_path, metadata
 
-        from vibesop.core.skills.base import SkillMetadata
+        from vibesop.spec.models import SkillSpec
 
-        metadata = SkillMetadata(
+        metadata = SkillSpec(
             id=source_path.stem,
             name=source_path.stem.replace("-", " ").title(),
             description=f"Skill from {source_path.name}",

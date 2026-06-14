@@ -1,7 +1,7 @@
 # ADR-004: Deprecated Skill Metadata Types Cleanup
 
 > **Date**: 2026-06-14
-> **Status**: Phase 1 ✅ shipped (v7.1.0). Phase 2 ❌ withdrawn after architect review. Phase 3 pending.
+> **Status**: Phase 1 ✅ shipped (v7.1.0). Phase 2 ❌ withdrawn after architect review. Phase 3 ✅ shipped (v7.3.0).
 > **Context**: VibeSOP currently maintains **four parallel skill metadata
 > models** — `vibesop.spec.SkillSpec` (the v5.5.0 canonical source of
 > truth) plus three deprecated predecessors that are still on hot
@@ -87,19 +87,35 @@ split explicitly. Phase 2 is dropped from the cleanup roadmap.
 ### Phase 3 — v7.3: Remove `core.skills.base.SkillMetadata`
 
 **Blast radius**: largest — `parser.build_metadata()` is called from
-`loader.py:330, 370, 408` (3 hot-path sites) plus 6 import sites.
+### Phase 3 — v7.3: Remove `core.skills.base.SkillMetadata` ✅ SHIPPED
+
+**Actual blast radius** (largest of the three phases):
+- `src/`: 6 modules, ~14 sites
+  - `core/skills/parser.py`: `parse_skill_md()` return type → SkillSpec; `build_metadata()` is now a thin alias for `build_spec()`; `SkillParser` return types updated; `__all__` updated
+  - `core/skills/base.py`: deleted `SkillMetadata` class (55 LOC) + local `SkillType` enum; `Skill`/`PromptSkill`/`WorkflowSkill.__init__` metadata param now typed `SkillSpec`
+  - `core/skills/loader.py`: `LoadedSkill.metadata: SkillSpec`; `_convert_external_skill` simplified (was 30 LOC manual field copy, now `model_copy(update={...})`); imports local SkillType replaced with spec SkillType
+  - `core/skills/understander.py`: 6 SkillMetadata param hints → SkillSpec; SkillType import from spec
+  - `core/skills/external_loader.py`: `ExternalSkillMetadata.base_metadata: SkillSpec` (real import, not TYPE_CHECKING)
+  - `core/skills/__init__.py`: removed SkillMetadata + SkillType from `__all__`
+  - `cli/commands/skill_commands.py`: CLI fallback construction uses SkillSpec
+- `tests/`: 8 files, ~30 sites
+- Bonus fixes (bugs exposed by SkillSpec.intent being `Optional[str]` whereas
+  SkillMetadata.intent was required `str`): `.get("intent", "")` patterns
+  in `optimization/clustering.py`, `skills/manager.py`, `config/manager.py`,
+  `routing/unified.py` changed to `.get("intent") or ""` to handle None.
 
 **Why last**: SkillMetadata is the dataclass form that parser/loader
 use directly; replacing it touches the most production code.
 
-**Migration approach**:
-1. v7.3.0: Change `parse_skill_md()` return type to `SkillSpec`.
-2. v7.3.0: Update `loader.py` 3 sites to consume `SkillSpec`.
-3. v7.3.1: Remove `SkillMetadata` class + `build_metadata()`.
-4. v7.3.2: Remove the runtime `DeprecationWarning` (no longer needed).
+**Migration approach** (shipped in v7.3.0, single release):
+1. `parse_skill_md()` returns SkillSpec directly (was: returned SkillMetadata built via `build_metadata()`)
+2. `build_metadata()` kept as a thin deprecated alias for `build_spec()` (callers transition gradually)
+3. `SkillMetadata` class + local `SkillType` enum deleted
+4. `DeprecationWarning` for SkillMetadata is gone (no class to warn about)
 
-**Acceptance gate**: `grep -rn "SkillMetadata\b" src/` returns 0 hits;
-no `DeprecationWarning` for SkillMetadata appears in test output.
+**Acceptance gate**: ✅ `grep -rn "SkillMetadata\b" src/` returns 0 hits
+(remaining matches are docstrings referencing the historical name).
+No `DeprecationWarning` for SkillMetadata appears in test output.
 
 ## Alternatives Considered
 
@@ -147,7 +163,7 @@ More work than direct migration.
 
 - [x] v7.1: Phase 1 (SkillDefinition removal) — shipped 2026-06-14 (commit 3f90c9b)
 - [~] v7.2: Phase 2 (SkillConfig removal) — **WITHDRAWN** 2026-06-14 after architect review (spec/persistence split)
-- [ ] v7.3: Phase 3 (SkillMetadata removal) — issue TBD
+- [x] v7.3: Phase 3 (SkillMetadata removal) — shipped 2026-06-14
 
 Each phase requires its own pre-implementation plan per ADR-003
 (Plan Completion Criteria).

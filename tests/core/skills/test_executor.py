@@ -124,11 +124,11 @@ description: Debug systematically
 
             # Mock the loader to return our test skill definition
             with patch.object(executor._loader, "get_skill") as mock_get:
-                from vibesop.core.skills.base import SkillMetadata
+                from vibesop.spec.models import SkillSpec
                 from vibesop.core.skills.loader import LoadedSkill
 
                 mock_get.return_value = LoadedSkill(
-                    metadata=SkillMetadata(
+                    metadata=SkillSpec(
                         id="systematic-debugging",
                         name="Systematic Debugging",
                         description="Debug systematically",
@@ -199,11 +199,11 @@ This is a test skill.
 
             # Mock the loader to find our test skill
             with patch.object(executor._loader, "get_skill") as mock_get:
-                from vibesop.core.skills.base import SkillMetadata
+                from vibesop.spec.models import SkillSpec
                 from vibesop.core.skills.loader import LoadedSkill
 
                 mock_get.return_value = LoadedSkill(
-                    metadata=SkillMetadata(
+                    metadata=SkillSpec(
                         id="test-skill",
                         name="Test Skill",
                         description="A test skill",
@@ -358,11 +358,11 @@ class TestSecurity:
 
             # Mock the loader and auditor
             with patch.object(executor._loader, "get_skill") as mock_get:
-                from vibesop.core.skills.base import SkillMetadata
+                from vibesop.spec.models import SkillSpec
                 from vibesop.core.skills.loader import LoadedSkill
 
                 mock_get.return_value = LoadedSkill(
-                    metadata=SkillMetadata(
+                    metadata=SkillSpec(
                         id="malicious",
                         name="Malicious",
                         description="Malicious skill",

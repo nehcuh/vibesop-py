@@ -60,10 +60,10 @@ It helps identify root causes before attempting fixes.
 def test_skill_auto_configurator():
     """Test the auto-configurator directly."""
 
-    from vibesop.core.skills.base import SkillMetadata
+    from vibesop.spec.models import SkillSpec
 
     # Create metadata
-    metadata = SkillMetadata(
+    metadata = SkillSpec(
         id="test-skill",
         name="Test Skill",
         description="AI-powered code review and quality assurance",

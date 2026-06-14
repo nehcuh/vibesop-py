@@ -8,7 +8,7 @@ import pytest
 from typer.testing import CliRunner
 
 from vibesop.cli.commands.skill_commands import app as skills_app
-from vibesop.core.skills.base import SkillMetadata
+from vibesop.spec.models import SkillSpec
 
 runner = CliRunner()
 
@@ -41,7 +41,7 @@ class TestSkillAddCommand:
         """Test skill detection from directory."""
 
         # Mock return value
-        mock_metadata = SkillMetadata(
+        mock_metadata = SkillSpec(
             id="test-skill",
             name="Test Skill",
             description="A test skill",
@@ -99,7 +99,7 @@ class TestSkillAddCommand:
     ):
         """Test complete installation flow."""
         # Setup mocks
-        mock_metadata = SkillMetadata(
+        mock_metadata = SkillSpec(
             id="test-skill",
             name="Test Skill",
             description="A test skill",
@@ -305,7 +305,7 @@ class TestAgentEnvironmentBranch:
         )
         mock_understand.return_value = mock_config
 
-        metadata = SkillMetadata(
+        metadata = SkillSpec(
             id="test-skill",
             name="Test Skill",
             description="A test skill",
@@ -344,7 +344,7 @@ class TestAgentEnvironmentBranch:
         )
         mock_understand.return_value = mock_config
 
-        metadata = SkillMetadata(
+        metadata = SkillSpec(
             id="test-skill",
             name="Test Skill",
             description="Debug things",
@@ -392,7 +392,7 @@ class TestAgentEnvironmentBranch:
         )
         mock_ai_enhancer_cls.return_value = mock_enhancer
 
-        metadata = SkillMetadata(
+        metadata = SkillSpec(
             id="test-skill",
             name="Test Skill",
             description="A test skill",
@@ -421,7 +421,7 @@ class TestAgentEnvironmentBranch:
             confidence=0.6,
             routing_patterns=[".*test.*"],
         )
-        metadata = SkillMetadata(
+        metadata = SkillSpec(
             id="test-skill",
             name="Test Skill",
             description="A test skill",
@@ -449,7 +449,7 @@ class TestAgentEnvironmentBranch:
             priority=50,
             confidence=0.6,
         )
-        metadata = SkillMetadata(
+        metadata = SkillSpec(
             id="test-skill",
             name="Test Skill",
             description="A test skill",

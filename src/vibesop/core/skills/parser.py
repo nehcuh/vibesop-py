@@ -4,34 +4,35 @@ This module parses SKILL.md files and extracts metadata for routing.
 It supports the frontmatter format used by VibeSOP skills.
 
 Enhanced in v4.1.0 to support workflow parsing for external skill execution.
-Updated in v5.5.0 to use SkillSpec (spec v3) internally, with build_metadata()
-maintained for backward compatibility.
+Updated in v5.5.0 to use SkillSpec (spec v3) internally.
+Updated in v7.3.0: ``parse_skill_md()`` now returns ``SkillSpec`` directly;
+the deprecated ``build_metadata()`` wrapper and ``SkillMetadata`` alias
+were removed (ADR-004 Phase 3).
 """
 
 from __future__ import annotations
 
 import logging
 import re
-import warnings
 from pathlib import Path
 from typing import Any
 
 from ruamel.yaml import YAML, YAMLError
 
-from vibesop.core.skills.base import SkillMetadata, SkillType
 from vibesop.core.skills.workflow import Workflow, parse_workflow_from_markdown
+from vibesop.spec.models import SkillSpec
 
 logger = logging.getLogger(__name__)
 
 
-def parse_skill_md(skill_path: Path) -> SkillMetadata | None:
+def parse_skill_md(skill_path: Path) -> SkillSpec | None:
     """Parse a SKILL.md file and extract metadata using ruamel.yaml.
 
     Args:
         skill_path: Path to the skill directory or SKILL.md file
 
     Returns:
-        SkillMetadata if parsing succeeded, None otherwise
+        SkillSpec if parsing succeeded, None otherwise
     """
     skill_file = skill_path if skill_path.is_file() else skill_path / "SKILL.md"
     if not skill_file.exists():
@@ -44,7 +45,7 @@ def parse_skill_md(skill_path: Path) -> SkillMetadata | None:
     if frontmatter is None:
         return None
 
-    return build_metadata(frontmatter, skill_id, skill_file)
+    return build_spec(frontmatter, skill_id, skill_file)
 
 
 def extract_frontmatter(content: str) -> tuple[dict[str, Any] | None, str]:
@@ -222,37 +223,16 @@ def build_metadata(
     data: dict[str, Any],
     skill_id: str,
     skill_file: Path,
-) -> SkillMetadata:
-    """Build SkillMetadata from parsed frontmatter.
+) -> SkillSpec:
+    """Build SkillSpec from parsed frontmatter.
 
-    Deprecated: prefer build_spec() which returns the canonical SkillSpec.
-    This function now delegates to build_spec() internally and converts the result.
+    Canonical builder since v7.3.0 (ADR-004 Phase 3). Historically this
+    function returned a deprecated ``SkillMetadata`` dataclass; it now
+    returns ``SkillSpec`` directly. Callers that depended on the
+    ``SkillMetadata`` shape should consume ``SkillSpec`` instead — it is
+    a strict field superset.
     """
-    spec = build_spec(data, skill_id, skill_file)
-
-    # Map SkillSpec back to SkillMetadata for backward compatibility.
-    # Note: SkillType is the old enum; STANDARD maps to PROMPT in the old model.
-    old_skill_type = SkillType.PROMPT
-    try:
-        old_skill_type = SkillType(spec.skill_type.value)
-    except ValueError:
-        old_skill_type = SkillType.PROMPT
-
-    return SkillMetadata(
-        id=spec.id,
-        name=spec.name,
-        description=spec.description,
-        intent=spec.intent or spec.description,
-        namespace=spec.namespace,
-        version=spec.version,
-        author=spec.author,
-        tags=spec.tags if spec.tags else spec.keywords,
-        triggers=spec.triggers,
-        skill_type=old_skill_type,
-        trigger_when=spec.trigger_when,
-        algorithms=spec.algorithms,
-        capabilities=spec.capabilities,
-    )
+    return build_spec(data, skill_id, skill_file)
 
 
 def extract_trigger_from_description(description: str) -> str:
@@ -311,14 +291,14 @@ class SkillParser:
         """Initialize the skill parser."""
         self._yaml = YAML()
 
-    def parse_metadata(self, skill_path: Path) -> SkillMetadata | None:
+    def parse_metadata(self, skill_path: Path) -> SkillSpec | None:
         """Parse skill metadata from SKILL.md file.
 
         Args:
             skill_path: Path to skill directory or SKILL.md file
 
         Returns:
-            SkillMetadata if parsing succeeded, None otherwise
+            SkillSpec if parsing succeeded, None otherwise
         """
         return parse_skill_md(skill_path)
 
@@ -369,7 +349,7 @@ class SkillParser:
     def parse_skill_file(
         self,
         skill_path: Path,
-    ) -> tuple[SkillMetadata | None, Workflow | None]:
+    ) -> tuple[SkillSpec | None, Workflow | None]:
         """Parse both metadata and workflow from SKILL.md file.
 
         Args:
@@ -402,7 +382,6 @@ class SkillParser:
 
 
 __all__ = [
-    "SkillMetadata",
     "SkillParser",
     "build_metadata",
     "build_spec",

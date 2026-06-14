@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from vibesop.core.skills.base import SkillMetadata
 from vibesop.core.skills.parser import build_metadata
+from vibesop.spec.models import SkillSpec
 
 
 class TestCapabilitiesExtraction:
@@ -44,8 +44,8 @@ class TestCapabilitiesExtraction:
         assert meta.capabilities == []
 
     def test_skill_metadata_capabilities_field(self) -> None:
-        """SkillMetadata dataclass accepts capabilities."""
-        meta = SkillMetadata(
+        """SkillSpec dataclass accepts capabilities."""
+        meta = SkillSpec(
             id="test",
             name="Test",
             description="desc",

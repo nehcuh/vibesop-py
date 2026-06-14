@@ -578,7 +578,7 @@ class ConfigManager:
         """Search skills by keyword in intent or description."""
         skills = self.get_all_skills(force_reload=force_reload)
         query_lower = query.lower()
-        return [skill for skill in skills if query_lower in skill.get("intent", "").lower()]
+        return [skill for skill in skills if query_lower in (skill.get("intent") or "").lower()]
 
     def clear_cache(self) -> None:
         self._cache.clear()

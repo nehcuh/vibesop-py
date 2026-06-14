@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from vibesop.core.skills.base import SkillMetadata
+from vibesop.spec.models import SkillSpec
 from vibesop.core.skills.external_loader import (
     ExternalSkillLoader,
     ExternalSkillMetadata,
@@ -18,7 +18,7 @@ from vibesop.core.skills.external_loader import (
 
 
 def _make_meta(skill_id="test/skill"):
-    return SkillMetadata(
+    return SkillSpec(
         id=skill_id, name="Test", description="Desc", intent="Do things",
     )
 
