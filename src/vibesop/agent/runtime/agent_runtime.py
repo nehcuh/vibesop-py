@@ -507,7 +507,15 @@ class AgentRuntime:
                 if isinstance(injection.payload, str):
                     result.skill_content = injection.payload
                 elif isinstance(injection.payload, dict):
-                    result.skill_content = injection.payload.get("content", "")
+                    # v7.3.5 fix (Round 4 P1, part 2): Claude Code injector
+                    # returns {"additionalContext": "..."}, not {"content": "..."}.
+                    # Without this fallback chain, skill_content was always ""
+                    # even when the injector successfully loaded the SKILL.md.
+                    result.skill_content = (
+                        injection.payload.get("additionalContext")
+                        or injection.payload.get("content")
+                        or ""
+                    )
             except Exception as e:
                 logger.debug(f"Skill injection failed: {e}")
                 # Non-fatal — routing decision is still valid

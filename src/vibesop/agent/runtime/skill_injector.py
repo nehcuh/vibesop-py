@@ -154,37 +154,76 @@ class SkillInjector:
     def _load_skill_content(self, skill_id: str) -> str:
         """Load skill content from filesystem.
 
-        Tries multiple locations in priority order:
-        1. core/skills/{skill_id}/SKILL.md
-        2. ~/.kimi-code/skills/{flattened_id}/SKILL.md
-        3. ~/.config/skills/{skill_id}/SKILL.md
+        v7.3.5 fix (Round 4 P1): previously only checked 3 paths and missed
+        the actual install locations for Claude Code (``~/.claude/skills/``)
+        and Pi (``~/.pi/agent/skills/``). Also, routing returns the bare
+        ``name:`` field from SKILL.md frontmatter (e.g. ``"diagnose"``),
+        but installed directory names carry pack prefixes
+        (e.g. ``mattpocock-diagnose`` or ``mattpocock-skills-engineering-diagnose``).
+        Without suffix matching, injector always fell back to placeholder text.
+
+        Search order (each path is tried with 3 lookup strategies):
+        1. ``core/skills/{skill_id}/SKILL.md`` — project-local builtin skills
+        2. ``~/.claude/skills/{...}/SKILL.md`` — Claude Code target dir
+        3. ``~/.pi/agent/skills/{...}/SKILL.md`` — Pi target dir
+        4. ``~/.kimi-code/skills/{...}/SKILL.md`` — Kimi Code target dir
+        5. ``~/.config/skills/{...}/SKILL.md`` — central storage (nested layout)
+
+        For each path, three lookup strategies are tried in order:
+        - Exact flat id: ``{skill_id.replace('/', '-')}`` (e.g. ``gstack-review``)
+        - Pack-prefix glob: ``*-{flat_id}`` (e.g. ``mattpocock-diagnose``)
+        - Nested glob: ``**/{flat_id}/SKILL.md`` (e.g. ``mattpocock/engineering/diagnose``)
         """
-        # Try core/skills/
-        core_path = self.project_root / "core" / "skills" / skill_id / "SKILL.md"
-        if core_path.exists():
-            try:
-                return core_path.read_text(encoding="utf-8")
-            except OSError:
-                pass
-
-        # Try flattened name (for namespaced skills like gstack/review)
         flat_id = skill_id.replace("/", "-")
-
-        # Try ~/.kimi-code/skills/
         home = Path.home()
-        kimi_path = home / ".kimi-code" / "skills" / flat_id / "SKILL.md"
-        if kimi_path.exists():
-            try:
-                return kimi_path.read_text(encoding="utf-8")
-            except OSError:
-                pass
 
-        # Try ~/.config/skills/
-        config_path = home / ".config" / "skills" / flat_id / "SKILL.md"
-        if config_path.exists():
+        # Candidate base directories in priority order
+        candidate_dirs: list[Path] = [
+            self.project_root / "core" / "skills",
+            home / ".claude" / "skills",
+            home / ".pi" / "agent" / "skills",
+            home / ".kimi-code" / "skills",
+            home / ".config" / "skills",
+        ]
+
+        for base in candidate_dirs:
+            if not base.exists():
+                continue
+
+            # Strategy 1: exact flat id (handles "gstack/review" → "gstack-review")
+            direct = base / flat_id / "SKILL.md"
+            if direct.exists():
+                try:
+                    return direct.read_text(encoding="utf-8")
+                except OSError:
+                    pass
+
+            # Strategy 2: pack-prefix glob (handles skill_id="diagnose"
+            # resolving to "mattpocock-diagnose")
+            if base != self.project_root / "core" / "skills":
+                # Only glob user-install dirs (core/skills has no pack prefix)
+                try:
+                    for candidate in base.glob(f"*-{flat_id}"):
+                        skill_file = candidate / "SKILL.md"
+                        if skill_file.exists():
+                            try:
+                                return skill_file.read_text(encoding="utf-8")
+                            except OSError:
+                                continue
+                except (OSError, PermissionError):
+                    pass
+
+        # Strategy 3: nested layout in central storage (~/.config/skills/)
+        # handles "mattpocock/skills/engineering/diagnose/SKILL.md"
+        central = home / ".config" / "skills"
+        if central.exists():
             try:
-                return config_path.read_text(encoding="utf-8")
-            except OSError:
+                for match in central.glob(f"**/{flat_id}/SKILL.md"):
+                    try:
+                        return match.read_text(encoding="utf-8")
+                    except OSError:
+                        continue
+            except (OSError, PermissionError):
                 pass
 
         return f"# Skill: {skill_id}\n\n*Skill content not found at expected locations.*"

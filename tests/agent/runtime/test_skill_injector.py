@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from unittest.mock import patch
 
 from vibesop.agent.runtime.skill_injector import (
@@ -152,3 +153,50 @@ class TestSkillInjector:
         content = injector._load_skill_content("nonexistent/skill")
         assert "Skill content not found" in content
         assert "nonexistent/skill" in content
+
+    def test_load_skill_pack_prefix_glob(self, tmp_path, monkeypatch) -> None:
+        """v7.3.5: skill_id='diagnose' should resolve to 'mattpocock-diagnose'."""
+        # Mock Path.home() to tmp_path
+        monkeypatch.setattr(Path, "home", lambda: tmp_path)
+
+        # Simulate VibeSOP install: pack-prefixed dir in ~/.claude/skills/
+        claude_skills = tmp_path / ".claude" / "skills" / "mattpocock-diagnose"
+        claude_skills.mkdir(parents=True)
+        (claude_skills / "SKILL.md").write_text("# Diagnose from mattpocock pack")
+
+        injector = SkillInjector(project_root=tmp_path)
+        content = injector._load_skill_content("diagnose")
+        assert "Diagnose from mattpocock pack" in content
+
+    def test_load_skill_nested_central_storage(self, tmp_path, monkeypatch) -> None:
+        """v7.3.5: skill_id='diagnose' resolves via ~/.config/skills/**/ glob.
+
+        VibeSOP central storage uses nested layout:
+            ~/.config/skills/mattpocock/skills/engineering/diagnose/SKILL.md
+        """
+        monkeypatch.setattr(Path, "home", lambda: tmp_path)
+
+        nested = tmp_path / ".config" / "skills" / "mattpocock" / "skills" / "engineering" / "diagnose"
+        nested.mkdir(parents=True)
+        (nested / "SKILL.md").write_text("# Diagnose via central nested storage")
+
+        injector = SkillInjector(project_root=tmp_path)
+        content = injector._load_skill_content("diagnose")
+        assert "Diagnose via central nested storage" in content
+
+    def test_load_skill_claude_code_dir_preferred(self, tmp_path, monkeypatch) -> None:
+        """v7.3.5: Claude Code install dir takes priority over central storage."""
+        monkeypatch.setattr(Path, "home", lambda: tmp_path)
+
+        # Install in both locations with different content
+        claude = tmp_path / ".claude" / "skills" / "gstack-review"
+        claude.mkdir(parents=True)
+        (claude / "SKILL.md").write_text("# Review from Claude Code install")
+
+        central = tmp_path / ".config" / "skills" / "gstack" / "review"
+        central.mkdir(parents=True)
+        (central / "SKILL.md").write_text("# Review from central storage")
+
+        injector = SkillInjector(project_root=tmp_path)
+        content = injector._load_skill_content("gstack/review")
+        assert "Claude Code install" in content
