@@ -203,8 +203,16 @@ class Orchestrator:
         effective_pattern = classification.pattern
         if context is not None:
             ctx_metadata = getattr(context, "metadata", None) or {}
-            ctx_analysis_dict = ctx_metadata.get("intent_analysis")
-            interception_mode = ctx_metadata.get("_interception_mode", "")
+            # Read intent_analysis: first-class field first, fall back to the
+            # legacy metadata backchannel for code paths not yet migrated
+            # (deprecated; will be removed in v7.1).
+            ctx_analysis_dict = getattr(context, "intent_analysis", None)
+            if ctx_analysis_dict is None:
+                ctx_analysis_dict = ctx_metadata.get("intent_analysis")
+            # Same field-first / metadata-fallback policy for interception_mode.
+            interception_mode = getattr(context, "interception_mode", None) or ""
+            if not interception_mode:
+                interception_mode = ctx_metadata.get("_interception_mode", "")
             if ctx_analysis_dict is not None:
                 # Prefer the context's analysis — the interceptor already
                 # committed to MULTI_AGENT_SQUAD and built a complete analysis.

@@ -223,6 +223,9 @@ def _build_single_agent_context(
     enriched = _copy_context(context)
     enriched.interception_mode = "single_agent"
     enriched.role_context = role_ctx
+    # First-class field (preferred by readers post-v7.0.3):
+    enriched.intent_analysis = analysis.to_dict()
+    # Legacy backchannel (kept for any reader that has not yet migrated):
     enriched.metadata.update(
         {
             "intent_analysis": analysis.to_dict(),
@@ -241,6 +244,9 @@ def _build_multi_agent_squad_context(
     enriched = _copy_context(context)
     enriched.interception_mode = "multi_agent_squad"
     if analysis is not None:
+        # First-class field (preferred by readers post-v7.0.3):
+        enriched.intent_analysis = analysis.to_dict()
+        # Legacy backchannel (kept for any reader that has not yet migrated):
         enriched.metadata.update(
             {
                 "intent_analysis": analysis.to_dict(),

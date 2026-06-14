@@ -380,7 +380,12 @@ class AgentRuntime:
                     from vibesop.core.matching import RoutingContext
 
                     squad_ctx = RoutingContext()
-                    squad_ctx.metadata["intent_analysis"] = decision.analysis.to_dict()
+                    # First-class fields (preferred by readers post-v7.0.3):
+                    squad_ctx.interception_mode = "multi_agent_squad"
+                    squad_ctx.intent_analysis = decision.analysis.to_dict()
+                    # Legacy backchannel (kept for any reader that has not
+                    # yet migrated; will be removed in v7.1):
+                    squad_ctx.metadata["intent_analysis"] = squad_ctx.intent_analysis
                     squad_ctx.metadata["_interception_mode"] = "multi_agent_squad"
 
                 orch_result = self.router.orchestrate(

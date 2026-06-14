@@ -4,6 +4,19 @@
 
 <!-- handoff:start -->
 
+### 2026-06-14 (S26) routing-context-first-class-fields (v7.0.3)
+**Session**: P1 fix from S23 Multi-Agent Squad deep analysis (implementer technical-debt #1).
+**Trigger**: S23 implementer flagged `_interception_mode` and `intent_analysis` riding RoutingContext.metadata backchannel — fragile, type-unsafe, dead-code field already existed for one of them.
+**Completed**:
+- `src/vibesop/core/matching/base.py` — `RoutingContext` gains first-class field `intent_analysis: dict[str, Any] | None = None`. Updated docstring to explain field-first / metadata-fallback policy and the deprecation plan. `to_dict()` now serializes `intent_analysis`.
+- `src/vibesop/core/routing/orchestrator.py:202-216` — reader now consults `context.interception_mode` field first, falls back to `context.metadata["_interception_mode"]` only when the field is absent. Same policy for `intent_analysis`.
+- `src/vibesop/agent/runtime/agent_runtime.py:382-389` — MULTI_AGENT_SQUAD branch now sets `squad_ctx.interception_mode` and `squad_ctx.intent_analysis` as fields, while keeping the metadata backchannel write for backward compatibility.
+- `src/vibesop/cli/main.py:223-249` — `_build_single_agent_context` and `_build_multi_agent_squad_context` follow the same dual-write policy.
+- `tests/core/routing/test_routing_context_interception_mode.py` (NEW) — 11 tests across 3 suites pinning the new contract.
+- `CHANGELOG.md` — v7.0.3 section with migration plan (v7.1 removes backchannel).
+**Verification**: 11/11 new tests pass; 885/885 tests in tests/core/routing + tests/core/orchestration + tests/agent + tests/hooks + tests/installer + tests/security + tests/adapters pass; basedpyright 0 new errors on touched files (pre-existing `original_query` argument warning at orchestrator.py:277 is line-shifted from :269, not introduced by this change — verified via `git stash`).
+**Next**: Phase 4 (README.zh-CN.md deprecation + intent_interceptor tests) and Phase 5 (path_safety symlink/TOCTOU) remain pending from S23 squad plan.
+
 ### 2026-06-14 (S25) jinja2-shell-python-injection-hardening (v7.0.2)
 **Session**: Second P0/P1 fix from S23 Multi-Agent Squad deep analysis.
 **Trigger**: S23 red-team flagged that `vibesop-route.sh.j2` rendered `{{ platform }}` into a Python single-quoted string literal inside `python3 -c "..."` — a Python code injection vector (not shell injection).

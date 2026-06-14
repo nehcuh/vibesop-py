@@ -53,6 +53,23 @@ class RoutingContext:
         user_skill_level: User's proficiency level (novice/intermediate/expert)
         conversation_id: Active conversation ID for memory lookup
         recent_queries: Recent user queries from conversation history
+        interception_mode: First-class field carrying the InterceptionMode
+            value (e.g. ``"multi_agent_squad"``, ``"single_agent"``).
+            Replaces the legacy ``metadata["_interception_mode"]``
+            backchannel; readers should prefer this field and fall back
+            to metadata only for backward compatibility with code paths
+            that have not yet been migrated.
+        intent_analysis: First-class field carrying the IntentAnalysis
+            payload (already serialized to dict via ``.to_dict()``).
+            Replaces the legacy ``metadata["intent_analysis"]``
+            backchannel; same field-first / metadata-fallback policy.
+        role_context: Per-role routing hints (role id, prompt, allowed
+            skills). Used by SINGLE_AGENT routing.
+        metadata: Free-form bag for matcher-specific extensions. New
+            code should add first-class fields above rather than piling
+            into metadata — the backchannel pattern is fragile because
+            string keys can drift between writers and readers without
+            any type-checker signal.
     """
 
     file_type: str | None = None
@@ -69,6 +86,9 @@ class RoutingContext:
     # Phase 6: interception mode and role context for agent routing
     interception_mode: str | None = None
     role_context: dict[str, Any] | None = None
+    # Phase 7.0.3 (v7.0.3): promote intent_analysis from metadata backchannel
+    # to a first-class field. See S26 handoff for migration context.
+    intent_analysis: dict[str, Any] | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -84,6 +104,7 @@ class RoutingContext:
             "current_skill": self.current_skill,
             "interception_mode": self.interception_mode,
             "role_context": self.role_context,
+            "intent_analysis": self.intent_analysis,
             "metadata": self.metadata,
         }
 

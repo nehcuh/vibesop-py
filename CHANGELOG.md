@@ -9,6 +9,73 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### v7.0.3 — RoutingContext First-Class Fields (de-backchannel)
+
+Closes the third P1 from S23 Multi-Agent Squad deep analysis. The
+MULTI_AGENT_SQUAD path relied on two parallel backchannels through
+``RoutingContext.metadata``:
+
+- ``metadata["_interception_mode"]`` — string key written by
+  ``agent_runtime.py`` and ``cli/main.py``, read by ``orchestrator.py``.
+- ``metadata["intent_analysis"]`` — string key, same writers + reader.
+
+``RoutingContext.interception_mode`` already existed as a first-class
+field (added in Phase 6) but was dead code — no reader ever consulted
+it. ``intent_analysis`` had no first-class field at all.
+
+The backchannel pattern was fragile: any rename of the string key
+silently severed the squad path without any type-checker signal. The
+S23 implementer report flagged this as technical debt #1.
+
+#### Field promotion
+
+- feat(matching): ``RoutingContext.intent_analysis: dict | None``
+  promoted from ``metadata["intent_analysis"]`` backchannel.
+- feat(matching): ``RoutingContext.to_dict()`` now serializes both
+  ``interception_mode`` and ``intent_analysis``.
+
+#### Reader migration (field-first / metadata-fallback)
+
+- fix(orchestrator): ``Orchestrator.orchestrate`` now reads
+  ``context.interception_mode`` first, falling back to
+  ``context.metadata["_interception_mode"]`` for code paths not yet
+  migrated. Same policy for ``intent_analysis``. The fallback is
+  temporary and will be removed in v7.1.
+
+#### Writer migration (dual-write during transition)
+
+- fix(agent_runtime): ``MULTI_AGENT_SQUAD`` branch now sets
+  ``squad_ctx.interception_mode`` and ``squad_ctx.intent_analysis`` as
+  first-class fields, while also populating the metadata backchannel
+  for backward compatibility with any reader that has not yet migrated.
+- fix(cli/main): ``_build_single_agent_context`` and
+  ``_build_multi_agent_squad_context`` follow the same dual-write policy.
+
+#### Tests
+
+- test(routing): ``tests/core/routing/test_routing_context_interception_mode.py``
+  — 11 tests across 3 suites pinning the new contract:
+  - TestRoutingContextFields (5): default values, set + serialize.
+  - TestOrchestratorReaderFieldFirst (4): field wins over metadata,
+    metadata fallback when field absent.
+  - TestWriterMigration (2): cli/main writers populate both channels.
+
+#### Verification
+
+- 11/11 new tests pass.
+- 885/885 tests in tests/core/routing + tests/core/orchestration +
+  tests/agent + tests/hooks + tests/installer + tests/security +
+  tests/adapters pass.
+- basedpyright: 0 new errors on touched files (pre-existing
+  ``original_query`` argument warning at orchestrator.py:277 unchanged).
+
+#### Migration plan
+
+- v7.0.x (this release): dual-write + field-first read.
+- v7.1: remove metadata backchannel writes; readers go field-only.
+
+---
+
 ### v7.0.2 — Jinja2 Shell / Python Injection Hardening
 
 Closes the second P0/P1 from S23 Multi-Agent Squad deep analysis:
