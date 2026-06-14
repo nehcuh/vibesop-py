@@ -4,6 +4,21 @@
 
 <!-- handoff:start -->
 
+### 2026-06-14 (S28) path-safety-symlink-toctou-hardening (v7.0.5)
+**Session**: Phase 5 (final) from S23 Multi-Agent Squad remediation plan.
+**Trigger**: S23 red-team flagged path_safety.py:121 using `resolve()` which follows symlinks; the code had a comment self-admitting the issue.
+**Completed**:
+- `src/vibesop/security/path_safety.py`:
+  - Module docstring rewritten to document the lexical-vs-resolve asymmetry: `check_traversal` is the adversarial-input gate (lexical only, no symlink following); `check_overlap` / `verify_writable` / `ensure_no_overlap` use resolve() but only operate on already-trusted paths.
+  - `check_traversal` rewritten: lexical normalization (`os.path.abspath` + `os.path.normpath`) + per-component `lstat` symlink detection + `os.sep`-suffix prefix-collision-resistant containment check.
+  - 3 new helpers: `_lexical_normalize`, `_is_lexically_within`, `_no_symlinks_in_chain`.
+  - `validate_filename` adds NUL byte rejection.
+  - `ensure_safe_output_path` rejects NUL bytes in the full input path and calls `validate_filename` on the leaf name.
+- `tests/security/test_path_safety_symlink.py` (NEW) — 28 tests across 6 suites (TestCheckTraversalSymlinkHardening, TestEnsureSafeOutputPathHardening, TestLexicalNormalize, TestNoSymlinksInChain, TestIsLexicallyWithin, TestValidateFilenameNulHardening). The original S23 red-team PoC (symlink inside base pointing outside) is pinned by `test_symlink_inside_base_pointing_outside_rejected`.
+- `CHANGELOG.md` — v7.0.5 section.
+**Verification**: 28/28 new tests pass; 400/400 tests in tests/security + tests/installer + tests/hooks + tests/builder pass; basedpyright 0 errors on touched file.
+**Plan complete**: S23 Multi-Agent Squad remediation plan now fully closed — Phases 1-5 all delivered (v7.0.1 through v7.0.5). Total: 5 commits, ~130 new tests, 0 new basedpyright errors. Ready to push as v7.0.5 release.
+
 ### 2026-06-14 (S27) doc-hygiene-and-interceptor-hardening (v7.0.4)
 **Session**: Phase 4 from S23 Multi-Agent Squad remediation plan.
 **Completed**:

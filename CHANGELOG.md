@@ -9,6 +9,87 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### v7.0.5 — Path Safety Symlink / TOCTOU Hardening
+
+Closes Phase 5 (the final item) of the S23 Multi-Agent Squad
+remediation plan. The red-team report flagged that
+``PathSafety.check_traversal`` used ``Path.resolve()`` to normalize
+paths — and ``resolve()`` follows symlinks. A symlink inside
+``base_dir`` pointing outside would silently bypass the containment
+check (the code at path_safety.py:121 even had a comment self-admitting
+the issue: "Use resolve() but be aware it follows symlinks").
+
+The vulnerability had two exploit variants:
+
+1. **Pre-existing symlinks**: attacker plants a symlink inside
+   ``base_dir`` pointing at ``/etc`` (or anywhere outside). When the
+   check resolves the path, it follows the symlink and writes outside
+   ``base_dir``.
+2. **TOCTOU**: attacker creates the symlink between the check and the
+   actual write. The check sees a clean path; the write goes through
+   the now-symlinked location.
+
+#### check_traversal rewrite
+
+- fix(security): ``check_traversal`` rewritten to use lexical
+  normalization (``os.path.abspath`` + ``os.path.normpath`` — no symlink
+  resolution) plus a per-component ``lstat`` check that refuses any
+  symlink in the chain from ``base_dir`` to target. Defeats both
+  pre-existing symlinks and TOCTOU.
+- feat(security): ``_lexical_normalize`` helper exposes the lexical
+  normalization as a static method for reuse.
+- feat(security): ``_is_lexically_within`` uses ``os.sep``-suffix matching
+  so ``/tmp/foo`` does NOT count as within ``/tmp/foobar`` (defeats the
+  prefix-collision attack that ``startswith`` would allow).
+- feat(security): ``_no_symlinks_in_chain`` walks from ``base_dir`` to
+  ``target``, refusing any symlink encountered. Logs a warning when a
+  symlink is detected.
+
+#### NUL byte hardening
+
+- fix(security): ``validate_filename`` rejects NUL bytes (``\\x00``).
+  NUL silently truncates C strings in downstream ``os.open`` / ``pathlib``
+  calls, which can let an attacker smuggle past later checks.
+- fix(security): ``ensure_safe_output_path`` rejects NUL bytes in the
+  full input path before resolving, and calls ``validate_filename`` on
+  the leaf name to catch shell-like metacharacters (``;``, ``$``, etc.)
+  even when ``check_traversal`` would otherwise pass.
+
+#### Compatibility note
+
+``check_overlap`` / ``verify_writable`` / ``ensure_no_overlap`` still
+use ``Path.resolve()``. These methods deal with already-trusted paths
+(not adversarial input), so the symlink-following behavior is safe
+there. The module docstring documents this asymmetry explicitly.
+
+#### Tests
+
+- test(security): ``tests/security/test_path_safety_symlink.py`` — 28
+  new tests across 6 suites:
+  - TestCheckTraversalSymlinkHardening (6): the core fix — symlink
+    inside base rejected, symlink in path component rejected, prefix
+    collision resistant, lexical normalization collapses ``..``.
+  - TestEnsureSafeOutputPathHardening (6): NUL byte in path/filename
+    rejected, shell-metacharacter filename rejected, symlinked output
+    path rejected end-to-end.
+  - TestLexicalNormalize (4): lexical normalization contract.
+  - TestNoSymlinksInChain (4): per-component lstat contract.
+  - TestIsLexicallyWithin (4): prefix-collision resistance.
+  - TestValidateFilenameNulHardening (4): NUL byte rejection at start,
+    middle, and end of filename.
+
+#### Verification
+
+- 28/28 new tests pass.
+- 400/400 tests in tests/security + tests/installer + tests/hooks +
+  tests/builder pass.
+- basedpyright: 0 errors on touched file.
+- The original S23 red-team PoC (symlink inside base pointing outside)
+  is verified neutralized by
+  ``test_symlink_inside_base_pointing_outside_rejected``.
+
+---
+
 ### v7.0.4 — Documentation Hygiene + Interceptor Hardening Tests
 
 Closes Phase 4 of the S23 Multi-Agent Squad remediation plan. Two

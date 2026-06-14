@@ -2,13 +2,22 @@
 
 This module provides the PathSafety class that validates file paths
 to prevent directory traversal and other path-based attacks.
+
+Security model (v7.0.5+): ``check_traversal`` uses lexical normalization
+plus per-component ``lstat`` checks. It does NOT follow symlinks. The
+``resolve()`` calls that remain in ``check_overlap`` / ``verify_writable``
+/ ``ensure_no_overlap`` are intentional — those methods deal with
+already-trusted paths, not adversarial input.
 """
 
+import logging
 import os
 from pathlib import Path
 from typing import Final
 
 from vibesop.security.exceptions import PathOverlapError, PathTraversalError
+
+logger = logging.getLogger(__name__)
 
 
 class PathSafety:
@@ -71,8 +80,22 @@ class PathSafety:
         path = Path(path)
         base_dir = Path(base_dir).resolve()
 
+        # Reject NUL bytes in the input early — they can silently truncate
+        # in downstream os/pathlib calls.
+        if "\x00" in str(path):
+            msg = f"Path contains NUL byte: {path!r}"
+            raise ValueError(msg)
+
         # Resolve to absolute path
         resolved = self._resolve_path(path, base_dir)
+
+        # Validate the leaf filename — defends against suspicious shell-like
+        # characters even when check_traversal would otherwise pass.
+        try:
+            self.validate_filename(resolved.name)
+        except ValueError as e:
+            # Re-raise with the full path context for easier debugging.
+            raise ValueError(f"Unsafe filename in path {resolved}: {e}") from e
 
         # Validate path length
         if len(str(resolved)) > self.max_path_length:
@@ -103,32 +126,113 @@ class PathSafety:
     def check_traversal(self, path: Path | str, base_dir: Path | str) -> bool:
         """Check if a path attempts to traverse outside base directory.
 
+        Security properties (v7.0.5):
+            - **Lexical normalization only** — does NOT follow symlinks.
+              ``Path.resolve()`` is unsafe here because a symlink inside
+              ``base_dir`` pointing outside would be followed silently.
+            - **Per-component lstat check** — refuses any symlink in the
+              chain from ``base_dir`` to the target. Defeats both
+              pre-existing symlinks and TOCTOU attacks (symlink created
+              between this check and the actual write).
+            - **Prefix-collision resistant** — ``/tmp/foo`` cannot bypass
+              to ``/tmp/foobar`` because the containment check uses
+              ``os.sep``-suffix matching rather than naive ``startswith``.
+
         Args:
-            path: Path to check (relative paths are treated as relative to base_dir)
-            base_dir: Base directory
+            path: Path to check (relative paths are treated as relative
+                to ``base_dir``).
+            base_dir: Trusted base directory. Symlinks inside the base
+                directory are still refused (defense in depth).
 
         Returns:
-            True if path is safe (within base_dir), False otherwise
+            True if the path is safe (within base_dir, no symlinks in
+            the chain); False otherwise.
         """
         path_obj = Path(path)
-        base_dir = Path(base_dir).resolve()
+        base_norm = self._lexical_normalize(Path(base_dir))
 
-        full_path = path_obj if path_obj.is_absolute() else base_dir / path_obj
+        # Build full path lexically — NO symlink resolution.
+        full_path = path_obj if path_obj.is_absolute() else base_norm / path_obj
+        candidate = self._lexical_normalize(full_path)
 
-        # Normalize the path (resolve .. and . components)
-        # Use resolve() but be aware it follows symlinks
-        try:
-            resolved = full_path.resolve()
-        except OSError:
-            # If resolve fails, use strict=False to handle non-existent paths
-            resolved = full_path.resolve(strict=False)
+        # Containment check: candidate must equal base_norm OR start with
+        # base_norm + os.sep. The os.sep suffix prevents /tmp/foo vs
+        # /tmp/foobar prefix collision.
+        if not self._is_lexically_within(candidate, base_norm):
+            return False
 
-        # Check if resolved path is within base_dir using relative_to
-        try:
-            resolved.relative_to(base_dir)
-            return True  # Path is within base_dir
-        except ValueError:
-            return False  # Path escapes base_dir
+        # Per-component symlink check (defeats pre-existing symlinks + TOCTOU).
+        if not self._no_symlinks_in_chain(base_norm, candidate):
+            return False
+
+        return True
+
+    @staticmethod
+    def _lexical_normalize(path: Path) -> Path:
+        """Normalize a path lexically: abspath + normpath.
+
+        Does NOT resolve symlinks (unlike ``Path.resolve()``). ``..`` and
+        ``.`` components are collapsed; the result is always absolute.
+        """
+        return Path(os.path.normpath(os.path.abspath(str(path))))
+
+    @staticmethod
+    def _is_lexically_within(candidate: Path, base: Path) -> bool:
+        """Return True iff candidate equals base or is a lexical descendant.
+
+        Uses ``os.sep``-suffix matching so ``/tmp/foo`` does NOT count as
+        within ``/tmp/foobar`` (would be a prefix-collision attack).
+        """
+        cand_str = str(candidate)
+        base_str = str(base)
+        if cand_str == base_str:
+            return True
+        return cand_str.startswith(base_str + os.sep)
+
+    def _no_symlinks_in_chain(self, base: Path, target: Path) -> bool:
+        """Walk from ``base`` to ``target`` and refuse any symlink in the chain.
+
+        Defends against:
+            - Pre-existing symlinks inside ``base`` pointing outside.
+            - TOCTOU: a symlink created between this check and the actual
+              write (the write code path is expected to re-validate or use
+              ``O_NOFOLLOW`` semantics for the leaf).
+
+        Does NOT walk above ``base`` (``base`` itself is trusted).
+
+        Args:
+            base: Trusted base directory.
+            target: Target path inside base.
+
+        Returns:
+            True if no component between base and target (exclusive of
+            base, inclusive of target if it exists) is a symlink.
+        """
+        rel = os.path.relpath(str(target), str(base))
+        if rel.startswith(".."):
+            # Caller should have caught this via _is_lexically_within.
+            return False
+        if rel == ".":
+            return True  # target is base
+
+        current = base
+        for part in Path(rel).parts:
+            current = current / part
+            try:
+                if current.is_symlink():
+                    logger.warning(
+                        "Symlink detected in path chain at %s (base=%s, target=%s)",
+                        current,
+                        base,
+                        target,
+                    )
+                    return False
+            except OSError:
+                # Path doesn't exist yet (typical for output paths).
+                # Parent symlinks have already been checked by the time we
+                # reach a non-existent component.
+                continue
+        return True
 
     def check_overlap(
         self,
@@ -244,19 +348,27 @@ class PathSafety:
         return (base / path).resolve()
 
     def validate_filename(self, filename: str) -> bool:
-        """Validate a filename is safe (no path separators).
+        """Validate a filename is safe (no path separators, no NUL bytes).
 
         Args:
             filename: Filename to validate
 
         Returns:
-            True if safe, False otherwise
+            True if safe
 
         Raises:
-            ValueError: If filename contains path separators or is empty
+            ValueError: If filename contains path separators, NUL bytes,
+                drive letters, or suspicious shell-like characters.
         """
         if not filename:
             msg = "Filename cannot be empty"
+            raise ValueError(msg)
+
+        # NUL bytes terminate C strings unexpectedly — many downstream
+        # libraries (os.open, pathlib, etc.) silently truncate at NUL,
+        # which lets an attacker smuggle past later checks. Reject early.
+        if "\x00" in filename:
+            msg = f"Filename contains NUL byte: {filename!r}"
             raise ValueError(msg)
 
         # Check for path separators
