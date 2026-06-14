@@ -377,3 +377,110 @@ class TestPostInstallHook:
             count = installer._copy_skill_dirs(pack, platform, "testpack")
 
         assert count == 1
+
+
+class TestSkillNameDedup:
+    """Tests for cross-pack deduplication by frontmatter ``name:``."""
+
+    def _make_pack(self, central: Path, pack_name: str, skill_name: str, rel: str = "review") -> Path:
+        pack = central / pack_name
+        skill_dir = pack / rel
+        skill_dir.mkdir(parents=True)
+        (skill_dir / "SKILL.md").write_text(
+            f"---\nname: {skill_name}\ndescription: A test skill for dedup verification\n---\n# {skill_name}\n"
+        )
+        return pack
+
+    def test_dedup_skips_same_name_across_packs(self, tmp_path):
+        """Two packs installing a skill with the same ``name:`` → only first lands."""
+        from vibesop.installer.pack_installer import PackInstaller
+
+        central = tmp_path / "central"
+        platform = tmp_path / "platform"
+        platform.mkdir(parents=True)
+
+        pack_a = self._make_pack(central, "packA", "shared-skill", rel="review")
+        pack_b = self._make_pack(central, "packB", "shared-skill", rel="deeply/nested/review")
+
+        installer = PackInstaller(central_storage=central, platform_paths=[platform])
+
+        count_a = installer.create_skill_symlinks(pack_a, platform, "packA")
+        count_b = installer.create_skill_symlinks(pack_b, platform, "packB")
+
+        assert count_a == 1
+        assert count_b == 0
+        entries = sorted(p.name for p in platform.iterdir())
+        assert entries == ["packA-review"]
+
+    def test_dedupe_disabled_installs_both(self, tmp_path):
+        """``dedupe_by_name=False`` preserves the legacy duplicate behavior."""
+        from vibesop.installer.pack_installer import PackInstaller
+
+        central = tmp_path / "central"
+        platform = tmp_path / "platform"
+        platform.mkdir(parents=True)
+
+        pack_a = self._make_pack(central, "packA", "shared-skill", rel="review")
+        pack_b = self._make_pack(central, "packB", "shared-skill", rel="deeply/nested/review")
+
+        installer = PackInstaller(central_storage=central, platform_paths=[platform])
+
+        count_a = installer.create_skill_symlinks(pack_a, platform, "packA", dedupe_by_name=False)
+        count_b = installer.create_skill_symlinks(pack_b, platform, "packB", dedupe_by_name=False)
+
+        assert count_a == 1
+        assert count_b == 1
+        entries = sorted(p.name for p in platform.iterdir())
+        assert entries == ["packA-review", "packB-deeply-nested-review"]
+
+    def test_different_names_both_installed(self, tmp_path):
+        """Distinct ``name:`` values are never deduped."""
+        from vibesop.installer.pack_installer import PackInstaller
+
+        central = tmp_path / "central"
+        platform = tmp_path / "platform"
+        platform.mkdir(parents=True)
+
+        pack_a = self._make_pack(central, "packA", "alpha", rel="alpha")
+        pack_b = self._make_pack(central, "packB", "beta", rel="beta")
+
+        installer = PackInstaller(central_storage=central, platform_paths=[platform])
+
+        count_a = installer.create_skill_symlinks(pack_a, platform, "packA")
+        count_b = installer.create_skill_symlinks(pack_b, platform, "packB")
+
+        assert count_a == 1
+        assert count_b == 1
+        entries = sorted(p.name for p in platform.iterdir())
+        assert entries == ["packA-alpha", "packB-beta"]
+
+    def test_missing_name_field_falls_back_to_path_dedup(self, tmp_path):
+        """A SKILL.md without ``name:`` is not deduped (falls back to path-based logic)."""
+        from vibesop.installer.pack_installer import PackInstaller
+
+        central = tmp_path / "central"
+        platform = tmp_path / "platform"
+        platform.mkdir(parents=True)
+
+        # Pack A has a name, pack B does not
+        pack_a = central / "packA" / "review"
+        pack_a.mkdir(parents=True)
+        (pack_a / "SKILL.md").write_text(
+            "---\nname: alpha\ndescription: Has a name field\n---\n# alpha\n"
+        )
+
+        pack_b = central / "packB" / "review"
+        pack_b.mkdir(parents=True)
+        (pack_b / "SKILL.md").write_text(
+            "---\ndescription: No name field here at all\n---\n# beta\n"
+        )
+
+        installer = PackInstaller(central_storage=central, platform_paths=[platform])
+        count_a = installer.create_skill_symlinks(pack_a.parent, platform, "packA")
+        count_b = installer.create_skill_symlinks(pack_b.parent, platform, "packB")
+
+        # Both installed because packB has no resolvable name
+        assert count_a == 1
+        assert count_b == 1
+        entries = sorted(p.name for p in platform.iterdir())
+        assert entries == ["packA-review", "packB-review"]

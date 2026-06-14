@@ -443,13 +443,72 @@ class PackInstaller:
         except Exception:
             return False
 
+    @staticmethod
+    def _parse_skill_name(skill_file: Path) -> str | None:
+        """Extract the frontmatter ``name:`` of a SKILL.md.
+
+        Returns ``None`` if the file has no frontmatter, no ``name`` key, or
+        the value is not a non-empty string.
+        """
+        try:
+            content = skill_file.read_text(encoding="utf-8")
+            if not content.startswith("---"):
+                return None
+            parts = content.split("---", 2)
+            if len(parts) < 3:
+                return None
+            import yaml as _yaml
+            fm = _yaml.safe_load(parts[1])
+            if not isinstance(fm, dict):
+                return None
+            name = fm.get("name")
+            if isinstance(name, str) and name.strip():
+                return name.strip()
+            return None
+        except Exception:
+            return None
+
+    def _collect_existing_skill_names(self, platform_dir: Path) -> dict[str, Path]:
+        """Map existing skill ``name:`` → symlink path in ``platform_dir``.
+
+        Walks existing entries (typically symlinks from prior installs) and
+        reads each target's SKILL.md frontmatter. Used to skip cross-pack
+        duplicates that point to the same logical skill.
+        """
+        seen: dict[str, Path] = {}
+        if not platform_dir.exists():
+            return seen
+        for entry in platform_dir.iterdir():
+            try:
+                if entry.is_symlink():
+                    target = entry.resolve()
+                elif entry.is_dir():
+                    target = entry
+                else:
+                    continue
+                skill_md = target / "SKILL.md"
+                if not skill_md.is_file():
+                    continue
+                name = self._parse_skill_name(skill_md)
+                if name and name not in seen:
+                    seen[name] = entry
+            except OSError:
+                continue
+        return seen
+
     def create_skill_symlinks(
         self,
         central_path: Path,
         platform_dir: Path,
         pack_name: str,
+        dedupe_by_name: bool = True,
     ) -> int:
         count = 0
+        existing_names: dict[str, Path] = (
+            self._collect_existing_skill_names(platform_dir)
+            if dedupe_by_name
+            else {}
+        )
         for skill_file in central_path.rglob("SKILL.md"):
             if not self._is_valid_skill(skill_file):
                 logger.warning("Skipping empty/invalid skill: %s", skill_file)
@@ -458,6 +517,17 @@ class PackInstaller:
             rel_path = skill_dir.relative_to(central_path)
             flat_name = self._flatten_skill_name(pack_name, str(rel_path))
             link_path = platform_dir / flat_name
+
+            if dedupe_by_name:
+                skill_name = self._parse_skill_name(skill_file)
+                if skill_name and skill_name in existing_names:
+                    logger.info(
+                        "Skipping duplicate skill %s (name=%r already at %s)",
+                        skill_file,
+                        skill_name,
+                        existing_names[skill_name],
+                    )
+                    continue
 
             if link_path.exists():
                 if link_path.is_symlink():
@@ -471,6 +541,10 @@ class PackInstaller:
                     link_path.unlink()
 
             link_path.symlink_to(skill_dir, target_is_directory=True)
+            if dedupe_by_name:
+                skill_name = self._parse_skill_name(skill_file)
+                if skill_name and skill_name not in existing_names:
+                    existing_names[skill_name] = link_path
             count += 1
 
         return count
@@ -480,8 +554,14 @@ class PackInstaller:
         central_path: Path,
         platform_dir: Path,
         pack_name: str,
+        dedupe_by_name: bool = True,
     ) -> int:
         count = 0
+        existing_names: dict[str, Path] = (
+            self._collect_existing_skill_names(platform_dir)
+            if dedupe_by_name
+            else {}
+        )
         for skill_file in central_path.rglob("SKILL.md"):
             if not self._is_valid_skill(skill_file):
                 logger.warning("Skipping empty/invalid skill: %s", skill_file)
@@ -491,6 +571,17 @@ class PackInstaller:
             flat_name = self._flatten_skill_name(pack_name, str(rel_path))
             dest_path = platform_dir / flat_name
 
+            if dedupe_by_name:
+                skill_name = self._parse_skill_name(skill_file)
+                if skill_name and skill_name in existing_names:
+                    logger.info(
+                        "Skipping duplicate skill %s (name=%r already at %s)",
+                        skill_file,
+                        skill_name,
+                        existing_names[skill_name],
+                    )
+                    continue
+
             if dest_path.exists():
                 if dest_path.is_symlink() or dest_path.is_file():
                     dest_path.unlink()
@@ -498,6 +589,10 @@ class PackInstaller:
                     _safe_rmtree(dest_path)
 
             shutil.copytree(skill_dir, dest_path)
+            if dedupe_by_name:
+                skill_name = self._parse_skill_name(skill_file)
+                if skill_name and skill_name not in existing_names:
+                    existing_names[skill_name] = dest_path
             count += 1
 
         return count
