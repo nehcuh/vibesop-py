@@ -1,6 +1,6 @@
 # VibeSOP SkillOS — 项目目标
 
-> 最后更新: 2026-05-23
+> 最后更新: 2026-06-19
 
 ---
 
@@ -139,6 +139,36 @@ VibeSOP 是一个 **SkillOS（技能操作系统）**，管理 AI 辅助开发�
 - `vibe skill share <id>`：通过 GitHub Issues 分享技能到社区
 - `vibe skill discover [query]`：搜索社区分享的技能
 - 按 👍 反应排序
+
+### F. 自主执行与在线值守（v8.0+）
+
+#### 17. 定时循环任务（vibe loop）
+- `vibe loop create` — 创建定时循环任务
+- 支持 cron 表达式（`*/30 * * * *`, `0 22 * * *` 等）
+- 支持指定目标技能（`--skill`）或查询语句（`--query`）
+- 持久化到 `~/.vibe/loops/{name}/`（`spec.json` + `state.json`）
+- `vibe loop list` / `show` / `delete` / `pause` / `resume`
+- `vibe loop logs` — 查看执行历史
+
+#### 18. 两种执行模式
+- **Hook API（被动）** — 作为 Claude Code 等 Agent 的 skill router
+- **Runtime API（主动）** — 独立运行，自带 LLM，定时执行
+- 共享同一套核心（路由、技能管理、安全、生命周期）
+
+#### 19. Loop Guard 安全系统
+- `max_failures`: 连续失败上限 → DEAD 状态
+- **Dead man's switch**: loop 停止 → 告警
+- **人工审批门**: 关键操作（merge-to-main 等）等待人类确认
+- **通知集成**: Slack / Email / GitHub Issue（v8.1）
+
+#### 20. Loop 适用场景分类
+- **监控类**: CI 状态、依赖漏洞、测试覆盖率、过期分支
+- **收集类**: PR 汇总、issue 分类、反馈聚类
+- **分析类**: 代码质量趋势、性能基准、安全审计
+- **报告类**: 每日日报、周报、项目健康度
+
+**不适用场景**（需人类 + Claude Code）:
+- 代码实现、架构设计、代码审查、复杂重构、安全渗透
 
 ---
 

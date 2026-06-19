@@ -39,6 +39,10 @@ These files remain in the project root for discoverability and tool integration:
 - **[Project Status](PROJECT_STATUS.md)** — Current development status and milestones
 - **[Philosophy](PHILOSOPHY.md)** — Design principles and core philosophy (Discovery > Execution, Matching > Guessing, Memory > Intelligence, Open > Closed)
 - **[Roadmap](ROADMAP.md)** — Future development plans and timeline (v4.x → v6.0)
+- **[v8.0 Roadmap: Autonomous Loop System](ROADMAP.md#v800--autonomous-loop-system)** — 自主循环任务路线图
+- **[Loop Setup Guide](loop-setup-guide.md)** — Phase 1 实测部署指南（cron/systemd/launchd 配置 + 24h 观察指标）
+- **[Use Cases Guide](USE_CASES.md)** — 12 个具体场景的"痛点→方案→命令"手册（日常开发/编排/跨平台/自主监控/生命周期）
+- **[Use Cases Guide (EN)](USE_CASES.en.md)** — 12 concrete scenarios with pain → approach → commands
 
 ### Governance
 

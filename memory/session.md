@@ -1,5 +1,16 @@
 ## Current Session
 
+### S20 (2026-06-19) v8.0-loop-phase1-implementation-and-validation-prep
+- 实现 v8.0 Loop System Phase 1 全部 5 个子阶段：models (BaseModel) / store (路径遍历防护) / scheduler (cron 解析) / executor (`/slash-route` dispatch) / CLI (7 命令含 `tick` 执行桥梁)
+- 累计 ~2200 LOC + 1700 test LOC，147 tests passing，0 regression
+- 每个 Phase 草稿都先做 audit → push back P0/P1 → 修复 → 执行（用户明确认可此模式）
+- 关键发现：Phase 1-1 决策时对 `/slash-route` 语义误读——它不进 EXPLICIT layer，靠 keyword 命中
+- 配置实测：创建 `health-check` loop（`~/.vibe/loops/health-check/spec.json`），用户自行配 cron 跑 24h
+- Claude Code classifier 拦了 crontab/launchd 写入（persistence 防护，合理）——用户需手动 `! (crontab -l ...) | crontab -`
+- 文档：`docs/PHILOSOPHY.md` / `docs/ROADMAP.md` / `GOALS.md` / `docs/INDEX.md` / `docs/loop-setup-guide.md` 全部更新
+- Next: 等 24h 实测结果，按 `docs/loop-setup-guide.md` §6 判定树决定 Phase 2 优先级
+- Recorded: yes — [[project-v8-loop-phase1-validation]] 记录等结果状态
+
 ### S19 (2026-06-09 15:50~) prompt-chain-final-phase-review-branch
 - Added `metadata: dict[str, Any]` field to `ExecutionPlan` in models.py (+ `to_dict()` serialization)
 - Modified `_generate_final_phase()` in prompt_chain_generator.py to conditionally include review-specific content:

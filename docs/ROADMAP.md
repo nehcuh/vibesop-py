@@ -612,6 +612,109 @@ User Query
 | v6.1.0 | 2026-06-05 | ✅ Dynamic Workflow Engine — Phase 2: Adversarial Verification |
 | v6.2.0 | 2026-06-05 | ✅ Dynamic Workflow Engine — Phase 3: Full Execution Dynamic |
 | v7.0.0 | 2026-06-14 | ✅ Hook Path Hardening + Multi-Agent Squad + prompt-chain-validator skill |
+| v8.0.0 | 2026-Q3 | 🚧 Autonomous Loop System — vibe loop CLI + Cron 调度 + Guard 系统 |
+
+---
+
+## v8.0.0 — Autonomous Loop System
+
+> **版本**: 8.0.0
+> **目标**: 将 VibeSOP 从"被动响应式路由工具"升级为"可主动执行的任务平台"
+> **预计交付**: 2026-Q3
+> **状态**: ✅ 设计完成，待实现
+
+### 设计背景
+
+社区 "Claude Loops" 理念（Hanako @hanakoxbt, 67万阅读量）提出核心洞见：
+
+> *"Most people use Claude one prompt at a time. You type, it answers, you read it, you type again. The moment you close the laptop, everything stops."*
+
+"Loop" 的本质：把一次性的人机对话，升级为持续运行的自主任务。
+
+### 设计决策
+
+**vibe loop 不启动 Claude Code。** 它启动 VibeSOP 自身的 `AgentRuntime`（使用已配置的 LLM API 密钥），执行已安装的技能任务。
+
+**执行模式双轨制**:
+
+- **Hook API（被动模式）** — 嵌入到 Claude Code / Cursor / Kimi CLI 中，当它们的"技能大脑"
+- **Runtime API（主动模式）** — 独立运行，通过 `vibe loop` 定时执行技能任务
+
+### Phase 1: CLI 命令 + Cron 调度 + 状态持久化
+
+**新增命令**:
+
+```
+vibe loop create        — 创建定时循环任务
+vibe loop list          — 列出所有 loops
+vibe loop show          — 查看 loop 详情和运行历史
+vibe loop delete        — 删除 loop
+vibe loop pause         — 暂停 loop
+vibe loop resume        — 恢复 loop
+vibe loop logs          — 查看 loop 执行日志
+```
+
+**新增模块**:
+
+```
+src/vibesop/core/loop/
+  ├── models.py         — LoopSpec, LoopState, LoopRunRecord 数据模型
+  ├── store.py          — JSON 文件持久化 (~/.vibe/loops/{name}/)
+  ├── scheduler.py      — Cron 表达式解析引擎（无外部依赖）
+  ├── executor.py       — 单次 loop 执行引擎
+  └── daemon.py         — 后台轮询守护线程
+```
+
+**设计原则**:
+
+- **窄范围、高内聚**: "改善代码库"不是 loop，"找出>50行的函数并建 issue"才是
+- **从小开始**: 先一个 loop，跑熟了再添加
+- **Guard 先行**: loop 有安全边界，关键步骤保留人工审批
+- **人在环外、不在每环**: 95% 的枯燥工作自动化，5% 的风险操作保留人
+
+**适合的 loop 技能类型**:
+
+```
+✅ 检查 CI 失败模式
+✅ 汇总每日 PR 状态
+✅ 扫描依赖漏洞
+✅ 清理过期分支
+✅ 监控测试覆盖率趋势
+❌ 不适合: 重构代码、实现新功能、代码审查（这些需要 Claude Code 交互）
+```
+
+### Phase 2: Guard 系统 + 通知集成（设计中）
+
+- **Dead man's switch**: 连续失败超限 → 自动告警
+- **人工审批门**: merge-to-main 等风险操作等人确认
+- **通知渠道**: Slack / Email / GitHub Issue
+- **状态看板**: `vibe loop dashboard`
+
+### Phase 3: Webhook 触发 + 事件驱动（未来规划）
+
+- GitHub Webhook → trigger loop
+- PR merged → trigger loop
+- CI failed → trigger loop
+
+### 技术架构
+
+```
+User/System
+  │
+  ├── [手动] → Claude Code Hook → VibeSOP (L1/L2 被动模式)
+  │
+  └── [定时] → cron → VibeSOP Loop Daemon
+                    ├── AgentRuntime.handle_query() (L0 主动模式)
+                    ├── 执行技能任务
+                    ├── 记录结果到 LoopStore
+                    └── 失败时触发 Guard 升级
+```
+
+### Metrics
+
+- 目标: **20+ 个 loop 并行运行**
+- 目标: loop 创建 → 执行 < 5 分钟
+- 目标: 0 误触发人工审批（Guard 精确度）
 
 ---
 
@@ -644,4 +747,4 @@ See something missing? Want to accelerate a feature?
 
 ---
 
-*Last updated: 2026-06-14 (v7.0.0 — hook reliability + multi-agent squad + prompt-chain-validator; see [CHANGELOG](../CHANGELOG.md#unreleased) for details)*
+*Last updated: 2026-06-19 (v8.0.0 设计 — Autonomous Loop System 路线图追加; see [CHANGELOG](../CHANGELOG.md#unreleased) for details)*
