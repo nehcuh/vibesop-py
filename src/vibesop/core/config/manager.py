@@ -267,6 +267,30 @@ class PlatformsConfig(BaseModel):
     )
 
 
+class LoopConfig(BaseModel):
+    """Configuration for the autonomous Loop System (v8.0).
+
+    Set ``enabled = true`` to allow ``vibe loop tick`` to actually execute
+    loops. When false, ``tick`` reports eligible loops but skips execution
+    (useful for dry-running a deployment before flipping the switch).
+    """
+
+    enabled: bool = Field(
+        default=False,
+        description="Master switch for loop execution. When false, tick reports only.",
+    )
+    default_tick_seconds: int = Field(
+        default=60,
+        ge=10,
+        description="Recommended interval for external cron to call `vibe loop tick`.",
+    )
+    max_active_loops: int = Field(
+        default=20,
+        ge=1,
+        description="Soft cap on simultaneously active loops. tick warns when exceeded.",
+    )
+
+
 class ConfigManager:
     """Unified configuration manager.
 
@@ -289,6 +313,7 @@ class ConfigManager:
         "semantic": SemanticConfig().model_dump(),
         "prompt_chain": PromptChainConfig().model_dump(),
         "platforms": PlatformsConfig().model_dump(),
+        "loop": LoopConfig().model_dump(),
         "optimization": {
             "enabled": True,
             "prefilter": {
@@ -436,6 +461,9 @@ class ConfigManager:
 
     def get_platforms_config(self) -> PlatformsConfig:
         return PlatformsConfig(**self._get_section("platforms"))
+
+    def get_loop_config(self) -> LoopConfig:
+        return LoopConfig(**self._get_section("loop"))
 
     def get_optimization_config(self) -> OptimizationConfig:
         from vibesop.core.config.optimization_config import OptimizationConfig

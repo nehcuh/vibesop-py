@@ -31,6 +31,7 @@ from vibesop import __version__
 from vibesop.cli.commands import (
     badges_cmd,
     deviation_cmd,
+    loop_cmd,
     market_cmd,
     matcher_cmd,
     plan_cmd,
@@ -151,6 +152,7 @@ app.add_typer(sync_cmd.app, name="sync-registry")
 app.add_typer(workflows_cmd.app, name="workflows")
 app.add_typer(instinct_cmd.app, name="instinct")
 app.add_typer(prompt_chain_cmd.app, name="prompt-chain")
+app.add_typer(loop_cmd.app, name="loop")
 app.command(name="trust")(trust_module.trust)
 
 
