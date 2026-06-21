@@ -15,6 +15,8 @@ import subprocess
 import tempfile
 from pathlib import Path
 
+import pytest
+
 from vibesop.core.routing.unified import UnifiedRouter
 from vibesop.core.skills.external_loader import ExternalSkillLoader
 from vibesop.installer.pack_installer import PackInstaller
@@ -65,6 +67,17 @@ class TestThirdPartySkillPack:
             capture_output=True,
         )
 
+    @pytest.mark.xfail(
+        strict=True,
+        reason=(
+            "Security allowlist (v7.0.5/v7.0.8) blocks file:// and all "
+            "non-https/git@/ssh git sources, so this test's local file:// "
+            "mock-repo method can no longer install through PackInstaller. Needs "
+            "rework to populate skill storage directly and assert discover+route "
+            "(the install_pack path itself is covered by tests/cli/"
+            "test_install_command.py). strict=True flags it when the rework lands."
+        ),
+    )
     def test_install_and_route_third_party_pack(self) -> None:
         """Test that a third-party pack can be installed, discovered, and routed."""
         with tempfile.TemporaryDirectory() as tmpdir:

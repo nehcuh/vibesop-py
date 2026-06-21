@@ -3,6 +3,7 @@
 from typing import Any
 from unittest.mock import MagicMock, patch
 
+import pytest
 from typer.testing import CliRunner
 
 from vibesop.cli.main import app
@@ -12,6 +13,19 @@ runner = CliRunner()
 
 class TestMarketSearch:
     """Tests for vibe market search."""
+
+    @pytest.fixture(autouse=True)
+    def _mock_publisher(self):
+        """Patch SkillPublisher so market search tests don't hit GitHub.
+
+        `search()` calls both GitHubSkillCrawler (mocked per-test) AND
+        SkillPublisher.search_issues (real network). The unmocked publisher
+        call made the suite flaky (e.g. test_search_pagination). Patch it for
+        all search tests.
+        """
+        with patch("vibesop.cli.commands.market_cmd.SkillPublisher") as mock_pub:
+            mock_pub.return_value.search_issues.return_value = []
+            yield
 
     @patch("vibesop.cli.commands.market_cmd.GitHubSkillCrawler")
     def test_search_basic(self, mock_crawler_cls: Any) -> None:

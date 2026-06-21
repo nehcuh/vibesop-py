@@ -24,11 +24,11 @@ class TestIntegrationDetector:
         integrations = detector.detect_all()
 
         # Should detect known integrations
-        assert len(integrations) >= 2  # superpowers and gstack
+        assert len(integrations) >= 1  # superpowers (gstack was removed)
 
         # Check structure
         for info in integrations:
-            assert info.name in ["superpowers", "gstack"]
+            assert info.name in ["superpowers"]
             assert info.description
             assert isinstance(info.status, IntegrationStatus)
             assert isinstance(info.skills, list)
@@ -46,20 +46,6 @@ class TestIntegrationDetector:
         # Check known skills
         assert "superpowers/tdd" in info.skills
         assert "superpowers/review" in info.skills
-
-    def test_detect_gstack(self) -> None:
-        """Test detecting gstack integration."""
-        detector = IntegrationDetector()
-        info = detector.detect_integration("gstack")
-
-        assert info.name == "gstack"
-        assert info.description
-        assert isinstance(info.status, IntegrationStatus)
-        assert len(info.skills) > 0
-
-        # Check known skills
-        assert "gstack/office-hours" in info.skills
-        assert "gstack/qa" in info.skills
 
     def test_is_integration_installed(self) -> None:
         """Test checking if integration is installed."""
@@ -107,7 +93,7 @@ class TestIntegrationManager:
         manager = IntegrationManager()
         integrations = manager.list_integrations()
 
-        assert len(integrations) >= 2
+        assert len(integrations) >= 1
         assert all(isinstance(info, type(integrations[0])) for info in integrations)
 
     def test_get_integration(self) -> None:
@@ -189,7 +175,7 @@ class TestIntegrationManager:
         assert "integrations" in summary
 
         # Check counts make sense
-        assert summary["total_integrations"] >= 2
+        assert summary["total_integrations"] >= 1
         assert summary["installed_integrations"] >= 0
         assert summary["total_skills"] >= 0
 
@@ -245,7 +231,6 @@ class TestIntegrationManager:
 
         assert isinstance(registry, dict)
         assert "superpowers" in registry
-        assert "gstack" in registry
 
         # Check structure
         for _name, data in registry.items():
@@ -281,11 +266,11 @@ class TestIntegrationManagementIntegration:
 
         # List integrations
         integrations = manager.list_integrations()
-        assert len(integrations) >= 2
+        assert len(integrations) >= 1
 
         # Get summary
         summary = manager.get_summary()
-        assert summary["total_integrations"] >= 2
+        assert summary["total_integrations"] >= 1
 
         # Check compatibility
         for info in integrations:
@@ -302,12 +287,10 @@ class TestIntegrationManagementIntegration:
         # Should have skills from both integrations
         assert isinstance(all_skills, list)
 
-        # Check for known skills
+        # Check for known skills (gstack was removed; superpowers remains)
         known_skills = [
             "superpowers/tdd",
             "superpowers/review",
-            "gstack/office-hours",
-            "gstack/qa",
         ]
 
         for _skill in known_skills:
