@@ -8,7 +8,7 @@ malicious SKILL.md files can exfiltrate data or manipulate agent behavior.
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime
 from enum import StrEnum
 from pathlib import Path
@@ -269,6 +269,9 @@ class SkillSecurityAuditor:
         self._strict_mode = strict_mode
         self._scanner = SecurityScanner()
         self._path_safety = PathSafety()
+        # Instance-local custom patterns (add_threat_pattern). Kept off the
+        # shared ClassVar so one instance can't pollute another's pattern set.
+        self._custom_threat_patterns: list[ThreatPattern] = []
 
         # Set up allowed paths
         if allowed_paths is None:
@@ -319,10 +322,16 @@ class SkillSecurityAuditor:
                 reason=f"Failed to read skill file: {e}",
             )
 
-        # 3. Scan with threat patterns
-        for pattern in self.THREAT_PATTERNS:
+        # 3. Scan with threat patterns. Copy each match (dataclasses.replace)
+        # so the trust-downgrade below mutates a per-audit copy, NEVER the
+        # shared ClassVar object. Without this copy, auditing ONE trusted pack
+        # that matches a HIGH pattern would set threat.level=MEDIUM on the
+        # ClassVar instance itself, permanently blinding every subsequent audit
+        # (incl. untrusted ones) for the process lifetime. (Critical, verified
+        # by execution pre-fix.)
+        for pattern in [*self.THREAT_PATTERNS, *self._custom_threat_patterns]:
             if pattern.matches(content):
-                threats.append(pattern)
+                threats.append(replace(pattern))
 
         # 4. Scan with security scanner
         try:
@@ -519,7 +528,9 @@ class SkillSecurityAuditor:
                 continue
 
             files_scanned += 1
-            file_threats = [p for p in type_patterns[suffix] if p.matches(content)]
+            # Copy each match (replace) so consumers of PackAuditResult.threats_by_file
+            # can't mutate the shared ClassVar/instance pattern objects.
+            file_threats = [replace(p) for p in type_patterns[suffix] if p.matches(content)]
             if not file_threats:
                 continue
 
@@ -550,9 +561,12 @@ class SkillSecurityAuditor:
 
     def _pack_file_type_patterns(self) -> dict[str, list[ThreatPattern]]:
         """Build suffix → patterns mapping for pack auditing."""
-        shell_patterns = self.THREAT_PATTERNS + self.SHELL_THREAT_PATTERNS
-        js_patterns = self.THREAT_PATTERNS + self.JS_THREAT_PATTERNS
-        base_patterns = self.THREAT_PATTERNS
+        # Include instance custom patterns so add_threat_pattern applies to pack
+        # audits too (consistent with audit_skill_file), not just skill files.
+        custom = self._custom_threat_patterns
+        shell_patterns = [*self.THREAT_PATTERNS, *self.SHELL_THREAT_PATTERNS, *custom]
+        js_patterns = [*self.THREAT_PATTERNS, *self.JS_THREAT_PATTERNS, *custom]
+        base_patterns = [*self.THREAT_PATTERNS, *custom]
         return {
             ".sh": shell_patterns,
             ".bash": shell_patterns,
@@ -627,7 +641,9 @@ class SkillSecurityAuditor:
         return mapping.get(scan_risk, ThreatLevel.MEDIUM)
 
     def add_threat_pattern(self, pattern: ThreatPattern) -> None:
-        self.THREAT_PATTERNS.append(pattern)
+        # Instance-local, not the shared ClassVar — adding a pattern on one
+        # auditor must not leak into other instances' scans.
+        self._custom_threat_patterns.append(pattern)
 
     def add_allowed_path(self, path: Path | str) -> None:
         self._allowed_paths.append(Path(path).resolve())

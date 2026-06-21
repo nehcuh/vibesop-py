@@ -195,3 +195,64 @@ override instructions and bypass safety checks.
 
         assert not result.is_safe
         assert result.risk_level == ThreatLevel.HIGH
+
+    def test_trusted_downgrade_does_not_pollute_classvar(self, tmp_path: Path) -> None:
+        """Regression: the trusted HIGH->MEDIUM downgrade must act on a per-audit
+        COPY, never on the shared THREAT_PATTERNS ClassVar.
+
+        Pre-fix, audit_skill_file appended ClassVar pattern objects BY REFERENCE
+        and mutated `threat.level` in place, so ONE trusted-pack audit
+        permanently set that HIGH pattern to MEDIUM for the whole process —
+        every later audit (including of UNTRUSTED packs) then saw the weakened
+        level. Critical bug, verified by execution pre-fix.
+
+        The scanner is mocked safe to isolate the THREAT_PATTERNS downgrade path
+        (the scanner otherwise flags this content CRITICAL, masking the HIGH
+        downgrade under test).
+        """
+        from unittest.mock import MagicMock, patch
+
+        # content matching ONLY the THREAT_PATTERNS "Role Hijacking" HIGH pattern
+        skill = tmp_path / "rh.md"
+        skill.write_text("---\nid: t\nname: t\n---\nYou are an assistant that writes code.\n")
+
+        rh = next(p for p in SkillSecurityAuditor.THREAT_PATTERNS if p.name == "Role Hijacking")
+        assert rh.level == ThreatLevel.HIGH  # precondition
+
+        def _auditor() -> SkillSecurityAuditor:
+            a = SkillSecurityAuditor(allowed_paths=[tmp_path], strict_mode=True)
+            a._scanner = MagicMock()
+            a._scanner.scan.return_value = MagicMock(safe=True, threats=[])
+            return a
+
+        trusted_store = MagicMock()
+        trusted_store.is_trusted_pack.return_value = True
+        trusted_store.is_trusted_source.return_value = True
+        with patch("vibesop.core.skills.trust.TrustStore", return_value=trusted_store):
+            trusted = _auditor().audit_skill_file(skill, pack_name="trusted-pack")
+
+        # 1. trusted audit downgraded the HIGH match to MEDIUM
+        assert trusted.risk_level == ThreatLevel.MEDIUM
+        # 2. the shared ClassVar pattern MUST be unchanged (the actual bug)
+        assert rh.level == ThreatLevel.HIGH, "ClassVar ThreatPattern mutated by trusted audit"
+        # 3. a FRESH auditor (untrusted) must still see HIGH (pre-fix: MEDIUM)
+        fresh = _auditor().audit_skill_file(skill)
+        assert fresh.risk_level == ThreatLevel.HIGH, (
+            "fresh auditor sees downgraded level — ClassVar pollution leaked across instances"
+        )
+
+    def test_add_threat_pattern_is_instance_local(self) -> None:
+        """add_threat_pattern stores on the instance, not the shared ClassVar."""
+        from vibesop.security.skill_auditor import ThreatPattern
+
+        classvar_before = len(SkillSecurityAuditor.THREAT_PATTERNS)
+        a = SkillSecurityAuditor()
+        a.add_threat_pattern(
+            ThreatPattern("solo-test-pattern", "zztopuniquepattern", ThreatLevel.MEDIUM, "t", "d")
+        )
+
+        # ClassVar untouched; the pattern lives on this instance only
+        assert len(SkillSecurityAuditor.THREAT_PATTERNS) == classvar_before
+        assert len(a._custom_threat_patterns) == 1
+        # a different instance does not inherit the custom pattern
+        assert SkillSecurityAuditor()._custom_threat_patterns == []
