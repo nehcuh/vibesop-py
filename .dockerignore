@@ -1,0 +1,25 @@
+# Keep build context lean for the validation base image + per-feature builds.
+# (Per-feature validation MOUNTS the repo at runtime, so source is never COPYed
+#  for validation — but these excludes still speed up any COPY-based build.)
+
+.git
+.gitignore
+.venv
+venv
+env
+node_modules
+**/__pycache__
+**/*.pyc
+**/*.pyo
+.pytest_cache
+.ruff_cache
+.mypy_cache
+.basedpyright_cache
+.coverage
+.coverage.*
+htmlcov
+**/*.egg-info
+build
+dist
+.DS_Store
+memory
