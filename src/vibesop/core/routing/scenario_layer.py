@@ -67,7 +67,15 @@ def load_scenario_config(registry_path: str | Path = "core/registry.yaml") -> di
             "keywords": cr.get("scenario_keywords", {}),
         }
     except Exception as e:
-        logger.debug(f"Failed to load scenario config from {registry_path}: {e}")
+        # Same anti-pattern as ConfigManager.load_registry: swallowing parse
+        # errors at debug silently disables scenario routing. Log at ERROR so a
+        # broken registry.yaml is visible. Return contract preserved (empty).
+        logger.error(
+            "Failed to parse scenario config from %s: %s — scenario routing will "
+            "be disabled. Fix the YAML (see parse error above).",
+            registry_path,
+            e,
+        )
         return {"strategies": [], "keywords": {}}
 
 

@@ -321,3 +321,53 @@ def test_config_source_reload_noop_without_path() -> None:
     )
     source.reload()
     assert source.data == {"a": 1}
+
+
+# ---------------------------------------------------------------------------
+# 8. load_registry — must never silently degrade to zero skills
+# ---------------------------------------------------------------------------
+
+
+def test_load_registry_returns_skills_when_valid(tmp_path: Path) -> None:
+    """A well-formed registry.yaml yields a non-empty skill list."""
+    core_dir = tmp_path / "core"
+    core_dir.mkdir()
+    (core_dir / "registry.yaml").write_text(
+        "skills:\n  - id: superpowers/brainstorm\n    name: Brainstorm\n"
+    )
+    manager = ConfigManager(project_root=str(tmp_path))
+    registry = manager.load_registry(force_reload=True)
+    assert len(registry.get("skills", [])) == 1
+    assert registry["skills"][0]["id"] == "superpowers/brainstorm"
+
+
+def test_load_registry_logs_error_on_parse_failure(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A malformed registry must be LOUD (ERROR), not silently empty.
+
+    Regression for the silent-lobotomy bug: load_registry used to swallow parse
+    errors at DEBUG level and return an empty dict, so every consumer (routing,
+    manifest builder, inspect) silently saw ZERO skills with no signal.
+    """
+    core_dir = tmp_path / "core"
+    core_dir.mkdir()
+    # guaranteed parse error: unclosed flow sequence
+    (core_dir / "registry.yaml").write_text("skills: [unclosed bracket\n")
+    manager = ConfigManager(project_root=str(tmp_path))
+    with caplog.at_level("ERROR", logger="vibesop.core.config.manager"):
+        registry = manager.load_registry(force_reload=True)
+    # documented empty contract is preserved (does not raise) ...
+    assert registry == {"skills": [], "version": "1.0.0"}
+    # ... but it MUST log at ERROR so the operator sees the misconfiguration.
+    assert any(
+        "Failed to parse skill registry" in rec.message and rec.levelname == "ERROR"
+        for rec in caplog.records
+    ), f"expected ERROR log for malformed registry; got: {[r.message for r in caplog.records]}"
+
+
+def test_load_registry_returns_empty_when_missing(tmp_path: Path) -> None:
+    """No registry.yaml -> empty contract (this path is fine to stay quiet)."""
+    manager = ConfigManager(project_root=str(tmp_path))
+    registry = manager.load_registry(force_reload=True)
+    assert registry == {"skills": [], "version": "1.0.0"}
