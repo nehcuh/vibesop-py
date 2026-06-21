@@ -264,7 +264,7 @@ conflict_resolution:
       alternatives:
 #         - skill: gstack/office-hours
 #           source: gstack
-          trigger: "产品头脑风暴"
+#           trigger: "产品头脑风暴"
         - skill: superpowers/brainstorm
           source: superpowers
           trigger: "设计细化"
@@ -282,10 +282,10 @@ conflict_resolution:
     - scenario: structured_planning
       primary: omx/ralplan
       primary_source: omx
-      alternatives:
+      alternatives: []
 #         - skill: gstack/plan-eng-review
 #           source: gstack
-          trigger: "架构审查"
+#           trigger: "架构审查"
 
     # Parallel execution: omx/team is primary
     - scenario: parallel_execution
@@ -303,13 +303,13 @@ conflict_resolution:
     - scenario: qa_cycling
       primary: omx/ultraqa
       primary_source: omx
-      alternatives:
+      alternatives: []
 #         - skill: gstack/qa
 #           source: gstack
-          trigger: "浏览器测试"
+#           trigger: "浏览器测试"
 #         - skill: gstack/qa-only
 #           source: gstack
-          trigger: "仅报告"
+#           trigger: "仅报告"
 
 # Skill detection and routing hints
 routing_hints:

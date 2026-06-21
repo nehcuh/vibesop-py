@@ -581,7 +581,18 @@ class ConfigManager:
             self._cache[cache_key] = data
             return data
         except Exception as e:
-            logger.debug(f"Failed to load registry from {registry_path}: {e}")
+            # A malformed registry silently lobotomizes routing: every consumer
+            # (skills/manager, manifest builder, inspect, scenario layer) would
+            # see ZERO skills with no signal. Log loudly (ERROR, not debug) so
+            # misconfiguration is visible. We keep the documented return contract
+            # (empty dict, not raise) — callers degrade to "no skills", but the
+            # operator now sees exactly why.
+            logger.error(
+                "Failed to parse skill registry %s: %s — routing/manifest/inspect "
+                "will see ZERO skills. Fix the YAML (see parse error above).",
+                registry_path,
+                e,
+            )
             return {"skills": [], "version": "1.0.0"}
 
     def get_all_skills(self, force_reload: bool = False) -> list[dict[str, Any]]:
