@@ -42,14 +42,14 @@ class TestProjectAnalyzer:
         assert profile.confidence == 0.0
 
     def test_detect_python(self, tmp_path: Path) -> None:
-        (tmp_path / "pyproject.toml").write_text("[project]\nname = \"test\"")
+        (tmp_path / "pyproject.toml").write_text('[project]\nname = "test"')
         analyzer = ProjectAnalyzer(tmp_path)
         profile = analyzer.analyze()
         assert profile.project_type == "python"
         assert profile.confidence > 0.0
 
     def test_detect_rust(self, tmp_path: Path) -> None:
-        (tmp_path / "Cargo.toml").write_text("[package]\nname = \"test\"")
+        (tmp_path / "Cargo.toml").write_text('[package]\nname = "test"')
         analyzer = ProjectAnalyzer(tmp_path)
         profile = analyzer.analyze()
         assert profile.project_type == "rust"
@@ -125,7 +125,7 @@ class TestProjectAnalyzer:
         assert "docker" in profile.tech_stack
 
     def test_confidence_with_multiple_markers(self, tmp_path: Path) -> None:
-        (tmp_path / "pyproject.toml").write_text("[project]\nname = \"test\"")
+        (tmp_path / "pyproject.toml").write_text('[project]\nname = "test"')
         (tmp_path / "requirements.txt").write_text("django\n")
         (tmp_path / "setup.py").write_text("from setuptools import setup")
         analyzer = ProjectAnalyzer(tmp_path)
@@ -133,21 +133,21 @@ class TestProjectAnalyzer:
         assert profile.confidence > 0.6
 
     def test_cache(self, tmp_path: Path) -> None:
-        (tmp_path / "pyproject.toml").write_text("[project]\nname = \"test\"")
+        (tmp_path / "pyproject.toml").write_text('[project]\nname = "test"')
         analyzer = ProjectAnalyzer(tmp_path)
         profile1 = analyzer.analyze()
         profile2 = analyzer.analyze()
         assert profile1 is profile2  # Same cached object
 
     def test_skill_relevance_boost_python(self, tmp_path: Path) -> None:
-        (tmp_path / "pyproject.toml").write_text("[project]\nname = \"test\"")
+        (tmp_path / "pyproject.toml").write_text('[project]\nname = "test"')
         analyzer = ProjectAnalyzer(tmp_path)
         boost = analyzer.get_skill_relevance_boost(["python", "debug", "code"])
         assert boost > 0.0
         assert boost <= 0.1
 
     def test_skill_relevance_boost_no_match(self, tmp_path: Path) -> None:
-        (tmp_path / "pyproject.toml").write_text("[project]\nname = \"test\"")
+        (tmp_path / "pyproject.toml").write_text('[project]\nname = "test"')
         analyzer = ProjectAnalyzer(tmp_path)
         boost = analyzer.get_skill_relevance_boost(["kubernetes", "deploy"])
         assert boost == 0.0

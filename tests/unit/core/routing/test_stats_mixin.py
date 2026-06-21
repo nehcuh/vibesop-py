@@ -4,10 +4,7 @@ from __future__ import annotations
 
 import threading
 from pathlib import Path
-from typing import Any
 from unittest.mock import MagicMock, patch
-
-import pytest
 
 from vibesop.core.models import RoutingLayer
 from vibesop.core.routing.stats_mixin import RouterStatsMixin
@@ -205,9 +202,7 @@ class TestPreferenceTracking:
 
         host.record_selection("gstack/review", "review code", was_helpful=True)
 
-        mock_learner.record_selection.assert_called_once_with(
-            "gstack/review", "review code", True
-        )
+        mock_learner.record_selection.assert_called_once_with("gstack/review", "review code", True)
 
     def test_get_preference_stats(self) -> None:
         """get_preference_stats delegates to learner."""
@@ -224,9 +219,7 @@ class TestPreferenceTracking:
         """get_top_skills delegates with limit and min_selections."""
         host = _MockHost()
         mock_learner = MagicMock()
-        mock_learner.get_top_skills.return_value = [
-            {"skill_id": "gstack/review", "count": 10}
-        ]
+        mock_learner.get_top_skills.return_value = [{"skill_id": "gstack/review", "count": 10}]
         host._preference_booster.get_learner.return_value = mock_learner
 
         result = host.get_top_skills(limit=3, min_selections=5)

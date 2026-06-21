@@ -132,9 +132,7 @@ class TestOrchestrationErrorHandling:
         config = RoutingConfig(enable_ai_triage=False)
         router = UnifiedRouter(project_root=tmp_path, config=config)
 
-        with patch.object(
-            router, "_get_task_decomposer"
-        ) as mock_get_decomposer:
+        with patch.object(router, "_get_task_decomposer") as mock_get_decomposer:
             mock_decomposer = MagicMock()
             mock_decomposer.decompose.side_effect = RuntimeError("Decomposition failed")
             mock_get_decomposer.return_value = mock_decomposer
@@ -148,9 +146,7 @@ class TestOrchestrationErrorHandling:
         config = RoutingConfig(enable_ai_triage=False)
         router = UnifiedRouter(project_root=tmp_path, config=config)
 
-        with patch.object(
-            router, "_get_plan_builder"
-        ) as mock_get_builder:
+        with patch.object(router, "_get_plan_builder") as mock_get_builder:
             mock_builder = MagicMock()
             mock_builder.build_plan.side_effect = RuntimeError("Plan building failed")
             mock_get_builder.return_value = mock_builder
@@ -164,9 +160,7 @@ class TestOrchestrationErrorHandling:
         config = RoutingConfig(enable_ai_triage=False)
         router = UnifiedRouter(project_root=tmp_path, config=config)
 
-        with patch.object(
-            router, "_get_task_decomposer"
-        ) as mock_get_decomposer:
+        with patch.object(router, "_get_task_decomposer") as mock_get_decomposer:
             mock_decomposer = MagicMock()
             mock_decomposer.decompose.return_value = []
             mock_get_decomposer.return_value = mock_decomposer
@@ -180,13 +174,9 @@ class TestOrchestrationErrorHandling:
         config = RoutingConfig(enable_ai_triage=False)
         router = UnifiedRouter(project_root=tmp_path, config=config)
 
-        with patch.object(
-            router, "_get_task_decomposer"
-        ) as mock_get_decomposer:
+        with patch.object(router, "_get_task_decomposer") as mock_get_decomposer:
             mock_decomposer = MagicMock()
-            mock_decomposer.decompose.return_value = [
-                {"intent": "analysis", "skill": "test"}
-            ]
+            mock_decomposer.decompose.return_value = [{"intent": "analysis", "skill": "test"}]
             mock_get_decomposer.return_value = mock_decomposer
 
             result = router.orchestrate("分析架构然后写测试")
@@ -201,11 +191,10 @@ class TestOrchestrationErrorHandling:
         mock_plan = MagicMock()
         mock_plan.steps = []
 
-        with patch.object(
-            router, "_get_task_decomposer"
-        ) as mock_get_decomposer, patch.object(
-            router, "_get_plan_builder"
-        ) as mock_get_builder:
+        with (
+            patch.object(router, "_get_task_decomposer") as mock_get_decomposer,
+            patch.object(router, "_get_plan_builder") as mock_get_builder,
+        ):
             mock_decomposer = MagicMock()
             mock_decomposer.decompose.return_value = [
                 {"intent": "analysis", "skill": "test"},

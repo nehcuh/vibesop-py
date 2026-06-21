@@ -53,9 +53,7 @@ class RouterOrchestrationMixin:
     def _to_orchestration_result(self, result: RoutingResult, query: str) -> OrchestrationResult:
         """Convert a single RoutingResult to OrchestrationResult."""
         mode = (
-            OrchestrationMode.SINGLE
-            if result.primary is not None
-            else OrchestrationMode.FALLBACK
+            OrchestrationMode.SINGLE if result.primary is not None else OrchestrationMode.FALLBACK
         )
         return OrchestrationResult(
             mode=mode,
@@ -121,7 +119,5 @@ class RouterOrchestrationMixin:
     def _get_plan_tracker(self) -> PlanTracker:
         host = cast("_OrchestrationHost", self)
         if host._plan_tracker is None:
-            host._plan_tracker = PlanTracker(
-                storage_dir=host.project_root / ".vibe"
-            )
+            host._plan_tracker = PlanTracker(storage_dir=host.project_root / ".vibe")
         return host._plan_tracker

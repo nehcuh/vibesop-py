@@ -216,7 +216,9 @@ class TaskDecomposer:
             if match:
                 intent_text = self._clean_intent(match.group(1))
                 query_text = match.group(2).strip()
-                tasks.append(SubTask(intent=intent_text, query=query_text, original_intent=query_text))
+                tasks.append(
+                    SubTask(intent=intent_text, query=query_text, original_intent=query_text)
+                )
         return tasks
 
     def _fallback_decomposition(self, query: str) -> list[SubTask]:
@@ -250,13 +252,15 @@ class TaskDecomposer:
 
             contextualized = self._contextualize_query(query, cleaned, intent)
             task_type = self._infer_task_type(cleaned, query)
-            sub_tasks.append(SubTask(
-                intent=intent,
-                query=contextualized,
-                source="rule_fallback",
-                original_intent=cleaned,
-                task_type=task_type,
-            ))
+            sub_tasks.append(
+                SubTask(
+                    intent=intent,
+                    query=contextualized,
+                    source="rule_fallback",
+                    original_intent=cleaned,
+                    task_type=task_type,
+                )
+            )
 
         # If we only got one subtask but the original query has multiple intents,
         # try to split by intent boundaries on the original query directly
@@ -294,7 +298,15 @@ class TaskDecomposer:
         if not sub_tasks:
             intent = self._detect_intent(query)
             task_type = self._infer_task_type(query, query)
-            return [SubTask(intent=intent, query=query, source="rule_fallback", original_intent=query, task_type=task_type)]
+            return [
+                SubTask(
+                    intent=intent,
+                    query=query,
+                    source="rule_fallback",
+                    original_intent=query,
+                    task_type=task_type,
+                )
+            ]
 
         if len(sub_tasks) == 1:
             return sub_tasks
@@ -450,8 +462,7 @@ class TaskDecomposer:
         }
 
         scores: dict[str, int] = {
-            tt: sum(1 for m in markers if m in q)
-            for tt, markers in type_markers.items()
+            tt: sum(1 for m in markers if m in q) for tt, markers in type_markers.items()
         }
 
         best = max(scores, key=lambda k: scores[k])

@@ -61,6 +61,7 @@ class TestClassifierAgentLLMClassification:
             def call(self, prompt, **kwargs):
                 class Response:
                     content = '{"pattern": "fan_out", "confidence": 0.9, "reasoning": "Multiple review angles", "task_type": "review", "complexity": "medium"}'
+
                 return Response()
 
         agent = ClassifierAgent(llm_client=FakeLLM())
@@ -76,6 +77,7 @@ class TestClassifierAgentLLMClassification:
             def call(self, prompt, **kwargs):
                 class Response:
                     content = '{"pattern": "invalid_pattern", "confidence": 0.5}'
+
                 return Response()
 
         agent = ClassifierAgent(llm_client=FakeLLM())
@@ -88,6 +90,7 @@ class TestClassifierAgentLLMClassification:
             def call(self, prompt, **kwargs):
                 class Response:
                     content = "not valid json"
+
                 return Response()
 
         agent = ClassifierAgent(llm_client=FakeLLM())
@@ -100,6 +103,7 @@ class TestClassifierAgentLLMClassification:
             def call(self, prompt, **kwargs):
                 class Response:
                     content = '{"pattern": "fan_out", "confidence": 0.8, "reasoning": "LLM agrees"}'
+
                 return Response()
 
         agent = ClassifierAgent(llm_client=FakeLLM())
@@ -115,6 +119,7 @@ class TestClassifierAgentLLMClassification:
             def call(self, prompt, **kwargs):
                 class Response:
                     content = '{"pattern": "adversarial", "confidence": 0.96, "reasoning": "LLM strongly disagrees"}'
+
                 return Response()
 
         agent = ClassifierAgent(llm_client=FakeLLM())
@@ -163,18 +168,14 @@ class TestClassifierReviewDetection:
 
     def test_chinese_multi_dimensional_review(self):
         agent = ClassifierAgent()
-        result = agent.classify(
-            "对当前项目从哲学理念、架构设计、代码实现进行深入评审"
-        )
+        result = agent.classify("对当前项目从哲学理念、架构设计、代码实现进行深入评审")
         assert result.pattern == WorkflowPattern.PROMPT_CHAIN
         assert result.confidence >= 0.6
         assert "multi_dimensional" in result.metadata.get("review_type", "")
 
     def test_chinese_five_dimension_review(self):
         agent = ClassifierAgent()
-        result = agent.classify(
-            "对项目进行全面评审：哲学、架构、实现、文档、安全"
-        )
+        result = agent.classify("对项目进行全面评审：哲学、架构、实现、文档、安全")
         assert result.pattern == WorkflowPattern.PROMPT_CHAIN
         assert result.confidence >= 0.6
         assert len(result.metadata.get("review_dimensions", [])) >= 4
@@ -194,9 +195,7 @@ class TestClassifierReviewDetection:
 
     def test_single_file_fix_stays_sequential(self):
         agent = ClassifierAgent()
-        result = agent.classify(
-            "帮我把这个函数的返回值类型从 any 改成具体类型"
-        )
+        result = agent.classify("帮我把这个函数的返回值类型从 any 改成具体类型")
         assert result.pattern == WorkflowPattern.SEQUENTIAL
 
     def test_single_security_fix_not_prompt_chain(self):
@@ -206,9 +205,7 @@ class TestClassifierReviewDetection:
 
     def test_review_dimensions_in_metadata(self):
         agent = ClassifierAgent()
-        result = agent.classify(
-            "从架构和代码实现两个维度评审项目"
-        )
+        result = agent.classify("从架构和代码实现两个维度评审项目")
         if result.pattern == WorkflowPattern.PROMPT_CHAIN:
             dims = result.metadata.get("review_dimensions", [])
             assert "architecture" in dims

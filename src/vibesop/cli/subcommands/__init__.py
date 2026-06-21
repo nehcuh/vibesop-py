@@ -59,6 +59,9 @@ from vibesop.cli.commands import (
     skills_commands as skills_mod,
 )
 from vibesop.cli.commands import (
+    spec_cmd as spec_mod,
+)
+from vibesop.cli.commands import (
     switch as switch_mod,
 )
 from vibesop.cli.commands import (
@@ -69,9 +72,6 @@ from vibesop.cli.commands import (
 )
 from vibesop.cli.commands import (
     verify as verify_mod,
-)
-from vibesop.cli.commands import (
-    spec_cmd as spec_mod,
 )
 
 config_app = typer.Typer(help="Configuration management")
@@ -84,7 +84,9 @@ def register(app: typer.Typer) -> None:
     """Register all subcommands with the main app."""
     app.add_typer(config_app, name="config")
     app.add_typer(skills_app, name="skills")
-    app.add_typer(skill_commands_mod.app, name="skill")  # singular alias (GOALS.md / docs convention)
+    app.add_typer(
+        skill_commands_mod.app, name="skill"
+    )  # singular alias (GOALS.md / docs convention)
     app.add_typer(session_app, name="session")
     app.add_typer(feedback_app, name="feedback")
 

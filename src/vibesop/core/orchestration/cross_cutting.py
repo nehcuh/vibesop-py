@@ -222,7 +222,7 @@ class CrossCuttingDiscovery:
                 intent = step.get("intent", "")
                 steps_yaml += f"\n  - skill: {skill}\n    intent: {intent}\n    order: {i}"
 
-        safe_desc = description.replace('\\', '\\\\').replace('"', '\\"')
+        safe_desc = description.replace("\\", "\\\\").replace('"', '\\"')
         content = f"""---
 id: {wf_id}
 name: {name}
@@ -234,7 +234,7 @@ depends_on:
 {deps_yaml}{tags_yaml}{steps_yaml}
 ---
 
-# {name.replace('-', ' ').title()}
+# {name.replace("-", " ").title()}
 
 > Cross-cutting workflow — orchestrates multiple skills together.
 

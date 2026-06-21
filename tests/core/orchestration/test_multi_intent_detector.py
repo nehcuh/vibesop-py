@@ -60,12 +60,8 @@ class TestMultiIntentDetector:
     def test_chinese_conjunctions(self) -> None:
         detector = MultiIntentDetector(min_query_length=10)
         result = RoutingResult()
-        assert detector.should_decompose(
-            "请帮我分析项目架构然后提出具体的优化建议", result
-        )
-        assert detector.should_decompose(
-            "同时评审代码质量和安全性，找出潜在漏洞", result
-        )
+        assert detector.should_decompose("请帮我分析项目架构然后提出具体的优化建议", result)
+        assert detector.should_decompose("同时评审代码质量和安全性，找出潜在漏洞", result)
 
     def test_short_query_with_conjunction_single_domain_rejected(self) -> None:
         detector = MultiIntentDetector(min_query_length=10)

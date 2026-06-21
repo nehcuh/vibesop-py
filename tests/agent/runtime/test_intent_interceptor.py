@@ -180,14 +180,21 @@ class TestIntentInterceptor:
             # (query, expected_roles, expected_mode)
             ("帮我调试一下这个错误", [], None),  # too short → no routing
             ("设计微服务架构", ["architect"], None),  # SINGLE_AGENT or ORCHESTRATE
-            ("设计架构并写代码实现", ["architect", "implementer"],
-             InterceptionMode.MULTI_AGENT_SQUAD),
-            ("请帮我设计微服务架构、然后用Python实现核心模块、最后做安全审查",
-             ["architect", "implementer", "red_team"],
-             InterceptionMode.MULTI_AGENT_SQUAD),
-            ("design architecture, implement code, security review",
-             ["architect", "implementer", "red_team"],
-             InterceptionMode.MULTI_AGENT_SQUAD),
+            (
+                "设计架构并写代码实现",
+                ["architect", "implementer"],
+                InterceptionMode.MULTI_AGENT_SQUAD,
+            ),
+            (
+                "请帮我设计微服务架构、然后用Python实现核心模块、最后做安全审查",
+                ["architect", "implementer", "red_team"],
+                InterceptionMode.MULTI_AGENT_SQUAD,
+            ),
+            (
+                "design architecture, implement code, security review",
+                ["architect", "implementer", "red_team"],
+                InterceptionMode.MULTI_AGENT_SQUAD,
+            ),
             ("帮我对比微服务和单体架构", ["debater", "architect"], None),
         ]
         for query, expected_roles, expected_mode in cases:
@@ -220,15 +227,11 @@ class TestIntentInterceptor:
         assert "security_audit" in analysis.per_agent_skills["red_team"]
 
         # implementer + reviewer → review_gate
-        analysis = interceptor._build_quick_squad_analysis(
-            "y", ["implementer", "reviewer"]
-        )
+        analysis = interceptor._build_quick_squad_analysis("y", ["implementer", "reviewer"])
         assert analysis.collaboration_protocol == "review_gate"
 
         # architect + implementer → sequential
-        analysis = interceptor._build_quick_squad_analysis(
-            "z", ["architect", "implementer"]
-        )
+        analysis = interceptor._build_quick_squad_analysis("z", ["architect", "implementer"])
         assert analysis.collaboration_protocol == "sequential"
 
     def test_single_role_does_not_trigger_squad(self) -> None:

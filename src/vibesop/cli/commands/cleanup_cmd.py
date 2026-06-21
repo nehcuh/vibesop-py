@@ -70,8 +70,13 @@ def _render_cleanup_table(
         label = action_styles.get(s.action, (s.action.upper(),))[0]
         days = f"{s.days_since_last_use}d" if s.days_since_last_use else "?"
         table.add_row(
-            str(idx), s.skill_id, label, s.grade,
-            f"{s.quality_score:.0%}", days, s.reason[:60],
+            str(idx),
+            s.skill_id,
+            label,
+            s.grade,
+            f"{s.quality_score:.0%}",
+            days,
+            s.reason[:60],
         )
 
     for s in deprecate:
@@ -79,8 +84,13 @@ def _render_cleanup_table(
         label = action_styles.get(s.action, (s.action.upper(),))[0]
         days = f"{s.days_since_last_use}d" if s.days_since_last_use else "?"
         table.add_row(
-            str(idx), s.skill_id, label, s.grade,
-            f"{s.quality_score:.0%}", days, s.reason[:60],
+            str(idx),
+            s.skill_id,
+            label,
+            s.grade,
+            f"{s.quality_score:.0%}",
+            days,
+            s.reason[:60],
         )
 
     for s in warn:
@@ -88,8 +98,13 @@ def _render_cleanup_table(
         label = action_styles.get(s.action, (s.action.upper(),))[0]
         days = f"{s.days_since_last_use}d" if s.days_since_last_use else "?"
         table.add_row(
-            str(idx), s.skill_id, label, s.grade,
-            f"{s.quality_score:.0%}", days, s.reason[:60],
+            str(idx),
+            s.skill_id,
+            label,
+            s.grade,
+            f"{s.quality_score:.0%}",
+            days,
+            s.reason[:60],
         )
 
     return table
@@ -131,12 +146,14 @@ def cleanup(
 
     if not all_needing_attention:
         console.print()
-        console.print(Panel(
-            "[green]Your skill ecosystem is healthy![/green]\n"
-            "No low-quality or stale skills detected.",
-            title="Skills Cleanup",
-            border_style="green",
-        ))
+        console.print(
+            Panel(
+                "[green]Your skill ecosystem is healthy![/green]\n"
+                "No low-quality or stale skills detected.",
+                title="Skills Cleanup",
+                border_style="green",
+            )
+        )
         console.print()
         return
 
@@ -183,7 +200,7 @@ def cleanup(
         choices.append(
             questionary.Choice(
                 title=f"[red]ARCHIVE[/red]  {s.skill_id}  "
-                      f"grade={s.grade}  quality={s.quality_score:.0%}  {days}",
+                f"grade={s.grade}  quality={s.quality_score:.0%}  {days}",
                 value=("archive", s.skill_id),
             )
         )
@@ -192,7 +209,7 @@ def cleanup(
         choices.append(
             questionary.Choice(
                 title=f"[red]DEPRECATE[/red]  {s.skill_id}  "
-                      f"grade={s.grade}  quality={s.quality_score:.0%}  {days}",
+                f"grade={s.grade}  quality={s.quality_score:.0%}  {days}",
                 value=("deprecate", s.skill_id),
             )
         )
@@ -200,7 +217,9 @@ def cleanup(
     if not choices:
         console.print("[dim]Only warnings found — no automated actions available.[/dim]")
         if warn:
-            console.print("[dim]Use [cyan]vibe skill stale[/cyan] to review warnings in detail.[/dim]")
+            console.print(
+                "[dim]Use [cyan]vibe skill stale[/cyan] to review warnings in detail.[/dim]"
+            )
         console.print()
         return
 

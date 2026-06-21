@@ -194,9 +194,7 @@ class TestDeterministicDecomposition:
     def test_llm_called_with_zero_temperature(self) -> None:
         """Temperature must be 0.0 to eliminate sampling variance across runs."""
         mock_llm = Mock()
-        mock_llm.call.return_value = Mock(
-            content='{"tasks": [{"intent": "x", "query": "do x"}]}'
-        )
+        mock_llm.call.return_value = Mock(content='{"tasks": [{"intent": "x", "query": "do x"}]}')
 
         decomposer = TaskDecomposer(llm_client=mock_llm)
         decomposer.decompose("do x")
@@ -274,7 +272,10 @@ class TestCleanIntentMarkdown:
 
     def test_clean_intent_strips_bold_markers(self) -> None:
         assert TaskDecomposer._clean_intent("**Input") == "Input"
-        assert TaskDecomposer._clean_intent("**Translation/Understanding**") == "Translation/Understanding"
+        assert (
+            TaskDecomposer._clean_intent("**Translation/Understanding**")
+            == "Translation/Understanding"
+        )
         assert TaskDecomposer._clean_intent("*italic*") == "italic"
 
     def test_clean_intent_strips_mixed_markers(self) -> None:

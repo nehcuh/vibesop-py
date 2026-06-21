@@ -51,11 +51,11 @@ from typing import Any
 from jinja2 import Environment
 
 __all__ = [
+    "make_shell_safe_env",
     "pyquote",
     "safe_text",
     "shellquote",
     "shellvar",
-    "make_shell_safe_env",
 ]
 
 

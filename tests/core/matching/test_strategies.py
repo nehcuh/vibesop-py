@@ -9,8 +9,6 @@ import pytest
 from vibesop.core.matching.base import (
     MatchResult,
     MatcherType,
-    RoutingContext,
-    SimilarityMetric,
 )
 from vibesop.core.matching.lazy_matcher import LazyEmbeddingMatcher
 from vibesop.core.matching.strategies import (
@@ -38,9 +36,7 @@ def _make_candidate(skill_id="test-skill", **overrides):
 
 
 def _make_candidates(*ids: str):
-    return [
-        _make_candidate(sid) for sid in ids
-    ]
+    return [_make_candidate(sid) for sid in ids]
 
 
 class TestMatcherConfig:
@@ -92,8 +88,13 @@ class TestKeywordMatcher:
     def test_match_below_threshold_filtered(self):
         cfg = MatcherConfig(min_confidence=0.9)
         m = KeywordMatcher(cfg)
-        c = _make_candidate("test-skill", name="Unrelated", description="Something else",
-                           intent="Other things", keywords=["other"])
+        c = _make_candidate(
+            "test-skill",
+            name="Unrelated",
+            description="Something else",
+            intent="Other things",
+            keywords=["other"],
+        )
         results = m.match("debug error crash", [c])
         # Very unlikely to match with high confidence
         assert all(r.confidence < 0.9 or r.skill_id != "test-skill" for r in results)
@@ -232,9 +233,7 @@ class TestEmbeddingMatcher:
 
     def test_match_returns_empty_when_no_numpy(self):
         m = EmbeddingMatcher()
-        with patch(
-            "vibesop.core.matching.strategies.np", None
-        ):
+        with patch("vibesop.core.matching.strategies.np", None):
             results = m.match("test", _make_candidates("a"))
             assert results == []
 
@@ -377,12 +376,14 @@ class TestLazyEmbeddingMatcher:
         cfg = MatcherConfig()
         lazy = LazyEmbeddingMatcher(cfg)
         mock_real = MagicMock()
-        mock_real.match.return_value = [MatchResult(
-            skill_id="test",
-            confidence=0.9,
-            score_breakdown={"test": 0.9},
-            matcher_type=MatcherType.EMBEDDING,
-        )]
+        mock_real.match.return_value = [
+            MatchResult(
+                skill_id="test",
+                confidence=0.9,
+                score_breakdown={"test": 0.9},
+                matcher_type=MatcherType.EMBEDDING,
+            )
+        ]
         lazy._real = mock_real
         candidates = _make_candidates("test")
         result = lazy.match("query", candidates)

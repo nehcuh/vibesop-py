@@ -304,7 +304,7 @@ class TestSkillStorageUncovered:
 
     def test_sync_project_skills_no_source(self, tmp_path: Path):
         storage = SkillStorage(dry_run=True)
-        import os
+
         project = tmp_path / "empty-project"
         project.mkdir()
         installed, linked, msgs = storage.sync_project_skills(project, "claude-code")

@@ -11,8 +11,8 @@ Covers:
 
 from __future__ import annotations
 
-import json
 import tempfile
+from datetime import UTC
 from pathlib import Path
 
 import pytest
@@ -180,7 +180,7 @@ class TestStatePersistence:
     def test_state_round_trip_preserves_recent_runs(self):
         """Critical: Phase 1-1 had a half-finished _dict_to_state that
         dropped recent_runs. BaseModel round-trip must preserve them."""
-        from datetime import datetime, timezone
+        from datetime import datetime
 
         from vibesop.core.loop.models import LoopRunRecord
 
@@ -189,7 +189,7 @@ class TestStatePersistence:
             spec = _spec("with-history")
             store.save_spec(spec)
             state = LoopState(spec=spec)
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
             state.record_run(
                 LoopRunRecord(
                     loop_name="with-history",

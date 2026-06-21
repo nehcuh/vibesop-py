@@ -41,12 +41,8 @@ class RepoAnalysis:
         return ids
 
 
-_GITHUB_TREE_RE = re.compile(
-    r"^https://github\.com/([^/]+)/([^/]+)/tree/([^/]+)/(.+)$"
-)
-_GITHUB_BLOB_RE = re.compile(
-    r"^https://github\.com/([^/]+)/([^/]+)/blob/([^/]+)/(.+)$"
-)
+_GITHUB_TREE_RE = re.compile(r"^https://github\.com/([^/]+)/([^/]+)/tree/([^/]+)/(.+)$")
+_GITHUB_BLOB_RE = re.compile(r"^https://github\.com/([^/]+)/([^/]+)/blob/([^/]+)/(.+)$")
 
 
 def parse_github_url(url: str) -> tuple[str, str | None]:
@@ -67,7 +63,6 @@ def parse_github_url(url: str) -> tuple[str, str | None]:
 
 
 class RepoAnalyzer:
-
     @staticmethod
     def _parse_github_url(url: str) -> tuple[str, str | None]:
         """Decompose a GitHub web URL into (clone_url, subdirectory)."""
@@ -89,9 +84,7 @@ class RepoAnalyzer:
             if subdirectory:
                 search_root = tmpdir_path / subdirectory
                 if not search_root.is_dir():
-                    result.errors.append(
-                        f"Subdirectory '{subdirectory}' not found in repository"
-                    )
+                    result.errors.append(f"Subdirectory '{subdirectory}' not found in repository")
                     return result
 
             for readme_name in ("README.md", "README.rst", "README.txt", "README"):
@@ -111,12 +104,17 @@ class RepoAnalyzer:
             if plugin_json.exists():
                 try:
                     import json
+
                     plugin_data = json.loads(plugin_json.read_text())
                     plugin_skills = plugin_data.get("skills", [])
                     for skill_entry in plugin_skills:
                         if isinstance(skill_entry, str):
                             skill_dir = tmpdir_path / skill_entry
-                            skill_md = skill_dir / "SKILL.md" if skill_dir.is_dir() else tmpdir_path / f"{skill_entry}.md"
+                            skill_md = (
+                                skill_dir / "SKILL.md"
+                                if skill_dir.is_dir()
+                                else tmpdir_path / f"{skill_entry}.md"
+                            )
                         elif isinstance(skill_entry, dict):
                             skill_path = skill_entry.get("path", "")
                             skill_dir = tmpdir_path / skill_path
@@ -137,8 +135,11 @@ class RepoAnalyzer:
                 )
 
             for script_name in (
-                "setup.py", "pyproject.toml", "package.json",
-                "Makefile", "requirements.txt",
+                "setup.py",
+                "pyproject.toml",
+                "package.json",
+                "Makefile",
+                "requirements.txt",
             ):
                 if (tmpdir_path / script_name).exists():
                     result.setup_scripts.append(script_name)
@@ -210,7 +211,10 @@ class RepoAnalyzer:
                     url,
                     str(dest),
                 ],
-                check=True, capture_output=True, text=True, timeout=60,
+                check=True,
+                capture_output=True,
+                text=True,
+                timeout=60,
             )
             return True
         except subprocess.CalledProcessError as e:
@@ -234,13 +238,16 @@ class RepoAnalyzer:
             return ""
 
         match = re.search(
-            r"#+\s*[Ii]nstallation.*?(?:\n#+\s*|\Z)", content, re.DOTALL,
+            r"#+\s*[Ii]nstallation.*?(?:\n#+\s*|\Z)",
+            content,
+            re.DOTALL,
         )
         if match:
             return "\n".join(match.group(0).split("\n")[:10]).strip()
 
         match = re.search(
-            r"`pip install[^`]+`|`make[^`]+`|`npm install[^`]+`", content,
+            r"`pip install[^`]+`|`make[^`]+`|`npm install[^`]+`",
+            content,
         )
         if match:
             return f"Setup command detected: {match.group(0)}"

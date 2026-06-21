@@ -15,7 +15,9 @@ class TestInspectCommand:
     @patch("vibesop.cli.commands.inspect.VibeSOPInstaller")
     @patch("vibesop.cli.commands.inspect.ConfigManager")
     @patch("vibesop.cli.commands.inspect.InitSupport")
-    def test_inspect_full(self, _mock_init_cls, mock_config_cls, mock_installer_cls, monkeypatch, tmp_path) -> None:
+    def test_inspect_full(
+        self, _mock_init_cls, mock_config_cls, mock_installer_cls, monkeypatch, tmp_path
+    ) -> None:
         """Test full inspect output."""
         monkeypatch.chdir(tmp_path)
         mock_init = MagicMock()
@@ -49,7 +51,9 @@ class TestInspectCommand:
 
     @patch("vibesop.cli.commands.inspect.ConfigManager")
     @patch("vibesop.cli.commands.inspect.InitSupport")
-    def test_inspect_skills_only(self, _mock_init_cls, mock_config_cls, monkeypatch, tmp_path) -> None:
+    def test_inspect_skills_only(
+        self, _mock_init_cls, mock_config_cls, monkeypatch, tmp_path
+    ) -> None:
         """Test inspect --skills."""
         monkeypatch.chdir(tmp_path)
         mock_config = MagicMock()
@@ -64,7 +68,9 @@ class TestInspectCommand:
 
     @patch("vibesop.cli.commands.inspect.ConfigManager")
     @patch("vibesop.cli.commands.inspect.InitSupport")
-    def test_inspect_config_only(self, _mock_init_cls, mock_config_cls, monkeypatch, tmp_path) -> None:
+    def test_inspect_config_only(
+        self, _mock_init_cls, mock_config_cls, monkeypatch, tmp_path
+    ) -> None:
         """Test inspect --config."""
         monkeypatch.chdir(tmp_path)
         mock_config = MagicMock()
@@ -98,7 +104,9 @@ class TestInspectCommand:
 
     @patch("vibesop.cli.commands.inspect.ConfigManager")
     @patch("vibesop.cli.commands.inspect.InitSupport")
-    def test_inspect_config_error(self, _mock_init_cls, mock_config_cls, monkeypatch, tmp_path) -> None:
+    def test_inspect_config_error(
+        self, _mock_init_cls, mock_config_cls, monkeypatch, tmp_path
+    ) -> None:
         """Test inspect when config loading fails."""
         monkeypatch.chdir(tmp_path)
         mock_config = MagicMock()
@@ -111,7 +119,9 @@ class TestInspectCommand:
 
     @patch("vibesop.cli.commands.inspect.ConfigManager")
     @patch("vibesop.cli.commands.inspect.InitSupport")
-    def test_inspect_skills_error(self, _mock_init_cls, mock_config_cls, monkeypatch, tmp_path) -> None:
+    def test_inspect_skills_error(
+        self, _mock_init_cls, mock_config_cls, monkeypatch, tmp_path
+    ) -> None:
         """Test inspect when skills loading fails."""
         monkeypatch.chdir(tmp_path)
         mock_config = MagicMock()
@@ -125,7 +135,9 @@ class TestInspectCommand:
     @patch("vibesop.cli.commands.inspect.VibeSOPInstaller")
     @patch("vibesop.cli.commands.inspect.ConfigManager")
     @patch("vibesop.cli.commands.inspect.InitSupport")
-    def test_inspect_installer_error(self, _mock_init_cls, mock_config_cls, mock_installer_cls, monkeypatch, tmp_path) -> None:
+    def test_inspect_installer_error(
+        self, _mock_init_cls, mock_config_cls, mock_installer_cls, monkeypatch, tmp_path
+    ) -> None:
         """Test inspect when installer check fails."""
         monkeypatch.chdir(tmp_path)
         mock_init = MagicMock()

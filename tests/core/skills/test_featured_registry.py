@@ -4,7 +4,6 @@ import json
 from pathlib import Path
 
 from vibesop.core.skills.featured_registry import (
-    DEFAULT_FEATURED_SKILLS,
     FeaturedRegistry,
     FeaturedSkill,
 )
@@ -102,12 +101,16 @@ class TestFeaturedRegistry:
     def test_load_from_local_file(self, tmp_path: Path):
         local_file = tmp_path / ".vibe" / "featured-skills.json"
         local_file.parent.mkdir(parents=True, exist_ok=True)
-        local_file.write_text(json.dumps({
-            "version": "1.0",
-            "skills": [
-                {"skill_id": "local/skill", "name": "Local", "description": "From file"}
-            ],
-        }))
+        local_file.write_text(
+            json.dumps(
+                {
+                    "version": "1.0",
+                    "skills": [
+                        {"skill_id": "local/skill", "name": "Local", "description": "From file"}
+                    ],
+                }
+            )
+        )
 
         reg = FeaturedRegistry(project_root=tmp_path)
         assert any(s.skill_id == "local/skill" for s in reg.skills)
@@ -123,18 +126,16 @@ class TestFeaturedRegistry:
     def test_merge_remote(self):
         reg = FeaturedRegistry()
         before = reg.count()
-        added = reg.merge_remote([
-            {"skill_id": "remote/new-skill", "name": "New", "description": "Remote skill"}
-        ])
+        added = reg.merge_remote(
+            [{"skill_id": "remote/new-skill", "name": "New", "description": "Remote skill"}]
+        )
         assert added == 1
         assert reg.count() == before + 1
 
     def test_merge_no_duplicates(self):
         reg = FeaturedRegistry()
         before = reg.count()
-        added = reg.merge_remote([
-            {"skill_id": "superpowers/tdd", "name": "Duplicate"}
-        ])
+        added = reg.merge_remote([{"skill_id": "superpowers/tdd", "name": "Duplicate"}])
         assert added == 0
         assert reg.count() == before
 

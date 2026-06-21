@@ -5,9 +5,6 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-import pytest
-
-from vibesop.spec.models import SkillSpec
 from vibesop.core.skills.external_loader import (
     ExternalSkillLoader,
     ExternalSkillMetadata,
@@ -15,11 +12,15 @@ from vibesop.core.skills.external_loader import (
     discover_external_skills,
     is_skill_safe,
 )
+from vibesop.spec.models import SkillSpec
 
 
 def _make_meta(skill_id="test/skill"):
     return SkillSpec(
-        id=skill_id, name="Test", description="Desc", intent="Do things",
+        id=skill_id,
+        name="Test",
+        description="Desc",
+        intent="Do things",
     )
 
 
@@ -378,6 +379,7 @@ description: A trusted skill
 # Content
 """)
         from vibesop.constants import TRUSTED_PACKS
+
         pack_name = list(TRUSTED_PACKS.keys())[0] if TRUSTED_PACKS else "gstack"
 
         result = loader._parse_and_audit(

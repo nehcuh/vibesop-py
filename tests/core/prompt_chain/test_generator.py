@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
 from vibesop.core.prompt_chain import (
     DiagnosisReport,
     PhasePrompt,
@@ -64,9 +62,7 @@ class TestDiagnose:
         (tmp_path / "src").mkdir()
         (tmp_path / "src" / "a.py").write_text("# a")
         gen = PromptChainGenerator(project_root=tmp_path)
-        report = gen.diagnose(
-            files=["src/a.py", "src/*.py"], feature_context="x"
-        )
+        report = gen.diagnose(files=["src/a.py", "src/*.py"], feature_context="x")
         # Same file matched twice via direct + glob → only once in output
         assert report.files_read == ["src/a.py"]
 

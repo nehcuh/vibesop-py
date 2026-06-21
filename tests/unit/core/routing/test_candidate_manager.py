@@ -54,7 +54,9 @@ class TestFilterRoutable:
     def test_deprecated_is_not_routable(self, tmp_path: Path) -> None:
         """DEPRECATED lifecycle is NOT routable (filtered out)."""
         mgr = CandidateManager(tmp_path)
-        candidates = [{"id": "dep-skill", "enabled": True, "lifecycle": "deprecated", "scope": "global"}]
+        candidates = [
+            {"id": "dep-skill", "enabled": True, "lifecycle": "deprecated", "scope": "global"}
+        ]
         filtered, _warnings = mgr.filter_routable(candidates)
         # DEPRECATED is not routable — filtered out entirely
         assert len(filtered) == 0
@@ -66,7 +68,15 @@ class TestFilterRoutable:
         skill_file = project / "skill.md"
         skill_file.write_text("")
         mgr = CandidateManager(project)
-        candidates = [{"id": "proj", "enabled": True, "lifecycle": "active", "scope": "project", "source_file": str(skill_file)}]
+        candidates = [
+            {
+                "id": "proj",
+                "enabled": True,
+                "lifecycle": "active",
+                "scope": "project",
+                "source_file": str(skill_file),
+            }
+        ]
         filtered, _ = mgr.filter_routable(candidates)
         assert len(filtered) == 1
 
@@ -78,7 +88,15 @@ class TestFilterRoutable:
         external_file = tmp_path / "external" / "skill.md"
         external_file.parent.mkdir()
         external_file.write_text("")
-        candidates = [{"id": "ext", "enabled": True, "lifecycle": "active", "scope": "project", "source_file": str(external_file)}]
+        candidates = [
+            {
+                "id": "ext",
+                "enabled": True,
+                "lifecycle": "active",
+                "scope": "project",
+                "source_file": str(external_file),
+            }
+        ]
         filtered, _ = mgr.filter_routable(candidates)
         assert len(filtered) == 0
 

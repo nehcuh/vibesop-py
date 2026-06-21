@@ -71,7 +71,9 @@ class TestSkillsInstall:
         mock_storage.install_from_remote.return_value = (True, "Installed from URL")
         mock_storage_cls.return_value = mock_storage
 
-        result = runner.invoke(app, ["skills", "install", "my-skill", "--url", "https://example.com/skill.tar.gz"])
+        result = runner.invoke(
+            app, ["skills", "install", "my-skill", "--url", "https://example.com/skill.tar.gz"]
+        )
         assert result.exit_code == 0
         assert "Installed from URL" in result.stdout
 
@@ -236,7 +238,15 @@ class TestSkillsAvailable:
     def test_available_verbose(self, mock_mgr_cls) -> None:
         mock_mgr = MagicMock()
         mock_mgr.list_skills.return_value = [
-            {"id": "debug", "name": "Debug", "description": "Debug skill", "namespace": "builtin", "type": "prompt", "tags": ["dev"], "source": "builtin"},
+            {
+                "id": "debug",
+                "name": "Debug",
+                "description": "Debug skill",
+                "namespace": "builtin",
+                "type": "prompt",
+                "tags": ["dev"],
+                "source": "builtin",
+            },
         ]
         mock_mgr.get_stats.return_value = {"namespaces": ["builtin"]}
         mock_mgr_cls.return_value = mock_mgr

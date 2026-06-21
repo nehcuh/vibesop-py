@@ -50,9 +50,23 @@ def _make_chain_plan(
     pattern: WorkflowPattern = WorkflowPattern.PROMPT_CHAIN,
 ) -> ExecutionPlan:
     if steps is None:
-        s1 = _make_step(1, "core/router", "路由层改造", source_files=["src/vibesop/core/routing/unified.py"])
-        s2 = _make_step(2, "core/engine", "引擎重写", dependencies=[s1.step_id], source_files=["src/vibesop/core/engine.py"])
-        s3 = _make_step(3, "core/adapter", "适配器扩展", dependencies=[s2.step_id], source_files=["src/vibesop/adapters/base.py"])
+        s1 = _make_step(
+            1, "core/router", "路由层改造", source_files=["src/vibesop/core/routing/unified.py"]
+        )
+        s2 = _make_step(
+            2,
+            "core/engine",
+            "引擎重写",
+            dependencies=[s1.step_id],
+            source_files=["src/vibesop/core/engine.py"],
+        )
+        s3 = _make_step(
+            3,
+            "core/adapter",
+            "适配器扩展",
+            dependencies=[s2.step_id],
+            source_files=["src/vibesop/adapters/base.py"],
+        )
         steps = [s1, s2, s3]
     return ExecutionPlan(
         plan_id="test-plan-001",
@@ -290,11 +304,9 @@ class TestWriteFiles:
             # (no escape via traversal or prefix collision).
             output_resolved = output.resolve()
             for path in written:
-                assert str(path.resolve()).startswith(
-                    str(output_resolved) + "/"
-                ) or str(path.resolve()) == str(output_resolved), (
-                    f"Path escaped output dir: {path}"
-                )
+                assert str(path.resolve()).startswith(str(output_resolved) + "/") or str(
+                    path.resolve()
+                ) == str(output_resolved), f"Path escaped output dir: {path}"
 
             # No file should have been written outside the output dir.
             # Walk tmpdir and assert no `etc/passwd` style files exist.
@@ -377,7 +389,9 @@ class TestSquadPromptGenerator:
         return AgentSquad(
             squad_id="squad-test",
             roles=[
-                AgentRole(role_id="architect", name="架构师", required_skills=["architecture-analysis"]),
+                AgentRole(
+                    role_id="architect", name="架构师", required_skills=["architecture-analysis"]
+                ),
                 AgentRole(role_id="implementer", name="实现者", required_skills=["python-coding"]),
             ],
             steps=[

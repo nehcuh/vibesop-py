@@ -106,14 +106,18 @@ class TestPublish:
         import httpx
 
         mock_client = mocker.patch("httpx.Client")
-        mock_client.return_value.__enter__.return_value.post.side_effect = httpx.RequestError("Network error")
+        mock_client.return_value.__enter__.return_value.post.side_effect = httpx.RequestError(
+            "Network error"
+        )
 
         result = publisher.publish(repo_name="owner/repo", description="Test")
 
         assert "error" in result
         assert "Network error" in result["error"]
 
-    def test_publish_auto_detect_description(self, mocker: MockerFixture, publisher: SkillPublisher) -> None:
+    def test_publish_auto_detect_description(
+        self, mocker: MockerFixture, publisher: SkillPublisher
+    ) -> None:
         # Mock _detect_from_skill_md
         mocker.patch.object(
             publisher,
@@ -174,7 +178,9 @@ class TestSearchIssues:
         results = publisher.search_issues()
         assert results == []
 
-    def test_search_skips_invalid_titles(self, mocker: MockerFixture, publisher: SkillPublisher) -> None:
+    def test_search_skips_invalid_titles(
+        self, mocker: MockerFixture, publisher: SkillPublisher
+    ) -> None:
         mock_response = mocker.Mock()
         mock_response.status_code = 200
         mock_response.json.return_value = {

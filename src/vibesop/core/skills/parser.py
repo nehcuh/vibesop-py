@@ -79,7 +79,7 @@ def build_spec(
     data: dict[str, Any],
     skill_id: str,
     skill_file: Path,
-) -> "SkillSpec":
+) -> SkillSpec:
     """Build a SkillSpec from parsed frontmatter (spec v3 canonical path).
 
     Captures all 29 fields including the 12 previously discarded by build_metadata().
@@ -93,7 +93,15 @@ def build_spec(
     Returns:
         SkillSpec with all available metadata.
     """
-    from vibesop.spec.models import SkillSpec, SkillType as SpecSkillType, SkillLifecycle as SpecSkillLifecycle
+    from vibesop.spec.models import (
+        SkillLifecycle as SpecSkillLifecycle,
+    )
+    from vibesop.spec.models import (
+        SkillSpec,
+    )
+    from vibesop.spec.models import (
+        SkillType as SpecSkillType,
+    )
 
     description = data.get("description", "")
 
@@ -125,7 +133,9 @@ def build_spec(
     user_invocable = bool(data.get("user_invocable", False))
     allowed_tools = _parse_list_field(data.get("allowed_tools") or data.get("allowed-tools"))
     mode = data.get("mode", "")
-    routing_patterns = _parse_list_field(data.get("routing_patterns") or data.get("routing-patterns"))
+    routing_patterns = _parse_list_field(
+        data.get("routing_patterns") or data.get("routing-patterns")
+    )
     priority = int(data.get("priority", 50))
     category = str(data.get("category", "development"))
     dependencies = _parse_list_field(data.get("dependencies"))

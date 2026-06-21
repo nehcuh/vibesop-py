@@ -1,6 +1,5 @@
 """Tests for workflow models."""
 
-
 from vibesop.core.skills.workflow import StepType, WorkflowStep
 
 

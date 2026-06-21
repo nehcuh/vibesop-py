@@ -12,8 +12,6 @@ Tests for:
 
 from __future__ import annotations
 
-import pytest
-
 from vibesop.core.models import (
     DynamicNodeStatus,
     ExecutionMode,
@@ -25,11 +23,9 @@ from vibesop.core.models import (
     TrustLevel,
     WorkflowPattern,
 )
-from vibesop.core.orchestration.reorchestrator import Reorchestrator, ReorchestrationAnalysis
+from vibesop.core.orchestration.reorchestrator import ReorchestrationAnalysis, Reorchestrator
 from vibesop.core.orchestration.tournament import (
-    ComparisonResult,
     TournamentConfig,
-    TournamentResult,
     TournamentRunner,
 )
 from vibesop.core.orchestration.workflow_engine import (
@@ -37,7 +33,6 @@ from vibesop.core.orchestration.workflow_engine import (
     WorkflowEngine,
     WorkflowEngineConfig,
 )
-
 
 # --- Model Tests ---
 
@@ -114,10 +109,15 @@ def test_apply_loop_until_dry_marks_iterations() -> None:
 
     class MockRouter:
         def _single_skill_route(self, query, context=None, candidates=None):
-            from vibesop.core.models import RoutingResult, SkillRoute, RoutingLayer
+            from vibesop.core.models import RoutingLayer, RoutingResult, SkillRoute
+
             return RoutingResult(
                 primary=SkillRoute(skill_id="test", confidence=0.9, layer=RoutingLayer.SCENARIO),
-                alternatives=[], routing_path=[], layer_details=[], query=query, duration_ms=10,
+                alternatives=[],
+                routing_path=[],
+                layer_details=[],
+                query=query,
+                duration_ms=10,
             )
 
     from vibesop.core.orchestration.task_decomposer import SubTask
@@ -137,10 +137,15 @@ def test_apply_tournament_creates_contestants() -> None:
 
     class MockRouter:
         def _single_skill_route(self, query, context=None, candidates=None):
-            from vibesop.core.models import RoutingResult, SkillRoute, RoutingLayer
+            from vibesop.core.models import RoutingLayer, RoutingResult, SkillRoute
+
             return RoutingResult(
                 primary=SkillRoute(skill_id="test", confidence=0.9, layer=RoutingLayer.SCENARIO),
-                alternatives=[], routing_path=[], layer_details=[], query=query, duration_ms=10,
+                alternatives=[],
+                routing_path=[],
+                layer_details=[],
+                query=query,
+                duration_ms=10,
             )
 
     from vibesop.core.orchestration.task_decomposer import SubTask
@@ -206,8 +211,11 @@ def test_reorchestrator_terminate_early_when_goals_met() -> None:
         original_query="Test",
         steps=[
             ExecutionStep(
-                step_id="s1", step_number=1, skill_id="test",
-                intent="Task 1", status=StepStatus.COMPLETED,
+                step_id="s1",
+                step_number=1,
+                skill_id="test",
+                intent="Task 1",
+                status=StepStatus.COMPLETED,
                 output_as="step_1_result",
             ),
         ],
@@ -232,12 +240,20 @@ def test_reorchestrator_continue_by_default() -> None:
         original_query="Test",
         steps=[
             ExecutionStep(
-                step_id="s1", step_number=1, skill_id="test",
-                intent="Task 1", status=StepStatus.COMPLETED, output_as="step_1_result",
+                step_id="s1",
+                step_number=1,
+                skill_id="test",
+                intent="Task 1",
+                status=StepStatus.COMPLETED,
+                output_as="step_1_result",
             ),
             ExecutionStep(
-                step_id="s2", step_number=2, skill_id="test",
-                intent="Task 2", status=StepStatus.PENDING, output_as="step_2_result",
+                step_id="s2",
+                step_number=2,
+                skill_id="test",
+                intent="Task 2",
+                status=StepStatus.PENDING,
+                output_as="step_2_result",
             ),
         ],
         detected_intents=["Task 1", "Task 2"],
@@ -313,13 +329,17 @@ def test_workflow_engine_is_dynamic() -> None:
     engine = WorkflowEngine()
 
     dynamic_plan = ExecutionPlan(
-        plan_id="test", original_query="Test", steps=[],
+        plan_id="test",
+        original_query="Test",
+        steps=[],
         workflow_pattern=WorkflowPattern.LOOP_UNTIL_DRY,
     )
     assert WorkflowEngine.is_dynamic(dynamic_plan) is True
 
     static_plan = ExecutionPlan(
-        plan_id="test", original_query="Test", steps=[],
+        plan_id="test",
+        original_query="Test",
+        steps=[],
         workflow_pattern=WorkflowPattern.SEQUENTIAL,
     )
     assert WorkflowEngine.is_dynamic(static_plan) is False
@@ -338,8 +358,20 @@ def test_workflow_engine_loop_until_dry() -> None:
         plan_id="test",
         original_query="Test",
         steps=[
-            ExecutionStep(step_id="s1", step_number=1, skill_id="test", intent="Task 1", output_as="step_1_result"),
-            ExecutionStep(step_id="s2", step_number=2, skill_id="test", intent="Task 2", output_as="step_2_result"),
+            ExecutionStep(
+                step_id="s1",
+                step_number=1,
+                skill_id="test",
+                intent="Task 1",
+                output_as="step_1_result",
+            ),
+            ExecutionStep(
+                step_id="s2",
+                step_number=2,
+                skill_id="test",
+                intent="Task 2",
+                output_as="step_2_result",
+            ),
         ],
         workflow_pattern=WorkflowPattern.LOOP_UNTIL_DRY,
         detected_intents=["Task 1", "Task 2"],
@@ -367,18 +399,27 @@ def test_workflow_engine_tournament() -> None:
         original_query="Test",
         steps=[
             ExecutionStep(
-                step_id="c1", step_number=1, skill_id="test",
-                intent="Approach A (contestant 1)", output_as="c1_result",
+                step_id="c1",
+                step_number=1,
+                skill_id="test",
+                intent="Approach A (contestant 1)",
+                output_as="c1_result",
                 contestant_index=0,
             ),
             ExecutionStep(
-                step_id="c2", step_number=2, skill_id="test",
-                intent="Approach B (contestant 2)", output_as="c2_result",
+                step_id="c2",
+                step_number=2,
+                skill_id="test",
+                intent="Approach B (contestant 2)",
+                output_as="c2_result",
                 contestant_index=1,
             ),
             ExecutionStep(
-                step_id="judge", step_number=3, skill_id="test",
-                intent="Judge", output_as="judge_result",
+                step_id="judge",
+                step_number=3,
+                skill_id="test",
+                intent="Judge",
+                output_as="judge_result",
                 is_verification_step=True,
             ),
         ],

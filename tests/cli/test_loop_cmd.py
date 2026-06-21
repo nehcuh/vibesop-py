@@ -16,7 +16,7 @@ real ``~/.vibe/loops/``.
 
 from __future__ import annotations
 
-import tempfile
+from datetime import UTC
 from pathlib import Path
 from unittest.mock import patch
 
@@ -26,7 +26,6 @@ from typer.testing import CliRunner
 from vibesop.cli.commands.loop_cmd import app
 from vibesop.core.loop.models import LoopRunRecord, LoopSpec, LoopStatus
 from vibesop.core.loop.store import LoopStore
-
 
 runner = CliRunner()
 
@@ -283,9 +282,7 @@ class TestTick:
         assert result.exit_code == 0
         assert "没有 loop" in result.stdout
 
-    def test_tick_dry_run_lists_triggered_without_executing(
-        self, isolated_store
-    ):
+    def test_tick_dry_run_lists_triggered_without_executing(self, isolated_store):
         """A ``* * * * *`` loop will match the current minute; dry-run
         must report it without calling execute_loop_tick."""
         runner.invoke(
@@ -302,9 +299,7 @@ class TestTick:
         # Critical: dry-run must NOT execute
         mock_exec.assert_not_called()
 
-    def test_tick_dispatches_to_executor_for_triggered_loop(
-        self, isolated_store
-    ):
+    def test_tick_dispatches_to_executor_for_triggered_loop(self, isolated_store):
         """Non-dry-run tick must call execute_loop_tick for triggered loops."""
         runner.invoke(
             app,
@@ -312,12 +307,12 @@ class TestTick:
         )
 
         # Build a fake success record that execute_loop_tick would return
-        from datetime import datetime, timezone
+        from datetime import datetime
 
         fake_record = LoopRunRecord(
             loop_name="every-min",
-            started_at=datetime.now(timezone.utc),
-            finished_at=datetime.now(timezone.utc),
+            started_at=datetime.now(UTC),
+            finished_at=datetime.now(UTC),
             success=True,
             matched_skill="x",
             output_summary="routed",
@@ -361,9 +356,7 @@ class TestTick:
         # (We can't assert "paused-one not in stdout" too strictly because
         # the loop name might appear elsewhere; assert via mock instead.)
         if mock_exec.call_args_list:
-            called_names = {
-                call.args[0].name for call in mock_exec.call_args_list
-            }
+            called_names = {call.args[0].name for call in mock_exec.call_args_list}
             assert "paused-one" not in called_names
 
     def test_tick_named_filter(self, isolated_store):
@@ -394,11 +387,11 @@ class TestTick:
             ["create", "doomed", "--skill", "x", "--schedule", "* * * * *"],
         )
 
-        from datetime import datetime, timezone
+        from datetime import datetime
 
         fake_fail = LoopRunRecord(
             loop_name="doomed",
-            started_at=datetime.now(timezone.utc),
+            started_at=datetime.now(UTC),
             success=False,
             error="LLM timeout",
             duration_s=0.01,

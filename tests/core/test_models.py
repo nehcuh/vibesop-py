@@ -81,7 +81,9 @@ class TestRejectedCandidate:
     """Test RejectedCandidate model."""
 
     def test_creation(self):
-        rc = RejectedCandidate(skill_id="s", confidence=0.3, layer=RoutingLayer.KEYWORD, reason="below threshold")
+        rc = RejectedCandidate(
+            skill_id="s", confidence=0.3, layer=RoutingLayer.KEYWORD, reason="below threshold"
+        )
         assert rc.skill_id == "s"
         assert rc.confidence == pytest.approx(0.3)
         assert rc.reason == "below threshold"

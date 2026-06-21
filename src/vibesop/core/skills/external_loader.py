@@ -111,7 +111,8 @@ class ExternalSkillLoader:
             from vibesop.security import SkillSecurityAuditor
 
             self._auditor = SkillSecurityAuditor(
-                strict_mode=self._strict_mode, project_root=self._project_root,
+                strict_mode=self._strict_mode,
+                project_root=self._project_root,
             )
             for path in self.external_paths:
                 if path.exists():
@@ -337,6 +338,7 @@ class ExternalSkillLoader:
 
             # Fallback: match directory names against trusted repo names from URLs
             from urllib.parse import urlparse
+
             for trusted_name, trusted_url in self.TRUSTED_PACKS.items():
                 repo_name = urlparse(trusted_url).path.rstrip("/").split("/")[-1]
                 if repo_name and repo_name in rel_path.parts:

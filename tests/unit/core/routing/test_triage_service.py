@@ -2,10 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
 from unittest.mock import MagicMock, patch
-
-import pytest
 
 from vibesop.core.models import RoutingLayer
 from vibesop.core.routing.triage_service import TriageService
@@ -369,7 +366,7 @@ class TestParseAiTriageResponse:
         """JSON inside markdown fences is extracted and parsed."""
         service = _make_service()
         result = service.parse_ai_triage_response(
-            "```json\n{\"skill_id\": \"debug\", \"confidence\": 0.8}\n```"
+            '```json\n{"skill_id": "debug", "confidence": 0.8}\n```'
         )
         assert result["skill_id"] == "debug"
         assert result["structured"] is True
@@ -428,11 +425,12 @@ class TestInitLlmClient:
     def test_init_failure_returns_none(self) -> None:
         """Exception during init logs and returns None."""
         service = _make_service()
-        with patch(
-            "vibesop.core.routing.triage_service.os.getenv", return_value=""
-        ), patch(
-            "vibesop.llm.factory.create_provider",
-            side_effect=ValueError("no provider"),
+        with (
+            patch("vibesop.core.routing.triage_service.os.getenv", return_value=""),
+            patch(
+                "vibesop.llm.factory.create_provider",
+                side_effect=ValueError("no provider"),
+            ),
         ):
             result = service.init_llm_client()
         assert result is None

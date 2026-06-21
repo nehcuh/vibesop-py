@@ -31,11 +31,11 @@ def _make_squad_plan(protocol: WorkflowPattern) -> ExecutionPlan:
         ],
         steps=[
             SquadStep(step_id="impl", role_id="implementer", skill_ids=["coding"]),
-            SquadStep(
-                step_id="rev", role_id="reviewer", skill_ids=["review"], input_from=["impl"]
-            ),
+            SquadStep(step_id="rev", role_id="reviewer", skill_ids=["review"], input_from=["impl"]),
         ],
-        collaboration_protocol="review_gate" if protocol == WorkflowPattern.RED_TEAM else protocol.value,
+        collaboration_protocol="review_gate"
+        if protocol == WorkflowPattern.RED_TEAM
+        else protocol.value,
         lead_role="reviewer",
         max_rounds=2,
         execution_order=["impl", "rev"],
@@ -69,7 +69,11 @@ class TestWorkflowEngineSquadPatterns:
 
         def executor(step: SquadStep, context: dict[str, Any]) -> dict[str, Any]:
             calls.append((step.role_id, context))
-            return {"step_id": step.step_id, "role_id": step.role_id, "content": f"output-{step.role_id}"}
+            return {
+                "step_id": step.step_id,
+                "role_id": step.role_id,
+                "content": f"output-{step.role_id}",
+            }
 
         result = engine.run(plan, executor)
 

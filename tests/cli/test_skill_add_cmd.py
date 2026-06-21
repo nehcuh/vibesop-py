@@ -19,6 +19,7 @@ class TestSkillAddCommand:
     def test_command_exists(self):
         """Test that skill_add command can be imported."""
         from vibesop.cli.commands.skill_commands import add
+
         assert add is not None
         assert callable(add)
 
@@ -46,7 +47,7 @@ class TestSkillAddCommand:
             name="Test Skill",
             description="A test skill",
             intent="Test",
-            trigger_when="User asks for test"
+            trigger_when="User asks for test",
         )
         mock_detect.return_value = (Path("test-skill"), mock_metadata)
 
@@ -71,12 +72,7 @@ class TestSkillAddCommand:
         from vibesop.cli.commands.skill_commands import _save_auto_config
 
         # Create test config
-        config = {
-            "skill_id": "test-skill",
-            "priority": 70,
-            "enabled": True,
-            "scope": "project"
-        }
+        config = {"skill_id": "test-skill", "priority": 70, "enabled": True, "scope": "project"}
 
         # Mock the config file path
         with patch("vibesop.cli.commands.skill_commands.Path") as mock_path:
@@ -90,12 +86,7 @@ class TestSkillAddCommand:
     @patch("vibesop.security.skill_auditor.SkillSecurityAuditor")
     @patch("vibesop.installer.skill_installer.SkillInstaller")
     def test_full_installation_flow(
-        self,
-        mock_installer,
-        mock_auditor,
-        mock_detect,
-        mock_questionary,
-        tmp_path
+        self, mock_installer, mock_auditor, mock_detect, mock_questionary, tmp_path
     ):
         """Test complete installation flow."""
         # Setup mocks
@@ -104,7 +95,7 @@ class TestSkillAddCommand:
             name="Test Skill",
             description="A test skill",
             intent="Test",
-            trigger_when="User asks for test"
+            trigger_when="User asks for test",
         )
         mock_detect.return_value = (tmp_path, mock_metadata)
 
@@ -119,7 +110,7 @@ class TestSkillAddCommand:
             "installed_path": str(tmp_path),
             "dependencies_installed": [],
             "errors": [],
-            "warnings": []
+            "warnings": [],
         }
         mock_installer.return_value.install_skill.return_value = mock_install_result
 
@@ -314,6 +305,7 @@ class TestAgentEnvironmentBranch:
 
         # Run with a temp directory containing SKILL.md
         import tempfile
+
         with tempfile.TemporaryDirectory() as tmpdir:
             skill_dir = Path(tmpdir) / "test-skill"
             skill_dir.mkdir()
@@ -352,6 +344,7 @@ class TestAgentEnvironmentBranch:
         )
 
         import tempfile
+
         with tempfile.TemporaryDirectory() as tmpdir:
             skill_dir = Path(tmpdir) / "test-skill"
             skill_dir.mkdir()
@@ -400,6 +393,7 @@ class TestAgentEnvironmentBranch:
         )
 
         import tempfile
+
         with tempfile.TemporaryDirectory() as tmpdir:
             skill_dir = Path(tmpdir) / "test-skill"
             skill_dir.mkdir()

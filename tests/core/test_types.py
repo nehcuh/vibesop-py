@@ -1,6 +1,5 @@
 """Tests for core type definitions."""
 
-
 from vibesop.core.types import (
     BoostAmount,
     ConfidenceScore,

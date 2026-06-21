@@ -1,6 +1,7 @@
 """Tests for the RoutingTracer."""
 
 from pathlib import Path
+
 from vibesop.core.models import LayerDetail, RoutingLayer
 from vibesop.core.routing.tracer import LayerTrace, RouteTrace, RoutingTracer
 
@@ -38,9 +39,14 @@ class TestRouteTrace:
             query="test query",
             layers=[
                 LayerTrace(
-                    layer="keyword", layer_number=3, matched=True,
-                    matched_skill="test-skill", confidence=0.85, reason="matched",
-                    duration_ms=2.1, candidates_considered=50,
+                    layer="keyword",
+                    layer_number=3,
+                    matched=True,
+                    matched_skill="test-skill",
+                    confidence=0.85,
+                    reason="matched",
+                    duration_ms=2.1,
+                    candidates_considered=50,
                 ),
             ],
             final_skill="test-skill",

@@ -54,9 +54,15 @@ class TestCollectAlternativesFromDetails:
                 matched=False,
                 reason="test",
                 rejected_candidates=[
-                    RejectedCandidate(skill_id="low", confidence=0.30, layer=RoutingLayer.KEYWORD, reason="x"),
-                    RejectedCandidate(skill_id="high", confidence=0.80, layer=RoutingLayer.TFIDF, reason="x"),
-                    RejectedCandidate(skill_id="mid", confidence=0.55, layer=RoutingLayer.KEYWORD, reason="x"),
+                    RejectedCandidate(
+                        skill_id="low", confidence=0.30, layer=RoutingLayer.KEYWORD, reason="x"
+                    ),
+                    RejectedCandidate(
+                        skill_id="high", confidence=0.80, layer=RoutingLayer.TFIDF, reason="x"
+                    ),
+                    RejectedCandidate(
+                        skill_id="mid", confidence=0.55, layer=RoutingLayer.KEYWORD, reason="x"
+                    ),
                 ],
             ),
         ]
@@ -74,7 +80,9 @@ class TestCollectAlternativesFromDetails:
                 matched=False,
                 reason="test",
                 rejected_candidates=[
-                    RejectedCandidate(skill_id="dup", confidence=0.40, layer=RoutingLayer.KEYWORD, reason="a"),
+                    RejectedCandidate(
+                        skill_id="dup", confidence=0.40, layer=RoutingLayer.KEYWORD, reason="a"
+                    ),
                 ],
             ),
             LayerDetail(
@@ -82,7 +90,9 @@ class TestCollectAlternativesFromDetails:
                 matched=False,
                 reason="test",
                 rejected_candidates=[
-                    RejectedCandidate(skill_id="dup", confidence=0.70, layer=RoutingLayer.TFIDF, reason="b"),
+                    RejectedCandidate(
+                        skill_id="dup", confidence=0.70, layer=RoutingLayer.TFIDF, reason="b"
+                    ),
                 ],
             ),
         ]
@@ -187,8 +197,12 @@ class TestBuildFallbackResult:
 
     def test_fallback_includes_nearest_candidates(self, monkeypatch) -> None:
         """Fallback result includes nearest candidates from matcher pipeline."""
-        mock_primary = SkillRoute(skill_id="nearest", confidence=0.25, layer=RoutingLayer.KEYWORD, source="external")
-        mock_alt = SkillRoute(skill_id="near-alt", confidence=0.20, layer=RoutingLayer.TFIDF, source="external")
+        mock_primary = SkillRoute(
+            skill_id="nearest", confidence=0.25, layer=RoutingLayer.KEYWORD, source="external"
+        )
+        mock_alt = SkillRoute(
+            skill_id="near-alt", confidence=0.20, layer=RoutingLayer.TFIDF, source="external"
+        )
 
         def mock_run_matcher(*args, **kwargs):
             return (mock_primary, [mock_alt], MagicMock())

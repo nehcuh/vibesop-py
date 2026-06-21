@@ -12,12 +12,12 @@ import json
 import logging
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from vibesop.core.models import LayerDetail, RejectedCandidate, RoutingLayer, SkillRoute
+    from vibesop.core.models import LayerDetail, RoutingLayer
 
 logger = logging.getLogger(__name__)
 
@@ -118,7 +118,7 @@ class RoutingTracer:
         tid = uuid.uuid4().hex[:12]
         self._current = RouteTrace(
             trace_id=tid,
-            timestamp=datetime.now(timezone.utc).isoformat(),
+            timestamp=datetime.now(UTC).isoformat(),
             query=query,
             mode=mode,
         )
@@ -207,14 +207,16 @@ class RoutingTracer:
         for f in files:
             try:
                 data = json.loads(f.read_text())
-                traces.append({
-                    "trace_id": data.get("trace_id", f.stem),
-                    "timestamp": data.get("timestamp", ""),
-                    "query": data.get("query", "")[:80],
-                    "final_skill": data.get("final", {}).get("skill_id"),
-                    "confidence": data.get("final", {}).get("confidence", 0),
-                    "layer_count": len(data.get("layers", [])),
-                })
+                traces.append(
+                    {
+                        "trace_id": data.get("trace_id", f.stem),
+                        "timestamp": data.get("timestamp", ""),
+                        "query": data.get("query", "")[:80],
+                        "final_skill": data.get("final", {}).get("skill_id"),
+                        "confidence": data.get("final", {}).get("confidence", 0),
+                        "layer_count": len(data.get("layers", [])),
+                    }
+                )
             except (json.JSONDecodeError, KeyError):
                 continue
         return traces

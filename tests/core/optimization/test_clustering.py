@@ -1,6 +1,5 @@
 """Tests for skill clustering."""
 
-
 from vibesop.core.optimization.clustering import SkillClusterIndex
 
 

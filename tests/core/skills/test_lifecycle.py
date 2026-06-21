@@ -16,15 +16,11 @@ class TestSkillLifecycleManager:
 
     def test_valid_transitions(self) -> None:
         """All valid transitions should succeed."""
-        assert SkillLifecycleManager.can_transition(
-            SkillLifecycle.DRAFT, SkillLifecycle.ACTIVE
-        )
+        assert SkillLifecycleManager.can_transition(SkillLifecycle.DRAFT, SkillLifecycle.ACTIVE)
         assert SkillLifecycleManager.can_transition(
             SkillLifecycle.ACTIVE, SkillLifecycle.DEPRECATED
         )
-        assert SkillLifecycleManager.can_transition(
-            SkillLifecycle.ACTIVE, SkillLifecycle.ARCHIVED
-        )
+        assert SkillLifecycleManager.can_transition(SkillLifecycle.ACTIVE, SkillLifecycle.ARCHIVED)
         assert SkillLifecycleManager.can_transition(
             SkillLifecycle.DEPRECATED, SkillLifecycle.ACTIVE
         )
@@ -34,9 +30,7 @@ class TestSkillLifecycleManager:
 
     def test_invalid_transitions(self) -> None:
         """Invalid transitions should return False."""
-        assert not SkillLifecycleManager.can_transition(
-            SkillLifecycle.ACTIVE, SkillLifecycle.DRAFT
-        )
+        assert not SkillLifecycleManager.can_transition(SkillLifecycle.ACTIVE, SkillLifecycle.DRAFT)
         assert not SkillLifecycleManager.can_transition(
             SkillLifecycle.ARCHIVED, SkillLifecycle.ACTIVE
         )
@@ -49,17 +43,13 @@ class TestSkillLifecycleManager:
 
     def test_transition_success(self) -> None:
         """Valid transition returns target state."""
-        result = SkillLifecycleManager.transition(
-            SkillLifecycle.DRAFT, SkillLifecycle.ACTIVE
-        )
+        result = SkillLifecycleManager.transition(SkillLifecycle.DRAFT, SkillLifecycle.ACTIVE)
         assert result == SkillLifecycle.ACTIVE
 
     def test_transition_failure(self) -> None:
         """Invalid transition raises ValueError."""
         with pytest.raises(ValueError, match="Invalid transition"):
-            SkillLifecycleManager.transition(
-                SkillLifecycle.ACTIVE, SkillLifecycle.DRAFT
-            )
+            SkillLifecycleManager.transition(SkillLifecycle.ACTIVE, SkillLifecycle.DRAFT)
 
     def test_is_routable(self) -> None:
         """Only ACTIVE skills are routable."""
@@ -70,9 +60,7 @@ class TestSkillLifecycleManager:
 
     def test_is_enabled_explicit_disabled(self) -> None:
         """Explicitly disabled skill is not enabled."""
-        assert not SkillLifecycleManager.is_enabled(
-            SkillLifecycle.ACTIVE, explicit_enabled=False
-        )
+        assert not SkillLifecycleManager.is_enabled(SkillLifecycle.ACTIVE, explicit_enabled=False)
 
     def test_is_enabled_routable(self) -> None:
         """Routable skill without explicit disable is enabled."""

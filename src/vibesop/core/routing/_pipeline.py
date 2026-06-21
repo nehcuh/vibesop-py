@@ -43,17 +43,16 @@ def run_matcher_pipeline(
             ),
         )
 
-    rejected = [
-        RejectedCandidate(**rc)
-        for rc in result.diagnostics.get("rejected_candidates", [])
-    ]
+    rejected = [RejectedCandidate(**rc) for rc in result.diagnostics.get("rejected_candidates", [])]
     layer_detail = LayerDetail(
         layer=result.layer,
         matched=True,
         reason=f"Matcher selected '{result.match.skill_id}' (confidence: {result.match.confidence:.0%})",
         duration_ms=duration_ms,
         rejected_candidates=rejected,
-        diagnostics={"rejected_candidates": result.diagnostics.get("rejected_candidates", [])} if rejected else {},
+        diagnostics={"rejected_candidates": result.diagnostics.get("rejected_candidates", [])}
+        if rejected
+        else {},
     )
 
     return result.match, result.alternatives, layer_detail

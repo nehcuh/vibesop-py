@@ -8,8 +8,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
 from vibesop.adapters import (
     ClaudeCodeAdapter,
     CursorAdapter,
@@ -107,6 +105,7 @@ class TestClaudeCodeConformance:
         settings = tmp_path / "settings.json"
         assert settings.exists()
         import json
+
         data = json.loads(settings.read_text())
         assert "hooks" in data
         assert "UserPromptSubmit" in data["hooks"]
@@ -233,12 +232,14 @@ class TestRenderResultConformance:
 
     def test_file_tracking(self):
         from vibesop.adapters.models import RenderResult
+
         result = RenderResult(success=True)
         result.add_file(Path("/tmp/test.txt"))
         assert result.file_count == 1
 
     def test_error_tracking(self):
         from vibesop.adapters.models import RenderResult
+
         result = RenderResult(success=True)
         result.add_error("Something went wrong")
         assert len(result.errors) == 1
@@ -246,6 +247,7 @@ class TestRenderResultConformance:
 
     def test_warning_tracking(self):
         from vibesop.adapters.models import RenderResult
+
         result = RenderResult(success=True)
         result.add_warning("Non-critical issue")
         assert result.success

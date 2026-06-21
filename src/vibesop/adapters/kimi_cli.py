@@ -110,61 +110,73 @@ class KimiCliAdapter(FileBasedAdapter):
         ]
 
         if manifest.metadata.author:
-            lines.extend([
-                f"# Author: {manifest.metadata.author}",
-                "",
-            ])
+            lines.extend(
+                [
+                    f"# Author: {manifest.metadata.author}",
+                    "",
+                ]
+            )
         if manifest.metadata.description:
-            lines.extend([
-                f"# Description: {manifest.metadata.description}",
-                "",
-            ])
+            lines.extend(
+                [
+                    f"# Description: {manifest.metadata.description}",
+                    "",
+                ]
+            )
 
         security = manifest.get_effective_security_policy()
-        lines.extend([
-            "[vibesop.security]",
-            f"scan_external_content = {str(security.scan_external_content).lower()}",
-            f"max_file_size_mb = {security.max_file_size / (1024 * 1024):.1f}",
-            "",
-        ])
+        lines.extend(
+            [
+                "[vibesop.security]",
+                f"scan_external_content = {str(security.scan_external_content).lower()}",
+                f"max_file_size_mb = {security.max_file_size / (1024 * 1024):.1f}",
+                "",
+            ]
+        )
 
         routing = manifest.get_effective_routing_policy()
-        lines.extend([
-            "[vibesop.routing]",
-            f"enable_ai_routing = {str(routing.enable_ai_routing).lower()}",
-            f"confidence_threshold = {routing.confidence_threshold}",
-            "",
-        ])
+        lines.extend(
+            [
+                "[vibesop.routing]",
+                f"enable_ai_routing = {str(routing.enable_ai_routing).lower()}",
+                f"confidence_threshold = {routing.confidence_threshold}",
+                "",
+            ]
+        )
 
         if manifest.skills:
-            lines.extend([
-                "# VibeSOP Skills",
-                f"# {len(manifest.skills)} skills configured.",
-                "# Install them to ~/.kimi-code/skills/ (or .kimi-code/skills/ for project-level)",
-                "# and set merge_all_available_skills = true to load from multiple sources.",
-                "",
-            ])
+            lines.extend(
+                [
+                    "# VibeSOP Skills",
+                    f"# {len(manifest.skills)} skills configured.",
+                    "# Install them to ~/.kimi-code/skills/ (or .kimi-code/skills/ for project-level)",
+                    "# and set merge_all_available_skills = true to load from multiple sources.",
+                    "",
+                ]
+            )
 
-        lines.extend([
-            "# ==============================================",
-            "# VibeSOP Auto-Routing Hook",
-            "# ==============================================",
-            "#",
-            "# This hook automatically calls 'vibe route' before each user prompt",
-            "# to enable context-aware skill routing. Requires the hook script",
-            "# to be installed at ~/.kimi-code/hooks/vibesop-route.sh",
-            "#",
-            "# NOTE: Kimi Code CLI event names vary by version. Valid values:",
-            "#   - 'UserPromptSubmit' : before sending user message to AI",
-            "#   - 'PreToolUse'       : before tool execution",
-            "# Adjust the event below to match your Kimi Code CLI version.",
-            "",
-            "[[hooks]]",
-            'name = "vibesop-route"',
-            'event = "UserPromptSubmit"',
-            'command = "bash ~/.kimi-code/hooks/vibesop-route.sh"',
-            "",
-        ])
+        lines.extend(
+            [
+                "# ==============================================",
+                "# VibeSOP Auto-Routing Hook",
+                "# ==============================================",
+                "#",
+                "# This hook automatically calls 'vibe route' before each user prompt",
+                "# to enable context-aware skill routing. Requires the hook script",
+                "# to be installed at ~/.kimi-code/hooks/vibesop-route.sh",
+                "#",
+                "# NOTE: Kimi Code CLI event names vary by version. Valid values:",
+                "#   - 'UserPromptSubmit' : before sending user message to AI",
+                "#   - 'PreToolUse'       : before tool execution",
+                "# Adjust the event below to match your Kimi Code CLI version.",
+                "",
+                "[[hooks]]",
+                'name = "vibesop-route"',
+                'event = "UserPromptSubmit"',
+                'command = "bash ~/.kimi-code/hooks/vibesop-route.sh"',
+                "",
+            ]
+        )
 
         return "\n".join(lines)
 
@@ -273,8 +285,11 @@ class KimiCliAdapter(FileBasedAdapter):
                 skill_dir = skills_dir / dir_name
                 skill_dir.mkdir(parents=True, exist_ok=True)
                 self._render_skill_content(
-                    skill, skill_dir, result,
-                    dir_name=dir_name, manifest=manifest,
+                    skill,
+                    skill_dir,
+                    result,
+                    dir_name=dir_name,
+                    manifest=manifest,
                 )
 
             # AGENTS.md context file
@@ -450,11 +465,11 @@ class KimiCliAdapter(FileBasedAdapter):
             "",
             "When the user signals the end of a session, you MUST run `session-end`:",
             "",
-            "**English signals**: \"that's all for now\", \"heading out\", \"I'm leaving\",",
-            "\"I'm done\", \"gotta go\", \"wrap it up\", \"call it a day\"",
+            '**English signals**: "that\'s all for now", "heading out", "I\'m leaving",',
+            '"I\'m done", "gotta go", "wrap it up", "call it a day"',
             "",
-            "**Chinese signals**: \"我要离开了\", \"先走了\", \"拜拜\", \"再见\",",
-            "\"今天就到这里\", \"就到这里吧\", \"收工\"",
+            '**Chinese signals**: "我要离开了", "先走了", "拜拜", "再见",',
+            '"今天就到这里", "就到这里吧", "收工"',
             "",
             "**Explicit command**: `/session-end`",
             "",

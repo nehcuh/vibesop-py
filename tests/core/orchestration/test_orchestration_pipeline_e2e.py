@@ -34,9 +34,7 @@ class TestOrchestrationPipelineE2E:
             assert result.execution_plan is not None
             assert len(result.execution_plan.steps) >= 2
 
-    def test_orchestrator_produces_valid_execution_plan(
-        self, router: UnifiedRouter
-    ) -> None:
+    def test_orchestrator_produces_valid_execution_plan(self, router: UnifiedRouter) -> None:
         """Orchestrated results must have valid, non-empty execution plans."""
         result = router.orchestrate("先分析架构再写测试然后做代码审查")
         if result.mode == OrchestrationMode.ORCHESTRATED:
@@ -49,9 +47,7 @@ class TestOrchestrationPipelineE2E:
                 assert step.intent
                 assert step.step_number > 0
 
-    def test_orchestrated_plan_has_single_fallback(
-        self, router: UnifiedRouter
-    ) -> None:
+    def test_orchestrated_plan_has_single_fallback(self, router: UnifiedRouter) -> None:
         """Orchestrated results must include a single_fallback."""
         result = router.orchestrate("review the code and deploy it")
         if result.mode == OrchestrationMode.ORCHESTRATED:
@@ -65,9 +61,7 @@ class TestOrchestrationPipelineE2E:
         result = router.orchestrate("分析架构然后写测试")
         assert result.mode == OrchestrationMode.SINGLE
 
-    def test_no_false_positive_for_simple_queries(
-        self, router: UnifiedRouter
-    ) -> None:
+    def test_no_false_positive_for_simple_queries(self, router: UnifiedRouter) -> None:
         """Simple single-domain queries should NOT be over-decomposed."""
         simple_queries = [
             "帮我调试这个空指针错误",
@@ -81,33 +75,25 @@ class TestOrchestrationPipelineE2E:
                 OrchestrationMode.ORCHESTRATED,
             )
 
-    def test_single_result_has_primary_and_alternatives(
-        self, router: UnifiedRouter
-    ) -> None:
+    def test_single_result_has_primary_and_alternatives(self, router: UnifiedRouter) -> None:
         """Results should include primary match with valid skill_id and confidence."""
         result = router.orchestrate("帮我review这段代码")
         assert result.primary is not None
         assert result.primary.skill_id
         assert result.primary.confidence >= 0.0
 
-    def test_result_has_duration_ms(
-        self, router: UnifiedRouter
-    ) -> None:
+    def test_result_has_duration_ms(self, router: UnifiedRouter) -> None:
         """All orchestration results should include duration tracking."""
         result = router.orchestrate("debug database connection error")
         assert result.duration_ms >= 0
 
-    def test_result_has_original_query(
-        self, router: UnifiedRouter
-    ) -> None:
+    def test_result_has_original_query(self, router: UnifiedRouter) -> None:
         """Results should preserve the original query."""
         query = "帮我分析代码架构和安全问题"
         result = router.orchestrate(query)
         assert result.original_query == query
 
-    def test_execution_plan_steps_are_ordered(
-        self, router: UnifiedRouter
-    ) -> None:
+    def test_execution_plan_steps_are_ordered(self, router: UnifiedRouter) -> None:
         """Execution plan steps should be ordered by step_number."""
         result = router.orchestrate("先分析架构，再写测试，然后审查代码")
         if result.mode == OrchestrationMode.ORCHESTRATED and result.execution_plan:

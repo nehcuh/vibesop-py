@@ -317,10 +317,14 @@ class StepRunner:
             }
 
         # Route dynamic plans to WorkflowEngine
-        from vibesop.core.orchestration.workflow_engine import DynamicExecutionResult, WorkflowEngine
+        from vibesop.core.orchestration.workflow_engine import (
+            DynamicExecutionResult,
+            WorkflowEngine,
+        )
 
         if WorkflowEngine.is_dynamic(self._plan):
             engine = WorkflowEngine(llm_client=self._llm_client)
+
             # Wrap executor to accept just the step (WorkflowEngine interface)
             def _wrap_executor(step: ExecutionStep):
                 ctx = self.get_context(step)
@@ -328,9 +332,7 @@ class StepRunner:
 
             dyn_result = engine.run(self._plan, _wrap_executor)
             if not isinstance(dyn_result, DynamicExecutionResult):
-                raise TypeError(
-                    f"Expected DynamicExecutionResult, got {type(dyn_result).__name__}"
-                )
+                raise TypeError(f"Expected DynamicExecutionResult, got {type(dyn_result).__name__}")
             return {
                 "completed": dyn_result.total_steps_executed,
                 "failed": 0,
@@ -491,9 +493,7 @@ class StepRunner:
         sorted_steps = sorted(steps, key=lambda s: s.assigned_role or "")
         grouped = {
             role: list(role_steps)
-            for role, role_steps in groupby(
-                sorted_steps, key=lambda s: s.assigned_role or ""
-            )
+            for role, role_steps in groupby(sorted_steps, key=lambda s: s.assigned_role or "")
         }
 
         results: dict[str, Any] = {}

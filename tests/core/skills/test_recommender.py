@@ -85,7 +85,9 @@ class TestSkillRecommenderRecommendations:
 
     def test_recommend_collaborative_both(self, tmp_path: Path):
         recommender = SkillRecommender(project_root=tmp_path)
-        with patch.object(recommender, "_get_installed_packs", return_value={"superpowers", "mattpocock"}):
+        with patch.object(
+            recommender, "_get_installed_packs", return_value={"superpowers", "mattpocock"}
+        ):
             recs = recommender.recommend_collaborative()
         assert recs == []
 

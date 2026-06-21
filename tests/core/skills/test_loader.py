@@ -3,17 +3,21 @@
 from __future__ import annotations
 
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 from vibesop.core.skills.base import PromptSkill, WorkflowSkill
-from vibesop.spec.models import SkillSpec, SkillType
 from vibesop.core.skills.external_loader import ExternalSkillMetadata, SkillSource
 from vibesop.core.skills.loader import LoadedSkill, SkillLoader
+from vibesop.spec.models import SkillSpec, SkillType
 
 
 def _make_meta(skill_id="test", **kwargs):
     return SkillSpec(
-        id=skill_id, name="Test", description="Desc", intent=kwargs.pop("intent", "Do things"), **kwargs
+        id=skill_id,
+        name="Test",
+        description="Desc",
+        intent=kwargs.pop("intent", "Do things"),
+        **kwargs,
     )
 
 
@@ -370,6 +374,7 @@ class TestValidateAlgorithms:
         loader = SkillLoader(project_root=tmp_path, enable_external=False)
         meta = _make_meta(algorithms=["nonexistent_algo_xyz"])
         import logging
+
         with caplog.at_level(logging.WARNING):
             loader._validate_algorithms(meta)
         assert len(caplog.records) >= 1
@@ -378,6 +383,7 @@ class TestValidateAlgorithms:
         loader = SkillLoader(project_root=tmp_path, enable_external=False)
         meta = _make_meta()
         import logging
+
         with caplog.at_level(logging.WARNING):
             loader._validate_algorithms(meta)
         assert len(caplog.records) == 0

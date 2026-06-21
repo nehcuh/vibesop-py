@@ -4,16 +4,14 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any
-from unittest.mock import patch
 
 import pytest
 
 from vibesop.core.matching.base import MatchResult, MatcherType
 from vibesop.core.routing.conflict import (
+    ConfidenceGapStrategy,
     ConflictResolution,
     ConflictResolver,
-    ConfidenceGapStrategy,
     ExplicitOverrideStrategy,
     FallbackStrategy,
     NamespacePriorityStrategy,
@@ -103,8 +101,8 @@ class TestNamespacePriorityStrategy:
         """One namespace clearly dominates."""
         strategy = NamespacePriorityStrategy()
         matches = [
-            _make_match("a", 0.9, "project"),   # priority 100
-            _make_match("b", 0.8, "builtin"),   # priority 60
+            _make_match("a", 0.9, "project"),  # priority 100
+            _make_match("b", 0.8, "builtin"),  # priority 60
         ]
         result = strategy.resolve(matches, "query")
         assert result is not None
@@ -139,9 +137,7 @@ class TestNamespacePriorityStrategy:
 
     def test_tie_within_margin(self) -> None:
         """Difference of exactly 5 → not > 5, so no resolution."""
-        strategy = NamespacePriorityStrategy(
-            priorities={"high": 55, "low": 50}
-        )
+        strategy = NamespacePriorityStrategy(priorities={"high": 55, "low": 50})
         matches = [
             _make_match("a", 0.9, "high"),
             _make_match("b", 0.8, "low"),
@@ -153,8 +149,8 @@ class TestNamespacePriorityStrategy:
         """When namespace wins, pick highest-confidence match within it."""
         strategy = NamespacePriorityStrategy()
         matches = [
-            _make_match("a", 0.6, "project"),   # lower conf in winning ns
-            _make_match("b", 0.9, "project"),   # higher conf in winning ns
+            _make_match("a", 0.6, "project"),  # lower conf in winning ns
+            _make_match("b", 0.9, "project"),  # higher conf in winning ns
             _make_match("c", 0.8, "builtin"),
         ]
         result = strategy.resolve(matches, "query")

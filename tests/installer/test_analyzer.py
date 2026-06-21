@@ -37,7 +37,9 @@ def test_repo_analysis_skill_ids_with_mock():
         source_url="https://example.com",
         skill_files=[Path("debug/SKILL.md")],
     )
-    with patch("vibesop.installer.analyzer.parse_skill_md", return_value=MagicMock(id="mock-debug")):
+    with patch(
+        "vibesop.installer.analyzer.parse_skill_md", return_value=MagicMock(id="mock-debug")
+    ):
         assert analysis.skill_ids() == ["mock-debug"]
 
 
@@ -88,7 +90,10 @@ def test_analyze_repo(fake_repo):
     with (
         patch("tempfile.TemporaryDirectory") as mock_tmp,
         patch.object(analyzer, "git_clone", return_value=True),
-        patch("vibesop.installer.analyzer.parse_skill_md", return_value=MagicMock(namespace="testpack")),
+        patch(
+            "vibesop.installer.analyzer.parse_skill_md",
+            return_value=MagicMock(namespace="testpack"),
+        ),
     ):
         mock_tmp.return_value.__enter__ = MagicMock(return_value=str(fake_repo))
         mock_tmp.return_value.__exit__ = MagicMock(return_value=False)
@@ -158,7 +163,9 @@ def test_analyze_with_subdirectory(fake_repo):
     with (
         patch("tempfile.TemporaryDirectory") as mock_tmp,
         patch.object(analyzer, "git_clone", return_value=True) as mock_clone,
-        patch("vibesop.installer.analyzer.parse_skill_md", return_value=MagicMock(namespace="debug")),
+        patch(
+            "vibesop.installer.analyzer.parse_skill_md", return_value=MagicMock(namespace="debug")
+        ),
     ):
         mock_tmp.return_value.__enter__ = MagicMock(return_value=str(fake_repo))
         mock_tmp.return_value.__exit__ = MagicMock(return_value=False)

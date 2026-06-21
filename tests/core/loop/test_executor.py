@@ -127,8 +127,8 @@ class TestExecuteLoopTickDispatch:
 
     def test_no_match_records_failure_with_descriptive_error(self):
         runtime = _mock_runtime(
-            success=True,       # no internal errors
-            has_match=False,    # but no skill matched
+            success=True,  # no internal errors
+            has_match=False,  # but no skill matched
             skill_id="",
             decision_message="",
             errors=[],
@@ -339,8 +339,6 @@ class TestExecuteLoopTickDefaults:
 
                 execute_loop_tick(spec, store=store)
 
-                state_path = (
-                    store.base_dir / "disk-write" / store.STATE_FILENAME
-                )
+                state_path = store.base_dir / "disk-write" / store.STATE_FILENAME
                 assert state_path.exists()
                 assert state_path.read_text(encoding="utf-8").strip().startswith("{")

@@ -33,6 +33,6 @@ __all__ = [
     "SkillSpec",
     "SkillType",
     "SpecValidator",
-    "ValidationResult",
     "SpecVersion",
+    "ValidationResult",
 ]

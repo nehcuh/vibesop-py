@@ -181,13 +181,15 @@ def test_get_section_deep_merge_overrides_nested_values(
     vibe_dir = tmp_path / ".vibe"
     vibe_dir.mkdir()
     config_file = vibe_dir / "config.toml"
-    config_file.write_text('[routing]\nmin_confidence = 0.99\n')
+    config_file.write_text("[routing]\nmin_confidence = 0.99\n")
 
     # Block global config so the only sources are defaults + project.
     monkeypatch.setattr(
         ConfigSource,
         "_resolve_config_path",
-        staticmethod(lambda base_dir, name: None if "home" in str(base_dir).lower() else config_file),  # type: ignore[arg-type]
+        staticmethod(
+            lambda base_dir, name: None if "home" in str(base_dir).lower() else config_file
+        ),  # type: ignore[arg-type]
     )
 
     manager = ConfigManager(project_root=str(tmp_path))
@@ -222,7 +224,9 @@ def test_deep_merge_multiple_overlays() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_env_override_via_get(monkeypatch: pytest.MonkeyPatch, manager_no_files: ConfigManager) -> None:
+def test_env_override_via_get(
+    monkeypatch: pytest.MonkeyPatch, manager_no_files: ConfigManager
+) -> None:
     """Environment variables override config values for ConfigManager.get()."""
     monkeypatch.setenv("VIBE_ROUTING_MIN_CONFIDENCE", "0.95")
     # The manager caches results, but env was not set at construction time.
@@ -231,7 +235,9 @@ def test_env_override_via_get(monkeypatch: pytest.MonkeyPatch, manager_no_files:
     assert value == "0.95"  # env values come back as strings from os.environ
 
 
-def test_env_override_in_get_section(monkeypatch: pytest.MonkeyPatch, manager_no_files: ConfigManager) -> None:
+def test_env_override_in_get_section(
+    monkeypatch: pytest.MonkeyPatch, manager_no_files: ConfigManager
+) -> None:
     """Environment variables override values inside _get_section with parsed types."""
     monkeypatch.setenv("VIBE_ROUTING_MIN_CONFIDENCE", "0.88")
     monkeypatch.setenv("VIBE_ROUTING_MAX_CANDIDATES", "7")
@@ -240,14 +246,18 @@ def test_env_override_in_get_section(monkeypatch: pytest.MonkeyPatch, manager_no
     assert section["max_candidates"] == 7
 
 
-def test_env_override_boolean_parsing(monkeypatch: pytest.MonkeyPatch, manager_no_files: ConfigManager) -> None:
+def test_env_override_boolean_parsing(
+    monkeypatch: pytest.MonkeyPatch, manager_no_files: ConfigManager
+) -> None:
     """Boolean env values are parsed correctly in _get_section."""
     monkeypatch.setenv("VIBE_ROUTING_ENABLE_AI_TRIAGE", "false")
     section = manager_no_files._get_section("routing")
     assert section["enable_ai_triage"] is False
 
 
-def test_env_override_integer_parsing(monkeypatch: pytest.MonkeyPatch, manager_no_files: ConfigManager) -> None:
+def test_env_override_integer_parsing(
+    monkeypatch: pytest.MonkeyPatch, manager_no_files: ConfigManager
+) -> None:
     """Integer env values are parsed correctly in _get_section."""
     monkeypatch.setenv("VIBE_ROUTING_AI_TRIAGE_MAX_SKILLS", "42")
     section = manager_no_files._get_section("routing")

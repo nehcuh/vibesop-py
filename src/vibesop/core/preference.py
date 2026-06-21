@@ -237,17 +237,16 @@ class PreferenceLearner:
                 # Re-read latest state under lock to avoid overwriting concurrent changes
                 latest = self._load_storage()
                 # Merge: keep selections from both
-                existing_ids = {
-                    (s.get("skill_id"), s.get("timestamp"))
-                    for s in latest.selections
-                }
+                existing_ids = {(s.get("skill_id"), s.get("timestamp")) for s in latest.selections}
                 for s in self._storage.selections:
                     key = (s.get("skill_id"), s.get("timestamp"))
                     if key not in existing_ids:
                         latest.selections.append(s)
                 # Merge skill scores (take higher score)
                 for skill_id, data in self._storage.skill_scores.items():
-                    if skill_id not in latest.skill_scores or data.get("score", 0) > latest.skill_scores[skill_id].get("score", 0):
+                    if skill_id not in latest.skill_scores or data.get(
+                        "score", 0
+                    ) > latest.skill_scores[skill_id].get("score", 0):
                         latest.skill_scores[skill_id] = data
                 # Merge associations (sum counters, clamp to prevent overflow)
                 for word, skills in self._storage.word_associations.items():

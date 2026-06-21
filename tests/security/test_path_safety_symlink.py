@@ -49,9 +49,7 @@ class TestCheckTraversalSymlinkHardening:
         # Classic traversal: escape via ..
         assert safety.check_traversal("../../../etc/passwd", base) is False
 
-    def test_symlink_inside_base_pointing_outside_rejected(
-        self, tmp_path: Path
-    ) -> None:
+    def test_symlink_inside_base_pointing_outside_rejected(self, tmp_path: Path) -> None:
         """The S23 red-team PoC: symlink inside base_dir → /etc (or
         anything outside). Pre-v7.0.5, resolve() followed the symlink
         and the check passed."""
@@ -246,25 +244,19 @@ class TestIsLexicallyWithin:
     """_is_lexically_within: prefix-collision-resistant containment check."""
 
     def test_exact_match_is_within(self) -> None:
-        assert PathSafety._is_lexically_within(
-            Path("/tmp/base"), Path("/tmp/base")
-        ) is True
+        assert PathSafety._is_lexically_within(Path("/tmp/base"), Path("/tmp/base")) is True
 
     def test_descendant_is_within(self) -> None:
-        assert PathSafety._is_lexically_within(
-            Path("/tmp/base/sub/file"), Path("/tmp/base")
-        ) is True
+        assert (
+            PathSafety._is_lexically_within(Path("/tmp/base/sub/file"), Path("/tmp/base")) is True
+        )
 
     def test_sibling_with_shared_prefix_not_within(self) -> None:
         """The classic prefix-collision attack: /tmp/base vs /tmp/base-evil."""
-        assert PathSafety._is_lexically_within(
-            Path("/tmp/base-evil"), Path("/tmp/base")
-        ) is False
+        assert PathSafety._is_lexically_within(Path("/tmp/base-evil"), Path("/tmp/base")) is False
 
     def test_parent_not_within(self) -> None:
-        assert PathSafety._is_lexically_within(
-            Path("/tmp"), Path("/tmp/base")
-        ) is False
+        assert PathSafety._is_lexically_within(Path("/tmp"), Path("/tmp/base")) is False
 
 
 class TestValidateFilenameNulHardening:
@@ -335,9 +327,7 @@ class TestResolvePathLexicalHardening:
         result = safety._resolve_path(Path("/tmp/foo/../bar"), Path("/base"))
         assert str(result) == "/tmp/bar"
 
-    def test_ensure_safe_output_path_symlink_now_caught(
-        self, tmp_path: Path
-    ) -> None:
+    def test_ensure_safe_output_path_symlink_now_caught(self, tmp_path: Path) -> None:
         """v7.0.8 regression: a symlinked output path must now be caught
         because _resolve_path no longer silently follows the symlink to a
         target outside base that lexically appears inside base."""

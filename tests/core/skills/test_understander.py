@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import pytest
 
-from vibesop.spec.models import SkillSpec, SkillType
 from vibesop.core.skills.understander import (
     CategoryRules,
     ComplexityLevel,
@@ -13,6 +12,7 @@ from vibesop.core.skills.understander import (
     SkillAutoConfigurator,
     UrgencyLevel,
 )
+from vibesop.spec.models import SkillSpec, SkillType
 
 
 class TestCategoryRulesInferById:

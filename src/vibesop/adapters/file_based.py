@@ -12,13 +12,13 @@ import os
 from pathlib import Path
 from typing import Any
 
-from vibesop.adapters.base import PlatformAdapter
-from vibesop.adapters.models import Manifest, RenderResult
 from vibesop.adapters._shared import (
     generate_slim_agents_index,
     render_docs_files,
     render_route_hook,
 )
+from vibesop.adapters.base import PlatformAdapter
+from vibesop.adapters.models import Manifest, RenderResult
 
 
 class FileBasedAdapter(PlatformAdapter):
@@ -133,16 +133,18 @@ class FileBasedAdapter(PlatformAdapter):
         ]
         for s in manifest.skills:
             readme_lines.append(f"- **{s.id}** — {s.description}")
-        readme_lines.extend([
-            "",
-            "## Documentation",
-            "",
-            "- `AGENTS.md` — AI agent context file",
-            "- `docs/routing.md` — Routing protocol details",
-            "- `docs/session-lifecycle.md` — Session lifecycle events",
-            "- `docs/skills-catalog.md` — Full skill catalog",
-            "- `docs/quick-commands.md` — Quick command reference",
-        ])
+        readme_lines.extend(
+            [
+                "",
+                "## Documentation",
+                "",
+                "- `AGENTS.md` — AI agent context file",
+                "- `docs/routing.md` — Routing protocol details",
+                "- `docs/session-lifecycle.md` — Session lifecycle events",
+                "- `docs/skills-catalog.md` — Full skill catalog",
+                "- `docs/quick-commands.md` — Quick command reference",
+            ]
+        )
         return "\n".join(readme_lines) + "\n"
 
     def _generate_llm_config(self) -> str:
@@ -165,7 +167,9 @@ class FileBasedAdapter(PlatformAdapter):
             },
         }
         if api_key:
-            config["api_key_env"] = "ANTHROPIC_API_KEY" if provider == "anthropic" else "OPENAI_API_KEY"
+            config["api_key_env"] = (
+                "ANTHROPIC_API_KEY" if provider == "anthropic" else "OPENAI_API_KEY"
+            )
 
         return json.dumps(config, indent=2) + "\n"
 
@@ -188,10 +192,10 @@ class FileBasedAdapter(PlatformAdapter):
         """Generate environment setup script."""
         return (
             "#!/usr/bin/env bash\n"
-            "# VibeSOP environment setup for {platform}\n"
-            "export CONVERSATION_ID=\"$(date +%s)-$$\"\n"
-            'vibe() {{ command vibe "$@" --conversation "$CONVERSATION_ID"; }}\n'
-        ).format(platform=self.platform_label)
+            f"# VibeSOP environment setup for {self.platform_label}\n"
+            'export CONVERSATION_ID="$(date +%s)-$$"\n'
+            'vibe() { command vibe "$@" --conversation "$CONVERSATION_ID"; }\n'
+        )
 
     def _render_route_hook(self, output_dir: Path, result: RenderResult) -> None:
         """Render the route interceptor hook script."""
@@ -306,8 +310,11 @@ class FileBasedAdapter(PlatformAdapter):
             skill_dir = skills_dir / dir_name
             skill_dir.mkdir(parents=True, exist_ok=True)
             self._render_skill_content(
-                skill, skill_dir, result,
-                dir_name=dir_name, manifest=manifest,
+                skill,
+                skill_dir,
+                result,
+                dir_name=dir_name,
+                manifest=manifest,
             )
 
         self.clean_orphan_skills(manifest, output_dir)

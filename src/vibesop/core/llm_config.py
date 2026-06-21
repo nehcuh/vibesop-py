@@ -475,9 +475,7 @@ class LLMConfigResolver:
             return env_config
 
         # 4. 默认(使用 Haiku - 快速且便宜)
-        self.logger.print(
-            "[dim]  Using default LLM (deepseek-v4-flash) for understanding[/dim]"
-        )
+        self.logger.print("[dim]  Using default LLM (deepseek-v4-flash) for understanding[/dim]")
         return LLMConfig(
             provider="deepseek",
             model="deepseek-v4-flash",

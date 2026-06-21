@@ -30,7 +30,9 @@ class TestInit:
 
 
 class TestSearch:
-    def test_search_returns_skill_repos(self, mocker: MockerFixture, crawler: GitHubSkillCrawler) -> None:
+    def test_search_returns_skill_repos(
+        self, mocker: MockerFixture, crawler: GitHubSkillCrawler
+    ) -> None:
         mock_response = mocker.Mock()
         mock_response.status_code = 200
         mock_response.json.return_value = {
@@ -83,7 +85,9 @@ class TestSearch:
 
         assert results == []
 
-    def test_search_http_error_returns_empty(self, mocker: MockerFixture, crawler: GitHubSkillCrawler) -> None:
+    def test_search_http_error_returns_empty(
+        self, mocker: MockerFixture, crawler: GitHubSkillCrawler
+    ) -> None:
         mock_response = mocker.Mock()
         mock_response.status_code = 403
         mock_client = mocker.patch("httpx.Client")
@@ -120,7 +124,9 @@ class TestSearch:
 
 
 class TestValidate:
-    def test_validate_skill_md_exists(self, mocker: MockerFixture, crawler: GitHubSkillCrawler) -> None:
+    def test_validate_skill_md_exists(
+        self, mocker: MockerFixture, crawler: GitHubSkillCrawler
+    ) -> None:
         mock_response = mocker.Mock()
         mock_response.status_code = 200
         mock_client = mocker.patch("httpx.Client")
@@ -137,7 +143,9 @@ class TestValidate:
 
         assert crawler.validate(repo) is True
 
-    def test_validate_skill_md_missing(self, mocker: MockerFixture, crawler: GitHubSkillCrawler) -> None:
+    def test_validate_skill_md_missing(
+        self, mocker: MockerFixture, crawler: GitHubSkillCrawler
+    ) -> None:
         mock_response = mocker.Mock()
         mock_response.status_code = 404
         mock_client = mocker.patch("httpx.Client")

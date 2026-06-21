@@ -32,13 +32,13 @@ from vibesop.cli.commands import inspect as inspect_module
 from vibesop.cli.commands import install as install_module
 from vibesop.cli.commands import market_cmd as market_cmd_module
 from vibesop.cli.commands import onboard as onboard_module
+from vibesop.cli.commands import prompt_chain_cmd as prompt_chain_module
 from vibesop.cli.commands import quickstart as quickstart_module
 from vibesop.cli.commands import skill_commands as skill_cmd_module
 from vibesop.cli.commands import skill_craft as skill_craft_module
 from vibesop.cli.commands import skills_commands as skills_cmd_module
 from vibesop.cli.commands import switch as switch_module
 from vibesop.cli.commands import targets as targets_module
-from vibesop.cli.commands import prompt_chain_cmd as prompt_chain_module
 from vibesop.cli.commands import tools_cmd as tools_module
 
 __all__ = [
@@ -52,6 +52,7 @@ __all__ = [
     "install_module",
     "market_cmd_module",
     "onboard_module",
+    "prompt_chain_module",
     "quickstart_module",
     "skill_cmd_module",
     "skill_craft_module",
@@ -59,7 +60,6 @@ __all__ = [
     "switch_module",
     "targets_module",
     "tools_module",
-    "prompt_chain_module",
 ]
 
 

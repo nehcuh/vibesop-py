@@ -9,14 +9,17 @@ Tests for:
 
 from __future__ import annotations
 
-import pytest
-
 from vibesop.core.models import (
     ExecutionPlan,
     ExecutionStep,
-    StepStatus,
     TrustLevel,
     WorkflowPattern,
+)
+from vibesop.core.orchestration.verification_loop import (
+    VerificationLoop,
+    VerificationLoopAction,
+    VerificationLoopConfig,
+    VerificationLoopState,
 )
 from vibesop.core.orchestration.verifier import (
     VerificationIssue,
@@ -26,14 +29,6 @@ from vibesop.core.orchestration.verifier import (
     VerifierAgent,
     verify_step_with_retry,
 )
-from vibesop.core.orchestration.verification_loop import (
-    VerificationLoop,
-    VerificationLoopAction,
-    VerificationLoopConfig,
-    VerificationLoopState,
-    execute_plan_with_verification,
-)
-
 
 # --- VerifierAgent Tests ---
 
@@ -89,6 +84,7 @@ def test_verification_strictness_enum() -> None:
 
 def test_verifier_agent_init() -> None:
     """Test VerifierAgent initialization."""
+
     # Mock LLM client
     class MockLLM:
         def call(self, prompt: str, **kwargs: object) -> str:
@@ -103,6 +99,7 @@ def test_verifier_agent_init() -> None:
 
 def test_verifier_agent_empty_output() -> None:
     """Test verifier handles empty output correctly."""
+
     class MockLLM:
         def call(self, prompt: str, **kwargs: object) -> str:
             return "Never called"
@@ -127,9 +124,10 @@ def test_verifier_agent_empty_output() -> None:
 
 def test_verifier_agent_parse_response() -> None:
     """Test verifier parses LLM response correctly."""
+
     class MockLLM:
         def call(self, prompt: str, **kwargs: object) -> str:
-            return '''{
+            return """{
                 "status": "needs_revision",
                 "confidence": 0.7,
                 "reasoning": "Some issues found",
@@ -137,7 +135,7 @@ def test_verifier_agent_parse_response() -> None:
                 "issues": [
                     {"category": "completeness", "severity": "medium", "description": "Missing X", "suggested_fix": "Add X"}
                 ]
-            }'''
+            }"""
 
     llm = MockLLM()
     verifier = VerifierAgent(llm)
@@ -159,9 +157,10 @@ def test_verifier_agent_parse_response() -> None:
 
 def test_verifier_strictness_lenient() -> None:
     """Test verifier lenient strictness (only fails on critical)."""
+
     class MockLLM:
         def call(self, prompt: str, **kwargs: object) -> str:
-            return '''{
+            return """{
                 "status": "failed",
                 "confidence": 0.5,
                 "reasoning": "Test",
@@ -169,7 +168,7 @@ def test_verifier_strictness_lenient() -> None:
                 "issues": [
                     {"category": "correctness", "severity": "medium", "description": "Test issue"}
                 ]
-            }'''
+            }"""
 
     llm = MockLLM()
     verifier = VerifierAgent(llm, strictness=VerificationStrictness.LENIENT)
@@ -189,9 +188,10 @@ def test_verifier_strictness_lenient() -> None:
 
 def test_verifier_strictness_strict() -> None:
     """Test verifier strict strictness (medium issues trigger failure)."""
+
     class MockLLM:
         def call(self, prompt: str, **kwargs: object) -> str:
-            return '''{
+            return """{
                 "status": "needs_revision",
                 "confidence": 0.6,
                 "reasoning": "Test",
@@ -199,7 +199,7 @@ def test_verifier_strictness_strict() -> None:
                 "issues": [
                     {"category": "completeness", "severity": "medium", "description": "Test issue"}
                 ]
-            }'''
+            }"""
 
     llm = MockLLM()
     verifier = VerifierAgent(llm, strictness=VerificationStrictness.STRICT)
@@ -504,10 +504,11 @@ def test_adversarial_pattern_has_verification_step() -> None:
     # Create a mock router with proper routing config
     class MockRouter:
         def __init__(self):
-            self.routing_config = type('obj', (object,), {'enable_orchestration': True})()
+            self.routing_config = type("obj", (object,), {"enable_orchestration": True})()
 
         def _single_skill_route(self, query: str, context=None, candidates=None):
-            from vibesop.core.models import RoutingResult, SkillRoute, RoutingLayer
+            from vibesop.core.models import RoutingLayer, RoutingResult, SkillRoute
+
             return RoutingResult(
                 primary=SkillRoute(skill_id="test", confidence=0.9, layer=RoutingLayer.SCENARIO),
                 alternatives=[],
@@ -564,10 +565,11 @@ def test_sequential_pattern_no_verification_step() -> None:
     # Create a mock router with proper routing config
     class MockRouter:
         def __init__(self):
-            self.routing_config = type('obj', (object,), {'enable_orchestration': True})()
+            self.routing_config = type("obj", (object,), {"enable_orchestration": True})()
 
         def _single_skill_route(self, query: str, context=None, candidates=None):
-            from vibesop.core.models import RoutingResult, SkillRoute, RoutingLayer
+            from vibesop.core.models import RoutingLayer, RoutingResult, SkillRoute
+
             return RoutingResult(
                 primary=SkillRoute(skill_id="test", confidence=0.9, layer=RoutingLayer.SCENARIO),
                 alternatives=[],
@@ -609,8 +611,8 @@ def test_sequential_pattern_no_verification_step() -> None:
 
 def test_execution_order_with_dependencies() -> None:
     """Test _get_execution_order respects dependencies."""
+    from vibesop.core.models import ExecutionMode, ExecutionStep
     from vibesop.core.orchestration.verification_loop import _get_execution_order
-    from vibesop.core.models import ExecutionPlan, ExecutionStep, ExecutionMode
 
     step1 = ExecutionStep(
         step_id="s1",
@@ -678,7 +680,7 @@ def test_strategy_hint_single_key_value() -> None:
 
 def test_execution_plan_to_dict_includes_workflow_pattern() -> None:
     """Test ExecutionPlan.to_dict() includes workflow_pattern."""
-    from vibesop.core.models import ExecutionMode, ExecutionPlan, PlanStatus
+    from vibesop.core.models import ExecutionMode
 
     plan = ExecutionPlan(
         plan_id="test-plan",
@@ -695,7 +697,7 @@ def test_execution_plan_to_dict_includes_workflow_pattern() -> None:
 
 def test_execution_plan_summary_includes_workflow_pattern() -> None:
     """Test get_execution_summary() includes workflow_pattern."""
-    from vibesop.core.models import ExecutionMode, ExecutionPlan
+    from vibesop.core.models import ExecutionMode
 
     plan = ExecutionPlan(
         plan_id="test-plan",
@@ -738,8 +740,12 @@ def test_verify_step_with_retry_accepts_executor() -> None:
     )
 
     result, retries = verify_step_with_retry(
-        verifier, "Test query", step, "Initial output",
-        max_retries=3, executor=mock_executor,
+        verifier,
+        "Test query",
+        step,
+        "Initial output",
+        max_retries=3,
+        executor=mock_executor,
     )
 
     assert result.status == VerificationStatus.PASSED
@@ -768,8 +774,12 @@ def test_verify_step_with_retry_no_executor() -> None:
     )
 
     result, retries = verify_step_with_retry(
-        verifier, "Test query", step, "Output",
-        max_retries=5, executor=None,
+        verifier,
+        "Test query",
+        step,
+        "Output",
+        max_retries=5,
+        executor=None,
     )
 
     assert result.status == VerificationStatus.PASSED
@@ -777,6 +787,7 @@ def test_verify_step_with_retry_no_executor() -> None:
 
 def test_apply_strictness_returns_new_object() -> None:
     """Test _apply_strictness returns a copy, not mutating original."""
+
     class MockLLM:
         def call(self, prompt: str, **kwargs: object) -> str:
             return "never called"
@@ -862,4 +873,3 @@ def test_verify_step_trusted_defaults_to_true() -> None:
     )
 
     assert loop.verify_step(step, "") is True
-

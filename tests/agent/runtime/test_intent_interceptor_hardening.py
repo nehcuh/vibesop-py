@@ -25,7 +25,7 @@ from __future__ import annotations
 
 import pytest
 
-from vibesop.agent.runtime.intent_interceptor import InterceptionMode, IntentInterceptor
+from vibesop.agent.runtime.intent_interceptor import IntentInterceptor, InterceptionMode
 
 
 class TestExtractExplicitSkillChineseHardening:
@@ -38,7 +38,10 @@ class TestExtractExplicitSkillChineseHardening:
     def test_ascii_skill_id_accepted(self, interceptor: IntentInterceptor) -> None:
         """Legitimate ASCII skill IDs (slash, dash, underscore) pass."""
         assert interceptor._extract_explicit_skill("use gstack/review") == "gstack/review"
-        assert interceptor._extract_explicit_skill("调用 systematic-debugging") == "systematic-debugging"
+        assert (
+            interceptor._extract_explicit_skill("调用 systematic-debugging")
+            == "systematic-debugging"
+        )
         assert interceptor._extract_explicit_skill("use my_skill_v2") == "my_skill_v2"
 
     def test_chinese_text_capture_rejected(self, interceptor: IntentInterceptor) -> None:
@@ -65,9 +68,7 @@ class TestExtractExplicitSkillChineseHardening:
         result = interceptor._extract_explicit_skill("使用 Ａrchitect 工具")
         assert result is None
 
-    def test_skill_with_chinese_prefix_rejected(
-        self, interceptor: IntentInterceptor
-    ) -> None:
+    def test_skill_with_chinese_prefix_rejected(self, interceptor: IntentInterceptor) -> None:
         """When a Chinese word happens to match the ``"用 X"`` pattern
         boundary, the captured group must still be ASCII-clean."""
         # "用 数据库" — the "用" is a real Chinese word, "数据库" is
@@ -104,9 +105,7 @@ class TestDetectRolesContract:
         roles = interceptor._detect_roles("请帮我设计架构")
         assert roles == ["architect"]
 
-    def test_multiple_distinct_roles_deduplicated(
-        self, interceptor: IntentInterceptor
-    ) -> None:
+    def test_multiple_distinct_roles_deduplicated(self, interceptor: IntentInterceptor) -> None:
         """Multiple keywords from the same role count once; distinct
         roles produce distinct list items in dict-iteration order."""
         # Use real keywords from ROLE_KEYWORDS: 'architecture' (architect),
@@ -119,9 +118,7 @@ class TestDetectRolesContract:
         # match this query.
         assert roles == ["architect", "implementer", "reviewer"]
 
-    def test_same_role_multiple_keywords_deduplicated(
-        self, interceptor: IntentInterceptor
-    ) -> None:
+    def test_same_role_multiple_keywords_deduplicated(self, interceptor: IntentInterceptor) -> None:
         """If 'architect' has multiple keywords (架构/设计/architecture),
         a query mentioning several of them still counts architect once."""
         # '架构' and 'architecture' both map to architect.
@@ -137,9 +134,7 @@ class TestDetectRolesContract:
         roles_mixed = interceptor._detect_roles("Design The Architecture")
         assert roles_lower == roles_upper == roles_mixed == ["architect"]
 
-    def test_first_seen_order_is_dict_iteration_order(
-        self, interceptor: IntentInterceptor
-    ) -> None:
+    def test_first_seen_order_is_dict_iteration_order(self, interceptor: IntentInterceptor) -> None:
         """Roles are returned in dict-iteration order, NOT query-appearance
         order. This pins the current contract; if the contract changes to
         query-appearance order, this test will catch it."""
@@ -160,9 +155,7 @@ class TestQuickSquadProtocolPriority:
     def interceptor(self) -> IntentInterceptor:
         return IntentInterceptor()
 
-    def test_red_team_wins_over_everything(
-        self, interceptor: IntentInterceptor
-    ) -> None:
+    def test_red_team_wins_over_everything(self, interceptor: IntentInterceptor) -> None:
         """If red_team is in the role set, protocol is 'red_team'."""
         for roles in (
             ["architect", "implementer", "red_team"],
@@ -170,26 +163,18 @@ class TestQuickSquadProtocolPriority:
             ["architect", "red_team", "reviewer", "implementer"],
         ):
             analysis = interceptor._build_quick_squad_analysis("x", roles)
-            assert analysis.collaboration_protocol == "red_team", (
-                f"red_team must dominate: {roles}"
-            )
+            assert analysis.collaboration_protocol == "red_team", f"red_team must dominate: {roles}"
 
     def test_review_gate_when_reviewer_and_implementer_without_red_team(
         self, interceptor: IntentInterceptor
     ) -> None:
         """reviewer + implementer (no red_team) → review_gate."""
-        analysis = interceptor._build_quick_squad_analysis(
-            "x", ["implementer", "reviewer"]
-        )
+        analysis = interceptor._build_quick_squad_analysis("x", ["implementer", "reviewer"])
         assert analysis.collaboration_protocol == "review_gate"
 
-    def test_debate_when_debater_present(
-        self, interceptor: IntentInterceptor
-    ) -> None:
+    def test_debate_when_debater_present(self, interceptor: IntentInterceptor) -> None:
         """debater (without red_team / review_gate prereqs) → debate."""
-        analysis = interceptor._build_quick_squad_analysis(
-            "x", ["architect", "debater"]
-        )
+        analysis = interceptor._build_quick_squad_analysis("x", ["architect", "debater"])
         assert analysis.collaboration_protocol == "debate"
 
     def test_parallel_when_three_plus_roles_no_special_markers(
@@ -201,31 +186,21 @@ class TestQuickSquadProtocolPriority:
         )
         assert analysis.collaboration_protocol == "parallel"
 
-    def test_sequential_default_for_two_roles(
-        self, interceptor: IntentInterceptor
-    ) -> None:
+    def test_sequential_default_for_two_roles(self, interceptor: IntentInterceptor) -> None:
         """2 roles without special markers → sequential."""
-        analysis = interceptor._build_quick_squad_analysis(
-            "x", ["architect", "implementer"]
-        )
+        analysis = interceptor._build_quick_squad_analysis("x", ["architect", "implementer"])
         assert analysis.collaboration_protocol == "sequential"
 
-    def test_per_agent_skills_populated(
-        self, interceptor: IntentInterceptor
-    ) -> None:
+    def test_per_agent_skills_populated(self, interceptor: IntentInterceptor) -> None:
         """Each role gets its skill set via skill_composer.infer_skills_for_role."""
-        analysis = interceptor._build_quick_squad_analysis(
-            "x", ["architect", "red_team"]
-        )
+        analysis = interceptor._build_quick_squad_analysis("x", ["architect", "red_team"])
         assert "architect" in analysis.per_agent_skills
         assert "red_team" in analysis.per_agent_skills
         # skill_composer provides these defaults; pin the contract:
         assert "system-design" in analysis.per_agent_skills["architect"]
         assert "security_audit" in analysis.per_agent_skills["red_team"]
 
-    def test_handoff_points_match_role_count(
-        self, interceptor: IntentInterceptor
-    ) -> None:
+    def test_handoff_points_match_role_count(self, interceptor: IntentInterceptor) -> None:
         """handoff_points is range(1, n_roles) — one less than role count."""
         for n in (2, 3, 4):
             roles = [f"role{i}" for i in range(n)]
@@ -250,9 +225,7 @@ class TestShouldInterceptEndToEndWithHardening:
         high-availability architecture must not get routed to a
         non-existent skill named '高可用'."""
         interceptor = IntentInterceptor()
-        decision = interceptor.should_intercept(
-            "用 高可用 的方式重新设计这个微服务架构"
-        )
+        decision = interceptor.should_intercept("用 高可用 的方式重新设计这个微服务架构")
         # Should NOT route to a single skill called "高可用".
         if decision.mode == InterceptionMode.SINGLE:
             assert "高可用" not in decision.reason, (

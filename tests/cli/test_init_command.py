@@ -115,7 +115,9 @@ class TestInitCommand:
 
     @patch("vibesop.cli.commands.init.InitSupport")
     @patch("vibesop.cli.commands.init.IntegrationManager")
-    def test_init_with_warnings(self, mock_mgr_cls, mock_support_cls, monkeypatch, tmp_path) -> None:
+    def test_init_with_warnings(
+        self, mock_mgr_cls, mock_support_cls, monkeypatch, tmp_path
+    ) -> None:
         """Test initialization with warnings but success."""
         monkeypatch.chdir(tmp_path)
         mock_support = MagicMock()
@@ -140,7 +142,9 @@ class TestInitCommand:
 
     @patch("vibesop.cli.commands.init.InitSupport")
     @patch("vibesop.cli.commands.init.IntegrationManager")
-    def test_init_success_no_created_items(self, mock_mgr_cls, mock_support_cls, monkeypatch, tmp_path) -> None:
+    def test_init_success_no_created_items(
+        self, mock_mgr_cls, mock_support_cls, monkeypatch, tmp_path
+    ) -> None:
         """Test successful initialization with no created dirs/files."""
         monkeypatch.chdir(tmp_path)
         mock_support = MagicMock()
@@ -161,7 +165,9 @@ class TestInitCommand:
 
     @patch("vibesop.cli.commands.init.InitSupport")
     @patch("vibesop.cli.commands.init.IntegrationManager")
-    def test_init_all_integrations_installed(self, mock_mgr_cls, mock_support_cls, monkeypatch, tmp_path) -> None:
+    def test_init_all_integrations_installed(
+        self, mock_mgr_cls, mock_support_cls, monkeypatch, tmp_path
+    ) -> None:
         """Test init when all integrations are already installed."""
         monkeypatch.chdir(tmp_path)
         mock_support = MagicMock()

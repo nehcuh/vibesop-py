@@ -4,12 +4,11 @@ from __future__ import annotations
 
 import uuid
 from pathlib import Path
-
 from typing import Any
 
 import pytest
 
-from vibesop.agent.step_runner import StepRunner, StepRunContext
+from vibesop.agent.step_runner import StepRunContext, StepRunner
 from vibesop.core.models import (
     ExecutionMode,
     ExecutionPlan,
@@ -62,9 +61,11 @@ class TestStepRunnerBasic:
         assert runner.pending_steps() == []
 
     def test_single_step_execution(self):
-        plan = _make_plan([
-            ("gstack/review", "review code", "帮我 review 代码", None),
-        ])
+        plan = _make_plan(
+            [
+                ("gstack/review", "review code", "帮我 review 代码", None),
+            ]
+        )
         runner = StepRunner(plan, track_state=False)
 
         pending = runner.pending_steps()
@@ -81,11 +82,13 @@ class TestStepRunnerBasic:
         assert runner.is_complete
 
     def test_sequential_dependent_steps(self):
-        plan = _make_plan([
-            ("superpowers-architect", "analyze architecture", "分析项目架构", None),
-            ("gstack/review", "review based on analysis", "审查代码", ["step-1"]),
-            ("superpowers-optimize", "optimize based on review", "优化代码", ["step-2"]),
-        ])
+        plan = _make_plan(
+            [
+                ("superpowers-architect", "analyze architecture", "分析项目架构", None),
+                ("gstack/review", "review based on analysis", "审查代码", ["step-1"]),
+                ("superpowers-optimize", "optimize based on review", "优化代码", ["step-2"]),
+            ]
+        )
         runner = StepRunner(plan, track_state=False)
 
         # Step 1 should be ready
@@ -115,20 +118,24 @@ class TestStepRunnerBasic:
         assert runner.is_complete
 
     def test_independent_steps_run_in_parallel(self):
-        plan = _make_plan([
-            ("gstack/review", "review code", "review", None),
-            ("gstack/qa", "qa test", "qa", None),
-        ])
+        plan = _make_plan(
+            [
+                ("gstack/review", "review code", "review", None),
+                ("gstack/qa", "qa test", "qa", None),
+            ]
+        )
         runner = StepRunner(plan, track_state=False)
 
         pending = runner.pending_steps()
         assert len(pending) == 2, "Both independent steps should be ready"
 
     def test_failed_dependency_blocks_downstream(self):
-        plan = _make_plan([
-            ("superpowers-architect", "analyze", "分析", None),
-            ("gstack/review", "review", "审查", ["step-1"]),
-        ])
+        plan = _make_plan(
+            [
+                ("superpowers-architect", "analyze", "分析", None),
+                ("gstack/review", "review", "审查", ["step-1"]),
+            ]
+        )
         runner = StepRunner(plan, track_state=False)
 
         step1 = runner.pending_steps()[0]
@@ -139,9 +146,11 @@ class TestStepRunnerBasic:
         assert len(pending) == 0
 
     def test_skip_step(self):
-        plan = _make_plan([
-            ("gstack/review", "review", "review", None),
-        ])
+        plan = _make_plan(
+            [
+                ("gstack/review", "review", "review", None),
+            ]
+        )
         runner = StepRunner(plan, track_state=False)
         step = runner.pending_steps()[0]
         runner.mark_skipped(step, "Not needed for this project")
@@ -153,10 +162,12 @@ class TestStepContext:
     """Context accumulation from upstream steps."""
 
     def test_context_includes_dependency_outputs(self):
-        plan = _make_plan([
-            ("superpowers-architect", "analyze", "分析架构", None),
-            ("gstack/review", "review", "审查代码", ["step-1"]),
-        ])
+        plan = _make_plan(
+            [
+                ("superpowers-architect", "analyze", "分析架构", None),
+                ("gstack/review", "review", "审查代码", ["step-1"]),
+            ]
+        )
         runner = StepRunner(plan, track_state=False)
 
         step1 = runner.pending_steps()[0]
@@ -168,10 +179,12 @@ class TestStepContext:
         assert "hexagonal architecture" in ctx.dependency_outputs["step-1"]
 
     def test_context_format_for_prompt(self):
-        plan = _make_plan([
-            ("superpowers-architect", "analyze", "分析架构", None),
-            ("gstack/review", "review", "审查代码", ["step-1"]),
-        ])
+        plan = _make_plan(
+            [
+                ("superpowers-architect", "analyze", "分析架构", None),
+                ("gstack/review", "review", "审查代码", ["step-1"]),
+            ]
+        )
         runner = StepRunner(plan, track_state=False)
 
         step1 = runner.pending_steps()[0]
@@ -184,9 +197,11 @@ class TestStepContext:
         assert "hexagonal architecture" in prompt
 
     def test_context_empty_when_no_dependencies(self):
-        plan = _make_plan([
-            ("gstack/review", "review", "review", None),
-        ])
+        plan = _make_plan(
+            [
+                ("gstack/review", "review", "review", None),
+            ]
+        )
         runner = StepRunner(plan, track_state=False)
         step = runner.pending_steps()[0]
         ctx = runner.get_context(step)
@@ -194,10 +209,12 @@ class TestStepContext:
         assert ctx.format_for_prompt() == ""
 
     def test_context_excludes_failed_dependencies(self):
-        plan = _make_plan([
-            ("superpowers-architect", "analyze", "分析", None),
-            ("gstack/review", "review", "审查", ["step-1"]),
-        ])
+        plan = _make_plan(
+            [
+                ("superpowers-architect", "analyze", "分析", None),
+                ("gstack/review", "review", "审查", ["step-1"]),
+            ]
+        )
         runner = StepRunner(plan, track_state=False)
         step1 = runner.pending_steps()[0]
         runner.mark_failed(step1, "Error")
@@ -215,11 +232,13 @@ class TestExecuteAll:
     """Full execute_all() integration."""
 
     def test_execute_all_sequential(self):
-        plan = _make_plan([
-            ("skill-a", "step 1", "do step 1", None),
-            ("skill-b", "step 2", "do step 2", ["step-1"]),
-            ("skill-c", "step 3", "do step 3", ["step-2"]),
-        ])
+        plan = _make_plan(
+            [
+                ("skill-a", "step 1", "do step 1", None),
+                ("skill-b", "step 2", "do step 2", ["step-1"]),
+                ("skill-c", "step 3", "do step 3", ["step-2"]),
+            ]
+        )
         runner = StepRunner(plan, track_state=False)
 
         def executor(step: ExecutionStep, ctx: StepRunContext) -> str:
@@ -236,11 +255,13 @@ class TestExecuteAll:
             assert r["output"].startswith("Executed skill-")
 
     def test_execute_all_with_failure_non_fatal(self):
-        plan = _make_plan([
-            ("skill-a", "step 1", "do step 1", None),
-            ("skill-b", "step 2", "do step 2", ["step-1"]),
-            ("skill-c", "step 3", "do step 3", None),
-        ])
+        plan = _make_plan(
+            [
+                ("skill-a", "step 1", "do step 1", None),
+                ("skill-b", "step 2", "do step 2", ["step-1"]),
+                ("skill-c", "step 3", "do step 3", None),
+            ]
+        )
         runner = StepRunner(plan, track_state=False)
 
         def executor(step: ExecutionStep, ctx: StepRunContext) -> str:
@@ -249,6 +270,7 @@ class TestExecuteAll:
             return f"OK {step.skill_id}"
 
         errors_called: list[str] = []
+
         def on_error(step: ExecutionStep, error: Exception) -> bool:
             errors_called.append(step.skill_id)
             return True  # continue
@@ -260,13 +282,16 @@ class TestExecuteAll:
         assert errors_called[0] == "skill-b"
 
     def test_execute_all_fail_fast(self):
-        plan = _make_plan([
-            ("skill-a", "step 1", "do step 1", None),
-            ("skill-b", "step 2", "do step 2", None),
-        ])
+        plan = _make_plan(
+            [
+                ("skill-a", "step 1", "do step 1", None),
+                ("skill-b", "step 2", "do step 2", None),
+            ]
+        )
         runner = StepRunner(plan, track_state=False)
 
         call_order: list[str] = []
+
         def executor(step: ExecutionStep, ctx: StepRunContext) -> str:
             call_order.append(step.skill_id)
             raise RuntimeError(f"Fail {step.skill_id}")
@@ -283,10 +308,12 @@ class TestStatePersistence:
     """StepRunner integration with PlanTracker."""
 
     def test_persist_and_resume(self, tmp_path: Path):
-        plan = _make_plan([
-            ("skill-a", "step 1", "do step 1", None),
-            ("skill-b", "step 2", "do step 2", ["step-1"]),
-        ])
+        plan = _make_plan(
+            [
+                ("skill-a", "step 1", "do step 1", None),
+                ("skill-b", "step 2", "do step 2", ["step-1"]),
+            ]
+        )
         runner = StepRunner(plan, project_root=tmp_path, track_state=True)
 
         step1 = runner.pending_steps()[0]
@@ -308,11 +335,13 @@ class TestStepRunnerWithDeps:
     """Complex dependency scenarios."""
 
     def test_mixed_parallel_dependencies(self):
-        plan = _make_plan([
-            ("skill-a", "step 1", "a", None),
-            ("skill-b", "step 2", "b", None),
-            ("skill-c", "step 3", "c depends on a+b", ["step-1", "step-2"]),
-        ])
+        plan = _make_plan(
+            [
+                ("skill-a", "step 1", "a", None),
+                ("skill-b", "step 2", "b", None),
+                ("skill-c", "step 3", "c depends on a+b", ["step-1", "step-2"]),
+            ]
+        )
         runner = StepRunner(plan, track_state=False)
 
         pending = runner.pending_steps()

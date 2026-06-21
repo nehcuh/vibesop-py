@@ -10,7 +10,13 @@ from vibesop.utils.external_tools import ToolInfo, ToolStatus
 runner = CliRunner()
 
 
-def _make_tool(name: str, status: ToolStatus, optional: bool = False, version: str | None = "1.0.0", path: str | None = "/usr/bin/name") -> ToolInfo:
+def _make_tool(
+    name: str,
+    status: ToolStatus,
+    optional: bool = False,
+    version: str | None = "1.0.0",
+    path: str | None = "/usr/bin/name",
+) -> ToolInfo:
     return ToolInfo(
         name=name,
         command=name,
@@ -46,7 +52,9 @@ class TestToolsCommand:
     def test_tools_show(self, mock_detector_cls) -> None:
         """Test tools show action."""
         mock_detector = MagicMock()
-        mock_detector.detect_tool.return_value = _make_tool("git", ToolStatus.AVAILABLE, version="2.40.0", path="/usr/bin/git")
+        mock_detector.detect_tool.return_value = _make_tool(
+            "git", ToolStatus.AVAILABLE, version="2.40.0", path="/usr/bin/git"
+        )
         mock_detector_cls.return_value = mock_detector
 
         result = runner.invoke(app, ["tools", "show", "git"])
@@ -80,7 +88,9 @@ class TestToolsCommand:
     def test_tools_verify_available(self, mock_detector_cls) -> None:
         """Test tools verify for available tool."""
         mock_detector = MagicMock()
-        mock_detector.detect_tool.return_value = _make_tool("git", ToolStatus.AVAILABLE, version="2.40.0")
+        mock_detector.detect_tool.return_value = _make_tool(
+            "git", ToolStatus.AVAILABLE, version="2.40.0"
+        )
         mock_detector_cls.return_value = mock_detector
 
         result = runner.invoke(app, ["tools", "verify", "git"])

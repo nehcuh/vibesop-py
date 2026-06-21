@@ -2,11 +2,9 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock
-
 import pytest
 
-from vibesop.core.models import ExecutionMode, ExecutionPlan, WorkflowPattern
+from vibesop.core.models import ExecutionMode, WorkflowPattern
 from vibesop.core.orchestration.plan_builder import PlanBuilder
 from vibesop.core.orchestration.task_decomposer import SubTask
 
@@ -74,9 +72,7 @@ class TestPlanBuilderPatternAware:
             SubTask(intent="find bugs", query="find bugs"),
             SubTask(intent="check performance", query="check performance"),
         ]
-        plan = builder.build_plan(
-            "test query", sub_tasks, workflow_pattern=WorkflowPattern.FAN_OUT
-        )
+        plan = builder.build_plan("test query", sub_tasks, workflow_pattern=WorkflowPattern.FAN_OUT)
 
         assert plan.workflow_pattern == WorkflowPattern.FAN_OUT
         assert len(plan.steps) == 3  # 2 sub-tasks + 1 synthesise step
@@ -92,9 +88,7 @@ class TestPlanBuilderPatternAware:
     def test_fan_out_single_task_no_synthesise(self):
         builder = self._make_builder()
         sub_tasks = [SubTask(intent="only task", query="do one thing")]
-        plan = builder.build_plan(
-            "test query", sub_tasks, workflow_pattern=WorkflowPattern.FAN_OUT
-        )
+        plan = builder.build_plan("test query", sub_tasks, workflow_pattern=WorkflowPattern.FAN_OUT)
 
         # Single task: no synthesise step added
         assert len(plan.steps) == 1
@@ -117,9 +111,7 @@ class TestPlanBuilderPatternAware:
 
     def test_adversarial_empty_steps(self):
         builder = self._make_builder()
-        plan = builder.build_plan(
-            "test query", [], workflow_pattern=WorkflowPattern.ADVERSARIAL
-        )
+        plan = builder.build_plan("test query", [], workflow_pattern=WorkflowPattern.ADVERSARIAL)
 
         assert len(plan.steps) == 0
 

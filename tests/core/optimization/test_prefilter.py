@@ -1,6 +1,5 @@
 """Tests for candidate prefilter."""
 
-
 from vibesop.core.optimization.prefilter import COMPLEXITY_INDICATORS, CandidatePrefilter
 
 

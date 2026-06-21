@@ -49,12 +49,8 @@ class TournamentResult(BaseModel):
         default_factory=dict,
         description="Total scores per contestant: {index: total_score}",
     )
-    comparison_reasoning: str = Field(
-        default="", description="Why the champion was selected"
-    )
-    all_outputs: list[str] = Field(
-        default_factory=list, description="All contestant outputs"
-    )
+    comparison_reasoning: str = Field(default="", description="Why the champion was selected")
+    all_outputs: list[str] = Field(default_factory=list, description="All contestant outputs")
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -117,7 +113,7 @@ class TournamentRunner:
             )
 
         # Run pairwise comparisons
-        scores: dict[int, float] = {i: 0.0 for i in range(len(contestant_outputs))}
+        scores: dict[int, float] = dict.fromkeys(range(len(contestant_outputs)), 0.0)
         all_reasoning: list[str] = []
 
         for i in range(len(contestant_outputs)):

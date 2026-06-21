@@ -148,9 +148,9 @@ class TestSafeEvalCondition:
         assert engine._evaluate_condition('exec("print(1)")', context) is False
 
         # Block dangerous attribute access
-        assert engine._evaluate_condition('().__class__', context) is False
-        assert engine._evaluate_condition('[].__class__', context) is False
-        assert engine._evaluate_condition('{}.__class__', context) is False
+        assert engine._evaluate_condition("().__class__", context) is False
+        assert engine._evaluate_condition("[].__class__", context) is False
+        assert engine._evaluate_condition("{}.__class__", context) is False
 
     def test_safe_eval_syntax_error(self) -> None:
         """Test that syntax errors are handled gracefully."""
@@ -164,11 +164,14 @@ class TestSafeEvalCondition:
     def test_safe_eval_with_variables(self) -> None:
         """Test variable substitution in conditions."""
         engine = WorkflowEngine()
-        context = ExecutionContext(skill_id="test", variables={
-            "status": "success",
-            "count": 42,
-            "enabled": True,
-        })
+        context = ExecutionContext(
+            skill_id="test",
+            variables={
+                "status": "success",
+                "count": 42,
+                "enabled": True,
+            },
+        )
 
         # String variable
         assert engine._evaluate_condition('status == "success"', context) is True
@@ -183,21 +186,23 @@ class TestSafeEvalCondition:
     def test_safe_eval_complex_expressions(self) -> None:
         """Test complex but safe expressions."""
         engine = WorkflowEngine()
-        context = ExecutionContext(skill_id="test", variables={
-            "x": 5,
-            "y": 10,
-            "z": 15,
-            "name": "test",
-        })
+        context = ExecutionContext(
+            skill_id="test",
+            variables={
+                "x": 5,
+                "y": 10,
+                "z": 15,
+                "name": "test",
+            },
+        )
 
         # Complex arithmetic and comparison
         assert engine._evaluate_condition("(x + y) * 2 == z * 2", context) is True
 
         # Complex boolean
-        assert engine._evaluate_condition(
-            "(x == 5 or y == 5) and (name == 'test')",
-            context
-        ) is True
+        assert (
+            engine._evaluate_condition("(x == 5 or y == 5) and (name == 'test')", context) is True
+        )
 
         # Nested comparisons
         assert engine._evaluate_condition("x < y < z", context) is True

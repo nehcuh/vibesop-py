@@ -76,7 +76,8 @@ class QuickstartRunner:
 
             if config.install_integrations is None:
                 config.install_integrations = self._ask_yes_no(
-                    "Install skill pack integrations (superpowers, omx)?", default=True,
+                    "Install skill pack integrations (superpowers, omx)?",
+                    default=True,
                 )
             console.print()
 
@@ -122,12 +123,18 @@ class QuickstartRunner:
 
         if choice == "1":
             return QuickstartConfig(
-                platform="ask", install_integrations=True, install_hooks=True,
-                project_path=Path.home(), global_install=True,
+                platform="ask",
+                install_integrations=True,
+                install_hooks=True,
+                project_path=Path.home(),
+                global_install=True,
             )
         return QuickstartConfig(
-            platform="ask", install_integrations=False, install_hooks=False,
-            project_path=project_path, global_install=False,
+            platform="ask",
+            install_integrations=False,
+            install_hooks=False,
+            project_path=project_path,
+            global_install=False,
         )
 
     def _ask_platform(self) -> str:
@@ -219,7 +226,11 @@ class QuickstartRunner:
                     hooks_install_target = install_target
                 hooks_result = installer.install(config.platform, hooks_install_target)
                 hooks_installed_list = hooks_result.get("hooks_installed", [])
-                hooks_installed = len(hooks_installed_list) if isinstance(hooks_installed_list, list) else sum(1 for v in hooks_installed_list.values() if v)
+                hooks_installed = (
+                    len(hooks_installed_list)
+                    if isinstance(hooks_installed_list, list)
+                    else sum(1 for v in hooks_installed_list.values() if v)
+                )
                 total_hooks = len(hooks_installed_list)
                 if hooks_installed > 0:
                     console.print(f"✓ Hooks installed: {hooks_installed}/{total_hooks}")
@@ -308,7 +319,9 @@ class QuickstartRunner:
         if config.global_install:
             output_dir = platform_dirs.get(config.platform)
             if output_dir:
-                console.print(f"1. Run: [cyan]vibe build {config.platform} --output {output_dir}[/cyan]")
+                console.print(
+                    f"1. Run: [cyan]vibe build {config.platform} --output {output_dir}[/cyan]"
+                )
             else:
                 console.print(f"1. Run: [cyan]vibe build {config.platform}[/cyan]")
             console.print('2. Run: [cyan]vibe route "your query"[/cyan] to find skills')
@@ -320,7 +333,9 @@ class QuickstartRunner:
             console.print('4. Run: [cyan]vibe route "your query"[/cyan] to test')
 
         console.print("\n[bold yellow]⚙️  LLM Configuration[/bold yellow]")
-        console.print("   Default config created at [cyan]~/.vibe/config.toml[/cyan] with Ollama as provider.")
+        console.print(
+            "   Default config created at [cyan]~/.vibe/config.toml[/cyan] with Ollama as provider."
+        )
         console.print("   Edit this file to switch provider (Anthropic, OpenAI, DeepSeek, etc.):")
         console.print()
         console.print("   [dim]  [llm][/dim]")

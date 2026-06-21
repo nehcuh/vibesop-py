@@ -249,10 +249,13 @@ def test_priority_fallback():
 
             # 1. 技能级别配置
             print("\n✓ Step 1: Set skill-level config")
-            SkillConfigManager.set_skill_llm_config(skill_id, {
-                "provider": "openai",
-                "model": "gpt-4",
-            })
+            SkillConfigManager.set_skill_llm_config(
+                skill_id,
+                {
+                    "provider": "openai",
+                    "model": "gpt-4",
+                },
+            )
 
             llm_config = get_skill_llm_config(skill_id)
             print(f"  Provider: {llm_config.provider if llm_config else 'None'}")

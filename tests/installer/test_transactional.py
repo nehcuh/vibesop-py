@@ -83,9 +83,7 @@ class TestTransactionalInstaller:
     def test_create_installer_no_auto_rollback(self) -> None:
         """Test creating installer without auto rollback."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            installer = TransactionalInstaller(
-                snapshot_dir=Path(tmpdir), auto_rollback=False
-            )
+            installer = TransactionalInstaller(snapshot_dir=Path(tmpdir), auto_rollback=False)
             assert installer._auto_rollback is False
 
     def test_add_step(self) -> None:
@@ -157,9 +155,7 @@ class TestTransactionalInstaller:
     def test_execute_failing_transaction_no_rollback(self) -> None:
         """Test transaction failure without auto rollback."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            installer = TransactionalInstaller(
-                snapshot_dir=Path(tmpdir), auto_rollback=False
-            )
+            installer = TransactionalInstaller(snapshot_dir=Path(tmpdir), auto_rollback=False)
 
             executed_steps = []
             rollback_steps = []
@@ -373,8 +369,9 @@ class TestTransactionalInstallerEdgeCases:
                 json.dump(metadata, f, indent=2)
             return snapshot_id
 
-        with tempfile.TemporaryDirectory() as tmpdir, patch.object(
-            TransactionalInstaller, "_create_snapshot", mock_create_snapshot
+        with (
+            tempfile.TemporaryDirectory() as tmpdir,
+            patch.object(TransactionalInstaller, "_create_snapshot", mock_create_snapshot),
         ):
             installer1 = TransactionalInstaller(snapshot_dir=Path(tmpdir))
             installer1.add_step("step1", lambda: {"success": True}, lambda: {"success": True})

@@ -248,7 +248,9 @@ class OpenCodeAdapter(FileBasedAdapter):
         """Render OpenCode-specific env script."""
         try:
             script_path = output_dir / "vibesop-env.sh"
-            self.write_file_atomic(script_path, self._generate_env_script(), validate_security=False)
+            self.write_file_atomic(
+                script_path, self._generate_env_script(), validate_security=False
+            )
             script_path.chmod(0o755)
             result.add_file(script_path)
         except Exception as e:

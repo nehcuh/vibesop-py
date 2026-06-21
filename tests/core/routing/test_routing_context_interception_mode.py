@@ -79,9 +79,7 @@ class TestOrchestratorReaderFieldFirst:
         # the implementation uses. We can't easily exercise orchestrate()
         # end-to-end without a lot of mocking, so we replicate the
         # field-first / fallback logic to pin the contract.
-        interception_mode = ctx.interception_mode or ctx.metadata.get(
-            "_interception_mode", ""
-        )
+        interception_mode = ctx.interception_mode or ctx.metadata.get("_interception_mode", "")
         assert interception_mode == "multi_agent_squad"
 
     def test_metadata_backchannel_used_when_field_absent(self) -> None:
@@ -89,9 +87,7 @@ class TestOrchestratorReaderFieldFirst:
         ctx = RoutingContext()
         ctx.metadata["_interception_mode"] = "single_agent"
 
-        interception_mode = ctx.interception_mode or ctx.metadata.get(
-            "_interception_mode", ""
-        )
+        interception_mode = ctx.interception_mode or ctx.metadata.get("_interception_mode", "")
         assert interception_mode == "single_agent"
 
     def test_field_intent_analysis_wins_over_metadata(self) -> None:
@@ -119,9 +115,7 @@ class TestWriterMigration:
 
         decision = MagicMock()
         decision.analysis = MagicMock()
-        decision.analysis.to_dict.return_value = {
-            "collaboration_protocol": "sequential"
-        }
+        decision.analysis.to_dict.return_value = {"collaboration_protocol": "sequential"}
 
         ctx = _build_multi_agent_squad_context(context=None, decision=decision)
 

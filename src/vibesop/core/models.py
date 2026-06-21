@@ -552,9 +552,7 @@ class ExecutionPlan(BaseModel):
             created_at=data.get("created_at", ""),
             status=data.get("status", PlanStatus.PENDING),
             execution_mode=data.get("execution_mode", ExecutionMode.SEQUENTIAL),
-            workflow_pattern=data.get(
-                "workflow_pattern", WorkflowPattern.SEQUENTIAL
-            ),
+            workflow_pattern=data.get("workflow_pattern", WorkflowPattern.SEQUENTIAL),
             is_dynamic=data.get("is_dynamic", False),
             dry_threshold=data.get("dry_threshold", 2),
             max_reorchestration_rounds=data.get("max_reorchestration_rounds", 5),
@@ -562,7 +560,7 @@ class ExecutionPlan(BaseModel):
             metadata=data.get("metadata", {}),
         )
 
-    def get_parallel_groups(self) -> list[list["ExecutionStep"]]:
+    def get_parallel_groups(self) -> list[list[ExecutionStep]]:
         """Group steps into parallel batches based on dependencies.
 
         Uses a topological sort to find steps that can run concurrently.

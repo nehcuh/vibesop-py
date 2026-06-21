@@ -51,9 +51,7 @@ class RouterContextMixin:
         if host._memory_manager is None:
             from vibesop.core.memory import MemoryManager
 
-            host._memory_manager = MemoryManager(
-                storage_dir=host.project_root / ".vibe" / "memory"
-            )
+            host._memory_manager = MemoryManager(storage_dir=host.project_root / ".vibe" / "memory")
         return host._memory_manager
 
     def _get_session_context(self):
@@ -69,9 +67,7 @@ class RouterContextMixin:
             )
         return host._session_context
 
-    def _save_session_state(
-        self, result: RoutingResult, _context: RoutingContext | None
-    ) -> None:
+    def _save_session_state(self, result: RoutingResult, _context: RoutingContext | None) -> None:
         """Persist session state after routing, including reroute check.
 
         After saving the current routing decision as session state, checks
@@ -115,9 +111,7 @@ class RouterContextMixin:
             )
         return host._instinct_learner
 
-    def _enrich_context(
-        self, context: RoutingContext | None, query: str = ""
-    ) -> RoutingContext:
+    def _enrich_context(self, context: RoutingContext | None, query: str = "") -> RoutingContext:
         """Enrich routing context with memory, session state, recent conversation history, and project context."""
         if context is None:
             context = RoutingContext()

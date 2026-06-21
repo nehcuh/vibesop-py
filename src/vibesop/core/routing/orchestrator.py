@@ -142,8 +142,8 @@ class Orchestrator:
                 progress=0.55,
             )
         )
-        from vibesop.core.orchestration.classifier import ClassifierAgent
         from vibesop.core.models import ClassifierResult, WorkflowPattern
+        from vibesop.core.orchestration.classifier import ClassifierAgent
 
         classifier = ClassifierAgent(llm_client=self._router._llm)
         classification = classifier.classify(query, sub_tasks)
@@ -235,7 +235,8 @@ class Orchestrator:
 
         try:
             plan = builder.build_plan(
-                query, sub_tasks,
+                query,
+                sub_tasks,
                 workflow_pattern=effective_pattern,
                 metadata=plan_metadata,
             )
@@ -274,6 +275,7 @@ class Orchestrator:
 
             # Append verification step to the plan
             from vibesop.core.orchestration.plan_builder import PlanBuilder
+
             PlanBuilder._apply_adversarial(plan.steps, query)
             # Mark the new verification step with QUARANTINE trust
             if plan.steps:
@@ -291,7 +293,11 @@ class Orchestrator:
                 phase=OrchestrationPhase.PLAN_BUILDING,
                 message=f"Execution plan built with {len(plan.steps)} steps ({'dynamic' if WorkflowPattern(plan.workflow_pattern) in (WorkflowPattern.LOOP_UNTIL_DRY, WorkflowPattern.TOURNAMENT) else 'static'})",
                 progress=0.9,
-                metadata={"step_count": len(plan.steps), "strategy": plan.execution_mode.value, "pattern": plan.workflow_pattern.value},
+                metadata={
+                    "step_count": len(plan.steps),
+                    "strategy": plan.execution_mode.value,
+                    "pattern": plan.workflow_pattern.value,
+                },
             )
         )
 

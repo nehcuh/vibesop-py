@@ -51,7 +51,12 @@ class TestTryMatcherPipeline:
         opt_service.ensure_cluster_index = Mock()
         opt_service.apply_optimizations = Mock(
             return_value=(
-                MatchResult(skill_id="winner", confidence=0.9, matcher_type=MatcherType.KEYWORD, metadata={"namespace": "builtin"}),
+                MatchResult(
+                    skill_id="winner",
+                    confidence=0.9,
+                    matcher_type=MatcherType.KEYWORD,
+                    metadata={"namespace": "builtin"},
+                ),
                 [],
             )
         )
@@ -70,9 +75,16 @@ class TestTryMatcherPipeline:
 
     def test_single_matcher_winner(self) -> None:
         """Pipeline with one confident matcher returns result."""
-        matcher = FakeMatcher([
-            MatchResult(skill_id="winner", confidence=0.9, matcher_type=MatcherType.KEYWORD, metadata={"namespace": "builtin"}),
-        ])
+        matcher = FakeMatcher(
+            [
+                MatchResult(
+                    skill_id="winner",
+                    confidence=0.9,
+                    matcher_type=MatcherType.KEYWORD,
+                    metadata={"namespace": "builtin"},
+                ),
+            ]
+        )
         pipeline = self._make_pipeline([(RoutingLayer.KEYWORD, matcher)])
         candidates = [{"id": "winner", "description": "winning skill"}]
 
@@ -85,9 +97,13 @@ class TestTryMatcherPipeline:
 
     def test_no_match_below_threshold(self) -> None:
         """Match below min_confidence returns None."""
-        matcher = FakeMatcher([
-            MatchResult(skill_id="weak", confidence=0.3, matcher_type=MatcherType.KEYWORD, metadata={}),
-        ])
+        matcher = FakeMatcher(
+            [
+                MatchResult(
+                    skill_id="weak", confidence=0.3, matcher_type=MatcherType.KEYWORD, metadata={}
+                ),
+            ]
+        )
         pipeline = self._make_pipeline([(RoutingLayer.KEYWORD, matcher)], min_confidence=0.6)
 
         result = pipeline.try_matcher_pipeline("test", [{"id": "weak"}], None)
@@ -103,16 +119,32 @@ class TestTryMatcherPipeline:
 
     def test_multiple_matchers_best_wins(self) -> None:
         """Across multiple matchers, highest confidence skill wins."""
-        keyword_matcher = FakeMatcher([
-            MatchResult(skill_id="a", confidence=0.7, matcher_type=MatcherType.KEYWORD, metadata={"namespace": "builtin"}),
-        ])
-        tfidf_matcher = FakeMatcher([
-            MatchResult(skill_id="b", confidence=0.85, matcher_type=MatcherType.TFIDF, metadata={"namespace": "builtin"}),
-        ])
-        pipeline = self._make_pipeline([
-            (RoutingLayer.KEYWORD, keyword_matcher),
-            (RoutingLayer.TFIDF, tfidf_matcher),
-        ])
+        keyword_matcher = FakeMatcher(
+            [
+                MatchResult(
+                    skill_id="a",
+                    confidence=0.7,
+                    matcher_type=MatcherType.KEYWORD,
+                    metadata={"namespace": "builtin"},
+                ),
+            ]
+        )
+        tfidf_matcher = FakeMatcher(
+            [
+                MatchResult(
+                    skill_id="b",
+                    confidence=0.85,
+                    matcher_type=MatcherType.TFIDF,
+                    metadata={"namespace": "builtin"},
+                ),
+            ]
+        )
+        pipeline = self._make_pipeline(
+            [
+                (RoutingLayer.KEYWORD, keyword_matcher),
+                (RoutingLayer.TFIDF, tfidf_matcher),
+            ]
+        )
         candidates = [
             {"id": "a", "description": "skill a"},
             {"id": "b", "description": "skill b"},
@@ -124,30 +156,57 @@ class TestTryMatcherPipeline:
 
     def test_embedding_skipped_when_disabled(self) -> None:
         """Embedding matcher is skipped when enable_embedding=False."""
-        keyword_matcher = FakeMatcher([
-            MatchResult(skill_id="a", confidence=0.9, matcher_type=MatcherType.KEYWORD, metadata={"namespace": "builtin"}),
-        ])
+        keyword_matcher = FakeMatcher(
+            [
+                MatchResult(
+                    skill_id="a",
+                    confidence=0.9,
+                    matcher_type=MatcherType.KEYWORD,
+                    metadata={"namespace": "builtin"},
+                ),
+            ]
+        )
         embed_matcher = FakeMatcher([])
-        pipeline = self._make_pipeline([
-            (RoutingLayer.KEYWORD, keyword_matcher),
-            (RoutingLayer.EMBEDDING, embed_matcher),
-        ], enable_embedding=False)
+        pipeline = self._make_pipeline(
+            [
+                (RoutingLayer.KEYWORD, keyword_matcher),
+                (RoutingLayer.EMBEDDING, embed_matcher),
+            ],
+            enable_embedding=False,
+        )
 
         pipeline.try_matcher_pipeline("test", [{"id": "a"}], None)
         assert embed_matcher.call_count == 0
 
     def test_embedding_runs_when_enabled(self) -> None:
         """Embedding matcher runs when enable_embedding=True."""
-        keyword_matcher = FakeMatcher([
-            MatchResult(skill_id="a", confidence=0.5, matcher_type=MatcherType.KEYWORD, metadata={"namespace": "builtin"}),
-        ])
-        embed_matcher = FakeMatcher([
-            MatchResult(skill_id="b", confidence=0.9, matcher_type=MatcherType.EMBEDDING, metadata={"namespace": "builtin"}),
-        ])
-        pipeline = self._make_pipeline([
-            (RoutingLayer.KEYWORD, keyword_matcher),
-            (RoutingLayer.EMBEDDING, embed_matcher),
-        ], enable_embedding=True)
+        keyword_matcher = FakeMatcher(
+            [
+                MatchResult(
+                    skill_id="a",
+                    confidence=0.5,
+                    matcher_type=MatcherType.KEYWORD,
+                    metadata={"namespace": "builtin"},
+                ),
+            ]
+        )
+        embed_matcher = FakeMatcher(
+            [
+                MatchResult(
+                    skill_id="b",
+                    confidence=0.9,
+                    matcher_type=MatcherType.EMBEDDING,
+                    metadata={"namespace": "builtin"},
+                ),
+            ]
+        )
+        pipeline = self._make_pipeline(
+            [
+                (RoutingLayer.KEYWORD, keyword_matcher),
+                (RoutingLayer.EMBEDDING, embed_matcher),
+            ],
+            enable_embedding=True,
+        )
 
         pipeline.try_matcher_pipeline("test", [{"id": "a"}, {"id": "b"}], None)
         assert embed_matcher.call_count == 1
@@ -159,13 +218,22 @@ class TestTryMatcherPipeline:
         failing_matcher.score = Mock(return_value=0.5)
         failing_matcher.warm_up = Mock()
 
-        backup_matcher = FakeMatcher([
-            MatchResult(skill_id="backup", confidence=0.9, matcher_type=MatcherType.TFIDF, metadata={"namespace": "builtin"}),
-        ])
-        pipeline = self._make_pipeline([
-            (RoutingLayer.KEYWORD, failing_matcher),
-            (RoutingLayer.TFIDF, backup_matcher),
-        ])
+        backup_matcher = FakeMatcher(
+            [
+                MatchResult(
+                    skill_id="backup",
+                    confidence=0.9,
+                    matcher_type=MatcherType.TFIDF,
+                    metadata={"namespace": "builtin"},
+                ),
+            ]
+        )
+        pipeline = self._make_pipeline(
+            [
+                (RoutingLayer.KEYWORD, failing_matcher),
+                (RoutingLayer.TFIDF, backup_matcher),
+            ]
+        )
 
         result = pipeline.try_matcher_pipeline("test", [{"id": "backup"}], None)
         assert isinstance(result, LayerResult)
@@ -173,23 +241,39 @@ class TestTryMatcherPipeline:
 
     def test_early_exit_high_confidence_keyword(self) -> None:
         """Keyword match >= 0.95 skips subsequent matchers."""
-        keyword_matcher = FakeMatcher([
-            MatchResult(skill_id="fast", confidence=0.97, matcher_type=MatcherType.KEYWORD, metadata={"namespace": "builtin"}),
-        ])
+        keyword_matcher = FakeMatcher(
+            [
+                MatchResult(
+                    skill_id="fast",
+                    confidence=0.97,
+                    matcher_type=MatcherType.KEYWORD,
+                    metadata={"namespace": "builtin"},
+                ),
+            ]
+        )
         tfidf_matcher = FakeMatcher([])
-        pipeline = self._make_pipeline([
-            (RoutingLayer.KEYWORD, keyword_matcher),
-            (RoutingLayer.TFIDF, tfidf_matcher),
-        ])
+        pipeline = self._make_pipeline(
+            [
+                (RoutingLayer.KEYWORD, keyword_matcher),
+                (RoutingLayer.TFIDF, tfidf_matcher),
+            ]
+        )
 
         pipeline.try_matcher_pipeline("test", [{"id": "fast"}], None)
         assert tfidf_matcher.call_count == 0
 
     def test_rejected_candidates_collected(self) -> None:
         """collect_rejected=True populates rejected candidates."""
-        matcher = FakeMatcher([
-            MatchResult(skill_id="winner", confidence=0.9, matcher_type=MatcherType.KEYWORD, metadata={"namespace": "builtin"}),
-        ])
+        matcher = FakeMatcher(
+            [
+                MatchResult(
+                    skill_id="winner",
+                    confidence=0.9,
+                    matcher_type=MatcherType.KEYWORD,
+                    metadata={"namespace": "builtin"},
+                ),
+            ]
+        )
         pipeline = self._make_pipeline([(RoutingLayer.KEYWORD, matcher)], min_confidence=0.8)
         candidates = [
             {"id": "winner", "description": "winning skill"},
@@ -205,12 +289,21 @@ class TestTryMatcherPipeline:
 
     def test_no_rejected_when_not_requested(self) -> None:
         """collect_rejected=False leaves diagnostics empty."""
-        matcher = FakeMatcher([
-            MatchResult(skill_id="winner", confidence=0.9, matcher_type=MatcherType.KEYWORD, metadata={"namespace": "builtin"}),
-        ])
+        matcher = FakeMatcher(
+            [
+                MatchResult(
+                    skill_id="winner",
+                    confidence=0.9,
+                    matcher_type=MatcherType.KEYWORD,
+                    metadata={"namespace": "builtin"},
+                ),
+            ]
+        )
         pipeline = self._make_pipeline([(RoutingLayer.KEYWORD, matcher)])
 
-        result = pipeline.try_matcher_pipeline("test", [{"id": "winner"}], None, collect_rejected=False)
+        result = pipeline.try_matcher_pipeline(
+            "test", [{"id": "winner"}], None, collect_rejected=False
+        )
         assert result.diagnostics == {}
 
 

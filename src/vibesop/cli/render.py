@@ -23,7 +23,10 @@ _TIP_TEMPLATES: list[tuple[str, str]] = [
     ("discover", "[cyan]vibe skill discover[/cyan] [dim]— browse community skills[/dim]"),
     ("cleanup", "[cyan]vibe skill cleanup[/cyan] [dim]— review and prune stale skills[/dim]"),
     ("list", "[cyan]vibe skill list[/cyan] [dim]— browse all 45+ available skills[/dim]"),
-    ("recommend", "[cyan]vibe skills suggested[/cyan] [dim]— get personalized recommendations[/dim]"),
+    (
+        "recommend",
+        "[cyan]vibe skills suggested[/cyan] [dim]— get personalized recommendations[/dim]",
+    ),
 ]
 
 
@@ -263,9 +266,7 @@ def _get_today_stats(project_root: Path) -> dict[str, Any]:
     if today_records:
         from collections import Counter
 
-        skill_counts = Counter(
-            r.primary_skill for r in today_records if r.primary_skill
-        )
+        skill_counts = Counter(r.primary_skill for r in today_records if r.primary_skill)
         if skill_counts:
             top_skill = skill_counts.most_common(1)[0][0]
 
@@ -281,9 +282,7 @@ def _check_new_badges(project_root: Path, skill_id: str) -> list[str]:
         store = AnalyticsStore(storage_dir=project_root / ".vibe")
         records = store.list_records(limit=500)
 
-        route_history = [
-            {"skill_id": r.primary_skill} for r in records if r.primary_skill
-        ]
+        route_history = [{"skill_id": r.primary_skill} for r in records if r.primary_skill]
 
         new_badges = tracker.check_route_event(skill_id, route_history)
         if not new_badges:
@@ -292,7 +291,9 @@ def _check_new_badges(project_root: Path, skill_id: str) -> list[str]:
         lines: list[str] = []
         for b in new_badges:
             meta = get_badge_display(b.type)
-            lines.append(f"{meta['icon']} [bold magenta]{meta['title']}[/bold magenta] — {meta['description']}")
+            lines.append(
+                f"{meta['icon']} [bold magenta]{meta['title']}[/bold magenta] — {meta['description']}"
+            )
         return lines
     except Exception:
         return []
@@ -338,8 +339,7 @@ def render_ecosystem_tips(
     stale = _count_stale_skills(project_root)
     if stale > 0:
         tips.append(
-            f"[yellow]{stale} stale skill(s)[/yellow] "
-            f"[dim]— [cyan]vibe skill cleanup[/cyan][/dim]"
+            f"[yellow]{stale} stale skill(s)[/yellow] [dim]— [cyan]vibe skill cleanup[/cyan][/dim]"
         )
 
     for tip in tips[:2]:

@@ -635,9 +635,7 @@ class SkillAutoConfigurator:
 
         return config
 
-    def _generate_routing_patterns(
-        self, metadata: SkillSpec, analysis: SkillAnalysis
-    ) -> list[str]:
+    def _generate_routing_patterns(self, metadata: SkillSpec, analysis: SkillAnalysis) -> list[str]:
         patterns = []
 
         # 1. 从关键词生成

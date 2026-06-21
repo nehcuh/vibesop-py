@@ -1,6 +1,5 @@
 """Test getattr security fix - prevent special attribute access via getattr."""
 
-
 from vibesop.core.skills.workflow import ExecutionContext, WorkflowEngine
 
 
@@ -59,12 +58,11 @@ class TestGetattrSecurity:
     def test_getattr_blocks_indirect_special_access(self) -> None:
         """Test that getattr with variable attribute name is blocked."""
         engine = WorkflowEngine()
-        context = ExecutionContext(skill_id="test", variables={
-            "attr_name": "__class__",
-            "obj": "test"
-        })
+        context = ExecutionContext(
+            skill_id="test", variables={"attr_name": "__class__", "obj": "test"}
+        )
 
         # Even with variable-based attribute name, should be blocked
         # because getattr now requires literal string arguments
-        result = engine._evaluate_condition('getattr(obj, attr_name)', context)
+        result = engine._evaluate_condition("getattr(obj, attr_name)", context)
         assert result is False, "getattr with variable attribute name should be blocked"

@@ -27,13 +27,25 @@ class Recommendation:
 
 _USE_CASE_MAP: dict[str, list[tuple[str, RecommendationPriority, str]]] = {
     "software-development": [
-        ("superpowers", RecommendationPriority.HIGH, "Essential for software development workflows"),
+        (
+            "superpowers",
+            RecommendationPriority.HIGH,
+            "Essential for software development workflows",
+        ),
     ],
     "code-review": [("superpowers", RecommendationPriority.HIGH, "Provides code review skills")],
-    "brainstorming": [("superpowers", RecommendationPriority.MEDIUM, "Great for ideation and brainstorming")],
-    "testing": [("superpowers", RecommendationPriority.HIGH, "Includes test-driven development skills")],
-    "architecture": [("superpowers", RecommendationPriority.HIGH, "Provides architecture design skills")],
-    "productivity": [("superpowers", RecommendationPriority.MEDIUM, "General productivity enhancements")],
+    "brainstorming": [
+        ("superpowers", RecommendationPriority.MEDIUM, "Great for ideation and brainstorming")
+    ],
+    "testing": [
+        ("superpowers", RecommendationPriority.HIGH, "Includes test-driven development skills")
+    ],
+    "architecture": [
+        ("superpowers", RecommendationPriority.HIGH, "Provides architecture design skills")
+    ],
+    "productivity": [
+        ("superpowers", RecommendationPriority.MEDIUM, "General productivity enhancements")
+    ],
 }
 
 _DEFAULT_REASONS: dict[str, str] = {
@@ -66,29 +78,69 @@ class IntegrationRecommender:
                 continue
             info = available[iid]
             installed_bonus = 0.1 if info.status == IntegrationStatus.INSTALLED else 0.2
-            confidence = min(0.8 + installed_bonus, 1.0) if prio == RecommendationPriority.HIGH else min(0.5 + installed_bonus, 1.0)
-            recs.append(Recommendation(
-                integration_id=iid, name=info.name, description=info.description,
-                priority=prio, reason=reason, confidence=confidence, skills=info.skills,
-            ))
+            confidence = (
+                min(0.8 + installed_bonus, 1.0)
+                if prio == RecommendationPriority.HIGH
+                else min(0.5 + installed_bonus, 1.0)
+            )
+            recs.append(
+                Recommendation(
+                    integration_id=iid,
+                    name=info.name,
+                    description=info.description,
+                    priority=prio,
+                    reason=reason,
+                    confidence=confidence,
+                    skills=info.skills,
+                )
+            )
 
         return recs[:max_recommendations]
 
     def get_compatibility_report(
-        self, integration_ids: list[str], platform: str,
+        self,
+        integration_ids: list[str],
+        platform: str,
     ) -> dict[str, Any]:
         return {
             "compatible": [i for i in integration_ids if i in ("superpowers", "omx", "mattpocock")],
-            "incompatible": [{"integration_id": i, "reason": "Unknown integration"} for i in integration_ids if i not in ("superpowers", "omx", "mattpocock")],
+            "incompatible": [
+                {"integration_id": i, "reason": "Unknown integration"}
+                for i in integration_ids
+                if i not in ("superpowers", "omx", "mattpocock")
+            ],
             "warnings": [],
             "platform": platform,
         }
 
     def generate_setup_plan(
-        self, recommendations: list[Recommendation], platform: str, _output_dir: Path,
+        self,
+        recommendations: list[Recommendation],
+        platform: str,
+        _output_dir: Path,
     ) -> dict[str, Any]:
         steps = [
-            {"action": "install", "integration": r.integration_id, "command": f"vibe install {r.integration_id}", "description": f"Install {r.name}", "estimated_time": 5}
+            {
+                "action": "install",
+                "integration": r.integration_id,
+                "command": f"vibe install {r.integration_id}",
+                "description": f"Install {r.name}",
+                "estimated_time": 5,
+            }
             for r in recommendations
         ]
-        return {"platform": platform, "integrations": [{"id": r.integration_id, "name": r.name, "priority": r.priority.value, "estimated_time": 5} for r in recommendations], "steps": steps, "estimated_time": len(steps) * 5, "errors": []}
+        return {
+            "platform": platform,
+            "integrations": [
+                {
+                    "id": r.integration_id,
+                    "name": r.name,
+                    "priority": r.priority.value,
+                    "estimated_time": 5,
+                }
+                for r in recommendations
+            ],
+            "steps": steps,
+            "estimated_time": len(steps) * 5,
+            "errors": [],
+        }

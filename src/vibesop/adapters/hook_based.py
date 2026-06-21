@@ -166,13 +166,17 @@ class HookBasedAdapter(PlatformAdapter):
             except (json.JSONDecodeError, OSError):
                 pass
 
-        settings.setdefault("hooks", {})["UserPromptSubmit"] = [{
-            "matcher": "",
-            "hooks": [{
-                "type": "command",
-                "command": f"bash {hooks_dir}/vibesop-route.sh",
-            }],
-        }]
+        settings.setdefault("hooks", {})["UserPromptSubmit"] = [
+            {
+                "matcher": "",
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": f"bash {hooks_dir}/vibesop-route.sh",
+                    }
+                ],
+            }
+        ]
 
         settings_path = output_dir / "settings.json"
         self.write_file_atomic(

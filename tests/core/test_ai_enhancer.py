@@ -89,9 +89,16 @@ class TestAIEnhancer:
 
         assert isinstance(enhanced, EnhancedSkill)
         assert "优化" in enhanced.name or "performance" in enhanced.name.lower()
-        assert enhanced.category in ["development", "testing", "debugging",
-                                        "review", "documentation", "deployment",
-                                        "security", "optimization"]
+        assert enhanced.category in [
+            "development",
+            "testing",
+            "debugging",
+            "review",
+            "documentation",
+            "deployment",
+            "security",
+            "optimization",
+        ]
 
     def test_enhance_batch(self, sample_suggestion, enhancer):
         suggestions = [sample_suggestion] * 3
@@ -207,11 +214,13 @@ class TestFallbackEnhancement:
         enhancer = AIEnhancer()
 
         # Extract tags from queries
-        tags = enhancer._extract_tags([
-            "Optimize Python code performance",
-            "Review JavaScript code",
-            "Test API endpoints",
-        ])
+        tags = enhancer._extract_tags(
+            [
+                "Optimize Python code performance",
+                "Review JavaScript code",
+                "Test API endpoints",
+            ]
+        )
 
         # Should extract capitalized words and technical terms
         assert isinstance(tags, list)

@@ -1,6 +1,5 @@
 """Tests for TaskDecomposer fallback decomposition (no LLM)."""
 
-
 from vibesop.core.orchestration.task_decomposer import TaskDecomposer
 
 

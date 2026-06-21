@@ -37,7 +37,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Sequence
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Protocol
 
 logger = logging.getLogger(__name__)
@@ -170,9 +170,7 @@ class CronExpr:
             if not vals
         ]
         if empty_fields:
-            raise ValueError(
-                f"cron 表达式 {expr!r} 字段无合法值: {', '.join(empty_fields)}"
-            )
+            raise ValueError(f"cron 表达式 {expr!r} 字段无合法值: {', '.join(empty_fields)}")
 
         self._raw = expr
 
@@ -188,7 +186,7 @@ class CronExpr:
         Raises:
             RuntimeError: 一年内无匹配时间（极稀疏表达式，理论上不应发生）。
         """
-        after = (after or datetime.now(timezone.utc)).replace(second=0, microsecond=0)
+        after = (after or datetime.now(UTC)).replace(second=0, microsecond=0)
         dt = after + timedelta(minutes=1)
 
         for _ in range(self._MAX_SEARCH_MINUTES):
@@ -206,7 +204,7 @@ class CronExpr:
         对秒/微秒不敏感 —— 只要 minute/hour/day/month/weekday 匹配即为 True。
         即整分钟内的任意时刻（包括 30.000s 和 30.999s）都视为匹配。
         """
-        dt = dt or datetime.now(timezone.utc)
+        dt = dt or datetime.now(UTC)
         return self._matches(dt)
 
     def _matches(self, dt: datetime) -> bool:
@@ -252,7 +250,7 @@ class CronDaemon:
             当前 UTC 时间应触发的 specs 子集（保持原顺序）。
             无效 cron 会被静默跳过并 warning（不影响其他 spec）。
         """
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         triggered: list[_Schedulable] = []
 
         for spec in specs:
@@ -282,4 +280,4 @@ class CronDaemon:
         return triggered
 
 
-__all__ = ["CronExpr", "CronDaemon"]
+__all__ = ["CronDaemon", "CronExpr"]

@@ -226,8 +226,9 @@ def create(
             if description:
                 # YAML-safe the description (handle [, {, :, etc.)
                 from vibesop.adapters._shared import _yaml_dquote
+
                 safe_desc = _yaml_dquote(description)
-                old_desc = template_info.get('description', '')
+                old_desc = template_info.get("description", "")
                 old_desc_alt = _yaml_dquote(old_desc) if old_desc else None
                 # Try quoted first, then bare
                 replaced = new_text.replace(
@@ -333,7 +334,7 @@ def _create_from_suggestion(suggestion_id: str) -> None:
     steps_md = "\n".join(f"   - {step}" for step in suggestion.pattern_steps)
     tags_str = ", ".join(suggestion.context_tags) or "workflow, auto-generated"
     # YAML-safe: wrap description in double quotes
-    safe_desc = suggestion.suggested_description.replace('\\', '\\\\').replace('"', '\\"')
+    safe_desc = suggestion.suggested_description.replace("\\", "\\\\").replace('"', '\\"')
     content = f"""---
 id: custom/{suggestion.suggested_name}
 name: {suggestion.suggested_name}
@@ -435,9 +436,13 @@ vibe route "your query here"
 
 
 def featured(
-    stack: str | None = typer.Option(None, "--stack", "-s", help="Filter by tech stack (python, typescript, etc.)"),
+    stack: str | None = typer.Option(
+        None, "--stack", "-s", help="Filter by tech stack (python, typescript, etc.)"
+    ),
     json_output: bool = typer.Option(False, "--json", "-j", help="Output as JSON"),
-    install: bool = typer.Option(False, "--install", "-i", help="Install all featured skills for stack"),
+    install: bool = typer.Option(
+        False, "--install", "-i", help="Install all featured skills for stack"
+    ),
 ) -> None:
     """Browse the curated featured skills registry.
 
@@ -463,19 +468,13 @@ def featured(
     if json_output:
         import json
 
-        console.print(
-            json.dumps(
-                [s.to_dict() for s in skills], indent=2, ensure_ascii=False
-            )
-        )
+        console.print(json.dumps([s.to_dict() for s in skills], indent=2, ensure_ascii=False))
         return
 
     if not skills:
         console.print(f"[dim]No featured skills found for stack '{stack}'.[/dim]")
         stacks = registry.stacks_available()
-        console.print(
-            f"[dim]Available stacks: {', '.join(stacks) if stacks else 'none'}[/dim]"
-        )
+        console.print(f"[dim]Available stacks: {', '.join(stacks) if stacks else 'none'}[/dim]")
         return
 
     from rich.table import Table
@@ -488,7 +487,9 @@ def featured(
     table.add_column("Description", max_width=50, style="dim")
 
     for i, s in enumerate(skills, 1):
-        rating_style = "green" if s.quality_rating >= 0.85 else "yellow" if s.quality_rating >= 0.7 else "dim"
+        rating_style = (
+            "green" if s.quality_rating >= 0.85 else "yellow" if s.quality_rating >= 0.7 else "dim"
+        )
         rating_str = f"[{rating_style}]{s.quality_rating:.0%}[/{rating_style}]"
         stacks_str = ", ".join(s.stacks[:3]) if s.stacks else "any"
         table.add_row(
@@ -506,13 +507,10 @@ def featured(
 
     if stack:
         console.print(
-            "[dim]Install with:[/dim] [cyan]vibe skills featured --stack "
-            f"{stack} --install[/cyan]"
+            f"[dim]Install with:[/dim] [cyan]vibe skills featured --stack {stack} --install[/cyan]"
         )
     else:
         stacked = registry.stacks_available()
         if stacked:
-            console.print(
-                f"[dim]Filter by stack: {', '.join(stacked[:8])}[/dim]"
-            )
+            console.print(f"[dim]Filter by stack: {', '.join(stacked[:8])}[/dim]")
     console.print()

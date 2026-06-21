@@ -121,7 +121,10 @@ class TestSkillManagerIntegration:
 
         assert isinstance(results, list)
         assert len(results) > 0
-        assert any("debug" in r["id"].lower() or "debug" in r.get("description", "").lower() for r in results)
+        assert any(
+            "debug" in r["id"].lower() or "debug" in r.get("description", "").lower()
+            for r in results
+        )
 
     def test_get_namespaces_still_works(self) -> None:
         """Test that get_namespaces still works."""

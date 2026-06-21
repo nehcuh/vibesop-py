@@ -51,7 +51,12 @@ class IntegrationManager:
             "available_integrations": len(integrations) - installed,
             "total_skills": len(self.get_skills()),
             "integrations": [
-                {"name": i.name, "status": i.status.value, "version": i.version, "skill_count": len(i.skills)}
+                {
+                    "name": i.name,
+                    "status": i.status.value,
+                    "version": i.version,
+                    "skill_count": len(i.skills),
+                }
                 for i in integrations
             ],
         }
@@ -65,9 +70,18 @@ class IntegrationManager:
         if not info:
             return {"compatible": False, "reason": "Integration not found"}
         if info.status == IntegrationStatus.INSTALLED:
-            return {"compatible": True, "reason": "Installed and compatible", "version": info.version, "path": str(info.path) if info.path else None}
+            return {
+                "compatible": True,
+                "reason": "Installed and compatible",
+                "version": info.version,
+                "path": str(info.path) if info.path else None,
+            }
         if info.status == IntegrationStatus.NOT_INSTALLED:
-            return {"compatible": True, "reason": "Not installed but compatible", "install_hint": f"Install {name} to use its skills"}
+            return {
+                "compatible": True,
+                "reason": "Not installed but compatible",
+                "install_hint": f"Install {name} to use its skills",
+            }
         return {"compatible": False, "reason": f"Incompatible: {info.status.value}"}
 
     def get_integration_path(self, name: str) -> Path | None:
@@ -79,8 +93,17 @@ class IntegrationManager:
             info = self.get_integration(name)
             if not info:
                 return {}
-            return {"name": info.name, "description": info.description, "skills": info.skills, "installed": info.status == IntegrationStatus.INSTALLED}
+            return {
+                "name": info.name,
+                "description": info.description,
+                "skills": info.skills,
+                "installed": info.status == IntegrationStatus.INSTALLED,
+            }
         return {
-            i.name: {"description": i.description, "skills": i.skills, "installed": i.status == IntegrationStatus.INSTALLED}
+            i.name: {
+                "description": i.description,
+                "skills": i.skills,
+                "installed": i.status == IntegrationStatus.INSTALLED,
+            }
             for i in self.list_integrations()
         }

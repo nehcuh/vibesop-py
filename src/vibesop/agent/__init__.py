@@ -135,7 +135,9 @@ class AgentRouter:
                 )
                 self._router.routing_config = modified_config
                 self._router.triage_service.config = modified_config
-                ctx = SessionContext(project_root=str(self._router.project_root), router=self._router)
+                ctx = SessionContext(
+                    project_root=str(self._router.project_root), router=self._router
+                )
                 ctx.set_current_skill(current_skill)
                 suggestion = ctx.check_reroute_needed(new_message)
             finally:

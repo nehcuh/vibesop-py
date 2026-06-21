@@ -40,7 +40,9 @@ class VerificationStatus(StrEnum):
 class VerificationIssue(BaseModel):
     """A specific issue found during verification."""
 
-    category: str = Field(..., description="Issue category: completeness, correctness, edge_case, other")
+    category: str = Field(
+        ..., description="Issue category: completeness, correctness, edge_case, other"
+    )
     severity: str = Field(..., description="Severity: low, medium, high, critical")
     description: str = Field(..., description="Human-readable description")
     suggested_fix: str = Field(default="", description="Suggested fix for the issue")
@@ -105,7 +107,9 @@ class VerifierAgent:
         "clarity",  # Clear, actionable output
     ]
 
-    def __init__(self, llm_client: Any, strictness: VerificationStrictness = VerificationStrictness.STANDARD):
+    def __init__(
+        self, llm_client: Any, strictness: VerificationStrictness = VerificationStrictness.STANDARD
+    ):
         """Initialize the verifier agent.
 
         Args:
@@ -149,7 +153,7 @@ class VerifierAgent:
                     )
                 ],
                 reasoning="Verification failed: step produced no output",
-                rubric_scores={dim: 0.0 for dim in rubric},
+                rubric_scores=dict.fromkeys(rubric, 0.0),
             )
 
         # Use LLM for semantic verification
@@ -185,7 +189,9 @@ class VerifierAgent:
         It does NOT receive the execution agent's reasoning, ensuring
         independent adversarial review.
         """
-        prompt = self._build_verification_prompt(original_query, step, execution_output, rubric_dimensions)
+        prompt = self._build_verification_prompt(
+            original_query, step, execution_output, rubric_dimensions
+        )
 
         try:
             response = self._llm.call(
@@ -205,7 +211,7 @@ class VerifierAgent:
                 status=VerificationStatus.PASSED,
                 confidence=0.5,  # Low confidence on fallback
                 reasoning="LLM verification unavailable, assuming passed",
-                rubric_scores={dim: 0.5 for dim in rubric_dimensions},
+                rubric_scores=dict.fromkeys(rubric_dimensions, 0.5),
             )
 
     def _build_verification_prompt(
@@ -269,7 +275,9 @@ Criteria:
 - FAILED: Any rubric score < 0.5 OR has critical issues
 """
 
-    def _parse_llm_response(self, parsed: dict[str, Any], rubric_dimensions: list[str]) -> VerificationResult:
+    def _parse_llm_response(
+        self, parsed: dict[str, Any], rubric_dimensions: list[str]
+    ) -> VerificationResult:
         """Parse LLM response into VerificationResult."""
         status_str = parsed.get("status", "passed").lower()
         try:
@@ -309,7 +317,9 @@ Criteria:
                 new_status = VerificationStatus.PASSED
 
         elif self._strictness == VerificationStrictness.STRICT:
-            has_medium_or_worse = any(i.severity in ("medium", "high", "critical") for i in result.issues)
+            has_medium_or_worse = any(
+                i.severity in ("medium", "high", "critical") for i in result.issues
+            )
             if new_status == VerificationStatus.NEEDS_REVISION and has_medium_or_worse:
                 new_status = VerificationStatus.FAILED
 
@@ -342,7 +352,10 @@ def verify_step_with_retry(
     Returns:
         Tuple of (final verification result, retry count)
     """
-    from vibesop.core.orchestration.verification_loop import VerificationLoop, VerificationLoopConfig
+    from vibesop.core.orchestration.verification_loop import (
+        VerificationLoop,
+        VerificationLoopConfig,
+    )
 
     retry_count = 0
     current_output = execution_output

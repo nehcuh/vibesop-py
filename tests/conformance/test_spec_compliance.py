@@ -70,18 +70,38 @@ class TestAll29Fields:
         fields = list(SkillSpec.model_fields.keys())
         # The 29 canonical fields
         expected = {
-            "id", "name", "description", "version",
-            "author", "namespace",
-            "skill_type", "intent",
-            "trigger_when", "triggers", "routing_patterns", "priority",
-            "tags", "keywords", "category",
-            "capabilities", "algorithms",
-            "commands", "user_invocable", "allowed_tools",
+            "id",
+            "name",
+            "description",
+            "version",
+            "author",
+            "namespace",
+            "skill_type",
+            "intent",
+            "trigger_when",
+            "triggers",
+            "routing_patterns",
+            "priority",
+            "tags",
+            "keywords",
+            "category",
+            "capabilities",
+            "algorithms",
+            "commands",
+            "user_invocable",
+            "allowed_tools",
             "mode",
-            "lifecycle", "scope", "enabled", "deprecation_reason",
-            "dependencies", "env_vars",
-            "llm_config", "source_config",
-            "confidence", "auto_configured", "metadata",
+            "lifecycle",
+            "scope",
+            "enabled",
+            "deprecation_reason",
+            "dependencies",
+            "env_vars",
+            "llm_config",
+            "source_config",
+            "confidence",
+            "auto_configured",
+            "metadata",
         }
         missing = expected - set(fields)
         assert not missing, f"Missing fields: {missing}"
@@ -211,9 +231,7 @@ version: "1.0.0"
 ---
 # V1 Skill
 """
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".md", delete=False
-        ) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False) as f:
             f.write(content)
             f.flush()
             result = validator.validate_file(Path(f.name))
@@ -231,9 +249,7 @@ description: Missing version field
 ---
 # No Version
 """
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".md", delete=False
-        ) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False) as f:
             f.write(content)
             f.flush()
             result = validator.validate_file(Path(f.name))
@@ -254,9 +270,7 @@ type: prompt
 ---
 # Old Skill
 """
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".md", delete=False
-        ) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False) as f:
             f.write(content)
             f.flush()
             result = validator.validate_file(Path(f.name))
@@ -265,8 +279,7 @@ type: prompt
         # Missing v3-only fields get defaults, not errors
         error_count = len(result.errors)
         assert error_count == 0, (
-            f"v1 files should not produce hard errors, got: "
-            f"{[e.message for e in result.errors]}"
+            f"v1 files should not produce hard errors, got: {[e.message for e in result.errors]}"
         )
         Path(f.name).unlink(missing_ok=True)
 
@@ -310,9 +323,7 @@ env_vars:
 ---
 # V3 Full Skill
 """
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".md", delete=False
-        ) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False) as f:
             f.write(content)
             f.flush()
             result = validator.validate_file(Path(f.name))

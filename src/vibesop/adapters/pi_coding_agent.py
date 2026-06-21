@@ -249,7 +249,10 @@ class PiCodingAgentAdapter(SdkBasedAdapter):
         result: RenderResult,
     ) -> None:
         super()._render_skill_content(
-            skill, skill_dir, result, manifest=manifest,
+            skill,
+            skill_dir,
+            result,
+            manifest=manifest,
         )
 
         # Namespace external pack skills to avoid name collisions in pi agent.
@@ -304,9 +307,9 @@ class PiCodingAgentAdapter(SdkBasedAdapter):
         ns_prefix = namespace + "-"
         while current_name.startswith(ns_prefix) or current_name.startswith(ns_slash):
             if current_name.startswith(ns_slash):
-                current_name = current_name[len(ns_slash):]
+                current_name = current_name[len(ns_slash) :]
             elif current_name.startswith(ns_prefix):
-                current_name = current_name[len(ns_prefix):]
+                current_name = current_name[len(ns_prefix) :]
 
         # Normalize to [a-z0-9-]: replace / _ and embedded quotes with -
         for char in ("/", "_", '"'):

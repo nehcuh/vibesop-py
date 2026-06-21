@@ -32,7 +32,8 @@ class TestQuickCommandsE2E:
         assert result.exit_code == 0
         # Should be a valid JSON output. Note: we might need to handle raw newlines
         import re
-        clean_json = re.sub(r'[\x00-\x1f]', '', result.stdout)
+
+        clean_json = re.sub(r"[\x00-\x1f]", "", result.stdout)
         data = json.loads(clean_json)
         assert "message" in data
         assert "Installed Skills" in data["message"]

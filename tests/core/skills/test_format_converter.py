@@ -50,9 +50,7 @@ name: test
 **Version**: 1.0.0
 """
 
-        converted, metadata = converter.convert(
-            content, Path("/fake/path/review/SKILL.md")
-        )
+        converted, metadata = converter.convert(content, Path("/fake/path/review/SKILL.md"))
 
         # Check metadata
         assert metadata["id"] == "gstack/review"
@@ -104,9 +102,7 @@ description: "You MUST use this before any creative work"
 ---
 """
 
-        converted, metadata = converter.convert(
-            content, Path("/fake/path/brainstorming/SKILL.md")
-        )
+        converted, metadata = converter.convert(content, Path("/fake/path/brainstorming/SKILL.md"))
 
         # Check metadata
         assert metadata["id"] == "superpowers/brainstorming"
@@ -175,9 +171,7 @@ name: brainstorming
 description: "test"
 ---
 """
-        result = registry.convert(
-            superpowers_content, Path("/fake/brainstorming/SKILL.md")
-        )
+        result = registry.convert(superpowers_content, Path("/fake/brainstorming/SKILL.md"))
         assert result is not None
         _, metadata = result
         assert metadata["namespace"] == "superpowers"

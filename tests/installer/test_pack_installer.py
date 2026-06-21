@@ -67,9 +67,7 @@ class TestPackInstaller:
                 )
                 mock_cls.return_value = mock_analyzer
 
-                success, msg = installer.install_pack(
-                    "test-pack", "https://example.com/test-pack"
-                )
+                success, msg = installer.install_pack("test-pack", "https://example.com/test-pack")
 
             assert success is False
             assert "Network unreachable" in msg
@@ -87,9 +85,7 @@ class TestPackInstaller:
                 )
                 mock_cls.return_value = mock_analyzer
 
-                success, msg = installer.install_pack(
-                    "test-pack", "https://example.com/test-pack"
-                )
+                success, msg = installer.install_pack("test-pack", "https://example.com/test-pack")
 
             assert success is False
             assert "No SKILL.md files found" in msg
@@ -266,10 +262,14 @@ class TestSkillSymlinks:
         pack = central / "testpack"
         review_dir = pack / "review"
         review_dir.mkdir(parents=True)
-        (review_dir / "SKILL.md").write_text("---\nname: review\ndescription: Review code changes\n---\n# Test skill")
+        (review_dir / "SKILL.md").write_text(
+            "---\nname: review\ndescription: Review code changes\n---\n# Test skill"
+        )
         qa_dir = pack / "qa"
         qa_dir.mkdir(parents=True)
-        (qa_dir / "SKILL.md").write_text("---\nname: qa\ndescription: QA test the application\n---\n# QA skill")
+        (qa_dir / "SKILL.md").write_text(
+            "---\nname: qa\ndescription: QA test the application\n---\n# QA skill"
+        )
 
         platform = tmp_path / "platform"
         platform.mkdir(parents=True)
@@ -364,7 +364,9 @@ class TestPostInstallHook:
         central = tmp_path / "central"
         pack = central / "testpack"
         pack.mkdir(parents=True)
-        (pack / "SKILL.md").write_text("---\nname: testpack\ndescription: Root level test pack skill\n---\n# Pack manifest")
+        (pack / "SKILL.md").write_text(
+            "---\nname: testpack\ndescription: Root level test pack skill\n---\n# Pack manifest"
+        )
 
         platform = tmp_path / "platform"
         platform.mkdir(parents=True)
@@ -382,7 +384,9 @@ class TestPostInstallHook:
 class TestSkillNameDedup:
     """Tests for cross-pack deduplication by frontmatter ``name:``."""
 
-    def _make_pack(self, central: Path, pack_name: str, skill_name: str, rel: str = "review") -> Path:
+    def _make_pack(
+        self, central: Path, pack_name: str, skill_name: str, rel: str = "review"
+    ) -> Path:
         pack = central / pack_name
         skill_dir = pack / rel
         skill_dir.mkdir(parents=True)

@@ -49,6 +49,7 @@ def _get_configured_platform() -> str | None:
         try:
             if ext == ".toml":
                 import tomllib
+
                 with config_path.open("rb") as f:
                     config = tomllib.load(f)
             else:

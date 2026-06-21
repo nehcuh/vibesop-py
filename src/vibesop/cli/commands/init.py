@@ -273,8 +273,8 @@ def _do_init(
 
         # Build skill semantic index (layered: global first, then project)
         if not skip_index:
-            from vibesop.core.skills.indexer import SkillIndexer
             from vibesop.core.llm_config import LLMConfigResolver
+            from vibesop.core.skills.indexer import SkillIndexer
             from vibesop.llm.factory import create_provider
 
             def _llm_factory() -> Any:

@@ -32,9 +32,7 @@ class TestAgentRuntimeProcessQuery:
     async def test_process_query_single_agent(self) -> None:
         runtime = AgentRuntime()
         # Short query with architect role promotes to SINGLE_AGENT
-        result = await runtime.process_query(
-            "Design the architecture for a new service"
-        )
+        result = await runtime.process_query("Design the architecture for a new service")
 
         assert result["intercepted"] is True
         assert result["mode"] == InterceptionMode.SINGLE_AGENT.value

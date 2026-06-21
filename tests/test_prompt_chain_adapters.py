@@ -196,7 +196,10 @@ class TestCLIPromptChainOutput:
         with tempfile.TemporaryDirectory() as tmpdir:
             console = Console(width=120)
             _handle_prompt_chain_output(
-                FakeResult(), json_output=False, console=console, output_dir=tmpdir,
+                FakeResult(),
+                json_output=False,
+                console=console,
+                output_dir=tmpdir,
             )
 
             # Files should be written

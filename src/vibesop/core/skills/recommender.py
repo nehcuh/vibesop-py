@@ -51,7 +51,10 @@ class SkillRecommender:
         "typescript": [
             ("mattpocock/tdd", "Test-driven development with red-green-refactor"),
             ("mattpocock/diagnose", "Disciplined diagnosis loop for hard bugs"),
-            ("mattpocock/improve-codebase-architecture", "Architecture improvement with domain language"),
+            (
+                "mattpocock/improve-codebase-architecture",
+                "Architecture improvement with domain language",
+            ),
             ("superpowers/refactor", "Systematic refactoring"),
         ],
         "rust": [

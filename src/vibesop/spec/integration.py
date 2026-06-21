@@ -17,22 +17,22 @@ from vibesop.spec.models import SkillSpec
 class IntegrationMode(StrEnum):
     """How a platform integrates SkillSpec content."""
 
-    FILE_BASED = "file_based"      # CLAUDE.md/AGENTS.md with file references
-    HOOK_BASED = "hook_based"      # Shell/TS hooks intercept prompts at runtime
-    SDK_BASED = "sdk_based"        # Native Python/TS import of vibesop library
+    FILE_BASED = "file_based"  # CLAUDE.md/AGENTS.md with file references
+    HOOK_BASED = "hook_based"  # Shell/TS hooks intercept prompts at runtime
+    SDK_BASED = "sdk_based"  # Native Python/TS import of vibesop library
 
 
 class IntegrationTarget(StrEnum):
     """What an integration produces."""
 
-    CONTEXT_FILE = "context_file"         # CLAUDE.md or AGENTS.md
-    SKILL_DIRECTORY = "skill_directory"    # skills/ with symlinks or copies
-    HOOK_SCRIPT = "hook_script"           # Shell script or TS extension
-    PROMPT_TEMPLATE = "prompt_template"   # Agent-specific prompt format
-    SETTINGS_FILE = "settings_file"       # Platform settings (settings.json etc.)
-    BEHAVIOR_RULES = "behavior_rules"     # Always-loaded behavior rules
-    DOCS_REFERENCE = "docs_reference"     # On-demand documentation files
-    ENV_SCRIPT = "env_script"             # Environment setup script
+    CONTEXT_FILE = "context_file"  # CLAUDE.md or AGENTS.md
+    SKILL_DIRECTORY = "skill_directory"  # skills/ with symlinks or copies
+    HOOK_SCRIPT = "hook_script"  # Shell script or TS extension
+    PROMPT_TEMPLATE = "prompt_template"  # Agent-specific prompt format
+    SETTINGS_FILE = "settings_file"  # Platform settings (settings.json etc.)
+    BEHAVIOR_RULES = "behavior_rules"  # Always-loaded behavior rules
+    DOCS_REFERENCE = "docs_reference"  # On-demand documentation files
+    ENV_SCRIPT = "env_script"  # Environment setup script
 
 
 @dataclass
@@ -43,7 +43,9 @@ class ConformanceManifest:
     mode: IntegrationMode
     targets: list[IntegrationTarget] = field(default_factory=list)
     spec_versions: list[str] = field(default_factory=lambda: ["1.0", "2.0", "3.0"])
-    skill_types: list[str] = field(default_factory=lambda: ["prompt", "workflow", "command", "hybrid", "standard"])
+    skill_types: list[str] = field(
+        default_factory=lambda: ["prompt", "workflow", "command", "hybrid", "standard"]
+    )
     max_skills: int | None = None
     notes: str = ""
 

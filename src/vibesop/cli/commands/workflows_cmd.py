@@ -61,9 +61,7 @@ def list_workflows(
     if json_output:
         import json
 
-        console.print(
-            json.dumps([w.to_dict() for w in workflows], indent=2, ensure_ascii=False)
-        )
+        console.print(json.dumps([w.to_dict() for w in workflows], indent=2, ensure_ascii=False))
         return
 
     console.print()
@@ -145,8 +143,9 @@ def show(
 
     console.print()
     console.print(
-        "[dim]Use: [cyan]vibe route \"workflow: {name}\"[/cyan] to trigger this workflow[/dim]"
-        .format(name=wf.id.split("/")[-1])
+        '[dim]Use: [cyan]vibe route "workflow: {name}"[/cyan] to trigger this workflow[/dim]'.format(
+            name=wf.id.split("/")[-1]
+        )
     )
     console.print()
 
@@ -167,7 +166,7 @@ def create() -> None:
     # Step 1: Name
     name = questionary.text(
         "Workflow name (kebab-case):",
-        validate=lambda t: bool(t) and " " not in t or "Use kebab-case (no spaces)",
+        validate=lambda t: (bool(t) and " " not in t) or "Use kebab-case (no spaces)",
     ).ask()
     if not name:
         console.print("[yellow]Cancelled.[/yellow]")
@@ -225,12 +224,14 @@ def create() -> None:
     console.print(f"  Skills: {', '.join(depends_on)}")
     console.print(f"  File: {wf.source_file}")
     console.print()
-    console.print("[dim]Use: [cyan]vibe workflows show {id}[/cyan] to inspect[/dim]".format(id=wf.id))
+    console.print(f"[dim]Use: [cyan]vibe workflows show {wf.id}[/cyan] to inspect[/dim]")
 
 
 @app.command()
 def match(
-    skill_ids: str = typer.Argument(..., help="Comma-separated skill IDs to match against workflows"),
+    skill_ids: str = typer.Argument(
+        ..., help="Comma-separated skill IDs to match against workflows"
+    ),
 ) -> None:
     """Find cross-cutting workflows that cover the given skills.
 
@@ -243,9 +244,7 @@ def match(
     matching = discovery.find_for_skills(ids)
 
     if not matching:
-        console.print(
-            f"[dim]No cross-cutting workflows found covering: {', '.join(ids)}[/dim]"
-        )
+        console.print(f"[dim]No cross-cutting workflows found covering: {', '.join(ids)}[/dim]")
         all_wfs = discovery.discover_all()
         if all_wfs:
             console.print(

@@ -176,7 +176,9 @@ class TestSkillInjector:
         """
         monkeypatch.setattr(Path, "home", lambda: tmp_path)
 
-        nested = tmp_path / ".config" / "skills" / "mattpocock" / "skills" / "engineering" / "diagnose"
+        nested = (
+            tmp_path / ".config" / "skills" / "mattpocock" / "skills" / "engineering" / "diagnose"
+        )
         nested.mkdir(parents=True)
         (nested / "SKILL.md").write_text("# Diagnose via central nested storage")
 

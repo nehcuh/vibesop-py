@@ -141,9 +141,7 @@ class LoopStore:
     def _require_safe_name(cls, name: str) -> None:
         """Raise ``ValueError`` if ``name`` could enable path traversal."""
         if not cls._is_safe_name(name):
-            raise ValueError(
-                f"unsafe loop name {name!r}: must match {_SAFE_NAME_PATTERN.pattern}"
-            )
+            raise ValueError(f"unsafe loop name {name!r}: must match {_SAFE_NAME_PATTERN.pattern}")
 
     # ── 文件 IO ───────────────────────────────────────────────────────
 

@@ -20,7 +20,6 @@ Example:
 
 from __future__ import annotations
 
-import atexit
 import logging
 import threading
 import time
@@ -44,21 +43,19 @@ from vibesop.core.models import (
 from vibesop.core.optimization import (
     CandidatePrefilter,
 )
-from vibesop.core.routing.tracer import RoutingTracer
-from vibesop.core.routing.conflict import ConflictResolver
+from vibesop.core.routing import _layers, _pipeline
+from vibesop.core.routing._protocols import LLMFactory, PromptBuilder, SkillLoaderProtocol
 from vibesop.core.routing.context_mixin import RouterContextMixin
 from vibesop.core.routing.degradation import DegradationManager
 from vibesop.core.routing.matcher_pipeline import MatcherPipeline
 from vibesop.core.routing.optimization_service import OptimizationService
 from vibesop.core.routing.orchestration_mixin import RouterOrchestrationMixin
-from vibesop.core.routing.result_mixin import RouterResultMixin
-from vibesop.core.routing.stats_mixin import RouterStatsMixin
-from vibesop.core.routing.triage_service import TriageService
-from vibesop.core.routing.router_factory import RouterFactory
 from vibesop.core.routing.orchestrator import Orchestrator
-from vibesop.core.routing._protocols import LLMFactory, PromptBuilder, SkillLoaderProtocol
-from vibesop.core.routing import _layers
-from vibesop.core.routing import _pipeline
+from vibesop.core.routing.result_mixin import RouterResultMixin
+from vibesop.core.routing.router_factory import RouterFactory
+from vibesop.core.routing.stats_mixin import RouterStatsMixin
+from vibesop.core.routing.tracer import RoutingTracer
+from vibesop.core.routing.triage_service import TriageService
 
 if TYPE_CHECKING:
     from vibesop.core.instinct import InstinctLearner
@@ -279,9 +276,24 @@ class UnifiedRouter(
             query_lower = query.lower()
             # Extract simple tokens (words >= 2 chars)
             import re
+
             tokens = set(re.findall(r"[a-zA-Z\-]{2,}", query_lower))
             # Also include common CJK analysis keywords as whole substrings
-            cjk_keywords = ["分析", "审查", "设计", "调试", "优化", "规划", "测试", " review", " analyze", " debug", " design", " plan", " test"]
+            cjk_keywords = [
+                "分析",
+                "审查",
+                "设计",
+                "调试",
+                "优化",
+                "规划",
+                "测试",
+                " review",
+                " analyze",
+                " debug",
+                " design",
+                " plan",
+                " test",
+            ]
 
             def _relevance_score(c: dict[str, Any]) -> float:
                 score = 0.0
@@ -377,8 +389,15 @@ class UnifiedRouter(
         layer_details: list[LayerDetail] = []
 
         result = self._try_layers(
-            query, candidates, context, routing_path, layer_details,
-            start_time, deprecated_warnings, conversation, original_query,
+            query,
+            candidates,
+            context,
+            routing_path,
+            layer_details,
+            start_time,
+            deprecated_warnings,
+            conversation,
+            original_query,
         )
         if result is not None:
             trace = self._tracer.finish_trace(
@@ -392,8 +411,13 @@ class UnifiedRouter(
 
         duration_ms = (time.perf_counter() - start_time) * 1000
         final_result = self._finalize_no_match(
-            query, original_query, candidates, context,
-            routing_path, layer_details, duration_ms,
+            query,
+            original_query,
+            candidates,
+            context,
+            routing_path,
+            layer_details,
+            duration_ms,
         )
         trace = self._tracer.finish_trace(
             final_skill=None,
@@ -423,8 +447,16 @@ class UnifiedRouter(
         if match:
             self._record_layer(RoutingLayer.EXPLICIT)
             return self._build_match_result(
-                query, match, [], routing_path, layer_details,
-                start_time, deprecated_warnings, conversation, original_query, context,
+                query,
+                match,
+                [],
+                routing_path,
+                layer_details,
+                start_time,
+                deprecated_warnings,
+                conversation,
+                original_query,
+                context,
             )
 
         use_keyword = self._should_use_keyword_routing(query, context)
@@ -436,13 +468,24 @@ class UnifiedRouter(
         if early_match is not None:
             self._record_layer(early_match.layer)
             return self._build_match_result(
-                query, early_match, [], routing_path, layer_details,
-                start_time, deprecated_warnings, conversation, original_query, context,
+                query,
+                early_match,
+                [],
+                routing_path,
+                layer_details,
+                start_time,
+                deprecated_warnings,
+                conversation,
+                original_query,
+                context,
             )
 
         # Step 2: AI Triage (force for long/LLM queries, normal for keyword)
         match, detail = _layers.try_ai_triage_layer(
-            self, query, candidates, context,  # pyright: ignore[reportArgumentType]
+            self,
+            query,
+            candidates,
+            context,  # pyright: ignore[reportArgumentType]
             force=not use_keyword,
         )
         routing_path.append(RoutingLayer.AI_TRIAGE)
@@ -451,8 +494,16 @@ class UnifiedRouter(
         if match and match.confidence >= self._config.min_confidence:
             self._record_layer(RoutingLayer.AI_TRIAGE)
             return self._build_match_result(
-                query, match, [], routing_path, layer_details,
-                start_time, deprecated_warnings, conversation, original_query, context,
+                query,
+                match,
+                [],
+                routing_path,
+                layer_details,
+                start_time,
+                deprecated_warnings,
+                conversation,
+                original_query,
+                context,
             )
 
         # Step 3: Matcher pipeline (shared fallback)
@@ -465,8 +516,15 @@ class UnifiedRouter(
         if primary:
             self._record_layer(detail.layer)
             return self._build_match_result(
-                query, primary, alternatives, routing_path, layer_details,
-                start_time, deprecated_warnings, conversation, original_query,
+                query,
+                primary,
+                alternatives,
+                routing_path,
+                layer_details,
+                start_time,
+                deprecated_warnings,
+                conversation,
+                original_query,
             )
 
         return None
@@ -528,7 +586,9 @@ class UnifiedRouter(
         """Access the routing tracer for listing past traces."""
         return self._tracer
 
-    def _should_use_keyword_routing(self, query: str, context: RoutingContext | None = None) -> bool:
+    def _should_use_keyword_routing(
+        self, query: str, context: RoutingContext | None = None
+    ) -> bool:
         """Determine whether to use keyword-based routing or LLM semantic triage."""
         keyword_max_chars = getattr(self._config, "keyword_match_max_chars", 5)
         use_keyword = len(query) <= keyword_max_chars
@@ -544,8 +604,7 @@ class UnifiedRouter(
         if not llm_available and self._config.enable_ai_triage:
             self._triage_service._llm = self._triage_service.init_llm_client()
             llm_available = (
-                self._triage_service._llm is not None
-                and self._triage_service._llm.configured()
+                self._triage_service._llm is not None and self._triage_service._llm.configured()
             )
 
         if not use_keyword and not llm_available:
@@ -605,6 +664,7 @@ class UnifiedRouter(
         # Save conversation turn for multi-turn support
         if context and context.conversation_id:
             from vibesop.core.conversation import ConversationContext
+
             conversation = ConversationContext(
                 conversation_id=context.conversation_id,
                 storage_dir=self.project_root / ".vibe" / "conversations",
@@ -615,12 +675,12 @@ class UnifiedRouter(
             )
 
         from vibesop.core.routing.perf_monitor import get_perf_monitor
+
         get_perf_monitor().record(
             result.duration_ms,
             result.primary.layer.value if result.primary else RoutingLayer.NO_MATCH.value,
         )
         return result
-
 
     def route(
         self,

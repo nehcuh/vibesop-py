@@ -41,7 +41,9 @@ class TestRoutingHotPath:
     def test_simple_routing_p95_under_100ms(self, router):
         """Simple single-word queries should complete in <100ms P95."""
         stats = self._measure(router, "debug")
-        assert stats["p50"] < 100, f"P50 {stats['p50']}ms exceeds 100ms (was 50ms, raised for CI stability)"
+        assert stats["p50"] < 100, (
+            f"P50 {stats['p50']}ms exceeds 100ms (was 50ms, raised for CI stability)"
+        )
 
     def test_medium_routing_p95_under_150ms(self, router):
         """Medium complexity queries should complete in <150ms P95."""

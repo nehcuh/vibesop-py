@@ -242,8 +242,10 @@ def _get_ai_triage_skip_reason(router: RoutingCore) -> str:
 
 # --- Skill Semantic Index layer ---
 
+
 def _tokenize_query(query: str) -> set[str]:
     import re
+
     tokens: set[str] = set()
     # English words
     for word in re.findall(r"[a-zA-Z]{2,}", query.lower()):
@@ -302,9 +304,7 @@ def _try_embedding_fallback(
     index_start: float,
 ) -> tuple[SkillRoute | None, LayerDetail]:
     profiles_with_emb: dict[str, Any] = {
-        sid: prof
-        for sid, prof in index.items()
-        if getattr(prof, "embedding", None) is not None
+        sid: prof for sid, prof in index.items() if getattr(prof, "embedding", None) is not None
     }
     if not profiles_with_emb:
         return None, LayerDetail(
@@ -373,17 +373,13 @@ def _try_embedding_fallback(
         )
 
     # Scale similarity [threshold..1.0] → confidence [0.65..0.95]
-    confidence = 0.65 + (best_similarity - EMBEDDING_THRESHOLD) / (
-        1.0 - EMBEDDING_THRESHOLD
-    ) * 0.30
+    confidence = 0.65 + (best_similarity - EMBEDDING_THRESHOLD) / (1.0 - EMBEDDING_THRESHOLD) * 0.30
 
     match = SkillRoute(
         skill_id=best_skill_id,
         confidence=round(confidence, 2),
         layer=RoutingLayer.AI_TRIAGE,
-        source=router._get_skill_source(
-            best_skill_id, candidate.get("namespace", "builtin")
-        ),
+        source=router._get_skill_source(best_skill_id, candidate.get("namespace", "builtin")),
         description=str(candidate.get("description", "")),
         metadata={
             "index_hit": True,
@@ -395,10 +391,7 @@ def _try_embedding_fallback(
     detail = LayerDetail(
         layer=RoutingLayer.AI_TRIAGE,
         matched=True,
-        reason=(
-            f"Embedding match: '{best_skill_id}' "
-            f"(similarity {best_similarity:.2f})"
-        ),
+        reason=(f"Embedding match: '{best_skill_id}' (similarity {best_similarity:.2f})"),
         duration_ms=(time.perf_counter() - index_start) * 1000,
     )
     return match, detail
@@ -431,9 +424,7 @@ def try_index_layer(
                 duration_ms=(time.perf_counter() - index_start) * 1000,
             )
         router._index_layer_cache = indexer.load_index()
-        router._index_profile_tokens = _build_profile_token_index(
-            router._index_layer_cache
-        )
+        router._index_profile_tokens = _build_profile_token_index(router._index_layer_cache)
         cached = router._index_layer_cache
 
     index = cached
@@ -447,9 +438,7 @@ def try_index_layer(
 
     profile_tokens_by_id_raw = getattr(router, "_index_profile_tokens", None)
     profile_tokens_by_id: dict[str, set[str]] = (
-        profile_tokens_by_id_raw
-        if isinstance(profile_tokens_by_id_raw, dict)
-        else {}
+        profile_tokens_by_id_raw if isinstance(profile_tokens_by_id_raw, dict) else {}
     )
     query_tokens = _tokenize_query(query)
     best_skill_id: str | None = None
@@ -460,9 +449,7 @@ def try_index_layer(
         if profile_tokens is None:
             # Cache miss for a profile (e.g. cache populated by older code path);
             # fall back to on-the-fly compute. Cheap once, persists for next time.
-            profile_tokens = _build_profile_token_index({skill_id: index[skill_id]})[
-                skill_id
-            ]
+            profile_tokens = _build_profile_token_index({skill_id: index[skill_id]})[skill_id]
             profile_tokens_by_id[skill_id] = profile_tokens
         score = _score_overlap(query_tokens, profile_tokens)
         if score > best_score:

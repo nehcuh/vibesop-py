@@ -82,7 +82,9 @@ class SkillSpec(BaseModel):
 
     # ---- Optional identity fields ----
     author: str = Field(default="", description="Skill author")
-    namespace: str = Field(default="builtin", description="Skill namespace: builtin, gstack, superpowers, project")
+    namespace: str = Field(
+        default="builtin", description="Skill namespace: builtin, gstack, superpowers, project"
+    )
 
     # ---- Type & intent ----
     skill_type: SkillType = Field(
@@ -102,12 +104,18 @@ class SkillSpec(BaseModel):
         default_factory=list,
         description="Regex/natural-language patterns for scenario-based routing",
     )
-    priority: int = Field(default=50, ge=1, le=100, description="Routing priority (higher = preferred)")
+    priority: int = Field(
+        default=50, ge=1, le=100, description="Routing priority (higher = preferred)"
+    )
 
     # ---- Categorization ----
     tags: list[str] = Field(default_factory=list, description="Tags for categorization")
-    keywords: list[str] = Field(default_factory=list, description="Search keywords (distinct from tags)")
-    category: str = Field(default="development", description="Skill category: development, testing, ops, docs, etc.")
+    keywords: list[str] = Field(
+        default_factory=list, description="Search keywords (distinct from tags)"
+    )
+    category: str = Field(
+        default="development", description="Skill category: development, testing, ops, docs, etc."
+    )
 
     # ---- Capabilities ----
     capabilities: list[str] = Field(

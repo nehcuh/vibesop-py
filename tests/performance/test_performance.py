@@ -155,7 +155,9 @@ class TestRoutingPerformance:
 
         # Concurrent guardrail: current baseline ~8s, target <3s (v4.4 roadmap)
         total_time = end - start
-        assert total_time < 15.0, f"Concurrent routing took {total_time:.2f}s, too slow (guardrail: 15s)"
+        assert total_time < 15.0, (
+            f"Concurrent routing took {total_time:.2f}s, too slow (guardrail: 15s)"
+        )
 
 
 class TestConfigPerformance:

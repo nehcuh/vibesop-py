@@ -689,9 +689,7 @@ class PlanBuilder:
             # full allowlist beyond the primary skill_id.
             role_skills = getattr(step, "role_skills", None) or []
             extras = f" [+{len(role_skills) - 1} more]" if len(role_skills) > 1 else ""
-            reasoning_parts.append(
-                f"Step {step.step_number}: '{role}' → {skill}{extras} (squad)"
-            )
+            reasoning_parts.append(f"Step {step.step_number}: '{role}' → {skill}{extras} (squad)")
         return reasoning_parts
 
     def _collect_global_skills(self) -> list[dict[str, Any]]:

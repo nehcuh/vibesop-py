@@ -124,8 +124,8 @@ description: Debug systematically
 
             # Mock the loader to return our test skill definition
             with patch.object(executor._loader, "get_skill") as mock_get:
-                from vibesop.spec.models import SkillSpec
                 from vibesop.core.skills.loader import LoadedSkill
+                from vibesop.spec.models import SkillSpec
 
                 mock_get.return_value = LoadedSkill(
                     metadata=SkillSpec(
@@ -199,8 +199,8 @@ This is a test skill.
 
             # Mock the loader to find our test skill
             with patch.object(executor._loader, "get_skill") as mock_get:
-                from vibesop.spec.models import SkillSpec
                 from vibesop.core.skills.loader import LoadedSkill
+                from vibesop.spec.models import SkillSpec
 
                 mock_get.return_value = LoadedSkill(
                     metadata=SkillSpec(
@@ -358,8 +358,8 @@ class TestSecurity:
 
             # Mock the loader and auditor
             with patch.object(executor._loader, "get_skill") as mock_get:
-                from vibesop.spec.models import SkillSpec
                 from vibesop.core.skills.loader import LoadedSkill
+                from vibesop.spec.models import SkillSpec
 
                 mock_get.return_value = LoadedSkill(
                     metadata=SkillSpec(

@@ -394,7 +394,9 @@ class TestPlatformAdapterEdgeCases:
         # Patch get_effective_security_policy to return a policy with allow_path_traversal=True
         fake_policy = MagicMock()
         fake_policy.allow_path_traversal = True
-        with patch("vibesop.adapters.base.Manifest.get_effective_security_policy", return_value=fake_policy):
+        with patch(
+            "vibesop.adapters.base.Manifest.get_effective_security_policy", return_value=fake_policy
+        ):
             errors = adapter.validate_manifest(manifest)
         assert any("path traversal" in e.lower() for e in errors)
 

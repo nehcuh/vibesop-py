@@ -11,8 +11,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from vibesop.spec.models import SkillSpec, SkillType
-from vibesop.spec.version import FIELD_VERSION_REQUIREMENTS, SpecVersion, detect_spec_version
+from vibesop.spec.models import SkillType
+from vibesop.spec.version import SpecVersion, detect_spec_version
 
 logger = logging.getLogger(__name__)
 
@@ -47,8 +47,14 @@ class ValidationResult:
             "valid": self.valid,
             "skill_id": self.skill_id,
             "spec_version": self.spec_version.value,
-            "errors": [{"field": e.field, "message": e.message, "severity": e.severity} for e in self.errors],
-            "warnings": [{"field": w.field, "message": w.message, "severity": w.severity} for w in self.warnings],
+            "errors": [
+                {"field": e.field, "message": e.message, "severity": e.severity}
+                for e in self.errors
+            ],
+            "warnings": [
+                {"field": w.field, "message": w.message, "severity": w.severity}
+                for w in self.warnings
+            ],
             "source_file": str(self.source_file) if self.source_file else None,
         }
 
@@ -99,7 +105,13 @@ class SpecValidator:
                 valid=False,
                 skill_id=str(path),
                 spec_version=SpecVersion.V3_0,
-                errors=[SpecIssue(field="file", message=f"SKILL.md not found at {skill_file}", severity="error")],
+                errors=[
+                    SpecIssue(
+                        field="file",
+                        message=f"SKILL.md not found at {skill_file}",
+                        severity="error",
+                    )
+                ],
                 source_file=skill_file,
             )
 
@@ -111,7 +123,13 @@ class SpecValidator:
                 valid=False,
                 skill_id=skill_file.parent.name,
                 spec_version=SpecVersion.V3_0,
-                errors=[SpecIssue(field="frontmatter", message="No valid YAML frontmatter found", severity="error")],
+                errors=[
+                    SpecIssue(
+                        field="frontmatter",
+                        message="No valid YAML frontmatter found",
+                        severity="error",
+                    )
+                ],
                 source_file=skill_file,
             )
 
@@ -138,49 +156,59 @@ class SpecValidator:
         # 1. Check required fields
         for field in self.REQUIRED_FIELDS:
             if not data.get(field):
-                errors.append(SpecIssue(
-                    field=field,
-                    message=f"Required field '{field}' is missing or empty",
-                    severity="error",
-                    spec_version=SpecVersion.V3_0,
-                ))
+                errors.append(
+                    SpecIssue(
+                        field=field,
+                        message=f"Required field '{field}' is missing or empty",
+                        severity="error",
+                        spec_version=SpecVersion.V3_0,
+                    )
+                )
 
         # 2. Validate 'type' field maps to a known SkillType
         type_value = data.get("type") or data.get("skill_type")
         if type_value:
             if type_value not in self.VALID_TYPES:
-                errors.append(SpecIssue(
-                    field="type",
-                    message=f"Invalid skill type '{type_value}'. Valid types: {', '.join(self.VALID_TYPES)}",
-                    severity="error",
-                    spec_version=SpecVersion.V3_0,
-                ))
+                errors.append(
+                    SpecIssue(
+                        field="type",
+                        message=f"Invalid skill type '{type_value}'. Valid types: {', '.join(self.VALID_TYPES)}",
+                        severity="error",
+                        spec_version=SpecVersion.V3_0,
+                    )
+                )
         else:
-            warnings.append(SpecIssue(
-                field="type",
-                message="No 'type' field specified, defaults to 'prompt'",
-                severity="warning",
-                spec_version=SpecVersion.V3_0,
-            ))
+            warnings.append(
+                SpecIssue(
+                    field="type",
+                    message="No 'type' field specified, defaults to 'prompt'",
+                    severity="warning",
+                    spec_version=SpecVersion.V3_0,
+                )
+            )
 
         # 3. Check for v1/v2 naming conventions that should migrate
         if data.get("skill_type") and not data.get("type"):
-            warnings.append(SpecIssue(
-                field="skill_type",
-                message="Use 'type' instead of 'skill_type' (spec v3 standard)",
-                severity="warning",
-                spec_version=SpecVersion.V3_0,
-            ))
+            warnings.append(
+                SpecIssue(
+                    field="skill_type",
+                    message="Use 'type' instead of 'skill_type' (spec v3 standard)",
+                    severity="warning",
+                    spec_version=SpecVersion.V3_0,
+                )
+            )
 
         # 4. Check for 'standard' type (was buggy before v3)
         if type_value == "standard" and detected_version != SpecVersion.V3_0:
-            warnings.append(SpecIssue(
-                field="type",
-                message="type: 'standard' was not a valid SkillType before spec v3.0 "
-                        "(silently fell back to 'prompt' in older parsers)",
-                severity="warning",
-                spec_version=SpecVersion.V3_0,
-            ))
+            warnings.append(
+                SpecIssue(
+                    field="type",
+                    message="type: 'standard' was not a valid SkillType before spec v3.0 "
+                    "(silently fell back to 'prompt' in older parsers)",
+                    severity="warning",
+                    spec_version=SpecVersion.V3_0,
+                )
+            )
 
         # 5. Check that keywords and tags are separate (not merged)
         has_both = bool(data.get("tags")) and bool(data.get("keywords"))
@@ -188,13 +216,15 @@ class SpecValidator:
             tags_set = set(data["tags"]) if isinstance(data["tags"], list) else set()
             kw_set = set(data["keywords"]) if isinstance(data["keywords"], list) else set()
             if tags_set == kw_set:
-                warnings.append(SpecIssue(
-                    field="tags/keywords",
-                    message="'tags' and 'keywords' are identical. In spec v3 these are separate concepts: "
-                            "tags are for categorization, keywords are for search.",
-                    severity="warning",
-                    spec_version=SpecVersion.V3_0,
-                ))
+                warnings.append(
+                    SpecIssue(
+                        field="tags/keywords",
+                        message="'tags' and 'keywords' are identical. In spec v3 these are separate concepts: "
+                        "tags are for categorization, keywords are for search.",
+                        severity="warning",
+                        spec_version=SpecVersion.V3_0,
+                    )
+                )
 
         # 6. Check for fields that exist in spec but are never parsed (pre-v3)
         orphan_fields = {
@@ -205,32 +235,38 @@ class SpecValidator:
         }
         for field, explanation in orphan_fields.items():
             if field in data and detected_version != SpecVersion.V3_0:
-                warnings.append(SpecIssue(
-                    field=field,
-                    message=f"'{field}' is present but was discarded by pre-v3 parsers. {explanation}.",
-                    severity="warning",
-                    spec_version=detected_version,
-                ))
+                warnings.append(
+                    SpecIssue(
+                        field=field,
+                        message=f"'{field}' is present but was discarded by pre-v3 parsers. {explanation}.",
+                        severity="warning",
+                        spec_version=detected_version,
+                    )
+                )
 
         # 7. Validate version string format (should be SemVer-like)
         version = data.get("version", "")
         if version and not _looks_like_semver(version):
-            warnings.append(SpecIssue(
-                field="version",
-                message=f"Version '{version}' does not look like SemVer (e.g. '1.2.3')",
-                severity="warning",
-                spec_version=SpecVersion.V3_0,
-            ))
+            warnings.append(
+                SpecIssue(
+                    field="version",
+                    message=f"Version '{version}' does not look like SemVer (e.g. '1.2.3')",
+                    severity="warning",
+                    spec_version=SpecVersion.V3_0,
+                )
+            )
 
         # 8. Check for LLM config without source_config when remote
         if data.get("llm_config") and not data.get("source_config"):
-            warnings.append(SpecIssue(
-                field="source_config",
-                message="Skill has llm_config but no source_config -- consider adding "
-                        "source verification info",
-                severity="warning",
-                spec_version=SpecVersion.V2_0,
-            ))
+            warnings.append(
+                SpecIssue(
+                    field="source_config",
+                    message="Skill has llm_config but no source_config -- consider adding "
+                    "source verification info",
+                    severity="warning",
+                    spec_version=SpecVersion.V2_0,
+                )
+            )
 
         valid = len(errors) == 0
 
@@ -253,11 +289,13 @@ class SpecValidator:
                 valid=False,
                 skill_id=archive_path.stem,
                 spec_version=SpecVersion.V3_0,
-                errors=[SpecIssue(
-                    field="archive",
-                    message=f"Archive not found: {archive_path}",
-                    severity="error",
-                )],
+                errors=[
+                    SpecIssue(
+                        field="archive",
+                        message=f"Archive not found: {archive_path}",
+                        severity="error",
+                    )
+                ],
                 source_file=archive_path,
             )
         return ValidationResult(

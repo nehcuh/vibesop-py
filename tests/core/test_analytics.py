@@ -83,9 +83,15 @@ class TestAnalyticsStore:
 
     def test_skill_stats(self, tmp_path: Path) -> None:
         store = AnalyticsStore(storage_dir=str(tmp_path))
-        store.record(ExecutionRecord(query="q1", primary_skill="s1", user_satisfied=True, duration_ms=100.0))
-        store.record(ExecutionRecord(query="q2", primary_skill="s1", user_satisfied=True, duration_ms=200.0))
-        store.record(ExecutionRecord(query="q3", primary_skill="s1", user_satisfied=False, duration_ms=300.0))
+        store.record(
+            ExecutionRecord(query="q1", primary_skill="s1", user_satisfied=True, duration_ms=100.0)
+        )
+        store.record(
+            ExecutionRecord(query="q2", primary_skill="s1", user_satisfied=True, duration_ms=200.0)
+        )
+        store.record(
+            ExecutionRecord(query="q3", primary_skill="s1", user_satisfied=False, duration_ms=300.0)
+        )
 
         stats = store.get_skill_stats("s1")
         assert stats["total_uses"] == 3
@@ -103,18 +109,22 @@ class TestAnalyticsStore:
         store = AnalyticsStore(storage_dir=str(tmp_path))
         # s1: 1/3 satisfied → low quality
         for i in range(3):
-            store.record(ExecutionRecord(
-                query=f"q{i}",
-                primary_skill="s1",
-                user_satisfied=(i == 0),
-            ))
+            store.record(
+                ExecutionRecord(
+                    query=f"q{i}",
+                    primary_skill="s1",
+                    user_satisfied=(i == 0),
+                )
+            )
         # s2: 3/3 satisfied → not low quality
         for i in range(3):
-            store.record(ExecutionRecord(
-                query=f"q{i}",
-                primary_skill="s2",
-                user_satisfied=True,
-            ))
+            store.record(
+                ExecutionRecord(
+                    query=f"q{i}",
+                    primary_skill="s2",
+                    user_satisfied=True,
+                )
+            )
 
         low_quality = store.get_low_quality_skills(threshold=0.5)
         assert len(low_quality) == 1
@@ -125,11 +135,13 @@ class TestAnalyticsStore:
         store = AnalyticsStore(storage_dir=str(tmp_path))
         # Only 2 samples for s1 — not enough to flag
         for i in range(2):
-            store.record(ExecutionRecord(
-                query=f"q{i}",
-                primary_skill="s1",
-                user_satisfied=False,
-            ))
+            store.record(
+                ExecutionRecord(
+                    query=f"q{i}",
+                    primary_skill="s1",
+                    user_satisfied=False,
+                )
+            )
 
         low_quality = store.get_low_quality_skills(threshold=0.5)
         assert len(low_quality) == 0

@@ -13,13 +13,12 @@ Covers:
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 
 from vibesop.core.loop.models import LoopSpec
 from vibesop.core.loop.scheduler import CronDaemon, CronExpr, _parse_field
-
 
 # ──────────────────────────────────────────────────────────────────
 # _parse_field
@@ -113,33 +112,31 @@ class TestEveryFifteenMinutes:
         self.c = CronExpr("*/15 * * * *")
 
     def test_next_after_exact_match(self):
-        dt = datetime(2026, 6, 19, 10, 0, tzinfo=timezone.utc)
+        dt = datetime(2026, 6, 19, 10, 0, tzinfo=UTC)
         n = self.c.next_run_after(dt)
         # 10:00:00 is the after-baseline; next is 10:15
         assert (n.hour, n.minute, n.day) == (10, 15, 19)
 
     def test_next_after_offset(self):
-        dt = datetime(2026, 6, 19, 10, 10, tzinfo=timezone.utc)
+        dt = datetime(2026, 6, 19, 10, 10, tzinfo=UTC)
         n = self.c.next_run_after(dt)
         assert (n.hour, n.minute) == (10, 15)
 
     def test_next_after_last_quarter_rolls_to_next_hour(self):
-        dt = datetime(2026, 6, 19, 10, 45, tzinfo=timezone.utc)
+        dt = datetime(2026, 6, 19, 10, 45, tzinfo=UTC)
         n = self.c.next_run_after(dt)
         assert (n.hour, n.minute) == (11, 0)
 
     def test_should_run_at_quarter(self):
-        assert self.c.should_run(datetime(2026, 6, 19, 10, 0, tzinfo=timezone.utc)) is True
+        assert self.c.should_run(datetime(2026, 6, 19, 10, 0, tzinfo=UTC)) is True
 
     def test_should_not_run_between_quarters(self):
-        assert self.c.should_run(datetime(2026, 6, 19, 10, 7, tzinfo=timezone.utc)) is False
+        assert self.c.should_run(datetime(2026, 6, 19, 10, 7, tzinfo=UTC)) is False
 
     def test_should_run_is_second_agnostic(self):
         """Within minute 10:00, seconds 00 / 30 / 59 all match."""
         for sec in (0, 30, 59):
-            assert self.c.should_run(
-                datetime(2026, 6, 19, 10, 0, sec, tzinfo=timezone.utc)
-            ) is True
+            assert self.c.should_run(datetime(2026, 6, 19, 10, 0, sec, tzinfo=UTC)) is True
 
 
 class TestDailyAt2230:
@@ -147,20 +144,20 @@ class TestDailyAt2230:
         self.c = CronExpr("30 22 * * *")
 
     def test_next_before_target(self):
-        dt = datetime(2026, 6, 19, 22, 0, tzinfo=timezone.utc)
+        dt = datetime(2026, 6, 19, 22, 0, tzinfo=UTC)
         n = self.c.next_run_after(dt)
         assert (n.day, n.hour, n.minute) == (19, 22, 30)
 
     def test_next_at_target_rolls_to_tomorrow(self):
-        dt = datetime(2026, 6, 19, 22, 30, tzinfo=timezone.utc)
+        dt = datetime(2026, 6, 19, 22, 30, tzinfo=UTC)
         n = self.c.next_run_after(dt)
         assert (n.day, n.hour, n.minute) == (20, 22, 30)
 
     def test_should_run_at_target(self):
-        assert self.c.should_run(datetime(2026, 6, 19, 22, 30, tzinfo=timezone.utc)) is True
+        assert self.c.should_run(datetime(2026, 6, 19, 22, 30, tzinfo=UTC)) is True
 
     def test_should_not_run_at_wrong_minute(self):
-        assert self.c.should_run(datetime(2026, 6, 19, 22, 31, tzinfo=timezone.utc)) is False
+        assert self.c.should_run(datetime(2026, 6, 19, 22, 31, tzinfo=UTC)) is False
 
 
 class TestWeekday9AM:
@@ -172,23 +169,23 @@ class TestWeekday9AM:
     @pytest.mark.parametrize(
         "date,expected",
         [
-            ("2026-06-22", True),   # Monday
-            ("2026-06-23", True),   # Tuesday
-            ("2026-06-24", True),   # Wednesday
-            ("2026-06-25", True),   # Thursday
-            ("2026-06-26", True),   # Friday
+            ("2026-06-22", True),  # Monday
+            ("2026-06-23", True),  # Tuesday
+            ("2026-06-24", True),  # Wednesday
+            ("2026-06-25", True),  # Thursday
+            ("2026-06-26", True),  # Friday
             ("2026-06-27", False),  # Saturday
             ("2026-06-28", False),  # Sunday
         ],
     )
     def test_should_run_by_weekday(self, date: str, expected: bool):
         y, m, d = (int(x) for x in date.split("-"))
-        dt = datetime(y, m, d, 9, 0, tzinfo=timezone.utc)
+        dt = datetime(y, m, d, 9, 0, tzinfo=UTC)
         assert self.c.should_run(dt) is expected
 
     def test_next_after_friday_morning_is_monday(self):
         """Friday 9:05 → next Monday 9:00."""
-        dt = datetime(2026, 6, 26, 9, 5, tzinfo=timezone.utc)  # Friday
+        dt = datetime(2026, 6, 26, 9, 5, tzinfo=UTC)  # Friday
         n = self.c.next_run_after(dt)
         assert n.weekday() == 0  # Monday
         assert (n.hour, n.minute) == (9, 0)
@@ -199,13 +196,13 @@ class TestYearlySparse:
 
     def test_next_from_june_is_next_year(self):
         c = CronExpr("0 0 1 1 *")
-        dt = datetime(2026, 6, 19, 0, 0, tzinfo=timezone.utc)
+        dt = datetime(2026, 6, 19, 0, 0, tzinfo=UTC)
         n = c.next_run_after(dt)
         assert (n.year, n.month, n.day) == (2027, 1, 1)
 
     def test_next_from_january_first_late_is_next_year(self):
         c = CronExpr("0 0 1 1 *")
-        dt = datetime(2026, 1, 1, 12, 0, tzinfo=timezone.utc)
+        dt = datetime(2026, 1, 1, 12, 0, tzinfo=UTC)
         n = c.next_run_after(dt)
         assert (n.year, n.month, n.day) == (2027, 1, 1)
 
@@ -215,7 +212,7 @@ class TestRapidFireWeekday:
 
     def test_next_minute_same_hour(self):
         c = CronExpr("*/5 * * * 1-5")
-        dt = datetime(2026, 6, 22, 9, 3, tzinfo=timezone.utc)  # Monday 09:03
+        dt = datetime(2026, 6, 22, 9, 3, tzinfo=UTC)  # Monday 09:03
         n = c.next_run_after(dt)
         assert (n.hour, n.minute) == (9, 5)
         assert n.weekday() == 0
@@ -228,11 +225,11 @@ class TestSundayDow:
         c_zero = CronExpr("0 0 * * 0")
         c_seven = CronExpr("0 0 * * 7")
         # Sunday 2026-06-28
-        sunday = datetime(2026, 6, 28, 0, 0, tzinfo=timezone.utc)
+        sunday = datetime(2026, 6, 28, 0, 0, tzinfo=UTC)
         assert c_zero.should_run(sunday)
         assert c_seven.should_run(sunday)
         # Saturday 2026-06-27
-        saturday = datetime(2026, 6, 27, 0, 0, tzinfo=timezone.utc)
+        saturday = datetime(2026, 6, 27, 0, 0, tzinfo=UTC)
         assert not c_zero.should_run(saturday)
         assert not c_seven.should_run(saturday)
 

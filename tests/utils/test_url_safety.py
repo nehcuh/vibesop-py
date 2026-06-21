@@ -9,7 +9,7 @@ Covers the S29 red-team findings:
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -69,12 +69,12 @@ class TestValidateUrl:
     @pytest.mark.parametrize(
         "ip",
         [
-            "10.0.0.1",       # private 10/8
-            "172.16.0.1",     # private 172.16/12
-            "192.168.1.1",    # private 192.168/16
-            "127.0.0.1",      # loopback
-            "100.64.0.1",     # CGNAT
-            "0.0.0.0",        # unspecified
+            "10.0.0.1",  # private 10/8
+            "172.16.0.1",  # private 172.16/12
+            "192.168.1.1",  # private 192.168/16
+            "127.0.0.1",  # loopback
+            "100.64.0.1",  # CGNAT
+            "0.0.0.0",  # unspecified
         ],
     )
     def test_all_private_ranges_blocked(self, ip: str) -> None:
@@ -113,7 +113,7 @@ class TestSafeUlopenSizeCap:
         chunk = b"x" * (64 * 1024)
 
         class FakeResponse:
-            def __enter__(self) -> "FakeResponse":
+            def __enter__(self) -> FakeResponse:
                 return self
 
             def __exit__(self, *args: object) -> None:
@@ -127,9 +127,12 @@ class TestSafeUlopenSizeCap:
                     return b""
                 return chunk
 
-        with patch("vibesop.utils.url_safety.validate_url"), patch(
-            "vibesop.utils.url_safety.urllib.request.urlopen",
-            return_value=FakeResponse(),
+        with (
+            patch("vibesop.utils.url_safety.validate_url"),
+            patch(
+                "vibesop.utils.url_safety.urllib.request.urlopen",
+                return_value=FakeResponse(),
+            ),
         ):
             with pytest.raises(UnsafeUrlError, match="exceeded max_bytes"):
                 safe_urlopen(
@@ -143,7 +146,7 @@ class TestSafeUlopenSizeCap:
         body = b'{"ok": true}'
 
         class FakeResponse:
-            def __enter__(self) -> "FakeResponse":
+            def __enter__(self) -> FakeResponse:
                 return self
 
             def __exit__(self, *args: object) -> None:
@@ -158,9 +161,12 @@ class TestSafeUlopenSizeCap:
                 FakeResponse._returned = True
                 return body
 
-        with patch("vibesop.utils.url_safety.validate_url"), patch(
-            "vibesop.utils.url_safety.urllib.request.urlopen",
-            return_value=FakeResponse(),
+        with (
+            patch("vibesop.utils.url_safety.validate_url"),
+            patch(
+                "vibesop.utils.url_safety.urllib.request.urlopen",
+                return_value=FakeResponse(),
+            ),
         ):
             result = safe_urlopen("https://example.com/small", max_bytes=1024)
         assert result == body

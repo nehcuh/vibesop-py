@@ -31,6 +31,7 @@ from vibesop import __version__
 from vibesop.cli.commands import (
     badges_cmd,
     deviation_cmd,
+    instinct_cmd,
     loop_cmd,
     market_cmd,
     matcher_cmd,
@@ -42,9 +43,6 @@ from vibesop.cli.commands import (
     workflows_cmd,
 )
 from vibesop.cli.commands import trust as trust_module
-from vibesop.cli.commands import (
-    instinct_cmd,
-)
 from vibesop.cli.commands.status_cmd import status as status_command
 from vibesop.cli.confirmation import _needs_confirmation, _run_confirmation_flow
 from vibesop.cli.feedback import _collect_feedback
@@ -128,9 +126,7 @@ console = Console()
 @app.callback(invoke_without_command=True)
 def _default_callback(  # pyright: ignore[reportUnusedFunction]
     ctx: typer.Context,
-    version: bool = typer.Option(
-        False, "--version", "-V", help="Show version and exit"
-    ),
+    version: bool = typer.Option(False, "--version", "-V", help="Show version and exit"),
 ) -> None:
     """VibeSOP — AI-powered skill operating system for developers."""
     if version:
@@ -158,9 +154,7 @@ app.command(name="trust")(trust_module.trust)
 
 @app.command()
 def status(
-    no_color: bool = typer.Option(
-        False, "--no-color", help="Disable colored output"
-    ),
+    no_color: bool = typer.Option(False, "--no-color", help="Disable colored output"),
 ) -> None:
     """Show a unified snapshot of your VibeSOP skill ecosystem."""
     status_command(no_color=no_color)
@@ -421,7 +415,13 @@ def route(
 
                 # Use print() instead of console.print() to avoid Rich's line wrapping
                 # which would break JSON structure with unescaped newlines
-                print(json.dumps({"success": result.success, "message": result.message}, indent=2, ensure_ascii=False))
+                print(
+                    json.dumps(
+                        {"success": result.success, "message": result.message},
+                        indent=2,
+                        ensure_ascii=False,
+                    )
+                )
             elif result.success:
                 console.print(f"[bold green]✓[/bold green] {result.message}")
             else:
@@ -445,9 +445,7 @@ def route(
             update={"min_confidence": min_confidence}
         )
     if no_session:
-        router.routing_config = router.routing_config.model_copy(
-            update={"session_aware": False}
-        )
+        router.routing_config = router.routing_config.model_copy(update={"session_aware": False})
     if strategy is not None:
         router.routing_config = router.routing_config.model_copy(
             update={"default_strategy": strategy}
@@ -525,22 +523,17 @@ def route(
             from vibesop.cli.progress import LiveOrchestrationCallbacks
 
             with LiveOrchestrationCallbacks(console=console) as callbacks:
-                result = router.orchestrate(
-                    decision.query, context=context, callbacks=callbacks
-                )
+                result = router.orchestrate(decision.query, context=context, callbacks=callbacks)
         else:
             result = router.orchestrate(decision.query, context=context)
-    else:
-        # Unknown mode: fall back to orchestration for backward compatibility
-        if use_live_progress:
-            from vibesop.cli.progress import LiveOrchestrationCallbacks
+    # Unknown mode: fall back to orchestration for backward compatibility
+    elif use_live_progress:
+        from vibesop.cli.progress import LiveOrchestrationCallbacks
 
-            with LiveOrchestrationCallbacks(console=console) as callbacks:
-                result = router.orchestrate(
-                    decision.query, context=context, callbacks=callbacks
-                )
-        else:
-            result = router.orchestrate(decision.query, context=context)
+        with LiveOrchestrationCallbacks(console=console) as callbacks:
+            result = router.orchestrate(decision.query, context=context, callbacks=callbacks)
+    else:
+        result = router.orchestrate(decision.query, context=context)
 
     # Phase 4: render Agent Squad summary when the plan contains a squad
     squad_already_rendered = False
@@ -596,9 +589,7 @@ def route(
             trace_id = t.get("trace_id", "")
             trace_file = Path.cwd() / ".vibe" / "traces" / f"{trace_id}.json"
             console.print()
-            console.print(
-                f"[bold cyan]🔍 Routing Trace[/bold cyan] [dim](SkillTree mode)[/dim]"
-            )
+            console.print("[bold cyan]🔍 Routing Trace[/bold cyan] [dim](SkillTree mode)[/dim]")
             console.print(f"  Trace ID: [cyan]{trace_id}[/cyan]")
             console.print(f"  Layers: [bold]{t.get('layer_count', 0)}[/bold] attempted")
             console.print(f"  Saved: [dim]{trace_file}[/dim]")
@@ -615,19 +606,33 @@ def route(
             pattern and pattern == "prompt_chain"
         ):
             _handle_prompt_chain_output(
-                result, json_output, console, output_dir=output_dir,
+                result,
+                json_output,
+                console,
+                output_dir=output_dir,
             )
             return
 
         _handle_orchestrated_result(
-            result, router, yes, execute, json_output, console,
-            already_rendered=already_rendered, squad=squad,
+            result,
+            router,
+            yes,
+            execute,
+            json_output,
+            console,
+            already_rendered=already_rendered,
+            squad=squad,
         )
         return
 
     # Handle single-skill result
     _handle_single_result(
-        result, router, yes, json_output, validate, console,
+        result,
+        router,
+        yes,
+        json_output,
+        validate,
+        console,
         already_rendered=already_rendered,
     )
 
@@ -852,9 +857,7 @@ def _handle_prompt_chain_output(
         console.print(f"  {phase_label}: {pf.name} → {target_dir}/{pf.filename}")
 
     console.print()
-    console.print(
-        "[bold green]⏩ 请在 Claude Code 中按顺序执行：[/bold green]"
-    )
+    console.print("[bold green]⏩ 请在 Claude Code 中按顺序执行：[/bold green]")
     first_file = next((p for p in written if "phase-0" in p.name), written[0] if written else None)
     if first_file:
         console.print(f"   cat {first_file} | pbcopy")
@@ -875,8 +878,14 @@ def _handle_orchestrated_result(
 
     # 1. Confirmation flow (when needed)
     confirmed = _orchestration_confirmation_flow(
-        result, yes, execute, json_output, console, router,
-        already_rendered=already_rendered, squad=squad,
+        result,
+        yes,
+        execute,
+        json_output,
+        console,
+        router,
+        already_rendered=already_rendered,
+        squad=squad,
     )
     if not confirmed:
         return
@@ -1538,8 +1547,7 @@ def _format_squad_summary(squad: Any, analysis: Any | None = None) -> str:
     lines.append("")
     lines.append(f"🔄 Protocol: {squad.collaboration_protocol}")
     order_names = [
-        step_by_role[rid].role_id if rid in step_by_role else rid
-        for rid in squad.execution_order
+        step_by_role[rid].role_id if rid in step_by_role else rid for rid in squad.execution_order
     ]
     lines.append(f"   Round 1: {' → '.join(order_names)} → review")
     lines.append(f"   Max Rounds: {squad.max_rounds}")

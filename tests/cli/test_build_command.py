@@ -36,7 +36,9 @@ class TestBuildCommand:
 
     @patch("vibesop.cli.commands.build.ConfigRenderer")
     @patch("vibesop.cli.commands.build.ManifestBuilder")
-    def test_build_success(self, mock_builder_cls, mock_renderer_cls, monkeypatch, tmp_path) -> None:
+    def test_build_success(
+        self, mock_builder_cls, mock_renderer_cls, monkeypatch, tmp_path
+    ) -> None:
         """Test successful build."""
         monkeypatch.chdir(tmp_path)
         manifest = _make_manifest()
@@ -55,7 +57,9 @@ class TestBuildCommand:
 
     @patch("vibesop.cli.commands.build.ConfigRenderer")
     @patch("vibesop.cli.commands.build.ManifestBuilder")
-    def test_build_with_overlay(self, mock_builder_cls, mock_renderer_cls, monkeypatch, tmp_path) -> None:
+    def test_build_with_overlay(
+        self, mock_builder_cls, mock_renderer_cls, monkeypatch, tmp_path
+    ) -> None:
         """Test build with overlay file."""
         monkeypatch.chdir(tmp_path)
         overlay_file = tmp_path / "overlay.yaml"
@@ -73,7 +77,9 @@ class TestBuildCommand:
         result = runner.invoke(app, ["build", "claude-code", "--overlay", str(overlay_file)])
         assert result.exit_code == 0
         assert "Applying overlay" in result.stdout
-        mock_builder.build.assert_called_once_with(overlay_path=Path(str(overlay_file)), platform="claude-code")
+        mock_builder.build.assert_called_once_with(
+            overlay_path=Path(str(overlay_file)), platform="claude-code"
+        )
 
     @patch("vibesop.cli.commands.build.ManifestBuilder")
     def test_build_verify(self, mock_builder_cls, monkeypatch, tmp_path) -> None:
@@ -115,7 +121,9 @@ class TestBuildCommand:
 
     @patch("vibesop.cli.commands.build.ConfigRenderer")
     @patch("vibesop.cli.commands.build.ManifestBuilder")
-    def test_build_deployed_output(self, mock_builder_cls, mock_renderer_cls, monkeypatch, tmp_path) -> None:
+    def test_build_deployed_output(
+        self, mock_builder_cls, mock_renderer_cls, monkeypatch, tmp_path
+    ) -> None:
         """Test build when output matches Claude Code deploy path."""
         monkeypatch.chdir(tmp_path)
         manifest = _make_manifest()
@@ -135,7 +143,9 @@ class TestBuildCommand:
 
     @patch("vibesop.cli.commands.build.ConfigRenderer")
     @patch("vibesop.cli.commands.build.ManifestBuilder")
-    def test_build_no_target_uses_default(self, mock_builder_cls, mock_renderer_cls, monkeypatch, tmp_path) -> None:
+    def test_build_no_target_uses_default(
+        self, mock_builder_cls, mock_renderer_cls, monkeypatch, tmp_path
+    ) -> None:
         """Test build without target uses default claude-code."""
         monkeypatch.chdir(tmp_path)
         manifest = _make_manifest()
@@ -155,7 +165,9 @@ class TestBuildCommand:
     @patch("vibesop.cli.commands.build.ConfigRenderer")
     @patch("vibesop.cli.commands.build.ManifestBuilder")
     @patch("vibesop.cli.commands.build._get_configured_platform")
-    def test_build_no_target_uses_config(self, mock_get_platform, mock_builder_cls, mock_renderer_cls, monkeypatch, tmp_path) -> None:
+    def test_build_no_target_uses_config(
+        self, mock_get_platform, mock_builder_cls, mock_renderer_cls, monkeypatch, tmp_path
+    ) -> None:
         """Test build without target uses configured platform."""
         monkeypatch.chdir(tmp_path)
         mock_get_platform.return_value = "opencode"
@@ -176,7 +188,9 @@ class TestBuildCommand:
 
     @patch("vibesop.cli.commands.build.ConfigRenderer")
     @patch("vibesop.cli.commands.build.ManifestBuilder")
-    def test_build_file_outside_cwd(self, mock_builder_cls, mock_renderer_cls, monkeypatch, tmp_path) -> None:
+    def test_build_file_outside_cwd(
+        self, mock_builder_cls, mock_renderer_cls, monkeypatch, tmp_path
+    ) -> None:
         """Test build when created file is outside current directory."""
         monkeypatch.chdir(tmp_path)
         manifest = _make_manifest()
@@ -194,7 +208,9 @@ class TestBuildCommand:
 
     @patch("vibesop.cli.commands.build.ConfigRenderer")
     @patch("vibesop.cli.commands.build.ManifestBuilder")
-    def test_build_deploy_to_claude_dir(self, mock_builder_cls, mock_renderer_cls, monkeypatch, tmp_path) -> None:
+    def test_build_deploy_to_claude_dir(
+        self, mock_builder_cls, mock_renderer_cls, monkeypatch, tmp_path
+    ) -> None:
         """Test build when output is ~/.claude."""
         monkeypatch.chdir(tmp_path)
         manifest = _make_manifest()
@@ -235,4 +251,5 @@ class TestBuildCommand:
         (config_dir / "config.yaml").write_text("platform: opencode\n")
 
         from vibesop.cli.commands.build import _get_configured_platform
+
         assert _get_configured_platform() == "opencode"

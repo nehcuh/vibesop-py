@@ -131,10 +131,7 @@ class AgentRuntimeResult:
         if self.mode == "orchestrate" and self.plan:
             plan_text = json.dumps(self.plan, indent=2, ensure_ascii=False)
             response: dict[str, Any] = {
-                "systemMessage": (
-                    "🔀 VibeSOP detected multiple intents. "
-                    "Execution plan injected."
-                ),
+                "systemMessage": ("🔀 VibeSOP detected multiple intents. Execution plan injected."),
             }
             if include_additional_context:
                 ctx = f"[VibeSOP Execution Plan]\n{plan_text}"
@@ -150,8 +147,7 @@ class AgentRuntimeResult:
                 return json.dumps(
                     {
                         "systemMessage": (
-                            "🤖 VibeSOP: No matching skill found. "
-                            "Proceeding in normal mode."
+                            "🤖 VibeSOP: No matching skill found. Proceeding in normal mode."
                         )
                     },
                     ensure_ascii=False,
@@ -166,8 +162,7 @@ class AgentRuntimeResult:
         alt_msg = ""
         if self.alternatives:
             alt_lines = [
-                f"  {i+1}. {a['skill_id']} "
-                f"({int(a.get('confidence', 0) * 100)}%)"
+                f"  {i + 1}. {a['skill_id']} ({int(a.get('confidence', 0) * 100)}%)"
                 for i, a in enumerate(self.alternatives[:5])
             ]
             alt_msg = (
@@ -363,9 +358,7 @@ class AgentRuntime:
 
         # Generate conversation ID if not provided
         if not conversation_id:
-            project_hash = hashlib.sha256(
-                str(self.project_root).encode()
-            ).hexdigest()[:16]
+            project_hash = hashlib.sha256(str(self.project_root).encode()).hexdigest()[:16]
             conversation_id = project_hash
 
         # 1. Check for slash commands (/vibe-help, /vibe-list, etc.)
@@ -440,9 +433,7 @@ class AgentRuntime:
                     squad_ctx.metadata["intent_analysis"] = squad_ctx.intent_analysis
                     squad_ctx.metadata["_interception_mode"] = mode_tag
 
-                orch_result = self.router.orchestrate(
-                    query, callbacks=callbacks, context=squad_ctx
-                )
+                orch_result = self.router.orchestrate(query, callbacks=callbacks, context=squad_ctx)
                 if orch_result.get("is_multi_intent"):
                     result.mode = "orchestrate"
                     plan = orch_result.get("plan", {})
@@ -453,10 +444,12 @@ class AgentRuntime:
                         result.confidence = 0.8
                         result.skill_name = steps[0].get("intent", "")
                     for step in steps[1:5]:
-                        result.alternatives.append({
-                            "skill_id": step.get("skill_id", ""),
-                            "confidence": 0.7,
-                        })
+                        result.alternatives.append(
+                            {
+                                "skill_id": step.get("skill_id", ""),
+                                "confidence": 0.7,
+                            }
+                        )
                 else:
                     single = orch_result.get("single_result", {})
                     result.skill_id = single.get("skill_id", "") or ""
@@ -483,10 +476,12 @@ class AgentRuntime:
                     # Capture alternatives
                     if hasattr(routing_result, "alternatives"):
                         for alt in routing_result.alternatives[:5]:
-                            result.alternatives.append({
-                                "skill_id": getattr(alt, "skill_id", ""),
-                                "confidence": getattr(alt, "confidence", 0.0),
-                            })
+                            result.alternatives.append(
+                                {
+                                    "skill_id": getattr(alt, "skill_id", ""),
+                                    "confidence": getattr(alt, "confidence", 0.0),
+                                }
+                            )
 
                     # Capture orchestration plan
                     if hasattr(routing_result, "plan") and routing_result.plan:
@@ -625,9 +620,7 @@ class AgentRuntime:
             return await self._single_agent_with_skills(query, role, skills, context)
 
         if decision.mode == InterceptionMode.MULTI_AGENT_SQUAD:
-            return await self._orchestrate(
-                query, decision.analysis, context, mode=decision.mode
-            )
+            return await self._orchestrate(query, decision.analysis, context, mode=decision.mode)
 
         if decision.mode == InterceptionMode.ORCHESTRATE:
             return await self._orchestrate(query, None, context, mode=decision.mode)

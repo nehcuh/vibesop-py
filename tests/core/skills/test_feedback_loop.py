@@ -11,8 +11,14 @@ from vibesop.core.skills.feedback_loop import FeedbackLoop
 class TestFeedbackLoop:
     """Test FeedbackLoop retention analysis and auto-deprecation."""
 
-    def _make_evaluation(self, skill_id: str, grade: str, total_routes: int = 5,
-                         last_used: str | None = None, quality: float = 0.5) -> SkillEvaluation:
+    def _make_evaluation(
+        self,
+        skill_id: str,
+        grade: str,
+        total_routes: int = 5,
+        last_used: str | None = None,
+        quality: float = 0.5,
+    ) -> SkillEvaluation:
         """Create SkillEvaluation with given quality score.
 
         quality < 0.4 → F, 0.4-0.59 → D, 0.6-0.74 → C,
@@ -36,7 +42,10 @@ class TestFeedbackLoop:
         evaluator = MagicMock()
         evaluator.evaluate_all_skills.return_value = {
             "test/skill": self._make_evaluation(
-                "test/skill", "F", total_routes=1, quality=0.3,
+                "test/skill",
+                "F",
+                total_routes=1,
+                quality=0.3,
                 last_used="2026-04-01T00:00:00",
             ),
         }
@@ -51,7 +60,10 @@ class TestFeedbackLoop:
         evaluator = MagicMock()
         evaluator.evaluate_all_skills.return_value = {
             "test/skill": self._make_evaluation(
-                "test/skill", "D", total_routes=5, quality=0.45,
+                "test/skill",
+                "D",
+                total_routes=5,
+                quality=0.45,
                 last_used="2026-03-01T00:00:00",
             ),
         }
@@ -76,7 +88,9 @@ class TestFeedbackLoop:
         evaluator = MagicMock()
         evaluator.evaluate_all_skills.return_value = {
             "test/stale": self._make_evaluation(
-                "test/stale", "C", total_routes=3,
+                "test/stale",
+                "C",
+                total_routes=3,
                 last_used="2025-12-01T00:00:00",
                 quality=0.65,
             ),
@@ -91,7 +105,9 @@ class TestFeedbackLoop:
         evaluator = MagicMock()
         evaluator.evaluate_all_skills.return_value = {
             "test/active": self._make_evaluation(
-                "test/active", "C", total_routes=10,
+                "test/active",
+                "C",
+                total_routes=10,
                 last_used="2026-05-01T00:00:00",
                 quality=0.7,
             ),
@@ -124,7 +140,10 @@ class TestFeedbackLoop:
         evaluator = MagicMock()
         evaluator.evaluate_all_skills.return_value = {
             "test/bad": self._make_evaluation(
-                "test/bad", "F", total_routes=1, quality=0.3,
+                "test/bad",
+                "F",
+                total_routes=1,
+                quality=0.3,
                 last_used="2026-04-01T00:00:00",
             ),
         }
@@ -138,7 +157,10 @@ class TestFeedbackLoop:
         evaluator.evaluate_all_skills.return_value = {
             "test/good": self._make_evaluation("test/good", "A", total_routes=5, quality=0.95),
             "test/bad": self._make_evaluation(
-                "test/bad", "F", total_routes=1, quality=0.3,
+                "test/bad",
+                "F",
+                total_routes=1,
+                quality=0.3,
                 last_used="2026-04-01T00:00:00",
             ),
         }
@@ -153,7 +175,10 @@ class TestFeedbackLoop:
         evaluator.evaluate_all_skills.return_value = {
             "test/a": self._make_evaluation("test/a", "A", total_routes=5, quality=0.95),
             "test/f": self._make_evaluation(
-                "test/f", "F", total_routes=1, quality=0.3,
+                "test/f",
+                "F",
+                total_routes=1,
+                quality=0.3,
                 last_used="2026-04-01T00:00:00",
             ),
         }

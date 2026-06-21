@@ -39,10 +39,10 @@ from __future__ import annotations
 
 import logging
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from vibesop.agent.runtime.agent_runtime import AgentRuntime
-from vibesop.core.loop.models import LoopSpec, LoopRunRecord, LoopState
+from vibesop.core.loop.models import LoopRunRecord, LoopSpec, LoopState
 from vibesop.core.loop.store import LoopStore
 
 logger = logging.getLogger(__name__)
@@ -95,7 +95,7 @@ def execute_loop_tick(
     runtime = runtime or AgentRuntime()
     store = store or LoopStore()
 
-    started_at = datetime.now(timezone.utc)
+    started_at = datetime.now(UTC)
     start_wall = time.monotonic()
 
     record = LoopRunRecord(loop_name=spec.name, started_at=started_at)
@@ -129,7 +129,7 @@ def execute_loop_tick(
         logger.exception("Loop tick raised unexpectedly [%s]", spec.name)
 
     record.duration_s = round(time.monotonic() - start_wall, 2)
-    record.finished_at = datetime.now(timezone.utc)
+    record.finished_at = datetime.now(UTC)
 
     # Persist state — even on failure, so the failure counter advances.
     state = store.load_state(spec.name) or LoopState(spec=spec)

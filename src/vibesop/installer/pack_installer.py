@@ -23,6 +23,7 @@ console = Console()
 
 def _safe_rmtree(path: Path) -> None:
     """Remove a directory tree, handling read-only files on Windows."""
+
     def _onerror(_func: Any, _path: str, _excinfo: Any) -> None:
         # Change read-only files to writable and retry
         os.chmod(_path, stat.S_IWRITE)
@@ -109,13 +110,14 @@ class PackInstaller:
             if target_path.exists() and any(target_path.iterdir()):
                 installed_skill_files = list(target_path.rglob("SKILL.md"))
                 if installed_skill_files:
-                    audit_results = self._audit_skills(
-                        installed_skill_files, pack_name=pack_name
-                    )
+                    audit_results = self._audit_skills(installed_skill_files, pack_name=pack_name)
                     symlink_results = self._create_symlinks(pack_name, platforms)
                     msg = self._build_install_msg(
-                        pack_name, installed_skill_files, audit_results,
-                        symlink_results, already_installed=True,
+                        pack_name,
+                        installed_skill_files,
+                        audit_results,
+                        symlink_results,
+                        already_installed=True,
                     )
                     self._rebuild_global_index(pack_name)
                     return True, msg
@@ -154,14 +156,15 @@ class PackInstaller:
             )
 
             installed_skill_files = list(target_path.rglob("SKILL.md"))
-            audit_results = self._audit_skills(
-                installed_skill_files, pack_name=pack_name
-            )
+            audit_results = self._audit_skills(installed_skill_files, pack_name=pack_name)
             symlink_results = self._create_symlinks(pack_name, platforms)
 
             msg = self._build_install_msg(
-                pack_name, installed_skill_files, audit_results,
-                symlink_results, build_output=build_output,
+                pack_name,
+                installed_skill_files,
+                audit_results,
+                symlink_results,
+                build_output=build_output,
                 pre_audit_summary=pre_audit.summary,
                 pre_audit_files=pre_audit.files_scanned,
             )
@@ -171,14 +174,10 @@ class PackInstaller:
         except Exception as e:
             return False, f"Failed to install {pack_name}: {e}"
 
-    def _audit_skills(
-        self, skill_files: list[Path], pack_name: str | None = None
-    ) -> list[str]:
+    def _audit_skills(self, skill_files: list[Path], pack_name: str | None = None) -> list[str]:
         results = []
         for skill_file in skill_files:
-            audit = self._auditor.audit_skill_file(
-                skill_file, pack_name=pack_name
-            )
+            audit = self._auditor.audit_skill_file(skill_file, pack_name=pack_name)
             results.append(f"{skill_file.parent.name}: {'PASS' if audit.is_safe else 'WARN'}")
         return results
 
@@ -329,10 +328,7 @@ class PackInstaller:
 
         if result.returncode == 0:
             return f"{script_path.name} OK (sandboxed, network blocked)"
-        return (
-            f"{script_path.name} blocked/failed in sandbox: "
-            f"{result.stderr.strip()[:80]}"
-        )
+        return f"{script_path.name} blocked/failed in sandbox: {result.stderr.strip()[:80]}"
 
     @staticmethod
     def _run_build_local(
@@ -400,18 +396,17 @@ class PackInstaller:
 
             try:
                 platform_dir.mkdir(parents=True, exist_ok=True)
-                skill_count = self.create_skill_symlinks(
-                    central_path, platform_dir, pack_name
-                )
+                skill_count = self.create_skill_symlinks(central_path, platform_dir, pack_name)
                 results.append((platform, f"Linked to {platform} ({skill_count} skills)"))
 
             except OSError:
                 try:
-                    skill_count = self._copy_skill_dirs(
-                        central_path, platform_dir, pack_name
-                    )
+                    skill_count = self._copy_skill_dirs(central_path, platform_dir, pack_name)
                     results.append(
-                        (platform, f"Copied to {platform} ({skill_count} skills, symlinks not supported)")
+                        (
+                            platform,
+                            f"Copied to {platform} ({skill_count} skills, symlinks not supported)",
+                        )
                     )
                 except Exception as copy_err:
                     results.append((platform, f"Failed: {copy_err}"))
@@ -435,6 +430,7 @@ class PackInstaller:
             if len(parts) < 3:
                 return False
             import yaml as _yaml
+
             fm = _yaml.safe_load(parts[1])
             if not isinstance(fm, dict):
                 return False
@@ -458,6 +454,7 @@ class PackInstaller:
             if len(parts) < 3:
                 return None
             import yaml as _yaml
+
             fm = _yaml.safe_load(parts[1])
             if not isinstance(fm, dict):
                 return None
@@ -505,9 +502,7 @@ class PackInstaller:
     ) -> int:
         count = 0
         existing_names: dict[str, Path] = (
-            self._collect_existing_skill_names(platform_dir)
-            if dedupe_by_name
-            else {}
+            self._collect_existing_skill_names(platform_dir) if dedupe_by_name else {}
         )
         for skill_file in central_path.rglob("SKILL.md"):
             if not self._is_valid_skill(skill_file):
@@ -558,9 +553,7 @@ class PackInstaller:
     ) -> int:
         count = 0
         existing_names: dict[str, Path] = (
-            self._collect_existing_skill_names(platform_dir)
-            if dedupe_by_name
-            else {}
+            self._collect_existing_skill_names(platform_dir) if dedupe_by_name else {}
         )
         for skill_file in central_path.rglob("SKILL.md"):
             if not self._is_valid_skill(skill_file):
@@ -608,14 +601,22 @@ class PackInstaller:
 
             indexer = SkillIndexer(project_root=Path.home(), llm_factory=_llm_factory)
             result = indexer.update_global_index_for_pack(
-                pack_name=pack_name, pack_storage=self.central_storage, show_progress=False,
+                pack_name=pack_name,
+                pack_storage=self.central_storage,
+                show_progress=False,
             )
             if result.success:
-                logger.info("Global index updated for pack %s: %d skills", pack_name, result.indexed_count)
+                logger.info(
+                    "Global index updated for pack %s: %d skills", pack_name, result.indexed_count
+                )
             else:
                 detail = "; ".join(result.errors) if result.errors else "unknown"
                 logger.warning("Global index update for %s had issues: %s", pack_name, detail)
-                console.print(f"\n[yellow]⚠ Index update for '{pack_name}' had issues:[/yellow] {detail}\n{recovery_hint}")
+                console.print(
+                    f"\n[yellow]⚠ Index update for '{pack_name}' had issues:[/yellow] {detail}\n{recovery_hint}"
+                )
         except Exception as e:
             logger.warning("Global index update for %s failed (non-fatal): %s", pack_name, e)
-            console.print(f"\n[yellow]⚠ Index update for '{pack_name}' failed:[/yellow] {e}\n{recovery_hint}")
+            console.print(
+                f"\n[yellow]⚠ Index update for '{pack_name}' failed:[/yellow] {e}\n{recovery_hint}"
+            )

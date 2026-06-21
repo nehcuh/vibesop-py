@@ -308,7 +308,7 @@ You MUST follow this skill's workflow. Do not skip steps.
             else ""
         )
         payload = (
-            f"<vibesop-skill platform=\"pi\">\n"
+            f'<vibesop-skill platform="pi">\n'
             f"## Skill: {skill_id}\n"
             f"Read the SKILL.md for `{skill_id}` before proceeding.\n"
             f"```markdown\n{skill_content}{truncation_note}\n```\n"
@@ -320,6 +320,7 @@ You MUST follow this skill's workflow. Do not skip steps.
             skill_id=skill_id,
             truncated=truncated,
         )
+
     def _inject_generic(
         self,
         skill_id: str,

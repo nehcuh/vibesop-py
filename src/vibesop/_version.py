@@ -26,7 +26,7 @@ DEV_VERSION = False
 _suffix = _parts[2] if len(_parts) > 2 else ""
 for sep in ("a", "b", "rc"):
     if sep in _suffix:
-        VERSION_SUFFIX = _suffix[_suffix.index(sep):]  # pyright: ignore[reportConstantRedefinition]
+        VERSION_SUFFIX = _suffix[_suffix.index(sep) :]  # pyright: ignore[reportConstantRedefinition]
         break
 if ".dev" in _suffix:
     DEV_VERSION = True  # pyright: ignore[reportConstantRedefinition]

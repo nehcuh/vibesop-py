@@ -84,11 +84,16 @@ class SkillRecommender:
             if th:
                 reason_parts.append(f"{th} trigger hits")
 
-            scored.append(Recommendation(
-                skill_id=skill_id, namespace=namespace, score=round(min(score, 1.0), 4),
-                matched_keywords=intent_kw, intent=str(c.get("intent", "")),
-                reason="; ".join(reason_parts) if reason_parts else "priority-based match",
-            ))
+            scored.append(
+                Recommendation(
+                    skill_id=skill_id,
+                    namespace=namespace,
+                    score=round(min(score, 1.0), 4),
+                    matched_keywords=intent_kw,
+                    intent=str(c.get("intent", "")),
+                    reason="; ".join(reason_parts) if reason_parts else "priority-based match",
+                )
+            )
 
         scored.sort(key=lambda r: r.score, reverse=True)
         return scored[:top_k]
@@ -132,11 +137,16 @@ class SkillRecommender:
             if intent_kw:
                 reason_parts.append(f"{len(intent_kw)} keyword matches")
 
-            scored.append(Recommendation(
-                skill_id=skill_id, namespace=namespace, score=round(min(score, 1.0), 4),
-                matched_keywords=intent_kw, intent=str(c.get("intent", "")),
-                reason="; ".join(reason_parts) if reason_parts else "discovery suggestion",
-            ))
+            scored.append(
+                Recommendation(
+                    skill_id=skill_id,
+                    namespace=namespace,
+                    score=round(min(score, 1.0), 4),
+                    matched_keywords=intent_kw,
+                    intent=str(c.get("intent", "")),
+                    reason="; ".join(reason_parts) if reason_parts else "discovery suggestion",
+                )
+            )
 
         scored.sort(key=lambda r: r.score, reverse=True)
         return scored[:top_k]

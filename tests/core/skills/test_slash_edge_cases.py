@@ -1,6 +1,5 @@
 """Tests for slash command edge cases and error handling."""
 
-
 from vibesop.core.skills.slash_commands import SlashCommandHandler
 
 
@@ -37,17 +36,13 @@ class TestSlashCommandEdgeCases:
     def test_multiple_flags(self) -> None:
         """Handle multiple flags in various orders."""
         handler = SlashCommandHandler()
-        success, _msg = handler.execute(
-            '/vibe-route "query" --explain --strategy parallel'
-        )
+        success, _msg = handler.execute('/vibe-route "query" --explain --strategy parallel')
         assert isinstance(success, bool)
 
     def test_flag_before_query(self) -> None:
         """Handle flags appearing before query text."""
         handler = SlashCommandHandler()
-        success, _msg = handler.execute(
-            '/vibe-route --explain "query after flag"'
-        )
+        success, _msg = handler.execute('/vibe-route --explain "query after flag"')
         assert isinstance(success, bool)
 
     def test_install_invalid_pack_name(self) -> None:
@@ -76,7 +71,7 @@ class TestSlashCommandEdgeCases:
 
         assert success is True
         # Count command names in help text
-        commands_found = [line for line in msg.split('\n') if line.strip().startswith('/vibe-')]
+        commands_found = [line for line in msg.split("\n") if line.strip().startswith("/vibe-")]
         assert len(commands_found) == 7
 
     def test_whitespace_only_input(self) -> None:

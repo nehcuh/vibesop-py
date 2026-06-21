@@ -105,14 +105,22 @@ class TestAgentRegistry:
         reg = AgentRegistry()
         steps = [
             {"skill_id": "debug-skill", "skill_tags": ["debugging"], "category": "debugging"},
-            {"skill_id": "refactor-skill", "skill_tags": ["refactoring"], "category": "development"},
-            {"skill_id": "doc-skill", "skill_tags": ["documentation", "chinese"], "category": "documentation"},
+            {
+                "skill_id": "refactor-skill",
+                "skill_tags": ["refactoring"],
+                "category": "development",
+            },
+            {
+                "skill_id": "doc-skill",
+                "skill_tags": ["documentation", "chinese"],
+                "category": "documentation",
+            },
         ]
         assigned = reg.assign_agents_to_steps(steps)
         assert len(assigned) == 3
         assert assigned[0]["assigned_agent"] == "claude-code"  # debugging
-        assert assigned[1]["assigned_agent"] == "opencode"      # refactoring
-        assert assigned[2]["assigned_agent"] == "kimi-cli"      # chinese docs
+        assert assigned[1]["assigned_agent"] == "opencode"  # refactoring
+        assert assigned[2]["assigned_agent"] == "kimi-cli"  # chinese docs
 
     def test_assign_agents_with_pool(self):
         reg = AgentRegistry()
@@ -120,6 +128,7 @@ class TestAgentRegistry:
             {"skill_id": "s1", "skill_tags": [], "category": "general"},
         ]
         assigned = reg.assign_agents_to_steps(
-            steps, available_agents=["cursor", "kimi-cli"],
+            steps,
+            available_agents=["cursor", "kimi-cli"],
         )
         assert assigned[0]["assigned_agent"] in ("cursor", "kimi-cli")

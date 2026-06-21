@@ -27,7 +27,9 @@ class TestSkillCraftCommand:
     def test_create_with_name(self, monkeypatch, tmp_path) -> None:
         """Test skill-craft create with --name creates file."""
         monkeypatch.chdir(tmp_path)
-        result = runner.invoke(app, ["skill-craft", "create", "--name", "My Skill", "--description", "Does things"])
+        result = runner.invoke(
+            app, ["skill-craft", "create", "--name", "My Skill", "--description", "Does things"]
+        )
         assert result.exit_code == 0
         assert "Skill created" in result.stdout
         assert (tmp_path / ".vibe" / "skills" / "my-skill.md").exists()
@@ -36,7 +38,9 @@ class TestSkillCraftCommand:
         """Test skill-craft create with custom output directory."""
         monkeypatch.chdir(tmp_path)
         out_dir = tmp_path / "custom"
-        result = runner.invoke(app, ["skill-craft", "create", "--name", "Test", "--output", str(out_dir)])
+        result = runner.invoke(
+            app, ["skill-craft", "create", "--name", "Test", "--output", str(out_dir)]
+        )
         assert result.exit_code == 0
         assert (out_dir / "test.md").exists()
 
@@ -57,7 +61,9 @@ class TestSkillCraftCommand:
         """Test skill-craft from with valid session JSON."""
         monkeypatch.chdir(tmp_path)
         session_file = tmp_path / "session.json"
-        session_file.write_text(json.dumps({"messages": [{"role": "user", "content": "review my code"}]}))
+        session_file.write_text(
+            json.dumps({"messages": [{"role": "user", "content": "review my code"}]})
+        )
 
         result = runner.invoke(app, ["skill-craft", "from", str(session_file)])
         assert result.exit_code == 0
