@@ -272,10 +272,11 @@ class SkillConfigManager:
             mtime = config_path.stat().st_mtime
             cached = _CONFIG_FILE_CACHE.get(config_path)
             if cached is not None and cached[0] == mtime:
-                return cast(dict[str, Any], cached[1])
+                return cast("dict[str, Any]", cached[1])
 
             if config_path.suffix.lower() == ".toml":
                 import tomllib
+
                 with config_path.open("rb") as f:
                     data = tomllib.load(f) or {}
             else:
@@ -283,7 +284,7 @@ class SkillConfigManager:
                     data = yaml.safe_load(f) or {}
             if isinstance(data, dict):
                 _CONFIG_FILE_CACHE[config_path] = (mtime, data)
-            return cast(dict[str, Any], data)
+            return cast("dict[str, Any]", data)
         except Exception as e:
             console.print(f"[yellow]⚠ Failed to load {config_path}: {e}[/yellow]")
 

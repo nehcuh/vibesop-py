@@ -36,25 +36,19 @@ class TestLightweightRouterFallback:
 
 class TestLightweightRouterFormatResult:
     def test_format_single_result(self):
-        result = LightweightRouter._format_result(
-            _mock_single_result("test/review", 0.95)
-        )
+        result = LightweightRouter._format_result(_mock_single_result("test/review", 0.95))
         assert result["mode"] == "single"
         assert result["skill_id"] == "test/review"
         assert result["confidence"] == 0.95
 
     def test_format_orchestrated_result(self):
-        result = LightweightRouter._format_result(
-            _mock_orchestrated_result()
-        )
+        result = LightweightRouter._format_result(_mock_orchestrated_result())
         assert result["mode"] == "orchestrated"
         assert "steps" in result
         assert len(result["steps"]) == 2
 
     def test_format_no_match_result(self):
-        result = LightweightRouter._format_result(
-            _mock_no_match_result()
-        )
+        result = LightweightRouter._format_result(_mock_no_match_result())
         assert result["mode"] == "no_match"
 
     def test_format_result_truncates_alternatives(self):
@@ -62,8 +56,7 @@ class TestLightweightRouterFormatResult:
         mock = _mock_single_result("test/skill", 0.8)
         mock.primary.__class__ = type("P", (), {})
         mock.alternatives = [
-            type("Alt", (), {"skill_id": f"alt/{i}", "confidence": 0.5})()
-            for i in range(10)
+            type("Alt", (), {"skill_id": f"alt/{i}", "confidence": 0.5})() for i in range(10)
         ]
         result = LightweightRouter._format_result(mock)
         assert len(result.get("alternatives", [])) <= 5

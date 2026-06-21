@@ -51,12 +51,12 @@ from typing import Final
 logger = logging.getLogger(__name__)
 
 __all__ = [
-    "UnsafeUrlError",
-    "validate_url",
-    "safe_urlretrieve",
-    "safe_urlopen",
     "DEFAULT_MAX_BYTES",
     "DEFAULT_TIMEOUT",
+    "UnsafeUrlError",
+    "safe_urlopen",
+    "safe_urlretrieve",
+    "validate_url",
 ]
 
 DEFAULT_MAX_BYTES: Final[int] = 50 * 1024 * 1024  # 50 MiB
@@ -151,9 +151,7 @@ def validate_url(
     parsed = urllib.parse.urlparse(url)
     scheme = (parsed.scheme or "").lower()
     if scheme not in allowed_schemes:
-        raise UnsafeUrlError(
-            f"URL scheme {scheme!r} not in allowlist {allowed_schemes}"
-        )
+        raise UnsafeUrlError(f"URL scheme {scheme!r} not in allowlist {allowed_schemes}")
 
     hostname = parsed.hostname
     if not hostname:
@@ -165,9 +163,7 @@ def validate_url(
         if not ips:
             # Treat unresolved as unsafe (could be a junk hostname that
             # later resolves to a private IP via DNS rebinding).
-            raise UnsafeUrlError(
-                f"Could not resolve hostname (or refused by policy): {hostname!r}"
-            )
+            raise UnsafeUrlError(f"Could not resolve hostname (or refused by policy): {hostname!r}")
         for ip_str in ips:
             if _is_private_ip(ip_str):
                 raise UnsafeUrlError(
@@ -221,9 +217,7 @@ def safe_urlopen(
                 break
             total += len(chunk)
             if total > max_bytes:
-                raise UnsafeUrlError(
-                    f"Response exceeded max_bytes={max_bytes} after {total} bytes"
-                )
+                raise UnsafeUrlError(f"Response exceeded max_bytes={max_bytes} after {total} bytes")
             chunks.append(chunk)
         return b"".join(chunks)
 

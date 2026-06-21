@@ -354,9 +354,7 @@ def execute_plan_with_verification(
                     results[step.step_id] = {"error": str(e)}
 
             elif action == VerificationLoopAction.ESCALATE:
-                logger.warning(
-                    "Step %s verification failed, escalating to user", step.step_id
-                )
+                logger.warning("Step %s verification failed, escalating to user", step.step_id)
                 # In a real implementation, this would prompt the user
                 results[step.step_id] = {
                     "error": "Verification failed, user intervention required",

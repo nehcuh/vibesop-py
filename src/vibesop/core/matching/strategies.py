@@ -556,6 +556,7 @@ class LevenshteinMatcher:
 
     def _tokenize(self, text: str) -> list[str]:
         import re
+
         return [t.lower() for t in re.findall(r"[a-zA-Z0-9\u4e00-\u9fff]+", text) if len(t) > 1]
 
     def _candidate_tokens(self, candidate: SkillCandidateDict) -> list[str]:

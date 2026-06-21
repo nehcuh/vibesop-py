@@ -95,7 +95,9 @@ class TestProjectRouting:
     def test_merge_scenario_keywords(self):
         """Test merging global keywords with project overrides."""
         global_keywords = {"debugging": ["debug", "bug"], "planning": ["plan"]}
-        project_routing = {"scenario_keywords": {"debugging": ["crash", "segfault"], "new_scenario": ["deploy"]}}
+        project_routing = {
+            "scenario_keywords": {"debugging": ["crash", "segfault"], "new_scenario": ["deploy"]}
+        }
 
         result = merge_scenario_keywords(global_keywords, project_routing)
 

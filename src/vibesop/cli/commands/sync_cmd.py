@@ -24,11 +24,15 @@ logger = logging.getLogger(__name__)
 @app.callback(invoke_without_command=True)
 def sync(
     url: str = typer.Option(
-        DEFAULT_REGISTRY_URL, "--url", "-u",
+        DEFAULT_REGISTRY_URL,
+        "--url",
+        "-u",
         help="Remote registry URL to sync from",
     ),
     reset: bool = typer.Option(
-        False, "--reset", "-r",
+        False,
+        "--reset",
+        "-r",
         help="Reset to built-in defaults (ignore remote)",
     ),
 ) -> None:
@@ -77,9 +81,7 @@ def sync(
         if url != DEFAULT_REGISTRY_URL:
             console.print(f"[yellow]Failed to fetch from {url}: {e}[/yellow]")
             raise typer.Exit(1)
-        console.print(
-            "[dim]Remote registry not available. Using built-in defaults.[/dim]"
-        )
+        console.print("[dim]Remote registry not available. Using built-in defaults.[/dim]")
         registry.reload()
         console.print(f"[dim]{registry.count()} skills loaded.[/dim]")
         return
@@ -91,10 +93,7 @@ def sync(
             f"([dim]{before}[/dim] → [bold]{registry.count()}[/bold])"
         )
     else:
-        console.print(
-            f"[green]Already up to date.[/green] "
-            f"[dim]({registry.count()} skills)[/dim]"
-        )
+        console.print(f"[green]Already up to date.[/green] [dim]({registry.count()} skills)[/dim]")
 
     # Show stack coverage
     stacks = registry.stacks_available()

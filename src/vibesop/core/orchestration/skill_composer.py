@@ -326,8 +326,8 @@ class SkillIsolationContext:
 
 
 __all__ = [
+    "ROLE_DEFAULT_SKILLS",
     "SkillComposer",
     "SkillIsolationContext",
-    "ROLE_DEFAULT_SKILLS",
     "infer_skills_for_role",
 ]

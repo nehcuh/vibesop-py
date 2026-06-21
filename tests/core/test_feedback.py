@@ -57,9 +57,7 @@ class TestFeedbackCollector:
         storage = tmp_path / "feedback.json"
         collector = FeedbackCollector(storage_path=str(storage))
 
-        collector.collect_feedback(
-            query="q1", routed_skill="s1", was_correct=True, confidence=0.9
-        )
+        collector.collect_feedback(query="q1", routed_skill="s1", was_correct=True, confidence=0.9)
         collector.collect_feedback(
             query="q2", routed_skill="s2", was_correct=False, actual_skill="s1", confidence=0.4
         )

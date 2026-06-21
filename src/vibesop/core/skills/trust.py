@@ -53,9 +53,8 @@ class TrustStore:
         self._save()
 
     def revoke(self, key: str) -> bool:
-        removed = (
-            self._data.get("packs", {}).pop(key, None)
-            or self._data.get("sources", {}).pop(key, None)
+        removed = self._data.get("packs", {}).pop(key, None) or self._data.get("sources", {}).pop(
+            key, None
         )
         if removed:
             self._save()

@@ -58,7 +58,9 @@ def _instinct_overview(ctx: typer.Context) -> None:  # pyright: ignore[reportUnu
         if high:
             console.print("[bold]High Confidence (>= 0.8):[/bold]")
             for i in high:
-                console.print(f"  [cyan]{i.pattern}[/cyan] ({i.confidence:.0%}, {i.total_applications} uses)")
+                console.print(
+                    f"  [cyan]{i.pattern}[/cyan] ({i.confidence:.0%}, {i.total_applications} uses)"
+                )
 
     console.print()
     console.print("[dim]Quick actions:[/dim]")
@@ -90,7 +92,9 @@ def learn(
         tags=tags or [],
         source=source,
     )
-    console.print(f"[green]Learned:[/green] {instinct.pattern} (id: [dim]{instinct.id[:16]}...[/dim])")
+    console.print(
+        f"[green]Learned:[/green] {instinct.pattern} (id: [dim]{instinct.id[:16]}...[/dim])"
+    )
 
 
 @app.command()
@@ -154,7 +158,9 @@ def eval(
                 logger.warning("Unhandled error: %s", e)
         pending = collector.get_pending()
         if pending:
-            console.print(f"[green]✓[/green] [bold]{len(pending)}[/bold] suggestion(s) pending. Run [cyan]vibe skills suggestions[/cyan] to review.")
+            console.print(
+                f"[green]✓[/green] [bold]{len(pending)}[/bold] suggestion(s) pending. Run [cyan]vibe skills suggestions[/cyan] to review."
+            )
 
 
 @app.command()
@@ -177,7 +183,9 @@ def status(
         return
 
     if not instincts:
-        console.print("[dim]No reliable instincts yet. Use [cyan]vibe instinct learn[/cyan] to build your knowledge base.[/dim]")
+        console.print(
+            "[dim]No reliable instincts yet. Use [cyan]vibe instinct learn[/cyan] to build your knowledge base.[/dim]"
+        )
         return
 
     high = [i for i in instincts if i.confidence >= 0.8]
@@ -207,7 +215,9 @@ def status(
 
     stats = learner.get_stats()
     console.print()
-    console.print(f"[dim]Total: {stats['total_instincts']} | Candidates: {len(learner.get_sequence_candidates())}[/dim]")
+    console.print(
+        f"[dim]Total: {stats['total_instincts']} | Candidates: {len(learner.get_sequence_candidates())}[/dim]"
+    )
 
 
 @app.command()
@@ -218,7 +228,9 @@ def export(
         "-o",
         help="Output file path",
     ),
-    min_confidence: float = typer.Option(0.0, "--min-confidence", "-c", help="Minimum confidence filter"),
+    min_confidence: float = typer.Option(
+        0.0, "--min-confidence", "-c", help="Minimum confidence filter"
+    ),
     tag: str | None = typer.Option(None, "--tag", "-t", help="Filter by tag"),
 ) -> None:
     """Export reliable instincts to JSON for backup or team sharing."""
@@ -241,13 +253,17 @@ def export(
     output_path = Path.cwd() / output if not output.is_absolute() else output
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(json.dumps(data, indent=2, ensure_ascii=False, default=str))
-    console.print(f"[green]Exported[/green] [bold]{len(instincts)}[/bold] instincts to [cyan]{output_path}[/cyan]")
+    console.print(
+        f"[green]Exported[/green] [bold]{len(instincts)}[/bold] instincts to [cyan]{output_path}[/cyan]"
+    )
 
 
 @app.command(name="import")
 def import_(
     file: Path = typer.Argument(..., help="Path to the JSON export file"),
-    force: bool = typer.Option(False, "--force", "-f", help="Overwrite existing instincts with same ID"),
+    force: bool = typer.Option(
+        False, "--force", "-f", help="Overwrite existing instincts with same ID"
+    ),
 ) -> None:
     """Import instincts from a JSON export file (team sharing or backup restore)."""
     from vibesop.core.instinct.learner import Instinct, InstinctLearner
@@ -302,7 +318,9 @@ def evolve(
         "-i",
         help="Index of the instinct to evolve (from 'vibe instinct evolve' without args)",
     ),
-    list_only: bool = typer.Option(False, "--list", "-l", help="Only list candidates, don't generate"),
+    list_only: bool = typer.Option(
+        False, "--list", "-l", help="Only list candidates, don't generate"
+    ),
 ) -> None:
     """Upgrade a high-confidence instinct into a formal VibeSOP skill."""
     from vibesop.core.instinct.learner import InstinctLearner
@@ -322,14 +340,18 @@ def evolve(
     if list_only:
         console.print("[bold]Evolution Candidates:[/bold]")
         for j, ins in enumerate(reliable):
-            console.print(f"  {j}. [cyan]{ins.pattern}[/cyan] ({ins.confidence:.0%}, {ins.total_applications} uses)")
+            console.print(
+                f"  {j}. [cyan]{ins.pattern}[/cyan] ({ins.confidence:.0%}, {ins.total_applications} uses)"
+            )
         return
 
     # Default: list if no index given, or the index is out of range but we'll show list first
     if index < 0 or index >= len(reliable):
         console.print("[bold]Evolution Candidates:[/bold]")
         for j, ins in enumerate(reliable):
-            console.print(f"  {j}. [cyan]{ins.pattern}[/cyan] ({ins.confidence:.0%}, {ins.total_applications} uses)")
+            console.print(
+                f"  {j}. [cyan]{ins.pattern}[/cyan] ({ins.confidence:.0%}, {ins.total_applications} uses)"
+            )
         if len(reliable) > 1:
             console.print()
             console.print("[dim]Use --index <N> to pick one, or 0 for the first.[/dim]")
@@ -381,4 +403,6 @@ When this pattern matches, {ins.action}.
     console.print(f"[green]Skill created:[/green] {skill_dir}/SKILL.md")
     console.print(f"[green]Skill ID:[/green] [cyan]{skill_id}[/cyan]")
     console.print()
-    console.print("[dim]Next: run [cyan]vibe skills suggestions[/cyan] to register it formally.[/dim]")
+    console.print(
+        "[dim]Next: run [cyan]vibe skills suggestions[/cyan] to register it formally.[/dim]"
+    )

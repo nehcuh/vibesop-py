@@ -127,7 +127,7 @@ class TestSync:
     def test_sync_updates_changed_intent(self, tmp_path: Path):
         registry_file = tmp_path / "registry.yaml"
         registry_file.write_text(
-            'schema_version: 1\nskills:\n  - id: existing\n    namespace: builtin\n    intent: old intent\n'
+            "schema_version: 1\nskills:\n  - id: existing\n    namespace: builtin\n    intent: old intent\n"
         )
 
         skill_dir = tmp_path / "skills" / "existing"
@@ -148,7 +148,7 @@ class TestSync:
     def test_sync_preserves_non_builtin(self, tmp_path: Path):
         registry_file = tmp_path / "registry.yaml"
         registry_file.write_text(
-            'schema_version: 1\nskills:\n  - id: external\n    namespace: external\n'
+            "schema_version: 1\nskills:\n  - id: external\n    namespace: external\n"
         )
 
         sync = RegistrySync(registry_path=registry_file, skills_dir=tmp_path / "skills")
@@ -161,7 +161,7 @@ class TestSync:
     def test_sync_unchanged(self, tmp_path: Path):
         registry_file = tmp_path / "registry.yaml"
         registry_file.write_text(
-            'schema_version: 1\nskills:\n  - id: same\n    namespace: builtin\n    intent: same\n'
+            "schema_version: 1\nskills:\n  - id: same\n    namespace: builtin\n    intent: same\n"
         )
 
         skill_dir = tmp_path / "skills" / "same"

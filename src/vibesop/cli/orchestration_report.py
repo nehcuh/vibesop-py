@@ -132,6 +132,7 @@ def _render_orchestrated_result(result: OrchestrationResult, console: Console) -
     agent_ids: list[str] = []
     try:
         from vibesop.core.orchestration.agent_capability import AgentRegistry
+
         registry = AgentRegistry(installed_only=False)
         steps_data = [
             {"skill_id": s.skill_id, "skill_tags": [], "category": s.intent or "general"}

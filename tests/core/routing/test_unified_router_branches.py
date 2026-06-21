@@ -26,7 +26,9 @@ if TYPE_CHECKING:
 class TestRouteExplicitLayer:
     """Test explicit override layer (Layer 0)."""
 
-    @pytest.mark.skip(reason="Flaky: depends on live skill registry containing 'systematic-debugging' (not present in this environment)")
+    @pytest.mark.skip(
+        reason="Flaky: depends on live skill registry containing 'systematic-debugging' (not present in this environment)"
+    )
     def test_explicit_skill_id_routing(self, tmp_path: Path) -> None:
         """Routing with explicit skill_id should match directly."""
         config = RoutingConfig(enable_ai_triage=False)
@@ -227,7 +229,9 @@ class TestBuildMatchResult:
 class TestRouteWithContext:
     """Test routing with context enrichment."""
 
-    @pytest.mark.skip(reason="Flaky: depends on live skill registry; 'test' query falls through to fallback-llm with current candidate set")
+    @pytest.mark.skip(
+        reason="Flaky: depends on live skill registry; 'test' query falls through to fallback-llm with current candidate set"
+    )
     def test_routing_with_project_type(self, tmp_path: Path) -> None:
         """Routing should accept project type context."""
         from vibesop.core.matching import RoutingContext

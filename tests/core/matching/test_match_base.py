@@ -86,7 +86,9 @@ class TestMatchResult:
     """Test MatchResult model."""
 
     def test_creation(self):
-        result = MatchResult(skill_id="test/skill", confidence=0.9, matcher_type=MatcherType.KEYWORD)
+        result = MatchResult(
+            skill_id="test/skill", confidence=0.9, matcher_type=MatcherType.KEYWORD
+        )
         assert result.skill_id == "test/skill"
         assert result.confidence == pytest.approx(0.9)
         assert result.matcher_type == MatcherType.KEYWORD

@@ -113,12 +113,14 @@ class LightweightRouter:
             plan = result.execution_plan
             steps = []
             for s in plan.steps:
-                steps.append({
-                    "step": s.step_number,
-                    "skill_id": s.skill_id,
-                    "intent": s.intent,
-                    "query": s.input_query,
-                })
+                steps.append(
+                    {
+                        "step": s.step_number,
+                        "skill_id": s.skill_id,
+                        "intent": s.intent,
+                        "query": s.input_query,
+                    }
+                )
             return {
                 "mode": "orchestrated",
                 "pattern": plan.workflow_pattern.value,
@@ -141,10 +143,12 @@ class LightweightRouter:
 
         alternatives = []
         for alt in getattr(result, "alternatives", []) or []:
-            alternatives.append({
-                "skill_id": alt.skill_id,
-                "confidence": alt.confidence,
-            })
+            alternatives.append(
+                {
+                    "skill_id": alt.skill_id,
+                    "confidence": alt.confidence,
+                }
+            )
 
         return {
             "mode": "single",

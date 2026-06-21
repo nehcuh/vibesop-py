@@ -82,7 +82,9 @@ def list_traces(
     console.print()
     console.print(table)
     console.print()
-    console.print(f"[dim]{len(traces)} traces shown. View details:[/dim] [cyan]vibe trace show <id>[/cyan]")
+    console.print(
+        f"[dim]{len(traces)} traces shown. View details:[/dim] [cyan]vibe trace show <id>[/cyan]"
+    )
     console.print()
 
 
@@ -126,8 +128,10 @@ def show(
     final = data.get("final", {})
     if final.get("skill_id"):
         final_style = (
-            "green" if final.get("confidence", 0) >= 0.7
-            else "yellow" if final.get("confidence", 0) >= 0.4
+            "green"
+            if final.get("confidence", 0) >= 0.7
+            else "yellow"
+            if final.get("confidence", 0) >= 0.4
             else "red"
         )
         console.print(
@@ -232,4 +236,6 @@ def clean(
         f.unlink()
         removed += 1
 
-    console.print(f"[green]Removed {removed} old trace(s).[/green] [dim]{keep} most recent kept.[/dim]")
+    console.print(
+        f"[green]Removed {removed} old trace(s).[/green] [dim]{keep} most recent kept.[/dim]"
+    )

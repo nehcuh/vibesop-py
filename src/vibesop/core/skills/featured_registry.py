@@ -19,8 +19,7 @@ from typing import Any, ClassVar
 logger = logging.getLogger(__name__)
 
 DEFAULT_REGISTRY_URL = (
-    "https://raw.githubusercontent.com/nehcuh/vibesop-py/main/"
-    "registry/featured-skills.json"
+    "https://raw.githubusercontent.com/nehcuh/vibesop-py/main/registry/featured-skills.json"
 )
 
 
@@ -206,10 +205,7 @@ class FeaturedRegistry:
 
     def for_stack(self, stack: str) -> list[FeaturedSkill]:
         """Get skills recommended for a specific tech stack, sorted by priority."""
-        matching = [
-            s for s in self.skills
-            if stack.lower() in [st.lower() for st in s.stacks]
-        ]
+        matching = [s for s in self.skills if stack.lower() in [st.lower() for st in s.stacks]]
         matching.sort(key=lambda s: s.priority, reverse=True)
         return matching
 

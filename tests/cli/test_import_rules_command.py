@@ -48,8 +48,7 @@ class TestImportRulesCommand:
             rule_file.write_text("# Behavior\n\nNo yelling.")
 
             result = runner.invoke(
-                app,
-                ["import-rules", str(rule_file), "--target", "behavior-policies", "--force"]
+                app, ["import-rules", str(rule_file), "--target", "behavior-policies", "--force"]
             )
             assert result.exit_code == 0
             assert "Import Successful" in result.stdout

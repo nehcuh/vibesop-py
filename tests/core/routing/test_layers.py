@@ -1,6 +1,5 @@
 """Tests for routing layer types and models."""
 
-
 from vibesop.core.models import RoutingLayer, SkillRoute
 from vibesop.core.routing.layers import IRouteLayer, LayerResult
 

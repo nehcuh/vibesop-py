@@ -101,9 +101,7 @@ class TestResolvePlatformsWithConfig:
         project_root.mkdir()
         proj_config = project_root / ".vibe" / "config.yaml"
         proj_config.parent.mkdir(parents=True)
-        proj_config.write_text(
-            "platforms:\n  install_targets:\n    - opencode\n"
-        )
+        proj_config.write_text("platforms:\n  install_targets:\n    - opencode\n")
         platforms, source = _resolve_platforms(None, project_root)
         assert platforms == ["opencode"]
         assert source == "project-config"
@@ -112,9 +110,7 @@ class TestResolvePlatformsWithConfig:
         monkeypatch.setattr(Path, "home", lambda: tmp_path)
         user_config = tmp_path / ".vibe" / "config.yaml"
         user_config.parent.mkdir(parents=True)
-        user_config.write_text(
-            "platforms:\n  install_targets:\n    - kimi-cli\n"
-        )
+        user_config.write_text("platforms:\n  install_targets:\n    - kimi-cli\n")
         project_root = tmp_path / "project"
         project_root.mkdir()
         platforms, source = _resolve_platforms("cursor", project_root)
@@ -165,9 +161,7 @@ class TestConfigPlatformsCommand:
         project_root = tmp_path / "project"
         project_root.mkdir()
         monkeypatch.chdir(project_root)
-        result = runner.invoke(
-            app, ["config", "platforms", "claude-code", "--project"]
-        )
+        result = runner.invoke(app, ["config", "platforms", "claude-code", "--project"])
         assert result.exit_code == 0
         assert "Project platforms set" in result.stdout
         written = (project_root / ".vibe" / "config.yaml").read_text()
@@ -200,9 +194,7 @@ class TestConfigPlatformsCommand:
         monkeypatch.chdir(project_root)
         cfg = tmp_path / ".vibe" / "config.yaml"
         cfg.parent.mkdir(parents=True)
-        cfg.write_text(
-            "platforms:\n  install_targets:\n    - kimi-cli\n"
-        )
+        cfg.write_text("platforms:\n  install_targets:\n    - kimi-cli\n")
         result = runner.invoke(app, ["config", "platforms", "--clear"])
         assert result.exit_code == 0
         assert "Cleared" in result.stdout

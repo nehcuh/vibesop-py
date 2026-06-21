@@ -139,10 +139,7 @@ class PlatformAdapter(ABC):
         if not skills_dir.exists():
             return []
 
-        expected_dirs = {
-            skill.id.replace("/", "-")
-            for skill in manifest.skills
-        }
+        expected_dirs = {skill.id.replace("/", "-") for skill in manifest.skills}
 
         removed: list[Path] = []
         for item in skills_dir.iterdir():
@@ -470,7 +467,11 @@ class PlatformAdapter(ABC):
                     pass
 
         self._fallback_skill_content(
-            skill, skill_output_path, result, dir_name=dir_name, manifest=manifest,
+            skill,
+            skill_output_path,
+            result,
+            dir_name=dir_name,
+            manifest=manifest,
         )
 
     def _fallback_skill_content(

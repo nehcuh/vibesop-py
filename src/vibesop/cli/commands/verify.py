@@ -78,7 +78,7 @@ PLATFORM_CONFIGS: dict[str, dict[str, Any]] = {
     },
     "pi": {
         "name": "Pi Coding Agent",
-        "config_dir": Path(".") / ".pi",
+        "config_dir": Path(".pi"),
         "checks": {
             "config_dir": "Project .pi/ directory exists",
             "agents_md": "AGENTS.md in project root exists",
@@ -96,8 +96,7 @@ console = Console()
 
 def verify(
     platform: str | None = typer.Argument(
-        None,
-        help="Platform to verify (claude-code, kimi-cli, opencode, cursor, pi, all)"
+        None, help="Platform to verify (claude-code, kimi-cli, opencode, cursor, pi, all)"
     ),
     verbose: bool = typer.Option(
         False,
@@ -261,7 +260,9 @@ def _check_platform(platform: str) -> list[dict[str, Any]]:
     return results
 
 
-def _render_results(overall_results: list[tuple[str, str, list[dict[str, Any]]]], verbose: bool) -> None:
+def _render_results(
+    overall_results: list[tuple[str, str, list[dict[str, Any]]]], verbose: bool
+) -> None:
     console.print(f"\n[bold cyan]🔍 Configuration Verification[/bold cyan]\n{'=' * 40}\n")
 
     vibe_available = shutil.which("vibe") is not None

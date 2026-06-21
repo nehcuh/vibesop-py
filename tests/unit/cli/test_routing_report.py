@@ -311,13 +311,17 @@ class TestRenderRoutingReport:
             layer_details=[],
             duration_ms=10.0,
         )
-        context = type("Ctx", (), {
-            "conversation_id": "conv-123",
-            "current_skill": "debug",
-            "recent_queries": ["previous query"],
-            "habit_boosts": {"debug": 0.1},
-            "project_type": "python",
-        })()
+        context = type(
+            "Ctx",
+            (),
+            {
+                "conversation_id": "conv-123",
+                "current_skill": "debug",
+                "recent_queries": ["previous query"],
+                "habit_boosts": {"debug": 0.1},
+                "project_type": "python",
+            },
+        )()
         output = io.StringIO()
         console = Console(file=output, force_terminal=False)
         render_routing_report(result, console=console, context=context)

@@ -172,9 +172,7 @@ class ContainerValidator:
         elif self.container_tool == "lima":
             # lima 不支持 -e 直接传 env，需通过 bash 内 export
             if self.deepseek_api_key:
-                cmd = (
-                    f"export DEEPSEEK_API_KEY={shlex.quote(self.deepseek_api_key)} && {cmd}"
-                )
+                cmd = f"export DEEPSEEK_API_KEY={shlex.quote(self.deepseek_api_key)} && {cmd}"
             full_cmd = ["limactl", "shell", self.CONTAINER_NAME, "bash", "-c", cmd]
         else:
             full_cmd = ["bash", "-c", cmd]
@@ -316,15 +314,11 @@ class ContainerValidator:
             True 如果 config 写入成功。
         """
         if self.deepseek_api_key:
-            config_body = (
-                '[llm]\n'
-                'provider = "deepseek"\n'
-                'model = "deepseek-v4-flash"\n'
-            )
+            config_body = '[llm]\nprovider = "deepseek"\nmodel = "deepseek-v4-flash"\n'
         else:
             # Fallback: assume host runs oMLX on 11434 (OpenAI compatible)
             config_body = (
-                '[llm]\n'
+                "[llm]\n"
                 'provider = "openai"\n'
                 'model = "Qwen3.6-35B-A3B-mxfp8"\n'
                 'api_base = "http://host.docker.internal:11434/v1"\n'
@@ -378,7 +372,7 @@ class ContainerValidator:
         )
         cmd = (
             f'cd /app && export PATH="$HOME/.local/bin:$PATH" && '
-            f'uv run python -c \'{indexer_py}\' 2>&1 | tail -5'
+            f"uv run python -c '{indexer_py}' 2>&1 | tail -5"
         )
         stdout, stderr, rc = self._container_exec(cmd, timeout=_INSTALL_TIMEOUT)
         if rc != 0:
@@ -487,9 +481,9 @@ class ContainerValidator:
         ]
         results: dict[str, bool] = {}
         for mod in modules:
-            cmd = f'cd /app && python -c "import {mod}; print(\'OK\')" 2>&1'
+            cmd = f"cd /app && python -c \"import {mod}; print('OK')\" 2>&1"
             if self.container_tool == "local":
-                cmd = f'python -c "import {mod}; print(\'OK\')" 2>&1'
+                cmd = f"python -c \"import {mod}; print('OK')\" 2>&1"
             stdout, _, _ = self._container_exec(cmd)
             results[mod] = "OK" in stdout
         return results
@@ -531,7 +525,9 @@ class ContainerValidator:
         if self.container_tool == "local":
             build_cmd = "uv run vibe build claude-code --output /tmp/.claude 2>&1 | tail -3"
         stdout, _, _ = self._container_exec(build_cmd, timeout=60)
-        hook_check = "ls /tmp/.claude/hooks/vibesop-route.sh 2>/dev/null && echo EXISTS || echo NOT_FOUND"
+        hook_check = (
+            "ls /tmp/.claude/hooks/vibesop-route.sh 2>/dev/null && echo EXISTS || echo NOT_FOUND"
+        )
         hook_stdout, _, _ = self._container_exec(hook_check)
         return {
             "build_ok": "Build complete" in stdout or "Deployed" in stdout,
@@ -565,10 +561,7 @@ class ContainerValidator:
 
         if self.container_tool == "local":
             # Local mode: pipe to hook script directly
-            cmd = (
-                f"echo '{envelope}' | bash /tmp/.claude/hooks/vibesop-route.sh 2>&1 | "
-                "tail -20"
-            )
+            cmd = f"echo '{envelope}' | bash /tmp/.claude/hooks/vibesop-route.sh 2>&1 | tail -20"
         else:
             # Container mode: docker exec -i reads stdin
             cmd = (
@@ -630,7 +623,9 @@ class ContainerValidator:
             }
 
         ctx = data.get("hookSpecificOutput", {}).get("additionalContext", "")
-        has_skill_id = '"skill_id"' in ctx and "fallback-llm" not in ctx.split('"skill_id"')[1][:100]
+        has_skill_id = (
+            '"skill_id"' in ctx and "fallback-llm" not in ctx.split('"skill_id"')[1][:100]
+        )
 
         return {
             "envelope_parsed": True,

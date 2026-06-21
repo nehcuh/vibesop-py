@@ -74,7 +74,9 @@ class TestExternalSkillIntegration:
                 print(f"⚠️  Not found: {skill_id}")
 
         # At least some built-in management tools should be instantiable
-        assert len(instantiated) > 0, f"Should be able to instantiate at least one skill, found {instantiated}"
+        assert len(instantiated) > 0, (
+            f"Should be able to instantiate at least one skill, found {instantiated}"
+        )
 
     def test_gstack_skills_loaded(self):
         """Test that gstack skills are loaded if installed."""
@@ -115,11 +117,10 @@ class TestExternalSkillIntegration:
                 from vibesop.security.skill_auditor import ThreatLevel
 
                 # Either the skill is safe, or it's trusted with non-critical threats
-                is_trusted_safe = (
-                    skill.external_metadata.is_safe or
-                    (skill.external_metadata.is_trusted and
-                     skill.external_metadata.audit_result and
-                     skill.external_metadata.audit_result.risk_level != ThreatLevel.CRITICAL)
+                is_trusted_safe = skill.external_metadata.is_safe or (
+                    skill.external_metadata.is_trusted
+                    and skill.external_metadata.audit_result
+                    and skill.external_metadata.audit_result.risk_level != ThreatLevel.CRITICAL
                 )
                 assert is_trusted_safe, (
                     f"Skill {skill_id} should be either safe or trusted with non-critical threats"

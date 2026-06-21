@@ -157,9 +157,7 @@ class SkillIndexer:
             logger.warning(f"Failed to create LLM provider: {e}")
             return None
 
-    def _classify_skill_source(
-        self, loaded_skill: Any
-    ) -> Literal["global", "project"]:
+    def _classify_skill_source(self, loaded_skill: Any) -> Literal["global", "project"]:
         source = loaded_skill.source_file
         if not source:
             return "global"
@@ -303,9 +301,7 @@ class SkillIndexer:
         # which releases the GIL. Mutation of `result`, `global_profiles`,
         # and `project_profiles` happens only on the main thread inside the
         # `as_completed` loop, so no locks needed.
-        cache_label = (
-            f" ({len(cached_hits)} cached)" if cached_hits and not force else ""
-        )
+        cache_label = f" ({len(cached_hits)} cached)" if cached_hits and not force else ""
         description = f"Indexing {len(cache_misses)} skills{cache_label}"
         with self._progress_context(
             total=len(cache_misses),
@@ -331,17 +327,13 @@ class SkillIndexer:
                                     profile.pack_owner = ""
                                     project_profiles[skill_id] = profile
                                 else:
-                                    profile.pack_owner = self._infer_pack_owner(
-                                        loaded_skill
-                                    )
+                                    profile.pack_owner = self._infer_pack_owner(loaded_skill)
                                     global_profiles[skill_id] = profile
                                 result.indexed_count += 1
                             else:
                                 result.failed_count += 1
                         except Exception as e:
-                            logger.debug(
-                                "Failed to index skill %s: %s", skill_id, e
-                            )
+                            logger.debug("Failed to index skill %s: %s", skill_id, e)
                             result.failed_count += 1
                             result.errors.append(f"{skill_id}: {e}")
                         finally:
@@ -382,10 +374,7 @@ class SkillIndexer:
                 count = result.indexed_count
 
             if result.success:
-                console.print(
-                    f"\n[green]✅ Index built:[/green] {label}"
-                    f" ({count} skills indexed)"
-                )
+                console.print(f"\n[green]✅ Index built:[/green] {label} ({count} skills indexed)")
             else:
                 console.print("\n[yellow]⚠ Index build completed with issues[/yellow]")
             console.print()
@@ -513,12 +502,8 @@ class SkillIndexer:
             confidence_boosters=data.get("confidence_boosters", []),
         )
 
-    def _save_index(
-        self, profiles: dict[str, SkillProfile], scope: str = "global"
-    ) -> None:
-        index_path = (
-            self.global_index_path if scope == "global" else self.project_index_path
-        )
+    def _save_index(self, profiles: dict[str, SkillProfile], scope: str = "global") -> None:
+        index_path = self.global_index_path if scope == "global" else self.project_index_path
         index_path.parent.mkdir(parents=True, exist_ok=True)
 
         index_data = {
@@ -526,10 +511,7 @@ class SkillIndexer:
             "indexed_at": datetime.now(UTC).isoformat(),
             "scope": scope,
             "indexed_count": len(profiles),
-            "skills": {
-                skill_id: profile.to_dict()
-                for skill_id, profile in profiles.items()
-            },
+            "skills": {skill_id: profile.to_dict() for skill_id, profile in profiles.items()},
         }
         payload = json.dumps(index_data, indent=2, ensure_ascii=False)
 
@@ -616,9 +598,7 @@ class SkillIndexer:
         try:
             pack_root = (pack_storage / pack_name).resolve()
         except OSError as e:
-            result.errors.append(
-                f"Cannot resolve pack storage {pack_storage}/{pack_name}: {e}"
-            )
+            result.errors.append(f"Cannot resolve pack storage {pack_storage}/{pack_name}: {e}")
             return result
 
         # Discover all skills available; identify ones whose source resolves
@@ -674,9 +654,7 @@ class SkillIndexer:
 
         llm = self._get_llm()
         if llm is None:
-            result.errors.append(
-                "No LLM provider available for incremental indexing"
-            )
+            result.errors.append("No LLM provider available for incremental indexing")
             return result
 
         # Cache check: split into reuse-from-disk vs needs-LLM. Mirrors
@@ -696,9 +674,7 @@ class SkillIndexer:
             cache_misses.append((sid, ls))
 
         cache_hits = len(new_profiles)
-        cache_label = (
-            f" ({cache_hits} cached)" if cache_hits and not force else ""
-        )
+        cache_label = f" ({cache_hits} cached)" if cache_hits and not force else ""
         description = f"Indexing {len(cache_misses)} skills in {pack_name}{cache_label}"
         with self._progress_context(
             total=len(cache_misses),
@@ -721,23 +697,15 @@ class SkillIndexer:
                                 result.indexed_count += 1
                             else:
                                 result.failed_count += 1
-                                result.errors.append(
-                                    f"{sid}: LLM analysis returned no profile"
-                                )
+                                result.errors.append(f"{sid}: LLM analysis returned no profile")
                         except Exception as e:
-                            logger.debug(
-                                "Failed to incrementally index skill %s: %s", sid, e
-                            )
+                            logger.debug("Failed to incrementally index skill %s: %s", sid, e)
                             result.failed_count += 1
                             result.errors.append(f"{sid}: {e}")
                         finally:
                             advance()
 
-        merged = {
-            sid: profile
-            for sid, profile in existing.items()
-            if sid not in stale_ids
-        }
+        merged = {sid: profile for sid, profile in existing.items() if sid not in stale_ids}
         merged.update(new_profiles)
 
         self._save_index(merged, scope="global")

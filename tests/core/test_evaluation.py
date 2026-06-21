@@ -45,19 +45,72 @@ class TestSkillEvaluation:
 
     def test_quality_score_no_routes_with_confidence_and_user_score(self):
         """quality_score should blend confidence and user_score when no routes exist."""
-        eval = SkillEvaluation(
-            skill_id="s", total_routes=0, avg_confidence=1.0, user_score=1.0
-        )
+        eval = SkillEvaluation(skill_id="s", total_routes=0, avg_confidence=1.0, user_score=1.0)
         # 0.5 + (1.0 * 0.05) + (1.0 * 0.05) = 0.6
         assert eval.quality_score == pytest.approx(0.6)
 
     def test_grade_boundaries(self):
         """grade should map correctly to letter boundaries."""
-        assert SkillEvaluation(skill_id="s", total_routes=1, routing_accuracy=1.0, user_satisfaction=1.0, execution_success=1.0, usage_frequency=1.0, health_score=1.0).grade == "A"
-        assert SkillEvaluation(skill_id="s", total_routes=1, routing_accuracy=0.75, user_satisfaction=0.75, execution_success=0.75, usage_frequency=0.75, health_score=0.75).grade == "B"
-        assert SkillEvaluation(skill_id="s", total_routes=1, routing_accuracy=0.625, user_satisfaction=0.625, execution_success=0.625, usage_frequency=0.625, health_score=0.625).grade == "C"
-        assert SkillEvaluation(skill_id="s", total_routes=1, routing_accuracy=0.5, user_satisfaction=0.5, execution_success=0.5, usage_frequency=0.5, health_score=0.5).grade == "D"
-        assert SkillEvaluation(skill_id="s", total_routes=1, routing_accuracy=0.0, user_satisfaction=0.0, execution_success=0.0, usage_frequency=0.0, health_score=0.0).grade == "F"
+        assert (
+            SkillEvaluation(
+                skill_id="s",
+                total_routes=1,
+                routing_accuracy=1.0,
+                user_satisfaction=1.0,
+                execution_success=1.0,
+                usage_frequency=1.0,
+                health_score=1.0,
+            ).grade
+            == "A"
+        )
+        assert (
+            SkillEvaluation(
+                skill_id="s",
+                total_routes=1,
+                routing_accuracy=0.75,
+                user_satisfaction=0.75,
+                execution_success=0.75,
+                usage_frequency=0.75,
+                health_score=0.75,
+            ).grade
+            == "B"
+        )
+        assert (
+            SkillEvaluation(
+                skill_id="s",
+                total_routes=1,
+                routing_accuracy=0.625,
+                user_satisfaction=0.625,
+                execution_success=0.625,
+                usage_frequency=0.625,
+                health_score=0.625,
+            ).grade
+            == "C"
+        )
+        assert (
+            SkillEvaluation(
+                skill_id="s",
+                total_routes=1,
+                routing_accuracy=0.5,
+                user_satisfaction=0.5,
+                execution_success=0.5,
+                usage_frequency=0.5,
+                health_score=0.5,
+            ).grade
+            == "D"
+        )
+        assert (
+            SkillEvaluation(
+                skill_id="s",
+                total_routes=1,
+                routing_accuracy=0.0,
+                user_satisfaction=0.0,
+                execution_success=0.0,
+                usage_frequency=0.0,
+                health_score=0.0,
+            ).grade
+            == "F"
+        )
 
     def test_to_dict_contains_all_fields(self):
         """to_dict should include computed properties."""
@@ -110,13 +163,27 @@ class TestRoutingEvaluator:
 
         mock_feedback = MagicMock()
         mock_feedback.get_records.return_value = [
-            MagicMock(routed_skill="my-skill", was_correct=True, confidence=0.9, timestamp="2024-01-01T00:00:00"),
-            MagicMock(routed_skill="my-skill", was_correct=False, confidence=0.5, timestamp="2024-01-02T00:00:00"),
+            MagicMock(
+                routed_skill="my-skill",
+                was_correct=True,
+                confidence=0.9,
+                timestamp="2024-01-01T00:00:00",
+            ),
+            MagicMock(
+                routed_skill="my-skill",
+                was_correct=False,
+                confidence=0.5,
+                timestamp="2024-01-02T00:00:00",
+            ),
         ]
         evaluator._feedback = mock_feedback
 
         mock_exec = MagicMock()
-        mock_exec.get_skill_summary.return_value = {"total": 0, "helpful_rate": None, "success_rate": None}
+        mock_exec.get_skill_summary.return_value = {
+            "total": 0,
+            "helpful_rate": None,
+            "success_rate": None,
+        }
         evaluator._execution = mock_exec
 
         mock_prefs = MagicMock()
@@ -137,13 +204,27 @@ class TestRoutingEvaluator:
 
         mock_feedback = MagicMock()
         mock_feedback.get_records.return_value = [
-            MagicMock(routed_skill="skill-a", was_correct=True, confidence=0.9, timestamp="2024-01-01T00:00:00"),
-            MagicMock(routed_skill="skill-b", was_correct=False, confidence=0.3, timestamp="2024-01-01T00:00:00"),
+            MagicMock(
+                routed_skill="skill-a",
+                was_correct=True,
+                confidence=0.9,
+                timestamp="2024-01-01T00:00:00",
+            ),
+            MagicMock(
+                routed_skill="skill-b",
+                was_correct=False,
+                confidence=0.3,
+                timestamp="2024-01-01T00:00:00",
+            ),
         ]
         evaluator._feedback = mock_feedback
 
         mock_exec = MagicMock()
-        mock_exec.get_skill_summary.return_value = {"total": 0, "helpful_rate": None, "success_rate": None}
+        mock_exec.get_skill_summary.return_value = {
+            "total": 0,
+            "helpful_rate": None,
+            "success_rate": None,
+        }
         evaluator._execution = mock_exec
 
         mock_prefs = MagicMock()
@@ -162,17 +243,51 @@ class TestRoutingEvaluator:
 
         mock_feedback = MagicMock()
         mock_feedback.get_records.return_value = [
-            MagicMock(routed_skill="good", was_correct=True, confidence=0.9, timestamp="2024-01-01T00:00:00"),
-            MagicMock(routed_skill="good", was_correct=True, confidence=0.9, timestamp="2024-01-02T00:00:00"),
-            MagicMock(routed_skill="good", was_correct=True, confidence=0.9, timestamp="2024-01-03T00:00:00"),
-            MagicMock(routed_skill="bad", was_correct=False, confidence=0.2, timestamp="2024-01-01T00:00:00"),
-            MagicMock(routed_skill="bad", was_correct=False, confidence=0.2, timestamp="2024-01-02T00:00:00"),
-            MagicMock(routed_skill="bad", was_correct=False, confidence=0.2, timestamp="2024-01-03T00:00:00"),
+            MagicMock(
+                routed_skill="good",
+                was_correct=True,
+                confidence=0.9,
+                timestamp="2024-01-01T00:00:00",
+            ),
+            MagicMock(
+                routed_skill="good",
+                was_correct=True,
+                confidence=0.9,
+                timestamp="2024-01-02T00:00:00",
+            ),
+            MagicMock(
+                routed_skill="good",
+                was_correct=True,
+                confidence=0.9,
+                timestamp="2024-01-03T00:00:00",
+            ),
+            MagicMock(
+                routed_skill="bad",
+                was_correct=False,
+                confidence=0.2,
+                timestamp="2024-01-01T00:00:00",
+            ),
+            MagicMock(
+                routed_skill="bad",
+                was_correct=False,
+                confidence=0.2,
+                timestamp="2024-01-02T00:00:00",
+            ),
+            MagicMock(
+                routed_skill="bad",
+                was_correct=False,
+                confidence=0.2,
+                timestamp="2024-01-03T00:00:00",
+            ),
         ]
         evaluator._feedback = mock_feedback
 
         mock_exec = MagicMock()
-        mock_exec.get_skill_summary.return_value = {"total": 0, "helpful_rate": None, "success_rate": None}
+        mock_exec.get_skill_summary.return_value = {
+            "total": 0,
+            "helpful_rate": None,
+            "success_rate": None,
+        }
         evaluator._execution = mock_exec
 
         mock_prefs = MagicMock()
@@ -197,12 +312,21 @@ class TestRoutingEvaluator:
 
         mock_feedback = MagicMock()
         mock_feedback.get_records.return_value = [
-            MagicMock(routed_skill="skill-a", was_correct=True, confidence=0.9, timestamp="2024-01-01T00:00:00"),
+            MagicMock(
+                routed_skill="skill-a",
+                was_correct=True,
+                confidence=0.9,
+                timestamp="2024-01-01T00:00:00",
+            ),
         ]
         evaluator._feedback = mock_feedback
 
         mock_exec = MagicMock()
-        mock_exec.get_skill_summary.return_value = {"total": 0, "helpful_rate": None, "success_rate": None}
+        mock_exec.get_skill_summary.return_value = {
+            "total": 0,
+            "helpful_rate": None,
+            "success_rate": None,
+        }
         evaluator._execution = mock_exec
 
         mock_prefs = MagicMock()

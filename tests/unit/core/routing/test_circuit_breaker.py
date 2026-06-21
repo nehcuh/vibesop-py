@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
-import pytest
-
 from vibesop.core.routing.circuit_breaker import CircuitState, TriageCircuitBreaker
 
 
@@ -284,11 +282,17 @@ class TestTriageCircuitBreaker:
         assert cb._state == CircuitState.OPEN
 
         # Cannot execute while OPEN (cooldown not elapsed)
-        with patch("vibesop.core.routing.circuit_breaker.time.monotonic", return_value=cb._last_failure_time + 1):
+        with patch(
+            "vibesop.core.routing.circuit_breaker.time.monotonic",
+            return_value=cb._last_failure_time + 1,
+        ):
             assert cb.can_execute() is False
 
         # Cooldown elapsed → HALF_OPEN
-        with patch("vibesop.core.routing.circuit_breaker.time.monotonic", return_value=cb._last_failure_time + cb.cooldown_seconds + 1):
+        with patch(
+            "vibesop.core.routing.circuit_breaker.time.monotonic",
+            return_value=cb._last_failure_time + cb.cooldown_seconds + 1,
+        ):
             assert cb.can_execute() is True
         assert cb._state == CircuitState.HALF_OPEN
 

@@ -91,8 +91,7 @@ This skill provides a structured approach to debugging:
             print("\n✓ Skill requires LLM - checking availability...")
 
             llm_config = resolver.resolve_llm_config(
-                skill_requirements=config.llm_config,
-                prefer_agent=True
+                skill_requirements=config.llm_config, prefer_agent=True
             )
 
             if llm_config:
@@ -129,17 +128,17 @@ This skill provides a structured approach to debugging:
         print("\n✓ Saved Configuration:")
         print(f"  Skills: {list(saved_config.get('skills', {}).keys())}")
 
-        if config.skill_id in saved_config.get('skills', {}):
-            skill_config = saved_config['skills'][config.skill_id]
+        if config.skill_id in saved_config.get("skills", {}):
+            skill_config = saved_config["skills"][config.skill_id]
             print(f"  Priority: {skill_config.get('priority')}")
             print(f"  Category: {skill_config.get('category')}")
             print(f"  Enabled: {skill_config.get('enabled')}")
 
-            routing = skill_config.get('routing', {})
-            patterns = routing.get('patterns', [])
+            routing = skill_config.get("routing", {})
+            patterns = routing.get("patterns", [])
             print(f"  Routing Patterns: {len(patterns)}")
 
-            metadata = skill_config.get('metadata', {})
+            metadata = skill_config.get("metadata", {})
             print(f"  Auto-Configured: {metadata.get('auto_configured')}")
             print(f"  Confidence: {metadata.get('confidence', 0):.1%}")
 
@@ -212,18 +211,18 @@ def test_multiple_skill_types():
 
             skill_md = skill_dir / "SKILL.md"
             skill_md.write_text(f"""---
-name: {test_case['name']}
-id: {test_case['id']}
-description: {test_case['description']}
+name: {test_case["name"]}
+id: {test_case["id"]}
+description: {test_case["description"]}
 version: 1.0.0
 skill_type: workflow
-tags: [{test_case['expected_category']}]
-trigger_when: User requests {test_case['name'].lower()}
+tags: [{test_case["expected_category"]}]
+trigger_when: User requests {test_case["name"].lower()}
 ---
 
-# {test_case['name']}
+# {test_case["name"]}
 
-{test_case['description']}
+{test_case["description"]}
 """)
 
             try:
@@ -232,16 +231,18 @@ trigger_when: User requests {test_case['name'].lower()}
                 # Check if category matches (allowing for some flexibility)
                 # Category detection is heuristic-based; nearby categories are acceptable
                 category_match = (
-                    config.category == test_case['expected_category'] or
-                    config.category == "development" or  # generic fallback
+                    config.category == test_case["expected_category"]
+                    or config.category == "development"  # generic fallback
+                    or
                     # security/review are closely related
-                    (test_case['expected_category'] == "security" and config.category == "review") or
+                    (test_case["expected_category"] == "security" and config.category == "review")
+                    or
                     # review/testing are closely related
-                    (test_case['expected_category'] == "review" and config.category == "testing")
+                    (test_case["expected_category"] == "review" and config.category == "testing")
                 )
 
                 result = {
-                    "name": test_case['name'],
+                    "name": test_case["name"],
                     "category": config.category,
                     "priority": config.priority,
                     "requires_llm": config.requires_llm,
@@ -259,11 +260,13 @@ trigger_when: User requests {test_case['name'].lower()}
 
             except Exception as e:
                 print(f"\n✗ {test_case['name']}: FAILED - {e}")
-                results.append({
-                    "name": test_case['name'],
-                    "passed": False,
-                    "error": str(e),
-                })
+                results.append(
+                    {
+                        "name": test_case["name"],
+                        "passed": False,
+                        "error": str(e),
+                    }
+                )
 
     # Summary
     passed = sum(1 for r in results if r.get("passed", False))

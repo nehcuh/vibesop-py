@@ -49,8 +49,7 @@ class VibeSOPInstaller:
                 return result
 
             target_dir = (
-                config_dir if config_dir is not None
-                else self._platforms[platform]["config_dir"]
+                config_dir if config_dir is not None else self._platforms[platform]["config_dir"]
             ).expanduser()
             result["config_dir"] = str(target_dir)
 
@@ -122,8 +121,7 @@ class VibeSOPInstaller:
                 return result
 
             target_dir = (
-                config_dir if config_dir is not None
-                else self._platforms[platform]["config_dir"]
+                config_dir if config_dir is not None else self._platforms[platform]["config_dir"]
             ).expanduser()
 
             from vibesop.hooks import HookInstaller
@@ -238,7 +236,10 @@ class VibeSOPInstaller:
             claude_md = config_dir / "CLAUDE.md"
             if not claude_md.exists():
                 issues.append("CLAUDE.md not found")
-            elif "# VibeSOP" not in claude_md.read_text() and "## VibeSOP" not in claude_md.read_text():
+            elif (
+                "# VibeSOP" not in claude_md.read_text()
+                and "## VibeSOP" not in claude_md.read_text()
+            ):
                 issues.append("CLAUDE.md missing VibeSOP configuration")
         elif platform == "kimi-cli":
             if not (config_dir / "config.toml").exists():

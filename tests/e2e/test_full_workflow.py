@@ -217,9 +217,7 @@ class TestSkillExecution:
         ]
 
         for query in queries:
-            router.record_selection(
-                skill_id=skill_id, query=query, was_helpful=True
-            )
+            router.record_selection(skill_id=skill_id, query=query, was_helpful=True)
 
         # Verify preference learning
         stats = router.get_preference_stats()

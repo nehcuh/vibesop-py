@@ -1,6 +1,5 @@
 """Verify orchestrate() is the CLI default entry point with proper fallback."""
 
-
 from vibesop.core.models import OrchestrationMode
 from vibesop.core.routing.unified import UnifiedRouter
 

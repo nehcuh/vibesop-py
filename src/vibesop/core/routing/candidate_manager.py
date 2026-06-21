@@ -158,7 +158,8 @@ class CandidateManager:
                     "description": metadata.description,
                     "intent": metadata.intent,
                     "keywords": tags,
-                    "triggers": list(metadata.triggers or []) + ([metadata.trigger_when] if metadata.trigger_when else []),
+                    "triggers": list(metadata.triggers or [])
+                    + ([metadata.trigger_when] if metadata.trigger_when else []),
                     "namespace": metadata.namespace,
                     "source": self._get_skill_source(metadata.id, metadata.namespace),
                     "priority": "P0" if metadata.id in p0_skills else "P2",

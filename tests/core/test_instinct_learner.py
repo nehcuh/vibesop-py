@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import tempfile
 from datetime import datetime
 from pathlib import Path
@@ -215,7 +214,11 @@ class TestSequencePattern:
         assert pattern.first_seen == datetime(2026, 1, 1, 12, 0, 0)
 
     def test_from_dict_defaults(self):
-        d = {"steps": ["a"], "first_seen": "2026-01-01T12:00:00", "last_seen": "2026-01-01T12:00:00"}
+        d = {
+            "steps": ["a"],
+            "first_seen": "2026-01-01T12:00:00",
+            "last_seen": "2026-01-01T12:00:00",
+        }
         pattern = SequencePattern.from_dict(d)
         assert pattern.success_count == 0
         assert pattern.total_count == 0
@@ -427,7 +430,9 @@ class TestInstinctLearner:
     def test_load_skips_invalid_json(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             path = Path(tmpdir) / "bad.jsonl"
-            path.write_text('{"id": "good", "pattern": "p", "action": "a", "created_at": "2026-01-01T00:00:00"}\nbad json line\n')
+            path.write_text(
+                '{"id": "good", "pattern": "p", "action": "a", "created_at": "2026-01-01T00:00:00"}\nbad json line\n'
+            )
             learner = InstinctLearner(storage_path=path)
             assert len(learner._instincts) == 1
 

@@ -80,6 +80,7 @@ class TestDocTemplates:
 
     def test_get_default_template_unknown(self) -> None:
         """Test getting default template for an unexpected doc type."""
+
         # Use an arbitrary value not explicitly handled
         class FakeDocType:
             pass

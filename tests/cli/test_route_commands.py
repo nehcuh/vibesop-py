@@ -9,7 +9,7 @@ import json
 
 from typer.testing import CliRunner
 
-from vibesop.cli.main import app, _extract_squad_from_result, _format_squad_summary
+from vibesop.cli.main import _extract_squad_from_result, _format_squad_summary, app
 from vibesop.core.models import WorkflowPattern
 
 runner = CliRunner()
@@ -174,7 +174,14 @@ class TestRouteSquadDisplay:
         assert "arch → rt → review" in summary
 
     def test_extract_squad_from_orchestration_result(self) -> None:
-        from vibesop.core.models import AgentRole, AgentSquad, ExecutionPlan, OrchestrationResult, OrchestrationMode, SquadStep
+        from vibesop.core.models import (
+            AgentRole,
+            AgentSquad,
+            ExecutionPlan,
+            OrchestrationMode,
+            OrchestrationResult,
+            SquadStep,
+        )
 
         squad = AgentSquad(
             squad_id="squad-test",
@@ -199,7 +206,7 @@ class TestRouteSquadDisplay:
         assert extracted.squad_id == "squad-test"
 
     def test_extract_squad_returns_none_for_plain_result(self) -> None:
-        from vibesop.core.models import OrchestrationResult, OrchestrationMode
+        from vibesop.core.models import OrchestrationMode, OrchestrationResult
 
         result = OrchestrationResult(
             mode=OrchestrationMode.SINGLE,

@@ -39,7 +39,12 @@ class TestMessage:
         assert d["metadata"] == {"k": "v"}
 
     def test_from_dict(self):
-        d = {"role": "assistant", "content": "Hi", "timestamp": "2026-01-01T12:00:00", "metadata": {"k": "v"}}
+        d = {
+            "role": "assistant",
+            "content": "Hi",
+            "timestamp": "2026-01-01T12:00:00",
+            "metadata": {"k": "v"},
+        }
         msg = Message.from_dict(d)
         assert msg.role == MessageRole.ASSISTANT
         assert msg.content == "Hi"
@@ -109,7 +114,14 @@ class TestConversation:
         d = {
             "id": "conv-1",
             "title": "Test",
-            "messages": [{"role": "user", "content": "Hello", "timestamp": "2026-01-01T12:00:00", "metadata": {}}],
+            "messages": [
+                {
+                    "role": "user",
+                    "content": "Hello",
+                    "timestamp": "2026-01-01T12:00:00",
+                    "metadata": {},
+                }
+            ],
             "created_at": "2026-01-01T12:00:00",
             "updated_at": "2026-01-01T12:00:00",
             "metadata": {"k": "v"},
@@ -156,7 +168,13 @@ class TestContext:
         assert ctx.env == {"KEY": "VAL"}
 
     def test_to_dict(self):
-        ctx = Context(conversation_id="c", session_id="s", working_dir="/tmp", env={"k": "v"}, metadata={"m": 1})
+        ctx = Context(
+            conversation_id="c",
+            session_id="s",
+            working_dir="/tmp",
+            env={"k": "v"},
+            metadata={"m": 1},
+        )
         d = ctx.to_dict()
         assert d["conversation_id"] == "c"
         assert d["session_id"] == "s"

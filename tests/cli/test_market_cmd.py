@@ -30,6 +30,7 @@ class TestMarketSearch:
     @patch("vibesop.cli.commands.market_cmd.GitHubSkillCrawler")
     def test_search_basic(self, mock_crawler_cls: Any) -> None:
         from vibesop.market.crawler import SkillRepo
+
         mock_crawler = MagicMock()
         mock_crawler.search.return_value = [
             SkillRepo(
@@ -52,6 +53,7 @@ class TestMarketSearch:
     @patch("vibesop.cli.commands.market_cmd.GitHubSkillCrawler")
     def test_search_json(self, mock_crawler_cls: Any) -> None:
         from vibesop.market.crawler import SkillRepo
+
         mock_crawler = MagicMock()
         mock_crawler.search.return_value = [
             SkillRepo(

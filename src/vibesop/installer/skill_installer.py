@@ -106,9 +106,7 @@ class SkillInstaller:
 
         return result
 
-    def uninstall_skill(
-        self, skill_id: str, project_path: Path
-    ) -> dict[str, Any]:
+    def uninstall_skill(self, skill_id: str, project_path: Path) -> dict[str, Any]:
         result: dict[str, Any] = {
             "success": False,
             "skill_id": skill_id,
@@ -158,9 +156,7 @@ class SkillInstaller:
 
         return skills
 
-    def verify_skill(
-        self, skill_id: str, project_path: Path
-    ) -> dict[str, Any]:
+    def verify_skill(self, skill_id: str, project_path: Path) -> dict[str, Any]:
         result: dict[str, Any] = {
             "skill_id": skill_id,
             "installed": False,
@@ -198,9 +194,7 @@ class SkillInstaller:
             trigger_when="Manual",
         )
 
-    def _install_dependencies(
-        self, dependencies: list[str], project_path: Path
-    ) -> dict[str, Any]:
+    def _install_dependencies(self, dependencies: list[str], project_path: Path) -> dict[str, Any]:
         result: dict[str, Any] = {"success": True, "installed": [], "errors": []}
 
         for dep_id in dependencies:

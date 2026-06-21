@@ -28,7 +28,11 @@ class TestPreferenceScore:
 
     def test_creation(self):
         ps = PreferenceScore(
-            skill_id="s", score=0.8, selection_count=5, helpful_count=4, last_selected=datetime.now()
+            skill_id="s",
+            score=0.8,
+            selection_count=5,
+            helpful_count=4,
+            last_selected=datetime.now(),
         )
         assert ps.score == pytest.approx(0.8)
         assert ps.selection_count == 5
@@ -174,7 +178,12 @@ class TestPreferenceLearnerHistory:
             {"skill_id": "s1", "query": "q", "timestamp": old_ts, "was_helpful": True}
         )
         learner._storage.selections.append(
-            {"skill_id": "s1", "query": "q", "timestamp": datetime.now().isoformat(), "was_helpful": True}
+            {
+                "skill_id": "s1",
+                "query": "q",
+                "timestamp": datetime.now().isoformat(),
+                "was_helpful": True,
+            }
         )
 
         removed = learner.clear_old_data(days=90)

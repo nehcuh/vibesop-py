@@ -116,13 +116,16 @@ def _skill_overview(  # pyright: ignore[reportUnusedFunction]
     )
 
     console.print()
-    console.print("[dim]Also try:[/dim] [cyan]vibe status[/cyan] [dim]for full ecosystem health[/dim]")
+    console.print(
+        "[dim]Also try:[/dim] [cyan]vibe status[/cyan] [dim]for full ecosystem health[/dim]"
+    )
     console.print()
 
 
 # ---------------------------------------------------------------------------
 # list
 # ---------------------------------------------------------------------------
+
 
 def _load_skills(project_root: str = ".") -> list[dict[str, Any]]:
     from vibesop.core.routing import UnifiedRouter
@@ -182,6 +185,7 @@ def list_skills(
 # enable / disable
 # ---------------------------------------------------------------------------
 
+
 @app.command()
 def enable(
     skill_id: str = typer.Argument(..., help="Skill ID to enable"),
@@ -230,6 +234,7 @@ def disable(
 # status
 # ---------------------------------------------------------------------------
 
+
 @app.command()
 def status(
     skill_id: str = typer.Argument(..., help="Skill ID to check"),
@@ -273,6 +278,7 @@ def status(
 # ---------------------------------------------------------------------------
 # stale
 # ---------------------------------------------------------------------------
+
 
 @app.command()
 def stale(
@@ -356,6 +362,7 @@ def stale(
 # end-check
 # ---------------------------------------------------------------------------
 
+
 @app.command()
 def end_check(
     json_output: bool = typer.Option(False, "--json", "-j", help="Output as JSON"),
@@ -404,6 +411,7 @@ def end_check(
 # ---------------------------------------------------------------------------
 # add (from skill_add.py)
 # ---------------------------------------------------------------------------
+
 
 @app.command()
 def add(
@@ -727,9 +735,7 @@ def _auto_configure_skill_with_llm(metadata: Any, scope: str, skill_source: str)
         _fallback_auto_configure(metadata, scope, skill_source, in_agent)
 
 
-def _fallback_auto_configure(
-    metadata: Any, scope: str, skill_source: str, in_agent: bool
-) -> None:
+def _fallback_auto_configure(metadata: Any, scope: str, skill_source: str, in_agent: bool) -> None:
     from vibesop.core.skills.understander import SkillAnalysis, SkillAutoConfigurator
 
     if in_agent:
@@ -920,13 +926,58 @@ def _extract_keywords(text: str) -> list[str]:
     words = re.findall(r"\b\w{2,}\b", text.lower())
 
     stop_words = {
-        "the", "a", "an", "is", "are", "was", "were", "be", "been", "being",
-        "have", "has", "had", "do", "does", "did", "will", "would", "could",
-        "should", "may", "might", "must", "shall", "can", "need", "for",
-        "with", "from", "this", "that", "these", "those", "use", "using",
-        "get", "got", "make", "made", "take", "took", "help", "user", "ask",
-        "want", "like",
-        "用户", "帮助", "使用", "需要", "想要", "可以",
+        "the",
+        "a",
+        "an",
+        "is",
+        "are",
+        "was",
+        "were",
+        "be",
+        "been",
+        "being",
+        "have",
+        "has",
+        "had",
+        "do",
+        "does",
+        "did",
+        "will",
+        "would",
+        "could",
+        "should",
+        "may",
+        "might",
+        "must",
+        "shall",
+        "can",
+        "need",
+        "for",
+        "with",
+        "from",
+        "this",
+        "that",
+        "these",
+        "those",
+        "use",
+        "using",
+        "get",
+        "got",
+        "make",
+        "made",
+        "take",
+        "took",
+        "help",
+        "user",
+        "ask",
+        "want",
+        "like",
+        "用户",
+        "帮助",
+        "使用",
+        "需要",
+        "想要",
+        "可以",
     }
 
     keywords = [w for w in words if w not in stop_words and len(w) >= 3]
@@ -964,6 +1015,7 @@ def _verify_and_sync(skill_id: str, _scope: str) -> None:
 # Community commands (delegated)
 # ---------------------------------------------------------------------------
 
+
 @app.command(name="share", help="Publish a skill to the community via GitHub Issues")
 def _share_cmd(  # pyright: ignore[reportUnusedFunction]
     skill_id: str = typer.Argument(..., help="Skill ID to share"),
@@ -984,8 +1036,6 @@ def _cleanup_cmd(  # pyright: ignore[reportUnusedFunction]
     auto: bool = typer.Option(
         False, "--auto", "-a", help="Apply all suggested actions automatically"
     ),
-    dry_run: bool = typer.Option(
-        False, "--dry-run", "-n", help="Preview without making changes"
-    ),
+    dry_run: bool = typer.Option(False, "--dry-run", "-n", help="Preview without making changes"),
 ) -> None:
     cleanup(auto=auto, dry_run=dry_run)

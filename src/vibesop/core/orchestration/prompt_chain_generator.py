@@ -212,9 +212,7 @@ class PromptChainGenerator:
 
         for idx, step in enumerate(remaining):
             phase_num = base_phase + idx
-            files.append(
-                self._generate_phase_n(plan, ctx, step, phase_num, step_phase_map)
-            )
+            files.append(self._generate_phase_n(plan, ctx, step, phase_num, step_phase_map))
 
         # Final phase: adversarial review
         files.append(self._generate_final_phase(plan, ctx, files))
@@ -223,8 +221,7 @@ class PromptChainGenerator:
         for pf in files:
             if pf.phase >= 0:
                 pf.downstream_phases = [
-                    f.phase for f in files
-                    if f.phase > pf.phase and f.phase > 0
+                    f.phase for f in files if f.phase > pf.phase and f.phase > 0
                 ]
 
         return files
@@ -326,7 +323,9 @@ class PromptChainGenerator:
                     ("抽象层次", "抽象完整且无泄漏（调用者不需了解实现细节）"),
                     ("扩展点", "新增功能时需修改的文件数量最少"),
                 ]
-            elif any(kw in intent for kw in ("code", "代码", "implementation", "实现", "quality", "质量")):
+            elif any(
+                kw in intent for kw in ("code", "代码", "implementation", "实现", "quality", "质量")
+            ):
                 points = [
                     ("类型安全", "TypeScript/Python 类型标注完整，无 any 滥用"),
                     ("错误处理", "所有错误路径有处理，无空 catch，错误信息有上下文"),
@@ -434,10 +433,7 @@ class PromptChainGenerator:
         required_files = sorted(set(all_source_files))
 
         # Skill references for readability
-        skill_refs = [
-            f"- **{s.skill_id}** — {s.intent or s.input_query[:60]}"
-            for s in steps
-        ]
+        skill_refs = [f"- **{s.skill_id}** — {s.intent or s.input_query[:60]}" for s in steps]
 
         # Distinguish precise paths from fallback exploration hints
         _FALLBACK_ENTRIES = frozenset({"src/", "tests/", "docs/", "README.md", "pyproject.toml"})
@@ -466,9 +462,7 @@ class PromptChainGenerator:
 
         content = (
             f"# {project_name} — Phase 0：全局扇出诊断\n\n"
-            "## 前置条件\n"
-            + "\n".join(f"- [ ] {p}" for p in prerequisites)
-            + "\n\n"
+            "## 前置条件\n" + "\n".join(f"- [ ] {p}" for p in prerequisites) + "\n\n"
             "## 你的任务\n"
             "全面理解当前任务的改造范围，识别所有改造点。\n\n"
             f"### 原始需求\n> {original_query}\n\n"
@@ -502,8 +496,7 @@ class PromptChainGenerator:
             "执行完本 Phase 后，创建标记文件：\n"
             "```bash\n"
             f'echo "phase-0 completed at $(date)" > {completion_marker}\n'
-            "```\n"
-            + _ROUTING_HINT
+            "```\n" + _ROUTING_HINT
         )
 
         return PromptFile(
@@ -554,19 +547,11 @@ class PromptChainGenerator:
 
         content = (
             "# Quick Wins — Phase 1\n\n"
-            "## 前置条件\n"
-            + "\n".join(f"- [ ] {p}" for p in prerequisites)
-            + "\n\n"
-            "## 改动列表\n"
-            + "\n".join(step_items)
-            + "\n\n"
+            "## 前置条件\n" + "\n".join(f"- [ ] {p}" for p in prerequisites) + "\n\n"
+            "## 改动列表\n" + "\n".join(step_items) + "\n\n"
         )
         if source_files:
-            content += (
-                "## 涉及文件\n"
-                + "\n".join(f"- `{f}`" for f in source_files)
-                + "\n\n"
-            )
+            content += "## 涉及文件\n" + "\n".join(f"- `{f}`" for f in source_files) + "\n\n"
         content += (
             "## 实施要求\n"
             "1. 每个改动必须独立、原子化\n"
@@ -581,8 +566,7 @@ class PromptChainGenerator:
             "执行完本 Phase 后，创建标记文件：\n"
             "```bash\n"
             f'echo "phase-1 completed at $(date)" > {completion_marker}\n'
-            "```\n"
-            + _ROUTING_HINT
+            "```\n" + _ROUTING_HINT
         )
 
         return PromptFile(
@@ -616,16 +600,11 @@ class PromptChainGenerator:
         # Build dependency prerequisites with phase numbers
         dep_lines: list[str] = []
         for dep_id in step.dependencies:
-            dep_step = next(
-                (s for s in plan.steps if s.step_id == dep_id), None
-            )
+            dep_step = next((s for s in plan.steps if s.step_id == dep_id), None)
             if dep_step:
                 dep_phase = (step_phase_map or {}).get(dep_id, dep_step.step_number)
                 marker = f".vibe/prompts/.phase-{dep_phase}-done"
-                dep_lines.append(
-                    f"- Phase {dep_phase}: {dep_step.intent} "
-                    f"(`ls {marker}`)"
-                )
+                dep_lines.append(f"- Phase {dep_phase}: {dep_step.intent} (`ls {marker}`)")
 
         prerequisites: list[str] = ["Phase 0 诊断报告已完成"]
         if dep_lines:
@@ -636,9 +615,7 @@ class PromptChainGenerator:
         file_section = ""
         if source_files:
             file_section = (
-                "## 你必须先阅读的当前文件\n"
-                + "\n".join(f"- `{f}`" for f in source_files)
-                + "\n\n"
+                "## 你必须先阅读的当前文件\n" + "\n".join(f"- `{f}`" for f in source_files) + "\n\n"
             )
 
         # Generate dynamic key points and checklist
@@ -646,7 +623,12 @@ class PromptChainGenerator:
         checklist = self._generate_checklist(step, phase_num)
 
         # ASCII-safe slug for filename
-        raw_slug = (step.intent[:40] if step.intent else step.skill_id).lower().replace(" ", "-").replace("/", "-")
+        raw_slug = (
+            (step.intent[:40] if step.intent else step.skill_id)
+            .lower()
+            .replace(" ", "-")
+            .replace("/", "-")
+        )
         ascii_slug = "".join(c if c.isalnum() or c in "-_" else "" for c in raw_slug)
         if not ascii_slug:
             ascii_slug = f"step-{phase_num}"
@@ -665,16 +647,13 @@ class PromptChainGenerator:
             f"### 目标技能\n`{step.skill_id}`\n\n"
             f"### 输出变量\n`{step.output_as}`\n\n"
             f"## 关键实现要点\n{key_points}\n\n"
-            "## 验证 Checklist\n"
-            + "\n".join(f"- [ ] {c}" for c in checklist)
-            + "\n\n"
+            "## 验证 Checklist\n" + "\n".join(f"- [ ] {c}" for c in checklist) + "\n\n"
             "---\n\n"
             "## 完成条件\n"
             "执行完本 Phase 后，创建标记文件：\n"
             "```bash\n"
             f'echo "phase-{phase_num} completed at $(date)" > {completion_marker}\n'
-            "```\n"
-            + _ROUTING_HINT
+            "```\n" + _ROUTING_HINT
         )
 
         # Determine risk level from step
@@ -703,7 +682,7 @@ class PromptChainGenerator:
         previous_files: list[PromptFile],
     ) -> PromptFile:
         """Final phase — adversarial review of all changes."""
-        plan_metadata = getattr(_plan, 'metadata', None) or {}
+        plan_metadata = getattr(_plan, "metadata", None) or {}
         is_review = plan_metadata.get("review_type") == "multi_dimensional"
 
         all_required = sorted({f for pf in previous_files for f in pf.required_files})
@@ -802,9 +781,7 @@ class PromptChainGenerator:
             "- [ ] 所有中间验证 checklist 已通过\n\n"
             "## 全量文件清单验证\n\n"
             "| 文件 | 阶段 | 验证项数 |\n"
-            "|------|------|----------|\n"
-            + "\n".join(file_table_rows)
-            + "\n\n"
+            "|------|------|----------|\n" + "\n".join(file_table_rows) + "\n\n"
             "## 安全审查\n"
             "- [ ] 无命令注入风险（不拼接用户输入到 shell 命令）\n"
             "- [ ] 无路径遍历风险（已验证所有路径参数）\n"
@@ -819,11 +796,7 @@ class PromptChainGenerator:
         if is_review:
             content += red_team_section
             if cross_phase_checks:
-                content += (
-                    "## 跨维度交叉验证\n"
-                    + "\n".join(cross_phase_checks)
-                    + "\n\n"
-                )
+                content += "## 跨维度交叉验证\n" + "\n".join(cross_phase_checks) + "\n\n"
             content += scoring_section + action_section
         else:
             content += "## 功能验证清单\n" + "\n".join(all_checklist) + "\n\n"
@@ -926,11 +899,7 @@ class SquadPromptGenerator:
                 )
 
         prompt_text = template.format(skill_list=skill_list)
-        prompt_text = (
-            f"# 原始需求\n{query}\n\n"
-            f"{input_context}\n"
-            f"{prompt_text}\n"
-        )
+        prompt_text = f"# 原始需求\n{query}\n\n{input_context}\n{prompt_text}\n"
 
         role = AgentRole(
             role_id=step.role_id,

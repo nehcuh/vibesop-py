@@ -377,7 +377,9 @@ class ConfigManager:
             source.load_from_file()
             self._sources[ConfigSourcePriority.GLOBAL] = source
 
-        project_config_path = ConfigSource._resolve_config_path(self.project_root / ".vibe", "config")  # pyright: ignore[reportPrivateUsage]
+        project_config_path = ConfigSource._resolve_config_path(
+            self.project_root / ".vibe", "config"
+        )  # pyright: ignore[reportPrivateUsage]
         if project_config_path:
             source = ConfigSource(
                 priority=ConfigSourcePriority.PROJECT,

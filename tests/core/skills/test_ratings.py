@@ -28,7 +28,13 @@ class TestSkillRating:
         assert "created_at" in d
 
     def test_from_dict(self):
-        d = {"skill_id": "s", "score": 3, "review": "OK", "user_id": "u1", "created_at": "2024-01-01"}
+        d = {
+            "skill_id": "s",
+            "score": 3,
+            "review": "OK",
+            "user_id": "u1",
+            "created_at": "2024-01-01",
+        }
         rating = SkillRating.from_dict(d)
         assert rating.skill_id == "s"
         assert rating.score == 3

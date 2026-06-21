@@ -20,7 +20,9 @@ class TestFeedbackCollector:
         path = tmp_path / "feedback.jsonl"
         collector = FeedbackCollector(storage_path=str(path))
 
-        collector.collect_feedback("debug error", "gstack/review", False, "gstack/investigate", 0.85)
+        collector.collect_feedback(
+            "debug error", "gstack/review", False, "gstack/investigate", 0.85
+        )
         collector.collect_feedback("fix bug", "gstack/review", False, "gstack/investigate", 0.90)
         collector.collect_feedback("code review", "gstack/review", True, confidence=0.92)
         collector.collect_feedback("refactor", "gstack/review", False, "superpowers/refactor", 0.75)
@@ -61,7 +63,9 @@ class TestFeedbackCollector:
         path = tmp_path / "feedback.jsonl"
         collector = FeedbackCollector(storage_path=str(path))
 
-        collector.collect_feedback("debug", "gstack/review", False, actual_skill=None, confidence=0.80)
+        collector.collect_feedback(
+            "debug", "gstack/review", False, actual_skill=None, confidence=0.80
+        )
 
         mismatches = collector.get_top_mismatches()
         assert len(mismatches) == 0

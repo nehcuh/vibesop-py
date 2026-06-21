@@ -9,8 +9,8 @@ Previously duplicated across claude_code.py, opencode.py, and kimi_cli.py:
 from __future__ import annotations
 
 import logging
-from pathlib import Path
 import shutil
+from pathlib import Path
 from typing import Any
 
 from jinja2 import FileSystemLoader, select_autoescape
@@ -539,15 +539,17 @@ def generate_docs_skills_catalog(skills: list[Any]) -> str:
     ]
 
     if not skills:
-        lines.extend([
-            "No skills configured.",
-            "",
-            "Install skills with:",
-            "```bash",
-            "vibe install <pack>",
-            "```",
-            "",
-        ])
+        lines.extend(
+            [
+                "No skills configured.",
+                "",
+                "Install skills with:",
+                "```bash",
+                "vibe install <pack>",
+                "```",
+                "",
+            ]
+        )
     else:
         for skill in skills:
             skill_id = skill.id if hasattr(skill, "id") else skill.get("id", "")
@@ -556,20 +558,26 @@ def generate_docs_skills_catalog(skills: list[Any]) -> str:
                 skill.description if hasattr(skill, "description") else skill.get("description", "")
             )
             trigger = (
-                skill.trigger_when if hasattr(skill, "trigger_when") else skill.get("trigger_when", "")
+                skill.trigger_when
+                if hasattr(skill, "trigger_when")
+                else skill.get("trigger_when", "")
             )
-            lines.extend([
-                f"### {skill_id}",
-                f"- **Name**: {name}",
-                f"- **Description**: {description}",
-                f"- **Trigger**: {trigger}",
-                "",
-            ])
+            lines.extend(
+                [
+                    f"### {skill_id}",
+                    f"- **Name**: {name}",
+                    f"- **Description**: {description}",
+                    f"- **Trigger**: {trigger}",
+                    "",
+                ]
+            )
 
-    lines.extend([
-        "---",
-        "*Regenerate: `vibe build`*",
-    ])
+    lines.extend(
+        [
+            "---",
+            "*Regenerate: `vibe build`*",
+        ]
+    )
 
     return "\n".join(lines)
 
@@ -651,7 +659,7 @@ def _yaml_dquote(value: str) -> str:
     if not value:
         return '""'
     # Escape backslashes first, then double quotes
-    safe = str(value).replace('\\', '\\\\').replace('"', '\\"')
+    safe = str(value).replace("\\", "\\\\").replace('"', '\\"')
     return f'"{safe}"'
 
 
@@ -681,17 +689,28 @@ def render_skill_md(
         skill_dict = skill.model_dump()
     elif hasattr(skill, "__dataclass_fields__"):
         import dataclasses
+
         skill_dict = dataclasses.asdict(skill)  # type: ignore[arg-type]
     elif isinstance(skill, dict):
         skill_dict = skill
     else:
-        for attr in ("id", "name", "description", "trigger_when", "skill_type",
-                     "namespace", "version", "author", "tags", "metadata"):
+        for attr in (
+            "id",
+            "name",
+            "description",
+            "trigger_when",
+            "skill_type",
+            "namespace",
+            "version",
+            "author",
+            "tags",
+            "metadata",
+        ):
             if hasattr(skill, attr):
                 skill_dict[attr] = getattr(skill, attr)
 
     # YAML-safe the description before handing to template
-    if "description" in skill_dict and skill_dict["description"]:
+    if skill_dict.get("description"):
         skill_dict["description"] = _yaml_dquote(skill_dict["description"])
 
     return template.render(

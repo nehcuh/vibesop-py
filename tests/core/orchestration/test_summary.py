@@ -1,6 +1,5 @@
 """Tests for orchestration summary generation."""
 
-
 from vibesop.core.models import ExecutionMode, ExecutionPlan, ExecutionStep
 from vibesop.core.orchestration.summary import _format_step, generate_execution_summary
 

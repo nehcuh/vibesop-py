@@ -121,9 +121,7 @@ class TestClassifySkillSource:
         )
         assert indexer._classify_skill_source(ls) == "global"
 
-    def test_builtin_outside_project_is_global(
-        self, indexer: SkillIndexer, tmp_path: Path
-    ) -> None:
+    def test_builtin_outside_project_is_global(self, indexer: SkillIndexer, tmp_path: Path) -> None:
         ls = _fake_loaded_skill(
             "builtin/research",
             tmp_path / "site-packages" / "vibesop" / "core" / "skills" / "research.md",
@@ -134,9 +132,7 @@ class TestClassifySkillSource:
         ls = _fake_loaded_skill("phantom", None)
         assert indexer._classify_skill_source(ls) == "global"
 
-    def test_path_outside_project_is_global(
-        self, indexer: SkillIndexer, tmp_path: Path
-    ) -> None:
+    def test_path_outside_project_is_global(self, indexer: SkillIndexer, tmp_path: Path) -> None:
         # Sibling dir to project, not under it
         ls = _fake_loaded_skill(
             "external",
@@ -144,9 +140,7 @@ class TestClassifySkillSource:
         )
         assert indexer._classify_skill_source(ls) == "global"
 
-    def test_project_root_dotted_dir_other_than_vibe_is_global(
-        self, indexer: SkillIndexer
-    ) -> None:
+    def test_project_root_dotted_dir_other_than_vibe_is_global(self, indexer: SkillIndexer) -> None:
         # File under project_root but not in skills/ or .vibe/
         ls = _fake_loaded_skill(
             "weird",
@@ -313,9 +307,7 @@ class TestLoadIndexMerge:
         merged = indexer.load_index()
         assert set(merged.keys()) == {"g/a", "p/a"}
 
-    def test_project_overrides_global_for_same_skill_id(
-        self, indexer: SkillIndexer
-    ) -> None:
+    def test_project_overrides_global_for_same_skill_id(self, indexer: SkillIndexer) -> None:
         # Same skill_id in both, project should win
         global_profile = _make_profile(
             "shared",
@@ -373,9 +365,7 @@ class TestHasIndex:
         )
         assert not indexer.has_index()
 
-    def test_corrupt_global_falls_back_to_valid_project(
-        self, indexer: SkillIndexer
-    ) -> None:
+    def test_corrupt_global_falls_back_to_valid_project(self, indexer: SkillIndexer) -> None:
         indexer.global_index_path.parent.mkdir(parents=True, exist_ok=True)
         indexer.global_index_path.write_text("garbage", encoding="utf-8")
         indexer._save_index({"p/a": _make_profile("p/a")}, scope="project")
@@ -419,10 +409,14 @@ class TestBuildIndexScope:
         }
         loader_p, llm_p = self._patch_loader_and_llm(indexer, skills)
 
-        with loader_p, llm_p, patch.object(
-            indexer,
-            "_analyze_skill",
-            side_effect=lambda ls, _llm: _make_profile(ls.metadata.id),
+        with (
+            loader_p,
+            llm_p,
+            patch.object(
+                indexer,
+                "_analyze_skill",
+                side_effect=lambda ls, _llm: _make_profile(ls.metadata.id),
+            ),
         ):
             result = indexer.build_index(scope="global", show_progress=False)
 
@@ -451,10 +445,14 @@ class TestBuildIndexScope:
         }
         loader_p, llm_p = self._patch_loader_and_llm(indexer, skills)
 
-        with loader_p, llm_p, patch.object(
-            indexer,
-            "_analyze_skill",
-            side_effect=lambda ls, _llm: _make_profile(ls.metadata.id),
+        with (
+            loader_p,
+            llm_p,
+            patch.object(
+                indexer,
+                "_analyze_skill",
+                side_effect=lambda ls, _llm: _make_profile(ls.metadata.id),
+            ),
         ):
             result = indexer.build_index(scope="project", show_progress=False)
 
@@ -483,10 +481,14 @@ class TestBuildIndexScope:
         }
         loader_p, llm_p = self._patch_loader_and_llm(indexer, skills)
 
-        with loader_p, llm_p, patch.object(
-            indexer,
-            "_analyze_skill",
-            side_effect=lambda ls, _llm: _make_profile(ls.metadata.id),
+        with (
+            loader_p,
+            llm_p,
+            patch.object(
+                indexer,
+                "_analyze_skill",
+                side_effect=lambda ls, _llm: _make_profile(ls.metadata.id),
+            ),
         ):
             result = indexer.build_index(scope="all", show_progress=False)
 
@@ -495,22 +497,21 @@ class TestBuildIndexScope:
         assert indexer.global_index_path.exists()
         assert indexer.project_index_path.exists()
 
-        global_data = json.loads(
-            indexer.global_index_path.read_text(encoding="utf-8")
-        )
-        project_data = json.loads(
-            indexer.project_index_path.read_text(encoding="utf-8")
-        )
+        global_data = json.loads(indexer.global_index_path.read_text(encoding="utf-8"))
+        project_data = json.loads(indexer.project_index_path.read_text(encoding="utf-8"))
         assert "g/a" in global_data["skills"]
         assert "g/a" not in project_data["skills"]
         assert "p/a" in project_data["skills"]
         assert "p/a" not in global_data["skills"]
 
     def test_no_skills_returns_failure_result(self, indexer: SkillIndexer) -> None:
-        with patch(
-            "vibesop.core.skills.loader.SkillLoader.discover_all",
-            return_value={},
-        ), patch.object(indexer, "_get_llm", return_value=SimpleNamespace()):
+        with (
+            patch(
+                "vibesop.core.skills.loader.SkillLoader.discover_all",
+                return_value={},
+            ),
+            patch.object(indexer, "_get_llm", return_value=SimpleNamespace()),
+        ):
             result = indexer.build_index(scope="all", show_progress=False)
         assert result.success is False
         assert any("No skills" in e for e in result.errors)
@@ -555,24 +556,24 @@ class TestBuildIndexScope:
         )
         llm_p = patch.object(indexer, "_get_llm", return_value=SimpleNamespace())
 
-        with loader_p, llm_p, patch.object(
-            indexer,
-            "_analyze_skill",
-            side_effect=lambda ls, _llm: _make_profile(ls.metadata.id),
+        with (
+            loader_p,
+            llm_p,
+            patch.object(
+                indexer,
+                "_analyze_skill",
+                side_effect=lambda ls, _llm: _make_profile(ls.metadata.id),
+            ),
         ):
             result = indexer.build_index(scope="all", show_progress=False)
 
         assert result.success is True
 
-        global_data = json.loads(
-            indexer.global_index_path.read_text(encoding="utf-8")
-        )
+        global_data = json.loads(indexer.global_index_path.read_text(encoding="utf-8"))
         assert global_data["skills"]["g/a"]["pack_owner"] == "gpack"
         assert global_data["skills"]["loose"]["pack_owner"] == "looseapp"
 
-        project_data = json.loads(
-            indexer.project_index_path.read_text(encoding="utf-8")
-        )
+        project_data = json.loads(indexer.project_index_path.read_text(encoding="utf-8"))
         assert project_data["skills"]["p/a"]["pack_owner"] == "", (
             "Project-local profiles aren't owned by any pack"
         )
@@ -620,12 +621,14 @@ class TestUpdateGlobalIndexForPack:
             analyzed.append(sid)
             return _make_profile(sid)
 
-        with patch(
-            "vibesop.core.skills.loader.SkillLoader.discover_all",
-            return_value=discovered,
-        ), patch.object(
-            indexer, "_get_llm", return_value=SimpleNamespace()
-        ), patch.object(indexer, "_analyze_skill", side_effect=_fake_analyze):
+        with (
+            patch(
+                "vibesop.core.skills.loader.SkillLoader.discover_all",
+                return_value=discovered,
+            ),
+            patch.object(indexer, "_get_llm", return_value=SimpleNamespace()),
+            patch.object(indexer, "_analyze_skill", side_effect=_fake_analyze),
+        ):
             result = indexer.update_global_index_for_pack(
                 pack_name="newpack",
                 pack_storage=central,
@@ -662,15 +665,17 @@ class TestUpdateGlobalIndexForPack:
             "old/x": _fake_loaded_skill("old/x", old_path),
         }
 
-        with patch(
-            "vibesop.core.skills.loader.SkillLoader.discover_all",
-            return_value=discovered,
-        ), patch.object(
-            indexer, "_get_llm", return_value=SimpleNamespace()
-        ), patch.object(
-            indexer,
-            "_analyze_skill",
-            side_effect=lambda ls, _llm: _make_profile(ls.metadata.id),
+        with (
+            patch(
+                "vibesop.core.skills.loader.SkillLoader.discover_all",
+                return_value=discovered,
+            ),
+            patch.object(indexer, "_get_llm", return_value=SimpleNamespace()),
+            patch.object(
+                indexer,
+                "_analyze_skill",
+                side_effect=lambda ls, _llm: _make_profile(ls.metadata.id),
+            ),
         ):
             indexer.update_global_index_for_pack(
                 pack_name="newpack",
@@ -679,9 +684,9 @@ class TestUpdateGlobalIndexForPack:
             )
 
         merged = json.loads(indexer.global_index_path.read_text(encoding="utf-8"))
-        assert (
-            merged["skills"]["old/x"]["differentiation"] == "OLD_VALUE"
-        ), "Old pack profile must be preserved"
+        assert merged["skills"]["old/x"]["differentiation"] == "OLD_VALUE", (
+            "Old pack profile must be preserved"
+        )
         assert "newpack/a" in merged["skills"]
 
     def test_replaces_renamed_skill_in_same_pack(
@@ -714,15 +719,17 @@ class TestUpdateGlobalIndexForPack:
             "newpack/new_name": _fake_loaded_skill("newpack/new_name", new_path),
         }
 
-        with patch(
-            "vibesop.core.skills.loader.SkillLoader.discover_all",
-            return_value=discovered,
-        ), patch.object(
-            indexer, "_get_llm", return_value=SimpleNamespace()
-        ), patch.object(
-            indexer,
-            "_analyze_skill",
-            side_effect=lambda ls, _llm: _make_profile(ls.metadata.id),
+        with (
+            patch(
+                "vibesop.core.skills.loader.SkillLoader.discover_all",
+                return_value=discovered,
+            ),
+            patch.object(indexer, "_get_llm", return_value=SimpleNamespace()),
+            patch.object(
+                indexer,
+                "_analyze_skill",
+                side_effect=lambda ls, _llm: _make_profile(ls.metadata.id),
+            ),
         ):
             indexer.update_global_index_for_pack(
                 pack_name="newpack",
@@ -782,15 +789,17 @@ class TestUpdateGlobalIndexForPack:
             "pack/a": _fake_loaded_skill("pack/a", skill_path),
         }
 
-        with patch(
-            "vibesop.core.skills.loader.SkillLoader.discover_all",
-            return_value=discovered,
-        ), patch.object(
-            indexer, "_get_llm", return_value=SimpleNamespace()
-        ), patch.object(
-            indexer,
-            "_analyze_skill",
-            return_value=None,  # Simulate LLM parse failure
+        with (
+            patch(
+                "vibesop.core.skills.loader.SkillLoader.discover_all",
+                return_value=discovered,
+            ),
+            patch.object(indexer, "_get_llm", return_value=SimpleNamespace()),
+            patch.object(
+                indexer,
+                "_analyze_skill",
+                return_value=None,  # Simulate LLM parse failure
+            ),
         ):
             result = indexer.update_global_index_for_pack(
                 pack_name="pack",
@@ -811,10 +820,13 @@ class TestUpdateGlobalIndexForPack:
         # Pre-existing global index
         indexer._save_index({"old/x": _make_profile("old/x")}, scope="global")
 
-        with patch(
-            "vibesop.core.skills.loader.SkillLoader.discover_all",
-            return_value={},
-        ), patch.object(indexer, "_get_llm", return_value=SimpleNamespace()):
+        with (
+            patch(
+                "vibesop.core.skills.loader.SkillLoader.discover_all",
+                return_value={},
+            ),
+            patch.object(indexer, "_get_llm", return_value=SimpleNamespace()),
+        ):
             result = indexer.update_global_index_for_pack(
                 pack_name="ghost",
                 pack_storage=central,
@@ -851,15 +863,17 @@ class TestUpdateGlobalIndexForPack:
             "newpack/a": _fake_loaded_skill("newpack/a", symlinked_skill),
         }
 
-        with patch(
-            "vibesop.core.skills.loader.SkillLoader.discover_all",
-            return_value=discovered,
-        ), patch.object(
-            indexer, "_get_llm", return_value=SimpleNamespace()
-        ), patch.object(
-            indexer,
-            "_analyze_skill",
-            side_effect=lambda ls, _llm: _make_profile(ls.metadata.id),
+        with (
+            patch(
+                "vibesop.core.skills.loader.SkillLoader.discover_all",
+                return_value=discovered,
+            ),
+            patch.object(indexer, "_get_llm", return_value=SimpleNamespace()),
+            patch.object(
+                indexer,
+                "_analyze_skill",
+                side_effect=lambda ls, _llm: _make_profile(ls.metadata.id),
+            ),
         ):
             result = indexer.update_global_index_for_pack(
                 pack_name="newpack",
@@ -897,15 +911,17 @@ class TestUpdateGlobalIndexForPack:
             "ideation": _fake_loaded_skill("ideation", new_path),
         }
 
-        with patch(
-            "vibesop.core.skills.loader.SkillLoader.discover_all",
-            return_value=discovered,
-        ), patch.object(
-            indexer, "_get_llm", return_value=SimpleNamespace()
-        ), patch.object(
-            indexer,
-            "_analyze_skill",
-            side_effect=lambda ls, _llm: _make_profile(ls.metadata.id),
+        with (
+            patch(
+                "vibesop.core.skills.loader.SkillLoader.discover_all",
+                return_value=discovered,
+            ),
+            patch.object(indexer, "_get_llm", return_value=SimpleNamespace()),
+            patch.object(
+                indexer,
+                "_analyze_skill",
+                side_effect=lambda ls, _llm: _make_profile(ls.metadata.id),
+            ),
         ):
             indexer.update_global_index_for_pack(
                 pack_name="superpowers",
@@ -941,15 +957,17 @@ class TestUpdateGlobalIndexForPack:
             "gstack/review": _fake_loaded_skill("gstack/review", new_path),
         }
 
-        with patch(
-            "vibesop.core.skills.loader.SkillLoader.discover_all",
-            return_value=discovered,
-        ), patch.object(
-            indexer, "_get_llm", return_value=SimpleNamespace()
-        ), patch.object(
-            indexer,
-            "_analyze_skill",
-            side_effect=lambda ls, _llm: _make_profile(ls.metadata.id),
+        with (
+            patch(
+                "vibesop.core.skills.loader.SkillLoader.discover_all",
+                return_value=discovered,
+            ),
+            patch.object(indexer, "_get_llm", return_value=SimpleNamespace()),
+            patch.object(
+                indexer,
+                "_analyze_skill",
+                side_effect=lambda ls, _llm: _make_profile(ls.metadata.id),
+            ),
         ):
             indexer.update_global_index_for_pack(
                 pack_name="gstack",
@@ -980,15 +998,17 @@ class TestUpdateGlobalIndexForPack:
             "mypack/thing": _fake_loaded_skill("mypack/thing", skill),
         }
 
-        with patch(
-            "vibesop.core.skills.loader.SkillLoader.discover_all",
-            return_value=discovered,
-        ), patch.object(
-            indexer, "_get_llm", return_value=SimpleNamespace()
-        ), patch.object(
-            indexer,
-            "_analyze_skill",
-            side_effect=lambda ls, _llm: _make_profile(ls.metadata.id),
+        with (
+            patch(
+                "vibesop.core.skills.loader.SkillLoader.discover_all",
+                return_value=discovered,
+            ),
+            patch.object(indexer, "_get_llm", return_value=SimpleNamespace()),
+            patch.object(
+                indexer,
+                "_analyze_skill",
+                side_effect=lambda ls, _llm: _make_profile(ls.metadata.id),
+            ),
         ):
             indexer.update_global_index_for_pack(
                 pack_name="mypack",
@@ -1022,15 +1042,17 @@ class TestUpdateGlobalIndexForPack:
             "newpack/a": _fake_loaded_skill("newpack/a", new_path),
         }
 
-        with patch(
-            "vibesop.core.skills.loader.SkillLoader.discover_all",
-            return_value=discovered,
-        ), patch.object(
-            indexer, "_get_llm", return_value=SimpleNamespace()
-        ), patch.object(
-            indexer,
-            "_analyze_skill",
-            side_effect=lambda ls, _llm: _make_profile(ls.metadata.id),
+        with (
+            patch(
+                "vibesop.core.skills.loader.SkillLoader.discover_all",
+                return_value=discovered,
+            ),
+            patch.object(indexer, "_get_llm", return_value=SimpleNamespace()),
+            patch.object(
+                indexer,
+                "_analyze_skill",
+                side_effect=lambda ls, _llm: _make_profile(ls.metadata.id),
+            ),
         ):
             indexer.update_global_index_for_pack(
                 pack_name="newpack",
@@ -1057,9 +1079,7 @@ class TestIndexPaths:
         indexer = SkillIndexer(project_root=project_root)
         assert indexer.project_index_path == project_root / ".vibe" / "skill-index.json"
 
-    def test_global_index_path_uses_home(
-        self, project_root: Path, global_home: Path
-    ) -> None:
+    def test_global_index_path_uses_home(self, project_root: Path, global_home: Path) -> None:
         indexer = SkillIndexer(project_root=project_root)
         assert indexer.global_index_path == global_home / ".vibe" / "skill-index.json"
 
@@ -1102,9 +1122,7 @@ class TestContentHashCache:
         assert h1 == h2
         assert len(h1) == 16  # truncated sha256 — see _hash_prompt docstring
 
-    def test_hash_prompt_changes_with_content(
-        self, indexer: SkillIndexer
-    ) -> None:
+    def test_hash_prompt_changes_with_content(self, indexer: SkillIndexer) -> None:
         assert indexer._hash_prompt("a") != indexer._hash_prompt("b")
 
     def test_analyze_skill_stamps_content_hash(
@@ -1114,9 +1132,7 @@ class TestContentHashCache:
     ) -> None:
         """``_analyze_skill`` must populate ``content_hash`` so the next run
         can decide whether to skip the LLM call."""
-        ls = _fake_loaded_skill(
-            "g/a", global_home / ".config" / "skills" / "g" / "a" / "SKILL.md"
-        )
+        ls = _fake_loaded_skill("g/a", global_home / ".config" / "skills" / "g" / "a" / "SKILL.md")
 
         class _StubLLM:
             def call(self, prompt: str, max_tokens: int, temperature: float) -> object:
@@ -1138,9 +1154,7 @@ class TestContentHashCache:
         expected = indexer._hash_prompt(indexer._build_prompt(ls))
         assert profile.content_hash == expected
 
-    def test_save_and_load_round_trip_preserves_content_hash(
-        self, indexer: SkillIndexer
-    ) -> None:
+    def test_save_and_load_round_trip_preserves_content_hash(self, indexer: SkillIndexer) -> None:
         profile = _make_profile("a/b")
         profile.content_hash = "deadbeefcafe1234"
         indexer._save_index({"a/b": profile}, scope="global")
@@ -1183,9 +1197,7 @@ class TestContentHashCache:
         """If an existing profile's content_hash matches the freshly-computed
         prompt hash, build_index reuses the cached profile and never calls
         the LLM. Saves both wall-clock and API spend."""
-        ls = _fake_loaded_skill(
-            "g/a", global_home / ".config" / "skills" / "g" / "a" / "SKILL.md"
-        )
+        ls = _fake_loaded_skill("g/a", global_home / ".config" / "skills" / "g" / "a" / "SKILL.md")
 
         # Materialize source so .resolve() works inside _infer_pack_owner.
         if ls.source_file is not None:
@@ -1206,25 +1218,23 @@ class TestContentHashCache:
             analyze_calls.append(loaded.metadata.id)  # type: ignore[attr-defined]
             return _make_profile(loaded.metadata.id)  # type: ignore[attr-defined]
 
-        with patch(
-            "vibesop.core.skills.loader.SkillLoader.discover_all",
-            return_value={"g/a": ls},
-        ), patch.object(indexer, "_get_llm", return_value=SimpleNamespace()), patch.object(
-            indexer, "_analyze_skill", side_effect=_spy_analyze
+        with (
+            patch(
+                "vibesop.core.skills.loader.SkillLoader.discover_all",
+                return_value={"g/a": ls},
+            ),
+            patch.object(indexer, "_get_llm", return_value=SimpleNamespace()),
+            patch.object(indexer, "_analyze_skill", side_effect=_spy_analyze),
         ):
             result = indexer.build_index(scope="global", show_progress=False)
 
         assert result.success is True
         assert result.indexed_count == 1
-        assert analyze_calls == [], (
-            "Cache hit must skip the LLM call entirely"
-        )
+        assert analyze_calls == [], "Cache hit must skip the LLM call entirely"
 
         # Cached profile content survives — proves the cache hit was used,
         # not just silently overwritten.
-        merged = json.loads(
-            indexer.global_index_path.read_text(encoding="utf-8")
-        )
+        merged = json.loads(indexer.global_index_path.read_text(encoding="utf-8"))
         assert merged["skills"]["g/a"]["differentiation"] == "CACHED"
 
     def test_force_bypasses_cache(
@@ -1234,9 +1244,7 @@ class TestContentHashCache:
     ) -> None:
         """``force=True`` must re-analyze every skill, even cached ones.
         Use case: the prompt template changed, every profile needs rebuilding."""
-        ls = _fake_loaded_skill(
-            "g/a", global_home / ".config" / "skills" / "g" / "a" / "SKILL.md"
-        )
+        ls = _fake_loaded_skill("g/a", global_home / ".config" / "skills" / "g" / "a" / "SKILL.md")
         if ls.source_file is not None:
             ls.source_file.parent.mkdir(parents=True, exist_ok=True)
             ls.source_file.write_text("# stub", encoding="utf-8")
@@ -1252,20 +1260,18 @@ class TestContentHashCache:
             analyze_calls.append(loaded.metadata.id)  # type: ignore[attr-defined]
             return _make_profile(loaded.metadata.id, differentiation="FRESH")  # type: ignore[attr-defined]
 
-        with patch(
-            "vibesop.core.skills.loader.SkillLoader.discover_all",
-            return_value={"g/a": ls},
-        ), patch.object(indexer, "_get_llm", return_value=SimpleNamespace()), patch.object(
-            indexer, "_analyze_skill", side_effect=_spy_analyze
+        with (
+            patch(
+                "vibesop.core.skills.loader.SkillLoader.discover_all",
+                return_value={"g/a": ls},
+            ),
+            patch.object(indexer, "_get_llm", return_value=SimpleNamespace()),
+            patch.object(indexer, "_analyze_skill", side_effect=_spy_analyze),
         ):
             indexer.build_index(scope="global", show_progress=False, force=True)
 
-        assert analyze_calls == ["g/a"], (
-            "force=True must re-run analysis even when hash matches"
-        )
-        merged = json.loads(
-            indexer.global_index_path.read_text(encoding="utf-8")
-        )
+        assert analyze_calls == ["g/a"], "force=True must re-run analysis even when hash matches"
+        merged = json.loads(indexer.global_index_path.read_text(encoding="utf-8"))
         assert merged["skills"]["g/a"]["differentiation"] == "FRESH"
 
     def test_cache_invalidated_when_skill_content_changes(
@@ -1276,9 +1282,7 @@ class TestContentHashCache:
         """Changing skill content changes the prompt → hash mismatch →
         cache miss → LLM re-analyzes. This is the bug the cache MUST NOT have:
         stale results for genuinely-changed skills."""
-        ls = _fake_loaded_skill(
-            "g/a", global_home / ".config" / "skills" / "g" / "a" / "SKILL.md"
-        )
+        ls = _fake_loaded_skill("g/a", global_home / ".config" / "skills" / "g" / "a" / "SKILL.md")
 
         # Stash a profile with a stale hash (computed from a different prompt).
         stale_profile = _make_profile("g/a")
@@ -1291,17 +1295,17 @@ class TestContentHashCache:
             analyze_calls.append(loaded.metadata.id)  # type: ignore[attr-defined]
             return _make_profile(loaded.metadata.id)  # type: ignore[attr-defined]
 
-        with patch(
-            "vibesop.core.skills.loader.SkillLoader.discover_all",
-            return_value={"g/a": ls},
-        ), patch.object(indexer, "_get_llm", return_value=SimpleNamespace()), patch.object(
-            indexer, "_analyze_skill", side_effect=_spy_analyze
+        with (
+            patch(
+                "vibesop.core.skills.loader.SkillLoader.discover_all",
+                return_value={"g/a": ls},
+            ),
+            patch.object(indexer, "_get_llm", return_value=SimpleNamespace()),
+            patch.object(indexer, "_analyze_skill", side_effect=_spy_analyze),
         ):
             indexer.build_index(scope="global", show_progress=False)
 
-        assert analyze_calls == ["g/a"], (
-            "Hash mismatch must trigger fresh LLM analysis"
-        )
+        assert analyze_calls == ["g/a"], "Hash mismatch must trigger fresh LLM analysis"
 
     def test_update_global_index_for_pack_uses_cache(
         self,
@@ -1328,11 +1332,13 @@ class TestContentHashCache:
             analyze_calls.append(loaded.metadata.id)  # type: ignore[attr-defined]
             return _make_profile(loaded.metadata.id)  # type: ignore[attr-defined]
 
-        with patch(
-            "vibesop.core.skills.loader.SkillLoader.discover_all",
-            return_value={"newpack/a": ls},
-        ), patch.object(indexer, "_get_llm", return_value=SimpleNamespace()), patch.object(
-            indexer, "_analyze_skill", side_effect=_spy_analyze
+        with (
+            patch(
+                "vibesop.core.skills.loader.SkillLoader.discover_all",
+                return_value={"newpack/a": ls},
+            ),
+            patch.object(indexer, "_get_llm", return_value=SimpleNamespace()),
+            patch.object(indexer, "_analyze_skill", side_effect=_spy_analyze),
         ):
             result = indexer.update_global_index_for_pack(
                 pack_name="newpack",
@@ -1343,9 +1349,7 @@ class TestContentHashCache:
         assert result.success is True
         assert result.indexed_count == 1
         assert analyze_calls == [], "Pack-level cache hit must skip LLM"
-        merged = json.loads(
-            indexer.global_index_path.read_text(encoding="utf-8")
-        )
+        merged = json.loads(indexer.global_index_path.read_text(encoding="utf-8"))
         # Cache hit preserves cached profile, refreshes pack_owner.
         assert merged["skills"]["newpack/a"]["differentiation"] == "CACHED"
         assert merged["skills"]["newpack/a"]["pack_owner"] == "newpack"
@@ -1390,27 +1394,23 @@ class TestParallelism:
             return _make_profile(loaded.metadata.id)  # type: ignore[attr-defined]
 
         start = time.perf_counter()
-        with patch(
-            "vibesop.core.skills.loader.SkillLoader.discover_all",
-            return_value=skills,
-        ), patch.object(indexer, "_get_llm", return_value=SimpleNamespace()), patch.object(
-            indexer, "_analyze_skill", side_effect=_slow_analyze
+        with (
+            patch(
+                "vibesop.core.skills.loader.SkillLoader.discover_all",
+                return_value=skills,
+            ),
+            patch.object(indexer, "_get_llm", return_value=SimpleNamespace()),
+            patch.object(indexer, "_analyze_skill", side_effect=_slow_analyze),
         ):
-            result = indexer.build_index(
-                scope="global", show_progress=False, max_workers=8
-            )
+            result = indexer.build_index(scope="global", show_progress=False, max_workers=8)
         elapsed = time.perf_counter() - start
 
         assert result.success is True
         assert result.indexed_count == 8
         # Serial would be ~400ms; parallel with 8 workers ≈ 50ms.
         # Generous bound to absorb scheduling + GIL noise.
-        assert elapsed < 0.25, (
-            f"Indexer not parallelizing: 8×50ms slept took {elapsed:.3f}s"
-        )
-        assert max_concurrent > 1, (
-            "Expected concurrent _analyze_skill executions"
-        )
+        assert elapsed < 0.25, f"Indexer not parallelizing: 8×50ms slept took {elapsed:.3f}s"
+        assert max_concurrent > 1, "Expected concurrent _analyze_skill executions"
 
     def test_analyze_failure_in_one_thread_doesnt_kill_others(
         self,
@@ -1435,11 +1435,13 @@ class TestParallelism:
                 raise RuntimeError("provider down")
             return _make_profile(sid)
 
-        with patch(
-            "vibesop.core.skills.loader.SkillLoader.discover_all",
-            return_value=skills,
-        ), patch.object(indexer, "_get_llm", return_value=SimpleNamespace()), patch.object(
-            indexer, "_analyze_skill", side_effect=_maybe_explode
+        with (
+            patch(
+                "vibesop.core.skills.loader.SkillLoader.discover_all",
+                return_value=skills,
+            ),
+            patch.object(indexer, "_get_llm", return_value=SimpleNamespace()),
+            patch.object(indexer, "_analyze_skill", side_effect=_maybe_explode),
         ):
             result = indexer.build_index(scope="global", show_progress=False)
 
@@ -1447,9 +1449,7 @@ class TestParallelism:
         assert result.failed_count == 1
         assert any("g/boom" in e for e in result.errors)
         # Surviving skill still in the saved index.
-        merged = json.loads(
-            indexer.global_index_path.read_text(encoding="utf-8")
-        )
+        merged = json.loads(indexer.global_index_path.read_text(encoding="utf-8"))
         assert "g/ok" in merged["skills"]
         assert "g/boom" not in merged["skills"]
 
@@ -1471,13 +1471,17 @@ class TestProgressSuppression:
             ),
         }
 
-        with patch(
-            "vibesop.core.skills.loader.SkillLoader.discover_all",
-            return_value=skills,
-        ), patch.object(indexer, "_get_llm", return_value=SimpleNamespace()), patch.object(
-            indexer,
-            "_analyze_skill",
-            side_effect=lambda ls, _llm: _make_profile(ls.metadata.id),
+        with (
+            patch(
+                "vibesop.core.skills.loader.SkillLoader.discover_all",
+                return_value=skills,
+            ),
+            patch.object(indexer, "_get_llm", return_value=SimpleNamespace()),
+            patch.object(
+                indexer,
+                "_analyze_skill",
+                side_effect=lambda ls, _llm: _make_profile(ls.metadata.id),
+            ),
         ):
             indexer.build_index(scope="global", show_progress=False)
 

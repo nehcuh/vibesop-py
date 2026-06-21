@@ -47,7 +47,9 @@ class TestOpenCodeAdapter:
         result = adapter.render_config(manifest, tmp_path)
 
         assert result.success
-        assert result.file_count == 9  # config.yaml + llm-config.json + AGENTS.md + vibesop-env.sh + hooks/vibesop-route.sh + docs/(4 files)
+        assert (
+            result.file_count == 9
+        )  # config.yaml + llm-config.json + AGENTS.md + vibesop-env.sh + hooks/vibesop-route.sh + docs/(4 files)
         assert (tmp_path / "config.yaml").exists()
         assert (tmp_path / "llm-config.json").exists()
         assert (tmp_path / "vibesop-env.sh").exists()
@@ -77,7 +79,9 @@ class TestOpenCodeAdapter:
         result = adapter.render_config(manifest, tmp_path)
 
         assert result.success
-        assert result.file_count == 11  # config.yaml + README.md + llm-config.json + AGENTS.md + vibesop-env.sh + hooks/vibesop-route.sh + skill + docs/(4 files)
+        assert (
+            result.file_count == 11
+        )  # config.yaml + README.md + llm-config.json + AGENTS.md + vibesop-env.sh + hooks/vibesop-route.sh + skill + docs/(4 files)
         assert (tmp_path / "config.yaml").exists()
         assert (tmp_path / "README.md").exists()
         assert (tmp_path / "llm-config.json").exists()
@@ -225,7 +229,9 @@ class TestOpenCodeAdapter:
         result = adapter.render_config_only(manifest, tmp_path)
 
         assert result.success
-        assert result.file_count == 10  # config.yaml + README.md + llm-config.json + AGENTS.md + vibesop-env.sh + hooks/vibesop-route.sh + docs/(4 files)
+        assert (
+            result.file_count == 10
+        )  # config.yaml + README.md + llm-config.json + AGENTS.md + vibesop-env.sh + hooks/vibesop-route.sh + docs/(4 files)
         assert (tmp_path / "config.yaml").exists()
         assert (tmp_path / "README.md").exists()
         assert (tmp_path / "vibesop-env.sh").exists()
@@ -240,7 +246,9 @@ class TestOpenCodeAdapter:
         result = adapter.render_config_only(manifest, tmp_path)
 
         assert result.success
-        assert result.file_count == 9  # config.yaml + llm-config.json + AGENTS.md + vibesop-env.sh + hooks/vibesop-route.sh + docs/(4 files)
+        assert (
+            result.file_count == 9
+        )  # config.yaml + llm-config.json + AGENTS.md + vibesop-env.sh + hooks/vibesop-route.sh + docs/(4 files)
         assert (tmp_path / "vibesop-env.sh").exists()
         assert not (tmp_path / "README.md").exists()
 
@@ -309,7 +317,11 @@ class TestOpenCodeAdapter:
         assert result.success
 
         agents_md = (tmp_path / "AGENTS.md").read_text()
-        assert "### " not in agents_md.split("## Skills")[1].split("##")[0] if "## Skills" in agents_md else True
+        assert (
+            "### " not in agents_md.split("## Skills")[1].split("##")[0]
+            if "## Skills" in agents_md
+            else True
+        )
 
     def test_install_hooks_default(self, tmp_path: Path) -> None:
         """Test default hook installation."""
@@ -354,7 +366,9 @@ class TestOpenCodeAdapterEdgeCases:
 
         result = adapter.render_config(manifest, tmp_path)
         assert result.success
-        assert result.file_count == 9  # config.yaml + llm-config.json + AGENTS.md + vibesop-env.sh + hooks/vibesop-route.sh + docs/(4 files), no README
+        assert (
+            result.file_count == 9
+        )  # config.yaml + llm-config.json + AGENTS.md + vibesop-env.sh + hooks/vibesop-route.sh + docs/(4 files), no README
 
     def test_render_with_full_metadata(self, tmp_path: Path) -> None:
         """Test rendering with full metadata."""

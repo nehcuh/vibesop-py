@@ -53,7 +53,13 @@ _CONFIG_PATHS: ClassVar[dict[str, list[Path]]] = {
 }
 
 
-def _result(name: str, status: VerificationStatus, msg: str, details: dict[str, Any] | None = None, suggestions: list[str] | None = None) -> VerificationResult:
+def _result(
+    name: str,
+    status: VerificationStatus,
+    msg: str,
+    details: dict[str, Any] | None = None,
+    suggestions: list[str] | None = None,
+) -> VerificationResult:
     return VerificationResult(name, status, msg, details or {}, suggestions or [])
 
 
@@ -61,12 +67,21 @@ class IntegrationVerifier:
     def __init__(self) -> None:
         self._manager = IntegrationManager()
 
-    def verify_integration(self, integration_id: str, platform: str = "claude-code") -> IntegrationReport:
+    def verify_integration(
+        self, integration_id: str, platform: str = "claude-code"
+    ) -> IntegrationReport:
         integrations = self._manager.list_integrations()
         integration = next((i for i in integrations if i.name == integration_id), None)
 
         if integration is None:
-            return IntegrationReport(integration_id, VerificationStatus.FAILED, [], False, False, [f"Integration {integration_id} not found"])
+            return IntegrationReport(
+                integration_id,
+                VerificationStatus.FAILED,
+                [],
+                False,
+                False,
+                [f"Integration {integration_id} not found"],
+            )
 
         results: list[VerificationResult] = []
         errors: list[str] = []
@@ -81,40 +96,68 @@ class IntegrationVerifier:
                     errors.append(f"{check_name}: {result.message}")
             except (ValueError, KeyError, AttributeError, TypeError, OSError) as e:
                 errors.append(f"{check_name}: Verification failed with error: {e}")
-                results.append(_result(check_name, VerificationStatus.FAILED, f"Check raised exception: {e}"))
+                results.append(
+                    _result(check_name, VerificationStatus.FAILED, f"Check raised exception: {e}")
+                )
 
         overall = self._determine_overall_status(results)
         return IntegrationReport(
-            integration_id, overall, results,
+            integration_id,
+            overall,
+            results,
             integration.status == IntegrationStatus.INSTALLED,
             overall in (VerificationStatus.PASSED, VerificationStatus.WARNING),
             errors,
         )
 
     def verify_all(self, platform: str = "claude-code") -> dict[str, IntegrationReport]:
-        return {i.name: self.verify_integration(i.name, platform) for i in self._manager.list_integrations()}
+        return {
+            i.name: self.verify_integration(i.name, platform)
+            for i in self._manager.list_integrations()
+        }
 
     def get_quick_check(self, integration_id: str) -> dict[str, Any]:
-        integration = next((i for i in self._manager.list_integrations() if i.name == integration_id), None)
+        integration = next(
+            (i for i in self._manager.list_integrations() if i.name == integration_id), None
+        )
 
         if integration is None:
-            return {"integration_id": integration_id, "installed": False, "functional": False, "status": "not_found"}
+            return {
+                "integration_id": integration_id,
+                "installed": False,
+                "functional": False,
+                "status": "not_found",
+            }
 
         installed = integration.status == IntegrationStatus.INSTALLED
         if not installed:
-            return {"integration_id": integration_id, "installed": False, "functional": False, "status": "not_installed"}
+            return {
+                "integration_id": integration_id,
+                "installed": False,
+                "functional": False,
+                "status": "not_installed",
+            }
         if integration.path is None:
-            return {"integration_id": integration_id, "installed": True, "functional": False, "status": "no_path"}
+            return {
+                "integration_id": integration_id,
+                "installed": True,
+                "functional": False,
+                "status": "no_path",
+            }
 
         skills_dir = Path(integration.path) / "skills"
         skills_exist = skills_dir.exists() and any(skills_dir.iterdir())
         return {
-            "integration_id": integration_id, "installed": True, "functional": skills_exist,
+            "integration_id": integration_id,
+            "installed": True,
+            "functional": skills_exist,
             "status": "functional" if skills_exist else "no_skills",
             "skills_count": len(list(skills_dir.glob("*.md"))) if skills_exist else 0,
         }
 
-    def _run_check(self, name: str, iid: str, platform: str, info: IntegrationInfo) -> VerificationResult:
+    def _run_check(
+        self, name: str, iid: str, platform: str, info: IntegrationInfo
+    ) -> VerificationResult:
         dispatch = {
             "installation_exists": lambda: self._check_installation(info),
             "skills_present": lambda: self._check_skills(iid, info),
@@ -128,21 +171,51 @@ class IntegrationVerifier:
 
     def _check_installation(self, info: IntegrationInfo) -> VerificationResult:
         if info.path is None:
-            return _result("installation_exists", VerificationStatus.FAILED, "Installation path is not set", {"path": None}, [f"vibe install {info.name}"])
+            return _result(
+                "installation_exists",
+                VerificationStatus.FAILED,
+                "Installation path is not set",
+                {"path": None},
+                [f"vibe install {info.name}"],
+            )
         path = Path(info.path)
         if not path.exists():
-            return _result("installation_exists", VerificationStatus.FAILED, "Installation directory does not exist", {"path": str(path)}, [f"vibe install {info.name}"])
+            return _result(
+                "installation_exists",
+                VerificationStatus.FAILED,
+                "Installation directory does not exist",
+                {"path": str(path)},
+                [f"vibe install {info.name}"],
+            )
         if not path.is_dir():
-            return _result("installation_exists", VerificationStatus.FAILED, "Installation path is not a directory", {"path": str(path)}, [f"Reinstall: vibe install {info.name}"])
-        return _result("installation_exists", VerificationStatus.PASSED, "Installation directory exists", {"path": str(path)})
+            return _result(
+                "installation_exists",
+                VerificationStatus.FAILED,
+                "Installation path is not a directory",
+                {"path": str(path)},
+                [f"Reinstall: vibe install {info.name}"],
+            )
+        return _result(
+            "installation_exists",
+            VerificationStatus.PASSED,
+            "Installation directory exists",
+            {"path": str(path)},
+        )
 
     def _check_skills(self, iid: str, info: IntegrationInfo) -> VerificationResult:
         cfg = _INTEGRATION_CHECKS.get(iid, {})
         required: list[str] = cfg.get("required_skills", [])
         if not required:
-            return _result("skills_present", VerificationStatus.SKIPPED, "No required skills defined")
+            return _result(
+                "skills_present", VerificationStatus.SKIPPED, "No required skills defined"
+            )
         if info.path is None:
-            return _result("skills_present", VerificationStatus.FAILED, "Integration path is not set", suggestions=[f"vibe install {iid}"])
+            return _result(
+                "skills_present",
+                VerificationStatus.FAILED,
+                "Integration path is not set",
+                suggestions=[f"vibe install {iid}"],
+            )
 
         ipath = Path(info.path)
         found, missing = [], []
@@ -154,21 +227,59 @@ class IntegrationVerifier:
             (found if skill_file.exists() else missing).append(skill)
 
         if not found and missing == required:
-            return _result("skills_present", VerificationStatus.FAILED, "Skills directory does not exist", {"skills_dir": str(ipath / "skills") if iid != "gstack" else str(ipath)})
+            return _result(
+                "skills_present",
+                VerificationStatus.FAILED,
+                "Skills directory does not exist",
+                {"skills_dir": str(ipath / "skills") if iid != "gstack" else str(ipath)},
+            )
         if missing:
-            return _result("skills_present", VerificationStatus.WARNING, f"Missing {len(missing)} required skills", {"found": found, "missing": missing}, [f"Update {iid} to get missing skills"])
-        return _result("skills_present", VerificationStatus.PASSED, f"All {len(found)} required skills present", {"skills": found})
+            return _result(
+                "skills_present",
+                VerificationStatus.WARNING,
+                f"Missing {len(missing)} required skills",
+                {"found": found, "missing": missing},
+                [f"Update {iid} to get missing skills"],
+            )
+        return _result(
+            "skills_present",
+            VerificationStatus.PASSED,
+            f"All {len(found)} required skills present",
+            {"skills": found},
+        )
 
     def _check_config(self, iid: str, platform: str) -> VerificationResult:
         checked = [str(p) for p in _CONFIG_PATHS.get(platform, []) if p.exists()]
         if checked:
-            return _result("config_valid", VerificationStatus.PASSED, "Configuration paths found", {"paths": checked})
-        return _result("config_valid", VerificationStatus.WARNING, "No standard configuration paths found", {"platform": platform}, [f"Ensure {iid} is properly configured for {platform}"])
+            return _result(
+                "config_valid",
+                VerificationStatus.PASSED,
+                "Configuration paths found",
+                {"paths": checked},
+            )
+        return _result(
+            "config_valid",
+            VerificationStatus.WARNING,
+            "No standard configuration paths found",
+            {"platform": platform},
+            [f"Ensure {iid} is properly configured for {platform}"],
+        )
 
     def _check_deps(self, _iid: str) -> VerificationResult:
         if shutil.which("git") is None:
-            return _result("dependencies_met", VerificationStatus.FAILED, "Missing required dependencies: git", {"dependencies": [{"name": "git", "installed": False, "required": True}]}, ["Install git"])
-        return _result("dependencies_met", VerificationStatus.PASSED, "All dependencies satisfied", {"dependencies": [{"name": "git", "installed": True, "required": True}]})
+            return _result(
+                "dependencies_met",
+                VerificationStatus.FAILED,
+                "Missing required dependencies: git",
+                {"dependencies": [{"name": "git", "installed": False, "required": True}]},
+                ["Install git"],
+            )
+        return _result(
+            "dependencies_met",
+            VerificationStatus.PASSED,
+            "All dependencies satisfied",
+            {"dependencies": [{"name": "git", "installed": True, "required": True}]},
+        )
 
     @staticmethod
     def _determine_overall_status(results: list[VerificationResult]) -> VerificationStatus:

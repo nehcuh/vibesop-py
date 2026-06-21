@@ -11,7 +11,7 @@ Covers:
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 from pydantic import ValidationError
@@ -23,7 +23,6 @@ from vibesop.core.loop.models import (
     LoopStatus,
     LoopTrigger,
 )
-
 
 # ──────────────────────────────────────────────────────────────────
 # Fixtures
@@ -43,7 +42,7 @@ def _valid_spec_kwargs(**overrides):
 
 
 def _make_run(loop_name: str = "ci-watcher", success: bool = True) -> LoopRunRecord:
-    started = datetime.now(timezone.utc)
+    started = datetime.now(UTC)
     return LoopRunRecord(
         loop_name=loop_name,
         started_at=started,
@@ -89,14 +88,14 @@ def test_spec_accepts_workflow_id_target():
 @pytest.mark.parametrize(
     "bad_name",
     [
-        "",                  # empty
-        "CI-Watcher",        # uppercase
-        "ci_watcher",        # underscore
-        "-leading",          # leading dash
-        "trailing-",         # trailing dash
-        "has space",         # whitespace
-        "123",               # digits-only is allowed by pattern actually,
-                             # but the next case asserts a clearer rejection
+        "",  # empty
+        "CI-Watcher",  # uppercase
+        "ci_watcher",  # underscore
+        "-leading",  # leading dash
+        "trailing-",  # trailing dash
+        "has space",  # whitespace
+        "123",  # digits-only is allowed by pattern actually,
+        # but the next case asserts a clearer rejection
     ],
 )
 def test_spec_rejects_invalid_name(bad_name):
@@ -138,11 +137,11 @@ def test_spec_rejects_cron_with_out_of_range_value():
 
 def test_spec_accepts_typical_cron_expressions():
     for schedule in (
-        "*/15 * * * *",     # every 15 min
-        "0 9 * * 1-5",      # weekday 9am
-        "30 22 * * *",      # daily 22:30
-        "0 0 1 * *",        # monthly on the 1st
-        "0 0 1 1 *",        # yearly on Jan 1
+        "*/15 * * * *",  # every 15 min
+        "0 9 * * 1-5",  # weekday 9am
+        "30 22 * * *",  # daily 22:30
+        "0 0 1 * *",  # monthly on the 1st
+        "0 0 1 1 *",  # yearly on Jan 1
         "*/30 9-17 * * 1-5",  # every 30 min during business hours
     ):
         spec = LoopSpec(**_valid_spec_kwargs(schedule=schedule))

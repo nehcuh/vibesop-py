@@ -26,8 +26,9 @@ Examples:
     vibe install --list
 """
 
-import typer
 from pathlib import Path
+
+import typer
 from rich.console import Console
 from rich.progress import BarColumn, Progress, SpinnerColumn, TaskProgressColumn, TextColumn
 from rich.table import Table
@@ -95,9 +96,7 @@ def install(
     elif platforms_source != "cli-flag":
         label = "project" if platforms_source == "project-config" else "user"
         target_str = "all platforms" if platforms_list is None else ", ".join(platforms_list)
-        console.print(
-            f"[dim]Using {label} config platforms: {target_str}[/dim]\n"
-        )
+        console.print(f"[dim]Using {label} config platforms: {target_str}[/dim]\n")
 
     # List mode
     if list_available:

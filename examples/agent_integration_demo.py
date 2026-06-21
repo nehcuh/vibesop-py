@@ -8,7 +8,6 @@ Usage:
     python examples/agent_integration_demo.py
 """
 
-
 from vibesop.agent import AgentRouter, SimpleLLM, SimpleResponse
 
 
@@ -29,7 +28,9 @@ class DemoAgentLLM(SimpleLLM):
             "optimize performance": '{"skill_id": "superpowers/optimize", "confidence": 0.85}',
         }
 
-    def call(self, prompt: str, _max_tokens: int = 100, _temperature: float = 0.1) -> SimpleResponse:
+    def call(
+        self, prompt: str, _max_tokens: int = 100, _temperature: float = 0.1
+    ) -> SimpleResponse:
         """Simulate LLM call for routing.
 
         In production, this would call the Agent's actual LLM.
@@ -42,8 +43,7 @@ class DemoAgentLLM(SimpleLLM):
 
         # Default fallback response
         return SimpleResponse(
-            content='{"skill_id": "fallback-llm", "confidence": 0.5}',
-            model=self.model_name
+            content='{"skill_id": "fallback-llm", "confidence": 0.5}', model=self.model_name
         )
 
 
@@ -61,8 +61,8 @@ def demo_basic_routing():
     queries = [
         "帮我审查代码质量",  # Chinese: code review
         "帮我调试这个错误",  # Chinese: debug error
-        "code review",      # English
-        "debug this error", # English
+        "code review",  # English
+        "debug this error",  # English
     ]
 
     for query in queries:
@@ -89,8 +89,8 @@ def demo_multi_turn_reroute():
     # Simulate a multi-turn conversation
     conversation = [
         ("帮我调试这个错误", "systematic-debugging"),  # Turn 1: debugging
-        ("继续排查", "systematic-debugging"),         # Turn 2: continue debugging
-        ("帮我审查代码质量", None),                   # Turn 3: switch to review
+        ("继续排查", "systematic-debugging"),  # Turn 2: continue debugging
+        ("帮我审查代码质量", None),  # Turn 3: switch to review
     ]
 
     for i, (query, current_skill) in enumerate(conversation, 1):

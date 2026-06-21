@@ -45,7 +45,10 @@ def _get_candidates(cm: Any, definitions: dict) -> list[dict[str, Any]]:
     mock_cs.return_value.get_p0_skills.return_value = []
 
     with patch("vibesop.core.optimization.cold_start.get_cold_start_strategy", mock_cs):
-        with patch("vibesop.core.skills.config_manager.SkillConfigManager.get_skill_config", return_value=None):
+        with patch(
+            "vibesop.core.skills.config_manager.SkillConfigManager.get_skill_config",
+            return_value=None,
+        ):
             return cm.get_candidates()
 
 
@@ -61,7 +64,9 @@ class TestDeduplication:
     def test_deduplicates_same_id_different_case(self, candidate_manager: Any) -> None:
         definitions = {
             "gstack/office-hours": _make_definition("gstack/office-hours", name="Office Hours"),
-            "gstack/Office-Hours": _make_definition("gstack/Office-Hours", name="Office Hours Duplicate"),
+            "gstack/Office-Hours": _make_definition(
+                "gstack/Office-Hours", name="Office Hours Duplicate"
+            ),
         }
         candidates = _get_candidates(candidate_manager, definitions)
         ids = [c["id"] for c in candidates]

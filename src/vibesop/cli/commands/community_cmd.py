@@ -201,7 +201,8 @@ def discover(
     if query:
         q = query.lower()
         skills = [
-            s for s in skills
+            s
+            for s in skills
             if q in s.get("title", "").lower() or q in (s.get("body") or "").lower()
         ]
         if not skills:
@@ -239,7 +240,7 @@ def discover(
     console.print()
     console.print(
         f"[dim]{len(skills)} skills in community. "
-        'Sort by reactions (github API sort=reactions).[/dim]'
+        "Sort by reactions (github API sort=reactions).[/dim]"
     )
     console.print(
         "[dim]To install a community skill, copy its SKILL.md to "

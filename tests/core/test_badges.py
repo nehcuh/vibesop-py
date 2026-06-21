@@ -138,7 +138,9 @@ class TestBadgeTracker:
         assert len(new_badges) == 1
         assert new_badges[0].type == BadgeType.FIRST_FEEDBACK
 
-    def test_check_feedback_event_ecosystem_guardian(self, tmp_path: Path, tmp_path_factory: Any) -> None:
+    def test_check_feedback_event_ecosystem_guardian(
+        self, tmp_path: Path, tmp_path_factory: Any
+    ) -> None:
         # Need to mock feedback file to have 5+ records
         data_path = tmp_path / "badges.json"
         tracker = BadgeTracker(data_path)

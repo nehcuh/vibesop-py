@@ -84,9 +84,7 @@ def _load_ecosystem_health(project_root: Path) -> Panel:
         lines.append(_grade_bar(grade_counts, evaluated))
     else:
         lines.append("")
-        lines.append(
-            "[dim]No evaluation data yet. Skills are evaluated as you use them.[/dim]"
-        )
+        lines.append("[dim]No evaluation data yet. Skills are evaluated as you use them.[/dim]")
 
     content = "\n".join(lines)
     return Panel(content, title="[bold]Ecosystem Health[/bold]", border_style="cyan", box=ROUNDED)
@@ -110,7 +108,7 @@ def _load_recent_activity(project_root: Path) -> Panel:
     if not records:
         return Panel(
             "[dim]No routing activity yet.\n"
-            "Try [bold cyan]vibe route \"help me debug this error\"[/bold cyan] to get started![/dim]",
+            'Try [bold cyan]vibe route "help me debug this error"[/bold cyan] to get started![/dim]',
             title="[bold]Recent Activity[/bold]",
             border_style="dim",
             box=ROUNDED,
@@ -135,9 +133,7 @@ def _load_recommendations() -> Panel:
         recommender = SkillRecommender()
         recs = recommender.recommend_for_project()
         missing = recommender.detect_missing_skills()
-        all_recs = list(recs) + [
-            r for r in missing if r.skill_id not in {s.skill_id for s in recs}
-        ]
+        all_recs = list(recs) + [r for r in missing if r.skill_id not in {s.skill_id for s in recs}]
     except Exception:
         return Panel(
             "[dim]Recommendations not available[/dim]",
@@ -156,9 +152,7 @@ def _load_recommendations() -> Panel:
 
     lines: list[str] = []
     for r in all_recs[:5]:
-        lines.append(
-            f"[cyan]{r.skill_id}[/cyan] [dim]—[/dim] {r.reason[:80]}"
-        )
+        lines.append(f"[cyan]{r.skill_id}[/cyan] [dim]—[/dim] {r.reason[:80]}")
 
     content = "\n".join(lines)
     return Panel(content, title="[bold]For You[/bold]", border_style="green", box=ROUNDED)
@@ -188,8 +182,7 @@ def _load_warnings(project_root: Path) -> Panel:
         suggestions = loop.analyze_all(auto_deprecate=False)
         for s in suggestions[:3]:
             if s.action == "deprecate" and s.skill_id not in [
-                w.split(" —")[0].replace("[yellow]", "").replace("[/yellow]", "")
-                for w in warnings
+                w.split(" —")[0].replace("[yellow]", "").replace("[/yellow]", "") for w in warnings
             ]:
                 warnings.append(
                     f"[yellow]{s.skill_id}[/yellow] — [red]suggested deprecation[/red]: "
@@ -278,10 +271,7 @@ def _load_community_trending() -> Panel | None:
             title = issue.get("title", "").replace("[技能分享] ", "").strip()
             reactions = issue.get("reactions", {}).get("+1", 0)
             url_link = issue.get("html_url", "")
-            lines.append(
-                f"[cyan][link={url_link}]{title}[/link][/cyan] "
-                f"[dim]👍 {reactions}[/dim]"
-            )
+            lines.append(f"[cyan][link={url_link}]{title}[/link][/cyan] [dim]👍 {reactions}[/dim]")
 
         content = "\n".join(lines)
         return Panel(
@@ -309,7 +299,7 @@ def _load_welcome(is_first: bool) -> Panel | None:
     content = (
         "[bold]Welcome to VibeSOP![/bold]  Your AI-powered skill operating system.\n\n"
         "[dim]Getting started:[/dim]\n"
-        "  [cyan]vibe route \"help me debug this\"[/cyan]  [dim]— route a query to the best skill[/dim]\n"
+        '  [cyan]vibe route "help me debug this"[/cyan]  [dim]— route a query to the best skill[/dim]\n'
         "  [cyan]vibe skills list[/cyan]             [dim]— browse your 45+ available skills[/dim]\n"
         "  [cyan]vibe status[/cyan]                   [dim]— return to this dashboard[/dim]\n\n"
         "[dim]VibeSOP manages your skills so your AI agent can focus on execution.[/dim]"
@@ -323,9 +313,7 @@ def _load_welcome(is_first: bool) -> Panel | None:
 
 
 def status(
-    no_color: bool = typer.Option(
-        False, "--no-color", help="Disable colored output"
-    ),
+    no_color: bool = typer.Option(False, "--no-color", help="Disable colored output"),
 ) -> None:
     """Show a unified snapshot of your VibeSOP skill ecosystem.
 

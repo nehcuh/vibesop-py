@@ -137,11 +137,7 @@ class FeedbackLoop:
             )
 
         # Rule: Grade D, 60+ days unused → warn
-        if (
-            grade == "D"
-            and days_since is not None
-            and days_since >= self.D_STALE_DAYS
-        ):
+        if grade == "D" and days_since is not None and days_since >= self.D_STALE_DAYS:
             return RetentionSuggestion(
                 skill_id=skill_id,
                 action="warn",
@@ -156,11 +152,7 @@ class FeedbackLoop:
             )
 
         # Rule: 90+ days unused with grade C/D/F → archive
-        if (
-            days_since is not None
-            and days_since >= self.ARCHIVE_DAYS
-            and grade in ("C", "D", "F")
-        ):
+        if days_since is not None and days_since >= self.ARCHIVE_DAYS and grade in ("C", "D", "F"):
             return RetentionSuggestion(
                 skill_id=skill_id,
                 action="archive",

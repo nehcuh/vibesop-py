@@ -34,7 +34,7 @@ from vibesop.core.orchestration.parallel_scheduler import (
 )
 from vibesop.core.orchestration.plan_builder import PlanBuilder
 from vibesop.core.orchestration.plan_tracker import PlanTracker
-from vibesop.core.orchestration.reorchestrator import Reorchestrator, ReorchestrationAnalysis
+from vibesop.core.orchestration.reorchestrator import ReorchestrationAnalysis, Reorchestrator
 from vibesop.core.orchestration.summary import generate_execution_summary
 from vibesop.core.orchestration.task_decomposer import SubTask, TaskDecomposer
 from vibesop.core.orchestration.tournament import (
@@ -43,6 +43,13 @@ from vibesop.core.orchestration.tournament import (
     TournamentResult,
     TournamentRunner,
 )
+from vibesop.core.orchestration.verification_loop import (
+    VerificationLoop,
+    VerificationLoopAction,
+    VerificationLoopConfig,
+    VerificationLoopState,
+    execute_plan_with_verification,
+)
 from vibesop.core.orchestration.verifier import (
     VerificationIssue,
     VerificationResult,
@@ -50,13 +57,6 @@ from vibesop.core.orchestration.verifier import (
     VerificationStrictness,
     VerifierAgent,
     verify_step_with_retry,
-)
-from vibesop.core.orchestration.verification_loop import (
-    VerificationLoop,
-    VerificationLoopAction,
-    VerificationLoopConfig,
-    VerificationLoopState,
-    execute_plan_with_verification,
 )
 from vibesop.core.orchestration.workflow_engine import (
     DynamicExecutionResult,
@@ -77,23 +77,23 @@ __all__ = [
     "PhaseInfo",
     "PlanBuilder",
     "PlanTracker",
-    "Reorchestrator",
     "ReorchestrationAnalysis",
+    "Reorchestrator",
     "StepResult",
     "SubTask",
     "TaskDecomposer",
     "TournamentConfig",
     "TournamentResult",
     "TournamentRunner",
-    "VerifierAgent",
     "VerificationIssue",
-    "VerificationResult",
-    "VerificationStatus",
-    "VerificationStrictness",
     "VerificationLoop",
     "VerificationLoopAction",
     "VerificationLoopConfig",
     "VerificationLoopState",
+    "VerificationResult",
+    "VerificationStatus",
+    "VerificationStrictness",
+    "VerifierAgent",
     "WorkflowEngine",
     "WorkflowEngineConfig",
     "execute_plan_sync",

@@ -147,7 +147,9 @@ class TestUnifiedRouterAIBudget:
         )
         prompt_builder = TriagePromptRegistry.render
         router = UnifiedRouter(
-            project_root=tmp_path, config=config, prompt_builder=prompt_builder,
+            project_root=tmp_path,
+            config=config,
+            prompt_builder=prompt_builder,
         )
 
         prompt = router._build_ai_triage_prompt("test", "- skill")

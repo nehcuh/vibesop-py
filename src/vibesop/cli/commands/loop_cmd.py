@@ -28,7 +28,7 @@ Design decisions (Phase 1-1 → 1-5 cumulative):
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import typer
 from pydantic import ValidationError
@@ -96,9 +96,7 @@ def create(
     必须指定 ``--skill`` / ``--query`` / ``--workflow`` 之一作为执行目标。
     """
     if not any([skill_id, query, workflow]):
-        console.print(
-            "[red]❌ 至少需要指定 --skill、--query 或 --workflow 之一[/red]"
-        )
+        console.print("[red]❌ 至少需要指定 --skill、--query 或 --workflow 之一[/red]")
         raise typer.Exit(1)
 
     try:
@@ -146,9 +144,7 @@ def create(
             title="VibeSOP Loop",
         )
     )
-    console.print(
-        f"\n[dim]外部 cron 调用 `vibe loop tick` 即可触发执行。[/dim]"
-    )
+    console.print("\n[dim]外部 cron 调用 `vibe loop tick` 即可触发执行。[/dim]")
 
 
 # ──────────────────────────────────────────────────────────────────
@@ -170,9 +166,7 @@ def list_loops(
     specs = store.list_specs()
 
     if not specs:
-        console.print(
-            "[yellow]没有已创建的 loop。使用 `vibe loop create` 创建第一个。[/yellow]"
-        )
+        console.print("[yellow]没有已创建的 loop。使用 `vibe loop create` 创建第一个。[/yellow]")
         return
 
     pairs: list[tuple[LoopSpec, LoopState]] = []
@@ -186,7 +180,7 @@ def list_loops(
         console.print(f"[yellow]没有匹配状态 '{status}' 的 loop。[/yellow]")
         return
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     table = Table(title=f"VibeSOP Loops ({len(pairs)} shown / {len(specs)} total)")
     table.add_column("Name", style="cyan")
     table.add_column("Schedule")
@@ -199,8 +193,8 @@ def list_loops(
         next_run_str = ""
         if state.status not in _SKIP_STATUSES:
             try:
-                next_run_str = CronExpr(spec.schedule).next_run_after(now).strftime(
-                    "%m-%d %H:%M UTC"
+                next_run_str = (
+                    CronExpr(spec.schedule).next_run_after(now).strftime("%m-%d %H:%M UTC")
                 )
             except (ValueError, RuntimeError):
                 next_run_str = "?"
@@ -232,9 +226,7 @@ def show(name: str = typer.Argument(..., help="loop 名称")) -> None:
 
     state = store.load_state(name) or LoopState(spec=spec)
     icon = _STATUS_ICONS.get(state.status, "⚪")
-    last_run = (
-        state.last_run_at.strftime("%Y-%m-%d %H:%M UTC") if state.last_run_at else "never"
-    )
+    last_run = state.last_run_at.strftime("%Y-%m-%d %H:%M UTC") if state.last_run_at else "never"
 
     info = (
         f"[bold]Name:[/bold]           {spec.name}\n"
@@ -254,10 +246,7 @@ def show(name: str = typer.Argument(..., help="loop 名称")) -> None:
         for r in state.recent_runs[-10:]:
             run_icon = "✅" if r.success else "❌"
             ts = r.started_at.strftime("%m-%d %H:%M")
-            summary = (
-                r.output_summary[:55]
-                or (r.error[:55] if r.error else "—")
-            )
+            summary = r.output_summary[:55] or (r.error[:55] if r.error else "—")
             info += f"  {run_icon} {ts} | {summary}\n"
 
     console.print(Panel(info, title=f"Loop: {spec.name}"))
@@ -380,8 +369,7 @@ def tick(
 
     if skipped and not eligible:
         console.print(
-            f"[yellow]没有可执行的 loop — {len(skipped)} 个被跳过"
-            f"（PAUSED/DEAD/RETIRED）。[/yellow]"
+            f"[yellow]没有可执行的 loop — {len(skipped)} 个被跳过（PAUSED/DEAD/RETIRED）。[/yellow]"
         )
         return
 
@@ -397,9 +385,7 @@ def tick(
 
     # Dry-run: report and stop.
     if dry_run:
-        console.print(
-            f"[bold cyan]{len(triggered)}[/bold cyan] 个 loop 会被触发 (dry-run):"
-        )
+        console.print(f"[bold cyan]{len(triggered)}[/bold cyan] 个 loop 会被触发 (dry-run):")
         for spec in triggered:
             console.print(f"  • {spec.name} — {_target_str(spec, truncate=40)}")
         return
@@ -412,10 +398,7 @@ def tick(
         record = execute_loop_tick(spec, store=store)
         if record.success:
             success_count += 1
-            console.print(
-                f"  [green]✅[/green] {record.matched_skill} "
-                f"({record.duration_s}s)"
-            )
+            console.print(f"  [green]✅[/green] {record.matched_skill} ({record.duration_s}s)")
         else:
             failure_count += 1
             console.print(f"  [red]❌[/red] {record.error[:80]}")

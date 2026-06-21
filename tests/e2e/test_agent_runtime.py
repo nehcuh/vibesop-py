@@ -233,7 +233,10 @@ class TestAgentRuntimeFullChain:
         )
 
         assert present_result.message != ""
-        assert "fallback" in present_result.message.lower() or "no match" in present_result.message.lower()
+        assert (
+            "fallback" in present_result.message.lower()
+            or "no match" in present_result.message.lower()
+        )
         assert present_result.structured is not None
         assert present_result.structured.get("primary") is None
 
@@ -258,6 +261,7 @@ class TestPlatformAdapterAgentRuntime:
         assert track_hook.exists(), "vibesop-track.sh should be generated"
 
         import stat
+
         route_stat = route_hook.stat()
         track_stat = track_hook.stat()
         assert route_stat.st_mode & stat.S_IXUSR, "vibesop-route.sh should be executable"
@@ -371,7 +375,13 @@ class TestPlatformAdapterAgentRuntime:
         """E2E: OpenCode plugin template files exist as reference implementation."""
         template_dir = (
             Path(__file__).parent.parent.parent
-            / "src" / "vibesop" / "adapters" / "templates" / "opencode" / "plugin" / "vibesop"
+            / "src"
+            / "vibesop"
+            / "adapters"
+            / "templates"
+            / "opencode"
+            / "plugin"
+            / "vibesop"
         )
 
         index_ts = template_dir / "index.ts"

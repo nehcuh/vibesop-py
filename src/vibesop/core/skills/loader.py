@@ -88,6 +88,7 @@ class SkillLoader:
 
     def _compute_project_hash(self) -> str:
         import hashlib
+
         return hashlib.md5(str(self.project_root).encode()).hexdigest()[:12]
 
     @property
@@ -202,10 +203,12 @@ class SkillLoader:
 
         # Override id + namespace on a copy of the parsed SkillSpec.
         # parse_skill_md() already returns SkillSpec; no field-by-field copy needed.
-        metadata = base.model_copy(update={
-            "id": skill_id,
-            "namespace": ext_metadata.pack_name or "external",
-        })
+        metadata = base.model_copy(
+            update={
+                "id": skill_id,
+                "namespace": ext_metadata.pack_name or "external",
+            }
+        )
         self._validate_algorithms(metadata)
 
         # Read skill content from source file

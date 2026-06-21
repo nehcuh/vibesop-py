@@ -243,7 +243,9 @@ class TestSkillSuggestionCollector:
 
     def test_persistence_skips_corrupted_lines(self, tmp_path: Path):
         storage_file = tmp_path / "skill_candidates.jsonl"
-        storage_file.write_text('not json\n{"id": "sug_x", "pattern_steps": [], "success_rate": 0.5, "occurrences": 1, "suggested_name": "n", "created_at": "2026-01-01T12:00:00"}\n')
+        storage_file.write_text(
+            'not json\n{"id": "sug_x", "pattern_steps": [], "success_rate": 0.5, "occurrences": 1, "suggested_name": "n", "created_at": "2026-01-01T12:00:00"}\n'
+        )
 
         collector = SkillSuggestionCollector(storage_dir=tmp_path)
         assert collector.get("sug_x") is not None

@@ -31,7 +31,9 @@ class TestAnalyzeCommand:
         assert "No session file found" in result.stdout
 
     @patch("vibesop.core.session_analyzer.SessionAnalyzer")
-    def test_analyze_session_with_suggestions(self, mock_analyzer_cls, monkeypatch, tmp_path) -> None:
+    def test_analyze_session_with_suggestions(
+        self, mock_analyzer_cls, monkeypatch, tmp_path
+    ) -> None:
         """Test analyze session with skill suggestions."""
         monkeypatch.chdir(tmp_path)
         session_file = tmp_path / "session.jsonl"
@@ -53,7 +55,9 @@ class TestAnalyzeCommand:
         assert "Found 1 potential skills" in result.stdout
 
     @patch("vibesop.core.session_analyzer.SessionAnalyzer")
-    def test_analyze_session_empty_suggestions(self, mock_analyzer_cls, monkeypatch, tmp_path) -> None:
+    def test_analyze_session_empty_suggestions(
+        self, mock_analyzer_cls, monkeypatch, tmp_path
+    ) -> None:
         """Test analyze session with no patterns."""
         monkeypatch.chdir(tmp_path)
         session_file = tmp_path / "session.jsonl"

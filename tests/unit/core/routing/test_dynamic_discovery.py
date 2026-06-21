@@ -6,8 +6,6 @@ from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from vibesop.core.routing.dynamic_discovery import DiscoveredSkill, DynamicSkillDiscovery
 
 
@@ -39,7 +37,9 @@ class TestDynamicSkillDiscovery:
         """Reset singleton loader after each test."""
         DynamicSkillDiscovery._loader = None
 
-    def _make_meta(self, name: str = "Skill", description: str = "", install_path: Path | None = None) -> Any:
+    def _make_meta(
+        self, name: str = "Skill", description: str = "", install_path: Path | None = None
+    ) -> Any:
         """Factory for mock ExternalSkillMetadata-like objects."""
         meta = MagicMock()
         meta.base_metadata.name = name

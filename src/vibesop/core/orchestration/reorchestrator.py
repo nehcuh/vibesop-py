@@ -184,15 +184,14 @@ class Reorchestrator:
         remaining = [
             f"- Step {s.step_number}: {s.intent} (status: {s.status.value})"
             for s in plan.steps
-            if s.step_number > completed_step.step_number
-            and s.status.value == "pending"
+            if s.step_number > completed_step.step_number and s.status.value == "pending"
         ]
         remaining_text = "\n".join(remaining) if remaining else "None (all steps executed)"
 
         return f"""Analyze the execution state of a multi-step plan.
 
 Original goal: {plan.original_query}
-Detected intents: {', '.join(plan.detected_intents)}
+Detected intents: {", ".join(plan.detected_intents)}
 
 Completed step: {completed_step.intent}
 Step output: {step_output[:500]}

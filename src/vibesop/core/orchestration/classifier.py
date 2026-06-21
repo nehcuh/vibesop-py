@@ -109,10 +109,18 @@ _TASK_TYPE_PATTERNS: dict[str, WorkflowPattern] = {
 # ── Multi-dimensional review detection ────────────────────────────────────────
 
 _REVIEW_EXACT_KEYWORDS: list[str] = [
-    "评审", "review", "审计", "audit",
-    "多维度", "multi-dimensional", "multi dimensional",
-    "全面评审", "comprehensive review", "deep review",
-    "深入评审", "thorough review",
+    "评审",
+    "review",
+    "审计",
+    "audit",
+    "多维度",
+    "multi-dimensional",
+    "multi dimensional",
+    "全面评审",
+    "comprehensive review",
+    "deep review",
+    "深入评审",
+    "thorough review",
 ]
 
 _REVIEW_SEMANTIC_CLUSTERS: dict[str, list[str]] = {
@@ -196,17 +204,12 @@ class ClassifierAgent:
         query_lower = query.lower()
 
         # Count exact keyword matches
-        exact_matches = sum(
-            1 for kw in _REVIEW_EXACT_KEYWORDS
-            if kw in query_lower or kw in query
-        )
+        exact_matches = sum(1 for kw in _REVIEW_EXACT_KEYWORDS if kw in query_lower or kw in query)
 
         # Count per-dimension hits
         dimension_hits: dict[str, int] = {}
         for dim, keywords in _REVIEW_SEMANTIC_CLUSTERS.items():
-            dimension_hits[dim] = sum(
-                1 for kw in keywords if kw in query_lower or kw in query
-            )
+            dimension_hits[dim] = sum(1 for kw in keywords if kw in query_lower or kw in query)
 
         covered_dimensions = [dim for dim, hits in dimension_hits.items() if hits > 0]
         total_hits = sum(dimension_hits.values())
@@ -282,9 +285,7 @@ class ClassifierAgent:
         # Check sub-task task types
         if sub_tasks:
             task_types = [
-                getattr(st, "task_type", "")
-                for st in sub_tasks
-                if getattr(st, "task_type", "")
+                getattr(st, "task_type", "") for st in sub_tasks if getattr(st, "task_type", "")
             ]
             for tt in task_types:
                 if tt in _TASK_TYPE_PATTERNS:

@@ -53,14 +53,16 @@ def detect_spec_version(frontmatter: dict) -> SpecVersion:
     Heuristic: presence of v3-only fields → v3, v2-only → v2, otherwise v1.
     """
     has_v3_fields = any(
-        frontmatter.get(f) for f in FIELD_VERSION_REQUIREMENTS
+        frontmatter.get(f)
+        for f in FIELD_VERSION_REQUIREMENTS
         if FIELD_VERSION_REQUIREMENTS[f] == SpecVersion.V3_0
     )
     if has_v3_fields:
         return SpecVersion.V3_0
 
     has_v2_fields = any(
-        frontmatter.get(f) for f in FIELD_VERSION_REQUIREMENTS
+        frontmatter.get(f)
+        for f in FIELD_VERSION_REQUIREMENTS
         if FIELD_VERSION_REQUIREMENTS[f] == SpecVersion.V2_0
     )
     if has_v2_fields:

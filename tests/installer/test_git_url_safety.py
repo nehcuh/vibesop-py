@@ -83,9 +83,7 @@ class TestGitCloneRejectsUnsafeUrl:
         """http:// is MITM-able; we require https://."""
         analyzer = RepoAnalyzer()
         with patch("vibesop.installer.analyzer.subprocess") as mock_sp:
-            result = analyzer.git_clone(
-                "http://example.com/foo", MagicMock(spec=[])
-            )
+            result = analyzer.git_clone("http://example.com/foo", MagicMock(spec=[]))
         assert result is False
         mock_sp.run.assert_not_called()
 
@@ -95,16 +93,12 @@ class TestGitCloneAllowsSafeUrl:
     pass the protocol.ext.allow=never config to defense-in-depth the
     allowlist."""
 
-    def test_https_url_invokes_subprocess_with_ext_never_config(
-        self, tmp_path
-    ) -> None:
+    def test_https_url_invokes_subprocess_with_ext_never_config(self, tmp_path) -> None:
         analyzer = RepoAnalyzer()
         dest = tmp_path / "dest"
         with patch("vibesop.installer.analyzer.subprocess") as mock_sp:
             mock_sp.run.return_value = MagicMock(returncode=0)
-            result = analyzer.git_clone(
-                "https://github.com/foo/bar.git", dest
-            )
+            result = analyzer.git_clone("https://github.com/foo/bar.git", dest)
         assert result is True
         mock_sp.run.assert_called_once()
         cmd = mock_sp.run.call_args.args[0]

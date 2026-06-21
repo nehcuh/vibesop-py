@@ -74,7 +74,9 @@ class TestKimiCliAdapter:
         result = adapter.render_config(manifest, tmp_path)
 
         assert result.success
-        assert result.file_count == 9  # config.toml + README.md + skill + AGENTS.md + hook + docs/(4 files)
+        assert (
+            result.file_count == 9
+        )  # config.toml + README.md + skill + AGENTS.md + hook + docs/(4 files)
         assert (tmp_path / "config.toml").exists()
         assert (tmp_path / "README.md").exists()
         assert (tmp_path / "AGENTS.md").exists()
@@ -273,7 +275,7 @@ class TestKimiCliAdapter:
         content = hook_path.read_text()
         assert "AgentRuntime" in content, "AgentRuntime delegation missing"
         assert "handle_query_for_hook" in content, "handle_query_for_hook call missing"
-        assert ("python3 -c" in content or "uv run python" in content), "Python invocation missing"
+        assert "python3 -c" in content or "uv run python" in content, "Python invocation missing"
         assert "vibe" in content, "vibe reference missing"
 
     def test_config_toml_has_hooks_section(self, tmp_path: Path) -> None:

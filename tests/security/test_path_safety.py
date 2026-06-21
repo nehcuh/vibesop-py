@@ -72,6 +72,7 @@ class TestPathSafety:
     def test_check_traversal_attack(self, tmp_path: Path) -> None:
         """Test check_traversal blocks traversal attacks."""
         import platform
+
         safety = PathSafety()
 
         # Unix-style traversal attempts

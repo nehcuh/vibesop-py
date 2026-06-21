@@ -6,8 +6,6 @@ from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from vibesop.core.matching import RoutingContext
 from vibesop.core.models import RoutingResult, SkillRoute
 from vibesop.core.routing.context_mixin import RouterContextMixin

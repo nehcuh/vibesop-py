@@ -280,9 +280,7 @@ class TestApplyQualityBoost:
         matches = [_make_match("a", 0.80)]
 
         mock_eval = MagicMock()
-        mock_eval.evaluate_skill.return_value = MagicMock(
-            total_routes=5, grade="A"
-        )
+        mock_eval.evaluate_skill.return_value = MagicMock(total_routes=5, grade="A")
 
         svc._evaluator = mock_eval
         svc._apply_quality_boost(matches)
@@ -296,9 +294,7 @@ class TestApplyQualityBoost:
         matches = [_make_match("a", 0.80)]
 
         mock_eval = MagicMock()
-        mock_eval.evaluate_skill.return_value = MagicMock(
-            total_routes=5, grade="A"
-        )
+        mock_eval.evaluate_skill.return_value = MagicMock(total_routes=5, grade="A")
 
         svc._evaluator = mock_eval
         result = svc._apply_quality_boost(matches)
@@ -313,9 +309,7 @@ class TestApplyQualityBoost:
         matches = [_make_match("a", 0.80)]
 
         mock_eval = MagicMock()
-        mock_eval.evaluate_skill.return_value = MagicMock(
-            total_routes=10, grade="F"
-        )
+        mock_eval.evaluate_skill.return_value = MagicMock(total_routes=10, grade="F")
 
         svc._evaluator = mock_eval
         result = svc._apply_quality_boost(matches)
@@ -329,9 +323,7 @@ class TestApplyQualityBoost:
         matches = [_make_match("a", 0.80)]
 
         mock_eval = MagicMock()
-        mock_eval.evaluate_skill.return_value = MagicMock(
-            total_routes=2, grade="A"
-        )
+        mock_eval.evaluate_skill.return_value = MagicMock(total_routes=2, grade="A")
 
         svc._evaluator = mock_eval
         result = svc._apply_quality_boost(matches)
@@ -630,9 +622,7 @@ class TestApplyInstinctBoost:
         svc = _make_service()
         matches = [_make_match("xyz", 0.80)]
 
-        instinct = type(
-            "Instinct", (), {"action": "do something unrelated", "confidence": 0.9}
-        )()
+        instinct = type("Instinct", (), {"action": "do something unrelated", "confidence": 0.9})()
 
         learner = MagicMock()
         learner.find_matching.return_value = [instinct]

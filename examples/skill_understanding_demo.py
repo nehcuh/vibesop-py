@@ -11,7 +11,6 @@
     python examples/skill_understanding_demo.py
 """
 
-
 # 添加项目路径
 import sys
 from pathlib import Path
@@ -34,9 +33,9 @@ console = Console()
 def demo_understanding_skill(skill_id: str, skill_path: Path) -> None:
     """演示理解和配置单个技能"""
 
-    console.print(f"\n{'='*60}")
+    console.print(f"\n{'=' * 60}")
     console.print(f"[bold cyan]🔍 Understanding Skill: {skill_id}[/bold cyan]")
-    console.print(f"{'='*60}\n")
+    console.print(f"{'=' * 60}\n")
 
     # 显示原始信息
     console.print("[dim]原始信息 (Raw Info):[/dim]")
@@ -117,6 +116,7 @@ def demo_understanding_skill(skill_id: str, skill_path: Path) -> None:
         # 显示配置文件内容
         console.print("\n[dim]配置文件内容:[/dim]")
         import yaml
+
         with open(config_file) as f:
             config_data = yaml.safe_load(f)
 
@@ -129,9 +129,9 @@ def demo_understanding_skill(skill_id: str, skill_path: Path) -> None:
 def demo_rule_engine() -> None:
     """演示规则引擎"""
 
-    console.print("\n" + "="*60)
+    console.print("\n" + "=" * 60)
     console.print("[bold cyan]📐 规则引擎演示[/bold cyan]")
-    console.print("="*60 + "\n")
+    console.print("=" * 60 + "\n")
 
     # 演示类别规则
     console.print("[bold]类别规则示例:[/bold]\n")
@@ -154,9 +154,9 @@ def demo_rule_engine() -> None:
 def demo_keyword_analysis() -> None:
     """演示关键词分析"""
 
-    console.print("\n" + "="*60)
+    console.print("\n" + "=" * 60)
     console.print("[bold cyan]🔑 关键词分析演示[/bold cyan]")
-    console.print("="*60 + "\n")
+    console.print("=" * 60 + "\n")
 
     # 测试文本
     test_cases = [
@@ -182,7 +182,7 @@ def demo_keyword_analysis() -> None:
         console.print(f"[bold]{test_case['name']}:[/bold]")
         console.print(f"  [dim]文本:[/dim] {test_case['text']}")
 
-        analysis = KeywordAnalyzer.analyze(test_case['text'])
+        analysis = KeywordAnalyzer.analyze(test_case["text"])
 
         console.print(f"  关键词: {', '.join(analysis.keywords)}")
         console.print(f"  需要 LLM: {'是' if analysis.requires_llm else '否'}")
@@ -204,9 +204,9 @@ def main() -> None:
     demo_keyword_analysis()
 
     # 3. 演示完整流程（如果技能存在）
-    console.print("\n" + "="*60)
+    console.print("\n" + "=" * 60)
     console.print("[bold cyan]🔄 完整流程演示[/bold cyan]")
-    console.print("="*60 + "\n")
+    console.print("=" * 60 + "\n")
 
     # 检查是否有可测试的技能
     test_skills = [

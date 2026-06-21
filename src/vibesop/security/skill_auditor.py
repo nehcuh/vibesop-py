@@ -350,8 +350,9 @@ class SkillSecurityAuditor:
         is_trusted = False
         if pack_name or source_url:
             try:
-                from vibesop.core.skills.trust import TrustStore
                 from vibesop.constants import TRUSTED_PACKS
+                from vibesop.core.skills.trust import TrustStore
+
                 store = TrustStore()
                 is_trusted = (
                     (pack_name and store.is_trusted_pack(pack_name))
@@ -574,9 +575,7 @@ class SkillSecurityAuditor:
             from vibesop.core.skills.trust import TrustStore
 
             store = TrustStore()
-            return bool(
-                store.is_trusted_pack(pack_name) or pack_name in TRUSTED_PACKS
-            )
+            return bool(store.is_trusted_pack(pack_name) or pack_name in TRUSTED_PACKS)
         except Exception:
             return False
 

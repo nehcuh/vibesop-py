@@ -27,7 +27,11 @@ def _make_routing_result(has_match: bool = True) -> RoutingResult:
         alternatives=[],
         routing_path=[RoutingLayer.KEYWORD],
         layer_details=[
-            LayerDetail(layer=RoutingLayer.KEYWORD, matched=has_match, reason="matched" if has_match else "no match"),
+            LayerDetail(
+                layer=RoutingLayer.KEYWORD,
+                matched=has_match,
+                reason="matched" if has_match else "no match",
+            ),
         ],
         query="test query",
         duration_ms=10.0,

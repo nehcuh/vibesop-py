@@ -12,8 +12,6 @@ import subprocess
 from pathlib import Path
 from unittest.mock import patch
 
-import pytest
-
 from vibesop.core.prompt_chain import ContainerValidator, ValidationReport
 
 

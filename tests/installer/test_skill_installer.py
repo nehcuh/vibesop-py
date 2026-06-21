@@ -54,9 +54,7 @@ class TestSkillInstaller:
         installer = SkillInstaller()
         skill_dir = tmp_path / "my-skill"
         skill_dir.mkdir()
-        (skill_dir / "SKILL.md").write_text(
-            "---\nid: my-skill\nname: My Skill\n---\n"
-        )
+        (skill_dir / "SKILL.md").write_text("---\nid: my-skill\nname: My Skill\n---\n")
         project_path = tmp_path / "project"
         project_path.mkdir()
 
@@ -115,9 +113,7 @@ class TestSkillInstaller:
         installer = SkillInstaller()
         skill_dir = tmp_path / "my-skill"
         skill_dir.mkdir()
-        (skill_dir / "SKILL.md").write_text(
-            "---\nid: my-skill\nname: My Skill\n---\n"
-        )
+        (skill_dir / "SKILL.md").write_text("---\nid: my-skill\nname: My Skill\n---\n")
         # Create dependency skill
         dep_dir = tmp_path / "dep-skill"
         dep_dir.mkdir()
@@ -146,9 +142,7 @@ class TestSkillInstaller:
         installer = SkillInstaller()
         skill_dir = tmp_path / "my-skill"
         skill_dir.mkdir()
-        (skill_dir / "SKILL.md").write_text(
-            "---\nid: my-skill\nname: My Skill\n---\n"
-        )
+        (skill_dir / "SKILL.md").write_text("---\nid: my-skill\nname: My Skill\n---\n")
         project_path = tmp_path / "project"
         project_path.mkdir()
 
@@ -195,9 +189,7 @@ class TestSkillInstaller:
         installer = SkillInstaller()
         skill_dir = tmp_path / "listed-skill"
         skill_dir.mkdir()
-        (skill_dir / "SKILL.md").write_text(
-            "---\nid: listed-skill\nname: Listed Skill\n---\n"
-        )
+        (skill_dir / "SKILL.md").write_text("---\nid: listed-skill\nname: Listed Skill\n---\n")
         project_path = tmp_path / "project"
         project_path.mkdir()
         installer.install_skill(skill_dir, project_path)

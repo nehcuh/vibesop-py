@@ -1,6 +1,5 @@
 """Tests for IntentInterceptor slash command detection."""
 
-
 from vibesop.agent.runtime.intent_interceptor import (
     IntentInterceptor,
     InterceptionContext,

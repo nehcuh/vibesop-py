@@ -1,6 +1,5 @@
 """Tests for Skill Governance (Phase 3): enable/disable and scope enforcement."""
 
-
 import pytest
 
 from vibesop.core.routing.unified import UnifiedRouter

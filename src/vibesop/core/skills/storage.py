@@ -26,7 +26,6 @@ import json
 import logging
 import shutil
 import tempfile
-import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, ClassVar
@@ -241,9 +240,7 @@ class SkillStorage:
             if member.issym() or member.islnk():
                 target = member.linkname
                 if target.startswith("/") or ".." in Path(target).parts:
-                    raise ValueError(
-                        f"Unsafe tar link rejected: {name!r} -> {target!r}"
-                    )
+                    raise ValueError(f"Unsafe tar link rejected: {name!r} -> {target!r}")
         # Production path uses extractall(filter='data') at line ~199
         # (PEP-706); this manual method is documentation-only and is
         # exercised by test_storage_tar_safety.py. All members have been

@@ -22,16 +22,18 @@ class TestRetentionPolicy:
         from vibesop.core.skills.evaluator import SkillEvaluation
 
         policy = RetentionPolicy()
-        policy._evaluator.evaluate_skill = MagicMock(return_value=SkillEvaluation(
-            skill_id="bad-skill",
-            total_routes=2,
-            routing_accuracy=0.0,
-            user_satisfaction=0.0,
-            execution_success=0.0,
-            usage_frequency=0.0,
-            health_score=0.0,
-            last_used="2020-01-01T00:00:00",
-        ))
+        policy._evaluator.evaluate_skill = MagicMock(
+            return_value=SkillEvaluation(
+                skill_id="bad-skill",
+                total_routes=2,
+                routing_accuracy=0.0,
+                user_satisfaction=0.0,
+                execution_success=0.0,
+                usage_frequency=0.0,
+                health_score=0.0,
+                last_used="2020-01-01T00:00:00",
+            )
+        )
 
         result = policy.analyze_skill("bad-skill")
         assert result.action == "remove"
@@ -43,16 +45,18 @@ class TestRetentionPolicy:
         from vibesop.core.skills.evaluator import SkillEvaluation
 
         policy = RetentionPolicy()
-        policy._evaluator.evaluate_skill = MagicMock(return_value=SkillEvaluation(
-            skill_id="stale-skill",
-            total_routes=5,
-            routing_accuracy=0.5,
-            user_satisfaction=0.5,
-            execution_success=0.5,
-            usage_frequency=0.5,
-            health_score=0.5,
-            last_used="2020-01-01T00:00:00",
-        ))
+        policy._evaluator.evaluate_skill = MagicMock(
+            return_value=SkillEvaluation(
+                skill_id="stale-skill",
+                total_routes=5,
+                routing_accuracy=0.5,
+                user_satisfaction=0.5,
+                execution_success=0.5,
+                usage_frequency=0.5,
+                health_score=0.5,
+                last_used="2020-01-01T00:00:00",
+            )
+        )
 
         result = policy.analyze_skill("stale-skill")
         assert result.action == "warn"
@@ -66,16 +70,18 @@ class TestRetentionPolicy:
 
         policy = RetentionPolicy()
         recent = datetime.now().isoformat()
-        policy._evaluator.evaluate_skill = MagicMock(return_value=SkillEvaluation(
-            skill_id="great-skill",
-            total_routes=50,
-            routing_accuracy=1.0,
-            user_satisfaction=1.0,
-            execution_success=1.0,
-            usage_frequency=1.0,
-            health_score=1.0,
-            last_used=recent,
-        ))
+        policy._evaluator.evaluate_skill = MagicMock(
+            return_value=SkillEvaluation(
+                skill_id="great-skill",
+                total_routes=50,
+                routing_accuracy=1.0,
+                user_satisfaction=1.0,
+                execution_success=1.0,
+                usage_frequency=1.0,
+                health_score=1.0,
+                last_used=recent,
+            )
+        )
 
         result = policy.analyze_skill("great-skill")
         assert result.action == "highlight"
@@ -90,23 +96,33 @@ class TestRetentionPolicy:
         def mock_eval(skill_id):
             if skill_id == "bad":
                 return SkillEvaluation(
-                    skill_id="bad", total_routes=1,
-                    routing_accuracy=0.0, user_satisfaction=0.0,
-                    execution_success=0.0, usage_frequency=0.0,
-                    health_score=0.0, last_used="2020-01-01T00:00:00",
+                    skill_id="bad",
+                    total_routes=1,
+                    routing_accuracy=0.0,
+                    user_satisfaction=0.0,
+                    execution_success=0.0,
+                    usage_frequency=0.0,
+                    health_score=0.0,
+                    last_used="2020-01-01T00:00:00",
                 )
             return SkillEvaluation(
-                skill_id="good", total_routes=10,
-                routing_accuracy=0.9, user_satisfaction=0.9,
-                execution_success=0.9, usage_frequency=0.8,
-                health_score=0.8, last_used="2024-01-01T00:00:00",
+                skill_id="good",
+                total_routes=10,
+                routing_accuracy=0.9,
+                user_satisfaction=0.9,
+                execution_success=0.9,
+                usage_frequency=0.8,
+                health_score=0.8,
+                last_used="2024-01-01T00:00:00",
             )
 
         policy._evaluator.evaluate_skill = mock_eval
-        policy._evaluator.evaluate_all_skills = MagicMock(return_value={
-            "good": mock_eval("good"),
-            "bad": mock_eval("bad"),
-        })
+        policy._evaluator.evaluate_all_skills = MagicMock(
+            return_value={
+                "good": mock_eval("good"),
+                "bad": mock_eval("bad"),
+            }
+        )
 
         results = policy.analyze_all()
         assert len(results) == 1

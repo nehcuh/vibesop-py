@@ -117,7 +117,9 @@ def execute_build(
                     console.print(f"  📄 {file_path}")
 
         if result.files_removed:
-            console.print(f"\n[yellow]🧹 Cleaned {len(result.files_removed)} orphan skill(s):[/yellow]")
+            console.print(
+                f"\n[yellow]🧹 Cleaned {len(result.files_removed)} orphan skill(s):[/yellow]"
+            )
             for file_path in result.files_removed:
                 try:
                     rel_path = Path(file_path).relative_to(Path.cwd())
@@ -177,6 +179,7 @@ def _get_configured_platform() -> str | None:
         try:
             if ext == ".toml":
                 import tomllib
+
                 with config_path.open("rb") as f:
                     config = tomllib.load(f)
             else:

@@ -16,9 +16,7 @@ class TestToolUseEvent:
 
     def test_create_event(self):
         """Test creating a tool use event."""
-        event = ToolUseEvent(
-            tool_name="read", timestamp=time.time(), skill="systematic-debugging"
-        )
+        event = ToolUseEvent(tool_name="read", timestamp=time.time(), skill="systematic-debugging")
 
         assert event.tool_name == "read"
         assert event.skill == "systematic-debugging"
@@ -180,17 +178,13 @@ class TestSessionPersistence:
         assert data["current_skill"] == "test-skill"
 
         # Load and verify
-        loaded = SessionContext.load(
-            session_id="save-test", project_root=str(tmp_path)
-        )
+        loaded = SessionContext.load(session_id="save-test", project_root=str(tmp_path))
         assert loaded._current_skill == "test-skill"
         assert len(loaded._tool_history) == 1
 
     def test_load_missing_returns_fresh(self, tmp_path):
         """Test loading non-existent session creates fresh instance."""
-        loaded = SessionContext.load(
-            session_id="nonexistent", project_root=str(tmp_path)
-        )
+        loaded = SessionContext.load(session_id="nonexistent", project_root=str(tmp_path))
         assert loaded._current_skill is None
         assert loaded._tool_history == []
         assert loaded.session_id == "nonexistent"
@@ -327,9 +321,7 @@ class TestIntegrationScenarios:
             ctx.record_tool_use("read", skill="systematic-debugging")
 
         # Now user wants to plan
-        suggestion = ctx.check_reroute_needed(
-            "now let's plan the refactoring approach"
-        )
+        suggestion = ctx.check_reroute_needed("now let's plan the refactoring approach")
 
         # Should suggest re-routing away from debugging (accept any non-debugging skill)
         if suggestion.should_reroute:

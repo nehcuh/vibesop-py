@@ -87,9 +87,7 @@ class TestInstallFromUrlTarSafety:
         """install_from_remote must reject a tarball with a traversal member."""
         # Build a malicious tarball that would write to ../../../tmp/evil.txt
         # if extractall were used without filter='data'.
-        malicious_tar = _make_tarball(
-            {"../../evil.txt": "evil", "skill/SKILL.md": "ok"}
-        )
+        malicious_tar = _make_tarball({"../../evil.txt": "evil", "skill/SKILL.md": "ok"})
 
         storage = SkillStorage()
 
@@ -100,25 +98,15 @@ class TestInstallFromUrlTarSafety:
             Path(dest).write_bytes(malicious_tar)
             return Path(dest)
 
-        monkeypatch.setattr(
-            "vibesop.utils.url_safety.safe_urlretrieve", fake_retrieve
-        )
+        monkeypatch.setattr("vibesop.utils.url_safety.safe_urlretrieve", fake_retrieve)
 
         # install_from_remote must return failure (not raise, not escape).
-        ok, msg = storage.install_from_remote(
-            "evil-skill", "https://x/y.tar.gz"
-        )
-        assert ok is False, (
-            f"install_from_remote must reject malicious tarball; got msg={msg}"
-        )
+        ok, msg = storage.install_from_remote("evil-skill", "https://x/y.tar.gz")
+        assert ok is False, f"install_from_remote must reject malicious tarball; got msg={msg}"
 
-    def test_clean_tarball_installs(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_clean_tarball_installs(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """install_from_remote accepts a clean tarball."""
-        clean_tar = _make_tarball(
-            {"skill/SKILL.md": "---\nid: x\ndescription: skill x\n---\n"}
-        )
+        clean_tar = _make_tarball({"skill/SKILL.md": "---\nid: x\ndescription: skill x\n---\n"})
 
         storage = SkillStorage()
 
@@ -126,9 +114,7 @@ class TestInstallFromUrlTarSafety:
             Path(dest).write_bytes(clean_tar)
             return Path(dest)
 
-        monkeypatch.setattr(
-            "vibesop.utils.url_safety.safe_urlretrieve", fake_retrieve
-        )
+        monkeypatch.setattr("vibesop.utils.url_safety.safe_urlretrieve", fake_retrieve)
 
         # install_skill is called from install_from_remote; patch it to
         # capture what source_path was extracted, then return success.
@@ -140,9 +126,7 @@ class TestInstallFromUrlTarSafety:
 
         monkeypatch.setattr(SkillStorage, "install_skill", fake_install)
 
-        ok, _msg = storage.install_from_remote(
-            "x", "https://example.com/x.tar.gz"
-        )
+        ok, _msg = storage.install_from_remote("x", "https://example.com/x.tar.gz")
         assert ok is True
         # The source_path should point to the extracted "skill" dir.
         assert captured["source_path"].name == "skill"

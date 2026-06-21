@@ -54,7 +54,7 @@ def demo_set_skill_config():
                         "model": "gpt-4",
                         "temperature": 0.2,
                     },
-                    "reason": "需要高准确性，使用 GPT-4"
+                    "reason": "需要高准确性，使用 GPT-4",
                 },
                 "brainstorm": {
                     "name": "头脑风暴",
@@ -63,7 +63,7 @@ def demo_set_skill_config():
                         "model": "claude-3-opus-20240229",
                         "temperature": 0.9,
                     },
-                    "reason": "需要创意，使用 Claude Opus + 高温度"
+                    "reason": "需要创意，使用 Claude Opus + 高温度",
                 },
                 "debug-helper": {
                     "name": "调试助手",
@@ -72,17 +72,19 @@ def demo_set_skill_config():
                         "model": "claude-sonnet-4-6",
                         "temperature": 0.3,
                     },
-                    "reason": "需要准确且快速，使用 Claude Sonnet"
+                    "reason": "需要准确且快速，使用 Claude Sonnet",
                 },
             }
 
             for skill_id, config in configs.items():
                 console.print(f"[bold]✓ {config['name']} ({skill_id})[/bold]")
                 console.print(f"  [dim]原因:[/dim] {config['reason']}")
-                console.print(f"  [dim]LLM:[/dim] {config['llm']['provider']} / {config['llm']['model']}")
+                console.print(
+                    f"  [dim]LLM:[/dim] {config['llm']['provider']} / {config['llm']['model']}"
+                )
                 console.print(f"  [dim]温度:[/dim] {config['llm']['temperature']}")
 
-                set_skill_llm_config(skill_id, config['llm'])
+                set_skill_llm_config(skill_id, config["llm"])
                 console.print()
 
         finally:
@@ -102,11 +104,14 @@ def demo_get_skill_config():
 
         try:
             # 设置配置
-            set_skill_llm_config("code-reviewer", {
-                "provider": "openai",
-                "model": "gpt-4",
-                "temperature": 0.2,
-            })
+            set_skill_llm_config(
+                "code-reviewer",
+                {
+                    "provider": "openai",
+                    "model": "gpt-4",
+                    "temperature": 0.2,
+                },
+            )
 
             # 获取配置
             llm_config = get_skill_llm_config("code-reviewer")
@@ -140,8 +145,16 @@ def demo_list_configs():
             # 设置多个技能的配置
             configs = {
                 "code-reviewer": {"provider": "openai", "model": "gpt-4", "temperature": 0.2},
-                "brainstorm": {"provider": "anthropic", "model": "claude-3-opus-20240229", "temperature": 0.9},
-                "debug-helper": {"provider": "anthropic", "model": "claude-sonnet-4-6", "temperature": 0.3},
+                "brainstorm": {
+                    "provider": "anthropic",
+                    "model": "claude-3-opus-20240229",
+                    "temperature": 0.9,
+                },
+                "debug-helper": {
+                    "provider": "anthropic",
+                    "model": "claude-sonnet-4-6",
+                    "temperature": 0.3,
+                },
             }
 
             for skill_id, llm_config in configs.items():
@@ -195,10 +208,13 @@ def demo_priority_fallback():
 
             # 1. 技能级别配置
             console.print("[bold]步骤 1: 设置技能级别配置[/bold]")
-            set_skill_llm_config(skill_id, {
-                "provider": "openai",
-                "model": "gpt-4",
-            })
+            set_skill_llm_config(
+                skill_id,
+                {
+                    "provider": "openai",
+                    "model": "gpt-4",
+                },
+            )
 
             llm_config = get_skill_llm_config(skill_id)
             if llm_config:
@@ -217,7 +233,9 @@ def demo_priority_fallback():
                 console.print("  ⚠ 未找到配置（使用默认值）")
 
             console.print("\n[dim]优先级顺序:[/dim]")
-            console.print("  [dim]1. 技能配置 → 2. 全局配置 → 3. 环境变量 → 4. Agent → 5. 默认值[/dim]")
+            console.print(
+                "  [dim]1. 技能配置 → 2. 全局配置 → 3. 环境变量 → 4. Agent → 5. 默认值[/dim]"
+            )
 
         finally:
             # 恢复原始路径

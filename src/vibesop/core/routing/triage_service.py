@@ -8,9 +8,9 @@ from typing import TYPE_CHECKING, Any
 
 from vibesop.core.matching import KeywordMatcher, MatcherConfig
 from vibesop.core.models import RoutingLayer, SkillRoute
+from vibesop.core.routing._protocols import LLMFactory, PromptBuilder
 from vibesop.core.routing.circuit_breaker import TriageCircuitBreaker
 from vibesop.core.routing.layers import LayerResult
-from vibesop.core.routing._protocols import LLMFactory, PromptBuilder
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -175,7 +175,9 @@ class TriageService:
             if skill_id:
                 candidate = next((c for c in triage_candidates if c["id"] == skill_id), None)
                 if candidate is None:
-                    candidate = next((c for c in triage_candidates if c["id"].lower() == skill_id.lower()), None)
+                    candidate = next(
+                        (c for c in triage_candidates if c["id"].lower() == skill_id.lower()), None
+                    )
                 if candidate:
                     source = self._get_skill_source(skill_id, candidate.get("namespace", "builtin"))
                     # Dynamic confidence: structured JSON gets higher trust than regex fallback

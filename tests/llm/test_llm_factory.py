@@ -106,5 +106,6 @@ def test_create_from_env_returns_unconfigured_preferred(monkeypatch):
     # Ollama defaults to localhost and is always "configured", so create_from_env
     # falls back to it when no other provider keys are present.
     from vibesop.llm.ollama import OllamaProvider
+
     provider = create_from_env(preferred_provider="anthropic")
     assert isinstance(provider, OllamaProvider)

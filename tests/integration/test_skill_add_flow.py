@@ -198,6 +198,5 @@ def test_skill_add_force_reinstall(temp_skill_dir, monkeypatch, tmp_path):
 
 
 if __name__ == "__main__":
-
     # Run with verbose output
     pytest.main([__file__, "-v", "-s"])

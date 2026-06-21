@@ -17,9 +17,15 @@ console = Console()
 
 def spec(
     action: str = typer.Argument("version", help="Action: validate, version, conformance"),
-    path: str | None = typer.Option(None, "--path", "-p", help="Path to SKILL.md file or skill directory"),
-    all_skills: bool = typer.Option(False, "--all", help="Validate all installed skills / run all conformance tests"),
-    platform: str | None = typer.Option(None, "--platform", help="Platform to check conformance for"),
+    path: str | None = typer.Option(
+        None, "--path", "-p", help="Path to SKILL.md file or skill directory"
+    ),
+    all_skills: bool = typer.Option(
+        False, "--all", help="Validate all installed skills / run all conformance tests"
+    ),
+    platform: str | None = typer.Option(
+        None, "--platform", help="Platform to check conformance for"
+    ),
     self_check: bool = typer.Option(False, "--self", help="Run spec self-conformance check"),
 ) -> None:
     """Manage the SKILL.md specification standard.
@@ -48,7 +54,9 @@ def _show_version() -> None:
     console.print(f"[bold]Current spec version:[/bold] {SpecVersion.V3_0.value}")
     console.print(f"[bold]Supported versions:[/bold] {', '.join(v.value for v in SpecVersion)}")
     console.print()
-    console.print("[dim]Use 'vibe spec validate --all' to check installed skills for compliance.[/dim]")
+    console.print(
+        "[dim]Use 'vibe spec validate --all' to check installed skills for compliance.[/dim]"
+    )
 
 
 def _run_validation(path: str | None, all_skills: bool) -> None:
@@ -60,7 +68,9 @@ def _run_validation(path: str | None, all_skills: bool) -> None:
     elif all_skills:
         _validate_all(validator)
     else:
-        console.print("[yellow]Specify a path with --path, or use --all to validate all installed skills.[/yellow]")
+        console.print(
+            "[yellow]Specify a path with --path, or use --all to validate all installed skills.[/yellow]"
+        )
         raise typer.Exit(code=1)
 
 
@@ -69,7 +79,9 @@ def _validate_single(validator: SpecValidator, skill_path: Path) -> None:
     result = validator.validate_file(skill_path)
 
     if result.valid:
-        console.print(f"[green]Valid[/green] — {result.skill_id} (spec v{result.spec_version.value})")
+        console.print(
+            f"[green]Valid[/green] — {result.skill_id} (spec v{result.spec_version.value})"
+        )
     else:
         console.print(f"[red]Invalid[/red] — {result.skill_id} (spec v{result.spec_version.value})")
 
@@ -123,13 +135,19 @@ def _validate_all(validator: SpecValidator) -> None:
 
     for result in sorted(all_results, key=lambda r: (not r.valid, r.skill_id)):
         status = "[green]✓[/green]" if result.valid else "[red]✗[/red]"
-        issues = f"{len(result.errors)}E {len(result.warnings)}W" if result.issue_count > 0 else "[dim]none[/dim]"
+        issues = (
+            f"{len(result.errors)}E {len(result.warnings)}W"
+            if result.issue_count > 0
+            else "[dim]none[/dim]"
+        )
         table.add_row(status, result.skill_id, result.spec_version.value, issues)
 
     console.print(table)
     console.print()
-    console.print(f"[bold]Summary:[/bold] {valid_count}/{len(all_results)} valid, "
-                  f"{error_count} errors, {warning_count} warnings")
+    console.print(
+        f"[bold]Summary:[/bold] {valid_count}/{len(all_results)} valid, "
+        f"{error_count} errors, {warning_count} warnings"
+    )
 
 
 def _run_conformance(platform: str | None, all_platforms: bool, self_only: bool) -> None:
@@ -149,7 +167,14 @@ def _run_conformance(platform: str | None, all_platforms: bool, self_only: bool)
     if self_only:
         console.print("[bold]Spec Self-Conformance Check[/bold]\n")
         # Run spec compliance tests only (language-level, no platform deps)
-        cmd = [sys.executable, "-m", "pytest", str(test_dir / "test_spec_compliance.py"), "-v", "-q"]
+        cmd = [
+            sys.executable,
+            "-m",
+            "pytest",
+            str(test_dir / "test_spec_compliance.py"),
+            "-v",
+            "-q",
+        ]
         result = subprocess.run(cmd, capture_output=False)
         raise typer.Exit(code=result.returncode)
 
@@ -161,10 +186,14 @@ def _run_conformance(platform: str | None, all_platforms: bool, self_only: bool)
             raise typer.Exit(code=1)
         # Run platform adapter tests for the specific platform
         cmd = [
-            sys.executable, "-m", "pytest",
+            sys.executable,
+            "-m",
+            "pytest",
             str(test_dir / "test_platform_adapters.py"),
-            "-v", "-q",
-            "-k", platform.replace("-", "_"),
+            "-v",
+            "-q",
+            "-k",
+            platform.replace("-", "_"),
         ]
         result = subprocess.run(cmd, capture_output=False)
         raise typer.Exit(code=result.returncode)

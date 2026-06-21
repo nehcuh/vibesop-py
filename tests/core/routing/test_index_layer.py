@@ -205,9 +205,7 @@ class TestEmbeddingFallback:
         }
         index_path.write_text(json.dumps(index_data))
 
-        candidates = [
-            {"id": "gstack/review", "description": "Review code", "namespace": "gstack"}
-        ]
+        candidates = [{"id": "gstack/review", "description": "Review code", "namespace": "gstack"}]
 
         # Build a fake sentence_transformers module so no real model is loaded.
         mock_model = MagicMock()
@@ -217,9 +215,7 @@ class TestEmbeddingFallback:
         fake_st.SentenceTransformer.return_value = mock_model
 
         with patch.dict(sys.modules, {"sentence_transformers": fake_st}):
-            match, detail = try_index_layer(
-                router, "audit the authentication flow", candidates
-            )
+            match, detail = try_index_layer(router, "audit the authentication flow", candidates)
 
         assert match is not None
         assert match.skill_id == "gstack/review"

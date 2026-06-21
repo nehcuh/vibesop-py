@@ -48,7 +48,11 @@ class GitHubSkillCrawler:
 
     def search(self, query: str, page: int = 1) -> list[SkillRepo]:
         """Search GitHub for repos with topic:vibesop-skill + query."""
-        warnings.warn("Market module is experimental and may change significantly", FutureWarning, stacklevel=2)
+        warnings.warn(
+            "Market module is experimental and may change significantly",
+            FutureWarning,
+            stacklevel=2,
+        )
         q = f"{query}+topic:vibesop-skill"
         params: dict[str, Any] = {"q": q, "page": page, "per_page": 30}
         url = f"{self.BASE_URL}/search/repositories"
@@ -76,7 +80,11 @@ class GitHubSkillCrawler:
 
     def validate(self, repo: SkillRepo) -> bool:
         """Check if repo has SKILL.md at root."""
-        warnings.warn("Market module is experimental and may change significantly", FutureWarning, stacklevel=2)
+        warnings.warn(
+            "Market module is experimental and may change significantly",
+            FutureWarning,
+            stacklevel=2,
+        )
         url = f"{self.BASE_URL}/repos/{repo.full_name}/contents/SKILL.md"
 
         with httpx.Client(headers=self.headers, timeout=30.0) as client:

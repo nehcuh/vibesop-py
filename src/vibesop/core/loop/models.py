@@ -22,11 +22,10 @@ Design notes:
 from __future__ import annotations
 
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
-
 
 _NAME_PATTERN = re.compile(r"^[a-z0-9]([a-z0-9-]*[a-z0-9])?$")
 # 5-field cron: minute hour day-of-month month day-of-week
@@ -35,11 +34,11 @@ _CRON_FIELD_PATTERN = re.compile(
     r"^\*|(?:\d+|\*/\d+|\d+-\d+(?:/\d+)?|\d+(?:,\d+)*)(?:,\d+|\d+-\d+(?:/\d+)?)*$"
 )
 _CRON_FIELD_RANGES: tuple[tuple[int, int], ...] = (
-    (0, 59),   # minute
-    (0, 23),   # hour
-    (1, 31),   # day-of-month
-    (1, 12),   # month
-    (0, 6),    # day-of-week (0 = Sunday)
+    (0, 59),  # minute
+    (0, 23),  # hour
+    (1, 31),  # day-of-month
+    (1, 12),  # month
+    (0, 6),  # day-of-week (0 = Sunday)
 )
 
 
@@ -49,11 +48,11 @@ class LoopStatus(StrEnum):
     System-managed; users may read but not directly edit.
     """
 
-    ACTIVE = "active"        # Running normally
-    PAUSED = "paused"        # User-paused (spec unchanged)
-    FAILING = "failing"      # Consecutive failures under threshold
-    DEAD = "dead"            # Exceeded max_failures, will not run again
-    RETIRED = "retired"      # User-archived
+    ACTIVE = "active"  # Running normally
+    PAUSED = "paused"  # User-paused (spec unchanged)
+    FAILING = "failing"  # Consecutive failures under threshold
+    DEAD = "dead"  # Exceeded max_failures, will not run again
+    RETIRED = "retired"  # User-archived
 
 
 class LoopTrigger(StrEnum):
@@ -116,7 +115,7 @@ class LoopSpec(BaseModel):
         description="Per-loop env var overrides applied at execution time.",
     )
     created_at: datetime = Field(
-        default_factory=lambda: datetime.now(timezone.utc),
+        default_factory=lambda: datetime.now(UTC),
         description="UTC creation timestamp.",
     )
 
@@ -133,16 +132,12 @@ class LoopSpec(BaseModel):
             if field_str == "*":
                 continue
             if not _CRON_FIELD_PATTERN.match(field_str):
-                raise ValueError(
-                    f"cron field {idx} ({field_str!r}) has invalid syntax"
-                )
+                raise ValueError(f"cron field {idx} ({field_str!r}) has invalid syntax")
             for token in field_str.split(","):
                 for piece in token.split("-"):
                     base = piece.split("/")[0]
                     if base and base.isdigit() and not (lo <= int(base) <= hi):
-                        raise ValueError(
-                            f"cron field {idx} value {base} out of range [{lo}, {hi}]"
-                        )
+                        raise ValueError(f"cron field {idx} value {base} out of range [{lo}, {hi}]")
         return v
 
     @model_validator(mode="after")
@@ -151,8 +146,7 @@ class LoopSpec(BaseModel):
         non_empty = [t for t in targets if t.strip()]
         if len(non_empty) != 1:
             raise ValueError(
-                "exactly one of skill_id / query / workflow_id must be set "
-                f"(got {len(non_empty)})"
+                f"exactly one of skill_id / query / workflow_id must be set (got {len(non_empty)})"
             )
         return self
 
@@ -212,7 +206,7 @@ class LoopState(BaseModel):
         self.last_run_at = record.started_at
         self.recent_runs.append(record)
         if len(self.recent_runs) > self._RECENT_RUN_CAP:
-            self.recent_runs = self.recent_runs[-self._RECENT_RUN_CAP:]
+            self.recent_runs = self.recent_runs[-self._RECENT_RUN_CAP :]
 
         if record.success:
             self.consecutive_failures = 0
@@ -233,10 +227,9 @@ class LoopState(BaseModel):
 
 
 __all__ = [
+    "LoopRunRecord",
     "LoopSpec",
     "LoopState",
-    "LoopRunRecord",
     "LoopStatus",
     "LoopTrigger",
 ]
-

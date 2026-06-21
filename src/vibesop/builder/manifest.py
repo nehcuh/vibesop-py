@@ -129,7 +129,7 @@ class ManifestBuilder:
                     skills.append(skill)
                 except Exception as e:
                     # Skip invalid skills
-                    logger.warning("Failed to load skill %s: %s", skill_dict.get('id'), e)
+                    logger.warning("Failed to load skill %s: %s", skill_dict.get("id"), e)
 
             # Merge with dynamically discovered skills from central storage
             self._merge_discovered_skills(skills)
@@ -231,9 +231,7 @@ class ManifestBuilder:
                         id=skill.id,
                         name=skill.name or skill.id,
                         description=skill.description,
-                        trigger_when=(
-                            skill.triggers[0] if skill.triggers else ""
-                        ),
+                        trigger_when=(skill.triggers[0] if skill.triggers else ""),
                         metadata={
                             "namespace": skill.namespace,
                             "entrypoint": "external",

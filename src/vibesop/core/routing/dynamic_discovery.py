@@ -95,9 +95,7 @@ class DynamicSkillDiscovery:
 
         return discovered
 
-    def merge_with_registry(
-        self, registry_skills: list[dict[str, Any]]
-    ) -> list[dict[str, Any]]:
+    def merge_with_registry(self, registry_skills: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Merge dynamically discovered skills with static registry entries.
 
         Discovered skills supplement registry entries.
