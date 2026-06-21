@@ -59,12 +59,12 @@ class TestSkillManagerSimple:
         """Test that get_skill_info still works."""
         manager = SkillManager()
 
-        # Test with a skill we know exists
-        info = manager.get_skill_info("gstack/freeze")
+        # Test with a skill we know exists (gstack was removed; use superpowers)
+        info = manager.get_skill_info("superpowers/tdd")
 
         assert info is not None
         assert "id" in info
-        assert info["id"] == "gstack/freeze"
+        assert info["id"] == "superpowers/tdd"
 
     def test_backward_compatibility_search(self) -> None:
         """Test that search_skills still works."""
@@ -83,7 +83,7 @@ class TestSkillManagerSimple:
 
         assert isinstance(namespaces, list)
         assert "builtin" in namespaces
-        assert "gstack" in namespaces
+        assert "superpowers" in namespaces
 
     def test_backward_compatibility_stats(self) -> None:
         """Test that get_stats still works."""
