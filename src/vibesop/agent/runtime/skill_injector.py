@@ -8,6 +8,8 @@ Platform-specific injection strategies:
 
 from __future__ import annotations
 
+import hashlib
+import logging
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
@@ -15,6 +17,8 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from vibesop.core.models import ExecutionPlan
+
+logger = logging.getLogger(__name__)
 
 
 class PlatformType(StrEnum):
@@ -77,6 +81,9 @@ class SkillInjector:
 
     def __init__(self, project_root: str | Path = ".") -> None:
         self.project_root = Path(project_root).resolve()
+        # content-hash → safe? cache for the runtime security scan (avoids
+        # re-scanning unchanged skill content on every route).
+        self._scan_cache: dict[str, bool] = {}
 
     def inject_single_skill(
         self,
@@ -93,6 +100,29 @@ class SkillInjector:
             InjectionResult with platform-specific payload
         """
         skill_content = self._load_skill_content(skill_id)
+
+        # Runtime security gate: re-scan the loaded content before injecting.
+        # The install-time audit is otherwise the ONLY check, so a post-install
+        # edit / git-pull / symlink swap would inject unsanitized third-party
+        # content into the LLM context. Refuse (inject a notice) if unsafe.
+        safe, _scan_source = self._is_content_safe(skill_content)
+        if not safe:
+            logger.warning(
+                "Refusing to inject skill '%s': runtime security scan flagged "
+                "the content unsafe (post-install tampering or embedded threat).",
+                skill_id,
+            )
+            return InjectionResult(
+                method=InjectionMethod.TEXT,
+                payload=(
+                    f"[VibeSOP SECURITY] Skill '{skill_id}' was flagged unsafe by "
+                    f"the runtime security scan; its content was NOT injected. It "
+                    f"may have been modified after install or contains a threat. "
+                    f"Re-install or audit it before use."
+                ),
+                skill_id=skill_id,
+            )
+
         truncated = False
 
         if skill_content and len(skill_content) > self.MAX_INJECT_LENGTH:
@@ -227,6 +257,28 @@ class SkillInjector:
                 pass
 
         return f"# Skill: {skill_id}\n\n*Skill content not found at expected locations.*"
+
+    def _is_content_safe(self, content: str) -> tuple[bool, str]:
+        """Runtime security check of skill content before injection.
+
+        Catches post-install tampering (edit / git-pull / symlink swap) that
+        bypasses the install-time audit — without this, modified SKILL.md is
+        injected verbatim into the LLM context. Cached by content hash; fails
+        closed (a scanner error is treated as unsafe).
+        """
+        key = hashlib.sha256(content.encode("utf-8", errors="ignore")).hexdigest()
+        cached = self._scan_cache.get(key)
+        if cached is not None:
+            return cached, "cached"
+        from vibesop.security.scanner import SecurityScanner
+
+        try:
+            safe = bool(SecurityScanner().scan(content).safe)
+        except Exception as e:  # fail closed — never inject unscanned content
+            logger.warning("Runtime skill scan raised %r; treating as unsafe.", e)
+            safe = False
+        self._scan_cache[key] = safe
+        return safe, "scanned"
 
     def _inject_claude_code(
         self,
