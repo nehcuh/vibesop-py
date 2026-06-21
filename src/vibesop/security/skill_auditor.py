@@ -241,6 +241,40 @@ class SkillSecurityAuditor:
         ),
     ]
 
+    # Python-specific threat patterns (applied to .py files). Catches the RCE
+    # primitives the prompt-injection THREAT_PATTERNS miss — a setup.py doing
+    # os.system('curl|sh') or pickle.loads would otherwise pass the audit clean.
+    PYTHON_THREAT_PATTERNS: ClassVar[list[ThreatPattern]] = [
+        ThreatPattern(
+            name="Python Shell Execution",
+            pattern=r"(os\.system|os\.popen[2-4]?|os\.exec\w*|os\.spawn\w*|subprocess\.(run|call|Popen|check_(output|call))|pty\.spawn)\s*\(",
+            level=ThreatLevel.HIGH,
+            category="code_injection",
+            description="Runs a shell/system command from Python",
+        ),
+        ThreatPattern(
+            name="Python Exec / Eval",
+            pattern=r"\bexec\s*\(|\beval\s*\(",
+            level=ThreatLevel.HIGH,
+            category="code_injection",
+            description="exec()/eval() of dynamic code",
+        ),
+        ThreatPattern(
+            name="Python Unsafe Deserialization",
+            pattern=r"pickle\.(loads?|Unpickler)|marshal\.loads?",
+            level=ThreatLevel.HIGH,
+            category="code_injection",
+            description="Unsafe deserialization (pickle/marshal) → arbitrary code",
+        ),
+        ThreatPattern(
+            name="Python Dynamic Import Of Dangerous Module",
+            pattern=r"__import__\s*\(\s*['\"](os|subprocess|socket|pty)",
+            level=ThreatLevel.HIGH,
+            category="data_exfiltration",
+            description="Dynamic import of os/subprocess/socket/pty",
+        ),
+    ]
+
     # Max file size to scan (1 MiB) — avoids DoS on huge files in cloned packs.
     PACK_FILE_SIZE_LIMIT: ClassVar[int] = 1_048_576
 
@@ -252,6 +286,8 @@ class SkillSecurityAuditor:
             ".js",
             ".mjs",
             ".cjs",
+            ".ts",
+            ".tsx",
             ".py",
             ".md",
             ".yaml",
@@ -566,6 +602,13 @@ class SkillSecurityAuditor:
         custom = self._custom_threat_patterns
         shell_patterns = [*self.THREAT_PATTERNS, *self.SHELL_THREAT_PATTERNS, *custom]
         js_patterns = [*self.THREAT_PATTERNS, *self.JS_THREAT_PATTERNS, *custom]
+        # .py scanned with Python RCE primitives (was base-only → setup.py
+        # os.system('curl|sh') / pickle.loads passed clean).
+        python_patterns = [*self.THREAT_PATTERNS, *self.PYTHON_THREAT_PATTERNS, *custom]
+        # .json (esp. package.json) scanned with shell patterns too — a
+        # preinstall: "curl|sh" or reverse shell in package.json scripts is
+        # executed by bun/npm on install (was base-only → passed clean).
+        json_patterns = [*self.THREAT_PATTERNS, *self.SHELL_THREAT_PATTERNS, *custom]
         base_patterns = [*self.THREAT_PATTERNS, *custom]
         return {
             ".sh": shell_patterns,
@@ -573,11 +616,13 @@ class SkillSecurityAuditor:
             ".js": js_patterns,
             ".mjs": js_patterns,
             ".cjs": js_patterns,
-            ".py": base_patterns,
+            ".ts": js_patterns,
+            ".tsx": js_patterns,
+            ".py": python_patterns,
             ".md": base_patterns,
             ".yaml": base_patterns,
             ".yml": base_patterns,
-            ".json": base_patterns,
+            ".json": json_patterns,
         }
 
     @staticmethod
