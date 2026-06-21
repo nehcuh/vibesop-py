@@ -38,13 +38,21 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
-    "pytest>=8.3.0,<9.0.0",
+    # pytest 9.0.3+ fixes CVE-2025-71176 (was pinned <9.0.0).
+    "pytest>=9.0.3,<10.0.0",
     "pytest-cov>=6.0.0,<7.0.0",
-    "pytest-asyncio>=0.25.0,<1.0.0",
+    "pytest-asyncio>=1.0.0,<2.0.0",  # 1.x is required for pytest 9
+    # pytest plugins required by the suite (previously only in [dependency-groups],
+    # which CI's `uv sync --extra dev` did NOT install — causing collection-time
+    # failure on @pytest.mark.flaky and the missing `mocker` fixture).
+    "pytest-mock>=3.15.1",
+    "pytest-rerunfailures>=16.1",
+    "pytest-xdist>=3.8.0",
     "ruff>=0.9.0,<1.0.0",
     "mypy>=1.14.0,<2.0.0",
     "pre-commit>=4.0.0,<5.0.0",
     "basedpyright>=1.24.0,<2.0.0",
+    "pdoc>=16.0.0",
 ]
 
 test = [
@@ -285,13 +293,8 @@ exclude_lines = [
     "@(abc\\.)?abstractmethod",
 ]
 
-[dependency-groups]
-dev = [
-    "pdoc>=16.0.0",
-    "pytest-asyncio>=0.26.0",
-    "pytest-cov>=6.3.0",
-    "pytest-mock>=3.15.1",
-    "pytest-rerunfailures>=16.1",
-    "pytest-xdist>=3.8.0",
-]
+# Dev tooling lives in [project.optional-dependencies].dev above — single source.
+# (The previous duplicate [dependency-groups].dev diverged from it, which is what
+# broke CI's test job: `uv sync --extra dev` installed the extra but not the
+# group's pytest plugins.)
 
