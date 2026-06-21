@@ -9,8 +9,8 @@ Thank you for your interest in contributing to VibeSOP! This guide will help you
 git clone https://github.com/YOUR_USERNAME/vibesop-py.git
 cd vibesop-py
 
-# Setup environment
-uv sync  # or: pip install -e ".[dev]"
+# Setup environment (dev tooling lives in the `dev` extra)
+uv sync --extra dev  # or: pip install -e ".[dev]"
 
 # Verify
 make test-fast             # Fast test suite (~30s)
