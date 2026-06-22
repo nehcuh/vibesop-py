@@ -128,7 +128,7 @@ class LoopSpec(BaseModel):
                 f"cron expression must have 5 fields (min hour day month dow), "
                 f"got {len(parts)}: {v!r}"
             )
-        for idx, (field_str, (lo, hi)) in enumerate(zip(parts, _CRON_FIELD_RANGES)):
+        for idx, (field_str, (lo, hi)) in enumerate(zip(parts, _CRON_FIELD_RANGES, strict=False)):
             if field_str == "*":
                 continue
             if not _CRON_FIELD_PATTERN.match(field_str):

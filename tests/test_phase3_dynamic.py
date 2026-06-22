@@ -326,7 +326,7 @@ def test_tournament_config_defaults() -> None:
 
 
 def test_workflow_engine_is_dynamic() -> None:
-    engine = WorkflowEngine()
+    WorkflowEngine()
 
     dynamic_plan = ExecutionPlan(
         plan_id="test",

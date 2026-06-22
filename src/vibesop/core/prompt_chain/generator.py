@@ -69,7 +69,6 @@ class PromptChainGenerator:
         )
     """
 
-    # (phase, title, description)
     PHASES: tuple[tuple[int, str, str], ...] = (
         (0, "扇出诊断", "读取核心文件，输出问题清单和依赖关系"),
         (1, "核心数据模型", "实现语义分析引擎和核心数据模型"),
@@ -123,14 +122,14 @@ class PromptChainGenerator:
         seen: set[str] = set()
         expanded: list[str] = []
         for pattern in patterns:
-            pattern = pattern.strip()
-            if not pattern:
+            pattern_clean = pattern.strip()
+            if not pattern_clean:
                 continue
             # 拒绝绝对路径外的遍历模式
-            if ".." in pattern.split("/"):
-                logger.warning("跳过含 .. 的路径: %s", pattern)
+            if ".." in pattern_clean.split("/"):
+                logger.warning("跳过含 .. 的路径: %s", pattern_clean)
                 continue
-            for match in sorted(self.project_root.glob(pattern)):
+            for match in sorted(self.project_root.glob(pattern_clean)):
                 if not match.is_file():
                     continue
                 rel = match.relative_to(self.project_root).as_posix()
@@ -581,7 +580,6 @@ vibe prompt-chain validate --json
                 for line in pyproject.read_text(encoding="utf-8").splitlines():
                     stripped = line.strip()
                     if stripped.startswith("name") and "=" in stripped:
-                        # e.g. name = "vibesop"
                         _, _, raw = stripped.partition("=")
                         return raw.strip().strip('"').strip("'")
             except OSError:

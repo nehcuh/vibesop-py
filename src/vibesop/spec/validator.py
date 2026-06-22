@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 from vibesop.spec.models import SkillType
 from vibesop.spec.version import SpecVersion, detect_spec_version
@@ -77,7 +77,7 @@ class SpecValidator:
     VALID_TYPES: tuple[str, ...] = tuple(t.value for t in SkillType)
 
     # Fields that existed in v1/v2 but were renamed or merged in v3
-    MIGRATED_FIELDS: dict[str, str] = {
+    MIGRATED_FIELDS: ClassVar[dict[str, str]] = {
         "skill_type": "type",  # v3 uses 'type', 'skill_type' is accepted as alias
     }
 
@@ -116,7 +116,7 @@ class SpecValidator:
             )
 
         content = skill_file.read_text(encoding="utf-8")
-        frontmatter, body = _extract_frontmatter_raw(content)
+        frontmatter, _body = _extract_frontmatter_raw(content)
 
         if frontmatter is None:
             return ValidationResult(
@@ -154,12 +154,12 @@ class SpecValidator:
         detected_version = detect_spec_version(data)
 
         # 1. Check required fields
-        for field in self.REQUIRED_FIELDS:
-            if not data.get(field):
+        for req_field in self.REQUIRED_FIELDS:
+            if not data.get(req_field):
                 errors.append(
                     SpecIssue(
-                        field=field,
-                        message=f"Required field '{field}' is missing or empty",
+                        field=req_field,
+                        message=f"Required field '{req_field}' is missing or empty",
                         severity="error",
                         spec_version=SpecVersion.V3_0,
                     )
@@ -233,12 +233,12 @@ class SpecValidator:
             "allowed_tools": "spec v3 stores allowed_tools for tool permission checks",
             "mode": "spec v3 stores mode for operational behavior control",
         }
-        for field, explanation in orphan_fields.items():
-            if field in data and detected_version != SpecVersion.V3_0:
+        for orphan_field, explanation in orphan_fields.items():
+            if orphan_field in data and detected_version != SpecVersion.V3_0:
                 warnings.append(
                     SpecIssue(
-                        field=field,
-                        message=f"'{field}' is present but was discarded by pre-v3 parsers. {explanation}.",
+                        field=orphan_field,
+                        message=f"'{orphan_field}' is present but was discarded by pre-v3 parsers. {explanation}.",
                         severity="warning",
                         spec_version=detected_version,
                     )

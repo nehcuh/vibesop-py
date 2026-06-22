@@ -101,14 +101,12 @@ def _validate_single(validator: SpecValidator, skill_path: Path) -> None:
 
 def _validate_all(validator: SpecValidator) -> None:
     """Validate all installed skills and produce a summary report."""
-    import os
-
     # Search common skill locations
     search_paths = [
         Path.home() / ".config" / "skills",
         Path.home() / ".claude" / "skills",
-        Path(os.getcwd()) / ".vibe" / "skills",
-        Path(os.getcwd()) / "skills",
+        Path.cwd() / ".vibe" / "skills",
+        Path.cwd() / "skills",
     ]
 
     all_results = []
@@ -175,7 +173,7 @@ def _run_conformance(platform: str | None, all_platforms: bool, self_only: bool)
             "-v",
             "-q",
         ]
-        result = subprocess.run(cmd, capture_output=False)
+        result = subprocess.run(cmd, capture_output=False, check=False)
         raise typer.Exit(code=result.returncode)
 
     if platform:
@@ -195,14 +193,14 @@ def _run_conformance(platform: str | None, all_platforms: bool, self_only: bool)
             "-k",
             platform.replace("-", "_"),
         ]
-        result = subprocess.run(cmd, capture_output=False)
+        result = subprocess.run(cmd, capture_output=False, check=False)
         raise typer.Exit(code=result.returncode)
 
     if all_platforms:
         console.print("[bold]Full Conformance Suite[/bold]\n")
         console.print("Running: spec compliance + platform adapters + agent runtime\n")
         cmd = [sys.executable, "-m", "pytest", str(test_dir), "-v", "-q"]
-        result = subprocess.run(cmd, capture_output=False)
+        result = subprocess.run(cmd, capture_output=False, check=False)
         if result.returncode == 0:
             console.print("\n[bold green]All conformance tests passed.[/bold green]")
         else:

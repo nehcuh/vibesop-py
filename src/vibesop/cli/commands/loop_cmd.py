@@ -114,7 +114,7 @@ def create(
         for err in e.errors():
             loc = ".".join(str(p) for p in err.get("loc", []))
             console.print(f"  • {loc}: {err.get('msg', '')}")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from e
 
     # Pre-flight: cron must parse and produce a next-run.
     try:
@@ -122,7 +122,7 @@ def create(
         next_run = cron.next_run_after()
     except (ValueError, RuntimeError) as e:
         console.print(f"[red]❌ cron 表达式无效: {e}[/red]")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from e
 
     store = LoopStore()
     if store.load_spec(name) is not None:

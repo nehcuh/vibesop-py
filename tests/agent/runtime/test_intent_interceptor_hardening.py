@@ -203,7 +203,7 @@ class TestQuickSquadProtocolPriority:
     def test_handoff_points_match_role_count(self, interceptor: IntentInterceptor) -> None:
         """handoff_points is range(1, n_roles) — one less than role count."""
         for n in (2, 3, 4):
-            roles = [f"role{i}" for i in range(n)]
+            [f"role{i}" for i in range(n)]
             # Use roles that exist in ROLE_KEYWORDS to avoid empty skill sets;
             # we hand-craft the call to bypass role validation.
             real_roles = (

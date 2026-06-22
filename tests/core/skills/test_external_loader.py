@@ -201,7 +201,7 @@ description: Versioned skill
         loader = ExternalSkillLoader(require_audit=False)
         result = loader.discover_from_pack("versioned-pack", pack_dir)
         assert len(result) >= 1
-        skill = list(result.values())[0]
+        skill = next(iter(result.values()))
         assert skill.pack_version == "2.0.0"
 
 
@@ -380,7 +380,7 @@ description: A trusted skill
 """)
         from vibesop.constants import TRUSTED_PACKS
 
-        pack_name = list(TRUSTED_PACKS.keys())[0] if TRUSTED_PACKS else "gstack"
+        pack_name = next(iter(TRUSTED_PACKS.keys())) if TRUSTED_PACKS else "gstack"
 
         result = loader._parse_and_audit(
             skill_dir=tmp_path,
@@ -482,8 +482,9 @@ class TestResolvePackName:
         """A third-party pack in the standard <pack>/skills/<id>/ layout must be
         attributed to its own pack (NOT mattpocock via the 'skills' dir) and
         must NOT be is_trusted."""
-        self._write_skill(tmp_path, "awesome-skills", "skills", "my-audit",
-                          sid="my-audit", ns="awesome-skills")
+        self._write_skill(
+            tmp_path, "awesome-skills", "skills", "my-audit", sid="my-audit", ns="awesome-skills"
+        )
         loader = ExternalSkillLoader(external_paths=[tmp_path])
         skills = loader.discover_all()
 
@@ -497,8 +498,7 @@ class TestResolvePackName:
         """A pack installed under a trusted pack's GitHub repo-name dir (top
         level) is correctly attributed + trusted. omx's repo is 'oh-my-codex'
         (repo_name != pack_name 'omx') — exercises the legit fallback path."""
-        self._write_skill(tmp_path, "oh-my-codex", "some-skill",
-                          sid="some-skill", ns="omx")
+        self._write_skill(tmp_path, "oh-my-codex", "some-skill", sid="some-skill", ns="omx")
         loader = ExternalSkillLoader(external_paths=[tmp_path])
         skills = loader.discover_all()
 

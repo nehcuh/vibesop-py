@@ -9,6 +9,7 @@ This is the core of Phase 2 (v6.1.0): Adversarial Verification.
 
 from __future__ import annotations
 
+import contextlib
 import logging
 from enum import StrEnum
 from typing import TYPE_CHECKING, Any
@@ -100,12 +101,12 @@ class VerifierAgent:
     """
 
     # Default verification rubric dimensions
-    RUBRIC_DIMENSIONS = [
+    RUBRIC_DIMENSIONS = (
         "completeness",  # All requirements addressed
         "correctness",  # Technical accuracy
         "edge_cases",  # Edge cases considered
         "clarity",  # Clear, actionable output
-    ]
+    )
 
     def __init__(
         self, llm_client: Any, strictness: VerificationStrictness = VerificationStrictness.STANDARD
@@ -276,7 +277,9 @@ Criteria:
 """
 
     def _parse_llm_response(
-        self, parsed: dict[str, Any], rubric_dimensions: list[str]
+        self,
+        parsed: dict[str, Any],
+        rubric_dimensions: list[str],  # noqa: ARG002
     ) -> VerificationResult:
         """Parse LLM response into VerificationResult."""
         status_str = parsed.get("status", "passed").lower()
@@ -287,10 +290,8 @@ Criteria:
 
         issues = []
         for issue_data in parsed.get("issues", []):
-            try:
+            with contextlib.suppress(Exception):  # Skip malformed issues
                 issues.append(VerificationIssue(**issue_data))
-            except Exception:
-                pass  # Skip malformed issues
 
         rubric_scores = parsed.get("rubric_scores", {})
 

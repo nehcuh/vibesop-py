@@ -10,6 +10,7 @@ Usage:
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import time
 from typing import TYPE_CHECKING, Any, cast
@@ -160,14 +161,12 @@ class Orchestrator:
 
             if "workflow_pattern" in hint_tokens:
                 override = hint_tokens["workflow_pattern"]
-                try:
+                with contextlib.suppress(ValueError):  # Invalid override, keep classifier result
                     classification = ClassifierResult(
                         pattern=WorkflowPattern(override),
                         confidence=1.0,
                         reasoning=f"User explicitly selected {override} pattern",
                     )
-                except ValueError:
-                    pass  # Invalid override, keep classifier result
 
             # Store verify hint for plan execution phase
             if "verify" in hint_tokens:

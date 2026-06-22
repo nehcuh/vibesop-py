@@ -9,6 +9,7 @@ This project is a complete rewrite of the Ruby version, leveraging:
 - Type-safe LLM clients
 """
 
+import contextlib
 import os
 import sys
 
@@ -29,26 +30,22 @@ def _setup_windows_console() -> None:
         os.environ["PYTHONIOENCODING"] = "utf-8"
     # Reconfigure already-open stdout/stderr to use the new UTF-8 code page
     if hasattr(sys.stdout, "reconfigure"):
-        try:
+        with contextlib.suppress(Exception):
             sys.stdout.reconfigure(encoding="utf-8")
-        except Exception:
-            pass
     if hasattr(sys.stderr, "reconfigure"):
-        try:
+        with contextlib.suppress(Exception):
             sys.stderr.reconfigure(encoding="utf-8")
-        except Exception:
-            pass
 
 
 _setup_windows_console()
 
-from vibesop._version import __version__
+from vibesop._version import __version__  # noqa: E402  # late import: after Windows console setup
 
 __author__ = "nehcuh"
 __license__ = "MIT"
 
 # Core public API
-from vibesop.core.models import (
+from vibesop.core.models import (  # noqa: E402  # late import: after Windows console setup
     RoutingLayer,
     RoutingRequest,
     RoutingResult,

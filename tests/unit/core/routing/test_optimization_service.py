@@ -146,7 +146,7 @@ class TestApplyOptimizations:
         )
         svc._conflict_resolver.resolve.return_value = resolution
 
-        primary, alternatives = svc.apply_optimizations(matches, "query")
+        primary, _alternatives = svc.apply_optimizations(matches, "query")
 
         assert primary.skill_id == "a"
         svc._preference_booster.boost.assert_called_once()
@@ -520,7 +520,7 @@ class TestApplyInstinctBoost:
         context = MagicMock()
         context.recent_queries = ["previous query", "another query"]
 
-        result = svc.apply_instinct_boost(matches, "short", context)
+        svc.apply_instinct_boost(matches, "short", context)
 
         learner.find_matching.assert_called_once()
         call_args = learner.find_matching.call_args
@@ -542,7 +542,7 @@ class TestApplyInstinctBoost:
         context = MagicMock()
         context.recent_queries = ["previous"]
 
-        result = svc.apply_instinct_boost(matches, "还是继续", context)
+        svc.apply_instinct_boost(matches, "还是继续", context)
 
         learner.find_matching.assert_called_once()
         call_args = learner.find_matching.call_args

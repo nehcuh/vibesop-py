@@ -93,7 +93,7 @@ class AgentRuntimeResult:
 
     def to_hook_response(
         self,
-        platform: str = "generic",
+        platform: str = "generic",  # noqa: ARG002  # interface-conforming param
         hook_event_name: str = "",
         include_additional_context: bool = True,
         no_match_message: bool = True,

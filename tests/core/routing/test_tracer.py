@@ -76,7 +76,7 @@ class TestRoutingTracer:
         assert len(tid) == 12
 
         # Record a few layers
-        for layer, matched, conf in [
+        for layer, matched, _conf in [
             (RoutingLayer.EXPLICIT, False, 0.0),
             (RoutingLayer.AI_TRIAGE, True, 0.85),
         ]:

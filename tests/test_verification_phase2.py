@@ -739,7 +739,7 @@ def test_verify_step_with_retry_accepts_executor() -> None:
         input_query="Original query",
     )
 
-    result, retries = verify_step_with_retry(
+    result, _retries = verify_step_with_retry(
         verifier,
         "Test query",
         step,
@@ -773,7 +773,7 @@ def test_verify_step_with_retry_no_executor() -> None:
         intent="Test step",
     )
 
-    result, retries = verify_step_with_retry(
+    result, _retries = verify_step_with_retry(
         verifier,
         "Test query",
         step,

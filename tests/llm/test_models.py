@@ -36,7 +36,13 @@ def test_canonical_model_constants_are_current() -> None:
         "claude-3-haiku-20240307",
         "gpt-4",
     }
-    for m in (ANTHROPIC_DEFAULT_MODEL, ANTHROPIC_SMART_MODEL, ANTHROPIC_FAST_MODEL, OPENAI_DEFAULT_MODEL, OPENAI_SMART_MODEL):
+    for m in (
+        ANTHROPIC_DEFAULT_MODEL,
+        ANTHROPIC_SMART_MODEL,
+        ANTHROPIC_FAST_MODEL,
+        OPENAI_DEFAULT_MODEL,
+        OPENAI_SMART_MODEL,
+    ):
         assert m not in stale
 
 

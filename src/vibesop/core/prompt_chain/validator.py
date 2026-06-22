@@ -112,6 +112,7 @@ class ContainerValidator:
                     capture_output=True,
                     text=True,
                     timeout=5,
+                    check=False,
                 )
                 if result.returncode == 0:
                     logger.info("检测到容器运行时: %s", tool)
@@ -154,6 +155,7 @@ class ContainerValidator:
                 timeout=timeout,
                 cwd=str(self.project_root),
                 env=env,
+                check=False,
             )
             return result.stdout, result.stderr, result.returncode
 
@@ -183,6 +185,7 @@ class ContainerValidator:
                 capture_output=True,
                 text=True,
                 timeout=timeout,
+                check=False,
             )
             return result.stdout, result.stderr, result.returncode
         except subprocess.TimeoutExpired:
@@ -197,6 +200,7 @@ class ContainerValidator:
                 text=True,
                 timeout=timeout,
                 cwd=str(self.project_root),
+                check=False,
             )
             return result.stdout, result.stderr, result.returncode
         except subprocess.TimeoutExpired:
@@ -574,7 +578,7 @@ class ContainerValidator:
         # For container mode, _container_exec wraps in `bash -c` which conflicts
         # with stdin redirection. Run directly via subprocess for this check.
         if self.container_tool == "local":
-            stdout, stderr, _ = self._container_exec(cmd, timeout=60)
+            stdout, _stderr, _ = self._container_exec(cmd, timeout=60)
         else:
             # Use subprocess directly with stdin
             docker_args = ["docker", "exec", "-i"]
@@ -588,9 +592,9 @@ class ContainerValidator:
                     capture_output=True,
                     text=True,
                     timeout=60,
+                    check=False,
                 )
                 stdout = result.stdout
-                stderr = result.stderr
             except subprocess.TimeoutExpired:
                 return {
                     "envelope_parsed": False,
@@ -601,9 +605,9 @@ class ContainerValidator:
         # Look for JSON response line
         json_response = ""
         for line in stdout.splitlines():
-            line = line.strip()
-            if line.startswith("{") and "hookSpecificOutput" in line:
-                json_response = line
+            line_clean = line.strip()
+            if line_clean.startswith("{") and "hookSpecificOutput" in line_clean:
+                json_response = line_clean
                 break
 
         if not json_response:
@@ -676,9 +680,8 @@ class ContainerValidator:
             for name, value in payload.items():
                 if value is False:
                     _record(f"{category}.{name}", value)
-                elif isinstance(value, dict):
-                    if value.get("passed") is False:
-                        _record(f"{category}.{name}.passed", value)
+                elif isinstance(value, dict) and value.get("passed") is False:
+                    _record(f"{category}.{name}.passed", value)
         return issues
 
 

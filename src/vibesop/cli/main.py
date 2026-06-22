@@ -290,7 +290,7 @@ def route(
     trace: bool = typer.Option(
         False, "--trace", help="Enable per-layer routing trace (inspired by SkillTree)"
     ),
-    agents: str | None = typer.Option(
+    agents: str | None = typer.Option(  # noqa: ARG001  # Typer CLI option (framework-passed)
         None,
         "--agents",
         help="Comma-separated agent pool for orchestration (claude-code,opencode,kimi-cli,cursor)",
@@ -830,7 +830,7 @@ def _handle_prompt_chain_output(
             "output_dir": target_dir,
             "files": [
                 {"phase": pf.phase, "filename": pf.filename, "path": str(p)}
-                for pf, p in zip(prompt_files, written)
+                for pf, p in zip(prompt_files, written, strict=False)
             ],
         }
         print(json.dumps(output, indent=2, ensure_ascii=False))

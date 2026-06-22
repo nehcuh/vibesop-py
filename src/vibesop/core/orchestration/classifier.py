@@ -313,7 +313,6 @@ class ClassifierAgent:
                 metadata={"intent_analysis": analysis.to_dict()},
             )
 
-        # Default: sequential
         return ClassifierResult(
             pattern=WorkflowPattern.SEQUENTIAL,
             confidence=0.6,
@@ -337,7 +336,7 @@ class ClassifierAgent:
 
     @staticmethod
     def _infer_complexity_level(
-        query: str,
+        query: str,  # noqa: ARG004
         sub_tasks: list[Any] | None = None,
     ) -> str:
         """Infer execution complexity tier from query and sub-tasks.
@@ -463,7 +462,7 @@ class ClassifierAgent:
             return self._fallback_result(query)
 
     @staticmethod
-    def _fallback_result(query: str) -> ClassifierResult:
+    def _fallback_result(query: str) -> ClassifierResult:  # noqa: ARG004
         """Fallback when LLM classification fails."""
         return ClassifierResult(
             pattern=WorkflowPattern.SEQUENTIAL,

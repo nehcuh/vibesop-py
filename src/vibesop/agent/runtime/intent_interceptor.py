@@ -14,7 +14,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import Any
+from typing import Any, ClassVar
 
 from vibesop.core.models import IntentAnalysis
 from vibesop.core.orchestration.patterns import (
@@ -118,7 +118,7 @@ class IntentInterceptor:
     # Role keyword dictionary for the fast multi-role detection path.
     # When ≥ SQUAD_ROLE_THRESHOLD distinct roles are matched in a query, the
     # interceptor short-circuits to MULTI_AGENT_SQUAD without calling an LLM.
-    ROLE_KEYWORDS: dict[str, tuple[str, ...]] = {
+    ROLE_KEYWORDS: ClassVar[dict[str, tuple[str, ...]]] = {
         "architect": (
             "架构",
             "架构设计",
@@ -410,7 +410,7 @@ class IntentInterceptor:
 
     def _build_quick_squad_analysis(
         self,
-        query: str,
+        query: str,  # noqa: ARG002  # accepted by caller for signature clarity
         roles: list[str],
     ) -> IntentAnalysis:
         """Build an IntentAnalysis for the fast multi-role path (no LLM).

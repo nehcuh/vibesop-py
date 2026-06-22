@@ -87,10 +87,7 @@ def is_historical_file(path: Path) -> bool:
 def should_skip(path: Path) -> bool:
     """Check if a file should be skipped (not a project doc)."""
     rel = path.relative_to(PROJECT_ROOT).as_posix()
-    for skip in SKIP_DIRS:
-        if rel.startswith(skip + "/"):
-            return True
-    return False
+    return any(rel.startswith(skip + "/") for skip in SKIP_DIRS)
 
 
 def find_versions_in_file(path: Path) -> list[tuple[int, str]]:
@@ -107,7 +104,7 @@ def find_versions_in_file(path: Path) -> list[tuple[int, str]]:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Check doc version consistency")
     parser.add_argument("--fix", action="store_true", help="Auto-fix outdated versions")
-    args = parser.parse_args()
+    parser.parse_args()
 
     expected = get_expected_version()
     print(f"Canonical version (pyproject.toml): {expected}")
