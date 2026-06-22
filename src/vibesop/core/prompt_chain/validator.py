@@ -584,7 +584,7 @@ class ContainerValidator:
             docker_args = ["docker", "exec", "-i"]
             if self.deepseek_api_key:
                 docker_args += ["-e", f"DEEPSEEK_API_KEY={self.deepseek_api_key}"]
-            docker_args += [self.CONTAINER_NAME, "bash", "/tmp/.claude/hooks/vibesop-route.sh"]
+            docker_args += [self.CONTAINER_NAME, "bash", "/tmp/.claude/hooks/vibesop-route.sh"]  # nosec B108  # container-internal path, not a host temp dir
             try:
                 result = subprocess.run(
                     docker_args,

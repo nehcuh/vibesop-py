@@ -206,7 +206,7 @@ def safe_urlopen(
         block_private_hosts=block_private_hosts,
     )
 
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
+    with urllib.request.urlopen(req, timeout=timeout) as resp:  # nosec B310  # SSRF-aware: url validated (_is_safe_url) before open; size-capped
         # Read in chunks to enforce size limit without loading the entire
         # body into memory first.
         chunks: list[bytes] = []
