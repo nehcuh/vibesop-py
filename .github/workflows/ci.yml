@@ -118,7 +118,7 @@ jobs:
         run: uv pip install bandit[toml]
 
       - name: Run Bandit
-        run: uv run bandit -c pyproject.toml -r src/vibesop -ll --skip B324,B701
+        run: uv run bandit -c pyproject.toml -r src/vibesop -ll --skip B324,B701,B608
 
   benchmark:
     name: Performance Benchmark

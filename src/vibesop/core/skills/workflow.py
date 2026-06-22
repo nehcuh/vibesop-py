@@ -711,7 +711,7 @@ class WorkflowEngine:
 
             # Compile and evaluate the AST
             code = compile(tree, "<string>", "eval")
-            result = eval(code, {"__builtins__": safe_builtins}, eval_context)
+            result = eval(code, {"__builtins__": safe_builtins}, eval_context)  # nosec B307  # AST-whitelisted eval sandbox (safe_builtins); not arbitrary eval
 
             return bool(result)
 

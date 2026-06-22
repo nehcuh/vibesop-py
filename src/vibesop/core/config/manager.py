@@ -578,7 +578,7 @@ class ConfigManager:
 
             yaml = YAML()
             with registry_path.open("r", encoding="utf-8") as f:
-                data = yaml.load(f) or {}
+                data = yaml.load(f) or {}  # nosec B506  # ruamel.yaml.YAML().load() is safe (no arbitrary object instantiation)
 
             self._cache[cache_key] = data
             return data
