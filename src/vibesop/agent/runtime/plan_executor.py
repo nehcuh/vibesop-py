@@ -18,6 +18,7 @@ tooling to detect step completion.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -34,6 +35,8 @@ if TYPE_CHECKING:
 
 
 COMPLETION_MARKER_PREFIX = "[StepCompleted:"
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -111,6 +114,22 @@ class PlanExecutor:
 
         for step in plan.steps:
             skill_content = loader.read_skill_content(step.skill_id)
+            # Runtime security gate (parallel to SkillInjector.inject_single_skill):
+            # the install-time audit is the only other check, so post-install
+            # tampering of SKILL.md would otherwise reach the agent prompt
+            # verbatim via the manifest. Refuse (embed a notice) if unsafe.
+            from vibesop.security.runtime_scan import (
+                is_skill_content_safe,
+                unsafe_replacement_notice,
+            )
+
+            if not is_skill_content_safe(skill_content):
+                logger.warning(
+                    "Refusing to embed skill '%s' in execution manifest: "
+                    "runtime security scan flagged the content unsafe.",
+                    step.skill_id,
+                )
+                skill_content = unsafe_replacement_notice(step.skill_id)
             skill = loader.get_skill(step.skill_id)
             skill_name = skill.metadata.name if skill else step.skill_id
             skill_path = str(skill.source_file) if skill and skill.source_file else ""

@@ -112,14 +112,11 @@ class SkillInjector:
                 "the content unsafe (post-install tampering or embedded threat).",
                 skill_id,
             )
+            from vibesop.security.runtime_scan import unsafe_replacement_notice
+
             return InjectionResult(
                 method=InjectionMethod.TEXT,
-                payload=(
-                    f"[VibeSOP SECURITY] Skill '{skill_id}' was flagged unsafe by "
-                    f"the runtime security scan; its content was NOT injected. It "
-                    f"may have been modified after install or contains a threat. "
-                    f"Re-install or audit it before use."
-                ),
+                payload=unsafe_replacement_notice(skill_id),
                 skill_id=skill_id,
             )
 
@@ -270,13 +267,9 @@ class SkillInjector:
         cached = self._scan_cache.get(key)
         if cached is not None:
             return cached, "cached"
-        from vibesop.security.scanner import SecurityScanner
+        from vibesop.security.runtime_scan import is_skill_content_safe
 
-        try:
-            safe = bool(SecurityScanner().scan(content).safe)
-        except Exception as e:  # fail closed — never inject unscanned content
-            logger.warning("Runtime skill scan raised %r; treating as unsafe.", e)
-            safe = False
+        safe = is_skill_content_safe(content)
         self._scan_cache[key] = safe
         return safe, "scanned"
 
