@@ -36,6 +36,7 @@ class LazyEmbeddingMatcher:
                     from vibesop.core.matching import EmbeddingMatcher
 
                     self._real = EmbeddingMatcher(config=self._config)  # pyright: ignore[reportAttributeAccessIssue]
+        assert self._real is not None
         return self._real
 
     def warm_up(self, candidates: list[dict[str, Any]]) -> None:

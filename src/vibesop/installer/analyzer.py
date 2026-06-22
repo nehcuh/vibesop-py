@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import re
 import subprocess
@@ -103,8 +104,6 @@ class RepoAnalyzer:
             plugin_json = tmpdir_path / ".claude-plugin" / "plugin.json"
             if plugin_json.exists():
                 try:
-                    import json
-
                     plugin_data = json.loads(plugin_json.read_text())
                     plugin_skills = plugin_data.get("skills", [])
                     for skill_entry in plugin_skills:

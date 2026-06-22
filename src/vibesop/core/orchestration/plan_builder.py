@@ -785,8 +785,8 @@ class PlanBuilder:
         steps.append(synthesise_step)
         return steps
 
+    @staticmethod
     def _apply_adversarial(
-        self,
         steps: list[ExecutionStep],
         original_query: str,
     ) -> list[ExecutionStep]:

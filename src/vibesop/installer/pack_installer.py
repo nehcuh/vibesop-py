@@ -28,7 +28,7 @@ def _safe_rmtree(path: Path) -> None:
         Path(_path).chmod(stat.S_IWRITE)
         _func(_path)
 
-    shutil.rmtree(path, onerror=_onerror)
+    shutil.rmtree(path, onexc=_onerror)
 
 
 class PackInstaller:
