@@ -12,6 +12,14 @@ from typing import Any, ClassVar
 import yaml
 from rich.console import Console
 
+from vibesop.llm.models import (
+    ANTHROPIC_DEFAULT_MODEL,
+    OPENAI_SMART_MODEL,
+)
+from vibesop.llm.models import (
+    PROVIDER_DEFAULT_MODELS as _PROVIDER_DEFAULT_MODELS,
+)
+
 console = Console()
 logger = logging.getLogger(__name__)
 
@@ -170,8 +178,9 @@ class AgentEnvironmentDetector:
                 if model:
                     # Claude 模型名称映射
                     model_mapping = {
-                        "claude-sonnet-4-20250514": "claude-sonnet-4-6-20250514",
-                        "claude-3-5-sonnet-20241022": "claude-3-5-sonnet-20241022",
+                        "claude-sonnet-4-20250514": "claude-sonnet-4-6",
+                        "claude-sonnet-4-6-20250514": "claude-sonnet-4-6",
+                        "claude-3-5-sonnet-20241022": "claude-sonnet-4-6",
                     }
                     claude_model = model_mapping.get(model, model)
 
@@ -230,9 +239,7 @@ class EnvVarLLMDetector:
     }
 
     PROVIDER_DEFAULT_MODELS: ClassVar[dict[str, str]] = {
-        "deepseek": "deepseek-v4-flash",
-        "kimi": "moonshot-v1-8k",
-        "zhipu": "glm-4",
+        **_PROVIDER_DEFAULT_MODELS,
         "ollama": "qwen3:35b-a3b-mlx",
     }
 
@@ -256,7 +263,7 @@ class EnvVarLLMDetector:
                 api_key_env="ANTHROPIC_API_KEY",
                 base_url_env="ANTHROPIC_BASE_URL",
                 model_env="ANTHROPIC_MODEL",
-                default_model="claude-sonnet-4-6-20250514",
+                default_model=ANTHROPIC_DEFAULT_MODEL,
             )
 
         # Priority 3: OpenAI
@@ -266,7 +273,7 @@ class EnvVarLLMDetector:
                 api_key_env="OPENAI_API_KEY",
                 base_url_env="OPENAI_BASE_URL",
                 model_env="OPENAI_MODEL",
-                default_model="gpt-4",
+                default_model=OPENAI_SMART_MODEL,
             )
 
         # Priority 4: Provider-specific env vars (deepseek, kimi, zhipu, etc.)

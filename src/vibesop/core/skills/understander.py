@@ -106,7 +106,7 @@ class CategoryRules:
             "urgency": "high",
             "llm": {
                 "provider": "anthropic",
-                "models": ["claude-sonnet-4-6-20250514"],
+                "models": ["claude-sonnet-4-6"],
                 "temperature": 0.3,
             },
         },
@@ -122,7 +122,7 @@ class CategoryRules:
             "priority_range": (50, 70),
             "llm": {
                 "provider": "anthropic",
-                "models": ["claude-3-5-sonnet-20241022"],
+                "models": ["claude-sonnet-4-6"],
                 "temperature": 0.2,
             },
         },
@@ -130,7 +130,7 @@ class CategoryRules:
             "priority_range": (30, 50),
             "llm": {
                 "provider": "anthropic",
-                "models": ["claude-3-haiku-20240307"],
+                "models": ["claude-haiku-4-5"],
                 "temperature": 0.5,
             },
         },
@@ -144,7 +144,7 @@ class CategoryRules:
             "urgency": "critical",
             "llm": {
                 "provider": "anthropic",
-                "models": ["claude-3-opus-20240229"],
+                "models": ["claude-opus-4-8"],
                 "temperature": 0.1,
             },
         },
@@ -152,7 +152,7 @@ class CategoryRules:
             "priority_range": (40, 60),
             "llm": {
                 "provider": "openai",
-                "models": ["gpt-4"],
+                "models": ["gpt-4o"],
                 "temperature": 0.9,
             },
         },
@@ -698,7 +698,7 @@ class SkillAutoConfigurator:
         if not llm_config:
             llm_config = {
                 "provider": "anthropic",
-                "models": ["claude-sonnet-4-6-20250514"],
+                "models": ["claude-sonnet-4-6"],
                 "temperature": 0.5,
             }
 

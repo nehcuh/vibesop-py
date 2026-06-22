@@ -8,6 +8,7 @@ from typing import Literal, cast
 
 from vibesop.llm.anthropic import AnthropicProvider
 from vibesop.llm.base import LLMProvider
+from vibesop.llm.models import OPENAI_DEFAULT_MODEL, PROVIDER_DEFAULT_MODELS
 from vibesop.llm.ollama import OllamaProvider
 from vibesop.llm.openai import OpenAIProvider
 
@@ -26,12 +27,7 @@ _OPENAI_COMPATIBLE: dict[str, str] = {
     "zhipu": "https://open.bigmodel.cn/api/paas/v4",
 }
 
-# Default models for each provider
-_PROVIDER_DEFAULT_MODELS: dict[str, str] = {
-    "deepseek": "deepseek-v4-flash",
-    "kimi": "moonshot-v1-8k",
-    "zhipu": "glm-4",
-}
+# Default models live in vibesop.llm.models (single source of truth).
 
 
 def create_provider(
@@ -73,7 +69,7 @@ def create_provider(
         env_map = {"deepseek": "DEEPSEEK_API_KEY", "kimi": "KIMI_API_KEY", "zhipu": "ZHIPU_API_KEY"}
         resolved_key = os.getenv(env_map.get(provider, "")) or os.getenv("OPENAI_API_KEY")
     resolved_base_url = base_url or _OPENAI_COMPATIBLE.get(provider)
-    resolved_model = _PROVIDER_DEFAULT_MODELS.get(provider, "gpt-4o-mini")
+    resolved_model = PROVIDER_DEFAULT_MODELS.get(provider, OPENAI_DEFAULT_MODEL)
     return OpenAIProvider(api_key=resolved_key, base_url=resolved_base_url, model=resolved_model)
 
 
