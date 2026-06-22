@@ -459,3 +459,50 @@ class TestConvenienceFunctions:
         ):
             result = is_skill_safe("nonexistent")
             assert result is False
+
+
+class TestResolvePackName:
+    """Regression for _resolve_pack_name's trusted-repo-name fallback.
+
+    The fallback matched a trusted pack's GitHub repo name against ANY path
+    part. Since mattpocock's repo is "skills", the standard install layout
+    <pack>/skills/<id>/SKILL.md matched it — every nested-layout third-party
+    pack was mis-attributed to mattpocock and marked is_trusted. Fixed to match
+    only the top-level dir (parts[0]).
+    """
+
+    _SKILL_MD = "---\nid: {sid}\nname: {sid}\nnamespace: {ns}\n---\n# {sid}\n"
+
+    def _write_skill(self, storage: Path, *segments: str, sid: str, ns: str) -> None:
+        skill_dir = storage.joinpath(*segments)
+        skill_dir.mkdir(parents=True, exist_ok=True)
+        (skill_dir / "SKILL.md").write_text(self._SKILL_MD.format(sid=sid, ns=ns))
+
+    def test_nested_skills_dir_not_misattributed_to_trusted_pack(self, tmp_path: Path) -> None:
+        """A third-party pack in the standard <pack>/skills/<id>/ layout must be
+        attributed to its own pack (NOT mattpocock via the 'skills' dir) and
+        must NOT be is_trusted."""
+        self._write_skill(tmp_path, "awesome-skills", "skills", "my-audit",
+                          sid="my-audit", ns="awesome-skills")
+        loader = ExternalSkillLoader(external_paths=[tmp_path])
+        skills = loader.discover_all()
+
+        assert "awesome-skills/my-audit" in skills
+        assert "mattpocock/my-audit" not in skills  # the over-match must not fire
+        skill = skills["awesome-skills/my-audit"]
+        assert skill.pack_name == "awesome-skills"
+        assert skill.is_trusted is False  # a third-party pack must not be trusted
+
+    def test_top_level_repo_name_matches_trusted(self, tmp_path: Path) -> None:
+        """A pack installed under a trusted pack's GitHub repo-name dir (top
+        level) is correctly attributed + trusted. omx's repo is 'oh-my-codex'
+        (repo_name != pack_name 'omx') — exercises the legit fallback path."""
+        self._write_skill(tmp_path, "oh-my-codex", "some-skill",
+                          sid="some-skill", ns="omx")
+        loader = ExternalSkillLoader(external_paths=[tmp_path])
+        skills = loader.discover_all()
+
+        matched = [s for s in skills.values() if s.base_metadata.id == "some-skill"]
+        assert matched
+        assert matched[0].pack_name == "omx"
+        assert matched[0].is_trusted is True
