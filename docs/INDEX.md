@@ -1,7 +1,7 @@
 # VibeSOP Documentation Index
 
 > **Last Updated**: 2026-06-14
-> **Version**: 7.0.0
+> **Version**: 8.0.0.dev0
 
 This document serves as the central index for all VibeSOP documentation, organized by purpose and audience.
 
@@ -164,7 +164,7 @@ These files remain in the project root for discoverability and tool integration:
 
 | Metric | Value |
 |--------|-------|
-| **Version** | 7.0.0 |
+| **Version** | 8.0.0.dev0 |
 | **Tests** | 1,867+ pytest passing (28 prompt-chain, 20 interceptor, 10 security) |
 | **Coverage** | ~73% (target: 75%) |
 | **Skills Supported** | 50+ builtin + 43 community (mattpocock + superpowers) |
