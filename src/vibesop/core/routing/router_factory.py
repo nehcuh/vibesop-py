@@ -98,7 +98,7 @@ class RouterFactory:
             use_cache=routing_config.use_cache,
         )
 
-        matchers: list[tuple[RoutingLayer, IMatcher]] = [
+        matchers: list[tuple[RoutingLayer, IMatcher]] = [  # pyright: ignore[reportAssignmentType]
             (RoutingLayer.KEYWORD, KeywordMatcher(matcher_config)),
             (RoutingLayer.TFIDF, TFIDFMatcher(matcher_config)),
         ]

@@ -340,7 +340,7 @@ class ClaudeCodeAdapter(HookBasedAdapter):
 
         return result
 
-    def _render_skill_content(
+    def _render_skill_content(  # pyright: ignore[reportIncompatibleMethodOverride]
         self,
         skill: Any,
         skill_dir: Path,

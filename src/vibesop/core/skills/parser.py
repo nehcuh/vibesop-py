@@ -189,7 +189,7 @@ def build_spec(
         version=data.get("version", "1.0.0"),
         author=data.get("author", ""),
         namespace=data.get("namespace", source),
-        skill_type=skill_type,
+        skill_type=skill_type,  # pyright: ignore[reportCallIssue]
         intent=intent,
         trigger_when=trigger_when,
         triggers=triggers,

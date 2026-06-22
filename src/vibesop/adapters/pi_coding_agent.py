@@ -241,7 +241,7 @@ class PiCodingAgentAdapter(SdkBasedAdapter):
 
         return result
 
-    def _render_skill_content(
+    def _render_skill_content(  # pyright: ignore[reportIncompatibleMethodOverride]
         self,
         skill: Any,
         skill_dir: Path,
@@ -471,7 +471,7 @@ class PiCodingAgentAdapter(SdkBasedAdapter):
 
         return results
 
-    def _render_extension(self, template_name: str) -> str:
+    def _render_extension(self, template_name: str) -> str:  # pyright: ignore[reportIncompatibleMethodOverride]
         """Render an extension template standalone (without manifest context)."""
         try:
             env = self._get_template_env()

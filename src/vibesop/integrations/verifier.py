@@ -4,7 +4,7 @@ import shutil
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Any, ClassVar
+from typing import Any
 
 from vibesop.integrations import IntegrationInfo, IntegrationManager, IntegrationStatus
 
@@ -35,7 +35,7 @@ class IntegrationReport:
     errors: list[str]
 
 
-_INTEGRATION_CHECKS: ClassVar[dict[str, dict[str, Any]]] = {
+_INTEGRATION_CHECKS: dict[str, dict[str, Any]] = {
     "gstack": {
         "checks": ["installation_exists", "skills_present", "config_valid", "dependencies_met"],
         "required_skills": ["office-hours", "plan-eng-review", "review", "qa", "ship"],
@@ -46,7 +46,7 @@ _INTEGRATION_CHECKS: ClassVar[dict[str, dict[str, Any]]] = {
     },
 }
 
-_CONFIG_PATHS: ClassVar[dict[str, list[Path]]] = {
+_CONFIG_PATHS: dict[str, list[Path]] = {
     "claude-code": [Path(".claude/skills"), Path(".vibe/skills")],
     "kimi-cli": [Path(".kimi-code/skills"), Path(".vibe/skills")],
     "opencode": [Path(".config/skills")],

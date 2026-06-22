@@ -272,7 +272,7 @@ class SkillConfigManager:
             mtime = config_path.stat().st_mtime
             cached = _CONFIG_FILE_CACHE.get(config_path)
             if cached is not None and cached[0] == mtime:
-                return cast("dict[str, Any]", cached[1])
+                return cached[1]
 
             if config_path.suffix.lower() == ".toml":
                 import tomllib
