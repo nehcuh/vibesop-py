@@ -277,6 +277,18 @@ class TestPauseResume:
 
 
 class TestTick:
+    @pytest.fixture(autouse=True)
+    def _enable_loop_execution(self):
+        """C2: tick now respects loop.enabled (default false). Execution-path
+        tests opt in; test_tick_disabled_does_not_execute overrides to false."""
+        from unittest.mock import MagicMock
+
+        with patch("vibesop.core.config.manager.ConfigManager.get_loop_config") as m:
+            cfg = MagicMock()
+            cfg.enabled = True
+            m.return_value = cfg
+            yield
+
     def test_tick_no_loops_reports_empty(self, isolated_store):
         result = runner.invoke(app, ["tick"])
         assert result.exit_code == 0
@@ -403,6 +415,28 @@ class TestTick:
         ):
             result = runner.invoke(app, ["tick"])
 
-        assert result.exit_code == 0
+        # C3: a failed tick must exit non-zero so external cron/launchd detects it.
+        assert result.exit_code == 1
         assert "Tick 完成" in result.stdout
         assert "1 失败" in result.stdout
+
+    def test_tick_disabled_does_not_execute(self, isolated_store):
+        """C2: when loop.enabled is false, tick reports what would trigger but
+        does NOT execute (the master kill-switch). Pre-fix this config was dead.
+        """
+        from unittest.mock import MagicMock
+
+        runner.invoke(app, ["create", "every-min", "--skill", "x", "--schedule", "* * * * *"])
+        with (
+            patch("vibesop.core.config.manager.ConfigManager.get_loop_config") as m,
+            patch("vibesop.cli.commands.loop_cmd.execute_loop_tick") as mock_exec,
+        ):
+            cfg = MagicMock()
+            cfg.enabled = False
+            m.return_value = cfg
+            result = runner.invoke(app, ["tick"])
+
+        assert result.exit_code == 0
+        assert "disabled" in result.stdout.lower()
+        assert "every-min" in result.stdout  # reports what would trigger
+        mock_exec.assert_not_called()  # but does NOT execute

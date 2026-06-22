@@ -102,6 +102,56 @@ class TestCronExprInit:
         assert 0 in c.dow
 
 
+def test_posix_dom_dow_or_semantics():
+    """C1 regression: POSIX crontab(5) — when BOTH day-of-month and day-of-week
+    are restricted (neither is '*'), the command runs on EITHER (OR), not both
+    (AND). Pre-fix _matches used AND, so '0 0 1 * 1' fired only on a 1st that
+    was also a Monday. Dates are found dynamically to avoid hardcoding calendar.
+    """
+    both = CronExpr("0 0 1 * 1")  # dom=1 + dow=Monday, both restricted → OR
+    dom_only = CronExpr("0 0 1 * *")  # dom=1, dow=* → AND (1st only)
+
+    mon_not_1st = first_1st_not_mon = neither = None
+    for month in range(1, 13):
+        for day in range(1, 29):
+            dt = datetime(2026, month, day, 0, 0, tzinfo=UTC)
+            is_mon, is_1st = dt.weekday() == 0, day == 1
+            if is_mon and not is_1st and mon_not_1st is None:
+                mon_not_1st = dt
+            if is_1st and not is_mon and first_1st_not_mon is None:
+                first_1st_not_mon = dt
+            if not is_mon and not is_1st and neither is None:
+                neither = dt
+    assert mon_not_1st and first_1st_not_mon and neither
+
+    # OR: Monday-not-1st matches via dow; 1st-not-Monday via dom; neither no.
+    assert both.should_run(mon_not_1st) is True
+    assert both.should_run(first_1st_not_mon) is True
+    assert both.should_run(neither) is False
+    # dom-only: only the 1st matches.
+    assert dom_only.should_run(mon_not_1st) is False
+    assert dom_only.should_run(first_1st_not_mon) is True
+
+
+def test_posix_star_step_counts_as_restricted():
+    """C1 edge case (kimi): '*/2' is restricted (not bare '*'), so dom='*/2' +
+    dow=Monday uses OR. A substring '*' check would wrongly treat '*/2' as
+    unrestricted (AND), so an odd-day Monday would not match."""
+    c = CronExpr("0 0 */2 * 1")  # dom=*/2 (even days), dow=Monday — both restricted
+    odd_monday = None
+    for month in range(1, 13):
+        for day in range(1, 29):
+            dt = datetime(2026, month, day, 0, 0, tzinfo=UTC)
+            if dt.weekday() == 0 and day % 2 == 1:
+                odd_monday = dt
+                break
+        if odd_monday:
+            break
+    assert odd_monday is not None
+    # odd day (dom no) + Monday (dow yes) → OR match
+    assert c.should_run(odd_monday) is True
+
+
 # ──────────────────────────────────────────────────────────────────
 # CronExpr — next_run_after & should_run
 # ──────────────────────────────────────────────────────────────────

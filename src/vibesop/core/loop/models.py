@@ -194,8 +194,8 @@ class LoopState(BaseModel):
 
         Transition rules:
             - success: reset consecutive_failures to 0; status → ACTIVE
-              (unless user-paused; paused is sticky and must be cleared
-              by an explicit resume).
+              (unless user-paused or DEAD — both are terminal until an
+              explicit resume; a stray success must NOT revive a DEAD loop).
             - failure: increment consecutive_failures. If the count
               reaches ``spec.max_failures``, status → DEAD; otherwise
               status → FAILING. A PAUSED loop is left PAUSED — record_run
@@ -211,7 +211,11 @@ class LoopState(BaseModel):
         if record.success:
             self.consecutive_failures = 0
             self.last_success_at = record.finished_at or record.started_at
-            if self.status != LoopStatus.PAUSED:
+            # PAUSED is sticky (cleared only by explicit resume). DEAD is also
+            # terminal — a stray successful tick must NOT revive a DEAD loop and
+            # zero its failure budget (revival is explicit). Pre-fix only PAUSED
+            # was guarded, so one success revived DEAD -> ACTIVE.
+            if self.status not in (LoopStatus.PAUSED, LoopStatus.DEAD):
                 self.status = LoopStatus.ACTIVE
             return
 
