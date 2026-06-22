@@ -9,6 +9,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [8.0.0.dev0] — 2026-06-22
+
+### v8.0.0-dev: Loop System (Phase 1) + deep-diagnosis fixes
+
+**New: Loop System** — time-triggered autonomous loops (`vibe loop create/list/
+show/pause/resume/tick`). External-cron-driven, stdlib-only cron parser,
+persistent state. See `docs/loop-setup-guide.md`.
+
+**Correctness & security fixes (deep-diagnosis pass):**
+- `core/registry.yaml` no longer silently returns zero skills — malformed YAML
+  fixed, `load_registry` now logs at ERROR (skills 0 → 26).
+- dev-dep dual-source collapse + pytest 9 (CVE-2025-71176); CI test/format green.
+- Security: ThreatPattern ClassVar no longer permanently downgraded by one
+  trusted audit; `.py` / `package.json` / `.ts` install-time RCE now scanned;
+  runtime skill injection re-scans content (catches post-install tampering).
+- Loop: POSIX cron dom/dow OR-semantics; `loop.enabled` master switch wired into
+  tick; `tick` exits non-zero on failure; DEAD status is terminal.
+- Version alignment: package 7.3.0 → 8.0.0.dev0; generated artifacts now stamp
+  the dynamic version; arch doc headers updated.
+
 ### v7.3.0 — ADR-004 Phase 3: Remove `core.skills.base.SkillMetadata` + local `SkillType` enum
 
 Final phase of ADR-004's deprecated-types cleanup. Removes the dataclass form

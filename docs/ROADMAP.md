@@ -1,7 +1,7 @@
 # VibeSOP Roadmap
 
-> **Version**: 7.0.0
-> **版本 Version**: 7.0.0
+> **Version**: 8.0.0.dev0
+> **版本 Version**: 8.0.0.dev0
 > **最后更新 Last Updated**: 2026-06-14
 
 ---
