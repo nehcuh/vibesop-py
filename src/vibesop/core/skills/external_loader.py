@@ -298,14 +298,19 @@ class ExternalSkillLoader:
     def _resolve_pack_name(self, search_path: Path, skill_file: Path) -> str | None:
         """Infer pack name from directory structure, falling back to manifest files.
 
-        If the directory name itself is not in TRUSTED_PACKS, we:
-        1. Walk up looking for pack.json or package.json and match repository URLs
-        2. Match directory names against known trusted repo names extracted from URLs
+        Resolution order:
+        1. If the top-level dir (``parts[0]``) is a TRUSTED_PACK name, use it.
+        2. Walk up looking for ``pack.json``/``package.json`` and match repository
+           URLs against trusted pack URLs (handles arbitrary nesting depths).
+        3. Match the TOP-LEVEL dir against trusted GitHub repo names (e.g. a pack
+           installed under its repo name ``oh-my-codex`` -> ``omx``). Only the top
+           level is checked — matching any path part would over-match common dir
+           names like ``skills`` (mattpocock's repo is literally "skills") and
+           mis-attribute every ``<pack>/skills/<id>/`` pack to mattpocock.
 
-        This handles cases like:
-            ~/.claude/skills/omx-plugins/oh-my-codex/skills/ultraqa/SKILL.md
-        where the outer folder (omx-plugins) is not trusted, but the inner
-        oh-my-codex repo belongs to the trusted "omx" pack.
+        Deep-nested trusted packs without a manifest are NOT recognised by step 3
+        (only the top level matches); install a ``pack.json``/``package.json`` so
+        the walk-up in step 2 can attribute them.
         """
         try:
             rel_path = skill_file.relative_to(search_path)
@@ -336,12 +341,19 @@ class ExternalSkillLoader:
                             pass
                 current = current.parent
 
-            # Fallback: match directory names against trusted repo names from URLs
+            # Fallback: a trusted repo name may be used as the top-level install
+            # dir (e.g. installed under its GitHub repo name, not the VibeSOP
+            # pack name). Match ONLY the top-level dir (parts[0]); matching any
+            # path part would over-match common dir names — e.g. mattpocock's
+            # repo is "skills", which appears in the standard <pack>/skills/<id>/
+            # layout, falsely attributing every nested-layout pack to mattpocock
+            # (and marking it is_trusted). See test_resolve_pack_name_*.
             from urllib.parse import urlparse
 
+            top_dir = rel_path.parts[0]
             for trusted_name, trusted_url in self.TRUSTED_PACKS.items():
                 repo_name = urlparse(trusted_url).path.rstrip("/").split("/")[-1]
-                if repo_name and repo_name in rel_path.parts:
+                if repo_name and repo_name == top_dir:
                     return trusted_name
 
             return candidate
