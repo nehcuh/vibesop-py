@@ -13,6 +13,11 @@ from vibesop.builder import ConfigRenderer, QuickBuilder
 from vibesop.core.config.manager import RoutingConfig
 from vibesop.core.routing.unified import UnifiedRouter
 
+# All performance tests are timing-sensitive (flaky under CI load) — mark the
+# module slow so CI's `-m "not benchmark and not slow"` test job skips them.
+# They still run via `make test-full` or the dedicated benchmark job.
+pytestmark = pytest.mark.slow
+
 
 class TestRoutingPerformance:
     """Performance tests for routing system."""
