@@ -1,6 +1,6 @@
 """Anthropic Claude LLM provider.
 
-Supports Claude 3.5 Haiku, Sonnet, and Opus models.
+Supports Claude Haiku, Sonnet, and Opus models (current model IDs in vibesop.llm.models).
 """
 
 import os
@@ -10,6 +10,7 @@ import anthropic
 from anthropic import Anthropic, AsyncAnthropic
 
 from vibesop.llm.base import LLMProvider, LLMResponse
+from vibesop.llm.models import ANTHROPIC_DEFAULT_MODEL, ANTHROPIC_FAST_MODEL
 
 
 class AnthropicProvider(LLMProvider):
@@ -21,10 +22,11 @@ class AnthropicProvider(LLMProvider):
         print(response.content)
     """
 
-    # Default models
-    DEFAULT_MODEL = "claude-3-5-haiku-20241022"  # Fast and cost-effective
-    FAST_MODEL = "claude-3-5-haiku-20241022"
-    SMART_MODEL = "claude-3-5-sonnet-20241022"
+    # Default models (canonical IDs in vibesop.llm.models; the previous
+    # claude-3-5-* snapshots are deprecated and 404 at the provider).
+    DEFAULT_MODEL = ANTHROPIC_FAST_MODEL
+    FAST_MODEL = ANTHROPIC_FAST_MODEL
+    SMART_MODEL = ANTHROPIC_DEFAULT_MODEL
 
     # API endpoint
     DEFAULT_BASE_URL = "https://api.anthropic.com"

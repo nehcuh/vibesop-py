@@ -81,5 +81,5 @@ async def test_anthropic_provider_acall_success():
 def test_anthropic_provider_default_model_and_name():
     key = "sk-ant-" + "x" * 40
     provider = AnthropicProvider(api_key=key)
-    assert provider.default_model() == "claude-3-5-haiku-20241022"
+    assert provider.default_model() == "claude-haiku-4-5"
     assert provider.provider_name == "Anthropic"

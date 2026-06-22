@@ -1410,13 +1410,35 @@ def _check_config() -> tuple[bool, str]:
 
 
 def _check_llm_provider() -> tuple[bool, str]:
-    if os.getenv("ANTHROPIC_API_KEY"):
-        return True, "Anthropic (API key found)"
-    if os.getenv("OPENAI_API_KEY"):
-        return True, "OpenAI (API key found)"
-    if os.getenv("KIMI_API_KEY"):
-        return True, "Kimi / Moonshot (API key found)"
-    return False, "No API key found (set ANTHROPIC_API_KEY, OPENAI_API_KEY, or KIMI_API_KEY)"
+    from vibesop.llm.models import (
+        ANTHROPIC_DEFAULT_MODEL,
+        OPENAI_DEFAULT_MODEL,
+        PROVIDER_DEFAULT_MODELS,
+        validate_provider_model,
+    )
+
+    # provider -> (env var holding its key, default model to validate)
+    candidates = [
+        ("anthropic", "ANTHROPIC_API_KEY", ANTHROPIC_DEFAULT_MODEL),
+        ("openai", "OPENAI_API_KEY", OPENAI_DEFAULT_MODEL),
+        ("deepseek", "DEEPSEEK_API_KEY", PROVIDER_DEFAULT_MODELS.get("deepseek", "")),
+        ("kimi", "KIMI_API_KEY", PROVIDER_DEFAULT_MODELS.get("kimi", "")),
+        ("zhipu", "ZHIPU_API_KEY", PROVIDER_DEFAULT_MODELS.get("zhipu", "")),
+    ]
+    for provider, key_env, model in candidates:
+        key = os.getenv(key_env)
+        if not key:
+            continue
+        # Best-effort live validation against the provider's /models catalog.
+        # Fail-safe: a network/error skip never fails the check; only a confirmed
+        # "model not in catalog" does (catches stale/hallucinated model IDs).
+        ok, detail = validate_provider_model(provider, model, key)
+        return ok, f"{provider.capitalize()} (key found; model {model!r}: {detail})"
+    return (
+        False,
+        "No API key found (set ANTHROPIC_API_KEY, OPENAI_API_KEY, "
+        "DEEPSEEK_API_KEY, KIMI_API_KEY, or ZHIPU_API_KEY)",
+    )
 
 
 def _check_integrations() -> tuple[bool, str]:
