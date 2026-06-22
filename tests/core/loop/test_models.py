@@ -224,6 +224,20 @@ def test_state_max_failures_one_flips_to_dead_immediately():
     assert state.status == LoopStatus.DEAD
 
 
+def test_state_dead_is_terminal_stray_success_does_not_revive():
+    """C4 regression: DEAD is terminal. A stray successful run must NOT revive a
+    DEAD loop to ACTIVE (which would zero the failure budget). Pre-fix only
+    PAUSED was guarded in record_run's success branch, so one success revived
+    DEAD → ACTIVE."""
+    state = LoopState(spec=LoopSpec(**_valid_spec_kwargs(max_failures=3)))
+    for _ in range(3):
+        state.record_run(_make_run(success=False))
+    assert state.status == LoopStatus.DEAD
+
+    state.record_run(_make_run(success=True))
+    assert state.status == LoopStatus.DEAD, "DEAD revived by a stray success"
+
+
 def test_state_paused_is_sticky_through_success():
     """A PAUSED loop stays paused even when a success is recorded.
 

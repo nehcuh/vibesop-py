@@ -157,6 +157,14 @@ class CronExpr:
         # POSIX: dow 0 and 7 both = Sunday. Normalise 7 → 0.
         dow_raw = _parse_field(fields[4], 0, 7)
         self.dow = {0 if v == 7 else v for v in dow_raw}
+        # POSIX crontab(5): when BOTH day-of-month and day-of-week are restricted
+        # (neither is '*'), the command runs on EITHER match (OR); otherwise AND.
+        # Pre-fix this used AND always, so '0 0 1 * 1' fired only on the 1st AND
+        # Monday, not '1st OR Monday'.
+        # POSIX/Vixie: "restricted" = the field is NOT the bare wildcard '*'.
+        # `*/2`, `1-31`, `1,15` are all restricted (only a bare '*' is not). A
+        # substring '*' check would wrongly treat `*/2` as unrestricted (AND).
+        self._dom_dow_both_restricted = fields[2].strip() != "*" and fields[4].strip() != "*"
 
         empty_fields = [
             name
@@ -208,12 +216,19 @@ class CronExpr:
         return self._matches(dt)
 
     def _matches(self, dt: datetime) -> bool:
+        dom_match = dt.day in self.days
+        dow_match = _PY_TO_CRON_DOW.get(dt.weekday(), -1) in self.dow
+        # POSIX OR-semantics when both dom and dow are restricted (see __init__).
+        day_match = (
+            (dom_match or dow_match)
+            if self._dom_dow_both_restricted
+            else (dom_match and dow_match)
+        )
         return (
             dt.minute in self.minutes
             and dt.hour in self.hours
-            and dt.day in self.days
+            and day_match
             and dt.month in self.months
-            and _PY_TO_CRON_DOW.get(dt.weekday(), -1) in self.dow
         )
 
     def __repr__(self) -> str:

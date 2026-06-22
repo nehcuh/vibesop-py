@@ -383,6 +383,21 @@ def tick(
         )
         return
 
+    # Master kill-switch (C2): when loop.enabled is false, report what WOULD
+    # trigger but do not execute (per LoopConfig docstring). Pre-fix this config
+    # was dead — tick executed regardless of the switch.
+    from vibesop.core.config.manager import ConfigManager
+
+    if not ConfigManager().get_loop_config().enabled:
+        console.print(
+            f"[yellow]Loop execution disabled (loop.enabled=false) — "
+            f"{len(triggered)} loop(s) would trigger:[/yellow]"
+        )
+        for spec in triggered:
+            console.print(f"  • {spec.name} — {_target_str(spec, truncate=40)}")
+        console.print("[dim]Set loop.enabled=true to execute.[/dim]")
+        return
+
     # Dry-run: report and stop.
     if dry_run:
         console.print(f"[bold cyan]{len(triggered)}[/bold cyan] 个 loop 会被触发 (dry-run):")
@@ -409,6 +424,11 @@ def tick(
         f"[green]{success_count} 成功[/green], "
         f"[red]{failure_count} 失败[/red]"
     )
+    # Non-zero exit when any loop failed so external cron/launchd can detect it
+    # (C3). Pre-fix tick always exited 0, masking total failure from the only
+    # documented deployment (external cron every minute).
+    if failure_count:
+        raise typer.Exit(code=1)
 
 
 __all__ = ["app"]
