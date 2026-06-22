@@ -15,7 +15,7 @@ Covers:
 from __future__ import annotations
 
 import tempfile
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -300,45 +300,33 @@ class TestExecuteLoopTickStatePersistence:
 # ──────────────────────────────────────────────────────────────────
 
 
-class TestExecuteLoopTickDefaults:
-    def test_default_runtime_and_store_wiring(self):
-        """When runtime/store are None, executor must construct defaults
-        and call through them. We patch AgentRuntime so no real LLM is
-        contacted; we pass a real store via tmpdir for verification."""
+class TestExecuteLoopTickRuntimeInjection:
+    def test_injected_runtime_is_called_and_state_wired(self):
+        """Executor calls the injected runtime and persists state. (Pre-fix the
+        runtime was default-constructed inside executor via a Core->Agent import;
+        now it is injected, so we pass the mock runtime directly.)"""
         runtime = _mock_runtime()
         with tempfile.TemporaryDirectory() as tmpdir:
-            with patch(
-                "vibesop.core.loop.executor.AgentRuntime",
-                return_value=runtime,
-            ):
-                store = LoopStore(base_dir=tmpdir)
-                spec = _spec(name="default-wiring")
-                store.save_spec(spec)
+            store = LoopStore(base_dir=tmpdir)
+            spec = _spec(name="default-wiring")
+            store.save_spec(spec)
 
-                # Pass store explicitly; let runtime default-construct
-                # (patched to return our mock).
-                record = execute_loop_tick(spec, store=store)
+            record = execute_loop_tick(spec, runtime=runtime, store=store)
 
-                assert record.success is True
-                assert runtime.handle_query.called
+            assert record.success is True
+            assert runtime.handle_query.called
 
-    def test_default_store_writes_to_real_disk(self):
-        """End-to-end: real store, patched runtime. The state file must
+    def test_state_writes_to_real_disk(self):
+        """End-to-end: real store, injected mock runtime. The state file must
         land on disk under the tmpdir."""
         runtime = _mock_runtime()
         with tempfile.TemporaryDirectory() as tmpdir:
-            with patch(
-                "vibesop.core.loop.executor.AgentRuntime",
-                return_value=runtime,
-            ):
-                spec = _spec(name="disk-write")
-                # Use the real default store path under tmpdir/home by
-                # passing store explicitly.
-                store = LoopStore(base_dir=tmpdir)
-                store.save_spec(spec)
+            spec = _spec(name="disk-write")
+            store = LoopStore(base_dir=tmpdir)
+            store.save_spec(spec)
 
-                execute_loop_tick(spec, store=store)
+            execute_loop_tick(spec, runtime=runtime, store=store)
 
-                state_path = store.base_dir / "disk-write" / store.STATE_FILENAME
-                assert state_path.exists()
-                assert state_path.read_text(encoding="utf-8").strip().startswith("{")
+            state_path = store.base_dir / "disk-write" / store.STATE_FILENAME
+            assert state_path.exists()
+            assert state_path.read_text(encoding="utf-8").strip().startswith("{")

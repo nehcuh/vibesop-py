@@ -40,12 +40,24 @@ from __future__ import annotations
 import logging
 import time
 from datetime import UTC, datetime
+from typing import Any, Protocol
 
-from vibesop.agent.runtime.agent_runtime import AgentRuntime
 from vibesop.core.loop.models import LoopRunRecord, LoopSpec, LoopState
 from vibesop.core.loop.store import LoopStore
 
 logger = logging.getLogger(__name__)
+
+
+class LoopRunner(Protocol):
+    """Structural type for a runtime that executes a routed query.
+
+    ``AgentRuntime`` (agent layer) satisfies this. core/loop depends on the
+    Protocol, not the concrete class, so core no longer imports the agent
+    layer — fixing the Core->Agent layer inversion. The concrete runtime is
+    injected by the CLI caller (which is allowed to import agent).
+    """
+
+    def handle_query(self, query: str, *, platform: str = ..., explain: bool = ...) -> Any: ...
 
 
 def _build_query(spec: LoopSpec) -> str:
@@ -73,7 +85,7 @@ def _build_query(spec: LoopSpec) -> str:
 
 def execute_loop_tick(
     spec: LoopSpec,
-    runtime: AgentRuntime | None = None,
+    runtime: LoopRunner,
     store: LoopStore | None = None,
 ) -> LoopRunRecord:
     """Execute one loop tick and persist the result.
@@ -82,9 +94,9 @@ def execute_loop_tick(
         spec: Loop definition. Caller is responsible for skipping
             ``PAUSED`` / ``DEAD`` loops — this function will execute
             whatever it's given.
-        runtime: AgentRuntime instance. ``None`` creates a default
-            instance with project_root=cwd (will attempt to read
-            ``~/.vibe/config.toml`` for LLM credentials).
+        runtime: A ``LoopRunner`` (e.g. ``AgentRuntime``) that executes the
+            routed query. Injected by the caller (CLI) so core/loop does not
+            import the agent layer (Core->Agent inversion fix).
         store: LoopStore instance. ``None`` creates a default instance
             rooted at ``~/.vibe/loops/``.
 
@@ -92,7 +104,6 @@ def execute_loop_tick(
         ``LoopRunRecord`` describing this tick. The record has already
         been appended to the loop's persisted ``LoopState``.
     """
-    runtime = runtime or AgentRuntime()
     store = store or LoopStore()
 
     started_at = datetime.now(UTC)

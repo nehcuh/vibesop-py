@@ -128,10 +128,21 @@ class SlashCommandRegistry:
 class SlashCommandHandler:
     """Executes slash commands by dispatching to VibeSOP internal APIs."""
 
-    def __init__(self, project_root: Path | None = None) -> None:
+    def __init__(
+        self,
+        project_root: Path | None = None,
+        routing_report_renderer: Callable[..., None] | None = None,
+    ) -> None:
         self.project_root = project_root or Path.cwd()
         self._registry = SlashCommandRegistry()
         self._router: UnifiedRouter | None = None
+        # Optional injected renderer for `/vibe-route --explain`. core/ must not
+        # import the cli layer, so the rich report is injected by an outer layer
+        # when available; without it, --explain falls back to a text summary.
+        # NB: no caller currently injects this (the agent-layer executor stays
+        # cli-free); the rich path is a reserved extension point for a future
+        # CLI-direct integration.
+        self._routing_report_renderer = routing_report_renderer
         self._setup_handlers()
 
     @property
@@ -260,13 +271,20 @@ class SlashCommandHandler:
             result = self.router.orchestrate(query, context=context)
 
             if explain:
-                from rich.console import Console
+                if self._routing_report_renderer is not None:
+                    from rich.console import Console
 
-                from vibesop.cli.routing_report import render_routing_report
-
-                console = Console()
-                render_routing_report(result, console=console)
-                return True, "Routing decision displayed"
+                    self._routing_report_renderer(result, console=Console())
+                    return True, "Routing decision displayed"
+                # No renderer injected (core must not import cli) — text summary
+                # preserves the --explain transparency intent without the rich tree.
+                if result.primary:
+                    return (
+                        True,
+                        f"Routing: {result.primary.skill_id} "
+                        f"(confidence: {result.primary.confidence:.0%})",
+                    )
+                return True, "Routing: no matching skill found"
             elif result.primary:
                 return (
                     True,

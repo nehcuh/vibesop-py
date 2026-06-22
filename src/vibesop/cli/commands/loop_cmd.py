@@ -405,12 +405,17 @@ def tick(
             console.print(f"  • {spec.name} — {_target_str(spec, truncate=40)}")
         return
 
-    # Execute each triggered loop.
+    # Execute each triggered loop. AgentRuntime is imported here (the CLI layer
+    # may depend on agent) and injected into core/loop's executor, so core/loop
+    # no longer imports the agent layer (Core->Agent inversion fix).
+    from vibesop.agent.runtime.agent_runtime import AgentRuntime
+
+    runtime = AgentRuntime()
     success_count = 0
     failure_count = 0
     for spec in triggered:
         console.print(f"[cyan]▶[/cyan] Ticking [bold]{spec.name}[/bold]...")
-        record = execute_loop_tick(spec, store=store)
+        record = execute_loop_tick(spec, runtime=runtime, store=store)
         if record.success:
             success_count += 1
             console.print(f"  [green]✅[/green] {record.matched_skill} ({record.duration_s}s)")
