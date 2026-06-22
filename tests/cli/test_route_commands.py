@@ -28,7 +28,10 @@ class TestRouteCommand:
         """JSON output should be valid JSON."""
         result = runner.invoke(app, ["route", "route my query", "--json"])
         assert result.exit_code == 0
-        data = json.loads(result.output)
+        # Tolerate a status preamble (e.g. "Using default LLM ..." printed to
+        # stdout when no explicit LLM is configured) — extract the JSON object.
+        out = result.output
+        data = json.loads(out[out.index("{"):])
         assert "mode" in data
         assert "primary" in data
 
