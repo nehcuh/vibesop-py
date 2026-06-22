@@ -220,7 +220,7 @@ class TestSkillStorageUncovered:
 
     def test_install_from_remote_invalid_url(self, tmp_path: Path):
         storage = SkillStorage(dry_run=False)
-        success, msg = storage.install_from_remote("test", "not-a-valid-url")
+        success, _msg = storage.install_from_remote("test", "not-a-valid-url")
         assert success is False
 
     def test_unlink_from_platform_real(self, tmp_path: Path):
@@ -307,6 +307,6 @@ class TestSkillStorageUncovered:
 
         project = tmp_path / "empty-project"
         project.mkdir()
-        installed, linked, msgs = storage.sync_project_skills(project, "claude-code")
+        installed, linked, _msgs = storage.sync_project_skills(project, "claude-code")
         assert installed == 0
         assert linked == 0

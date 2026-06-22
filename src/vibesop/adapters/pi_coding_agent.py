@@ -371,7 +371,7 @@ class PiCodingAgentAdapter(SdkBasedAdapter):
 
     def _render_settings_json(
         self,
-        output_dir: Path,
+        output_dir: Path,  # noqa: ARG002  # interface-conforming override signature
         _manifest: Manifest,
         result: RenderResult,
     ) -> None:

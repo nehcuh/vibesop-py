@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import os
 import shutil
 import stat
 from pathlib import Path
@@ -26,7 +25,7 @@ def _safe_rmtree(path: Path) -> None:
 
     def _onerror(_func: Any, _path: str, _excinfo: Any) -> None:
         # Change read-only files to writable and retry
-        os.chmod(_path, stat.S_IWRITE)
+        Path(_path).chmod(stat.S_IWRITE)
         _func(_path)
 
     shutil.rmtree(path, onerror=_onerror)
@@ -280,7 +279,7 @@ class PackInstaller:
     def _run_build_in_container(
         target_path: Path,
         script_path: Path,
-        runtime: str,
+        runtime: str,  # noqa: ARG004  # passed by callers; runtime_bin fixed (dead-ternary collapsed)
     ) -> str:
         """Run a build script in an ephemeral, network-blocked container.
 
@@ -296,7 +295,7 @@ class PackInstaller:
         # All three supported runtimes accept the docker-CLI shape for our
         # purposes (orbstack via docker-compat, lima via its docker wrapper).
         # We use the docker CLI regardless and let the runtime shim translate.
-        runtime_bin = "docker" if runtime in ("orbstack", "docker") else "docker"
+        runtime_bin = "docker"
         cmd = [
             runtime_bin,
             "run",

@@ -48,20 +48,20 @@ __all__ = [
     # Adapters
     "ClaudeCodeAdapter",
     "CursorAdapter",
-    "KimiCliAdapter",
-    "OpenCodeAdapter",
-    "PiCodingAgentAdapter",
     # Base classes
     "FileBasedAdapter",
     "HookBasedAdapter",
-    "PlatformAdapter",
-    "SdkBasedAdapter",
+    "KimiCliAdapter",
     # Models
     "Manifest",
     "ManifestMetadata",
+    "OpenCodeAdapter",
+    "PiCodingAgentAdapter",
+    "PlatformAdapter",
     "PolicySet",
     "RenderResult",
     "RoutingPolicy",
+    "SdkBasedAdapter",
     "SecurityPolicy",
 ]
 

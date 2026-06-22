@@ -405,7 +405,7 @@ class WorkflowEngine:
         results = {
             "prompt_files": [
                 {"phase": pf.phase, "filename": pf.filename, "path": str(p)}
-                for pf, p in zip(prompt_files, written)
+                for pf, p in zip(prompt_files, written, strict=False)
             ],
         }
 

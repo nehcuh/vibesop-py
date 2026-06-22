@@ -56,16 +56,16 @@ def _parse_field(field: str, min_val: int, max_val: int) -> set[int]:
     """
     values: set[int] = set()
     for part in field.split(","):
-        part = part.strip()
-        if not part:
+        part_clean = part.strip()
+        if not part_clean:
             continue
 
-        if part == "*":
+        if part_clean == "*":
             values.update(range(min_val, max_val + 1))
             continue
 
-        if "/" in part:
-            base_str, step_str = part.split("/", 1)
+        if "/" in part_clean:
+            base_str, step_str = part_clean.split("/", 1)
             try:
                 step = int(step_str)
             except ValueError:
@@ -95,8 +95,8 @@ def _parse_field(field: str, min_val: int, max_val: int) -> set[int]:
                 continue
             values.update(range(start, end + 1, step))
 
-        elif "-" in part:
-            lo_str, _, hi_str = part.partition("-")
+        elif "-" in part_clean:
+            lo_str, _, hi_str = part_clean.partition("-")
             try:
                 low = int(lo_str)
                 high = int(hi_str) if hi_str else max_val
@@ -108,7 +108,7 @@ def _parse_field(field: str, min_val: int, max_val: int) -> set[int]:
 
         else:
             try:
-                v = int(part)
+                v = int(part_clean)
             except ValueError:
                 continue
             if min_val <= v <= max_val:
@@ -220,9 +220,7 @@ class CronExpr:
         dow_match = _PY_TO_CRON_DOW.get(dt.weekday(), -1) in self.dow
         # POSIX OR-semantics when both dom and dow are restricted (see __init__).
         day_match = (
-            (dom_match or dow_match)
-            if self._dom_dow_both_restricted
-            else (dom_match and dow_match)
+            (dom_match or dow_match) if self._dom_dow_both_restricted else (dom_match and dow_match)
         )
         return (
             dt.minute in self.minutes

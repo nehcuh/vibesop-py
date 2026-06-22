@@ -316,5 +316,5 @@ class TestTriageCircuitBreaker:
         for i in range(15):
             cb.record_success(latency_ms=float(i * 10))
         assert len(cb._latencies_ms) == 10
-        assert list(cb._latencies_ms)[0] == 50.0  # oldest of the 10 kept
+        assert next(iter(cb._latencies_ms)) == 50.0  # oldest of the 10 kept
         assert list(cb._latencies_ms)[-1] == 140.0  # newest

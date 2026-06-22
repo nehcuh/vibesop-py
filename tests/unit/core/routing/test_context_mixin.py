@@ -329,7 +329,7 @@ class TestEnrichContext:
                     mock_profile = MagicMock()
                     mock_profile.project_type = None
                     mock_pa.analyze.return_value = mock_profile
-                    result = host._enrich_context(ctx, "test")
+                    host._enrich_context(ctx, "test")
 
         mock_load.assert_not_called()
 
@@ -379,7 +379,7 @@ class TestEnrichContext:
             mock_mm = MockMM.return_value
             mock_mm.get_active_conversation_id.return_value = None
             with patch("vibesop.core.project_analyzer.ProjectAnalyzer") as MockPA:
-                result = host._enrich_context(ctx, "test")
+                host._enrich_context(ctx, "test")
 
         MockPA.assert_not_called()
         mock_pa.analyze.assert_called_once()

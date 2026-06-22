@@ -56,9 +56,7 @@ class TestThirdPartySkillPack:
         loader = ExternalSkillLoader(external_paths=[config_skills])
         skills = loader.discover_all()
         matched_keys = [k for k in skills if k.endswith("/my-audit")]
-        assert matched_keys, (
-            f"Skill 'my-audit' not discovered. Discovered: {list(skills.keys())}"
-        )
+        assert matched_keys, f"Skill 'my-audit' not discovered. Discovered: {list(skills.keys())}"
         skill = skills[matched_keys[0]]
         assert skill.base_metadata.namespace == "awesome-skills"
         assert skill.is_safe is True
@@ -76,9 +74,7 @@ class TestThirdPartySkillPack:
         finally:
             ExternalSkillLoader.EXTERNAL_PATHS = original_paths
 
-        assert result.primary is not None, (
-            f"No routing match. Path: {result.routing_path}"
-        )
+        assert result.primary is not None, f"No routing match. Path: {result.routing_path}"
         assert result.primary.skill_id.endswith("/my-audit"), (
             f"Expected routing to '*/my-audit', got {result.primary.skill_id}"
         )

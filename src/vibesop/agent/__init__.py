@@ -290,7 +290,7 @@ class AgentRouter:
     def orchestrate(
         self,
         query: str,
-        callbacks: Any | None = None,
+        callbacks: Any | None = None,  # noqa: ARG002  # accepted for API compatibility
         context: Any | None = None,
     ) -> dict[str, Any]:
         """Full orchestration: detect intents, decompose, and build plan.

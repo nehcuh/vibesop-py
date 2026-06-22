@@ -658,7 +658,7 @@ class PlanBuilder:
     def _build_squad_reasoning(
         self,
         steps: list[ExecutionStep],
-        squad: Any,
+        squad: Any,  # noqa: ARG002
     ) -> list[str]:
         """Generate reasoning strings that match the squad's actual skill assignments.
 

@@ -176,10 +176,7 @@ class PathSafety:
             return False
 
         # Per-component symlink check (defeats pre-existing symlinks + TOCTOU).
-        if not self._no_symlinks_in_chain(base_norm, candidate):
-            return False
-
-        return True
+        return self._no_symlinks_in_chain(base_norm, candidate)
 
     @staticmethod
     def _lexical_normalize(path: Path) -> Path:
@@ -188,7 +185,9 @@ class PathSafety:
         Does NOT resolve symlinks (unlike ``Path.resolve()``). ``..`` and
         ``.`` components are collapsed; the result is always absolute.
         """
-        return Path(os.path.normpath(os.path.abspath(str(path))))
+        # NOTE: intentionally os.path.abspath (not Path.resolve) — must NOT
+        # resolve symlinks, per this function's contract.  PTH100 suppressed.
+        return Path(os.path.normpath(os.path.abspath(str(path))))  # noqa: PTH100
 
     @staticmethod
     def _is_lexically_within(candidate: Path, base: Path) -> bool:

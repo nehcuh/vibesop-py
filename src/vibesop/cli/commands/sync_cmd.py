@@ -80,7 +80,7 @@ def sync(
         logger.debug("Remote sync failed: %s", e)
         if url != DEFAULT_REGISTRY_URL:
             console.print(f"[yellow]Failed to fetch from {url}: {e}[/yellow]")
-            raise typer.Exit(1)
+            raise typer.Exit(1) from e
         console.print("[dim]Remote registry not available. Using built-in defaults.[/dim]")
         registry.reload()
         console.print(f"[dim]{registry.count()} skills loaded.[/dim]")

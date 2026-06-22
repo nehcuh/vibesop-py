@@ -31,7 +31,7 @@ class TestRouteCommand:
         # Tolerate a status preamble (e.g. "Using default LLM ..." printed to
         # stdout when no explicit LLM is configured) — extract the JSON object.
         out = result.output
-        data = json.loads(out[out.index("{"):])
+        data = json.loads(out[out.index("{") :])
         assert "mode" in data
         assert "primary" in data
 

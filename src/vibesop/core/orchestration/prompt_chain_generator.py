@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from pydantic import BaseModel, Field
 
@@ -841,7 +841,7 @@ class SquadPromptGenerator:
     that role, handoff context from upstream roles, and an expected output schema.
     """
 
-    _ROLE_ICONS: dict[str, str] = {
+    _ROLE_ICONS: ClassVar[dict[str, str]] = {
         "architect": "🏗️",
         "implementer": "💻",
         "reviewer": "👁️",

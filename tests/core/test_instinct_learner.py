@@ -280,7 +280,7 @@ class TestInstinctLearner:
     def test_find_matching_basic(self, learner: InstinctLearner) -> None:
         learner.learn(pattern="debug database error", action="use systematic-debugging")
         # Make it reliable
-        instinct_id = list(learner._instincts.keys())[0]
+        instinct_id = next(iter(learner._instincts.keys()))
         for _ in range(4):
             learner.record_outcome(instinct_id, success=True)
 
@@ -300,7 +300,7 @@ class TestInstinctLearner:
             action="use pytest debug",
             context="testing",
         )
-        instinct_id = list(learner._instincts.keys())[0]
+        instinct_id = next(iter(learner._instincts.keys()))
         for _ in range(4):
             learner.record_outcome(instinct_id, success=True)
 

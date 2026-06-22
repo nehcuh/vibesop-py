@@ -316,8 +316,8 @@ def render_route_hook(
 def generate_slim_agents_index(
     *,
     version: str = __version__,
-    platform_name: str = "OpenCode",
-    config_dir_label: str = "~/.config/opencode",
+    platform_name: str = "OpenCode",  # noqa: ARG001  # public API kwarg
+    config_dir_label: str = "~/.config/opencode",  # noqa: ARG001  # public API kwarg
     include_skills_reference: bool = True,
 ) -> str:
     """Generate a slim AGENTS.md index that references docs/ for details.
