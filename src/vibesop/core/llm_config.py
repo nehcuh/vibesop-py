@@ -347,7 +347,11 @@ class LLMConfigResolver:
     """LLM 配置解析器 - 统一的配置获取和降级策略"""
 
     def __init__(self) -> None:
-        self.logger = console
+        # Status/info output goes to stderr so it never pollutes stdout in
+        # --json (machine-readable) mode. Pre-fix, `vibe route --json` emitted
+        # "Using default LLM ..." on stdout before the JSON, breaking
+        # json.loads for any consumer.
+        self.logger = Console(stderr=True)
 
     def resolve_llm_config(
         self, skill_requirements: dict[str, Any] | None = None, prefer_agent: bool = True
