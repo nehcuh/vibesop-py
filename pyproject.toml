@@ -268,7 +268,10 @@ test_id = ["B324", "B701"]
 [tool.coverage.run]
 source = ["src"]
 branch = true
-parallel = true
+# NOTE: `parallel = true` was removed — with branch=true it raised
+# coverage.exceptions.DataError "Can't combine statement coverage data with
+# branch data" under `pytest --cov` (CI's Test job, and locally). CI's test job
+# runs single-process (no -n/xdist), so parallel data files aren't needed.
 omit = [
     "*/__init__.py",
     "*/__pycache__/*",
