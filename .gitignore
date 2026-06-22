@@ -110,3 +110,6 @@ ruff.toml
 .vibe/conversations/
 .vibe/*.jsonl
 .worktrees/
+
+# VibeSOP session-generated routing fan-out prompts (not curated)
+.vibe/prompts/
