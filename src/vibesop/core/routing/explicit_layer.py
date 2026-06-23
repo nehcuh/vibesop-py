@@ -37,6 +37,23 @@ def check_explicit_override(
     Returns:
         Tuple of (skill_id, cleaned_query) or (None, None) if no override.
     """
+    # Priority 0: /skill_name (slash command — exact skill invocation).
+    # This is the highest-priority match: the user typed the exact skill name.
+    stripped = query.strip()
+    if stripped.startswith("/"):
+        slash_name = stripped[1:].split()[0] if len(stripped) > 1 else ""
+        remainder = stripped[len(slash_name) + 1:].strip() if slash_name else ""
+        if slash_name:
+            # Exact ID match (e.g., /builtin/skill-name)
+            for c in candidates:
+                if c.get("id") == slash_name:
+                    return slash_name, remainder
+            # Namespace suffix match (e.g., /skill-name → builtin/skill-name)
+            for c in candidates:
+                cid = c.get("id", "")
+                if cid.endswith(f"/{slash_name}") or cid.endswith(f"-{slash_name}"):
+                    return cid, remainder
+
     # Priority 1: !skill_id prefix
     match = EXPLICIT_PREFIX_PATTERN.match(query)
     if match:
