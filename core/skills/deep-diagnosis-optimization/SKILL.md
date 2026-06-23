@@ -8,7 +8,6 @@ description: >-
   with full CI green — using dynamic workflows, kimi code review, and arm64
   container e2e validation.
 tags: [diagnosis, optimization, workflow, ci, verification, kimi, docker,
-       container, orbstack, lint, security, review, audit, merge, refactor,
        诊断, 优化, 审查, 审计]
 triggers:
   - "deep diagnosis"
