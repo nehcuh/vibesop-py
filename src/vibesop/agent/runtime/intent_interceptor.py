@@ -225,8 +225,7 @@ class IntentInterceptor:
         # CJK characters carry ~2.5x the information density of Latin chars;
         # count them accordingly so "深度诊断" (4 CJK chars) passes the gate.
         effective_len = sum(
-            2.5 if ('一' <= ch <= '鿿' or '぀' <= ch <= 'ヿ') else 1.0
-            for ch in stripped
+            2.5 if ("一" <= ch <= "鿿" or "぀" <= ch <= "ヿ") else 1.0 for ch in stripped
         )
         is_short = effective_len < self.MIN_QUERY_LENGTH
         is_explicit = stripped.startswith("/") or stripped.startswith("!")

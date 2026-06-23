@@ -42,7 +42,7 @@ def check_explicit_override(
     stripped = query.strip()
     if stripped.startswith("/"):
         slash_name = stripped[1:].split()[0] if len(stripped) > 1 else ""
-        remainder = stripped[len(slash_name) + 1:].strip() if slash_name else ""
+        remainder = stripped[len(slash_name) + 1 :].strip() if slash_name else ""
         if slash_name:
             # Exact ID match (e.g., /builtin/skill-name)
             for c in candidates:
