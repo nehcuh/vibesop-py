@@ -85,6 +85,11 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["src/vibesop"]
 
+# Bundle the builtin skills (core/skills/) into the wheel so they're available
+# on any installation (uv tool / pip / pipx), not just the dev repo checkout.
+[tool.hatch.build.targets.wheel.force-include]
+"core/skills" = "vibesop/builtin_skills"
+
 # ============================================
 # Ruff - Modern Python Linter
 # ============================================
