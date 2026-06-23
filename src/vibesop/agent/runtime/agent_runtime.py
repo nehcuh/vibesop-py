@@ -53,6 +53,7 @@ class AgentRuntimeResult:
     skill_content: str = ""
     slash_result: dict[str, Any] | None = None
     errors: list[str] = field(default_factory=list)
+    project_root: Path | None = None
 
     @property
     def has_match(self) -> bool:
@@ -158,6 +159,33 @@ class AgentRuntimeResult:
         skill_flat = self.skill_id.replace("/", "-")
         conf_pct = int(self.confidence * 100)
 
+        # Hint path must match real on-disk layout. For builtin skills the
+        # file is bundled as data (force-include per commit 185dfe4) — it may
+        # live in site-packages next to the installed package, OR in the dev
+        # repo's core/skills/ directory. Scan both and emit an absolute path
+        # so Claude can Read it regardless of the user's CWD.
+        user_root = self.project_root or Path.cwd()
+        if "/" in self.skill_id:
+            namespace, bare_name = self.skill_id.split("/", 1)
+            if namespace == "builtin":
+                import sys
+
+                builtin_candidates = [user_root / "core" / "skills" / bare_name / "SKILL.md"]
+                for path_entry in sys.path:
+                    if not path_entry:
+                        continue
+                    bundled = Path(path_entry) / "vibesop" / "builtin_skills" / bare_name / "SKILL.md"
+                    if bundled not in builtin_candidates:
+                        builtin_candidates.append(bundled)
+                hint_path = next(
+                    (str(p) for p in builtin_candidates if p.exists()),
+                    f"core/skills/{bare_name}/SKILL.md",
+                )
+            else:
+                hint_path = f"skills/{skill_flat}/SKILL.md"
+        else:
+            hint_path = f"skills/{self.skill_id}/SKILL.md"
+
         # Build alternatives message
         alt_msg = ""
         if self.alternatives:
@@ -175,7 +203,7 @@ class AgentRuntimeResult:
         system_message = (
             f"🎯 VibeSOP routed: {self.skill_id} ({conf_pct}% confidence)"
             f"{alt_msg}"
-            f"\n\nNEXT STEP (MANDATORY): read skills/{skill_flat}/SKILL.md\n"
+            f"\n\nNEXT STEP (MANDATORY): read {hint_path}\n"
             "Do NOT proceed without reading this file.\n"
             "If the skill doesn't match, load an alternative skill above."
         )
@@ -354,7 +382,7 @@ class AgentRuntime:
         Returns:
             AgentRuntimeResult with routing decision, skill content, and metadata.
         """
-        result = AgentRuntimeResult()
+        result = AgentRuntimeResult(project_root=self.project_root)
 
         # Generate conversation ID if not provided
         if not conversation_id:

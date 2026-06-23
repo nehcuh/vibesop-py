@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from vibesop.agent.runtime.agent_runtime import AgentRuntime
+from vibesop.agent.runtime.agent_runtime import AgentRuntime, AgentRuntimeResult
 from vibesop.agent.runtime.intent_interceptor import InterceptionMode
 
 
@@ -101,3 +101,70 @@ class TestAgentRuntimeBackwardCompat:
 
         assert result.intercepted is True
         assert result.mode == "slash_command"
+
+
+class TestAgentRuntimeHookResponseHintPath:
+    """NEXT STEP hint in to_hook_response must match real on-disk layout."""
+
+    def _make_result(self, skill_id: str) -> "AgentRuntimeResult":
+        from vibesop.agent.runtime.agent_runtime import AgentRuntimeResult
+
+        return AgentRuntimeResult(
+            intercepted=True,
+            mode="single",
+            skill_id=skill_id,
+            confidence=0.54,
+        )
+
+    def test_hint_path_for_builtin_skill(self) -> None:
+        """builtin/xxx → core/skills/{xxx}/SKILL.md (no 'builtin-' prefix)."""
+        result = self._make_result("builtin/deep-diagnosis-optimization")
+        response = result.to_hook_response(no_match_message=False)
+        assert "core/skills/deep-diagnosis-optimization/SKILL.md" in response
+        assert "builtin-deep-diagnosis-optimization" not in response
+
+    def test_hint_path_for_builtin_uses_absolute_path_from_bundle(
+        self, tmp_path, monkeypatch
+    ) -> None:
+        """When project_root/core/skills/ is absent, hint must point to the
+        bundled data dir via sys.path scan — and be absolute so Claude can
+        Read it from any CWD."""
+        from pathlib import Path
+
+        site_packages = tmp_path / "site-packages"
+        bundled = (
+            site_packages
+            / "vibesop"
+            / "builtin_skills"
+            / "deep-diagnosis-optimization"
+            / "SKILL.md"
+        )
+        bundled.parent.mkdir(parents=True)
+        bundled.write_text("# bundled")
+        monkeypatch.syspath_prepend(str(site_packages))
+
+        from vibesop.agent.runtime.agent_runtime import AgentRuntimeResult
+
+        result = AgentRuntimeResult(
+            intercepted=True,
+            mode="single",
+            skill_id="builtin/deep-diagnosis-optimization",
+            confidence=0.55,
+            project_root=tmp_path / "user_project",  # has no core/skills
+        )
+        response = result.to_hook_response(no_match_message=False)
+        assert str(bundled) in response
+        # Sanity: still mentions the skill name
+        assert "deep-diagnosis-optimization" in response
+
+    def test_hint_path_for_external_pack_keeps_flat(self) -> None:
+        """gstack/yyy → skills/{gstack-yyy}/SKILL.md (pack-prefixed flat dir)."""
+        result = self._make_result("gstack/review")
+        response = result.to_hook_response(no_match_message=False)
+        assert "skills/gstack-review/SKILL.md" in response
+
+    def test_hint_path_for_bare_id(self) -> None:
+        """Bare id (no namespace) → skills/{id}/SKILL.md."""
+        result = self._make_result("diagnose")
+        response = result.to_hook_response(no_match_message=False)
+        assert "skills/diagnose/SKILL.md" in response

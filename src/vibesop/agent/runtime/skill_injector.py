@@ -213,6 +213,45 @@ class SkillInjector:
             home / ".config" / "skills",
         ]
 
+        # Strategy 0 (builtin skills only): strip namespace prefix.
+        # SKILL.md frontmatter carries namespaced ids like "builtin/xxx",
+        # but on-disk layout is flat (no "builtin/" segment, no "builtin-"
+        # prefix). Three locations carry builtin skills, tried in order:
+        #
+        #   1. Dev repo:        <project_root>/core/skills/{name}/SKILL.md
+        #       (when running inside the vibesop-py repo itself)
+        #   2. Editable bundle: <sys.path entry>/vibesop/builtin_skills/{name}/SKILL.md
+        #       (force-include data per commit 185dfe4; lives next to the
+        #        installed package, NOT under __file__/src/vibesop/ —
+        #        PEP 660 editable wheels keep code in src/ and data in
+        #        site-packages, so __file__ can't reach the data)
+        #   3. Wheel bundle:    <site-packages>/vibesop/builtin_skills/{name}/SKILL.md
+        #       (same as #2; sys.path scan already covers it)
+        #
+        # External packs (gstack/yyy) are NOT stripped here — they keep
+        # pack-prefixed flat dirs (Strategy 1/2 below).
+        if "/" in skill_id:
+            name_only = skill_id.split("/", 1)[1]
+            strip_bases: list[Path] = [self.project_root / "core" / "skills"]
+            # Scan sys.path for bundled builtin_skills data dirs. This finds
+            # both uv-tool installs and editable installs where data lives
+            # in site-packages alongside the .pth pointer.
+            import sys
+
+            for path_entry in sys.path:
+                if not path_entry:
+                    continue
+                bundled = Path(path_entry) / "vibesop" / "builtin_skills"
+                if bundled.exists():
+                    strip_bases.append(bundled)
+            for base in strip_bases:
+                direct = base / name_only / "SKILL.md"
+                if direct.exists():
+                    try:
+                        return direct.read_text(encoding="utf-8")
+                    except OSError:
+                        pass
+
         for base in candidate_dirs:
             if not base.exists():
                 continue

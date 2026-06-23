@@ -248,3 +248,101 @@ class TestSkillInjector:
         injector = SkillInjector(project_root=tmp_path)
         content = injector._load_skill_content("gstack/review")
         assert "Claude Code install" in content
+
+    def test_load_skill_strips_builtin_namespace(self, tmp_path) -> None:
+        """builtin/{name} id must resolve to core/skills/{name}/SKILL.md.
+
+        SKILL.md frontmatter carries namespaced ids ("builtin/deep-diagnosis"),
+        but the on-disk layout is flat — no "builtin-" prefix, no nested
+        ``builtin/`` directory segment. Without this strip, the injector
+        fell back to the "Skill content not found" placeholder and the
+        agent saw an empty ACTIVE SKILL block.
+        """
+        injector = SkillInjector(project_root=tmp_path)
+
+        skill_dir = tmp_path / "core" / "skills" / "deep-diagnosis-optimization"
+        skill_dir.mkdir(parents=True)
+        (skill_dir / "SKILL.md").write_text("# Deep diagnosis builtin content")
+
+        content = injector._load_skill_content("builtin/deep-diagnosis-optimization")
+        assert "Deep diagnosis builtin content" in content
+
+    def test_load_skill_builtin_strip_does_not_affect_external_packs(
+        self, tmp_path, monkeypatch
+    ) -> None:
+        """Strip-prefix must be scoped to core/skills only.
+
+        For external packs like "gstack/review", the on-disk layout is
+        pack-prefixed flat (e.g. ~/.claude/skills/gstack-review/).
+        Stripping the namespace here would look for ~/.claude/skills/review/,
+        which is wrong. Verify the existing Strategy-1 flat-id path still
+        handles external packs.
+        """
+        monkeypatch.setattr(Path, "home", lambda: tmp_path)
+
+        # core/skills exists but does NOT contain a "review" directory,
+        # so the strip-prefix strategy must NOT short-circuit here.
+        (tmp_path / "core" / "skills").mkdir(parents=True)
+
+        claude = tmp_path / ".claude" / "skills" / "gstack-review"
+        claude.mkdir(parents=True)
+        (claude / "SKILL.md").write_text("# Review via pack-prefixed install")
+
+        injector = SkillInjector(project_root=tmp_path)
+        content = injector._load_skill_content("gstack/review")
+        assert "Review via pack-prefixed install" in content
+
+    def test_load_skill_builtin_via_bundled_data_dir(self, tmp_path, monkeypatch) -> None:
+        """builtin/{name} must resolve via sys.path bundled data dir.
+
+        When the user runs `vibe route` from their own project (not the
+        vibesop repo), project_root/core/skills/ does not exist. Builtin
+        skills are bundled as data inside the installed package at
+        <sys.path entry>/vibesop/builtin_skills/{name}/SKILL.md (per
+        commit 185dfe4 — force-include in wheel). Without this lookup,
+        every non-vibesop-project user got "Skill content not found".
+        """
+        # User's project: no core/skills, no user-install dirs.
+        # Simulate by pointing project_root at empty tmp_path and
+        # isolating Path.home() to tmp_path so default candidate_dirs miss.
+        monkeypatch.setattr(Path, "home", lambda: tmp_path / "fakehome")
+
+        # Simulate installed-package data layout in a fake site-packages entry.
+        site_packages = tmp_path / "site-packages"
+        bundled = site_packages / "vibesop" / "builtin_skills" / "deep-diagnosis-optimization"
+        bundled.mkdir(parents=True)
+        (bundled / "SKILL.md").write_text("# Bundled builtin via sys.path scan")
+
+        # Make sys.path include the fake site-packages entry.
+        monkeypatch.syspath_prepend(str(site_packages))
+
+        injector = SkillInjector(project_root=tmp_path)
+        content = injector._load_skill_content("builtin/deep-diagnosis-optimization")
+        assert "Bundled builtin via sys.path scan" in content
+
+    def test_load_skill_builtin_dev_repo_preferred_over_bundle(
+        self, tmp_path, monkeypatch
+    ) -> None:
+        """When both dev repo and bundled data exist, dev repo wins.
+
+        Dev repo (core/skills/) is the source of truth during development;
+        the bundled copy is a wheel-build snapshot. Preferring dev repo
+        ensures uncommitted changes win during local testing.
+        """
+        monkeypatch.setattr(Path, "home", lambda: tmp_path / "fakehome")
+
+        # Dev repo layout (preferred).
+        dev = tmp_path / "core" / "skills" / "foo-skill"
+        dev.mkdir(parents=True)
+        (dev / "SKILL.md").write_text("# From dev repo")
+
+        # Bundled layout (fallback).
+        site_packages = tmp_path / "site-packages"
+        bundled = site_packages / "vibesop" / "builtin_skills" / "foo-skill"
+        bundled.mkdir(parents=True)
+        (bundled / "SKILL.md").write_text("# From bundled wheel")
+        monkeypatch.syspath_prepend(str(site_packages))
+
+        injector = SkillInjector(project_root=tmp_path)
+        content = injector._load_skill_content("builtin/foo-skill")
+        assert "From dev repo" in content
