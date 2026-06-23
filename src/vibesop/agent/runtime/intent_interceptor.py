@@ -220,8 +220,17 @@ class IntentInterceptor:
                 query=original_query,
             )
 
-        # 1. Empty or too short → skip
-        if len(original_query) < self.MIN_QUERY_LENGTH:
+        # 1. Empty or too short → skip (but allow slash commands + exact triggers)
+        stripped = original_query.strip()
+        # CJK characters carry ~2.5x the information density of Latin chars;
+        # count them accordingly so "深度诊断" (4 CJK chars) passes the gate.
+        effective_len = sum(
+            2.5 if ('一' <= ch <= '鿿' or '぀' <= ch <= 'ヿ') else 1.0
+            for ch in stripped
+        )
+        is_short = effective_len < self.MIN_QUERY_LENGTH
+        is_explicit = stripped.startswith("/") or stripped.startswith("!")
+        if is_short and not is_explicit:
             return InterceptionDecision(
                 should_route=False,
                 reason=f"Query too short ({len(original_query)} < {self.MIN_QUERY_LENGTH})",
