@@ -52,6 +52,12 @@ if [ -n "$_VIBESOP_PROJECT_ROOT" ] && command -v uv &> /dev/null; then
 elif command -v uv &> /dev/null && uv run python -c "import vibesop" 2>/dev/null; then
     _VIBESOP_PYTHON="uv run python"
 fi
+# Fallback: globally-installed vibesop (uv tool) — its Python can import vibesop
+# even when the project root isn't found and system python3 lacks the package.
+if [ "$_VIBESOP_PYTHON" = "python3" ]; then
+    _UV_TOOL_PYTHON="$HOME/.local/share/uv/tools/vibesop/bin/python"
+    [ -x "$_UV_TOOL_PYTHON" ] && "$_UV_TOOL_PYTHON" -c "import vibesop" 2>/dev/null && _VIBESOP_PYTHON="$_UV_TOOL_PYTHON"
+fi
 $_VIBESOP_PYTHON -c "
 import sys
 from vibesop.agent.runtime import AgentRuntime
