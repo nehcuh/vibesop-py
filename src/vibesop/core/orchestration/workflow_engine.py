@@ -361,7 +361,8 @@ class WorkflowEngine:
         """Execute TOURNAMENT pattern.
 
         Contestants run in parallel via a thread pool, then a judge selects
-        the champion.
+        the champion. Without an LLM, a rubric-style heuristic picks the
+        champion instead of defaulting to the first contestant.
         """
         from vibesop.core.orchestration.tournament import TournamentResult, TournamentRunner
 
@@ -404,8 +405,7 @@ class WorkflowEngine:
                     results[step.step_id] = {"error": str(e)}
                     contestant_outputs[idx] = ""
 
-        # Select champion: LLM judge when available, else default to first contestant.
-        tournament_result = TournamentResult(champion_index=0)
+        # Select champion: LLM judge when available, heuristic fallback otherwise.
         if self._llm and contestant_outputs:
             runner = TournamentRunner(self._llm)
             tournament_result = runner.run_tournament(
@@ -413,6 +413,10 @@ class WorkflowEngine:
                 plan.steps[0].intent if plan.steps else "",
                 contestant_outputs,
             )
+        elif contestant_outputs:
+            tournament_result = self._heuristic_tournament(contestant_outputs)
+        else:
+            tournament_result = TournamentResult(champion_index=0)
 
         plan.status = PlanStatus.COMPLETED
 
@@ -426,6 +430,39 @@ class WorkflowEngine:
             final_status="completed",
             champion_index=tournament_result.champion_index,
             results=results,
+        )
+
+    @staticmethod
+    def _heuristic_tournament(contestant_outputs: list[str]) -> Any:
+        """Pick a champion without an LLM using a lightweight rubric.
+
+        Scores each output on substance (length), vocabulary diversity, code
+        presence, and structural keywords. Ties resolve to the earliest index.
+        """
+        from vibesop.core.orchestration.tournament import TournamentResult
+
+        scores: list[float] = []
+        for raw in contestant_outputs:
+            text = raw or ""
+            lowered = text.lower()
+            score = 0.0
+            if len(text) > 50:
+                score += 0.3
+            if len(set(lowered.split())) > 20:
+                score += 0.3
+            if "```" in text:
+                score += 0.2
+            if any(kw in lowered for kw in ("step", "result", "conclusion")):
+                score += 0.2
+            scores.append(score)
+
+        champion_index = max(range(len(scores)), key=lambda i: scores[i]) if scores else 0
+        return TournamentResult(
+            champion_index=champion_index,
+            champion_output=contestant_outputs[champion_index] if contestant_outputs else "",
+            scores={i: scores[i] for i in range(len(scores))},
+            comparison_reasoning="Heuristic fallback (no LLM configured)",
+            all_outputs=contestant_outputs,
         )
 
     def _run_prompt_chain(

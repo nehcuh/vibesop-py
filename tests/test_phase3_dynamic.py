@@ -451,7 +451,7 @@ def test_dynamic_execution_result_model() -> None:
     assert result.pattern == WorkflowPattern.LOOP_UNTIL_DRY
 
 
-# --- Phase 1 Regression Tests (P0 fixes) ---
+# --- Phase 1 Regression Tests (P0/P1 fixes) ---
 
 
 class _LoopBackLLM:
@@ -675,3 +675,68 @@ def test_tournament_parallel_exception_isolation() -> None:
     assert "ok-c2" in str(result.results.get("c2"))
     failed = result.results.get("c1")
     assert isinstance(failed, dict) and "error" in failed
+
+
+def test_tournament_no_llm_fallback_not_default_zero() -> None:
+    """P1-2: without an LLM, champion is chosen by heuristic, not always 0."""
+
+    def executor(step):
+        if step.step_id == "c0":
+            return "ok"  # short, unstructured
+        return (
+            "```python\n"
+            "def solve():\n"
+            "    result = compute()\n"
+            "    return result\n"
+            "```\n"
+            "step by step conclusion: done"
+        )
+
+    engine = WorkflowEngine()  # no LLM
+    plan = ExecutionPlan(
+        plan_id="regression-tournament-fallback",
+        original_query="fallback",
+        steps=[
+            ExecutionStep(
+                step_id="c0", step_number=1, skill_id="t", intent="A", output_as="c0",
+                contestant_index=0,
+            ),
+            ExecutionStep(
+                step_id="c1", step_number=2, skill_id="t", intent="B", output_as="c1",
+                contestant_index=1,
+            ),
+        ],
+        workflow_pattern=WorkflowPattern.TOURNAMENT,
+    )
+
+    result = engine.run(plan, executor)
+    assert result.champion_index == 1, (
+        f"Heuristic should pick the richer contestant 1, got {result.champion_index}"
+    )
+
+
+def test_tournament_no_llm_empty_outputs_no_crash() -> None:
+    """P1-2: all-empty contestant outputs must not crash and yield a valid index."""
+
+    def executor(step):
+        return ""
+
+    engine = WorkflowEngine()
+    plan = ExecutionPlan(
+        plan_id="regression-tournament-empty",
+        original_query="empty",
+        steps=[
+            ExecutionStep(
+                step_id="c0", step_number=1, skill_id="t", intent="A", output_as="c0",
+                contestant_index=0,
+            ),
+            ExecutionStep(
+                step_id="c1", step_number=2, skill_id="t", intent="B", output_as="c1",
+                contestant_index=1,
+            ),
+        ],
+        workflow_pattern=WorkflowPattern.TOURNAMENT,
+    )
+
+    result = engine.run(plan, executor)
+    assert result.champion_index in (0, 1)
