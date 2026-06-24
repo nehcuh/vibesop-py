@@ -142,6 +142,19 @@ class Reorchestrator:
         completed_steps = sum(1 for s in plan.steps if s.status.value == "completed")
         return completed_steps >= intent_count
 
+    def goals_met(
+        self,
+        plan: ExecutionPlan,
+        accumulated_results: dict[str, str] | None,
+    ) -> bool:
+        """Public goals-met check for degraded (no-LLM) reorchestration.
+
+        Wraps :meth:`_check_goals_met` so callers — e.g. the workflow engine's
+        degraded LOOP_UNTIL_DRY path — can test for early termination without
+        an LLM and without reaching into a private method.
+        """
+        return self._check_goals_met(plan, accumulated_results or {})
+
     def _llm_analyze(
         self,
         plan: ExecutionPlan,

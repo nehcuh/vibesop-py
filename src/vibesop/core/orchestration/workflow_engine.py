@@ -237,11 +237,31 @@ class WorkflowEngine:
         from vibesop.core.orchestration.reorchestrator import Reorchestrator
 
         reorchestrator = Reorchestrator(self._llm) if self._llm else None
+        # Degraded path: with no LLM the full reorchestration analysis is
+        # unavailable. We still expose the goals-met fast path so the loop can
+        # terminate early, and record a marker so callers know degradation
+        # occurred (APPEND_STEPS / LOOP_BACK require LLM analysis).
+        degraded = self._llm is None
+        rule_checker = Reorchestrator(None) if degraded else None
+        if degraded:
+            logger.warning(
+                "LOOP_UNTIL_DRY: no LLM configured — reorchestration degraded to "
+                "goals-met check only; APPEND_STEPS and LOOP_BACK will not trigger."
+            )
         results: dict[str, Any] = {}
         accumulated: dict[str, str] = {}
         dry_count = 0
         round_count = 0
         history: list[dict[str, Any]] = []
+        if degraded:
+            history.append(
+                {
+                    "round": -1,
+                    "step_id": "",
+                    "decision": "degraded",
+                    "reasoning": "No LLM configured — APPEND_STEPS/LOOP_BACK unavailable",
+                }
+            )
 
         step_idx = 0
         while step_idx < len(plan.steps):
@@ -336,6 +356,25 @@ class WorkflowEngine:
 
                 if dry_count >= plan.dry_threshold:
                     logger.info("Loop-until-dry: dry after %d consecutive rounds", dry_count)
+                    break
+
+            elif rule_checker is not None:
+                # Degraded (no LLM): only the goals-met fast path is available.
+                # APPEND_STEPS / LOOP_BACK require LLM analysis and are skipped.
+                if rule_checker.goals_met(plan, accumulated):
+                    logger.info("Loop-until-dry (degraded): all goals met, terminating early")
+                    history.append(
+                        {
+                            "round": -1,
+                            "step_id": step.step_id,
+                            "decision": "terminate_early",
+                            "reasoning": "degraded goals-met (no LLM)",
+                        }
+                    )
+                    break
+                dry_count += 1
+                if dry_count >= plan.dry_threshold:
+                    logger.info("Loop-until-dry (degraded): dry after %d rounds", dry_count)
                     break
 
             step_idx += 1

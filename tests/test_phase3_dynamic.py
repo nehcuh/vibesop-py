@@ -740,3 +740,61 @@ def test_tournament_no_llm_empty_outputs_no_crash() -> None:
 
     result = engine.run(plan, executor)
     assert result.champion_index in (0, 1)
+
+
+# --- Phase 2 Regression Tests ---
+
+
+def test_loop_until_dry_degraded_logs_warning(caplog) -> None:
+    """P1-3: no LLM → LOOP_UNTIL_DRY logs a degradation warning (not silent)."""
+    import logging
+
+    caplog.set_level(logging.WARNING, logger="vibesop.core.orchestration.workflow_engine")
+    engine = WorkflowEngine()  # no LLM
+
+    plan = ExecutionPlan(
+        plan_id="degraded-warn",
+        original_query="Test",
+        steps=[
+            ExecutionStep(
+                step_id="s1", step_number=1, skill_id="t", intent="Task 1", output_as="s1_result"
+            )
+        ],
+        workflow_pattern=WorkflowPattern.LOOP_UNTIL_DRY,
+        detected_intents=["Task 1"],
+    )
+
+    engine.run(plan, lambda s: "ok")
+
+    assert any("degraded" in rec.message.lower() for rec in caplog.records), (
+        "no-LLM LOOP_UNTIL_DRY should log a degradation warning"
+    )
+
+
+def test_loop_until_dry_degraded_continues_safely() -> None:
+    """P1-3: degraded LOOP_UNTIL_DRY runs steps once, flags degradation, no crash."""
+    engine = WorkflowEngine()  # no LLM
+
+    plan = ExecutionPlan(
+        plan_id="degraded-safe",
+        original_query="Test",
+        steps=[
+            ExecutionStep(
+                step_id="s1", step_number=1, skill_id="t", intent="Task 1", output_as="s1_result"
+            ),
+            ExecutionStep(
+                step_id="s2", step_number=2, skill_id="t", intent="Task 2", output_as="s2_result"
+            ),
+        ],
+        workflow_pattern=WorkflowPattern.LOOP_UNTIL_DRY,
+        detected_intents=["Task 1", "Task 2"],
+    )
+
+    result = engine.run(plan, lambda s: f"result_{s.step_id}")
+
+    assert plan.status == PlanStatus.COMPLETED
+    assert result.total_steps_executed == 2
+    assert result.reorchestration_rounds == 0
+    assert any(
+        entry.get("decision") == "degraded" for entry in result.reorchestration_history
+    ), f"degraded path should record a 'degraded' marker: {result.reorchestration_history}"
