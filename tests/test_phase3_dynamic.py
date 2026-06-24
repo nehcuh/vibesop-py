@@ -1014,5 +1014,53 @@ async def test_debate_pro_con_judge_flow() -> None:
     )
 
 
+# --- P2 Regression Tests: defensive squad metadata parsing (re-added after merge) ---
 
-main
+
+async def test_agent_squad_missing_metadata_raises_clear_error() -> None:
+    """Missing/empty squad metadata raises a clear ValueError, not a cryptic ValidationError."""
+    import pytest
+
+    engine = WorkflowEngine()
+    plan = ExecutionPlan(
+        plan_id="no-squad",
+        original_query="test",
+        steps=[],
+        workflow_pattern=WorkflowPattern.AGENT_SQUAD,
+        metadata={},
+    )
+    with pytest.raises(ValueError, match="empty or missing"):
+        await engine.run_async(plan)
+
+
+async def test_agent_squad_malformed_metadata_raises_clear_error() -> None:
+    """Non-dict squad metadata (e.g. a list) is rejected cleanly by the type guard."""
+    import pytest
+
+    engine = WorkflowEngine()
+    plan = ExecutionPlan(
+        plan_id="malformed-squad",
+        original_query="test",
+        steps=[],
+        workflow_pattern=WorkflowPattern.AGENT_SQUAD,
+        metadata={"agent_squad": ["not", "a", "dict"]},
+    )
+    with pytest.raises(ValueError, match="empty or missing"):
+        await engine.run_async(plan)
+
+
+async def test_agent_squad_invalid_metadata_raises_clear_error() -> None:
+    """Structurally invalid squad metadata raises a clear ValueError wrapping the details."""
+    import pytest
+
+    engine = WorkflowEngine()
+    plan = ExecutionPlan(
+        plan_id="bad-squad",
+        original_query="test",
+        steps=[],
+        workflow_pattern=WorkflowPattern.AGENT_SQUAD,
+        metadata={"agent_squad": {"roles": []}},  # missing required squad_id
+    )
+    with pytest.raises(ValueError, match="Invalid agent squad metadata"):
+        await engine.run_async(plan)
+
