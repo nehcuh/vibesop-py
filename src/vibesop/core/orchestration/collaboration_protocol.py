@@ -90,11 +90,24 @@ class CollaborationProtocol(ABC):
     ) -> bool:
         """Return True if the protocol should run another round.
 
-        Stops when max rounds are reached or when every verdict has passed.
+        Convergence is decided by the LATEST verdict only, not the full
+        history (the engine accumulates verdicts across rounds). Stop when:
+
+        - max rounds are reached, or
+        - the latest review passed (work is good), or
+        - the latest review failed without requesting revision (hard reject).
+
+        Keep looping only when the latest review failed but explicitly
+        requests another revision.
         """
         if round_number >= max_rounds:
             return False
-        return not (verdicts and all(v.passed for v in verdicts))
+        if not verdicts:
+            return True
+        latest = verdicts[-1]
+        if latest.passed:
+            return False
+        return latest.requires_revision
 
     def _step_for_role(self, role_id: str) -> SquadStep | None:
         """Find the squad step owned by ``role_id``."""

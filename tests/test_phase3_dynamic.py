@@ -13,6 +13,7 @@ Tests for:
 from __future__ import annotations
 
 from vibesop.core.models import (
+    AgentSquad,
     DynamicNodeStatus,
     ExecutionMode,
     ExecutionPlan,
@@ -448,3 +449,148 @@ def test_dynamic_execution_result_model() -> None:
     )
     assert result.plan_id == "test"
     assert result.pattern == WorkflowPattern.LOOP_UNTIL_DRY
+
+
+# --- Phase 1 Regression Tests (P0 fixes) ---
+
+
+class _LoopBackLLM:
+    """Mock LLM that always returns a LOOP_BACK decision to a target step."""
+
+    def __init__(self, target_step_id: str) -> None:
+        self._target = target_step_id
+
+    def call(self, prompt, **kwargs):
+        return (
+            '{"decision": "loop_back", "confidence": 0.9, '
+            f'"reasoning": "redo", "loop_target_step_id": "{self._target}"}}'
+        )
+
+
+def test_loop_back_actually_reexecutes() -> None:
+    """P0-1: LOOP_BACK must rewind the cursor so the target step re-runs.
+
+    Before the fix the cursor only advanced, so the target step executed once.
+    """
+    call_log: list[str] = []
+
+    def executor(step):
+        call_log.append(step.step_id)
+        return f"output for {step.step_id}"
+
+    engine = WorkflowEngine(llm_client=_LoopBackLLM("s1"))
+    plan = ExecutionPlan(
+        plan_id="regression-loop-back",
+        original_query="Test LOOP_BACK cursor rewinding",
+        steps=[
+            ExecutionStep(
+                step_id="s1",
+                step_number=1,
+                skill_id="test",
+                intent="Step 1",
+                output_as="s1_result",
+            ),
+        ],
+        workflow_pattern=WorkflowPattern.LOOP_UNTIL_DRY,
+        # 2 intents but 1 step → _check_goals_met fast path never fires
+        detected_intents=["intent-a", "intent-b"],
+        dry_threshold=5,
+        max_reorchestration_rounds=3,
+    )
+
+    engine._run_loop_until_dry(plan, executor)
+
+    assert call_log.count("s1") >= 2, (
+        f"LOOP_BACK should re-execute target step; s1 ran "
+        f"{call_log.count('s1')} time(s): {call_log}"
+    )
+
+
+def test_loop_back_guard_terminates() -> None:
+    """P0-1 guard: a runaway LOOP_BACK must terminate, not spin forever."""
+    call_log: list[str] = []
+
+    def executor(step):
+        call_log.append(step.step_id)
+        return "out"
+
+    engine = WorkflowEngine(llm_client=_LoopBackLLM("s1"))
+    plan = ExecutionPlan(
+        plan_id="regression-loop-guard",
+        original_query="guard",
+        steps=[
+            ExecutionStep(step_id="s1", step_number=1, skill_id="t", intent="x", output_as="o")
+        ],
+        workflow_pattern=WorkflowPattern.LOOP_UNTIL_DRY,
+        detected_intents=["a", "b"],
+        dry_threshold=200,
+        max_reorchestration_rounds=200,  # generous; per-step guard must kick in first
+    )
+
+    engine._run_loop_until_dry(plan, executor)
+
+    assert len(call_log) < 20, f"Guard failed; engine spun {len(call_log)} times: {call_log}"
+
+
+def test_convergence_after_revision_pass() -> None:
+    """P0-2: once the latest review PASSES, the loop must converge even when
+    an earlier round failed. This is the [FAIL, PASS] accumulation repro."""
+    from vibesop.core.orchestration.collaboration_protocol import (
+        ReviewVerdict,
+        SequentialProtocol,
+    )
+
+    protocol = SequentialProtocol(AgentSquad(squad_id="conv"))
+    verdicts = [
+        ReviewVerdict(
+            passed=False,
+            reviewer_role="rev",
+            target_role="impl",
+            issues=["bug"],
+            requires_revision=True,
+            revision_feedback="fix it",
+        ),
+        ReviewVerdict(passed=True, reviewer_role="rev", target_role="impl", issues=[]),
+    ]
+    assert protocol.should_continue(round_number=2, max_rounds=5, verdicts=verdicts) is False
+
+
+def test_convergence_hard_reject() -> None:
+    """P0-2: FAIL with no revision requested is a hard reject → stop early."""
+    from vibesop.core.orchestration.collaboration_protocol import (
+        ReviewVerdict,
+        SequentialProtocol,
+    )
+
+    protocol = SequentialProtocol(AgentSquad(squad_id="conv"))
+    verdicts = [
+        ReviewVerdict(
+            passed=False,
+            reviewer_role="rev",
+            target_role="impl",
+            issues=["fatal"],
+            requires_revision=False,
+        )
+    ]
+    assert protocol.should_continue(round_number=1, max_rounds=5, verdicts=verdicts) is False
+
+
+def test_continues_when_revision_needed() -> None:
+    """P0-2 guard: FAIL + revision requested must keep looping (no over-fix)."""
+    from vibesop.core.orchestration.collaboration_protocol import (
+        ReviewVerdict,
+        SequentialProtocol,
+    )
+
+    protocol = SequentialProtocol(AgentSquad(squad_id="conv"))
+    verdicts = [
+        ReviewVerdict(
+            passed=False,
+            reviewer_role="rev",
+            target_role="impl",
+            issues=["bug"],
+            requires_revision=True,
+            revision_feedback="fix it",
+        )
+    ]
+    assert protocol.should_continue(round_number=1, max_rounds=5, verdicts=verdicts) is True

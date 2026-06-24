@@ -34,6 +34,11 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# Safety cap on how many times a single step may be re-executed via LOOP_BACK.
+# The primary bound is ``plan.max_reorchestration_rounds`` (caps total analyses);
+# this guards a single step against a runaway loop-back decision.
+MAX_LOOP_ITERATIONS = 5
+
 
 @dataclass
 class WorkflowEngineConfig:
@@ -293,21 +298,36 @@ class WorkflowEngine:
                 elif analysis.decision == ReorchestrationDecision.LOOP_BACK:
                     dry_count = 0
                     target_id = analysis.loop_target_step_id
-                    target_step = next(
-                        (s for s in plan.steps if s.step_id == target_id),
+                    target_idx = next(
+                        (i for i, s in enumerate(plan.steps) if s.step_id == target_id),
                         None,
                     )
-                    if target_step:
+                    # Rewind to the current or an earlier step. The tail
+                    # ``step_idx += 1`` then advances onto target_idx, so we
+                    # set the cursor to ``target_idx - 1`` (valid even for
+                    # target_idx == 0, since the increment runs this iteration).
+                    if (
+                        target_idx is not None
+                        and target_idx <= step_idx
+                        and plan.steps[target_idx].loop_iteration < MAX_LOOP_ITERATIONS
+                    ):
+                        target_step = plan.steps[target_idx]
                         target_step.status = StepStatus.PENDING
                         target_step.dynamic_status = DynamicNodeStatus.LOOPING
                         target_step.loop_iteration += 1
+                        step_idx = target_idx - 1
                         logger.info(
                             "Loop-until-dry: looping back to step %s (iteration %d)",
                             target_id,
                             target_step.loop_iteration,
                         )
                     else:
-                        logger.warning("LOOP_BACK target step %s not found", target_id)
+                        logger.warning(
+                            "LOOP_BACK to step %s skipped (not found, ahead of cursor, "
+                            "or iteration cap %d reached)",
+                            target_id,
+                            MAX_LOOP_ITERATIONS,
+                        )
 
                 else:
                     # CONTINUE or unknown — counts toward dry threshold
