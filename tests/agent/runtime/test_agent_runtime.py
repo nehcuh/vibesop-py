@@ -106,7 +106,7 @@ class TestAgentRuntimeBackwardCompat:
 class TestAgentRuntimeHookResponseHintPath:
     """NEXT STEP hint in to_hook_response must match real on-disk layout."""
 
-    def _make_result(self, skill_id: str) -> "AgentRuntimeResult":
+    def _make_result(self, skill_id: str) -> AgentRuntimeResult:
         from vibesop.agent.runtime.agent_runtime import AgentRuntimeResult
 
         return AgentRuntimeResult(
@@ -129,7 +129,6 @@ class TestAgentRuntimeHookResponseHintPath:
         """When project_root/core/skills/ is absent, hint must point to the
         bundled data dir via sys.path scan — and be absolute so Claude can
         Read it from any CWD."""
-        from pathlib import Path
 
         site_packages = tmp_path / "site-packages"
         bundled = (
