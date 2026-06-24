@@ -433,8 +433,7 @@ class WorkflowEngine:
             max_workers=max(1, len(contestant_steps))
         ) as pool:
             future_to_idx = {
-                pool.submit(run_contestant, step): idx
-                for idx, step in enumerate(contestant_steps)
+                pool.submit(run_contestant, step): idx for idx, step in enumerate(contestant_steps)
             }
             for future in concurrent.futures.as_completed(future_to_idx):
                 idx = future_to_idx[future]

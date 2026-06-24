@@ -518,9 +518,7 @@ def test_loop_back_guard_terminates() -> None:
     plan = ExecutionPlan(
         plan_id="regression-loop-guard",
         original_query="guard",
-        steps=[
-            ExecutionStep(step_id="s1", step_number=1, skill_id="t", intent="x", output_as="o")
-        ],
+        steps=[ExecutionStep(step_id="s1", step_number=1, skill_id="t", intent="x", output_as="o")],
         workflow_pattern=WorkflowPattern.LOOP_UNTIL_DRY,
         detected_intents=["a", "b"],
         dry_threshold=200,
@@ -654,15 +652,27 @@ def test_tournament_parallel_exception_isolation() -> None:
         original_query="iso",
         steps=[
             ExecutionStep(
-                step_id="c0", step_number=1, skill_id="t", intent="A", output_as="c0",
+                step_id="c0",
+                step_number=1,
+                skill_id="t",
+                intent="A",
+                output_as="c0",
                 contestant_index=0,
             ),
             ExecutionStep(
-                step_id="c1", step_number=2, skill_id="t", intent="B", output_as="c1",
+                step_id="c1",
+                step_number=2,
+                skill_id="t",
+                intent="B",
+                output_as="c1",
                 contestant_index=1,
             ),
             ExecutionStep(
-                step_id="c2", step_number=3, skill_id="t", intent="C", output_as="c2",
+                step_id="c2",
+                step_number=3,
+                skill_id="t",
+                intent="C",
+                output_as="c2",
                 contestant_index=2,
             ),
         ],
@@ -698,11 +708,19 @@ def test_tournament_no_llm_fallback_not_default_zero() -> None:
         original_query="fallback",
         steps=[
             ExecutionStep(
-                step_id="c0", step_number=1, skill_id="t", intent="A", output_as="c0",
+                step_id="c0",
+                step_number=1,
+                skill_id="t",
+                intent="A",
+                output_as="c0",
                 contestant_index=0,
             ),
             ExecutionStep(
-                step_id="c1", step_number=2, skill_id="t", intent="B", output_as="c1",
+                step_id="c1",
+                step_number=2,
+                skill_id="t",
+                intent="B",
+                output_as="c1",
                 contestant_index=1,
             ),
         ],
@@ -727,11 +745,19 @@ def test_tournament_no_llm_empty_outputs_no_crash() -> None:
         original_query="empty",
         steps=[
             ExecutionStep(
-                step_id="c0", step_number=1, skill_id="t", intent="A", output_as="c0",
+                step_id="c0",
+                step_number=1,
+                skill_id="t",
+                intent="A",
+                output_as="c0",
                 contestant_index=0,
             ),
             ExecutionStep(
-                step_id="c1", step_number=2, skill_id="t", intent="B", output_as="c1",
+                step_id="c1",
+                step_number=2,
+                skill_id="t",
+                intent="B",
+                output_as="c1",
                 contestant_index=1,
             ),
         ],
@@ -795,9 +821,9 @@ def test_loop_until_dry_degraded_continues_safely() -> None:
     assert plan.status == PlanStatus.COMPLETED
     assert result.total_steps_executed == 2
     assert result.reorchestration_rounds == 0
-    assert any(
-        entry.get("decision") == "degraded" for entry in result.reorchestration_history
-    ), f"degraded path should record a 'degraded' marker: {result.reorchestration_history}"
+    assert any(entry.get("decision") == "degraded" for entry in result.reorchestration_history), (
+        f"degraded path should record a 'degraded' marker: {result.reorchestration_history}"
+    )
 
 
 def test_append_steps_uses_router_for_skill_id() -> None:
@@ -833,7 +859,9 @@ def test_append_steps_uses_router_for_skill_id() -> None:
         max_reorchestration_rounds=5,
     )
 
-    new_steps = engine._create_steps_from_analysis(plan, [{"intent": "Fix X", "query": "fix the X"}])
+    new_steps = engine._create_steps_from_analysis(
+        plan, [{"intent": "Fix X", "query": "fix the X"}]
+    )
 
     assert len(new_steps) == 1
     assert new_steps[0].skill_id == "real/debug-skill", (
@@ -855,7 +883,9 @@ def test_append_steps_fallback_when_no_router() -> None:
         workflow_pattern=WorkflowPattern.LOOP_UNTIL_DRY,
     )
 
-    new_steps = engine._create_steps_from_analysis(plan, [{"intent": "Task", "query": "do something"}])
+    new_steps = engine._create_steps_from_analysis(
+        plan, [{"intent": "Task", "query": "do something"}]
+    )
 
     assert len(new_steps) == 1
     assert new_steps[0].skill_id == "builtin/slash-orchestrate"
@@ -1063,4 +1093,3 @@ async def test_agent_squad_invalid_metadata_raises_clear_error() -> None:
     )
     with pytest.raises(ValueError, match="Invalid agent squad metadata"):
         await engine.run_async(plan)
-
