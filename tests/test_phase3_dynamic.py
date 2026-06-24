@@ -859,3 +859,156 @@ def test_append_steps_fallback_when_no_router() -> None:
 
     assert len(new_steps) == 1
     assert new_steps[0].skill_id == "builtin/slash-orchestrate"
+
+
+class _ReviewLLM:
+    """LLM whose review verdicts fail for the first N calls, then pass."""
+
+    def __init__(self, fail_count: int) -> None:
+        self._fail_count = fail_count
+        self._n = 0
+
+    def call(self, prompt, **kwargs):
+        self._n += 1
+        if self._n <= self._fail_count:
+            return (
+                '{"passed": false, "issues": ["problem"], "score": 3.0, '
+                '"requires_revision": true, "revision_feedback": "fix it"}'
+            )
+        return (
+            '{"passed": true, "issues": [], "score": 9.0, '
+            '"requires_revision": false, "revision_feedback": ""}'
+        )
+
+
+async def test_squad_partial_rerun() -> None:
+    """P1-7: after a failing review, later rounds re-run only target + reviewer."""
+    from vibesop.core.models import AgentRole, AgentSquad, SquadStep
+
+    execution_log: list[str] = []
+
+    async def executor(step, ctx):
+        execution_log.append(step.step_id)
+        return {"role_id": step.role_id, "content": f"out-{step.step_id}"}
+
+    squad = AgentSquad(
+        squad_id="partial",
+        roles=[
+            AgentRole(role_id="implementer", name="Impl"),
+            AgentRole(role_id="reviewer", name="Rev"),
+            AgentRole(role_id="documenter", name="Doc"),
+            AgentRole(role_id="deployer", name="Deploy"),
+        ],
+        steps=[
+            SquadStep(step_id="s1", role_id="implementer"),
+            SquadStep(step_id="s2", role_id="reviewer", input_from=["s1"]),
+            SquadStep(step_id="s3", role_id="documenter"),
+            SquadStep(step_id="s4", role_id="deployer"),
+        ],
+        execution_order=["s1", "s2", "s3", "s4"],
+        collaboration_protocol="review_gate",
+        max_rounds=3,
+    )
+    plan = ExecutionPlan(
+        plan_id="partial",
+        original_query="build",
+        steps=[],
+        workflow_pattern=WorkflowPattern.AGENT_SQUAD,
+        metadata={"agent_squad": squad.to_dict()},
+    )
+
+    engine = WorkflowEngine(llm_client=_ReviewLLM(fail_count=99))  # always fails
+    await engine.run_async(plan, context={}, executor=executor)
+
+    # Round 0 runs all 4; rounds 1-2 re-run only s1 (target) + s2 (reviewer).
+    assert execution_log == ["s1", "s2", "s3", "s4", "s1", "s2", "s1", "s2"], (
+        f"partial rerun expected [s1,s2,s3,s4, s1,s2, s1,s2], got {execution_log}"
+    )
+
+
+async def test_red_team_fix_loop() -> None:
+    """P1-4/P1-7: RED_TEAM loops implementer→red_team only (fixed-point), via delegation."""
+    from vibesop.core.models import AgentRole, AgentSquad, SquadStep
+
+    execution_log: list[str] = []
+
+    async def executor(step, ctx):
+        execution_log.append(step.role_id)
+        return {"role_id": step.role_id, "content": f"out-{step.role_id}"}
+
+    squad = AgentSquad(
+        squad_id="redteam",
+        roles=[
+            AgentRole(role_id="implementer", name="Impl"),
+            AgentRole(role_id="red_team", name="RT"),
+        ],
+        steps=[
+            SquadStep(step_id="s1", role_id="implementer"),
+            SquadStep(step_id="s2", role_id="red_team", input_from=["s1"]),
+        ],
+        execution_order=["s1", "s2"],
+        collaboration_protocol="red_team",
+        max_rounds=3,
+    )
+    plan = ExecutionPlan(
+        plan_id="redteam",
+        original_query="secure auth",
+        steps=[],
+        workflow_pattern=WorkflowPattern.RED_TEAM,
+        metadata={"agent_squad": squad.to_dict()},
+    )
+
+    engine = WorkflowEngine(llm_client=_ReviewLLM(fail_count=2))  # fail, fail, pass
+    result = await engine.run_async(plan, context={}, executor=executor)
+
+    assert execution_log == [
+        "implementer",
+        "red_team",
+        "implementer",
+        "red_team",
+        "implementer",
+        "red_team",
+    ], f"RED_TEAM should loop impl→rt per round: {execution_log}"
+    assert result.verdicts[-1].passed is True
+
+
+async def test_debate_pro_con_judge_flow() -> None:
+    """P1-4: DEBATE executes pro→con→judge in order (delegation + DebateProtocol)."""
+    from vibesop.core.models import AgentRole, AgentSquad, SquadStep
+
+    execution_log: list[str] = []
+
+    async def executor(step, ctx):
+        execution_log.append(step.role_id)
+        return {"role_id": step.role_id, "content": f"out-{step.role_id}"}
+
+    squad = AgentSquad(
+        squad_id="debate",
+        roles=[
+            AgentRole(role_id="pro", name="Pro"),
+            AgentRole(role_id="con", name="Con"),
+            AgentRole(role_id="judge", name="Judge"),
+        ],
+        steps=[
+            SquadStep(step_id="s1", role_id="pro"),
+            SquadStep(step_id="s2", role_id="con", input_from=["s1"]),
+            SquadStep(step_id="s3", role_id="judge", input_from=["s1", "s2"]),
+        ],
+        execution_order=["s1", "s2", "s3"],
+        collaboration_protocol="debate",
+        max_rounds=1,
+    )
+    plan = ExecutionPlan(
+        plan_id="debate",
+        original_query="topic",
+        steps=[],
+        workflow_pattern=WorkflowPattern.DEBATE,
+        metadata={"agent_squad": squad.to_dict()},
+    )
+
+    engine = WorkflowEngine()
+    await engine.run_async(plan, context={}, executor=executor)
+
+    assert execution_log == ["pro", "con", "judge"], (
+        f"DEBATE should run pro→con→judge: {execution_log}"
+    )

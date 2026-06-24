@@ -647,7 +647,18 @@ class WorkflowEngine:
         self._start_time = time.monotonic()
 
         while protocol.should_continue(round_num, squad.max_rounds, all_verdicts):
-            for step_id in squad.execution_order:
+            # Round 0 runs the full squad. Later rounds re-run only the steps a
+            # failing review flagged — the target step plus the reviewer that
+            # judges it — instead of re-executing every role from scratch.
+            if round_num == 0:
+                step_ids = list(squad.execution_order)
+            else:
+                step_ids = self._revision_targets(squad, all_verdicts)
+                if not step_ids:
+                    logger.info("Squad round %d: no revision targets, stopping", round_num)
+                    break
+
+            for step_id in step_ids:
                 step = self._find_step(squad.steps, step_id)
                 step_context = self._build_step_context(
                     step, squad, outputs, protocol, all_verdicts, context
@@ -798,6 +809,28 @@ class WorkflowEngine:
             prev_step = self._find_step(squad.steps, prev_step_id)
             return prev_step.role_id
         return "unknown"
+
+    def _revision_targets(self, squad: AgentSquad, verdicts: list[Any]) -> list[str]:
+        """Return the step IDs to re-run after a failing review.
+
+        On a revision request, both the failing target step AND the reviewer
+        step that flagged it must re-run — the target to apply the fix, the
+        reviewer to re-judge it within the same round (otherwise the loop never
+        sees a fresh verdict). Returns an empty list when the latest review
+        passed or is a hard reject (no revision wanted), which stops the loop.
+        """
+        if not verdicts:
+            return []
+        latest = verdicts[-1]
+        if getattr(latest, "passed", False):
+            return []
+        if not getattr(latest, "requires_revision", True):
+            return []
+        for i, sid in enumerate(squad.execution_order):
+            step = self._find_step(squad.steps, sid)
+            if step.role_id in ("reviewer", "red_team") and i > 0:
+                return [squad.execution_order[i - 1], sid]
+        return []
 
     def _elapsed(self) -> float:
         """Return elapsed time since execution started in milliseconds."""
