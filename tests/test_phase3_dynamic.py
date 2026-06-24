@@ -1012,3 +1012,7 @@ async def test_debate_pro_con_judge_flow() -> None:
     assert execution_log == ["pro", "con", "judge"], (
         f"DEBATE should run pro→con→judge: {execution_log}"
     )
+
+
+
+main
