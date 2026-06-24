@@ -798,3 +798,64 @@ def test_loop_until_dry_degraded_continues_safely() -> None:
     assert any(
         entry.get("decision") == "degraded" for entry in result.reorchestration_history
     ), f"degraded path should record a 'degraded' marker: {result.reorchestration_history}"
+
+
+def test_append_steps_uses_router_for_skill_id() -> None:
+    """P1-5: appended steps route to a real skill via the router, not hard-coded."""
+
+    class FixedRouter:
+        def _single_skill_route(self, query, context=None, candidates=None):
+            from vibesop.core.models import RoutingLayer, RoutingResult, SkillRoute
+
+            return RoutingResult(
+                primary=SkillRoute(
+                    skill_id="real/debug-skill", confidence=0.85, layer=RoutingLayer.KEYWORD
+                ),
+                alternatives=[],
+                routing_path=[],
+                layer_details=[],
+                query=query,
+                duration_ms=10,
+            )
+
+    engine = WorkflowEngine(router=FixedRouter())
+    plan = ExecutionPlan(
+        plan_id="append-routing-test",
+        original_query="Test",
+        steps=[
+            ExecutionStep(
+                step_id="s1", step_number=1, skill_id="test", intent="Original", output_as="s1"
+            )
+        ],
+        workflow_pattern=WorkflowPattern.LOOP_UNTIL_DRY,
+        detected_intents=["Original"],
+        dry_threshold=5,
+        max_reorchestration_rounds=5,
+    )
+
+    new_steps = engine._create_steps_from_analysis(plan, [{"intent": "Fix X", "query": "fix the X"}])
+
+    assert len(new_steps) == 1
+    assert new_steps[0].skill_id == "real/debug-skill", (
+        f"appended step should use the routed skill_id, got {new_steps[0].skill_id}"
+    )
+
+
+def test_append_steps_fallback_when_no_router() -> None:
+    """P1-5: without a router, appended steps fall back to the default skill_id."""
+    engine = WorkflowEngine()  # no router
+    plan = ExecutionPlan(
+        plan_id="append-fallback-test",
+        original_query="Test",
+        steps=[
+            ExecutionStep(
+                step_id="s1", step_number=1, skill_id="test", intent="Original", output_as="s1"
+            )
+        ],
+        workflow_pattern=WorkflowPattern.LOOP_UNTIL_DRY,
+    )
+
+    new_steps = engine._create_steps_from_analysis(plan, [{"intent": "Task", "query": "do something"}])
+
+    assert len(new_steps) == 1
+    assert new_steps[0].skill_id == "builtin/slash-orchestrate"

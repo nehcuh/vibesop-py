@@ -125,6 +125,7 @@ class WorkflowEngine:
         config: WorkflowEngineConfig | None = None,
         llm_client: Any = None,
         prompt_chain_output_dir: str = ".vibe/prompts",
+        router: Any = None,
     ):
         """Initialize the workflow engine.
 
@@ -132,10 +133,12 @@ class WorkflowEngine:
             config: Engine configuration
             llm_client: LLM client for re-orchestration analysis and squad reviews
             prompt_chain_output_dir: Output directory for prompt chain files
+            router: Optional router for routing appended steps to real skills
         """
         self._config = config or WorkflowEngineConfig()
         self._llm = llm_client
         self._prompt_chain_output_dir = prompt_chain_output_dir
+        self._router = router
         self._start_time: float = 0.0
 
     @staticmethod
@@ -574,12 +577,14 @@ class WorkflowEngine:
         next_number = max((s.step_number for s in plan.steps), default=0) + 1
 
         for task in new_sub_tasks:
+            intent = task.get("intent", "")
+            query = task.get("query", "")
             step = ExecutionStep(
                 step_id=str(uuid.uuid4())[:8],
                 step_number=next_number,
-                skill_id="builtin/slash-orchestrate",
-                intent=task.get("intent", ""),
-                input_query=task.get("query", ""),
+                skill_id=self._route_appended_skill(query, intent),
+                intent=intent,
+                input_query=query,
                 original_query_segment=plan.original_query,
                 output_as=f"appended_step_{next_number}_result",
                 status=StepStatus.PENDING,
@@ -592,6 +597,27 @@ class WorkflowEngine:
             next_number += 1
 
         return steps
+
+    def _route_appended_skill(self, query: str, intent: str) -> str:
+        """Route an appended sub-task to a real skill via the configured router.
+
+        Falls back to ``builtin/slash-orchestrate`` when no router is configured
+        or routing fails, matching the prior hard-coded behaviour.
+        """
+        default = "builtin/slash-orchestrate"
+        route_method = getattr(self._router, "_single_skill_route", None) if self._router else None
+        if route_method is None:
+            return default
+        try:
+            route = route_method(query)
+            primary = getattr(route, "primary", None)
+            skill_id = getattr(primary, "skill_id", None) if primary else None
+            if skill_id:
+                logger.info("APPEND step routed to %s for intent=%s", skill_id, intent)
+                return skill_id
+        except Exception as e:
+            logger.warning("APPEND step routing failed for intent=%s: %s", intent, e)
+        return default
 
     # ── Phase 4: Agent squad executors ───────────────────────────────────────
 
