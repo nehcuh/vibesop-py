@@ -594,3 +594,84 @@ def test_continues_when_revision_needed() -> None:
         )
     ]
     assert protocol.should_continue(round_number=1, max_rounds=5, verdicts=verdicts) is True
+
+
+def test_tournament_parallel_execution() -> None:
+    """P1-1: contestants run in parallel (wall-clock far below serial sum)."""
+    import time
+
+    def slow_executor(step):
+        time.sleep(0.06)
+        return f"output from {step.step_id}"
+
+    engine = WorkflowEngine()
+    plan = ExecutionPlan(
+        plan_id="regression-tournament-parallel",
+        original_query="parallel",
+        steps=[
+            ExecutionStep(
+                step_id=f"c{i}",
+                step_number=i + 1,
+                skill_id="t",
+                intent=f"Contestant {i}",
+                output_as=f"c{i}",
+                contestant_index=i,
+            )
+            for i in range(4)
+        ]
+        + [
+            ExecutionStep(
+                step_id="judge",
+                step_number=5,
+                skill_id="t",
+                intent="Judge",
+                output_as="judge",
+                is_verification_step=True,
+            ),
+        ],
+        workflow_pattern=WorkflowPattern.TOURNAMENT,
+    )
+
+    start = time.monotonic()
+    engine.run(plan, slow_executor)
+    elapsed = time.monotonic() - start
+
+    # Serial would be 4 * 0.06 = 0.24s; parallel ~0.06-0.08s.
+    assert elapsed < 0.18, f"Tournament should run in parallel; took {elapsed:.3f}s"
+
+
+def test_tournament_parallel_exception_isolation() -> None:
+    """P1-1: a failing contestant must not abort the other contestants."""
+
+    def executor(step):
+        if step.step_id == "c1":
+            raise RuntimeError("boom")
+        return f"ok-{step.step_id}"
+
+    engine = WorkflowEngine()
+    plan = ExecutionPlan(
+        plan_id="regression-tournament-iso",
+        original_query="iso",
+        steps=[
+            ExecutionStep(
+                step_id="c0", step_number=1, skill_id="t", intent="A", output_as="c0",
+                contestant_index=0,
+            ),
+            ExecutionStep(
+                step_id="c1", step_number=2, skill_id="t", intent="B", output_as="c1",
+                contestant_index=1,
+            ),
+            ExecutionStep(
+                step_id="c2", step_number=3, skill_id="t", intent="C", output_as="c2",
+                contestant_index=2,
+            ),
+        ],
+        workflow_pattern=WorkflowPattern.TOURNAMENT,
+    )
+
+    result = engine.run(plan, executor)
+
+    assert "ok-c0" in str(result.results.get("c0"))
+    assert "ok-c2" in str(result.results.get("c2"))
+    failed = result.results.get("c1")
+    assert isinstance(failed, dict) and "error" in failed

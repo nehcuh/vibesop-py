@@ -11,6 +11,7 @@ Phase 4 (v7.1.0): Agent squad/debate/red-team execution
 from __future__ import annotations
 
 import asyncio
+import concurrent.futures
 import logging
 import time
 import uuid
@@ -359,32 +360,51 @@ class WorkflowEngine:
     ) -> DynamicExecutionResult:
         """Execute TOURNAMENT pattern.
 
-        Contestants run in parallel, then a judge selects the champion.
+        Contestants run in parallel via a thread pool, then a judge selects
+        the champion.
         """
         from vibesop.core.orchestration.tournament import TournamentResult, TournamentRunner
 
         contestant_steps = [s for s in plan.steps if not s.is_verification_step]
         results: dict[str, Any] = {}
-        contestant_outputs: list[str] = []
+        # Pre-size so each contestant writes its own slot by index, preserving
+        # the contestant-order ↔ output-index correspondence the judge relies on.
+        contestant_outputs: list[str] = [""] * len(contestant_steps)
 
-        # Execute all contestant steps
-        for step in contestant_steps:
+        def run_contestant(step: ExecutionStep) -> Any:
+            """Execute one contestant; mutate its status, propagate errors."""
             step.status = StepStatus.IN_PROGRESS
             step.dynamic_status = DynamicNodeStatus.RUNNING
-
             try:
                 output = executor(step)
                 step.status = StepStatus.COMPLETED
                 step.dynamic_status = DynamicNodeStatus.COMPLETED
-                results[step.step_id] = output
-                contestant_outputs.append(str(output) if output else "")
-            except Exception as e:
+                return output
+            except Exception:
                 step.status = StepStatus.FAILED
                 step.dynamic_status = DynamicNodeStatus.FAILED
-                results[step.step_id] = {"error": str(e)}
-                contestant_outputs.append("")
+                raise
 
-        # Run tournament judge
+        # Execute all contestants in parallel; each worker mutates its own step.
+        with concurrent.futures.ThreadPoolExecutor(
+            max_workers=max(1, len(contestant_steps))
+        ) as pool:
+            future_to_idx = {
+                pool.submit(run_contestant, step): idx
+                for idx, step in enumerate(contestant_steps)
+            }
+            for future in concurrent.futures.as_completed(future_to_idx):
+                idx = future_to_idx[future]
+                step = contestant_steps[idx]
+                try:
+                    output = future.result()
+                    results[step.step_id] = output
+                    contestant_outputs[idx] = str(output) if output else ""
+                except Exception as e:
+                    results[step.step_id] = {"error": str(e)}
+                    contestant_outputs[idx] = ""
+
+        # Select champion: LLM judge when available, else default to first contestant.
         tournament_result = TournamentResult(champion_index=0)
         if self._llm and contestant_outputs:
             runner = TournamentRunner(self._llm)
@@ -399,7 +419,9 @@ class WorkflowEngine:
         return DynamicExecutionResult(
             plan_id=plan.plan_id,
             pattern=WorkflowPattern.TOURNAMENT,
-            total_steps_executed=len(contestant_steps),
+            total_steps_executed=sum(
+                1 for s in contestant_steps if s.status == StepStatus.COMPLETED
+            ),
             reorchestration_rounds=0,
             final_status="completed",
             champion_index=tournament_result.champion_index,
