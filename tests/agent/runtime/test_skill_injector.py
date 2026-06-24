@@ -320,9 +320,7 @@ class TestSkillInjector:
         content = injector._load_skill_content("builtin/deep-diagnosis-optimization")
         assert "Bundled builtin via sys.path scan" in content
 
-    def test_load_skill_builtin_dev_repo_preferred_over_bundle(
-        self, tmp_path, monkeypatch
-    ) -> None:
+    def test_load_skill_builtin_dev_repo_preferred_over_bundle(self, tmp_path, monkeypatch) -> None:
         """When both dev repo and bundled data exist, dev repo wins.
 
         Dev repo (core/skills/) is the source of truth during development;

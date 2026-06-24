@@ -174,7 +174,9 @@ class AgentRuntimeResult:
                 for path_entry in sys.path:
                     if not path_entry:
                         continue
-                    bundled = Path(path_entry) / "vibesop" / "builtin_skills" / bare_name / "SKILL.md"
+                    bundled = (
+                        Path(path_entry) / "vibesop" / "builtin_skills" / bare_name / "SKILL.md"
+                    )
                     if bundled not in builtin_candidates:
                         builtin_candidates.append(bundled)
                 hint_path = next(

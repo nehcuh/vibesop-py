@@ -11,6 +11,7 @@ Phase 4 (v7.1.0): Agent squad/debate/red-team execution
 from __future__ import annotations
 
 import asyncio
+import concurrent.futures
 import logging
 import time
 import uuid
@@ -33,6 +34,11 @@ if TYPE_CHECKING:
     from vibesop.core.models import ExecutionPlan
 
 logger = logging.getLogger(__name__)
+
+# Safety cap on how many times a single step may be re-executed via LOOP_BACK.
+# The primary bound is ``plan.max_reorchestration_rounds`` (caps total analyses);
+# this guards a single step against a runaway loop-back decision.
+MAX_LOOP_ITERATIONS = 5
 
 
 @dataclass
@@ -119,6 +125,7 @@ class WorkflowEngine:
         config: WorkflowEngineConfig | None = None,
         llm_client: Any = None,
         prompt_chain_output_dir: str = ".vibe/prompts",
+        router: Any = None,
     ):
         """Initialize the workflow engine.
 
@@ -126,10 +133,12 @@ class WorkflowEngine:
             config: Engine configuration
             llm_client: LLM client for re-orchestration analysis and squad reviews
             prompt_chain_output_dir: Output directory for prompt chain files
+            router: Optional router for routing appended steps to real skills
         """
         self._config = config or WorkflowEngineConfig()
         self._llm = llm_client
         self._prompt_chain_output_dir = prompt_chain_output_dir
+        self._router = router
         self._start_time: float = 0.0
 
     @staticmethod
@@ -231,11 +240,31 @@ class WorkflowEngine:
         from vibesop.core.orchestration.reorchestrator import Reorchestrator
 
         reorchestrator = Reorchestrator(self._llm) if self._llm else None
+        # Degraded path: with no LLM the full reorchestration analysis is
+        # unavailable. We still expose the goals-met fast path so the loop can
+        # terminate early, and record a marker so callers know degradation
+        # occurred (APPEND_STEPS / LOOP_BACK require LLM analysis).
+        degraded = self._llm is None
+        rule_checker = Reorchestrator(None) if degraded else None
+        if degraded:
+            logger.warning(
+                "LOOP_UNTIL_DRY: no LLM configured — reorchestration degraded to "
+                "goals-met check only; APPEND_STEPS and LOOP_BACK will not trigger."
+            )
         results: dict[str, Any] = {}
         accumulated: dict[str, str] = {}
         dry_count = 0
         round_count = 0
         history: list[dict[str, Any]] = []
+        if degraded:
+            history.append(
+                {
+                    "round": -1,
+                    "step_id": "",
+                    "decision": "degraded",
+                    "reasoning": "No LLM configured — APPEND_STEPS/LOOP_BACK unavailable",
+                }
+            )
 
         step_idx = 0
         while step_idx < len(plan.steps):
@@ -293,21 +322,36 @@ class WorkflowEngine:
                 elif analysis.decision == ReorchestrationDecision.LOOP_BACK:
                     dry_count = 0
                     target_id = analysis.loop_target_step_id
-                    target_step = next(
-                        (s for s in plan.steps if s.step_id == target_id),
+                    target_idx = next(
+                        (i for i, s in enumerate(plan.steps) if s.step_id == target_id),
                         None,
                     )
-                    if target_step:
+                    # Rewind to the current or an earlier step. The tail
+                    # ``step_idx += 1`` then advances onto target_idx, so we
+                    # set the cursor to ``target_idx - 1`` (valid even for
+                    # target_idx == 0, since the increment runs this iteration).
+                    if (
+                        target_idx is not None
+                        and target_idx <= step_idx
+                        and plan.steps[target_idx].loop_iteration < MAX_LOOP_ITERATIONS
+                    ):
+                        target_step = plan.steps[target_idx]
                         target_step.status = StepStatus.PENDING
                         target_step.dynamic_status = DynamicNodeStatus.LOOPING
                         target_step.loop_iteration += 1
+                        step_idx = target_idx - 1
                         logger.info(
                             "Loop-until-dry: looping back to step %s (iteration %d)",
                             target_id,
                             target_step.loop_iteration,
                         )
                     else:
-                        logger.warning("LOOP_BACK target step %s not found", target_id)
+                        logger.warning(
+                            "LOOP_BACK to step %s skipped (not found, ahead of cursor, "
+                            "or iteration cap %d reached)",
+                            target_id,
+                            MAX_LOOP_ITERATIONS,
+                        )
 
                 else:
                     # CONTINUE or unknown — counts toward dry threshold
@@ -315,6 +359,25 @@ class WorkflowEngine:
 
                 if dry_count >= plan.dry_threshold:
                     logger.info("Loop-until-dry: dry after %d consecutive rounds", dry_count)
+                    break
+
+            elif rule_checker is not None:
+                # Degraded (no LLM): only the goals-met fast path is available.
+                # APPEND_STEPS / LOOP_BACK require LLM analysis and are skipped.
+                if rule_checker.goals_met(plan, accumulated):
+                    logger.info("Loop-until-dry (degraded): all goals met, terminating early")
+                    history.append(
+                        {
+                            "round": -1,
+                            "step_id": step.step_id,
+                            "decision": "terminate_early",
+                            "reasoning": "degraded goals-met (no LLM)",
+                        }
+                    )
+                    break
+                dry_count += 1
+                if dry_count >= plan.dry_threshold:
+                    logger.info("Loop-until-dry (degraded): dry after %d rounds", dry_count)
                     break
 
             step_idx += 1
@@ -339,33 +402,51 @@ class WorkflowEngine:
     ) -> DynamicExecutionResult:
         """Execute TOURNAMENT pattern.
 
-        Contestants run in parallel, then a judge selects the champion.
+        Contestants run in parallel via a thread pool, then a judge selects
+        the champion. Without an LLM, a rubric-style heuristic picks the
+        champion instead of defaulting to the first contestant.
         """
         from vibesop.core.orchestration.tournament import TournamentResult, TournamentRunner
 
         contestant_steps = [s for s in plan.steps if not s.is_verification_step]
         results: dict[str, Any] = {}
-        contestant_outputs: list[str] = []
+        # Pre-size so each contestant writes its own slot by index, preserving
+        # the contestant-order ↔ output-index correspondence the judge relies on.
+        contestant_outputs: list[str] = [""] * len(contestant_steps)
 
-        # Execute all contestant steps
-        for step in contestant_steps:
+        def run_contestant(step: ExecutionStep) -> Any:
+            """Execute one contestant; mutate its status, propagate errors."""
             step.status = StepStatus.IN_PROGRESS
             step.dynamic_status = DynamicNodeStatus.RUNNING
-
             try:
                 output = executor(step)
                 step.status = StepStatus.COMPLETED
                 step.dynamic_status = DynamicNodeStatus.COMPLETED
-                results[step.step_id] = output
-                contestant_outputs.append(str(output) if output else "")
-            except Exception as e:
+                return output
+            except Exception:
                 step.status = StepStatus.FAILED
                 step.dynamic_status = DynamicNodeStatus.FAILED
-                results[step.step_id] = {"error": str(e)}
-                contestant_outputs.append("")
+                raise
 
-        # Run tournament judge
-        tournament_result = TournamentResult(champion_index=0)
+        # Execute all contestants in parallel; each worker mutates its own step.
+        with concurrent.futures.ThreadPoolExecutor(
+            max_workers=max(1, len(contestant_steps))
+        ) as pool:
+            future_to_idx = {
+                pool.submit(run_contestant, step): idx for idx, step in enumerate(contestant_steps)
+            }
+            for future in concurrent.futures.as_completed(future_to_idx):
+                idx = future_to_idx[future]
+                step = contestant_steps[idx]
+                try:
+                    output = future.result()
+                    results[step.step_id] = output
+                    contestant_outputs[idx] = str(output) if output else ""
+                except Exception as e:
+                    results[step.step_id] = {"error": str(e)}
+                    contestant_outputs[idx] = ""
+
+        # Select champion: LLM judge when available, heuristic fallback otherwise.
         if self._llm and contestant_outputs:
             runner = TournamentRunner(self._llm)
             tournament_result = runner.run_tournament(
@@ -373,17 +454,56 @@ class WorkflowEngine:
                 plan.steps[0].intent if plan.steps else "",
                 contestant_outputs,
             )
+        elif contestant_outputs:
+            tournament_result = self._heuristic_tournament(contestant_outputs)
+        else:
+            tournament_result = TournamentResult(champion_index=0)
 
         plan.status = PlanStatus.COMPLETED
 
         return DynamicExecutionResult(
             plan_id=plan.plan_id,
             pattern=WorkflowPattern.TOURNAMENT,
-            total_steps_executed=len(contestant_steps),
+            total_steps_executed=sum(
+                1 for s in contestant_steps if s.status == StepStatus.COMPLETED
+            ),
             reorchestration_rounds=0,
             final_status="completed",
             champion_index=tournament_result.champion_index,
             results=results,
+        )
+
+    @staticmethod
+    def _heuristic_tournament(contestant_outputs: list[str]) -> Any:
+        """Pick a champion without an LLM using a lightweight rubric.
+
+        Scores each output on substance (length), vocabulary diversity, code
+        presence, and structural keywords. Ties resolve to the earliest index.
+        """
+        from vibesop.core.orchestration.tournament import TournamentResult
+
+        scores: list[float] = []
+        for raw in contestant_outputs:
+            text = raw or ""
+            lowered = text.lower()
+            score = 0.0
+            if len(text) > 50:
+                score += 0.3
+            if len(set(lowered.split())) > 20:
+                score += 0.3
+            if "```" in text:
+                score += 0.2
+            if any(kw in lowered for kw in ("step", "result", "conclusion")):
+                score += 0.2
+            scores.append(score)
+
+        champion_index = max(range(len(scores)), key=lambda i: scores[i]) if scores else 0
+        return TournamentResult(
+            champion_index=champion_index,
+            champion_output=contestant_outputs[champion_index] if contestant_outputs else "",
+            scores={i: scores[i] for i in range(len(scores))},
+            comparison_reasoning="Heuristic fallback (no LLM configured)",
+            all_outputs=contestant_outputs,
         )
 
     def _run_prompt_chain(
@@ -456,12 +576,14 @@ class WorkflowEngine:
         next_number = max((s.step_number for s in plan.steps), default=0) + 1
 
         for task in new_sub_tasks:
+            intent = task.get("intent", "")
+            query = task.get("query", "")
             step = ExecutionStep(
                 step_id=str(uuid.uuid4())[:8],
                 step_number=next_number,
-                skill_id="builtin/slash-orchestrate",
-                intent=task.get("intent", ""),
-                input_query=task.get("query", ""),
+                skill_id=self._route_appended_skill(query, intent),
+                intent=intent,
+                input_query=query,
                 original_query_segment=plan.original_query,
                 output_as=f"appended_step_{next_number}_result",
                 status=StepStatus.PENDING,
@@ -474,6 +596,27 @@ class WorkflowEngine:
             next_number += 1
 
         return steps
+
+    def _route_appended_skill(self, query: str, intent: str) -> str:
+        """Route an appended sub-task to a real skill via the configured router.
+
+        Falls back to ``builtin/slash-orchestrate`` when no router is configured
+        or routing fails, matching the prior hard-coded behaviour.
+        """
+        default = "builtin/slash-orchestrate"
+        route_method = getattr(self._router, "_single_skill_route", None) if self._router else None
+        if route_method is None:
+            return default
+        try:
+            route = route_method(query)
+            primary = getattr(route, "primary", None)
+            skill_id = getattr(primary, "skill_id", None) if primary else None
+            if skill_id:
+                logger.info("APPEND step routed to %s for intent=%s", skill_id, intent)
+                return skill_id
+        except Exception as e:
+            logger.warning("APPEND step routing failed for intent=%s: %s", intent, e)
+        return default
 
     # ── Phase 4: Agent squad executors ───────────────────────────────────────
 
@@ -508,7 +651,18 @@ class WorkflowEngine:
         self._start_time = time.monotonic()
 
         while protocol.should_continue(round_num, squad.max_rounds, all_verdicts):
-            for step_id in squad.execution_order:
+            # Round 0 runs the full squad. Later rounds re-run only the steps a
+            # failing review flagged — the target step plus the reviewer that
+            # judges it — instead of re-executing every role from scratch.
+            if round_num == 0:
+                step_ids = list(squad.execution_order)
+            else:
+                step_ids = self._revision_targets(squad, all_verdicts)
+                if not step_ids:
+                    logger.info("Squad round %d: no revision targets, stopping", round_num)
+                    break
+
+            for step_id in step_ids:
                 step = self._find_step(squad.steps, step_id)
                 step_context = self._build_step_context(
                     step, squad, outputs, protocol, all_verdicts, context
@@ -659,6 +813,28 @@ class WorkflowEngine:
             prev_step = self._find_step(squad.steps, prev_step_id)
             return prev_step.role_id
         return "unknown"
+
+    def _revision_targets(self, squad: AgentSquad, verdicts: list[Any]) -> list[str]:
+        """Return the step IDs to re-run after a failing review.
+
+        On a revision request, both the failing target step AND the reviewer
+        step that flagged it must re-run — the target to apply the fix, the
+        reviewer to re-judge it within the same round (otherwise the loop never
+        sees a fresh verdict). Returns an empty list when the latest review
+        passed or is a hard reject (no revision wanted), which stops the loop.
+        """
+        if not verdicts:
+            return []
+        latest = verdicts[-1]
+        if getattr(latest, "passed", False):
+            return []
+        if not getattr(latest, "requires_revision", True):
+            return []
+        for i, sid in enumerate(squad.execution_order):
+            step = self._find_step(squad.steps, sid)
+            if step.role_id in ("reviewer", "red_team") and i > 0:
+                return [squad.execution_order[i - 1], sid]
+        return []
 
     def _elapsed(self) -> float:
         """Return elapsed time since execution started in milliseconds."""
