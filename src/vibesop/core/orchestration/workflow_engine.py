@@ -17,7 +17,7 @@ import uuid
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 
 from vibesop.core.models import (
     AgentSquad,
@@ -494,7 +494,12 @@ class WorkflowEngine:
         6. Return SquadExecutionResult
         """
         squad_data = plan.metadata.get("agent_squad", {})
-        squad = AgentSquad(**squad_data)
+        if not isinstance(squad_data, dict) or not squad_data:
+            raise ValueError("Agent squad metadata is empty or missing")
+        try:
+            squad = AgentSquad(**squad_data)
+        except ValidationError as e:
+            raise ValueError(f"Invalid agent squad metadata: {e}") from e
         protocol = self._get_protocol(squad)
 
         outputs: dict[str, Any] = {}
