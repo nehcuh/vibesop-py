@@ -160,3 +160,65 @@ class TestContrastLoopClosesWithOutcomes:
         assert result[0].confidence > 0.5  # boosted
         assert result[0].metadata.get("boosted") is True
         assert result[0].metadata.get("boost_source") == "instinct"
+
+
+class TestRewardSignalFix:
+    """Phase 2 fix: record_outcome_for_query + record_feedback_outcome close the loop.
+
+    These exercise the NEW wiring. They would fail on pre-fix code (the methods
+    did not exist) and pass once the reward signal is connected.
+    """
+
+    def test_record_outcome_for_query_matures_instinct(self, tmp_path: Path) -> None:
+        learner = _real_learner(tmp_path)
+        learner.learn(pattern=QUERY, action=ACTION, source="auto_routing")
+        iid = next(iter(learner.instincts))
+
+        for _ in range(3):
+            learner.record_outcome_for_query(QUERY, success=True)
+
+        matured = learner.instincts[iid]
+        assert matured.total_applications == 3
+        assert matured.is_reliable is True
+
+    def test_record_outcome_for_query_negative_suppresses(self, tmp_path: Path) -> None:
+        """A 'no' is a real negative outcome (failure_count++), not neutral."""
+        learner = _real_learner(tmp_path)
+        learner.learn(pattern=QUERY, action=ACTION, source="auto_routing")
+        iid = next(iter(learner.instincts))
+
+        for _ in range(3):
+            learner.record_outcome_for_query(QUERY, success=False)
+
+        suppressed = learner.instincts[iid]
+        assert suppressed.failure_count == 3
+        assert suppressed.is_reliable is False  # suppressed, not neutral
+        assert suppressed.confidence < 0.5
+
+    def test_record_outcome_for_query_noop_when_no_instinct(self, tmp_path: Path) -> None:
+        learner = _real_learner(tmp_path)
+        # Query was never auto-recorded -> no-op, no crash.
+        learner.record_outcome_for_query("never recorded query", success=True)
+        assert learner.instincts == {}
+
+    def test_record_feedback_outcome_closes_loop(self, tmp_path: Path) -> None:
+        """Router.record_feedback_outcome wires explicit feedback -> maturation."""
+        from vibesop.core.routing.context_mixin import RouterContextMixin
+
+        class _StubHost(RouterContextMixin):
+            """Minimal host exposing only what record_feedback_outcome touches."""
+
+            def __init__(self, project_root: Path) -> None:
+                self.project_root = project_root
+                self._instinct_learner = None
+
+        host = _StubHost(tmp_path)
+        learner = host._get_instinct_learner()
+        learner.learn(pattern=QUERY, action=ACTION, source="auto_routing")
+        iid = next(iter(learner.instincts))
+
+        # Three explicit "yes" feedbacks via the router-level entry point.
+        for _ in range(3):
+            host.record_feedback_outcome(QUERY, success=True)
+
+        assert learner.instincts[iid].is_reliable is True

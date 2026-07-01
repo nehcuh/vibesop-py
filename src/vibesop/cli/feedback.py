@@ -43,6 +43,13 @@ def _collect_feedback(result: Any, router: Any, console: Console) -> None:  # py
             record.user_modified = partial
             store.record(record)
 
+        # Phase 2: feed explicit yes/no back into instinct learning. Matures
+        # (yes) or suppresses (no) the auto-recorded instinct for this query.
+        # Skip "partial" (ambiguous) and "skip".
+        if feedback in ("yes", "no"):
+            with contextlib.suppress(Exception):
+                router.record_feedback_outcome(result.original_query, success=satisfied)
+
         if satisfied and result.execution_plan:
             for step in result.execution_plan.steps:
                 with contextlib.suppress(Exception):

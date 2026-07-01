@@ -111,6 +111,20 @@ class RouterContextMixin:
             )
         return host._instinct_learner
 
+    def record_feedback_outcome(self, query: str, success: bool) -> None:
+        """Feed an explicit user satisfaction signal back into instinct learning.
+
+        Called by the CLI feedback path when a user accepts (``success=True``)
+        or rejects (``success=False``) a route. Matures or suppresses the
+        auto-recorded instinct for this query; no-op if no instinct exists.
+        This is the reward signal that closes the instinct -> routing feedback
+        loop (Phase 0 found ``record_outcome`` was never called from routing).
+        """
+        try:
+            self._get_instinct_learner().record_outcome_for_query(query, success)
+        except (OSError, ValueError, RuntimeError) as e:
+            logger.debug("record_feedback_outcome failed: %s", e)
+
     def _enrich_context(self, context: RoutingContext | None, query: str = "") -> RoutingContext:
         """Enrich routing context with memory, session state, recent conversation history, and project context."""
         if context is None:
