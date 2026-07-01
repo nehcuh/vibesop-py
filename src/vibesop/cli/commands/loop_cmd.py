@@ -37,7 +37,7 @@ from rich.panel import Panel
 from rich.table import Table
 
 from vibesop.core.loop.executor import execute_loop_tick
-from vibesop.core.loop.models import LoopSpec, LoopState, LoopStatus
+from vibesop.core.loop.models import LoopSpec, LoopState, LoopStatus, validate_transition
 from vibesop.core.loop.scheduler import CronDaemon, CronExpr
 from vibesop.core.loop.store import LoopStore
 
@@ -300,6 +300,13 @@ def pause(name: str = typer.Argument(..., help="loop 名称")) -> None:
         console.print(f"[yellow]Loop '{name}' 已处于暂停状态[/yellow]")
         return
 
+    if not validate_transition(state.status, LoopStatus.PAUSED):
+        console.print(
+            f"[red]❌ 无法从 {state.status.value} 暂停 —— 仅 ACTIVE/FAILING 可暂停，"
+            f"DEAD/RETIRED 需先 reset 或为终态。[/red]"
+        )
+        raise typer.Exit(1)
+
     state.status = LoopStatus.PAUSED
     store.save_state(state)
     console.print(f"[yellow]⏸️  Loop '{name}' 已暂停[/yellow]")
@@ -319,10 +326,45 @@ def resume(name: str = typer.Argument(..., help="loop 名称")) -> None:
         console.print(f"[yellow]Loop '{name}' 已处于活跃状态[/yellow]")
         return
 
+    if state.status == LoopStatus.DEAD:
+        console.print(
+            f"[yellow]Loop '{name}' 处于 DEAD 状态。使用 "
+            f"[bold]vibe loop reset {name}[/bold] 清除失败计数并重新激活。[/yellow]"
+        )
+        raise typer.Exit(1)
+
     state.status = LoopStatus.ACTIVE
     state.consecutive_failures = 0
     store.save_state(state)
     console.print(f"[green]▶️ Loop '{name}' 已恢复[/green]")
+
+
+@app.command()
+def reset(name: str = typer.Argument(..., help="loop 名称")) -> None:
+    """重置 DEAD loop 回 ACTIVE（清除连续失败计数）。
+
+    DEAD 是终态，普通 ``resume`` 不会复活它；``reset`` 是唯一的恢复路径。
+    """
+    store = LoopStore()
+    spec = store.load_spec(name)
+    if spec is None:
+        console.print(f"[red]❌ Loop '{name}' 不存在[/red]")
+        raise typer.Exit(1)
+
+    state = store.load_state(name) or LoopState(spec=spec)
+    if state.status != LoopStatus.DEAD:
+        console.print(
+            f"[yellow]Loop '{name}' 当前状态为 {state.status.value}，非 DEAD。"
+            f"reset 仅用于 DEAD loop。[/yellow]"
+        )
+        raise typer.Exit(1)
+
+    state.status = LoopStatus.ACTIVE
+    state.consecutive_failures = 0
+    store.save_state(state)
+    console.print(
+        f"[green]♻️ Loop '{name}' 已重置为 ACTIVE（连续失败计数已清零）[/green]"
+    )
 
 
 # ──────────────────────────────────────────────────────────────────
@@ -421,7 +463,10 @@ def tick(
             console.print(f"  [green]✅[/green] {record.matched_skill} ({record.duration_s}s)")
         else:
             failure_count += 1
-            console.print(f"  [red]❌[/red] {record.error[:80]}")
+            category = (
+                record.failure_info.category.value if record.failure_info else "unclassified"
+            )
+            console.print(f"  [red]❌[/red] {record.error[:80]} [dim]({category})[/dim]")
 
     total = success_count + failure_count
     console.print(

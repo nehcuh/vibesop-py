@@ -22,8 +22,10 @@ Design notes:
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import StrEnum
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -53,6 +55,28 @@ class LoopStatus(StrEnum):
     FAILING = "failing"  # Consecutive failures under threshold
     DEAD = "dead"  # Exceeded max_failures, will not run again
     RETIRED = "retired"  # User-archived
+
+
+# Allowed status transitions. DEAD -> ACTIVE is intentionally excluded — it
+# requires the explicit ``vibe loop reset`` command (clears failure counters).
+# ``record_run`` (below) honours the same invariant for automatic transitions.
+_ALLOWED_TRANSITIONS: dict[LoopStatus, frozenset[LoopStatus]] = {
+    LoopStatus.ACTIVE: frozenset({LoopStatus.PAUSED, LoopStatus.FAILING, LoopStatus.RETIRED}),
+    LoopStatus.PAUSED: frozenset({LoopStatus.ACTIVE, LoopStatus.RETIRED}),
+    LoopStatus.FAILING: frozenset(
+        {LoopStatus.ACTIVE, LoopStatus.PAUSED, LoopStatus.DEAD, LoopStatus.RETIRED}
+    ),
+    LoopStatus.DEAD: frozenset({LoopStatus.RETIRED}),
+    LoopStatus.RETIRED: frozenset(),
+}
+
+
+def validate_transition(from_status: LoopStatus, to_status: LoopStatus) -> bool:
+    """Return True if ``from_status -> to_status`` is a legal edge.
+
+    DEAD -> ACTIVE is rejected here (it requires ``vibe loop reset``).
+    """
+    return to_status in _ALLOWED_TRANSITIONS.get(from_status, frozenset())
 
 
 class LoopTrigger(StrEnum):
@@ -107,7 +131,21 @@ class LoopSpec(BaseModel):
     )
     guard: str = Field(
         default="",
-        description="Reserved for v2 human-approval gate. Empty in v1.",
+        description=(
+            "Reserved for future Loop Guard features (dead-man-switch, "
+            "human-approval, notifications). Not yet implemented — see "
+            "ROADMAP.md. Empty in v8.x."
+        ),
+    )
+    max_retries: int = Field(
+        default=0,
+        ge=0,
+        description="Max retries on TRANSIENT failure within one tick (0 = no retry).",
+    )
+    retry_delay_base: int = Field(
+        default=30,
+        ge=1,
+        description="Base seconds for exponential retry backoff (2^attempt * base, capped 300s).",
     )
     tags: list[str] = Field(default_factory=list, description="Categorisation tags.")
     env_overrides: dict[str, str] = Field(
@@ -151,6 +189,24 @@ class LoopSpec(BaseModel):
         return self
 
 
+class FailureCategory(StrEnum):
+    """Category of a loop execution failure, driving retry/escalation policy."""
+
+    TRANSIENT = "transient"  # Retryable: network timeout, rate limit, blip
+    PERMANENT = "permanent"  # Not retryable: config error, skill missing
+    ESCALATED = "escalated"  # Quality gate rejected (reserved for Checker)
+
+
+class FailureInfo(BaseModel):
+    """Structured failure information for a loop tick."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    category: FailureCategory = Field(..., description="Failure category.")
+    reason: str = Field(..., description="Human-readable reason.")
+    suggestion: str | None = Field(default=None, description="Optional fix suggestion.")
+
+
 class LoopRunRecord(BaseModel):
     """Single loop execution record."""
 
@@ -163,7 +219,24 @@ class LoopRunRecord(BaseModel):
     matched_skill: str = Field(default="", description="Skill ID the runtime matched.")
     output_summary: str = Field(default="", description="Truncated decision message.")
     error: str = Field(default="", description="Error message on failure.")
+    failure_info: FailureInfo | None = Field(
+        default=None,
+        description="Structured failure classification (None on success or if unclassified).",
+    )
     duration_s: float = Field(default=0.0, ge=0.0, description="Wall-clock duration in seconds.")
+
+
+@dataclass
+class RunHistory:
+    """Cross-run memory for a loop tick — a read-only view over LoopState.
+
+    Ephemeral (not persisted); built by the executor from LoopState and fed to
+    ``_build_query`` so each tick's routing query carries recent context.
+    """
+
+    recent_runs: list[LoopRunRecord] = field(default_factory=list)
+    trends: dict[str, Any] = field(default_factory=dict)
+    progress_notes: list[str] = field(default_factory=list)
 
 
 class LoopState(BaseModel):
@@ -185,6 +258,10 @@ class LoopState(BaseModel):
     recent_runs: list[LoopRunRecord] = Field(
         default_factory=list,
         description="Most recent runs (capped at 20).",
+    )
+    progress_notes: list[str] = Field(
+        default_factory=list,
+        description="Cross-run observation notes (appended over time, injected into queries).",
     )
 
     _RECENT_RUN_CAP: int = 20
@@ -231,9 +308,13 @@ class LoopState(BaseModel):
 
 
 __all__ = [
+    "FailureCategory",
+    "FailureInfo",
     "LoopRunRecord",
     "LoopSpec",
     "LoopState",
     "LoopStatus",
     "LoopTrigger",
+    "RunHistory",
+    "validate_transition",
 ]
