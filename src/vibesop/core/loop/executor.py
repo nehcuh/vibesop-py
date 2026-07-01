@@ -142,7 +142,10 @@ def _build_query(spec: LoopSpec, history: RunHistory | None = None) -> str:
             f"(LoopSpec validation should have prevented this)"
         )
 
-    if not history or not history.recent_runs:
+    # Injection is opt-in: it mutates the query text fed to the matchers, which
+    # can alter routing outcomes (esp. for CJK queries polluted by the English
+    # template below). Default off preserves existing matching behaviour.
+    if not spec.inject_history or not history or not history.recent_runs:
         return base
 
     recent = history.recent_runs[-10:]

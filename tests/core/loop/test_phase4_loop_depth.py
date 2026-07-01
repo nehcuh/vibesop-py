@@ -165,7 +165,7 @@ class TestRetry:
 
 class TestCrossRunMemory:
     def test_history_appended_to_query(self) -> None:
-        spec = _spec(skill_id="", query="check ci")
+        spec = _spec(skill_id="", query="check ci", inject_history=True)
         prior = [
             LoopRunRecord(
                 loop_name="t", started_at=datetime.now(UTC), success=True, matched_skill="x"
@@ -190,9 +190,18 @@ class TestCrossRunMemory:
         assert "fixed api key" in q
 
     def test_no_history_no_context(self) -> None:
-        spec = _spec(skill_id="sys-debug")
+        spec = _spec(skill_id="sys-debug", inject_history=True)
         assert _build_query(spec) == "/slash-route use sys-debug"
         assert _build_query(spec, history=RunHistory()) == "/slash-route use sys-debug"
+
+    def test_inject_history_off_by_default(self) -> None:
+        """Default (inject_history=False) must NOT mutate the query — preserves
+        routing behaviour. Regression guard for the Lane-B H2 concern."""
+        spec = _spec(skill_id="", query="check ci")  # inject_history defaults False
+        prior = [
+            LoopRunRecord(loop_name="t", started_at=datetime.now(UTC), success=True, matched_skill="x")
+        ]
+        assert _build_query(spec, history=RunHistory(recent_runs=prior)) == "check ci"
 
 
 # ── state machine ─────────────────────────────────────────────────────

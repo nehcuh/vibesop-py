@@ -333,6 +333,13 @@ def resume(name: str = typer.Argument(..., help="loop 名称")) -> None:
         )
         raise typer.Exit(1)
 
+    if not validate_transition(state.status, LoopStatus.ACTIVE):
+        console.print(
+            f"[red]❌ 无法从 {state.status.value} 恢复 —— "
+            f"{state.status.value} 为终态，resume 仅用于 PAUSED/FAILING。[/red]"
+        )
+        raise typer.Exit(1)
+
     state.status = LoopStatus.ACTIVE
     state.consecutive_failures = 0
     store.save_state(state)

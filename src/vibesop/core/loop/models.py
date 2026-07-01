@@ -147,6 +147,14 @@ class LoopSpec(BaseModel):
         ge=1,
         description="Base seconds for exponential retry backoff (2^attempt * base, capped 300s).",
     )
+    inject_history: bool = Field(
+        default=False,
+        description=(
+            "Append cross-run context (recent success rate, failure categories, "
+            "progress notes) to the routing query. Off by default — injection "
+            "mutates the query text and can alter matching, so it is opt-in."
+        ),
+    )
     tags: list[str] = Field(default_factory=list, description="Categorisation tags.")
     env_overrides: dict[str, str] = Field(
         default_factory=dict,
