@@ -20,6 +20,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 import re
@@ -165,7 +166,20 @@ class LoopStore:
         try:
             return model_cls.model_validate_json(text)
         except (json.JSONDecodeError, ValidationError) as e:
-            logger.warning("Loop file %s has invalid JSON or schema: %s", path, e)
+            # Back up the corrupt file for forensic analysis rather than
+            # silently masking the data loss. Callers fall back to a fresh
+            # model (load_state -> LoopState(spec=spec); load_spec -> None),
+            # so the loop remains usable rather than silently disappearing.
+            backup = path.with_name(path.name + ".corrupt")
+            with contextlib.suppress(OSError):
+                # Best-effort backup; the warning below still surfaces the issue.
+                path.rename(backup)
+            logger.warning(
+                "Loop file %s had invalid JSON or schema (backed up to %s): %s",
+                path,
+                backup,
+                e,
+            )
             return None
 
     @staticmethod

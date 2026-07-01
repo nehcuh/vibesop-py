@@ -683,7 +683,11 @@ src/vibesop/core/loop/
 ❌ 不适合: 重构代码、实现新功能、代码审查（这些需要 Claude Code 交互）
 ```
 
-### Phase 2: Guard 系统 + 通知集成（设计中）
+### Phase 2: Guard 系统 + 通知集成（未排期 — 需 PM scoping）
+
+> **状态（v8.x）**: 未实装。`LoopSpec.guard` 字段为保留位；dead-man-switch /
+> 人工审批门 / 通知渠道均未实现。Phase 4 已落地失败归因（TRANSIENT/PERMANENT）+
+> 指数退避重试 + `vibe loop reset`，但完整 Guard 系统待 PM 重新 scoping 后再启动。
 
 - **Dead man's switch**: 连续失败超限 → 自动告警
 - **人工审批门**: merge-to-main 等风险操作等人确认
