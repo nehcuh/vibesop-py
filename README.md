@@ -284,20 +284,21 @@ vibe skills add code-reviewer
 
 ### 🎯 95% 路由准确率 (95% Routing Accuracy)
 
-基于 10 层路由 pipeline，结合 AI 语义分析和场景知识：
+基于 4 阶段路由级联，结合 AI 语义分析和场景知识：
 
-Based on a 10-layer routing pipeline combining AI semantic analysis and scenario knowledge:
+Based on a 4-stage routing cascade combining AI semantic analysis and scenario knowledge:
 
-- **Layer 0**: Explicit overrides
-- **Layer 1**: Scenario patterns (90% accuracy)
-- **Layer 2**: AI Semantic Triage (95% accuracy, forced for long queries >5 chars)
-- **Layer 3**: Keyword matching (70% accuracy, short queries only by default)
-- **Layer 4**: TF-IDF semantic similarity (75% accuracy)
-- **Layer 5**: Embedding-based matching (85% accuracy)
-- **Layer 6**: Fuzzy matching for typos (60% accuracy)
-- **Layer 7**: Custom plugin matchers (user-defined)
-- **Layer 8**: No Match (below threshold)
-- **Layer 9**: Fallback LLM (last-resort routing)
+- **Stage 1**: Explicit override — exact skill ID match (e.g. `/review`), immediate dispatch
+- **Stage 2**: Scenario + Semantic Index — predefined scenarios + skill semantic index
+  (token-overlap + embedding), best-of-N selection
+- **Stage 3**: AI Semantic Triage — LLM intent understanding (95% accuracy, complex /
+  long queries)
+- **Stage 4**: Matcher aggregation — keyword, TF-IDF, embedding, and fuzzy matchers run
+  in parallel; highest-confidence candidate wins (not serial fallback)
+
+Terminal states (not routing layers):
+- **No Match**: all candidates below the minimum confidence threshold
+- **Fallback LLM**: last-resort raw LLM routing
 
 ### 🛒 技能市场 (Skill Market) — v5.2.0
 
@@ -754,9 +755,9 @@ VibeSOP v6.2.0 introduces a **3-pillar architecture** (enhanced with Dynamic Wor
 │                       │                         │
 │  ┌────────────────────▼─────────────────────┐   │
 │  │          UnifiedRouter (路由层)           │   │
-│  │   10-Layer Pipeline:                      │   │
-│  │   AI Triage → Scenario → Keyword → TF-IDF │   │
-│  │   → Embedding → Levenshtein → Fallback    │   │
+│  │   4-Stage Cascade:                        │   │
+│  │   Explicit → Scenario+Index → AI Triage   │   │
+│  │   → Matcher Aggregation → Fallback        │   │
 │  └────────────────────┬─────────────────────┘   │
 │                       │                         │
 │  ┌────────────────────▼─────────────────────┐   │
@@ -796,7 +797,7 @@ Detailed architecture docs: [docs/architecture/](docs/architecture/)
 
 - **🆕 [docs/SKILLS_GUIDE.md](docs/SKILLS_GUIDE.md)** - 技能生态系统完整指南 / Complete skills ecosystem guide
   - 50+ 个技能详解 / All skills explained
-  - 10 层路由系统 / 10-layer routing system
+  - 4 阶段路由级联 / 4-stage routing cascade
   - 优先级决策机制 / Priority decision mechanism
   - 手动切换技能 / How to switch skills
 - [docs/QUICKSTART_USERS.md](docs/QUICKSTART_USERS.md) - 用户快速入门 / User quick start
@@ -848,7 +849,7 @@ Detailed architecture docs: [docs/architecture/](docs/architecture/)
 
 | Feature | VibeSOP | Cursor | Continue.dev | Aider |
 |---------|---------|--------|--------------|-------|
-| **Routing** | 10-layer intelligent routing | Built-in commands | Extension-based | CLI flags |
+| **Routing** | 4-stage cascade routing | Built-in commands | Extension-based | CLI flags |
 | **Orchestration** | Multi-skill composition | No | No | No |
 | **Lifecycle Mgmt** | Enable/disable, scope, evaluate | No | No | No |
 | **Skills** | 50+ cross-platform skills | Built-in features | Community extensions | Built-in workflows |

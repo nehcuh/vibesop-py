@@ -138,7 +138,7 @@ class PiCodingAgentAdapter(SdkBasedAdapter):
                 dir_name = skill.id.replace("/", "-")
                 skill_dir = output_dir / "skills" / dir_name
                 skill_dir.mkdir(parents=True, exist_ok=True)
-                self._render_skill_content(skill, skill_dir, manifest, result)
+                self._render_skill_content(skill, skill_dir, result, manifest=manifest)
 
             # Clean orphan skills not in the current manifest
             self.clean_orphan_skills(manifest, output_dir)
@@ -241,17 +241,19 @@ class PiCodingAgentAdapter(SdkBasedAdapter):
 
         return result
 
-    def _render_skill_content(  # pyright: ignore[reportIncompatibleMethodOverride]
+    def _render_skill_content(
         self,
         skill: Any,
         skill_dir: Path,
-        manifest: Manifest,
         result: RenderResult,
+        dir_name: str | None = None,
+        manifest: Manifest | None = None,
     ) -> None:
         super()._render_skill_content(
             skill,
             skill_dir,
             result,
+            dir_name=dir_name,
             manifest=manifest,
         )
 

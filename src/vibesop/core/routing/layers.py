@@ -1,19 +1,17 @@
-"""Routing layer protocol and result types.
+"""Routing layer result types.
 
-Each routing layer implements the IRouteLayer protocol and returns a LayerResult.
-The UnifiedRouter executes layers in priority order and returns the first successful match.
+Defines ``LayerResult``, the result type returned by routing layer functions in
+``_layers.py``. The UnifiedRouter evaluates layers via a 4-stage branched cascade
+(see ``unified.py::_try_layers``), not a strict priority-ordered first-match loop.
 """
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Protocol
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from vibesop.core.models import RoutingLayer, SkillRoute
-
-if TYPE_CHECKING:
-    from vibesop.core.matching import RoutingContext
 
 
 class LayerResult(BaseModel):
@@ -37,34 +35,3 @@ class LayerResult(BaseModel):
     diagnostics: dict[str, Any] = Field(default_factory=dict)
 
     model_config = ConfigDict(frozen=False)
-
-
-class IRouteLayer(Protocol):
-    """Protocol for a single routing layer.
-
-    Each layer is responsible for one matching strategy.
-    Returns a LayerResult indicating whether it matched.
-    """
-
-    @property
-    def layer(self) -> RoutingLayer:
-        """Which routing layer this implements."""
-        ...
-
-    def try_route(
-        self,
-        query: str,
-        candidates: list[dict[str, Any]],
-        context: RoutingContext | None,
-    ) -> LayerResult | None:
-        """Attempt to route the query.
-
-        Args:
-            query: User's natural language query
-            candidates: Available skill candidates
-            context: Additional routing context
-
-        Returns:
-            LayerResult if this layer matched, None to defer to next layer
-        """
-        ...

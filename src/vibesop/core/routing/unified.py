@@ -84,6 +84,15 @@ class UnifiedRouter(
         ...     print(f"Matched: {result.primary.skill_id}")
     """
 
+    # NOTE: This priority list is used for DISPLAY/sorting and get_capabilities()
+    # only — it does NOT drive execution order. The real pipeline is a 4-stage
+    # branched cascade; see `_try_layers()`:
+    #   Stage 1: EXPLICIT (short-circuit on hit)
+    #   Stage 2: SCENARIO + Semantic Index (best-of-N, keyword/short-query path)
+    #   Stage 3: AI_TRIAGE (LLM, long-query path)
+    #   Stage 4: Matcher aggregation (keyword/tfidf/embedding/levenshtein run in
+    #            parallel, max confidence wins — not serial fallback)
+    # NO_MATCH and FALLBACK_LLM are terminal states, not matching layers.
     _LAYER_PRIORITY: ClassVar[list[RoutingLayer]] = [
         RoutingLayer.EXPLICIT,
         RoutingLayer.SCENARIO,

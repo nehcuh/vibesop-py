@@ -81,7 +81,7 @@ AI 辅助开发的工具爆炸式增长：
 **VibeSOP = SkillOS = 智能路由 + 任务编排 + 生命周期管理 + 生态集成**
 
 1. **理解意图** → 自然语言输入
-2. **智能匹配** → 10 层路由 pipeline
+2. **智能匹配** → 4 阶段路由级联
 3. **学习偏好** → 越用越准确
 4. **跨平台** → 不绑定任何工具
 
@@ -96,10 +96,10 @@ AI 辅助开发的工具爆炸式增长：
 **解读**: 不要让用户猜测命令，要理解用户的真实意图。
 
 **实践**:
-- 10 层路由模型，3 阶段执行（显式匹配 → 早期层 → 匹配器流水线）
-- AI 语义分析（Layer 0: EXPLICIT）
-- 场景模式匹配 + 语义索引（Layer 1-2: SCENARIO, INDEX）
-- 多维度匹配器流水线（Layer 3-6: KEYWORD, TFIDF, EMBEDDING, LEVENSHTEIN）
+- 4 阶段路由模型：显式匹配 → 场景+语义索引 → AI 分诊 → 匹配器聚合（按 query 长度分支）
+- AI 语义分析（Stage 3: AI_TRIAGE，真 LLM 意图理解）
+- 场景模式匹配 + 语义索引（Stage 2: SCENARIO + INDEX，best-of-N 并行取最高）
+- 多维度匹配器聚合（Stage 4: KEYWORD, TFIDF, EMBEDDING, LEVENSHTEIN — 并行聚合，非串行回退）
 - 4 级置信度降级模型（AUTO → SUGGEST → DEGRADE → FALLBACK）
 - Skill Semantic Index：token-overlap + embedding 双重索引，支持跨 pack 去重
 
@@ -366,7 +366,7 @@ AI 辅助开发的工具爆炸式增长：
 
 **含义**: 理解意图比猜测命令更重要
 
-**体现**: 10 层路由，而非简单关键词匹配
+**体现**: 4 阶段路由级联（显式 → 场景+语义索引 → AI 分诊 → 匹配器聚合），而非简单关键词匹配
 
 ### **Memory over Intelligence** (记忆 > 智能)
 

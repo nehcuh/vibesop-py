@@ -1,7 +1,7 @@
 """Tests for routing layer types and models."""
 
 from vibesop.core.models import RoutingLayer, SkillRoute
-from vibesop.core.routing.layers import IRouteLayer, LayerResult
+from vibesop.core.routing.layers import LayerResult
 
 
 class TestLayerResult:
@@ -53,30 +53,3 @@ class TestLayerResult:
         result.reason = "Updated"
         assert result.matched is True
         assert result.reason == "Updated"
-
-
-class TestIRouteLayer:
-    """Test IRouteLayer protocol."""
-
-    def test_protocol_exists(self):
-        """IRouteLayer should be importable and usable as a protocol."""
-        assert hasattr(IRouteLayer, "layer")
-        assert hasattr(IRouteLayer, "try_route")
-
-    def test_conforming_class(self):
-        """A class implementing the protocol should work."""
-
-        class DummyLayer:
-            @property
-            def layer(self) -> RoutingLayer:
-                return RoutingLayer.EXPLICIT
-
-            def try_route(self, query, candidates, context=None):
-                return LayerResult(match=None, layer=self.layer)
-
-        dummy = DummyLayer()
-        # IRouteLayer is not @runtime_checkable, so we verify by duck typing
-        assert hasattr(dummy, "layer")
-        assert hasattr(dummy, "try_route")
-        result = dummy.try_route("test", [])
-        assert result.layer == RoutingLayer.EXPLICIT
