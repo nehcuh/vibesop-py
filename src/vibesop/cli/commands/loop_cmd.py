@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import logging
 from datetime import UTC, datetime
+from typing import Any
 
 import typer
 from pydantic import ValidationError
@@ -74,6 +75,33 @@ def _target_str(spec: LoopSpec, truncate: int = 0) -> str:
     if truncate and len(raw) > truncate:
         return raw[: truncate - 3] + "..."
     return raw
+
+
+def _acquire_tick_lock(store: LoopStore, name: str) -> Any:
+    """Acquire a per-loop advisory lock so overlapping ``vibe loop tick``
+    processes (e.g. external cron firing while a retry-laden tick is still
+    running) skip an in-progress loop instead of racing on ``state.json``
+    (load→execute→save is a TOCTOU across processes; the atomic write only
+    protects a single process).
+
+    Returns the open lock-file handle (close it to release), or ``None`` if
+    another process holds the lock. POSIX-only (``fcntl``); on Windows there
+    is no advisory locking, so it returns ``True`` (always proceed — callers
+    are expected to serialise ticks themselves there).
+    """
+    try:
+        import fcntl
+    except ImportError:
+        return True  # Windows: no cross-process advisory locking.
+    lock_path = store.base_dir / name / ".tick.lock"
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    lock_fd = lock_path.open("w")
+    try:
+        fcntl.flock(lock_fd.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except (BlockingIOError, OSError):
+        lock_fd.close()
+        return None
+    return lock_fd
 
 
 # ──────────────────────────────────────────────────────────────────
@@ -369,9 +397,7 @@ def reset(name: str = typer.Argument(..., help="loop 名称")) -> None:
     state.status = LoopStatus.ACTIVE
     state.consecutive_failures = 0
     store.save_state(state)
-    console.print(
-        f"[green]♻️ Loop '{name}' 已重置为 ACTIVE（连续失败计数已清零）[/green]"
-    )
+    console.print(f"[green]♻️ Loop '{name}' 已重置为 ACTIVE（连续失败计数已清零）[/green]")
 
 
 # ──────────────────────────────────────────────────────────────────
@@ -463,17 +489,27 @@ def tick(
     success_count = 0
     failure_count = 0
     for spec in triggered:
-        console.print(f"[cyan]▶[/cyan] Ticking [bold]{spec.name}[/bold]...")
-        record = execute_loop_tick(spec, runtime=runtime, store=store)
-        if record.success:
-            success_count += 1
-            console.print(f"  [green]✅[/green] {record.matched_skill} ({record.duration_s}s)")
-        else:
-            failure_count += 1
-            category = (
-                record.failure_info.category.value if record.failure_info else "unclassified"
+        tick_lock = _acquire_tick_lock(store, spec.name)
+        if tick_lock is None:
+            console.print(
+                f"[yellow]⏭️  {spec.name}: 另一个 tick 正在进行 —— 跳过以避免并发写冲突[/yellow]"
             )
-            console.print(f"  [red]❌[/red] {record.error[:80]} [dim]({category})[/dim]")
+            continue
+        try:
+            console.print(f"[cyan]▶[/cyan] Ticking [bold]{spec.name}[/bold]...")
+            record = execute_loop_tick(spec, runtime=runtime, store=store)
+            if record.success:
+                success_count += 1
+                console.print(f"  [green]✅[/green] {record.matched_skill} ({record.duration_s}s)")
+            else:
+                failure_count += 1
+                category = (
+                    record.failure_info.category.value if record.failure_info else "unclassified"
+                )
+                console.print(f"  [red]❌[/red] {record.error[:80]} [dim]({category})[/dim]")
+        finally:
+            if hasattr(tick_lock, "close"):
+                tick_lock.close()  # releases the fcntl lock
 
     total = success_count + failure_count
     console.print(

@@ -12,6 +12,7 @@ import time
 from datetime import UTC, datetime
 from unittest.mock import MagicMock
 
+import pytest
 from typer.testing import CliRunner
 
 from vibesop.cli.commands.loop_cmd import app
@@ -199,7 +200,9 @@ class TestCrossRunMemory:
         routing behaviour. Regression guard for the Lane-B H2 concern."""
         spec = _spec(skill_id="", query="check ci")  # inject_history defaults False
         prior = [
-            LoopRunRecord(loop_name="t", started_at=datetime.now(UTC), success=True, matched_skill="x")
+            LoopRunRecord(
+                loop_name="t", started_at=datetime.now(UTC), success=True, matched_skill="x"
+            )
         ]
         assert _build_query(spec, history=RunHistory(recent_runs=prior)) == "check ci"
 
@@ -307,3 +310,32 @@ class TestLoopCmdResetResume:
         result = CliRunner().invoke(app, ["reset", "active"])
 
         assert result.exit_code != 0  # reset only for DEAD
+
+
+# ── per-loop tick lock (Lane-B H1: cross-process TOCTOU guard) ────────
+
+
+class TestTickLock:
+    def test_concurrent_acquire_is_blocked(self, tmp_path) -> None:
+        """A second acquirer on an already-locked loop gets None (skip),
+        and the lock is reusable after release. POSIX (fcntl) only."""
+        from vibesop.cli.commands.loop_cmd import _acquire_tick_lock
+
+        try:
+            import fcntl  # noqa: F401
+        except ImportError:
+            pytest.skip("fcntl unavailable (non-POSIX)")
+
+        store = LoopStore(base_dir=str(tmp_path))
+        store.save_spec(_spec(name="locked"))
+
+        lock1 = _acquire_tick_lock(store, "locked")
+        assert lock1 is not None and lock1 is not True  # acquired (a file handle)
+
+        lock2 = _acquire_tick_lock(store, "locked")
+        assert lock2 is None  # blocked by lock1
+
+        lock1.close()  # release
+        lock3 = _acquire_tick_lock(store, "locked")
+        assert lock3 is not None  # reacquired after release
+        lock3.close()
