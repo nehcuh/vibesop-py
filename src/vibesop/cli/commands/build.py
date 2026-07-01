@@ -104,6 +104,9 @@ def execute_build(
         )
 
         console.print(f"\n[green]✓ Build complete![/green]\n[bold]Output:[/bold] {output_dir}\n")
+        console.print(
+            "[dim]Restart your AI Agent (Claude Code / OpenCode / etc.) to pick up the changes.[/dim]"
+        )
 
         if result.files_created:
             console.print("[bold]Files created:[/bold]")

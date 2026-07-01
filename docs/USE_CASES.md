@@ -28,7 +28,7 @@ VibeSOP = **SkillOS**（技能操作系统）+ **Loop Engine**（自主任务引
 | 类别 | 解决的问题 | 关键命令 | 对应能力层 |
 |---|---|---|---|
 | **1. 日常开发** | 记不住命令 | `vibe route "<意图>"` | L1 路由注入 |
-| **2. 复杂任务** | 多步串行易遗漏 | `vibe route --execute "<复杂任务>"` | L2 编排 |
+| **2. 复杂任务** | 多步串行易遗漏 | `vibe route --guided "<复杂任务>"` | L2 编排 |
 | **3. 跨平台** | 工具切换重装 | `vibe install <pack>` | 跨平台适配 |
 | **4. 自主监控** | 下班没人盯 | `vibe loop create ...` | L0 自主执行 |
 | **5. 生命周期** | 技能越装越乱 | `vibe skill stale` / `cleanup` | 生命周期管理 |
@@ -95,7 +95,7 @@ vibe route "给 src/auth/token.py 写 TDD 测试"
 
 **命令**：
 ```bash
-vibe route --execute "审查 PR #234 的安全性、性能、可读性三个维度"
+vibe route --guided "审查 PR #234 的安全性、性能、可读性三个维度"
 ```
 
 **预期**：VibeSOP 检测到"三个维度"是多角色查询，自动进入 MULTI_AGENT_SQUAD 模式，分配三个 agent 各审一个维度，最后汇总。
@@ -112,7 +112,7 @@ vibe route --execute "审查 PR #234 的安全性、性能、可读性三个维�
 
 **命令**：
 ```bash
-vibe route --execute "分析 src/payment/ 模块架构，补单元测试，更新 README"
+vibe route --guided "分析 src/payment/ 模块架构，补单元测试，更新 README"
 ```
 
 **预期输出**：
@@ -356,7 +356,7 @@ vibe verify                        # 验证多平台
 
 ### 第 1 个月：编排 + 团队共享
 ```bash
-vibe route --execute "分析+测试+文档"   # L2 编排
+vibe route --guided "分析+测试+文档"   # L2 编排
 vibe workflows create release-pipeline # 跨技能工作流
 git add .vibe/ && git commit           # 团队共享
 ```

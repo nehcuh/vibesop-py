@@ -222,6 +222,8 @@ export OLLAMA_MODEL=qwen3:35b-a3b-mlx
 
 ## 快速开始
 
+> 💡 VibeSOP 路由到技能并把指令注入你的 AI Agent（Claude Code / OpenCode）的上下文，由 Agent 负责实际执行（读写文件、改代码）。运行 `vibe doctor` 查看哪些 Agent 可用。
+
 ### 1. 路由你的第一个查询
 
 ```bash

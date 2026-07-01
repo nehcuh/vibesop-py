@@ -7,7 +7,7 @@ adapters must inherit from, along with shared utility methods.
 import logging
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 from vibesop.adapters.models import Manifest, RenderResult
 from vibesop.security import PathSafety, SecurityScanner
@@ -112,6 +112,27 @@ class PlatformAdapter(ABC):
             Dictionary mapping hook names to installation status
         """
         return {}
+
+    # CLI binary name for availability detection (override per concrete adapter).
+    # Empty string means no PATH-based detection (is_available returns False).
+    cli_binary: ClassVar[str] = ""
+
+    def is_available(self) -> bool:
+        """Whether this platform's AI Agent CLI is installed and on PATH.
+
+        VibeSOP routes queries and injects skill instructions; the Agent
+        (Claude Code, OpenCode, etc.) performs the actual execution. This
+        checks whether that Agent is installed.
+        """
+        import shutil
+
+        return bool(self.cli_binary) and shutil.which(self.cli_binary) is not None
+
+    def detect(self) -> str | None:
+        """Absolute path to the Agent CLI binary, or None if not found/unknown."""
+        import shutil
+
+        return shutil.which(self.cli_binary) if self.cli_binary else None
 
     def clean_orphan_skills(
         self,

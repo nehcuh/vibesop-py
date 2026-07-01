@@ -412,7 +412,7 @@ AI 辅助开发的工具爆炸式增长：
 > |------|------|--------|------|---------|
 > | L0 自主执行 | 定时自主运行技能任务，无需人在场 | VibeSOP Runtime | `vibe loop create --schedule "*/30 * * * *"` | 无人值守，结果推送 |
 > | L1 路由注入 | 路由到技能，将 SKILL.md 内容注入 Agent 上下文 | VibeSOP | `vibe route "debug this"` | 人在回路 |
-> | L2 引导执行 | 多步骤编排，上下文传递，进度追踪 | VibeSOP | `vibe route --execute "分析架构并生成测试"` | 人在回路 |
+> | L2 引导执行 | 多步骤编排，上下文传递，进度追踪 | VibeSOP | `vibe route --guided "分析架构并生成测试"` | 人在回路 |
 > | L3 Agent 接管 | 文件读写、代码修改、测试运行 | AI Agent | 由 Claude Code / OpenCode 等完成 | 人在回路 |
 >
 > VibeSOP 实现了 **L0、L1 和 L2**。L3 由 AI Agent 完成。

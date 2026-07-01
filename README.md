@@ -158,6 +158,9 @@ Duration     12.3ms
    • superpowers/debug (75%)
 ```
 
+> 💡 VibeSOP 路由到技能并把指令注入你的 AI Agent（Claude Code / OpenCode）的上下文，由 Agent 负责实际执行。运行 `vibe doctor` 查看哪些 Agent 可用。
+> 💡 VibeSOP routes to a skill and injects instructions into your AI Agent's context; the Agent does the actual execution. Run `vibe doctor` to see which Agents are available.
+
 ```bash
 # Multi intent - automatically orchestrates
 $ vibe route "分析架构并生成测试"
