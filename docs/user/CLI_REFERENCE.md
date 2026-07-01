@@ -47,6 +47,12 @@ By default, VibeSOP will:
 3. Build an execution plan with optimal skill selection
 4. Show a summary for confirmation
 
+> **Note**: VibeSOP routes queries and injects skill instructions only. Skill
+> execution (code changes, file writes, tool calls) is performed by an external
+> AI Agent (Claude Code, OpenCode, etc.). Use `--guided` for step-by-step
+> guidance, or hand the plan off to your Agent. See
+> [Hook Integration](HOOK_INTEGRATION.md).
+
 ```bash
 vibe route <query> [options]
 ```
@@ -61,6 +67,7 @@ vibe route <query> [options]
 - `--explain, -e` - Explain full routing decision tree with per-layer diagnostics, multi-intent analysis, and execution flow
 - `--no-session` - Disable session-state-aware routing for this query
 - `--yes, -y` - Skip confirmation prompt
+- `--guided, -x` - Interactive step-by-step guided execution mode (prints a plan checklist; you or your Agent perform the actual execution)
 - `--strategy, -s` - Force execution strategy: auto, sequential, parallel, hybrid
 
 **Examples:**

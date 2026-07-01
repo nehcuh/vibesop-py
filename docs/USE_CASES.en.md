@@ -28,7 +28,7 @@ VibeSOP = **SkillOS** (Skill Operating System) + **Loop Engine** (autonomous tas
 | Category | Problem Solved | Key Command | Capability Layer |
 |---|---|---|---|
 | **1. Daily dev** | Can't remember commands | `vibe route "<intent>"` | L1 routing injection |
-| **2. Complex tasks** | Multi-step easy to miss | `vibe route --execute "<complex>"` | L2 orchestration |
+| **2. Complex tasks** | Multi-step easy to miss | `vibe route --guided "<complex>"` | L2 orchestration |
 | **3. Cross-platform** | Reinstall on tool switch | `vibe install <pack>` | Cross-platform adapter |
 | **4. Autonomous monitoring** | Nobody watching after hours | `vibe loop create ...` | L0 autonomous exec |
 | **5. Lifecycle** | Skills pile up messy | `vibe skill stale` / `cleanup` | Lifecycle management |
@@ -95,7 +95,7 @@ vibe route "write TDD tests for src/auth/token.py"
 
 **Commands**:
 ```bash
-vibe route --execute "review PR #234 across security, performance, and readability dimensions"
+vibe route --guided "review PR #234 across security, performance, and readability dimensions"
 ```
 
 **Expected**: VibeSOP detects "three dimensions" as a multi-role query, auto-enters MULTI_AGENT_SQUAD mode, assigns three agents one dimension each, aggregates at the end.
@@ -112,7 +112,7 @@ vibe route --execute "review PR #234 across security, performance, and readabili
 
 **Commands**:
 ```bash
-vibe route --execute "analyze src/payment/ module architecture, add unit tests, update README"
+vibe route --guided "analyze src/payment/ module architecture, add unit tests, update README"
 ```
 
 **Expected output**:
@@ -356,7 +356,7 @@ vibe verify                        # verify multi-platform
 
 ### Month 1: Orchestration + team sharing
 ```bash
-vibe route --execute "analyze+test+document"   # L2 orchestration
+vibe route --guided "analyze+test+document"   # L2 orchestration
 vibe workflows create release-pipeline          # cross-skill workflow
 git add .vibe/ && git commit                    # team sharing
 ```

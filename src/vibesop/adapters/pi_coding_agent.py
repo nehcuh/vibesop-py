@@ -30,6 +30,8 @@ class PiCodingAgentAdapter(SdkBasedAdapter):
         super().__init__()
         self._project_root = Path(project_root).resolve()
 
+    cli_binary = "pi"
+
     @property
     def platform_name(self) -> str:
         return "pi"

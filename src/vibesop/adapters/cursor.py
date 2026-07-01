@@ -20,6 +20,8 @@ class CursorAdapter(FileBasedAdapter):
         super().__init__()
         self._project_root = Path(project_root).resolve()
 
+    cli_binary = "cursor"
+
     @property
     def platform_name(self) -> str:
         return "cursor"

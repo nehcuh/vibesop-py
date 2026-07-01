@@ -4,13 +4,17 @@ Built with Typer for modern CLI UX.
 
 VibeSOP is a Skill Operating System (SkillOS) that manages the full lifecycle
 of AI development skills: discovery → installation → routing → orchestration →
-evaluation → retention/deprecation. Simple tasks are handled end-to-end by
-VibeSOP (route → inject → guide execution); complex tasks are delegated to
-AI Agents (Claude Code, Cursor, OpenCode).
+evaluation → retention/deprecation.
 
-Note: v4.1.0 removed the `execute` CLI command — skill execution is the
-responsibility of AI Agents. VibeSOP provides lightweight guided execution
-for task orchestration, not full skill execution.
+Routing: VibeSOP routes natural language queries to the best-matching skill
+and injects the skill's instructions (SKILL.md) into an AI Agent's context.
+
+Execution: VibeSOP does NOT execute skills. Actual execution (code changes,
+file writes, tool calls) is performed by an external AI Agent such as Claude
+Code, OpenCode, or Kimi Code CLI. Use `--guided` mode for step-by-step
+guidance at the terminal, or hand the plan off to your Agent.
+
+See docs/user/HOOK_INTEGRATION.md for the integration model.
 """
 
 from __future__ import annotations
@@ -280,9 +284,9 @@ def route(
     ),
     execute: bool = typer.Option(
         False,
-        "--execute",
+        "--guided",
         "-x",
-        help="Enter interactive step-by-step execution mode after plan confirmation",
+        help="Enter interactive step-by-step guided execution mode after plan confirmation",
     ),
     no_session: bool = typer.Option(
         False, "--no-session", help="Disable session-state-aware routing for this query"
@@ -890,7 +894,7 @@ def _handle_orchestrated_result(
     if not confirmed:
         return
 
-    # 2. Interactive execution (--execute flag)
+    # 2. Interactive guided execution (--guided flag)
     if execute and plan:
         _execute_plan_interactive(result, console)
         return
@@ -994,7 +998,11 @@ def _orchestration_post_process(
         print(json.dumps(result.to_dict(), indent=2, ensure_ascii=False))
     else:
         render_orchestration_result(result, console=console)
-        console.print("\n[dim]Plan saved. Track with:[/dim] [bold]vibe plan status[/bold]")
+        console.print(
+            "\n[dim]Plan ready. Hand it off to your AI Agent (Claude Code / OpenCode) "
+            "for execution, or run[/dim] [bold]vibe route --guided[/bold] "
+            "[dim]for step-by-step guidance. Track with:[/dim] [bold]vibe plan status[/bold]"
+        )
 
         if plan:
             from vibesop.core.orchestration import generate_execution_summary
@@ -1008,7 +1016,13 @@ def _orchestration_post_process(
 
 
 def _execute_plan_interactive(result: Any, console: Console) -> None:
-    """Enter interactive step-by-step execution mode."""
+    """Enter interactive step-by-step guided execution mode.
+
+    This does NOT execute skills. It prints a guided checklist of plan steps
+    and awaits human confirmation at each step. Actual skill execution (code
+    changes, file writes, tool calls) is handled by an external AI Agent
+    (Claude Code, OpenCode, etc.) — not by VibeSOP itself.
+    """
     plan = result.execution_plan
     if not plan:
         console.print("[yellow]No execution plan available.[/yellow]")
@@ -1079,7 +1093,8 @@ def _execute_plan_interactive(result: Any, console: Console) -> None:
         if not sys.stdin.isatty():
             console.print(
                 "[dim](Non-interactive mode — skipping step confirmation. "
-                "Run in a TTY for step-by-step execution.)[/dim]"
+                "Run in a TTY for step-by-step guided execution, or hand the "
+                "plan off to your AI Agent for actual execution.)[/dim]"
             )
             continue
 
@@ -1277,6 +1292,8 @@ def doctor() -> None:
         )
         console.print(f"{icon} [{color}]{name}[/{color}]: {message}")
 
+    _print_platform_availability(console)
+
     all_ok = all(status for status, _ in checks)
     if all_ok:
         console.print("\n[bold green]✨ All checks passed![/bold green]")
@@ -1284,6 +1301,42 @@ def doctor() -> None:
     else:
         console.print("\n[bold red]⚠️  Some checks failed. Please fix the issues above.[/bold red]")
         raise typer.Exit(1)
+
+
+def _print_platform_availability(console: Console) -> None:
+    """Print which AI Agent CLIs are installed.
+
+    VibeSOP routes queries and injects skill instructions; these Agents perform
+    the actual execution. Helps users see at a glance which executor is wired up.
+    """
+    from vibesop.adapters import (
+        ClaudeCodeAdapter,
+        CursorAdapter,
+        KimiCliAdapter,
+        OpenCodeAdapter,
+        PiCodingAgentAdapter,
+    )
+
+    console.print(
+        "\n[bold]Platform Availability[/bold] [dim](AI Agents that execute skills):[/dim]"
+    )
+    for cls in (
+        ClaudeCodeAdapter,
+        OpenCodeAdapter,
+        KimiCliAdapter,
+        CursorAdapter,
+        PiCodingAgentAdapter,
+    ):
+        try:
+            adapter = cls()
+        except Exception:
+            console.print(f"  [dim]?  {cls.__name__} (init failed)[/dim]")
+            continue
+        path = adapter.detect()
+        if path:
+            console.print(f"  [green]✅[/green] {adapter.platform_name:12s} [dim]{path}[/dim]")
+        else:
+            console.print(f"  [dim]❌ {adapter.platform_name:12s} not found[/dim]")
 
 
 @app.command()
