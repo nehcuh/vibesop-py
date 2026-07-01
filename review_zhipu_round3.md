@@ -191,7 +191,7 @@ candidate_manager._cached_reload_locked
 
 | # | 问题 | 说明 |
 |---|------|------|
-| 7 | Adapter override 签名不兼容 ×3 | 第二轮遗留，不影响运行时，但类型检查不通过 |
+| 7 | Adapter override 签名不兼容 ×3 | 第二轮遗留，不影响运行时，但类型检查不通过。（2026-07 更新：Phase 1 已修复 `_render_skill_content` 的 2 处 override——签名对齐 base；`_render_extension` 为有意设计保留 ignore） |
 
 ---
 

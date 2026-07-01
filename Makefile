@@ -1,4 +1,4 @@
-.PHONY: help install dev lint format test clean type-check security
+.PHONY: help install dev lint format test test-fast test-cov clean clean-cov type-check security
 
 help: ## Show this help message
 	@echo "Available commands:"
@@ -19,13 +19,13 @@ format: ## Format code
 type-check: ## Run type checking
 	uv run basedpyright
 
-test: ## Run tests (skip slow/benchmark for reasonable speed)
+test: clean-cov ## Run tests (skip slow/benchmark for reasonable speed)
 	uv run pytest -m "not benchmark and not slow"
 
-test-fast: ## Run tests fast (skip slow/benchmark)
+test-fast: clean-cov ## Run tests fast (skip slow/benchmark)
 	uv run pytest -q -m "not benchmark and not slow"
 
-test-cov: ## Run tests with coverage
+test-cov: clean-cov ## Run tests with coverage
 	uv run pytest --cov=src/vibesop --cov-report=html
 
 test-parallel: ## Run tests with pytest-xdist (may fail on stateful tests)
@@ -37,10 +37,13 @@ test-full: ## Run full test suite including benchmark and slow tests
 security: ## Run security checks (pip-audit)
 	uv run pip-audit
 
-clean: ## Clean up generated files
+clean: clean-cov ## Clean up generated files
 	find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
 	find . -type f -name "*.pyc" -delete
-	rm -rf .pytest_cache .ruff_cache .coverage htmlcov/
+	rm -rf .pytest_cache .ruff_cache htmlcov/
+
+clean-cov: ## Clean coverage artifacts (fixes local DataError from stale .coverage.* xdist files)
+	@rm -f .coverage .coverage.*
 
 docs: ## Generate API documentation
 	uv run pdoc src/vibesop -o docs/api --docformat google

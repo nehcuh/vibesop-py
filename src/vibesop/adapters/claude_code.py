@@ -226,7 +226,7 @@ class ClaudeCodeAdapter(HookBasedAdapter):
                 dir_name = skill.id.replace("/", "-")
                 skill_dir = output_dir / "skills" / dir_name
                 skill_dir.mkdir(parents=True, exist_ok=True)
-                self._render_skill_content(skill, skill_dir, manifest, result)
+                self._render_skill_content(skill, skill_dir, result, manifest=manifest)
 
         except Exception as e:
             result.add_error(f"Failed to render configuration: {e}")
@@ -340,17 +340,19 @@ class ClaudeCodeAdapter(HookBasedAdapter):
 
         return result
 
-    def _render_skill_content(  # pyright: ignore[reportIncompatibleMethodOverride]
+    def _render_skill_content(
         self,
         skill: Any,
         skill_dir: Path,
-        manifest: Manifest,
         result: RenderResult,
+        dir_name: str | None = None,
+        manifest: Manifest | None = None,
     ) -> None:
         super()._render_skill_content(
             skill,
             skill_dir,
             result,
+            dir_name=dir_name,
             manifest=manifest,
         )
 

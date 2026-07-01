@@ -220,12 +220,12 @@ class TestSkillContentRender:
         result.add_error = MagicMock()
 
         # First build: creates symlink
-        adapter._render_skill_content(skill, skill_dir, manifest, result)
+        adapter._render_skill_content(skill, skill_dir, result, manifest=manifest)
         assert skill_dir.is_symlink()
         assert skill_dir.resolve() == installed_dir.resolve()
 
         # Second build: symlink must be preserved
-        adapter._render_skill_content(skill, skill_dir, manifest, result)
+        adapter._render_skill_content(skill, skill_dir, result, manifest=manifest)
         assert skill_dir.is_symlink(), "Symlink was lost on second build"
         assert skill_dir.resolve() == installed_dir.resolve(), "Symlink target changed"
 
@@ -276,6 +276,6 @@ class TestSkillContentRender:
         result.add_file = MagicMock()
         result.add_error = MagicMock()
 
-        adapter._render_skill_content(_Skill(), skill_dir, manifest, result)
+        adapter._render_skill_content(_Skill(), skill_dir, result, manifest=manifest)
         skill_md = skill_dir / "SKILL.md"
         assert skill_md.exists(), "SKILL.md should exist from template fallback"

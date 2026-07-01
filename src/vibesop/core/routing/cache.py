@@ -12,7 +12,6 @@ import collections
 import contextlib
 import hashlib
 import json
-import re
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -162,17 +161,6 @@ class CacheManager:
             "memory_size": len(self._memory_cache),
         }
 
-    def generate_key(
-        self,
-        input_text: str,
-        context: dict[str, Any] | None = None,
-    ) -> str:
-        """Generate a cache key from input and context."""
-        normalized = self._normalize_for_cache(input_text)
-        relevant_context = self._extract_relevant_context(context or {})
-        base = f"{normalized}:{json.dumps(relevant_context, sort_keys=True)}"
-        return hashlib.sha256(base.encode()).hexdigest()[:16]
-
     def _set_memory_cache(self, key: str, entry: CacheEntry) -> None:
         """Set value in memory cache with true LRU eviction.
 
@@ -204,18 +192,6 @@ class CacheManager:
     def _get_file_path(self, key: str) -> Path:
         safe_key = hashlib.sha256(key.encode()).hexdigest()[:24]
         return self.cache_dir / f"cache_{safe_key}.json"
-
-    def _normalize_for_cache(self, input_text: str) -> str:
-        normalized = re.sub(r"\d+", "N", input_text)
-        normalized = re.sub(r"['\"].*?['\"]", "X", normalized)
-        normalized = re.sub(r"\s+", " ", normalized)
-        return normalized.strip().lower()
-
-    def _extract_relevant_context(self, context: dict[str, Any]) -> dict[str, Any]:
-        return {
-            "file_type": context.get("file_type"),
-            "has_errors": bool(context.get("error_count", 0)),
-        }
 
     def get_similar(self, query: str, similarity_threshold: float = 0.75) -> dict[str, Any] | None:
         """Find a cached result for a semantically similar query.

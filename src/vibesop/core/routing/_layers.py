@@ -484,7 +484,11 @@ def try_index_layer(
     match = SkillRoute(
         skill_id=best_skill_id,
         confidence=round(confidence, 2),
-        layer=RoutingLayer.AI_TRIAGE,  # Report as AI_TRIAGE to avoid enum churn
+        # NOTE: This match comes from the Skill Semantic Index (token-overlap +
+        # embedding), NOT from AI Triage (LLM). It shares the AI_TRIAGE enum value
+        # for backward compatibility with persisted trace data in .vibe/traces/.
+        # TODO(v9.0): add a dedicated SEMANTIC_INDEX enum value.
+        layer=RoutingLayer.AI_TRIAGE,
         source=router._get_skill_source(best_skill_id, candidate.get("namespace", "builtin")),
         description=str(candidate.get("description", "")),
         metadata={
