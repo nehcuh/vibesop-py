@@ -4,10 +4,13 @@ from __future__ import annotations
 
 import json
 import re
+import threading
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Any
+
+from vibesop.utils.atomic_writer import write_text
 
 
 @dataclass
@@ -157,6 +160,7 @@ class InstinctLearner:
             self._numpy = np
         except ImportError:
             self._numpy = None
+        self._lock = threading.RLock()
         self._load()
 
     def _load(self) -> None:
@@ -178,10 +182,12 @@ class InstinctLearner:
         self._load_sequences()
 
     def _save(self) -> None:
-        with self.storage_path.open("w") as f:
-            for instinct in self._instincts.values():
-                f.write(json.dumps(instinct.to_dict()) + "\n")
-        self._save_sequences()
+        with self._lock:
+            content = "".join(
+                json.dumps(instinct.to_dict()) + "\n" for instinct in self._instincts.values()
+            )
+            write_text(self.storage_path, content)
+            self._save_sequences()
 
     @property
     def instincts(self) -> dict[str, Instinct]:
@@ -194,14 +200,26 @@ class InstinctLearner:
 
     def set_instinct(self, instinct: Instinct) -> None:
         """Add or replace an instinct."""
-        self._instincts[instinct.id] = instinct
-        self._embedding_cache.clear()
+        with self._lock:
+            self._instincts[instinct.id] = instinct
+            self._embedding_cache.clear()
 
     def save(self) -> None:
         """Persist all instincts to storage."""
         self._save()
 
     def learn(
+        self,
+        pattern: str,
+        action: str,
+        context: str = "",
+        tags: list[str] | None = None,
+        source: str = "manual",
+    ) -> Instinct:
+        with self._lock:
+            return self._learn_locked(pattern, action, context, tags, source)
+
+    def _learn_locked(
         self,
         pattern: str,
         action: str,
@@ -234,11 +252,24 @@ class InstinctLearner:
         return instinct
 
     def record_outcome(self, instinct_id: str, success: bool) -> None:
-        if instinct_id not in self._instincts:
-            return
+        with self._lock:
+            if instinct_id not in self._instincts:
+                return
 
-        self._instincts[instinct_id].update(success)
-        self._save()
+            self._instincts[instinct_id].update(success)
+            self._save()
+
+    def record_outcome_for_query(self, query: str, success: bool) -> None:
+        """Record an outcome for the instinct whose pattern matches this query.
+
+        Derives the instinct id the same way ``learn()`` does, so the two stay
+        in sync. No-op if no instinct exists for the query. Called by the
+        routing feedback path (``UnifiedRouter.record_feedback_outcome``) when a
+        user explicitly accepts (``success=True``) or rejects (``success=False``)
+        a route — this is the missing reward signal that closes the instinct ->
+        routing feedback loop (Phase 0 finding).
+        """
+        self.record_outcome(self._generate_id(query), success)
 
     def find_matching(
         self,
@@ -485,10 +516,10 @@ class InstinctLearner:
 
     def _save_sequences(self) -> None:
         seq_path = self.storage_path.parent / "sequences.jsonl"
-        seq_path.parent.mkdir(parents=True, exist_ok=True)
-        with seq_path.open("w") as f:
-            for pattern in self._sequences.values():
-                f.write(json.dumps(pattern.to_dict()) + "\n")
+        content = "".join(
+            json.dumps(pattern.to_dict()) + "\n" for pattern in self._sequences.values()
+        )
+        write_text(seq_path, content)
 
     def export_for_routing(self) -> list[dict[str, Any]]:
         return [
