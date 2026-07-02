@@ -1588,3 +1588,28 @@ content = render_skill_md(skill)
 
 **Files**: `src/vibesop/core/orchestration/classifier.py` (`_detect_review_task`), `src/vibesop/core/orchestration/task_decomposer.py` (`_infer_task_type`)
 
+
+---
+
+## 2026-07 Phase 0-4 deep-diagnosis optimization run
+
+4 PRs merged (#51-54) from a 5-dimension parallel diagnosis. All CI green; basedpyright held at 0 err / 46 warn throughout. See session.md S48.
+
+### Architecture decisions
+- **L3 执行断层 = 方向A（拥抱分裂）**：VibeSOP=路由/编排，执行靠外部 Agent。`vibe route` ROUTE-ONLY；`--execute` 是人工 checklist（非执行）；真实生产路径=隐式 hook（handle_query_for_hook）。落地：--execute→--guided（保 -x）、adapter is_available()/detect()、vibe doctor 平台可用性、HOOK_INTEGRATION.md。**不要**方向B（内置 LLM executor）。
+- **instinct 奖励信号注入点 = cli/feedback.py**（非 _record_execution）：后者 user_satisfied 永远 None（orchestrator.py:315 不传）。fix = record_outcome_for_query + record_feedback_outcome，yes/no 都触发、partial 跳过。no confidence reset（is_reliable 门控 total>=3 AND rate>=0.6 即安全网）。Wilson 负样本：3×False→conf 0.281 + rate 0→永不 reliable（真抑制）。
+- **loop retry 在 executor 内**（非 CLI）：每 execute_loop_tick 持久化一条 record，CLI 重试会按 attempt 烧 DEAD 预算。executor 内重试=persist-once（瞬态 blip 算 1 次失败非 N 次）。max_retries 默认 0=关。
+- **inject_history opt-in 默认关**：跨次记忆注入会改路由 query（污染 CJK/匹配），必须 opt-in。默认路由字节不变（回归测试 test_inject_history_off_by_default 锁）。
+- **DEAD→ACTIVE 只经 vibe loop reset**：resume 拒 DEAD（指向 reset）、拒 RETIRED；pause/resume 都走 validate_transition。
+
+### Technical pitfalls (this run)
+1. **loop 模型是 pydantic BaseModel 非 @dataclass**（models.py:8-12 自述）；TickResult 不存在（executor 返回 LoopRunRecord）。Phase 4 计划假设 @dataclass/TickContent 全错——加默认字段到 pydantic 是 forward-compatible（extra="forbid" 只拒多余键，不拒缺失键）。
+2. **VerificationLoop.verify() 不存在**（plan 编造）：VerificationLoop 有 decide_action/verify_step，面向 adversarial plan step + VerifierAgent/LLM，不匹配 loop routing output。故 Maker/Checker deferred（需独立设计，非复用）。
+3. **git push HTTP/2 framing layer 错误**（本机连 github.com 时发，连超 3 次）：`git -c http.version=HTTP/1.1 push` 绕过。gh CLI/API（api.github.com）不受影响。pull 同理用 HTTP/1.1。
+4. **vibe 是 uv tool**：裸 `vibe` 是已装旧版，本地源码改动后用 `uv run vibe` 或 CliRunner 直 import 验证，别信裸 vibe 的输出。
+5. **提交前先开分支**：本会话 Phase 4 第一笔误提交到 main（Phase 3 合并后忘切分支）——已修（commit 移分支、main reset origin/main）。`git checkout -b` 必在 commit 前。
+6. **router 误路由反馈消息**：UserPromptSubmit hook 把含 "test/decision/review" 的反馈/决策消息误分类为 squad / code-review skill（本会话 3 次）。Dim 1 改进项——router 对非任务消息识别弱。
+7. **_classify_failure 默认 PERMANENT**（保守）：未知失败不重试（避免浪费 tick）。计划原拟 TRANSIENT 默认（乐观）会重试未知失败。关键词表英文-only（CJK 失败不匹配→不重试）——已记 TODO。
+8. **per-loop fcntl tick lock**：retry+backoff（最长 ~12.5min）vs 每分钟 cron 会跨进程 TOCTOU（atomic write 只护单进程）。fcntl LOCK_EX|LOCK_NB，并发 tick 进程 skip 该 loop。POSIX-only（Windows no-op）。
+9. **auto_select_threshold 不是死代码**：Phase 1 计划标它死，但 grep 复核 cli/confirmation.py:34,42 真在用（auto-select 门控）。**计划给的死代码清单必须逐个 grep 复核**，别信"零引用"断言。
+

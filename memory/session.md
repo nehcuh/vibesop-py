@@ -993,3 +993,16 @@ Coverage: temporarily lowered fail_under=0 from 75% (massive new test additions)
 - basedpyright 0 errors，43 个 classifier+phase3 测试全部通过
 - Next: e2e 验证 `vibe route` 实际输出
 - Recorded: yes - 1 reusable pattern (classifier keyword overlap priority)
+
+### S48 (2026-07-01~02) [vibesop-py Phase 0 诊断 + Phase 1-4 落地]
+本会话：5 维度并行诊断 → 4 个 phase 依次实现合并，全部 CI 绿。
+- **Phase 0 诊断**（5 并行 agent）：用户给的「关键文件索引」系统性过时（router.py→routing/ 包、loop 在 core/loop 非 agent/runtime、preferences→instinct）。两个 P0：① instinct 奖励信号断裂（record_outcome 路由从不调→死循环）② L3 执行断层（vibe route ROUTE-ONLY，--execute 是人工 checklist，真实路径=隐式 hook）。
+- **Phase 1**（PR #51, 零行为变更）：文档 10 层→4 阶段级联；删死代码（generate_key/IRouteLayer）；Makefile clean-cov 修本地 coverage DataError；adapter override 签名对齐（review_zhipu #7）。3 个候选（_compute_index_score/get_similar/auto_select_threshold）grep 复核有测试/调用方→defer Phase 5。
+- **Phase 2**（PR #52, 行为变更）：instinct 奖励信号修复——record_outcome 接 cli/feedback.py（非 _record_execution，后者 user_satisfied 永远 None）。record_outcome_for_query + record_feedback_outcome。no confidence reset（门控即安全网）。_save 加 RLock + atomic_writer。
+- **Phase 3**（PR #53, CLI 破坏性变更）：L3 方向A——--execute→--guided（保 -x）；adapter is_available()/detect()（per-adapter cli_binary，非计划 platform_name 默认）+ vibe doctor 平台可用性；hook 文档 HOOK_INTEGRATION.md；9 处 --execute 文档修正。
+- **Phase 4**（PR #54, 行为变更）：loop 深度——FailureCategory 归因 + 指数退避重试（executor 内=persist-once，max_retries 默认 0）+ opt-in inject_history（默认关）+ 状态机 + vibe loop reset + corrupt-state 备份 + per-loop fcntl tick lock。**2-agent 交叉验证**（用户要求）：code-reviewer 抓 CRITICAL（resume 复活 RETIRED）+ architect 抓 H1（retry+cron TOCTOU）/H2（注入污染路由），全部修。Maker/Checker deferred（VerificationLoop.verify 不存在 + 模型不匹配）。
+- **偏离汇总**：loop 模型 pydantic 非 @dataclass；TickResult 不存在（=LoopRunRecord）；未知失败默认 PERMANENT。
+- **运维 gotcha**：① git push HTTP/2 framing 错→`git -c http.version=HTTP/1.1 push` ② vibe 是 uv tool，本地改后用 `uv run vibe` ③ router 把反馈消息误分类为 squad/code-review（3 次）——Dim 1 改进项。
+- 验证：每 phase 全量 pytest 绿（3665→3674→3702→3704）+ ruff 0 + basedpyright 0 err/46 warn（全程基线）。
+- 剩余：Phase 5（路由整合：拆 AI_TRIAGE 枚举、EMBEDDING 默认、CacheManager 命运、degradation 遥测）；Maker/Checker follow-up。
+- Recorded: yes — project-knowledge.md 加「2026-07 Phase 0-4」节；harness memory instinct-reward-signal-broken.md 标 merged。
