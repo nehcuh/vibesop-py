@@ -1613,3 +1613,9 @@ content = render_skill_md(skill)
 8. **per-loop fcntl tick lock**：retry+backoff（最长 ~12.5min）vs 每分钟 cron 会跨进程 TOCTOU（atomic write 只护单进程）。fcntl LOCK_EX|LOCK_NB，并发 tick 进程 skip 该 loop。POSIX-only（Windows no-op）。
 9. **auto_select_threshold 不是死代码**：Phase 1 计划标它死，但 grep 复核 cli/confirmation.py:34,42 真在用（auto-select 门控）。**计划给的死代码清单必须逐个 grep 复核**，别信"零引用"断言。
 
+### Phase 5 完成 (2026-07-02, PR #55) — Phase 0-5 收官
+- **SEMANTIC_INDEX 独立枚举**：`RoutingLayer.SEMANTIC_INDEX = "semantic_index"`（Stage 2，与 SCENARIO 同级）。`_layers.py` 12 处 Skill-Semantic-Index 路径（`try_index_layer` + `_try_embedding_fallback`）→ SEMANTIC_INDEX；4 处真 LLM triage（`try_ai_triage_layer`）保留 AI_TRIAGE。layer_number 重编号 2→3…（display-only，仅 tracer.py 用）。**StrEnum 向后兼容**：旧 trace 的 `"ai_triage"` 仍反序列化为 AI_TRIAGE。无测试断言 index 层 → 加字段零回归（422 路由测试绿）。
+- **degradation×satisfaction 遥测**：result_mixin 记 `degradation_confidence`；`_record_execution` 把 `degradation_level` 从 SkillRoute.metadata 搬到 ExecutionRecord.metadata（之前没持久化）；`analytics.degradation_satisfaction_analysis` join `user_satisfied`；`vibe route-stats` 渲染。Phase 2 的 instinct 奖励信号让 user_satisfied 成为真实数据，本遥测才有意义。
+- **EMBEDDING 默认关闭文档化**（option A）：`enable_embedding=False`，Field 描述写清是 opt-in 增强（延迟+可选依赖；keyword+TFIDF 覆盖同信号）。Task 4 CacheManager（保留为 AI-Triage 缓存）/ Task 5 P95 SLO（无真实流量）按计划跳过。
+- **Phase 0 诊断 5 维度全部处置完毕**：2 P0（instinct 奖励、L3 断层）+ 3 P1（loop 深度、路由整合、校准）关闭。5 PR（#51-55）全 CI 绿，basedpyright 全程 0 err/46 warn（基线不动）。
+

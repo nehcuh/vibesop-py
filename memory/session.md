@@ -994,7 +994,7 @@ Coverage: temporarily lowered fail_under=0 from 75% (massive new test additions)
 - Next: e2e 验证 `vibe route` 实际输出
 - Recorded: yes - 1 reusable pattern (classifier keyword overlap priority)
 
-### S48 (2026-07-01~02) [vibesop-py Phase 0 诊断 + Phase 1-4 落地]
+### S48 (2026-07-01~02) [vibesop-py Phase 0 诊断 + Phase 1-5 全部落地]
 本会话：5 维度并行诊断 → 4 个 phase 依次实现合并，全部 CI 绿。
 - **Phase 0 诊断**（5 并行 agent）：用户给的「关键文件索引」系统性过时（router.py→routing/ 包、loop 在 core/loop 非 agent/runtime、preferences→instinct）。两个 P0：① instinct 奖励信号断裂（record_outcome 路由从不调→死循环）② L3 执行断层（vibe route ROUTE-ONLY，--execute 是人工 checklist，真实路径=隐式 hook）。
 - **Phase 1**（PR #51, 零行为变更）：文档 10 层→4 阶段级联；删死代码（generate_key/IRouteLayer）；Makefile clean-cov 修本地 coverage DataError；adapter override 签名对齐（review_zhipu #7）。3 个候选（_compute_index_score/get_similar/auto_select_threshold）grep 复核有测试/调用方→defer Phase 5。
@@ -1004,5 +1004,6 @@ Coverage: temporarily lowered fail_under=0 from 75% (massive new test additions)
 - **偏离汇总**：loop 模型 pydantic 非 @dataclass；TickResult 不存在（=LoopRunRecord）；未知失败默认 PERMANENT。
 - **运维 gotcha**：① git push HTTP/2 framing 错→`git -c http.version=HTTP/1.1 push` ② vibe 是 uv tool，本地改后用 `uv run vibe` ③ router 把反馈消息误分类为 squad/code-review（3 次）——Dim 1 改进项。
 - 验证：每 phase 全量 pytest 绿（3665→3674→3702→3704）+ ruff 0 + basedpyright 0 err/46 warn（全程基线）。
-- 剩余：Phase 5（路由整合：拆 AI_TRIAGE 枚举、EMBEDDING 默认、CacheManager 命运、degradation 遥测）；Maker/Checker follow-up。
+- 剩余（已清零）：~~Phase 5~~ **Phase 5（PR #55）已落地** —— SEMANTIC_INDEX 独立枚举（`_layers.py` 12 处 index 路径→SEMANTIC_INDEX，4 处真 AI_TRIAGE 保留）+ layer_number 重编号（display-only）+ degradation×satisfaction 遥测（result_mixin→_record_execution→analytics→route-stats）+ EMBEDDING 默认关闭文档化。**Phase 0-5 全部完成，5 个 PR（#51-55）全 CI 绿。**
+- 真正剩余（不在 5 phase 范围）：Maker/Checker follow-up（Phase 4 deferred）；4 个 dependabot CVE（2H/1M/1L，依赖升级）；router 误路由反馈消息（含 test/decision/review→squad/code-review，本会话 4 次，Dim 1 改进项）。
 - Recorded: yes — project-knowledge.md 加「2026-07 Phase 0-4」节；harness memory instinct-reward-signal-broken.md 标 merged。
