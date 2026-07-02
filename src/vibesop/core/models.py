@@ -19,16 +19,17 @@ from vibesop.spec import SkillSpec
 class RoutingLayer(StrEnum):
     """Routing layers in priority order (Layer 0 → Layer 9)."""
 
-    EXPLICIT = "explicit"  # Layer 0
-    SCENARIO = "scenario"  # Layer 1
-    AI_TRIAGE = "ai_triage"  # Layer 2
-    KEYWORD = "keyword"  # Layer 3
-    TFIDF = "tfidf"  # Layer 4
-    EMBEDDING = "embedding"  # Layer 5
-    LEVENSHTEIN = "levenshtein"  # Layer 6
-    CUSTOM = "custom"  # Layer 7
-    NO_MATCH = "no_match"  # Layer 8
-    FALLBACK_LLM = "fallback_llm"  # Layer 9
+    EXPLICIT = "explicit"  # Stage 1
+    SCENARIO = "scenario"  # Stage 2
+    SEMANTIC_INDEX = "semantic_index"  # Stage 2 (Skill Semantic Index: token-overlap + embedding)
+    AI_TRIAGE = "ai_triage"  # Stage 3 (LLM triage)
+    KEYWORD = "keyword"  # Stage 4
+    TFIDF = "tfidf"  # Stage 4
+    EMBEDDING = "embedding"  # Stage 4
+    LEVENSHTEIN = "levenshtein"  # Stage 4
+    CUSTOM = "custom"  # Stage 4
+    NO_MATCH = "no_match"  # terminal
+    FALLBACK_LLM = "fallback_llm"  # terminal
 
     @property
     def layer_number(self) -> int:
@@ -36,14 +37,15 @@ class RoutingLayer(StrEnum):
         mapping = {
             RoutingLayer.EXPLICIT: 0,
             RoutingLayer.SCENARIO: 1,
-            RoutingLayer.AI_TRIAGE: 2,
-            RoutingLayer.KEYWORD: 3,
-            RoutingLayer.TFIDF: 4,
-            RoutingLayer.EMBEDDING: 5,
-            RoutingLayer.LEVENSHTEIN: 6,
-            RoutingLayer.CUSTOM: 7,
-            RoutingLayer.NO_MATCH: 8,
-            RoutingLayer.FALLBACK_LLM: 9,
+            RoutingLayer.SEMANTIC_INDEX: 2,
+            RoutingLayer.AI_TRIAGE: 3,
+            RoutingLayer.KEYWORD: 4,
+            RoutingLayer.TFIDF: 5,
+            RoutingLayer.EMBEDDING: 6,
+            RoutingLayer.LEVENSHTEIN: 7,
+            RoutingLayer.CUSTOM: 8,
+            RoutingLayer.NO_MATCH: 9,
+            RoutingLayer.FALLBACK_LLM: 10,
         }
         return mapping[self]
 

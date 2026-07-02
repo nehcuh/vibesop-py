@@ -181,3 +181,35 @@ class AnalyticsStore:
 
         result.sort(key=lambda x: (-x[1], -x[2]))
         return result[:limit]
+
+
+def degradation_satisfaction_analysis(
+    records: list[ExecutionRecord],
+) -> dict[str, dict[str, float]]:
+    """Correlate routing degradation level with user satisfaction.
+
+    Joins the ``degradation_level`` carried on each record's metadata (set by
+    ``UnifiedRouter._record_execution``) with ``user_satisfied`` feedback.
+    Answers: are DEGRADE/SUGGEST-level routes actually useful to users?
+    """
+    if not records:
+        return {}
+
+    by_level: dict[str, dict[str, float]] = {}
+    for r in records:
+        level = r.metadata.get("degradation_level", "unknown") if r.metadata else "unknown"
+        bucket = by_level.setdefault(level, {"count": 0.0, "satisfied": 0.0, "dissatisfied": 0.0})
+        bucket["count"] += 1
+        if r.user_satisfied is True:
+            bucket["satisfied"] += 1
+        elif r.user_satisfied is False:
+            bucket["dissatisfied"] += 1
+
+    return {
+        level: {
+            "count": int(b["count"]),
+            "satisfaction_rate": b["satisfied"] / b["count"] if b["count"] else 0.0,
+            "dissatisfaction_rate": b["dissatisfied"] / b["count"] if b["count"] else 0.0,
+        }
+        for level, b in sorted(by_level.items())
+    }

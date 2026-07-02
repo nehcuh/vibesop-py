@@ -96,6 +96,7 @@ class UnifiedRouter(
     _LAYER_PRIORITY: ClassVar[list[RoutingLayer]] = [
         RoutingLayer.EXPLICIT,
         RoutingLayer.SCENARIO,
+        RoutingLayer.SEMANTIC_INDEX,
         RoutingLayer.AI_TRIAGE,
         RoutingLayer.KEYWORD,
         RoutingLayer.TFIDF,
@@ -748,6 +749,14 @@ class UnifiedRouter(
     ) -> None:
         from vibesop.core.analytics import AnalyticsStore, ExecutionRecord
 
+        # Carry degradation telemetry onto the execution record so analytics can
+        # join degradation level ↔ user satisfaction (Phase 5).
+        degradation_meta: dict[str, Any] = {}
+        if result.primary and result.primary.metadata:
+            for key in ("degradation_level", "degradation_confidence"):
+                if key in result.primary.metadata:
+                    degradation_meta[key] = result.primary.metadata[key]
+
         store = AnalyticsStore(storage_dir=self.project_root / ".vibe")
         record = ExecutionRecord(
             query=query,
@@ -761,6 +770,7 @@ class UnifiedRouter(
             user_modified=user_modified,
             user_satisfied=user_satisfied,
             routing_layers=[layer.value for layer in result.routing_path],
+            metadata=degradation_meta,
         )
         store.record(record)
 

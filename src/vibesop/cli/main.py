@@ -1393,6 +1393,19 @@ def route_stats() -> None:
 
     console.print(f"\nCache: {stats.get('cache_dir', 'N/A')}")
 
+    # Degradation × satisfaction telemetry (Phase 5).
+    from vibesop.core.analytics import AnalyticsStore, degradation_satisfaction_analysis
+
+    analysis = degradation_satisfaction_analysis(AnalyticsStore().list_records(limit=1000))
+    if analysis:
+        console.print("\n[bold]Degradation × Satisfaction:[/bold]")
+        for level, data in analysis.items():
+            bar_len = int(data["satisfaction_rate"] * 20)
+            bar = "█" * bar_len + "░" * (20 - bar_len)
+            console.print(
+                f"  {level:12s} [{bar}] {data['satisfaction_rate']:.0%} ({data['count']} samples)"
+            )
+
 
 @app.command("preferences")
 def preferences() -> None:

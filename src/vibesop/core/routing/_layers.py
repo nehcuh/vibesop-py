@@ -308,7 +308,7 @@ def _try_embedding_fallback(
     }
     if not profiles_with_emb:
         return None, LayerDetail(
-            layer=RoutingLayer.AI_TRIAGE,
+            layer=RoutingLayer.SEMANTIC_INDEX,
             matched=False,
             reason="No embeddings in index",
             duration_ms=(time.perf_counter() - index_start) * 1000,
@@ -326,7 +326,7 @@ def _try_embedding_fallback(
             router._index_embedding_model = model
         except Exception:
             return None, LayerDetail(
-                layer=RoutingLayer.AI_TRIAGE,
+                layer=RoutingLayer.SEMANTIC_INDEX,
                 matched=False,
                 reason="sentence-transformers not available for embedding fallback",
                 duration_ms=(time.perf_counter() - index_start) * 1000,
@@ -337,7 +337,7 @@ def _try_embedding_fallback(
         query_emb = raw_emb.tolist() if hasattr(raw_emb, "tolist") else list(raw_emb)
     except Exception:
         return None, LayerDetail(
-            layer=RoutingLayer.AI_TRIAGE,
+            layer=RoutingLayer.SEMANTIC_INDEX,
             matched=False,
             reason="Query embedding failed",
             duration_ms=(time.perf_counter() - index_start) * 1000,
@@ -354,7 +354,7 @@ def _try_embedding_fallback(
     EMBEDDING_THRESHOLD = 0.45
     if best_similarity < EMBEDDING_THRESHOLD or not best_skill_id:
         return None, LayerDetail(
-            layer=RoutingLayer.AI_TRIAGE,
+            layer=RoutingLayer.SEMANTIC_INDEX,
             matched=False,
             reason=(
                 f"Embedding fallback: no match above threshold "
@@ -366,7 +366,7 @@ def _try_embedding_fallback(
     candidate = next((c for c in candidates if c["id"] == best_skill_id), None)
     if not candidate:
         return None, LayerDetail(
-            layer=RoutingLayer.AI_TRIAGE,
+            layer=RoutingLayer.SEMANTIC_INDEX,
             matched=False,
             reason=f"Embedding matched '{best_skill_id}' but skill not in candidates",
             duration_ms=(time.perf_counter() - index_start) * 1000,
@@ -378,7 +378,7 @@ def _try_embedding_fallback(
     match = SkillRoute(
         skill_id=best_skill_id,
         confidence=round(confidence, 2),
-        layer=RoutingLayer.AI_TRIAGE,
+        layer=RoutingLayer.SEMANTIC_INDEX,
         source=router._get_skill_source(best_skill_id, candidate.get("namespace", "builtin")),
         description=str(candidate.get("description", "")),
         metadata={
@@ -389,7 +389,7 @@ def _try_embedding_fallback(
         },
     )
     detail = LayerDetail(
-        layer=RoutingLayer.AI_TRIAGE,
+        layer=RoutingLayer.SEMANTIC_INDEX,
         matched=True,
         reason=(f"Embedding match: '{best_skill_id}' (similarity {best_similarity:.2f})"),
         duration_ms=(time.perf_counter() - index_start) * 1000,
@@ -418,7 +418,7 @@ def try_index_layer(
             router._index_layer_cache = {}  # mark as "tried, missing"
             router._index_profile_tokens = {}
             return None, LayerDetail(
-                layer=RoutingLayer.AI_TRIAGE,
+                layer=RoutingLayer.SEMANTIC_INDEX,
                 matched=False,
                 reason="Skill semantic index not built (run 'vibe init' to build)",
                 duration_ms=(time.perf_counter() - index_start) * 1000,
@@ -430,7 +430,7 @@ def try_index_layer(
     index = cached
     if not index:
         return None, LayerDetail(
-            layer=RoutingLayer.AI_TRIAGE,
+            layer=RoutingLayer.SEMANTIC_INDEX,
             matched=False,
             reason="Skill semantic index is empty",
             duration_ms=(time.perf_counter() - index_start) * 1000,
@@ -470,7 +470,7 @@ def try_index_layer(
     candidate = next((c for c in candidates if c["id"] == best_skill_id), None)
     if not candidate:
         return None, LayerDetail(
-            layer=RoutingLayer.AI_TRIAGE,
+            layer=RoutingLayer.SEMANTIC_INDEX,
             matched=False,
             reason=f"Index matched '{best_skill_id}' but skill not in candidates",
             duration_ms=(time.perf_counter() - index_start) * 1000,
@@ -484,11 +484,9 @@ def try_index_layer(
     match = SkillRoute(
         skill_id=best_skill_id,
         confidence=round(confidence, 2),
-        # NOTE: This match comes from the Skill Semantic Index (token-overlap +
-        # embedding), NOT from AI Triage (LLM). It shares the AI_TRIAGE enum value
-        # for backward compatibility with persisted trace data in .vibe/traces/.
-        # TODO(v9.0): add a dedicated SEMANTIC_INDEX enum value.
-        layer=RoutingLayer.AI_TRIAGE,
+        # Skill Semantic Index (token-overlap + embedding) — NOT AI Triage (LLM).
+        # Has its own enum value since Phase 5 (was mislabeled AI_TRIAGE pre-v8.1).
+        layer=RoutingLayer.SEMANTIC_INDEX,
         source=router._get_skill_source(best_skill_id, candidate.get("namespace", "builtin")),
         description=str(candidate.get("description", "")),
         metadata={
@@ -498,7 +496,7 @@ def try_index_layer(
         },
     )
     return match, LayerDetail(
-        layer=RoutingLayer.AI_TRIAGE,
+        layer=RoutingLayer.SEMANTIC_INDEX,
         matched=True,
         reason=f"Index match: '{best_skill_id}' (score {best_score:.2f})",
         duration_ms=(time.perf_counter() - index_start) * 1000,

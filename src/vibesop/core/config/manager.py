@@ -125,7 +125,17 @@ class RoutingConfig(BaseModel):
         description="Enable multi-skill orchestration for multi-intent queries",
     )
     enable_ai_triage: bool = True
-    enable_embedding: bool = False
+    enable_embedding: bool = Field(
+        default=False,
+        description=(
+            "Enable embedding-based matching in the Stage-4 matcher aggregation. "
+            "Opt-in enhancement — disabled by default: it requires the optional "
+            "sentence-transformers dependency (~20ms/route), and the keyword + "
+            "TFIDF matchers already cover the same signal for most queries. "
+            "Enable only if the model is installed and deeper semantic matching "
+            "is needed."
+        ),
+    )
     max_candidates: int = Field(default=3, ge=1, le=10)
     use_cache: bool = True
     ai_triage_max_skills: int = Field(default=20, ge=5, le=50)
