@@ -133,7 +133,7 @@ class TestKimiCliAdapter:
         assert "# Kimi Code CLI Configuration" in readme
         assert "## Skills" in readme
         assert "vibe skills list" in readme
-        assert "10-Layer Routing System" in readme
+        assert "4-Stage Routing Cascade" in readme
 
     def test_render_config_with_custom_policies(self, tmp_path: Path) -> None:
         """Test rendering with custom policies."""
@@ -289,10 +289,12 @@ class TestKimiCliAdapter:
 
         config_toml = (tmp_path / "config.toml").read_text()
         assert "[[hooks]]" in config_toml
-        assert 'name = "vibesop-route"' in config_toml
         assert 'event = "UserPromptSubmit"' in config_toml
         assert 'command = "bash ~/.kimi-code/hooks/vibesop-route.sh"' in config_toml
-        # Kimi Code CLI doesn't use file-based hooks
+        assert "timeout = 15" in config_toml
+        # 'name' field is NOT allowed — kimi rejects extra fields
+        # (only event/matcher/command/timeout per the official hooks docs)
+        assert "name =" not in config_toml
 
     def test_agents_md_is_slim(self, tmp_path: Path) -> None:
         """AGENTS.md should be a slim index, not inlining skills."""
