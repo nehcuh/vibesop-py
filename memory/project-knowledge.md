@@ -1619,3 +1619,19 @@ content = render_skill_md(skill)
 - **EMBEDDING 默认关闭文档化**（option A）：`enable_embedding=False`，Field 描述写清是 opt-in 增强（延迟+可选依赖；keyword+TFIDF 覆盖同信号）。Task 4 CacheManager（保留为 AI-Triage 缓存）/ Task 5 P95 SLO（无真实流量）按计划跳过。
 - **Phase 0 诊断 5 维度全部处置完毕**：2 P0（instinct 奖励、L3 断层）+ 3 P1（loop 深度、路由整合、校准）关闭。5 PR（#51-55）全 CI 绿，basedpyright 全程 0 err/46 warn（基线不动）。
 
+### kimi 深审修正 (2026-07-02, PR #56, merged 06ffbbf)
+kimi Code 深审 Phase 1-5 diff（OrbStack e2e 3703/0 绿），抓到 1 CRITICAL + 8 HIGH（都是测试/linter 结构性发现不了的逻辑 bug）。修复：
+- **🔴 CRITICAL（Phase 2 回归）instinct 反馈多轮键不匹配**：`_build_match_result`（result_mixin.py:151）把 instinct 记在 conversation-**enriched** 的 `query` 上，但 feedback.py 用 `result.original_query`（raw）反馈；`record_outcome_for_query` 是精确哈希查 → 多轮路由里奖励打到错 instinct 或 no-op。修：`_record_routing_decision(original_query, ...)`。+ 回归测试。**教训：learn 和 feedback 必须同键；enrichment 会改 query，instinct/preference 键于 original_query。**
+- **HIGH** `record_sequence` 没拿 `self._lock`（其余 learner 方法都拿了）→ 包进锁。
+- **HIGH** pause/resume/reset 没拿 tick lock → 与并发 tick 的 load-modify-save race。`_acquire_tick_lock(blocking=True)` 包住三命令。
+- **HIGH** `save_state` 在 try/except 外 → 失败丢失败计数器推进 + 异常上抛。包进 try/except（log + 仍返回 record）。
+- **HIGH** `layer_number` 重编号破坏持久化 trace（kimi 验证 tracer.py:73,149 持久化它）→ 回退：SEMANTIC_INDEX=10（不挤占 0-9）。**Phase 5 "layer_number 仅 display 安全"判断不完整——它被持久化了。**
+- **HIGH** degradation 遥测在 fallback 路径丢失 → 携带到 fallback result metadata。
+- **MEDIUM** RoutingLayer docstring、max_retries `le=10` 上限。
+- 文档化（非代码修）：retry execute-once vs persist-once（route-only handle_query 基本幂等）；异常路径遥测 = 后续。
+
+### 过程教训（本会话）
+1. **`make lint` ≠ CI Lint**：`make lint` 只跑 `ruff check .`，CI Lint 还跑 `ruff format --check .`。门禁必须显式 `ruff check . && ruff format --check .`。Phase 1 踩过（memory #7），Phase 6 fix PR 又踩（SIM105 漏过 → CI Lint 红）。**提交前永远跑两个。**
+2. **`ruff check` 的 "No fixes available (N hidden fix…)" = 有错**，不是通过。只有 "All checks passed!" 才是绿。
+3. **kimi 深审的价值**：抓到 3704 绿测试 + ruff + pyright 全漏的 CRITICAL（多轮 instinct 键）。独立视角 + 全 diff 上下文 = 找结构性盲点。后续大改动值得跑 kimi + 容器 e2e（deep-diagnosis-optimization skill 的 per-batch 验证流程）。
+
