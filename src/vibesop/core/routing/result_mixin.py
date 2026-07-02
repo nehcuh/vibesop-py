@@ -137,6 +137,7 @@ class RouterResultMixin:
                     routing_path=routing_path,
                     layer_details=layer_details,
                     duration_ms=(time.perf_counter() - start_time) * 1000,
+                    degradation_level=degradation_level.value,
                 )
 
         if primary is None:  # pyright: ignore[reportUnnecessaryComparison]
@@ -148,7 +149,12 @@ class RouterResultMixin:
                 duration_ms=(time.perf_counter() - start_time) * 1000,
             )
 
-        host._record_routing_decision(query, primary, context)
+        # Key the instinct/preference record on original_query (what the user
+        # typed), NOT the conversation-enriched `query`. feedback.py feeds back
+        # result.original_query; if learn + feedback use different keys the
+        # reward signal lands on the wrong instinct or no-ops in multi-turn.
+        # (kimi CRITICAL: was `query` — the enriched one.)
+        host._record_routing_decision(original_query, primary, context)
 
         # Enrich alternatives with SkillRecommender suggestions
         enriched_alternatives = list(alternatives) if alternatives else []
@@ -263,6 +269,7 @@ class RouterResultMixin:
         routing_path: list[RoutingLayer],
         layer_details: list[LayerDetail],
         duration_ms: float,
+        degradation_level: str | None = None,
     ) -> RoutingResult:
         """Build a fallback result when no skill matches.
 
@@ -298,6 +305,10 @@ class RouterResultMixin:
                     "reason": "No skill matched query",
                     "fallback_mode": getattr(host._config, "fallback_mode", "silent"),
                     "candidate_count": len(candidates),
+                    # Carry degradation telemetry onto the fallback route so
+                    # _record_execution still joins degradation↔satisfaction
+                    # even when the route fell back. (kimi HIGH.)
+                    "degradation_level": degradation_level,
                 },
             ),
             alternatives=nearest,

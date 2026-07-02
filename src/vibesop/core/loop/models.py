@@ -140,7 +140,8 @@ class LoopSpec(BaseModel):
     max_retries: int = Field(
         default=0,
         ge=0,
-        description="Max retries on TRANSIENT failure within one tick (0 = no retry).",
+        le=10,
+        description="Max retries on TRANSIENT failure within one tick (0 = no retry). Capped at 10 to bound tick duration.",
     )
     retry_delay_base: int = Field(
         default=30,

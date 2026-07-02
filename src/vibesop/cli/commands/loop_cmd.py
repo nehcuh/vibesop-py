@@ -77,17 +77,21 @@ def _target_str(spec: LoopSpec, truncate: int = 0) -> str:
     return raw
 
 
-def _acquire_tick_lock(store: LoopStore, name: str) -> Any:
+def _acquire_tick_lock(store: LoopStore, name: str, *, blocking: bool = False) -> Any:
     """Acquire a per-loop advisory lock so overlapping ``vibe loop tick``
-    processes (e.g. external cron firing while a retry-laden tick is still
-    running) skip an in-progress loop instead of racing on ``state.json``
-    (load→execute→save is a TOCTOU across processes; the atomic write only
-    protects a single process).
+    processes (or a state-mutating command concurrent with a tick) don't race
+    on ``state.json`` (load→mutate/save is a TOCTOU across processes; the
+    atomic write only protects a single process).
 
-    Returns the open lock-file handle (close it to release), or ``None`` if
-    another process holds the lock. POSIX-only (``fcntl``); on Windows there
-    is no advisory locking, so it returns ``True`` (always proceed — callers
-    are expected to serialise ticks themselves there).
+    - ``blocking=False`` (default, used by ``tick``): skip (return ``None``)
+      if another process holds the lock — overlapping ticks are redundant.
+    - ``blocking=True`` (used by pause/resume/reset): wait for the lock so the
+      state mutation completes after any in-progress tick.
+
+    Returns the open lock-file handle (close it to release), or ``None`` if a
+    non-blocking acquire found the lock held. POSIX-only (``fcntl``); on
+    Windows there is no advisory locking, so it returns ``True`` (always
+    proceed — callers must serialise ticks themselves there).
     """
     try:
         import fcntl
@@ -97,7 +101,8 @@ def _acquire_tick_lock(store: LoopStore, name: str) -> Any:
     lock_path.parent.mkdir(parents=True, exist_ok=True)
     lock_fd = lock_path.open("w")
     try:
-        fcntl.flock(lock_fd.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        flag = fcntl.LOCK_EX if blocking else fcntl.LOCK_EX | fcntl.LOCK_NB
+        fcntl.flock(lock_fd.fileno(), flag)
     except (BlockingIOError, OSError):
         lock_fd.close()
         return None
@@ -323,20 +328,27 @@ def pause(name: str = typer.Argument(..., help="loop 名称")) -> None:
         console.print(f"[red]❌ Loop '{name}' 不存在[/red]")
         raise typer.Exit(1)
 
-    state = store.load_state(name) or LoopState(spec=spec)
-    if state.status == LoopStatus.PAUSED:
-        console.print(f"[yellow]Loop '{name}' 已处于暂停状态[/yellow]")
-        return
+    # Hold the per-loop lock across load→mutate→save so a concurrent tick
+    # can't overwrite this transition (kimi HIGH: was lock-free).
+    tick_lock = _acquire_tick_lock(store, name, blocking=True)
+    try:
+        state = store.load_state(name) or LoopState(spec=spec)
+        if state.status == LoopStatus.PAUSED:
+            console.print(f"[yellow]Loop '{name}' 已处于暂停状态[/yellow]")
+            return
 
-    if not validate_transition(state.status, LoopStatus.PAUSED):
-        console.print(
-            f"[red]❌ 无法从 {state.status.value} 暂停 —— 仅 ACTIVE/FAILING 可暂停，"
-            f"DEAD/RETIRED 需先 reset 或为终态。[/red]"
-        )
-        raise typer.Exit(1)
+        if not validate_transition(state.status, LoopStatus.PAUSED):
+            console.print(
+                f"[red]❌ 无法从 {state.status.value} 暂停 —— 仅 ACTIVE/FAILING 可暂停，"
+                f"DEAD/RETIRED 需先 reset 或为终态。[/red]"
+            )
+            raise typer.Exit(1)
 
-    state.status = LoopStatus.PAUSED
-    store.save_state(state)
+        state.status = LoopStatus.PAUSED
+        store.save_state(state)
+    finally:
+        if hasattr(tick_lock, "close"):
+            tick_lock.close()
     console.print(f"[yellow]⏸️  Loop '{name}' 已暂停[/yellow]")
 
 
@@ -349,28 +361,34 @@ def resume(name: str = typer.Argument(..., help="loop 名称")) -> None:
         console.print(f"[red]❌ Loop '{name}' 不存在[/red]")
         raise typer.Exit(1)
 
-    state = store.load_state(name) or LoopState(spec=spec)
-    if state.status == LoopStatus.ACTIVE:
-        console.print(f"[yellow]Loop '{name}' 已处于活跃状态[/yellow]")
-        return
+    # Hold the per-loop lock across load→mutate→save (kimi HIGH).
+    tick_lock = _acquire_tick_lock(store, name, blocking=True)
+    try:
+        state = store.load_state(name) or LoopState(spec=spec)
+        if state.status == LoopStatus.ACTIVE:
+            console.print(f"[yellow]Loop '{name}' 已处于活跃状态[/yellow]")
+            return
 
-    if state.status == LoopStatus.DEAD:
-        console.print(
-            f"[yellow]Loop '{name}' 处于 DEAD 状态。使用 "
-            f"[bold]vibe loop reset {name}[/bold] 清除失败计数并重新激活。[/yellow]"
-        )
-        raise typer.Exit(1)
+        if state.status == LoopStatus.DEAD:
+            console.print(
+                f"[yellow]Loop '{name}' 处于 DEAD 状态。使用 "
+                f"[bold]vibe loop reset {name}[/bold] 清除失败计数并重新激活。[/yellow]"
+            )
+            raise typer.Exit(1)
 
-    if not validate_transition(state.status, LoopStatus.ACTIVE):
-        console.print(
-            f"[red]❌ 无法从 {state.status.value} 恢复 —— "
-            f"{state.status.value} 为终态，resume 仅用于 PAUSED/FAILING。[/red]"
-        )
-        raise typer.Exit(1)
+        if not validate_transition(state.status, LoopStatus.ACTIVE):
+            console.print(
+                f"[red]❌ 无法从 {state.status.value} 恢复 —— "
+                f"{state.status.value} 为终态，resume 仅用于 PAUSED/FAILING。[/red]"
+            )
+            raise typer.Exit(1)
 
-    state.status = LoopStatus.ACTIVE
-    state.consecutive_failures = 0
-    store.save_state(state)
+        state.status = LoopStatus.ACTIVE
+        state.consecutive_failures = 0
+        store.save_state(state)
+    finally:
+        if hasattr(tick_lock, "close"):
+            tick_lock.close()
     console.print(f"[green]▶️ Loop '{name}' 已恢复[/green]")
 
 
@@ -386,17 +404,23 @@ def reset(name: str = typer.Argument(..., help="loop 名称")) -> None:
         console.print(f"[red]❌ Loop '{name}' 不存在[/red]")
         raise typer.Exit(1)
 
-    state = store.load_state(name) or LoopState(spec=spec)
-    if state.status != LoopStatus.DEAD:
-        console.print(
-            f"[yellow]Loop '{name}' 当前状态为 {state.status.value}，非 DEAD。"
-            f"reset 仅用于 DEAD loop。[/yellow]"
-        )
-        raise typer.Exit(1)
+    # Hold the per-loop lock across load→mutate→save (kimi HIGH).
+    tick_lock = _acquire_tick_lock(store, name, blocking=True)
+    try:
+        state = store.load_state(name) or LoopState(spec=spec)
+        if state.status != LoopStatus.DEAD:
+            console.print(
+                f"[yellow]Loop '{name}' 当前状态为 {state.status.value}，非 DEAD。"
+                f"reset 仅用于 DEAD loop。[/yellow]"
+            )
+            raise typer.Exit(1)
 
-    state.status = LoopStatus.ACTIVE
-    state.consecutive_failures = 0
-    store.save_state(state)
+        state.status = LoopStatus.ACTIVE
+        state.consecutive_failures = 0
+        store.save_state(state)
+    finally:
+        if hasattr(tick_lock, "close"):
+            tick_lock.close()
     console.print(f"[green]♻️ Loop '{name}' 已重置为 ACTIVE（连续失败计数已清零）[/green]")
 
 
