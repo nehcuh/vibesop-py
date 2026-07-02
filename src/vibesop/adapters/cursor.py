@@ -229,7 +229,7 @@ class CursorAdapter(FileBasedAdapter):
 
     def get_settings_schema(self) -> dict[str, Any]:
         return {
-            "$schema": "https://json.schemastore.org/claude-code-settings.json",
+            "$schema": "https://json.schemastore.org/cursor-settings.json",
             "title": "Cursor Settings",
             "type": "object",
             "properties": {

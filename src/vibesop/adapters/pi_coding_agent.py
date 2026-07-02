@@ -375,16 +375,17 @@ class PiCodingAgentAdapter(SdkBasedAdapter):
 
     def _render_settings_json(
         self,
-        output_dir: Path,  # noqa: ARG002  # interface-conforming override signature
+        output_dir: Path,  # interface-conforming override signature
         _manifest: Manifest,
         result: RenderResult,
     ) -> None:
-        """Render .pi/settings.json with extension and skill configuration."""
-        # Use the project-level .pi directory for settings
-        project_pi_dir = self._project_root / ".pi"
-        project_pi_dir.mkdir(parents=True, exist_ok=True)
+        """Render settings.json with extension and skill configuration.
 
-        settings_path = project_pi_dir / "settings.json"
+        Uses output_dir (the --output target) so deployment is self-contained.
+        """
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        settings_path = output_dir / "settings.json"
 
         # Merge with existing settings if present
         settings: dict[str, Any] = {

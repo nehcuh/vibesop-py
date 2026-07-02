@@ -264,7 +264,7 @@ class OpenCodeAdapter(FileBasedAdapter):
 
     def get_settings_schema(self) -> dict[str, Any]:
         return {
-            "$schema": "https://json.schemastore.org/claude-code-settings.json",
+            "$schema": "https://json.schemastore.org/opencode-settings.json",
             "title": "OpenCode Settings",
             "type": "object",
             "properties": {
