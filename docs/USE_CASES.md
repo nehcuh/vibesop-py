@@ -250,7 +250,7 @@ vibe loop create daily-pr-digest \
   --desc "每天 9 点 PR 状态汇总"
 ```
 
-`--query` 模式走完整 10 层路由 pipeline（不像 `--skill` 显式指定），适合"我不知道该用哪个技能，让 VibeSOP 选"。
+`--query` 模式走完整 4 阶段路由级联（不像 `--skill` 显式指定），适合"我不知道该用哪个技能，让 VibeSOP 选"。
 
 ---
 

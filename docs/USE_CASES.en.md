@@ -250,7 +250,7 @@ vibe loop create daily-pr-digest \
   --desc "Daily 9am PR status digest"
 ```
 
-`--query` mode goes through the full 10-layer routing pipeline (unlike `--skill` which is explicit) — perfect for "I don't know which skill fits, let VibeSOP pick".
+`--query` mode goes through the full 4-stage routing cascade (unlike `--skill` which is explicit) — perfect for "I don't know which skill fits, let VibeSOP pick".
 
 ---
 

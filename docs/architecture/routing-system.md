@@ -1,14 +1,14 @@
 # Routing System Architecture
 
 > **Version**: 8.0.0.dev0
-> **Last Updated**: 2026-06-05
+> **Last Updated**: 2026-07-02
 
 ## Overview
 
 The routing system is VibeSOP's core component. It takes user queries and returns the most appropriate skill(s) to handle them.
 
 ```
-Query → UnifiedRouter → 10-Layer Pipeline → RoutingResult
+Query → UnifiedRouter → 4-Stage Cascade → RoutingResult
 ```
 
 ## UnifiedRouter
@@ -29,66 +29,27 @@ class UnifiedRouter:
         """Route query to best matching skill."""
 ```
 
-## 10-Layer Pipeline
+## 4-Stage Routing Cascade
 
-Layers are tried in priority order. First match wins (except for alternatives).
+> **Redesigned in v8.0**: the routing model is a **4-stage branched cascade**,
+> not the serial 10-layer pipeline of v4. `RoutingLayer.SEMANTIC_INDEX` (Stage 2)
+> was split out from `AI_TRIAGE` so the Skill Semantic Index is no longer
+> mislabeled. The `Layer N` headings in **Layer Details** below are now
+> per-mechanism reference, not strict execution order. See `_try_layers()` in
+> `unified.py` for the real control flow.
 
-> **v4.4.0**: Layers 7 (Custom plugins), 8 (No Match), and 9 (Fallback LLM) added. Keyword routing is bypassed for queries exceeding `keyword_match_max_chars` (default 5), falling directly to AI Triage.
+Stages are branched by query length (≤ ~15 chars → keyword/short path, else
+LLM path), not a flat priority loop:
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│ Layer 0: Explicit Override                                  │
-│ • Detects /skill or "use skill" patterns                    │
-│ • Latency: <0.1ms                                           │
-│ • Use when: User explicitly chooses a skill                 │
-├─────────────────────────────────────────────────────────────┤
-│ Layer 1: Scenario Patterns                                  │
-│ • Predefined situation → skill mappings                     │
-│ • Latency: <0.1ms                                           │
-│ • Use when: Common scenarios (debug, review, deploy)        │
-├─────────────────────────────────────────────────────────────┤
-│ Layer 2: AI Triage (LLM)                                    │
-│ • Uses LLM for semantic classification                      │
-│ • Cost: ~$0.001/call                                        │
-│ • Latency: ~100-500ms                                      │
-│ • Use when: High-stakes decisions, complex intent           │
-├─────────────────────────────────────────────────────────────┤
-│ Layer 3: Keyword Matching                                   │
-│ • Exact token-based matching                                │
-│ • Latency: <0.1ms                                           │
-│ • Use when: Direct keyword matches                          │
-├─────────────────────────────────────────────────────────────┤
-│ Layer 4: TF-IDF Semantic Matching                           │
-│ • Cosine similarity on term vectors                         │
-│ • Latency: ~5-10ms                                          │
-│ • Use when: General queries                                 │
-├─────────────────────────────────────────────────────────────┤
-│ Layer 5: Embedding-Based Matching                           │
-│ • Vector similarity for semantic understanding              │
-│ • Latency: ~10-20ms                                         │
-│ • Use when: Semantic meaning > exact keywords               │
-├─────────────────────────────────────────────────────────────┤
-│ Layer 6: Fuzzy Fallback (Levenshtein)                       │
-│ • Edit distance for typos and misspellings                  │
-│ • Latency: ~10-20ms                                         │
-│ • Use when: No matches in upper layers                      │
-├─────────────────────────────────────────────────────────────┤
-│ Layer 7: Custom Matcher Plugins                             │
-│ • User-defined matchers in .vibe/matchers/                  │
-│ • Latency: varies                                           │
-│ • Use when: Specialized matching logic needed               │
-├─────────────────────────────────────────────────────────────┤
-│ Layer 8: No Match                                           │
-│ • All layers failed to find a confident match               │
-│ • Latency: N/A                                              │
-│ • Use when: Query doesn't match any skill                   │
-├─────────────────────────────────────────────────────────────┤
-│ Layer 9: Fallback LLM                                       │
-│ • Raw LLM fallback when no skill matches                    │
-│ • Configurable: transparent / silent / disabled             │
-│ • Use when: Last-resort routing for unmatched queries       │
-└─────────────────────────────────────────────────────────────┘
-```
+| Stage | Mechanism | Notes |
+|-------|-----------|-------|
+| 1. Explicit Override | exact skill ID (`/skill`, `use skill`) | short-circuits on hit |
+| 2. Scenario + Semantic Index | predefined scenario patterns + Skill Semantic Index (token-overlap + embedding), best-of-N | the short-query path; `SEMANTIC_INDEX` enum |
+| 3. AI Triage | LLM semantic classification | the long-query path; `AI_TRIAGE` enum |
+| 4. Matcher Aggregation | keyword + TF-IDF + embedding + Levenshtein run **in parallel**; highest confidence wins (not serial fallback) | + custom plugins |
+
+**Terminal states** (not routing layers): **No Match** (all candidates below
+the minimum confidence threshold), **Fallback LLM** (last-resort raw LLM).
 
 ## Layer Details
 
@@ -193,7 +154,7 @@ scenarios:
 
 ## Optimization Layer
 
-After the 10-layer matching pipeline, optimization is applied:
+After the 4-stage cascade, optimization is applied:
 
 ### Preference Boost
 
@@ -384,7 +345,7 @@ Scores all skills but **penalizes already-used skills** (×0.2 weight), favoring
 
 ## Interception Modes (v7.0)
 
-Before the 10-layer pipeline runs, `IntentInterceptor.should_intercept()`
+Before the cascade runs, `IntentInterceptor.should_intercept()`
 decides *whether* to route and *how*. The decision tree below is the
 single entry point for both the CLI (`vibe route`) and the hook path
 (`vibesop-route.sh` → `AgentRuntime.handle_query_for_hook`).

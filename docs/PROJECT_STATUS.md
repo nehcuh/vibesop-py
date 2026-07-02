@@ -33,7 +33,7 @@ VibeSOP is a **battle-tested, production-ready** AI-powered Skill Operating Syst
 - **94% Accuracy**: AI semantic triage with multi-layer fallback
 - **Multi-Language**: English + Chinese support
 - **Preference Learning**: Gets better with use
-- **10-Layer Pipeline**: AI Triage → Explicit → Scenario → Keyword → TF-IDF → Embedding → Levenshtein → Custom → No Match → Fallback LLM
+- **4-Stage Cascade**: Explicit → Scenario+Semantic Index → AI Triage → Matcher aggregation (keyword/TF-IDF/embedding/Levenshtein in parallel); No Match / Fallback LLM are terminal
 
 ### 3. Skill Lifecycle Management
 - **Lifecycle States**: DRAFT → ACTIVE → DEPRECATED → ARCHIVED
@@ -61,7 +61,7 @@ VibeSOP is a **battle-tested, production-ready** AI-powered Skill Operating Syst
 3. **Integration Layer**: CLI adapters, configuration, hooks
 
 ### Key Components
-- **UnifiedRouter**: 10-layer routing pipeline with AI semantic triage
+- **UnifiedRouter**: 4-stage routing cascade with AI semantic triage
 - **SkillManager**: High-level skill management API
 - **WorkflowEngine**: AST-based safe workflow execution
 - **ExternalSkillExecutor**: External skill execution with security audit

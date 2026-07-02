@@ -27,7 +27,7 @@ These files remain in the project root for discoverability and tool integration:
 
 - **[Skills Ecosystem Guide](SKILLS_GUIDE.md)** — Complete guide to the VibeSOP skills ecosystem
   - 50+ skills explained (builtin, superpowers, gstack, omx)
-  - 10-layer routing system详解
+  - 4-stage routing cascade详解
   - Priority decision mechanism and scenario-based selection
 - **[Quick Start - Users](QUICKSTART_USERS.md)** — User-facing installation and basic usage
 - **[Quick Start - Developers](QUICKSTART_DEVELOPERS.md)** — Developer setup and contribution workflow
@@ -55,7 +55,7 @@ These files remain in the project root for discoverability and tool integration:
 
 - **[Architecture Overview](architecture/ARCHITECTURE.md)** — System architecture and technical design
   - 3-Pillar architecture (Spec / Reference / Conformance)
-  - 10-layer routing pipeline
+  - 4-stage routing cascade
   - Agent Runtime layer
   - Component structure and data flow
 - **[Skill Runtime Interface](architecture/skill-runtime-interface.md)** — SkillRuntime contract and lifecycle state machine
