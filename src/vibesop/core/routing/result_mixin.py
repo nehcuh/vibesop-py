@@ -129,6 +129,7 @@ class RouterResultMixin:
                 primary = cast("SkillRoute | None", degraded_primary)  # pyright: ignore[reportAssignmentType]
             if primary:
                 primary.metadata["degradation_level"] = degradation_level.value
+                primary.metadata["degradation_confidence"] = primary.confidence
             else:
                 return self._build_fallback_result(
                     query=original_query,
