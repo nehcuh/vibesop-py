@@ -17,7 +17,7 @@ from vibesop.spec import SkillSpec
 
 
 class RoutingLayer(StrEnum):
-    """Routing layers in priority order (Layer 0 → Layer 9)."""
+    """Routing layers (4-stage cascade; layer_number is a display-only index)."""
 
     EXPLICIT = "explicit"  # Stage 1
     SCENARIO = "scenario"  # Stage 2
@@ -37,15 +37,18 @@ class RoutingLayer(StrEnum):
         mapping = {
             RoutingLayer.EXPLICIT: 0,
             RoutingLayer.SCENARIO: 1,
-            RoutingLayer.SEMANTIC_INDEX: 2,
-            RoutingLayer.AI_TRIAGE: 3,
-            RoutingLayer.KEYWORD: 4,
-            RoutingLayer.TFIDF: 5,
-            RoutingLayer.EMBEDDING: 6,
-            RoutingLayer.LEVENSHTEIN: 7,
-            RoutingLayer.CUSTOM: 8,
-            RoutingLayer.NO_MATCH: 9,
-            RoutingLayer.FALLBACK_LLM: 10,
+            RoutingLayer.AI_TRIAGE: 2,
+            RoutingLayer.KEYWORD: 3,
+            RoutingLayer.TFIDF: 4,
+            RoutingLayer.EMBEDDING: 5,
+            RoutingLayer.LEVENSHTEIN: 6,
+            RoutingLayer.CUSTOM: 7,
+            RoutingLayer.NO_MATCH: 8,
+            RoutingLayer.FALLBACK_LLM: 9,
+            # SEMANTIC_INDEX gets 10 (not inserted at 2) so the renumber does
+            # NOT shift existing layers — persisted trace layer_numbers (tracer.py)
+            # keep their meaning. (kimi HIGH #6: inserting at 2 broke old traces.)
+            RoutingLayer.SEMANTIC_INDEX: 10,
         }
         return mapping[self]
 

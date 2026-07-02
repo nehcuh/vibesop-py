@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import time
 from unittest.mock import MagicMock
 
@@ -164,6 +165,46 @@ class TestBuildResult:
         )
         assert result.primary is not None
         assert result.primary.metadata["deprecated_warnings"] == ["dep-skill is deprecated"]
+
+    def test_record_routing_decision_uses_original_query_not_enriched(self, monkeypatch) -> None:
+        """Regression (kimi CRITICAL): the instinct/preference record must be
+        keyed on ``original_query`` (what feedback.py feeds back), NOT the
+        conversation-enriched ``query``. Otherwise multi-turn routing sends the
+        reward signal to the wrong instinct / no-ops."""
+        from vibesop.core.routing.degradation import DegradationLevel
+
+        mixin = RouterResultMixin()
+        mixin._config = MagicMock()
+        mixin._degradation_manager = MagicMock()
+        primary = SkillRoute(
+            skill_id="x", confidence=0.9, layer=RoutingLayer.KEYWORD, source="builtin"
+        )
+        mixin._degradation_manager.evaluate.return_value = (DegradationLevel.AUTO, primary)
+
+        recorded: list[str] = []
+        # Direct-assign: in production `self` is the UnifiedRouter host (which
+        # defines _record_routing_decision); a bare mixin instance doesn't have it.
+        mixin._record_routing_decision = lambda q, p, c: recorded.append(q)
+
+        # _build_match_result also runs alternatives-enrichment that needs the
+        # full UnifiedRouter host (skill_recommender, candidate_manager, ...).
+        # The CRITICAL fix is the _record_routing_decision call, which executes
+        # BEFORE that enrichment — capture it even though the bare mixin can't
+        # complete the downstream work.
+        with contextlib.suppress(AttributeError):
+            mixin._build_match_result(
+                query="ENRICHED query with prior-turn context",
+                primary=primary,
+                alternatives=[],
+                routing_path=[RoutingLayer.KEYWORD],
+                layer_details=[LayerDetail(layer=RoutingLayer.KEYWORD, matched=True, reason="m")],
+                start_time=time.perf_counter(),
+                deprecated_warnings=None,
+                conversation=None,
+                original_query="raw user query",
+                context=None,
+            )
+        assert recorded == ["raw user query"]
 
 
 class TestBuildFallbackResult:

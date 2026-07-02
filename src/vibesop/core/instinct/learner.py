@@ -455,40 +455,41 @@ class InstinctLearner:
         if len(steps) < 3:
             return None
 
-        import hashlib
+        # Hold the lock across mutation + persist (kimi HIGH: was lock-free, racing
+        # with learn/record_outcome which now take self._lock).
+        with self._lock:
+            import hashlib
 
-        seq_hash = hashlib.md5("→".join(steps).encode()).hexdigest()[:12]
+            seq_hash = hashlib.md5("→".join(steps).encode()).hexdigest()[:12]
 
-        if seq_hash in self._sequences:
-            pattern = self._sequences[seq_hash]
-        else:
-            pattern = SequencePattern(steps=steps)
-            self._sequences[seq_hash] = pattern
+            if seq_hash in self._sequences:
+                pattern = self._sequences[seq_hash]
+            else:
+                pattern = SequencePattern(steps=steps)
+                self._sequences[seq_hash] = pattern
 
-        pattern.total_count += 1
-        if success:
-            pattern.success_count += 1
-        pattern.last_seen = datetime.now()
+            pattern.total_count += 1
+            if success:
+                pattern.success_count += 1
+            pattern.last_seen = datetime.now()
 
-        if context:
-            context_lower = context.lower()
-            for tag in (
-                "debugging",
-                "testing",
-                "linting",
-                "deploying",
-                "refactoring",
-                "building",
-                "security",
-            ):
-                if tag in context_lower and tag not in pattern.context_tags:
-                    pattern.context_tags.append(tag)
+            if context:
+                context_lower = context.lower()
+                for tag in (
+                    "debugging",
+                    "testing",
+                    "linting",
+                    "deploying",
+                    "refactoring",
+                    "building",
+                    "security",
+                ):
+                    if tag in context_lower and tag not in pattern.context_tags:
+                        pattern.context_tags.append(tag)
 
-        self._save_sequences()
+            self._save_sequences()
 
-        if pattern.is_candidate:
-            return pattern
-        return None
+            return pattern if pattern.is_candidate else None
 
     def get_sequence_candidates(self, min_confidence: float = 0.5) -> list[SequencePattern]:
         return [

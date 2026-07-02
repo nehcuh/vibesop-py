@@ -259,8 +259,18 @@ def execute_loop_tick(
     record.finished_at = datetime.now(UTC)
 
     # Persist state — even on failure, so the failure counter advances.
+    # Resilient: a save failure (disk full / IO) must not crash the tick or
+    # mask the outcome — log loudly and still return the record. (kimi HIGH:
+    # save_state was outside any try/except, so a failed save lost the
+    # failure-counter advance AND propagated.)
     state.record_run(record)
-    store.save_state(state)
+    try:
+        store.save_state(state)
+    except Exception:
+        logger.exception(
+            "Failed to persist loop state for [%s] — failure counter may not advance",
+            spec.name,
+        )
 
     return record
 
