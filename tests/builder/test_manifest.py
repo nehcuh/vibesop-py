@@ -127,6 +127,26 @@ policies:
         assert policies.security is not None
         assert policies.routing is not None
 
+    def test_deduplicate_builtin_aliases(self, tmp_path: Path) -> None:
+        """builtin/X and bare X (same skill from registry vs discovery) should dedup."""
+        from types import SimpleNamespace
+
+        from vibesop.builder.manifest import ManifestBuilder
+
+        builder = ManifestBuilder(project_root=tmp_path)
+        skills = [
+            SimpleNamespace(id="builtin/session-end"),
+            SimpleNamespace(id="session-end"),  # duplicate
+            SimpleNamespace(id="builtin/skill-craft"),
+            SimpleNamespace(id="other-skill"),
+        ]
+        result = builder._deduplicate_builtin_aliases(skills)
+        assert len(result) == 3
+        ids = [s.id for s in result]
+        assert "builtin/session-end" in ids
+        assert "session-end" not in ids
+        assert "other-skill" in ids
+
 
 class TestQuickBuilder:
     """Test QuickBuilder convenience methods."""

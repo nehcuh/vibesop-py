@@ -134,6 +134,9 @@ class ManifestBuilder:
             # Merge with dynamically discovered skills from central storage
             self._merge_discovered_skills(skills)
 
+            # Deduplicate builtin/X vs X (same skill from registry vs discovery)
+            skills = self._deduplicate_builtin_aliases(skills)
+
             return skills
 
         except Exception as e:
@@ -242,6 +245,29 @@ class ManifestBuilder:
                     existing_ids.add(skill.id)
         except Exception as e:
             logger.warning("Dynamic skill discovery failed: %s", e)
+
+    def _deduplicate_builtin_aliases(self, skills: list[SkillSpec]) -> list[SkillSpec]:
+        """Remove skills that appear as both 'builtin/X' and 'X'.
+
+        Dynamic discovery finds skills at ~/.config/skills/X/ while the config
+        registry already lists them as builtin/X. Without dedup, adapters that
+        flatten IDs (e.g. Pi: builtin-session-end vs session-end) render both.
+        Keep the first-seen version (the registry's builtin/X is authoritative).
+        """
+        seen_canonical: set[str] = set()
+        result: list[SkillSpec] = []
+        for skill in skills:
+            canonical = skill.id.removeprefix("builtin/")
+            if canonical in seen_canonical:
+                logger.debug(
+                    "Deduplicating skill %s (canonical %s already present)",
+                    skill.id,
+                    canonical,
+                )
+                continue
+            seen_canonical.add(canonical)
+            result.append(skill)
+        return result
 
     def _load_policies(self) -> PolicySet:
         try:
