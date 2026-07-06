@@ -81,6 +81,26 @@ def test_detect_provider_default(monkeypatch):
     assert detect_provider_from_env() == "ollama"
 
 
+def test_detect_provider_from_ollama_env(monkeypatch):
+    """OLLAMA_BASE_URL set with no cloud keys selects local ollama (regression for F-28).
+
+    Previously this branch misrouted to the unconfigured 'deepseek' cloud provider,
+    silently disabling AI triage for local-Ollama users.
+    """
+    monkeypatch.delenv("VIBE_LLM_PROVIDER", raising=False)
+    for _key in (
+        "ANTHROPIC_API_KEY",
+        "OPENAI_API_KEY",
+        "DEEPSEEK_API_KEY",
+        "KIMI_API_KEY",
+        "ZHIPU_API_KEY",
+    ):
+        monkeypatch.delenv(_key, raising=False)
+    monkeypatch.setenv("OLLAMA_BASE_URL", "http://localhost:11434/v1")
+    monkeypatch.delenv("OLLAMA_MODEL", raising=False)
+    assert detect_provider_from_env() == "ollama"
+
+
 def test_create_from_env_prefers_preferred_when_configured(monkeypatch):
     monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-" + "x" * 40)
     monkeypatch.setenv("OPENAI_API_KEY", "sk-" + "x" * 48)

@@ -20,12 +20,12 @@ jobs:
     needs: ci-gate
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.1
         with:
           fetch-depth: 0
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v4
+        uses: astral-sh/setup-uv@38f3f104447c67c051c4a08e39b64a148898af3a  # v4.2.0
 
       - name: Set up Python
         run: uv python install 3.12
@@ -43,11 +43,21 @@ jobs:
       - name: Build package
         run: uv build
 
+      - name: Attest build provenance
+        # Generate SLSA build provenance for the dist artifacts (F-12). PyPI
+        # package attestations (PEP 740) are emitted separately by the publish
+        # action below via Trusted Publishing + id-token: write.
+        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373  # v4.1.1
+        with:
+          subject-path: dist/*
+
       - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
+        uses: pypa/gh-action-pypi-publish@ec4db0b4ddc65acdf4bff5fa45ac92d78b56bdf0  # v1.9.0
+        with:
+          attestations: true
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a3eeaf626c5b8d85266b0e65  # v2.6.2
         with:
           generate_release_notes: true
           files: dist/*

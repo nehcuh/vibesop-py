@@ -105,9 +105,6 @@ def detect_provider_from_env() -> ProviderType:
         if os.getenv(env_key):
             return cast("ProviderType", provider_name)
 
-    if os.getenv("OLLAMA_BASE_URL") or os.getenv("OLLAMA_MODEL"):
-        return "deepseek"
-
     return "ollama"
 
 
