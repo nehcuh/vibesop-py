@@ -98,7 +98,7 @@ class OpenAIProvider(LLMProvider):
 
         Raises:
             ValueError: If provider is not configured
-            openai.APIError: If API call fails
+            LLMError: If the API call fails (wraps openai.APIError)
         """
         if not self._client:
             msg = "OpenAI provider not configured. Set OPENAI_API_KEY."
@@ -172,7 +172,7 @@ class OpenAIProvider(LLMProvider):
 
         Raises:
             ValueError: If provider is not configured
-            Exception: If API call fails
+            LLMError: If the API call fails (wraps openai.APIError)
         """
         if not self.api_key:
             msg = "OpenAI provider not configured. Set OPENAI_API_KEY."

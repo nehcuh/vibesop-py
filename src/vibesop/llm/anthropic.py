@@ -93,7 +93,7 @@ class AnthropicProvider(LLMProvider):
 
         Raises:
             ValueError: If provider is not configured
-            LLMError: If the API call fails (wraps anthropic.APIError)
+            LLMError: If the API call fails (wraps anthropic.APIError / OSError / ValueError)
         """
         if not self._client:
             msg = "Anthropic provider not configured. Set ANTHROPIC_API_KEY."
@@ -126,7 +126,7 @@ class AnthropicProvider(LLMProvider):
                 output_tokens=output_tokens,
             )
 
-        except anthropic.APIError as e:
+        except (anthropic.APIError, OSError, ValueError) as e:
             raise LLMError(self.provider_name, f"Anthropic API error: {e}") from e
 
     def _is_configured(self) -> bool:
@@ -156,7 +156,7 @@ class AnthropicProvider(LLMProvider):
 
         Raises:
             ValueError: If provider is not configured
-            LLMError: If the API call fails (wraps anthropic.APIError)
+            LLMError: If the API call fails (wraps anthropic.APIError / OSError / ValueError)
         """
         if not self.api_key:
             msg = "Anthropic provider not configured. Set ANTHROPIC_API_KEY."
@@ -192,5 +192,5 @@ class AnthropicProvider(LLMProvider):
                     output_tokens=output_tokens,
                 )
 
-        except anthropic.APIError as e:
+        except (anthropic.APIError, OSError, ValueError) as e:
             raise LLMError(self.provider_name, f"Anthropic API error: {e}") from e

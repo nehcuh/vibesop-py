@@ -115,6 +115,23 @@ async def test_anthropic_provider_acall_api_error_wraps_llmerror():
     assert raised.value.__cause__ is err
 
 
+def test_anthropic_provider_call_oserror_wraps_llmerror():
+    """F-22 (review fixup): transient non-APIError errors (OSError) also wrap to LLMError.
+
+    Matches OpenAI/Ollama's `(APIError, OSError, ValueError)` catch tuple so a
+    connection reset can't leak past a caller's `except LLMError`.
+    """
+    key = "sk-ant-" + "x" * 40
+    provider = AnthropicProvider(api_key=key)
+    mock_client = MagicMock()
+    mock_client.messages.create.side_effect = OSError("connection reset")
+    provider._client = mock_client
+
+    with pytest.raises(LLMError, match="Anthropic API error") as raised:
+        provider.call("Hello")
+    assert isinstance(raised.value.__cause__, OSError)
+
+
 def test_anthropic_sync_client_uses_timeout():
     """F-24: sync Anthropic client is constructed with TIMEOUT (sanity)."""
     key = "sk-ant-" + "x" * 40
