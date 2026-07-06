@@ -14,6 +14,7 @@ from vibesop.core.orchestration.patterns import (
     INTENT_DOMAIN_KEYWORDS,
     MULTI_INTENT_CONJUNCTIONS,
 )
+from vibesop.utils.json_extract import extract_first_json_object
 
 logger = logging.getLogger(__name__)
 
@@ -128,27 +129,11 @@ class TaskDecomposer:
     def _extract_json(self, content: str) -> str | None:
         """Extract first balanced JSON object from text.
 
-        Handles nested braces correctly (unlike greedy regex).
-        Prefers markdown code blocks when present.
+        Delegates to the shared ``extract_first_json_object`` helper so the
+        balanced-brace logic (markdown fence + depth tracking) lives in one
+        place — other LLM-prompt consumers (ai_enhancer, etc.) share it.
         """
-        # Try markdown code block first
-        code_match = re.search(r"```(?:json)?\s*(\{.*?)\s*```", content, re.DOTALL)
-        if code_match:
-            return code_match.group(1)
-
-        # Find first opening brace and track depth to find matching close
-        start = content.find("{")
-        if start == -1:
-            return None
-        depth = 0
-        for i, ch in enumerate(content[start:], start):
-            if ch == "{":
-                depth += 1
-            elif ch == "}":
-                depth -= 1
-                if depth == 0:
-                    return content[start : i + 1]
-        return None
+        return extract_first_json_object(content)
 
     def _parse_json_response(self, content: str) -> list[SubTask]:
         """Parse structured JSON response with Pydantic validation."""

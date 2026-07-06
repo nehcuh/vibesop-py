@@ -30,6 +30,10 @@ class OpenAIProvider(LLMProvider):
     # API endpoint
     DEFAULT_BASE_URL = "https://api.openai.com/v1"
 
+    # Request timeout (seconds) — applied to both sync and async clients so
+    # neither can hang indefinitely on slow responses (e.g. DeepSeek peaks) (F-24).
+    TIMEOUT: float = 30.0
+
     def __init__(
         self,
         api_key: str | None = None,
@@ -55,15 +59,14 @@ class OpenAIProvider(LLMProvider):
 
         super().__init__(api_key=api_key, base_url=base_url)
 
-        # Initialize OpenAI client with reasonable timeout to prevent indefinite
+        # Initialize OpenAI client with a timeout to prevent indefinite
         # blocking on slow API responses (e.g., DeepSeek during peak hours).
-        # 60s covers绝大多数 routing calls while preventing hangs.
         self._client: OpenAI | None = None
         if self.api_key:
             self._client = OpenAI(
                 api_key=self.api_key,
                 base_url=self.base_url,
-                timeout=30.0,
+                timeout=self.TIMEOUT,
             )
 
     @property
@@ -179,7 +182,9 @@ class OpenAIProvider(LLMProvider):
             model = self.default_model()
 
         try:
-            async with AsyncOpenAI(api_key=self.api_key, base_url=self.base_url) as client:
+            async with AsyncOpenAI(
+                api_key=self.api_key, base_url=self.base_url, timeout=self.TIMEOUT
+            ) as client:
                 response = await client.chat.completions.create(
                     model=model,
                     messages=[{"role": "user", "content": prompt}],

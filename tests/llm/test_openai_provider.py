@@ -89,3 +89,29 @@ def test_openai_provider_default_model():
     provider = OpenAIProvider(api_key="sk-" + "x" * 48)
     assert provider.default_model() == "gpt-4o-mini"
     assert provider.provider_name == "OpenAI"
+
+
+def test_openai_sync_client_uses_timeout():
+    """F-24: sync OpenAI client constructed with TIMEOUT."""
+    with patch("vibesop.llm.openai.OpenAI") as mock_cls:
+        OpenAIProvider(api_key="sk-" + "x" * 48)
+    assert OpenAIProvider.TIMEOUT == 30.0
+    assert mock_cls.call_args.kwargs["timeout"] == OpenAIProvider.TIMEOUT
+
+
+def test_openai_async_client_uses_timeout():
+    """F-24: AsyncOpenAI constructed with timeout (previously missing — could hang)."""
+    provider = OpenAIProvider(api_key="sk-" + "x" * 48)
+    fake_response = FakeCompletion("x", usage=FakeUsage())
+
+    async def _run():
+        with patch("vibesop.llm.openai.AsyncOpenAI") as mock_async:
+            mock_client = MagicMock()
+            mock_client.chat.completions.create = AsyncMock(return_value=fake_response)
+            instance = mock_async.return_value
+            instance.__aenter__ = AsyncMock(return_value=mock_client)
+            instance.__aexit__ = AsyncMock(return_value=False)
+            await provider.acall("Hi")
+            assert mock_async.call_args.kwargs["timeout"] == OpenAIProvider.TIMEOUT
+
+    asyncio.run(_run())

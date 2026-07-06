@@ -381,3 +381,73 @@ def test_load_registry_returns_empty_when_missing(tmp_path: Path) -> None:
     manager = ConfigManager(project_root=str(tmp_path))
     registry = manager.load_registry(force_reload=True)
     assert registry == {"skills": [], "version": "1.0.0"}
+
+
+# ---------------------------------------------------------------------------
+# 9. F-19: malformed project/global config must be LOUD (not silently ignored)
+# ---------------------------------------------------------------------------
+
+
+def test_config_source_load_logs_error_on_parse_failure(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Regression for F-19: load_from_file must log ERROR (not DEBUG) on parse failure.
+
+    Previously a typo'd config silently fell back to defaults with zero signal
+    at the default log level, so operators couldn't tell their config was rejected.
+    """
+    config_file = tmp_path / "config.toml"
+    # guaranteed parse error: unquoted string where a number is expected
+    config_file.write_text("[routing]\nmin_confidence = not-a-number\n")
+    source = ConfigSource(
+        priority=ConfigSourcePriority.PROJECT,
+        data={},
+        path=config_file,
+    )
+    with caplog.at_level("ERROR", logger="vibesop.core.config.manager"):
+        source.load_from_file()
+    # graceful-degrade contract preserved (does not raise, data reset)
+    assert source.data == {}
+    # ... but MUST log at ERROR so the operator sees the rejected config.
+    assert any(
+        "Failed to parse config" in rec.message and rec.levelname == "ERROR"
+        for rec in caplog.records
+    ), f"expected ERROR log for malformed config; got: {[r.message for r in caplog.records]}"
+
+
+# ---------------------------------------------------------------------------
+# 10. F-20: typed config models tolerate unknown (legacy/env/typo) keys
+# ---------------------------------------------------------------------------
+
+
+def test_routing_config_tolerates_unknown_keys() -> None:
+    """Regression for F-20: extra keys must not raise ValidationError.
+
+    _map_legacy_preferences emits ``routing.enable_ai`` (renamed to
+    ``enable_ai_triage``); pydantic's default extra rejection turned this
+    stale field into a crash on UnifiedRouter init.
+    """
+    rc = RoutingConfig(enable_ai=False, min_confidence=0.3, bogus_field="x")
+    assert rc.min_confidence == pytest.approx(0.3)
+    # real field unaffected; the unknown extras were silently dropped
+    assert rc.enable_ai_triage is True
+
+
+def test_get_routing_config_tolerates_legacy_preferences(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """End-to-end F-20: a stale v7 preferences.json must not crash routing init."""
+    vibe_dir = tmp_path / ".vibe"
+    vibe_dir.mkdir()
+    (vibe_dir / "preferences.json").write_text(
+        '{"routing": {"enable_ai": false, "min_confidence": 0.3}}'
+    )
+    monkeypatch.setattr(
+        ConfigSource,
+        "_resolve_config_path",
+        staticmethod(lambda base_dir, name: None),  # type: ignore[arg-type]
+    )
+    manager = ConfigManager(project_root=str(tmp_path))
+    rc = manager.get_routing_config()  # must not raise ValidationError
+    assert isinstance(rc, RoutingConfig)
+    assert rc.min_confidence == pytest.approx(0.3)

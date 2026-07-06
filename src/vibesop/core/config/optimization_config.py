@@ -6,10 +6,12 @@ Controls three optimization layers:
 - Clustering: Groups similar skills for better selection
 """
 
-from pydantic import BaseModel, Field
+from pydantic import Field
+
+from vibesop.core.config._base import TolerantConfig
 
 
-class PrefilterConfig(BaseModel):
+class PrefilterConfig(TolerantConfig):
     """Configuration for pre-filtering candidates before routing.
 
     Attributes:
@@ -27,7 +29,7 @@ class PrefilterConfig(BaseModel):
     namespace_relevance_threshold: float = Field(default=0.3, ge=0.0, le=1.0)
 
 
-class PreferenceBoostConfig(BaseModel):
+class PreferenceBoostConfig(TolerantConfig):
     """Configuration for preference-based score boosting.
 
     Attributes:
@@ -43,7 +45,7 @@ class PreferenceBoostConfig(BaseModel):
     decay_days: int = Field(default=30, ge=1)
 
 
-class ClusteringConfig(BaseModel):
+class ClusteringConfig(TolerantConfig):
     """Configuration for semantic clustering of skills.
 
     Attributes:
@@ -61,7 +63,7 @@ class ClusteringConfig(BaseModel):
     max_clusters: int = Field(default=12, ge=2)
 
 
-class OptimizationConfig(BaseModel):
+class OptimizationConfig(TolerantConfig):
     """Top-level optimization configuration.
 
     Controls all three optimization layers for skill routing.
