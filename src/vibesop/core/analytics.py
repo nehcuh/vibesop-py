@@ -13,6 +13,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from vibesop.utils.redaction import redact_sensitive
+
 logger = logging.getLogger(__name__)
 
 
@@ -75,10 +77,12 @@ class AnalyticsStore:
         self.storage_path.parent.mkdir(parents=True, exist_ok=True)
 
     def record(self, record: ExecutionRecord) -> None:
-        """Append an execution record."""
+        """Append an execution record (query redacted — F-06)."""
         try:
+            data = record.to_dict()
+            data["query"] = redact_sensitive(data["query"])
             with self.storage_path.open("a", encoding="utf-8") as f:
-                f.write(json.dumps(record.to_dict(), ensure_ascii=False) + "\n")
+                f.write(json.dumps(data, ensure_ascii=False) + "\n")
         except OSError as e:
             logger.warning("Failed to record analytics: %s", e)
 

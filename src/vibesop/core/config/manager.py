@@ -363,6 +363,11 @@ class ConfigManager:
                 "max_clusters": 12,
             },
         },
+        # F-06: analytics persistence is opt-in (default off) — the user's raw
+        # query is NOT written to .vibe/analytics.jsonl unless explicitly enabled.
+        "analytics": {
+            "enabled": False,
+        },
     }
 
     # Environment variable prefix

@@ -16,6 +16,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from vibesop.utils.redaction import redact_sensitive
+
 if TYPE_CHECKING:
     from vibesop.core.models import LayerDetail, RoutingLayer
 
@@ -181,13 +183,19 @@ class RoutingTracer:
         return trace
 
     def save(self, trace: RouteTrace | None) -> str | None:
-        """Persist trace to .vibe/traces/<trace_id>.json. Returns file path."""
+        """Persist trace to .vibe/traces/<trace_id>.json. Returns file path.
+
+        The query is redacted (F-07) — traces are a debugging surface and the
+        raw query is the most PII-dense field.
+        """
         if trace is None:
             return None
         self._traces_dir.mkdir(parents=True, exist_ok=True)
+        data = trace.to_dict()
+        data["query"] = redact_sensitive(data["query"])
         filepath = self._traces_dir / f"{trace.trace_id}.json"
         filepath.write_text(
-            json.dumps(trace.to_dict(), indent=2, ensure_ascii=False, default=str),
+            json.dumps(data, indent=2, ensure_ascii=False, default=str),
         )
         logger.debug("Routing trace saved: %s", filepath)
         return str(filepath)

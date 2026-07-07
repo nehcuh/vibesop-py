@@ -747,6 +747,13 @@ class UnifiedRouter(
         user_modified: bool = False,
         user_satisfied: bool | None = None,
     ) -> None:
+        # F-06: analytics persistence is opt-in (default off) — do not write the
+        # user's query to .vibe/analytics.jsonl unless explicitly enabled.
+        enabled = self._config_manager.get("analytics.enabled", False)
+        if isinstance(enabled, str):  # env vars are returned as raw strings
+            enabled = enabled.strip().lower() in ("true", "1", "yes", "on")
+        if not enabled:
+            return
         from vibesop.core.analytics import AnalyticsStore, ExecutionRecord
 
         # Carry degradation telemetry onto the execution record so analytics can
@@ -780,6 +787,13 @@ class UnifiedRouter(
         match: SkillRoute,
         context: RoutingContext | None,
     ) -> None:
+        # F-06 (Kimi review #2): redact PII/secrets before the query is persisted
+        # to the instinct/preference learners (instincts.jsonl, preferences.json)
+        # — same plaintext-PII leak class as analytics; non-PII queries are
+        # unchanged so instinct pattern-matching is preserved for the common case.
+        from vibesop.utils.redaction import redact_sensitive
+
+        query = redact_sensitive(query)
         try:
             # Add to memory conversation if available
             if context and context.conversation_id:
