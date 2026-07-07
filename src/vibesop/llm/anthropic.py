@@ -9,6 +9,7 @@ from typing import cast
 import anthropic
 from anthropic import Anthropic, AsyncAnthropic
 
+from vibesop.core.exceptions import LLMError
 from vibesop.llm.base import LLMProvider, LLMResponse
 from vibesop.llm.models import ANTHROPIC_DEFAULT_MODEL, ANTHROPIC_FAST_MODEL
 
@@ -30,6 +31,10 @@ class AnthropicProvider(LLMProvider):
 
     # API endpoint
     DEFAULT_BASE_URL = "https://api.anthropic.com"
+
+    # Request timeout (seconds) — applied to both sync and async clients so
+    # neither can hang indefinitely on a stalled TCP connection (F-24).
+    TIMEOUT: float = 30.0
 
     def __init__(
         self,
@@ -56,7 +61,7 @@ class AnthropicProvider(LLMProvider):
             self._client = Anthropic(
                 api_key=self.api_key,
                 base_url=self.base_url,
-                timeout=30.0,
+                timeout=self.TIMEOUT,
             )
 
     @property
@@ -87,12 +92,14 @@ class AnthropicProvider(LLMProvider):
             LLMResponse with generated content
 
         Raises:
-            ValueError: If provider is not configured
-            anthropic.APIError: If API call fails
+            LLMError: If the provider is not configured, or the API call fails
+                (wraps anthropic.APIError / OSError / ValueError)
         """
         if not self._client:
-            msg = "Anthropic provider not configured. Set ANTHROPIC_API_KEY."
-            raise ValueError(msg)
+            raise LLMError(
+                self.provider_name,
+                "Provider not configured. Set ANTHROPIC_API_KEY.",
+            )
 
         if model is None:
             model = self.default_model()
@@ -121,8 +128,8 @@ class AnthropicProvider(LLMProvider):
                 output_tokens=output_tokens,
             )
 
-        except anthropic.APIError:
-            raise
+        except (anthropic.APIError, OSError, ValueError) as e:
+            raise LLMError(self.provider_name, f"Anthropic API error: {e}") from e
 
     def _is_configured(self) -> bool:
         """Check if Anthropic API key is valid.
@@ -150,18 +157,22 @@ class AnthropicProvider(LLMProvider):
             LLMResponse with generated content
 
         Raises:
-            ValueError: If provider is not configured
-            anthropic.APIError: If API call fails
+            LLMError: If the provider is not configured, or the API call fails
+                (wraps anthropic.APIError / OSError / ValueError)
         """
         if not self.api_key:
-            msg = "Anthropic provider not configured. Set ANTHROPIC_API_KEY."
-            raise ValueError(msg)
+            raise LLMError(
+                self.provider_name,
+                "Provider not configured. Set ANTHROPIC_API_KEY.",
+            )
 
         if model is None:
             model = self.default_model()
 
         try:
-            async with AsyncAnthropic(api_key=self.api_key, base_url=self.base_url) as client:
+            async with AsyncAnthropic(
+                api_key=self.api_key, base_url=self.base_url, timeout=self.TIMEOUT
+            ) as client:
                 response = await client.messages.create(
                     model=model,
                     max_tokens=max_tokens,
@@ -185,5 +196,5 @@ class AnthropicProvider(LLMProvider):
                     output_tokens=output_tokens,
                 )
 
-        except anthropic.APIError:
-            raise
+        except (anthropic.APIError, OSError, ValueError) as e:
+            raise LLMError(self.provider_name, f"Anthropic API error: {e}") from e

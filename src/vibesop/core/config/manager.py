@@ -17,7 +17,9 @@ from enum import StrEnum
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import Field
+
+from vibesop.core.config._base import TolerantConfig
 
 logger = logging.getLogger(__name__)
 
@@ -95,8 +97,22 @@ class ConfigSource:
 
                 with self.path.open() as f:
                     self.data = yaml.safe_load(f) or {}
+        except FileNotFoundError:
+            # Config file absent — normal (callers gate on _resolve_config_path,
+            # so this only fires on a TOCTOU race between resolve and open).
+            # Stay quiet; this is not a parse error worth an ERROR log.
+            logger.debug("Config file not found: %s", self.path)
+            self.data = {}
         except Exception as e:
-            logger.debug(f"Failed to load config from {self.path}: {e}")
+            # A malformed config silently falls back to defaults with zero
+            # signal at the default log level (WARNING). Log loudly so
+            # operators see their config was rejected — mirrors load_registry().
+            logger.error(
+                "Failed to parse config %s: %s — falling back to defaults. "
+                "Check the file for syntax errors.",
+                self.path,
+                e,
+            )
             self.data = {}
 
     @staticmethod
@@ -111,7 +127,7 @@ class ConfigSource:
         return None
 
 
-class RoutingConfig(BaseModel):
+class RoutingConfig(TolerantConfig):
     """Configuration for routing behavior."""
 
     min_confidence: float = Field(default=0.3, ge=0.0, le=1.0)
@@ -215,7 +231,7 @@ class RoutingConfig(BaseModel):
     )
 
 
-class SecurityConfig(BaseModel):
+class SecurityConfig(TolerantConfig):
     """Configuration for security settings."""
 
     scan_external: bool = True
@@ -230,7 +246,7 @@ class SecurityConfig(BaseModel):
     block_patterns: list[str] = Field(default_factory=list)
 
 
-class SemanticConfig(BaseModel):
+class SemanticConfig(TolerantConfig):
     """Configuration for semantic matching."""
 
     enabled: bool = False
@@ -239,7 +255,7 @@ class SemanticConfig(BaseModel):
     batch_size: int = 32
 
 
-class PromptChainConfig(BaseModel):
+class PromptChainConfig(TolerantConfig):
     """Configuration for prompt chain generation (v7.0)."""
 
     enabled: bool = Field(
@@ -258,7 +274,7 @@ class PromptChainConfig(BaseModel):
     )
 
 
-class PlatformsConfig(BaseModel):
+class PlatformsConfig(TolerantConfig):
     """Configuration for which AI agent platforms receive skill installs.
 
     VibeSOP supports multiple AI coding agents (Claude Code, Kimi CLI,
@@ -277,7 +293,7 @@ class PlatformsConfig(BaseModel):
     )
 
 
-class LoopConfig(BaseModel):
+class LoopConfig(TolerantConfig):
     """Configuration for the autonomous Loop System (v8.0).
 
     Set ``enabled = true`` to allow ``vibe loop tick`` to actually execute

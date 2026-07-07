@@ -127,14 +127,14 @@ Return ONLY the JSON, no other text.
         original: SkillSuggestion,
     ) -> EnhancedSkill:
         import json
-        import re
+
+        from vibesop.utils.json_extract import extract_first_json_object
 
         try:
-            json_match = re.search(r"\{[^{}]*\}", response, re.DOTALL)
-            if json_match:
-                data: dict[str, Any] = json.loads(json_match.group())
-            else:
-                data = json.loads(response.strip())
+            json_str = extract_first_json_object(response)
+            if json_str is None:
+                json_str = response.strip()
+            data: dict[str, Any] = json.loads(json_str)
 
             name = str(data.get("name", original.skill_name))
             description = str(data.get("description", original.description))
