@@ -16,7 +16,7 @@ import logging
 import time
 import uuid
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel, Field, ValidationError
 
@@ -61,7 +61,9 @@ class DynamicExecutionResult(BaseModel):
     pattern: WorkflowPattern = Field(..., description="Pattern used")
     total_steps_executed: int = Field(default=0)
     reorchestration_rounds: int = Field(default=0)
-    final_status: str = Field(default="completed")
+    final_status: Literal["completed", "partial", "failed", "prompts_generated"] = Field(
+        default="completed"
+    )
     champion_index: int | None = Field(default=None, description="Tournament champion")
     results: dict[str, Any] = Field(default_factory=dict)
     reorchestration_history: list[dict[str, Any]] = Field(default_factory=list)
@@ -152,6 +154,24 @@ class WorkflowEngine:
             WorkflowPattern.DEBATE,
             WorkflowPattern.RED_TEAM,
         )
+
+    @staticmethod
+    def _compute_final_status(
+        results: dict[str, Any],
+    ) -> Literal["completed", "partial", "failed"]:
+        """F-26: derive final_status from step results, not a hardcoded 'completed'.
+
+        'failed' if every recorded result is an error; 'partial' if some errored
+        and some succeeded; 'completed' if no errors (or no results recorded).
+        """
+        values = list(results.values())
+        has_error = any(isinstance(v, dict) and "error" in v for v in values)
+        has_success = any(not (isinstance(v, dict) and "error" in v) for v in values)
+        if has_error and not has_success:
+            return "failed"
+        if has_error:
+            return "partial"
+        return "completed"
 
     def run(
         self,
@@ -390,7 +410,7 @@ class WorkflowEngine:
             pattern=WorkflowPattern.LOOP_UNTIL_DRY,
             total_steps_executed=sum(1 for s in plan.steps if s.status == StepStatus.COMPLETED),
             reorchestration_rounds=round_count,
-            final_status="completed",
+            final_status=self._compute_final_status(results),
             results=results,
             reorchestration_history=history,
         )
@@ -468,8 +488,8 @@ class WorkflowEngine:
                 1 for s in contestant_steps if s.status == StepStatus.COMPLETED
             ),
             reorchestration_rounds=0,
-            final_status="completed",
-            champion_index=tournament_result.champion_index,
+            final_status=self._compute_final_status(results),
+            champion_index=(tournament_result.champion_index if any(contestant_outputs) else None),
             results=results,
         )
 
@@ -563,6 +583,7 @@ class WorkflowEngine:
             plan_id=plan.plan_id,
             pattern=plan.workflow_pattern,
             total_steps_executed=sum(1 for s in plan.steps if s.status == StepStatus.COMPLETED),
+            final_status=self._compute_final_status(results),
             results=results,
         )
 

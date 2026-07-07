@@ -734,7 +734,7 @@ def test_tournament_no_llm_fallback_not_default_zero() -> None:
 
 
 def test_tournament_no_llm_empty_outputs_no_crash() -> None:
-    """P1-2: all-empty contestant outputs must not crash and yield a valid index."""
+    """P1-2 / F-26: all-empty contestant outputs must not crash; with no non-empty output there is no valid champion (None)."""
 
     def executor(step):
         return ""
@@ -765,7 +765,57 @@ def test_tournament_no_llm_empty_outputs_no_crash() -> None:
     )
 
     result = engine.run(plan, executor)
-    assert result.champion_index in (0, 1)
+    # F-26: with no non-empty contestant output, there is no valid champion
+    # (previously the heuristic picked index 0 from empty strings, presenting
+    # a hollow champion as a real result).
+    assert result.champion_index is None
+
+
+def test_compute_final_status_derives_from_results() -> None:
+    """F-26: _compute_final_status derives completed/partial/failed from results."""
+    assert WorkflowEngine._compute_final_status({}) == "completed"
+    assert WorkflowEngine._compute_final_status({"a": "ok"}) == "completed"
+    assert WorkflowEngine._compute_final_status({"a": "ok", "b": {"error": "x"}}) == "partial"
+    assert (
+        WorkflowEngine._compute_final_status({"a": {"error": "x"}, "b": {"error": "y"}}) == "failed"
+    )
+
+
+def test_tournament_all_contestants_fail_final_status_failed() -> None:
+    """F-26: when every contestant raises, final_status is 'failed' and there is
+    no champion (previously 'completed' with a hollow champion_index)."""
+
+    def executor(step):
+        raise RuntimeError(f"contestant {step.step_id} crashed")
+
+    engine = WorkflowEngine()
+    plan = ExecutionPlan(
+        plan_id="tournament-all-fail",
+        original_query="all fail",
+        steps=[
+            ExecutionStep(
+                step_id="c0",
+                step_number=1,
+                skill_id="t",
+                intent="A",
+                output_as="c0",
+                contestant_index=0,
+            ),
+            ExecutionStep(
+                step_id="c1",
+                step_number=2,
+                skill_id="t",
+                intent="B",
+                output_as="c1",
+                contestant_index=1,
+            ),
+        ],
+        workflow_pattern=WorkflowPattern.TOURNAMENT,
+    )
+
+    result = engine.run(plan, executor)
+    assert result.final_status == "failed"
+    assert result.champion_index is None
 
 
 # --- Phase 2 Regression Tests ---

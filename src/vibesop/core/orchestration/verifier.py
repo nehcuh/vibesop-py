@@ -36,6 +36,7 @@ class VerificationStatus(StrEnum):
     PASSED = "passed"  # Output is complete and correct
     NEEDS_REVISION = "needs_revision"  # Issues found but fixable
     FAILED = "failed"  # Fundamental problems, requires re-execution
+    ERROR = "error"  # Verification could not complete (LLM/parse failure) — F-47
 
 
 class VerificationIssue(BaseModel):
@@ -206,13 +207,16 @@ class VerifierAgent:
             parsed = json.loads(content)
             return self._parse_llm_response(parsed, rubric_dimensions)
         except Exception as e:
-            logger.warning("LLM verification failed: %s", e)
-            # Fallback: assume passed if LLM fails
+            # F-47: do NOT assume PASSED when verification couldn't run — that
+            # silently disables adversarial verification on any LLM/parse error.
+            # Return ERROR so the verification loop escalates instead of treating
+            # an unverified output as verified.
+            logger.warning("LLM verification failed (returning ERROR): %s", e, exc_info=True)
             return VerificationResult(
-                status=VerificationStatus.PASSED,
-                confidence=0.5,  # Low confidence on fallback
-                reasoning="LLM verification unavailable, assuming passed",
-                rubric_scores=dict.fromkeys(rubric_dimensions, 0.5),
+                status=VerificationStatus.ERROR,
+                confidence=0.0,
+                reasoning=f"Verification could not complete: {e}",
+                rubric_scores=dict.fromkeys(rubric_dimensions, 0.0),
             )
 
     def _build_verification_prompt(
