@@ -119,7 +119,8 @@ class TestRoutingTracer:
         path = t.save(trace)
         assert path is not None
 
-        data = json.loads(open(path).read())
+        with open(path) as f:
+            data = json.loads(f.read())
         assert "alice@corp.com" not in data["query"]
         assert "sk-" + "a" * 24 not in data["query"]
         assert "[REDACTED_EMAIL]" in data["query"]
