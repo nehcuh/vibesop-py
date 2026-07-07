@@ -34,6 +34,7 @@ from rich.panel import Panel
 from vibesop import __version__
 from vibesop.cli.commands import (
     badges_cmd,
+    data_cmd,
     deviation_cmd,
     instinct_cmd,
     loop_cmd,
@@ -153,6 +154,7 @@ app.add_typer(workflows_cmd.app, name="workflows")
 app.add_typer(instinct_cmd.app, name="instinct")
 app.add_typer(prompt_chain_cmd.app, name="prompt-chain")
 app.add_typer(loop_cmd.app, name="loop")
+app.add_typer(data_cmd.app, name="data")
 app.command(name="trust")(trust_module.trust)
 
 

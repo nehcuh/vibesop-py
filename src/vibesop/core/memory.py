@@ -205,6 +205,10 @@ class MemoryManager:
         self._max_conversations = max_conversations
         self._active_conversation_id: str | None = None
 
+    def clear_all(self) -> int:
+        """Delete all conversations (F-08: data purge)."""
+        return self._storage.clear_all()
+
     def create_conversation(
         self,
         title: str = "",

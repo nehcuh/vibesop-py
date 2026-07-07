@@ -231,7 +231,10 @@ class FeedbackCollector:
 
     def clear_records(self) -> None:
         self._records = []
-        self._save_records()
+        # _save_records() no-ops on an empty list, so unlink the file to
+        # actually remove persisted records (F-08 — otherwise purge is a no-op).
+        if self._storage_path.exists():
+            self._storage_path.unlink()
 
     def export_records(self, output_path: str | Path) -> None:
         output_path = Path(output_path).expanduser()
@@ -413,7 +416,10 @@ class ExecutionFeedbackCollector:
 
     def clear_records(self) -> None:
         self._records = []
-        self._save_records()
+        # _save_records() no-ops on an empty list, so unlink the file to
+        # actually remove persisted records (F-08 — otherwise purge is a no-op).
+        if self._storage_path.exists():
+            self._storage_path.unlink()
 
     def _load_records(self) -> None:
         if self._storage_path.exists():

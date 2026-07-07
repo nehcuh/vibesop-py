@@ -200,6 +200,18 @@ class PreferenceLearner:
             self._save_storage()
         return removed
 
+    def clear(self) -> None:
+        """Reset ALL learned preference data (F-08) — including the query-derived
+        word/ngram associations that ``clear_old_data`` leaves behind.
+
+        Unlinks the file rather than just saving an empty store, because
+        ``_save_storage`` re-reads+merges under its file lock and would restore
+        the cleared data from the on-disk copy.
+        """
+        self._storage = PreferenceStorage()
+        if self.storage_path.exists():
+            self.storage_path.unlink()
+
     def _load_storage(self) -> PreferenceStorage:
         if not self.storage_path.exists():
             return PreferenceStorage()
