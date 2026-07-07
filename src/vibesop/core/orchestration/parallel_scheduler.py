@@ -56,10 +56,15 @@ class ParallelScheduler:
 
         Returns:
             Dictionary with:
-                - results: List of results in step_number order
-                - duration_ms: Total execution time
-                - steps_executed: Number of steps executed
-                - parallel_batches: Number of parallel batches
+                - results: results in step_number order (includes {"error": ...}
+                  for failed steps and {"skipped": ...} for steps whose
+                  dependencies failed/skipped)
+                - duration_ms: total execution time
+                - steps_executed: steps actually dispatched (excludes skipped;
+                  includes failed)
+                - skipped: steps skipped due to a failed/skipped upstream
+                  dependency (F-25)
+                - parallel_batches: number of parallel batches
         """
         if not plan.steps:
             return {
@@ -76,11 +81,43 @@ class ParallelScheduler:
 
         results_map: dict[int, Any] = {}  # step_number -> result
 
+        # F-25: index steps by id so we can detect failed/skipped dependencies
+        # before dispatching each batch (avoids running downstream steps on
+        # missing upstream output — the "silently-wrong success" bug).
+        steps_by_id = {s.step_id: s for s in plan.steps}
+        executed_count = 0
+        skipped_count = 0
+
         for batch_num, group in enumerate(groups, 1):
-            logger.info("Executing batch %d with %d steps", batch_num, len(group))
+            # F-25: skip steps whose dependencies FAILED or were SKIPPED in an
+            # earlier batch. Otherwise they'd execute on empty upstream output
+            # and produce results presented as success.
+            ready_group: list[ExecutionStep] = []
+            for step in group:
+                if self._has_failed_dependency(step, steps_by_id):
+                    step.status = StepStatus.SKIPPED
+                    results_map[step.step_number] = {
+                        "skipped": True,
+                        "reason": "upstream dependency failed or was skipped",
+                    }
+                    skipped_count += 1
+                    logger.info(
+                        "Skipping step %s in batch %d: upstream dependency failed/skipped",
+                        step.step_id,
+                        batch_num,
+                    )
+                else:
+                    ready_group.append(step)
+
+            if not ready_group:
+                logger.info("Batch %d fully skipped (all dependencies failed)", batch_num)
+                continue
+
+            executed_count += len(ready_group)
+            logger.info("Executing batch %d with %d steps", batch_num, len(ready_group))
 
             # Wait for all tasks in this batch (with semaphore for max_parallel)
-            if len(group) > self._max_parallel:
+            if len(ready_group) > self._max_parallel:
                 _semaphore = asyncio.Semaphore(self._max_parallel)
 
                 async def limited_execute(
@@ -90,18 +127,18 @@ class ParallelScheduler:
                         return await self._execute_with_tracking(step, exec_fn)
 
                 batch_results = await asyncio.gather(
-                    *(limited_execute(step, executor) for step in group),
+                    *(limited_execute(step, executor) for step in ready_group),
                     return_exceptions=True,
                 )
             else:
-                batch_tasks = [self._execute_with_tracking(step, executor) for step in group]
+                batch_tasks = [self._execute_with_tracking(step, executor) for step in ready_group]
                 batch_results = await asyncio.gather(
                     *batch_tasks,
                     return_exceptions=True,
                 )
 
             # Store results
-            for step, result in zip(group, batch_results, strict=True):
+            for step, result in zip(ready_group, batch_results, strict=True):
                 if isinstance(result, Exception):
                     logger.error("Step %s failed: %s", step.step_id, result)
                     results_map[step.step_number] = {"error": str(result)}
@@ -120,7 +157,8 @@ class ParallelScheduler:
         return {
             "results": ordered_results,
             "duration_ms": duration_ms,
-            "steps_executed": len(results_map),
+            "steps_executed": executed_count,
+            "skipped": skipped_count,
             "parallel_batches": len(groups),
         }
 
@@ -149,6 +187,22 @@ class ParallelScheduler:
             step.status = StepStatus.FAILED
             logger.warning("Step %s failed: %s", step.step_id, e)
             raise
+
+    @staticmethod
+    def _has_failed_dependency(
+        step: ExecutionStep,
+        steps_by_id: dict[str, ExecutionStep],
+    ) -> bool:
+        """F-25: True if any of step's dependencies FAILED or was SKIPPED.
+
+        A skipped dependency cascades transitively — if A fails, B (depends on
+        A) is skipped, and C (depends on B) is skipped too.
+        """
+        for dep_id in step.dependencies:
+            dep = steps_by_id.get(dep_id)
+            if dep is not None and dep.status in (StepStatus.FAILED, StepStatus.SKIPPED):
+                return True
+        return False
 
     def get_execution_preview(self, plan: ExecutionPlan) -> dict[str, Any]:
         """Get preview of how execution will be parallelized.
