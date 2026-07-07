@@ -86,6 +86,16 @@ class AnalyticsStore:
         except OSError as e:
             logger.warning("Failed to record analytics: %s", e)
 
+    def clear(self) -> int:
+        """Delete the analytics log (F-08). Returns records removed, 0 if absent."""
+        if not self.storage_path.exists():
+            return 0
+        with self.storage_path.open("r", encoding="utf-8") as f:
+            count = sum(1 for _ in f)
+        self.storage_path.unlink()
+        logger.info("Cleared analytics log: %d records", count)
+        return count
+
     def list_records(
         self,
         limit: int = 100,

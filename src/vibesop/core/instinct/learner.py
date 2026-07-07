@@ -208,6 +208,16 @@ class InstinctLearner:
         """Persist all instincts to storage."""
         self._save()
 
+    def clear(self) -> int:
+        """Remove all learned instincts (F-08). Returns count removed."""
+        with self._lock:
+            count = len(self._instincts)
+            self._instincts.clear()
+            self._sequences.clear()
+            self._embedding_cache.clear()
+            self._save()
+        return count
+
     def learn(
         self,
         pattern: str,

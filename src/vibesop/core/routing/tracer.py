@@ -200,6 +200,16 @@ class RoutingTracer:
         logger.debug("Routing trace saved: %s", filepath)
         return str(filepath)
 
+    def clear(self) -> int:
+        """Delete all saved traces (F-08). Returns files removed."""
+        if not self._traces_dir.exists():
+            return 0
+        files = list(self._traces_dir.glob("*.json"))
+        for f in files:
+            f.unlink()
+        logger.info("Cleared %d routing traces", len(files))
+        return len(files)
+
     def list_traces(self, limit: int = 20) -> list[dict[str, Any]]:
         """List recent traces from .vibe/traces/."""
         if not self._traces_dir.exists():
