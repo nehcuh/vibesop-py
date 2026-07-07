@@ -8,6 +8,7 @@ on:
 permissions:
   contents: write
   id-token: write
+  attestations: write  # required by actions/attest-build-provenance (F-12, Kimi review #1)
 
 jobs:
   # Gate: Run CI checks before release
