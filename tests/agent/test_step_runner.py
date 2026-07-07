@@ -419,3 +419,123 @@ class TestStepRunnerSquadMode:
         assert rev_ctx["role"] == "reviewer"
         assert "Reviewer" in rev_ctx["role_prompt"]
         assert rev_ctx["skill_isolation"]["allowed_skills"] == ["review", "code_review"]
+
+    def test_execute_all_squad_member_failure_does_not_abort(self):
+        """F-27: a single squad member failing must not abort the whole squad.
+
+        Previously ``_execute_squad`` had no try/except: one member's exception
+        propagated, result recording was skipped, and ``execute_all``
+        unconditionally ``mark_completed`` every step — hiding the failure and
+        leaving steps stuck in IN_PROGRESS.
+        """
+        plan = ExecutionPlan(
+            plan_id=f"plan-{uuid.uuid4().hex[:8]}",
+            original_query="squad failure test",
+            workflow_pattern=WorkflowPattern.AGENT_SQUAD,
+            execution_mode=ExecutionMode.SEQUENTIAL,
+            steps=[
+                ExecutionStep(
+                    step_id="impl",
+                    step_number=1,
+                    skill_id="coding",
+                    intent="implement",
+                    input_query="implement",
+                    assigned_role="implementer",
+                    agent_squad_id="squad-1",
+                    role_skills=["coding"],
+                ),
+                ExecutionStep(
+                    step_id="rev",
+                    step_number=2,
+                    skill_id="review",
+                    intent="review",
+                    input_query="review",
+                    assigned_role="reviewer",
+                    agent_squad_id="squad-1",
+                    role_skills=["review"],
+                ),
+                ExecutionStep(
+                    step_id="qa",
+                    step_number=3,
+                    skill_id="qa",
+                    intent="qa",
+                    input_query="qa",
+                    assigned_role="reviewer",
+                    agent_squad_id="squad-1",
+                    role_skills=["review"],
+                ),
+            ],
+        )
+        runner = StepRunner(plan, track_state=False)
+
+        def executor(step: ExecutionStep, ctx: dict[str, Any]) -> str:
+            if step.step_id == "rev":
+                raise RuntimeError("review tool crashed")
+            return f"ok-{step.step_id}"
+
+        errors_notified: list[str] = []
+
+        def on_error(step: ExecutionStep, error: Exception) -> bool:
+            errors_notified.append(step.step_id)
+            return True
+
+        result = runner.execute_all(executor, context={}, on_step_error=on_error)
+
+        # Squad not aborted: impl + qa complete, rev fails.
+        assert result["completed"] == 2
+        assert result["failed"] == 1
+
+        by_id = {r["step_id"]: r for r in result["results"]}
+        assert by_id["impl"]["status"] == "completed"
+        assert by_id["rev"]["status"] == "failed"
+        assert "review tool crashed" in by_id["rev"]["error"]
+        assert by_id["qa"]["status"] == "completed"
+
+        # The failed step was surfaced through on_step_error.
+        assert errors_notified == ["rev"]
+
+        # F-27 symptom: the failed step reached FAILED (not stuck IN_PROGRESS).
+        rev_step = next(s for s in plan.steps if s.step_id == "rev")
+        assert rev_step.status == StepStatus.FAILED
+
+    def test_execute_all_squad_all_members_fail(self):
+        """F-27: when every squad member fails, all are marked failed (completed=0)."""
+        plan = ExecutionPlan(
+            plan_id=f"plan-{uuid.uuid4().hex[:8]}",
+            original_query="squad all-fail test",
+            workflow_pattern=WorkflowPattern.AGENT_SQUAD,
+            execution_mode=ExecutionMode.SEQUENTIAL,
+            steps=[
+                ExecutionStep(
+                    step_id="a",
+                    step_number=1,
+                    skill_id="x",
+                    intent="a",
+                    input_query="a",
+                    assigned_role="attacker",
+                    agent_squad_id="s1",
+                    role_skills=["x"],
+                ),
+                ExecutionStep(
+                    step_id="b",
+                    step_number=2,
+                    skill_id="y",
+                    intent="b",
+                    input_query="b",
+                    assigned_role="defender",
+                    agent_squad_id="s1",
+                    role_skills=["y"],
+                ),
+            ],
+        )
+        runner = StepRunner(plan, track_state=False)
+
+        def executor(step: ExecutionStep, ctx: dict[str, Any]) -> str:
+            raise RuntimeError(f"crash-{step.step_id}")
+
+        result = runner.execute_all(executor)
+
+        assert result["completed"] == 0
+        assert result["failed"] == 2
+        assert all(r["status"] == "failed" for r in result["results"])
+        assert all(s.status == StepStatus.FAILED for s in plan.steps)
