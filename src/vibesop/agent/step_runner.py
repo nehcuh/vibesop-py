@@ -293,20 +293,45 @@ class StepRunner:
         results: list[dict[str, Any]] = []
 
         # Route squad-oriented plans through role-aware execution.
+        # F-27 note: squad mode runs ALL members eagerly (every role executes
+        # regardless of individual failures), so fail_fast / on_step_error's
+        # abort-return are intentionally NOT honored here — a squad collects
+        # every member's result. on_step_error is still called for notification.
         is_squad = any(s.agent_squad_id for s in self._plan.steps)
         if is_squad:
             squad_results = self._execute_squad(self._plan.steps, context or {}, step_executor)
             for step in self._plan.steps:
                 result = squad_results.get(step.step_id)
-                self.mark_completed(step, str(result) if result is not None else "")
-                results.append(
-                    {
-                        "step_id": step.step_id,
-                        "output": result,
-                        "error": None,
-                        "status": "completed",
-                    }
-                )
+                # F-27: _execute_squad records a member failure as the Exception
+                # object (instead of aborting). Distinguish here so failed steps
+                # are marked failed — previously every step was unconditionally
+                # marked completed, hiding failures and leaving them stuck.
+                if isinstance(result, Exception):
+                    self.mark_failed(step, str(result))
+                    if on_step_error:
+                        on_step_error(step, result)
+                    results.append(
+                        {
+                            "step_id": step.step_id,
+                            "output": None,
+                            "error": str(result),
+                            "status": "failed",
+                        }
+                    )
+                else:
+                    output = str(result) if result is not None else ""
+                    self.mark_completed(step, output)
+                    # F-27: mirror single-step/parallel-batch paths — notify on success.
+                    if on_step_complete:
+                        on_step_complete(step, output)
+                    results.append(
+                        {
+                            "step_id": step.step_id,
+                            "output": result,
+                            "error": None,
+                            "status": "completed",
+                        }
+                    )
             return {
                 "completed": self.completed_count,
                 "failed": self.failed_count,
@@ -510,7 +535,15 @@ class StepRunner:
             }
 
             for step in role_steps:
-                result = step_executor(step, enriched_context)
+                try:
+                    result = step_executor(step, enriched_context)
+                except Exception as e:
+                    # F-27: don't abort the whole squad on one member's failure.
+                    # Record the exception; execute_all marks the step failed
+                    # (mirrors the parallel-batch path's Exception-as-result pattern).
+                    logger.warning("Squad step %s (role=%s) failed: %s", step.step_id, role, e)
+                    results[step.step_id] = e
+                    continue
                 results[step.step_id] = result
 
         return results
