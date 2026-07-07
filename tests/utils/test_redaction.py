@@ -1,0 +1,100 @@
+"""Tests for utils/redaction.py — PII / secret redaction before persistence."""
+
+from vibesop.utils.redaction import contains_sensitive, redact_sensitive
+
+
+def test_redacts_email() -> None:
+    out = redact_sensitive("contact alice@corp.com for details")
+    assert "alice@corp.com" not in out
+    assert "[REDACTED_EMAIL]" in out
+
+
+def test_redacts_sk_key() -> None:
+    out = redact_sensitive("my openai key is sk-" + "a" * 24 + " done")
+    assert "sk-" + "a" * 24 not in out
+    assert "[REDACTED_KEY]" in out
+    assert "done" in out  # surrounding text preserved
+
+
+def test_redacts_github_token() -> None:
+    token = "ghp_" + "0" * 36
+    out = redact_sensitive(f"GH token: {token}")
+    assert token not in out
+    assert "[REDACTED_TOKEN]" in out
+
+
+def test_redacts_secret_assignment_keeps_label() -> None:
+    """`api_key=VALUE` → label preserved, only VALUE redacted.
+
+    (VALUE is deliberately not sk-/gh-prefixed so the SECRET pattern — not KEY —
+    handles it, exercising the value-only redaction path.)
+    """
+    out = redact_sensitive('config: api_key = "livekey1234567890ab"')
+    assert "livekey1234567890ab" not in out
+    assert "[REDACTED_SECRET]" in out
+    assert "api_key" in out  # the label is retained for readability
+
+
+def test_redacts_bearer_authorization_header() -> None:
+    out = redact_sensitive("Authorization: Bearer abcdef1234567890123")
+    assert "abcdef1234567890123" not in out
+    assert "[REDACTED_SECRET]" in out
+    assert "Bearer" in out  # the scheme name is retained
+
+
+def test_redacts_home_path_unix() -> None:
+    out = redact_sensitive("check /Users/bob/secret/file and /home/alice/.ssh")
+    assert "/Users/bob" not in out
+    assert "/home/alice" not in out
+    assert "[REDACTED_PATH]" in out
+
+
+def test_redacts_home_path_windows() -> None:
+    """T2-a (Kimi review): Windows home paths are redacted too."""
+    out = redact_sensitive(r"check C:\Users\bob\secrets\file")
+    assert r"C:\Users\bob" not in out
+    assert "[REDACTED_PATH]" in out
+
+
+def test_redacts_base64_bearer_token() -> None:
+    """T2-a (Kimi review): base64 bearer tokens (containing +/=) are redacted."""
+    out = redact_sensitive("Authorization: Bearer dXNlcjpwYXNzd29yZA==")
+    assert "dXNlcjpwYXNzd29yZA==" not in out
+    assert "[REDACTED_SECRET]" in out
+
+
+def test_combined_redaction_in_realistic_query() -> None:
+    q = (
+        "Email support@acme.io — my key sk-ABCDEFGHIJKLMNOPQRSTUVWX123 is in "
+        "/Users/me/.config/creds and the CI token is ghp_" + "a" * 36
+    )
+    out = redact_sensitive(q)
+    assert "support@acme.io" not in out
+    assert "sk-ABCDEFGHIJKLMNOPQRSTUVWX123" not in out
+    assert "/Users/me" not in out
+    assert "ghp_" + "a" * 36 not in out
+    # Structural words preserved
+    assert "Email" in out
+    assert "CI token" in out
+
+
+def test_non_sensitive_text_unchanged() -> None:
+    msg = "how do I test my python code for the auth module"
+    assert redact_sensitive(msg) == msg
+
+
+def test_empty_and_none_safe() -> None:
+    assert redact_sensitive("") == ""
+
+
+def test_contains_sensitive_detects_without_modifying() -> None:
+    assert contains_sensitive("reach me at alice@corp.com") is True
+    assert contains_sensitive("how do I test my code") is False
+    assert contains_sensitive("") is False
+
+
+def test_does_not_false_positive_on_short_hex() -> None:
+    """A short hex string (e.g. a uuid prefix) must not be flagged as a key."""
+    # 12-char hex is not an sk-/gh-/email/path — should be left alone.
+    short = "commit abc123def456"
+    assert redact_sensitive(short) == short
