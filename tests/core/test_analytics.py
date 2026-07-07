@@ -64,6 +64,19 @@ class TestAnalyticsStore:
         assert len(records) == 1
         assert records[0].query == "q1"
 
+    def test_record_redacts_pii_from_query(self, tmp_path: Path) -> None:
+        """F-06: PII/secrets in the query are redacted before persistence."""
+        store = AnalyticsStore(storage_dir=str(tmp_path))
+        leak = "email alice@corp.com key sk-" + "a" * 24
+        store.record(ExecutionRecord(query=leak, primary_skill="s1"))
+
+        records = store.list_records()
+        assert len(records) == 1
+        stored = records[0].query
+        assert "alice@corp.com" not in stored
+        assert "sk-" + "a" * 24 not in stored
+        assert "[REDACTED_EMAIL]" in stored
+
     def test_list_with_skill_filter(self, tmp_path: Path) -> None:
         store = AnalyticsStore(storage_dir=str(tmp_path))
         store.record(ExecutionRecord(query="q1", primary_skill="s1"))

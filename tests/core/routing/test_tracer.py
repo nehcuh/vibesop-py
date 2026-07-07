@@ -107,6 +107,23 @@ class TestRoutingTracer:
         files = list(traces_dir.glob("*.json"))
         assert len(files) == 1
 
+    def test_save_redacts_query_pii(self, tmp_path: Path) -> None:
+        """F-07: PII in the trace query is redacted in the saved file."""
+        import json
+
+        traces_dir = tmp_path / "traces"
+        t = RoutingTracer(enabled=True, traces_dir=traces_dir)
+        leak = "email alice@corp.com key sk-" + "a" * 24
+        t.start_trace(leak)
+        trace = t.finish_trace(final_skill="s", final_confidence=0.5, final_layer="keyword")
+        path = t.save(trace)
+        assert path is not None
+
+        data = json.loads(open(path).read())
+        assert "alice@corp.com" not in data["query"]
+        assert "sk-" + "a" * 24 not in data["query"]
+        assert "[REDACTED_EMAIL]" in data["query"]
+
     def test_list_traces(self, tmp_path: Path):
         traces_dir = tmp_path / "traces"
         traces_dir.mkdir(parents=True, exist_ok=True)
