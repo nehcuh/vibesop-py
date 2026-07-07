@@ -118,7 +118,7 @@ async def test_anthropic_provider_acall_api_error_wraps_llmerror():
 def test_anthropic_provider_call_oserror_wraps_llmerror():
     """F-22 (review fixup): transient non-APIError errors (OSError) also wrap to LLMError.
 
-    Matches OpenAI/Ollama's `(APIError, OSError, ValueError)` catch tuple so a
+    Matches OpenAI's `(APIError, OSError, ValueError)` catch tuple so a
     connection reset can't leak past a caller's `except LLMError`.
     """
     key = "sk-ant-" + "x" * 40
@@ -129,6 +129,25 @@ def test_anthropic_provider_call_oserror_wraps_llmerror():
 
     with pytest.raises(LLMError, match="Anthropic API error") as raised:
         provider.call("Hello")
+    assert isinstance(raised.value.__cause__, OSError)
+
+
+@pytest.mark.anyio
+async def test_anthropic_provider_acall_oserror_wraps_llmerror():
+    """F-22 (review fixup): async path also wraps transient OSError to LLMError."""
+    key = "sk-ant-" + "x" * 40
+    provider = AnthropicProvider(api_key=key)
+    mock_create = AsyncMock(side_effect=OSError("connection reset"))
+    mock_client = MagicMock()
+    mock_client.messages.create = mock_create
+
+    with patch("vibesop.llm.anthropic.AsyncAnthropic") as mock_async_cls:
+        instance = mock_async_cls.return_value
+        instance.__aenter__ = AsyncMock(return_value=mock_client)
+        instance.__aexit__ = AsyncMock(return_value=False)
+        with pytest.raises(LLMError, match="Anthropic API error") as raised:
+            await provider.acall("Hello")
+
     assert isinstance(raised.value.__cause__, OSError)
 
 
