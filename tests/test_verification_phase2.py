@@ -122,6 +122,28 @@ def test_verifier_agent_empty_output() -> None:
     assert result.issues[0].severity == "critical"
 
 
+def test_verifier_returns_error_when_llm_call_fails() -> None:
+    """F-47: when the LLM call fails, verification must NOT default to PASSED.
+
+    Previously a broad `except Exception` returned PASSED — silently disabling
+    adversarial verification on any provider/parse error. Now it returns ERROR
+    so the verification loop escalates the unverified output instead of treating
+    it as verified.
+    """
+
+    class FailingLLM:
+        def call(self, prompt: str, **kwargs: object) -> str:
+            raise RuntimeError("LLM provider down")
+
+    verifier = VerifierAgent(FailingLLM())
+    step = ExecutionStep(step_id="v1", step_number=1, skill_id="t", intent="verify me")
+
+    result = verifier.verify("query", step, "some real output")
+
+    assert result.status == VerificationStatus.ERROR
+    assert result.confidence == 0.0
+
+
 def test_verifier_agent_parse_response() -> None:
     """Test verifier parses LLM response correctly."""
 
