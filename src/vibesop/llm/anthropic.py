@@ -92,12 +92,14 @@ class AnthropicProvider(LLMProvider):
             LLMResponse with generated content
 
         Raises:
-            ValueError: If provider is not configured
-            LLMError: If the API call fails (wraps anthropic.APIError / OSError / ValueError)
+            LLMError: If the provider is not configured, or the API call fails
+                (wraps anthropic.APIError / OSError / ValueError)
         """
         if not self._client:
-            msg = "Anthropic provider not configured. Set ANTHROPIC_API_KEY."
-            raise ValueError(msg)
+            raise LLMError(
+                self.provider_name,
+                "Provider not configured. Set ANTHROPIC_API_KEY.",
+            )
 
         if model is None:
             model = self.default_model()
@@ -155,12 +157,14 @@ class AnthropicProvider(LLMProvider):
             LLMResponse with generated content
 
         Raises:
-            ValueError: If provider is not configured
-            LLMError: If the API call fails (wraps anthropic.APIError / OSError / ValueError)
+            LLMError: If the provider is not configured, or the API call fails
+                (wraps anthropic.APIError / OSError / ValueError)
         """
         if not self.api_key:
-            msg = "Anthropic provider not configured. Set ANTHROPIC_API_KEY."
-            raise ValueError(msg)
+            raise LLMError(
+                self.provider_name,
+                "Provider not configured. Set ANTHROPIC_API_KEY.",
+            )
 
         if model is None:
             model = self.default_model()

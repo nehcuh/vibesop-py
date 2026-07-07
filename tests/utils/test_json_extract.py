@@ -44,3 +44,24 @@ def test_no_braces_returns_none():
 
 def test_unbalanced_returns_none():
     assert extract_first_json_object('{"a": 1') is None
+
+
+def test_close_brace_inside_string_value():
+    """Regression (Kimi review): a `}` inside a JSON string must not end the object.
+
+    The naive depth tracker returned `{"name": "}` for this input (truncated).
+    """
+    text = '{"name": "}", "steps": {"a": 1}}'
+    assert extract_first_json_object(text) == text
+
+
+def test_open_brace_inside_string_value():
+    """Symmetric to the above: `{` inside a string must not inflate depth."""
+    text = '{"prompt": "if (x) { return; }", "ok": true}'
+    assert extract_first_json_object(text) == text
+
+
+def test_escaped_quote_inside_string():
+    """An escaped `\"` does not terminate the string."""
+    text = '{"msg": "she said \\"hi}\\""}'
+    assert extract_first_json_object(text) == text

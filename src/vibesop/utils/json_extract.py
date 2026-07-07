@@ -39,9 +39,24 @@ def extract_first_json_object(content: str) -> str | None:
     if start == -1:
         return None
 
+    # Walk braces with string awareness: a `{`/`}` inside a JSON string
+    # literal must NOT affect depth. Without this, `{"name": "}"}` truncates
+    # at the inner `}` (the depth tracker sees it and returns early). Track
+    # in-string state and honour backslash escapes.
     depth = 0
+    in_string = False
+    escaped = False
     for i, ch in enumerate(content[start:], start):
-        if ch == "{":
+        if in_string:
+            if escaped:
+                escaped = False
+            elif ch == "\\":
+                escaped = True
+            elif ch == '"':
+                in_string = False
+        elif ch == '"':
+            in_string = True
+        elif ch == "{":
             depth += 1
         elif ch == "}":
             depth -= 1

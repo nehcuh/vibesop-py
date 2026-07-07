@@ -97,6 +97,12 @@ class ConfigSource:
 
                 with self.path.open() as f:
                     self.data = yaml.safe_load(f) or {}
+        except FileNotFoundError:
+            # Config file absent — normal (callers gate on _resolve_config_path,
+            # so this only fires on a TOCTOU race between resolve and open).
+            # Stay quiet; this is not a parse error worth an ERROR log.
+            logger.debug("Config file not found: %s", self.path)
+            self.data = {}
         except Exception as e:
             # A malformed config silently falls back to defaults with zero
             # signal at the default log level (WARNING). Log loudly so

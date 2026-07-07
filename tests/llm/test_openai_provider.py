@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from vibesop.core.exceptions import LLMError
 from vibesop.llm.openai import OpenAIProvider
 
 
@@ -64,7 +65,7 @@ def test_openai_provider_call_no_usage():
 
 def test_openai_provider_call_unconfigured():
     provider = OpenAIProvider(api_key="")
-    with pytest.raises(ValueError, match="not configured"):
+    with pytest.raises(LLMError, match="not configured"):
         provider.call("Say hello")
 
 

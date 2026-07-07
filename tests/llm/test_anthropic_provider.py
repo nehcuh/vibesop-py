@@ -41,7 +41,7 @@ def test_anthropic_provider_call_success():
 
 def test_anthropic_provider_call_unconfigured():
     provider = AnthropicProvider(api_key="")
-    with pytest.raises(ValueError, match="not configured"):
+    with pytest.raises(LLMError, match="not configured"):
         provider.call("Hello")
 
 
