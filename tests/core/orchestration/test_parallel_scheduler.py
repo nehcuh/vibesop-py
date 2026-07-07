@@ -187,3 +187,84 @@ class TestParallelScheduler:
     def test_max_parallel_default(self) -> None:
         scheduler = ParallelScheduler()
         assert scheduler._max_parallel == 5
+
+    @pytest.mark.anyio
+    async def test_downstream_step_skipped_when_dependency_fails(self) -> None:
+        """F-25: a step whose dependency failed must be SKIPPED, not executed.
+
+        Previously the next batch ran unconditionally — downstream steps
+        executed on missing upstream output and produced silently-wrong results.
+        Cascade: s1 fails → s2 (dep s1) skipped → s3 (dep s2) skipped.
+        """
+        scheduler = ParallelScheduler()
+        plan = ExecutionPlan(
+            plan_id="test-f25",
+            original_query="dep fail cascade",
+            steps=[
+                ExecutionStep(step_id="s1", step_number=1, skill_id="skill_1", dependencies=[]),
+                ExecutionStep(step_id="s2", step_number=2, skill_id="skill_2", dependencies=["s1"]),
+                ExecutionStep(step_id="s3", step_number=3, skill_id="skill_3", dependencies=["s2"]),
+            ],
+            execution_mode=ExecutionMode.SEQUENTIAL,
+        )
+
+        executed: list[str] = []
+
+        async def failing_executor(step: ExecutionStep) -> str:
+            executed.append(step.step_id)
+            if step.step_id == "s1":
+                raise ValueError("s1 failed")
+            return f"result_{step.step_id}"
+
+        result = await scheduler.execute_plan(plan, failing_executor)
+
+        # Only s1 was dispatched (and failed); s2 and s3 skipped, not executed.
+        assert executed == ["s1"]
+        by_id = {s.step_id: s for s in plan.steps}
+        assert by_id["s1"].status.value == "failed"
+        assert by_id["s2"].status.value == "skipped"
+        assert by_id["s3"].status.value == "skipped"  # transitive cascade
+
+        # Result entries distinguish skipped from executed.
+        assert isinstance(result["results"][0], dict) and "error" in result["results"][0]
+        assert isinstance(result["results"][1], dict) and result["results"][1].get("skipped")
+        assert isinstance(result["results"][2], dict) and result["results"][2].get("skipped")
+        assert result["steps_executed"] == 1
+        assert result["skipped"] == 2
+
+    @pytest.mark.anyio
+    async def test_partial_batch_skip_independent_sibling_still_runs(self) -> None:
+        """F-25: in a multi-step batch, a step whose dep failed is skipped while
+        an independent sibling whose dep completed still executes."""
+        scheduler = ParallelScheduler()
+        plan = ExecutionPlan(
+            plan_id="test-f25-partial",
+            original_query="partial batch skip",
+            steps=[
+                ExecutionStep(step_id="f", step_number=1, skill_id="fail_src", dependencies=[]),
+                ExecutionStep(step_id="g", step_number=2, skill_id="ok_src", dependencies=[]),
+                ExecutionStep(step_id="p", step_number=3, skill_id="dep_f", dependencies=["f"]),
+                ExecutionStep(step_id="q", step_number=4, skill_id="dep_g", dependencies=["g"]),
+            ],
+            execution_mode=ExecutionMode.PARALLEL,
+        )
+
+        executed: list[str] = []
+
+        async def executor(step: ExecutionStep) -> str:
+            executed.append(step.step_id)
+            if step.step_id == "f":
+                raise ValueError("f failed")
+            return f"ok-{step.step_id}"
+
+        result = await scheduler.execute_plan(plan, executor)
+
+        by_id = {s.step_id: s for s in plan.steps}
+        assert by_id["f"].status.value == "failed"
+        assert by_id["g"].status.value == "completed"
+        assert by_id["p"].status.value == "skipped"  # dep f failed
+        assert by_id["q"].status.value == "completed"  # dep g ok → still runs
+        assert "p" not in executed
+        assert set(executed) == {"f", "g", "q"}
+        assert result["skipped"] == 1
+        assert result["steps_executed"] == 3
