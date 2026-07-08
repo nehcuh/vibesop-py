@@ -10,6 +10,7 @@ if TYPE_CHECKING:
     from vibesop.installer.analyzer import RepoAnalysis
 
 from vibesop.installer.analyzer import RepoAnalysis
+from vibesop.utils.pack_name import sanitize_pack_name
 
 
 @dataclass
@@ -57,10 +58,11 @@ class InstallPlanner:
         self.base_target = base_target or (Path.home() / ".config" / "skills")
 
     def plan(self, analysis: RepoAnalysis) -> InstallPlan:
-        target = self.base_target / analysis.pack_name
+        safe_name = sanitize_pack_name(analysis.pack_name)
+        target = self.base_target / safe_name
 
         plan = InstallPlan(
-            pack_name=analysis.pack_name,
+            pack_name=safe_name,
             source_url=analysis.source_url,
             target_path=target,
             readme_hint=analysis.readme_install_hint,

@@ -606,6 +606,10 @@ class WorkflowEngine:
                 ast.Set,  # Set literals {1, 2, 3}
                 ast.Dict,  # Dict literals {"key": "value"}
                 ast.ListComp,  # List comprehensions [x for x in ...]
+                ast.comprehension,  # The `for ... in ... [if ...]` clause
+                ast.Subscript,  # Indexing: [1, 2, 3][0]
+                ast.Slice,  # Slicing: [1, 2, 3][:]
+                ast.Store,  # Assignment context inside comprehensions
             }
 
             # Define allowed built-in functions
@@ -647,6 +651,12 @@ class WorkflowEngine:
             for node in ast.walk(tree):
                 if not isinstance(node, tuple(ALLOWED_NODE_TYPES)):
                     logger.error(f"Unsafe AST node type: {type(node).__name__}")
+                    return False
+
+                # Block names that look like Python internals (dunder names).
+                # These can leak the builtins dict or other sensitive objects.
+                if isinstance(node, ast.Name) and node.id.startswith("__"):
+                    logger.error(f"Internal name not allowed: {node.id}")
                     return False
 
                 # Extra check for function calls

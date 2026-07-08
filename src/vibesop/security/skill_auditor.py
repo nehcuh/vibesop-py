@@ -326,6 +326,7 @@ class SkillSecurityAuditor:
         skill_path: Path,
         pack_name: str | None = None,
         source_url: str | None = None,
+        pack_path: Path | None = None,
     ) -> AuditResult:
         """Audit a skill file for security threats."""
         threats = []
@@ -391,19 +392,33 @@ class SkillSecurityAuditor:
             )
 
         # 4.5. Trust store override — downgrade HIGH threats to MEDIUM
-        # for packs the user has explicitly trusted or for built-in trusted packs
+        # for packs the user has explicitly trusted or for built-in trusted packs.
+        # F-10: user trust is bound to the pack's content hash; if the tree has
+        # changed since approval, the downgrade is not applied. To avoid hashing
+        # every pack on every audit, the hash is computed only for packs that are
+        # actually present in the user trust store.
         is_trusted = False
         if pack_name or source_url:
             try:
                 from vibesop.constants import TRUSTED_PACKS
                 from vibesop.core.skills.trust import TrustStore
+                from vibesop.utils.marker_files import MarkerFileManager
 
                 store = TrustStore()
-                is_trusted = (
-                    (pack_name and store.is_trusted_pack(pack_name))
-                    or (source_url and store.is_trusted_source(source_url))
-                    or (pack_name and pack_name in TRUSTED_PACKS)
-                )
+                is_builtin_trusted = pack_name and pack_name in TRUSTED_PACKS
+                is_source_trusted = source_url and store.is_trusted_source(source_url)
+
+                is_user_trusted = False
+                if pack_name and store.is_trusted_pack(pack_name):
+                    content_sha256 = ""
+                    if pack_path is not None:
+                        content_sha256 = MarkerFileManager().calculate_checksum(pack_path)
+                    is_user_trusted = store.is_trusted_pack(
+                        pack_name, content_sha256=content_sha256
+                    )
+
+                is_trusted = is_builtin_trusted or is_user_trusted or is_source_trusted
+
                 if is_trusted:
                     for threat in threats:
                         if threat.level == ThreatLevel.HIGH:
@@ -584,7 +599,7 @@ class SkillSecurityAuditor:
 
         # Trust store downgrade for HIGH (consistent with audit_skill_file).
         # CRITICAL is never downgraded — trust is not a license for RCE.
-        is_trusted = self._is_pack_trusted(pack_name)
+        is_trusted = self._is_pack_trusted(pack_name, pack_dir)
         effective_has_high = has_high and not is_trusted
 
         return PackAuditResult(
@@ -626,15 +641,29 @@ class SkillSecurityAuditor:
         }
 
     @staticmethod
-    def _is_pack_trusted(pack_name: str | None) -> bool:
+    def _is_pack_trusted(pack_name: str | None, pack_dir: Path | None = None) -> bool:
         if not pack_name:
             return False
         try:
+            from pathlib import Path
+
             from vibesop.constants import TRUSTED_PACKS
             from vibesop.core.skills.trust import TrustStore
+            from vibesop.utils.marker_files import MarkerFileManager
 
             store = TrustStore()
-            return bool(store.is_trusted_pack(pack_name) or pack_name in TRUSTED_PACKS)
+            if pack_name in TRUSTED_PACKS:
+                return True
+
+            if not store.is_trusted_pack(pack_name):
+                return False
+
+            # F-10: user trust is bound to the pack's content hash. If the tree
+            # has changed since approval, treat it as untrusted.
+            content_sha256 = ""
+            if pack_dir is not None:
+                content_sha256 = MarkerFileManager().calculate_checksum(Path(pack_dir))
+            return store.is_trusted_pack(pack_name, content_sha256=content_sha256)
         except Exception:
             return False
 

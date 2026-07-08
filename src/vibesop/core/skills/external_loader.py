@@ -149,11 +149,24 @@ class ExternalSkillLoader:
                 # e.g., ~/.config/skills/systematic-debugging/SKILL.md
                 #       -> pack_name = None
                 pack_name = self._resolve_pack_name(search_path, skill_file)
+                # Best-effort pack root for F-10 hash verification. If the skill
+                # is nested, the top-level directory under search_path is the pack
+                # tree; passing it lets the auditor compare the current sha256
+                # against the hash recorded when the user approved the pack.
+                try:
+                    rel = skill_file.relative_to(search_path)
+                    pack_path = search_path / rel.parts[0] if len(rel.parts) >= 2 else None
+                except ValueError:
+                    pack_path = None
 
                 # Parse and audit the skill
                 is_trusted = pack_name in self.TRUSTED_PACKS if pack_name else False
                 metadata = self._parse_and_audit(
-                    skill_dir, skill_file, pack_name=pack_name, is_trusted=is_trusted
+                    skill_dir,
+                    skill_file,
+                    pack_name=pack_name,
+                    pack_path=pack_path,
+                    is_trusted=is_trusted,
                 )
                 if metadata:
                     skill_key = metadata.base_metadata.id
@@ -192,6 +205,7 @@ class ExternalSkillLoader:
                 pack_name=pack_name,
                 pack_version=pack_version,
                 is_trusted=is_trusted,
+                pack_path=pack_path,
             )
             if metadata:
                 skills[metadata.base_metadata.id] = metadata
@@ -236,11 +250,14 @@ class ExternalSkillLoader:
         pack_name: str | None = None,
         pack_version: str | None = None,
         is_trusted: bool = False,
+        pack_path: Path | None = None,
     ) -> ExternalSkillMetadata | None:
         """Audit skill file first, then parse only if safe."""
         auditor = self._ensure_auditor()
         if auditor is not None:
-            audit_result = auditor.audit_skill_file(skill_file, pack_name=pack_name)
+            audit_result = auditor.audit_skill_file(
+                skill_file, pack_name=pack_name, pack_path=pack_path
+            )
 
             if not audit_result.is_safe and not is_trusted:
                 has_high = any(t.level.value == "high" for t in audit_result.threats)

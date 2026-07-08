@@ -1,12 +1,23 @@
 """Tests for PackInstaller."""
 
 import tempfile
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock, patch
 
 from vibesop.installer.pack_installer import PackInstaller
 from vibesop.security.skill_auditor import PackAuditResult
+
+
+@contextmanager
+def _allow_local_build():
+    """Mock the F-03 interactive gate so tests can exercise local build execution."""
+    with (
+        patch("vibesop.installer.pack_installer.sys.stdin.isatty", return_value=True),
+        patch("vibesop.installer.pack_installer.Confirm.ask", return_value=True),
+    ):
+        yield
 
 
 def _clean_pack_audit() -> PackAuditResult:
@@ -199,9 +210,10 @@ class TestPackInstaller:
                     mock_plan.target_path = target_path
                     planner_cls.return_value.plan.return_value = mock_plan
 
-                    success, msg = installer.install_pack(
-                        "test-pack", "https://example.com/test-pack"
-                    )
+                    with _allow_local_build():
+                        success, msg = installer.install_pack(
+                            "test-pack", "https://example.com/test-pack"
+                        )
 
             assert success is True
             assert "Build:" in msg
@@ -287,41 +299,53 @@ class TestSkillSymlinks:
 class TestPostInstallHook:
     """Tests for _run_post_install build script detection and execution."""
 
-    def test_no_build_script_returns_empty(self, tmp_path):
-        """Pack without build scripts returns empty string."""
+    def test_symlinked_build_script_outside_pack_rejected(self, tmp_path):
+        """A BUILD.sh symlink pointing outside the pack must not be executed."""
         from vibesop.installer.pack_installer import PackInstaller
 
-        installer = PackInstaller(external_paths=[tmp_path])
+        installer = PackInstaller(
+            external_paths=[tmp_path], allow_unsafe_build=True
+        )
         pack_dir = tmp_path / "pack"
         pack_dir.mkdir()
-        (pack_dir / "SKILL.md").write_text("# Test")
+        secret = tmp_path / "secret.txt"
+        secret.write_text("sensitive data")
+        (pack_dir / "BUILD.sh").symlink_to(secret)
 
-        result = installer._run_post_install(pack_dir, object())
-        assert result == ""
+        with _allow_local_build():
+            result = installer._run_post_install(pack_dir, object())
+        # The confirmation gate should reject the symlink and decline execution.
+        assert "declined" in result.lower()
 
     def test_build_sh_executed(self, tmp_path):
         """BUILD.sh is detected and executed."""
         from vibesop.installer.pack_installer import PackInstaller
 
-        installer = PackInstaller(external_paths=[tmp_path])
+        installer = PackInstaller(
+            external_paths=[tmp_path], allow_unsafe_build=True
+        )
         pack_dir = tmp_path / "pack"
         pack_dir.mkdir()
         (pack_dir / "BUILD.sh").write_text("#!/bin/sh\necho 'built'")
 
-        result = installer._run_post_install(pack_dir, object())
+        with _allow_local_build():
+            result = installer._run_post_install(pack_dir, object())
         assert "BUILD.sh" in result
 
     def test_vibesop_build_priority(self, tmp_path):
         """.vibesop-build takes priority over BUILD.sh."""
         from vibesop.installer.pack_installer import PackInstaller
 
-        installer = PackInstaller(external_paths=[tmp_path])
+        installer = PackInstaller(
+            external_paths=[tmp_path], allow_unsafe_build=True
+        )
         pack_dir = tmp_path / "pack"
         pack_dir.mkdir()
         (pack_dir / ".vibesop-build").write_text("#!/bin/sh\necho 'vibesop'")
         (pack_dir / "BUILD.sh").write_text("#!/bin/sh\necho 'build'")
 
-        result = installer._run_post_install(pack_dir, object())
+        with _allow_local_build():
+            result = installer._run_post_install(pack_dir, object())
         assert "vibesop-build" in result
 
     def test_package_json_bun_fallback(self, tmp_path, monkeypatch):
@@ -330,7 +354,9 @@ class TestPostInstallHook:
 
         from vibesop.installer.pack_installer import PackInstaller
 
-        installer = PackInstaller(external_paths=[tmp_path])
+        installer = PackInstaller(
+            external_paths=[tmp_path], allow_unsafe_build=True
+        )
         pack_dir = tmp_path / "pack"
         pack_dir.mkdir()
         (pack_dir / "package.json").write_text('{"scripts":{"gen:skill-docs":"echo skills"}}')
@@ -342,19 +368,23 @@ class TestPostInstallHook:
 
         monkeypatch.setattr("shutil.which", _mock_which)
 
-        result = installer._run_post_install(pack_dir, object())
+        with _allow_local_build():
+            result = installer._run_post_install(pack_dir, object())
         assert isinstance(result, str)
 
     def test_setup_sh_executed(self, tmp_path):
         """setup.sh is also detected as a build script."""
         from vibesop.installer.pack_installer import PackInstaller
 
-        installer = PackInstaller(external_paths=[tmp_path])
+        installer = PackInstaller(
+            external_paths=[tmp_path], allow_unsafe_build=True
+        )
         pack_dir = tmp_path / "pack"
         pack_dir.mkdir()
         (pack_dir / "setup.sh").write_text("#!/bin/sh\necho 'setup'")
 
-        result = installer._run_post_install(pack_dir, object())
+        with _allow_local_build():
+            result = installer._run_post_install(pack_dir, object())
         assert "setup.sh" in result
 
     def test_create_skill_symlinks_root_skill_md(self, tmp_path):

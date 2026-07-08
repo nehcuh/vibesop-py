@@ -5,16 +5,19 @@ from __future__ import annotations
 import logging
 import shutil
 import stat
+import sys
 from pathlib import Path
 from typing import Any, ClassVar
 
 from rich.console import Console
+from rich.prompt import Confirm
 
 from vibesop.constants import TRUSTED_PACKS
 from vibesop.core.skills.storage import SkillStorage
 from vibesop.installer.analyzer import RepoAnalyzer, parse_github_url
 from vibesop.installer.planner import InstallPlanner
 from vibesop.security import SkillSecurityAuditor
+from vibesop.utils.pack_name import sanitize_pack_name
 
 logger = logging.getLogger(__name__)
 console = Console()
@@ -86,7 +89,15 @@ class PackInstaller:
         pack_url: str | None = None,
         _version: str | None = None,
         platforms: list[str] | None = None,
+        upgrade: bool = False,
     ) -> tuple[bool, str]:
+        from datetime import UTC, datetime
+
+        from vibesop.core.exceptions import PackIntegrityError
+        from vibesop.core.skills.pack_lock import PackLock, PackLockStore
+        from vibesop.installer.analyzer import capture_rev
+        from vibesop.utils.marker_files import MarkerFileManager
+
         pack_url = pack_url or TRUSTED_PACKS.get(pack_name)
         if not pack_url:
             return False, f"Unknown pack: {pack_name}"
@@ -107,19 +118,26 @@ class PackInstaller:
             target_path = plan.target_path
 
             if target_path.exists() and any(target_path.iterdir()):
-                installed_skill_files = list(target_path.rglob("SKILL.md"))
-                if installed_skill_files:
-                    audit_results = self._audit_skills(installed_skill_files, pack_name=pack_name)
-                    symlink_results = self._create_symlinks(pack_name, platforms)
-                    msg = self._build_install_msg(
-                        pack_name,
-                        installed_skill_files,
-                        audit_results,
-                        symlink_results,
-                        already_installed=True,
-                    )
-                    self._rebuild_global_index(pack_name)
-                    return True, msg
+                if upgrade:
+                    # F-02: --upgrade re-clones to accept a changed pack.
+                    _safe_rmtree(target_path)
+                    target_path.mkdir(parents=True, exist_ok=True)
+                else:
+                    installed_skill_files = list(target_path.rglob("SKILL.md"))
+                    if installed_skill_files:
+                        audit_results = self._audit_skills(
+                            installed_skill_files, pack_name=pack_name
+                        )
+                        symlink_results = self._create_symlinks(pack_name, platforms)
+                        msg = self._build_install_msg(
+                            pack_name,
+                            installed_skill_files,
+                            audit_results,
+                            symlink_results,
+                            already_installed=True,
+                        )
+                        self._rebuild_global_index(pack_name)
+                        return True, msg
 
             target_path.mkdir(parents=True, exist_ok=True)
 
@@ -128,9 +146,28 @@ class PackInstaller:
             if not clone_ok:
                 return False, f"Failed to clone {repo_url} to {target_path}"
 
+            # F-02: capture the commit SHA BEFORE removing .git (rev-parse needs
+            # the object database), then remove .git and compute a deterministic
+            # content checksum of the checked-out tree. Verify against the prior
+            # install's lock to reject force-pushes / tampered packs unless --upgrade.
+            commit_sha = capture_rev(target_path)
+
             git_dir = target_path / ".git"
             if git_dir.exists():
                 _safe_rmtree(git_dir)
+
+            content_sha256 = MarkerFileManager().calculate_checksum(target_path)
+            if not upgrade:
+                existing = PackLockStore().get(pack_name)
+                if existing is not None and (
+                    existing.commit_sha != commit_sha or existing.content_sha256 != content_sha256
+                ):
+                    _safe_rmtree(target_path)
+                    raise PackIntegrityError(
+                        pack_name=pack_name,
+                        old=existing.commit_sha[:8] or existing.content_sha256[:8],
+                        new=commit_sha[:8] or content_sha256[:8],
+                    )
 
             # Pre-install audit: scan ALL files (incl. BUILD.sh / setup.sh /
             # package.json scripts) BEFORE any build script is executed.
@@ -152,10 +189,13 @@ class PackInstaller:
                 analysis,
                 sandbox=self._sandbox_builds,
                 allow_unsafe_build=self._allow_unsafe_build,
+                pre_audit_summary=pre_audit.summary,
             )
 
             installed_skill_files = list(target_path.rglob("SKILL.md"))
-            audit_results = self._audit_skills(installed_skill_files, pack_name=pack_name)
+            audit_results = self._audit_skills(
+                installed_skill_files, pack_name=pack_name, pack_path=target_path
+            )
             symlink_results = self._create_symlinks(pack_name, platforms)
 
             msg = self._build_install_msg(
@@ -168,15 +208,39 @@ class PackInstaller:
                 pre_audit_files=pre_audit.files_scanned,
             )
             self._rebuild_global_index(pack_name)
+            # F-02: record the lock so future installs verify against this commit.
+            # Non-fatal — a lock-write failure degrades to "no lock" (next install
+            # is treated as fresh), never undoes a successful install.
+            try:
+                PackLockStore().write(
+                    PackLock(
+                        pack_name=pack_name,
+                        source_url=repo_url,
+                        commit_sha=commit_sha,
+                        content_sha256=content_sha256,
+                        installed_at=datetime.now(UTC).isoformat(),
+                    )
+                )
+            except OSError as e:
+                logger.warning("Install succeeded but failed to write pack lock: %s", e)
             return True, msg
 
+        except PackIntegrityError:
+            raise  # F-02: propagate to the CLI (actionable, not a generic install error)
         except Exception as e:
             return False, f"Failed to install {pack_name}: {e}"
 
-    def _audit_skills(self, skill_files: list[Path], pack_name: str | None = None) -> list[str]:
+    def _audit_skills(
+        self,
+        skill_files: list[Path],
+        pack_name: str | None = None,
+        pack_path: Path | None = None,
+    ) -> list[str]:
         results = []
         for skill_file in skill_files:
-            audit = self._auditor.audit_skill_file(skill_file, pack_name=pack_name)
+            audit = self._auditor.audit_skill_file(
+                skill_file, pack_name=pack_name, pack_path=pack_path
+            )
             results.append(f"{skill_file.parent.name}: {'PASS' if audit.is_safe else 'WARN'}")
         return results
 
@@ -219,7 +283,8 @@ class PackInstaller:
         _analysis: object,
         *,
         sandbox: bool = False,
-        allow_unsafe_build: bool = False,
+        allow_unsafe_build: bool | None = None,
+        pre_audit_summary: str = "",
     ) -> str:
         """Run post-install build scripts for template-based skill packs.
 
@@ -232,8 +297,14 @@ class PackInstaller:
                 Falls back to local execution only if ``allow_unsafe_build``
                 is also True; otherwise the build is skipped with a notice.
             allow_unsafe_build: Explicit opt-in for local execution when no
-                container runtime is available.
+                container runtime is available. If omitted, the instance's
+                ``_allow_unsafe_build`` setting is used.
+            pre_audit_summary: Human-readable summary from the pre-install
+                security audit, shown during the interactive confirmation for
+                local build fallback (F-03).
         """
+        if allow_unsafe_build is None:
+            allow_unsafe_build = self._allow_unsafe_build
         build_scripts = [".vibesop-build", "BUILD.sh", "setup.sh"]
         script_path: Path | None = next(
             (target_path / s for s in build_scripts if (target_path / s).exists()),
@@ -254,12 +325,27 @@ class PackInstaller:
             runtime = self._detect_container_runtime()
             if runtime is not None and script_path is not None:
                 return self._run_build_in_container(target_path, script_path, runtime)
-            if not allow_unsafe_build:
-                return (
-                    "BUILD skipped (no container runtime available; "
-                    "pass allow_unsafe_build=True to override)"
-                )
-            # Local fallback explicitly opted in.
+            # No container runtime available: fall through to the local-execution
+            # gate below (same path as sandbox=False with allow_unsafe_build=True).
+
+        if not allow_unsafe_build:
+            return (
+                "BUILD skipped (no container runtime available; "
+                "pass allow_unsafe_build=True to override)"
+            )
+
+        # F-03: local build execution is an explicitly opted-in escape hatch.
+        # Require an interactive TTY, disclose the audit summary + script content,
+        # and obtain explicit user confirmation. Non-interactive contexts fail-closed
+        # so CI/automation cannot be tricked into executing fetched, unsigned scripts.
+        if not sys.stdin.isatty():
+            return (
+                "BUILD skipped (allow_unsafe_build=True but no interactive "
+                "TTY available; local execution of fetched scripts is "
+                "disabled in non-interactive contexts)"
+            )
+        if not self._confirm_unsafe_build(target_path, script_path, pre_audit_summary):
+            return "BUILD skipped (user declined local execution)"
 
         return self._run_build_local(target_path, script_path)
 
@@ -330,6 +416,50 @@ class PackInstaller:
         return f"{script_path.name} blocked/failed in sandbox: {result.stderr.strip()[:80]}"
 
     @staticmethod
+    def _confirm_unsafe_build(
+        target_path: Path,
+        script_path: Path | None,
+        pre_audit_summary: str,
+    ) -> bool:
+        """Interactive confirmation before locally executing a fetched build script.
+
+        Returns True only when the user explicitly confirms after seeing the
+        audit summary and the script content (F-03).
+        """
+        console.print("\n[bold yellow]⚠ Security warning[/bold yellow]")
+        console.print(
+            "No container runtime was found and [bold]allow_unsafe_build=True[/bold] "
+            "was requested. VibeSOP is about to execute a fetched, unsigned build "
+            "script on this machine with your user privileges."
+        )
+        console.print(f"Pack directory: {target_path}", markup=False)
+        if pre_audit_summary:
+            console.print(f"Pre-install audit: {pre_audit_summary}", markup=False)
+        if script_path is not None:
+            # Reject symlinks that escape the pack directory — they could point
+            # to arbitrary sensitive files on disk.
+            try:
+                script_path.resolve().relative_to(target_path.resolve())
+            except ValueError:
+                console.print(
+                    "[red]Build script resolves outside the pack directory; "
+                    "refusing to display or execute it.[/red]"
+                )
+                return False
+            console.print(f"\nScript to execute: {script_path}", markup=False)
+            try:
+                content = script_path.read_text(encoding="utf-8", errors="replace")
+                console.print("\n[dim]--- script start ---[/dim]")
+                console.print(content, markup=False)
+                console.print("[dim]--- script end ---[/dim]\n")
+            except OSError as e:
+                console.print(f"[dim]Could not read script content: {e}[/dim]\n")
+        return Confirm.ask(
+            "Do you want to execute this script locally?",
+            default=False,
+        )
+
+    @staticmethod
     def _run_build_local(
         target_path: Path,
         script_path: Path | None,
@@ -356,6 +486,12 @@ class PackInstaller:
                     return f"bun build error: {e}"
             return ""
 
+        # Reject symlinks that escape the pack directory before mutating or
+        # executing the script.
+        try:
+            script_path.resolve().relative_to(Path(target_path).resolve())
+        except ValueError:
+            return f"{script_path.name} blocked (resolves outside pack directory)"
         script_path.chmod(0o755)
         try:
             result = subprocess.run(
@@ -379,7 +515,8 @@ class PackInstaller:
     ) -> list[tuple[str, str]]:
         results: list[tuple[str, str]] = []
         storage = SkillStorage()
-        central_path = self.central_storage / pack_name
+        safe_name = sanitize_pack_name(pack_name)
+        central_path = self.central_storage / safe_name
 
         if not central_path.exists():
             return results
@@ -395,12 +532,12 @@ class PackInstaller:
 
             try:
                 platform_dir.mkdir(parents=True, exist_ok=True)
-                skill_count = self.create_skill_symlinks(central_path, platform_dir, pack_name)
+                skill_count = self.create_skill_symlinks(central_path, platform_dir, safe_name)
                 results.append((platform, f"Linked to {platform} ({skill_count} skills)"))
 
             except OSError:
                 try:
-                    skill_count = self._copy_skill_dirs(central_path, platform_dir, pack_name)
+                    skill_count = self._copy_skill_dirs(central_path, platform_dir, safe_name)
                     results.append(
                         (
                             platform,

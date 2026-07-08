@@ -8,6 +8,7 @@ CLI; --all/--feedback touch the GLOBAL ~/.vibe and are excluded from unit tests
 from __future__ import annotations
 
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from typer.testing import CliRunner
 
@@ -15,6 +16,10 @@ from vibesop.cli.commands import data_cmd
 from vibesop.core.analytics import AnalyticsStore, ExecutionRecord
 from vibesop.core.instinct.learner import InstinctLearner
 from vibesop.core.routing.tracer import RoutingTracer
+from vibesop.core.skills.pack_lock import PackLock, PackLockStore
+
+if TYPE_CHECKING:
+    import pytest
 
 runner = CliRunner()
 
@@ -139,3 +144,45 @@ def test_instinct_clear_also_clears_sequences(tmp_path: Path) -> None:
 
     assert len(learner.instincts) == 0
     assert len(learner._sequences) == 0
+
+
+def test_pack_lock_store_clear_all(tmp_path: Path) -> None:
+    """F-02 completion: PackLockStore.clear_all() removes every lock file."""
+    store = PackLockStore(locks_dir=tmp_path)
+    store.write(PackLock("a", "u", "c1", "h1", "t"))
+    store.write(PackLock("b", "u", "c2", "h2", "t"))
+    assert store.clear_all() == 2
+    assert store.get("a") is None
+    assert store.get("b") is None
+    assert store.clear_all() == 0  # already absent
+
+
+def test_data_purge_pack_locks(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """F-02 completion: `vibe data purge --pack-locks` clears install locks."""
+    locks_dir = tmp_path / "pack-locks"
+    monkeypatch.setattr(PackLockStore, "LOCKS_DIR", locks_dir)
+
+    store = PackLockStore()
+    store.write(PackLock("demo", "https://example.com", "abc", "def", "2026-01-01"))
+    assert (locks_dir / "demo.json").exists()
+
+    result = runner.invoke(data_cmd.app, ["purge", "--pack-locks", "--yes"])
+    assert result.exit_code == 0, result.output
+    assert not (locks_dir / "demo.json").exists()
+    assert "pack-locks" in result.output
+
+
+def test_data_purge_all_includes_pack_locks(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """F-02 completion: `vibe data purge --all` lists pack-locks in the prompt."""
+    locks_dir = tmp_path / "pack-locks"
+    monkeypatch.setattr(PackLockStore, "LOCKS_DIR", locks_dir)
+
+    store = PackLockStore()
+    store.write(PackLock("demo", "https://example.com", "abc", "def", "2026-01-01"))
+
+    result = runner.invoke(data_cmd.app, ["purge", "--all", "--yes"])
+    assert result.exit_code == 0, result.output
+    assert not (locks_dir / "demo.json").exists()
+    assert "pack-locks" in result.output

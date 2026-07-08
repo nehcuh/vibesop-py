@@ -70,6 +70,11 @@ def install(
         "-f",
         help="Force reinstall even if already installed",
     ),
+    upgrade: bool = typer.Option(
+        False,
+        "--upgrade",
+        help="Accept a pack whose commit/content changed since the last install (F-02)",
+    ),
     skip_verify: bool = typer.Option(
         False,
         "--skip-verify",
@@ -123,7 +128,7 @@ def install(
         )
         raise typer.Exit(1)
 
-    _install_pack(name_or_url, force, skip_verify, platforms=platforms_list)
+    _install_pack(name_or_url, force, skip_verify, platforms=platforms_list, upgrade=upgrade)
 
 
 def _list_available() -> None:
@@ -299,6 +304,7 @@ def _install_pack(
     skip_verify: bool,
     quiet: bool = False,
     platforms: list[str] | None = None,
+    upgrade: bool = False,
 ) -> str:
     """Install a skill pack by name or URL.
 
@@ -340,24 +346,38 @@ def _install_pack(
                 )
             return "skipped"
 
-    # Execute installation with progress bar
-    if quiet:
-        success, msg = installer.install_pack(pack_name, pack_url, platforms=platforms)
-    else:
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            BarColumn(),
-            TaskProgressColumn(),
-            console=console,
-        ) as progress:
-            task = progress.add_task(f"Installing {pack_name}...", total=100)
+    from vibesop.core.exceptions import PackIntegrityError
 
-            # The installer does the heavy lifting; we just show completion
-            # since install_pack doesn't expose incremental progress.
-            progress.update(task, completed=30, description="Analyzing repository...")
-            success, msg = installer.install_pack(pack_name, pack_url, platforms=platforms)
-            progress.update(task, completed=100, description="Installation complete")
+    # Execute installation with progress bar
+    try:
+        if quiet:
+            success, msg = installer.install_pack(
+                pack_name, pack_url, platforms=platforms, upgrade=upgrade
+            )
+        else:
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("[progress.description]{task.description}"),
+                BarColumn(),
+                TaskProgressColumn(),
+                console=console,
+            ) as progress:
+                task = progress.add_task(f"Installing {pack_name}...", total=100)
+
+                # The installer does the heavy lifting; we just show completion
+                # since install_pack doesn't expose incremental progress.
+                progress.update(task, completed=30, description="Analyzing repository...")
+                success, msg = installer.install_pack(
+                    pack_name, pack_url, platforms=platforms, upgrade=upgrade
+                )
+                progress.update(task, completed=100, description="Installation complete")
+    except PackIntegrityError as e:
+        console.print(f"\n[red]✗ Integrity check failed:[/red] {e.message}")
+        console.print(
+            "[dim]The pack changed since the last install. If you've reviewed the "
+            "change, re-run with --upgrade.[/dim]\n"
+        )
+        return "failed"
 
     if success:
         if not quiet:

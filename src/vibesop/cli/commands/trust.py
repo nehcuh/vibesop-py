@@ -5,8 +5,18 @@ from rich.console import Console
 from rich.table import Table
 
 from vibesop.core.skills.trust import TrustStore
+from vibesop.installer.pack_installer import PackInstaller
+from vibesop.utils.marker_files import MarkerFileManager
 
 console = Console()
+
+
+def _compute_pack_hash(pack_name: str) -> str:
+    """Return the sha256 content hash of an installed pack, or ''."""
+    candidate = PackInstaller.CENTRAL_STORAGE / pack_name
+    if candidate.exists() and candidate.is_dir():
+        return MarkerFileManager().calculate_checksum(candidate)
+    return ""
 
 
 def trust(
@@ -33,8 +43,12 @@ def trust(
         store.trust_source(pack)
         console.print(f"Trusted source: {pack}")
     else:
-        store.trust_pack(pack, source_url)
-        console.print(f"Trusted pack: {pack}")
+        content_sha256 = _compute_pack_hash(pack)
+        store.trust_pack(pack, source_url, content_sha256=content_sha256)
+        if content_sha256:
+            console.print(f"Trusted pack: {pack} (sha256: {content_sha256[:16]}...)")
+        else:
+            console.print(f"Trusted pack: {pack} (pack not installed — no hash recorded)")
 
 
 def _list_trusted(store: TrustStore) -> None:
@@ -42,10 +56,17 @@ def _list_trusted(store: TrustStore) -> None:
     t.add_column("Name/Source")
     t.add_column("Type")
     t.add_column("Trusted At")
+    t.add_column("Hash")
 
     for name, info in store.get_trusted_packs().items():
-        t.add_row(name, "pack", str(info.get("trusted_at", "")))
+        hash_prefix = info.get("content_sha256", "")[:16]
+        t.add_row(
+            name,
+            "pack",
+            str(info.get("trusted_at", "")),
+            f"{hash_prefix}..." if hash_prefix else "—",
+        )
     for url, info in store.get_trusted_sources().items():
-        t.add_row(url, "source", str(info.get("trusted_at", "")))
+        t.add_row(url, "source", str(info.get("trusted_at", "")), "—")
 
     console.print(t)

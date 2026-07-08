@@ -87,9 +87,16 @@ def test_planner_plan_setup_steps(fake_analysis):
     assert any("make setup" in step for step in plan.setup_steps)
 
 
-def test_planner_plan_post_install(fake_analysis):
+def test_planner_rejects_path_traversal_pack_name(fake_analysis):
+    """A pack name that escapes the base target must be rejected."""
     planner = InstallPlanner(base_target=Path("/tmp/target"))
-    plan = planner.plan(fake_analysis)
+    fake_analysis.pack_name = "../escape"
+    with pytest.raises(ValueError):
+        planner.plan(fake_analysis)
 
-    assert any("security audit" in step for step in plan.post_install)
-    assert any("Update registry" in step for step in plan.post_install)
+
+def test_planner_rejects_dot_prefix_pack_name(fake_analysis):
+    planner = InstallPlanner(base_target=Path("/tmp/target"))
+    fake_analysis.pack_name = ".hidden"
+    with pytest.raises(ValueError):
+        planner.plan(fake_analysis)

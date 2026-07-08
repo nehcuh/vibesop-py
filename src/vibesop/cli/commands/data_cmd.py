@@ -1,8 +1,9 @@
 """``vibe data`` — manage VibeSOP-derived data.
 
 Provides a deletion path (``vibe data purge``) for the prompt-derived data
-VibeSOP persists — analytics, traces, preferences, instincts, memory, and
-feedback (F-08). Without it, every routed prompt is effectively permanent.
+VibeSOP persists — analytics, traces, preferences, instincts, memory, feedback,
+and pack install locks (F-08 + F-02). Without it, every routed prompt is
+effectively permanent.
 """
 
 from __future__ import annotations
@@ -35,6 +36,9 @@ def purge(
     feedback: bool = typer.Option(
         False, "--feedback", help="Purge feedback records (global ~/.vibe/feedback.jsonl)."
     ),
+    pack_locks: bool = typer.Option(
+        False, "--pack-locks", help="Purge pack install locks (~/.config/skills/.pack-locks/)."
+    ),
     yes: bool = typer.Option(False, "-y", "--yes", help="Skip the confirmation prompt."),
     project_root: Path = typer.Option(
         Path(), "--project-root", help="Project root (where .vibe/ lives)."
@@ -42,17 +46,47 @@ def purge(
 ) -> None:
     """Permanently delete VibeSOP-derived data (F-08: user deletion path)."""
     if all:
-        analytics = traces = preferences = instincts = memory = sessions = feedback = True
-    if not (analytics or traces or preferences or instincts or memory or sessions or feedback):
+        analytics = traces = preferences = instincts = memory = sessions = feedback = pack_locks = True
+    if not (
+        analytics
+        or traces
+        or preferences
+        or instincts
+        or memory
+        or sessions
+        or feedback
+        or pack_locks
+    ):
         console.print(
             "[red]No purge target selected.[/red] Pass --all, or one of "
-            "--analytics/--traces/--preferences/--instincts/--memory/--sessions/--feedback."
+            "--analytics/--traces/--preferences/--instincts/--memory/--sessions/--feedback/--pack-locks."
         )
         raise typer.Exit(code=2)
 
-    if not yes and not typer.confirm(
-        "This permanently deletes the selected data. Continue?", default=False
-    ):
+    targets = []
+    if analytics:
+        targets.append("analytics")
+    if traces:
+        targets.append("traces")
+    if preferences:
+        targets.append("preferences")
+    if instincts:
+        targets.append("instincts")
+    if memory:
+        targets.append("memory")
+    if sessions:
+        targets.append("sessions")
+    if feedback:
+        targets.append("feedback")
+    if pack_locks:
+        targets.append("pack-locks")
+
+    prompt = (
+        f"This permanently deletes the selected data: {', '.join(targets)}. Continue?"
+        if targets
+        else "This permanently deletes the selected data. Continue?"
+    )
+    if not yes and not typer.confirm(prompt, default=False):
         console.print("[yellow]Aborted — nothing was changed.[/yellow]")
         raise typer.Exit(code=0)
 
@@ -96,6 +130,11 @@ def purge(
         FeedbackCollector().clear_records()
         ExecutionFeedbackCollector().clear_records()
         cleared.append("feedback: cleared")
+    if pack_locks:
+        from vibesop.core.skills.pack_lock import PackLockStore
+
+        n = PackLockStore().clear_all()
+        cleared.append(f"pack-locks: {n} lock(s)")
 
     console.print("[green]Purged:[/green]")
     for line in cleared:
