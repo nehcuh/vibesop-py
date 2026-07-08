@@ -175,9 +175,7 @@ This skill documents prompt injection attempts where users try to
 override instructions, bypass safety, or ignore restrictions.
 """)
         auditor = SkillSecurityAuditor(strict_mode=True)
-        result = auditor.audit_skill_file(
-            skill, pack_name="trusted-pack", pack_path=d
-        )
+        result = auditor.audit_skill_file(skill, pack_name="trusted-pack", pack_path=d)
 
         # Should be safe because the pack is trusted (HIGH -> MEDIUM, MEDIUM accepted)
         assert result.is_safe
