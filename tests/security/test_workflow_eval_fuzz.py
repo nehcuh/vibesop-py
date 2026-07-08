@@ -350,5 +350,9 @@ class TestWorkflowEvalFuzz:
 
     def test_payload_count_meets_target(self) -> None:
         """Sanity check that the fuzz corpus is at least 200 payloads."""
-        total = len(self.MALICIOUS_PAYLOADS) + len(self.BENIGN_PAYLOADS) + len(self.SUBSTITUTION_ATTACKS)
+        total = (
+            len(self.MALICIOUS_PAYLOADS)
+            + len(self.BENIGN_PAYLOADS)
+            + len(self.SUBSTITUTION_ATTACKS)
+        )
         assert total >= 200, f"Fuzz corpus too small: {total}"

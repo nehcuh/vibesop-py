@@ -46,7 +46,9 @@ def purge(
 ) -> None:
     """Permanently delete VibeSOP-derived data (F-08: user deletion path)."""
     if all:
-        analytics = traces = preferences = instincts = memory = sessions = feedback = pack_locks = True
+        analytics = traces = preferences = instincts = memory = sessions = feedback = pack_locks = (
+            True
+        )
     if not (
         analytics
         or traces

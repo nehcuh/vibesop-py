@@ -202,9 +202,7 @@ override instructions, bypass safety, or ignore restrictions.
         auditor = SkillSecurityAuditor(allowed_paths=[tmp_path], strict_mode=True)
 
         # Hash matches -> HIGH downgraded to MEDIUM, accepted.
-        result = auditor.audit_skill_file(
-            skill, pack_name="trusted-pack", pack_path=pack_path
-        )
+        result = auditor.audit_skill_file(skill, pack_name="trusted-pack", pack_path=pack_path)
         assert result.is_safe
         assert any(t.level == ThreatLevel.MEDIUM for t in result.threats)
 
@@ -212,9 +210,7 @@ override instructions, bypass safety, or ignore restrictions.
         (pack_path / "extra.txt").write_text("tamper")
 
         # Hash no longer matches -> trust downgrade is NOT applied.
-        result = auditor.audit_skill_file(
-            skill, pack_name="trusted-pack", pack_path=pack_path
-        )
+        result = auditor.audit_skill_file(skill, pack_name="trusted-pack", pack_path=pack_path)
         assert not result.is_safe
         assert result.risk_level == ThreatLevel.HIGH
         assert any(t.level == ThreatLevel.HIGH for t in result.threats)

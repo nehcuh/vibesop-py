@@ -13,6 +13,4 @@ import pytest
 def _isolate_pack_locks(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
     from vibesop.core.skills import pack_lock
 
-    monkeypatch.setattr(
-        pack_lock.PackLockStore, "LOCKS_DIR", tmp_path / "pack-locks"
-    )
+    monkeypatch.setattr(pack_lock.PackLockStore, "LOCKS_DIR", tmp_path / "pack-locks")

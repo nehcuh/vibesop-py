@@ -58,9 +58,7 @@ class TrustStore:
     def is_trusted_source(self, source_url: str) -> bool:
         return source_url in self._data.get("sources", {})
 
-    def trust_pack(
-        self, pack_name: str, source_url: str = "", content_sha256: str = ""
-    ) -> None:
+    def trust_pack(self, pack_name: str, source_url: str = "", content_sha256: str = "") -> None:
         self._data.setdefault("packs", {})[pack_name] = {
             "trusted_at": datetime.now(UTC).isoformat(),
             "source": source_url,

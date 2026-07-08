@@ -303,9 +303,7 @@ class TestPostInstallHook:
         """A BUILD.sh symlink pointing outside the pack must not be executed."""
         from vibesop.installer.pack_installer import PackInstaller
 
-        installer = PackInstaller(
-            external_paths=[tmp_path], allow_unsafe_build=True
-        )
+        installer = PackInstaller(external_paths=[tmp_path], allow_unsafe_build=True)
         pack_dir = tmp_path / "pack"
         pack_dir.mkdir()
         secret = tmp_path / "secret.txt"
@@ -321,9 +319,7 @@ class TestPostInstallHook:
         """BUILD.sh is detected and executed."""
         from vibesop.installer.pack_installer import PackInstaller
 
-        installer = PackInstaller(
-            external_paths=[tmp_path], allow_unsafe_build=True
-        )
+        installer = PackInstaller(external_paths=[tmp_path], allow_unsafe_build=True)
         pack_dir = tmp_path / "pack"
         pack_dir.mkdir()
         (pack_dir / "BUILD.sh").write_text("#!/bin/sh\necho 'built'")
@@ -336,9 +332,7 @@ class TestPostInstallHook:
         """.vibesop-build takes priority over BUILD.sh."""
         from vibesop.installer.pack_installer import PackInstaller
 
-        installer = PackInstaller(
-            external_paths=[tmp_path], allow_unsafe_build=True
-        )
+        installer = PackInstaller(external_paths=[tmp_path], allow_unsafe_build=True)
         pack_dir = tmp_path / "pack"
         pack_dir.mkdir()
         (pack_dir / ".vibesop-build").write_text("#!/bin/sh\necho 'vibesop'")
@@ -354,9 +348,7 @@ class TestPostInstallHook:
 
         from vibesop.installer.pack_installer import PackInstaller
 
-        installer = PackInstaller(
-            external_paths=[tmp_path], allow_unsafe_build=True
-        )
+        installer = PackInstaller(external_paths=[tmp_path], allow_unsafe_build=True)
         pack_dir = tmp_path / "pack"
         pack_dir.mkdir()
         (pack_dir / "package.json").write_text('{"scripts":{"gen:skill-docs":"echo skills"}}')
@@ -376,9 +368,7 @@ class TestPostInstallHook:
         """setup.sh is also detected as a build script."""
         from vibesop.installer.pack_installer import PackInstaller
 
-        installer = PackInstaller(
-            external_paths=[tmp_path], allow_unsafe_build=True
-        )
+        installer = PackInstaller(external_paths=[tmp_path], allow_unsafe_build=True)
         pack_dir = tmp_path / "pack"
         pack_dir.mkdir()
         (pack_dir / "setup.sh").write_text("#!/bin/sh\necho 'setup'")
