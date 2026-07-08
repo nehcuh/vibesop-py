@@ -75,6 +75,17 @@ class PackInstaller:
             if path.exists():
                 self._auditor.add_allowed_path(path)
 
+    @classmethod
+    def compute_pack_hash(cls, pack_name: str, central_storage: Path | None = None) -> str:
+        """Return the sha256 content hash of an installed pack, or ''."""
+        base = central_storage or cls.CENTRAL_STORAGE
+        candidate = base / pack_name
+        if candidate.exists() and candidate.is_dir():
+            from vibesop.utils.marker_files import MarkerFileManager
+
+            return MarkerFileManager().calculate_checksum(candidate)
+        return ""
+
     def install_skill_from_github(self, skill_id: str) -> tuple[bool, str]:
         try:
             return self.install_pack(

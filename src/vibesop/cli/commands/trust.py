@@ -6,17 +6,8 @@ from rich.table import Table
 
 from vibesop.core.skills.trust import TrustStore
 from vibesop.installer.pack_installer import PackInstaller
-from vibesop.utils.marker_files import MarkerFileManager
 
 console = Console()
-
-
-def _compute_pack_hash(pack_name: str) -> str:
-    """Return the sha256 content hash of an installed pack, or ''."""
-    candidate = PackInstaller.CENTRAL_STORAGE / pack_name
-    if candidate.exists() and candidate.is_dir():
-        return MarkerFileManager().calculate_checksum(candidate)
-    return ""
 
 
 def trust(
@@ -43,7 +34,7 @@ def trust(
         store.trust_source(pack)
         console.print(f"Trusted source: {pack}")
     else:
-        content_sha256 = _compute_pack_hash(pack)
+        content_sha256 = PackInstaller.compute_pack_hash(pack)
         store.trust_pack(pack, source_url, content_sha256=content_sha256)
         if content_sha256:
             console.print(f"Trusted pack: {pack} (sha256: {content_sha256[:16]}...)")

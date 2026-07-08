@@ -80,6 +80,11 @@ def install(
         "--skip-verify",
         help="Skip post-install verification",
     ),
+    allow_unsafe_build: bool = typer.Option(
+        False,
+        "--allow-unsafe-build",
+        help="Allow local (non-container) build-script execution after interactive confirmation (F-03)",
+    ),
     platform: str | None = typer.Option(
         None,
         "--platform",
@@ -128,7 +133,14 @@ def install(
         )
         raise typer.Exit(1)
 
-    _install_pack(name_or_url, force, skip_verify, platforms=platforms_list, upgrade=upgrade)
+    _install_pack(
+        name_or_url,
+        force,
+        skip_verify,
+        platforms=platforms_list,
+        upgrade=upgrade,
+        allow_unsafe_build=allow_unsafe_build,
+    )
 
 
 def _list_available() -> None:
@@ -305,12 +317,15 @@ def _install_pack(
     quiet: bool = False,
     platforms: list[str] | None = None,
     upgrade: bool = False,
+    allow_unsafe_build: bool = False,
 ) -> str:
     """Install a skill pack by name or URL.
 
     Returns:
         "success", "failed", or "skipped"
     """
+    installer = PackInstaller(allow_unsafe_build=allow_unsafe_build)
+
     # Determine if this is a URL or a pack name
     is_url = name_or_url.startswith(("http://", "https://", "git@"))
 

@@ -242,6 +242,12 @@ vibe install <source> [options]
 
 **Options:**
 - `--force, -f` - Force reinstall if already installed
+- `--upgrade` - Accept a pack whose commit or content changed since the last install (F-02)
+- `--skip-verify` - Skip post-install verification
+- `--allow-unsafe-build` - Allow local (non-container) build-script execution after interactive confirmation (F-03)
+- `--platform, -p` - Target platform for skill symlinks (`claude-code`, `kimi-cli`, `opencode`, `cursor`, `pi`, or `all`)
+- `--list, -l` - List available skill packs
+- `--auto, -a` - Auto-install recommended skill packs
 
 **Examples:**
 ```bash
@@ -253,6 +259,45 @@ vibe install https://github.com/anthropics/gstack
 
 # Force reinstall
 vibe install gstack --force
+
+# Accept a changed pack after reviewing the diff
+vibe install gstack --upgrade
+
+# Allow local build scripts after explicit interactive confirmation
+vibe install gstack --allow-unsafe-build
+```
+
+### `vibe data purge`
+
+Permanently delete VibeSOP-derived data, including analytics, traces, preferences, instincts, memory, sessions, feedback, and pack install locks (F-08 + F-02).
+
+```bash
+vibe data purge [options]
+```
+
+**Options:**
+- `--all` - Purge ALL VibeSOP-derived data
+- `--analytics` - Purge `.vibe/analytics.jsonl`
+- `--traces` - Purge `.vibe/traces/*.json`
+- `--preferences` - Purge learned preferences
+- `--instincts` - Purge learned instincts
+- `--memory` - Purge conversation memory
+- `--sessions` - Purge `.vibe/session/*.json`
+- `--feedback` - Purge feedback records
+- `--pack-locks` - Purge pack install locks (`~/.config/skills/.pack-locks/`)
+- `-y, --yes` - Skip the confirmation prompt
+- `--project-root` - Project root (where `.vibe/` lives)
+
+**Examples:**
+```bash
+# Purge everything
+vibe data purge --all
+
+# Purge only analytics and traces
+vibe data purge --analytics --traces
+
+# Reset pack install locks after a force-push review
+vibe data purge --pack-locks --yes
 ```
 
 ---
