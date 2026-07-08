@@ -225,7 +225,7 @@ class RepoAnalyzer:
                     "-c",
                     "protocol.ext.allow=never",
                     "-c",
-                    "protocol.file.allow=user",
+                    "protocol.file.allow=never",
                     url,
                     str(dest),
                 ],

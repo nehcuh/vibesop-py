@@ -17,6 +17,12 @@ from vibesop.core.skills.pack_lock import PackLock, PackLockStore
 from vibesop.installer.pack_installer import PackInstaller
 
 
+@pytest.fixture(autouse=True)
+def _isolate_pack_locks(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep pack-lock tests from touching the real ~/.config/skills/.pack-locks/."""
+    monkeypatch.setattr(PackLockStore, "LOCKS_DIR", tmp_path / ".pack-locks")
+
+
 @contextlib.contextmanager
 def install_deps(commit_sha: str, content_sha256: str, target_path: Path):
     """Patch the install heavy deps with controlled commit/content values."""

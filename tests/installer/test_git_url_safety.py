@@ -105,7 +105,7 @@ class TestGitCloneAllowsSafeUrl:
         # Verify the defense-in-depth config is present.
         assert "-c" in cmd
         assert "protocol.ext.allow=never" in cmd
-        assert "protocol.file.allow=user" in cmd
+        assert "protocol.file.allow=never" in cmd
         # Verify the URL is passed verbatim.
         assert "https://github.com/foo/bar.git" in cmd
 

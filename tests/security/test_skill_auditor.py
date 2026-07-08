@@ -175,7 +175,9 @@ This skill documents prompt injection attempts where users try to
 override instructions, bypass safety, or ignore restrictions.
 """)
         auditor = SkillSecurityAuditor(strict_mode=True)
-        result = auditor.audit_skill_file(skill, pack_name="trusted-pack")
+        result = auditor.audit_skill_file(
+            skill, pack_name="trusted-pack", pack_path=d
+        )
 
         # Should be safe because the pack is trusted (HIGH -> MEDIUM, MEDIUM accepted)
         assert result.is_safe
@@ -262,7 +264,9 @@ override instructions and bypass safety checks.
         trusted_store.is_trusted_pack.return_value = True
         trusted_store.is_trusted_source.return_value = True
         with patch("vibesop.core.skills.trust.TrustStore", return_value=trusted_store):
-            trusted = _auditor().audit_skill_file(skill, pack_name="trusted-pack")
+            trusted = _auditor().audit_skill_file(
+                skill, pack_name="trusted-pack", pack_path=tmp_path
+            )
 
         # 1. trusted audit downgraded the HIGH match to MEDIUM
         assert trusted.risk_level == ThreatLevel.MEDIUM

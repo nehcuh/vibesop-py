@@ -78,6 +78,7 @@ class PackInstaller:
     @classmethod
     def compute_pack_hash(cls, pack_name: str, central_storage: Path | None = None) -> str:
         """Return the sha256 content hash of an installed pack, or ''."""
+        sanitize_pack_name(pack_name)
         base = central_storage or cls.CENTRAL_STORAGE
         candidate = base / pack_name
         if candidate.exists() and candidate.is_dir():
@@ -387,6 +388,13 @@ class PackInstaller:
         - 60s timeout, 512 MB memory cap, 0.5 CPU: contains runaway builds.
         """
         import subprocess
+
+        # Reject symlinks that escape the pack directory, matching the local
+        # execution gate in ``_confirm_unsafe_build``.
+        try:
+            script_path.resolve().relative_to(target_path.resolve())
+        except ValueError:
+            return f"{script_path.name} blocked: resolves outside the pack directory"
 
         image = "ubuntu:22.04"
         # All three supported runtimes accept the docker-CLI shape for our

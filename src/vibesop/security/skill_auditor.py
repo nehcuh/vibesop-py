@@ -283,6 +283,7 @@ class SkillSecurityAuditor:
         {
             ".sh",
             ".bash",
+            ".vibesop-build",
             ".js",
             ".mjs",
             ".cjs",
@@ -409,10 +410,8 @@ class SkillSecurityAuditor:
                 is_source_trusted = source_url and store.is_trusted_source(source_url)
 
                 is_user_trusted = False
-                if pack_name and store.is_trusted_pack(pack_name):
-                    content_sha256 = ""
-                    if pack_path is not None:
-                        content_sha256 = MarkerFileManager().calculate_checksum(pack_path)
+                if pack_name and pack_path is not None and store.is_trusted_pack(pack_name):
+                    content_sha256 = MarkerFileManager().calculate_checksum(pack_path)
                     is_user_trusted = store.is_trusted_pack(
                         pack_name, content_sha256=content_sha256
                     )
@@ -628,6 +627,7 @@ class SkillSecurityAuditor:
         return {
             ".sh": shell_patterns,
             ".bash": shell_patterns,
+            ".vibesop-build": shell_patterns,
             ".js": js_patterns,
             ".mjs": js_patterns,
             ".cjs": js_patterns,

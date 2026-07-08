@@ -347,7 +347,6 @@ def _install_pack(
         if platforms:
             console.print(f"[dim]Platform:[/dim] {', '.join(platforms)}\n")
 
-    installer = PackInstaller()
     loader = ExternalSkillLoader()
 
     # Check if already installed (unless force)
