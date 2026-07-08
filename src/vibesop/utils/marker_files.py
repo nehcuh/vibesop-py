@@ -271,21 +271,24 @@ class MarkerFileManager:
     def _calculate_checksum(self, path: Path) -> str:
         sha256 = hashlib.sha256()
 
-        if path.is_file():
+        if path.is_file() and not path.is_symlink():
             with path.open("rb") as f:
                 for chunk in iter(lambda: f.read(4096), b""):
                     sha256.update(chunk)
 
         elif path.is_dir():
             for file_path in sorted(path.rglob("*")):
-                if file_path.is_file():
-                    # Include relative path in checksum
-                    relative_path = file_path.relative_to(path)
-                    sha256.update(str(relative_path).encode())
+                # Skip symlinks and non-regular files to avoid following
+                # arbitrary links or hanging on device files (e.g. /dev/zero).
+                if file_path.is_symlink() or not file_path.is_file():
+                    continue
+                # Include relative path in checksum
+                relative_path = file_path.relative_to(path)
+                sha256.update(str(relative_path).encode())
 
-                    with file_path.open("rb") as f:
-                        for chunk in iter(lambda: f.read(4096), b""):
-                            sha256.update(chunk)
+                with file_path.open("rb") as f:
+                    for chunk in iter(lambda: f.read(4096), b""):
+                        sha256.update(chunk)
 
         return sha256.hexdigest()
 

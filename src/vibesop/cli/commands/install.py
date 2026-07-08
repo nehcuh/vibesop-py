@@ -70,10 +70,20 @@ def install(
         "-f",
         help="Force reinstall even if already installed",
     ),
+    upgrade: bool = typer.Option(
+        False,
+        "--upgrade",
+        help="Accept a pack whose commit/content changed since the last install (F-02)",
+    ),
     skip_verify: bool = typer.Option(
         False,
         "--skip-verify",
         help="Skip post-install verification",
+    ),
+    allow_unsafe_build: bool = typer.Option(
+        False,
+        "--allow-unsafe-build",
+        help="Allow local (non-container) build-script execution after interactive confirmation (F-03)",
     ),
     platform: str | None = typer.Option(
         None,
@@ -123,7 +133,14 @@ def install(
         )
         raise typer.Exit(1)
 
-    _install_pack(name_or_url, force, skip_verify, platforms=platforms_list)
+    _install_pack(
+        name_or_url,
+        force,
+        skip_verify,
+        platforms=platforms_list,
+        upgrade=upgrade,
+        allow_unsafe_build=allow_unsafe_build,
+    )
 
 
 def _list_available() -> None:
@@ -299,12 +316,16 @@ def _install_pack(
     skip_verify: bool,
     quiet: bool = False,
     platforms: list[str] | None = None,
+    upgrade: bool = False,
+    allow_unsafe_build: bool = False,
 ) -> str:
     """Install a skill pack by name or URL.
 
     Returns:
         "success", "failed", or "skipped"
     """
+    installer = PackInstaller(allow_unsafe_build=allow_unsafe_build)
+
     # Determine if this is a URL or a pack name
     is_url = name_or_url.startswith(("http://", "https://", "git@"))
 
@@ -326,7 +347,6 @@ def _install_pack(
         if platforms:
             console.print(f"[dim]Platform:[/dim] {', '.join(platforms)}\n")
 
-    installer = PackInstaller()
     loader = ExternalSkillLoader()
 
     # Check if already installed (unless force)
@@ -340,24 +360,38 @@ def _install_pack(
                 )
             return "skipped"
 
-    # Execute installation with progress bar
-    if quiet:
-        success, msg = installer.install_pack(pack_name, pack_url, platforms=platforms)
-    else:
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            BarColumn(),
-            TaskProgressColumn(),
-            console=console,
-        ) as progress:
-            task = progress.add_task(f"Installing {pack_name}...", total=100)
+    from vibesop.core.exceptions import PackIntegrityError
 
-            # The installer does the heavy lifting; we just show completion
-            # since install_pack doesn't expose incremental progress.
-            progress.update(task, completed=30, description="Analyzing repository...")
-            success, msg = installer.install_pack(pack_name, pack_url, platforms=platforms)
-            progress.update(task, completed=100, description="Installation complete")
+    # Execute installation with progress bar
+    try:
+        if quiet:
+            success, msg = installer.install_pack(
+                pack_name, pack_url, platforms=platforms, upgrade=upgrade
+            )
+        else:
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("[progress.description]{task.description}"),
+                BarColumn(),
+                TaskProgressColumn(),
+                console=console,
+            ) as progress:
+                task = progress.add_task(f"Installing {pack_name}...", total=100)
+
+                # The installer does the heavy lifting; we just show completion
+                # since install_pack doesn't expose incremental progress.
+                progress.update(task, completed=30, description="Analyzing repository...")
+                success, msg = installer.install_pack(
+                    pack_name, pack_url, platforms=platforms, upgrade=upgrade
+                )
+                progress.update(task, completed=100, description="Installation complete")
+    except PackIntegrityError as e:
+        console.print(f"\n[red]✗ Integrity check failed:[/red] {e.message}")
+        console.print(
+            "[dim]The pack changed since the last install. If you've reviewed the "
+            "change, re-run with --upgrade.[/dim]\n"
+        )
+        return "failed"
 
     if success:
         if not quiet:

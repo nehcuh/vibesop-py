@@ -30,7 +30,7 @@ class TestInstallCommand:
         assert result.exit_code == 0
         assert "gstack installed successfully" in result.output
         mock_installer.install_pack.assert_called_once_with(
-            "gstack", None, platforms=["claude-code"]
+            "gstack", None, platforms=["claude-code"], upgrade=False
         )
 
     @patch("vibesop.cli.commands.install.PackInstaller")
@@ -55,7 +55,10 @@ class TestInstallCommand:
         assert result.exit_code == 0
         assert "my-skills installed successfully" in result.output
         mock_installer.install_pack.assert_called_once_with(
-            "my-skills", "https://github.com/user/my-skills", platforms=["claude-code"]
+            "my-skills",
+            "https://github.com/user/my-skills",
+            platforms=["claude-code"],
+            upgrade=False,
         )
 
     @patch("vibesop.cli.commands.install.PackInstaller")
@@ -90,7 +93,7 @@ class TestInstallCommand:
         result = runner.invoke(app, ["install", "superpowers", "--force"])
         assert result.exit_code == 0
         mock_installer.install_pack.assert_called_once_with(
-            "superpowers", None, platforms=["claude-code"]
+            "superpowers", None, platforms=["claude-code"], upgrade=False
         )
 
     @patch("vibesop.cli.commands.install.ExternalSkillLoader")
@@ -126,7 +129,9 @@ class TestInstallCommand:
 
         result = runner.invoke(app, ["install", "--auto"])
         assert result.exit_code == 0
-        mock_installer.install_pack.assert_called_once_with("omx", None, platforms=["claude-code"])
+        mock_installer.install_pack.assert_called_once_with(
+            "omx", None, platforms=["claude-code"], upgrade=False
+        )
 
     @patch("vibesop.cli.commands.install.PackInstaller")
     @patch("vibesop.cli.commands.install.ExternalSkillLoader")
@@ -206,7 +211,7 @@ class TestInstallCommand:
         assert "gstack installed successfully" in result.output
         assert "Platform: claude-code" in result.output
         mock_installer.install_pack.assert_called_once_with(
-            "gstack", None, platforms=["claude-code"]
+            "gstack", None, platforms=["claude-code"], upgrade=False
         )
 
     @patch("vibesop.cli.commands.install.PackInstaller")
@@ -224,7 +229,9 @@ class TestInstallCommand:
 
         result = runner.invoke(app, ["install", "gstack", "--platform", "cursor"])
         assert result.exit_code == 0
-        mock_installer.install_pack.assert_called_once_with("gstack", None, platforms=["cursor"])
+        mock_installer.install_pack.assert_called_once_with(
+            "gstack", None, platforms=["cursor"], upgrade=False
+        )
 
     def test_install_invalid_platform(self) -> None:
         result = runner.invoke(app, ["install", "gstack", "--platform", "vscode"])
@@ -251,4 +258,6 @@ class TestInstallCommand:
 
         result = runner.invoke(app, ["install", "--auto", "--platform", "opencode"])
         assert result.exit_code == 0
-        mock_installer.install_pack.assert_called_once_with("omx", None, platforms=["opencode"])
+        mock_installer.install_pack.assert_called_once_with(
+            "omx", None, platforms=["opencode"], upgrade=False
+        )

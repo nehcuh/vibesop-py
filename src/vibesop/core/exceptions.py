@@ -173,6 +173,19 @@ class PermissionError(VibeSOPError):
         self.resource = resource
 
 
+class PackIntegrityError(VibeSOPError):
+    """Raised when a pack's commit/content differs from its install lock (F-02)."""
+
+    def __init__(self, pack_name: str, old: str, new: str) -> None:
+        super().__init__(
+            f"Pack {pack_name!r} changed since the last install "
+            f"(was {old}, now {new}) — possible force-push or tampering. "
+            f"Re-run with --upgrade if you've reviewed and accept the change.",
+            details={"pack_name": pack_name, "old": old, "new": new},
+        )
+        self.pack_name = pack_name
+
+
 # Export all exceptions
 __all__ = [
     "CacheError",
@@ -181,6 +194,7 @@ __all__ = [
     "LLMError",
     "MatcherError",
     "NoMatchingSkillError",
+    "PackIntegrityError",
     "PermissionError",
     "RoutingError",
     "SkillLoadError",

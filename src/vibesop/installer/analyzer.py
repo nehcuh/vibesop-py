@@ -15,6 +15,25 @@ from vibesop.core.skills.parser import parse_skill_md
 logger = logging.getLogger(__name__)
 
 
+def capture_rev(dest: Path) -> str:
+    """Return ``git -C <dest> rev-parse HEAD`` (the cloned commit SHA).
+
+    Must run before ``.git`` is removed. Returns "" if HEAD can't be determined
+    (e.g. a shallow-clone anomaly) — callers then rely on the content sha256.
+    """
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(dest), "rev-parse", "HEAD"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=True,
+        )
+        return result.stdout.strip()
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, FileNotFoundError):
+        return ""
+
+
 @dataclass
 class RepoAnalysis:
     pack_name: str
@@ -206,7 +225,7 @@ class RepoAnalyzer:
                     "-c",
                     "protocol.ext.allow=never",
                     "-c",
-                    "protocol.file.allow=user",
+                    "protocol.file.allow=never",
                     url,
                     str(dest),
                 ],

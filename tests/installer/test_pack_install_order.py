@@ -206,7 +206,7 @@ class TestSandboxedBuild:
             assert "allow_unsafe_build" in result
 
     def test_local_build_runs_when_allow_unsafe_build_true(self) -> None:
-        """No runtime + sandbox=True + opt-in → falls back to local exec."""
+        """No runtime + sandbox=True + opt-in + TTY confirm → falls back to local exec."""
         with tempfile.TemporaryDirectory() as tmpdir:
             target_path = Path(tmpdir) / "explicit-opt-in"
             target_path.mkdir(parents=True, exist_ok=True)
@@ -225,6 +225,14 @@ class TestSandboxedBuild:
                     "_run_build_local",
                     return_value="BUILD.sh OK",
                 ) as mock_local,
+                patch(
+                    "vibesop.installer.pack_installer.sys.stdin.isatty",
+                    return_value=True,
+                ),
+                patch(
+                    "vibesop.installer.pack_installer.Confirm.ask",
+                    return_value=True,
+                ) as mock_confirm,
             ):
                 result = installer._run_post_install(
                     target_path,
@@ -233,8 +241,84 @@ class TestSandboxedBuild:
                     allow_unsafe_build=True,
                 )
 
+            mock_confirm.assert_called_once()
             mock_local.assert_called_once()
             assert result == "BUILD.sh OK"
+
+    def test_local_build_rejected_in_non_interactive_context(self) -> None:
+        """F-03: no runtime + opt-in but non-interactive → fail-closed."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = Path(tmpdir) / "ci-context"
+            target_path.mkdir(parents=True, exist_ok=True)
+            (target_path / "BUILD.sh").write_text("#!/bin/sh\necho built\n")
+
+            installer = PackInstaller(external_paths=[Path(tmpdir)])
+
+            with (
+                patch.object(
+                    PackInstaller,
+                    "_detect_container_runtime",
+                    return_value=None,
+                ),
+                patch.object(
+                    PackInstaller,
+                    "_run_build_local",
+                ) as mock_local,
+                patch(
+                    "vibesop.installer.pack_installer.sys.stdin.isatty",
+                    return_value=False,
+                ),
+            ):
+                result = installer._run_post_install(
+                    target_path,
+                    _analysis=None,
+                    sandbox=True,
+                    allow_unsafe_build=True,
+                )
+
+            mock_local.assert_not_called()
+            assert "non-interactive" in result.lower()
+            assert "skipped" in result.lower()
+
+    def test_local_build_skipped_when_user_declines(self) -> None:
+        """F-03: interactive user declines the confirmation prompt."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_path = Path(tmpdir) / "declined"
+            target_path.mkdir(parents=True, exist_ok=True)
+            (target_path / "BUILD.sh").write_text("#!/bin/sh\necho built\n")
+
+            installer = PackInstaller(external_paths=[Path(tmpdir)])
+
+            with (
+                patch.object(
+                    PackInstaller,
+                    "_detect_container_runtime",
+                    return_value=None,
+                ),
+                patch.object(
+                    PackInstaller,
+                    "_run_build_local",
+                ) as mock_local,
+                patch(
+                    "vibesop.installer.pack_installer.sys.stdin.isatty",
+                    return_value=True,
+                ),
+                patch(
+                    "vibesop.installer.pack_installer.Confirm.ask",
+                    return_value=False,
+                ) as mock_confirm,
+            ):
+                result = installer._run_post_install(
+                    target_path,
+                    _analysis=None,
+                    sandbox=True,
+                    allow_unsafe_build=True,
+                )
+
+            mock_confirm.assert_called_once()
+            mock_local.assert_not_called()
+            assert "declined" in result.lower()
+            assert "skipped" in result.lower()
 
 
 class TestPackAuditResult:
