@@ -113,3 +113,12 @@ ruff.toml
 
 # VibeSOP session-generated routing fan-out prompts (not curated)
 .vibe/prompts/
+
+# Claude Code local state (sessions, memory, worktrees)
+.claude/
+
+# Pi CLI / skills runtime symlinks (environment-local)
+.pi/skills/
+
+# Audit reports: generated locally; commit explicitly if they should be shared.
+/audit-report-*
