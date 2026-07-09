@@ -121,4 +121,4 @@ ruff.toml
 .pi/skills/
 
 # Audit reports: generated locally; commit explicitly if they should be shared.
-audit-report-*
+/audit-report-*
