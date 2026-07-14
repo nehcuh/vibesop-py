@@ -469,6 +469,28 @@ class UnifiedRouter(
                 context,
             )
 
+        # Layer 0.5: Explicit session-end signal detection.
+        # Short session-end signals (e.g. "拜拜", "I'm done") would otherwise be
+        # bypassed by the short-query threshold, so we check them up-front.
+        match, detail = self._try_session_end_layer(query, candidates)
+        routing_path.append(RoutingLayer.KEYWORD)
+        layer_details.append(detail)
+        self._tracer.record_layer(RoutingLayer.KEYWORD, detail, len(candidates))
+        if match:
+            self._record_layer(RoutingLayer.KEYWORD)
+            return self._build_match_result(
+                query,
+                match,
+                [],
+                routing_path,
+                layer_details,
+                start_time,
+                deprecated_warnings,
+                conversation,
+                original_query,
+                context,
+            )
+
         use_keyword = self._should_use_keyword_routing(query, context)
 
         # Step 1: Early layers (scenario+index best-of for keyword, index only for LLM)
@@ -577,6 +599,51 @@ class UnifiedRouter(
                 return match
 
         return None
+
+    def _try_session_end_layer(
+        self,
+        query: str,
+        candidates: list[dict[str, Any]],
+    ) -> tuple[SkillRoute | None, LayerDetail]:
+        """Fast-path explicit session-end signals before short-query bypass.
+
+        Session-end signals are often very short (e.g. "拜拜", "I'm done").
+        Without this layer they would be bypassed by the AI Triage short-query
+        threshold and then missed by the matcher pipeline.  We detect them
+        early using the skill's declared triggers.
+        """
+        if not self._triage_service.is_explicit_session_end_signal(query, candidates):
+            return None, LayerDetail(
+                layer=RoutingLayer.KEYWORD,
+                matched=False,
+                reason="No explicit session-end signal detected",
+            )
+
+        candidate = next(
+            (c for c in candidates if self._triage_service.is_session_end_skill(c.get("id", ""))),
+            None,
+        )
+        if candidate is None:
+            return None, LayerDetail(
+                layer=RoutingLayer.KEYWORD,
+                matched=False,
+                reason="Session-end signal detected but skill not in candidates",
+            )
+
+        skill_id = candidate.get("id", "builtin/session-end")
+        match = SkillRoute(
+            skill_id=skill_id,
+            confidence=0.95,
+            layer=RoutingLayer.KEYWORD,
+            source=self._get_skill_source(skill_id, candidate.get("namespace", "builtin")),
+            description=str(candidate.get("description", "")),
+            metadata={"session_end_signal": True},
+        )
+        return match, LayerDetail(
+            layer=RoutingLayer.KEYWORD,
+            matched=True,
+            reason=f"Explicit session-end signal matched '{skill_id}'",
+        )
 
     def enable_trace(self) -> None:
         """Enable per-layer routing trace recording.

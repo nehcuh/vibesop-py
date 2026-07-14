@@ -300,3 +300,85 @@ class TestBuildDecompositionSkills:
         assert isinstance(skills, list)
         for s in skills:
             assert isinstance(s, str) and ":" in s
+
+
+class TestSessionEndLayer:
+    """Test early session-end detection for short explicit signals."""
+
+    def test_short_chinese_session_end_signal(self, tmp_path: Path) -> None:
+        """Very short Chinese session-end signals must still match."""
+        config = RoutingConfig(enable_ai_triage=True)
+        router = UnifiedRouter(project_root=tmp_path, config=config)
+
+        candidates = [
+            {
+                "id": "builtin/session-end",
+                "description": "Session wrap-up",
+                "namespace": "builtin",
+                "triggers": ["that's all for now", "拜拜", "我要离开了", "先走了"],
+            },
+            {"id": "debug-skill", "description": "Debug things", "namespace": "builtin"},
+        ]
+
+        result = router._single_skill_route("我要离开了", candidates=candidates)
+
+        assert result.has_match
+        assert result.primary is not None
+        assert result.primary.skill_id == "builtin/session-end"
+
+    def test_short_english_session_end_signal(self, tmp_path: Path) -> None:
+        """Short English session-end signals must still match."""
+        config = RoutingConfig(enable_ai_triage=True)
+        router = UnifiedRouter(project_root=tmp_path, config=config)
+
+        candidates = [
+            {
+                "id": "builtin/session-end",
+                "description": "Session wrap-up",
+                "namespace": "builtin",
+                "triggers": ["i'm done", "heading out", "gotta go"],
+            },
+            {"id": "debug-skill", "description": "Debug things", "namespace": "builtin"},
+        ]
+
+        result = router._single_skill_route("I'm done", candidates=candidates)
+
+        assert result.has_match
+        assert result.primary is not None
+        assert result.primary.skill_id == "builtin/session-end"
+
+    def test_non_session_end_query_ignored(self, tmp_path: Path) -> None:
+        """Problem reports should not hit the session-end layer."""
+        config = RoutingConfig(enable_ai_triage=True)
+        router = UnifiedRouter(project_root=tmp_path, config=config)
+
+        candidates = [
+            {
+                "id": "builtin/session-end",
+                "description": "Session wrap-up",
+                "namespace": "builtin",
+                "triggers": ["that's all for now", "拜拜"],
+            },
+            {"id": "debug-skill", "description": "Debug things", "namespace": "builtin"},
+        ]
+
+        match, detail = router._try_session_end_layer(
+            "CMSpark MCP 有问题，无法获取工具列表", candidates
+        )
+
+        assert match is None
+        assert detail.matched is False
+
+    def test_session_end_layer_returns_none_when_skill_missing(self, tmp_path: Path) -> None:
+        """If session-end skill is not in candidates, layer returns None."""
+        config = RoutingConfig(enable_ai_triage=True)
+        router = UnifiedRouter(project_root=tmp_path, config=config)
+
+        candidates = [
+            {"id": "debug-skill", "description": "Debug things", "namespace": "builtin"},
+        ]
+
+        match, detail = router._try_session_end_layer("拜拜", candidates)
+
+        assert match is None
+        assert detail.matched is False

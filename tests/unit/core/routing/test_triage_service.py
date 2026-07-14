@@ -498,3 +498,99 @@ class TestSkillIdNotInCandidates:
             result = service.try_ai_triage("test", [{"id": "skill-a", "intent": "test"}])
 
         assert result is None
+
+
+class TestSessionEndGuard:
+    """Test that session-end is only selected on explicit signals."""
+
+    def _make_service_with_llm(self) -> TriageService:
+        service = _make_service()
+        service._llm = MagicMock()
+        service._llm.configured.return_value = True
+        service._llm.call.return_value = MagicMock(
+            content='{"skill_id": "builtin/session-end"}',
+            model="test",
+            tokens_used=10,
+            input_tokens=5,
+            output_tokens=5,
+        )
+        service._cache_manager.get.return_value = None
+        return service
+
+    def test_session_end_rejected_without_explicit_signal(self) -> None:
+        """Ordinary technical queries must not route to session-end."""
+        service = self._make_service_with_llm()
+        candidates = [
+            {
+                "id": "builtin/session-end",
+                "intent": "wrap up session",
+                "triggers": ["that's all for now", "拜拜"],
+            },
+            {"id": "debug-skill", "intent": "debug things"},
+        ]
+
+        with patch.object(
+            service,
+            "parse_ai_triage_response",
+            return_value={"skill_id": "builtin/session-end", "structured": True},
+        ):
+            result = service.try_ai_triage(
+                "有点奇怪，当前 CMSpark 的 MCP 支持有问题，未连接，无法获取工具列表",
+                candidates,
+            )
+
+        assert result is None
+
+    def test_session_end_allowed_with_explicit_signal(self) -> None:
+        """Explicit session-end signals should still route to session-end."""
+        service = self._make_service_with_llm()
+        candidates = [
+            {
+                "id": "builtin/session-end",
+                "intent": "wrap up session",
+                "triggers": ["that's all for now", "拜拜"],
+            },
+            {"id": "debug-skill", "intent": "debug things"},
+        ]
+
+        with patch.object(
+            service,
+            "parse_ai_triage_response",
+            return_value={"skill_id": "builtin/session-end", "structured": True},
+        ):
+            result = service.try_ai_triage("今天就到这里，拜拜", candidates)
+
+        assert result is not None
+        assert result.match.skill_id == "builtin/session-end"
+
+    def test_session_end_uses_fallback_triggers_when_missing(self) -> None:
+        """If candidate has no triggers, guard still uses known signals."""
+        service = self._make_service_with_llm()
+        candidates = [
+            {"id": "builtin/session-end", "intent": "wrap up session"},
+            {"id": "debug-skill", "intent": "debug things"},
+        ]
+
+        with patch.object(
+            service,
+            "parse_ai_triage_response",
+            return_value={"skill_id": "builtin/session-end", "structured": True},
+        ):
+            result = service.try_ai_triage("I'm done for today", candidates)
+
+        assert result is not None
+        assert result.match.skill_id == "builtin/session-end"
+
+    def test_session_end_rejected_when_candidate_not_present(self) -> None:
+        """If session-end is not in candidates, guard rejects selection."""
+        service = self._make_service_with_llm()
+        candidates = [{"id": "debug-skill", "intent": "debug things"}]
+
+        with patch.object(
+            service,
+            "parse_ai_triage_response",
+            return_value={"skill_id": "builtin/session-end", "structured": True},
+        ):
+            result = service.try_ai_triage("that's all for now", candidates)
+
+        assert result is None

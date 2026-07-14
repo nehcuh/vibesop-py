@@ -179,6 +179,19 @@ class TriageService:
                         (c for c in triage_candidates if c["id"].lower() == skill_id.lower()), None
                     )
                 if candidate:
+                    # Guard session-end: LLMs frequently misclassify problem
+                    # reports, confusion, or negative statements as session-end
+                    # signals. Only allow session-end when the query explicitly
+                    # matches one of the skill's declared triggers.
+                    if self.is_session_end_skill(
+                        skill_id
+                    ) and not self.is_explicit_session_end_signal(query, triage_candidates):
+                        logger.debug(
+                            "AI triage selected '%s' but query lacks an explicit session-end signal; ignoring",
+                            skill_id,
+                        )
+                        return None
+
                     source = self._get_skill_source(skill_id, candidate.get("namespace", "builtin"))
                     # Dynamic confidence: structured JSON gets higher trust than regex fallback
                     confidence = 0.88 if parsed.get("structured") else 0.82
@@ -240,6 +253,62 @@ class TriageService:
             prefiltered.extend(remaining[: max_skills - len(prefiltered)])
 
         return prefiltered[:max_skills]
+
+    def is_session_end_skill(self, skill_id: str) -> bool:
+        """Return True if the selected skill is the session-end skill."""
+        return skill_id in {"session-end", "builtin/session-end"}
+
+    def is_explicit_session_end_signal(
+        self,
+        query: str,
+        candidates: list[dict[str, Any]],
+    ) -> bool:
+        """Check whether the query contains an explicit session-end signal.
+
+        The session-end skill is intentionally high-impact (wrap-up, commit,
+        memory writes).  We therefore require an exact match against its
+        declared triggers rather than relying on the LLM's loose semantic
+        interpretation of "done" or "problem".
+        """
+        # Find the session-end candidate and its declared triggers.
+        session_end_candidate: dict[str, Any] | None = None
+        for c in candidates:
+            if self.is_session_end_skill(c.get("id", "")):
+                session_end_candidate = c
+                break
+
+        if session_end_candidate is None:
+            # No session-end candidate in this triage batch -> cannot be a
+            # legitimate session-end selection.
+            return False
+
+        triggers = session_end_candidate.get("triggers", [])
+        if not triggers:
+            # Fall back to a conservative known-signal list if triggers are absent.
+            triggers = [
+                "that's all for now",
+                "heading out",
+                "i'm leaving",
+                "i'm done",
+                "gotta go",
+                "我要离开了",
+                "先走了",
+                "拜拜",
+                "今天就到这里",
+                "session end",
+                "/session-end",
+            ]
+
+        normalized_query = query.lower()
+        # Normalize common apostrophe variants so "i'm done" and "im done" both match.
+        normalized_query = normalized_query.replace("'", "").replace("’", "")
+
+        for trigger in triggers:
+            trigger_norm = str(trigger).lower().replace("'", "").replace("’", "")
+            if trigger_norm in normalized_query:
+                return True
+
+        return False
 
     def build_ai_triage_prompt(self, query: str, skills_summary: str) -> str:
         if self._prompt_builder is not None:
