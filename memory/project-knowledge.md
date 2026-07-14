@@ -2,6 +2,66 @@
 
 ## Technical Pitfalls
 
+### Cross-Cutting Skills NOT Included in `sync_project_skills` (2026-07-14)
+
+**Issue**: `SkillStorage.sync_project_skills()` iterates `core/skills/` to install skills, but cross-cutting skills live in `.vibe/skills/cross-cutting/` and are discovered by `CrossCuttingDiscovery.discover_all()` at runtime. This split is intentional but easy to misunderstand.
+
+**Root Cause**: Two separate discovery mechanisms: (1) `sync_project_skills` → central storage + platform symlinks; (2) `CrossCuttingDiscovery` → runtime discovery from project directory.
+
+**Key Insight**: Cross-cutting skills don't need symlinks to agent directories. `CrossCuttingDiscovery.discover_all()` scans `.vibe/skills/cross-cutting/` directly, and the routing system includes them in candidate lists.
+
+**Files**: `src/vibesop/core/skills/storage.py:436`, `src/vibesop/core/orchestration/cross_cutting.py:157`
+
+### Skills Exist in Three Independent Registries (2026-07-14)
+
+**Issue**: Skills are duplicated across `~/.config/skills/` (central, 18), `~/.claude/skills/` (Claude Code, 108), and `.pi/skills/` (Pi Agent, 115) — all real directories, not symlinks. `vibe install` installs packs to all three independently.
+
+**Root Cause**: Different agents read from different directories. Claude Code uses `~/.claude/skills/`, Pi uses `.pi/skills/`. `sync_project_skills` creates copies rather than managing a unified symlink farm.
+
+**Solution**: Use `.vibe/skills/cross-cutting/` for project-shared skills (git-tracked). Let agent-specific directories remain auto-managed by pack installers.
+
+### prompt-chain-validator Phantom Routing (2026-07-14)
+
+**Issue**: `vibe route` matched `prompt-chain-validator` but the skill wasn't in `.pi/skills/`. It existed in `.vibe/skills/cross-cutting/` but the namespace wasn't in `config.toml`.
+
+**Solution**: Add `cross-cutting` to `[skills] namespaces` in `.vibe/config.toml`.
+
+## Reusable Patterns
+
+### Cross-Cutting Skill Migration Pattern (2026-07-14)
+
+**Pattern**: When migrating a personal/Claude-local skill to project-shared cross-cutting:
+1. Copy from `~/.claude/skills/<name>/` or `.pi/skills/personal-<name>/` to `.vibe/skills/cross-cutting/<name>.skill/`
+2. Update SKILL.md frontmatter: `type: cross-cutting`, `namespace: cross-cutting`, add `keywords/capabilities/lifecycle`
+3. Update `.vibe/config.toml` → `[skills] namespaces` include `cross-cutting`
+4. Update `.vibe/skill-index.json` with query patterns
+5. Update `.vibe/skill-routing.yaml` with routing hints
+6. Clean duplicates from `~/.claude/skills/` and `~/.config/skills/`
+7. Files are tracked by git (`.gitignore` has `!.vibe/skills/cross-cutting/` exception)
+
+### Skill Directory Cleanup Checklist (2026-07-14)
+
+1. Check for alias skills without namespace prefix
+2. Check for duplicate skills across registries
+3. Check for broken symlinks
+4. Verify `.gitignore` exceptions for cross-cutting
+
+## Architecture Decisions
+
+### Cross-Cutting as Project-Shared, Non-Symlinked Skills (2026-07-14)
+
+**Decision**: Cross-cutting skills live in `.vibe/skills/cross-cutting/` (git-tracked) and are discovered at runtime by `CrossCuttingDiscovery`, NOT symlinked to agent directories.
+
+**Rationale**: Cross-cutting skills are project-specific workflow definitions. They should travel with the project via git and be discovered dynamically, not installed as system-wide skills.
+
+**Trade-off**: Two different discovery mechanisms (sync vs runtime discovery) creates complexity. Mitigated by clear documentation and automatic namespace registration in `config.toml`.
+
+### Fuck_My_Shit_Mountain as Cross-Cutting Audit Skill (2026-07-14)
+
+**Decision**: Migrate the 28-dimension audit skill from Claude-local to cross-cutting, enabling git-tracked project audits.
+
+**Rationale**: The audit skill (364K, 50 files including prompts/templates/rubrics/scripts) is a comprehensive code quality tool that benefits all project contributors.
+
 ### step_type Must Take Priority Over Keyword Matching for Task Classification (2026-06-09)
 
 **Issue**: `_generate_key_points()` used keyword matching on `intent` text. "philosophical foundations and design principles" matched "design" → architecture template, producing wrong implementation points for an analysis task.

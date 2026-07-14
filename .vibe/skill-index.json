@@ -2,7 +2,7 @@
   "version": "1.3.0",
   "indexed_at": "2026-05-23T16:41:22.362709+00:00",
   "scope": "project",
-  "indexed_count": 1,
+  "indexed_count": 3,
   "skills": {
     "project/auto-config.yaml/auto-config": {
       "skill_id": "project/auto-config.yaml/auto-config",
@@ -29,6 +29,59 @@
       ],
       "pack_owner": "",
       "content_hash": "0340f8a08b961f95"
+    },
+    "cross-cutting/fuck-my-shit-mountain": {
+      "skill_id": "cross-cutting/fuck-my-shit-mountain",
+      "scenarios": [
+        "Full codebase audit across 28 quality dimensions",
+        "Incremental PR diff audit",
+        "Focused security/architecture/performance audits",
+        "HTML/JSON/Markdown report generation"
+      ],
+      "query_patterns": [
+        "audit this project",
+        "codebase health report",
+        "security audit",
+        "代码审计",
+        "代码质量检查"
+      ],
+      "differentiation": "Comprehensive multi-dimensional audit vs single-focus review skills",
+      "confidence_boosters": [
+        "audit",
+        "审计",
+        "fuck",
+        "shit",
+        "mountain",
+        "code health",
+        "health report"
+      ],
+      "pack_owner": "cross-cutting",
+      "content_hash": "fmsm-v1.0.0"
+    },
+    "cross-cutting/kimi-gated-fix": {
+      "skill_id": "cross-cutting/kimi-gated-fix",
+      "scenarios": [
+        "Surgical bug fix with kimi pre-apply review",
+        "High-risk code change requiring independent gate review",
+        "Design → KimiReview → Apply → Verify workflow"
+      ],
+      "query_patterns": [
+        "kimi 复审",
+        "kimi review",
+        "改动前复审",
+        "kimi 把关",
+        "定点修复"
+      ],
+      "differentiation": "Gated fix with kimi review before every apply vs standard fix workflows",
+      "confidence_boosters": [
+        "kimi",
+        "复审",
+        "把关",
+        "gated",
+        "surgical"
+      ],
+      "pack_owner": "cross-cutting",
+      "content_hash": "kgf-v1.0.0"
     }
   }
 }

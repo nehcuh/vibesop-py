@@ -1,6 +1,6 @@
 # Overview - VibeSOP Project
 
-**Last Updated**: 2026-06-09 (v7.0.0-dev — Prompt Chain Generator quality fixes)
+**Last Updated**: 2026-07-14 (S30 — Skills Architecture Reorg & Cross-Cutting Migration)
 
 ---
 

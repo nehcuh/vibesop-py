@@ -22,11 +22,12 @@ threat_level = "medium"
 scan_external = true
 
 [skills]
-namespaces = ["builtin", "omx", "superpowers"]
+namespaces = ["builtin", "omx", "superpowers", "cross-cutting"]
 
 [skills.namespace_priorities]
-# omx skills get priority over gstack when both match a query
-# e.g., omx/analyze vs gstack/plan-* for analysis-type requests
+# Cross-cutting project skills have highest priority
+# builtin provides core workflow; omx/superpowers provide specialized packs
+cross-cutting = 110
 builtin = 100
 omx = 95
 superpowers = 80

@@ -25,7 +25,7 @@ The following development tools are available on this system. Use them when work
 vibe route "<user_request>"
 ```
 
-Then read `.pi/skills/<matched-skill>/SKILL.md` and follow its steps.
+Then read `.pi/skills/<matched-skill>/SKILL.md` (or `.vibe/skills/cross-cutting/<matched-skill>.skill/SKILL.md` for cross-cutting skills) and follow its steps.
 
 For routing details, override protocol, and multi-intent handling: read `docs/routing-protocol.md`.
 

@@ -4,6 +4,18 @@
 
 <!-- handoff:start -->
 
+### 2026-07-14 (S30) 技能架构梳理、迁移与清理
+**Session**: 全面梳理项目技能存储架构，迁移自定义技能到 cross-cutting，清理重复和损坏条目。
+**Completed**:
+- 梳理 128→116 个技能目录，按命名空间分类（builtin/mattpocock/omx/superpowers/personal）
+- 发现三层技能存储架构：~/.config/skills/ → ~/.claude/skills/ → .pi/skills/
+- 删除 12 个与 builtin 重复的别名目录 + 6 项重复/损坏
+- personal-kimi-gated-fix → cross-cutting/kimi-gated-fix.skill（git 跟踪）
+- Fuck_My_Shit_Mountain（364K, 50 文件）→ cross-cutting/fuck-my-shit-mountain.skill
+- 配置 cross-cutting namespace（priority 110）自动安装
+**Verification**: 3 个 cross-cutting 技能就位，JSON 配置有效
+**Next**: git commit + push；验证 vite route 能发现全部 cross-cutting 技能
+
 ### 2026-07-09 (S29) audit-T1-merge-and-gitignore-cleanup
 **Session**: Closed the 2026-07 audit Immediate scope and cleaned repository state.
 **Completed**:

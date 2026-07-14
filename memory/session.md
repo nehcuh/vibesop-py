@@ -1,6 +1,33 @@
 ## Current Session
 
-### S20 (2026-06-19) v8.0-loop-phase1-implementation-and-validation-prep
+### S30 (2026-07-14 09:00~) 技能架构梳理、迁移与清理
+
+- [x] **内置技能梳理**：列出 14 个 `builtin-*` 技能，按功能分四类（Slash 命令/工作流/学习/会话管理）
+- [x] **`prompt-chain-validator` 幽灵技能排查**：发现存在于 `.vibe/skills/cross-cutting/` 而非 `.pi/skills/`，因为跨命名空间不可见
+- [x] **别名技能清理**：删除 12 个与 `builtin-*` 完全重复的无前缀别名目录
+- [x] **`personal-kimi-gated-fix` 迁移到 cross-cutting**：`.pi/skills/personal-kimi-gated-fix/` → `.vibe/skills/cross-cutting/kimi-gated-fix.skill/`，git 跟踪
+- [x] **`Fuck_My_Shit_Mountain` 迁移**：从 `~/.claude/skills/` 迁移 50 文件（364K）到 cross-cutting，更新元数据为 `type: cross-cutting`
+- [x] **重复/损坏清理**：删除 6 项（kimi-gated-fix ×3、Fuck_My_Shit_Mountain ×2、good-pack 损坏 symlink）
+- [x] **自动安装配置**：`.vibe/config.toml` 添加 `cross-cutting` namespace（priority 110）、`skill-index.json` 注册、`skill-routing.yaml` 添加路由提示
+- [x] **全新安装分析**：确认 cross-cutting 技能通过 git clone 就位 + `CrossCuttingDiscovery.discover_all()` 运行时发现，不依赖 symlink
+
+**Key Discoveries**:
+1. **三层技能存储架构**：`~/.config/skills/`（中央）→ `~/.claude/skills/`（Claude Code）→ `.pi/skills/`（Pi Agent），三份独立副本而非 symlink
+2. **Cross-cutting 不同于 builtin 安装**：`SkillStorage.sync_project_skills()` 只处理 `core/skills/`，cross-cutting 由 `CrossCuttingDiscovery.discover_all()` 运行时发现
+3. **prompt-chain-validator 已在 cross-cutting**，只是 `.vibe/config.toml` 未包含 `cross-cutting` namespace 导致不可见
+4. **Fuck_My_Shit_Mountain** 仅存在 Claude 端，Pi 端缺失——是 28 维度审计技能包
+
+**Files Modified**:
+- 新建：`.vibe/skills/cross-cutting/kimi-gated-fix.skill/`（SKILL.md + workflow-template.js）
+- 新建：`.vibe/skills/cross-cutting/fuck-my-shit-mountain.skill/`（50 文件）
+- 修改：`.vibe/config.toml`、`.vibe/skill-index.json`、`.vibe/skill-routing.yaml`、`AGENTS.md`
+- 删除：12 个别名目录 + 6 项重复/损坏
+
+**Next Steps**: 提交 git，验证 `vibe route` 能发现 cross-cutting 技能
+
+**Recorded**: yes — 3 个技术发现 + 2 个架构决策
+
+### All previous sessions above
 - 实现 v8.0 Loop System Phase 1 全部 5 个子阶段：models (BaseModel) / store (路径遍历防护) / scheduler (cron 解析) / executor (`/slash-route` dispatch) / CLI (7 命令含 `tick` 执行桥梁)
 - 累计 ~2200 LOC + 1700 test LOC，147 tests passing，0 regression
 - 每个 Phase 草稿都先做 audit → push back P0/P1 → 修复 → 执行（用户明确认可此模式）
