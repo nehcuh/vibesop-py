@@ -1,5 +1,8 @@
 #!/bin/bash
 # Type checking verification script for VibeSOP-Py
+# Uses basedpyright — the project's type checker (see pyproject.toml [tool.pyright]
+# and .github/workflows/ci.yml). Accepts exit 0 (clean) or 3 (warnings only),
+# same as CI; fails on 1 (errors).
 
 set -e
 
@@ -7,44 +10,30 @@ echo "🔍 VibeSOP-Py Type Checking Verification"
 echo "========================================"
 echo
 
-# Check if type checker is installed
-if command -v pyright &> /dev/null; then
-    TYPE_CHECKER="pyright"
-elif command -v mypy &> /dev/null; then
-    TYPE_CHECKER="mypy"
-else
-    echo "❌ No type checker found!"
+if ! uv run basedpyright --version &> /dev/null; then
+    echo "❌ basedpyright not found in the project environment!"
     echo
-    echo "Please install one of the following:"
-    echo "  - Pyright: npm install -g pyright"
-    echo "  - BasedPyright: pip install basedpyright"
-    echo "  - MyPy: pip install mypy"
-    echo
-    echo "Or install all dev dependencies:"
-    echo "  pip install -e '.[dev]'"
+    echo "Install dev dependencies:"
+    echo "  uv sync --extra dev"
     exit 1
 fi
 
-echo "✅ Type checker found: $TYPE_CHECKER"
+echo "✅ Type checker found: basedpyright $(uv run basedpyright --version)"
 echo
 
 # Run type checking
-echo "🔬 Running type checks on src/vibesop..."
+echo "🔬 Running type checks on src/..."
 echo
 
-if [ "$TYPE_CHECKER" = "pyright" ]; then
-    pyright src/vibesop
-    EXIT_CODE=$?
-elif [ "$TYPE_CHECKER" = "mypy" ]; then
-    mypy src/vibesop
-    EXIT_CODE=$?
-fi
+EXIT_CODE=0
+uv run basedpyright || EXIT_CODE=$?
 
 echo
 if [ $EXIT_CODE -eq 0 ]; then
     echo "✅ All type checks passed!"
-    echo
-    echo "Type checking verification complete."
+    exit 0
+elif [ $EXIT_CODE -eq 3 ]; then
+    echo "✅ No type errors (warnings only — advisory, non-blocking)."
     exit 0
 else
     echo "❌ Type checking failed!"

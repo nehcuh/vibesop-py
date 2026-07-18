@@ -2,6 +2,7 @@
 # VibeSOP Release Verification Script
 #
 # This script verifies that the package is ready for PyPI release.
+# Toolchain: uv + ruff + basedpyright (same as CI). Run via: bash scripts/verify-release.sh
 
 set -e
 
@@ -18,7 +19,7 @@ echo ""
 
 # Check Python version
 echo "1. Checking Python version..."
-PYTHON_VERSION=$(python --version | awk '{print $2}')
+PYTHON_VERSION=$(uv run python --version | awk '{print $2}')
 PYTHON_MAJOR=$(echo $PYTHON_VERSION | cut -d. -f1)
 PYTHON_MINOR=$(echo $PYTHON_VERSION | cut -d. -f2)
 
@@ -29,19 +30,20 @@ else
     exit 1
 fi
 
-# Check if in virtual environment
+# Check lockfile is in sync
 echo ""
-echo "2. Checking virtual environment..."
-if python -c "import sys; sys.exit(0 if sys.prefix != sys.base_prefix else 1)"; then
-    echo -e "${GREEN}✅ Virtual environment active${NC}"
+echo "2. Checking lockfile sync..."
+if uv lock --check; then
+    echo -e "${GREEN}✅ uv.lock in sync with pyproject.toml${NC}"
 else
-    echo -e "${YELLOW}⚠️  Not in virtual environment${NC}"
+    echo -e "${RED}❌ uv.lock out of sync — run 'uv lock'${NC}"
+    exit 1
 fi
 
 # Run tests
 echo ""
 echo "3. Running tests..."
-if python -m pytest tests/ -q --no-cov 2>&1 | grep -q "passed"; then
+if uv run pytest -m "not benchmark and not slow" -q 2>&1 | grep -q "passed"; then
     echo -e "${GREEN}✅ Tests passing${NC}"
 else
     echo -e "${RED}❌ Tests failing${NC}"
@@ -50,21 +52,23 @@ fi
 
 # Check type hints
 echo ""
-echo "4. Checking type hints..."
-if python -c "import pyright; import subprocess; subprocess.run(['pyright', 'src/vibesop'], check=True)" 2>/dev/null; then
-    echo -e "${GREEN}✅ Type checking passed${NC}"
+echo "4. Checking type hints (basedpyright, exit 0/3 accepted — same as CI)..."
+uv run basedpyright || TYPE_EXIT=$?
+if [ "${TYPE_EXIT:-0}" -eq 0 ] || [ "${TYPE_EXIT:-0}" -eq 3 ]; then
+    echo -e "${GREEN}✅ Type checking passed (0 errors)${NC}"
 else
-    echo -e "${YELLOW}⚠️  Type checking has warnings (may be acceptable)${NC}"
+    echo -e "${RED}❌ Type checking failed with errors${NC}"
+    exit 1
 fi
 
 # Check linting
 echo ""
 echo "5. Checking code style..."
-if python -m ruff check src/ --output-format=text 2>&1 | grep -q "0 errors"; then
+if uv run ruff check . && uv run ruff format --check .; then
     echo -e "${GREEN}✅ No linting errors${NC}"
 else
-    echo -e "${YELLOW}⚠️  Linting issues found${NC}"
-    python -m ruff check src/ --output-format=concise || true
+    echo -e "${RED}❌ Linting issues found${NC}"
+    exit 1
 fi
 
 # Check if all required files exist
@@ -93,13 +97,13 @@ if [ "$ALL_FILES_PRESENT" = false ]; then
     exit 1
 fi
 
-# Check version in pyproject.toml
+# Check version in pyproject.toml (PEP 440 incl. dev/a/b/rc pre-releases)
 echo ""
 echo "7. Checking version..."
 VERSION=$(grep "^version = " pyproject.toml | head -1 | cut -d'"' -f2)
 echo "Version: $VERSION"
 
-if [[ ! $VERSION =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+if [[ ! $VERSION =~ ^[0-9]+\.[0-9]+\.[0-9]+((\.dev|a|b|rc)[0-9]+)?$ ]]; then
     echo -e "${RED}❌ Invalid version format${NC}"
     exit 1
 else
@@ -109,7 +113,8 @@ fi
 # Try to build package
 echo ""
 echo "8. Building package..."
-if python -m build --outdir /tmp/vibesop-build 2>&1 | grep -q "Successfully built"; then
+rm -rf /tmp/vibesop-build
+if uv build --out-dir /tmp/vibesop-build; then
     echo -e "${GREEN}✅ Package built successfully${NC}"
 else
     echo -e "${RED}❌ Package build failed${NC}"
@@ -119,7 +124,7 @@ fi
 # Check package
 echo ""
 echo "9. Checking package..."
-if twine check /tmp/vibesop-build/vibesop-* 2>&1 | grep -q "Checking"; then
+if uvx twine check /tmp/vibesop-build/vibesop-*; then
     echo -e "${GREEN}✅ Package check passed${NC}"
 else
     echo -e "${RED}❌ Package check failed${NC}"
@@ -137,6 +142,6 @@ echo ""
 echo "Next steps:"
 echo "1. Review the package in /tmp/vibesop-build"
 echo "2. Test with: pip install /tmp/vibesop-build/vibesop-$VERSION.tar.gz"
-echo "3. Upload to TestPyPI: twine upload --repository testpypi /tmp/vibesop-build/*"
-echo "4. Upload to PyPI: twine upload /tmp/vibesop-build/*"
+echo "3. Release via tag: git tag v$VERSION && git push origin v$VERSION"
+echo "   (the Release workflow runs CI gate, SLSA attestation, Trusted Publishing)"
 echo ""

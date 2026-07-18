@@ -1,6 +1,9 @@
 version: 2
 updates:
-  - package-ecosystem: "pip"
+  # uv ecosystem updates uv.lock directly (the old "pip" entry only touched
+  # pyproject ranges and could not refresh the lockfile — security alerts had
+  # to be resolved by hand, e.g. 21b735a).
+  - package-ecosystem: "uv"
     directory: "/"
     schedule:
       interval: "weekly"
