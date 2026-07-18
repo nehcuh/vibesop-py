@@ -21,6 +21,7 @@ Usage:
     vibe skills scope <skill_id> [--set SCOPE]
     vibe skills feedback --skill ID --query Q [--helpful yes/no] ...
     vibe skills create [--name N] [--from TEMPLATE] [--from-suggestion ID]
+    vibe skills distill [<suggestion-id>] [--yes] [--template]
     vibe skills lifecycle <skill_id> [--set STATE] [--reason R] [--auto-review]
     vibe skills suggestions [--dismiss] [--json]
     vibe skills rate <skill_id> <1-5> [--review R]
@@ -43,6 +44,7 @@ from vibesop.cli.commands.skills_commands._crud import (
 )
 from vibesop.cli.commands.skills_commands._discovery import (
     create,
+    distill,
     featured,
     recommended,
     suggestions,
@@ -71,6 +73,7 @@ __all__ = [
     "available",
     "create",
     "disable",
+    "distill",
     "enable",
     "featured",
     "feedback",

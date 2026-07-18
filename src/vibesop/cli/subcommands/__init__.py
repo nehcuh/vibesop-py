@@ -125,6 +125,7 @@ def register(app: typer.Typer) -> None:
     skills_app.command("create")(skills_mod.create)
     skills_app.command("lifecycle")(skills_mod.lifecycle)
     skills_app.command("suggestions")(skills_mod.suggestions)
+    skills_app.command("distill")(skills_mod.distill)
     skills_app.command("rate")(skills_mod.rate)
     skills_app.command("ratings")(skills_mod.ratings)
     skills_app.command("recommended")(skills_mod.recommended)

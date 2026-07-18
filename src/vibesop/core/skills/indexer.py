@@ -7,7 +7,7 @@ import hashlib
 import json
 import logging
 import tempfile
-from collections.abc import Iterator
+from collections.abc import Generator
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -196,7 +196,7 @@ class SkillIndexer:
         total: int,
         description: str,
         show: bool,
-    ) -> Iterator[Any]:
+    ) -> Generator[Any, None, None]:
         if not show or total == 0:
             yield (lambda: None)
             return
