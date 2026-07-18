@@ -53,6 +53,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Deps: lockfile upgrade resolving Dependabot alerts (sentence-transformers
   5.5+, urllib3/requests dropped from the lock).
 
+### Design proposals
+- Added `docs/proposals/skill-market-search-and-feedback-loop.md`: market
+  rebuild (public-ecosystem search + trust tiers + `--scope` install),
+  no-match query tracking, task distillation, and the Langfuse decision —
+  reviewed via 4-lane fanout + Pi agent adversarial review (2026-07-18).
+
 ## [8.0.0.dev0] — 2026-06-22
 
 ### v8.0.0-dev: Loop System (Phase 1) + deep-diagnosis fixes

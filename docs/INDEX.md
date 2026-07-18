@@ -143,6 +143,7 @@ These files remain in the project root for discoverability and tool integration:
 ### Proposals
 
 - **[proposals/](proposals/)** — Design proposals for upcoming features
+- **[Skill 商店重构与智能建议反馈环](proposals/skill-market-search-and-feedback-loop.md)** — 商店改造（公共生态搜索+信任三级+双作用域安装）、未命中追踪、任务蒸馏、Langfuse 决议（2026-07-18，已评审）
 
 ---
 
