@@ -36,6 +36,11 @@ def purge(
     miss_counter: bool = typer.Option(
         False, "--miss-counter", help="Purge .vibe/miss_counter.json (miss telemetry)."
     ),
+    tool_sequences: bool = typer.Option(
+        False,
+        "--tool-sequences",
+        help="Purge .vibe/tool_sequences.jsonl + cursor (P3 capture telemetry).",
+    ),
     feedback: bool = typer.Option(
         False, "--feedback", help="Purge feedback records (global ~/.vibe/feedback.jsonl)."
     ),
@@ -50,6 +55,7 @@ def purge(
     """Permanently delete VibeSOP-derived data (F-08: user deletion path)."""
     if all:
         analytics = traces = preferences = instincts = memory = sessions = miss_counter = True
+        tool_sequences = True
         feedback = pack_locks = True
     if not (
         analytics
@@ -59,13 +65,14 @@ def purge(
         or memory
         or sessions
         or miss_counter
+        or tool_sequences
         or feedback
         or pack_locks
     ):
         console.print(
             "[red]No purge target selected.[/red] Pass --all, or one of "
             "--analytics/--traces/--preferences/--instincts/--memory/--sessions/"
-            "--miss-counter/--feedback/--pack-locks."
+            "--miss-counter/--tool-sequences/--feedback/--pack-locks."
         )
         raise typer.Exit(code=2)
 
@@ -84,6 +91,8 @@ def purge(
         targets.append("sessions")
     if miss_counter:
         targets.append("miss-counter")
+    if tool_sequences:
+        targets.append("tool-sequences")
     if feedback:
         targets.append("feedback")
     if pack_locks:
@@ -137,6 +146,11 @@ def purge(
 
         MissCounter(project_root).clear()
         cleared.append("miss-counter: cleared")
+    if tool_sequences:
+        from vibesop.core.instinct.tool_sequences import clear_tool_sequences
+
+        n = clear_tool_sequences(project_root)
+        cleared.append(f"tool-sequences: {n} file(s)")
     if feedback:
         from vibesop.core.feedback import ExecutionFeedbackCollector, FeedbackCollector
 

@@ -14,6 +14,18 @@ from vibesop.adapters.models import Manifest, RenderResult
 logger = logging.getLogger(__name__)
 
 
+def _tool_seq_project_root(output_dir: Path) -> str:
+    """Derive the project root a tool-seq hook should capture against.
+
+    The hook lands in ``<output_dir>/hooks/``; mirroring the script's own
+    ``_HOOK_DIR/../..`` convention, the project root (where ``.vibe/`` lives)
+    is the parent of the config dir — e.g. ``<project>/.claude`` →
+    ``<project>``, ``~/.claude`` → ``~`` (global capture, consistent with the
+    global ``~/.vibe`` config location).
+    """
+    return str(output_dir.resolve().parent)
+
+
 class ClaudeCodeAdapter(HookBasedAdapter):
     """Adapter for Claude Code platform."""
 
@@ -122,6 +134,24 @@ class ClaudeCodeAdapter(HookBasedAdapter):
     def _get_no_match_message(self) -> bool:
         return True
 
+    def _sequences_enabled(self) -> bool:
+        """Read the ``sequences.enabled`` switch (default true).
+
+        Same reading pattern as ``suggestions.enabled`` — env vars arrive as
+        raw strings. Fail-open on config errors: capture is local-only
+        telemetry, and a broken config must not silently disable it.
+        """
+        try:
+            from vibesop.core.config.manager import ConfigManager
+
+            enabled = ConfigManager(self._project_root).get("sequences.enabled", True)
+            if isinstance(enabled, str):  # env vars are returned as raw strings
+                enabled = enabled.strip().lower() in ("true", "1", "yes", "on")
+            return bool(enabled)
+        except Exception:
+            logger.debug("sequences.enabled lookup failed, defaulting to enabled")
+            return True
+
     def render_config(self, manifest: Manifest, output_dir: Path) -> RenderResult:
         """Render Claude Code configuration from manifest."""
         result = self.create_render_result(success=True)
@@ -222,6 +252,7 @@ class ClaudeCodeAdapter(HookBasedAdapter):
             # Render Agent Runtime hook scripts
             self._render_route_hook(output_dir, result)
             self._render_track_hook(output_dir, result)
+            self._render_tool_seq_hook(output_dir, result)
 
             # Render skill definitions - copy actual content from core/skills/
             for skill in manifest.skills:
@@ -335,6 +366,7 @@ class ClaudeCodeAdapter(HookBasedAdapter):
             # Render Agent Runtime hook scripts
             self._render_route_hook(output_dir, result)
             self._render_track_hook(output_dir, result)
+            self._render_tool_seq_hook(output_dir, result)
 
         except Exception as e:
             result.add_error(f"Failed to render configuration: {e}")
@@ -436,6 +468,21 @@ class ClaudeCodeAdapter(HookBasedAdapter):
             ]
         }
 
+        # Register the P3 tool-sequence capture hook (PostToolUse: tool name +
+        # timestamp + session id only, never tool_input).
+        if self._sequences_enabled():
+            settings["hooks"]["PostToolUse"] = [
+                {
+                    "matcher": "",
+                    "hooks": [
+                        {
+                            "type": "command",
+                            "command": f"bash {hooks_dir}/vibesop-tool-seq.sh",
+                        }
+                    ],
+                }
+            ]
+
         settings_path = output_dir / "settings.json"
         self.write_file_atomic(
             settings_path,
@@ -499,6 +546,30 @@ class ClaudeCodeAdapter(HookBasedAdapter):
             result.add_file(hook_path)
         except Exception as e:
             result.add_warning(f"Failed to write vibesop-track.sh: {e}")
+
+    def _render_tool_seq_hook(
+        self,
+        output_dir: Path,
+        result: RenderResult,
+    ) -> None:
+        """Render the vibesop-tool-seq.sh PostToolUse capture hook (P3)."""
+        if not self._sequences_enabled():
+            return
+        try:
+            from vibesop._version import __version__
+
+            env = self._get_template_env()
+            template = env.get_template("hooks/vibesop-tool-seq.sh.j2")
+            hook_content = template.render(
+                version=__version__,
+                project_root=_tool_seq_project_root(output_dir),
+            )
+            hook_path = output_dir / "hooks" / "vibesop-tool-seq.sh"
+            self.write_file_atomic(hook_path, hook_content, validate_security=False)
+            hook_path.chmod(0o755)
+            result.add_file(hook_path)
+        except Exception as e:
+            result.add_warning(f"Failed to write vibesop-tool-seq.sh: {e}")
 
     def install_hooks(self, config_dir: Path) -> dict[str, bool]:
         """Install Claude Code hooks."""
@@ -567,5 +638,27 @@ fi
         except Exception as e:
             logger.debug(f"Failed to install vibesop-track hook: {e}")
             results["vibesop-track"] = False
+
+        # Install P3 tool-sequence capture hook (PostToolUse), unless disabled
+        if self._sequences_enabled():
+            tool_seq_hook_path = config_dir / "hooks" / "vibesop-tool-seq.sh"
+            try:
+                from vibesop._version import __version__
+
+                env = self._get_template_env()
+                template = env.get_template("hooks/vibesop-tool-seq.sh.j2")
+                tool_seq_content = template.render(
+                    version=__version__,
+                    project_root=_tool_seq_project_root(config_dir),
+                )
+                tool_seq_hook_path.parent.mkdir(parents=True, exist_ok=True)
+                self.write_file_atomic(
+                    tool_seq_hook_path, tool_seq_content, validate_security=False
+                )
+                tool_seq_hook_path.chmod(0o755)
+                results["vibesop-tool-seq"] = True
+            except Exception as e:
+                logger.debug(f"Failed to install vibesop-tool-seq hook: {e}")
+                results["vibesop-tool-seq"] = False
 
         return results

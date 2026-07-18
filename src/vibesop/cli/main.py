@@ -47,6 +47,7 @@ from vibesop.cli.commands import (
     matcher_cmd,
     plan_cmd,
     prompt_chain_cmd,
+    sequence_cmd,
     snapshot_cmd,
     sync_cmd,
     trace_cmd,
@@ -158,6 +159,7 @@ app.add_typer(sync_cmd.app, name="sync-registry")
 app.add_typer(workflows_cmd.app, name="workflows")
 app.add_typer(instinct_cmd.app, name="instinct")
 app.add_typer(prompt_chain_cmd.app, name="prompt-chain")
+app.add_typer(sequence_cmd.app, name="sequence")
 app.add_typer(loop_cmd.app, name="loop")
 app.add_typer(data_cmd.app, name="data")
 app.command(name="trust")(trust_module.trust)
@@ -292,6 +294,52 @@ def _maybe_prompt_market_search(query: str) -> None:
     elif choice == "dismiss":
         collector.dismiss(suggestion.id)
         console.print("[dim]已记录，此类查询将不再提示。[/dim]")
+
+
+def _record_plan_sequence(plan: Any, success: bool, query: str = "") -> None:
+    """Record an orchestration plan's skill sequence into instinct learning (P3).
+
+    Privacy rule: ONLY an explicit user confirmation in the orchestration
+    confirmation flow may pass success=True; every implicit signal
+    (unattended runs, skips, rejections) is application-only telemetry
+    (success=False). Plans with <3 steps are a natural no-op
+    (``record_sequence`` threshold). Fully fault-tolerant: learning must
+    never affect the main flow.
+    """
+    try:
+        if plan is None or not getattr(plan, "steps", None):
+            return
+        steps = [s.skill_id for s in plan.steps if getattr(s, "skill_id", None)]
+        if len(steps) < 3:
+            return
+        from vibesop.core.instinct.learner import InstinctLearner
+
+        learner = InstinctLearner(storage_path=Path.cwd() / ".vibe" / "instincts.jsonl")
+        learner.record_sequence(steps=steps, success=success, context=query)
+    except Exception:
+        logger.debug("Plan-sequence recording skipped", exc_info=True)
+
+
+def _maybe_assemble_tool_sequences(project_root: Path) -> None:
+    """Lazily fold captured tool sequences into instinct learning (P3).
+
+    Runs beside the P2 missed-query hook on interactive ``vibe route`` runs.
+    Honors the ``sequences.enabled`` switch (default true). Raises nothing by
+    contract at the call site — the caller wraps this in a broad except.
+    *project_root* is where ``.vibe/`` lives (same semantics as the adapters'
+    ``project_root``); the caller passes ``Path.cwd()``.
+    """
+    from vibesop.core.config.manager import ConfigManager
+
+    enabled = ConfigManager(project_root).get("sequences.enabled", True)
+    if isinstance(enabled, str):  # env vars are returned as raw strings
+        enabled = enabled.strip().lower() in ("true", "1", "yes", "on")
+    if not enabled:
+        return
+
+    from vibesop.core.instinct.tool_sequences import assemble_tool_sequences
+
+    assemble_tool_sequences(project_root)
 
 
 def _handle_missed_query_suggestion(query: str, *, json_output: bool) -> None:
@@ -604,6 +652,20 @@ def route(
         project_hash = hashlib.sha256(str(Path.cwd()).encode()).hexdigest()[:8]
         context.conversation_id = f"cli-{project_hash}"
 
+    # P3: when no interactive plan confirmation will happen (--yes/--json/
+    # --validate/non-TTY/confirmation_mode=never), flag the run so the
+    # orchestrator records the plan sequence as application-only telemetry
+    # (success=False). Metadata survives the _copy_context enrichment used by
+    # the squad/single-agent paths.
+    if (
+        yes
+        or json_output
+        or validate
+        or not sys.stdin.isatty()
+        or getattr(router._config, "confirmation_mode", None) == "never"
+    ):
+        context.metadata["_sequence_unattended"] = True
+
     # Apply workflow pattern and verification hints
     if pattern:
         context.strategy_hint = f"workflow_pattern:{pattern}"
@@ -742,6 +804,14 @@ def route(
             json_output=json_output,
         )
 
+    # P3 lazy assembly: fold tool sequences captured by the Claude Code
+    # PostToolUse hook into instinct learning. Best-effort; never affects
+    # routing output. (--json exits above, so JSON output stays pure.)
+    try:
+        _maybe_assemble_tool_sequences(Path.cwd())
+    except Exception:  # assembly must never affect routing output
+        logger.debug("Tool-sequence assembly skipped", exc_info=True)
+
     # Handle result with unified confirmation flow
     if result.mode.value == "orchestrated" and result.execution_plan:
         # Prompt chain generation (--pattern prompt_chain or auto-detected)
@@ -768,6 +838,7 @@ def route(
             console,
             already_rendered=already_rendered,
             squad=squad,
+            validate=validate,
         )
         return
 
@@ -1019,6 +1090,7 @@ def _handle_orchestrated_result(
     console: Console,
     already_rendered: bool = False,
     squad: Any | None = None,
+    validate: bool = False,
 ) -> None:
     plan = result.execution_plan
 
@@ -1032,6 +1104,7 @@ def _handle_orchestrated_result(
         router,
         already_rendered=already_rendered,
         squad=squad,
+        validate=validate,
     )
     if not confirmed:
         return
@@ -1054,11 +1127,14 @@ def _orchestration_confirmation_flow(
     router: Any,
     already_rendered: bool = False,
     squad: Any | None = None,
+    validate: bool = False,
 ) -> bool:
     """Interactive confirmation for orchestrated result."""
     plan = result.execution_plan
 
-    if not _needs_confirmation(result, router, yes, json_output, is_orchestrated=True):
+    if not _needs_confirmation(
+        result, router, yes, json_output, validate=validate, is_orchestrated=True
+    ):
         return True
 
     if not already_rendered:
@@ -1096,8 +1172,15 @@ def _orchestration_confirmation_flow(
             render_orchestration_result(result, console=console)
             if not questionary.confirm("Proceed with updated plan?", default=True).ask():
                 console.print("[dim]Plan editing cancelled.[/dim]")
+                _record_plan_sequence(plan, success=False, query=result.original_query or "")
                 return False
+            # Explicit confirmation of the (edited) plan — the only
+            # success=True source besides "confirm"/"execute" below (P3).
+            _record_plan_sequence(plan, success=True, query=result.original_query or "")
             return True
+        # Editor applied no changes — the plan was never accepted, so record
+        # application-only telemetry, symmetric with the other exits below.
+        _record_plan_sequence(plan, success=False, query=result.original_query or "")
         return False
     elif choice == "single" and result.single_fallback:
         console.print(
@@ -1108,13 +1191,20 @@ def _orchestration_confirmation_flow(
                 border_style="blue",
             )
         )
+        _record_plan_sequence(plan, success=False, query=result.original_query or "")
         return False
     elif choice == "skip":
         console.print("[dim]Skipped. Using raw LLM.[/dim]")
+        _record_plan_sequence(plan, success=False, query=result.original_query or "")
         return False
     elif choice == "execute" and plan:
+        # Explicit step-by-step execution choice = plan accepted.
+        _record_plan_sequence(plan, success=True, query=result.original_query or "")
         _execute_plan_interactive(result, console)
         return False
+    elif choice == "confirm":
+        _record_plan_sequence(plan, success=True, query=result.original_query or "")
+        return True
 
     return True
 

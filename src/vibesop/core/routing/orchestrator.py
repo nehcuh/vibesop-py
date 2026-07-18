@@ -314,6 +314,13 @@ class Orchestrator:
         # Record execution analytics
         self._router._record_execution(query, result)
 
+        # P3: on unattended runs (CLI flagged context.metadata
+        # ["_sequence_unattended"]), record the plan's skill sequence as
+        # application-only telemetry (success=False). Interactive runs record
+        # in the CLI confirmation flow instead — explicit user confirmation is
+        # the only success=True source — so this path never double-counts.
+        self._record_plan_sequence(query, plan, context)
+
         cb.on_plan_ready(plan)
         cb.on_phase_complete(
             PhaseInfo(
@@ -324,3 +331,23 @@ class Orchestrator:
         )
 
         return result
+
+    def _record_plan_sequence(self, query: str, plan: Any, context: Any) -> None:
+        """Record the plan's skill sequence on unattended runs (P3 telemetry).
+
+        Gated on the CLI's ``_sequence_unattended`` context flag so interactive
+        runs — where the confirmation flow records the explicit signal — are
+        never double-counted. Application-only: success=False per the privacy
+        rule. Fully fault-tolerant.
+        """
+        try:
+            if not (context and context.metadata.get("_sequence_unattended")):
+                return
+            steps = [s.skill_id for s in plan.steps if getattr(s, "skill_id", None)]
+            if len(steps) < 3:
+                return
+            self._router._get_instinct_learner().record_sequence(
+                steps=steps, success=False, context=query
+            )
+        except Exception as e:  # telemetry must never break orchestration
+            logger.debug("Failed to record plan sequence: %s", e)
