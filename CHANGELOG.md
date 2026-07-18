@@ -9,6 +9,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Skill marketplace & suggestion feedback loop (P0–P4, 2026-07-18)
+
+Implements `docs/proposals/skill-market-search-and-feedback-loop.md`
+(4-lane fanout + Pi agent adversarial review at every phase):
+
+- **Marketplace rebuild (P0)**: search the public skill ecosystem
+  (topics agent-skills/claude-skills/…, stars-sorted, 24h cache) plus a
+  curated awesome-list channel; trust tiers official/curated/unknown;
+  `vibe market trending`; `--scope global|project` install through the full
+  pre-audit + pack-lock + build gate; trust store hardening (hash required,
+  legacy migration); GitHub Issues marketplace removed.
+- **Telemetry foundation (P1)**: single-route `ExecutionRecord` write path
+  (was orchestration-only); always-on hash-only miss counter
+  (`.vibe/miss_counter.json`, no raw query); `vibe data purge
+  --miss-counter`.
+- **Missed-query loop (P2)**: repeated no-match queries surface a
+  machine-readable `vibe market search` hint on every path and a strictly
+  TTY-gated 3-choice teaser (search / skip / never-ask) with a frequency
+  budget; suggestions land in the unified `vibe skills suggestions` inbox on
+  all paths.
+- **Distillation data sources (P3)**: orchestration-plan sequences recorded
+  (explicit confirm = success, unattended = application-only); Claude Code
+  PostToolUse hook captures tool sequences (never tool_input) with
+  `vibe sequence assemble` + `purge --tool-sequences`.
+- **LLM task distillation (P4)**: `vibe skills distill` turns mature
+  patterns into reviewed SKILL.md skills — consent gate, full-text review,
+  security audit of the exact final bytes (any threat blocks `--yes`),
+  project-scope install.
+
 ### Security & privacy (audit remediation, F-## series)
 - **T1 supply-chain hardening** (#69): F-01 eval sandbox (AST allowlist + fuzz
   tests), F-02 pack-lock (per-pack commit SHA + content hash), F-03 interactive

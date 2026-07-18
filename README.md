@@ -320,6 +320,16 @@ vibe market install user/repo
 
 搜索结果按信任级别排序：官方（内置可信包）→ 已策展（awesome list）→ 未验证来源，同级按 stars 降序。
 
+```bash
+# 安装到当前项目（仅 .vibe/skills/，全链路安全审计）
+vibe market install user/repo --scope project
+
+# 查看分类趋势
+vibe market trending agent
+```
+
+**智能建议反馈环**（v8.0）：未命中查询会被本地匿名计数（仅存哈希），重复未命中时给出搜索建议；编排确认流与 Claude Code 工具钩子会学习你的重复工作流，`vibe skills suggestions` 统一收件，`vibe skills distill` 一键蒸馏为项目级技能（LLM 生成 + 全文审定 + 安全审计）。
+
 ### 📉 智能降级 (Degradation) — v5.2.0
 
 4 级置信度降级，替代二元 fallback：
