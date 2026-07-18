@@ -33,6 +33,9 @@ def purge(
     instincts: bool = typer.Option(False, "--instincts", help="Purge learned instincts."),
     memory: bool = typer.Option(False, "--memory", help="Purge conversation memory."),
     sessions: bool = typer.Option(False, "--sessions", help="Purge .vibe/session/*.json."),
+    miss_counter: bool = typer.Option(
+        False, "--miss-counter", help="Purge .vibe/miss_counter.json (miss telemetry)."
+    ),
     feedback: bool = typer.Option(
         False, "--feedback", help="Purge feedback records (global ~/.vibe/feedback.jsonl)."
     ),
@@ -46,9 +49,8 @@ def purge(
 ) -> None:
     """Permanently delete VibeSOP-derived data (F-08: user deletion path)."""
     if all:
-        analytics = traces = preferences = instincts = memory = sessions = feedback = pack_locks = (
-            True
-        )
+        analytics = traces = preferences = instincts = memory = sessions = miss_counter = True
+        feedback = pack_locks = True
     if not (
         analytics
         or traces
@@ -56,12 +58,14 @@ def purge(
         or instincts
         or memory
         or sessions
+        or miss_counter
         or feedback
         or pack_locks
     ):
         console.print(
             "[red]No purge target selected.[/red] Pass --all, or one of "
-            "--analytics/--traces/--preferences/--instincts/--memory/--sessions/--feedback/--pack-locks."
+            "--analytics/--traces/--preferences/--instincts/--memory/--sessions/"
+            "--miss-counter/--feedback/--pack-locks."
         )
         raise typer.Exit(code=2)
 
@@ -78,6 +82,8 @@ def purge(
         targets.append("memory")
     if sessions:
         targets.append("sessions")
+    if miss_counter:
+        targets.append("miss-counter")
     if feedback:
         targets.append("feedback")
     if pack_locks:
@@ -126,6 +132,11 @@ def purge(
         for f in files:
             f.unlink()
         cleared.append(f"sessions: {len(files)} file(s)")
+    if miss_counter:
+        from vibesop.core.skills.miss_counter import MissCounter
+
+        MissCounter(project_root).clear()
+        cleared.append("miss-counter: cleared")
     if feedback:
         from vibesop.core.feedback import ExecutionFeedbackCollector, FeedbackCollector
 

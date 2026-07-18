@@ -87,12 +87,17 @@ class AgentRouter:
         self._router._llm_factory = llm_factory
         self._router._triage_service._llm_factory = llm_factory
 
-    def route(self, query: str, enable_ai_triage: bool = True) -> Any:
+    def route(
+        self, query: str, enable_ai_triage: bool = True, *, record_telemetry: bool = True
+    ) -> Any:
         """Route a query to the best matching skill.
 
         Args:
             query: Natural language query string.
             enable_ai_triage: Temporarily enable AI triage for this call.
+            record_telemetry: Forwarded to the underlying router — meta-callers
+                (e.g. detect_intents) pass False so one user query is recorded
+                once, not twice.
         """
         # If AI triage is requested and LLM is available, temporarily enable it
         if enable_ai_triage and self._router.llm is not None:
@@ -106,13 +111,13 @@ class AgentRouter:
                 )
                 self._router.routing_config = modified_config
                 self._router.triage_service.config = modified_config
-                result = self._router.route_single(query)
+                result = self._router.route_single(query, record_telemetry=record_telemetry)
             finally:
                 # Restore original configs
                 self._router.routing_config = original_router_config
                 self._router.triage_service.config = original_triage_config
         else:
-            result = self._router.route_single(query)
+            result = self._router.route_single(query, record_telemetry=record_telemetry)
 
         return result
 
@@ -170,8 +175,10 @@ class AgentRouter:
         """Detect if a query contains multiple distinct intents."""
         from vibesop.core.orchestration import MultiIntentDetector
 
-        # First, get single routing result for context
-        single_result = self.route(query, enable_ai_triage=False)
+        # First, get single routing result for context. This is an auxiliary
+        # pass — the caller's real route() comes later, so suppress telemetry
+        # here to keep one record per user query (Pi P1 review).
+        single_result = self.route(query, enable_ai_triage=False, record_telemetry=False)
 
         # Initialize detector
         detector = MultiIntentDetector()

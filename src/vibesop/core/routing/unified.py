@@ -35,6 +35,7 @@ from vibesop.core.matching import (
 )
 from vibesop.core.models import (
     LayerDetail,
+    OrchestrationMode,
     OrchestrationResult,
     RoutingLayer,
     RoutingResult,
@@ -764,6 +765,8 @@ class UnifiedRouter(
         query: str,
         candidates: list[Any] | None = None,
         context: RoutingContext | None = None,
+        *,
+        record_telemetry: bool = True,
     ) -> RoutingResult:
         """Route a query to the best matching skill (single-skill fast path).
 
@@ -774,11 +777,27 @@ class UnifiedRouter(
             query: User's natural language query.
             candidates: Optional skill candidates list (uses cached if None).
             context: Optional routing context with conversation/memory state.
+            record_telemetry: Internal escape hatch for meta-callers that route
+                the same user query more than once per request (e.g.
+                AgentRouter.detect_intents) — pass False on the auxiliary pass
+                so analytics/miss-counter see the query exactly once.
 
         Returns:
             RoutingResult with primary match or no-match sentinel.
         """
-        return self._single_skill_route(query, candidates, context)
+        result = self._single_skill_route(query, candidates, context)
+        # P1 telemetry — the single exit point for the single-route path (hit,
+        # low-confidence, and no-match/fallback all land here). Both writes are
+        # fault-tolerant and never affect the returned result:
+        #   - opt-in analytics execution record (F-06)
+        #   - always-on hash-only miss counter (no raw query persisted)
+        # The orchestration path does NOT pass through here (Orchestrator calls
+        # _single_skill_route directly and records via _record_execution), so
+        # orchestrated queries are not double-recorded.
+        if record_telemetry:
+            self._record_single_route_execution(query, result)
+            self._record_route_miss(query, result)
+        return result
 
     def _get_orchestrator(self) -> Orchestrator:
         """Lazy-init Orchestrator to avoid heavy construction during router init."""
@@ -807,6 +826,17 @@ class UnifiedRouter(
     # Analytics and execution recording
     # ================================================================
 
+    def _analytics_enabled(self) -> bool:
+        """F-06: analytics persistence is opt-in (default off).
+
+        Env vars are returned as raw strings by ConfigManager, so string values
+        like "false" must be parsed, not truthiness-checked.
+        """
+        enabled = self._config_manager.get("analytics.enabled", False)
+        if isinstance(enabled, str):  # env vars are returned as raw strings
+            enabled = enabled.strip().lower() in ("true", "1", "yes", "on")
+        return bool(enabled)
+
     def _record_execution(
         self,
         query: str,
@@ -816,10 +846,7 @@ class UnifiedRouter(
     ) -> None:
         # F-06: analytics persistence is opt-in (default off) — do not write the
         # user's query to .vibe/analytics.jsonl unless explicitly enabled.
-        enabled = self._config_manager.get("analytics.enabled", False)
-        if isinstance(enabled, str):  # env vars are returned as raw strings
-            enabled = enabled.strip().lower() in ("true", "1", "yes", "on")
-        if not enabled:
+        if not self._analytics_enabled():
             return
         from vibesop.core.analytics import AnalyticsStore, ExecutionRecord
 
@@ -847,6 +874,56 @@ class UnifiedRouter(
             metadata=degradation_meta,
         )
         store.record(record)
+
+    def _record_single_route_execution(self, query: str, result: RoutingResult) -> None:
+        """Record a single-route execution to analytics (opt-in, F-06).
+
+        Single-route counterpart to ``_record_execution`` (which is coupled to
+        ``OrchestrationResult``): builds the ``ExecutionRecord`` directly from
+        the ``RoutingResult`` of the ``route()`` fast path. Called once per
+        ``route()`` — hit, low-confidence, and no-match/fallback alike, since
+        misses are the primary signal for the skill-market feedback loop.
+        """
+        if not self._analytics_enabled():
+            return
+        try:
+            from vibesop.core.analytics import AnalyticsStore, ExecutionRecord
+
+            # Same degradation telemetry extraction as _record_execution.
+            degradation_meta: dict[str, Any] = {}
+            if result.primary and result.primary.metadata:
+                for key in ("degradation_level", "degradation_confidence"):
+                    if key in result.primary.metadata:
+                        degradation_meta[key] = result.primary.metadata[key]
+
+            record = ExecutionRecord(
+                query=query,
+                mode=OrchestrationMode.SINGLE.value,
+                primary_skill=result.primary.skill_id if result.primary else None,
+                plan_steps=[],
+                step_count=0,
+                duration_ms=result.duration_ms,
+                routing_layers=[layer.value for layer in result.routing_path],
+                metadata=degradation_meta,
+            )
+            AnalyticsStore(storage_dir=self.project_root / ".vibe").record(record)
+        except Exception as e:  # telemetry must never break routing
+            logger.debug("Failed to record single-route execution: %s", e)
+
+    def _record_route_miss(self, query: str, result: RoutingResult) -> None:
+        """Always-on miss telemetry: hash-only counter, no raw query persisted.
+
+        Fires only when the route ended in no-match/fallback (no primary, or a
+        FALLBACK_LLM sentinel) — exactly the queries VibeSOP cannot serve.
+        """
+        if result.has_match:
+            return
+        try:
+            from vibesop.core.skills.miss_counter import MissCounter
+
+            MissCounter(self.project_root).record(query)
+        except Exception as e:  # telemetry must never break routing
+            logger.debug("Failed to record route miss: %s", e)
 
     def _record_routing_decision(
         self,
@@ -937,12 +1014,15 @@ class UnifiedRouter(
         query: str,
         candidates: list[dict[str, Any]] | None = None,
         context: RoutingContext | None = None,
+        *,
+        record_telemetry: bool = True,
     ) -> RoutingResult:
         """Route a query to the best matching skill (public entry point).
 
-        This is the public counterpart to ``_single_skill_route``.
+        Alias for :meth:`route` — kept as the single exit point so
+        single-route telemetry fires exactly once per call.
         """
-        return self._single_skill_route(query, candidates, context)
+        return self.route(query, candidates, context, record_telemetry=record_telemetry)
 
     def build_decomposition_skills(
         self,

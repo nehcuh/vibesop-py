@@ -46,6 +46,9 @@ def test_redacts_home_path_unix() -> None:
     out = redact_sensitive("check /Users/bob/secret/file and /home/alice/.ssh")
     assert "/Users/bob" not in out
     assert "/home/alice" not in out
+    # The tail of the path must not leak either — only the placeholder remains.
+    assert "/secret/file" not in out
+    assert ".ssh" not in out
     assert "[REDACTED_PATH]" in out
 
 
@@ -53,6 +56,7 @@ def test_redacts_home_path_windows() -> None:
     """T2-a (Kimi review): Windows home paths are redacted too."""
     out = redact_sensitive(r"check C:\Users\bob\secrets\file")
     assert r"C:\Users\bob" not in out
+    assert "secrets" not in out
     assert "[REDACTED_PATH]" in out
 
 

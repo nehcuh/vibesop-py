@@ -43,8 +43,9 @@ _PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     ),
     # Email addresses.
     ("EMAIL", re.compile(r"\b[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}\b")),
-    # Home-directory paths (contain the OS username).
-    ("PATH", re.compile(r"(?:/Users/|/home/)[A-Za-z0-9._\-]+|C:\\Users\\[A-Za-z0-9._\-]+")),
+    # Home-directory paths (contain the OS username). The entire path segment
+    # is redacted — not just the user component — so no tail filenames leak.
+    ("PATH", re.compile(r"(?:/Users/|/home/)\S*|C:\\Users\\\S*")),
 ]
 
 

@@ -186,3 +186,23 @@ def test_data_purge_all_includes_pack_locks(
     assert result.exit_code == 0, result.output
     assert not (locks_dir / "demo.json").exists()
     assert "pack-locks" in result.output
+
+
+def test_data_purge_miss_counter(tmp_path: Path) -> None:
+    """P1: `vibe data purge --miss-counter` clears miss telemetry (keeps the salt)."""
+    from vibesop.core.skills.miss_counter import MissCounter
+
+    counter = MissCounter(tmp_path)
+    counter.record("some unmatched query")
+    assert (tmp_path / ".vibe" / "miss_counter.json").exists()
+    salt_before = (tmp_path / ".vibe" / "miss_salt").read_bytes()
+
+    result = runner.invoke(
+        data_cmd.app,
+        ["purge", "--miss-counter", "--yes", "--project-root", str(tmp_path)],
+    )
+    assert result.exit_code == 0, result.output
+    assert not (tmp_path / ".vibe" / "miss_counter.json").exists()
+    assert "miss-counter" in result.output
+    # The salt is not user data — purge keeps it, byte-for-byte.
+    assert (tmp_path / ".vibe" / "miss_salt").read_bytes() == salt_before
