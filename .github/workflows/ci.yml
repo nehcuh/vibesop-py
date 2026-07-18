@@ -5,9 +5,13 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  # Required so release.yml can reuse this workflow as its ci-gate job
+  # (uses: ./.github/workflows/ci.yml). Without it every release run
+  # failed instantly with "workflow is not reusable".
+  workflow_call:
 
 env:
-  UV_VERSION: "0.5.0"
+  UV_VERSION: "0.11.19"
 
 permissions:
   contents: read
@@ -113,10 +117,20 @@ jobs:
         run: uv sync --extra dev
 
       - name: Install pip-audit
-        run: uv pip install pip-audit
+        run: uv pip install "pip-audit>=2.9,<3"
 
-      - name: Run pip-audit
+      - name: Run pip-audit (venv)
         run: uv run pip-audit
+
+      # Also audit the FULL locked dependency set (incl. the semantic extra —
+      # torch/transformers are the project's largest supply-chain surface and
+      # are never installed in this job's venv). Export resolves from uv.lock
+      # without installing anything.
+      - name: Run pip-audit (full lockfile, all extras)
+        run: |
+          uv export --all-extras --no-hashes --format requirements-txt --output-file /tmp/vibesop-all-deps.txt
+          grep -v '^-e ' /tmp/vibesop-all-deps.txt > /tmp/vibesop-all-deps-clean.txt
+          uv run pip-audit -r /tmp/vibesop-all-deps-clean.txt
 
       # Bandit catches first-order RCE / injection primitives in the
       # project's own code that pip-audit (which only scans dependency
@@ -128,7 +142,9 @@ jobs:
         run: uv pip install bandit[toml]
 
       - name: Run Bandit
-        run: uv run bandit -c pyproject.toml -r src/vibesop -ll --skip B324,B701,B608
+        # Skips (B324/B701/B608) are registered with justifications in
+        # pyproject.toml [tool.bandit."skips"] — single source of truth.
+        run: uv run bandit -c pyproject.toml -r src/vibesop -ll
 
   benchmark:
     name: Performance Benchmark

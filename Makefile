@@ -10,8 +10,9 @@ install: ## Install dependencies
 dev: install ## Install development dependencies
 	uv sync --extra dev
 
-lint: ## Run linting
+lint: ## Run linting (check + format check, same as CI)
 	uv run ruff check .
+	uv run ruff format --check .
 
 format: ## Format code
 	uv run ruff format .
@@ -34,8 +35,9 @@ test-parallel: ## Run tests with pytest-xdist (may fail on stateful tests)
 test-full: ## Run full test suite including benchmark and slow tests
 	uv run pytest
 
-security: ## Run security checks (pip-audit)
+security: ## Run security checks (pip-audit + bandit, same as CI)
 	uv run pip-audit
+	uv run bandit -c pyproject.toml -r src/vibesop -ll
 
 clean: clean-cov ## Clean up generated files
 	find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
@@ -54,7 +56,7 @@ docs-serve: ## Serve API documentation locally
 check: lint type-check test-fast ## Run all checks (lint, type-check, test-fast)
 
 benchmark: ## Run performance benchmarks
-	uv run pytest tests/benchmark/ tests/benchmarks/ -v -m benchmark --no-cov
+	uv run pytest tests/benchmark/ -v -m benchmark --no-cov
 
 bootstrap: dev ## Bootstrap development environment
 	@echo "✨ Development environment ready!"

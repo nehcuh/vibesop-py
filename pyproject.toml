@@ -49,7 +49,6 @@ dev = [
     "pytest-rerunfailures>=16.1",
     "pytest-xdist>=3.8.0",
     "ruff>=0.9.0,<1.0.0",
-    "mypy>=1.14.0,<2.0.0",
     "pre-commit>=4.0.0,<5.0.0",
     "basedpyright>=1.24.0,<2.0.0",
     "pdoc>=16.0.0",
@@ -96,6 +95,9 @@ packages = ["src/vibesop"]
 target-version = "py312"
 line-length = 100
 indent-width = 4
+# .vibe/skills/ holds git-tracked third-party skill content (data, not project
+# source) — its scripts are not held to the project's lint/format bar.
+extend-exclude = [".vibe"]
 
 [tool.ruff.lint]
 select = [
@@ -209,7 +211,7 @@ reportPrivateUsage = "warning"
 # Pytest - Test Framework
 # ============================================
 [tool.pytest.ini_options]
-minversion = "8.3"
+minversion = "9.0"
 testpaths = ["tests"]
 pythonpath = ["src"]
 asyncio_mode = "auto"
@@ -245,9 +247,6 @@ exclude_dirs = [
 
 # Per-test skips with documented justification. Each skip must reference
 # either a fix that landed or an open issue tracking the residual work.
-[tool.bandit.assert_used]
-skips = ["*_test.py", "*/test_*.py"]
-
 # B324: hashlib MD5/SHA1 used for content addressing (cache keys, skill
 #       IDs), not password hashing or other security-sensitive contexts.
 #       Adding `usedforsecurity=False` would require Python 3.9+ (we have
@@ -264,8 +263,13 @@ skips = ["*_test.py", "*/test_*.py"]
 #       from shell=True to ["bash", "-c", cmd] list form. Kept here as
 #       documentation; if any new shell=True re-emerges, CI will fail
 #       (this skip is no longer applied — see ci.yml).
-[tool.bandit."skips"]
-test_id = ["B324", "B701"]
+# B608: hardcoded_sql_expressions — sole hit is installer/init_support.py:234,
+#       an f-string *TOML config template* (not SQL); confidence Low. No SQL
+#       is constructed anywhere in the codebase.
+skips = ["B324", "B701", "B608"]
+
+[tool.bandit.assert_used]
+skips = ["*_test.py", "*/test_*.py"]
 
 # ============================================
 # Coverage

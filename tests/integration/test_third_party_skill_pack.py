@@ -61,11 +61,12 @@ class TestThirdPartySkillPack:
         assert skill.base_metadata.namespace == "awesome-skills"
         assert skill.is_safe is True
 
-        # 2. UnifiedRouter can route queries to the third-party skill. Override
-        # the class-level EXTERNAL_PATHS so the router sees only our isolated
+        # 2. UnifiedRouter can route queries to the third-party skill. Use a
+        # tmp project_root so repo-resident skills (core/skills, .vibe/skills)
+        # stay invisible and cannot outrank our fixture, and override the
+        # class-level EXTERNAL_PATHS so the router sees only our isolated
         # storage, then restore it.
-        project_root = Path(__file__).resolve().parent.parent.parent
-        router = UnifiedRouter(project_root=project_root)
+        router = UnifiedRouter(project_root=tmp_path)
         original_paths = list(ExternalSkillLoader.EXTERNAL_PATHS)
         ExternalSkillLoader.EXTERNAL_PATHS = [config_skills]
         try:
