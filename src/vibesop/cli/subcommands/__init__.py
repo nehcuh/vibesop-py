@@ -20,9 +20,6 @@ from vibesop.cli.commands import (
     cleanup_cmd as cleanup_mod,
 )
 from vibesop.cli.commands import (
-    community_cmd as community_mod,
-)
-from vibesop.cli.commands import (
     config as config_mod,
 )
 from vibesop.cli.commands import (
@@ -134,8 +131,6 @@ def register(app: typer.Typer) -> None:
     skills_app.command("featured")(skills_mod.featured)
     skills_app.command("stale")(skill_commands_mod.stale)
     skills_app.command("end-check")(skill_commands_mod.end_check)
-    skills_app.command("share")(community_mod.share)
-    skills_app.command("discover")(community_mod.discover)
     skills_app.command("cleanup")(cleanup_mod.cleanup)
 
     # Platform verification

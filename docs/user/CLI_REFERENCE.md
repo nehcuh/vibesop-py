@@ -19,8 +19,6 @@ Complete reference for all VibeSOP CLI commands (v6.2.0+).
   - [`vibe skill cleanup`](#vibe-skill-cleanup-v530)
   - [`vibe skill stale`](#vibe-skill-stale)
   - [`vibe skill end-check`](#vibe-skill-end-check-v510)
-  - [`vibe skill share`](#vibe-skill-share-v530)
-  - [`vibe skill discover`](#vibe-skill-discover-v530)
   - [`vibe skills suggestions`](#vibe-skills-suggestions-v510)
 - [Project Setup](#project-setup)
 - [Platform & Utility Commands](#platform--utility-commands)
@@ -774,53 +772,6 @@ vibe skill end-check
 
 # Machine-readable output
 vibe skill end-check --json
-```
-
----
-
-#### `vibe skill share` (v5.3.0+)
-
-Publish a skill to the community via GitHub Issues. Opens a browser with a prefilled issue form, or uses `gh` CLI if installed.
-
-```bash
-vibe skill share <skill-id>
-```
-
-**Examples:**
-```bash
-# Share your custom skill
-vibe skill share my-custom-linter
-
-# Share a gstack skill variant
-vibe skill share gstack/custom-review
-```
-
----
-
-#### `vibe skill discover` (v5.3.0+)
-
-Browse community-shared skills from GitHub Issues, sorted by 👍 reactions.
-
-```bash
-vibe skill discover [query] [options]
-```
-
-**Arguments:**
-- `query` — Optional search keywords to filter community skills
-
-**Options:**
-- `--json, -j` — Output as JSON
-
-**Examples:**
-```bash
-# Browse all community skills
-vibe skill discover
-
-# Search for debugging-related skills
-vibe skill discover debugging
-
-# Search with keywords
-vibe skill discover "python lint"
 ```
 
 ---

@@ -7,7 +7,7 @@ import shutil
 import stat
 import sys
 from pathlib import Path
-from typing import Any, ClassVar
+from typing import Any, ClassVar, Literal
 
 from rich.console import Console
 from rich.prompt import Confirm
@@ -65,15 +65,26 @@ class PackInstaller:
         self._strict_mode = strict_mode
         self._sandbox_builds = sandbox_builds
         self._allow_unsafe_build = allow_unsafe_build
+        # Project root anchors project-scope installs (``.vibe/skills/``) and
+        # the auditor's allowed paths. Defaults to the current directory,
+        # matching how the CLI commands resolve the "current project".
+        self._project_root = (
+            Path(project_root).resolve() if project_root is not None else Path.cwd()
+        )
         self._auditor = SkillSecurityAuditor(
             strict_mode=strict_mode,
-            project_root=project_root or Path.cwd(),
+            project_root=self._project_root,
         )
         self.central_storage.mkdir(parents=True, exist_ok=True)
         self._auditor.add_allowed_path(self.central_storage)
         for path in self.platform_paths:
             if path.exists():
                 self._auditor.add_allowed_path(path)
+
+    @property
+    def project_root(self) -> Path:
+        """The project root anchoring project-scope installs (``.vibe/skills/``)."""
+        return self._project_root
 
     @classmethod
     def compute_pack_hash(cls, pack_name: str, central_storage: Path | None = None) -> str:
@@ -102,7 +113,20 @@ class PackInstaller:
         _version: str | None = None,
         platforms: list[str] | None = None,
         upgrade: bool = False,
+        scope: Literal["global", "project"] = "global",
     ) -> tuple[bool, str]:
+        """Install a skill pack from a trusted name or Git URL.
+
+        Args:
+            scope: ``"global"`` installs to the central storage
+                (``~/.config/skills/<pack>``) with platform symlinks and a
+                global index rebuild. ``"project"`` installs to
+                ``<project_root>/.vibe/skills/<pack>/`` — discovered by
+                ``SkillLoader`` as project-level skills — and runs the exact
+                same security chain (pre-install audit, F-02 pack-lock,
+                F-03 build gate); only platform symlinks and the global index
+                rebuild are skipped.
+        """
         from datetime import UTC, datetime
 
         from vibesop.core.exceptions import PackIntegrityError
@@ -123,7 +147,10 @@ class PackInstaller:
         if not analysis.skill_files:
             return False, f"No SKILL.md files found in {pack_name} repository"
 
-        planner = InstallPlanner(base_target=self.central_storage)
+        install_base = (
+            self.central_storage if scope == "global" else self._project_root / ".vibe" / "skills"
+        )
+        planner = InstallPlanner(base_target=install_base)
         plan = planner.plan(analysis)
 
         try:
@@ -140,7 +167,9 @@ class PackInstaller:
                         audit_results = self._audit_skills(
                             installed_skill_files, pack_name=pack_name
                         )
-                        symlink_results = self._create_symlinks(pack_name, platforms)
+                        symlink_results = (
+                            self._create_symlinks(pack_name, platforms) if scope == "global" else []
+                        )
                         msg = self._build_install_msg(
                             pack_name,
                             installed_skill_files,
@@ -148,7 +177,8 @@ class PackInstaller:
                             symlink_results,
                             already_installed=True,
                         )
-                        self._rebuild_global_index(pack_name)
+                        if scope == "global":
+                            self._rebuild_global_index(pack_name)
                         return True, msg
 
             target_path.mkdir(parents=True, exist_ok=True)
@@ -208,18 +238,24 @@ class PackInstaller:
             audit_results = self._audit_skills(
                 installed_skill_files, pack_name=pack_name, pack_path=target_path
             )
-            symlink_results = self._create_symlinks(pack_name, platforms)
+            # Project-scope installs stay inside .vibe/skills/ (discovered by
+            # SkillLoader directly) — no platform symlinks, no global index.
+            symlink_results = (
+                self._create_symlinks(pack_name, platforms) if scope == "global" else []
+            )
 
             msg = self._build_install_msg(
                 pack_name,
                 installed_skill_files,
                 audit_results,
                 symlink_results,
+                target_path=target_path,
                 build_output=build_output,
                 pre_audit_summary=pre_audit.summary,
                 pre_audit_files=pre_audit.files_scanned,
             )
-            self._rebuild_global_index(pack_name)
+            if scope == "global":
+                self._rebuild_global_index(pack_name)
             # F-02: record the lock so future installs verify against this commit.
             # Non-fatal — a lock-write failure degrades to "no lock" (next install
             # is treated as fresh), never undoes a successful install.
@@ -263,6 +299,7 @@ class PackInstaller:
         audit_results: list[str],
         symlink_results: list[tuple[str, str]],
         already_installed: bool = False,
+        target_path: Path | None = None,
         build_output: str = "",
         pre_audit_summary: str | None = None,
         pre_audit_files: int = 0,
@@ -272,7 +309,8 @@ class PackInstaller:
         if already_installed:
             parts.append(f"Already installed: {pack_name} ({len(skill_files)} skills)")
         else:
-            parts.append(f"Installed {pack_name} to {self.central_storage / pack_name}")
+            location = target_path or (self.central_storage / pack_name)
+            parts.append(f"Installed {pack_name} to {location}")
             parts.append(f"Skills found: {len(skill_files)}")
 
         if pre_audit_summary is not None:

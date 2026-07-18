@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 _TIP_TEMPLATES: list[tuple[str, str]] = [
     ("status", "[cyan]vibe status[/cyan] [dim]— see your full ecosystem health[/dim]"),
-    ("discover", "[cyan]vibe skill discover[/cyan] [dim]— browse community skills[/dim]"),
+    ("market", "[cyan]vibe market search <query>[/cyan] [dim]— find skills on GitHub[/dim]"),
     ("cleanup", "[cyan]vibe skill cleanup[/cyan] [dim]— review and prune stale skills[/dim]"),
     ("list", "[cyan]vibe skill list[/cyan] [dim]— browse all 45+ available skills[/dim]"),
     (
@@ -46,7 +46,7 @@ def render_fallback_panel(result: Any, console: Console) -> None:
             f"[dim]Query:[/dim] {result.original_query}\n"
             f"{alt_text}\n"
             f"[bold]What to do:[/bold]\n"
-            f"  • [cyan]vibe skill discover[/cyan] — search community skills\n"
+            f"  • [cyan]vibe market search <query>[/cyan] — search skills on GitHub\n"
             f"  • [cyan]vibe skills list[/cyan] — browse installed skills\n"
             f"  • Rephrase your query with more specific keywords\n"
             f"  • Your AI Agent can still handle this without a skill\n"
@@ -133,7 +133,7 @@ def render_no_match(result: Any, console: Console) -> None:
     suggestions = [
         "Try being more specific with your intent",
         "Use [cyan]vibe skills list[/cyan] to see available skills",
-        "Use [cyan]vibe skill discover[/cyan] to find community skills",
+        "Use [cyan]vibe market search <query>[/cyan] to find skills on GitHub",
         "Check [cyan]vibe status[/cyan] for ecosystem health",
     ]
 

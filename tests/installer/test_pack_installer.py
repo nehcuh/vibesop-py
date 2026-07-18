@@ -508,3 +508,169 @@ class TestSkillNameDedup:
         assert count_b == 1
         entries = sorted(p.name for p in platform.iterdir())
         assert entries == ["packA-review", "packB-review"]
+
+
+class TestProjectScopeInstall:
+    """``scope="project"`` installs into ``<project_root>/.vibe/skills/<pack>/``.
+
+    The full security chain (pre-audit, F-02 pack-lock, F-03 build gate) runs
+    exactly as for global installs; only platform symlinks and the global
+    index rebuild are skipped.
+    """
+
+    @patch("vibesop.installer.pack_installer.SkillSecurityAuditor")
+    def test_project_scope_layout_and_discovery(self, mock_auditor_cls: Any, tmp_path) -> None:
+        mock_audit = MagicMock()
+        mock_audit.is_safe = True
+        mock_auditor = MagicMock()
+        mock_auditor.audit_skill_file.return_value = mock_audit
+        mock_auditor.audit_pack_files.return_value = _clean_pack_audit()
+        mock_auditor_cls.return_value = mock_auditor
+
+        project_root = tmp_path / "proj"
+        central = tmp_path / "central"
+        platform = tmp_path / "platform"
+        installer = PackInstaller(
+            central_storage=central,
+            platform_paths=[platform],
+            project_root=project_root,
+        )
+
+        def _mock_clone(url: str, dest: Path) -> bool:
+            dest.mkdir(parents=True, exist_ok=True)
+            (dest / "SKILL.md").write_text(
+                "---\nname: proj-pack\ndescription: A project-scope test skill pack\n---\n# Test\n"
+            )
+            return True
+
+        with patch("vibesop.installer.pack_installer.RepoAnalyzer") as mock_cls:
+            mock_analyzer = MagicMock()
+            mock_analyzer.analyze.return_value = MagicMock(
+                errors=[],
+                skill_files=[Path("SKILL.md")],
+                pack_name="proj-pack",
+                source_url="https://example.com/proj-pack",
+                readme_install_hint="",
+                setup_scripts=[],
+            )
+            mock_analyzer.git_clone.side_effect = _mock_clone
+            mock_cls.return_value = mock_analyzer
+
+            success, msg = installer.install_pack(
+                "proj-pack", "https://example.com/proj-pack", scope="project"
+            )
+
+        assert success is True, msg
+        pack_dir = project_root / ".vibe" / "skills" / "proj-pack"
+        assert (pack_dir / "SKILL.md").is_file()
+        assert str(pack_dir) in msg
+
+        # Project scope skips platform symlinks and the central-storage copy.
+        assert not (central / "proj-pack").exists()
+        assert not platform.exists()
+
+        # F-02: the pack lock is recorded (conftest isolates the lock store).
+        from vibesop.core.skills.pack_lock import PackLockStore
+
+        assert PackLockStore().get("proj-pack") is not None
+
+        # The project-level pack is discovered by the skill loader, like any
+        # other .vibe/skills/ skill (e.g. instinct-evolved ones).
+        from vibesop.core.skills.loader import SkillLoader
+
+        skills = SkillLoader(project_root=project_root, enable_external=False).discover_all()
+        assert "proj-pack" in skills
+        source_file = skills["proj-pack"].source_file
+        assert source_file is not None
+        assert ".vibe/skills/proj-pack" in str(source_file)
+
+    @patch("vibesop.installer.pack_installer.SkillSecurityAuditor")
+    def test_project_scope_already_installed_branch(self, mock_auditor_cls: Any, tmp_path) -> None:
+        mock_audit = MagicMock()
+        mock_audit.is_safe = True
+        mock_auditor = MagicMock()
+        mock_auditor.audit_skill_file.return_value = mock_audit
+        mock_auditor.audit_pack_files.return_value = _clean_pack_audit()
+        mock_auditor_cls.return_value = mock_auditor
+
+        project_root = tmp_path / "proj"
+        installer = PackInstaller(
+            central_storage=tmp_path / "central",
+            platform_paths=[tmp_path / "platform"],
+            project_root=project_root,
+        )
+
+        def _mock_clone(url: str, dest: Path) -> bool:
+            dest.mkdir(parents=True, exist_ok=True)
+            (dest / "SKILL.md").write_text(
+                "---\nname: proj-pack\ndescription: A project-scope test skill pack\n---\n# Test\n"
+            )
+            return True
+
+        with patch("vibesop.installer.pack_installer.RepoAnalyzer") as mock_cls:
+            mock_analyzer = MagicMock()
+            mock_analyzer.analyze.return_value = MagicMock(
+                errors=[],
+                skill_files=[Path("SKILL.md")],
+                pack_name="proj-pack",
+                source_url="https://example.com/proj-pack",
+                readme_install_hint="",
+                setup_scripts=[],
+            )
+            mock_analyzer.git_clone.side_effect = _mock_clone
+            mock_cls.return_value = mock_analyzer
+
+            url = "https://example.com/proj-pack"
+            first, _ = installer.install_pack("proj-pack", url, scope="project")
+            second, msg = installer.install_pack("proj-pack", url, scope="project")
+
+        assert first is True
+        assert second is True
+        assert "Already installed" in msg
+        # The second install short-circuits before re-cloning.
+        mock_analyzer.git_clone.assert_called_once()
+
+    @patch("vibesop.installer.pack_installer.SkillSecurityAuditor")
+    def test_global_scope_unchanged(self, mock_auditor_cls: Any, tmp_path) -> None:
+        """Default scope still installs to central storage."""
+        mock_audit = MagicMock()
+        mock_audit.is_safe = True
+        mock_auditor = MagicMock()
+        mock_auditor.audit_skill_file.return_value = mock_audit
+        mock_auditor.audit_pack_files.return_value = _clean_pack_audit()
+        mock_auditor_cls.return_value = mock_auditor
+
+        central = tmp_path / "central"
+        project_root = tmp_path / "proj"
+        installer = PackInstaller(
+            central_storage=central,
+            platform_paths=[tmp_path / "platform"],
+            project_root=project_root,
+        )
+
+        def _mock_clone(url: str, dest: Path) -> bool:
+            dest.mkdir(parents=True, exist_ok=True)
+            (dest / "SKILL.md").write_text(
+                "---\nname: glob-pack\ndescription: A global-scope test skill pack\n---\n# Test\n"
+            )
+            return True
+
+        with patch("vibesop.installer.pack_installer.RepoAnalyzer") as mock_cls:
+            mock_analyzer = MagicMock()
+            mock_analyzer.analyze.return_value = MagicMock(
+                errors=[],
+                skill_files=[Path("SKILL.md")],
+                pack_name="glob-pack",
+                source_url="https://example.com/glob-pack",
+                readme_install_hint="",
+                setup_scripts=[],
+            )
+            mock_analyzer.git_clone.side_effect = _mock_clone
+            mock_cls.return_value = mock_analyzer
+
+            with patch.object(installer, "_create_symlinks", return_value=[]):
+                success, msg = installer.install_pack("glob-pack", "https://example.com/glob-pack")
+
+        assert success is True, msg
+        assert (central / "glob-pack" / "SKILL.md").is_file()
+        assert not (project_root / ".vibe" / "skills" / "glob-pack").exists()

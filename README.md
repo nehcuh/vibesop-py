@@ -305,21 +305,20 @@ Terminal states (not routing layers):
 
 ### 🛒 技能市场 (Skill Market) — v5.2.0
 
-发现、安装、发布技能：
+发现、安装公共生态中的技能：
 
 ```bash
-# 搜索市场中已有的技能
+# 搜索 GitHub 公共技能生态（agent-skills 等 topic + curated awesome lists）
 vibe market search "debug"
+
+# 按分类查看热门技能（分类映射到 GitHub topic，按 stars 排序）
+vibe market trending agent
 
 # 从市场安装技能
 vibe market install user/repo
-
-# 发布你的技能到市场（通过 GitHub Issue）
-vibe market publish
-vibe market publish --dry-run  # 预览发布内容
 ```
 
-发布基于 GitHub Issues，无需额外服务器。关闭 Issue 即下架。
+搜索结果按信任级别排序：官方（内置可信包）→ 已策展（awesome list）→ 未验证来源，同级按 stars 降序。
 
 ### 📉 智能降级 (Degradation) — v5.2.0
 

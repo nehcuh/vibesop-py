@@ -30,7 +30,7 @@ class TestInstallCommand:
         assert result.exit_code == 0
         assert "gstack installed successfully" in result.output
         mock_installer.install_pack.assert_called_once_with(
-            "gstack", None, platforms=["claude-code"], upgrade=False
+            "gstack", None, platforms=["claude-code"], upgrade=False, scope="global"
         )
 
     @patch("vibesop.cli.commands.install.PackInstaller")
@@ -59,6 +59,7 @@ class TestInstallCommand:
             "https://github.com/user/my-skills",
             platforms=["claude-code"],
             upgrade=False,
+            scope="global",
         )
 
     @patch("vibesop.cli.commands.install.PackInstaller")
@@ -93,7 +94,7 @@ class TestInstallCommand:
         result = runner.invoke(app, ["install", "superpowers", "--force"])
         assert result.exit_code == 0
         mock_installer.install_pack.assert_called_once_with(
-            "superpowers", None, platforms=["claude-code"], upgrade=False
+            "superpowers", None, platforms=["claude-code"], upgrade=False, scope="global"
         )
 
     @patch("vibesop.cli.commands.install.ExternalSkillLoader")
@@ -130,7 +131,7 @@ class TestInstallCommand:
         result = runner.invoke(app, ["install", "--auto"])
         assert result.exit_code == 0
         mock_installer.install_pack.assert_called_once_with(
-            "omx", None, platforms=["claude-code"], upgrade=False
+            "omx", None, platforms=["claude-code"], upgrade=False, scope="global"
         )
 
     @patch("vibesop.cli.commands.install.PackInstaller")
@@ -211,7 +212,7 @@ class TestInstallCommand:
         assert "gstack installed successfully" in result.output
         assert "Platform: claude-code" in result.output
         mock_installer.install_pack.assert_called_once_with(
-            "gstack", None, platforms=["claude-code"], upgrade=False
+            "gstack", None, platforms=["claude-code"], upgrade=False, scope="global"
         )
 
     @patch("vibesop.cli.commands.install.PackInstaller")
@@ -230,7 +231,7 @@ class TestInstallCommand:
         result = runner.invoke(app, ["install", "gstack", "--platform", "cursor"])
         assert result.exit_code == 0
         mock_installer.install_pack.assert_called_once_with(
-            "gstack", None, platforms=["cursor"], upgrade=False
+            "gstack", None, platforms=["cursor"], upgrade=False, scope="global"
         )
 
     def test_install_invalid_platform(self) -> None:
@@ -259,5 +260,33 @@ class TestInstallCommand:
         result = runner.invoke(app, ["install", "--auto", "--platform", "opencode"])
         assert result.exit_code == 0
         mock_installer.install_pack.assert_called_once_with(
-            "omx", None, platforms=["opencode"], upgrade=False
+            "omx", None, platforms=["opencode"], upgrade=False, scope="global"
         )
+
+    @patch("vibesop.cli.commands.install.PackInstaller")
+    @patch("vibesop.cli.commands.install.ExternalSkillLoader")
+    def test_install_with_project_scope(
+        self, mock_loader_cls: Any, mock_installer_cls: Any
+    ) -> None:
+        """--scope project threads the scope through and skips platform resolution."""
+        mock_installer = MagicMock()
+        mock_installer.install_pack.return_value = (True, "Installed gstack")
+        mock_installer_cls.return_value = mock_installer
+
+        mock_loader = MagicMock()
+        mock_loader.get_supported_packs.return_value = {}
+        mock_loader_cls.return_value = mock_loader
+
+        result = runner.invoke(app, ["install", "gstack", "--scope", "project"])
+        assert result.exit_code == 0
+        assert "gstack installed successfully" in result.output
+        # Project scope skips platform symlinks, so no platform messaging.
+        assert "No platform preference found" not in result.output
+        mock_installer.install_pack.assert_called_once_with(
+            "gstack", None, platforms=None, upgrade=False, scope="project"
+        )
+
+    def test_install_invalid_scope(self) -> None:
+        result = runner.invoke(app, ["install", "gstack", "--scope", "bogus"])
+        assert result.exit_code == 1
+        assert "--scope must be 'global' or 'project'" in result.output

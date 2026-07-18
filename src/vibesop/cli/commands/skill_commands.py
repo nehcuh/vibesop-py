@@ -12,8 +12,6 @@ Usage:
     vibe skill stale [--auto] [--json]
     vibe skill end-check [--json]
     vibe skill add <source> [--global] [--auto-config/--manual-config] [--force]
-    vibe skill share <skill_id>
-    vibe skill discover [query] [--json]
     vibe skill cleanup [--auto] [--dry-run]
 """
 
@@ -31,7 +29,6 @@ from rich.panel import Panel
 from rich.table import Table
 
 from vibesop.cli.commands.cleanup_cmd import cleanup
-from vibesop.cli.commands.community_cmd import discover, share
 from vibesop.core.skills.config_manager import SkillConfigManager
 
 logger = logging.getLogger(__name__)
@@ -104,11 +101,10 @@ def _skill_overview(  # pyright: ignore[reportUnusedFunction]
 
     actions = (
         "[cyan]vibe skill list[/cyan]            [dim]— browse all installed skills[/dim]\n"
-        "[cyan]vibe skill discover[/cyan]        [dim]— find community skills[/dim]\n"
+        "[cyan]vibe market search <query>[/cyan] [dim]— find skills on GitHub[/dim]\n"
         "[cyan]vibe skill cleanup[/cyan]         [dim]— review and prune stale skills[/dim]\n"
         "[cyan]vibe skill enable/disable[/cyan]  [dim]— toggle skills on/off[/dim]\n"
-        "[cyan]vibe skill stale[/cyan]           [dim]— detailed health analysis[/dim]\n"
-        "[cyan]vibe skill share[/cyan]           [dim]— publish your skill to the community[/dim]"
+        "[cyan]vibe skill stale[/cyan]           [dim]— detailed health analysis[/dim]"
     )
 
     console.print(
@@ -1009,26 +1005,6 @@ def _verify_and_sync(skill_id: str, _scope: str) -> None:
 
     console.print("[dim]Syncing to platform...[/dim]")
     console.print("[green]✓ Synced[/green]")
-
-
-# ---------------------------------------------------------------------------
-# Community commands (delegated)
-# ---------------------------------------------------------------------------
-
-
-@app.command(name="share", help="Publish a skill to the community via GitHub Issues")
-def _share_cmd(  # pyright: ignore[reportUnusedFunction]
-    skill_id: str = typer.Argument(..., help="Skill ID to share"),
-) -> None:
-    share(skill_id)
-
-
-@app.command(name="discover", help="Discover community-shared skills from GitHub Issues")
-def _discover_cmd(  # pyright: ignore[reportUnusedFunction]
-    query: str | None = typer.Argument(None, help="Search keywords"),
-    json_output: bool = typer.Option(False, "--json", "-j", help="Output as JSON"),
-) -> None:
-    discover(query=query, json_output=json_output)
 
 
 @app.command(name="cleanup", help="Interactively review and clean up low-quality or stale skills")

@@ -410,7 +410,7 @@ class SkillSecurityAuditor:
                 is_source_trusted = source_url and store.is_trusted_source(source_url)
 
                 is_user_trusted = False
-                if pack_name and pack_path is not None and store.is_trusted_pack(pack_name):
+                if pack_name and pack_path is not None and pack_name in store.get_trusted_packs():
                     content_sha256 = MarkerFileManager().calculate_checksum(pack_path)
                     is_user_trusted = store.is_trusted_pack(
                         pack_name, content_sha256=content_sha256
@@ -655,7 +655,7 @@ class SkillSecurityAuditor:
             if pack_name in TRUSTED_PACKS:
                 return True
 
-            if not store.is_trusted_pack(pack_name):
+            if pack_name not in store.get_trusted_packs():
                 return False
 
             # F-10: user trust is bound to the pack's content hash. If the tree

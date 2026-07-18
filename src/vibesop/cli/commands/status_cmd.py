@@ -240,50 +240,6 @@ def _load_suggestions_count() -> int:
         return 0
 
 
-def _load_community_trending() -> Panel | None:
-    """Build community trending skills panel from GitHub Issues."""
-    try:
-        import json
-        import os
-        import urllib.request
-
-        token = os.environ.get("GITHUB_TOKEN", os.environ.get("GH_TOKEN", ""))
-        headers = {"Accept": "application/vnd.github.v3+json"}
-        if token:
-            headers["Authorization"] = f"Bearer {token}"
-
-        url = (
-            "https://api.github.com/repos/nehcuh/vibesop-py/issues"
-            "?labels=skill-share&state=open&per_page=5&sort=reactions&direction=desc"
-        )
-        # v7.0.11: safe_urlopen enforces https + private-host blocking.
-        from vibesop.utils.url_safety import safe_urlopen
-
-        req = urllib.request.Request(url, headers=headers)
-        body = safe_urlopen(req, max_bytes=10 * 1024 * 1024, timeout=5)
-        issues = json.loads(body)
-
-        if not issues:
-            return None
-
-        lines: list[str] = []
-        for issue in issues[:5]:
-            title = issue.get("title", "").replace("[技能分享] ", "").strip()
-            reactions = issue.get("reactions", {}).get("+1", 0)
-            url_link = issue.get("html_url", "")
-            lines.append(f"[cyan][link={url_link}]{title}[/link][/cyan] [dim]👍 {reactions}[/dim]")
-
-        content = "\n".join(lines)
-        return Panel(
-            content,
-            title="[bold]Community Trending[/bold]",
-            border_style="cyan",
-            box=ROUNDED,
-        )
-    except Exception:
-        return None
-
-
 def _detect_first_run(project_root: Path) -> bool:
     """Check if this appears to be the first run."""
     analytics_exists = (project_root / ".vibe" / "analytics.jsonl").exists()
@@ -356,11 +312,6 @@ def status(
 
     # Warnings
     local_console.print(_load_warnings(project_root))
-
-    # Community trending
-    trending = _load_community_trending()
-    if trending:
-        local_console.print(trending)
 
     # Skill suggestions
     suggestion_count = _load_suggestions_count()

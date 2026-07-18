@@ -35,11 +35,16 @@ def trust(
         console.print(f"Trusted source: {pack}")
     else:
         content_sha256 = PackInstaller.compute_pack_hash(pack)
+        if not content_sha256:
+            console.print(
+                f"[red]Cannot trust pack '{pack}': it is not installed, so no content "
+                "hash can be recorded.[/red]\n"
+                f"[dim]Install it first ([cyan]vibe install {pack}[/cyan]), or trust a "
+                "source URL instead.[/dim]"
+            )
+            raise typer.Exit(1)
         store.trust_pack(pack, source_url, content_sha256=content_sha256)
-        if content_sha256:
-            console.print(f"Trusted pack: {pack} (sha256: {content_sha256[:16]}...)")
-        else:
-            console.print(f"Trusted pack: {pack} (pack not installed — no hash recorded)")
+        console.print(f"Trusted pack: {pack} (sha256: {content_sha256[:16]}...)")
 
 
 def _list_trusted(store: TrustStore) -> None:

@@ -19,6 +19,9 @@ Examples:
     # Install for a specific platform only
     vibe install superpowers --platform claude-code
 
+    # Install into the current project only (.vibe/skills/)
+    vibe install superpowers --scope project
+
     # Auto-install all recommended packs
     vibe install --auto
 
@@ -26,7 +29,9 @@ Examples:
     vibe install --list
 """
 
+from collections.abc import Collection
 from pathlib import Path
+from typing import Any, Literal
 
 import typer
 from rich.console import Console
@@ -91,22 +96,38 @@ def install(
         "-p",
         help=_INSTALL_DOCSTRING_PLATFORM_HELP,
     ),
+    scope: str = typer.Option(
+        "global",
+        "--scope",
+        help="Install scope: 'global' (~/.config/skills + platform symlinks) or "
+        "'project' (.vibe/skills, current project only)",
+    ),
 ) -> None:
     """Install skill packs from trusted names or arbitrary Git URLs."""
-    # Resolve target platforms (flag > project config > user config > default)
-    platforms_list, platforms_source = _resolve_platforms(platform)
+    if scope not in ("global", "project"):
+        console.print("[red]--scope must be 'global' or 'project'[/red]")
+        raise typer.Exit(1)
+    scope_value: Literal["global", "project"] = "project" if scope == "project" else "global"
 
-    if platforms_source == "default":
-        console.print(
-            "[dim]No platform preference found — defaulting to claude-code only.[/dim]\n"
-            "[dim]To target other agents (kimi-cli, opencode, cursor, pi), run:[/dim]\n"
-            "  [cyan]vibe config platforms claude-code,kimi-cli[/cyan]\n"
-            "[dim]Or pass --platform <list> per install. Use --platform all for legacy behavior.[/dim]\n"
-        )
-    elif platforms_source != "cli-flag":
-        label = "project" if platforms_source == "project-config" else "user"
-        target_str = "all platforms" if platforms_list is None else ", ".join(platforms_list)
-        console.print(f"[dim]Using {label} config platforms: {target_str}[/dim]\n")
+    # Resolve target platforms (flag > project config > user config > default).
+    # Project-scope installs skip platform symlinks entirely.
+    if scope_value == "global":
+        platforms_list, platforms_source = _resolve_platforms(platform)
+
+        if platforms_source == "default":
+            console.print(
+                "[dim]No platform preference found — defaulting to claude-code only.[/dim]\n"
+                "[dim]To target other agents (kimi-cli, opencode, cursor, pi), run:[/dim]\n"
+                "  [cyan]vibe config platforms claude-code,kimi-cli[/cyan]\n"
+                "[dim]Or pass --platform <list> per install. Use --platform all for legacy "
+                "behavior.[/dim]\n"
+            )
+        elif platforms_source != "cli-flag":
+            label = "project" if platforms_source == "project-config" else "user"
+            target_str = "all platforms" if platforms_list is None else ", ".join(platforms_list)
+            console.print(f"[dim]Using {label} config platforms: {target_str}[/dim]\n")
+    else:
+        platforms_list = None
 
     # List mode
     if list_available:
@@ -115,7 +136,7 @@ def install(
 
     # Auto mode
     if auto:
-        _auto_install(force, skip_verify, platforms_list)
+        _auto_install(force, skip_verify, platforms_list, scope=scope_value)
         return
 
     # Manual mode - require name_or_url
@@ -140,6 +161,7 @@ def install(
         platforms=platforms_list,
         upgrade=upgrade,
         allow_unsafe_build=allow_unsafe_build,
+        scope=scope_value,
     )
 
 
@@ -246,7 +268,12 @@ def _resolve_platforms(
     return resolved, source
 
 
-def _auto_install(force: bool, skip_verify: bool, platforms: list[str] | None = None) -> None:
+def _auto_install(
+    force: bool,
+    skip_verify: bool,
+    platforms: list[str] | None = None,
+    scope: Literal["global", "project"] = "global",
+) -> None:
     """Auto-install recommended skill packs."""
     console.print(f"\n[bold cyan]🚀 Auto-Installing Recommended Packs[/bold cyan]\n{'=' * 40}\n")
 
@@ -256,13 +283,15 @@ def _auto_install(force: bool, skip_verify: bool, platforms: list[str] | None = 
 
     for name in DEFAULT_AUTO_INSTALL_PACKS:
         info = supported.get(name, {})
-        if info.get("installed") and not force:
+        if scope == "global" and info.get("installed") and not force:
             console.print(f"[dim]⊘ {name}: already installed, skipping[/dim]")
             results[name] = "skipped"
             continue
 
         console.print(f"[dim]Installing {name}...[/dim]")
-        result = _install_pack(name, force, skip_verify, quiet=True, platforms=platforms)
+        result = _install_pack(
+            name, force, skip_verify, quiet=True, platforms=platforms, scope=scope
+        )
         results[name] = result
 
     # Summary
@@ -304,7 +333,7 @@ def _prompt_trust_if_untrusted(
                 f"[dim]New source detected. Trust it with:[/dim] [cyan]vibe trust {pack_url}[/cyan]\n"
             )
     elif pack_url and pack_url not in TRUSTED_PACKS.values():
-        if not store.is_trusted_pack(pack_name) and not store.is_trusted_source(pack_url):
+        if pack_name not in store.get_trusted_packs() and not store.is_trusted_source(pack_url):
             console.print(
                 f"[dim]New source detected. Trust it with:[/dim] [cyan]vibe trust {pack_url}[/cyan]\n"
             )
@@ -318,6 +347,7 @@ def _install_pack(
     platforms: list[str] | None = None,
     upgrade: bool = False,
     allow_unsafe_build: bool = False,
+    scope: Literal["global", "project"] = "global",
 ) -> str:
     """Install a skill pack by name or URL.
 
@@ -344,13 +374,16 @@ def _install_pack(
         source = pack_url or pack_name
         console.print(f"\n[bold cyan]📦 Installing {pack_name}[/bold cyan]\n{'=' * 40}\n")
         console.print(f"[dim]Source:[/dim] {source}\n")
+        if scope == "project":
+            console.print("[dim]Scope:[/dim] project (.vibe/skills, this project only)\n")
         if platforms:
             console.print(f"[dim]Platform:[/dim] {', '.join(platforms)}\n")
 
     loader = ExternalSkillLoader()
 
-    # Check if already installed (unless force)
-    if not force and pack_url is None:
+    # Check if already installed (unless force). The supported-packs check only
+    # covers global storage, so it is skipped for project-scope installs.
+    if not force and pack_url is None and scope == "global":
         supported = loader.get_supported_packs()
         if supported.get(pack_name, {}).get("installed"):
             if not quiet:
@@ -366,7 +399,7 @@ def _install_pack(
     try:
         if quiet:
             success, msg = installer.install_pack(
-                pack_name, pack_url, platforms=platforms, upgrade=upgrade
+                pack_name, pack_url, platforms=platforms, upgrade=upgrade, scope=scope
             )
         else:
             with Progress(
@@ -382,7 +415,7 @@ def _install_pack(
                 # since install_pack doesn't expose incremental progress.
                 progress.update(task, completed=30, description="Analyzing repository...")
                 success, msg = installer.install_pack(
-                    pack_name, pack_url, platforms=platforms, upgrade=upgrade
+                    pack_name, pack_url, platforms=platforms, upgrade=upgrade, scope=scope
                 )
                 progress.update(task, completed=100, description="Installation complete")
     except PackIntegrityError as e:
@@ -402,9 +435,18 @@ def _install_pack(
 
             if not skip_verify:
                 console.print("[dim]Verifying installation...[/dim]")
-                discovered = loader.discover_from_pack(
-                    pack_name, loader.external_paths[0] / pack_name
-                )
+                discovered: Collection[Any]
+                if scope == "project":
+                    from vibesop.utils.pack_name import sanitize_pack_name
+
+                    project_pack = (
+                        installer.project_root / ".vibe" / "skills" / sanitize_pack_name(pack_name)
+                    )
+                    discovered = list(project_pack.rglob("SKILL.md"))
+                else:
+                    discovered = loader.discover_from_pack(
+                        pack_name, loader.external_paths[0] / pack_name
+                    )
                 if discovered:
                     console.print(
                         f"[green]✓ {len(discovered)} skill(s) discovered and ready[/green]\n"

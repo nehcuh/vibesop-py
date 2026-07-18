@@ -1,27 +1,32 @@
-"""VibeSOP market command - Discover, publish, and install skills from GitHub.
+"""VibeSOP market command - Discover and install skills from the public ecosystem.
 
 Usage:
     vibe market search <query>
     vibe market search <query> --json
+    vibe market trending <category>
     vibe market install <user/repo>
-    vibe market publish [user/repo]
+    vibe market install <user/repo> --scope project
 """
 
 from __future__ import annotations
 
 import json
-from pathlib import Path
+from typing import Literal
 
 import typer
 from rich.console import Console
 from rich.table import Table
 
+from vibesop.constants import TRUSTED_PACKS
+from vibesop.market.awesome_list import fetch_awesome_lists
 from vibesop.market.crawler import GitHubSkillCrawler, SkillRepo
-from vibesop.market.publisher import SkillPublisher
 
 console = Console()
 
-app = typer.Typer(name="market", help="Discover, publish, and install VibeSOP skills")
+app = typer.Typer(name="market", help="Discover and install skills from the public skill ecosystem")
+
+#: Lower rank sorts first.
+_TIER_RANK = {"official": 0, "curated": 1}
 
 
 @app.command()
@@ -30,7 +35,11 @@ def search(
     page: int = typer.Option(1, "--page", "-p", help="Page number"),
     json_output: bool = typer.Option(False, "--json", "-j", help="Output as JSON"),
 ) -> None:
-    """Search for VibeSOP skills on GitHub.
+    """Search the public skill ecosystem on GitHub.
+
+    Combines GitHub topic search (agent-skills, claude-skills, and friends)
+    with curated awesome lists. Results are deduplicated by repository and
+    sorted by trust tier (official/curated first), then by stars.
 
     \b
     Examples:
@@ -43,104 +52,114 @@ def search(
         # Search page 2
         vibe market search git --page 2
     """
-    console.print("[yellow]⚠️ Market features are experimental[/yellow]")
     crawler = GitHubSkillCrawler()
     results = crawler.search(query, page=page)
-    results = _enrich_with_local_quality(results)
-
-    # Also search published skills (GitHub Issues)
-    publisher = SkillPublisher()
-    listings = publisher.search_issues(query, page=page)
+    results = _merge_results(results, _curated_matches(query))
+    _apply_trusted_tier(results)
+    results.sort(key=lambda r: (_TIER_RANK.get(r.tier, 2), -r.stars))
 
     if json_output:
-        data = []
-        for r in results:
-            data.append(
-                {
-                    "source": "github",
-                    "name": r.name,
-                    "full_name": r.full_name,
-                    "description": r.description,
-                    "stars": r.stars,
-                    "topics": r.topics,
-                    "html_url": r.html_url,
-                    "quality_score": round(r.quality_score, 1),
-                }
-            )
-        for listing in listings:
-            data.append(
-                {
-                    "source": "published",
-                    "repo_name": listing.repo_name,
-                    "description": listing.description,
-                    "tags": listing.tags,
-                    "homepage": listing.homepage,
-                    "issue_url": listing.issue_url,
-                }
-            )
-        console.print(json.dumps(data, indent=2))
+        _print_results_json(results)
         return
 
-    if not results and not listings:
+    if not results:
         console.print("[yellow]No skills found.[/yellow]")
         return
 
-    if results:
-        table = Table(title=f"Market Search Results for '{query}'")
-        table.add_column("Name", style="cyan")
-        table.add_column("Description", style="green")
-        table.add_column("Stars", justify="right", style="yellow")
-        table.add_column("Quality", justify="center")
-        table.add_column("Install Command", style="dim")
+    _render_results_table(results, f"Market Search Results for '{query}'")
 
-        for repo in results:
-            quality_display = _quality_icon(repo.quality_score)
-            table.add_row(
-                repo.name,
-                repo.description or "\u2014",
-                str(repo.stars),
-                quality_display,
-                f"vibe market install {repo.full_name}",
-            )
 
-        console.print(table)
+#: Friendly category → GitHub topic mapping for ``vibe market trending``.
+_CATEGORY_TOPICS: dict[str, str] = {
+    "agent": "agent-skills",
+    "claude": "claude-skills",
+    "claude-code": "claude-code-skills",
+    "skill-md": "skill-md",
+}
 
-    if listings:
-        console.print(f"\n[bold]Published Skills ({len(listings)}):[/bold]")
-        for listing in listings:
-            console.print(
-                f"  [cyan]{listing.repo_name}[/cyan] — {listing.description or 'no description'}"
-            )
-            console.print(f"    [dim]Published: {listing.issue_url}[/dim]")
-            if listing.tags:
-                console.print(f"    [dim]Tags: {', '.join(listing.tags)}[/dim]")
 
-    total = len(results) + len(listings)
-    console.print(f"\n[dim]Found {total} result(s)[/dim]")
+@app.command()
+def trending(
+    category: str = typer.Argument(
+        ...,
+        help="Category: agent, claude, claude-code, skill-md, or any GitHub topic",
+    ),
+    json_output: bool = typer.Option(False, "--json", "-j", help="Output as JSON"),
+) -> None:
+    """Show trending skill repositories for a category, sorted by stars.
+
+    The category maps to a GitHub topic; unknown categories are used as
+    topic names directly.
+
+    \b
+    Examples:
+        # Trending agent skills
+        vibe market trending agent
+
+        # Trending Claude Code skills, as JSON
+        vibe market trending claude-code --json
+    """
+    topic = _CATEGORY_TOPICS.get(category)
+    if topic is None:
+        topic = category
+        console.print(
+            f"[dim]Unknown category '{category}'; using it as a GitHub topic directly.[/dim]"
+        )
+
+    crawler = GitHubSkillCrawler(topics=(topic,))
+    results = crawler.search("")
+    _apply_trusted_tier(results)
+    results.sort(key=lambda r: (_TIER_RANK.get(r.tier, 2), -r.stars))
+
+    if json_output:
+        _print_results_json(results)
+        return
+
+    if not results:
+        console.print("[yellow]No skills found.[/yellow]")
+        return
+
+    _render_results_table(results, f"Trending Skills for '{category}' (topic: {topic})")
 
 
 @app.command()
 def install(
     repo: str = typer.Argument(..., help="GitHub repository in user/repo format"),
     yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation"),
+    scope: str = typer.Option(
+        "global",
+        "--scope",
+        help="Install scope: 'global' (~/.config/skills, all projects) or "
+        "'project' (.vibe/skills, current project only)",
+    ),
 ) -> None:
     """Install a skill from a GitHub repository.
 
-    Validates that the repository has a SKILL.md file at the root,
-    then installs it via the PackInstaller.
+    Validates that the repository contains at least one SKILL.md file
+    (root or subdirectory — skill packs keep skills in subdirectories),
+    then installs it via the PackInstaller. Both scopes run the full
+    security chain (pre-install audit, pack-lock integrity, build gate);
+    project scope skips platform symlinks and the global index.
 
     \b
     Examples:
-        # Install from GitHub repo
+        # Install from GitHub repo (global, visible to all projects)
         vibe market install user/repo
+
+        # Install into the current project's .vibe/skills/ only
+        vibe market install user/repo --scope project
 
         # Install without confirmation prompt
         vibe market install user/repo --yes
     """
-    console.print("[yellow]⚠️ Market features are experimental[/yellow]")
     import questionary
 
     from vibesop.installer.pack_installer import PackInstaller
+
+    if scope not in ("global", "project"):
+        console.print("[red]--scope must be 'global' or 'project'[/red]")
+        raise typer.Exit(1)
+    scope_value: Literal["global", "project"] = "project" if scope == "project" else "global"
 
     if "/" not in repo:
         console.print("[red]Repository must be in 'user/repo' format[/red]")
@@ -161,14 +180,22 @@ def install(
         has_skill_md = crawler.validate(skill_repo)
 
     if not has_skill_md:
-        console.print(f"[red]Repository '{repo}' does not have a SKILL.md file at the root[/red]")
+        console.print(f"[red]Repository '{repo}' does not contain any SKILL.md file[/red]")
         raise typer.Exit(1)
 
     console.print(f"[green]Repository '{repo}' is valid[/green]")
 
     if not yes:
+        dest = (
+            f"~/.config/skills/{skill_repo.name} (global scope)"
+            if scope_value == "global"
+            else f".vibe/skills/{skill_repo.name} (project scope, current project only)"
+        )
+        tier_repo = _resolve_install_tier(repo, skill_repo)
+        if tier_repo.tier != "official":
+            _print_tier_panel(tier_repo)
         confirmed = questionary.confirm(
-            f"Install skill pack from {url}?",
+            f"Install skill pack from {url} into {dest}?",
             default=True,
         ).ask()
         if not confirmed:
@@ -177,9 +204,11 @@ def install(
 
     installer = PackInstaller()
     try:
-        success, message = installer.install_pack(skill_repo.name, url)
+        success, message = installer.install_pack(skill_repo.name, url, scope=scope_value)
         if success:
             console.print(f"[green]Successfully installed {skill_repo.name}[/green]")
+            for line in message.split("\n"):
+                console.print(f"[dim]{line}[/dim]")
         else:
             console.print(f"[red]Installation failed: {message}[/red]")
             raise typer.Exit(1) from None
@@ -188,137 +217,115 @@ def install(
         raise typer.Exit(1) from e
 
 
-@app.command()
-def publish(
-    repo: str = typer.Argument(
-        "",
-        help="GitHub repository in user/repo format (auto-detected from git remote if omitted)",
-    ),
-    dry_run: bool = typer.Option(False, "--dry-run", help="Preview the issue without creating it"),
-) -> None:
-    """Publish a skill to the VibeSOP marketplace via GitHub Issue.
+def _merge_results(github_results: list[SkillRepo], curated: list[SkillRepo]) -> list[SkillRepo]:
+    """Merge GitHub search results with curated awesome-list entries.
 
-    Creates a labeled Issue on the VibeSOP registry repository.
-    Requires GITHUB_TOKEN or GH_TOKEN environment variable.
-
-    \b
-    Examples:
-        # Auto-detect repo from git remote
-        vibe market publish
-
-        # Specify repo explicitly
-        vibe market publish user/my-skill
-
-        # Preview without publishing
-        vibe market publish --dry-run
+    Deduplicated by full_name. When a repo appears in both channels, the
+    GitHub entry (which has real stars/description) wins and inherits the
+    curated tier.
     """
-    console.print("[yellow]⚠️ Market features are experimental[/yellow]")
-    if not repo:
-        repo = _detect_git_remote()
-        if not repo:
-            console.print(
-                "[red]Could not detect GitHub repo. Run from a git repo or specify user/repo.[/red]"
-            )
-        raise typer.Exit(1)
-
-    publisher = SkillPublisher()
-    result = publisher.publish(repo, dry_run=dry_run)
-
-    if "error" in result:
-        console.print(f"[red]Publish failed: {result['error']}[/red]")
-        if "detail" in result:
-            console.print(f"[dim]{result['detail']}[/dim]")
-        raise typer.Exit(1)
-
-    if dry_run:
-        console.print("[bold]Dry run — issue payload:[/bold]")
-        console.print_json(json.dumps(result["payload"], indent=2))
-        return
-
-    console.print("[green]Skill published![/green]")
-    console.print(f"  Issue: {result['issue_url']}")
-    console.print(f"  Install: [cyan]vibe market install {repo}[/cyan]")
+    merged: dict[str, SkillRepo] = {}
+    for repo in github_results:
+        merged[repo.full_name] = repo
+    for repo in curated:
+        existing = merged.get(repo.full_name)
+        if existing is None:
+            merged[repo.full_name] = repo
+        else:
+            existing.tier = "curated"
+    return list(merged.values())
 
 
-def _detect_git_remote() -> str:
-    """Detect GitHub owner/repo from git remote origin."""
-    import subprocess
-
-    try:
-        output = subprocess.check_output(
-            ["git", "remote", "get-url", "origin"],
-            cwd=Path.cwd(),
-            text=True,
-            stderr=subprocess.DEVNULL,
-        ).strip()
-        for prefix in ("https://github.com/", "git@github.com:"):
-            if prefix in output:
-                path = output.split(prefix, 1)[1]
-                if path.endswith(".git"):
-                    path = path[:-4]
-                return path
-    except (subprocess.CalledProcessError, FileNotFoundError, IndexError):
-        pass
-    return ""
+def _curated_matches(query: str) -> list[SkillRepo]:
+    """Return awesome-list entries whose repo name matches the query."""
+    needle = query.lower()
+    return [r for r in fetch_awesome_lists() if needle in r.full_name.lower()]
 
 
-def _enrich_with_local_quality(results: list[SkillRepo]) -> list[SkillRepo]:
-    """Enrich market search results with local quality data.
+def _apply_trusted_tier(results: list[SkillRepo]) -> None:
+    """Mark repos listed in TRUSTED_PACKS as official."""
+    trusted = _trusted_full_names()
+    for repo in results:
+        if repo.full_name in trusted:
+            repo.tier = "official"
 
-    Combines GitHub stars (30%), local ratings (40%), and usage frequency (30%)
-    into a composite quality_score (0-100) and sorts by descending score.
+
+def _trusted_full_names() -> set[str]:
+    """Full names (owner/repo) of the hard-coded official packs."""
+    return {url.split("github.com/", 1)[-1] for url in TRUSTED_PACKS.values()}
+
+
+def _resolve_install_tier(full_name: str, fallback: SkillRepo) -> SkillRepo:
+    """Determine the trust tier of a repo about to be installed.
+
+    No extra network requests: official packs come from the hard-coded
+    TRUSTED_PACKS, curated repos are matched against the cache-backed
+    awesome-list channel. Anything else keeps the fallback's unknown tier.
     """
-    if not results:
-        return results
+    if full_name in _trusted_full_names():
+        fallback.tier = "official"
+        return fallback
+    for entry in fetch_awesome_lists():
+        if entry.full_name == full_name:
+            return entry
+    return fallback
 
-    local_ratings = _get_local_ratings()
-    local_usage = _get_local_usage()
-    max_stars = max((r.stars for r in results), default=1)
+
+def _print_tier_panel(repo: SkillRepo) -> None:
+    """Show trust metadata before installing a non-official repository."""
+    if repo.tier == "curated":
+        label = r"[cyan]\[curated][/cyan]"
+    else:
+        label = r"[red]\[未知来源 - 未经验证][/red]"
+    console.print(f"  [dim]Tier:[/dim] {label}")
+    console.print(f"  [dim]Stars:[/dim] {repo.stars}")
+    console.print(f"  [dim]Description:[/dim] {repo.description or '—'}")
+
+
+def _print_results_json(results: list[SkillRepo]) -> None:
+    """Print search/trending results as JSON."""
+    data = [
+        {
+            "source": r.source_channel,
+            "tier": r.tier,
+            "name": r.name,
+            "full_name": r.full_name,
+            "description": r.description,
+            "stars": r.stars,
+            "topics": r.topics,
+            "html_url": r.html_url,
+        }
+        for r in results
+    ]
+    console.print(json.dumps(data, indent=2))
+
+
+def _render_results_table(results: list[SkillRepo], title: str) -> None:
+    """Render search/trending results as a table."""
+    table = Table(title=title)
+    table.add_column("Name", style="cyan")
+    table.add_column("Tier", justify="center")
+    table.add_column("Description", style="green")
+    table.add_column("Stars", justify="right", style="yellow")
+    table.add_column("Install Command", style="dim")
 
     for repo in results:
-        skill_id = repo.infer_skill_id()
+        table.add_row(
+            repo.name,
+            _tier_badge(repo.tier),
+            repo.description or "—",
+            str(repo.stars),
+            f"vibe market install {repo.full_name}",
+        )
 
-        stars_norm = min(repo.stars / max(max_stars, 1), 1.0) * 30
-        rating_norm = local_ratings.get(skill_id, 0.5) * 40
-        usage_count = local_usage.get(skill_id, 0)
-        usage_norm = min(usage_count / max(max(local_usage.values(), default=1), 1), 1.0) * 30
-
-        repo.quality_score = stars_norm + rating_norm + usage_norm
-
-    results.sort(key=lambda r: r.quality_score, reverse=True)
-    return results
-
-
-def _get_local_ratings() -> dict[str, float]:
-    """Get local skill ratings, normalized to 0-1."""
-    try:
-        from vibesop.core.skills.ratings import SkillRatingStore
-
-        store = SkillRatingStore()
-        top = store.get_top_rated(limit=100, min_reviews=1)
-        return {skill_id: score / 5.0 for skill_id, score, _count in top}
-    except (ImportError, OSError):
-        return {}
+    console.print(table)
+    console.print(f"\n[dim]Found {len(results)} result(s)[/dim]")
 
 
-def _get_local_usage() -> dict[str, int]:
-    """Get local skill usage counts."""
-    try:
-        from vibesop.core.analytics import AnalyticsStore
-
-        store = AnalyticsStore()
-        popular = store.get_popular_skills(limit=100)
-        return {skill_id: count for skill_id, count, _satisfaction in popular}
-    except (ImportError, OSError):
-        return {}
-
-
-def _quality_icon(score: float) -> str:
-    """Display a quality score as a colored icon."""
-    if score >= 70:
-        return f"[green]\u2605 {score:.0f}[/green]"
-    elif score >= 40:
-        return f"[yellow]\u2605 {score:.0f}[/yellow]"
-    elif score > 0:
-        return f"[dim]{score:.0f}[/dim]"
-    return "\u2014"
+def _tier_badge(tier: str) -> str:
+    """Render a trust tier as a colored badge."""
+    if tier == "official":
+        return r"[green]\[官方][/green]"
+    if tier == "curated":
+        return r"[cyan]\[curated][/cyan]"
+    return r"[dim]\[未知][/dim]"
