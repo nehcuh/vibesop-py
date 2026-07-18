@@ -1,20 +1,20 @@
 # VibeSOP Project Status
 
-> **Last Updated**: 2026-06-14
+> **Last Updated**: 2026-07-18
 > **Version**: 8.0.0.dev0
 > **Status**: 🟢 Production Ready (SkillOS — Spec v3.0, Conformance Suite, Agent Runtime, Multi-Agent Squad)
 
 ## Executive Summary
 
-VibeSOP is a **battle-tested, production-ready** AI-powered Skill Operating System (SkillOS) for developer tools. The project has successfully completed all planned improvements across security, cross-platform compatibility, architecture, and documentation.
+VibeSOP is a **battle-tested, production-ready** AI-powered Skill Operating System (SkillOS) for developer tools. The project has successfully completed all planned improvements across security, cross-platform compatibility, architecture, and documentation. The control-panel extension was split into its own repository ([vibesop-py-panel](https://github.com/nehcuh/vibesop-py-panel)) on 2026-07-18.
 
 ## Current Status
 
 ### ✅ Production Ready
 
 **Key Metrics:**
-- **Test Status**: 2,972 tests collected (2,972 passing, 0 failing, 12 skipped)
-- **Security**: AST-based safe evaluation, no eval() usage
+- **Test Status**: 4,095 tests collected (4,066 passing in the default CI filter, 13 skipped — mostly external-environment dependent)
+- **Security**: AST-based safe evaluation, no eval() usage; T1 supply-chain hardening landed (F-01/F-02/F-03/F-10)
 - **Cross-Platform**: Windows, macOS, Linux compatible
 - **Documentation**: Complete with organized archive
 - **Architecture**: Clean, testable, dependency injection

@@ -793,7 +793,7 @@ Detailed architecture docs: [docs/architecture/](docs/architecture/)
 
 - [docs/PHILOSOPHY.md](docs/PHILOSOPHY.md) - 核心哲学和使命 / Core philosophy and mission
 - [docs/architecture/ARCHITECTURE.md](docs/architecture/ARCHITECTURE.md) - 系统架构 / System architecture
-- [docs/PROJECT_CONTEXT.md](docs/PROJECT_CONTEXT.md) - 项目背景 / Project context
+- [PROJECT_CONTEXT.md](PROJECT_CONTEXT.md) - 项目背景 / Project context
 - [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md) - 项目状态 / Project status
 
 ### 用户指南 User Guides

@@ -9,6 +9,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security & privacy (audit remediation, F-## series)
+- **T1 supply-chain hardening** (#69): F-01 eval sandbox (AST allowlist + fuzz
+  tests), F-02 pack-lock (per-pack commit SHA + content hash), F-03 interactive
+  gate for skill build scripts (fail-closed), F-10 trust store bound to
+  content hash.
+- **Privacy**: analytics opt-in + redact analytics/tracer/instinct data (F-06,
+  F-07, #66); PII/secret redaction utility (#65); `vibe data purge` — deletion
+  path for derived data (F-08, #68).
+- **Fix batches**: quick-wins day-1 (F-04/F-05/F-12/F-28/F-54/F-58, #60);
+  llm/config logic batch (F-19/F-20/F-22/F-24/F-48, #61); orchestration —
+  isolate squad member failures (F-27, #62), skip downstream steps on
+  dependency failure (F-25, #63), derive final_status + verifier ERROR
+  (F-26/F-47, #64).
+
+### Routing & skills
+- Session-end routing now guarded behind explicit signals (no accidental
+  session-end triggers).
+- Personal skills migrated to cross-cutting `.vibe/skills/cross-cutting/`.
+
+### Control panel split
+- Control panel development moved to its own repository,
+  [vibesop-py-panel](https://github.com/nehcuh/vibesop-py-panel); planning docs
+  removed from this repo. vibesop-py refocuses on its core positioning:
+  vibe-coding scaffolding, semantic query→skill routing, and coding-agent
+  optimization.
+
+### CI, release & repo quality (2026-07-18 convergence)
+- Fixed broken release pipeline: `ci.yml` now declares `workflow_call` so
+  `release.yml`'s ci-gate job works (every prior release run failed instantly).
+- CI lint green again: ruff excludes git-tracked `.vibe/` skill content
+  (third-party data, not project source).
+- Fixed the registry-coupled `test_discover_and_route_third_party_pack` by
+  isolating the router from repo-resident skills.
+- Security scan: pip-audit now also covers the full lockfile (all extras,
+  incl. torch/transformers); bandit skips consolidated into pyproject.toml
+  with justifications (B608 registered — single source of truth).
+- Dependabot switched to the `uv` ecosystem so it updates `uv.lock` directly.
+- `verify-release.sh` modernized (uv + basedpyright + PEP 440 dev versions);
+  `verify-type-checking.sh` uses basedpyright; dropped dead `sync-core.sh`
+  and the unused mypy dependency; pytest `minversion` aligned to 9.0; merged
+  duplicate `tests/benchmarks/` into `tests/benchmark/`; CI uv 0.5.0 → 0.11.19.
+- Deps: lockfile upgrade resolving Dependabot alerts (sentence-transformers
+  5.5+, urllib3/requests dropped from the lock).
+
 ## [8.0.0.dev0] — 2026-06-22
 
 ### v8.0.0-dev: Loop System (Phase 1) + deep-diagnosis fixes

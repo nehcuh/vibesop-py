@@ -1,6 +1,6 @@
 # VibeSOP Documentation Index
 
-> **Last Updated**: 2026-06-14
+> **Last Updated**: 2026-07-18
 > **Version**: 8.0.0.dev0
 
 This document serves as the central index for all VibeSOP documentation, organized by purpose and audience.
@@ -35,10 +35,10 @@ These files remain in the project root for discoverability and tool integration:
 
 ### Project Overview
 
-- **[Project Context](PROJECT_CONTEXT.md)** — Project background, goals, and scope
+- **[Project Context](../PROJECT_CONTEXT.md)** — Project background, goals, and scope（根目录，持续更新）
 - **[Project Status](PROJECT_STATUS.md)** — Current development status and milestones
 - **[Philosophy](PHILOSOPHY.md)** — Design principles and core philosophy (Discovery > Execution, Matching > Guessing, Memory > Intelligence, Open > Closed)
-- **[Roadmap](ROADMAP.md)** — Future development plans and timeline (v4.x → v6.0)
+- **[Roadmap](ROADMAP.md)** — Future development plans and timeline (v4.x → v8.0)
 - **[v8.0 Roadmap: Autonomous Loop System](ROADMAP.md#v800--autonomous-loop-system)** — 自主循环任务路线图
 - **[Loop Setup Guide](loop-setup-guide.md)** — Phase 1 实测部署指南（cron/systemd/launchd 配置 + 24h 观察指标）
 - **[Use Cases Guide](USE_CASES.md)** — 12 个具体场景的"痛点→方案→命令"手册（日常开发/编排/跨平台/自主监控/生命周期）
@@ -58,13 +58,13 @@ These files remain in the project root for discoverability and tool integration:
   - 4-stage routing cascade
   - Agent Runtime layer
   - Component structure and data flow
+- **[Architecture Guide (overview)](architecture/overview.md)** — 架构导览与阅读路径
+- **[Three Layers](architecture/three-layers.md)** — 三层模型详解
+- **[Routing System](architecture/routing-system.md)** — 路由系统设计与决策机制
 - **[Skill Runtime Interface](architecture/skill-runtime-interface.md)** — SkillRuntime contract and lifecycle state machine
-- **[Agent Integration Patterns](architecture/agent-integration-patterns.md)** — Platform adapter patterns
-- **[Session Management](architecture/session-management.md)** — Session context and intelligent routing
-- **[Orchestration Design](architecture/orchestration-design.md)** — Multi-intent detection and task decomposition
 - **[Workflow Engine](architecture/ARCHITECTURE.md#dynamic-workflow-engine-v60v62)** — Dynamic workflow engine: 6 patterns, platform compatibility, CLI flags
-- **[Routing Transparency](architecture/routing-transparency.md)** — Rejected candidates and decision explainability
-- **[Performance Benchmarks](architecture/performance-benchmarks.md)** — Latency, throughput, and optimization strategies
+- **[Cross-Platform Support](architecture/cross-platform-support.md)** — Windows / macOS / Linux 兼容设计
+- **[External Integrations](architecture/external-integrations.md)** — 外部技能包（superpowers/gstack/omx）集成架构
 
 ---
 
@@ -138,6 +138,7 @@ These files remain in the project root for discoverability and tool integration:
 - **[ADR 001](adr/001-skill-ecosystem-evolution.md)** — Skill Ecosystem Evolution (v5.x Roadmap)
 - **[ADR 002](adr/002-optimization-roadmap-v55.md)** — v5.4 → v5.5 Quality Convergence Roadmap
 - **[ADR 003](adr/003-plan-completion-criteria.md)** — Plan Completion Criteria
+- **[ADR 004](adr/004-deprecated-types-cleanup.md)** — Deprecated Types Cleanup（3 phases，已落地）
 
 ### Proposals
 
