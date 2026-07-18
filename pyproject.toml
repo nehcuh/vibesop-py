@@ -40,7 +40,7 @@ dependencies = [
 dev = [
     # pytest 9.0.3+ fixes CVE-2025-71176 (was pinned <9.0.0).
     "pytest>=9.0.3,<10.0.0",
-    "pytest-cov>=6.0.0,<7.0.0",
+    "pytest-cov>=6.0.0,<8.0.0",
     "pytest-asyncio>=1.0.0,<2.0.0",  # 1.x is required for pytest 9
     # pytest plugins required by the suite (previously only in [dependency-groups],
     # which CI's `uv sync --extra dev` did NOT install — causing collection-time
