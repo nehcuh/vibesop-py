@@ -1,5 +1,28 @@
 ## Current Session
 
+### S31 (2026-07-18 06:40~15:30) [vibesop-py 全面诊断 + panel 分拆 + 质量收口]
+
+- [x] **Fanout 六路诊断**（explore agents）：测试/静态检查/架构/文档/CI-发布/依赖安全。结论：代码内核健康，工程外围失修——main CI 红（`.vibe` 脚本 I001 + 注册表耦合测试）、release 管线从未跑通（`workflow_call` 缺失）、版本三方漂移（pyproject 8.0.0.dev0 / PyPI 5.4.6 / tag v5.4.5）、15 个堆积分支
+- [x] **Panel 分拆**：`../vibesop-py-panel` 实为 vibesop-py 的 worktree（34 提交 + 154 未提交文件）。WIP 全量提交保护 → 创建私有仓库 nehcuh/vibesop-py-panel → 推为 main（36 提交全历史）→ worktree 转独立克隆（.venv/node_modules/运行态完整迁移）
+- [x] **仓库清理**：主仓删除 6 个 panel 规划文档（a1b3227）；origin 15 个陈旧分支删除（备份 vibesop-py-branch-backup-20260718.bundle）；本地/远端均只剩 main
+- [x] **质量收口**（3 提交已推送）：c18d703 CI 门修复（ruff 排除 .vibe、测试 tmp project_root 隔离、bandit 配置收编、pip-audit 全 extras、uv 0.11.19、pytest 下限、删 mypy）、80b37e5 脚本现代化（dependabot→uv 生态、verify-* 重写、删 sync-core.sh、benchmark 双目录合并）、2efdaf6 文档止血（CHANGELOG 补 59 提交、INDEX 修死链+ADR-004、删陈旧 docs/PROJECT_CONTEXT.md）
+- [x] **验证**：CI 终审 6/6 全绿（run 29636446131）；本地 4067 passed / 覆盖率 74.65%；bandit/pip-audit（含 torch/transformers）0 问题
+
+**Key Discoveries**:
+1. pyproject 的 `[tool.bandit."skips"] test_id=[...]` **从未生效**（静默无效），正确写法是 `[tool.bandit]` 下扁平 `skips=[...]`
+2. `verify-release.sh` 的版本正则必然拒绝 `.dev0`——发布守门工具本身是坏的
+3. bandit B608 唯一命中是 `init_support.py:234` 的 TOML 模板 f-string（误报），已登记理由
+4. 审计声称的"失效 #nosec B108"其实是活抑制——移除前必须重跑扫描器验证
+
+**Next Steps**（用户提出的新方向，待评估实现）:
+1. **Skill 商店简化**：弃 GitHub Issues 模式，改为按需 GitHub 搜索 skill trend → 询问安装 → 全局/项目级配置
+2. **未命中查询追踪**：后台记录重复的无匹配查询，定期建议去 GitHub 搜索对应类别技能
+3. **任务蒸馏**：重复任务定期梳理，询问用户是否总结对话/流程为独立技能（instinct learning 延伸）
+4. **Langfuse**：评估结论——不进核心，可观测性留在 panel 层（已有 OTLP bridge）；核心只需本地结构化日志（沿用 F-06 opt-in 先例）
+5. 存量 backlog：文档深度治理（49 坏引用/187 版本漂移）、双 PromptChainGenerator 合并
+
+**Recorded**: yes — 4 个技术陷阱 + 1 个模式 → project-knowledge.md；2 个新 instincts
+
 ### S30 (2026-07-14 09:00~) 技能架构梳理、迁移与清理
 
 - [x] **内置技能梳理**：列出 14 个 `builtin-*` 技能，按功能分四类（Slash 命令/工作流/学习/会话管理）

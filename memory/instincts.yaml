@@ -163,3 +163,44 @@ instincts:
       - 检查是否有遗漏的局部变量依赖
     created_at: "2026-04-21"
     last_used: "2026-04-21"
+
+  - id: "550e8405-repo-split-worktree-2026"
+    pattern: "将 monorepo 中以 worktree 形式存在的子项目分拆为独立仓库：先提交保护全部 WIP，再把分支推送为新仓库的 main（保留全历史），fresh clone 后迁移 .venv/node_modules 等忽略文件（.venv 可直接移动当且仅当最终路径不变），最后 worktree remove + 删本地分支；删任何远端分支前先 bundle 备份所有 refs。"
+    confidence: 0.85
+    source_sessions: ["vibesop-py-panel-split-2026-07-18"]
+    usage_count: 1
+    success_rate: 1.0
+    tags: ["git", "monorepo", "worktree", "repo-split"]
+    status: "active"
+    context: |
+      关键步骤：
+      1. git add -A && commit —— 未提交的 WIP 是最大的丢失风险
+      2. git push -u <new-remote> <branch>:main —— 保留完整历史
+      3. fresh clone 到临时目录；mv .venv/tmp/node_modules，rsync .vibe/.pi 运行态
+      4. git worktree remove --force <old>；git branch -D <branch>（已全量推送，安全）
+      5. git bundle create backup.bundle $(git for-each-ref --format='%(refname)') 再删远端分支
+      陷阱：
+      - 删除远端分支会自动关闭其 open PR
+      - .venv 移动后可用是因为最终绝对路径不变（venv shebang 嵌入路径）
+    created_at: "2026-07-18"
+    last_used: "2026-07-18"
+
+  - id: "550e8406-ci-convergence-loop-2026"
+    pattern: "修 CI 红灯的收口循环：从 workflow yaml 提取每个 job 的等价命令在本地逐一复跑验证，分组提交（fix/chore/docs 分开），push 后用 gh run watch 观察远端终审，而不是修完直接推。"
+    confidence: 0.85
+    source_sessions: ["vibesop-py-ci-convergence-2026-07-18"]
+    usage_count: 1
+    success_rate: 1.0
+    tags: ["ci", "verification", "workflow", "quality-gate"]
+    status: "active"
+    context: |
+      关键步骤：
+      1. 从 .github/workflows/*.yml 逐 job 提取实际命令（含退出码语义，如 basedpyright 接受 0/3）
+      2. 本地逐一复跑验证（ruff/format/类型/测试+覆盖率/安全扫描）
+      3. 分组提交后 push，gh run watch <run-id> --exit-status 终审
+      陷阱：
+      - 工具配置可能「解析但不生效」：bandit [tool.bandit."skips"] 子表静默无效，必须用 [tool.bandit] 下扁平 skips 键
+      - 「失效的 #nosec」可能是活抑制——删除前必须重跑扫描器验证
+      - 可复用 workflow 缺 workflow_call 会让调用方 0 秒失败，且报错指向调用方而非被调用方
+    created_at: "2026-07-18"
+    last_used: "2026-07-18"

@@ -2,6 +2,36 @@
 
 ## Technical Pitfalls
 
+### Bandit pyproject.toml Skips Require Flat `skips` Key, Not a Sub-Table (2026-07-18)
+
+**Issue**: `[tool.bandit."skips"] test_id = ["B324", "B701"]` parses fine but bandit **silently ignores it** — all skips were only effective via CI's inline `--skip` flags. Dropping the CLI flags made B324/B701/B608 fire immediately.
+
+**Root Cause**: bandit's TOML config expects `skips = [...]` as a flat key inside `[tool.bandit]`. A nested table named `"skips"` is accepted by the TOML parser (no error) but never consulted.
+
+**Solution**: `skips = ["B324", "B701", "B608"]` directly under `[tool.bandit]`. Verify with `BanditConfig('pyproject.toml').get_option('skips')` — must return a list, not a dict.
+
+**Key Lesson**: Config that parses-but-no-ops is worse than a config error. Verify scanner *behavior* (run without CLI flags), never config *presence*.
+
+### "Stale" `# nosec` Markers May Still Be Live — Re-run the Scanner to Prove It (2026-07-18)
+
+**Issue**: A `# nosec B108` flagged as stale/invalid during audit turned out to be a live suppression — removing it reactivated a real B108 hit.
+
+**Lesson**: Never remove a suppression marker on inspection alone. Remove → re-run scanner → keep removal only if output stays clean. Suppression validity is a scanner-verdict fact, not a code-reading fact.
+
+### Reusable GitHub Workflows Fail Instantly Without `workflow_call` (2026-07-18)
+
+**Issue**: `release.yml`'s ci-gate (`uses: ./.github/workflows/ci.yml`) failed 0s on every tag push for months because `ci.yml`'s `on:` lacked `workflow_call`. GitHub surfaces this as a startup failure of the *caller*, not a config error in the reused workflow.
+
+**Detection**: `gh run list --workflow=<file>` showing all-0s-failure runs = trigger/config problem, not a test problem.
+
+**Solution**: add `workflow_call:` to the reused workflow's `on:`.
+
+### Router Tests Asserting the Winner Must Isolate from the Repo Skill Registry (2026-07-18)
+
+**Issue**: Integration test asserting routing to a fixture skill failed on clean checkouts: `UnifiedRouter(project_root=<repo>)` also loads git-tracked repo skills (`.vibe/skills/cross-cutting/`), and one outranked the fixture (SCENARIO layer, confidence 0.9).
+
+**Solution**: `UnifiedRouter(project_root=tmp_path)` makes repo-resident skills invisible; override `ExternalSkillLoader.EXTERNAL_PATHS` to point only at fixture storage. Any test asserting *which skill wins* must not run against the live repo registry.
+
 ### Cross-Cutting Skills NOT Included in `sync_project_skills` (2026-07-14)
 
 **Issue**: `SkillStorage.sync_project_skills()` iterates `core/skills/` to install skills, but cross-cutting skills live in `.vibe/skills/cross-cutting/` and are discovered by `CrossCuttingDiscovery.discover_all()` at runtime. This split is intentional but easy to misunderstand.
@@ -27,6 +57,16 @@
 **Solution**: Add `cross-cutting` to `[skills] namespaces` in `.vibe/config.toml`.
 
 ## Reusable Patterns
+
+### Splitting a Sub-Project Out of a Monorepo (Worktree Conversion) (2026-07-18)
+
+**Pattern**: When the sub-project lives as a git worktree branch of the main repo:
+1. Commit ALL WIP in the worktree first — uncommitted work is the #1 loss vector
+2. Push the branch to the NEW repo as `main` (`git push -u <remote> branch:main`) — keeps full history
+3. Fresh `git clone` of the new repo; carry ignored content over (`.venv`, `node_modules`, runtime dirs) — moving `.venv` needs no rebuild iff the final path is identical (venv shebangs embed absolute paths)
+4. `git worktree remove --force <old>`; `git branch -D <branch>` (safe: fully pushed)
+5. Bundle-backup ALL refs before deleting remote branches: `git bundle create f.bundle $(git for-each-ref --format='%(refname)')`
+6. Deleting a remote branch auto-closes its open PRs — back up first
 
 ### Cross-Cutting Skill Migration Pattern (2026-07-14)
 

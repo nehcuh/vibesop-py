@@ -1,10 +1,21 @@
 # Overview - VibeSOP Project
 
-**Last Updated**: 2026-07-14 (S30 — Skills Architecture Reorg & Cross-Cutting Migration)
+**Last Updated**: 2026-07-18 (S31 — Fanout Diagnosis + Panel Split + Quality Convergence)
 
 ---
 
 ## Goals
+
+### Current Week (July 13-18, 2026)
+
+1. **Control Panel 分拆** ✅ (Completed - July 18)
+   - vibesop-py-panel 独立仓库（私有，36 提交全历史），worktree 转独立克隆
+   - 主仓回归四个核心定位：脚手架 / 语义路由 / agent 优化 / 其他优化
+2. **质量收口** ✅ (Completed - July 18)
+   - main CI 6/6 全绿（此前 7-14 起持续红）：lint 修复 + 测试隔离 + release 管线 workflow_call
+   - 供应链：pip-audit 覆盖全 extras、dependabot→uv 生态、bandit 配置单源化
+3. **Skill 商店重构 + 智能建议**（新方向，待启动）
+   - GitHub 按需搜索替代 issues 版市场；未命中查询追踪；重复任务蒸馏为技能
 
 ### Previous Week (May 24-30, 2026) — Completed
 
@@ -67,16 +78,22 @@
 ## Projects Summary
 
 ### VibeSOP (vibesop-py)
-**Status**: v7.0.0-dev (Dynamic Workflow Engine + Prompt Chain: 7 patterns, 4 platforms)
-**Description**: AI SkillOS — skill protocol standard with Dynamic Workflow Engine, 3-pillar architecture, 4-platform support
-**Coverage**: 2968+ tests passing
+**Status**: v8.0.0.dev0 (Loop System Phase 1 + 供应链加固；CI 全绿)
+**Description**: AI SkillOS — vibe-coding 脚手架、语义级 query→skill 路由、编程 agent（Claude Code/Kimi/Pi/Cursor/Zed）优化
+**Coverage**: 4,067 tests passing（4,095 collected），覆盖率 74.65%（门禁 73）
 **Key Metrics**:
 - Routing accuracy: 94%
 - Performance: 44 QPS (target: 40+ QPS)
-- Skills supported: 207 skills across 4 packs
-- Total tests: 2968 passed
+- CI: 6/6 jobs green (2026-07-18)
+- Panel extension: split to nehcuh/vibesop-py-panel (2026-07-18)
 - Workflow patterns: 7 (SEQUENTIAL, PARALLEL, FAN_OUT, ADVERSARIAL, LOOP_UNTIL_DRY, TOURNAMENT, PROMPT_CHAIN)
-- Platforms: Claude Code, Kimi CLI, Pi Agent, OpenCode
+- Platforms: Claude Code, Kimi CLI, Pi Agent, OpenCode, Cursor
+
+**Recent Changes** (2026-07-18):
+- ✅ Fanout 六路诊断 → 全部问题收口：CI 转绿、release 管线修复（workflow_call）、pip-audit 全 extras 覆盖
+- ✅ Control panel 分拆为独立仓库 vibesop-py-panel（36 提交全历史，worktree→独立克隆）
+- ✅ 仓库清理：origin 15 个陈旧分支删除，本地/远端只剩 main
+- ✅ CHANGELOG 补齐 59 个提交；dependabot→uv 生态；删除 mypy/sync-core.sh
 
 **Recent Changes** (2026-06-09):
 - ✅ Final Phase conditional branching: review tasks get red team + scoring + action items; non-review tasks get functional verification checklist
@@ -139,11 +156,11 @@
 - ✅ All tests passing (1000+ lines of new code, fully tested)
 
 **Next Steps**:
-- Restore coverage threshold to 75%+ after verifying new test coverage impact
-- Continue backfill: builder/*, hooks/*, adapters/* remaining blind spots
-- Use new `skill_loader` injection to unify SkillManager/UnifiedRouter loader paths
-- Consider Builder pattern for UnifiedRouter __init__ (~110 lines)
-- Version bump automation (avoid future doc version drift)
+- Skill 商店简化：GitHub 按需搜索替代 issues 版市场，询问式安装（全局/项目级）
+- 未命中查询追踪：后台记录重复无匹配查询，定期建议搜索安装
+- 任务蒸馏：重复任务总结为独立技能（instinct learning 延伸）
+- Langfuse 不进核心（留 panel 层）；核心用本地结构化日志（F-06 opt-in 先例）
+- 存量 backlog：文档深度治理（49 坏引用/187 版本漂移）、双 PromptChainGenerator 合并
 
 ---
 
