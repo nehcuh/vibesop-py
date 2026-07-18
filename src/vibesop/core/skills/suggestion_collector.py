@@ -13,12 +13,18 @@ Lifecycle:
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+from vibesop.utils.atomic_writer import write_text
+
+if TYPE_CHECKING:
+    from vibesop.core.skills.missed_query_tracker import MissedCluster
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +44,8 @@ class SkillSuggestion:
     status: str = "pending"  # pending | dismissed | created
     created_at: datetime = field(default_factory=datetime.now)
     skill_id: str | None = None  # Set after creation
+    suggestion_type: str = "sequence"  # sequence | market-search
+    last_prompted_at: datetime | None = None  # Last time the user was prompted
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -52,10 +60,17 @@ class SkillSuggestion:
             "status": self.status,
             "created_at": self.created_at.isoformat(),
             "skill_id": self.skill_id,
+            "suggestion_type": self.suggestion_type,
+            "last_prompted_at": self.last_prompted_at.isoformat()
+            if self.last_prompted_at
+            else None,
         }
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> SkillSuggestion:
+        # suggestion_type / last_prompted_at default for backward compatibility
+        # with jsonl rows written before the P2 market-search loop existed.
+        last_prompted_raw = data.get("last_prompted_at")
         return cls(
             id=data["id"],
             pattern_steps=data.get("pattern_steps", []),
@@ -68,6 +83,10 @@ class SkillSuggestion:
             status=data.get("status", "pending"),
             created_at=datetime.fromisoformat(data["created_at"]),
             skill_id=data.get("skill_id"),
+            suggestion_type=data.get("suggestion_type", "sequence"),
+            last_prompted_at=datetime.fromisoformat(last_prompted_raw)
+            if last_prompted_raw
+            else None,
         )
 
     @classmethod
@@ -115,6 +134,13 @@ class SkillSuggestion:
         return f"Auto-detected workflow: {step_summary}{tag_str}"
 
 
+def _missed_query_confidence(count: int) -> float:
+    """Confidence for a market-search suggestion: 0.7 at the 3-miss threshold,
+    growing with repeats, capped at 0.9 (market suggestions never outrank a
+    strong sequence pattern)."""
+    return min(0.4 + 0.1 * count, 0.9)
+
+
 class SkillSuggestionCollector:
     """Collect and manage skill suggestions from learned patterns.
 
@@ -157,6 +183,63 @@ class SkillSuggestionCollector:
 
         self._save()
         return self._suggestions[suggestion.id]
+
+    def add_missed_query(
+        self,
+        cluster: MissedCluster,
+        suggested_command: str,
+    ) -> SkillSuggestion | None:
+        """Add or refresh a market-search suggestion from a missed-query cluster.
+
+        The suggestion id is derived from the normalized cluster key, so repeat
+        misses of the same query family update the same entry. Returns None
+        when the suggestion was previously dismissed — dismissals are
+        respected forever (design doc §UX 铁律: per-cluster dismissal is
+        persistent).
+        """
+        digest = hashlib.sha1(cluster.cluster_key.encode("utf-8")).hexdigest()[:12]
+        suggestion_id = f"miss_{digest}"
+        name = cluster.representative_query[:40] or "missed-query"
+        description = (
+            f"This query missed routing {cluster.count} times with no matching skill. "
+            f"Search the public skill ecosystem: {suggested_command}"
+        )
+        confidence = _missed_query_confidence(cluster.count)
+
+        existing = self._suggestions.get(suggestion_id)
+        if existing is not None:
+            if existing.status == "dismissed":
+                return None
+            existing.occurrences = cluster.count
+            existing.confidence = confidence
+            existing.suggested_name = name
+            existing.suggested_description = description
+            self._save()
+            return existing
+
+        suggestion = SkillSuggestion(
+            id=suggestion_id,
+            pattern_steps=[],
+            success_rate=0.0,
+            occurrences=cluster.count,
+            suggested_name=name,
+            suggested_description=description,
+            confidence=confidence,
+            suggestion_type="market-search",
+        )
+        self._suggestions[suggestion.id] = suggestion
+        self._save()
+        return suggestion
+
+    def mark_prompted(self, suggestion_id: str) -> None:
+        """Record that a suggestion was surfaced to the user (frequency budget)."""
+        if suggestion_id in self._suggestions:
+            self._suggestions[suggestion_id].last_prompted_at = datetime.now()
+            self._save()
+
+    def get_market_search_suggestions(self) -> list[SkillSuggestion]:
+        """All suggestions of type ``market-search``, regardless of status."""
+        return [s for s in self._suggestions.values() if s.suggestion_type == "market-search"]
 
     def get_pending(self) -> list[SkillSuggestion]:
         return sorted(
@@ -222,6 +305,8 @@ class SkillSuggestionCollector:
 
     def _save(self) -> None:
         self.storage_file.parent.mkdir(parents=True, exist_ok=True)
-        with self.storage_file.open("w") as f:
-            for suggestion in self._suggestions.values():
-                f.write(json.dumps(suggestion.to_dict(), default=str) + "\n")
+        content = "".join(
+            json.dumps(suggestion.to_dict(), default=str) + "\n"
+            for suggestion in self._suggestions.values()
+        )
+        write_text(self.storage_file, content)

@@ -6,6 +6,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from vibesop.core.skills.missed_query_tracker import MissedCluster
 from vibesop.core.skills.suggestion_collector import SkillSuggestion, SkillSuggestionCollector
 
 
@@ -250,3 +251,132 @@ class TestSkillSuggestionCollector:
         collector = SkillSuggestionCollector(storage_dir=tmp_path)
         assert collector.get("sug_x") is not None
         assert collector.get("missing") is None
+
+
+class TestMissedQuerySuggestions:
+    """Market-search suggestions from the P2 missed-query loop."""
+
+    @staticmethod
+    def _cluster(
+        count: int = 3,
+        key: str = "how do i review code",
+        representative: str = "how do I review code",
+    ) -> MissedCluster:
+        return MissedCluster(
+            cluster_key=key,
+            representative_query=representative,
+            count=count,
+            source="live",
+        )
+
+    def test_add_missed_query_creates_market_search_suggestion(self, tmp_path: Path):
+        collector = SkillSuggestionCollector(storage_dir=tmp_path)
+        command = 'vibe market search "how do I review code"'
+
+        suggestion = collector.add_missed_query(self._cluster(count=3), command)
+
+        assert suggestion is not None
+        assert suggestion.id.startswith("miss_")
+        assert suggestion.suggestion_type == "market-search"
+        assert suggestion.occurrences == 3
+        assert suggestion.status == "pending"
+        assert suggestion.suggested_name == "how do I review code"
+        assert "3 times" in suggestion.suggested_description
+        assert command in suggestion.suggested_description
+        assert suggestion.last_prompted_at is None
+
+    def test_add_missed_query_id_stable_and_updates_existing(self, tmp_path: Path):
+        collector = SkillSuggestionCollector(storage_dir=tmp_path)
+
+        first = collector.add_missed_query(self._cluster(count=3), "cmd")
+        assert first is not None
+        again = collector.add_missed_query(self._cluster(count=5), "cmd")
+
+        assert again is not None
+        assert again.id == first.id
+        assert again.occurrences == 5
+        assert again.confidence != first.confidence or again.occurrences == first.occurrences
+        assert len(collector.get_market_search_suggestions()) == 1
+
+    def test_add_missed_query_respects_dismissal(self, tmp_path: Path):
+        collector = SkillSuggestionCollector(storage_dir=tmp_path)
+        suggestion = collector.add_missed_query(self._cluster(), "cmd")
+        assert suggestion is not None
+
+        collector.dismiss(suggestion.id)
+
+        assert collector.add_missed_query(self._cluster(count=9), "cmd") is None
+        reloaded = SkillSuggestionCollector(storage_dir=tmp_path)
+        assert reloaded.add_missed_query(self._cluster(count=10), "cmd") is None
+
+    def test_add_missed_query_truncates_name_to_40_chars(self, tmp_path: Path):
+        collector = SkillSuggestionCollector(storage_dir=tmp_path)
+        long_query = "how do I review a very long pull request with many files changed"
+        suggestion = collector.add_missed_query(
+            self._cluster(key=long_query.lower(), representative=long_query), "cmd"
+        )
+        assert suggestion is not None
+        assert suggestion.suggested_name == long_query[:40]
+
+    def test_mark_prompted_persists(self, tmp_path: Path):
+        collector = SkillSuggestionCollector(storage_dir=tmp_path)
+        suggestion = collector.add_missed_query(self._cluster(), "cmd")
+        assert suggestion is not None
+        assert suggestion.last_prompted_at is None
+
+        collector.mark_prompted(suggestion.id)
+
+        reloaded = SkillSuggestionCollector(storage_dir=tmp_path).get(suggestion.id)
+        assert reloaded is not None
+        assert reloaded.last_prompted_at is not None
+
+    def test_mark_prompted_unknown_id_is_noop(self, tmp_path: Path):
+        collector = SkillSuggestionCollector(storage_dir=tmp_path)
+        collector.mark_prompted("miss_nonexistent")
+
+    def test_suggestion_type_roundtrip(self):
+        dt = datetime(2026, 1, 1, 12, 0, 0)
+        suggestion = SkillSuggestion(
+            id="miss_abc123",
+            pattern_steps=[],
+            success_rate=0.0,
+            occurrences=3,
+            suggested_name="n",
+            suggestion_type="market-search",
+            last_prompted_at=dt,
+        )
+        data = suggestion.to_dict()
+        assert data["suggestion_type"] == "market-search"
+        assert data["last_prompted_at"] == "2026-01-01T12:00:00"
+
+        restored = SkillSuggestion.from_dict(data)
+        assert restored.suggestion_type == "market-search"
+        assert restored.last_prompted_at == dt
+
+    def test_from_dict_backward_compatible_with_legacy_rows(self):
+        legacy = {
+            "id": "sug_1",
+            "pattern_steps": ["a"],
+            "success_rate": 0.5,
+            "occurrences": 1,
+            "suggested_name": "n",
+            "created_at": "2026-01-01T12:00:00",
+        }
+        suggestion = SkillSuggestion.from_dict(legacy)
+        assert suggestion.suggestion_type == "sequence"
+        assert suggestion.last_prompted_at is None
+
+    def test_get_market_search_suggestions_filters_by_type(self, tmp_path: Path):
+        collector = SkillSuggestionCollector(storage_dir=tmp_path)
+        pattern = MagicMock()
+        pattern.sequence_hash = "abc"
+        pattern.steps = ["a"]
+        pattern.success_rate = 0.8
+        pattern.total_count = 5
+        pattern.context_tags = []
+        collector.add_from_pattern(pattern)
+        collector.add_missed_query(self._cluster(), "cmd")
+
+        market = collector.get_market_search_suggestions()
+        assert len(market) == 1
+        assert market[0].suggestion_type == "market-search"

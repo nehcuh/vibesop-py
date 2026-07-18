@@ -90,6 +90,30 @@ class MissCounter:
         except Exception as e:  # telemetry must never break routing
             logger.debug("Failed to record missed query: %s", e)
 
+    def count_for(self, query: str) -> MissedCluster | None:
+        """Return the counter entry for *query* (normalized), or None if unseen.
+
+        Read-only companion to ``record`` used by the P2 live suggestion path
+        to check whether the query being routed right now is a repeat miss.
+        """
+        normalized = " ".join(query.split()).lower()
+        if not normalized:
+            return None
+        digest = self._hash(normalized)
+        entry = self._load().get(digest)
+        if entry is None:
+            return None
+        try:
+            count = int(entry.get("n", 0))
+        except (TypeError, ValueError):
+            return None
+        return MissedCluster(
+            hash=digest,
+            count=count,
+            first=str(entry.get("first", "")),
+            last=str(entry.get("last", "")),
+        )
+
     def frequent(self, min_count: int = 3) -> list[MissedCluster]:
         """Return clusters whose count reached *min_count*, most frequent first."""
         clusters: list[MissedCluster] = []

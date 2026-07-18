@@ -7,6 +7,7 @@ from typing import Any, cast
 
 import yaml
 from rich.console import Console
+from rich.markup import escape as rich_escape
 
 from vibesop.core.llm_config import (
     LLMConfig,
@@ -113,7 +114,7 @@ class SkillConfigManager:
         skill_config = cls._load_skill_config_from_file(skill_id)
 
         if skill_config and skill_config.requires_llm and skill_config.llm_provider:
-            console.print(f"[dim]  Using skill-level LLM config for {skill_id}[/dim]")
+            console.print(f"[dim]  Using skill-level LLM config for {rich_escape(skill_id)}[/dim]")
 
             return LLMConfig(
                 provider=skill_config.llm_provider,
@@ -125,7 +126,7 @@ class SkillConfigManager:
                 confidence=0.95,  # 技能配置置信度高
             )
 
-        console.print(f"[dim]  Using global LLM config for {skill_id}[/dim]")
+        console.print(f"[dim]  Using global LLM config for {rich_escape(skill_id)}[/dim]")
 
         resolver = LLMConfigResolver()
         return resolver.resolve_llm_config(prefer_agent=True)
@@ -145,9 +146,9 @@ class SkillConfigManager:
 
         cls._save_skill_config_file(config_data)
 
-        console.print(f"[green]✓ LLM config saved for skill: {skill_id}[/green]")
-        console.print(f"[dim]  Provider: {llm_config.get('provider')}[/dim]")
-        console.print(f"[dim]  Model: {llm_config.get('model')}[/dim]")
+        console.print(f"[green]✓ LLM config saved for skill: {rich_escape(skill_id)}[/green]")
+        console.print(f"[dim]  Provider: {rich_escape(str(llm_config.get('provider')))}[/dim]")
+        console.print(f"[dim]  Model: {rich_escape(str(llm_config.get('model')))}[/dim]")
 
     @classmethod
     def list_skill_configs(cls) -> dict[str, SkillConfig]:

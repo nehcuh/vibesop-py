@@ -23,13 +23,18 @@ import importlib.util
 import logging
 import os
 import sys
+from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import questionary
 import typer
 from rich.console import Console
+from rich.markup import escape as rich_escape
 from rich.panel import Panel
+
+if TYPE_CHECKING:
+    from vibesop.core.skills.suggestion_collector import SkillSuggestion, SkillSuggestionCollector
 
 from vibesop import __version__
 from vibesop.cli.commands import (
@@ -187,6 +192,131 @@ def _print_fallback(query: str, reason: str, *, json_output: bool) -> None:
         )
     else:
         console.print(f"[dim]{reason} — passing query to agent.[/dim]")
+
+
+# -- P2: missed-query market-search loop (design doc §P2, §UX 铁律) --
+
+#: Frequency budget: days before the same cluster may be re-prompted.
+_REPROMPT_DAYS = 7
+#: Frequency budget: global cooldown between any two market-search teasers.
+_GLOBAL_COOLDOWN_DAYS = 1
+
+
+def _escape_for_display_command(query: str) -> str:
+    """Escape *query* for embedding in a suggested shell command string."""
+    return query.replace("\\", "\\\\").replace('"', '\\"')
+
+
+def _market_search_budget_allows(
+    collector: SkillSuggestionCollector,
+    suggestion: SkillSuggestion,
+    now: datetime | None = None,
+) -> bool:
+    """Frequency budget for market-search teasers (UX 铁律 #2).
+
+    - the suggestion itself was never prompted, or was prompted ≥7 days ago;
+    - global cooldown: no market-search suggestion was prompted within 1 day.
+    """
+    now = now or datetime.now()
+    last = suggestion.last_prompted_at
+    if last is not None and now - last < timedelta(days=_REPROMPT_DAYS):
+        return False
+    for other in collector.get_market_search_suggestions():
+        prompted = other.last_prompted_at
+        if prompted is not None and now - prompted < timedelta(days=_GLOBAL_COOLDOWN_DAYS):
+            return False
+    return True
+
+
+def _record_missed_query_suggestion(query: str) -> Any | None:
+    """Record a repeated-miss cluster into the unified suggestion inbox.
+
+    Runs on every no-match (all human-readable paths, including non-TTY) so
+    `vibe skills suggestions` accumulates candidates even for agent/headless
+    usage — the interactive teaser is only one surfacing channel; the inbox
+    is the other. Returns the suggestion (or None below the miss threshold).
+    """
+    from vibesop.core.skills.miss_counter import MissCounter
+    from vibesop.core.skills.missed_query_tracker import MissedQueryTracker
+    from vibesop.core.skills.suggestion_collector import SkillSuggestionCollector
+
+    project_root = Path.cwd()
+    cluster = MissedQueryTracker(project_root).suggest_for_live_query(
+        query, MissCounter(project_root)
+    )
+    if cluster is None:
+        return None
+
+    collector = SkillSuggestionCollector()
+    command = f'vibe market search "{_escape_for_display_command(query)}"'
+    return collector.add_missed_query(cluster, command)
+
+
+def _maybe_prompt_market_search(query: str) -> None:
+    """Interactive market-search teaser. Caller guarantees a TTY + non-JSON run.
+
+    Raises nothing by contract at the call site — the caller wraps this in a
+    broad except so a broken prompt can never affect routing output.
+    """
+    from vibesop.core.config.manager import ConfigManager
+    from vibesop.core.skills.suggestion_collector import SkillSuggestionCollector
+
+    enabled = ConfigManager(Path.cwd()).get("suggestions.enabled", True)
+    if isinstance(enabled, str):  # env vars are returned as raw strings
+        enabled = enabled.strip().lower() in ("true", "1", "yes", "on")
+    if not enabled:
+        return
+
+    suggestion = _record_missed_query_suggestion(query)
+    if suggestion is None:
+        return
+
+    collector = SkillSuggestionCollector()
+    if not _market_search_budget_allows(collector, suggestion):
+        return
+
+    choice = questionary.select(
+        f"「{query}」类查询已 {suggestion.occurrences} 次未命中，要去 GitHub 搜吗？",
+        choices=[
+            questionary.Choice("🔍 搜索 GitHub 技能市场", value="search"),
+            questionary.Choice("⏭️ 跳过", value="skip"),
+            questionary.Choice("🚫 不再提示此类", value="dismiss"),
+        ],
+    ).ask()
+    # Any answer (including abort → None) starts the cooldown clock.
+    collector.mark_prompted(suggestion.id)
+    if choice == "search":
+        from vibesop.cli.commands.market_cmd import search as market_search
+
+        market_search(query=query, page=1, json_output=False)
+    elif choice == "dismiss":
+        collector.dismiss(suggestion.id)
+        console.print("[dim]已记录，此类查询将不再提示。[/dim]")
+
+
+def _handle_missed_query_suggestion(query: str, *, json_output: bool) -> None:
+    """Emit the no-match market-search suggestion line and the TTY teaser.
+
+    The one-line suggestion is machine-readable and printed on every no-match
+    (including non-TTY, agent-consumable). The interactive teaser is strictly
+    TTY-gated and must never break or alter routing output.
+    """
+    console.print(
+        f"[dim]Search GitHub: [cyan]vibe market search "
+        f'"{rich_escape(_escape_for_display_command(query))}"[/cyan][/dim]'
+    )
+    # Record into the unified inbox on every path (agent/headless included) —
+    # the interactive teaser below is only one surfacing channel.
+    try:
+        _record_missed_query_suggestion(query)
+    except Exception:  # recording must never affect routing output
+        logger.debug("Missed-query suggestion recording skipped", exc_info=True)
+    if json_output or not sys.stdin.isatty():
+        return
+    try:
+        _maybe_prompt_market_search(query)
+    except Exception:  # the teaser must never affect routing output
+        logger.debug("Missed-query teaser skipped", exc_info=True)
 
 
 def _copy_context(base: Any | None) -> Any:
@@ -601,6 +731,16 @@ def route(
             console.print(f"  Saved: [dim]{trace_file}[/dim]")
             console.print("  [dim]View full trace:[/dim] [cyan]vibe trace show {trace_id}[/cyan]")
             console.print()
+
+    # P2 missed-query loop: on single-route no-match, emit a machine-readable
+    # market-search suggestion (all output paths, agent-consumable) and, only
+    # when a human is at the TTY and the frequency budget allows, an
+    # interactive teaser. (--json exits above, so JSON output stays pure.)
+    if result.mode.value == "single" and not result.has_match:
+        _handle_missed_query_suggestion(
+            result.original_query or decision.query,
+            json_output=json_output,
+        )
 
     # Handle result with unified confirmation flow
     if result.mode.value == "orchestrated" and result.execution_plan:

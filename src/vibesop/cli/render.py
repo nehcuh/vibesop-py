@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any
 
 from rich import box
 from rich.console import Console
+from rich.markup import escape as rich_escape
 from rich.panel import Panel
 from rich.table import Table
 
@@ -133,7 +134,7 @@ def render_no_match(result: Any, console: Console) -> None:
     suggestions = [
         "Try being more specific with your intent",
         "Use [cyan]vibe skills list[/cyan] to see available skills",
-        "Use [cyan]vibe market search <query>[/cyan] to find skills on GitHub",
+        f'Use [cyan]vibe market search "{query}"[/cyan] to find skills on GitHub',
         "Check [cyan]vibe status[/cyan] for ecosystem health",
     ]
 
@@ -149,7 +150,7 @@ def render_no_match(result: Any, console: Console) -> None:
 
     console.print(
         Panel(
-            f"[yellow]No matching skill found for:[/yellow] {query}\n\n"
+            f"[yellow]No matching skill found for:[/yellow] {rich_escape(query)}\n\n"
             f"[bold]Suggestions:[/bold]\n{suggestion_text}",
             title="[bold]Routing Result[/bold]",
             border_style="yellow",

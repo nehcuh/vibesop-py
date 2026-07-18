@@ -13,6 +13,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from vibesop.utils.atomic_writer import write_text
+
 logger = logging.getLogger(__name__)
 
 
@@ -111,7 +113,9 @@ class SkillRatingStore:
 
     def _save(self) -> None:
         self._store_path.parent.mkdir(parents=True, exist_ok=True)
-        with self._store_path.open("w") as f:
-            for ratings in self._ratings.values():
-                for rating in ratings:
-                    f.write(json.dumps(rating.to_dict(), default=str) + "\n")
+        content = "".join(
+            json.dumps(rating.to_dict(), default=str) + "\n"
+            for ratings in self._ratings.values()
+            for rating in ratings
+        )
+        write_text(self._store_path, content)

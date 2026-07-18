@@ -204,7 +204,7 @@ def add_missed_query(
 ### 6.4 验收标准
 
 - 同一聚类 3 次未命中后，`vibe skills suggestions` 出现 `market-search` 建议
-- dismissal 后 7 天内同聚类不再提示；全局开关可关闭全部建议
+- dismissal 后同聚类**永久**不再提示（除非 `vibe skills suggestions` 中手动恢复——「不再提示」对用户的含义就是永久，VS Code "Don't Show Again" 同构）；全局开关可关闭全部建议
 
 ---
 
