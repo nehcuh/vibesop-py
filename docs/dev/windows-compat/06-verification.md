@@ -44,3 +44,9 @@ uv python install 3.12 && uv venv --python 3.12 && uv sync --extra dev
 ## Production-Readiness Statement
 
 Windows support is now code-enforced (explicit UTF-8 everywhere, probed symlink fallback, platform-guarded permission checks) and test-enforced (`test-windows` CI job, isolated-home suite). Remaining known limitations: symlink-dependent flows require Developer Mode or admin (graceful copy fallback otherwise, with `.vibe-copy-source` marker preserving discovery); hooks require `bash` on PATH (Git Bash).
+
+## CI Confirmation (2026-07-19, post-merge)
+
+- Run 1 (`a275caa`): ubuntu all green; Windows `4302 passed / 1 failed` → caught `_flatten_skill_name` backslash bug (fixed in `ab9c8df`, see `05-review.md` "Post-merge CI catch").
+- Run 2 (`ab9c8df`): **all jobs green** — `Test Windows (Python 3.12/3.13)` ✅, ubuntu `Test (3.12/3.13)` ✅, Lint / Type Check / Security / Benchmark ✅.
+- Local vs CI delta explained: local host probe-skips symlink tests (no privilege); elevated CI runners execute them — the two environments are complementary, and the pure-function regression test closes the gap for flatten logic.
