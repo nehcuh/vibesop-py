@@ -1,7 +1,7 @@
 ---
 id: builtin/experience-evolution
 name: experience-evolution
-description: Project knowledge accumulation system - learn from practice, avoid repeating mistakes（沉淀踩过的坑，以后别再犯）
+description: Project knowledge accumulation system — accumulate lessons learned from practice into project knowledge and avoid repeating mistakes（沉淀踩过的坑，以后别再犯）
 tags: [experience, knowledge, learn, memory, pattern, 经验, 知识, 学习, 沉淀, 避免再犯]
 version: 1.0.0
 mode: observe-only

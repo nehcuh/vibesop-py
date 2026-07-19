@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from typing import TYPE_CHECKING, Any
 
 from vibesop.core.exceptions import MatcherError
@@ -18,6 +19,29 @@ if TYPE_CHECKING:
     from vibesop.core.routing.optimization_service import OptimizationService
 
 logger = logging.getLogger(__name__)
+
+# Queries matching this are considered skill/tool-management intents — only
+# then may management-only (slash-*) skills compete in matcher layers.
+_MANAGEMENT_INTENT_RE = re.compile(r"技能|skills?\b|vibe", re.IGNORECASE)
+
+
+def filter_management_candidates(
+    query: str,
+    candidates: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Exclude management-only skills (slash-*) unless the query shows
+    tool-management intent.
+
+    Management skills (slash-route, slash-help, …) over-match everyday
+    queries on superficial keyword overlap (e.g. "router.py" pulling in
+    slash-route for a bug-fix request). They should only compete when the
+    user is actually talking about skills/the tool itself. The EXPLICIT
+    layer ("/route", "/help") must not pass candidates through this filter.
+    """
+    if _MANAGEMENT_INTENT_RE.search(query):
+        return candidates
+    kept = [c for c in candidates if not c.get("management_only")]
+    return kept or candidates
 
 
 class MatcherPipeline:
@@ -173,5 +197,14 @@ class MatcherPipeline:
         candidates: list[dict[str, Any]],
     ) -> list[dict[str, Any]]:
         if self._optimization_config.enabled and self._optimization_config.prefilter.enabled:
-            return self._prefilter.filter(query, candidates)
-        return candidates
+            candidates = self._prefilter.filter(query, candidates)
+        return self._apply_management_gate(query, candidates)
+
+    def _apply_management_gate(
+        self,
+        query: str,
+        candidates: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        """Exclude management-only skills from matcher layers unless the query
+        shows tool-management intent (see filter_management_candidates)."""
+        return filter_management_candidates(query, candidates)

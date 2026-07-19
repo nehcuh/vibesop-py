@@ -169,8 +169,14 @@ class CandidatePrefilter:
         """Filter candidates by namespace matching.
 
         When a namespace is explicitly triggered by the query, further
-        narrow the candidate set to that namespace (plus P0 skills).
-        Otherwise, keep the candidates as-is from priority filtering.
+        narrow the candidate set to that namespace (plus P0 skills and the
+        builtin namespace). Otherwise, keep the candidates as-is from
+        priority filtering.
+
+        Note: builtin skills are always preserved — external namespace
+        triggers (whose keywords are auto-discovered from arbitrary skill
+        tags) must never starve core capabilities. Narrowing exists to
+        *include* the triggered pack, not to *exclude* builtin.
 
         Args:
             query: The search query
@@ -184,7 +190,9 @@ class CandidatePrefilter:
             return [
                 c
                 for c in candidates
-                if c.get("namespace") in triggered_namespaces or c.get("priority") == "P0"
+                if c.get("namespace") in triggered_namespaces
+                or c.get("priority") == "P0"
+                or c.get("namespace") == "builtin"
             ]
         return candidates
 
@@ -211,11 +219,16 @@ class CandidatePrefilter:
         p0_ids = {c["id"] for c in candidates if c.get("priority") == "P0"}
         allowed_ids = cluster_skills | p0_ids
         triggered_ns = self._get_triggered_namespaces(query)
-        # Allow cluster members, P0 skills, and skills whose namespace was
-        # dynamically triggered (e.g. newly installed third-party packs not yet
-        # present in the cluster index).
+        # Allow cluster members, P0 skills, builtin skills (core capabilities
+        # must never be starved by cluster trimming), and skills whose
+        # namespace was dynamically triggered (e.g. newly installed
+        # third-party packs not yet present in the cluster index).
         return [
-            c for c in candidates if c["id"] in allowed_ids or c.get("namespace") in triggered_ns
+            c
+            for c in candidates
+            if c["id"] in allowed_ids
+            or c.get("namespace") in triggered_ns
+            or c.get("namespace") == "builtin"
         ]
 
     @staticmethod

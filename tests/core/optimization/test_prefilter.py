@@ -138,6 +138,45 @@ class TestFilterByNamespace:
         result = prefilter._filter_by_namespace("hello", candidates)
         assert len(result) == 2
 
+    def test_builtin_kept_when_external_namespace_triggered(self):
+        """Builtin skills are core capabilities and must never be starved by
+        external namespace triggers (keywords auto-discovered from arbitrary
+        skill tags — e.g. omx's "practice" tag triggering on
+        "learn from practice")."""
+        prefilter = CandidatePrefilter(namespace_keywords={"omx": ["practice"]})
+        candidates = [
+            {"id": "builtin/exp", "namespace": "builtin", "priority": "P2"},
+            {"id": "omx/research", "namespace": "omx", "priority": "P2"},
+            {"id": "sp/debug", "namespace": "superpowers", "priority": "P2"},
+        ]
+        result = prefilter._filter_by_namespace("learn from practice", candidates)
+        ids = {c["id"] for c in result}
+        assert "builtin/exp" in ids
+        assert "omx/research" in ids
+        assert "sp/debug" not in ids
+
+    def test_builtin_kept_in_cluster_filtering(self):
+        """Cluster trimming must not drop builtin skills either."""
+
+        class _StubClusterIndex:
+            def get_relevant_clusters(self, query: str) -> set[str]:
+                return {"c1"}
+
+            def get_cluster_members(self, cluster_id: str) -> set[str]:
+                return {"omx/a"}
+
+        prefilter = CandidatePrefilter(cluster_index=_StubClusterIndex())
+        candidates = [
+            {"id": "builtin/exp", "namespace": "builtin"},
+            {"id": "omx/a", "namespace": "omx"},
+            {"id": "sp/b", "namespace": "superpowers"},
+        ]
+        result = prefilter._filter_by_cluster("anything", candidates)
+        ids = {c["id"] for c in result}
+        assert "builtin/exp" in ids
+        assert "omx/a" in ids
+        assert "sp/b" not in ids
+
 
 class TestFilter:
     """Test main filter method."""

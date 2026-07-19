@@ -48,7 +48,7 @@ from vibesop.core.routing import _layers, _pipeline
 from vibesop.core.routing._protocols import LLMFactory, PromptBuilder, SkillLoaderProtocol
 from vibesop.core.routing.context_mixin import RouterContextMixin
 from vibesop.core.routing.degradation import DegradationManager
-from vibesop.core.routing.matcher_pipeline import MatcherPipeline
+from vibesop.core.routing.matcher_pipeline import MatcherPipeline, filter_management_candidates
 from vibesop.core.routing.optimization_service import OptimizationService
 from vibesop.core.routing.orchestration_mixin import RouterOrchestrationMixin
 from vibesop.core.routing.orchestrator import Orchestrator
@@ -494,9 +494,15 @@ class UnifiedRouter(
 
         use_keyword = self._should_use_keyword_routing(query, context)
 
+        # Management gate for the early layers (scenario / semantic index):
+        # slash-* management skills must not win non-management queries here
+        # (EXPLICIT above is intentionally exempt; matcher layers gate
+        # themselves via apply_prefilter).
+        early_candidates = filter_management_candidates(query, candidates)
+
         # Step 1: Early layers (scenario+index best-of for keyword, index only for LLM)
         early_match = self._try_early_layers(
-            query, candidates, routing_path, layer_details, use_keyword
+            query, early_candidates, routing_path, layer_details, use_keyword
         )
         if early_match is not None:
             self._record_layer(early_match.layer)

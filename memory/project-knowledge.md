@@ -12,9 +12,12 @@
 
 **剩余结构性阻塞**（非 SKILL.md 元数据可解）：
 - ~~「质量」→qa_cycling→omx/ultraqa 短路~~ **已修复**（2026-07-19，d624176：从 qa_cycling keywords 删除过宽的裸「质量」，eval 88.2%→91.2%）
+- ~~CandidatePrefilter 命名空间裁剪饿死 builtin~~ **已修复**（prefilter 保留 builtin + 新增管理意图门：非管理意图查询中 slash-* 退出 scenario/semantic_index/matcher 层竞争，eval → **94.1% / recall@3 100%**）
 - 「审查」→code_review→mattpocock/review 短路——语义上并非全错，评测期望可能偏严，暂未处理
-- experience-evolution 被 **CandidatePrefilter 命名空间裁剪**（外部 tag 触发导致候选只剩外部包，未进 matcher）
-- instinct 被**静态语义索引**（`~/.vibe/skill-index.json` 固定产物）压制——需 LLM 重建索引（非确定性，有回退风险）
+- instinct 被**静态语义索引**（`~/.vibe/skill-index.json` 固定产物）压制——已被管理门解决（slash-list 退出竞争后 instinct 正确命中）
+- experience-evolution vs omx/best-practice-research（0.96 levenshtein）——评分层问题（omx 短名称+环境 auto-config 路由模式加成），描述增强不足以扭转，需评分机制层面单独处理
+
+**管理意图门（2026-07-19）**：`filter_management_candidates`（matcher_pipeline.py）——查询不含管理意图（技能|skill|vibe）时，management_only 技能退出 scenario/semantic_index/matcher 层（EXPLICIT 豁免）。修复了 slash-route 被「router.py」表面匹配劫持的回归。
 
 **改进方向**：评测集已入库 `tests/benchmark/routing_eval.yaml`，应进 CI 防回退；结构性 4 条待 registry/索引专项处理。
 
