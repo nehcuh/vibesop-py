@@ -280,6 +280,11 @@ install_deps() {
     print_info "Running: uv sync"
     uv sync
 
+    # Install vibesop as a global CLI tool so `vibe` is on PATH.
+    # Required by platform hooks (e.g. Grok Build JSON hooks call `vibe route --hook`).
+    print_info "Running: uv tool install . (installs 'vibe' CLI globally)"
+    uv tool install . --force 2>/dev/null || print_warning "'uv tool install .' failed — hooks may need 'uv run vibe' instead"
+
     print_success "Dependencies installed successfully"
 }
 

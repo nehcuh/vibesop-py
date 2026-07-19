@@ -32,7 +32,7 @@ console = Console()
 logger = logging.getLogger(__name__)
 
 # Valid targets
-VALID_TARGETS = ["claude-code", "kimi-cli", "opencode", "superpowers", "cursor", "pi"]
+VALID_TARGETS = ["claude-code", "kimi-cli", "opencode", "superpowers", "cursor", "pi", "grok-build"]
 
 
 def _get_configured_platform() -> str | None:

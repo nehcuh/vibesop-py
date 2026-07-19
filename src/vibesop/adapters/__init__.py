@@ -28,6 +28,7 @@ from vibesop.adapters.base import PlatformAdapter
 from vibesop.adapters.claude_code import ClaudeCodeAdapter
 from vibesop.adapters.cursor import CursorAdapter
 from vibesop.adapters.file_based import FileBasedAdapter
+from vibesop.adapters.grok_build import GrokBuildAdapter
 from vibesop.adapters.hook_based import HookBasedAdapter
 from vibesop.adapters.kimi_cli import KimiCliAdapter
 from vibesop.adapters.models import (
@@ -50,6 +51,7 @@ __all__ = [
     "CursorAdapter",
     # Base classes
     "FileBasedAdapter",
+    "GrokBuildAdapter",
     "HookBasedAdapter",
     "KimiCliAdapter",
     # Models

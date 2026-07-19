@@ -12,6 +12,7 @@ from typing import Any, ClassVar
 
 from vibesop.adapters import (
     ClaudeCodeAdapter,
+    GrokBuildAdapter,
     KimiCliAdapter,
     OpenCodeAdapter,
     PiCodingAgentAdapter,
@@ -44,6 +45,7 @@ class ConfigRenderer:
         "kimi-cli": KimiCliAdapter,
         "opencode": OpenCodeAdapter,
         "pi": PiCodingAgentAdapter,
+        "grok-build": GrokBuildAdapter,
     }
 
     def __init__(
@@ -229,7 +231,7 @@ class ConfigRenderer:
         adapter_class = self._adapters[platform]
         # Pass project_root to adapters that need skill content lookup
         # or project-level config generation
-        if platform in ("claude-code", "kimi-cli", "opencode", "pi"):
+        if platform in ("claude-code", "kimi-cli", "opencode", "pi", "grok-build"):
             return adapter_class(project_root=self._project_root)
         return adapter_class()
 

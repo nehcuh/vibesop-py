@@ -212,6 +212,11 @@ if (-not $NoInstall) {
 
         Write-Host "         Running: uv sync"
         uv sync
+
+        # Install vibesop as a global CLI tool (needed by hooks)
+        Write-Host "         Running: uv tool install ."
+        try { uv tool install . --force 2>$null } catch { Write-Host "         (non-fatal: hooks can use 'uv run vibe')" -ForegroundColor DarkGray }
+
         Write-OK "Dependencies installed"
     } finally {
         Pop-Location

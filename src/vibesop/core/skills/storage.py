@@ -126,6 +126,7 @@ class SkillStorage:
         "opencode": Path.home() / ".config" / "opencode" / "skills",
         "cursor": Path.home() / ".config" / "cursor" / "skills",
         "pi": Path.home() / ".pi" / "agent" / "skills",
+        "grok-build": Path.home() / ".grok" / "skills",
     }
 
     _default_path_safety: ClassVar[Any] = None

@@ -26,6 +26,10 @@ class VibeSOPInstaller:
                 "config_dir": Path.home() / ".pi" / "agent",
                 "description": "Pi Coding Agent",
             },
+            "grok-build": {
+                "config_dir": Path.home() / ".grok",
+                "description": "Grok Build (xAI)",
+            },
         }
 
     def install(

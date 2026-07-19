@@ -39,7 +39,7 @@ from vibesop.builder.renderer import ConfigRenderer
 console = Console()
 logger = logging.getLogger(__name__)
 
-VALID_TARGETS = ["claude-code", "kimi-cli", "opencode", "superpowers", "cursor", "pi"]
+VALID_TARGETS = ["claude-code", "kimi-cli", "opencode", "superpowers", "cursor", "pi", "grok-build"]
 
 PROFILES: dict[str, str] = {
     "default": "Full configuration with all skills",
