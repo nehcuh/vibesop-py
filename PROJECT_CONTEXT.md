@@ -12,7 +12,7 @@
 - 仓库清理：origin 15 个陈旧分支删除（bundle 备份于 vibesop-py-branch-backup-20260718.bundle，确认无用可删），本地/远端只剩 main
 - 质量收口 3 提交：c18d703（CI 门：ruff 排除 .vibe、测试 tmp project_root 隔离、bandit skips 收编 pyproject——原 [tool.bandit."skips"] 从未生效、pip-audit 全 extras、uv 0.11.19、删 mypy）、80b37e5（dependabot→uv、verify-* 脚本重写、删 sync-core.sh、benchmark 双目录合并）、2efdaf6（CHANGELOG 补 59 提交、INDEX 修死链+ADR-004、删陈旧 docs/PROJECT_CONTEXT.md）
 **Verification**: CI run 29636446131 全 6 job 绿；本地 4067 passed / 覆盖率 74.65%；bandit/pip-audit（含 torch/transformers）0 问题
-**Next**: 用户新提案待评估 —— ① GitHub 按需搜索式 skill 商店（替代 issues 版 market/community）② 未命中查询记录+定期建议安装 ③ 重复任务蒸馏为技能（instinct 延伸）④ Langfuse 不进核心，留 panel 层。另：文档深度治理（49 坏引用/187 版本漂移）、双 PromptChainGenerator 合并
+**Next**: ~~用户新提案（商店/未命中/蒸馏/Langfuse）~~ 已全部落地（P0–P4，2026-07-18，CI 绿）。**后续工作项目（用户确认 2026-07-18）：Zed adapter**（已入 ROADMAP Backlog）；Windows 副本兜底补测试。其余 backlog：文档深度治理（49 坏引用/187 版本漂移）、双 PromptChainGenerator 合并、`InstinctLearner._load_sequences` 加载怪癖、squad 逐角色步骤展开的确定性
 
 ### 2026-07-14 (S30) 技能架构梳理、迁移与清理
 **Session**: 全面梳理项目技能存储架构，迁移自定义技能到 cross-cutting，清理重复和损坏条目。

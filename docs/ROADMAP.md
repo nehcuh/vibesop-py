@@ -579,6 +579,7 @@ User Query
 
 ### Nice to Have
 
+- [ ] **Zed adapter**（FileBasedAdapter：Zed rules 文件 + AGENTS.md 引导，模式同 cursor/opencode，成本低）→ **Recorded 2026-07-18：用户确认为后续工作项目**（2026-07-18 跨 Agent 验证时发现 Zed 无 adapter）
 - [ ] Web UI for skill management → **Deferred: post-v5.2 evaluation**
 - [ ] IDE integrations (VS Code, JetBrains) → **Deferred: post-v5.2 evaluation**
 - [ ] Mobile app for skill discovery → **Deferred: post-v5.2 evaluation**
@@ -588,6 +589,7 @@ User Query
 
 ### Technical Debt
 
+- [ ] Windows 副本兜底（`storage.py` symlink→copytree 回退）缺专项测试（mock symlink_to 抛 OSError）
 - [ ] Documentation translation (CN, JP, DE)
 - [ ] API stability guarantees (semver)
 - [ ] Migration guide for breaking changes
