@@ -166,7 +166,10 @@ conflict_resolution:
     qa_cycling:
       - "qa"
       - "测试"
-      - "质量"
+      # "质量" removed (2026-07-19): too broad — it hijacked non-QA queries
+      # like "评估技能的使用质量" away from builtin/slash-evaluate into
+      # omx/ultraqa via the fixed-0.9 scenario short-circuit. QA-specific
+      # phrases below still cover the scenario.
       - "qa cycle"
       - "quality cycle"
       - "测试循环"
