@@ -105,6 +105,8 @@ These files remain in the project root for discoverability and tool integration:
 ### Development Workflow
 
 - **[Contributing Guide](dev/CONTRIBUTING.md)** — How to contribute to VibeSOP
+- **[Agent Scenario Validation SOP](dev/agent-scenario-validation-sop.md)** — 多 Agent 场景化验证标准流程（场景库/指标/模型分层）
+- **[Agent Scenario Validation Report](dev/agent-scenario-validation-2026-07-19.md)** — Claude Code/Kimi Code/Grok Build × vibesop 两轮验证（含部署坑与模型调研）
 - **[Releasing](dev/releasing.md)** — Release process and versioning
 - **[Testing](dev/testing.md)** — Testing strategies and conventions
 

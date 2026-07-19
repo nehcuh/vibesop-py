@@ -1,0 +1,126 @@
+# Routing accuracy evaluation set (SOP §6.1).
+# Each entry: query + expect (acceptable primary skill_ids) + optional reject.
+# Covers: all builtin skills (CN/EN mix, long/short, noisy prefixes),
+# cross-cutting skills, and adversarial near-miss cases.
+
+- query: "帮我深度诊断这个项目的性能瓶颈并给出优化建议"
+  expect: [builtin/deep-diagnosis-optimization]
+  category: diagnosis
+- query: "run a deep diagnosis of the codebase and suggest optimizations"
+  expect: [builtin/deep-diagnosis-optimization]
+  category: diagnosis
+- query: "全面审查这个仓库的代码质量"
+  expect: [builtin/deep-diagnosis-optimization, fuck-my-shit-mountain]
+  category: diagnosis
+
+- query: "让 agent 自主运行一组实验并汇报评估结果"
+  expect: [builtin/autonomous-experiment]
+  category: experiment
+- query: "start an autonomous experiment loop with prediction evaluation"
+  expect: [builtin/autonomous-experiment]
+  category: experiment
+
+- query: "把最近踩过的坑沉淀下来，以后别再犯了"
+  expect: [builtin/experience-evolution]
+  category: learning
+- query: "accumulate what we learned from practice into project knowledge"
+  expect: [builtin/experience-evolution]
+  category: learning
+
+- query: "查看一下我的 instinct 学习状态"
+  expect: [builtin/instinct, builtin/instinct-learning]
+  category: learning
+- query: "show my coding instincts and their confidence"
+  expect: [builtin/instinct, builtin/instinct-learning]
+  category: learning
+- query: "从我的工作流里学习一个新的本能模式"
+  expect: [builtin/instinct-learning, builtin/instinct]
+  category: learning
+
+- query: "用 RIPER 流程来做这个功能"
+  expect: [builtin/riper-workflow]
+  category: workflow
+- query: "run the riper workflow for this feature"
+  expect: [builtin/riper-workflow]
+  category: workflow
+
+- query: "收工了"
+  expect: [builtin/session-end]
+  category: session
+- query: "that's all for now, heading out"
+  expect: [builtin/session-end]
+  category: session
+- query: "今天就到这里，保存一下进度"
+  expect: [builtin/session-end]
+  category: session
+
+- query: "把这段对话提炼成一个新技能"
+  expect: [builtin/skill-craft]
+  category: skill_mgmt
+- query: "craft a new skill from this session's patterns"
+  expect: [builtin/skill-craft]
+  category: skill_mgmt
+
+- query: "评估一下这些技能的使用质量和效果"
+  expect: [builtin/slash-evaluate]
+  category: skill_mgmt
+- query: "which skills are performing well and which need attention"
+  expect: [builtin/slash-evaluate]
+  category: skill_mgmt
+
+- query: "/help"
+  expect: [builtin/slash-help, help]
+  category: slash
+- query: "vibe 这个工具怎么用"
+  expect: [builtin/slash-help, help]
+  category: slash
+
+- query: "/install superpowers"
+  expect: [builtin/slash-install]
+  category: slash
+- query: "帮我安装一个技能包"
+  expect: [builtin/slash-install]
+  category: slash
+
+- query: "/list"
+  expect: [builtin/slash-list]
+  category: slash
+- query: "列出所有可用技能"
+  expect: [builtin/slash-list]
+  category: slash
+
+- query: "/orchestrate 同时做安全审查和补测试"
+  expect: [builtin/slash-orchestrate]
+  category: slash
+- query: "/route 这个查询到合适的技能"
+  expect: [builtin/slash-route]
+  category: slash
+
+- query: "来一次全维度代码库审计"
+  expect: [fuck-my-shit-mountain, builtin/deep-diagnosis-optimization]
+  category: cross_cutting
+- query: "这个 bug 在 router.py 第 123 行，修复它并验证"
+  expect: [kimi-gated-fix]
+  category: cross_cutting
+- query: "验证这个 prompt chain 各阶段是否符合规范"
+  expect: [prompt-chain-validator]
+  category: cross_cutting
+
+# --- adversarial / near-miss ---
+- query: "help me write a unit test for this function"
+  expect: []
+  reject: [builtin/slash-help]
+  category: adversarial
+  note: "help 前缀不应劫持到 slash-help（已知问题样本）"
+- query: "help me fix this bug in the login flow"
+  expect: []
+  reject: [builtin/slash-help]
+  category: adversarial
+  note: "同上：help 是语气词不是求助命令"
+- query: "审计一下第三方依赖的供应链安全"
+  expect: [builtin/deep-diagnosis-optimization, fuck-my-shit-mountain]
+  category: adversarial
+- query: "xyzq 什么都不相关的乱码查询 blargh"
+  expect: []
+  category: adversarial
+  note: "应 no-match / fallback"

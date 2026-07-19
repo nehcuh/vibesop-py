@@ -2,6 +2,20 @@
 
 ## Technical Pitfalls
 
+### Routing Eval Baseline: CN Queries Miss Builtin Management Skills (2026-07-19)
+
+**Baseline**（`scripts/eval_routing.py`，34 queries）：top-1 **64.7%**，recall@3 67.6%。错误样本记录在 `memory/routing-errors.jsonl`。三类错误模式：
+
+1. **中文 query → fallback-llm（8/12）**：builtin 管理类技能（session-end、skill-craft、slash-help/install/list、autonomous-experiment、kimi-gated-fix）的中文自然语言表达全部落空——builtin 技能元数据（description/tags/trigger_when）以英文为主，中文 keyword/TF-IDF 匹配失效。注意 `session-end` 的 tags 明明含「收工」，"收工了" 仍 fallback——疑似 ea2e026 的 session-end 守卫在无活跃会话时拦截。
+2. **外部技能包劫持（3/12）**：mattpocock/review 胜过 builtin/deep-diagnosis（中文「全面审查」）、omx/ultraqa 胜过 slash-evaluate、omx/best-practice-research 胜过 experience-evolution——外部包元数据更丰富，评分压过内置。
+3. **builtin 内部混淆（1/12）**："show my coding instincts" → slash-list（"show"≈"list" 关键词重叠）。
+
+**改进方向**：builtin SKILL.md 的 description/trigger_when 补中文等价表述；评测集已入库 `tests/benchmark/routing_eval.yaml`，应进 CI 防回退。
+
+### Slash Command ID 形式不一致（2026-07-19）
+
+`/help` 在 EXPLICIT 层返回裸 id `help`，而 `/list` 返回 `builtin/slash-list`——同类 slash 命令的 skill_id 命名空间不一致。评测集需同时接受两种形式；建议统一为 `builtin/slash-*`。
+
 ### Bandit pyproject.toml Skips Require Flat `skips` Key, Not a Sub-Table (2026-07-18)
 
 **Issue**: `[tool.bandit."skips"] test_id = ["B324", "B701"]` parses fine but bandit **silently ignores it** — all skips were only effective via CI's inline `--skip` flags. Dropping the CLI flags made B324/B701/B608 fire immediately.

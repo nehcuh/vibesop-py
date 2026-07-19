@@ -14,8 +14,12 @@ Complete reference for all VibeSOP CLI commands (v6.2.0+).
   - [`vibe doctor`](#vibe-doctor)
   - [`vibe version`](#vibe-version)
   - [`vibe install`](#vibe-install)
+  - [`vibe market`](#vibe-market)
+  - [`vibe sequence`](#vibe-sequence)
+  - [`vibe data purge`](#vibe-data-purge)
 - [Skills Management](#skills-management)
   - [`vibe skills`](#vibe-skills)
+  - [`vibe skills distill`](#vibe-skills-distill-suggestion-id)
   - [`vibe skill cleanup`](#vibe-skill-cleanup-v530)
   - [`vibe skill stale`](#vibe-skill-stale)
   - [`vibe skill end-check`](#vibe-skill-end-check-v510)
@@ -241,6 +245,7 @@ vibe install <source> [options]
 **Options:**
 - `--force, -f` - Force reinstall if already installed
 - `--upgrade` - Accept a pack whose commit or content changed since the last install (F-02)
+- `--scope` - Install scope: `global` (default, `~/.config/skills/` + platform symlinks) or `project` (`.vibe/skills/` in the current project only; runs the same security chain, skips platform symlinks and the global index)
 - `--skip-verify` - Skip post-install verification
 - `--allow-unsafe-build` - Allow local (non-container) build-script execution after interactive confirmation (F-03)
 - `--platform, -p` - Target platform for skill symlinks (`claude-code`, `kimi-cli`, `opencode`, `cursor`, `pi`, or `all`)
@@ -263,7 +268,51 @@ vibe install gstack --upgrade
 
 # Allow local build scripts after explicit interactive confirmation
 vibe install gstack --allow-unsafe-build
+
+# Install into the current project only (.vibe/skills/)
+vibe install https://github.com/mattpocock/skills --scope project
 ```
+
+### `vibe market`
+
+Search and install skills from the **public GitHub skill ecosystem** (topics `agent-skills`, `claude-skills`, etc., stars-sorted) plus curated awesome lists. Results are tiered: official (built-in trusted packs) → curated (awesome lists) → unknown (clearly flagged, install requires confirmation).
+
+```bash
+vibe market <command> [options]
+```
+
+**Commands:**
+- `search <query>` - Search the public ecosystem; results show trust tier, stars, and install command. `--json` for machine-readable output, `--page N` for paging
+- `trending <category>` - Trending repos for a category (`agent` → agent-skills, `claude` → claude-skills, `claude-code` → claude-code-skills, `skill-md`; any other value is used as the topic directly)
+- `install <owner/repo>` - Install from a GitHub repo (validates the repo contains SKILL.md files). Options: `--scope global|project`, `--yes`
+
+**Examples:**
+```bash
+# Search for code review skills
+vibe market search "code review"
+
+# See what is trending in the agent-skills topic
+vibe market trending agent
+
+# Install into the current project only
+vibe market install mattpocock/skills --scope project
+```
+
+> **Note**: unauthenticated GitHub API is rate-limited (10 req/min search); set `GITHUB_TOKEN` or `GH_TOKEN` for reliable use. Search results are cached for 24h (5 min on partial failure).
+
+### `vibe sequence`
+
+Manage captured tool-call sequences used by workflow-pattern learning (task distillation).
+
+```bash
+vibe sequence <command>
+```
+
+**Commands:**
+- `record-tool` - Record one tool call from a Claude Code `PostToolUse` hook (reads the hook JSON from stdin; stores only tool name + timestamp + session id — never `tool_input`)
+- `assemble` - Assemble recorded tool events into sequences (grouped by session, 30-min window fallback) and feed them to the instinct learner (`record_sequence`, application-only weight)
+
+**Related:** the Claude Code adapter ships the `vibesop-tool-seq.sh` hook (installed when `sequences.enabled` is true) which pipes PostToolUse events to `vibe sequence record-tool`. Captured data lives in `.vibe/tool_sequences.jsonl` (rotated at 10MB) and can be removed with `vibe data purge --tool-sequences`.
 
 ### `vibe data purge`
 
@@ -283,6 +332,8 @@ vibe data purge [options]
 - `--sessions` - Purge `.vibe/session/*.json`
 - `--feedback` - Purge feedback records
 - `--pack-locks` - Purge pack install locks (`~/.config/skills/.pack-locks/`)
+- `--miss-counter` - Purge the no-match query counter (`.vibe/miss_counter.json`; the salt is kept)
+- `--tool-sequences` - Purge captured tool sequences (`.vibe/tool_sequences.jsonl` + cursor + rotation)
 - `-y, --yes` - Skip the confirmation prompt
 - `--project-root` - Project root (where `.vibe/` lives)
 
@@ -354,6 +405,25 @@ vibe skills info <skill-id>
 ```bash
 vibe skills info systematic-debugging
 vibe skills info gstack/review
+```
+
+#### `vibe skills distill [<suggestion-id>]`
+
+Distill a mature workflow pattern (sequence suggestion) into a real SKILL.md via LLM. Flow: consent gate (shows which provider/model receives the redacted inputs) → full-text review (save / edit in `$EDITOR` / discard) → security audit of the exact final bytes (CRITICAL blocks; **any threat blocks `--yes`**; interactive second confirm otherwise) → writes to `.vibe/skills/custom/<name>/SKILL.md` (project scope) → marks the suggestion as created.
+
+```bash
+vibe skills distill [<suggestion-id>] [--yes] [--template]
+```
+
+**Options:**
+- `--yes` - Skip all prompts (a fully clean security audit is still required)
+- `--template` - Use the template generator instead of an LLM
+
+**Example:**
+```bash
+# List suggestions, then distill one
+vibe skills suggestions
+vibe skills distill sug_f4fb99e5ab5a
 ```
 
 #### `vibe skills install <id>`
@@ -778,7 +848,7 @@ vibe skill end-check --json
 
 #### `vibe skills suggestions` (v5.1.0+)
 
-View auto-detected skill suggestions from your repeated workflow patterns.
+Unified suggestion inbox: repeated workflow patterns (`sequence` type, from instinct learning) **and repeated no-match queries** (`market-search` type, suggesting `vibe market search`). Shows pending suggestions with confidence and occurrence counts.
 
 ```bash
 vibe skills suggestions [options]
@@ -795,6 +865,9 @@ vibe skills suggestions
 
 # Dismiss all
 vibe skills suggestions --dismiss
+
+# Distill a sequence suggestion into a real skill
+vibe skills distill <suggestion-id>
 ```
 
 ---
