@@ -125,3 +125,58 @@ reasoning: Step 1: 'red_team' → builtin/slash-evaluate [+1 more] (squad); ...
 - DeepSeek Anthropic 兼容端点：`https://api.deepseek.com/anthropic` + `ANTHROPIC_AUTH_TOKEN` + `ANTHROPIC_MODEL=deepseek-chat`，实测可用
 - Kimi Code：官方 install.sh 安装（PyPI 包是旧代）；`kimi -p` 单独使用（与 --yolo/--auto/--output-format 均互斥）；provider 配置格式见 [Kimi Code Providers 文档](https://www.kimi.com/code/docs/en/kimi-code-cli/configuration/providers.html)
 - 验证迭代共 7 轮（v1 参数错误 → v2 非 root + 新代 kimi → v3 `-p` 互斥 → v4/v5 config 格式 → v6 prompt 引号断裂 + 证据采集 → v7 uv tool install 修复 hook）
+
+---
+
+# 第 2 轮（v8，2026-07-19 下午）：Grok Build 扩展 + flash/pro 对照
+
+> 镜像 `vibesop-agent-val:py3.12-v3`（+ Grok Build 0.2.103 官方二进制）；原始证据 `~/Projects/vibesop-val-artifacts/agent-2026-07-19-v8/`（25MB，14 个 run）
+
+## 矩阵扩充
+
+新增 Grok Build 6 个 run（normal/dynamic × baseline/vibesop × flash，加 dynamic × baseline/vibesop × pro）。**Grok 6/6 全部 exit=0**，包括两个 baseline/vibesop 的动态场景——这是第一个在动态场景全绿的后端 harness。
+
+| Run | 模型 | 退出 | 产出 | turns | in/out tokens |
+|---|---|---|---|---|---|
+| baseline-grok-dynamic | flash | 0 | app+calc 修复 + 2 测试文件 | 9 | 3.8k/4.6k |
+| vibesop-grok-dynamic | flash | 0 | 同上 | 7 | 4.9k/4.6k |
+| baseline-grok-dynamic-pro | pro | 0 | app+calc 修复 + test_fixes.py | 12 | 14.5k/5.3k |
+| vibesop-grok-dynamic-pro | pro | 0 | app+calc 修复 + 2 测试文件 | 10 | 15.0k/5.8k |
+
+## 三个新发现
+
+### 1. Grok Build 原生兼容 Claude Code 的 vibesop 部署（意外之喜）✅
+
+未做任何 grok 适配，vibesop 的 claude-code 部署对 Grok Build **自动生效**，双通道证据：
+
+- **Hook**：`~/.claude/settings.json` 的 UserPromptSubmit hook 被 Grok 触发（`.vibe/ai_triage_log.jsonl` 记录 grok 会话的 `"hookEventName":"user_prompt_submit"`，triage 选中 `builtin/deep-diagnosis-optimization`）
+- **上下文**：Grok 的 `chat_history.jsonl` 中确认其原生读取了 `/home/val/.claude/CLAUDE.md`（vibesop 生成的路由协议）
+
+→ 含义：**Claude Code 兼容的 hook/CLAUDE.md 生态正在被新 agent 复用**，vibesop 的 claude-code adapter 覆盖面超出设计预期。后续可将「grok 兼容层」显性纳入 adapter 测试矩阵。
+
+### 2. 「flash 不行」的根因修正：harness 才是主导变量
+
+同一后端模型（deepseek-v4-flash）、同一场景、同一时间盒：
+
+| Agent harness | 动态场景结果 |
+|---|---|
+| Kimi Code + flash | **两轮均 420s 超时**（reasoning loop，反复重读文件） |
+| Grok Build + flash | **全部完成**（7-9 turns） |
+| Claude Code + flash | 全部完成 |
+
+→ 「flash 动态工作流拆解不行」的先前观察被证伪了一半：**失效是「Kimi harness × flash」的组合效应**，不是 flash 单独不行（与调研文献一致：scaffold 对结果的影响可超过模型本身）。Grok 的 harness（上下文管理/任务推进）对弱模型更友好。
+
+### 3. flash vs pro 对照：本场景无显著差异（成本差 3 倍）
+
+pro 全部完成但 turns 更多（12/10 vs 9/7）、输入 token 约 3 倍（14.5k vs 4-5k）——在小型 2 文件场景上 pro 的优势（长程保持、深推理）没有发挥空间。**结论维持分层策略**：vibesop 路由端用 flash（实测一直正常且 $0.0007/次）；执行端模型选择应先看 harness 质量，任务真正长程（10+ 工具调用、大上下文）时才需要 pro。
+
+### 4. Codex CLI 结论（调研）
+
+当前版本**不可直连 DeepSeek**：Codex 已硬移除 `wire_api="chat"`，DeepSeek 无 `/responses` 端点。接入需 Responses→Chat 协议代理（如 codex-proxy/LiteLLM），作为独立 spike 暂缓，不进 SOP 主路径。
+
+## 第 2 轮结论
+
+- Grok Build 是第三个被验证的 agent，且是**首个动态场景全绿**的 harness（6/6）
+- vibesop 注入链路透用于 Grok（未经适配即生效）
+- 「harness > 模型」在三个 agent 的对照中得到实证：同一 flash，Kimi 超时、Claude/Grok 完成
+- SOP 已沉淀：`docs/dev/agent-scenario-validation-sop.md`（含 8 类场景库、三层指标、routing 评测集与经验闭环、模型分层策略）
