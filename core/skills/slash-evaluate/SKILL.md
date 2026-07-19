@@ -3,7 +3,7 @@ id: builtin/slash-evaluate
 name: slash-evaluate
 description: Evaluate skill quality and usage statistics. Check which skills are performing well and which need attention.
 version: 2.0.0
-tags: [evaluate, quality, stats, audit, health]
+tags: [evaluate, quality, stats, audit, health, 评估, 技能质量, 效果]
 commands:
   - evaluate
 intent: evaluation

@@ -3,10 +3,10 @@ id: builtin/slash-install
 name: slash-install
 description: Install skill packs from trusted sources. Downloads and registers skill packs (gstack, superpowers, omx) into the central skill storage with platform symlinks.
 version: 2.0.0
-tags: [install, setup, pack, skills, download]
+tags: [install, setup, pack, skills, download, 安装, 技能包]
 commands:
   - install
-intent: setup
+intent: 安装技能包 install skill packs
 namespace: builtin
 type: standard
 user-invocable: true

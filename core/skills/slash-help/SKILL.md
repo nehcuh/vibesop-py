@@ -3,7 +3,7 @@ id: builtin/slash-help
 name: slash-help
 description: Show all available VibeSOP slash commands and their usage.
 version: 2.0.0
-tags: [help, commands, reference, guide, slash]
+tags: [help, commands, reference, guide, slash, vibe, 帮助, 怎么用]
 commands:
   - help
 intent: help

@@ -4,13 +4,18 @@
 
 ### Routing Eval Baseline: CN Queries Miss Builtin Management Skills (2026-07-19)
 
-**Baseline**（`scripts/eval_routing.py`，34 queries）：top-1 **64.7%**，recall@3 67.6%。错误样本记录在 `memory/routing-errors.jsonl`。三类错误模式：
+**Baseline**（`scripts/eval_routing.py`，34 queries）：top-1 **64.7%** → 元数据修复后 **88.2%**（recall@3 91.2%，零回退）。错误样本记录在 `memory/routing-errors.jsonl`。三类错误模式：
 
-1. **中文 query → fallback-llm（8/12）**：builtin 管理类技能（session-end、skill-craft、slash-help/install/list、autonomous-experiment、kimi-gated-fix）的中文自然语言表达全部落空——builtin 技能元数据（description/tags/trigger_when）以英文为主，中文 keyword/TF-IDF 匹配失效。注意 `session-end` 的 tags 明明含「收工」，"收工了" 仍 fallback——疑似 ea2e026 的 session-end 守卫在无活跃会话时拦截。
+1. **中文 query → fallback-llm（8/12）**：builtin 管理类技能的中文自然语言表达全部落空——元数据以英文为主。已通过补双语 description/tags/trigger_when 修复（11 个 SKILL.md，含 session-end triggers 补「收工」）。
 2. **外部技能包劫持（3/12）**：mattpocock/review 胜过 builtin/deep-diagnosis（中文「全面审查」）、omx/ultraqa 胜过 slash-evaluate、omx/best-practice-research 胜过 experience-evolution——外部包元数据更丰富，评分压过内置。
 3. **builtin 内部混淆（1/12）**："show my coding instincts" → slash-list（"show"≈"list" 关键词重叠）。
 
-**改进方向**：builtin SKILL.md 的 description/trigger_when 补中文等价表述；评测集已入库 `tests/benchmark/routing_eval.yaml`，应进 CI 防回退。
+**剩余 4 个结构性阻塞**（非 SKILL.md 元数据可解，需单独决策）：
+- 2 条被 **registry scenario 层固定 0.9 置信度短路**（「审查」→code_review→mattpocock/review、「质量」→qa_cycling→omx/ultraqa）——`core/registry.yaml` scenario_keywords/targets 调整是行为决策，未在本轮做；注意「全面审查→mattpocock/review」在语义上并非全错，评测期望可能偏严
+- 1 条被 **CandidatePrefilter 命名空间裁剪**（外部 tag 触发导致候选只剩外部包，experience-evolution 未进 matcher）
+- 1 条被**静态语义索引**（`~/.vibe/skill-index.json` 固定产物）压制——需 LLM 重建索引（非确定性，有回退风险）
+
+**改进方向**：评测集已入库 `tests/benchmark/routing_eval.yaml`，应进 CI 防回退；结构性 4 条待 registry/索引专项处理。
 
 ### Slash Command ID 形式不一致（2026-07-19）
 

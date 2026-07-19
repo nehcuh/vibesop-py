@@ -2,7 +2,8 @@
 id: builtin/skill-craft
 name: skill-craft
 description: Craft personal skills from session history - extract patterns, generate reusable skills
-tags: [skill, craft, generate, template, 技能, 生成]
+tags: [skill, craft, generate, template, 技能, 生成, 提炼, 新技能, 对话]
+trigger_when: 用户想把对话或会话历史中的成功经验提炼、生成新技能时
 version: 1.0.0
 commands:
   - skill-craft

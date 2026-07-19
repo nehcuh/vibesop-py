@@ -3,7 +3,7 @@ id: builtin/instinct
 name: instinct
 description: Instinct learning system — record patterns, review candidates, view status, import/export, and evolve instincts into formal skills. Memory over intelligence.
 version: 2.0.0
-tags: [instinct, pattern, learn, extract, habit, memory, evolve, 本能, 模式, 学习]
+tags: [instinct, pattern, learn, extract, habit, memory, evolve, confidence, status, 本能, 模式, 学习]
 commands:
   - instinct learn
   - instinct eval

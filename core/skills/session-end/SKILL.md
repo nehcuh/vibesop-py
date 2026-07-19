@@ -13,6 +13,7 @@ triggers:
   - "gotta go"
   - "我要离开了"
   - "先走了"
+  - "收工"
   - "拜拜"
   - "今天就到这里"
   - "session end"

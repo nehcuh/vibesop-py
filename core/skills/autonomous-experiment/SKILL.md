@@ -1,8 +1,8 @@
 ---
 id: builtin/autonomous-experiment
 name: autonomous-experiment
-description: Autonomous experiment loop with predict-attribute cycle and multi-dimensional evaluation
-tags: [experiment, optimize, iteration, benchmark, evaluate, 实验, 优化, 迭代]
+description: Autonomous experiment loop with predict-attribute cycle and multi-dimensional evaluation（自主运行实验循环并汇报评估结果）
+tags: [experiment, optimize, iteration, benchmark, evaluate, 实验, 优化, 迭代, 自主, 运行, 评估]
 version: "1.0.0"
 commands:
   - experiment

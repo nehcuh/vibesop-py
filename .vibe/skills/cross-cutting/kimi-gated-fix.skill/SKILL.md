@@ -23,11 +23,13 @@ triggers:
   - "kimi-gated fix"
 tags:
   - fix
+  - bug
   - kimi
   - review
   - dynamic-workflow
   - verification
   - 修复
+  - 验证
   - 复审
   - 把关
   - 定点修复
