@@ -40,6 +40,11 @@ def filter_management_candidates(
     """
     if _MANAGEMENT_INTENT_RE.search(query):
         return candidates
+    # Very short queries ("help", "收工了") are treated as direct tool
+    # commands — management skills stay eligible. (CJK single-phrase
+    # queries have no spaces and also count as short.)
+    if len(query.split()) <= 2:
+        return candidates
     kept = [c for c in candidates if not c.get("management_only")]
     return kept or candidates
 
