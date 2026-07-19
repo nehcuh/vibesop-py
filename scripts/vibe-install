@@ -211,6 +211,16 @@ main() {
                 exit 1
             fi
             install_platform "$PLATFORM" "$FORCE"
+
+            # Auto-install recommended community skill packs
+            print_info "Installing recommended community skill packs..."
+            python3 -c "
+from vibesop.cli.commands.install import _auto_install
+try:
+    _auto_install(force=False, skip_verify=False, platforms=None, scope='global')
+except Exception as e:
+    print(f'  Warning: community pack installation skipped ({e})')
+" || print_warning "Community pack installation failed (non-fatal)"
             ;;
     esac
 }
