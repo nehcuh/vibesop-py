@@ -1,5 +1,29 @@
 ## Current Session
 
+### S32 (2026-07-19 15:20~23:29) [vibesop-py Windows 兼容生产化 — 多 agent 动态工作流]
+
+- [x] **环境从零搭建**：Windows 无 Python/uv → 装 uv 0.11.29 → `uv python install 3.12` → `uv sync --extra dev`（101 包）
+- [x] **根因分析**（4 explore agents 并行）：88 failed/4194 passed 基线 → 6 桶（编码 41/exec 位 14/symlink 13/路径 10/shlex 3/其他 7），9 个真实生产 bug。落 `docs/dev/windows-compat/01-analysis.md`
+- [x] **设计 + 对抗 + pi 确认**：设计 v1 → 对抗评审 2 Blocker/5 Major → v2 修订 → pi 签字 3 决策点（marker 发现、shlex 转义、TOML locale 回退）→ `02-design.md`/`03-adversarial-review.md`
+- [x] **P0-P4 分批开发**（4 coder agents）：P0 生产 bug（编码自毒/场景路由禁用/fd 泄漏/shlex 引号）→ P1 编码统一（77 src + 436 tests）→ P2 symlink probe/exec 守护 → P3 路径/时序 → P4 HOME 三层隔离 + CI test-windows job。每批门禁：失败数严格递减 88→77→36→0
+- [x] **双评审 + pi/Grok 签字**：生产代码评审 3 Major（YAML 回退/marker 崩溃/pin 测试缺失）→ 修复；测试质量评审确认无削弱换绿；pi 两次 SHIP；Grok 独立审查 SHIP
+- [x] **提交推送**：`a275caa` 主提交（143 文件 + 4 新路径）
+- [x] **CI 首轮抓真 bug**：windows-latest（提权 runner）4302 passed/1 failed —— `_flatten_skill_name` 只替换 `/` 不处理 `\`（probe-skip 盲区本地不可见）→ 修复 + 无权限回归测试 → `ab9c8df` → **CI 全绿**（Windows 3.12/3.13 + ubuntu 全绿）
+
+**Key Discoveries**:
+1. GBK 自毒链：`vibe init` 不写 encoding → tomllib 永远读不回自己写的 config.toml
+2. `shlex posix=False` ≠ Windows 模式（保留引号的非 POSIX 词法）；正确跨平台是反斜杠翻倍 + posix=True
+3. probe-skip 盲区：无权限机器上提权代码路径零覆盖 → 纯逻辑必须抽无权限单测
+4. Windows mkstemp `closefd=False` fd 泄漏 → replace WinError 32 静默丢数据（POSIX 隐形）
+5. 多 agent 动态工作流各角色抓到不同层级问题：对抗评审抓设计断裂、代码评审抓崩溃级、Grok 抓理论边界
+
+**Next Steps**:
+1. `test-windows` CI job 两周观察期（至 ~2026-08-02）后移除 `continue-on-error` 转强约束
+2. 遗留项（05-review.md）：atomic_writer 并发 tmp 碰撞、conftest ClassVar 登记制维护、quick_commands.py:35 覆盖恢复
+3. 既有 backlog：Zed adapter、文档深度治理、双 PromptChainGenerator 合并
+
+**Recorded**: yes — 7 条 Windows 陷阱/模式 → project-knowledge.md；1 个新 instinct（动态工作流）
+
 ### S31 (2026-07-18 06:40~15:30) [vibesop-py 全面诊断 + panel 分拆 + 质量收口]
 
 - [x] **Fanout 六路诊断**（explore agents）：测试/静态检查/架构/文档/CI-发布/依赖安全。结论：代码内核健康，工程外围失修——main CI 红（`.vibe` 脚本 I001 + 注册表耦合测试）、release 管线从未跑通（`workflow_call` 缺失）、版本三方漂移（pyproject 8.0.0.dev0 / PyPI 5.4.6 / tag v5.4.5）、15 个堆积分支

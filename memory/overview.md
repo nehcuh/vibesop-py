@@ -1,12 +1,23 @@
 # Overview - VibeSOP Project
 
-**Last Updated**: 2026-07-18 (S31 — Fanout Diagnosis + Panel Split + Quality Convergence)
+**Last Updated**: 2026-07-19 (S32 — Windows Compatibility Production-Ready)
 
 ---
 
 ## Goals
 
-### Current Week (July 13-18, 2026)
+### Current Week (July 19-25, 2026)
+
+1. **Windows 兼容生产化** ✅ (Completed - July 19)
+   - 套件 88 failed → 0 failed（本地 4282 passed）+ CI test-windows job 全绿 + ubuntu 零回归
+   - 9 个真实生产 bug 修复（GBK 自毒/场景路由禁用/fd 泄漏丢状态/shlex 引号泄漏等）
+   - 多 agent 动态工作流（设计→对抗→开发→评审→pi/Grok 签字），全套文档 docs/dev/windows-compat/
+2. **test-windows CI 观察期**（至 ~2026-08-02）
+   - `continue-on-error: true` 稳定两周后转强约束（05-review.md 遗留项 #1）
+3. **Skill 商店重构 + 智能建议**（新方向，待启动）
+   - GitHub 按需搜索替代 issues 版市场；未命中查询追踪；重复任务蒸馏为技能
+
+### Previous Week (July 13-18, 2026) — Completed
 
 1. **Control Panel 分拆** ✅ (Completed - July 18)
    - vibesop-py-panel 独立仓库（私有，36 提交全历史），worktree 转独立克隆
@@ -14,8 +25,6 @@
 2. **质量收口** ✅ (Completed - July 18)
    - main CI 6/6 全绿（此前 7-14 起持续红）：lint 修复 + 测试隔离 + release 管线 workflow_call
    - 供应链：pip-audit 覆盖全 extras、dependabot→uv 生态、bandit 配置单源化
-3. **Skill 商店重构 + 智能建议**（新方向，待启动）
-   - GitHub 按需搜索替代 issues 版市场；未命中查询追踪；重复任务蒸馏为技能
 
 ### Previous Week (May 24-30, 2026) — Completed
 

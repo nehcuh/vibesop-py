@@ -1758,3 +1758,15 @@ kimi Code 深审 Phase 1-5 diff（OrbStack e2e 3703/0 绿），抓到 1 CRITICAL
 2. **`ruff check` 的 "No fixes available (N hidden fix…)" = 有错**，不是通过。只有 "All checks passed!" 才是绿。
 3. **kimi 深审的价值**：抓到 3704 绿测试 + ruff + pyright 全漏的 CRITICAL（多轮 instinct 键）。独立视角 + 全 diff 上下文 = 找结构性盲点。后续大改动值得跑 kimi + 容器 e2e（deep-diagnosis-optimization skill 的 per-batch 验证流程）。
 
+
+### Windows 兼容性实战陷阱 (2026-07-19, S32)
+
+详见 `docs/dev/windows-compat/` 全套文档。核心教训：
+
+- **GBK 自毒链**: zh-CN Windows 默认编码 GBK。写配置文件不显式 utf-8 → 之后 tomllib（TOML 规范强制 UTF-8）永远读不回——`vibe init` 曾写出自己读不了的 config.toml。规则：项目自产文件 IO 一律显式 `encoding="utf-8"`；用户可编辑文件走 `utils/encoding.py`（utf-8 严格 + locale 回退 + warning）。
+- **`shlex.split(posix=False)` 不是"Windows 模式"**: 它是保留引号的非 POSIX 词法——曾致引号泄漏进路由查询。正确跨平台写法：`input.replace("\\","\\\\")` + `posix=True`。
+- **probe-skip 盲区**: 能力探测 skip（symlink 权限）使提权代码路径在无权限开发机零覆盖——`_flatten_skill_name` 反斜杠 bug 直到 windows-latest CI（提权 runner）才暴露。教训：纯逻辑抽成不依赖权限的单测。
+- **Windows `mkstemp` + `open(fd, closefd=False)` = 静默数据丢失**: fd 泄漏 → `Path.replace()` WinError 32 → 被 except 吞掉。POSIX 无害所以长期隐形；改用 `utils/atomic_writer`。
+- **Windows exec 位**: `chmod(0o755)` 只影响只读位，`st_mode & 0o111` 恒 0。hook 一律 `bash <script>` 调用，生产 exec 检查需 win32 降级（`shutil.which("bash")` + 非空）。
+- **import 期冻结的 `Path.home()` ClassVar 不吃 env monkeypatch**——测试 HOME 隔离需显式重定向（conftest `_redirect_frozen_home_paths` 三层模式，12 个模块）。
+- **多 agent 动态工作流有效**: 设计 → 对抗评审 → 分批开发 → 独立评审 → 外部签字（pi + Grok）各抓到不同层级的真问题（对抗评审 2 Blocker、代码评审 3 Major、Grok 0 critical）。全套轨迹在 docs/dev/windows-compat/。

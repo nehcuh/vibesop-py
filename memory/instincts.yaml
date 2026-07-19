@@ -204,3 +204,25 @@ instincts:
       - 可复用 workflow 缺 workflow_call 会让调用方 0 秒失败，且报错指向调用方而非被调用方
     created_at: "2026-07-18"
     last_used: "2026-07-18"
+
+  - id: "550e8407-dynamic-multi-agent-workflow-2026"
+    pattern: "大型兼容/改造项目用动态多 agent 工作流：设计（多 explore 并行根因分析）→ 对抗评审（专职 agent 攻击设计）→ 分批开发（coder agents，每批独立门禁）→ 独立评审（生产+测试质量双 agent）→ 外部签字（pi/Grok 等异构 agent 确认决策点与终审）。每阶段落文档保证可追溯。"
+    confidence: 0.86
+    source_sessions: ["vibesop-py-windows-compat-2026-07-19"]
+    usage_count: 1
+    success_rate: 1.0
+    tags: ["multi-agent", "workflow", "code-review", "large-change", "traceability"]
+    status: "active"
+    context: |
+      适用场景：跨 100+ 文件的系统性改造、平台兼容、需要高置信度的变更。
+      关键纪律：
+      1. 每批次结束跑全量套件，失败数必须严格递减且零新增
+      2. 对抗评审必须在开发前（抓设计断裂），独立评审必须在验证前（抓实现崩溃级）
+      3. 外部异构 agent（pi/Grok）视角与内建 agent 互补——本次各抓到不同层级问题
+      4. 文档即门禁：分析/设计/对抗/实施/评审/验证每阶段一个文件
+      陷阱：
+      - headless agent（Grok -p）长跑会话可能截断，用 --resume 恢复拿结论
+      - probe-skip 会让提权代码路径在无权限开发机零覆盖——纯逻辑抽无权限单测
+      - 批量脚本改测试要三重验证（diff 抽查 + compile + lint），第一版脚本有 bug 很正常
+    created_at: "2026-07-19"
+    last_used: "2026-07-19"
