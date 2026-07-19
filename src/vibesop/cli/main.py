@@ -1460,8 +1460,8 @@ def _check_stale_skills_post_route() -> None:
     counter: dict[str, Any] = {}
     if counter_file.exists():
         try:
-            counter = json.loads(counter_file.read_text())
-        except (json.JSONDecodeError, OSError):
+            counter = json.loads(counter_file.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError, UnicodeDecodeError):
             counter = {}
 
     routes_since = counter.get("routes_since_last_check", 0) + 1
@@ -1470,7 +1470,7 @@ def _check_stale_skills_post_route() -> None:
     counter["check_interval"] = check_interval
 
     counter_file.parent.mkdir(parents=True, exist_ok=True)
-    counter_file.write_text(json.dumps(counter, indent=2))
+    counter_file.write_text(json.dumps(counter, indent=2), encoding="utf-8")
 
     if routes_since < check_interval:
         return
@@ -1491,7 +1491,7 @@ def _check_stale_skills_post_route() -> None:
             console.print()
 
         counter["routes_since_last_check"] = 0
-        counter_file.write_text(json.dumps(counter, indent=2))
+        counter_file.write_text(json.dumps(counter, indent=2), encoding="utf-8")
     except Exception as e:
         logger.warning("Unhandled error: %s", e)
 

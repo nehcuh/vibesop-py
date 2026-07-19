@@ -240,13 +240,13 @@ class FeedbackCollector:
         output_path = Path(output_path).expanduser()
 
         data = [record.to_dict() for record in self._records]
-        with output_path.open("w") as f:
+        with output_path.open("w", encoding="utf-8") as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
 
     def import_records(self, input_path: str | Path) -> int:
         input_path = Path(input_path).expanduser()
 
-        with input_path.open() as f:
+        with input_path.open(encoding="utf-8") as f:
             data = json.load(f)
 
         for record_data in data:
@@ -260,7 +260,7 @@ class FeedbackCollector:
         if self._storage_path.exists():
             try:
                 self._records = []
-                with self._storage_path.open() as f:
+                with self._storage_path.open(encoding="utf-8") as f:
                     for raw_line in f:
                         stripped = raw_line.strip()
                         if not stripped:
@@ -270,7 +270,7 @@ class FeedbackCollector:
                             self._records.append(FeedbackRecord.from_dict(data))
                         except (json.JSONDecodeError, KeyError):
                             pass
-            except (json.JSONDecodeError, OSError, KeyError):
+            except (json.JSONDecodeError, OSError, KeyError, UnicodeDecodeError):
                 self._records = []
 
     def _save_records(self) -> None:
@@ -278,7 +278,7 @@ class FeedbackCollector:
         if not self._records:
             return
         record = self._records[-1]
-        with self._storage_path.open("a") as f:
+        with self._storage_path.open("a", encoding="utf-8") as f:
             f.write(json.dumps(record.to_dict(), ensure_ascii=False) + "\n")
 
 
@@ -425,7 +425,7 @@ class ExecutionFeedbackCollector:
         if self._storage_path.exists():
             try:
                 self._records = []
-                with self._storage_path.open() as f:
+                with self._storage_path.open(encoding="utf-8") as f:
                     for raw_line in f:
                         stripped = raw_line.strip()
                         if not stripped:
@@ -435,7 +435,7 @@ class ExecutionFeedbackCollector:
                             self._records.append(SkillExecutionFeedback.from_dict(data))
                         except (json.JSONDecodeError, KeyError):
                             pass
-            except (json.JSONDecodeError, OSError, KeyError):
+            except (json.JSONDecodeError, OSError, KeyError, UnicodeDecodeError):
                 self._records = []
 
     def _save_records(self) -> None:
@@ -443,5 +443,5 @@ class ExecutionFeedbackCollector:
         if not self._records:
             return
         record = self._records[-1]
-        with self._storage_path.open("a") as f:
+        with self._storage_path.open("a", encoding="utf-8") as f:
             f.write(json.dumps(record.to_dict(), ensure_ascii=False) + "\n")

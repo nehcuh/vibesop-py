@@ -252,7 +252,9 @@ def export(
 
     output_path = Path.cwd() / output if not output.is_absolute() else output
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    output_path.write_text(json.dumps(data, indent=2, ensure_ascii=False, default=str))
+    output_path.write_text(
+        json.dumps(data, indent=2, ensure_ascii=False, default=str), encoding="utf-8"
+    )
     console.print(
         f"[green]Exported[/green] [bold]{len(instincts)}[/bold] instincts to [cyan]{output_path}[/cyan]"
     )
@@ -274,9 +276,9 @@ def import_(
         raise typer.Exit(1)
 
     try:
-        data = json.loads(input_path.read_text())
+        data = json.loads(input_path.read_text(encoding="utf-8"))
         incoming = [Instinct.from_dict(i) for i in data.get("instincts", [])]
-    except (json.JSONDecodeError, KeyError) as e:
+    except (json.JSONDecodeError, KeyError, UnicodeDecodeError) as e:
         console.print(f"[red]✗[/red] Invalid export file: {e}")
         raise typer.Exit(1) from None
 
@@ -288,7 +290,7 @@ def import_(
     for instinct in incoming:
         if not learner.has_instinct(instinct.id):
             learner.set_instinct(instinct)
-            with learner.storage_path.open("a") as f:
+            with learner.storage_path.open("a", encoding="utf-8") as f:
                 f.write(json.dumps(instinct.to_dict(), default=str) + "\n")
             imported += 1
         elif force:
@@ -399,7 +401,7 @@ When this pattern matches, {ins.action}.
 - **Evolved from**: instinct #{ins.id[:8]}
 """
 
-    (skill_dir / "SKILL.md").write_text(skill_md)
+    (skill_dir / "SKILL.md").write_text(skill_md, encoding="utf-8")
     console.print(f"[green]Skill created:[/green] {skill_dir}/SKILL.md")
     console.print(f"[green]Skill ID:[/green] [cyan]{skill_id}[/cyan]")
     console.print()

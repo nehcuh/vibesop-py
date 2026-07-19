@@ -180,7 +180,7 @@ class AgentRuntimeResult:
                     if bundled not in builtin_candidates:
                         builtin_candidates.append(bundled)
                 hint_path = next(
-                    (str(p) for p in builtin_candidates if p.exists()),
+                    (p.as_posix() for p in builtin_candidates if p.exists()),
                     f"core/skills/{bare_name}/SKILL.md",
                 )
             else:

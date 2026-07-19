@@ -174,13 +174,16 @@ class TestExternalSkillLoaderDiscover:
         pack_dir = tmp_path / "test-pack"
         skill_dir = pack_dir / "skills" / "my-skill"
         skill_dir.mkdir(parents=True)
-        (skill_dir / "SKILL.md").write_text("""---
+        (skill_dir / "SKILL.md").write_text(
+            """---
 id: test-skill
 name: Test Skill
 description: A skill from a pack
 ---
 # Content
-""")
+""",
+            encoding="utf-8",
+        )
         loader = ExternalSkillLoader(require_audit=False)
         result = loader.discover_from_pack("test-pack", pack_dir)
         assert len(result) >= 1
@@ -188,16 +191,19 @@ description: A skill from a pack
     def test_discover_from_pack_with_version(self, tmp_path: Path):
         pack_dir = tmp_path / "versioned-pack"
         pack_dir.mkdir()
-        (pack_dir / "pack.json").write_text('{"version": "2.0.0"}')
+        (pack_dir / "pack.json").write_text('{"version": "2.0.0"}', encoding="utf-8")
         skill_dir = pack_dir / "skills" / "my-skill"
         skill_dir.mkdir(parents=True)
-        (skill_dir / "SKILL.md").write_text("""---
+        (skill_dir / "SKILL.md").write_text(
+            """---
 id: v-skill
 name: Versioned
 description: Versioned skill
 ---
 # Content
-""")
+""",
+            encoding="utf-8",
+        )
         loader = ExternalSkillLoader(require_audit=False)
         result = loader.discover_from_pack("versioned-pack", pack_dir)
         assert len(result) >= 1
@@ -300,20 +306,20 @@ class TestExternalSkillLoaderPackVersion:
     """Test _get_pack_version."""
 
     def test_pack_json(self, tmp_path: Path):
-        (tmp_path / "pack.json").write_text('{"version": "1.2.3"}')
+        (tmp_path / "pack.json").write_text('{"version": "1.2.3"}', encoding="utf-8")
         loader = ExternalSkillLoader(require_audit=False)
         version = loader._get_pack_version(tmp_path, "test")
         assert version == "1.2.3"
 
     def test_package_json(self, tmp_path: Path):
-        (tmp_path / "package.json").write_text('{"version": "4.5.6"}')
+        (tmp_path / "package.json").write_text('{"version": "4.5.6"}', encoding="utf-8")
         loader = ExternalSkillLoader(require_audit=False)
         version = loader._get_pack_version(tmp_path, "test")
         assert version == "4.5.6"
 
     def test_pack_json_priority(self, tmp_path: Path):
-        (tmp_path / "pack.json").write_text('{"version": "1.0.0"}')
-        (tmp_path / "package.json").write_text('{"version": "2.0.0"}')
+        (tmp_path / "pack.json").write_text('{"version": "1.0.0"}', encoding="utf-8")
+        (tmp_path / "package.json").write_text('{"version": "2.0.0"}', encoding="utf-8")
         loader = ExternalSkillLoader(require_audit=False)
         version = loader._get_pack_version(tmp_path, "test")
         assert version == "1.0.0"  # pack.json takes priority
@@ -324,7 +330,7 @@ class TestExternalSkillLoaderPackVersion:
         assert version is None
 
     def test_invalid_json(self, tmp_path: Path):
-        (tmp_path / "pack.json").write_text("not json")
+        (tmp_path / "pack.json").write_text("not json", encoding="utf-8")
         loader = ExternalSkillLoader(require_audit=False)
         version = loader._get_pack_version(tmp_path, "test")
         assert version is None
@@ -347,7 +353,7 @@ class TestExternalSkillLoaderParseAndAudit:
 
         loader = ExternalSkillLoader(require_audit=True, auditor=mock_auditor)
         skill_file = tmp_path / "SKILL.md"
-        skill_file.write_text("# Test")
+        skill_file.write_text("# Test", encoding="utf-8")
 
         result = loader._parse_and_audit(
             skill_dir=tmp_path,
@@ -371,13 +377,16 @@ class TestExternalSkillLoaderParseAndAudit:
 
         loader = ExternalSkillLoader(require_audit=True, auditor=mock_auditor)
         skill_file = tmp_path / "SKILL.md"
-        skill_file.write_text("""---
+        skill_file.write_text(
+            """---
 id: trusted-skill
 name: Trusted
 description: A trusted skill
 ---
 # Content
-""")
+""",
+            encoding="utf-8",
+        )
         from vibesop.constants import TRUSTED_PACKS
 
         pack_name = next(iter(TRUSTED_PACKS.keys())) if TRUSTED_PACKS else "gstack"
@@ -393,13 +402,16 @@ description: A trusted skill
     def test_parse_and_audit_no_auditor(self, tmp_path: Path):
         loader = ExternalSkillLoader(require_audit=False)
         skill_file = tmp_path / "SKILL.md"
-        skill_file.write_text("""---
+        skill_file.write_text(
+            """---
 id: test-skill
 name: Test
 description: A test skill
 ---
 # Content
-""")
+""",
+            encoding="utf-8",
+        )
         result = loader._parse_and_audit(
             skill_dir=tmp_path,
             skill_file=skill_file,
@@ -411,13 +423,16 @@ description: A test skill
     def test_parse_and_audit_with_pack_name(self, tmp_path: Path):
         loader = ExternalSkillLoader(require_audit=False)
         skill_file = tmp_path / "SKILL.md"
-        skill_file.write_text("""---
+        skill_file.write_text(
+            """---
 id: pack-skill
 name: Pack Skill
 description: From a pack
 ---
 # Content
-""")
+""",
+            encoding="utf-8",
+        )
         result = loader._parse_and_audit(
             skill_dir=tmp_path,
             skill_file=skill_file,
@@ -433,7 +448,7 @@ description: From a pack
     def test_parse_and_audit_returns_none_for_invalid_skill_md(self, tmp_path: Path):
         loader = ExternalSkillLoader(require_audit=False)
         skill_file = tmp_path / "SKILL.md"
-        skill_file.write_text("Just some text without frontmatter")
+        skill_file.write_text("Just some text without frontmatter", encoding="utf-8")
         result = loader._parse_and_audit(
             skill_dir=tmp_path,
             skill_file=skill_file,
@@ -476,7 +491,7 @@ class TestResolvePackName:
     def _write_skill(self, storage: Path, *segments: str, sid: str, ns: str) -> None:
         skill_dir = storage.joinpath(*segments)
         skill_dir.mkdir(parents=True, exist_ok=True)
-        (skill_dir / "SKILL.md").write_text(self._SKILL_MD.format(sid=sid, ns=ns))
+        (skill_dir / "SKILL.md").write_text(self._SKILL_MD.format(sid=sid, ns=ns), encoding="utf-8")
 
     def test_nested_skills_dir_not_misattributed_to_trusted_pack(self, tmp_path: Path) -> None:
         """A third-party pack in the standard <pack>/skills/<id>/ layout must be

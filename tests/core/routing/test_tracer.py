@@ -119,7 +119,7 @@ class TestRoutingTracer:
         path = t.save(trace)
         assert path is not None
 
-        with open(path) as f:
+        with open(path, encoding="utf-8") as f:
             data = json.loads(f.read())
         assert "alice@corp.com" not in data["query"]
         assert "sk-" + "a" * 24 not in data["query"]
@@ -130,11 +130,13 @@ class TestRoutingTracer:
         traces_dir.mkdir(parents=True, exist_ok=True)
         (traces_dir / "trace1.json").write_text(
             '{"trace_id":"trace1","timestamp":"","query":"q1","layers":[],'
-            '"final":{"skill_id":"a","confidence":0.8,"layer":"x"},"total_duration_ms":1}'
+            '"final":{"skill_id":"a","confidence":0.8,"layer":"x"},"total_duration_ms":1}',
+            encoding="utf-8",
         )
         (traces_dir / "trace2.json").write_text(
             '{"trace_id":"trace2","timestamp":"","query":"q2","layers":[],'
-            '"final":{"skill_id":null,"confidence":0,"layer":"no_match"},"total_duration_ms":1}'
+            '"final":{"skill_id":null,"confidence":0,"layer":"no_match"},"total_duration_ms":1}',
+            encoding="utf-8",
         )
 
         t = RoutingTracer(enabled=True, traces_dir=traces_dir)

@@ -1,7 +1,10 @@
 """Tests for OpenCodeAdapter."""
 
+import sys
 from pathlib import Path
 from typing import ClassVar
+
+import pytest
 
 from vibesop.adapters import OpenCodeAdapter
 from vibesop.adapters.models import (
@@ -101,7 +104,7 @@ class TestOpenCodeAdapter:
         result = adapter.render_config(manifest, tmp_path)
         assert result.success
 
-        config_yaml = (tmp_path / "config.yaml").read_text()
+        config_yaml = (tmp_path / "config.yaml").read_text(encoding="utf-8")
 
         # Check for key sections
         assert "version: 1.0.0" in config_yaml
@@ -128,7 +131,7 @@ class TestOpenCodeAdapter:
         result = adapter.render_config(manifest, tmp_path)
         assert result.success
 
-        readme = (tmp_path / "README.md").read_text()
+        readme = (tmp_path / "README.md").read_text(encoding="utf-8")
 
         assert "# OpenCode Configuration" in readme
         assert "## Skills" in readme
@@ -156,7 +159,7 @@ class TestOpenCodeAdapter:
         result = adapter.render_config(manifest, tmp_path)
         assert result.success
 
-        config_yaml = (tmp_path / "config.yaml").read_text()
+        config_yaml = (tmp_path / "config.yaml").read_text(encoding="utf-8")
 
         # Check policies are reflected
         assert "scan_external_content: false" in config_yaml
@@ -201,7 +204,7 @@ class TestOpenCodeAdapter:
         result = adapter.render_config(manifest, tmp_path)
         assert result.success
 
-        config_yaml = (tmp_path / "config.yaml").read_text()
+        config_yaml = (tmp_path / "config.yaml").read_text(encoding="utf-8")
         assert "- id: skill-1" in config_yaml
         assert "- id: skill-2" in config_yaml
 
@@ -272,7 +275,7 @@ class TestOpenCodeAdapter:
         result = adapter.render_config(manifest, tmp_path)
         assert result.success
 
-        agents_md = (tmp_path / "AGENTS.md").read_text()
+        agents_md = (tmp_path / "AGENTS.md").read_text(encoding="utf-8")
 
         # Must reference docs/ for details
         assert "docs/routing.md" in agents_md
@@ -302,7 +305,7 @@ class TestOpenCodeAdapter:
         result = adapter.render_config(manifest, tmp_path)
         assert result.success
 
-        catalog = (tmp_path / "docs" / "skills-catalog.md").read_text()
+        catalog = (tmp_path / "docs" / "skills-catalog.md").read_text(encoding="utf-8")
         assert "### test-skill" in catalog
         assert "Test Skill" in catalog
         assert "A test skill" in catalog
@@ -316,7 +319,7 @@ class TestOpenCodeAdapter:
         result = adapter.render_config(manifest, tmp_path)
         assert result.success
 
-        agents_md = (tmp_path / "AGENTS.md").read_text()
+        agents_md = (tmp_path / "AGENTS.md").read_text(encoding="utf-8")
         assert (
             "### " not in agents_md.split("## Skills")[1].split("##")[0]
             if "## Skills" in agents_md
@@ -342,9 +345,11 @@ class TestOpenCodeAdapter:
 
         script_path = tmp_path / "vibesop-env.sh"
         assert script_path.exists()
-        assert script_path.stat().st_mode & 0o111  # executable
+        if sys.platform != "win32":
+            # Windows chmod only toggles read-only; hooks run via `bash <script>`.
+            assert script_path.stat().st_mode & 0o111  # executable
 
-        content = script_path.read_text()
+        content = script_path.read_text(encoding="utf-8")
         assert "CONVERSATION_ID" in content
         assert "python3 -c" in content
         assert "hashlib" in content
@@ -389,7 +394,7 @@ class TestOpenCodeAdapterEdgeCases:
         result = adapter.render_config(manifest, tmp_path)
         assert result.success
 
-        config_yaml = (tmp_path / "config.yaml").read_text()
+        config_yaml = (tmp_path / "config.yaml").read_text(encoding="utf-8")
         assert "version: 2.0.0" in config_yaml
         assert "author: Test Author" in config_yaml
         assert "description: Test manifest" in config_yaml
@@ -407,7 +412,7 @@ class TestOpenCodeAdapterEdgeCases:
         from ruamel.yaml import YAML
 
         yaml = YAML()
-        with (tmp_path / "config.yaml").open("r") as f:
+        with (tmp_path / "config.yaml").open("r", encoding="utf-8") as f:
             config: dict[str, object] = yaml.load(f)  # type: ignore[assignment]
 
         assert isinstance(config, dict)
@@ -448,8 +453,10 @@ class TestOpenCodeAdapterEdgeCases:
 class TestOpenCodeSkillContentRender:
     """Tests for _render_skill_content symlink preservation in OpenCode adapter."""
 
-    def test_symlink_preserved_on_second_build(self, monkeypatch, tmp_path):
+    def test_symlink_preserved_on_second_build(self, monkeypatch, tmp_path, symlink_supported):
         """Symlink to installed pack must be preserved on re-build."""
+        if not symlink_supported:
+            pytest.skip("directory symlinks not supported on this host")
         from vibesop.adapters.opencode import OpenCodeAdapter
 
         adapter = OpenCodeAdapter()
@@ -459,7 +466,9 @@ class TestOpenCodeSkillContentRender:
 
         installed_dir = tmp_path / "installed"
         installed_dir.mkdir(parents=True)
-        (installed_dir / "SKILL.md").write_text("# Full Review Skill\n\nExecute review flow.")
+        (installed_dir / "SKILL.md").write_text(
+            "# Full Review Skill\n\nExecute review flow.", encoding="utf-8"
+        )
 
         monkeypatch.setattr(
             "vibesop.adapters._shared.is_pack_installed",
@@ -484,5 +493,5 @@ class TestOpenCodeSkillContentRender:
 
         adapter._render_skill_content(_Skill(), skill_dir, result, dir_name="gstack-review")
         assert skill_dir.is_symlink(), "Symlink was lost on second build"
-        content = (skill_dir / "SKILL.md").read_text()
+        content = (skill_dir / "SKILL.md").read_text(encoding="utf-8")
         assert "Full Review Skill" in content

@@ -5,6 +5,8 @@ that manages hooks across all supported platforms.
 """
 
 import contextlib
+import shutil
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -273,6 +275,10 @@ class HookInstaller:
 
             # Check if executable (if required)
             if hook_def.get("executable", True):
+                if sys.platform == "win32":
+                    # Windows has no exec bit; hooks run via Git Bash, so
+                    # degrade the check to: bash on PATH + non-empty script.
+                    return shutil.which("bash") is not None and hook_path.stat().st_size > 0
                 return hook_path.stat().st_mode & 0o111 != 0
 
             return True

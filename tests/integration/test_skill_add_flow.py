@@ -19,7 +19,8 @@ def temp_skill_dir(tmp_path):
 
     # Create SKILL.md with metadata
     skill_md = skill_dir / "SKILL.md"
-    skill_md.write_text("""---
+    skill_md.write_text(
+        """---
 name: Test Skill
 id: test-skill
 description: Systematic debugging workflow for finding and fixing bugs
@@ -34,14 +35,19 @@ trigger_when: User encounters bugs or errors
 # Test Skill
 
 This is a test skill for debugging workflow.
-""")
+""",
+        encoding="utf-8",
+    )
 
     # Create skill.py
     skill_py = skill_dir / "skill.py"
-    skill_py.write_text("""
+    skill_py.write_text(
+        """
 def execute():
     print("Test skill executed")
-""")
+""",
+        encoding="utf-8",
+    )
 
     return skill_dir
 
@@ -75,7 +81,7 @@ def test_skill_add_with_auto_config(temp_skill_dir, monkeypatch):
 
             import yaml
 
-            with open(config_file) as f:
+            with open(config_file, encoding="utf-8") as f:
                 config = yaml.safe_load(f)
 
             print(f"Config: {json.dumps(config, indent=2)}")
@@ -109,12 +115,15 @@ def test_skill_add_with_llm_detection(temp_skill_dir, monkeypatch, tmp_path):
     vibe_dir.mkdir()
 
     config_file = vibe_dir / "config.yaml"
-    config_file.write_text("""
+    config_file.write_text(
+        """
 llm:
   provider: anthropic
   model: claude-sonnet-4-6
   api_key: test-key
-""")
+""",
+        encoding="utf-8",
+    )
 
     # Mock user input
     inputs = "project\n"

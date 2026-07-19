@@ -70,7 +70,7 @@ class TestDynamicSkillDiscovery:
         """Valid skill discovered with correct namespace split."""
         skill_dir = tmp_path / "gstack" / "review"
         skill_dir.mkdir(parents=True)
-        (skill_dir / "SKILL.md").write_text("# Review\n")
+        (skill_dir / "SKILL.md").write_text("# Review\n", encoding="utf-8")
 
         with patch("vibesop.core.skills.external_loader.ExternalSkillLoader") as MockLoader:
             MockLoader.return_value.discover_all.return_value = {
@@ -93,7 +93,7 @@ class TestDynamicSkillDiscovery:
         """When meta.name is empty, uses skill_name from ID."""
         skill_dir = tmp_path / "pack" / "my-skill"
         skill_dir.mkdir(parents=True)
-        (skill_dir / "SKILL.md").write_text("# My Skill\n")
+        (skill_dir / "SKILL.md").write_text("# My Skill\n", encoding="utf-8")
 
         with patch("vibesop.core.skills.external_loader.ExternalSkillLoader") as MockLoader:
             MockLoader.return_value.discover_all.return_value = {
@@ -109,7 +109,8 @@ class TestDynamicSkillDiscovery:
         skill_dir = tmp_path / "gstack" / "review"
         skill_dir.mkdir(parents=True)
         (skill_dir / "SKILL.md").write_text(
-            "---\ntriggers:\n  - review code\n  - audit code\n---\n# Review\n"
+            "---\ntriggers:\n  - review code\n  - audit code\n---\n# Review\n",
+            encoding="utf-8",
         )
 
         with patch("vibesop.core.skills.external_loader.ExternalSkillLoader") as MockLoader:

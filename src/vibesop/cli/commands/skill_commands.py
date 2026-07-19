@@ -901,7 +901,7 @@ def _save_auto_config(config: dict[str, Any]) -> None:
     config_file = Path(".vibe") / "skills" / "auto-config.yaml"
 
     if config_file.exists():
-        with config_file.open() as f:
+        with config_file.open(encoding="utf-8") as f:
             existing = yaml.safe_load(f) or {}
     else:
         existing = {"skills": {}}
@@ -910,7 +910,7 @@ def _save_auto_config(config: dict[str, Any]) -> None:
     existing["skills"][skill_id] = config
 
     config_file.parent.mkdir(parents=True, exist_ok=True)
-    with config_file.open("w") as f:
+    with config_file.open("w", encoding="utf-8") as f:
         yaml.dump(existing, f, default_flow_style=False)
 
 

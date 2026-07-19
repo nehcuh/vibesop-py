@@ -74,6 +74,10 @@ class TestConversation:
 
     def test_add_message(self):
         conv = Conversation(id="conv-1", title="Test")
+        # Pin updated_at into the past: on Windows the system clock granularity
+        # (~15ms) can make a fresh `datetime.now()` compare equal, so deriving
+        # `old_updated` from construction time is not a stable baseline.
+        conv.updated_at = datetime(2020, 1, 1)
         old_updated = conv.updated_at
         msg = Message(role=MessageRole.USER, content="Hello")
         conv.add_message(msg)

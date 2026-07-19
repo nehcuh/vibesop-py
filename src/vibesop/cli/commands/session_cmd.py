@@ -172,15 +172,17 @@ def enable_tracking() -> None:
 
     export_line = 'export VIBESOP_CONTEXT_TRACKING="true"'
 
-    # Check if already exists
+    # Check if already exists (user-managed file: tolerate locale encoding)
     if shell_profile.exists():
-        content = shell_profile.read_text()
+        from vibesop.utils.encoding import read_text_with_fallback
+
+        content = read_text_with_fallback(shell_profile)
         if export_line in content:
             console.print("[green]✓[/green] Tracking already enabled in profile")
             return
 
     # Append to profile
-    with shell_profile.open("a") as f:
+    with shell_profile.open("a", encoding="utf-8") as f:
         f.write(f"\n# VibeSOP session context tracking\n{export_line}\n")
 
     console.print(f"[green]✓[/green] Added to {shell_profile}")
@@ -198,8 +200,10 @@ def disable_tracking() -> None:
         console.print("  unset VIBESOP_CONTEXT_TRACKING")
         return
 
-    # Remove from profile
-    content = shell_profile.read_text()
+    # Remove from profile (user-managed file: tolerate locale encoding)
+    from vibesop.utils.encoding import read_text_with_fallback
+
+    content = read_text_with_fallback(shell_profile)
     lines = content.split("\n")
 
     # Filter out VibeSOP tracking lines
@@ -212,7 +216,7 @@ def disable_tracking() -> None:
         )
     ]
 
-    shell_profile.write_text("\n".join(filtered_lines))
+    shell_profile.write_text("\n".join(filtered_lines), encoding="utf-8")
 
     console.print(f"[green]✓[/green] Removed from {shell_profile}")
     console.print("\n[yellow]Restart your shell or run:[/yellow]")

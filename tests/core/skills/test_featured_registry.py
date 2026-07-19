@@ -109,7 +109,8 @@ class TestFeaturedRegistry:
                         {"skill_id": "local/skill", "name": "Local", "description": "From file"}
                     ],
                 }
-            )
+            ),
+            encoding="utf-8",
         )
 
         reg = FeaturedRegistry(project_root=tmp_path)
@@ -119,7 +120,7 @@ class TestFeaturedRegistry:
         reg = FeaturedRegistry(project_root=tmp_path)
         path = reg.export_local()
         assert path.exists()
-        data = json.loads(path.read_text())
+        data = json.loads(path.read_text(encoding="utf-8"))
         assert "skills" in data
         assert len(data["skills"]) > 0
 

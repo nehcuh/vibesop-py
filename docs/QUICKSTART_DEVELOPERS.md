@@ -239,6 +239,26 @@ vibe route "review my code"    # 英文
 
 ---
 
+## Windows 开发 Developing on Windows
+
+### 前置要求 Prerequisites
+
+- 安装 [uv](https://docs.astral.sh/uv/)：`winget install astral-sh.uv`，然后 `uv sync --extra dev`
+- 建议启用 **开发者模式**（设置 → 系统 → 开发者选项）：启用后可创建目录符号链接；
+  未启用时代码自动回退为 copy（带 `.vibe-copy-source` 标记），依赖符号链接的测试会自动 skip
+- **不需要**设置 `PYTHONUTF8`：项目代码对所有文件 IO 显式使用 `encoding="utf-8"`，
+  用户配置读取另有 GBK locale 回退
+
+### 常见坑 Common Pitfalls
+
+- **Hook 需要 bash**：平台 hook（`vibesop-route.sh` 等）是 bash 脚本，
+  请安装 Git Bash 并确保 `bash` 在 `PATH` 中
+- Git Bash 下先 `source "$HOME/.local/bin/env"`（加载 uv 环境），再 `uv run pytest`
+- 测试套件通过 autouse fixture 隔离真实用户目录（`HOME`/`Path.home()` 重定向到 tmp），
+  不会在 `~/.claude`、`~/.config/skills` 等目录产生副作用
+
+---
+
 ## CLI 常用命令 CLI Cheat Sheet
 
 ```bash

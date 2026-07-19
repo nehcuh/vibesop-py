@@ -139,7 +139,7 @@ class TestAgentRuntimeHookResponseHintPath:
             / "SKILL.md"
         )
         bundled.parent.mkdir(parents=True)
-        bundled.write_text("# bundled")
+        bundled.write_text("# bundled", encoding="utf-8")
         monkeypatch.syspath_prepend(str(site_packages))
 
         from vibesop.agent.runtime.agent_runtime import AgentRuntimeResult
@@ -152,7 +152,7 @@ class TestAgentRuntimeHookResponseHintPath:
             project_root=tmp_path / "user_project",  # has no core/skills
         )
         response = result.to_hook_response(no_match_message=False)
-        assert str(bundled) in response
+        assert bundled.as_posix() in response
         # Sanity: still mentions the skill name
         assert "deep-diagnosis-optimization" in response
 

@@ -70,13 +70,13 @@ class VibeSOPConfigManager:
             try:
                 suffix = config_path.suffix.lower()
                 if suffix == ".toml":
-                    import tomllib
+                    from vibesop.utils.encoding import load_toml_with_fallback
 
-                    with config_path.open("rb") as f:
-                        data = tomllib.load(f)
+                    data = load_toml_with_fallback(config_path)
                 else:
-                    with config_path.open() as f:
-                        data = yaml.safe_load(f) or {}
+                    from vibesop.utils.encoding import read_text_with_fallback
+
+                    data = yaml.safe_load(read_text_with_fallback(config_path)) or {}
 
                 # 检查 LLM 配置
                 if "llm" in data:
@@ -167,7 +167,7 @@ class AgentEnvironmentDetector:
         agent_config = cls.AGENT_CONFIGS[agent_id]
 
         try:
-            with config_file.open() as f:
+            with config_file.open(encoding="utf-8") as f:
                 data = json.load(f)
 
             # 根据不同的 Agent 读取配置

@@ -164,7 +164,7 @@ def _do_create(
     output_dir.mkdir(parents=True, exist_ok=True)
 
     skill_file = output_dir / f"{name.lower().replace(' ', '-')}.md"
-    skill_file.write_text(skill_content)
+    skill_file.write_text(skill_content, encoding="utf-8")
 
     console.print(f"\n[green]✓ Skill created[/green]\n  [dim]File:[/dim] {skill_file}\n")
     console.print(
@@ -198,7 +198,7 @@ def _do_from(
 
     # Read session file
     try:
-        content = source.read_text()
+        content = source.read_text(encoding="utf-8")
         session: dict[str, Any] = json.loads(content)
 
         console.print("[green]✓ Loaded session[/green]")

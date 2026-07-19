@@ -475,17 +475,57 @@ class PlatformAdapter(ABC):
             elif skill_dir.exists():
                 shutil.rmtree(skill_dir)
 
-            try:
-                skill_dir.symlink_to(resolved_installed, target_is_directory=True)
-                result.add_file(skill_output_path)
-                return
-            except OSError:
+            from vibesop.utils.symlinks import can_create_dir_symlink
+
+            if can_create_dir_symlink(skill_dir.parent):
                 try:
-                    shutil.copytree(resolved_installed, skill_dir)
+                    skill_dir.symlink_to(resolved_installed, target_is_directory=True)
                     result.add_file(skill_output_path)
                     return
-                except Exception:
-                    pass
+                except OSError as e:
+                    logger.info(
+                        "symlink unavailable, falling back to copy: %s -> %s (%s)",
+                        resolved_installed,
+                        skill_dir,
+                        e,
+                    )
+            else:
+                logger.info(
+                    "symlinks unsupported under %s, copying %s instead",
+                    skill_dir.parent,
+                    resolved_installed,
+                )
+
+            try:
+                shutil.copytree(resolved_installed, skill_dir)
+            except Exception as copy_err:
+                logger.warning(
+                    "copy fallback failed: %s -> %s (%s)",
+                    resolved_installed,
+                    skill_dir,
+                    copy_err,
+                )
+                # Clean up partial copytree residue before writing the stub
+                if skill_dir.exists() and not skill_dir.is_symlink():
+                    try:
+                        shutil.rmtree(skill_dir)
+                    except OSError as rm_err:
+                        logger.warning("failed to clean partial copy %s: %s", skill_dir, rm_err)
+            else:
+                # Marker failure must not discard a successful copy — the skill
+                # content is usable; it just won't show up in pack discovery.
+                try:
+                    from vibesop.core.skills.storage import write_copy_source_marker
+
+                    write_copy_source_marker(skill_dir, resolved_installed)
+                except OSError as marker_err:
+                    logger.warning(
+                        "copy succeeded but copy-source marker write failed for %s: %s",
+                        skill_dir,
+                        marker_err,
+                    )
+                result.add_file(skill_output_path)
+                return
 
         self._fallback_skill_content(
             skill,

@@ -123,7 +123,7 @@ class RepoAnalyzer:
             plugin_json = tmpdir_path / ".claude-plugin" / "plugin.json"
             if plugin_json.exists():
                 try:
-                    plugin_data = json.loads(plugin_json.read_text())
+                    plugin_data = json.loads(plugin_json.read_text(encoding="utf-8"))
                     plugin_skills = plugin_data.get("skills", [])
                     for skill_entry in plugin_skills:
                         if isinstance(skill_entry, str):

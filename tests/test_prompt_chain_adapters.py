@@ -83,7 +83,7 @@ class TestClaudeCodeAdapterPromptChain:
 
         with tempfile.TemporaryDirectory() as tmpdir:
             readme_path = adapter.build_prompt_chain(prompts, tmpdir)
-            content = Path(readme_path).read_text()
+            content = Path(readme_path).read_text(encoding="utf-8")
             assert "Execution Order" in content
             assert "phase-0" in content.lower() or "Phase 0" in content
 
@@ -95,7 +95,7 @@ class TestClaudeCodeAdapterPromptChain:
 
         with tempfile.TemporaryDirectory() as tmpdir:
             readme_path = adapter.build_prompt_chain(prompts, tmpdir)
-            content = Path(readme_path).read_text()
+            content = Path(readme_path).read_text(encoding="utf-8")
             assert "pbcopy" in content or "Claude Code" in content
 
 
@@ -123,7 +123,7 @@ class TestOpenCodeAdapterPromptChain:
 
         with tempfile.TemporaryDirectory() as tmpdir:
             readme_path = adapter.build_prompt_chain(prompts, tmpdir)
-            content = Path(readme_path).read_text()
+            content = Path(readme_path).read_text(encoding="utf-8")
             assert "OpenCode" in content
 
 
@@ -151,7 +151,7 @@ class TestKimiCliAdapterPromptChain:
 
         with tempfile.TemporaryDirectory() as tmpdir:
             readme_path = adapter.build_prompt_chain(prompts, tmpdir)
-            content = Path(readme_path).read_text()
+            content = Path(readme_path).read_text(encoding="utf-8")
             # Kimi CLI README should have Chinese instructions
             assert "阶段" in content or "Phase" in content
 

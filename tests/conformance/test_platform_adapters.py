@@ -6,6 +6,7 @@ output following their integration mode (file-based, hook-based, sdk-based).
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 from vibesop.adapters import (
@@ -84,19 +85,21 @@ class TestClaudeCodeConformance:
         adapter = ClaudeCodeAdapter()
         adapter.render_config_only(_manifest_for("claude-code"), tmp_path)
         hook = tmp_path / "hooks" / "vibesop-route.sh"
-        assert hook.stat().st_mode & 0o111
+        if sys.platform != "win32":
+            # Windows chmod only toggles read-only; hooks run via `bash <script>`.
+            assert hook.stat().st_mode & 0o111
 
     def test_hook_delegates_to_agent_runtime(self, tmp_path):
         adapter = ClaudeCodeAdapter()
         adapter.render_config_only(_manifest_for("claude-code"), tmp_path)
-        content = (tmp_path / "hooks" / "vibesop-route.sh").read_text()
+        content = (tmp_path / "hooks" / "vibesop-route.sh").read_text(encoding="utf-8")
         assert "AgentRuntime" in content
         assert "handle_query_for_hook" in content
 
     def test_hook_has_no_vibe_route_subprocess(self, tmp_path):
         adapter = ClaudeCodeAdapter()
         adapter.render_config_only(_manifest_for("claude-code"), tmp_path)
-        content = (tmp_path / "hooks" / "vibesop-route.sh").read_text()
+        content = (tmp_path / "hooks" / "vibesop-route.sh").read_text(encoding="utf-8")
         assert "vibe route" not in content
 
     def test_settings_json_has_hook_config(self, tmp_path):
@@ -106,7 +109,7 @@ class TestClaudeCodeConformance:
         assert settings.exists()
         import json
 
-        data = json.loads(settings.read_text())
+        data = json.loads(settings.read_text(encoding="utf-8"))
         assert "hooks" in data
         assert "UserPromptSubmit" in data["hooks"]
 
@@ -129,14 +132,16 @@ class TestOpenCodeConformance:
     def test_hook_delegates_to_agent_runtime(self, tmp_path):
         adapter = OpenCodeAdapter()
         adapter.render_config_only(_manifest_for("opencode"), tmp_path)
-        content = (tmp_path / "hooks" / "vibesop-route.sh").read_text()
+        content = (tmp_path / "hooks" / "vibesop-route.sh").read_text(encoding="utf-8")
         assert "AgentRuntime" in content
 
     def test_env_script_is_executable(self, tmp_path):
         adapter = OpenCodeAdapter()
         adapter.render_config_only(_manifest_for("opencode"), tmp_path)
         env = tmp_path / "vibesop-env.sh"
-        assert env.stat().st_mode & 0o111
+        if sys.platform != "win32":
+            # Windows chmod only toggles read-only; hooks run via `bash <script>`.
+            assert env.stat().st_mode & 0o111
 
 
 class TestCursorConformance:
@@ -169,14 +174,14 @@ class TestKimiCliConformance:
     def test_toml_config_has_hooks_section(self, tmp_path):
         adapter = KimiCliAdapter()
         adapter.render_config_only(_manifest_for("kimi-cli"), tmp_path)
-        content = (tmp_path / "config.toml").read_text()
+        content = (tmp_path / "config.toml").read_text(encoding="utf-8")
         assert "[[hooks]]" in content
         assert "vibesop-route" in content
 
     def test_hook_delegates_to_agent_runtime(self, tmp_path):
         adapter = KimiCliAdapter()
         adapter.render_config_only(_manifest_for("kimi-cli"), tmp_path)
-        content = (tmp_path / "hooks" / "vibesop-route.sh").read_text()
+        content = (tmp_path / "hooks" / "vibesop-route.sh").read_text(encoding="utf-8")
         assert "AgentRuntime" in content
 
 

@@ -48,7 +48,7 @@ class TestQueryExtraction:
             '{"role": "assistant", "content": "Sure"}',
         ]
 
-        session_file.write_text("\n".join(lines))
+        session_file.write_text("\n".join(lines), encoding="utf-8")
         return session_file
 
     def test_load_jsonl(self, temp_session_file):
@@ -220,7 +220,7 @@ class TestSessionAnalysis:
             '{"role": "assistant", "content": "OK"}',
         ]
 
-        session_file.write_text("\n".join(lines))
+        session_file.write_text("\n".join(lines), encoding="utf-8")
         return session_file
 
     def test_analyze_session_file(self, sample_session_file):
@@ -254,7 +254,7 @@ class TestEdgeCases:
     def test_empty_session(self, tmp_path):
         """Test handling empty session file."""
         session_file = tmp_path / "empty.jsonl"
-        session_file.write_text("")
+        session_file.write_text("", encoding="utf-8")
 
         analyzer = SessionAnalyzer()
         suggestions = analyzer.analyze_session_file(session_file)
@@ -264,7 +264,7 @@ class TestEdgeCases:
     def test_invalid_json(self, tmp_path):
         """Test handling invalid JSON."""
         session_file = tmp_path / "invalid.jsonl"
-        session_file.write_text("invalid json content")
+        session_file.write_text("invalid json content", encoding="utf-8")
 
         analyzer = SessionAnalyzer()
         suggestions = analyzer.analyze_session_file(session_file)
@@ -282,7 +282,7 @@ class TestEdgeCases:
             '{"role": "user", "content": "another unique query 3"}',
         ]
 
-        session_file.write_text("\n".join(lines))
+        session_file.write_text("\n".join(lines), encoding="utf-8")
 
         analyzer = SessionAnalyzer(min_frequency=2)
         suggestions = analyzer.analyze_session_file(session_file)
@@ -299,7 +299,7 @@ class TestEdgeCases:
             '{"role": "user", "content": "test query 2"}',
         ]
 
-        session_file.write_text("\n".join(lines))
+        session_file.write_text("\n".join(lines), encoding="utf-8")
 
         analyzer = SessionAnalyzer(min_frequency=10, min_confidence=0.9)
         suggestions = analyzer.analyze_session_file(session_file)

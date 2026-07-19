@@ -6,6 +6,8 @@ from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from vibesop.installer.pack_installer import PackInstaller
 from vibesop.security.skill_auditor import PackAuditResult
 
@@ -145,7 +147,7 @@ class TestPackInstaller:
             def _mock_clone(url: str, dest: Path) -> bool:
                 """Simulate git clone by creating the skill file."""
                 dest.mkdir(parents=True, exist_ok=True)
-                (dest / "SKILL.md").write_text("# Test Skill\n")
+                (dest / "SKILL.md").write_text("# Test Skill\n", encoding="utf-8")
                 return True
 
             with patch("vibesop.installer.pack_installer.RepoAnalyzer") as mock_cls:
@@ -191,8 +193,8 @@ class TestPackInstaller:
 
             def _mock_clone(url: str, dest: Path) -> bool:
                 dest.mkdir(parents=True, exist_ok=True)
-                (dest / "SKILL.md").write_text("# Test\n")
-                (dest / "BUILD.sh").write_text("#!/bin/sh\necho 'built'")
+                (dest / "SKILL.md").write_text("# Test\n", encoding="utf-8")
+                (dest / "BUILD.sh").write_text("#!/bin/sh\necho 'built'", encoding="utf-8")
                 return True
 
             with patch("vibesop.installer.pack_installer.RepoAnalyzer") as mock_cls:
@@ -236,7 +238,7 @@ class TestPackInstaller:
 
             def _mock_clone(url: str, dest: Path) -> bool:
                 dest.mkdir(parents=True, exist_ok=True)
-                (dest / "SKILL.md").write_text("# Test\n")
+                (dest / "SKILL.md").write_text("# Test\n", encoding="utf-8")
                 return True
 
             with patch("vibesop.installer.pack_installer.RepoAnalyzer") as mock_cls:
@@ -275,12 +277,14 @@ class TestSkillSymlinks:
         review_dir = pack / "review"
         review_dir.mkdir(parents=True)
         (review_dir / "SKILL.md").write_text(
-            "---\nname: review\ndescription: Review code changes\n---\n# Test skill"
+            "---\nname: review\ndescription: Review code changes\n---\n# Test skill",
+            encoding="utf-8",
         )
         qa_dir = pack / "qa"
         qa_dir.mkdir(parents=True)
         (qa_dir / "SKILL.md").write_text(
-            "---\nname: qa\ndescription: QA test the application\n---\n# QA skill"
+            "---\nname: qa\ndescription: QA test the application\n---\n# QA skill",
+            encoding="utf-8",
         )
 
         platform = tmp_path / "platform"
@@ -299,15 +303,17 @@ class TestSkillSymlinks:
 class TestPostInstallHook:
     """Tests for _run_post_install build script detection and execution."""
 
-    def test_symlinked_build_script_outside_pack_rejected(self, tmp_path):
+    def test_symlinked_build_script_outside_pack_rejected(self, tmp_path, symlink_supported):
         """A BUILD.sh symlink pointing outside the pack must not be executed."""
+        if not symlink_supported:
+            pytest.skip("directory symlinks not supported on this host")
         from vibesop.installer.pack_installer import PackInstaller
 
         installer = PackInstaller(external_paths=[tmp_path], allow_unsafe_build=True)
         pack_dir = tmp_path / "pack"
         pack_dir.mkdir()
         secret = tmp_path / "secret.txt"
-        secret.write_text("sensitive data")
+        secret.write_text("sensitive data", encoding="utf-8")
         (pack_dir / "BUILD.sh").symlink_to(secret)
 
         with _allow_local_build():
@@ -322,7 +328,7 @@ class TestPostInstallHook:
         installer = PackInstaller(external_paths=[tmp_path], allow_unsafe_build=True)
         pack_dir = tmp_path / "pack"
         pack_dir.mkdir()
-        (pack_dir / "BUILD.sh").write_text("#!/bin/sh\necho 'built'")
+        (pack_dir / "BUILD.sh").write_text("#!/bin/sh\necho 'built'", encoding="utf-8")
 
         with _allow_local_build():
             result = installer._run_post_install(pack_dir, object())
@@ -335,8 +341,8 @@ class TestPostInstallHook:
         installer = PackInstaller(external_paths=[tmp_path], allow_unsafe_build=True)
         pack_dir = tmp_path / "pack"
         pack_dir.mkdir()
-        (pack_dir / ".vibesop-build").write_text("#!/bin/sh\necho 'vibesop'")
-        (pack_dir / "BUILD.sh").write_text("#!/bin/sh\necho 'build'")
+        (pack_dir / ".vibesop-build").write_text("#!/bin/sh\necho 'vibesop'", encoding="utf-8")
+        (pack_dir / "BUILD.sh").write_text("#!/bin/sh\necho 'build'", encoding="utf-8")
 
         with _allow_local_build():
             result = installer._run_post_install(pack_dir, object())
@@ -351,7 +357,9 @@ class TestPostInstallHook:
         installer = PackInstaller(external_paths=[tmp_path], allow_unsafe_build=True)
         pack_dir = tmp_path / "pack"
         pack_dir.mkdir()
-        (pack_dir / "package.json").write_text('{"scripts":{"gen:skill-docs":"echo skills"}}')
+        (pack_dir / "package.json").write_text(
+            '{"scripts":{"gen:skill-docs":"echo skills"}}', encoding="utf-8"
+        )
 
         def _mock_which(cmd):
             if cmd == "bun":
@@ -371,7 +379,7 @@ class TestPostInstallHook:
         installer = PackInstaller(external_paths=[tmp_path], allow_unsafe_build=True)
         pack_dir = tmp_path / "pack"
         pack_dir.mkdir()
-        (pack_dir / "setup.sh").write_text("#!/bin/sh\necho 'setup'")
+        (pack_dir / "setup.sh").write_text("#!/bin/sh\necho 'setup'", encoding="utf-8")
 
         with _allow_local_build():
             result = installer._run_post_install(pack_dir, object())
@@ -385,7 +393,8 @@ class TestPostInstallHook:
         pack = central / "testpack"
         pack.mkdir(parents=True)
         (pack / "SKILL.md").write_text(
-            "---\nname: testpack\ndescription: Root level test pack skill\n---\n# Pack manifest"
+            "---\nname: testpack\ndescription: Root level test pack skill\n---\n# Pack manifest",
+            encoding="utf-8",
         )
 
         platform = tmp_path / "platform"
@@ -411,12 +420,15 @@ class TestSkillNameDedup:
         skill_dir = pack / rel
         skill_dir.mkdir(parents=True)
         (skill_dir / "SKILL.md").write_text(
-            f"---\nname: {skill_name}\ndescription: A test skill for dedup verification\n---\n# {skill_name}\n"
+            f"---\nname: {skill_name}\ndescription: A test skill for dedup verification\n---\n# {skill_name}\n",
+            encoding="utf-8",
         )
         return pack
 
-    def test_dedup_skips_same_name_across_packs(self, tmp_path):
+    def test_dedup_skips_same_name_across_packs(self, tmp_path, symlink_supported):
         """Two packs installing a skill with the same ``name:`` → only first lands."""
+        if not symlink_supported:
+            pytest.skip("directory symlinks not supported on this host")
         from vibesop.installer.pack_installer import PackInstaller
 
         central = tmp_path / "central"
@@ -436,8 +448,10 @@ class TestSkillNameDedup:
         entries = sorted(p.name for p in platform.iterdir())
         assert entries == ["packA-review"]
 
-    def test_dedupe_disabled_installs_both(self, tmp_path):
+    def test_dedupe_disabled_installs_both(self, tmp_path, symlink_supported):
         """``dedupe_by_name=False`` preserves the legacy duplicate behavior."""
+        if not symlink_supported:
+            pytest.skip("directory symlinks not supported on this host")
         from vibesop.installer.pack_installer import PackInstaller
 
         central = tmp_path / "central"
@@ -457,8 +471,10 @@ class TestSkillNameDedup:
         entries = sorted(p.name for p in platform.iterdir())
         assert entries == ["packA-review", "packB-deeply-nested-review"]
 
-    def test_different_names_both_installed(self, tmp_path):
+    def test_different_names_both_installed(self, tmp_path, symlink_supported):
         """Distinct ``name:`` values are never deduped."""
+        if not symlink_supported:
+            pytest.skip("directory symlinks not supported on this host")
         from vibesop.installer.pack_installer import PackInstaller
 
         central = tmp_path / "central"
@@ -478,8 +494,10 @@ class TestSkillNameDedup:
         entries = sorted(p.name for p in platform.iterdir())
         assert entries == ["packA-alpha", "packB-beta"]
 
-    def test_missing_name_field_falls_back_to_path_dedup(self, tmp_path):
+    def test_missing_name_field_falls_back_to_path_dedup(self, tmp_path, symlink_supported):
         """A SKILL.md without ``name:`` is not deduped (falls back to path-based logic)."""
+        if not symlink_supported:
+            pytest.skip("directory symlinks not supported on this host")
         from vibesop.installer.pack_installer import PackInstaller
 
         central = tmp_path / "central"
@@ -490,13 +508,15 @@ class TestSkillNameDedup:
         pack_a = central / "packA" / "review"
         pack_a.mkdir(parents=True)
         (pack_a / "SKILL.md").write_text(
-            "---\nname: alpha\ndescription: Has a name field\n---\n# alpha\n"
+            "---\nname: alpha\ndescription: Has a name field\n---\n# alpha\n",
+            encoding="utf-8",
         )
 
         pack_b = central / "packB" / "review"
         pack_b.mkdir(parents=True)
         (pack_b / "SKILL.md").write_text(
-            "---\ndescription: No name field here at all\n---\n# beta\n"
+            "---\ndescription: No name field here at all\n---\n# beta\n",
+            encoding="utf-8",
         )
 
         installer = PackInstaller(central_storage=central, platform_paths=[platform])
@@ -539,7 +559,8 @@ class TestProjectScopeInstall:
         def _mock_clone(url: str, dest: Path) -> bool:
             dest.mkdir(parents=True, exist_ok=True)
             (dest / "SKILL.md").write_text(
-                "---\nname: proj-pack\ndescription: A project-scope test skill pack\n---\n# Test\n"
+                "---\nname: proj-pack\ndescription: A project-scope test skill pack\n---\n# Test\n",
+                encoding="utf-8",
             )
             return True
 
@@ -582,7 +603,7 @@ class TestProjectScopeInstall:
         assert "proj-pack" in skills
         source_file = skills["proj-pack"].source_file
         assert source_file is not None
-        assert ".vibe/skills/proj-pack" in str(source_file)
+        assert ".vibe/skills/proj-pack" in source_file.as_posix()
 
     @patch("vibesop.installer.pack_installer.SkillSecurityAuditor")
     def test_project_scope_already_installed_branch(self, mock_auditor_cls: Any, tmp_path) -> None:
@@ -603,7 +624,8 @@ class TestProjectScopeInstall:
         def _mock_clone(url: str, dest: Path) -> bool:
             dest.mkdir(parents=True, exist_ok=True)
             (dest / "SKILL.md").write_text(
-                "---\nname: proj-pack\ndescription: A project-scope test skill pack\n---\n# Test\n"
+                "---\nname: proj-pack\ndescription: A project-scope test skill pack\n---\n# Test\n",
+                encoding="utf-8",
             )
             return True
 
@@ -651,7 +673,8 @@ class TestProjectScopeInstall:
         def _mock_clone(url: str, dest: Path) -> bool:
             dest.mkdir(parents=True, exist_ok=True)
             (dest / "SKILL.md").write_text(
-                "---\nname: glob-pack\ndescription: A global-scope test skill pack\n---\n# Test\n"
+                "---\nname: glob-pack\ndescription: A global-scope test skill pack\n---\n# Test\n",
+                encoding="utf-8",
             )
             return True
 

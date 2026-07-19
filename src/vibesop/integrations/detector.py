@@ -262,7 +262,7 @@ class IntegrationDetector:
         for version_file in version_files:
             if version_file.exists():
                 try:
-                    content = version_file.read_text()
+                    content = version_file.read_text(encoding="utf-8")
                     # Try to extract version
                     import json
 

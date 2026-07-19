@@ -103,7 +103,7 @@ class TestColdStartStrategy:
     def test_should_warm_cache_when_prefs_exist(self, tmp_path: Path):
         prefs_path = tmp_path / ".vibe" / "preferences.json"
         prefs_path.parent.mkdir(parents=True, exist_ok=True)
-        prefs_path.write_text("{}")
+        prefs_path.write_text("{}", encoding="utf-8")
         strategy = ColdStartStrategy(project_root=tmp_path)
         assert strategy.should_warm_cache() is False
 

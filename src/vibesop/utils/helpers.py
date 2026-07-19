@@ -4,12 +4,32 @@ This module provides utility functions that are used across
 multiple modules, promoting code reuse and consistency.
 """
 
+import shutil
+import stat
 from pathlib import Path
 from typing import Any
 
 from ruamel.yaml import YAML
 
 from vibesop.constants import FileSystemSettings
+
+
+def safe_rmtree(path: Path) -> None:
+    """Remove a directory tree, handling read-only files on Windows.
+
+    Windows refuses to delete read-only files (e.g. git pack files), so
+    retry them after clearing the read-only bit.
+
+    Args:
+        path: Directory tree to remove
+    """
+
+    def _onerror(_func: Any, _path: str, _excinfo: Any) -> None:
+        # Change read-only files to writable and retry
+        Path(_path).chmod(stat.S_IWRITE)
+        _func(_path)
+
+    shutil.rmtree(path, onexc=_onerror)
 
 
 def normalize_path(path: Path) -> Path:

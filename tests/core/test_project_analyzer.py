@@ -42,82 +42,90 @@ class TestProjectAnalyzer:
         assert profile.confidence == 0.0
 
     def test_detect_python(self, tmp_path: Path) -> None:
-        (tmp_path / "pyproject.toml").write_text('[project]\nname = "test"')
+        (tmp_path / "pyproject.toml").write_text('[project]\nname = "test"', encoding="utf-8")
         analyzer = ProjectAnalyzer(tmp_path)
         profile = analyzer.analyze()
         assert profile.project_type == "python"
         assert profile.confidence > 0.0
 
     def test_detect_rust(self, tmp_path: Path) -> None:
-        (tmp_path / "Cargo.toml").write_text('[package]\nname = "test"')
+        (tmp_path / "Cargo.toml").write_text('[package]\nname = "test"', encoding="utf-8")
         analyzer = ProjectAnalyzer(tmp_path)
         profile = analyzer.analyze()
         assert profile.project_type == "rust"
 
     def test_detect_javascript(self, tmp_path: Path) -> None:
-        (tmp_path / "package.json").write_text('{"name": "test"}')
+        (tmp_path / "package.json").write_text('{"name": "test"}', encoding="utf-8")
         analyzer = ProjectAnalyzer(tmp_path)
         profile = analyzer.analyze()
         assert profile.project_type == "javascript"
 
     def test_detect_typescript(self, tmp_path: Path) -> None:
-        (tmp_path / "tsconfig.json").write_text('{"compilerOptions": {}}')
+        (tmp_path / "tsconfig.json").write_text('{"compilerOptions": {}}', encoding="utf-8")
         analyzer = ProjectAnalyzer(tmp_path)
         profile = analyzer.analyze()
         assert profile.project_type == "typescript"
 
     def test_detect_go(self, tmp_path: Path) -> None:
-        (tmp_path / "go.mod").write_text("module example.com/test")
+        (tmp_path / "go.mod").write_text("module example.com/test", encoding="utf-8")
         analyzer = ProjectAnalyzer(tmp_path)
         profile = analyzer.analyze()
         assert profile.project_type == "go"
 
     def test_detect_java(self, tmp_path: Path) -> None:
-        (tmp_path / "pom.xml").write_text("<project></project>")
+        (tmp_path / "pom.xml").write_text("<project></project>", encoding="utf-8")
         analyzer = ProjectAnalyzer(tmp_path)
         profile = analyzer.analyze()
         assert profile.project_type == "java"
 
     def test_detect_docker(self, tmp_path: Path) -> None:
-        (tmp_path / "Dockerfile").write_text("FROM python:3.12")
+        (tmp_path / "Dockerfile").write_text("FROM python:3.12", encoding="utf-8")
         analyzer = ProjectAnalyzer(tmp_path)
         profile = analyzer.analyze()
         assert "docker" in profile.tech_stack
 
     def test_detect_django(self, tmp_path: Path) -> None:
-        (tmp_path / "requirements.txt").write_text("django>=4.0\n")
-        (tmp_path / "manage.py").write_text("#!/usr/bin/env python")
+        (tmp_path / "requirements.txt").write_text("django>=4.0\n", encoding="utf-8")
+        (tmp_path / "manage.py").write_text("#!/usr/bin/env python", encoding="utf-8")
         analyzer = ProjectAnalyzer(tmp_path)
         profile = analyzer.analyze()
         assert "django" in profile.tech_stack
 
     def test_detect_fastapi(self, tmp_path: Path) -> None:
-        (tmp_path / "requirements.txt").write_text("fastapi>=0.100\n")
+        (tmp_path / "requirements.txt").write_text("fastapi>=0.100\n", encoding="utf-8")
         analyzer = ProjectAnalyzer(tmp_path)
         profile = analyzer.analyze()
         assert "fastapi" in profile.tech_stack
 
     def test_detect_flask(self, tmp_path: Path) -> None:
-        (tmp_path / "pyproject.toml").write_text('[project]\ndependencies = ["flask>=2.0"]')
+        (tmp_path / "pyproject.toml").write_text(
+            '[project]\ndependencies = ["flask>=2.0"]', encoding="utf-8"
+        )
         analyzer = ProjectAnalyzer(tmp_path)
         profile = analyzer.analyze()
         assert "flask" in profile.tech_stack
 
     def test_detect_react(self, tmp_path: Path) -> None:
-        (tmp_path / "package.json").write_text('{"dependencies": {"react": "^18.0"}}')
+        (tmp_path / "package.json").write_text(
+            '{"dependencies": {"react": "^18.0"}}', encoding="utf-8"
+        )
         analyzer = ProjectAnalyzer(tmp_path)
         profile = analyzer.analyze()
         assert "react" in profile.tech_stack
 
     def test_detect_nextjs(self, tmp_path: Path) -> None:
-        (tmp_path / "package.json").write_text('{"dependencies": {"next": "^14.0"}}')
+        (tmp_path / "package.json").write_text(
+            '{"dependencies": {"next": "^14.0"}}', encoding="utf-8"
+        )
         analyzer = ProjectAnalyzer(tmp_path)
         profile = analyzer.analyze()
         assert "nextjs" in profile.tech_stack
 
     def test_multiple_tech_stack(self, tmp_path: Path) -> None:
-        (tmp_path / "requirements.txt").write_text("django>=4.0\nfastapi>=0.100\n")
-        (tmp_path / "Dockerfile").write_text("FROM python:3.12")
+        (tmp_path / "requirements.txt").write_text(
+            "django>=4.0\nfastapi>=0.100\n", encoding="utf-8"
+        )
+        (tmp_path / "Dockerfile").write_text("FROM python:3.12", encoding="utf-8")
         analyzer = ProjectAnalyzer(tmp_path)
         profile = analyzer.analyze()
         assert "django" in profile.tech_stack
@@ -125,35 +133,35 @@ class TestProjectAnalyzer:
         assert "docker" in profile.tech_stack
 
     def test_confidence_with_multiple_markers(self, tmp_path: Path) -> None:
-        (tmp_path / "pyproject.toml").write_text('[project]\nname = "test"')
-        (tmp_path / "requirements.txt").write_text("django\n")
-        (tmp_path / "setup.py").write_text("from setuptools import setup")
+        (tmp_path / "pyproject.toml").write_text('[project]\nname = "test"', encoding="utf-8")
+        (tmp_path / "requirements.txt").write_text("django\n", encoding="utf-8")
+        (tmp_path / "setup.py").write_text("from setuptools import setup", encoding="utf-8")
         analyzer = ProjectAnalyzer(tmp_path)
         profile = analyzer.analyze()
         assert profile.confidence > 0.6
 
     def test_cache(self, tmp_path: Path) -> None:
-        (tmp_path / "pyproject.toml").write_text('[project]\nname = "test"')
+        (tmp_path / "pyproject.toml").write_text('[project]\nname = "test"', encoding="utf-8")
         analyzer = ProjectAnalyzer(tmp_path)
         profile1 = analyzer.analyze()
         profile2 = analyzer.analyze()
         assert profile1 is profile2  # Same cached object
 
     def test_skill_relevance_boost_python(self, tmp_path: Path) -> None:
-        (tmp_path / "pyproject.toml").write_text('[project]\nname = "test"')
+        (tmp_path / "pyproject.toml").write_text('[project]\nname = "test"', encoding="utf-8")
         analyzer = ProjectAnalyzer(tmp_path)
         boost = analyzer.get_skill_relevance_boost(["python", "debug", "code"])
         assert boost > 0.0
         assert boost <= 0.1
 
     def test_skill_relevance_boost_no_match(self, tmp_path: Path) -> None:
-        (tmp_path / "pyproject.toml").write_text('[project]\nname = "test"')
+        (tmp_path / "pyproject.toml").write_text('[project]\nname = "test"', encoding="utf-8")
         analyzer = ProjectAnalyzer(tmp_path)
         boost = analyzer.get_skill_relevance_boost(["kubernetes", "deploy"])
         assert boost == 0.0
 
     def test_skill_relevance_boost_tech_stack(self, tmp_path: Path) -> None:
-        (tmp_path / "requirements.txt").write_text("django\n")
+        (tmp_path / "requirements.txt").write_text("django\n", encoding="utf-8")
         analyzer = ProjectAnalyzer(tmp_path)
         boost = analyzer.get_skill_relevance_boost(["django", "orm"])
         assert boost > 0.0

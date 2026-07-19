@@ -24,7 +24,8 @@ def test_complete_skill_understanding_flow():
         skill_dir.mkdir()
 
         skill_md = skill_dir / "SKILL.md"
-        skill_md.write_text("""---
+        skill_md.write_text(
+            """---
 name: Systematic Debugging
 id: systematic-debugging
 description: Find root cause before attempting fixes
@@ -44,7 +45,9 @@ This skill provides a structured approach to debugging:
 2. Form hypotheses
 3. Test systematically
 4. Verify fixes
-""")
+""",
+            encoding="utf-8",
+        )
 
         print(f"\n📁 Created test skill at: {skill_dir}")
 
@@ -122,7 +125,7 @@ This skill provides a structured approach to debugging:
         # Display saved config
         import yaml
 
-        with open(config_file) as f:
+        with open(config_file, encoding="utf-8") as f:
             saved_config = yaml.safe_load(f)
 
         print("\n✓ Saved Configuration:")
@@ -210,7 +213,8 @@ def test_multiple_skill_types():
             skill_dir.mkdir()
 
             skill_md = skill_dir / "SKILL.md"
-            skill_md.write_text(f"""---
+            skill_md.write_text(
+                f"""---
 name: {test_case["name"]}
 id: {test_case["id"]}
 description: {test_case["description"]}
@@ -223,7 +227,9 @@ trigger_when: User requests {test_case["name"].lower()}
 # {test_case["name"]}
 
 {test_case["description"]}
-""")
+""",
+                encoding="utf-8",
+            )
 
             try:
                 config = understand_skill_from_file(skill_dir)

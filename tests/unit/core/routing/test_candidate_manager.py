@@ -66,7 +66,7 @@ class TestFilterRoutable:
         project = tmp_path / "project"
         project.mkdir()
         skill_file = project / "skill.md"
-        skill_file.write_text("")
+        skill_file.write_text("", encoding="utf-8")
         mgr = CandidateManager(project)
         candidates = [
             {
@@ -87,7 +87,7 @@ class TestFilterRoutable:
         mgr = CandidateManager(project)
         external_file = tmp_path / "external" / "skill.md"
         external_file.parent.mkdir()
-        external_file.write_text("")
+        external_file.write_text("", encoding="utf-8")
         candidates = [
             {
                 "id": "ext",
@@ -206,7 +206,7 @@ class TestCacheInvalidation:
         search_path.mkdir()
         deep_dir = search_path / "pack" / "sub"
         deep_dir.mkdir(parents=True)
-        (deep_dir / "SKILL.md").write_text("id: old\n")
+        (deep_dir / "SKILL.md").write_text("id: old\n", encoding="utf-8")
 
         mgr = CandidateManager(tmp_path)
         hash_before = mgr._compute_paths_hash([search_path])
@@ -214,7 +214,7 @@ class TestCacheInvalidation:
         # Add a new skill two levels deep
         new_dir = search_path / "pack" / "new"
         new_dir.mkdir(parents=True)
-        (new_dir / "SKILL.md").write_text("id: new\n")
+        (new_dir / "SKILL.md").write_text("id: new\n", encoding="utf-8")
 
         hash_after = mgr._compute_paths_hash([search_path])
         assert hash_before != hash_after
@@ -226,7 +226,7 @@ class TestCacheInvalidation:
         search_path.mkdir()
         deep_dir = search_path / "pack" / "sub"
         deep_dir.mkdir(parents=True)
-        (deep_dir / "SKILL.md").write_text("id: old\n")
+        (deep_dir / "SKILL.md").write_text("id: old\n", encoding="utf-8")
 
         # Write disk cache with the old hash
         paths_hash = mgr._compute_paths_hash([search_path])
@@ -238,7 +238,7 @@ class TestCacheInvalidation:
         # Add a new deep skill
         new_dir = search_path / "pack" / "new"
         new_dir.mkdir(parents=True)
-        (new_dir / "SKILL.md").write_text("id: new\n")
+        (new_dir / "SKILL.md").write_text("id: new\n", encoding="utf-8")
 
         # Old cache is now stale
         assert mgr._load_from_disk_cache([search_path]) is None
@@ -250,7 +250,7 @@ class TestCacheInvalidation:
         deep_dir = search_path / "pack" / "sub"
         deep_dir.mkdir(parents=True)
         skill_file = deep_dir / "SKILL.md"
-        skill_file.write_text("id: x\n")
+        skill_file.write_text("id: x\n", encoding="utf-8")
 
         mtimes = CandidateManager._compute_skill_mtimes([search_path])
         assert str(skill_file) in mtimes
@@ -263,7 +263,7 @@ class TestCacheInvalidation:
         search_path.mkdir()
         deep_dir = search_path / "pack" / "sub"
         deep_dir.mkdir(parents=True)
-        (deep_dir / "SKILL.md").write_text("id: old\n")
+        (deep_dir / "SKILL.md").write_text("id: old\n", encoding="utf-8")
 
         mgr._search_paths = [search_path]
         mgr._path_mtimes = CandidateManager._compute_skill_mtimes([search_path])
@@ -278,6 +278,6 @@ class TestCacheInvalidation:
         # Add a new deep skill
         new_dir = search_path / "pack" / "new"
         new_dir.mkdir(parents=True)
-        (new_dir / "SKILL.md").write_text("id: new\n")
+        (new_dir / "SKILL.md").write_text("id: new\n", encoding="utf-8")
 
         assert mgr._should_check_reload() is True

@@ -769,7 +769,7 @@ class SkillAutoConfigurator:
 
         # 写入文件
         config_file = output_dir / "auto-config.yaml"
-        with config_file.open("w") as f:
+        with config_file.open("w", encoding="utf-8") as f:
             yaml.dump(config_data, f, default_flow_style=False)
 
         self.logger.info(f"Config saved to: {config_file}")
@@ -785,7 +785,7 @@ def understand_skill_from_file(skill_path: Path, scope: str = "project") -> Auto
     if not skill_md.exists():
         raise FileNotFoundError(f"SKILL.md not found in {skill_path}")
 
-    content = skill_md.read_text()
+    content = skill_md.read_text(encoding="utf-8")
     metadata = parse_skill_md(skill_md)
 
     if not metadata:

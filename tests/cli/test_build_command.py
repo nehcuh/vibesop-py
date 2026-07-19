@@ -63,7 +63,7 @@ class TestBuildCommand:
         """Test build with overlay file."""
         monkeypatch.chdir(tmp_path)
         overlay_file = tmp_path / "overlay.yaml"
-        overlay_file.write_text("{}")
+        overlay_file.write_text("{}", encoding="utf-8")
 
         manifest = _make_manifest()
         mock_builder = MagicMock()
@@ -248,7 +248,7 @@ class TestBuildCommand:
         monkeypatch.chdir(tmp_path)
         config_dir = tmp_path / ".vibe"
         config_dir.mkdir()
-        (config_dir / "config.yaml").write_text("platform: opencode\n")
+        (config_dir / "config.yaml").write_text("platform: opencode\n", encoding="utf-8")
 
         from vibesop.cli.commands.build import _get_configured_platform
 

@@ -167,7 +167,7 @@ class InstinctLearner:
         if not self.storage_path.exists():
             return
 
-        with self.storage_path.open() as f:
+        with self.storage_path.open(encoding="utf-8") as f:
             for raw_line in f:
                 stripped = raw_line.strip()
                 if not stripped:
@@ -513,7 +513,7 @@ class InstinctLearner:
         if not seq_path.exists():
             return
         self._sequences = {}
-        with seq_path.open() as f:
+        with seq_path.open(encoding="utf-8") as f:
             for raw_line in f:
                 stripped = raw_line.strip()
                 if not stripped:

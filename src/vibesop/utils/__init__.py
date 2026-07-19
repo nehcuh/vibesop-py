@@ -30,6 +30,7 @@ from vibesop.utils.helpers import (
     load_yaml_safe,
     merge_dicts,
     normalize_path,
+    safe_rmtree,
     truncate_text,
     write_yaml_safe,
 )
@@ -63,6 +64,7 @@ __all__ = [
     "merge_dicts",
     # Helpers
     "normalize_path",
+    "safe_rmtree",
     "truncate_text",
     "write_bytes",
     "write_text",

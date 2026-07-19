@@ -84,10 +84,10 @@ class CandidateManager:
             return None
         current_hash = self._compute_paths_hash(search_paths)
         try:
-            data = json.loads(cache_path.read_text())
+            data = json.loads(cache_path.read_text(encoding="utf-8"))
             if data.get("paths_hash") == current_hash:
                 return data.get("candidates", [])
-        except (json.JSONDecodeError, KeyError, OSError):
+        except (json.JSONDecodeError, KeyError, OSError, UnicodeDecodeError):
             pass
         return None
 
@@ -104,7 +104,8 @@ class CandidateManager:
                     },
                     default=str,
                     ensure_ascii=False,
-                )
+                ),
+                encoding="utf-8",
             )
 
     MANAGEMENT_SKILL_PREFIXES = ("slash-", "builtin/slash-", "builtin-slash-")

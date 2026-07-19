@@ -135,7 +135,7 @@ class TestPlanTracker:
         jsonl_path = Path(tracker.storage_path)
         assert jsonl_path.exists(), "JSONL file must be created"
 
-        lines = jsonl_path.read_text().strip().split("\n")
+        lines = jsonl_path.read_text(encoding="utf-8").strip().split("\n")
         assert len(lines) >= 1
         data = json.loads(lines[0])
         assert data["plan_id"] == "plan-001"

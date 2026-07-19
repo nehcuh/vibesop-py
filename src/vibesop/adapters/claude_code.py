@@ -436,7 +436,7 @@ class ClaudeCodeAdapter(HookBasedAdapter):
         existing_path = output_dir / "settings.json"
         if existing_path.exists():
             try:
-                existing = json.loads(existing_path.read_text())
+                existing = json.loads(existing_path.read_text(encoding="utf-8"))
                 if isinstance(existing, dict) and "env" in existing:
                     settings["env"] = existing["env"]
                 if isinstance(existing, dict) and "model" in existing:

@@ -187,7 +187,7 @@ class RecencyStrategy(ResolutionStrategy):
                 self._recent_skills = {}
                 return {}
 
-            with prefs_path.open("r") as f:
+            with prefs_path.open("r", encoding="utf-8") as f:
                 data = json.load(f)
 
             # Extract most recent selection for each skill

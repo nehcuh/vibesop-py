@@ -242,7 +242,7 @@ def create(
 
         template_path = template_info.get("source_file")
         if template_path:
-            template_text = Path(template_path).read_text()
+            template_text = Path(template_path).read_text(encoding="utf-8")
             new_text = template_text.replace(
                 f"id: {from_template}", f"id: {namespace}/{name}"
             ).replace(f"name: {from_template.split('/')[-1]}", f"name: {name}")
@@ -264,7 +264,7 @@ def create(
                         f"description: {safe_desc}",
                     )
                 new_text = replaced
-            (skill_dir / "SKILL.md").write_text(new_text)
+            (skill_dir / "SKILL.md").write_text(new_text, encoding="utf-8")
         else:
             _generate_skill_md(skill_dir, name, description or f"{name} skill", namespace)
 
@@ -397,7 +397,7 @@ vibe route "your query related to {" → ".join(suggestion.pattern_steps[:3])}"
     # Security audit (MUST) — template output is distilled content too and
     # must pass the same gate as LLM output before anything is written.
     _audit_distilled_content(content, yes=yes)
-    (skill_dir / "SKILL.md").write_text(content)
+    (skill_dir / "SKILL.md").write_text(content, encoding="utf-8")
     console.print(f"[green]✓[/green] SKILL.md created: {skill_dir}/SKILL.md")
 
     try:
@@ -806,7 +806,7 @@ type: prompt
 vibe route "your query here"
 ```
 """
-    (skill_dir / "SKILL.md").write_text(content)
+    (skill_dir / "SKILL.md").write_text(content, encoding="utf-8")
 
 
 def featured(

@@ -44,7 +44,8 @@ class TestThirdPartySkillPack:
             "trigger_when: When user asks for a custom security audit\n"
             "---\n\n"
             "# My Audit Skill\n\n"
-            "This is a custom third-party skill.\n"
+            "This is a custom third-party skill.\n",
+            encoding="utf-8",
         )
 
         # 1. ExternalSkillLoader discovers the skill. NB: _resolve_pack_name has

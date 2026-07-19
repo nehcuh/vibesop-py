@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import logging
 from abc import ABC, abstractmethod
+from contextlib import suppress
 from pathlib import Path
 from typing import Any
 
@@ -208,7 +209,7 @@ class GenericSessionTracker(SessionTracker):
             return
 
         try:
-            state = json.loads(self._state_file.read_text())
+            state = json.loads(self._state_file.read_text(encoding="utf-8"))
 
             # Restore session context
             if "current_skill" in state:
@@ -231,7 +232,8 @@ class GenericSessionTracker(SessionTracker):
         Uses atomic file writing to prevent corruption on concurrent saves.
         """
         import json
-        import tempfile
+
+        from vibesop.utils.atomic_writer import write_text
 
         try:
             state = {
@@ -247,14 +249,10 @@ class GenericSessionTracker(SessionTracker):
                 ],
             }
 
-            # Atomic write pattern
-            self._state_file.parent.mkdir(parents=True, exist_ok=True)
-            fd, tmp_path = tempfile.mkstemp(dir=self._state_file.parent, prefix=".tmp_state_")
-            with open(fd, "w", encoding="utf-8", closefd=False) as f:
-                json.dump(state, f, indent=2)
-
-            # Atomic replace
-            Path(tmp_path).replace(self._state_file)
+            write_text(self._state_file, json.dumps(state, indent=2))
+            # mkstemp used to yield 0o600; restore owner-only perms (no-op on Windows).
+            with suppress(OSError):
+                self._state_file.chmod(0o600)
         except Exception as e:
             logger.warning(f"Failed to save session state: {e}")
 

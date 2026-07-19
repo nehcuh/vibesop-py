@@ -106,7 +106,7 @@ class CacheManager:
         file_path = self._get_file_path(key)
         if file_path.exists():
             try:
-                with file_path.open("r") as f:
+                with file_path.open("r", encoding="utf-8") as f:
                     entry_data = json.load(f)
                 entry = CacheEntry(**entry_data)
 
@@ -116,7 +116,7 @@ class CacheManager:
                     self._set_memory_cache(key, entry)
                     self._stats.record_hit(is_memory=False)
                     return entry.data
-            except (OSError, json.JSONDecodeError):
+            except (OSError, json.JSONDecodeError, UnicodeDecodeError):
                 pass
 
         self._stats.record_miss()
@@ -177,7 +177,7 @@ class CacheManager:
         """Set value in file cache."""
         file_path = self._get_file_path(key)
         try:
-            with file_path.open("w") as f:
+            with file_path.open("w", encoding="utf-8") as f:
                 json.dump(
                     {
                         "data": entry.data,

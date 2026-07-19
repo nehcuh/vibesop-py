@@ -81,7 +81,8 @@ class TestResolvePlatformsWithConfig:
         user_config = tmp_path / ".vibe" / "config.yaml"
         user_config.parent.mkdir(parents=True)
         user_config.write_text(
-            "platforms:\n  install_targets:\n    - claude-code\n    - kimi-cli\n"
+            "platforms:\n  install_targets:\n    - claude-code\n    - kimi-cli\n",
+            encoding="utf-8",
         )
         # Project root distinct from $HOME so only user config applies
         project_root = tmp_path / "project"
@@ -95,13 +96,14 @@ class TestResolvePlatformsWithConfig:
         user_config = tmp_path / ".vibe" / "config.yaml"
         user_config.parent.mkdir(parents=True)
         user_config.write_text(
-            "platforms:\n  install_targets:\n    - claude-code\n    - kimi-cli\n"
+            "platforms:\n  install_targets:\n    - claude-code\n    - kimi-cli\n",
+            encoding="utf-8",
         )
         project_root = tmp_path / "project"
         project_root.mkdir()
         proj_config = project_root / ".vibe" / "config.yaml"
         proj_config.parent.mkdir(parents=True)
-        proj_config.write_text("platforms:\n  install_targets:\n    - opencode\n")
+        proj_config.write_text("platforms:\n  install_targets:\n    - opencode\n", encoding="utf-8")
         platforms, source = _resolve_platforms(None, project_root)
         assert platforms == ["opencode"]
         assert source == "project-config"
@@ -110,7 +112,7 @@ class TestResolvePlatformsWithConfig:
         monkeypatch.setattr(Path, "home", lambda: tmp_path)
         user_config = tmp_path / ".vibe" / "config.yaml"
         user_config.parent.mkdir(parents=True)
-        user_config.write_text("platforms:\n  install_targets:\n    - kimi-cli\n")
+        user_config.write_text("platforms:\n  install_targets:\n    - kimi-cli\n", encoding="utf-8")
         project_root = tmp_path / "project"
         project_root.mkdir()
         platforms, source = _resolve_platforms("cursor", project_root)
@@ -122,7 +124,8 @@ class TestResolvePlatformsWithConfig:
         user_config = tmp_path / ".vibe" / "config.yaml"
         user_config.parent.mkdir(parents=True)
         user_config.write_text(
-            "platforms:\n  install_targets:\n    - claude-code\n    - bogus-platform\n"
+            "platforms:\n  install_targets:\n    - claude-code\n    - bogus-platform\n",
+            encoding="utf-8",
         )
         project_root = tmp_path / "project"
         project_root.mkdir()
@@ -152,7 +155,7 @@ class TestConfigPlatformsCommand:
         result = runner.invoke(app, ["config", "platforms", "claude-code", "kimi-cli"])
         assert result.exit_code == 0
         assert "User platforms set" in result.stdout
-        written = (tmp_path / ".vibe" / "config.yaml").read_text()
+        written = (tmp_path / ".vibe" / "config.yaml").read_text(encoding="utf-8")
         assert "claude-code" in written
         assert "kimi-cli" in written
 
@@ -164,7 +167,7 @@ class TestConfigPlatformsCommand:
         result = runner.invoke(app, ["config", "platforms", "claude-code", "--project"])
         assert result.exit_code == 0
         assert "Project platforms set" in result.stdout
-        written = (project_root / ".vibe" / "config.yaml").read_text()
+        written = (project_root / ".vibe" / "config.yaml").read_text(encoding="utf-8")
         assert "claude-code" in written
 
     def test_set_with_comma_value(self, tmp_path, monkeypatch):
@@ -174,7 +177,7 @@ class TestConfigPlatformsCommand:
         monkeypatch.chdir(project_root)
         result = runner.invoke(app, ["config", "platforms", "claude-code,kimi-cli"])
         assert result.exit_code == 0
-        written = (tmp_path / ".vibe" / "config.yaml").read_text()
+        written = (tmp_path / ".vibe" / "config.yaml").read_text(encoding="utf-8")
         assert "claude-code" in written
         assert "kimi-cli" in written
 
@@ -194,11 +197,11 @@ class TestConfigPlatformsCommand:
         monkeypatch.chdir(project_root)
         cfg = tmp_path / ".vibe" / "config.yaml"
         cfg.parent.mkdir(parents=True)
-        cfg.write_text("platforms:\n  install_targets:\n    - kimi-cli\n")
+        cfg.write_text("platforms:\n  install_targets:\n    - kimi-cli\n", encoding="utf-8")
         result = runner.invoke(app, ["config", "platforms", "--clear"])
         assert result.exit_code == 0
         assert "Cleared" in result.stdout
-        assert "install_targets" not in cfg.read_text()
+        assert "install_targets" not in cfg.read_text(encoding="utf-8")
 
     def test_clear_when_no_config_is_noop(self, tmp_path, monkeypatch):
         monkeypatch.setattr(Path, "home", lambda: tmp_path)

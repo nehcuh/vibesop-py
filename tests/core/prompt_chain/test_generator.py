@@ -44,9 +44,9 @@ class TestDiagnose:
     def test_diagnose_expands_glob(self, tmp_path: Path) -> None:
         # Create a few .py files
         (tmp_path / "src").mkdir()
-        (tmp_path / "src" / "a.py").write_text("# a")
-        (tmp_path / "src" / "b.py").write_text("# b")
-        (tmp_path / "src" / "c.txt").write_text("ignore me")
+        (tmp_path / "src" / "a.py").write_text("# a", encoding="utf-8")
+        (tmp_path / "src" / "b.py").write_text("# b", encoding="utf-8")
+        (tmp_path / "src" / "c.txt").write_text("ignore me", encoding="utf-8")
 
         gen = PromptChainGenerator(project_root=tmp_path)
         report = gen.diagnose(files=["src/*.py"], feature_context="test")
@@ -60,7 +60,7 @@ class TestDiagnose:
 
     def test_diagnose_deduplicates(self, tmp_path: Path) -> None:
         (tmp_path / "src").mkdir()
-        (tmp_path / "src" / "a.py").write_text("# a")
+        (tmp_path / "src" / "a.py").write_text("# a", encoding="utf-8")
         gen = PromptChainGenerator(project_root=tmp_path)
         report = gen.diagnose(files=["src/a.py", "src/*.py"], feature_context="x")
         # Same file matched twice via direct + glob → only once in output
@@ -101,7 +101,7 @@ class TestGenerate:
     def test_generate_phase_zero_includes_files_table(self, tmp_path: Path) -> None:
         gen = PromptChainGenerator(project_root=tmp_path)
         (tmp_path / "src").mkdir()
-        (tmp_path / "src" / "router.py").write_text("# router")
+        (tmp_path / "src" / "router.py").write_text("# router", encoding="utf-8")
         report = gen.diagnose(files=["src/*.py"], feature_context="test")
 
         out = tmp_path / "prompts"
@@ -158,7 +158,8 @@ class TestGenerate:
 
     def test_generate_uses_project_name_from_pyproject(self, tmp_path: Path) -> None:
         (tmp_path / "pyproject.toml").write_text(
-            '[project]\nname = "my-test-project"\nversion = "0.1.0"\n'
+            '[project]\nname = "my-test-project"\nversion = "0.1.0"\n',
+            encoding="utf-8",
         )
         gen = PromptChainGenerator(project_root=tmp_path)
         out = tmp_path / "prompts"

@@ -37,7 +37,7 @@ class TestGenericSessionTracker:
 
         # Create a state file first
         state_file = tracker._state_file
-        state_file.write_text("{}")
+        state_file.write_text("{}", encoding="utf-8")
 
         result = tracker.disable()
 
@@ -100,7 +100,7 @@ class TestHookBasedSessionTracker:
         """Test availability when hooks exist."""
         hooks_dir = tmp_path / "hooks"
         hooks_dir.mkdir(parents=True)
-        (hooks_dir / "pre-tool-use.sh").write_text("#!/bin/bash\necho test")
+        (hooks_dir / "pre-tool-use.sh").write_text("#!/bin/bash\necho test", encoding="utf-8")
 
         tracker = HookBasedSessionTracker(
             project_root=".", platform="claude-code", hooks_dir=hooks_dir

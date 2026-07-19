@@ -9,6 +9,7 @@ would orchestrate in production, without requiring actual AI Agent platform conn
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 import pytest
@@ -264,16 +265,18 @@ class TestPlatformAdapterAgentRuntime:
 
         route_stat = route_hook.stat()
         track_stat = track_hook.stat()
-        assert route_stat.st_mode & stat.S_IXUSR, "vibesop-route.sh should be executable"
-        assert track_stat.st_mode & stat.S_IXUSR, "vibesop-track.sh should be executable"
+        if sys.platform != "win32":
+            # Windows chmod only toggles read-only; hooks run via `bash <script>`.
+            assert route_stat.st_mode & stat.S_IXUSR, "vibesop-route.sh should be executable"
+            assert track_stat.st_mode & stat.S_IXUSR, "vibesop-track.sh should be executable"
 
-        route_content = route_hook.read_text()
+        route_content = route_hook.read_text(encoding="utf-8")
         assert "AgentRuntime" in route_content
         assert "handle_query_for_hook" in route_content
         assert "$_VIBESOP_PYTHON -c" in route_content or "python3 -c" in route_content
         assert "UserPromptSubmit" in route_content
 
-        track_content = track_hook.read_text()
+        track_content = track_hook.read_text(encoding="utf-8")
         assert "tool" in track_content
         assert "step" in track_content.lower() or "Step" in track_content
 
@@ -289,7 +292,7 @@ class TestPlatformAdapterAgentRuntime:
         routing_md = tmp_path / "rules" / "routing.md"
         assert routing_md.exists()
 
-        content = routing_md.read_text()
+        content = routing_md.read_text(encoding="utf-8")
         assert "Agent Runtime Rules" in content
         assert "ACTIVE SKILL" in content
         assert "EXECUTION PLAN" in content
@@ -333,7 +336,7 @@ class TestPlatformAdapterAgentRuntime:
         agents_md = tmp_path / "AGENTS.md"
         assert agents_md.exists(), "AGENTS.md should be generated for Kimi CLI"
 
-        content = agents_md.read_text()
+        content = agents_md.read_text(encoding="utf-8")
         assert "vibe route" in content
         assert "SKILL.md" in content
         assert "MANDATORY" in content or "必须" in content
@@ -343,7 +346,7 @@ class TestPlatformAdapterAgentRuntime:
         # Detailed routing protocol lives in docs/routing.md
         routing_md = tmp_path / "docs" / "routing.md"
         assert routing_md.exists(), "docs/routing.md should be generated"
-        routing_content = routing_md.read_text()
+        routing_content = routing_md.read_text(encoding="utf-8")
         assert "override" in routing_content.lower()
         assert "orchestration" in routing_content.lower()
 
@@ -368,7 +371,7 @@ class TestPlatformAdapterAgentRuntime:
         assert (tmp_path / "skills" / "skill-b").is_dir()
 
         # AGENTS.md references the skills catalog
-        content = (tmp_path / "AGENTS.md").read_text()
+        content = (tmp_path / "AGENTS.md").read_text(encoding="utf-8")
         assert "docs/skills-catalog.md" in content or "skills" in content.lower()
 
     def test_opencode_plugin_template_exists(self) -> None:
@@ -390,14 +393,14 @@ class TestPlatformAdapterAgentRuntime:
         assert index_ts.exists(), "OpenCode plugin template (index.ts) should exist"
         assert readme_md.exists(), "OpenCode plugin README should exist"
 
-        index_content = index_ts.read_text()
+        index_content = index_ts.read_text(encoding="utf-8")
         assert "experimental.chat.system.transform" in index_content
         assert "chat.message" in index_content
         assert "tool.execute.before" in index_content
         assert "vibesop-skill" in index_content
         assert "vibesop-plan" in index_content
 
-        readme_content = readme_md.read_text()
+        readme_content = readme_md.read_text(encoding="utf-8")
         assert "VibeSOP" in readme_content
         assert "OpenCode" in readme_content
 
@@ -497,7 +500,7 @@ class TestCrossPlatformConsistency:
         claude_result = claude_adapter.render_config(claude_manifest, tmp_path / "claude")
         assert claude_result.success is True
 
-        claude_md = (tmp_path / "claude" / "CLAUDE.md").read_text()
+        claude_md = (tmp_path / "claude" / "CLAUDE.md").read_text(encoding="utf-8")
         assert "vibe route" in claude_md
         assert "MANDATORY" in claude_md
 
@@ -510,6 +513,6 @@ class TestCrossPlatformConsistency:
         kimi_result = kimi_adapter.render_config(kimi_manifest, tmp_path / "kimi")
         assert kimi_result.success is True
 
-        readme = (tmp_path / "kimi" / "README.md").read_text()
+        readme = (tmp_path / "kimi" / "README.md").read_text(encoding="utf-8")
         assert "vibe route" in readme
         assert "MANDATORY" in readme

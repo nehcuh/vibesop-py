@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import time
 from typing import TYPE_CHECKING
 
@@ -300,11 +301,18 @@ class TestConversationContext:
 
         # Create an old file
         old_file = storage / "old.json"
-        old_file.write_text('{"turns": []}')
+        old_file.write_text('{"turns": []}', encoding="utf-8")
 
         # Create a recent file
         recent_file = storage / "recent.json"
-        recent_file.write_text('{"turns": []}')
+        recent_file.write_text('{"turns": []}', encoding="utf-8")
+
+        # Backdate both files: with max_age=0.0 the check is `now - mtime > 0`,
+        # and on Windows the mtime granularity can make a just-written file
+        # compare equal to `now`, so the boundary value alone is flaky.
+        past = time.time() - 100
+        os.utime(old_file, (past, past))
+        os.utime(recent_file, (past, past))
 
         removed = ConversationContext.cleanup_expired(
             storage_dir=storage,

@@ -88,15 +88,15 @@ class ConfigSource:
         try:
             suffix = self.path.suffix.lower()
             if suffix == ".toml":
-                import tomllib
+                from vibesop.utils.encoding import load_toml_with_fallback
 
-                with self.path.open("rb") as f:
-                    self.data = tomllib.load(f)
+                self.data = load_toml_with_fallback(self.path)
             else:
                 import yaml
 
-                with self.path.open() as f:
-                    self.data = yaml.safe_load(f) or {}
+                from vibesop.utils.encoding import read_text_with_fallback
+
+                self.data = yaml.safe_load(read_text_with_fallback(self.path)) or {}
         except FileNotFoundError:
             # Config file absent — normal (callers gate on _resolve_config_path,
             # so this only fires on a TOCTOU race between resolve and open).
@@ -424,7 +424,7 @@ class ConfigManager:
         if preferences_path.exists():
             import json
 
-            with preferences_path.open() as f:
+            with preferences_path.open(encoding="utf-8") as f:
                 data = json.load(f)
 
             mapped_data = self._map_legacy_preferences(data)

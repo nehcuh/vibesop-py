@@ -49,12 +49,14 @@ class TestCheckTraversalSymlinkHardening:
         # Classic traversal: escape via ..
         assert safety.check_traversal("../../../etc/passwd", base) is False
 
-    def test_symlink_inside_base_pointing_outside_rejected(self, tmp_path: Path) -> None:
+    def test_symlink_inside_base_pointing_outside_rejected(
+        self, tmp_path: Path, symlink_supported: bool
+    ) -> None:
         """The S23 red-team PoC: symlink inside base_dir → /etc (or
         anything outside). Pre-v7.0.5, resolve() followed the symlink
         and the check passed."""
-        if os.name == "nt":
-            pytest.skip("Symlink semantics differ on Windows")
+        if not symlink_supported:
+            pytest.skip("directory symlinks not supported on this host")
         safety = PathSafety()
         base = tmp_path / "base"
         base.mkdir()
@@ -67,10 +69,12 @@ class TestCheckTraversalSymlinkHardening:
         # Post-v7.0.5, the lstat check refuses.
         assert safety.check_traversal(base / "evil" / "passwd", base) is False
 
-    def test_symlink_in_path_component_rejected(self, tmp_path: Path) -> None:
+    def test_symlink_in_path_component_rejected(
+        self, tmp_path: Path, symlink_supported: bool
+    ) -> None:
         """A symlink anywhere in the chain (not just the leaf) must be refused."""
-        if os.name == "nt":
-            pytest.skip("Symlink semantics differ on Windows")
+        if not symlink_supported:
+            pytest.skip("directory symlinks not supported on this host")
         safety = PathSafety()
         base = tmp_path / "base"
         base.mkdir()
@@ -146,10 +150,10 @@ class TestEnsureSafeOutputPathHardening:
         with pytest.raises((ValueError, PathTraversalError)):
             safety.ensure_safe_output_path("${HOME}.txt", base)
 
-    def test_symlinked_output_path_rejected(self, tmp_path: Path) -> None:
+    def test_symlinked_output_path_rejected(self, tmp_path: Path, symlink_supported: bool) -> None:
         """If the output path traverses a symlink inside base, refuse."""
-        if os.name == "nt":
-            pytest.skip("Symlink semantics differ on Windows")
+        if not symlink_supported:
+            pytest.skip("directory symlinks not supported on this host")
         safety = PathSafety()
         base = tmp_path / "base"
         base.mkdir()
@@ -168,21 +172,21 @@ class TestLexicalNormalize:
 
     def test_collapses_dotdot(self) -> None:
         result = PathSafety._lexical_normalize(Path("/tmp/foo/../bar"))
-        assert str(result) == "/tmp/bar"
+        assert result == Path(os.path.normpath(os.path.abspath("/tmp/bar")))
 
     def test_collapses_dot(self) -> None:
         result = PathSafety._lexical_normalize(Path("/tmp/./foo"))
-        assert str(result) == "/tmp/foo"
+        assert result == Path(os.path.normpath(os.path.abspath("/tmp/foo")))
 
     def test_makes_relative_absolute(self) -> None:
         # cwd-dependent; just check the result is absolute
         result = PathSafety._lexical_normalize(Path("foo/bar"))
         assert result.is_absolute()
 
-    def test_does_not_resolve_symlink(self, tmp_path: Path) -> None:
+    def test_does_not_resolve_symlink(self, tmp_path: Path, symlink_supported: bool) -> None:
         """Confirm _lexical_normalize doesn't follow symlinks."""
-        if os.name == "nt":
-            pytest.skip("Symlink semantics differ on Windows")
+        if not symlink_supported:
+            pytest.skip("directory symlinks not supported on this host")
         base = tmp_path / "base"
         base.mkdir()
         link = tmp_path / "link"
@@ -203,21 +207,21 @@ class TestNoSymlinksInChain:
         target = base / "subdir" / "file.txt"
         assert safety._no_symlinks_in_chain(base, target) is True
 
-    def test_symlink_at_leaf_rejected(self, tmp_path: Path) -> None:
-        if os.name == "nt":
-            pytest.skip("Symlink semantics differ on Windows")
+    def test_symlink_at_leaf_rejected(self, tmp_path: Path, symlink_supported: bool) -> None:
+        if not symlink_supported:
+            pytest.skip("directory symlinks not supported on this host")
         safety = PathSafety()
         base = tmp_path / "base"
         base.mkdir()
         outside = tmp_path / "outside.txt"
-        outside.write_text("evil")
+        outside.write_text("evil", encoding="utf-8")
         leaf_link = base / "leaf"
         leaf_link.symlink_to(outside)
         assert safety._no_symlinks_in_chain(base, leaf_link) is False
 
-    def test_symlink_in_middle_rejected(self, tmp_path: Path) -> None:
-        if os.name == "nt":
-            pytest.skip("Symlink semantics differ on Windows")
+    def test_symlink_in_middle_rejected(self, tmp_path: Path, symlink_supported: bool) -> None:
+        if not symlink_supported:
+            pytest.skip("directory symlinks not supported on this host")
         safety = PathSafety()
         base = tmp_path / "base"
         base.mkdir()
@@ -293,14 +297,16 @@ class TestResolvePathLexicalHardening:
     appeared inside base. Switching to _lexical_normalize closes the gap.
     """
 
-    def test_resolve_path_does_not_follow_symlink(self, tmp_path: Path) -> None:
-        if os.name == "nt":
-            pytest.skip("Symlink semantics differ on Windows")
+    def test_resolve_path_does_not_follow_symlink(
+        self, tmp_path: Path, symlink_supported: bool
+    ) -> None:
+        if not symlink_supported:
+            pytest.skip("directory symlinks not supported on this host")
         safety = PathSafety()
         base = tmp_path / "base"
         base.mkdir()
         outside = tmp_path / "outside.txt"
-        outside.write_text("evil")
+        outside.write_text("evil", encoding="utf-8")
         # Plant a symlink inside base pointing outside.
         link = base / "link"
         link.symlink_to(outside)
@@ -325,14 +331,16 @@ class TestResolvePathLexicalHardening:
         """Absolute input is normalized lexically (no symlink resolution)."""
         safety = PathSafety()
         result = safety._resolve_path(Path("/tmp/foo/../bar"), Path("/base"))
-        assert str(result) == "/tmp/bar"
+        assert result == Path(os.path.normpath(os.path.abspath("/tmp/bar")))
 
-    def test_ensure_safe_output_path_symlink_now_caught(self, tmp_path: Path) -> None:
+    def test_ensure_safe_output_path_symlink_now_caught(
+        self, tmp_path: Path, symlink_supported: bool
+    ) -> None:
         """v7.0.8 regression: a symlinked output path must now be caught
         because _resolve_path no longer silently follows the symlink to a
         target outside base that lexically appears inside base."""
-        if os.name == "nt":
-            pytest.skip("Symlink semantics differ on Windows")
+        if not symlink_supported:
+            pytest.skip("directory symlinks not supported on this host")
         safety = PathSafety()
         base = tmp_path / "base"
         base.mkdir()

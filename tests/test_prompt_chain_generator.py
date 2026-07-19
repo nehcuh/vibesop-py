@@ -304,9 +304,10 @@ class TestWriteFiles:
             # (no escape via traversal or prefix collision).
             output_resolved = output.resolve()
             for path in written:
-                assert str(path.resolve()).startswith(str(output_resolved) + "/") or str(
-                    path.resolve()
-                ) == str(output_resolved), f"Path escaped output dir: {path}"
+                resolved = path.resolve()
+                assert resolved == output_resolved or output_resolved in resolved.parents, (
+                    f"Path escaped output dir: {path}"
+                )
 
             # No file should have been written outside the output dir.
             # Walk tmpdir and assert no `etc/passwd` style files exist.
@@ -339,7 +340,7 @@ class TestWriteFiles:
             output = Path(tmpdir) / "foo"
             sibling = Path(tmpdir) / "foobar"
             sibling.mkdir(parents=True)
-            (sibling / "secret.md").write_text("secret")
+            (sibling / "secret.md").write_text("secret", encoding="utf-8")
 
             gen = PromptChainGenerator(output_dir=str(output))
             prompt_files = [
@@ -349,7 +350,7 @@ class TestWriteFiles:
             assert len(written) == 1
             assert written[0].resolve() == (output / "bar.md").resolve()
             # The sibling file must remain untouched.
-            assert (sibling / "secret.md").read_text() == "secret"
+            assert (sibling / "secret.md").read_text(encoding="utf-8") == "secret"
 
 
 class TestWorkflowEnginePromptChain:

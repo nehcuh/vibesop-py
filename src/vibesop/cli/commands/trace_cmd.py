@@ -110,7 +110,7 @@ def show(
         console.print(f"[red]Trace file not found: {trace_file}[/red]")
         raise typer.Exit(1)
 
-    data = json.loads(trace_file.read_text())
+    data = json.loads(trace_file.read_text(encoding="utf-8"))
 
     if json_output:
         console.print(json.dumps(data, indent=2, ensure_ascii=False, default=str))

@@ -54,7 +54,7 @@ class TestConversationStorage:
     def test_load_corrupted_file_returns_none(self, tmp_path: Path) -> None:
         storage = ConversationStorage(storage_dir=str(tmp_path))
         path = storage.get_conversation_path("bad")
-        path.write_text("not json")
+        path.write_text("not json", encoding="utf-8")
         assert storage.load("bad") is None
 
     def test_delete_existing(self, tmp_path: Path) -> None:
@@ -100,7 +100,7 @@ class TestConversationStorage:
     def test_list_all_skips_corrupted_files(self, tmp_path: Path) -> None:
         storage = ConversationStorage(storage_dir=str(tmp_path))
         bad_path = storage.get_conversation_path("bad")
-        bad_path.write_text("not json")
+        bad_path.write_text("not json", encoding="utf-8")
         assert storage.list_all() == []
 
     def test_clear_all(self, tmp_path: Path) -> None:

@@ -99,6 +99,41 @@ jobs:
           file: ./coverage.xml
           fail_ci_if_error: false
 
+  test-windows:
+    name: Test Windows (Python ${{ matrix.python-version }})
+    runs-on: windows-latest
+    # Observation period: the Windows gate is non-blocking (continue-on-error)
+    # for the first two weeks after landing (added 2026-07-19, P4 windows-compat
+    # batch). Once it has stayed green for two weeks, remove continue-on-error
+    # to make it a required gate. No coverage gate / codecov here — coverage
+    # stays the ubuntu `test` job's responsibility.
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12", "3.13"]
+
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.1
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@38f3f104447c67c051c4a08e39b64a148898af3a  # v4.2.0
+        with:
+          version: ${{ env.UV_VERSION }}
+
+      - name: Set up Python
+        run: uv python install ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: uv sync --extra dev
+
+      - name: Run tests
+        # Same marker filter as the ubuntu job. --reruns 2 absorbs Windows
+        # flakes (Defender scans, transient file-lock races).
+        run: uv run pytest -q -m "not benchmark and not slow" --reruns 2
+
   security:
     name: Security Scan
     runs-on: ubuntu-latest

@@ -102,7 +102,7 @@ class TestTryIndexLayer:
         # Create empty index
         index_path = tmp_path / ".vibe" / "skill-index.json"
         index_path.parent.mkdir(parents=True)
-        index_path.write_text(json.dumps({"version": "1.0.0", "skills": {}}))
+        index_path.write_text(json.dumps({"version": "1.0.0", "skills": {}}), encoding="utf-8")
 
         match, detail = try_index_layer(router, "review code", [])
 
@@ -130,7 +130,7 @@ class TestTryIndexLayer:
                 }
             },
         }
-        index_path.write_text(json.dumps(index_data))
+        index_path.write_text(json.dumps(index_data), encoding="utf-8")
 
         candidates = [{"id": "gstack/review", "description": "Review code", "namespace": "gstack"}]
 
@@ -162,7 +162,7 @@ class TestTryIndexLayer:
                 }
             },
         }
-        index_path.write_text(json.dumps(index_data))
+        index_path.write_text(json.dumps(index_data), encoding="utf-8")
 
         # No candidates match
         candidates = [{"id": "other/skill", "description": "Other"}]
@@ -203,7 +203,7 @@ class TestEmbeddingFallback:
                 }
             },
         }
-        index_path.write_text(json.dumps(index_data))
+        index_path.write_text(json.dumps(index_data), encoding="utf-8")
 
         candidates = [{"id": "gstack/review", "description": "Review code", "namespace": "gstack"}]
 
@@ -244,7 +244,7 @@ class TestEmbeddingFallback:
                 }
             },
         }
-        index_path.write_text(json.dumps(index_data))
+        index_path.write_text(json.dumps(index_data), encoding="utf-8")
 
         match, detail = try_index_layer(router, "audit the auth flow", [])
 
@@ -276,7 +276,7 @@ class TestEmbeddingFallback:
                 }
             },
         }
-        index_path.write_text(json.dumps(index_data))
+        index_path.write_text(json.dumps(index_data), encoding="utf-8")
 
         # Ensure sentence_transformers is NOT importable by removing any mock
         # that earlier tests may have injected into sys.modules.

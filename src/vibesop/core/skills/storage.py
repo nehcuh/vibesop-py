@@ -30,7 +30,43 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, ClassVar
 
+from vibesop.utils.helpers import safe_rmtree
+
 logger = logging.getLogger(__name__)
+
+# Marker file written into skill dirs that were copied (instead of symlinked)
+# from central storage — Windows without symlink privilege takes the copy
+# fallback. Content: absolute path of the central source directory (utf-8).
+COPY_SOURCE_MARKER = ".vibe-copy-source"
+
+
+def write_copy_source_marker(dest_dir: Path, source_dir: Path) -> None:
+    """Record the central-storage origin of a copied skill directory.
+
+    Args:
+        dest_dir: Copied skill directory receiving the marker
+        source_dir: Central storage directory the copy was made from
+    """
+    (dest_dir / COPY_SOURCE_MARKER).write_text(str(source_dir.resolve()), encoding="utf-8")
+
+
+def read_copy_source_marker(dest_dir: Path) -> Path | None:
+    """Read the central-storage source recorded by a copy marker.
+
+    Args:
+        dest_dir: Copied skill directory possibly containing a marker
+
+    Returns:
+        Source path from the marker, or None if absent/unreadable/empty
+    """
+    marker = dest_dir / COPY_SOURCE_MARKER
+    if not marker.is_file():
+        return None
+    try:
+        raw = marker.read_text(encoding="utf-8").strip()
+    except (OSError, UnicodeDecodeError):
+        return None
+    return Path(raw) if raw else None
 
 
 @dataclass
@@ -163,7 +199,7 @@ class SkillStorage:
 
         # Remove existing if overwriting
         if skill_path.exists():
-            shutil.rmtree(skill_path)
+            safe_rmtree(skill_path)
 
         # Copy skill directory
         shutil.copytree(source_path, skill_path)
@@ -280,7 +316,7 @@ class SkillStorage:
                     return False, f"Symlink exists but points elsewhere: {platform_path}"
             elif force:
                 if platform_path.is_dir():
-                    shutil.rmtree(platform_path)
+                    safe_rmtree(platform_path)
                 else:
                     platform_path.unlink()
             else:
@@ -289,17 +325,31 @@ class SkillStorage:
         if self.dry_run:
             return True, f"Would link {skill_id} -> {platform}"
 
-        # Create symlink
-        try:
-            platform_path.symlink_to(skill_path)
-            return True, f"Linked {skill_id} -> {platform}"
-        except OSError:
-            # Fallback to copy if symlinks not supported (Windows)
+        # Create symlink — probe capability first so Windows without
+        # symlink privilege goes straight to the copy fallback instead
+        # of raising on every skill.
+        from vibesop.utils.symlinks import can_create_dir_symlink
+
+        if not can_create_dir_symlink(platform_path.parent):
+            logger.info(
+                "symlinks unsupported under %s, copying %s instead",
+                platform_path.parent,
+                skill_id,
+            )
+        else:
             try:
-                shutil.copytree(skill_path, platform_path)
-                return True, f"Copied {skill_id} -> {platform} (symlinks not supported)"
-            except Exception as e:
-                return False, f"Failed to link/copy: {e}"
+                platform_path.symlink_to(skill_path, target_is_directory=True)
+                return True, f"Linked {skill_id} -> {platform}"
+            except OSError as e:
+                logger.info("symlink failed for %s, falling back to copy: %s", skill_id, e)
+
+        # Fallback to copy if symlinks not supported (Windows)
+        try:
+            shutil.copytree(skill_path, platform_path)
+            write_copy_source_marker(platform_path, skill_path)
+            return True, f"Copied {skill_id} -> {platform} (symlinks not supported)"
+        except Exception as e:
+            return False, f"Failed to link/copy: {e}"
 
     def unlink_from_platform(
         self,
@@ -319,7 +369,7 @@ class SkillStorage:
             if platform_path.is_symlink():
                 platform_path.unlink()
             elif platform_path.is_dir():
-                shutil.rmtree(platform_path)
+                safe_rmtree(platform_path)
             else:
                 platform_path.unlink()
             return True, f"Unlinked {skill_id} from {platform}"
@@ -342,7 +392,7 @@ class SkillStorage:
                 self.unlink_from_platform(skill_id, platform_name)
 
         # Remove from central storage
-        shutil.rmtree(skill_path)
+        safe_rmtree(skill_path)
         return True, f"Removed {skill_id} from central storage"
 
     def list_skills(self) -> dict[str, SkillManifest]:
@@ -367,22 +417,39 @@ class SkillStorage:
             if not platform_dir.exists():
                 continue
             for entry in platform_dir.iterdir():
-                if not entry.is_symlink():
-                    continue
                 skill_id = entry.name
                 if skill_id in skills:
                     continue
 
-                target = entry.resolve()
-                # Only include symlinks pointing into central storage
-                try:
-                    target.relative_to(self.CENTRAL_SKILLS_DIR)
-                except ValueError:
-                    continue
+                if entry.is_symlink():
+                    target = entry.resolve()
+                    # Only include symlinks pointing into central storage
+                    try:
+                        target.relative_to(self.CENTRAL_SKILLS_DIR)
+                    except ValueError:
+                        continue
 
-                manifest = self._build_manifest_from_skill_md(skill_id, target / "SKILL.md")
-                if manifest:
-                    skills[skill_id] = manifest
+                    manifest = self._build_manifest_from_skill_md(skill_id, target / "SKILL.md")
+                    if manifest:
+                        skills[skill_id] = manifest
+                elif entry.is_dir():
+                    # Copy fallback (Windows without symlink privilege): only a
+                    # real dir carrying a .vibe-copy-source marker whose recorded
+                    # source resolves into central storage counts as a pack skill.
+                    source = read_copy_source_marker(entry)
+                    if source is None:
+                        continue
+                    try:
+                        source.resolve().relative_to(self.CENTRAL_SKILLS_DIR.resolve())
+                    except (ValueError, OSError):
+                        continue
+
+                    manifest = self._build_manifest_from_skill_md(skill_id, entry / "SKILL.md")
+                    if manifest:
+                        # Provenance comes from the marker (central source dir),
+                        # mirroring the resolved symlink target in the branch above.
+                        manifest.source.path = str(source)
+                        skills[skill_id] = manifest
 
         return skills
 
@@ -530,7 +597,7 @@ class SkillStorage:
             "checksum": manifest.checksum,
         }
 
-        with metadata_path.open("w") as f:
+        with metadata_path.open("w", encoding="utf-8") as f:
             json.dump(manifest_dict, f, indent=2)
 
     def _read_metadata(self, skill_id: str) -> SkillManifest | None:
@@ -541,7 +608,7 @@ class SkillStorage:
             return None
 
         try:
-            with metadata_path.open() as f:
+            with metadata_path.open(encoding="utf-8") as f:
                 data = json.load(f)
 
             # Reconstruct SkillSource from dict

@@ -13,11 +13,13 @@ def fake_repo(tmp_path):
     """Create a fake repository structure."""
     repo = tmp_path / "fake-repo"
     repo.mkdir()
-    (repo / "README.md").write_text("# Test Pack\n\n## Installation\n\nRun setup.")
+    (repo / "README.md").write_text(
+        "# Test Pack\n\n## Installation\n\nRun setup.", encoding="utf-8"
+    )
     skills = repo / "skills" / "debug"
     skills.mkdir(parents=True)
-    (skills / "SKILL.md").write_text("---\nid: debug\nname: Debug\n---\n")
-    (repo / "requirements.txt").write_text("requests")
+    (skills / "SKILL.md").write_text("---\nid: debug\nname: Debug\n---\n", encoding="utf-8")
+    (repo / "requirements.txt").write_text("requests", encoding="utf-8")
     return repo
 
 
@@ -62,7 +64,9 @@ def test_infer_pack_name():
 
 def test_extract_install_hint_from_section(tmp_path):
     readme = tmp_path / "README.md"
-    readme.write_text("# Pack\n\n## Installation\n\nStep 1\nStep 2\n\n## Usage\n\nFoo")
+    readme.write_text(
+        "# Pack\n\n## Installation\n\nStep 1\nStep 2\n\n## Usage\n\nFoo", encoding="utf-8"
+    )
     analyzer = RepoAnalyzer()
     hint = analyzer._extract_install_hint(readme)
     assert "Step 1" in hint
@@ -71,7 +75,7 @@ def test_extract_install_hint_from_section(tmp_path):
 
 def test_extract_install_hint_from_command(tmp_path):
     readme = tmp_path / "README.md"
-    readme.write_text("# Pack\n\nRun `pip install -r requirements.txt`")
+    readme.write_text("# Pack\n\nRun `pip install -r requirements.txt`", encoding="utf-8")
     analyzer = RepoAnalyzer()
     hint = analyzer._extract_install_hint(readme)
     assert "pip install" in hint
@@ -79,7 +83,7 @@ def test_extract_install_hint_from_command(tmp_path):
 
 def test_extract_install_hint_no_instructions(tmp_path):
     readme = tmp_path / "README.md"
-    readme.write_text("# Pack\n\nHello")
+    readme.write_text("# Pack\n\nHello", encoding="utf-8")
     analyzer = RepoAnalyzer()
     hint = analyzer._extract_install_hint(readme)
     assert "No explicit installation" in hint

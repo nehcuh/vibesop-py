@@ -144,7 +144,7 @@ class TestSkillRatingStore:
     def test_persistence_skips_corrupted_lines(self, tmp_path: Path):
         store_path = tmp_path / "ratings.jsonl"
         store_path.parent.mkdir(parents=True, exist_ok=True)
-        store_path.write_text('not json\n{"skill_id": "s", "score": 5}\n')
+        store_path.write_text('not json\n{"skill_id": "s", "score": 5}\n', encoding="utf-8")
 
         store = SkillRatingStore(store_path=store_path)
         ratings = store.get_ratings("s")

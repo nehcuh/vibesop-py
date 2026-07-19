@@ -8,6 +8,7 @@ at the questionary boundary; TTY detection is simulated via the
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -576,7 +577,17 @@ class TestEditorHelper:
 
         replacement = tmp_path / "replacement.md"
         replacement.write_text("EDITED CONTENT", encoding="utf-8")
-        monkeypatch.setenv("EDITOR", f"cp {replacement}")
+        # Cross-platform "editor": a Python copy script. A bare `cp <path>`
+        # breaks on Windows (no cp; shlex eats the backslashes in the path).
+        copier = tmp_path / "copy_editor.py"
+        copier.write_text(
+            "import shutil, sys\nshutil.copy(sys.argv[1], sys.argv[2])\n",
+            encoding="utf-8",
+        )
+        monkeypatch.setenv(
+            "EDITOR",
+            f'"{sys.executable}" "{copier.as_posix()}" "{replacement.as_posix()}"',
+        )
         assert _discovery._edit_in_editor("ORIGINAL") == "EDITED CONTENT"
 
     def test_editor_preserves_when_noop(self, monkeypatch: pytest.MonkeyPatch) -> None:

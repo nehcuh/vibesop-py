@@ -20,6 +20,7 @@ from vibesop.core.skills.workflow import (
     Workflow,
     WorkflowStep,
 )
+from vibesop.security.skill_auditor import SkillSecurityAuditor
 
 # Get project root for tests
 PROJECT_ROOT = Path(__file__).parent.parent.parent.parent.resolve()
@@ -120,7 +121,13 @@ description: Debug systematically
                 encoding="utf-8",
             )
 
-            executor = ExternalSkillExecutor(project_root=tmpdir)
+            # Inject the auditor explicitly — relying on the composition-root
+            # default (vibesop.cli.main._wire_defaults) makes this test depend
+            # on collection order; it must pass when run standalone.
+            executor = ExternalSkillExecutor(
+                project_root=tmpdir,
+                auditor=SkillSecurityAuditor(project_root=tmpdir),
+            )
 
             # Mock the loader to return our test skill definition
             with patch.object(executor._loader, "get_skill") as mock_get:
@@ -194,8 +201,12 @@ This is a test skill.
                 encoding="utf-8",
             )
 
-            # Create executor and get definition
-            executor = ExternalSkillExecutor(project_root=tmpdir)
+            # Create executor and get definition (auditor injected explicitly —
+            # see test_get_skill_definition_builtin for why)
+            executor = ExternalSkillExecutor(
+                project_root=tmpdir,
+                auditor=SkillSecurityAuditor(project_root=tmpdir),
+            )
 
             # Mock the loader to find our test skill
             with patch.object(executor._loader, "get_skill") as mock_get:
@@ -350,7 +361,11 @@ class TestSecurity:
 
     def test_security_audit_failure(self) -> None:
         """Test that security audit failures block execution."""
-        executor = ExternalSkillExecutor(project_root=PROJECT_ROOT)
+        # Auditor injected explicitly — see test_get_skill_definition_builtin.
+        executor = ExternalSkillExecutor(
+            project_root=PROJECT_ROOT,
+            auditor=SkillSecurityAuditor(project_root=PROJECT_ROOT),
+        )
 
         with tempfile.TemporaryDirectory() as tmpdir:
             skill_file = Path(tmpdir) / "SKILL.md"

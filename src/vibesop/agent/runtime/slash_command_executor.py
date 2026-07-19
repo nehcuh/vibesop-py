@@ -19,7 +19,6 @@ Example:
 
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -104,7 +103,10 @@ class SlashCommandExecutor:
 
         # Extract command name and args using shlex for consistency
         try:
-            parts = shlex.split(stripped, posix=(os.name != "nt"))
+            # Escape backslashes so unquoted Windows paths survive posix-mode
+            # shlex parsing instead of being eaten as escape chars.
+            escaped = stripped.replace("\\", "\\\\")
+            parts = shlex.split(escaped, posix=True)
         except ValueError:
             parts = stripped.split()
         command = parts[0] if parts else ""

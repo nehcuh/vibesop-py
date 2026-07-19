@@ -1,5 +1,6 @@
 """Tests for hook system."""
 
+import sys
 from pathlib import Path
 
 from vibesop.hooks import (
@@ -68,7 +69,7 @@ class TestScriptHook:
         hook.render_to_file(output_path)
 
         assert output_path.exists()
-        content = output_path.read_text()
+        content = output_path.read_text(encoding="utf-8")
         assert "#!/bin/bash" in content
         assert "Test" in content
 
@@ -76,7 +77,9 @@ class TestScriptHook:
         import stat
 
         st_mode = output_path.stat().st_mode
-        assert st_mode & stat.S_IXUSR  # Owner execute permission
+        if sys.platform != "win32":
+            # Windows chmod only toggles read-only; hooks run via `bash <script>`.
+            assert st_mode & stat.S_IXUSR  # Owner execute permission
 
     def test_enable_disable(self) -> None:
         """Test enabling and disabling hook."""
@@ -102,7 +105,7 @@ class TestTemplateHook:
         """Test creating a template hook."""
         # Create template file
         template_file = tmp_path / "test_hook.sh.j2"
-        template_file.write_text("#!/bin/bash\necho '{{ name }}'")
+        template_file.write_text("#!/bin/bash\necho '{{ name }}'", encoding="utf-8")
 
         hook = TemplateHook(
             hook_name="test-hook",
@@ -118,7 +121,7 @@ class TestTemplateHook:
         """Test rendering template hook to file."""
         # Create template file
         template_file = tmp_path / "hook.sh.j2"
-        template_file.write_text("#!/bin/bash\necho '{{ message }}'")
+        template_file.write_text("#!/bin/bash\necho '{{ message }}'", encoding="utf-8")
 
         hook = TemplateHook(
             hook_name="test-hook",
@@ -131,7 +134,7 @@ class TestTemplateHook:
         hook.render_to_file(output_path)
 
         assert output_path.exists()
-        content = output_path.read_text()
+        content = output_path.read_text(encoding="utf-8")
         assert "Hello from hook!" in content
 
 
@@ -221,5 +224,5 @@ class TestHookIntegration:
 
         assert output1.exists()
         assert output2.exists()
-        assert "Hook 1" in output1.read_text()
-        assert "Hook 2" in output2.read_text()
+        assert "Hook 1" in output1.read_text(encoding="utf-8")
+        assert "Hook 2" in output2.read_text(encoding="utf-8")

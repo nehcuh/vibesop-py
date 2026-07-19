@@ -365,7 +365,7 @@ class TestTransactionalInstallerEdgeCases:
                 "created_at": "2024-01-01T12:00:00",
                 "steps": [s.name for s in _self._steps],
             }
-            with (snapshot_path / "metadata.json").open("w") as f:
+            with (snapshot_path / "metadata.json").open("w", encoding="utf-8") as f:
                 json.dump(metadata, f, indent=2)
             return snapshot_id
 
@@ -398,7 +398,7 @@ class TestFileTransactionalInstaller:
             snapshot_dir = Path(tmpdir) / "snapshots"
 
             file_path = base_dir / "config.yaml"
-            file_path.write_text("original")
+            file_path.write_text("original", encoding="utf-8")
 
             installer = FileTransactionalInstaller(
                 snapshot_dir=snapshot_dir,
@@ -410,7 +410,9 @@ class TestFileTransactionalInstaller:
 
             assert result.success
             snapshot_path = snapshot_dir / result.snapshot_id
-            assert (snapshot_path / "files" / "config.yaml").read_text() == "original"
+            assert (snapshot_path / "files" / "config.yaml").read_text(
+                encoding="utf-8"
+            ) == "original"
 
     def test_restore_tracked_files(self) -> None:
         """Test restoring tracked files from snapshot."""
@@ -420,7 +422,7 @@ class TestFileTransactionalInstaller:
             snapshot_dir = Path(tmpdir) / "snapshots"
 
             file_path = base_dir / "config.yaml"
-            file_path.write_text("original")
+            file_path.write_text("original", encoding="utf-8")
 
             installer = FileTransactionalInstaller(
                 snapshot_dir=snapshot_dir,
@@ -431,11 +433,11 @@ class TestFileTransactionalInstaller:
             result = installer.execute()
 
             # Modify file after snapshot
-            file_path.write_text("modified")
+            file_path.write_text("modified", encoding="utf-8")
 
             # Restore snapshot
             installer._restore_snapshot(result.snapshot_id)
-            assert file_path.read_text() == "original"
+            assert file_path.read_text(encoding="utf-8") == "original"
 
     def test_restore_missing_snapshot(self) -> None:
         """Test restoring from non-existent snapshot does nothing in FileTransactionalInstaller."""
@@ -451,7 +453,7 @@ class TestFileTransactionalInstaller:
         """Test tracking same file twice only stores once."""
         with tempfile.TemporaryDirectory() as tmpdir:
             file_path = Path(tmpdir) / "file.txt"
-            file_path.write_text("content")
+            file_path.write_text("content", encoding="utf-8")
 
             installer = FileTransactionalInstaller(base_dir=Path(tmpdir))
             installer.track_file(file_path)

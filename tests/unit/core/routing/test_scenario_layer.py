@@ -52,7 +52,7 @@ class TestLoadScenarioConfig:
     def test_disabled_conflict_resolution(self, tmp_path: Path) -> None:
         """Registry with disabled conflict_resolution returns empty."""
         registry = tmp_path / "registry.yaml"
-        registry.write_text("conflict_resolution:\n  enabled: false\n")
+        registry.write_text("conflict_resolution:\n  enabled: false\n", encoding="utf-8")
         result = load_scenario_config(registry)
         assert result == {"strategies": [], "keywords": {}}
 
@@ -66,7 +66,8 @@ class TestLoadScenarioConfig:
             "    - scenario: debug\n"
             "      primary: systematic-debugging\n"
             "  scenario_keywords:\n"
-            "    debug: [debug, bug, error]\n"
+            "    debug: [debug, bug, error]\n",
+            encoding="utf-8",
         )
         result = load_scenario_config(registry)
         assert len(result["strategies"]) == 1
@@ -76,7 +77,7 @@ class TestLoadScenarioConfig:
     def test_invalid_yaml_returns_empty(self, tmp_path: Path) -> None:
         """Invalid YAML returns empty config without raising."""
         registry = tmp_path / "registry.yaml"
-        registry.write_text("not: valid: yaml: [")
+        registry.write_text("not: valid: yaml: [", encoding="utf-8")
         result = load_scenario_config(registry)
         assert result == {"strategies": [], "keywords": {}}
 
@@ -92,7 +93,8 @@ class TestLoadScenarios:
             "  enabled: true\n"
             "  strategies:\n"
             "    - scenario: debug\n"
-            "      primary: systematic-debugging\n"
+            "      primary: systematic-debugging\n",
+            encoding="utf-8",
         )
         scenarios = load_scenarios(registry)
         assert isinstance(scenarios, list)

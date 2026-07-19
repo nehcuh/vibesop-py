@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 import shutil
-import stat
 import sys
 from pathlib import Path
 from typing import Any, ClassVar, Literal
@@ -13,25 +12,15 @@ from rich.console import Console
 from rich.prompt import Confirm
 
 from vibesop.constants import TRUSTED_PACKS
-from vibesop.core.skills.storage import SkillStorage
+from vibesop.core.skills.storage import SkillStorage, write_copy_source_marker
 from vibesop.installer.analyzer import RepoAnalyzer, parse_github_url
 from vibesop.installer.planner import InstallPlanner
 from vibesop.security import SkillSecurityAuditor
+from vibesop.utils.helpers import safe_rmtree as _safe_rmtree
 from vibesop.utils.pack_name import sanitize_pack_name
 
 logger = logging.getLogger(__name__)
 console = Console()
-
-
-def _safe_rmtree(path: Path) -> None:
-    """Remove a directory tree, handling read-only files on Windows."""
-
-    def _onerror(_func: Any, _path: str, _excinfo: Any) -> None:
-        # Change read-only files to writable and retry
-        Path(_path).chmod(stat.S_IWRITE)
-        _func(_path)
-
-    shutil.rmtree(path, onexc=_onerror)
 
 
 class PackInstaller:
@@ -587,22 +576,37 @@ class PackInstaller:
 
             platform_dir = storage.PLATFORM_SKILLS_DIRS[platform]
 
-            try:
-                platform_dir.mkdir(parents=True, exist_ok=True)
-                skill_count = self.create_skill_symlinks(central_path, platform_dir, safe_name)
-                results.append((platform, f"Linked to {platform} ({skill_count} skills)"))
+            from vibesop.utils.symlinks import can_create_dir_symlink
 
-            except OSError:
+            if not can_create_dir_symlink(platform_dir):
+                logger.info(
+                    "symlinks unsupported under %s, copying %s instead",
+                    platform_dir,
+                    safe_name,
+                )
+            else:
                 try:
-                    skill_count = self._copy_skill_dirs(central_path, platform_dir, safe_name)
-                    results.append(
-                        (
-                            platform,
-                            f"Copied to {platform} ({skill_count} skills, symlinks not supported)",
-                        )
+                    platform_dir.mkdir(parents=True, exist_ok=True)
+                    skill_count = self.create_skill_symlinks(central_path, platform_dir, safe_name)
+                    results.append((platform, f"Linked to {platform} ({skill_count} skills)"))
+                    continue
+                except OSError as e:
+                    logger.info(
+                        "symlink creation failed for %s, falling back to copy: %s",
+                        platform,
+                        e,
                     )
-                except Exception as copy_err:
-                    results.append((platform, f"Failed: {copy_err}"))
+
+            try:
+                skill_count = self._copy_skill_dirs(central_path, platform_dir, safe_name)
+                results.append(
+                    (
+                        platform,
+                        f"Copied to {platform} ({skill_count} skills, symlinks not supported)",
+                    )
+                )
+            except Exception as copy_err:
+                results.append((platform, f"Failed: {copy_err}"))
 
         return results
 
@@ -775,6 +779,7 @@ class PackInstaller:
                     _safe_rmtree(dest_path)
 
             shutil.copytree(skill_dir, dest_path)
+            write_copy_source_marker(dest_path, skill_dir)
             if dedupe_by_name:
                 skill_name = self._parse_skill_name(skill_file)
                 if skill_name and skill_name not in existing_names:

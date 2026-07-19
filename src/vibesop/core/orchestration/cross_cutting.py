@@ -266,7 +266,7 @@ vibe route "workflow: {name}"
 vibe workflows show {wf_id}
 ```
 """
-        (wf_dir / "SKILL.md").write_text(content)
+        (wf_dir / "SKILL.md").write_text(content, encoding="utf-8")
 
         return CrossCuttingWorkflow(
             id=wf_id,

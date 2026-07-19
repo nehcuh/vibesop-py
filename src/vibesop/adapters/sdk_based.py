@@ -109,7 +109,7 @@ class SdkBasedAdapter(PlatformAdapter):
         settings_path = output_dir / "settings.json"
         if settings_path.exists():
             try:
-                existing = json.loads(settings_path.read_text())
+                existing = json.loads(settings_path.read_text(encoding="utf-8"))
                 if isinstance(existing, dict):
                     settings = {**existing, **settings}
             except (json.JSONDecodeError, OSError):

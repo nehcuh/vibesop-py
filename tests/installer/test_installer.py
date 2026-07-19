@@ -163,7 +163,7 @@ class TestVibeSOPInstaller:
             assert not installer._is_configured(config_dir)
 
             # Create config file
-            (config_dir / "CLAUDE.md").write_text("# Test")
+            (config_dir / "CLAUDE.md").write_text("# Test", encoding="utf-8")
 
             # Now configured
             assert installer._is_configured(config_dir)
@@ -180,13 +180,13 @@ class TestVibeSOPInstaller:
             assert len(issues) > 0
 
             # Create CLAUDE.md without VibeSOP section
-            (config_dir / "CLAUDE.md").write_text("# Test")
+            (config_dir / "CLAUDE.md").write_text("# Test", encoding="utf-8")
             issues = installer._verify_config_files("claude-code", config_dir)
             assert len(issues) > 0
             assert "missing VibeSOP configuration" in issues[0]
 
             # Create proper CLAUDE.md
-            (config_dir / "CLAUDE.md").write_text("# VibeSOP Configuration")
+            (config_dir / "CLAUDE.md").write_text("# VibeSOP Configuration", encoding="utf-8")
             issues = installer._verify_config_files("claude-code", config_dir)
             assert len(issues) == 0
 

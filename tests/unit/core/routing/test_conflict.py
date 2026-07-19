@@ -183,7 +183,7 @@ class TestRecencyStrategy:
             }
         }
         prefs_file = tmp_path / "prefs.json"
-        prefs_file.write_text(json.dumps(prefs))
+        prefs_file.write_text(json.dumps(prefs), encoding="utf-8")
 
         strategy = RecencyStrategy(storage_path=str(prefs_file))
         matches = [
@@ -199,7 +199,7 @@ class TestRecencyStrategy:
         """Need at least 2 recent matches to resolve."""
         prefs = {"selections": {"a": [{"timestamp": 9999999999.0}]}}
         prefs_file = tmp_path / "prefs.json"
-        prefs_file.write_text(json.dumps(prefs))
+        prefs_file.write_text(json.dumps(prefs), encoding="utf-8")
 
         strategy = RecencyStrategy(storage_path=str(prefs_file))
         matches = [
@@ -217,7 +217,7 @@ class TestRecencyStrategy:
             }
         }
         prefs_file = tmp_path / "prefs.json"
-        prefs_file.write_text(json.dumps(prefs))
+        prefs_file.write_text(json.dumps(prefs), encoding="utf-8")
 
         strategy = RecencyStrategy(storage_path=str(prefs_file))
         matches = [
@@ -235,7 +235,7 @@ class TestRecencyStrategy:
             }
         }
         prefs_file = tmp_path / "prefs.json"
-        prefs_file.write_text(json.dumps(prefs))
+        prefs_file.write_text(json.dumps(prefs), encoding="utf-8")
 
         strategy = RecencyStrategy(storage_path=str(prefs_file))
         strategy._load_recent_skills()
@@ -253,7 +253,7 @@ class TestRecencyStrategy:
     def test_load_failure(self, tmp_path: Path) -> None:
         """Invalid JSON returns empty dict and caches it."""
         prefs_file = tmp_path / "prefs.json"
-        prefs_file.write_text("not json")
+        prefs_file.write_text("not json", encoding="utf-8")
 
         strategy = RecencyStrategy(storage_path=str(prefs_file))
         assert strategy._load_recent_skills() == {}

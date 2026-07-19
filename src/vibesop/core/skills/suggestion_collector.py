@@ -291,7 +291,7 @@ class SkillSuggestionCollector:
         if not self.storage_file.exists():
             return
         self._suggestions = {}
-        with self.storage_file.open() as f:
+        with self.storage_file.open(encoding="utf-8") as f:
             for raw_line in f:
                 stripped = raw_line.strip()
                 if not stripped:

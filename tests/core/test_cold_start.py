@@ -77,7 +77,7 @@ class TestColdStartStrategy:
         """Test cache warming recommendation when preferences exist."""
         prefs = tmp_path / ".vibe" / "preferences.json"
         prefs.parent.mkdir(parents=True)
-        prefs.write_text("{}")
+        prefs.write_text("{}", encoding="utf-8")
         strategy = ColdStartStrategy(tmp_path)
         assert strategy.should_warm_cache() is False
 

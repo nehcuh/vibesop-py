@@ -55,7 +55,7 @@ class InitSupport:
 
             config_content = self._generate_default_config(platform)
             config_file = project_path / self._config_file
-            config_file.write_text(config_content)
+            config_file.write_text(config_content, encoding="utf-8")
             result["created_files"].append(str(config_file))
 
             _ensure_global_config(platform, result)
@@ -70,7 +70,7 @@ class InitSupport:
 
             readme_content = self._generate_readme(platform)
             readme_file = project_path / self._vibe_dir / "README.md"
-            readme_file.write_text(readme_content)
+            readme_file.write_text(readme_content, encoding="utf-8")
             result["created_files"].append(str(readme_file))
 
             result["success"] = True
@@ -208,12 +208,12 @@ For more information, see:
         vibe_entries = ["# VibeSOP", ".vibe/", ".skills/"]
 
         if gitignore_path.exists():
-            content = gitignore_path.read_text()
+            content = gitignore_path.read_text(encoding="utf-8")
             if ".vibe/" not in content:
-                with gitignore_path.open("a") as f:
+                with gitignore_path.open("a", encoding="utf-8") as f:
                     f.write("\n" + "\n".join(vibe_entries) + "\n")
         else:
-            gitignore_path.write_text("\n".join(vibe_entries) + "\n")
+            gitignore_path.write_text("\n".join(vibe_entries) + "\n", encoding="utf-8")
 
 
 def _ensure_global_config(platform: str, result: dict[str, Any]) -> None:
@@ -225,7 +225,7 @@ def _ensure_global_config(platform: str, result: dict[str, Any]) -> None:
         return
 
     global_config_dir.mkdir(parents=True, exist_ok=True)
-    global_config_file.write_text(_generate_global_config_template(platform))
+    global_config_file.write_text(_generate_global_config_template(platform), encoding="utf-8")
     result["created_files"].append(str(global_config_file))
 
 

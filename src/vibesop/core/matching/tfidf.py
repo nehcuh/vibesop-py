@@ -231,7 +231,7 @@ class TFIDFCalculator:
         """
         import json
 
-        with Path(path).open("w") as f:
+        with Path(path).open("w", encoding="utf-8") as f:
             json.dump(
                 {
                     "idf": self._idf,
@@ -253,7 +253,7 @@ class TFIDFCalculator:
         """
         import json
 
-        with Path(path).open() as f:
+        with Path(path).open(encoding="utf-8") as f:
             data = json.load(f)
 
         calc = cls()

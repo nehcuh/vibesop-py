@@ -28,7 +28,7 @@ class TestLoadRegistry:
 
     def test_load_existing_registry(self, tmp_path: Path):
         registry_file = tmp_path / "registry.yaml"
-        registry_file.write_text("schema_version: 1\nskills: []\n")
+        registry_file.write_text("schema_version: 1\nskills: []\n", encoding="utf-8")
 
         sync = RegistrySync(registry_path=registry_file)
         data = sync._load_registry()
@@ -43,7 +43,7 @@ class TestLoadRegistry:
 
     def test_load_invalid_registry(self, tmp_path: Path):
         registry_file = tmp_path / "registry.yaml"
-        registry_file.write_text("not a dict")
+        registry_file.write_text("not a dict", encoding="utf-8")
 
         sync = RegistrySync(registry_path=registry_file)
         data = sync._load_registry()
@@ -61,7 +61,7 @@ class TestDiscoverBuiltinSkills:
     def test_discover_with_skills(self, tmp_path: Path):
         skill_dir = tmp_path / "test-skill"
         skill_dir.mkdir()
-        (skill_dir / "SKILL.md").write_text("# Test Skill\n")
+        (skill_dir / "SKILL.md").write_text("# Test Skill\n", encoding="utf-8")
 
         mock_meta = MagicMock()
         mock_meta.id = "test-skill"
@@ -76,7 +76,7 @@ class TestDiscoverBuiltinSkills:
         assert skills["test-skill"] == mock_meta
 
     def test_discover_skips_non_directories(self, tmp_path: Path):
-        (tmp_path / "not-a-dir.txt").write_text("hello")
+        (tmp_path / "not-a-dir.txt").write_text("hello", encoding="utf-8")
         sync = RegistrySync(skills_dir=tmp_path)
         skills = sync._discover_builtin_skills()
         assert skills == {}
@@ -91,7 +91,7 @@ class TestDiscoverBuiltinSkills:
     def test_discover_none_meta(self, tmp_path: Path):
         skill_dir = tmp_path / "test-skill"
         skill_dir.mkdir()
-        (skill_dir / "SKILL.md").write_text("# Test\n")
+        (skill_dir / "SKILL.md").write_text("# Test\n", encoding="utf-8")
 
         sync = RegistrySync(skills_dir=tmp_path)
         with patch("vibesop.core.skills.registry_sync.parse_skill_md", return_value=None):
@@ -106,11 +106,11 @@ class TestSync:
 
     def test_sync_adds_new_skills(self, tmp_path: Path):
         registry_file = tmp_path / "registry.yaml"
-        registry_file.write_text("schema_version: 1\nskills: []\n")
+        registry_file.write_text("schema_version: 1\nskills: []\n", encoding="utf-8")
 
         skill_dir = tmp_path / "skills" / "new-skill"
         skill_dir.mkdir(parents=True)
-        (skill_dir / "SKILL.md").write_text("# New Skill\n")
+        (skill_dir / "SKILL.md").write_text("# New Skill\n", encoding="utf-8")
 
         mock_meta = MagicMock()
         mock_meta.id = "new-skill"
@@ -127,12 +127,13 @@ class TestSync:
     def test_sync_updates_changed_intent(self, tmp_path: Path):
         registry_file = tmp_path / "registry.yaml"
         registry_file.write_text(
-            "schema_version: 1\nskills:\n  - id: existing\n    namespace: builtin\n    intent: old intent\n"
+            "schema_version: 1\nskills:\n  - id: existing\n    namespace: builtin\n    intent: old intent\n",
+            encoding="utf-8",
         )
 
         skill_dir = tmp_path / "skills" / "existing"
         skill_dir.mkdir(parents=True)
-        (skill_dir / "SKILL.md").write_text("# Existing\n")
+        (skill_dir / "SKILL.md").write_text("# Existing\n", encoding="utf-8")
 
         mock_meta = MagicMock()
         mock_meta.id = "existing"
@@ -148,7 +149,8 @@ class TestSync:
     def test_sync_preserves_non_builtin(self, tmp_path: Path):
         registry_file = tmp_path / "registry.yaml"
         registry_file.write_text(
-            "schema_version: 1\nskills:\n  - id: external\n    namespace: external\n"
+            "schema_version: 1\nskills:\n  - id: external\n    namespace: external\n",
+            encoding="utf-8",
         )
 
         sync = RegistrySync(registry_path=registry_file, skills_dir=tmp_path / "skills")
@@ -161,12 +163,13 @@ class TestSync:
     def test_sync_unchanged(self, tmp_path: Path):
         registry_file = tmp_path / "registry.yaml"
         registry_file.write_text(
-            "schema_version: 1\nskills:\n  - id: same\n    namespace: builtin\n    intent: same\n"
+            "schema_version: 1\nskills:\n  - id: same\n    namespace: builtin\n    intent: same\n",
+            encoding="utf-8",
         )
 
         skill_dir = tmp_path / "skills" / "same"
         skill_dir.mkdir(parents=True)
-        (skill_dir / "SKILL.md").write_text("# Same\n")
+        (skill_dir / "SKILL.md").write_text("# Same\n", encoding="utf-8")
 
         mock_meta = MagicMock()
         mock_meta.id = "same"

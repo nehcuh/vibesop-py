@@ -276,13 +276,13 @@ class SkillConfigManager:
                 return cached[1]
 
             if config_path.suffix.lower() == ".toml":
-                import tomllib
+                from vibesop.utils.encoding import load_toml_with_fallback
 
-                with config_path.open("rb") as f:
-                    data = tomllib.load(f) or {}
+                data = load_toml_with_fallback(config_path) or {}
             else:
-                with config_path.open() as f:
-                    data = yaml.safe_load(f) or {}
+                from vibesop.utils.encoding import read_text_with_fallback
+
+                data = yaml.safe_load(read_text_with_fallback(config_path)) or {}
             if isinstance(data, dict):
                 _CONFIG_FILE_CACHE[config_path] = (mtime, data)
             return cast("dict[str, Any]", data)
@@ -298,7 +298,7 @@ class SkillConfigManager:
 
         config_file.parent.mkdir(parents=True, exist_ok=True)
 
-        with config_file.open("w") as f:
+        with config_file.open("w", encoding="utf-8") as f:
             yaml.dump(config_data, f, default_flow_style=False)
 
         _CONFIG_FILE_CACHE.pop(config_file, None)

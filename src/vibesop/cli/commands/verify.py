@@ -20,6 +20,7 @@ Examples:
 """
 
 import shutil
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -180,9 +181,18 @@ def _check_platform(platform: str) -> list[dict[str, Any]]:
         elif check_id == "route_hook_executable":
             path = config_dir / "hooks" / "vibesop-route.sh"
             if path.exists():
-                is_exec = bool(path.stat().st_mode & 0o111)
-                result["pass"] = is_exec
-                result["detail"] = "Executable" if is_exec else "Not executable (chmod 755)"
+                if sys.platform == "win32":
+                    # No exec bit on Windows; hooks run via Git Bash, so
+                    # degrade to: bash on PATH + non-empty script.
+                    is_exec = shutil.which("bash") is not None and path.stat().st_size > 0
+                    result["pass"] = is_exec
+                    result["detail"] = (
+                        "Executable via bash" if is_exec else "bash not found or script empty"
+                    )
+                else:
+                    is_exec = bool(path.stat().st_mode & 0o111)
+                    result["pass"] = is_exec
+                    result["detail"] = "Executable" if is_exec else "Not executable (chmod 755)"
             else:
                 result["detail"] = "Script not found"
 
@@ -203,7 +213,7 @@ def _check_platform(platform: str) -> list[dict[str, Any]]:
         elif check_id == "hooks_section":
             path = config_dir / "config.toml"
             if path.exists():
-                content = path.read_text()
+                content = path.read_text(encoding="utf-8")
                 has_hooks = "[[hooks]]" in content
                 has_vibe_hook = "vibesop-route" in content
                 result["pass"] = has_hooks and has_vibe_hook
@@ -249,9 +259,18 @@ def _check_platform(platform: str) -> list[dict[str, Any]]:
         elif check_id == "hook_executable":
             path = config_dir / "hooks" / "vibesop-route.sh"
             if path.exists():
-                is_exec = bool(path.stat().st_mode & 0o111)
-                result["pass"] = is_exec
-                result["detail"] = "Executable" if is_exec else "Not executable (chmod 755)"
+                if sys.platform == "win32":
+                    # No exec bit on Windows; hooks run via Git Bash, so
+                    # degrade to: bash on PATH + non-empty script.
+                    is_exec = shutil.which("bash") is not None and path.stat().st_size > 0
+                    result["pass"] = is_exec
+                    result["detail"] = (
+                        "Executable via bash" if is_exec else "bash not found or script empty"
+                    )
+                else:
+                    is_exec = bool(path.stat().st_mode & 0o111)
+                    result["pass"] = is_exec
+                    result["detail"] = "Executable" if is_exec else "Not executable (chmod 755)"
             else:
                 result["detail"] = "Script not found"
 

@@ -19,7 +19,8 @@ def test_understand_skill_from_file():
 
         # Create SKILL.md
         skill_md = skill_dir / "SKILL.md"
-        skill_md.write_text("""---
+        skill_md.write_text(
+            """---
 name: Debugging Helper
 id: debug-helper
 description: Systematic debugging workflow for finding and fixing bugs
@@ -35,7 +36,9 @@ trigger_when: User encounters bugs or errors
 
 This skill provides a systematic workflow for debugging complex issues.
 It helps identify root causes before attempting fixes.
-""")
+""",
+            encoding="utf-8",
+        )
 
         # Understand the skill
         config = understand_skill_from_file(skill_dir)

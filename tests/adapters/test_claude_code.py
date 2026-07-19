@@ -1,5 +1,6 @@
 """Tests for Claude Code adapter."""
 
+import sys
 from pathlib import Path
 from typing import ClassVar
 from unittest.mock import MagicMock, patch
@@ -77,7 +78,9 @@ class TestClaudeCodeHookRendering:
 
         hook_path = tmp_path / "hooks" / "vibesop-route.sh"
         assert hook_path.exists(), "vibesop-route.sh should be created"
-        assert hook_path.stat().st_mode & 0o111, "Hook should be executable"
+        if sys.platform != "win32":
+            # Windows chmod only toggles read-only; hooks run via `bash <script>`.
+            assert hook_path.stat().st_mode & 0o111, "Hook should be executable"
         result.add_file.assert_called_once_with(hook_path)
         result.add_warning.assert_not_called()
 
@@ -89,7 +92,7 @@ class TestClaudeCodeHookRendering:
 
         adapter._render_route_hook(tmp_path, result)
 
-        content = (tmp_path / "hooks" / "vibesop-route.sh").read_text()
+        content = (tmp_path / "hooks" / "vibesop-route.sh").read_text(encoding="utf-8")
         assert "AgentRuntime" in content, "AgentRuntime delegation missing"
         assert "handle_query_for_hook" in content, "handle_query_for_hook call missing"
         assert "python3 -c" in content or "uv run python" in content, "Python invocation missing"
@@ -102,7 +105,7 @@ class TestClaudeCodeHookRendering:
 
         adapter._render_route_hook(tmp_path, result)
 
-        content = (tmp_path / "hooks" / "vibesop-route.sh").read_text()
+        content = (tmp_path / "hooks" / "vibesop-route.sh").read_text(encoding="utf-8")
         assert "vibe" in content, "vibe reference missing"
         # AgentRuntime handles slash commands, hook just delegates
         assert "from vibesop.agent.runtime import AgentRuntime" in content, (
@@ -117,7 +120,7 @@ class TestClaudeCodeHookRendering:
 
         adapter._render_route_hook(tmp_path, result)
 
-        content = (tmp_path / "hooks" / "vibesop-route.sh").read_text()
+        content = (tmp_path / "hooks" / "vibesop-route.sh").read_text(encoding="utf-8")
         assert "hook_event_name=" in content, "hook_event_name param missing"
         assert "include_additional_context=" in content, "include_additional_context param missing"
         assert "no_match_message=" in content, "no_match_message param missing"
@@ -131,7 +134,7 @@ class TestClaudeCodeHookRendering:
 
         adapter._render_route_hook(tmp_path, result)
 
-        content = (tmp_path / "hooks" / "vibesop-route.sh").read_text()
+        content = (tmp_path / "hooks" / "vibesop-route.sh").read_text(encoding="utf-8")
         assert "echo '{}'" in content, "Empty JSON fallback missing"
         assert "-z" in content, "Empty query check missing"
 
@@ -143,7 +146,7 @@ class TestClaudeCodeHookRendering:
 
         adapter._render_route_hook(tmp_path, result)
 
-        content = (tmp_path / "hooks" / "vibesop-route.sh").read_text()
+        content = (tmp_path / "hooks" / "vibesop-route.sh").read_text(encoding="utf-8")
         # Claude Code uses .prompt; some agents use .user_prompt / .query / .message.
         # Hook tries all in order via jq fallback chain.
         assert ".prompt" in content, "JSON .prompt parsing missing"
@@ -158,7 +161,7 @@ class TestClaudeCodeHookRendering:
 
         adapter._render_route_hook(tmp_path, result)
 
-        content = (tmp_path / "hooks" / "vibesop-route.sh").read_text()
+        content = (tmp_path / "hooks" / "vibesop-route.sh").read_text(encoding="utf-8")
         # These patterns were in the old 221-line bash hook and should now be absent
         assert "vibe route" not in content, "vibe route subprocess call should be removed"
         assert "OVERRIDE" not in content, "override detection should be in Python"
@@ -176,8 +179,10 @@ class TestSkillContentRender:
     by the thin Jinja2 template on subsequent builds.
     """
 
-    def test_symlink_preserved_on_second_build(self, monkeypatch, tmp_path):
+    def test_symlink_preserved_on_second_build(self, monkeypatch, tmp_path, symlink_supported):
         """Symlink to installed pack must be preserved on re-build."""
+        if not symlink_supported:
+            pytest.skip("directory symlinks not supported on this host")
         from vibesop.adapters.claude_code import ClaudeCodeAdapter
         from vibesop.adapters.models import Manifest, ManifestMetadata
 
@@ -188,7 +193,9 @@ class TestSkillContentRender:
 
         installed_dir = tmp_path / "installed"
         installed_dir.mkdir(parents=True)
-        (installed_dir / "SKILL.md").write_text("# Full Review Skill\n\nExecute review flow.")
+        (installed_dir / "SKILL.md").write_text(
+            "# Full Review Skill\n\nExecute review flow.", encoding="utf-8"
+        )
 
         monkeypatch.setattr(
             "vibesop.adapters._shared.is_pack_installed",
@@ -229,7 +236,7 @@ class TestSkillContentRender:
         assert skill_dir.is_symlink(), "Symlink was lost on second build"
         assert skill_dir.resolve() == installed_dir.resolve(), "Symlink target changed"
 
-        content = (skill_dir / "SKILL.md").read_text()
+        content = (skill_dir / "SKILL.md").read_text(encoding="utf-8")
         assert "Full Review Skill" in content, "Original content was overwritten"
         assert "Execute review flow" in content, "Original flow text missing"
 

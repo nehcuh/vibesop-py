@@ -309,7 +309,7 @@ class TestAgentEnvironmentBranch:
         with tempfile.TemporaryDirectory() as tmpdir:
             skill_dir = Path(tmpdir) / "test-skill"
             skill_dir.mkdir()
-            (skill_dir / "SKILL.md").write_text("---\nid: test-skill\n---\n")
+            (skill_dir / "SKILL.md").write_text("---\nid: test-skill\n---\n", encoding="utf-8")
 
             _auto_configure_skill_with_llm(metadata, "project", str(skill_dir))
 
@@ -348,7 +348,7 @@ class TestAgentEnvironmentBranch:
         with tempfile.TemporaryDirectory() as tmpdir:
             skill_dir = Path(tmpdir) / "test-skill"
             skill_dir.mkdir()
-            (skill_dir / "SKILL.md").write_text("---\nid: test-skill\n---\n")
+            (skill_dir / "SKILL.md").write_text("---\nid: test-skill\n---\n", encoding="utf-8")
 
             _auto_configure_skill_with_llm(metadata, "project", str(skill_dir))
 
@@ -397,7 +397,7 @@ class TestAgentEnvironmentBranch:
         with tempfile.TemporaryDirectory() as tmpdir:
             skill_dir = Path(tmpdir) / "test-skill"
             skill_dir.mkdir()
-            (skill_dir / "SKILL.md").write_text("---\nid: test-skill\n---\n")
+            (skill_dir / "SKILL.md").write_text("---\nid: test-skill\n---\n", encoding="utf-8")
 
             _auto_configure_skill_with_llm(metadata, "project", str(skill_dir))
 

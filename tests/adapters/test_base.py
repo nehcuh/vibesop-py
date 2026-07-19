@@ -121,7 +121,7 @@ class TestPlatformAdapter:
         adapter.write_file_atomic(file_path, content)
 
         assert file_path.exists()
-        assert file_path.read_text() == content
+        assert file_path.read_text(encoding="utf-8") == content
 
     def test_write_file_atomic_with_security_scan(self, tmp_path: Path) -> None:
         """Test write_file_atomic with security scanning."""
@@ -272,7 +272,7 @@ class TestPlatformAdapterEdgeCases:
         adapter.write_file_atomic(file_path, content, validate_security=False)
 
         assert file_path.exists()
-        assert file_path.read_text() == content
+        assert file_path.read_text(encoding="utf-8") == content
 
     def test_write_file_atomic_overwrites_existing(self, tmp_path: Path) -> None:
         """Test write_file_atomic overwrites existing file."""
@@ -280,10 +280,10 @@ class TestPlatformAdapterEdgeCases:
         file_path = tmp_path / "test.txt"
 
         # Write initial content
-        file_path.write_text("Old content")
+        file_path.write_text("Old content", encoding="utf-8")
         adapter.write_file_atomic(file_path, "New content", validate_security=False)
 
-        assert file_path.read_text() == "New content"
+        assert file_path.read_text(encoding="utf-8") == "New content"
 
     def test_validate_manifest_with_all_fields(self) -> None:
         """Test validate_manifest with complete manifest."""
@@ -314,7 +314,7 @@ class TestPlatformAdapterEdgeCases:
         # Create an orphan dir
         orphan = skills_dir / "old-skill"
         orphan.mkdir()
-        (orphan / "SKILL.md").write_text("# Old")
+        (orphan / "SKILL.md").write_text("# Old", encoding="utf-8")
 
         # Create a valid skill dir
         valid = skills_dir / "valid-skill"
@@ -342,8 +342,10 @@ class TestPlatformAdapterEdgeCases:
 
         assert removed == []
 
-    def test_clean_orphan_skills_symlink(self, tmp_path: Path) -> None:
+    def test_clean_orphan_skills_symlink(self, tmp_path: Path, symlink_supported: bool) -> None:
         """Test clean_orphan_skills removes orphan symlinks."""
+        if not symlink_supported:
+            pytest.skip("directory symlinks not supported on this host")
         adapter = DummyAdapter()
         skills_dir = tmp_path / "skills"
         skills_dir.mkdir()
@@ -351,7 +353,7 @@ class TestPlatformAdapterEdgeCases:
         target = tmp_path / "target"
         target.mkdir()
         orphan_link = skills_dir / "orphan-link"
-        orphan_link.symlink_to(target)
+        orphan_link.symlink_to(target, target_is_directory=True)
 
         metadata = ManifestMetadata(platform="dummy-platform")
         manifest = Manifest(metadata=metadata)

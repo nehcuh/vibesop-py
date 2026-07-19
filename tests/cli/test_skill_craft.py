@@ -62,7 +62,8 @@ class TestSkillCraftCommand:
         monkeypatch.chdir(tmp_path)
         session_file = tmp_path / "session.json"
         session_file.write_text(
-            json.dumps({"messages": [{"role": "user", "content": "review my code"}]})
+            json.dumps({"messages": [{"role": "user", "content": "review my code"}]}),
+            encoding="utf-8",
         )
 
         result = runner.invoke(app, ["skill-craft", "from", str(session_file)])
@@ -74,7 +75,7 @@ class TestSkillCraftCommand:
         """Test skill-craft from with empty messages."""
         monkeypatch.chdir(tmp_path)
         session_file = tmp_path / "session.json"
-        session_file.write_text(json.dumps({"messages": []}))
+        session_file.write_text(json.dumps({"messages": []}), encoding="utf-8")
 
         result = runner.invoke(app, ["skill-craft", "from", str(session_file)])
         assert result.exit_code == 0
@@ -84,7 +85,7 @@ class TestSkillCraftCommand:
         """Test skill-craft from with invalid JSON."""
         monkeypatch.chdir(tmp_path)
         session_file = tmp_path / "session.json"
-        session_file.write_text("not json")
+        session_file.write_text("not json", encoding="utf-8")
 
         result = runner.invoke(app, ["skill-craft", "from", str(session_file)])
         assert result.exit_code == 1

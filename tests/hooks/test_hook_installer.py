@@ -1,6 +1,7 @@
 """Tests for HookInstaller."""
 
 import stat
+import sys
 from pathlib import Path
 
 from vibesop.hooks import HookInstaller, HookPoint
@@ -86,7 +87,9 @@ class TestHookInstaller:
         assert hook_path.exists()
 
         st_mode = hook_path.stat().st_mode
-        assert st_mode & stat.S_IXUSR  # Owner execute permission
+        if sys.platform != "win32":
+            # Windows chmod only toggles read-only; hooks run via `bash <script>`.
+            assert st_mode & stat.S_IXUSR  # Owner execute permission
 
     def test_hook_content(self, tmp_path: Path) -> None:
         """Test that hooks have correct content."""
@@ -96,7 +99,7 @@ class TestHookInstaller:
 
         # Check hook content
         hook_path = tmp_path / "hooks" / "pre-session-end.sh"
-        content = hook_path.read_text()
+        content = hook_path.read_text(encoding="utf-8")
 
         assert "#!/bin/bash" in content
         assert "Pre-session-end hook for claude-code" in content
@@ -182,7 +185,7 @@ class TestHookInstaller:
 
         # Create a custom template
         template_path = tmp_path / "custom_hook.sh.j2"
-        template_path.write_text("#!/bin/bash\necho 'Custom: {{ name }}'")
+        template_path.write_text("#!/bin/bash\necho 'Custom: {{ name }}'", encoding="utf-8")
 
         hook = installer.create_hook_from_template(
             "custom-hook",

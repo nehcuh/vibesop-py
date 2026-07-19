@@ -33,7 +33,7 @@ def test_get_returns_none_when_absent(tmp_path: Path) -> None:
 
 def test_get_returns_none_on_corrupt_file(tmp_path: Path) -> None:
     (tmp_path).mkdir(parents=True, exist_ok=True)
-    (tmp_path / "broken.json").write_text("{not valid json")
+    (tmp_path / "broken.json").write_text("{not valid json", encoding="utf-8")
     assert PackLockStore(locks_dir=tmp_path).get("broken") is None
 
 

@@ -51,7 +51,7 @@ def load_scenario_config(registry_path: str | Path = "core/registry.yaml") -> di
         return {"strategies": [], "keywords": {}}
 
     try:
-        with registry_path.open("r") as f:
+        with registry_path.open("r", encoding="utf-8") as f:
             data = cast("Any", YAML().load(f))  # type: ignore[reportUnknownMemberType]
 
         if not data:

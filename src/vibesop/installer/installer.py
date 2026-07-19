@@ -236,10 +236,9 @@ class VibeSOPInstaller:
             claude_md = config_dir / "CLAUDE.md"
             if not claude_md.exists():
                 issues.append("CLAUDE.md not found")
-            elif (
-                "# VibeSOP" not in claude_md.read_text()
-                and "## VibeSOP" not in claude_md.read_text()
-            ):
+            elif "# VibeSOP" not in claude_md.read_text(
+                encoding="utf-8"
+            ) and "## VibeSOP" not in claude_md.read_text(encoding="utf-8"):
                 issues.append("CLAUDE.md missing VibeSOP configuration")
         elif platform == "kimi-cli":
             if not (config_dir / "config.toml").exists():

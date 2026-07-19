@@ -176,8 +176,9 @@ def _load_yaml(path: Path) -> dict[str, Any]:
     if not path.exists():
         return {}
     try:
-        with path.open() as f:
-            data = yaml.safe_load(f) or {}
+        from vibesop.utils.encoding import read_text_with_fallback
+
+        data = yaml.safe_load(read_text_with_fallback(path)) or {}
         return data if isinstance(data, dict) else {}
     except yaml.YAMLError as e:
         console.print(f"[red]✗ Failed to parse {path}: {e}[/red]")
@@ -186,5 +187,5 @@ def _load_yaml(path: Path) -> dict[str, Any]:
 
 def _dump_yaml(path: Path, data: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w") as f:
+    with path.open("w", encoding="utf-8") as f:
         yaml.safe_dump(data, f, sort_keys=False, default_flow_style=False)

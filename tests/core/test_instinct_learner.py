@@ -423,7 +423,7 @@ class TestInstinctLearner:
     def test_load_handles_empty_file(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             path = Path(tmpdir) / "empty.jsonl"
-            path.write_text("")
+            path.write_text("", encoding="utf-8")
             learner = InstinctLearner(storage_path=path)
             assert len(learner._instincts) == 0
 
@@ -431,7 +431,8 @@ class TestInstinctLearner:
         with tempfile.TemporaryDirectory() as tmpdir:
             path = Path(tmpdir) / "bad.jsonl"
             path.write_text(
-                '{"id": "good", "pattern": "p", "action": "a", "created_at": "2026-01-01T00:00:00"}\nbad json line\n'
+                '{"id": "good", "pattern": "p", "action": "a", "created_at": "2026-01-01T00:00:00"}\nbad json line\n',
+                encoding="utf-8",
             )
             learner = InstinctLearner(storage_path=path)
             assert len(learner._instincts) == 1
@@ -439,7 +440,7 @@ class TestInstinctLearner:
     def test_load_skips_missing_required_fields(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             path = Path(tmpdir) / "partial.jsonl"
-            path.write_text('{"id": "incomplete"}\n')
+            path.write_text('{"id": "incomplete"}\n', encoding="utf-8")
             learner = InstinctLearner(storage_path=path)
             assert len(learner._instincts) == 0
 

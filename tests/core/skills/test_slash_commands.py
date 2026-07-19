@@ -32,6 +32,47 @@ class TestSlashCommandRegistry:
         assert args == []
 
 
+class TestSlashParseWindowsCompat:
+    """Pin shlex parsing behavior (design M1): backslash-escape + posix=True.
+
+    The parser doubles backslashes before ``shlex.split(..., posix=True)`` so
+    behavior is identical on every platform. These tests pin that contract.
+    """
+
+    def test_quoted_arg_strips_quotes(self) -> None:
+        """Quoted arguments must not keep literal quote characters."""
+        registry = SlashCommandRegistry()
+        _cmd, args = registry.parse('/vibe-route "test query"')
+
+        assert args == ["test query"]
+
+    def test_unquoted_windows_path_backslashes_preserved(self) -> None:
+        """Unquoted Windows paths survive parsing (not eaten as escapes)."""
+        registry = SlashCommandRegistry()
+        _cmd, args = registry.parse(r"/vibe-route review src\core\skills\storage.py")
+
+        assert args == ["review", r"src\core\skills\storage.py"]
+
+    def test_single_quoted_backslash_edge_pinned(self) -> None:
+        """Known edge: backslashes inside single quotes come out doubled.
+
+        Documented, deliberate deviation from POSIX shell semantics: the
+        pre-split backslash doubling is invisible inside single quotes, so
+        ``'a\\b'`` yields ``a\\\\b``. Pinned so a future change is noticed.
+        """
+        registry = SlashCommandRegistry()
+        _cmd, args = registry.parse("/vibe-route 'a\\b'")
+
+        assert args == ["a\\\\b"]
+
+    def test_empty_quoted_query_is_empty_arg(self) -> None:
+        """An empty quoted string parses to one empty arg (not literal quotes)."""
+        registry = SlashCommandRegistry()
+        _cmd, args = registry.parse('/vibe-route ""')
+
+        assert args == [""]
+
+
 class TestSlashCommandHandler:
     """Test SlashCommandHandler execution."""
 

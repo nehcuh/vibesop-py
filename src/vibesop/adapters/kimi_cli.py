@@ -11,6 +11,7 @@ from typing import Any
 
 from vibesop.adapters.file_based import FileBasedAdapter
 from vibesop.adapters.models import Manifest, RenderResult
+from vibesop.utils.encoding import read_text_with_fallback
 
 logger = logging.getLogger(__name__)
 
@@ -186,7 +187,9 @@ class KimiCliAdapter(FileBasedAdapter):
 
     def _merge_config_with_existing(self, config_path: Path, new_config: str) -> str:
         """Merge new VibeSOP config fragment into existing config.toml."""
-        existing = config_path.read_text()
+        # config.toml is user-editable — tolerate locale-encoded (GBK) files
+        # via the shared fallback instead of failing on UnicodeDecodeError.
+        existing = read_text_with_fallback(config_path)
         lines = existing.split("\n")
 
         result_lines = []

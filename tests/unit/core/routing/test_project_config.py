@@ -31,7 +31,7 @@ class TestProjectRouting:
             assert result.name == "skill-routing.yaml"
 
             # Check content
-            content = result.read_text()
+            content = result.read_text(encoding="utf-8")
             assert "schema_version" in content
             assert "scenario_patterns" in content
             assert "routing_hints" in content
@@ -43,7 +43,7 @@ class TestProjectRouting:
             vibe_dir = Path(tmp) / ".vibe"
             vibe_dir.mkdir()
             existing_file = vibe_dir / "skill-routing.yaml"
-            existing_file.write_text("existing: content")
+            existing_file.write_text("existing: content", encoding="utf-8")
 
             # Should return None
             result = create_default_project_routing(tmp)
@@ -112,7 +112,8 @@ class TestProjectRouting:
             core_dir = Path(tmp) / "core"
             core_dir.mkdir(parents=True)
             global_config = core_dir / "registry.yaml"
-            global_config.write_text("""
+            global_config.write_text(
+                """
 schema_version: 1
 conflict_resolution:
   enabled: true
@@ -123,13 +124,16 @@ conflict_resolution:
       keywords: ["global"]
   scenario_keywords:
     global_test: ["global"]
-""")
+""",
+                encoding="utf-8",
+            )
 
             # Create project config
             vibe_dir = Path(tmp) / ".vibe"
             vibe_dir.mkdir()
             project_config = vibe_dir / "skill-routing.yaml"
-            project_config.write_text("""
+            project_config.write_text(
+                """
 schema_version: 1
 scenario_patterns:
   - id: project_test
@@ -138,7 +142,9 @@ scenario_patterns:
 scenario_keywords:
   global_test:
     - "project_global"
-""")
+""",
+                encoding="utf-8",
+            )
 
             result = load_merged_scenarios(tmp)
 
@@ -154,7 +160,8 @@ scenario_keywords:
             core_dir = Path(tmp) / "core"
             core_dir.mkdir(parents=True)
             global_config = core_dir / "registry.yaml"
-            global_config.write_text("""
+            global_config.write_text(
+                """
 schema_version: 1
 conflict_resolution:
   enabled: true
@@ -164,18 +171,23 @@ conflict_resolution:
       skill_id: global_skill
   scenario_keywords:
     global_test: ["global"]
-""")
+""",
+                encoding="utf-8",
+            )
 
             # Create project config
             vibe_dir = Path(tmp) / ".vibe"
             vibe_dir.mkdir()
             project_config = vibe_dir / "skill-routing.yaml"
-            project_config.write_text("""
+            project_config.write_text(
+                """
 schema_version: 1
 scenario_keywords:
   global_test:
     - "project_global"
-""")
+""",
+                encoding="utf-8",
+            )
 
             config = load_merged_scenario_config(tmp)
 

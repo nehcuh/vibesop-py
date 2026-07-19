@@ -64,7 +64,7 @@ class PackLockStore:
         if not path.exists():
             return None
         try:
-            return PackLock.from_dict(json.loads(path.read_text()))
+            return PackLock.from_dict(json.loads(path.read_text(encoding="utf-8")))
         except (json.JSONDecodeError, TypeError, ValueError) as e:
             logger.warning("Corrupt pack lock %s, ignoring: %s", path, e)
             return None

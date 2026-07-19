@@ -71,7 +71,7 @@ class TestSkillStorageDryRun:
         storage = SkillStorage(dry_run=True)
         source = tmp_path / "source"
         source.mkdir()
-        (source / "SKILL.md").write_text("# Test")
+        (source / "SKILL.md").write_text("# Test", encoding="utf-8")
 
         success, msg = storage.install_skill("test-skill", source)
         assert success is True
@@ -125,7 +125,7 @@ class TestSkillStorageReal:
 
         source = tmp_path / "source"
         source.mkdir()
-        (source / "SKILL.md").write_text("# Test Skill")
+        (source / "SKILL.md").write_text("# Test Skill", encoding="utf-8")
 
         try:
             success, _msg = storage.install_skill("test-skill", source)
@@ -143,7 +143,7 @@ class TestSkillStorageReal:
             assert storage.skill_exists("missing") is False
             skill_path = storage.get_skill_path("test")
             skill_path.mkdir(parents=True)
-            (skill_path / "SKILL.md").write_text("# Test")
+            (skill_path / "SKILL.md").write_text("# Test", encoding="utf-8")
             assert storage.skill_exists("test") is True
         finally:
             storage.CENTRAL_SKILLS_DIR = original_dir
@@ -166,7 +166,7 @@ class TestSkillStorageReal:
 
         source = tmp_path / "source"
         source.mkdir()
-        (source / "SKILL.md").write_text("# Test")
+        (source / "SKILL.md").write_text("# Test", encoding="utf-8")
 
         try:
             storage.install_skill("test", source)
@@ -223,7 +223,9 @@ class TestSkillStorageUncovered:
         success, _msg = storage.install_from_remote("test", "not-a-valid-url")
         assert success is False
 
-    def test_unlink_from_platform_real(self, tmp_path: Path):
+    def test_unlink_from_platform_real(self, tmp_path: Path, symlink_supported: bool):
+        if not symlink_supported:
+            pytest.skip("directory symlinks not supported on this host")
         storage = SkillStorage(dry_run=False)
         original_central = storage.CENTRAL_SKILLS_DIR
         storage.CENTRAL_SKILLS_DIR = tmp_path / "central"
@@ -231,12 +233,12 @@ class TestSkillStorageUncovered:
         try:
             skill_path = storage.get_skill_path("test")
             skill_path.mkdir(parents=True)
-            (skill_path / "SKILL.md").write_text("# Test")
+            (skill_path / "SKILL.md").write_text("# Test", encoding="utf-8")
 
             platform_dir = storage.PLATFORM_SKILLS_DIRS["claude-code"]
             platform_skill_path = platform_dir / "test"
             platform_skill_path.parent.mkdir(parents=True, exist_ok=True)
-            platform_skill_path.symlink_to(skill_path)
+            platform_skill_path.symlink_to(skill_path, target_is_directory=True)
 
             assert platform_skill_path.exists()
             success, _msg = storage.unlink_from_platform("test", "claude-code")
@@ -252,7 +254,7 @@ class TestSkillStorageUncovered:
         try:
             source = tmp_path / "source"
             source.mkdir()
-            (source / "SKILL.md").write_text("# Test")
+            (source / "SKILL.md").write_text("# Test", encoding="utf-8")
             storage.install_skill("test", source)
 
             success, _msg = storage.remove_skill("test", unlink_all=True)
@@ -271,7 +273,11 @@ class TestSkillStorageUncovered:
         with pytest.raises(ValueError, match="Unknown platform"):
             storage.get_linked_skills("unknown")
 
-    def test_list_skills_includes_symlinked_pack_skills(self, tmp_path: Path):
+    def test_list_skills_includes_symlinked_pack_skills(
+        self, tmp_path: Path, symlink_supported: bool
+    ):
+        if not symlink_supported:
+            pytest.skip("directory symlinks not supported on this host")
         storage = SkillStorage(dry_run=False)
         original_central = storage.CENTRAL_SKILLS_DIR
         storage.CENTRAL_SKILLS_DIR = tmp_path / "central"
@@ -280,7 +286,9 @@ class TestSkillStorageUncovered:
             # Install a skill
             source = tmp_path / "source"
             source.mkdir()
-            (source / "SKILL.md").write_text("---\nname: Test\ndescription: Desc\n---\n# Test")
+            (source / "SKILL.md").write_text(
+                "---\nname: Test\ndescription: Desc\n---\n# Test", encoding="utf-8"
+            )
             storage.install_skill("test-skill", source)
 
             # Create a symlink in a platform dir
@@ -289,7 +297,7 @@ class TestSkillStorageUncovered:
             platform_dir.mkdir(parents=True)
             skill_path = storage.get_skill_path("test-skill")
             link = platform_dir / "test-skill"
-            link.symlink_to(skill_path)
+            link.symlink_to(skill_path, target_is_directory=True)
 
             skills = storage.list_skills()
             assert "test-skill" in skills

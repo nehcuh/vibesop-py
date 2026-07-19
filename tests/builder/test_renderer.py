@@ -56,7 +56,13 @@ class TestConfigRenderer:
         assert result.success
         assert (tmp_path / "output" / "config.yaml").exists()
 
-    def test_render_with_default_output_dir(self, tmp_path: Path) -> None:
+    def test_render_with_default_output_dir(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # Redirect home so the adapter's default config_dir (~/.config/opencode)
+        # lands under tmp_path instead of the real user directory.
+        monkeypatch.setenv("HOME", str(tmp_path))
+        monkeypatch.setenv("USERPROFILE", str(tmp_path))
         renderer = ConfigRenderer()
         _metadata = ManifestMetadata(platform="opencode")
         manifest = QuickBuilder.minimal(platform="opencode")
@@ -64,9 +70,8 @@ class TestConfigRenderer:
         result = renderer.render(manifest)
 
         assert result.success
-        assert ".config/opencode" in str(result.files_created[0]) or ".opencode" in str(
-            result.files_created[0]
-        )
+        first_created = Path(result.files_created[0]).as_posix()
+        assert ".config/opencode" in first_created or ".opencode" in first_created
 
     def test_render_invalid_platform(self) -> None:
         renderer = ConfigRenderer()

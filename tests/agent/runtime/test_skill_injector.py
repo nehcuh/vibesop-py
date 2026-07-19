@@ -188,7 +188,7 @@ class TestSkillInjector:
         # Create a mock skill file
         skill_dir = tmp_path / "core" / "skills" / "test-skill"
         skill_dir.mkdir(parents=True)
-        (skill_dir / "SKILL.md").write_text("# Test Skill from core")
+        (skill_dir / "SKILL.md").write_text("# Test Skill from core", encoding="utf-8")
 
         content = injector._load_skill_content("test-skill")
         assert "Test Skill from core" in content
@@ -208,7 +208,7 @@ class TestSkillInjector:
         # Simulate VibeSOP install: pack-prefixed dir in ~/.claude/skills/
         claude_skills = tmp_path / ".claude" / "skills" / "mattpocock-diagnose"
         claude_skills.mkdir(parents=True)
-        (claude_skills / "SKILL.md").write_text("# Diagnose from mattpocock pack")
+        (claude_skills / "SKILL.md").write_text("# Diagnose from mattpocock pack", encoding="utf-8")
 
         injector = SkillInjector(project_root=tmp_path)
         content = injector._load_skill_content("diagnose")
@@ -226,7 +226,7 @@ class TestSkillInjector:
             tmp_path / ".config" / "skills" / "mattpocock" / "skills" / "engineering" / "diagnose"
         )
         nested.mkdir(parents=True)
-        (nested / "SKILL.md").write_text("# Diagnose via central nested storage")
+        (nested / "SKILL.md").write_text("# Diagnose via central nested storage", encoding="utf-8")
 
         injector = SkillInjector(project_root=tmp_path)
         content = injector._load_skill_content("diagnose")
@@ -239,11 +239,11 @@ class TestSkillInjector:
         # Install in both locations with different content
         claude = tmp_path / ".claude" / "skills" / "gstack-review"
         claude.mkdir(parents=True)
-        (claude / "SKILL.md").write_text("# Review from Claude Code install")
+        (claude / "SKILL.md").write_text("# Review from Claude Code install", encoding="utf-8")
 
         central = tmp_path / ".config" / "skills" / "gstack" / "review"
         central.mkdir(parents=True)
-        (central / "SKILL.md").write_text("# Review from central storage")
+        (central / "SKILL.md").write_text("# Review from central storage", encoding="utf-8")
 
         injector = SkillInjector(project_root=tmp_path)
         content = injector._load_skill_content("gstack/review")
@@ -262,7 +262,7 @@ class TestSkillInjector:
 
         skill_dir = tmp_path / "core" / "skills" / "deep-diagnosis-optimization"
         skill_dir.mkdir(parents=True)
-        (skill_dir / "SKILL.md").write_text("# Deep diagnosis builtin content")
+        (skill_dir / "SKILL.md").write_text("# Deep diagnosis builtin content", encoding="utf-8")
 
         content = injector._load_skill_content("builtin/deep-diagnosis-optimization")
         assert "Deep diagnosis builtin content" in content
@@ -286,7 +286,7 @@ class TestSkillInjector:
 
         claude = tmp_path / ".claude" / "skills" / "gstack-review"
         claude.mkdir(parents=True)
-        (claude / "SKILL.md").write_text("# Review via pack-prefixed install")
+        (claude / "SKILL.md").write_text("# Review via pack-prefixed install", encoding="utf-8")
 
         injector = SkillInjector(project_root=tmp_path)
         content = injector._load_skill_content("gstack/review")
@@ -311,7 +311,7 @@ class TestSkillInjector:
         site_packages = tmp_path / "site-packages"
         bundled = site_packages / "vibesop" / "builtin_skills" / "deep-diagnosis-optimization"
         bundled.mkdir(parents=True)
-        (bundled / "SKILL.md").write_text("# Bundled builtin via sys.path scan")
+        (bundled / "SKILL.md").write_text("# Bundled builtin via sys.path scan", encoding="utf-8")
 
         # Make sys.path include the fake site-packages entry.
         monkeypatch.syspath_prepend(str(site_packages))
@@ -332,13 +332,13 @@ class TestSkillInjector:
         # Dev repo layout (preferred).
         dev = tmp_path / "core" / "skills" / "foo-skill"
         dev.mkdir(parents=True)
-        (dev / "SKILL.md").write_text("# From dev repo")
+        (dev / "SKILL.md").write_text("# From dev repo", encoding="utf-8")
 
         # Bundled layout (fallback).
         site_packages = tmp_path / "site-packages"
         bundled = site_packages / "vibesop" / "builtin_skills" / "foo-skill"
         bundled.mkdir(parents=True)
-        (bundled / "SKILL.md").write_text("# From bundled wheel")
+        (bundled / "SKILL.md").write_text("# From bundled wheel", encoding="utf-8")
         monkeypatch.syspath_prepend(str(site_packages))
 
         injector = SkillInjector(project_root=tmp_path)

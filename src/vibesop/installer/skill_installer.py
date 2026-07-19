@@ -175,7 +175,9 @@ class SkillInstaller:
         result["files_present"] = (skill_dir / "SKILL.md").exists()
 
         registry_path = project_path / ".vibe" / "skills" / "registry.yaml"
-        result["in_registry"] = registry_path.exists() and skill_id in registry_path.read_text()
+        result["in_registry"] = registry_path.exists() and skill_id in registry_path.read_text(
+            encoding="utf-8"
+        )
 
         return result
 
@@ -216,23 +218,25 @@ class SkillInstaller:
         registry_path.parent.mkdir(parents=True, exist_ok=True)
 
         if not registry_path.exists():
-            registry_path.write_text(f"# Skill Registry\nskills:\n  - {manifest.id}\n")
+            registry_path.write_text(
+                f"# Skill Registry\nskills:\n  - {manifest.id}\n", encoding="utf-8"
+            )
         else:
-            content = registry_path.read_text()
+            content = registry_path.read_text(encoding="utf-8")
             if manifest.id not in content:
-                with registry_path.open("a") as f:
+                with registry_path.open("a", encoding="utf-8") as f:
                     f.write(f"  - {manifest.id}\n")
 
         marker = project_path / ".vibe" / ".skills_reload"
         try:
             marker.parent.mkdir(parents=True, exist_ok=True)
-            marker.write_text("")
+            marker.write_text("", encoding="utf-8")
         except OSError:
             pass
 
     def _remove_from_registry(self, skill_id: str, project_path: Path) -> None:
         registry_path = project_path / ".vibe" / "skills" / "registry.yaml"
         if registry_path.exists():
-            content = registry_path.read_text()
+            content = registry_path.read_text(encoding="utf-8")
             filtered_lines = [line for line in content.split("\n") if skill_id not in line]
-            registry_path.write_text("\n".join(filtered_lines))
+            registry_path.write_text("\n".join(filtered_lines), encoding="utf-8")

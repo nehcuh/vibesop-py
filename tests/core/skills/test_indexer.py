@@ -596,13 +596,13 @@ class TestUpdateGlobalIndexForPack:
         pack_b = central / "newpack" / "b" / "SKILL.md"
         pack_a.parent.mkdir(parents=True)
         pack_b.parent.mkdir(parents=True)
-        pack_a.write_text("# A")
-        pack_b.write_text("# B")
+        pack_a.write_text("# A", encoding="utf-8")
+        pack_b.write_text("# B", encoding="utf-8")
 
         # Existing pack "old" already in index
         old_skill_path = central / "old" / "x" / "SKILL.md"
         old_skill_path.parent.mkdir(parents=True)
-        old_skill_path.write_text("# X")
+        old_skill_path.write_text("# X", encoding="utf-8")
 
         # Discover returns all of them
         discovered = {
@@ -651,10 +651,10 @@ class TestUpdateGlobalIndexForPack:
         central = global_home / ".config" / "skills"
         pack_path = central / "newpack" / "a" / "SKILL.md"
         pack_path.parent.mkdir(parents=True)
-        pack_path.write_text("# A")
+        pack_path.write_text("# A", encoding="utf-8")
         old_path = central / "old" / "x" / "SKILL.md"
         old_path.parent.mkdir(parents=True)
-        old_path.write_text("# X")
+        old_path.write_text("# X", encoding="utf-8")
 
         # Pre-existing has old/x with custom differentiation
         old_profile = _make_profile("old/x", differentiation="OLD_VALUE")
@@ -701,7 +701,7 @@ class TestUpdateGlobalIndexForPack:
         central = global_home / ".config" / "skills"
         new_path = central / "newpack" / "new_name" / "SKILL.md"
         new_path.parent.mkdir(parents=True)
-        new_path.write_text("# new")
+        new_path.write_text("# new", encoding="utf-8")
 
         # Pre-existing index has the OLD skill_id (since renamed/removed).
         # No corresponding file on disk.
@@ -783,7 +783,7 @@ class TestUpdateGlobalIndexForPack:
         central = global_home / ".config" / "skills"
         skill_path = central / "pack" / "a" / "SKILL.md"
         skill_path.parent.mkdir(parents=True)
-        skill_path.write_text("# A")
+        skill_path.write_text("# A", encoding="utf-8")
 
         discovered = {
             "pack/a": _fake_loaded_skill("pack/a", skill_path),
@@ -843,14 +843,17 @@ class TestUpdateGlobalIndexForPack:
         indexer: SkillIndexer,
         global_home: Path,
         tmp_path: Path,
+        symlink_supported: bool,
     ) -> None:
         """Platform symlinks (e.g., ~/.kimi-code/skills/<flat>/SKILL.md) must
         resolve back to the central storage so the source classifier can
         correctly attribute them to the pack."""
+        if not symlink_supported:
+            pytest.skip("directory symlinks not supported on this host")
         central = global_home / ".config" / "skills"
         real_skill = central / "newpack" / "a" / "SKILL.md"
         real_skill.parent.mkdir(parents=True)
-        real_skill.write_text("# real")
+        real_skill.write_text("# real", encoding="utf-8")
 
         # Create a symlinked copy as a platform would
         platform_dir = global_home / ".kimi-code" / "skills" / "newpack-a"
@@ -899,7 +902,7 @@ class TestUpdateGlobalIndexForPack:
         central = global_home / ".config" / "skills"
         new_path = central / "superpowers" / "ideation" / "SKILL.md"
         new_path.parent.mkdir(parents=True)
-        new_path.write_text("# new")
+        new_path.write_text("# new", encoding="utf-8")
 
         # Existing v1.2 profile: pack_owner="superpowers", flat ID.
         old_profile = _make_profile("brainstorming")
@@ -946,7 +949,7 @@ class TestUpdateGlobalIndexForPack:
         central = global_home / ".config" / "skills"
         new_path = central / "gstack" / "review" / "SKILL.md"
         new_path.parent.mkdir(parents=True)
-        new_path.write_text("# review")
+        new_path.write_text("# review", encoding="utf-8")
 
         # Pre-existing legacy profile, pack_owner defaults to "".
         legacy_profile = _make_profile("gstack/old")
@@ -992,7 +995,7 @@ class TestUpdateGlobalIndexForPack:
         central = global_home / ".config" / "skills"
         skill = central / "mypack" / "thing" / "SKILL.md"
         skill.parent.mkdir(parents=True)
-        skill.write_text("# t")
+        skill.write_text("# t", encoding="utf-8")
 
         discovered = {
             "mypack/thing": _fake_loaded_skill("mypack/thing", skill),
@@ -1030,7 +1033,7 @@ class TestUpdateGlobalIndexForPack:
         central = global_home / ".config" / "skills"
         new_path = central / "newpack" / "a" / "SKILL.md"
         new_path.parent.mkdir(parents=True)
-        new_path.write_text("# a")
+        new_path.write_text("# a", encoding="utf-8")
 
         # Foreign pack profile with non-namespaced ID. Without pack_owner,
         # the old prefix-based logic couldn't tell this apart from a stranger.
@@ -1317,7 +1320,7 @@ class TestContentHashCache:
         central = global_home / ".config" / "skills"
         skill_path = central / "newpack" / "a" / "SKILL.md"
         skill_path.parent.mkdir(parents=True)
-        skill_path.write_text("# A")
+        skill_path.write_text("# A", encoding="utf-8")
 
         ls = _fake_loaded_skill("newpack/a", skill_path)
         cached_hash = indexer._hash_prompt(indexer._build_prompt(ls))

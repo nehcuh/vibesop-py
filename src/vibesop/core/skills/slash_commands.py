@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import os
 import shlex
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -115,7 +114,10 @@ class SlashCommandRegistry:
             return None, []
 
         try:
-            parts = shlex.split(user_input, posix=(os.name != "nt"))
+            # Escape backslashes so unquoted Windows paths (src\core\...) survive
+            # posix-mode shlex parsing instead of being eaten as escape chars.
+            escaped = user_input.replace("\\", "\\\\")
+            parts = shlex.split(escaped, posix=True)
         except ValueError:
             parts = user_input.split()
 

@@ -37,7 +37,7 @@ class TestAnalyzeCommand:
         """Test analyze session with skill suggestions."""
         monkeypatch.chdir(tmp_path)
         session_file = tmp_path / "session.jsonl"
-        session_file.write_text("{}")
+        session_file.write_text("{}", encoding="utf-8")
 
         mock_analyzer = MagicMock()
         suggestion = MagicMock()
@@ -61,7 +61,7 @@ class TestAnalyzeCommand:
         """Test analyze session with no patterns."""
         monkeypatch.chdir(tmp_path)
         session_file = tmp_path / "session.jsonl"
-        session_file.write_text("{}")
+        session_file.write_text("{}", encoding="utf-8")
 
         mock_analyzer = MagicMock()
         mock_analyzer.analyze_session_file.return_value = []
@@ -76,7 +76,7 @@ class TestAnalyzeCommand:
         """Test analyze patterns on a directory."""
         monkeypatch.chdir(tmp_path)
         session_file = tmp_path / "session.jsonl"
-        session_file.write_text("{}")
+        session_file.write_text("{}", encoding="utf-8")
 
         mock_analyzer = MagicMock()
         mock_analyzer.analyze_session_file.return_value = []
@@ -92,7 +92,7 @@ class TestAnalyzeCommand:
         """Test analyze security with no issues."""
         monkeypatch.chdir(tmp_path)
         py_file = tmp_path / "test.py"
-        py_file.write_text("print('hello')")
+        py_file.write_text("print('hello')", encoding="utf-8")
 
         mock_scanner = MagicMock()
         mock_scanner.scan_file.return_value = []
@@ -107,7 +107,7 @@ class TestAnalyzeCommand:
         """Test analyze security with issues found."""
         monkeypatch.chdir(tmp_path)
         py_file = tmp_path / "test.py"
-        py_file.write_text("eval('1')")
+        py_file.write_text("eval('1')", encoding="utf-8")
 
         mock_scanner = MagicMock()
         mock_scanner.scan_file.return_value = [
@@ -125,7 +125,7 @@ class TestAnalyzeCommand:
         """Test analyze security --json."""
         monkeypatch.chdir(tmp_path)
         py_file = tmp_path / "test.py"
-        py_file.write_text("x = 1")
+        py_file.write_text("x = 1", encoding="utf-8")
 
         mock_scanner = MagicMock()
         mock_scanner.scan_file.return_value = []

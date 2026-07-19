@@ -30,7 +30,7 @@ class TestAnalyzeSession:
             '{"role": "assistant", "content": "OK"}',
         ]
 
-        session_file.write_text("\n".join(lines))
+        session_file.write_text("\n".join(lines), encoding="utf-8")
         return session_file
 
     def test_analyze_session_with_file(self, sample_session_file):
@@ -50,7 +50,7 @@ class TestAnalyzeSession:
             '{"role": "user", "content": "different query 2"}',
         ]
 
-        session_file.write_text("\n".join(lines))
+        session_file.write_text("\n".join(lines), encoding="utf-8")
 
         result = runner.invoke(app, ["analyze", "session", str(session_file)])
 
@@ -124,7 +124,7 @@ class TestAnalyzePatterns:
                 '{"role": "assistant", "content": "OK"}',
             ]
 
-            session_file.write_text("\n".join(lines))
+            session_file.write_text("\n".join(lines), encoding="utf-8")
 
         return sessions_dir
 
@@ -161,7 +161,7 @@ class TestAnalyzeSecurity:
         """Test scanning a directory for security issues."""
         # Create a test file with a potential security issue
         test_file = tmp_path / "test.py"
-        test_file.write_text("password = 'secret123'\n")
+        test_file.write_text("password = 'secret123'\n", encoding="utf-8")
 
         result = runner.invoke(app, ["analyze", "security", str(tmp_path)])
 
@@ -171,7 +171,7 @@ class TestAnalyzeSecurity:
     def test_analyze_security_no_issues(self, tmp_path):
         """Test scanning clean code."""
         test_file = tmp_path / "clean.py"
-        test_file.write_text("print('hello world')\n")
+        test_file.write_text("print('hello world')\n", encoding="utf-8")
 
         result = runner.invoke(app, ["analyze", "security", str(tmp_path)])
 
@@ -208,7 +208,7 @@ class TestEdgeCases:
     def test_analyze_invalid_json(self, tmp_path):
         """Test analyzing invalid JSON file."""
         invalid_file = tmp_path / "invalid.jsonl"
-        invalid_file.write_text("not valid json")
+        invalid_file.write_text("not valid json", encoding="utf-8")
 
         result = runner.invoke(app, ["analyze", "session", str(invalid_file)])
 
@@ -218,7 +218,9 @@ class TestEdgeCases:
     def test_analyze_malformed_jsonl(self, tmp_path):
         """Test analyzing malformed JSONL."""
         malformed_file = tmp_path / "malformed.jsonl"
-        malformed_file.write_text('{"role": "user", "content": "test"}\ninvalid line\n')
+        malformed_file.write_text(
+            '{"role": "user", "content": "test"}\ninvalid line\n', encoding="utf-8"
+        )
 
         result = runner.invoke(app, ["analyze", "session", str(malformed_file)])
 

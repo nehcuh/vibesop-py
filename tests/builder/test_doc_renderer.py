@@ -78,7 +78,7 @@ class TestDocRenderer:
         monkeypatch.chdir(tmp_path)
         src_dir = tmp_path / "src"
         src_dir.mkdir()
-        (src_dir / "module.py").write_text('"""A module."""\n')
+        (src_dir / "module.py").write_text('"""A module."""\n', encoding="utf-8")
 
         renderer = DocRenderer()
         with patch.object(renderer, "_path_safety") as mock_safety:

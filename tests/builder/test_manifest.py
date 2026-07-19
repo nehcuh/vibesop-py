@@ -29,14 +29,17 @@ class TestManifestBuilder:
         registry_dir = tmp_path / "core"
         registry_dir.mkdir(parents=True)
         registry_file = registry_dir / "registry.yaml"
-        registry_file.write_text("""
+        registry_file.write_text(
+            """
 skills:
   - id: test-skill
     name: Test Skill
     description: A test skill
     trigger_when: Testing
     namespace: builtin
-""")
+""",
+            encoding="utf-8",
+        )
 
         builder = ManifestBuilder(project_root=tmp_path)
         manifest = builder.build_from_registry()
@@ -56,13 +59,16 @@ skills:
         """Test building with overlay."""
         # Create overlay file
         overlay_file = tmp_path / "overlay.yaml"
-        overlay_file.write_text("""
+        overlay_file.write_text(
+            """
 metadata:
   author: Test Author
   description: Test Description
 security:
   scan_external_content: false
-""")
+""",
+            encoding="utf-8",
+        )
 
         builder = ManifestBuilder(project_root=tmp_path)
         manifest = builder.build(overlay_path=overlay_file)
@@ -73,7 +79,8 @@ security:
     def test_build_from_file(self, tmp_path: Path) -> None:
         """Test building from manifest file."""
         manifest_file = tmp_path / "manifest.yaml"
-        manifest_file.write_text("""
+        manifest_file.write_text(
+            """
 metadata:
   platform: test-platform
   version: 2.0.0
@@ -88,7 +95,9 @@ policies:
     scan_external_content: false
   routing:
     enable_ai_routing: false
-""")
+""",
+            encoding="utf-8",
+        )
 
         builder = ManifestBuilder()
         manifest = builder.build_from_file(manifest_file)
@@ -110,7 +119,7 @@ policies:
         """Test loading skills from empty registry still discovers installed packs."""
         registry_dir = tmp_path / "core"
         registry_dir.mkdir(parents=True)
-        (registry_dir / "registry.yaml").write_text("skills: []")
+        (registry_dir / "registry.yaml").write_text("skills: []", encoding="utf-8")
 
         builder = ManifestBuilder(project_root=tmp_path)
         skills = builder._load_skills()  # type: ignore[attr-defined]
@@ -173,11 +182,14 @@ class TestOverlayMerger:
 
         # Create overlay file
         overlay_file = tmp_path / "overlay.yaml"
-        overlay_file.write_text("""
+        overlay_file.write_text(
+            """
 metadata:
   author: Overlay Author
   version: 2.0.0
-""")
+""",
+            encoding="utf-8",
+        )
 
         # Merge
         merger = OverlayMerger()
@@ -239,7 +251,7 @@ class TestCreateOverlay:
         )
 
         assert overlay_path.exists()
-        content = overlay_path.read_text()
+        content = overlay_path.read_text(encoding="utf-8")
         assert "skill-1" in content
         assert "skill-2" in content
         assert "scan_external_content" in content
@@ -268,10 +280,13 @@ class TestValidateOverlay:
     def test_validate_valid_overlay(self, tmp_path: Path) -> None:
         """Test validating valid overlay."""
         overlay_file = tmp_path / "overlay.yaml"
-        overlay_file.write_text("""
+        overlay_file.write_text(
+            """
 skills:
   - id: skill-1
-""")
+""",
+            encoding="utf-8",
+        )
 
         errors = validate_overlay(overlay_file)
 
@@ -288,7 +303,7 @@ skills:
         """Test validating overlay with invalid structure."""
         # Create invalid YAML
         overlay_file = tmp_path / "overlay.yaml"
-        overlay_file.write_text("[")
+        overlay_file.write_text("[", encoding="utf-8")
 
         errors = validate_overlay(overlay_file)
 
@@ -297,7 +312,7 @@ skills:
     def test_build_from_file_invalid_yaml(self, tmp_path: Path) -> None:
         """Test build_from_file with invalid YAML."""
         manifest_file = tmp_path / "manifest.yaml"
-        manifest_file.write_text("not: valid: yaml: [")
+        manifest_file.write_text("not: valid: yaml: [", encoding="utf-8")
 
         builder = ManifestBuilder(project_root=tmp_path)
         with pytest.raises(ValueError, match="Failed to load manifest"):

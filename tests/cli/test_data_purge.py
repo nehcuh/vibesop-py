@@ -92,8 +92,8 @@ def test_data_purge_sessions(tmp_path: Path) -> None:
     """F-08 (Kimi #1): --sessions purges .vibe/session/*.json."""
     session_dir = tmp_path / ".vibe" / "session"
     session_dir.mkdir(parents=True)
-    (session_dir / "s1.json").write_text("{}")
-    (session_dir / "s2.json").write_text("{}")
+    (session_dir / "s1.json").write_text("{}", encoding="utf-8")
+    (session_dir / "s2.json").write_text("{}", encoding="utf-8")
 
     result = runner.invoke(
         data_cmd.app,
@@ -110,7 +110,7 @@ def test_feedback_clear_records_unlinks_file(tmp_path: Path) -> None:
     from vibesop.core.feedback import FeedbackCollector
 
     path = tmp_path / "feedback.jsonl"
-    path.write_text('{"query": "q", "routed_skill": "s", "was_correct": true}\n')
+    path.write_text('{"query": "q", "routed_skill": "s", "was_correct": true}\n', encoding="utf-8")
     collector = FeedbackCollector(storage_path=path)
     assert path.exists()
 

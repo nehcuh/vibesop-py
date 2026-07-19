@@ -72,7 +72,7 @@ class ConfigDrivenRenderer:
 
         try:
             yaml_parser = YAML()
-            with rules_config.open() as f:
+            with rules_config.open(encoding="utf-8") as f:
                 config: dict[str, Any] = yaml_parser.load(f)  # pyright: ignore[reportUnknownVariableType,reportUnknownMemberType]
 
             rules: list[RenderRule] = []

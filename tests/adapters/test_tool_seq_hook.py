@@ -11,6 +11,7 @@ import json
 import shlex
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -104,7 +105,9 @@ class TestAdapterRegistration:
         assert result.success, result.errors
         hook = output_dir / "hooks" / "vibesop-tool-seq.sh"
         assert hook.exists()
-        assert hook.stat().st_mode & 0o111  # executable
+        if sys.platform != "win32":
+            # Windows chmod only toggles read-only; hooks run via `bash <script>`.
+            assert hook.stat().st_mode & 0o111  # executable
         # deterministic project root injected at render time (M3): the hook
         # lives in <output_dir>/hooks/, so the root is output_dir's parent —
         # mirroring the script's own `_HOOK_DIR/../..` convention.
@@ -142,7 +145,9 @@ class TestAdapterRegistration:
         assert results.get("vibesop-tool-seq") is True
         hook = config_dir / "hooks" / "vibesop-tool-seq.sh"
         assert hook.exists()
-        assert hook.stat().st_mode & 0o111
+        if sys.platform != "win32":
+            # Windows chmod only toggles read-only; hooks run via `bash <script>`.
+            assert hook.stat().st_mode & 0o111
         expected_root = shlex.quote(str(config_dir.resolve().parent))
         assert f"_SEQ_ROOT={expected_root}" in hook.read_text(encoding="utf-8")
 

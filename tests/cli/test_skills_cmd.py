@@ -3,6 +3,7 @@
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import pytest
 from typer.testing import CliRunner
 
 from vibesop.cli.main import app
@@ -160,12 +161,20 @@ class TestSkillsRemove:
         assert "Removed" in result.stdout
 
     @patch("vibesop.cli.commands.skills_commands._crud.SkillStorage")
-    def test_remove_linked_without_flag(self, mock_storage_cls, monkeypatch, tmp_path) -> None:
+    def test_remove_linked_without_flag(
+        self, mock_storage_cls, monkeypatch, tmp_path, symlink_supported
+    ) -> None:
+        if not symlink_supported:
+            pytest.skip("directory symlinks not supported on this host")
         monkeypatch.chdir(tmp_path)
         platform_dir = tmp_path / "claude"
         platform_dir.mkdir()
+        # Target must be a real, existing directory: _crud uses exists()
+        # to detect the link, and Windows requires target_is_directory.
+        link_target = tmp_path / "skill-target"
+        link_target.mkdir()
         skill_link = platform_dir / "my-skill"
-        skill_link.symlink_to("/dev/null")
+        skill_link.symlink_to(link_target, target_is_directory=True)
 
         mock_storage = MagicMock()
         mock_storage.PLATFORM_SKILLS_DIRS = {"claude-code": platform_dir}

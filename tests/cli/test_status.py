@@ -54,7 +54,7 @@ class TestStatusHelpers:
         from vibesop.cli.commands.status_cmd import _detect_first_run
 
         (tmp_path / ".vibe").mkdir(exist_ok=True)
-        (tmp_path / ".vibe" / "analytics.jsonl").write_text("{}")
+        (tmp_path / ".vibe" / "analytics.jsonl").write_text("{}", encoding="utf-8")
 
         assert _detect_first_run(tmp_path) is False
 
@@ -62,7 +62,7 @@ class TestStatusHelpers:
         from vibesop.cli.commands.status_cmd import _detect_first_run
 
         (tmp_path / ".vibe").mkdir(exist_ok=True)
-        (tmp_path / ".vibe" / "feedback.jsonl").write_text("{}")
+        (tmp_path / ".vibe" / "feedback.jsonl").write_text("{}", encoding="utf-8")
 
         assert _detect_first_run(tmp_path) is False
 

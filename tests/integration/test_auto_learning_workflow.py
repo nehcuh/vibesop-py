@@ -26,7 +26,7 @@ class TestPreferenceRecordingWorkflow:
     def test_preference_learner_direct(self, tmp_path: Path) -> None:
         """Test PreferenceLearner can record and learn from selections."""
         preferences_file = tmp_path / "preferences.json"
-        preferences_file.write_text('{"selections": []}')
+        preferences_file.write_text('{"selections": []}', encoding="utf-8")
 
         learner = PreferenceLearner(storage_path=preferences_file)
 
@@ -34,7 +34,7 @@ class TestPreferenceRecordingWorkflow:
         learner.record_selection("code-review/skill", "please review this", was_helpful=True)
         learner.record_selection("code-review/skill", "check my code", was_helpful=True)
 
-        data: dict[str, Any] = json.loads(preferences_file.read_text())
+        data: dict[str, Any] = json.loads(preferences_file.read_text(encoding="utf-8"))
         assert len(data["selections"]) == 3
         assert all(s["skill_id"] == "code-review/skill" for s in data["selections"])
 
@@ -66,7 +66,8 @@ class TestPreferenceRecordingWorkflow:
                         },
                     ]
                 }
-            )
+            ),
+            encoding="utf-8",
         )
 
         learner = PreferenceLearner(storage_path=preferences_file)
@@ -110,7 +111,7 @@ class TestPatternDetectionWorkflow:
             '{"role": "assistant", "content": "Reviewing security"}',
         ]
 
-        session_file.write_text("\n".join(lines))
+        session_file.write_text("\n".join(lines), encoding="utf-8")
         return session_file
 
     def test_detect_patterns_from_session(self, realistic_session: Path) -> None:
@@ -237,7 +238,7 @@ class TestCompleteLearningLoop:
         skills_dir = tmp_path / ".vibe" / "skills"
 
         skills_dir.mkdir(parents=True)
-        preferences_file.write_text('{"selections": []}')
+        preferences_file.write_text('{"selections": []}', encoding="utf-8")
 
         lines = [
             '{"role": "user", "content": "请帮我优化代码性能"}',
@@ -252,7 +253,7 @@ class TestCompleteLearningLoop:
             '{"role": "assistant", "content": "OK"}',
         ]
 
-        session_file.write_text("\n".join(lines))
+        session_file.write_text("\n".join(lines), encoding="utf-8")
 
         return {
             "session_file": session_file,
@@ -268,7 +269,9 @@ class TestCompleteLearningLoop:
         learner.record_selection("optimization/skill", "请帮我优化代码的性能", was_helpful=True)
         learner.record_selection("optimization/skill", "请帮我优化一下性能", was_helpful=True)
 
-        data: dict[str, Any] = json.loads(learning_environment["preferences_file"].read_text())
+        data: dict[str, Any] = json.loads(
+            learning_environment["preferences_file"].read_text(encoding="utf-8")
+        )
         assert len(data["selections"]) == 3
 
         learner.get_preference_score("optimization/skill")
@@ -374,7 +377,7 @@ class TestRealWorldScenarios:
             '{"role": "assistant", "content": "Cleaning up"}',
         ]
 
-        session_file.write_text("\n".join(lines))
+        session_file.write_text("\n".join(lines), encoding="utf-8")
 
         analyzer = SessionAnalyzer(min_frequency=2, min_confidence=0.3)
         suggestions = analyzer.analyze_session_file(session_file)
@@ -398,7 +401,7 @@ class TestRealWorldScenarios:
             '{"role": "assistant", "content": "OK"}',
         ]
 
-        session_file.write_text("\n".join(lines))
+        session_file.write_text("\n".join(lines), encoding="utf-8")
 
         analyzer = SessionAnalyzer(min_frequency=3, min_confidence=0.3)
         suggestions = analyzer.analyze_session_file(session_file)
@@ -418,7 +421,7 @@ class TestRealWorldScenarios:
             '{"role": "assistant", "content": "OK"}',
         ]
 
-        session_file.write_text("\n".join(lines))
+        session_file.write_text("\n".join(lines), encoding="utf-8")
 
         result = runner.invoke(app, ["analyze", "session", str(session_file)])
         assert result.exit_code == 0 or "Found" in result.stdout
@@ -430,7 +433,9 @@ class TestErrorRecovery:
     def test_corrupted_session_file(self, tmp_path: Path) -> None:
         """Test handling corrupted session file."""
         corrupted_file = tmp_path / "corrupted.jsonl"
-        corrupted_file.write_text('{"role": "user", "content": "valid"}\ninvalid json\n')
+        corrupted_file.write_text(
+            '{"role": "user", "content": "valid"}\ninvalid json\n', encoding="utf-8"
+        )
 
         analyzer = SessionAnalyzer()
         suggestions = analyzer.analyze_session_file(corrupted_file)
@@ -439,7 +444,7 @@ class TestErrorRecovery:
     def test_empty_session(self, tmp_path: Path) -> None:
         """Test empty session file."""
         empty_file = tmp_path / "empty.jsonl"
-        empty_file.write_text("")
+        empty_file.write_text("", encoding="utf-8")
 
         analyzer = SessionAnalyzer()
         suggestions = analyzer.analyze_session_file(empty_file)
@@ -458,7 +463,7 @@ class TestErrorRecovery:
             '{"role": "assistant", "content": "OK"}',
         ]
 
-        session_file.write_text("\n".join(lines))
+        session_file.write_text("\n".join(lines), encoding="utf-8")
 
         with patch("vibesop.core.ai_enhancer.AIEnhancer"):
             mock_instance = Mock()

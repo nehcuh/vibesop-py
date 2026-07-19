@@ -25,7 +25,8 @@ class TestSkillManifest:
             'author: "Tester"\n'
             'trigger_when: "test"\n'
             "---\n"
-            "# Content\n"
+            "# Content\n",
+            encoding="utf-8",
         )
         manifest = SkillManifest.from_file(skill_md)
         assert manifest.id == "test-skill"
@@ -54,7 +55,9 @@ class TestSkillInstaller:
         installer = SkillInstaller()
         skill_dir = tmp_path / "my-skill"
         skill_dir.mkdir()
-        (skill_dir / "SKILL.md").write_text("---\nid: my-skill\nname: My Skill\n---\n")
+        (skill_dir / "SKILL.md").write_text(
+            "---\nid: my-skill\nname: My Skill\n---\n", encoding="utf-8"
+        )
         project_path = tmp_path / "project"
         project_path.mkdir()
 
@@ -68,14 +71,14 @@ class TestSkillInstaller:
         # Registry updated
         registry = project_path / ".vibe" / "skills" / "registry.yaml"
         assert registry.exists()
-        assert "my-skill" in registry.read_text()
+        assert "my-skill" in registry.read_text(encoding="utf-8")
 
     def test_install_skill_already_exists_no_force(self, tmp_path: Path) -> None:
         """Test installing when already exists without force."""
         installer = SkillInstaller()
         skill_dir = tmp_path / "my-skill"
         skill_dir.mkdir()
-        (skill_dir / "SKILL.md").write_text("---\nid: my-skill\n---\n")
+        (skill_dir / "SKILL.md").write_text("---\nid: my-skill\n---\n", encoding="utf-8")
         project_path = tmp_path / "project"
         project_path.mkdir()
         target = project_path / ".vibe" / "skills" / "my-skill"
@@ -91,7 +94,7 @@ class TestSkillInstaller:
         installer = SkillInstaller()
         skill_dir = tmp_path / "my-skill"
         skill_dir.mkdir()
-        (skill_dir / "SKILL.md").write_text("---\nid: my-skill\n---\n")
+        (skill_dir / "SKILL.md").write_text("---\nid: my-skill\n---\n", encoding="utf-8")
         project_path = tmp_path / "project"
         project_path.mkdir()
 
@@ -113,11 +116,13 @@ class TestSkillInstaller:
         installer = SkillInstaller()
         skill_dir = tmp_path / "my-skill"
         skill_dir.mkdir()
-        (skill_dir / "SKILL.md").write_text("---\nid: my-skill\nname: My Skill\n---\n")
+        (skill_dir / "SKILL.md").write_text(
+            "---\nid: my-skill\nname: My Skill\n---\n", encoding="utf-8"
+        )
         # Create dependency skill
         dep_dir = tmp_path / "dep-skill"
         dep_dir.mkdir()
-        (dep_dir / "SKILL.md").write_text("---\nid: dep-skill\n---\n")
+        (dep_dir / "SKILL.md").write_text("---\nid: dep-skill\n---\n", encoding="utf-8")
         project_path = tmp_path / "project"
         project_path.mkdir()
         installer.install_skill(dep_dir, project_path)
@@ -142,7 +147,9 @@ class TestSkillInstaller:
         installer = SkillInstaller()
         skill_dir = tmp_path / "my-skill"
         skill_dir.mkdir()
-        (skill_dir / "SKILL.md").write_text("---\nid: my-skill\nname: My Skill\n---\n")
+        (skill_dir / "SKILL.md").write_text(
+            "---\nid: my-skill\nname: My Skill\n---\n", encoding="utf-8"
+        )
         project_path = tmp_path / "project"
         project_path.mkdir()
 
@@ -165,7 +172,7 @@ class TestSkillInstaller:
         installer = SkillInstaller()
         skill_dir = tmp_path / "my-skill"
         skill_dir.mkdir()
-        (skill_dir / "SKILL.md").write_text("---\nid: my-skill\n---\n")
+        (skill_dir / "SKILL.md").write_text("---\nid: my-skill\n---\n", encoding="utf-8")
         project_path = tmp_path / "project"
         project_path.mkdir()
         installer.install_skill(skill_dir, project_path)
@@ -175,7 +182,7 @@ class TestSkillInstaller:
         assert result["success"] is True
         assert not (project_path / ".vibe" / "skills" / "my-skill").exists()
         registry = project_path / ".vibe" / "skills" / "registry.yaml"
-        assert "my-skill" not in registry.read_text()
+        assert "my-skill" not in registry.read_text(encoding="utf-8")
 
     def test_uninstall_skill_not_found(self, tmp_path: Path) -> None:
         """Test uninstalling a non-existent skill."""
@@ -189,7 +196,9 @@ class TestSkillInstaller:
         installer = SkillInstaller()
         skill_dir = tmp_path / "listed-skill"
         skill_dir.mkdir()
-        (skill_dir / "SKILL.md").write_text("---\nid: listed-skill\nname: Listed Skill\n---\n")
+        (skill_dir / "SKILL.md").write_text(
+            "---\nid: listed-skill\nname: Listed Skill\n---\n", encoding="utf-8"
+        )
         project_path = tmp_path / "project"
         project_path.mkdir()
         installer.install_skill(skill_dir, project_path)
@@ -211,7 +220,7 @@ class TestSkillInstaller:
         installer = SkillInstaller()
         skill_dir = tmp_path / "my-skill"
         skill_dir.mkdir()
-        (skill_dir / "SKILL.md").write_text("---\nid: my-skill\n---\n")
+        (skill_dir / "SKILL.md").write_text("---\nid: my-skill\n---\n", encoding="utf-8")
         project_path = tmp_path / "project"
         project_path.mkdir()
         installer.install_skill(skill_dir, project_path)
@@ -235,10 +244,10 @@ class TestSkillInstaller:
         installer = SkillInstaller()
         src = tmp_path / "skill-with-subdir"
         src.mkdir()
-        (src / "SKILL.md").write_text("---\nid: s\n---\n")
+        (src / "SKILL.md").write_text("---\nid: s\n---\n", encoding="utf-8")
         sub = src / "templates"
         sub.mkdir()
-        (sub / "template.txt").write_text("hello")
+        (sub / "template.txt").write_text("hello", encoding="utf-8")
 
         dst = tmp_path / "dst"
         installer._copy_skill_files(src, dst)

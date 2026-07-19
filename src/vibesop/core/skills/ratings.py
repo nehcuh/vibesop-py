@@ -100,7 +100,7 @@ class SkillRatingStore:
         if not self._store_path.exists():
             return
         self._ratings = {}
-        with self._store_path.open() as f:
+        with self._store_path.open(encoding="utf-8") as f:
             for raw_line in f:
                 stripped = raw_line.strip()
                 if not stripped:

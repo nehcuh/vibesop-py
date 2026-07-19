@@ -7,11 +7,15 @@ This is intentionally lightweight - no DB, no complex state machine.
 from __future__ import annotations
 
 import json
+import logging
+from contextlib import suppress
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 
 class BadgeType(StrEnum):
@@ -113,20 +117,18 @@ class BadgeTracker:
 
     def _save(self) -> None:
         """Save badges to data file."""
-        self._data_path.parent.mkdir(parents=True, exist_ok=True)
-
         data: dict[str, Any] = {"badges": [b.to_dict() for b in self._badges]}
 
         # Atomic write to prevent corruption
-        import tempfile
+        from vibesop.utils.atomic_writer import AtomicWriteError, write_text
 
         try:
-            fd, tmp_path = tempfile.mkstemp(dir=self._data_path.parent, prefix=".tmp_badges_")
-            with open(fd, "w", encoding="utf-8", closefd=False) as f:
-                json.dump(data, f, indent=2)
-            Path(tmp_path).replace(self._data_path)
-        except OSError:
-            pass
+            write_text(self._data_path, json.dumps(data, indent=2))
+            # mkstemp used to yield 0o600; restore owner-only perms (no-op on Windows).
+            with suppress(OSError):
+                self._data_path.chmod(0o600)
+        except (OSError, AtomicWriteError) as e:
+            logger.warning(f"Failed to save badges to {self._data_path}: {e}")
 
     # ------------------------------------------------------------------
     # Query

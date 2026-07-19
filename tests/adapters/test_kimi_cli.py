@@ -1,7 +1,10 @@
 """Tests for KimiCliAdapter."""
 
+import sys
 from pathlib import Path
 from typing import ClassVar
+
+import pytest
 
 from vibesop.adapters.kimi_cli import KimiCliAdapter
 from vibesop.adapters.models import (
@@ -96,7 +99,7 @@ class TestKimiCliAdapter:
         result = adapter.render_config(manifest, tmp_path)
         assert result.success
 
-        config_toml = (tmp_path / "config.toml").read_text()
+        config_toml = (tmp_path / "config.toml").read_text(encoding="utf-8")
 
         # Check for key sections
         assert "# VibeSOP Configuration for Kimi Code CLI" in config_toml
@@ -128,7 +131,7 @@ class TestKimiCliAdapter:
         result = adapter.render_config(manifest, tmp_path)
         assert result.success
 
-        readme = (tmp_path / "README.md").read_text()
+        readme = (tmp_path / "README.md").read_text(encoding="utf-8")
 
         assert "# Kimi Code CLI Configuration" in readme
         assert "## Skills" in readme
@@ -157,7 +160,7 @@ class TestKimiCliAdapter:
         result = adapter.render_config(manifest, tmp_path)
         assert result.success
 
-        config_toml = (tmp_path / "config.toml").read_text()
+        config_toml = (tmp_path / "config.toml").read_text(encoding="utf-8")
 
         # Check policies are reflected
         assert "scan_external_content = false" in config_toml
@@ -203,7 +206,7 @@ class TestKimiCliAdapter:
         result = adapter.render_config(manifest, tmp_path)
         assert result.success
 
-        config_toml = (tmp_path / "config.toml").read_text()
+        config_toml = (tmp_path / "config.toml").read_text(encoding="utf-8")
         # Skills are no longer listed in config.toml (they are auto-discovered from directory)
         assert "VibeSOP Skills" in config_toml
         assert "2 skills configured" in config_toml
@@ -270,9 +273,11 @@ class TestKimiCliAdapter:
 
         hook_path = tmp_path / "hooks" / "vibesop-route.sh"
         assert hook_path.exists()
-        assert hook_path.stat().st_mode & 0o111  # executable
+        if sys.platform != "win32":
+            # Windows chmod only toggles read-only; hooks run via `bash <script>`.
+            assert hook_path.stat().st_mode & 0o111  # executable
 
-        content = hook_path.read_text()
+        content = hook_path.read_text(encoding="utf-8")
         assert "AgentRuntime" in content, "AgentRuntime delegation missing"
         assert "handle_query_for_hook" in content, "handle_query_for_hook call missing"
         assert "python3 -c" in content or "uv run python" in content, "Python invocation missing"
@@ -287,7 +292,7 @@ class TestKimiCliAdapter:
         result = adapter.render_config(manifest, tmp_path)
         assert result.success
 
-        config_toml = (tmp_path / "config.toml").read_text()
+        config_toml = (tmp_path / "config.toml").read_text(encoding="utf-8")
         assert "[[hooks]]" in config_toml
         assert 'event = "UserPromptSubmit"' in config_toml
         assert 'command = "bash ~/.kimi-code/hooks/vibesop-route.sh"' in config_toml
@@ -316,7 +321,7 @@ class TestKimiCliAdapter:
         result = adapter.render_config(manifest, tmp_path)
         assert result.success
 
-        agents_md = (tmp_path / "AGENTS.md").read_text()
+        agents_md = (tmp_path / "AGENTS.md").read_text(encoding="utf-8")
 
         assert "docs/routing.md" in agents_md
         assert "### test-skill" not in agents_md
@@ -342,7 +347,7 @@ class TestKimiCliAdapter:
         result = adapter.render_config(manifest, tmp_path)
         assert result.success
 
-        catalog = (tmp_path / "docs" / "skills-catalog.md").read_text()
+        catalog = (tmp_path / "docs" / "skills-catalog.md").read_text(encoding="utf-8")
         assert "### test-skill" in catalog
         assert "Test Skill" in catalog
 
@@ -403,7 +408,7 @@ class TestKimiCliAdapterEdgeCases:
         result = adapter.render_config(manifest, tmp_path)
         assert result.success
 
-        config_toml = (tmp_path / "config.toml").read_text()
+        config_toml = (tmp_path / "config.toml").read_text(encoding="utf-8")
         assert "# Version: 2.0.0" in config_toml
         assert "# Author: Test Author" in config_toml
         assert "# Description: Test manifest" in config_toml
@@ -442,8 +447,10 @@ class TestKimiCliAdapterEdgeCases:
 class TestKimiCLISkillContentRender:
     """Tests for _render_skill_content symlink preservation in Kimi CLI adapter."""
 
-    def test_symlink_preserved_on_second_build(self, monkeypatch, tmp_path):
+    def test_symlink_preserved_on_second_build(self, monkeypatch, tmp_path, symlink_supported):
         """Symlink to installed pack must be preserved on re-build."""
+        if not symlink_supported:
+            pytest.skip("directory symlinks not supported on this host")
         from vibesop.adapters.kimi_cli import KimiCliAdapter
 
         adapter = KimiCliAdapter()
@@ -453,7 +460,9 @@ class TestKimiCLISkillContentRender:
 
         installed_dir = tmp_path / "installed"
         installed_dir.mkdir(parents=True)
-        (installed_dir / "SKILL.md").write_text("# Full Review Skill\n\nExecute review flow.")
+        (installed_dir / "SKILL.md").write_text(
+            "# Full Review Skill\n\nExecute review flow.", encoding="utf-8"
+        )
 
         monkeypatch.setattr(
             "vibesop.adapters._shared.is_pack_installed",
@@ -478,5 +487,5 @@ class TestKimiCLISkillContentRender:
 
         adapter._render_skill_content(_Skill(), skill_dir, result, dir_name="gstack-review")
         assert skill_dir.is_symlink(), "Symlink was lost on second build"
-        content = (skill_dir / "SKILL.md").read_text()
+        content = (skill_dir / "SKILL.md").read_text(encoding="utf-8")
         assert "Full Review Skill" in content

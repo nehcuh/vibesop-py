@@ -33,8 +33,8 @@ class TrustStore:
         if not self.PATH.exists():
             return {"packs": {}, "sources": {}}
         try:
-            return json.loads(self.PATH.read_text())
-        except (json.JSONDecodeError, OSError):
+            return json.loads(self.PATH.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError, UnicodeDecodeError):
             return {"packs": {}, "sources": {}}
 
     def _save(self) -> None:

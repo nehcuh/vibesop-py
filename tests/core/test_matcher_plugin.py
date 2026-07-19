@@ -99,7 +99,8 @@ class TestMatcherPluginRegistry:
         matchers_dir.mkdir(parents=True)
 
         plugin_file = matchers_dir / "my_matcher.py"
-        plugin_file.write_text("""
+        plugin_file.write_text(
+            """
 NAME = "my_matcher"
 DESCRIPTION = "A test matcher"
 WEIGHT = 0.8
@@ -108,7 +109,9 @@ def match(query: str, candidate: dict) -> float:
     if "test" in query:
         return 0.9
     return 0.0
-""")
+""",
+            encoding="utf-8",
+        )
 
         registry = MatcherPluginRegistry(tmp_path)
         plugins = registry.list_plugins()
@@ -122,10 +125,13 @@ def match(query: str, candidate: dict) -> float:
         matchers_dir.mkdir(parents=True)
 
         plugin_file = matchers_dir / "fallback.py"
-        plugin_file.write_text("""
+        plugin_file.write_text(
+            """
 def match(query: str, candidate: dict) -> float:
     return 0.1
-""")
+""",
+            encoding="utf-8",
+        )
 
         registry = MatcherPluginRegistry(tmp_path)
         plugins = registry.list_plugins()
@@ -137,10 +143,13 @@ def match(query: str, candidate: dict) -> float:
         matchers_dir.mkdir(parents=True)
 
         plugin_file = matchers_dir / "_private.py"
-        plugin_file.write_text("""
+        plugin_file.write_text(
+            """
 def match(query: str, candidate: dict) -> float:
     return 1.0
-""")
+""",
+            encoding="utf-8",
+        )
 
         registry = MatcherPluginRegistry(tmp_path)
         assert registry.list_plugins() == []
@@ -150,22 +159,28 @@ def match(query: str, candidate: dict) -> float:
         matchers_dir.mkdir(parents=True)
 
         plugin_file = matchers_dir / "bad.py"
-        plugin_file.write_text("""
+        plugin_file.write_text(
+            """
 NAME = "bad"
 # No match function
-""")
+""",
+            encoding="utf-8",
+        )
 
         registry = MatcherPluginRegistry(tmp_path)
         assert registry.list_plugins() == []
 
     def test_register_new_file(self, tmp_path: Path) -> None:
         src_file = tmp_path / "new_matcher.py"
-        src_file.write_text("""
+        src_file.write_text(
+            """
 NAME = "new_matcher"
 
 def match(query: str, candidate: dict) -> float:
     return 0.5
-""")
+""",
+            encoding="utf-8",
+        )
 
         registry = MatcherPluginRegistry(tmp_path)
         plugin = registry.register(src_file)
@@ -184,10 +199,13 @@ def match(query: str, candidate: dict) -> float:
         matchers_dir.mkdir(parents=True)
 
         plugin_file = matchers_dir / "to_remove.py"
-        plugin_file.write_text("""
+        plugin_file.write_text(
+            """
 def match(query: str, candidate: dict) -> float:
     return 0.1
-""")
+""",
+            encoding="utf-8",
+        )
 
         registry = MatcherPluginRegistry(tmp_path)
         assert len(registry.list_plugins()) == 1
@@ -205,19 +223,25 @@ def match(query: str, candidate: dict) -> float:
         matchers_dir.mkdir(parents=True)
 
         plugin_file = matchers_dir / "reload.py"
-        plugin_file.write_text("""
+        plugin_file.write_text(
+            """
 def match(query: str, candidate: dict) -> float:
     return 0.1
-""")
+""",
+            encoding="utf-8",
+        )
 
         registry = MatcherPluginRegistry(tmp_path)
         assert len(registry.list_plugins()) == 1
 
         # Add another file directly
-        (matchers_dir / "new.py").write_text("""
+        (matchers_dir / "new.py").write_text(
+            """
 def match(query: str, candidate: dict) -> float:
     return 0.2
-""")
+""",
+            encoding="utf-8",
+        )
 
         registry.reload()
         assert len(registry.list_plugins()) == 2
@@ -227,12 +251,15 @@ def match(query: str, candidate: dict) -> float:
         matchers_dir.mkdir(parents=True)
 
         plugin_file = matchers_dir / "specific.py"
-        plugin_file.write_text("""
+        plugin_file.write_text(
+            """
 NAME = "specific"
 
 def match(query: str, candidate: dict) -> float:
     return 0.1
-""")
+""",
+            encoding="utf-8",
+        )
 
         registry = MatcherPluginRegistry(tmp_path)
         assert registry.get_plugin("specific") is not None

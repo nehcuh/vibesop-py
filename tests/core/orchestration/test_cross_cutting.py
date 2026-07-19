@@ -44,7 +44,8 @@ class TestParseCrossCutting:
         wf_dir = tmp_path / "test-wf"
         wf_dir.mkdir()
         skill_md = wf_dir / "SKILL.md"
-        skill_md.write_text("""---
+        skill_md.write_text(
+            """---
 id: cross-cutting/test
 name: Test Workflow
 description: A test cross-cutting workflow
@@ -65,7 +66,9 @@ tags: [workflow, test]
 # Test Workflow
 
 Test content.
-""")
+""",
+            encoding="utf-8",
+        )
         wf = parse_cross_cutting_workflow(skill_md)
         assert wf is not None
         assert wf.id == "cross-cutting/test"
@@ -80,14 +83,17 @@ Test content.
         wf_dir = tmp_path / "regular-skill"
         wf_dir.mkdir()
         skill_md = wf_dir / "SKILL.md"
-        skill_md.write_text("""---
+        skill_md.write_text(
+            """---
 id: namespace/skill
 name: Regular Skill
 description: A regular skill
 type: prompt
 ---
 # Regular skill content
-""")
+""",
+            encoding="utf-8",
+        )
         wf = parse_cross_cutting_workflow(skill_md)
         assert wf is None  # type is "prompt", not "cross-cutting"
 
@@ -98,7 +104,8 @@ type: prompt
         wf_dir = tmp_path / "string-deps"
         wf_dir.mkdir()
         skill_md = wf_dir / "SKILL.md"
-        skill_md.write_text("""---
+        skill_md.write_text(
+            """---
 id: cross-cutting/simple
 name: Simple
 description: Test
@@ -106,7 +113,9 @@ type: cross-cutting
 depends_on: skill-a, skill-b, skill-c
 ---
 Content
-""")
+""",
+            encoding="utf-8",
+        )
         wf = parse_cross_cutting_workflow(skill_md)
         assert wf is not None
         assert wf.depends_on == ["skill-a", "skill-b", "skill-c"]
@@ -120,7 +129,8 @@ class TestCrossCuttingDiscovery:
     def test_discover_workflows(self, tmp_path: Path):
         wf_dir = tmp_path / ".vibe" / "skills" / "cross-cutting" / "test-wf"
         wf_dir.mkdir(parents=True)
-        (wf_dir / "SKILL.md").write_text("""---
+        (wf_dir / "SKILL.md").write_text(
+            """---
 id: cross-cutting/test
 name: Test
 description: Test workflow
@@ -129,7 +139,9 @@ depends_on:
   - skill-a
 ---
 # Test
-""")
+""",
+            encoding="utf-8",
+        )
         discovery = CrossCuttingDiscovery(project_root=tmp_path)
         workflows = discovery.discover_all()
         assert len(workflows) == 1
@@ -144,7 +156,8 @@ depends_on:
             wf_dir = tmp_path / ".vibe" / "skills" / "cross-cutting" / name
             wf_dir.mkdir(parents=True)
             deps_yaml = "\n".join(f"  - {d}" for d in deps)
-            (wf_dir / "SKILL.md").write_text(f"""---
+            (wf_dir / "SKILL.md").write_text(
+                f"""---
 id: cross-cutting/{name}
 name: {name}
 description: Test
@@ -152,7 +165,9 @@ type: cross-cutting
 depends_on:
 {deps_yaml}
 ---
-""")
+""",
+                encoding="utf-8",
+            )
 
         discovery = CrossCuttingDiscovery(project_root=tmp_path)
         # skill-3 covers 1/2 of wf-b (50%) and 1/3 of wf-a (33% — below threshold)

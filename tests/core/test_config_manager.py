@@ -148,15 +148,15 @@ def test_config_source_has_does_not_mutate(source_defaults: ConfigSource) -> Non
 
 def test_resolve_config_path_prefers_toml(tmp_path: Path) -> None:
     """When both .toml and .yaml exist, .toml is chosen."""
-    (tmp_path / "config.toml").write_text("")
-    (tmp_path / "config.yaml").write_text("")
+    (tmp_path / "config.toml").write_text("", encoding="utf-8")
+    (tmp_path / "config.yaml").write_text("", encoding="utf-8")
     result = ConfigSource._resolve_config_path(tmp_path, "config")
     assert result == tmp_path / "config.toml"
 
 
 def test_resolve_config_path_fallback_to_yaml(tmp_path: Path) -> None:
     """When only .yaml exists, it is returned."""
-    (tmp_path / "config.yaml").write_text("")
+    (tmp_path / "config.yaml").write_text("", encoding="utf-8")
     result = ConfigSource._resolve_config_path(tmp_path, "config")
     assert result == tmp_path / "config.yaml"
 
@@ -181,7 +181,7 @@ def test_get_section_deep_merge_overrides_nested_values(
     vibe_dir = tmp_path / ".vibe"
     vibe_dir.mkdir()
     config_file = vibe_dir / "config.toml"
-    config_file.write_text("[routing]\nmin_confidence = 0.99\n")
+    config_file.write_text("[routing]\nmin_confidence = 0.99\n", encoding="utf-8")
 
     # Block global config so the only sources are defaults + project.
     monkeypatch.setattr(
@@ -299,7 +299,7 @@ def test_parse_env_value_string_fallback(manager_no_files: ConfigManager) -> Non
 def test_config_source_load_from_toml(tmp_path: Path) -> None:
     """ConfigSource.load_from_file reads TOML correctly."""
     config_file = tmp_path / "config.toml"
-    config_file.write_text('[section]\nkey = "value"\nnum = 42\n')
+    config_file.write_text('[section]\nkey = "value"\nnum = 42\n', encoding="utf-8")
     source = ConfigSource(
         priority=ConfigSourcePriority.PROJECT,
         data={},
@@ -312,7 +312,7 @@ def test_config_source_load_from_toml(tmp_path: Path) -> None:
 def test_config_source_load_from_yaml(tmp_path: Path) -> None:
     """ConfigSource.load_from_file reads YAML correctly."""
     config_file = tmp_path / "config.yaml"
-    config_file.write_text("section:\n  key: value\n  num: 42\n")
+    config_file.write_text("section:\n  key: value\n  num: 42\n", encoding="utf-8")
     source = ConfigSource(
         priority=ConfigSourcePriority.PROJECT,
         data={},
@@ -343,7 +343,8 @@ def test_load_registry_returns_skills_when_valid(tmp_path: Path) -> None:
     core_dir = tmp_path / "core"
     core_dir.mkdir()
     (core_dir / "registry.yaml").write_text(
-        "skills:\n  - id: superpowers/brainstorm\n    name: Brainstorm\n"
+        "skills:\n  - id: superpowers/brainstorm\n    name: Brainstorm\n",
+        encoding="utf-8",
     )
     manager = ConfigManager(project_root=str(tmp_path))
     registry = manager.load_registry(force_reload=True)
@@ -363,7 +364,7 @@ def test_load_registry_logs_error_on_parse_failure(
     core_dir = tmp_path / "core"
     core_dir.mkdir()
     # guaranteed parse error: unclosed flow sequence
-    (core_dir / "registry.yaml").write_text("skills: [unclosed bracket\n")
+    (core_dir / "registry.yaml").write_text("skills: [unclosed bracket\n", encoding="utf-8")
     manager = ConfigManager(project_root=str(tmp_path))
     with caplog.at_level("ERROR", logger="vibesop.core.config.manager"):
         registry = manager.load_registry(force_reload=True)
@@ -398,7 +399,7 @@ def test_config_source_load_logs_error_on_parse_failure(
     """
     config_file = tmp_path / "config.toml"
     # guaranteed parse error: unquoted string where a number is expected
-    config_file.write_text("[routing]\nmin_confidence = not-a-number\n")
+    config_file.write_text("[routing]\nmin_confidence = not-a-number\n", encoding="utf-8")
     source = ConfigSource(
         priority=ConfigSourcePriority.PROJECT,
         data={},
@@ -440,7 +441,8 @@ def test_get_routing_config_tolerates_legacy_preferences(
     vibe_dir = tmp_path / ".vibe"
     vibe_dir.mkdir()
     (vibe_dir / "preferences.json").write_text(
-        '{"routing": {"enable_ai": false, "min_confidence": 0.3}}'
+        '{"routing": {"enable_ai": false, "min_confidence": 0.3}}',
+        encoding="utf-8",
     )
     monkeypatch.setattr(
         ConfigSource,

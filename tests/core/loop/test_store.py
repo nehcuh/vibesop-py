@@ -102,7 +102,7 @@ class TestSpecCRUD:
             store = LoopStore(base_dir=tmpdir)
             store.save_spec(_spec("real-loop"))
             # Stray non-dir file
-            (Path(tmpdir) / "stray.txt").write_text("noise")
+            (Path(tmpdir) / "stray.txt").write_text("noise", encoding="utf-8")
             # Hidden dir (would be invalid name anyway)
             (Path(tmpdir) / ".hidden-dir").mkdir()
             result = store.list_specs()

@@ -403,7 +403,7 @@ class PiCodingAgentAdapter(SdkBasedAdapter):
 
         if settings_path.exists():
             try:
-                existing = json.loads(settings_path.read_text())
+                existing = json.loads(settings_path.read_text(encoding="utf-8"))
                 if isinstance(existing, dict):
                     # Merge — our keys take precedence
                     merged = {**existing, **settings}

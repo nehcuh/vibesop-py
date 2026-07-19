@@ -59,7 +59,7 @@ class TestIsPackInstalled:
     def test_pack_found(self, tmp_path: Path) -> None:
         pack_dir = tmp_path / ".config" / "skills" / "gstack" / "review"
         pack_dir.mkdir(parents=True)
-        (pack_dir / "SKILL.md").write_text("# Review\n")
+        (pack_dir / "SKILL.md").write_text("# Review\n", encoding="utf-8")
 
         with patch.object(Path, "home", return_value=tmp_path):
             result = is_pack_installed("gstack/review")
@@ -73,7 +73,7 @@ class TestIsPackInstalled:
     def test_pack_in_skills_subdir(self, tmp_path: Path) -> None:
         pack_dir = tmp_path / ".config" / "skills" / "gstack" / "skills" / "review"
         pack_dir.mkdir(parents=True)
-        (pack_dir / "SKILL.md").write_text("# Review\n")
+        (pack_dir / "SKILL.md").write_text("# Review\n", encoding="utf-8")
 
         with patch.object(Path, "home", return_value=tmp_path):
             result = is_pack_installed("gstack/review")

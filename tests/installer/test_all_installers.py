@@ -115,7 +115,7 @@ class TestInstallerIntegration:
         # Create a test skill
         skill_dir = tmp_path / "test-skill"
         skill_dir.mkdir(parents=True, exist_ok=True)
-        (skill_dir / "SKILL.md").write_text("# Test Skill\n\nA test skill.")
+        (skill_dir / "SKILL.md").write_text("# Test Skill\n\nA test skill.", encoding="utf-8")
 
         # Install skill
         skill_installer = SkillInstaller()

@@ -9,6 +9,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Windows compatibility — production-ready (2026-07-19)
+
+Full test suite green on Windows (`88 failed → 0 failed`, 4281 passed,
+37 skipped) with zero POSIX regressions and a new `test-windows` CI job.
+Design/analysis trail: `docs/dev/windows-compat/` (multi-agent workflow:
+design → adversarial review → implementation → review → pi sign-off).
+
+- **Encoding**: explicit `encoding="utf-8"` across all project-owned file IO
+  (77 src sites + 436 test sites); new `utils/encoding.py` with UTF-8-strict
+  → locale-fallback readers for user-managed configs (heals GBK-poisoned
+  `~/.vibe/config.toml` transparently, with a warning). Fixes: scenario
+  routing silently disabled on zh-CN Windows; `vibe init` writing config it
+  could not read back; `vibe config` crash on GBK `config.yaml`.
+- **Symlinks**: new `utils/symlinks.py` empirical capability probe
+  (cache-positive-only); copy-fallback now writes a `.vibe-copy-source`
+  marker so pack discovery (`vibe skills list`) keeps working; missing
+  `target_is_directory=True` fixed; fallback is logged, partial copies
+  cleaned, marker failure no longer discards good copies.
+- **Permission bits**: exec-bit checks degrade on win32 to
+  `bash` availability + non-empty script (hooks run via `bash <script>`);
+  `chmod 0o600` restored after atomic writes (POSIX privacy parity).
+- **Slash commands**: `shlex` backslash-escape + unconditional `posix=True`
+  — literal quotes no longer leak into route queries on Windows; pinned by
+  regression tests.
+- **Silent data loss**: `sessions/tracker.py` + `badges.py` fd leaks fixed
+  via `atomic_writer` — session state and badges now persist on Windows.
+- **Test infrastructure**: `_isolated_home` autouse fixture (3-layer: env +
+  `Path.home` + 12 frozen-ClassVar redirects) — zero real-user-dir side
+  effects; `symlink_supported` probe fixture; exec-bit assertions guarded
+  line-level; timing flakes pinned.
+- **CI**: `test-windows` job (windows-latest, py 3.12/3.13, `--reruns 2`;
+  `continue-on-error` during a 2-week observation period, then required).
+
 ### Skill marketplace & suggestion feedback loop (P0–P4, 2026-07-18)
 
 Implements `docs/proposals/skill-market-search-and-feedback-loop.md`

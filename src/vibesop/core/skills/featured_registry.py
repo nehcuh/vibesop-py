@@ -260,12 +260,12 @@ class FeaturedRegistry:
         local_file = self._project_root / ".vibe" / "featured-skills.json"
         if local_file.exists():
             try:
-                data = json.loads(local_file.read_text())
+                data = json.loads(local_file.read_text(encoding="utf-8"))
                 self._skills = [FeaturedSkill.from_dict(e) for e in data.get("skills", [])]
                 self._loaded = True
                 logger.debug("Loaded %d featured skills from %s", len(self._skills), local_file)
                 return
-            except (json.JSONDecodeError, KeyError) as e:
+            except (json.JSONDecodeError, KeyError, UnicodeDecodeError) as e:
                 logger.warning("Failed to load featured-skills.json: %s, using defaults", e)
 
         self._skills = [FeaturedSkill.from_dict(e) for e in DEFAULT_FEATURED_SKILLS]
@@ -280,7 +280,7 @@ class FeaturedRegistry:
             "updated_at": "",
             "skills": [s.to_dict() for s in self.skills],
         }
-        local_file.write_text(json.dumps(data, indent=2, ensure_ascii=False))
+        local_file.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
         return local_file
 
     def merge_remote(self, remote_skills: list[dict[str, Any]]) -> int:

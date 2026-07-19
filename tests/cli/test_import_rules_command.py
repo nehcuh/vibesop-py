@@ -23,7 +23,7 @@ class TestImportRulesCommand:
         """Test import-rules --dry-run."""
         with tempfile.TemporaryDirectory() as tmpdir:
             rule_file = Path(tmpdir) / "rules.md"
-            rule_file.write_text("# Team Rules\n\nBe nice.")
+            rule_file.write_text("# Team Rules\n\nBe nice.", encoding="utf-8")
 
             result = runner.invoke(app, ["import-rules", str(rule_file), "--dry-run"])
             assert result.exit_code == 0
@@ -34,7 +34,7 @@ class TestImportRulesCommand:
         """Test successful import to rules target."""
         with tempfile.TemporaryDirectory() as tmpdir:
             rule_file = Path(tmpdir) / "rules.md"
-            rule_file.write_text("# Team Rules\n\nBe nice.")
+            rule_file.write_text("# Team Rules\n\nBe nice.", encoding="utf-8")
 
             result = runner.invoke(app, ["import-rules", str(rule_file), "--force"])
             assert result.exit_code == 0
@@ -45,7 +45,7 @@ class TestImportRulesCommand:
         """Test import to behavior-policies target."""
         with tempfile.TemporaryDirectory() as tmpdir:
             rule_file = Path(tmpdir) / "rules.md"
-            rule_file.write_text("# Behavior\n\nNo yelling.")
+            rule_file.write_text("# Behavior\n\nNo yelling.", encoding="utf-8")
 
             result = runner.invoke(
                 app, ["import-rules", str(rule_file), "--target", "behavior-policies", "--force"]
@@ -58,7 +58,7 @@ class TestImportRulesCommand:
         """Test import fails when file exists and no --force."""
         with tempfile.TemporaryDirectory() as tmpdir:
             rule_file = Path(tmpdir) / "rules.md"
-            rule_file.write_text("# Team Rules")
+            rule_file.write_text("# Team Rules", encoding="utf-8")
 
             # First import creates the file
             runner.invoke(app, ["import-rules", str(rule_file), "--force"])

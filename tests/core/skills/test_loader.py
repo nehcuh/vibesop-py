@@ -33,7 +33,7 @@ class TestLoadedSkill:
 
     def test_creation_with_source(self, tmp_path: Path):
         source = tmp_path / "skill.md"
-        source.write_text("# Test")
+        source.write_text("# Test", encoding="utf-8")
         meta = _make_meta()
         skill = LoadedSkill(metadata=meta, content="hello", source_file=source)
         assert skill.source_file == source
@@ -114,13 +114,16 @@ class TestDiscoverAll:
     def test_discovers_markdown_skills(self, tmp_path: Path):
         skills_dir = tmp_path / "skills"
         skills_dir.mkdir()
-        (skills_dir / "my-skill.md").write_text("""---
+        (skills_dir / "my-skill.md").write_text(
+            """---
 id: my-skill
 name: My Skill
 description: A test skill
 ---
 # Content
-""")
+""",
+            encoding="utf-8",
+        )
         loader = SkillLoader(project_root=tmp_path, enable_external=False)
         skills = loader.discover_all()
         assert "my-skill" in skills
@@ -128,10 +131,13 @@ description: A test skill
     def test_discovers_yaml_skills(self, tmp_path: Path):
         skills_dir = tmp_path / "skills"
         skills_dir.mkdir()
-        (skills_dir / "test-skill.yaml").write_text("""id: test-skill
+        (skills_dir / "test-skill.yaml").write_text(
+            """id: test-skill
 name: Test Skill
 description: A YAML skill
-""")
+""",
+            encoding="utf-8",
+        )
         loader = SkillLoader(project_root=tmp_path, enable_external=False)
         skills = loader.discover_all()
         assert len(skills) > 0
@@ -139,10 +145,13 @@ description: A YAML skill
     def test_discovers_yml_skills(self, tmp_path: Path):
         skills_dir = tmp_path / "skills"
         skills_dir.mkdir()
-        (skills_dir / "test-skill.yml").write_text("""id: test-skill
+        (skills_dir / "test-skill.yml").write_text(
+            """id: test-skill
 name: Test Skill
 description: A YML skill
-""")
+""",
+            encoding="utf-8",
+        )
         loader = SkillLoader(project_root=tmp_path, enable_external=False)
         skills = loader.discover_all()
         assert len(skills) > 0
@@ -150,13 +159,16 @@ description: A YML skill
     def test_cache_returns_same(self, tmp_path: Path):
         skills_dir = tmp_path / "skills"
         skills_dir.mkdir()
-        (skills_dir / "test.md").write_text("""---
+        (skills_dir / "test.md").write_text(
+            """---
 id: test
 name: Test
 description: Desc
 ---
 # Body
-""")
+""",
+            encoding="utf-8",
+        )
         loader = SkillLoader(project_root=tmp_path, enable_external=False)
         first = loader.discover_all()
         second = loader.discover_all()
@@ -165,13 +177,16 @@ description: Desc
     def test_force_reload(self, tmp_path: Path):
         skills_dir = tmp_path / "skills"
         skills_dir.mkdir()
-        (skills_dir / "test.md").write_text("""---
+        (skills_dir / "test.md").write_text(
+            """---
 id: test
 name: Test
 description: Desc
 ---
 # Body
-""")
+""",
+            encoding="utf-8",
+        )
         loader = SkillLoader(project_root=tmp_path, enable_external=False)
         first = loader.discover_all()
         second = loader.discover_all(force_reload=True)
@@ -180,7 +195,7 @@ description: Desc
     def test_skips_invalid_markdown(self, tmp_path: Path):
         skills_dir = tmp_path / "skills"
         skills_dir.mkdir()
-        (skills_dir / "no-frontmatter.md").write_text("# No frontmatter here")
+        (skills_dir / "no-frontmatter.md").write_text("# No frontmatter here", encoding="utf-8")
         loader = SkillLoader(project_root=tmp_path, enable_external=False)
         skills = loader.discover_all()
         assert len(skills) == 0
@@ -202,13 +217,16 @@ class TestGetSkill:
     def test_get_existing_skill(self, tmp_path: Path):
         skills_dir = tmp_path / "skills"
         skills_dir.mkdir()
-        (skills_dir / "test.md").write_text("""---
+        (skills_dir / "test.md").write_text(
+            """---
 id: test
 name: Test
 description: Desc
 ---
 Body
-""")
+""",
+            encoding="utf-8",
+        )
         loader = SkillLoader(project_root=tmp_path, enable_external=False)
         skill = loader.get_skill("test")
         assert skill is not None
@@ -225,13 +243,16 @@ class TestReadSkillContent:
     def test_reads_from_source_file(self, tmp_path: Path):
         skills_dir = tmp_path / "skills"
         skills_dir.mkdir()
-        (skills_dir / "test.md").write_text("""---
+        (skills_dir / "test.md").write_text(
+            """---
 id: test
 name: Test
 description: Desc
 ---
 Body content here
-""")
+""",
+            encoding="utf-8",
+        )
         loader = SkillLoader(project_root=tmp_path, enable_external=False)
         content = loader.read_skill_content("test")
         assert "Body content here" in content
@@ -255,20 +276,26 @@ class TestListSkills:
     def test_list_all_skills(self, tmp_path: Path):
         skills_dir = tmp_path / "skills"
         skills_dir.mkdir()
-        (skills_dir / "a.md").write_text("""---
+        (skills_dir / "a.md").write_text(
+            """---
 id: a
 name: A
 description: DescA
 ---
 A
-""")
-        (skills_dir / "b.md").write_text("""---
+""",
+            encoding="utf-8",
+        )
+        (skills_dir / "b.md").write_text(
+            """---
 id: b
 name: B
 description: DescB
 ---
 B
-""")
+""",
+            encoding="utf-8",
+        )
         loader = SkillLoader(project_root=tmp_path, enable_external=False)
         skills = loader.list_skills()
         assert len(skills) == 2
@@ -276,22 +303,28 @@ B
     def test_list_filter_by_namespace(self, tmp_path: Path):
         skills_dir = tmp_path / "skills"
         skills_dir.mkdir()
-        (skills_dir / "a.md").write_text("""---
+        (skills_dir / "a.md").write_text(
+            """---
 id: a
 name: A
 description: DescA
 namespace: ns1
 ---
 A
-""")
-        (skills_dir / "b.md").write_text("""---
+""",
+            encoding="utf-8",
+        )
+        (skills_dir / "b.md").write_text(
+            """---
 id: b
 name: B
 description: DescB
 namespace: ns2
 ---
 B
-""")
+""",
+            encoding="utf-8",
+        )
         loader = SkillLoader(project_root=tmp_path, enable_external=False)
         filtered = loader.list_skills(namespace="ns1")
         assert len(filtered) == 1
@@ -353,13 +386,16 @@ class TestClearCache:
     def test_clear_cache(self, tmp_path: Path):
         skills_dir = tmp_path / "skills"
         skills_dir.mkdir()
-        (skills_dir / "test.md").write_text("""---
+        (skills_dir / "test.md").write_text(
+            """---
 id: test
 name: Test
 description: Desc
 ---
 Body
-""")
+""",
+            encoding="utf-8",
+        )
         loader = SkillLoader(project_root=tmp_path, enable_external=False)
         loader.discover_all()
         assert len(loader._skill_cache) > 0
@@ -447,13 +483,16 @@ class TestLoadMarkdownSkill:
 
     def test_loads_valid_markdown(self, tmp_path: Path):
         md = tmp_path / "test.md"
-        md.write_text("""---
+        md.write_text(
+            """---
 id: test
 name: Test
 description: A test skill
 ---
 # Do this
-""")
+""",
+            encoding="utf-8",
+        )
         loader = SkillLoader(project_root=tmp_path, enable_external=False)
         loader._load_markdown_skill(md)
         assert "test" in loader._skill_cache
@@ -461,21 +500,27 @@ description: A test skill
 
     def test_skips_duplicate_id(self, tmp_path: Path):
         md1 = tmp_path / "first.md"
-        md1.write_text("""---
+        md1.write_text(
+            """---
 id: dup
 name: First
 description: First skill
 ---
 First body
-""")
+""",
+            encoding="utf-8",
+        )
         md2 = tmp_path / "second.md"
-        md2.write_text("""---
+        md2.write_text(
+            """---
 id: dup
 name: Second
 description: Second skill
 ---
 Second body
-""")
+""",
+            encoding="utf-8",
+        )
         loader = SkillLoader(project_root=tmp_path, enable_external=False)
         loader._load_markdown_skill(md1)
         loader._load_markdown_skill(md2)
@@ -483,14 +528,15 @@ Second body
 
     def test_skips_file_without_frontmatter(self, tmp_path: Path):
         md = tmp_path / "no-frontmatter.md"
-        md.write_text("# Just a heading")
+        md.write_text("# Just a heading", encoding="utf-8")
         loader = SkillLoader(project_root=tmp_path, enable_external=False)
         loader._load_markdown_skill(md)
         assert len(loader._skill_cache) == 0
 
     def test_workflow_type_parses_steps(self, tmp_path: Path):
         md = tmp_path / "workflow.md"
-        md.write_text("""---
+        md.write_text(
+            """---
 id: workflow
 name: Workflow
 description: A workflow skill
@@ -501,7 +547,9 @@ steps:
     action: do_something
   - name: Step 2
     action: verify
-""")
+""",
+            encoding="utf-8",
+        )
         loader = SkillLoader(project_root=tmp_path, enable_external=False)
         loader._load_markdown_skill(md)
         skill = loader._skill_cache.get("workflow")
@@ -515,21 +563,27 @@ class TestLoadYamlSkill:
 
     def test_loads_valid_yaml(self, tmp_path: Path):
         yaml_file = tmp_path / "test.yaml"
-        yaml_file.write_text("""id: test-yaml
+        yaml_file.write_text(
+            """id: test-yaml
 name: Test YAML
 description: A YAML-defined skill
 prompt: Do this thing
-""")
+""",
+            encoding="utf-8",
+        )
         loader = SkillLoader(project_root=tmp_path, enable_external=False)
         loader._load_yaml_skill(yaml_file)
         assert "test-yaml" in loader._skill_cache
 
     def test_skips_duplicate_id(self, tmp_path: Path):
         yaml_file = tmp_path / "test.yaml"
-        yaml_file.write_text("""id: dup-yaml
+        yaml_file.write_text(
+            """id: dup-yaml
 name: Duplicate
 description: A duplicate
-""")
+""",
+            encoding="utf-8",
+        )
         loader = SkillLoader(project_root=tmp_path, enable_external=False)
         loader._skill_cache["dup-yaml"] = LoadedSkill(
             metadata=_make_meta("dup-yaml"),
@@ -540,7 +594,7 @@ description: A duplicate
 
     def test_skips_non_dict_yaml(self, tmp_path: Path):
         yaml_file = tmp_path / "list.yaml"
-        yaml_file.write_text("- item1\n- item2\n")
+        yaml_file.write_text("- item1\n- item2\n", encoding="utf-8")
         loader = SkillLoader(project_root=tmp_path, enable_external=False)
         loader._load_yaml_skill(yaml_file)
         assert len(loader._skill_cache) == 0

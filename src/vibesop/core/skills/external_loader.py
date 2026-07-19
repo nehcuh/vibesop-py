@@ -294,7 +294,7 @@ class ExternalSkillLoader:
         manifest_file = pack_path / "pack.json"
         if manifest_file.exists():
             try:
-                with manifest_file.open() as f:
+                with manifest_file.open(encoding="utf-8") as f:
                     manifest = json.load(f)
                 return manifest.get("version")
             except (OSError, json.JSONDecodeError):
@@ -304,7 +304,7 @@ class ExternalSkillLoader:
         pkg_file = pack_path / "package.json"
         if pkg_file.exists():
             try:
-                with pkg_file.open() as f:
+                with pkg_file.open(encoding="utf-8") as f:
                     pkg = json.load(f)
                 return pkg.get("version")
             except (OSError, json.JSONDecodeError):
@@ -344,7 +344,7 @@ class ExternalSkillLoader:
                     manifest_path = current / manifest_name
                     if manifest_path.exists():
                         try:
-                            with manifest_path.open() as f:
+                            with manifest_path.open(encoding="utf-8") as f:
                                 data = json.load(f)
                             repo = data.get("repository")
                             repo_url = repo.get("url") if isinstance(repo, dict) else repo

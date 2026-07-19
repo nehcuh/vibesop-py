@@ -34,19 +34,19 @@ class TestSkillRecommenderSimpleDetect:
     """Test _simple_detect language detection."""
 
     def test_detects_python(self, tmp_path: Path):
-        (tmp_path / "main.py").write_text("print('hello')")
+        (tmp_path / "main.py").write_text("print('hello')", encoding="utf-8")
         recommender = SkillRecommender(project_root=tmp_path)
         result = recommender._simple_detect()
         assert result["primary_language"] == "python"
 
     def test_detects_javascript(self, tmp_path: Path):
-        (tmp_path / "app.js").write_text("console.log('hi')")
+        (tmp_path / "app.js").write_text("console.log('hi')", encoding="utf-8")
         recommender = SkillRecommender(project_root=tmp_path)
         result = recommender._simple_detect()
         assert result["primary_language"] == "javascript"
 
     def test_detects_typescript(self, tmp_path: Path):
-        (tmp_path / "app.ts").write_text("let x: number")
+        (tmp_path / "app.ts").write_text("let x: number", encoding="utf-8")
         recommender = SkillRecommender(project_root=tmp_path)
         result = recommender._simple_detect()
         assert result["primary_language"] == "typescript"
@@ -57,9 +57,9 @@ class TestSkillRecommenderSimpleDetect:
         assert result["primary_language"] == "default"
 
     def test_most_common_wins(self, tmp_path: Path):
-        (tmp_path / "a.py").write_text("a")
-        (tmp_path / "b.py").write_text("b")
-        (tmp_path / "c.js").write_text("c")
+        (tmp_path / "a.py").write_text("a", encoding="utf-8")
+        (tmp_path / "b.py").write_text("b", encoding="utf-8")
+        (tmp_path / "c.js").write_text("c", encoding="utf-8")
         recommender = SkillRecommender(project_root=tmp_path)
         result = recommender._simple_detect()
         assert result["primary_language"] == "python"
@@ -111,7 +111,7 @@ class TestSkillRecommenderRecommendations:
         assert recs == []
 
     def test_recommend_for_project_python(self, tmp_path: Path):
-        (tmp_path / "main.py").write_text("pass")
+        (tmp_path / "main.py").write_text("pass", encoding="utf-8")
         recommender = SkillRecommender(project_root=tmp_path)
         with patch.object(recommender, "_get_installed_skill_ids", return_value=set()):
             with patch.object(recommender, "_get_analytics_recommendations", return_value=None):

@@ -99,7 +99,7 @@ def _acquire_tick_lock(store: LoopStore, name: str, *, blocking: bool = False) -
         return True  # Windows: no cross-process advisory locking.
     lock_path = store.base_dir / name / ".tick.lock"
     lock_path.parent.mkdir(parents=True, exist_ok=True)
-    lock_fd = lock_path.open("w")
+    lock_fd = lock_path.open("w", encoding="utf-8")
     try:
         flag = fcntl.LOCK_EX if blocking else fcntl.LOCK_EX | fcntl.LOCK_NB
         fcntl.flock(lock_fd.fileno(), flag)

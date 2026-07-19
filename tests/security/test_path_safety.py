@@ -1,6 +1,7 @@
 """Tests for PathSafety."""
 
 import contextlib
+import os
 from pathlib import Path
 
 import pytest
@@ -106,7 +107,7 @@ class TestPathSafety:
 
         error = exc_info.value
         assert "Path traversal detected" in str(error)
-        assert error.path == "../../../etc/passwd"
+        assert error.path == os.path.normpath("../../../etc/passwd")
 
     def test_check_overlap_identical(self, tmp_path: Path) -> None:
         """Test check_overlap with identical paths."""
@@ -152,7 +153,7 @@ class TestPathSafety:
         safety = PathSafety()
 
         test_file = tmp_path / "writable.txt"
-        test_file.write_text("test")
+        test_file.write_text("test", encoding="utf-8")
 
         # Should be writable
         assert safety.verify_writable(test_file)
@@ -301,7 +302,7 @@ class TestPathSafety:
 
         assert "depth exceeds maximum" in str(exc_info.value)
 
-    def test_symbolic_link_handling(self, tmp_path: Path) -> None:
+    def test_symbolic_link_handling(self, tmp_path: Path, symlink_supported: bool) -> None:
         """Test path safety with symbolic links.
 
         v7.0.8 contract update: a symlink in the output path is now
@@ -310,19 +311,16 @@ class TestPathSafety:
         conflicts with the v7.0.5 ``test_symlinked_output_path_rejected``
         test and with the S23 red-team threat model.
         """
+        if not symlink_supported:
+            pytest.skip("directory symlinks not supported on this host")
         safety = PathSafety()
 
         # Create a file
         target_file = tmp_path / "target.txt"
-        target_file.write_text("content")
+        target_file.write_text("content", encoding="utf-8")
 
-        # Create a symlink (if supported)
-        try:
-            link_file = tmp_path / "link.txt"
-            link_file.symlink_to(target_file)
-        except OSError:
-            # Symlinks not supported on this system
-            pytest.skip("Symbolic links not supported")
+        link_file = tmp_path / "link.txt"
+        link_file.symlink_to(target_file)
 
         # v7.0.5+: a symlink as the leaf of an output path must be
         # rejected — the lstat check in _no_symlinks_in_chain catches it.

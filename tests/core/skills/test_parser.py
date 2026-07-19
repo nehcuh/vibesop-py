@@ -53,7 +53,8 @@ class TestParseSkillMd:
             "description: A test skill\n"
             "version: 1.0.0\n"
             "---\n"
-            "# Test Skill\n"
+            "# Test Skill\n",
+            encoding="utf-8",
         )
 
         meta = parse_skill_md(skill_dir)
@@ -69,7 +70,7 @@ class TestParseSkillMd:
 
     def test_parse_file_directly(self, tmp_path: Path):
         skill_file = tmp_path / "SKILL.md"
-        skill_file.write_text("---\nid: direct\nname: Direct\n---\n")
+        skill_file.write_text("---\nid: direct\nname: Direct\n---\n", encoding="utf-8")
 
         meta = parse_skill_md(skill_file)
         assert meta is not None
@@ -79,7 +80,7 @@ class TestParseSkillMd:
         skill_dir = tmp_path / "bad-skill"
         skill_dir.mkdir()
         skill_file = skill_dir / "SKILL.md"
-        skill_file.write_text("# No frontmatter\n")
+        skill_file.write_text("# No frontmatter\n", encoding="utf-8")
 
         meta = parse_skill_md(skill_dir)
         assert meta is None
@@ -88,7 +89,7 @@ class TestParseSkillMd:
         skill_dir = tmp_path / "tagged-skill"
         skill_dir.mkdir()
         skill_file = skill_dir / "SKILL.md"
-        skill_file.write_text("---\nid: tagged\ntags: a, b, c\n---\n")
+        skill_file.write_text("---\nid: tagged\ntags: a, b, c\n---\n", encoding="utf-8")
 
         meta = parse_skill_md(skill_dir)
         assert meta is not None
@@ -100,7 +101,7 @@ class TestParseSkillMd:
         skill_dir = tmp_path / "triggered-skill"
         skill_dir.mkdir()
         skill_file = skill_dir / "SKILL.md"
-        skill_file.write_text("---\nid: triggered\ntriggers: debug, fix\n---\n")
+        skill_file.write_text("---\nid: triggered\ntriggers: debug, fix\n---\n", encoding="utf-8")
 
         meta = parse_skill_md(skill_dir)
         assert meta is not None

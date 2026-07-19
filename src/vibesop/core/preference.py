@@ -216,7 +216,7 @@ class PreferenceLearner:
         if not self.storage_path.exists():
             return PreferenceStorage()
         try:
-            with self.storage_path.open("r") as f:
+            with self.storage_path.open("r", encoding="utf-8") as f:
                 # Acquire shared lock for reading
                 if fcntl:
                     fcntl.flock(f.fileno(), fcntl.LOCK_SH)
@@ -242,7 +242,7 @@ class PreferenceLearner:
         self.storage_path.parent.mkdir(parents=True, exist_ok=True)
         # Use a separate lock file to coordinate concurrent writers
         lock_path = self.storage_path.with_suffix(".lock")
-        with lock_path.open("w") as lock_file:
+        with lock_path.open("w", encoding="utf-8") as lock_file:
             if fcntl:
                 fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
             try:

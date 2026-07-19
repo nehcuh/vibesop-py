@@ -181,14 +181,14 @@ def _get_configured_platform() -> str | None:
             continue
         try:
             if ext == ".toml":
-                import tomllib
+                from vibesop.utils.encoding import load_toml_with_fallback
 
-                with config_path.open("rb") as f:
-                    config = tomllib.load(f)
+                config = load_toml_with_fallback(config_path)
             else:
+                from vibesop.utils.encoding import read_text_with_fallback
+
                 yaml_parser = YAML()
-                with config_path.open() as f:
-                    config = yaml_parser.load(f)
+                config = yaml_parser.load(read_text_with_fallback(config_path))
             return config.get("platform") if config else None
         except Exception as e:
             logger.debug(f"Failed to read {config_path.name}: {e}")

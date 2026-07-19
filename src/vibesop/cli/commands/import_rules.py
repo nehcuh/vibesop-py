@@ -87,8 +87,10 @@ def import_rules(
 
     console.print(f"\n[bold cyan]📥 Import Rules[/bold cyan]\n{'=' * 40}\n")
 
-    # Read the input file
-    content = file_path.read_text()
+    # Read the input file (user-managed: tolerate locale-encoded files)
+    from vibesop.utils.encoding import read_text_with_fallback
+
+    content = read_text_with_fallback(file_path)
     console.print(f"[dim]Source: {file_path}[/dim]")
     console.print(f"[dim]Size: {len(content)} bytes[/dim]\n")
 
@@ -128,7 +130,7 @@ def import_rules(
         raise typer.Exit(1)
 
     # Write rules
-    output_file.write_text(rules)
+    output_file.write_text(rules, encoding="utf-8")
 
     console.print(
         Panel(

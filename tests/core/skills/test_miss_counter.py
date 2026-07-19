@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import stat
+import sys
 import time
 from pathlib import Path
 
@@ -100,8 +101,10 @@ def test_salt_file_permissions_and_stability(tmp_path: Path) -> None:
 
     salt_path = tmp_path / ".vibe" / "miss_salt"
     assert salt_path.exists()
-    mode = stat.S_IMODE(salt_path.stat().st_mode)
-    assert mode == 0o600, f"salt file must be 0o600, got {oct(mode)}"
+    if sys.platform != "win32":
+        # Windows has no POSIX permission-bit semantics (chmod toggles read-only only).
+        mode = stat.S_IMODE(salt_path.stat().st_mode)
+        assert mode == 0o600, f"salt file must be 0o600, got {oct(mode)}"
 
     # Same salt across instances → identical hash for identical queries.
     digest_before = next(iter(_load(tmp_path)))

@@ -41,7 +41,7 @@ def test_install_plan_to_dict():
     d = plan.to_dict()
     assert d["pack_name"] == "test-pack"
     assert d["source_url"] == "https://example.com"
-    assert d["target_path"] == "/target"
+    assert d["target_path"] == str(Path("/target"))  # "\target" on Windows
     assert d["skills"] == [{"id": "debug", "path": "skills/debug"}]
     assert "readme_hint" in d
 

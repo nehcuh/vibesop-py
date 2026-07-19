@@ -103,7 +103,7 @@ class TestLegacyMigration:
 
     def _write_legacy_file(self, trust_file, packs_json: str) -> None:
         trust_file.parent.mkdir(parents=True, exist_ok=True)
-        trust_file.write_text(packs_json)
+        trust_file.write_text(packs_json, encoding="utf-8")
 
     def test_backfills_hash_from_installed_pack_dir(self, tmp_path, monkeypatch):
         """A hashless entry whose pack dir exists gets its hash backfilled."""
@@ -115,7 +115,7 @@ class TestLegacyMigration:
         )
         pack_dir = tmp_path / "legacy-pack"
         pack_dir.mkdir()
-        (pack_dir / "SKILL.md").write_text("# legacy skill\n")
+        (pack_dir / "SKILL.md").write_text("# legacy skill\n", encoding="utf-8")
         expected_hash = MarkerFileManager().calculate_checksum(pack_dir)
 
         store = TrustStore()
@@ -138,7 +138,7 @@ class TestLegacyMigration:
         )
         pack_dir = tmp_path / "legacy-pack"
         pack_dir.mkdir()
-        (pack_dir / "SKILL.md").write_text("# legacy skill\n")
+        (pack_dir / "SKILL.md").write_text("# legacy skill\n", encoding="utf-8")
 
         with caplog.at_level(logging.WARNING, logger="vibesop.core.skills.trust"):
             TrustStore()
@@ -160,7 +160,7 @@ class TestLegacyMigration:
         assert store.get_trusted_packs() == {}
         assert not store.is_trusted_pack("ghost-pack", content_sha256="any-hash")
         # The drop is persisted.
-        assert "ghost-pack" not in trust_file.read_text()
+        assert "ghost-pack" not in trust_file.read_text(encoding="utf-8")
 
     def test_hashed_entries_are_untouched_even_without_pack_dir(self, tmp_path, monkeypatch):
         """Migration only touches hashless entries; hashed entries are kept

@@ -196,6 +196,7 @@ class RoutingTracer:
         filepath = self._traces_dir / f"{trace.trace_id}.json"
         filepath.write_text(
             json.dumps(data, indent=2, ensure_ascii=False, default=str),
+            encoding="utf-8",
         )
         logger.debug("Routing trace saved: %s", filepath)
         return str(filepath)
@@ -224,7 +225,7 @@ class RoutingTracer:
         traces = []
         for f in files:
             try:
-                data = json.loads(f.read_text())
+                data = json.loads(f.read_text(encoding="utf-8"))
                 traces.append(
                     {
                         "trace_id": data.get("trace_id", f.stem),
@@ -235,6 +236,6 @@ class RoutingTracer:
                         "layer_count": len(data.get("layers", [])),
                     }
                 )
-            except (json.JSONDecodeError, KeyError):
+            except (json.JSONDecodeError, KeyError, UnicodeDecodeError):
                 continue
         return traces

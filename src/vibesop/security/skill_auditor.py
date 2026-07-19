@@ -7,6 +7,7 @@ malicious SKILL.md files can exfiltrate data or manipulate agent behavior.
 
 from __future__ import annotations
 
+import logging
 import re
 from dataclasses import dataclass, field, replace
 from datetime import datetime
@@ -16,6 +17,8 @@ from typing import Any, ClassVar
 
 from vibesop.security import PathSafety, SecurityScanner
 from vibesop.security.exceptions import PathTraversalError, UnsafeContentError
+
+logger = logging.getLogger(__name__)
 
 
 class ThreatLevel(StrEnum):
@@ -574,7 +577,10 @@ class SkillSecurityAuditor:
                 if file_path.stat().st_size > self.PACK_FILE_SIZE_LIMIT:
                     continue
                 content = file_path.read_text(encoding="utf-8", errors="ignore")
-            except OSError:
+            except OSError as e:
+                # Transient lock (e.g. Windows Defender scan) — file is
+                # skipped from the audit; log so the gap is traceable.
+                logger.debug("pack audit skipped unreadable file %s: %s", file_path, e)
                 continue
 
             files_scanned += 1
