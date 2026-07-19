@@ -60,3 +60,19 @@ New observations added to deferred items (4) and (5) below.
 4. `quickstart_runner.py:297` — could adopt probe for consistency (behavior already correct via try/except).
 5. Conftest frozen-ClassVar redirect list is a maintenance burden: any future module freezing `Path.home()` at import time must be added manually (Grok R3). Consider an import-time lint or a centralized path-registry module.
 6. Marker `relative_to` validation is case-sensitive post-`resolve()`; a hand-crafted mixed-case marker could theoretically bypass (requires platform-dir write access — already a trusted operation) (Grok R3).
+
+## Post-merge CI catch (2026-07-19, fixed in follow-up commit)
+
+First real `windows-latest` CI run: **4302 passed, 1 failed** (ubuntu all green —
+zero-POSIX-regression claim externally confirmed). The single failure was a
+genuine Windows-only production bug the local privilege-less host could not
+reach (its symlink tests probe-skipped, CI runners are elevated):
+
+- `pack_installer._flatten_skill_name` replaced only `/`, but `rel_path` comes
+  from `Path.relative_to()` (native separators = `\` on Windows) → nested
+  "flat" names (`packB-deeply\nested\review`) → `symlink_to` WinError 3.
+- Fix: normalize `\` → `/` before flattening; pure-function regression test
+  added (`test_flatten_skill_name_normalizes_separators`, runs without
+  symlink privilege — closes the probe-skip blind spot for this logic).
+- Lesson recorded: probe-skipped tests hide privileged code paths locally;
+  prefer extracting pure logic into privilege-free unit tests where possible.

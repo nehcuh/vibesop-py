@@ -614,7 +614,11 @@ class PackInstaller:
     def _flatten_skill_name(pack_name: str, rel_path: str) -> str:
         if str(rel_path) == ".":
             return pack_name
-        return pack_name + "-" + str(rel_path).replace("/", "-")
+        # rel_path comes from Path.relative_to() — native separators, i.e.
+        # backslashes on Windows. Normalize before flattening, otherwise the
+        # "flat" name still contains path segments and symlink/copy targets
+        # end up in non-existent nested directories (WinError 3).
+        return pack_name + "-" + str(rel_path).replace("\\", "/").replace("/", "-")
 
     @staticmethod
     def _is_valid_skill(skill_file: Path) -> bool:

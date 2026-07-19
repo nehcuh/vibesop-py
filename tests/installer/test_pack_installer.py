@@ -425,6 +425,22 @@ class TestSkillNameDedup:
         )
         return pack
 
+    def test_flatten_skill_name_normalizes_separators(self) -> None:
+        """rel_path from Path.relative_to() uses native separators — backslashes
+        on Windows must flatten too, else the link target lands in a nested
+        non-existent directory (WinError 3 on windows-latest CI)."""
+        from vibesop.installer.pack_installer import PackInstaller
+
+        assert (
+            PackInstaller._flatten_skill_name("packB", "deeply/nested/review")
+            == "packB-deeply-nested-review"
+        )
+        assert (
+            PackInstaller._flatten_skill_name("packB", "deeply\\nested\\review")
+            == "packB-deeply-nested-review"
+        )
+        assert PackInstaller._flatten_skill_name("packB", ".") == "packB"
+
     def test_dedup_skips_same_name_across_packs(self, tmp_path, symlink_supported):
         """Two packs installing a skill with the same ``name:`` → only first lands."""
         if not symlink_supported:
