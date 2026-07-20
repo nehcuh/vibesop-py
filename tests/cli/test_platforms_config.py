@@ -12,7 +12,7 @@ import pytest
 import typer
 from typer.testing import CliRunner
 
-from vibesop.cli.commands.install import _resolve_platforms, _validate_platform
+from vibesop.cli.commands._utils import resolve_platforms as _resolve_platforms, validate_platform as _validate_platform
 from vibesop.cli.main import app
 
 runner = CliRunner()

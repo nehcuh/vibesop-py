@@ -186,6 +186,25 @@ class PackIntegrityError(VibeSOPError):
         self.pack_name = pack_name
 
 
+class PlanNotFoundError(VibeSOPError):
+    """Raised when an execution plan cannot be found."""
+
+    def __init__(self, plan_id: str) -> None:
+        super().__init__(f"Execution plan {plan_id!r} not found", details={"plan_id": plan_id})
+        self.plan_id = plan_id
+
+
+class SingleIntentRoutingError(VibeSOPError):
+    """Raised when orchestration is requested for a single-intent query."""
+
+    def __init__(self, query: str) -> None:
+        super().__init__(
+            f"Single-intent query cannot be orchestrated: {query!r}",
+            details={"query": query},
+        )
+        self.query = query
+
+
 # Export all exceptions
 __all__ = [
     "CacheError",
@@ -196,7 +215,9 @@ __all__ = [
     "NoMatchingSkillError",
     "PackIntegrityError",
     "PermissionError",
+    "PlanNotFoundError",
     "RoutingError",
+    "SingleIntentRoutingError",
     "SkillLoadError",
     "SkillNotFoundError",
     "SkillParseError",

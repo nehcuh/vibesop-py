@@ -42,6 +42,7 @@ from vibesop.constants import DEFAULT_AUTO_INSTALL_PACKS, TRUSTED_PACKS
 from vibesop.core.skills.external_loader import ExternalSkillLoader
 from vibesop.core.skills.storage import SkillStorage
 from vibesop.core.skills.trust import TrustStore
+from vibesop.cli.commands._utils import resolve_platforms as _resolve_platforms
 from vibesop.installer.pack_installer import PackInstaller
 
 console = Console()
@@ -191,81 +192,6 @@ def _list_available() -> None:
         "  [cyan]vibe install <pack-name>[/cyan]\n"
         "  [cyan]vibe install <git-url>[/cyan]\n"
     )
-
-
-def _validate_platform(platform: str | None) -> list[str] | None:
-    """Validate and normalize the --platform value.
-
-    Accepts comma-separated values (``--platform claude-code,kimi-cli``) and
-    the special sentinel ``all`` (returns ``None`` to signal PackInstaller's
-    "install to every platform" path).
-
-    Returns a list of validated platform names, or ``None`` when ``platform``
-    is ``None`` (caller should then fall back to config-based resolution).
-    """
-    if platform is None:
-        return None
-    valid = SkillStorage.PLATFORM_SKILLS_DIRS.keys()
-    raw_items = [p.strip() for p in platform.split(",") if p.strip()]
-    if not raw_items:
-        return None
-    if len(raw_items) == 1 and raw_items[0] == "all":
-        return None
-    unknown = [p for p in raw_items if p not in valid]
-    if unknown:
-        console.print(
-            f"[red]✗ Unknown platform: {', '.join(unknown)}[/red]\n"
-            f"[dim]Valid platforms: {', '.join(sorted(valid))} (or 'all')[/dim]"
-        )
-        raise typer.Exit(1)
-    return raw_items
-
-
-def _resolve_platforms(
-    cli_platform: str | None,
-    project_root: Path | None = None,
-) -> tuple[list[str] | None, str]:
-    """Resolve the install target platforms.
-
-    Order: ``--platform`` flag > project config > user config > built-in default.
-
-    Returns ``(platforms, source)`` where ``platforms`` is a list of validated
-    platform names (or ``None`` to signal "all platforms") and ``source`` is
-    one of ``"cli-flag"``, ``"project-config"``, ``"user-config"``,
-    ``"default"``.
-    """
-    if cli_platform is not None:
-        return _validate_platform(cli_platform), "cli-flag"
-
-    from vibesop.core.config.manager import ConfigManager, ConfigSourcePriority
-
-    manager = ConfigManager(project_root or Path.cwd())
-    targets = manager.get_platforms_config().install_targets
-
-    project_src = manager._sources.get(ConfigSourcePriority.PROJECT)
-    user_src = manager._sources.get(ConfigSourcePriority.GLOBAL)
-    if project_src and "platforms" in project_src.data:
-        source = "project-config"
-    elif user_src and "platforms" in user_src.data:
-        source = "user-config"
-    else:
-        source = "default"
-
-    if not targets:
-        return None, source
-
-    valid = SkillStorage.PLATFORM_SKILLS_DIRS.keys()
-    unknown = [p for p in targets if p not in valid]
-    if unknown:
-        console.print(
-            f"[yellow]⚠ Ignoring unknown platform(s) in config: "
-            f"{', '.join(unknown)}[/yellow]\n"
-            f"[dim]Valid: {', '.join(sorted(valid))}[/dim]"
-        )
-    resolved = [p for p in targets if p in valid]
-    if not resolved:
-        return list(valid), "default"
-    return resolved, source
 
 
 def _auto_install(

@@ -98,7 +98,7 @@ def platforms(
         # Clear project-level preference
         vibe config platforms --clear --project
     """
-    from vibesop.cli.commands.install import _resolve_platforms
+    from vibesop.cli.commands._utils import resolve_platforms
 
     valid_platforms = set(SkillStorage.PLATFORM_SKILLS_DIRS.keys())
 
@@ -120,7 +120,7 @@ def platforms(
         return
 
     if not values:
-        resolved, source = _resolve_platforms(None, Path.cwd())
+        resolved, source = resolve_platforms(None, Path.cwd())
         label = "all platforms" if resolved is None else ", ".join(resolved)
         console.print(
             Panel(

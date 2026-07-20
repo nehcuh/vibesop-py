@@ -138,12 +138,13 @@ class StepRunner:
         Raises:
             ValueError: If the plan is not found.
         """
+        from vibesop.core.exceptions import PlanNotFoundError
         from vibesop.core.orchestration.plan_tracker import PlanTracker
 
         tracker = PlanTracker(storage_dir=Path(project_root) / ".vibe")
         plan = tracker.get_plan(plan_id)
         if plan is None:
-            raise ValueError(f"Plan {plan_id!r} not found in persisted state")
+            raise PlanNotFoundError(plan_id)
 
         runner = cls(plan, project_root=project_root)
         return runner

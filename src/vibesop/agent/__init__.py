@@ -5,6 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from vibesop.core.exceptions import SingleIntentRoutingError
+
 
 class SimpleResponse:
     """Simple response wrapper for LLM output."""
@@ -400,7 +402,7 @@ class AgentRouter:
 
         orch = self.orchestrate(query)
         if not orch.get("is_multi_intent"):
-            raise ValueError(
+            raise SingleIntentRoutingError(
                 "Query is single-intent. Use router.route() directly for single-skill routing."
             )
 

@@ -327,7 +327,9 @@ class TestStatePersistence:
         assert runner2.completed_count == 1
 
     def test_resume_not_found(self):
-        with pytest.raises(ValueError, match="not found"):
+        from vibesop.core.exceptions import PlanNotFoundError
+
+        with pytest.raises(PlanNotFoundError, match="not found"):
             StepRunner.resume("nonexistent-plan-id", project_root=".")
 
 
