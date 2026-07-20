@@ -163,8 +163,8 @@ class PlanBuilder:
                 loaded = skill_loader.get_skill(skill_id)
                 if loaded is not None:
                     caps = loaded.metadata.capabilities or []
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Failed to get capability for skill %s: %s", skill_id, e)
 
         self._capability_cache[skill_id] = caps
         return caps
@@ -691,8 +691,8 @@ class PlanBuilder:
                 discovered = getattr(skill_loader, "discover_all", lambda: {})()
                 for skill_id, loaded in discovered.items():
                     skills.append(self._loaded_skill_to_dict(skill_id, loaded))
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Failed to get capability for skill %s: %s", skill_id, e)
 
         return skills
 

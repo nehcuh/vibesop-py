@@ -425,8 +425,9 @@ class SkillSecurityAuditor:
                     for threat in threats:
                         if threat.level == ThreatLevel.HIGH:
                             threat.level = ThreatLevel.MEDIUM
-            except Exception:
-                pass  # Trust store is best-effort
+            except Exception as e:
+                logger.debug("Trust store lookup failed for %s: %s", skill_id, e)
+                # Trust store is best-effort — proceed without trust downgrade
 
         # 5. Calculate result
         if not threats:
