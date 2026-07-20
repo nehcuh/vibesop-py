@@ -9,6 +9,7 @@ Complete reference for all VibeSOP CLI commands (v6.2.0+).
 - [Core Commands](#core-commands)
   - [`vibe route`](#vibe-route)
   - [`vibe status`](#vibe-status-v530)
+  - [`vibe dashboard`](#vibe-dashboard-v80)
   - [`vibe orchestrate`](#vibe-orchestrate)
   - [`vibe decompose`](#vibe-decompose)
   - [`vibe doctor`](#vibe-doctor)
@@ -958,6 +959,49 @@ trace clean
 
 ---
 
+#### `vibe dashboard` (v8.0+)
+
+Start a local web dashboard for background visualization of routing history,
+traces, conversations, and health metrics.
+
+```bash
+vibe dashboard [options]
+```
+
+**Options:**
+- `--host`, `-h` — Host to bind to (default: 127.0.0.1)
+- `--port`, `-p` — Port to listen on (default: 8420)
+- `--open` / `--no-open` — Automatically open browser (default: open)
+- `--project`, `-P` — Project root directory (default: auto-detect from cwd)
+
+**Dependencies:**
+```bash
+uv sync --extra dashboard
+# or: pip install vibesop[dashboard]
+```
+
+**Examples:**
+```bash
+# Start dashboard on default port, auto-open browser
+vibe dashboard
+
+# Custom port, no browser auto-open
+vibe dashboard --port 9000 --no-open
+
+# Specify project root explicitly
+vibe dashboard --project /path/to/project
+```
+
+**Dashboard Tabs:**
+- **📊 Overview** — Route count, hit rate, avg satisfaction, latency P50/P95/P99,
+  top skills bar chart, mode distribution
+- **📋 History** — Sortable routing history table (time, query, skill, mode,
+  duration), filterable by skill
+- **🔍 Traces** — Per-route decision trees with per-layer match/reject details
+- **💬 Conversations** — Multi-turn conversation history with full turn details
+
+---
+
 #### `vibe verify` (v5.4.5+)
 
 Verify platform configuration integrity across all supported platforms.
@@ -1520,6 +1564,7 @@ vibe import-rules <file> [options]
 | `vibe tools` | List available tools |
 | `vibe inspect <target>` | Inspect config/route/skill |
 | `vibe version` | Show version |
+| `vibe dashboard` | Start web dashboard for routing history & health |
 
 ### Removed Commands (v4.1.0)
 

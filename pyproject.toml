@@ -63,8 +63,13 @@ semantic = [
     "numpy>=1.24.0,<2.0.0",
 ]
 
+dashboard = [
+    "fastapi>=0.115.0,<1.0.0",
+    "uvicorn[standard]>=0.30.0,<1.0.0",
+]
+
 all = [
-    "vibesop[dev,test,semantic]",
+    "vibesop[dev,test,semantic,dashboard]",
 ]
 
 [project.scripts]

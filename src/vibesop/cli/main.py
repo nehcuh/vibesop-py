@@ -39,6 +39,7 @@ if TYPE_CHECKING:
 from vibesop import __version__
 from vibesop.cli.commands import (
     badges_cmd,
+    dashboard_cmd,
     data_cmd,
     deviation_cmd,
     instinct_cmd,
@@ -56,7 +57,13 @@ from vibesop.cli.commands import (
 )
 from vibesop.cli.commands import trust as trust_module
 from vibesop.cli.commands.status_cmd import status as status_command
-from vibesop.cli.confirmation import _needs_confirmation, _run_confirmation_flow
+from vibesop.cli.confirmation import (
+    _needs_confirmation,
+    _run_confirmation_flow,
+    _safe_questionary_confirm,
+    _safe_questionary_select,
+    _safe_questionary_text,
+)
 from vibesop.cli.feedback import _collect_feedback
 from vibesop.cli.orchestration_report import render_orchestration_result
 from vibesop.cli.plan_editor import _edit_execution_plan
@@ -165,6 +172,7 @@ app.add_typer(loop_cmd.app, name="loop")
 app.add_typer(optimize_cmd.app, name="optimize")
 app.add_typer(data_cmd.app, name="data")
 app.command(name="trust")(trust_module.trust)
+app.command(name="dashboard")(dashboard_cmd.dashboard)
 
 
 @app.command()
@@ -279,14 +287,15 @@ def _maybe_prompt_market_search(query: str) -> None:
     if not _market_search_budget_allows(collector, suggestion):
         return
 
-    choice = questionary.select(
+    choice = _safe_questionary_select(
         f"「{query}」类查询已 {suggestion.occurrences} 次未命中，要去 GitHub 搜吗？",
         choices=[
             questionary.Choice("🔍 搜索 GitHub 技能市场", value="search"),
             questionary.Choice("⏭️ 跳过", value="skip"),
             questionary.Choice("🚫 不再提示此类", value="dismiss"),
         ],
-    ).ask()
+        default="skip",
+    )
     # Any answer (including abort → None) starts the cooldown clock.
     collector.mark_prompted(suggestion.id)
     if choice == "search":
@@ -1166,13 +1175,13 @@ def _orchestration_confirmation_flow(
     if execute and sys.stdin.isatty():
         choices.insert(1, questionary.Choice("▶️  Execute plan step-by-step", value="execute"))
 
-    choice = questionary.select("How would you like to proceed?", choices=choices).ask()
+    choice = _safe_questionary_select("How would you like to proceed?", choices=choices, default="confirm")
 
     if choice == "edit":
         modified = _edit_execution_plan(result, console)
         if modified:
             render_orchestration_result(result, console=console)
-            if not questionary.confirm("Proceed with updated plan?", default=True).ask():
+            if not _safe_questionary_confirm("Proceed with updated plan?", default=True):
                 console.print("[dim]Plan editing cancelled.[/dim]")
                 _record_plan_sequence(plan, success=False, query=result.original_query or "")
                 return False
@@ -1333,14 +1342,15 @@ def _execute_plan_interactive(result: Any, console: Console) -> None:
             continue
 
         # Wait for completion confirmation
-        choice = questionary.select(
+        choice = _safe_questionary_select(
             f"Step {step_num}/{manifest.total_steps} — {step.skill_id}",
             choices=[
                 questionary.Choice("✅ Completed — proceed to next step", value="done"),
                 questionary.Choice("⏭️  Skip this step", value="skip"),
                 questionary.Choice("⏸️  Pause (exit execution mode)", value="pause"),
             ],
-        ).ask()
+            default="done",
+        )
 
         if choice == "skip":
             console.print(f"[dim]Step {step_num} skipped.[/dim]")
@@ -1354,9 +1364,10 @@ def _execute_plan_interactive(result: Any, console: Console) -> None:
 
         # Collect step output summary
         if sys.stdin.isatty():
-            summary = questionary.text(
+            summary = _safe_questionary_text(
                 f"Summary of step {step_num} output (or leave blank):",
-            ).ask()
+                default="",
+            )
             if summary:
                 injector.save_step_output(
                     plan_id=manifest.plan_id,

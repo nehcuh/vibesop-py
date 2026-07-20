@@ -69,9 +69,14 @@ def _run_flow(
 ) -> bool:
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr("vibesop.cli.main.sys.stdin", SimpleNamespace(isatty=lambda: True))
-    questionary_mock = MagicMock()
-    questionary_mock.select.return_value.ask.return_value = choice
-    monkeypatch.setattr("vibesop.cli.main.questionary", questionary_mock)
+    monkeypatch.setattr(
+        "vibesop.cli.main._safe_questionary_select",
+        lambda message, choices, default="confirm": choice,
+    )
+    monkeypatch.setattr(
+        "vibesop.cli.main._safe_questionary_confirm",
+        lambda message, default=True: default,
+    )
     monkeypatch.setattr("vibesop.cli.main.render_orchestration_result", MagicMock())
     monkeypatch.setattr("vibesop.cli.main._execute_plan_interactive", MagicMock())
     return _orchestration_confirmation_flow(
@@ -110,9 +115,10 @@ class TestConfirmationFlowRecording:
     ) -> None:
         monkeypatch.chdir(tmp_path)
         monkeypatch.setattr("vibesop.cli.main.sys.stdin", SimpleNamespace(isatty=lambda: True))
-        questionary_mock = MagicMock()
-        questionary_mock.select.return_value.ask.return_value = "single"
-        monkeypatch.setattr("vibesop.cli.main.questionary", questionary_mock)
+        monkeypatch.setattr(
+            "vibesop.cli.main._safe_questionary_select",
+            lambda message, choices, default="confirm": "single",
+        )
         monkeypatch.setattr("vibesop.cli.main.render_orchestration_result", MagicMock())
         result = _result(_plan("a", "b", "c"))
         result.single_fallback = SimpleNamespace(skill_id="solo", confidence=0.9)
@@ -143,10 +149,14 @@ class TestConfirmationFlowRecording:
     ) -> None:
         monkeypatch.chdir(tmp_path)
         monkeypatch.setattr("vibesop.cli.main.sys.stdin", SimpleNamespace(isatty=lambda: True))
-        questionary_mock = MagicMock()
-        questionary_mock.select.return_value.ask.return_value = "edit"
-        questionary_mock.confirm.return_value.ask.return_value = True
-        monkeypatch.setattr("vibesop.cli.main.questionary", questionary_mock)
+        monkeypatch.setattr(
+            "vibesop.cli.main._safe_questionary_select",
+            lambda message, choices, default="confirm": "edit",
+        )
+        monkeypatch.setattr(
+            "vibesop.cli.main._safe_questionary_confirm",
+            lambda message, default=True: True,
+        )
         monkeypatch.setattr("vibesop.cli.main.render_orchestration_result", MagicMock())
         monkeypatch.setattr("vibesop.cli.main._edit_execution_plan", MagicMock(return_value=True))
 
@@ -169,10 +179,14 @@ class TestConfirmationFlowRecording:
     ) -> None:
         monkeypatch.chdir(tmp_path)
         monkeypatch.setattr("vibesop.cli.main.sys.stdin", SimpleNamespace(isatty=lambda: True))
-        questionary_mock = MagicMock()
-        questionary_mock.select.return_value.ask.return_value = "edit"
-        questionary_mock.confirm.return_value.ask.return_value = False
-        monkeypatch.setattr("vibesop.cli.main.questionary", questionary_mock)
+        monkeypatch.setattr(
+            "vibesop.cli.main._safe_questionary_select",
+            lambda message, choices, default="confirm": "edit",
+        )
+        monkeypatch.setattr(
+            "vibesop.cli.main._safe_questionary_confirm",
+            lambda message, default=True: False,
+        )
         monkeypatch.setattr("vibesop.cli.main.render_orchestration_result", MagicMock())
         monkeypatch.setattr("vibesop.cli.main._edit_execution_plan", MagicMock(return_value=True))
 
@@ -224,9 +238,12 @@ class TestConfirmationFlowRecording:
         # application-only telemetry, symmetric with skip/single (M1).
         monkeypatch.chdir(tmp_path)
         monkeypatch.setattr("vibesop.cli.main.sys.stdin", SimpleNamespace(isatty=lambda: True))
-        questionary_mock = MagicMock()
-        questionary_mock.select.return_value.ask.return_value = "edit"
-        monkeypatch.setattr("vibesop.cli.main.questionary", questionary_mock)
+        monkeypatch.setattr(
+            "vibesop.cli.main._safe_questionary_select",
+            lambda message, choices, default="confirm": "edit",
+        )
+        confirm_mock = MagicMock()
+        monkeypatch.setattr("vibesop.cli.main._safe_questionary_confirm", confirm_mock)
         monkeypatch.setattr("vibesop.cli.main.render_orchestration_result", MagicMock())
         monkeypatch.setattr("vibesop.cli.main._edit_execution_plan", MagicMock(return_value=False))
 
@@ -240,7 +257,7 @@ class TestConfirmationFlowRecording:
             already_rendered=True,
         )
         assert confirmed is False
-        questionary_mock.confirm.assert_not_called()  # no "proceed?" for an unchanged plan
+        confirm_mock.assert_not_called()  # no "proceed?" for an unchanged plan
         stored = _stored_sequences(tmp_path)
         assert len(stored) == 1
         assert stored[0]["steps"] == ["a", "b", "c"]
@@ -259,8 +276,8 @@ class TestValidateModeRecording:
         # confirmation_mode="always" + TTY would prompt without the fix.
         monkeypatch.chdir(tmp_path)
         monkeypatch.setattr("vibesop.cli.main.sys.stdin", SimpleNamespace(isatty=lambda: True))
-        questionary_mock = MagicMock()
-        monkeypatch.setattr("vibesop.cli.main.questionary", questionary_mock)
+        select_mock = MagicMock()
+        monkeypatch.setattr("vibesop.cli.main._safe_questionary_select", select_mock)
         monkeypatch.setattr("vibesop.cli.main.render_orchestration_result", MagicMock())
 
         confirmed = _orchestration_confirmation_flow(
@@ -274,7 +291,7 @@ class TestValidateModeRecording:
             validate=True,
         )
         assert confirmed is True
-        questionary_mock.select.assert_not_called()
+        select_mock.assert_not_called()
         assert _stored_sequences(tmp_path) == []
 
     def test_validate_run_records_once_application_only(
@@ -296,8 +313,8 @@ class TestValidateModeRecording:
         orch._record_plan_sequence(_QUERY, _plan("a", "b", "c"), context)
 
         monkeypatch.setattr("vibesop.cli.main.sys.stdin", SimpleNamespace(isatty=lambda: True))
-        questionary_mock = MagicMock()
-        monkeypatch.setattr("vibesop.cli.main.questionary", questionary_mock)
+        select_mock = MagicMock()
+        monkeypatch.setattr("vibesop.cli.main._safe_questionary_select", select_mock)
         monkeypatch.setattr("vibesop.cli.main.render_orchestration_result", MagicMock())
         confirmed = _orchestration_confirmation_flow(
             _result(_plan("a", "b", "c")),
@@ -311,7 +328,7 @@ class TestValidateModeRecording:
         )
 
         assert confirmed is True
-        questionary_mock.select.assert_not_called()
+        select_mock.assert_not_called()
         stored = _stored_sequences(tmp_path)
         assert len(stored) == 1  # no double record
         assert stored[0]["success_count"] == 0

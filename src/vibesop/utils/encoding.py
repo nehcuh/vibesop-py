@@ -21,14 +21,29 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 
+def _strip_bom(text: str) -> str:
+    """Strip a leading UTF-8 BOM (``\\ufeff``) if present.
+
+    Windows editors (Notepad, some PowerShell redirections) often insert a BOM
+    at the start of UTF-8 files.  Stripping it here keeps downstream parsers
+    (``tomllib``, ``yaml.safe_load``) from rejecting the content.
+    """
+    if text.startswith("\ufeff"):
+        return text[1:]
+    return text
+
+
 def read_text_with_fallback(path: Path) -> str:
     """Read a text file as UTF-8, falling back to the locale encoding.
+
+    A leading UTF-8 BOM is stripped automatically so that downstream
+    consumers (TOML / YAML parsers) do not see invalid leading bytes.
 
     Args:
         path: Path to the text file
 
     Returns:
-        Decoded file content
+        Decoded file content (BOM-stripped)
 
     Raises:
         OSError: If the file cannot be read
@@ -37,7 +52,7 @@ def read_text_with_fallback(path: Path) -> str:
     """
     raw = path.read_bytes()
     try:
-        return raw.decode("utf-8")
+        text = raw.decode("utf-8")
     except UnicodeDecodeError:
         fallback = locale.getpreferredencoding()
         logger.warning(
@@ -46,11 +61,16 @@ def read_text_with_fallback(path: Path) -> str:
             path,
             fallback,
         )
-        return raw.decode(fallback)
+        text = raw.decode(fallback)
+    return _strip_bom(text)
 
 
 def load_toml_with_fallback(path: Path) -> dict[str, Any]:
     """Load a TOML file as UTF-8, falling back to the locale encoding.
+
+    Strips a leading UTF-8 BOM (``\\ufeff``) if present — Windows editors
+    (Notepad, some PowerShell redirections) often insert one, and
+    ``tomllib`` rejects it as invalid syntax at line 1 column 1.
 
     Args:
         path: Path to the TOML file
@@ -64,4 +84,8 @@ def load_toml_with_fallback(path: Path) -> dict[str, Any]:
             locale-preferred encoding
         tomllib.TOMLDecodeError: If the content is not valid TOML
     """
-    return tomllib.loads(read_text_with_fallback(path))
+    text = read_text_with_fallback(path)
+    # Strip UTF-8 BOM — common on Windows when editors save as "UTF-8 with BOM"
+    if text.startswith("\ufeff"):
+        text = text[1:]
+    return tomllib.loads(text)

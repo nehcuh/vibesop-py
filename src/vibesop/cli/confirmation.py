@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import sys
 from typing import TYPE_CHECKING, Any
 
@@ -12,6 +13,71 @@ if TYPE_CHECKING:
 
 from vibesop.cli.routing_report import render_routing_report
 from vibesop.core.models import RoutingResult
+
+logger = logging.getLogger(__name__)
+
+
+def _safe_questionary_select(
+    message: str,
+    choices: list[questionary.Choice],
+    default: str = "confirm",
+) -> str | None:
+    """Call ``questionary.select``, falling back to *default* on console errors.
+
+    On Windows, ``prompt_toolkit`` requires a real console screen buffer
+    (``Win32Output``).  Environments like Grok Build or CI runners may
+    provide a PTY (so ``sys.stdin.isatty()`` returns ``True``) but lack
+    an actual Windows console — ``questionary`` raises
+    ``NoConsoleScreenBufferError`` in that case.  This wrapper catches
+    the error, logs a warning, and returns *default* so the caller can
+    proceed without blocking.
+    """
+    try:
+        return questionary.select(message, choices=choices).ask()
+    except Exception:
+        # prompt_toolkit raises ``NoConsoleScreenBufferError`` (a plain
+        # ``Exception`` subclass from its win32 module).  We catch broadly
+        # because the exact exception class is an implementation detail of
+        # prompt_toolkit and may change across versions.
+        logger.warning(
+            "Interactive prompt unavailable (no console); auto-selecting %r.", default
+        )
+        return default
+
+
+def _safe_questionary_confirm(
+    message: str,
+    default: bool = True,
+) -> bool:
+    """Call ``questionary.confirm``, falling back to *default* on console errors.
+
+    See :func:`_safe_questionary_select` for the rationale.
+    """
+    try:
+        return questionary.confirm(message, default=default).ask()
+    except Exception:
+        logger.warning(
+            "Interactive prompt unavailable (no console); auto-answering %s.",
+            "yes" if default else "no",
+        )
+        return default
+
+
+def _safe_questionary_text(
+    message: str,
+    default: str = "",
+) -> str:
+    """Call ``questionary.text``, falling back to *default* on console errors.
+
+    See :func:`_safe_questionary_select` for the rationale.
+    """
+    try:
+        return questionary.text(message, default=default).ask()
+    except Exception:
+        logger.warning(
+            "Interactive prompt unavailable (no console); using default %r.", default
+        )
+        return default
 
 
 def _needs_confirmation(  # pyright: ignore[reportUnusedFunction]
@@ -65,7 +131,9 @@ def _run_confirmation_flow(  # pyright: ignore[reportUnusedFunction]
         questionary.Choice("🔀 Choose a different skill", value="alternative"),
         questionary.Choice("📝 Skip skill, use raw LLM", value="skip"),
     ]
-    choice = questionary.select("How would you like to proceed?", choices=choices).ask()
+    choice = _safe_questionary_select(
+        "How would you like to proceed?", choices=choices, default="confirm"
+    )
 
     if choice == "alternative" and result.alternatives:
         _choose_alternative(result)
@@ -84,7 +152,9 @@ def _choose_alternative(result: Any) -> None:
         for alt in result.alternatives[:5]
     ]
     alt_choices.append(questionary.Choice("↩️  Back", value="back"))
-    alt_id = questionary.select("Select a skill:", choices=alt_choices).ask()
+    alt_id = _safe_questionary_select(
+        "Select a skill:", choices=alt_choices, default="back"
+    )
 
     if alt_id and alt_id != "back":
         for alt in result.alternatives:

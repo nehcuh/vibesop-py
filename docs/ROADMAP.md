@@ -580,6 +580,7 @@ User Query
 ### Nice to Have
 
 - [ ] **Zed adapter**（FileBasedAdapter：Zed rules 文件 + AGENTS.md 引导，模式同 cursor/opencode，成本低）→ **Recorded 2026-07-18：用户确认为后续工作项目**（2026-07-18 跨 Agent 验证时发现 Zed 无 adapter）
+- [x] Web UI for routing history & health (`vibe dashboard`, v8.0) — single-page dashboard with 4 tabs: Overview, History, Traces, Conversations
 - [ ] Web UI for skill management → **Deferred: post-v5.2 evaluation**
 - [ ] IDE integrations (VS Code, JetBrains) → **Deferred: post-v5.2 evaluation**
 - [ ] Mobile app for skill discovery → **Deferred: post-v5.2 evaluation**

@@ -1081,3 +1081,32 @@ Coverage: temporarily lowered fail_under=0 from 75% (massive new test additions)
 - 剩余（已清零）：~~Phase 5~~ **Phase 5（PR #55）已落地** —— SEMANTIC_INDEX 独立枚举（`_layers.py` 12 处 index 路径→SEMANTIC_INDEX，4 处真 AI_TRIAGE 保留）+ layer_number 重编号（display-only）+ degradation×satisfaction 遥测（result_mixin→_record_execution→analytics→route-stats）+ EMBEDDING 默认关闭文档化。**Phase 0-5 全部完成，5 个 PR（#51-55）全 CI 绿。**
 - 真正剩余（不在 5 phase 范围）：Maker/Checker follow-up（Phase 4 deferred）；4 个 dependabot CVE（2H/1M/1L，依赖升级）；router 误路由反馈消息（含 test/decision/review→squad/code-review，本会话 4 次，Dim 1 改进项）。
 - Recorded: yes — project-knowledge.md 加「2026-07 Phase 0-4」节；harness memory instinct-reward-signal-broken.md 标 merged。
+
+### S33 (2026-07-20 22:40~23:20) [vibesop-py] BOM 修复 + 非交互终端崩溃修复 + Web Dashboard 搭建
+
+- [x] **根因分析**：`vibe route` 在 Grok Build 中崩溃——两个独立问题
+  1. `~/.vibe/config.toml` 含 UTF-8 BOM → `tomllib.loads()` 拒绝 → 回退到默认配置
+  2. `sys.stdin.isatty()` 在 PTY 下返回 True → `prompt_toolkit` 找不到真实 Windows 控制台 → `NoConsoleScreenBufferError`
+
+- [x] **BOM 修复**：`encoding.py` 新增 `_strip_bom()`，`read_text_with_fallback()` 和 `load_toml_with_fallback()` 自动剥离 BOM → 任何被 Windows 编辑器引入 BOM 的 config 文件都能正常解析
+
+- [x] **非交互终端保护**：`confirmation.py` 新增 `_safe_questionary_select/confirm/text()` 三个 wrapper，`try/except` 捕获 `NoConsoleScreenBufferError`，fallback 到默认值 → `main.py` 4 处裸调用全部替换
+
+- [x] **Web Dashboard 搭建**（回答用户原问题"如何后台可视化历史对话和路由信息"）：
+  - 新建 `src/vibesop/dashboard/` — FastAPI 后端（7 个 API）+ 单页 HTML（4 Tab：Overview/History/Traces/Conversations）
+  - `vibe dashboard` CLI 命令 — 一键启动、自动打开浏览器
+  - `pyproject.toml` 新增 `dashboard` extra（fastapi + uvicorn）
+
+- [x] **测试更新**：`test_plan_sequence_recording.py` 和 `test_route_market_suggestion.py` 的 mock 路径从 `main.questionary` 更新为 `main._safe_questionary_select`
+- [x] **文档同步**：CLI_REFERENCE.md 新增 dashboard 章节、ROADMAP.md 标记完成、quality-sprint 计划标记完成
+
+**Key Discoveries**:
+1. `encoding="utf-8"` 写的文件不含 BOM，但 Windows 编辑器打开保存后自动加 BOM → 跨平台部署经典坑
+2. `sys.stdin.isatty()` 在 PTY 下不可靠——`prompt_toolkit` 的 `Win32Output` 需要真实控制台
+3. Web Dashboard 用纯 FastAPI + 单页 HTML（零前端框架）即可提供完整可视化体验
+
+**Test Status**: 4253 passed, 39 skipped, 0 failed ✅ (排除 3 个已有失败)
+
+**Next Steps**: 无紧急任务
+
+**Recorded**: yes — 2 个技术陷阱写入 project-knowledge.md

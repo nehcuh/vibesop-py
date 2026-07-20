@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VibeSOP Dashboard</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --card: #1a1d27;
+    --border: #2a2d3a;
+    --text: #c9d1d9;
+    --dim: #6e7681;
+    --accent: #58a6ff;
+    --green: #3fb950;
+    --yellow: #d29922;
+    --red: #f85149;
+    --purple: #a371f7;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+  header { background: var(--card); border-bottom: 1px solid var(--border); padding: 12px 24px; display: flex; align-items: center; gap: 16px; position: sticky; top: 0; z-index: 10; }
+  header h1 { font-size: 18px; font-weight: 600; }
+  header .ver { font-size: 12px; color: var(--dim); }
+  nav { display: flex; gap: 4px; margin-left: 24px; }
+  nav button { background: none; border: none; color: var(--dim); padding: 6px 14px; border-radius: 6px; cursor: pointer; font-size: 13px; transition: all .15s; }
+  nav button:hover { color: var(--text); background: rgba(255,255,255,.05); }
+  nav button.active { color: var(--accent); background: rgba(88,166,255,.1); }
+  .refresh { margin-left: auto; background: var(--accent); color: #fff; border: none; padding: 6px 16px; border-radius: 6px; font-size: 12px; cursor: pointer; font-weight: 500; }
+  .refresh:hover { opacity: .85; }
+  .status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 6px; }
+  .status-dot.ok { background: var(--green); }
+  .status-dot.warn { background: var(--yellow); }
+  main { max-width: 1200px; margin: 0 auto; padding: 20px 24px; }
+  .tab { display: none; }
+  .tab.active { display: block; }
+
+  /* Cards */
+  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 14px; margin-bottom: 20px; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 16px; }
+  .card .label { font-size: 12px; color: var(--dim); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 6px; }
+  .card .value { font-size: 28px; font-weight: 700; }
+  .card .sub { font-size: 12px; color: var(--dim); margin-top: 4px; }
+  .value.green { color: var(--green); }
+  .value.yellow { color: var(--yellow); }
+  .value.red { color: var(--red); }
+  .value.accent { color: var(--accent); }
+
+  /* Tables */
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { text-align: left; padding: 8px 12px; color: var(--dim); font-weight: 500; font-size: 11px; text-transform: uppercase; letter-spacing: .5px; background: var(--card); position: sticky; top: 0; }
+  td { padding: 8px 12px; border-top: 1px solid var(--border); }
+  tr:hover td { background: rgba(255,255,255,.02); }
+  .mono { font-family: 'SF Mono', 'Cascadia Code', 'Consolas', monospace; font-size: 12px; }
+
+  /* Badges */
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 500; }
+  .badge.single { background: rgba(63,185,80,.15); color: var(--green); }
+  .badge.orchestrated { background: rgba(88,166,255,.15); color: var(--accent); }
+  .badge.fallback { background: rgba(210,153,34,.15); color: var(--yellow); }
+  .badge.no-match { background: rgba(248,81,73,.15); color: var(--red); }
+
+  /* Trace tree */
+  .layer { margin-left: 16px; padding: 4px 0; border-left: 2px solid var(--border); padding-left: 12px; }
+  .layer-header { font-weight: 500; font-size: 13px; display: flex; gap: 8px; align-items: center; }
+  .layer-name { color: var(--accent); }
+  .layer-status { font-size: 11px; padding: 1px 6px; border-radius: 8px; }
+  .layer-status.match { background: rgba(63,185,80,.15); color: var(--green); }
+  .layer-status.no-match { background: rgba(248,81,73,.15); color: var(--red); }
+  .layer-detail { font-size: 12px; color: var(--dim); margin-top: 2px; }
+
+  /* Detail panel */
+  .detail { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 16px; margin-top: 14px; }
+  .detail pre { white-space: pre-wrap; font-size: 12px; color: var(--dim); max-height: 400px; overflow-y: auto; }
+  .detail .close { float: right; background: none; border: none; color: var(--dim); cursor: pointer; font-size: 18px; }
+  .detail .close:hover { color: var(--text); }
+  .detail h3 { font-size: 15px; margin-bottom: 10px; }
+  .detail .meta { font-size: 12px; color: var(--dim); margin-bottom: 10px; }
+
+  /* Conversation turns */
+  .turn { padding: 10px 14px; border-left: 3px solid var(--border); margin: 8px 0; border-radius: 0 6px 6px 0; }
+  .turn.user { border-color: var(--accent); }
+  .turn.assistant { border-color: var(--purple); }
+  .turn .role { font-size: 11px; text-transform: uppercase; letter-spacing: .5px; margin-bottom: 4px; }
+  .turn .role.user { color: var(--accent); }
+  .turn .role.assistant { color: var(--purple); }
+  .turn .content { font-size: 13px; }
+
+  /* Loading */
+  .loading { text-align: center; padding: 40px; color: var(--dim); }
+  .empty { text-align: center; padding: 60px 20px; color: var(--dim); font-size: 14px; }
+
+  /* Skill bar */
+  .skill-bar { display: flex; align-items: center; gap: 8px; margin: 4px 0; }
+  .skill-bar .name { width: 180px; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .skill-bar .bar { flex: 1; height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; }
+  .skill-bar .fill { height: 100%; background: var(--accent); border-radius: 3px; }
+  .skill-bar .count { font-size: 12px; color: var(--dim); width: 40px; text-align: right; }
+
+  /* Filter */
+  .filter-bar { display: flex; gap: 10px; margin-bottom: 14px; align-items: center; }
+  .filter-bar select, .filter-bar input { background: var(--card); border: 1px solid var(--border); color: var(--text); padding: 6px 10px; border-radius: 6px; font-size: 13px; }
+  .filter-bar select { min-width: 140px; }
+
+  .clickable { cursor: pointer; color: var(--accent); }
+  .clickable:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<header>
+  <h1>⚡ VibeSOP Dashboard</h1>
+  <span class="ver">v8.0</span>
+  <nav>
+    <button class="active" data-tab="overview">📊 Overview</button>
+    <button data-tab="history">📋 History</button>
+    <button data-tab="traces">🔍 Traces</button>
+    <button data-tab="conversations">💬 Conversations</button>
+  </nav>
+  <button class="refresh" onclick="refreshAll()">🔄 Refresh</button>
+</header>
+
+<main>
+  <!-- Overview Tab -->
+  <div id="tab-overview" class="tab active">
+    <div class="cards" id="health-cards"></div>
+    <div class="card" style="margin-bottom:14px">
+      <h3 style="font-size:14px;margin-bottom:10px">🏆 Top Skills</h3>
+      <div id="top-skills"></div>
+    </div>
+    <div class="card">
+      <h3 style="font-size:14px;margin-bottom:10px">📈 Mode Distribution</h3>
+      <div id="mode-dist"></div>
+    </div>
+  </div>
+
+  <!-- History Tab -->
+  <div id="tab-history" class="tab">
+    <div class="filter-bar">
+      <label style="font-size:13px;color:var(--dim)">Filter:</label>
+      <select id="hist-filter" onchange="loadHistory()">
+        <option value="">All Skills</option>
+      </select>
+      <span style="font-size:12px;color:var(--dim);margin-left:auto" id="hist-count"></span>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th>Time</th><th>Query</th><th>Skill</th><th>Mode</th><th>Sat.</th><th>Duration</th>
+        </tr></thead>
+        <tbody id="hist-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Traces Tab -->
+  <div id="tab-traces" class="tab">
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th>Trace ID</th><th>Query</th><th>Layers</th><th>Result</th><th>Duration</th>
+        </tr></thead>
+        <tbody id="traces-body"></tbody>
+      </table>
+    </div>
+    <div id="trace-detail" style="display:none" class="detail"></div>
+  </div>
+
+  <!-- Conversations Tab -->
+  <div id="tab-conversations" class="tab">
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th>ID</th><th>Turns</th><th>Preview</th><th>Updated</th>
+        </tr></thead>
+        <tbody id="conv-body"></tbody>
+      </table>
+    </div>
+    <div id="conv-detail" style="display:none" class="detail"></div>
+  </div>
+</main>
+
+<script>
+// ── Tab switching ──────────────────────────────────────────────
+document.querySelectorAll('nav button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+    loadTab(btn.dataset.tab);
+  });
+});
+
+// ── Data loading ───────────────────────────────────────────────
+async function api(path) {
+  const r = await fetch(path);
+  return r.json();
+}
+
+function timeAgo(ts) {
+  if (!ts) return '-';
+  const d = new Date(ts);
+  if (isNaN(d.getTime())) return ts;
+  const now = new Date();
+  const s = Math.floor((now - d) / 1000);
+  if (s < 60) return s + 's ago';
+  if (s < 3600) return Math.floor(s/60) + 'm ago';
+  if (s < 86400) return Math.floor(s/3600) + 'h ago';
+  return d.toLocaleDateString();
+}
+
+function escapeHtml(s) {
+  if (!s) return '';
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+let healthData = null;
+
+async function loadTab(tab) {
+  switch(tab) {
+    case 'overview': loadOverview(); break;
+    case 'history': loadHistory(); break;
+    case 'traces': loadTraces(); break;
+    case 'conversations': loadConversations(); break;
+  }
+}
+
+async function refreshAll() {
+  const active = document.querySelector('nav button.active');
+  if (active) loadTab(active.dataset.tab);
+}
+
+// ── Overview ───────────────────────────────────────────────────
+async function loadOverview() {
+  healthData = await api('/api/health');
+
+  const cards = document.getElementById('health-cards');
+  const h = healthData;
+  cards.innerHTML = `
+    <div class="card">
+      <div class="label">Total Routes</div>
+      <div class="value accent">${h.total_routes}</div>
+      <div class="sub">all-time routing calls</div>
+    </div>
+    <div class="card">
+      <div class="label">Hit Rate</div>
+      <div class="value ${h.hit_rate >= 50 ? 'green' : h.hit_rate >= 30 ? 'yellow' : 'red'}">${h.hit_rate}%</div>
+      <div class="sub">skills matched vs fallback</div>
+    </div>
+    <div class="card">
+      <div class="label">Avg Satisfaction</div>
+      <div class="value ${h.avg_satisfaction >= 3 ? 'green' : h.avg_satisfaction >= 2 ? 'yellow' : 'red'}">${h.avg_satisfaction ?? '-'}</div>
+      <div class="sub">out of 5</div>
+    </div>
+    <div class="card">
+      <div class="label">P95 Latency</div>
+      <div class="value ${h.latency_p95 < 200 ? 'green' : h.latency_p95 < 500 ? 'yellow' : 'red'}">${h.latency_p95}ms</div>
+      <div class="sub">P50: ${h.latency_p50}ms / P99: ${h.latency_p99}ms</div>
+    </div>
+    <div class="card">
+      <div class="label">Traces</div>
+      <div class="value accent">${h.total_traces}</div>
+      <div class="sub">recorded decision trees</div>
+    </div>
+    <div class="card">
+      <div class="label">Conversations</div>
+      <div class="value accent">${h.total_conversations}</div>
+      <div class="sub">multi-turn sessions</div>
+    </div>
+  `;
+
+  // Top skills
+  const ts = document.getElementById('top-skills');
+  if (h.top_skills && h.top_skills.length) {
+    const max = h.top_skills[0][1];
+    ts.innerHTML = h.top_skills.map(([name, count]) => `
+      <div class="skill-bar">
+        <span class="name">${escapeHtml(name)}</span>
+        <span class="bar"><span class="fill" style="width:${(count/max*100).toFixed(0)}%"></span></span>
+        <span class="count">${count}</span>
+      </div>
+    `).join('');
+  } else {
+    ts.innerHTML = '<div class="empty">No skill data yet</div>';
+  }
+
+  // Mode distribution
+  const md = document.getElementById('mode-dist');
+  const modes = h.mode_distribution || {};
+  const modeLabels = { single: 'Single Match', orchestrated: 'Orchestrated', 'no-match': 'No Match', fallback: 'Fallback LLM' };
+  md.innerHTML = Object.entries(modes).map(([k, v]) => `
+    <span class="badge ${k}">${modeLabels[k] || k}: ${v}</span>
+  `).join(' ') || '<span class="dim">No data</span>';
+}
+
+// ── History ────────────────────────────────────────────────────
+let allHistory = [];
+
+async function loadHistory() {
+  const skill = document.getElementById('hist-filter').value;
+  const data = await api('/api/analytics?limit=200' + (skill ? '&skill=' + encodeURIComponent(skill) : ''));
+  allHistory = data;
+
+  // Update filter options
+  const skills = [...new Set(data.map(r => r.primary_skill || r.skill_id).filter(Boolean))].sort();
+  const sel = document.getElementById('hist-filter');
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">All Skills</option>' + skills.map(s => `<option value="${escapeHtml(s)}" ${s===cur?'selected':''}>${escapeHtml(s)}</option>`).join('');
+
+  const tbody = document.getElementById('hist-body');
+  document.getElementById('hist-count').textContent = data.length + ' records';
+
+  if (!data.length) {
+    tbody.innerHTML = '<tr><td colspan="6" class="empty">No routing history found. Run <code>vibe route "your query"</code> to generate data.</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = data.map(r => `
+    <tr>
+      <td>${timeAgo(r.timestamp)}</td>
+      <td style="max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escapeHtml(r.query || '')}">${escapeHtml((r.query || '').substring(0, 60))}</td>
+      <td><span class="mono">${escapeHtml(r.primary_skill || r.skill_id || '-')}</span></td>
+      <td><span class="badge ${r.mode || 'unknown'}">${r.mode || 'unknown'}</span></td>
+      <td>${r.user_satisfaction ? '⭐'.repeat(r.user_satisfaction) : '-'}</td>
+      <td>${r.duration_ms ? r.duration_ms + 'ms' : '-'}</td>
+    </tr>
+  `).join('');
+}
+
+// ── Traces ─────────────────────────────────────────────────────
+async function loadTraces() {
+  const data = await api('/api/traces?limit=50');
+  const tbody = document.getElementById('traces-body');
+
+  if (!data.length) {
+    tbody.innerHTML = '<tr><td colspan="5" class="empty">No traces found. Enable tracing with <code>vibe route --trace</code>.</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = data.map(t => `
+    <tr>
+      <td><span class="mono clickable" onclick="showTrace('${t._id}')">${t._id.substring(0, 12)}...</span></td>
+      <td style="max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml((t.query || '').substring(0, 60))}</td>
+      <td>${(t.layer_details || []).length || t.layers || '-'}</td>
+      <td>${t.primary_skill || t.result || '-'}</td>
+      <td>${t.duration_ms ? t.duration_ms + 'ms' : '-'}</td>
+    </tr>
+  `).join('');
+}
+
+async function showTrace(id) {
+  const t = await api('/api/traces/' + id);
+  const div = document.getElementById('trace-detail');
+  const layers = t.layer_details || t.layers || [];
+
+  div.style.display = 'block';
+  div.innerHTML = `
+    <button class="close" onclick="this.parentElement.style.display='none'">&times;</button>
+    <h3>Trace: ${id}</h3>
+    <div class="meta">Query: <strong>${escapeHtml(t.query || '')}</strong> &bull; Duration: ${t.duration_ms || '?'}ms &bull; Result: ${t.primary_skill || t.result || 'none'}</div>
+    <h4 style="font-size:13px;margin-bottom:8px;color:var(--dim)">Decision Tree</h4>
+    ${layers.map(l => `
+      <div class="layer">
+        <div class="layer-header">
+          <span class="layer-name">${l.layer || l.name || '?'}</span>
+          <span class="layer-status ${l.matched || l.match ? 'match' : 'no-match'}">${l.matched || l.match ? '✓ MATCH' : '✗ NO MATCH'}</span>
+          ${l.confidence ? `<span style="font-size:11px;color:var(--dim)">${(l.confidence*100).toFixed(0)}%</span>` : ''}
+          ${l.duration_ms ? `<span style="font-size:11px;color:var(--dim)">${l.duration_ms}ms</span>` : ''}
+        </div>
+        ${l.reason || l.detail ? `<div class="layer-detail">${escapeHtml((l.reason || l.detail || '').substring(0, 200))}</div>` : ''}
+      </div>
+    `).join('') || '<div class="empty">No layer data</div>'}
+    <details style="margin-top:10px"><summary style="cursor:pointer;font-size:12px;color:var(--dim)">Raw JSON</summary><pre>${escapeHtml(JSON.stringify(t, null, 2))}</pre></details>
+  `;
+  div.scrollIntoView({ behavior: 'smooth' });
+}
+
+// ── Conversations ──────────────────────────────────────────────
+async function loadConversations() {
+  const data = await api('/api/conversations?limit=30');
+  const tbody = document.getElementById('conv-body');
+
+  if (!data.length) {
+    tbody.innerHTML = '<tr><td colspan="4" class="empty">No conversations found. Multi-turn conversations are created automatically during routing.</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = data.map(c => `
+    <tr>
+      <td><span class="mono clickable" onclick="showConversation('${c._id}')">${c._id.substring(0, 16)}...</span></td>
+      <td>${c.turn_count || '-'}</td>
+      <td style="max-width:350px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(c.preview || '')}</td>
+      <td>${timeAgo(c.updated_at || c.timestamp)}</td>
+    </tr>
+  `).join('');
+}
+
+async function showConversation(id) {
+  const c = await api('/api/conversations/' + id);
+  const div = document.getElementById('conv-detail');
+  const turns = c.turns || [];
+
+  div.style.display = 'block';
+  div.innerHTML = `
+    <button class="close" onclick="this.parentElement.style.display='none'">&times;</button>
+    <h3>Conversation: ${id}</h3>
+    <div class="meta">${turns.length} turns &bull; Current skill: ${c.current_skill || c.previous_skill || 'none'}</div>
+    ${turns.map(t => `
+      <div class="turn ${t.role || 'user'}">
+        <div class="role ${t.role || 'user'}">${t.role || 'user'}</div>
+        <div class="content">${escapeHtml(t.query || t.content || '')}</div>
+      </div>
+    `).join('')}
+    <details style="margin-top:10px"><summary style="cursor:pointer;font-size:12px;color:var(--dim)">Raw JSON</summary><pre>${escapeHtml(JSON.stringify(c, null, 2))}</pre></details>
+  `;
+  div.scrollIntoView({ behavior: 'smooth' });
+}
+
+// ── Init ───────────────────────────────────────────────────────
+loadOverview();
+</script>
+</body>
+</html>

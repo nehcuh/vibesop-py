@@ -4,6 +4,17 @@
 
 <!-- handoff:start -->
 
+### 2026-07-20 (S33) BOM 修复 + 非交互终端崩溃修复 + Web Dashboard 搭建
+**Session**: 用户询问"如何后台可视化历史对话和路由信息" → 发现 `vibe route` 在 Grok Build 中崩溃（BOM + NoConsoleScreenBufferError）→ 修复两个根因 → 搭建 Web Dashboard 回答原始问题。
+**Completed**:
+- BOM 修复：`encoding.py` 新增 `_strip_bom()` → `read_text_with_fallback()` 和 `load_toml_with_fallback()` 自动剥离 UTF-8 BOM（Windows 编辑器常见）
+- 非交互终端保护：`confirmation.py` 新增 `_safe_questionary_select/confirm/text()` → 捕获 `NoConsoleScreenBufferError` → fallback 到默认值 → `main.py` 全部替换
+- Web Dashboard：`src/vibesop/dashboard/` — FastAPI 后端（7 API）+ 单页 HTML（4 Tab：Overview/History/Traces/Conversations）+ `vibe dashboard` CLI 命令 + `pyproject.toml` 新增 `dashboard` extra
+- 文档同步：CLI_REFERENCE.md 新增 dashboard 章节、ROADMAP.md 标记完成、quality-sprint 计划标记完成
+- 测试更新：mock 路径从 `main.questionary` → `main._safe_questionary_select`
+**Verification**: 4253 passed, 0 failed (excl. 3 pre-existing)
+**Next**: 无紧急任务。Dashboard 后续可考虑：实时刷新、技能健康面板、更多时间范围筛选
+
 ### 2026-07-19 (S32) Windows 兼容生产化 — 多 agent 动态工作流
 **Session**: Windows 环境从零搭建（uv + Python 3.12）→ 88 failed 基线 → 设计/对抗/开发/评审/验证多 agent 工作流 → 0 failed + CI 全绿。
 **Completed**:
@@ -13,15 +24,5 @@
 - 提交：`a275caa`（主提交）→ CI 首轮抓 `_flatten_skill_name` 反斜杠 bug（probe-skip 盲区）→ `ab9c8df` 修复 → **CI 全绿**（Windows 3.12/3.13 + ubuntu 零回归）→ `4cf9a36` 文档收尾
 **Verification**: 本地 4282 passed/0 failed；CI windows-latest + ubuntu 全绿；ruff/basedpyright 0 err
 **Next**: ① test-windows 观察期至 ~2026-08-02 后转强约束（删 `continue-on-error`）② 遗留项（05-review.md）：atomic_writer 并发 tmp 碰撞、conftest ClassVar 登记制维护 ③ backlog：Zed adapter、文档深度治理、双 PromptChainGenerator 合并
-
-### 2026-07-18 (S31) fanout 诊断 + panel 分拆 + 质量收口
-**Session**: 六路并行诊断 → control panel 分拆为独立仓库 → 全部已知问题收口 → CI 转绿。
-**Completed**:
-- Fanout 诊断（6 explore agents）：定位 main CI 双红因（.vibe 脚本 I001 + 注册表耦合测试）、release.yml 结构性损坏（workflow_call 缺失，发布从未跑通）、版本三方漂移、15 个堆积分支
-- Panel 分拆：154 个 WIP 文件提交保护 → 创建 nehcuh/vibesop-py-panel（私有）并推为 main（36 提交全历史）→ worktree 转独立克隆（环境完整迁移）→ 主仓删 panel 规划文档（a1b3227）
-- 仓库清理：origin 15 个陈旧分支删除（bundle 备份于 vibesop-py-branch-backup-20260718.bundle，确认无用可删），本地/远端只剩 main
-- 质量收口 3 提交：c18d703（CI 门：ruff 排除 .vibe、测试 tmp project_root 隔离、bandit skips 收编 pyproject——原 [tool.bandit."skips"] 从未生效、pip-audit 全 extras、uv 0.11.19、删 mypy）、80b37e5（dependabot→uv、verify-* 脚本重写、删 sync-core.sh、benchmark 双目录合并）、2efdaf6（CHANGELOG 补 59 提交、INDEX 修死链+ADR-004、删陈旧 docs/PROJECT_CONTEXT.md）
-**Verification**: CI run 29636446131 全 6 job 绿；本地 4067 passed / 覆盖率 74.65%；bandit/pip-audit（含 torch/transformers）0 问题
-**Next**: ~~用户新提案（商店/未命中/蒸馏/Langfuse）~~ 已全部落地（P0–P4，2026-07-18，CI 绿）。**后续工作项目（用户确认 2026-07-18）：Zed adapter**（已入 ROADMAP Backlog）；~~Windows 副本兜底补测试~~（已于 S32 完成：mock OSError 回退单测 + CI Windows job）。其余 backlog：文档深度治理（49 坏引用/187 版本漂移）、双 PromptChainGenerator 合并、`InstinctLearner._load_sequences` 加载怪癖、squad 逐角色步骤展开的确定性
 
 <!-- handoff:end -->

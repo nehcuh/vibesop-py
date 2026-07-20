@@ -1693,7 +1693,7 @@ git commit -m "feat: add 'vibe dashboard' command for routing analytics and insi
 | Phase 2 | v4.4.2 | 性能优化 | P95 <150ms, 缓存命中率 >50% |
 | Phase 3 | v4.5.0 | 架构重构 | UnifiedRouter <600 行, Lint 0 |
 | Phase 4 | v5.0.0 | 编排深化 | Agent Protocol + 隐式意图检测 |
-| Phase 5 | v5.0.x | 可观测性 | `vibe dashboard` 命令可用 |
+| Phase 5 | v5.0.x | 可观测性 | `vibe dashboard` 命令可用 ✅ (implemented v8.0) |
 
 ## 验证策略
 

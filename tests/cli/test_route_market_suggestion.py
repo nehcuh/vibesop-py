@@ -218,46 +218,46 @@ class TestTeaserGating:
         for _ in range(misses):
             counter.record(_QUERY)
         monkeypatch.setattr("vibesop.cli.main.sys.stdin", SimpleNamespace(isatty=lambda: stdin_tty))
-        questionary_mock = MagicMock()
-        monkeypatch.setattr("vibesop.cli.main.questionary", questionary_mock)
+        select_mock = MagicMock(return_value="dismiss")  # non-search non-empty default
+        monkeypatch.setattr("vibesop.cli.main._safe_questionary_select", select_mock)
 
         _handle_missed_query_suggestion(_QUERY, json_output=False)
-        return questionary_mock
+        return select_mock
 
     def test_teaser_prompts_after_three_misses(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        questionary_mock = self._run_teaser(tmp_path, monkeypatch, misses=3)
+        select_mock = self._run_teaser(tmp_path, monkeypatch, misses=3)
 
-        questionary_mock.select.assert_called_once()
-        prompt_text = questionary_mock.select.call_args.args[0]
+        select_mock.assert_called_once()
+        prompt_text = select_mock.call_args.args[0]
         assert _QUERY in prompt_text
         assert "3 次未命中" in prompt_text
-        # ask() returned a MagicMock (≠ "search"/"dismiss") → mark_prompted only.
+        # mock returned "dismiss" → mark_prompted only.
         assert _only_suggestion(tmp_path).last_prompted_at is not None
 
     def test_teaser_silent_below_threshold(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        questionary_mock = self._run_teaser(tmp_path, monkeypatch, misses=2)
+        select_mock = self._run_teaser(tmp_path, monkeypatch, misses=2)
 
-        questionary_mock.select.assert_not_called()
+        select_mock.assert_not_called()
 
     def test_teaser_respects_global_switch(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        questionary_mock = self._run_teaser(
+        select_mock = self._run_teaser(
             tmp_path, monkeypatch, misses=3, config_values={"suggestions.enabled": False}
         )
 
-        questionary_mock.select.assert_not_called()
+        select_mock.assert_not_called()
 
     def test_teaser_silent_on_non_tty(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        questionary_mock = self._run_teaser(tmp_path, monkeypatch, misses=3, stdin_tty=False)
+        select_mock = self._run_teaser(tmp_path, monkeypatch, misses=3, stdin_tty=False)
 
-        questionary_mock.select.assert_not_called()
+        select_mock.assert_not_called()
 
     def test_teaser_blocked_by_recent_prompt(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -289,9 +289,12 @@ class TestTeaserGating:
         for _ in range(3):
             counter.record(_QUERY)
         monkeypatch.setattr("vibesop.cli.main.sys.stdin", SimpleNamespace(isatty=lambda: True))
+        # Simulate questionary crash (e.g., NoConsoleScreenBufferError) —
+        # the _safe_questionary_select wrapper in confirmation.py must
+        # catch it and return a default, so the teaser never explodes.
         questionary_mock = MagicMock()
         questionary_mock.select.side_effect = RuntimeError("boom")
-        monkeypatch.setattr("vibesop.cli.main.questionary", questionary_mock)
+        monkeypatch.setattr("vibesop.cli.confirmation.questionary", questionary_mock)
 
         # Must not raise — routing output is already printed at this point.
         _handle_missed_query_suggestion(_QUERY, json_output=False)
@@ -312,9 +315,10 @@ class TestTeaserChoices:
         for _ in range(3):
             counter.record(_QUERY)
         monkeypatch.setattr("vibesop.cli.main.sys.stdin", SimpleNamespace(isatty=lambda: True))
-        questionary_mock = MagicMock()
-        questionary_mock.select.return_value.ask.return_value = choice
-        monkeypatch.setattr("vibesop.cli.main.questionary", questionary_mock)
+        monkeypatch.setattr(
+            "vibesop.cli.main._safe_questionary_select",
+            lambda message, choices, default="skip": choice,
+        )
         market_search_mock = MagicMock()
         monkeypatch.setattr("vibesop.cli.commands.market_cmd.search", market_search_mock)
 
