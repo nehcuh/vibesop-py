@@ -268,6 +268,75 @@ def _load_welcome(is_first: bool) -> Panel | None:
     )
 
 
+def _load_routing_health(project_root: Path) -> Panel:
+    """Build routing health analytics panel."""
+    try:
+        from vibesop.core.routing_health import RoutingHealthAnalyzer
+
+        analyzer = RoutingHealthAnalyzer(project_root)
+        health = analyzer.analyze(days=30)
+
+        lines: list[str] = []
+        grade_color = _grade_color(health.health_grade)
+        lines.append(
+            f"Routing grade: [{grade_color}]{health.health_grade}[/{grade_color}] "
+            f"({health.hit_rate:.0%} hit rate, {health.total_routes} routes in 30d)"
+        )
+        lines.append(f"[dim]{health.routes_last_24h} last 24h  ·  {health.routes_last_7d} last 7d[/dim]")
+
+        if health.single_skill_hits > 0:
+            lines.append(
+                f"  Single-skill hits: {health.single_skill_hits}  ·  "
+                f"Orchestrated: {health.orchestrated_hits}  ·  "
+                f"No-match: {health.no_match}  ·  "
+                f"Fallback: {health.fallback}"
+            )
+
+        if health.p50_latency_ms > 0:
+            lines.append(
+                f"  Latency: avg {health.avg_latency_ms:.0f}ms  ·  "
+                f"P50 {health.p50_latency_ms:.0f}ms  ·  "
+                f"P95 {health.p95_latency_ms:.0f}ms  ·  "
+                f"P99 {health.p99_latency_ms:.0f}ms"
+            )
+
+        if health.top_skills:
+            top = [f"[cyan]{s[0]}[/cyan]({s[1]})" for s in health.top_skills[:5]]
+            lines.append(f"  Top skills: {', '.join(top)}")
+
+        if health.ai_triage_calls > 0:
+            lines.append(
+                f"  AI triage: {health.ai_triage_calls} calls  ·  "
+                f"${health.ai_triage_cost_usd:.3f} cost  ·  "
+                f"{health.ai_triage_success_rate:.0%} success"
+            )
+
+        if health.layer_breakdown:
+            layers = [f"{k}:{v}" for k, v in sorted(health.layer_breakdown.items())]
+            lines.append(f"  Layers: {', '.join(layers)}")
+
+        # Actionable insights
+        insights = analyzer.get_actionable_insights(health)
+        if insights and insights[0] != "Routing health looks good! No urgent actions needed.":
+            lines.append("")
+            lines.append("[bold yellow]Suggestions:[/bold yellow]")
+            for insight in insights:
+                lines.append(f"  • {insight}")
+
+        content = "\n".join(lines)
+        return Panel(content, title="[bold]Routing Health[/bold]", border_style="blue", box=ROUNDED)
+
+    except Exception as e:
+        logger.debug("Routing health unavailable: %s", e)
+        return Panel(
+            "[dim]Routing analytics not yet available.[/dim]\n"
+            "[dim]Route queries via 'vibe route' to collect data.[/dim]",
+            title="[bold]Routing Health[/bold]",
+            border_style="blue",
+            box=ROUNDED,
+        )
+
+
 def status(
     no_color: bool = typer.Option(False, "--no-color", help="Disable colored output"),
 ) -> None:
@@ -312,6 +381,9 @@ def status(
 
     # Warnings
     local_console.print(_load_warnings(project_root))
+
+    # Routing health
+    local_console.print(_load_routing_health(project_root))
 
     # Skill suggestions
     suggestion_count = _load_suggestions_count()
