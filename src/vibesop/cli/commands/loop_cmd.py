@@ -28,6 +28,7 @@ Design decisions (Phase 1-1 → 1-5 cumulative):
 from __future__ import annotations
 
 import logging
+import os
 from datetime import UTC, datetime
 from typing import Any
 
@@ -89,14 +90,24 @@ def _acquire_tick_lock(store: LoopStore, name: str, *, blocking: bool = False) -
       state mutation completes after any in-progress tick.
 
     Returns the open lock-file handle (close it to release), or ``None`` if a
-    non-blocking acquire found the lock held. POSIX-only (``fcntl``); on
-    Windows there is no advisory locking, so it returns ``True`` (always
-    proceed — callers must serialise ticks themselves there).
+    non-blocking acquire found the lock held. Uses ``fcntl.flock`` on POSIX;
+    on Windows falls back to atomic file creation (``O_CREAT | O_EXCL``) for
+    cross-process mutual exclusion.
     """
     try:
         import fcntl
     except ImportError:
-        return True  # Windows: no cross-process advisory locking.
+        # Windows: use atomic file creation as advisory lock
+        lock_path = store.base_dir / name / ".tick.lock"
+        lock_path.parent.mkdir(parents=True, exist_ok=True)
+        if blocking:
+            lock_fd = os.open(lock_path, os.O_CREAT | os.O_EXCL | os.O_RDWR)
+        else:
+            try:
+                lock_fd = os.open(lock_path, os.O_CREAT | os.O_EXCL | os.O_RDWR)
+            except FileExistsError:
+                return None
+        return os.fdopen(lock_fd, "w")
     lock_path = store.base_dir / name / ".tick.lock"
     lock_path.parent.mkdir(parents=True, exist_ok=True)
     lock_fd = lock_path.open("w", encoding="utf-8")

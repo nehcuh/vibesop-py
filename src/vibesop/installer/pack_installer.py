@@ -355,6 +355,12 @@ class PackInstaller:
             and (target_path / "package.json").exists()
             and shutil.which("bun") is not None
         )
+        if has_bun_fallback:
+            logger.info(
+                "No build script found, falling back to bun for %s "
+                "(will execute gen:skill-docs from package.json)",
+                target_path,
+            )
         has_build = script_path is not None or has_bun_fallback
 
         if not has_build:
