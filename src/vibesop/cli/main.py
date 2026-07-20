@@ -45,6 +45,7 @@ from vibesop.cli.commands import (
     loop_cmd,
     market_cmd,
     matcher_cmd,
+    optimize_cmd,
     plan_cmd,
     prompt_chain_cmd,
     sequence_cmd,
@@ -161,6 +162,7 @@ app.add_typer(instinct_cmd.app, name="instinct")
 app.add_typer(prompt_chain_cmd.app, name="prompt-chain")
 app.add_typer(sequence_cmd.app, name="sequence")
 app.add_typer(loop_cmd.app, name="loop")
+app.add_typer(optimize_cmd.app, name="optimize")
 app.add_typer(data_cmd.app, name="data")
 app.command(name="trust")(trust_module.trust)
 
