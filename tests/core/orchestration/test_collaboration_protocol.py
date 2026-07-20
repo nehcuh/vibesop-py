@@ -5,6 +5,9 @@ from __future__ import annotations
 import json
 from unittest.mock import Mock
 
+import pytest
+
+from vibesop.core.exceptions import LLMError
 from vibesop.core.models import AgentRole, AgentSquad, SquadStep
 from vibesop.core.orchestration.collaboration_protocol import (
     DebateProtocol,
@@ -101,15 +104,14 @@ class TestCollaborationProtocol:
         assert "missing tests" in verdict.issues
         assert mock_llm.call.called
 
-    def test_review_gate_protocol_bypasses_without_llm(self) -> None:
+    def test_review_gate_requires_llm(self) -> None:
         squad = self._minimal_squad("review_gate", roles=["implementer", "reviewer"])
         protocol = ReviewGateProtocol(squad, llm_client=None)
-        verdict = protocol.review(
-            "implementer",
-            [{"role": "implementer", "content": "def foo(): pass"}],
-        )
-        assert verdict.passed is True
-        assert "No LLM configured" in verdict.issues[0]
+        with pytest.raises(LLMError, match="No LLM configured"):
+            protocol.review(
+                "implementer",
+                [{"role": "implementer", "content": "def foo(): pass"}],
+            )
 
     def test_should_continue_stops_at_max_rounds(self) -> None:
         squad = self._minimal_squad("review_gate")

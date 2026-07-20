@@ -185,12 +185,10 @@ class ReviewGateProtocol(CollaborationProtocol):
         )
 
         if self._llm is None:
-            return ReviewVerdict(
-                passed=True,
-                reviewer_role=reviewer_role or "reviewer",
-                target_role=target_role,
-                issues=["No LLM configured; review gate bypassed."],
-                score=10.0,
+            raise LLMError(
+                "review_gate",
+                "No LLM configured; review gate cannot operate. "
+                "Configure an LLM provider to enable automated review.",
             )
 
         prompt = self._build_review_prompt(target_role, combined_output)

@@ -68,7 +68,7 @@ class SecurityViolationError(Exception):
         super().__init__(message)
 
 
-class SkillResult:
+class SkillExecutionResult:
     """Result of skill execution or definition retrieval.
 
     Attributes:
@@ -191,7 +191,7 @@ class ExternalSkillExecutor:
     def set_default_auditor_factory(cls, factory: Any) -> None:
         cls._default_auditor_factory = factory
 
-    def get_skill_definition(self, skill_id: str) -> SkillResult:
+    def get_skill_definition(self, skill_id: str) -> SkillExecutionResult:
         """Get skill workflow definition for AI agent execution.
 
         This method parses the skill's SKILL.md and returns the workflow
@@ -201,7 +201,7 @@ class ExternalSkillExecutor:
             skill_id: Skill identifier (e.g., "superpowers/tdd", "gstack/review")
 
         Returns:
-            SkillResult with workflow definition
+            SkillExecutionResult with workflow definition
 
         Raises:
             SkillNotFoundError: If skill not found
@@ -258,7 +258,7 @@ class ExternalSkillExecutor:
             # Step 4: Return result
             execution_time = (time.time() - start_time) * 1000  # ms
 
-            return SkillResult(
+            return SkillExecutionResult(
                 success=True,
                 skill_id=skill_id,
                 workflow=workflow,
@@ -271,7 +271,7 @@ class ExternalSkillExecutor:
             execution_time = (time.time() - start_time) * 1000
             logger.exception(f"Failed to get skill definition: {skill_id}")
 
-            return SkillResult(
+            return SkillExecutionResult(
                 success=False,
                 skill_id=skill_id,
                 error=str(e),
@@ -282,7 +282,7 @@ class ExternalSkillExecutor:
         self,
         skill_id: str,
         context: dict[str, Any] | None = None,
-    ) -> SkillResult:
+    ) -> SkillExecutionResult:
         """Execute skill locally (for testing/validation).
 
         This method executes the skill workflow locally. Primarily intended for:
@@ -298,7 +298,7 @@ class ExternalSkillExecutor:
             context: Execution context (variables, inputs, etc.)
 
         Returns:
-            SkillResult with execution output
+            SkillExecutionResult with execution output
 
         Raises:
             SkillExecutionError: If execution fails
@@ -355,7 +355,7 @@ class ExternalSkillExecutor:
             # Step 4: Return result
             execution_time = (time.time() - start_time) * 1000  # ms
 
-            return SkillResult(
+            return SkillExecutionResult(
                 success=workflow_result.success,
                 skill_id=skill_id,
                 workflow=workflow,

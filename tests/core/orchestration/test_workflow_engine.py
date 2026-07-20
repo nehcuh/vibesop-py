@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 from typing import Any
+from unittest.mock import Mock
 
 import pytest
 
@@ -117,7 +119,11 @@ class TestWorkflowEngineSquadPatterns:
     @pytest.mark.asyncio
     async def test_run_red_team(self) -> None:
         plan = _make_squad_plan(WorkflowPattern.RED_TEAM)
-        engine = WorkflowEngine()
+        mock_llm = Mock()
+        mock_llm.call.return_value = Mock(
+            content=json.dumps({"passed": True, "score": 8.0, "issues": []})
+        )
+        engine = WorkflowEngine(llm_client=mock_llm)
 
         async def executor(step: SquadStep, context: dict[str, Any]) -> dict[str, Any]:
             return {"step_id": step.step_id, "role_id": step.role_id, "content": "security check"}

@@ -379,8 +379,12 @@ class SkillLoader:
             )
             self._skill_cache[metadata.id] = definition
 
-        except (OSError, Exception):
-            pass
+        except OSError as e:
+            logger.warning("Failed to load YAML skill %s: %s", file_path, e)
+        except Exception as e:
+            logger.warning(
+                "Unexpected error loading YAML skill %s: %s", file_path, e, exc_info=True
+            )
 
     def _validate_algorithms(self, metadata: SkillSpec) -> None:
         if not metadata.algorithms:

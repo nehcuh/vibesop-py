@@ -136,31 +136,10 @@ class PlanTracker:
             logger.error("Failed to write plan state: %s", e)
 
     def _dict_to_plan(self, data: dict[str, Any]) -> ExecutionPlan:
-        """Rehydrate ExecutionPlan from dict."""
-        from vibesop.core.models import ExecutionStep
+        """Rehydrate ExecutionPlan from dict.
 
-        steps = [
-            ExecutionStep(
-                step_id=s["step_id"],
-                step_number=s["step_number"],
-                skill_id=s["skill_id"],
-                intent=s.get("intent", ""),
-                input_query=s.get("input_query", ""),
-                output_as=s.get("output_as", ""),
-                status=StepStatus(s.get("status", "pending")),
-                result_summary=s.get("result_summary"),
-                started_at=s.get("started_at"),
-                completed_at=s.get("completed_at"),
-            )
-            for s in data.get("steps", [])
-        ]
-
-        return ExecutionPlan(
-            plan_id=data["plan_id"],
-            original_query=data.get("original_query", ""),
-            steps=steps,
-            detected_intents=data.get("detected_intents", []),
-            reasoning=data.get("reasoning", ""),
-            created_at=data.get("created_at", ""),
-            status=PlanStatus(data.get("status", "pending")),
-        )
+        Delegates to ExecutionPlan.from_dict() which recursively rebuilds
+        each ExecutionStep via ExecutionStep.from_dict(), ensuring all
+        fields survive the to_dict() → from_dict() round-trip.
+        """
+        return ExecutionPlan.from_dict(data)

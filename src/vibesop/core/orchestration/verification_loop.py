@@ -338,7 +338,8 @@ def execute_plan_with_verification(
             # Decide next action
             action = loop.decide_action(step, verification_result.to_dict())
 
-            if action == VerificationLoopAction.RETRY:
+            # Retry loop: keep retrying while action is RETRY (up to max_retries)
+            while action == VerificationLoopAction.RETRY:
                 # Build retry query with feedback
                 retry_query = loop.build_retry_query(step, verification_result.to_dict())
 
@@ -352,8 +353,24 @@ def execute_plan_with_verification(
                 except Exception as e:
                     logger.error("Step %s retry failed: %s", step.step_id, e)
                     results[step.step_id] = {"error": str(e)}
+                    break
 
-            elif action == VerificationLoopAction.ESCALATE:
+                # Re-verify after retry
+                verification_result = verifier.verify(
+                    original_query=plan.original_query,
+                    step=step,
+                    execution_output=str(result),
+                )
+                verification_summary.append(
+                    {
+                        "step_id": step.step_id,
+                        "step_number": step.step_number,
+                        "verification": verification_result.to_dict(),
+                    }
+                )
+                action = loop.decide_action(step, verification_result.to_dict())
+
+            if action == VerificationLoopAction.ESCALATE:
                 logger.warning("Step %s verification failed, escalating to user", step.step_id)
                 # In a real implementation, this would prompt the user
                 results[step.step_id] = {

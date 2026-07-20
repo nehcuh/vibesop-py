@@ -32,7 +32,7 @@ class TournamentConfig:
 class ComparisonResult(BaseModel):
     """Result of a pairwise comparison between two contestants."""
 
-    winner_index: int = Field(..., description="Index of the winning contestant (0 or 1)")
+    winner_index: int = Field(..., description="Index of the winning contestant (>=0), or -1 if comparison was inconclusive")
     scores: dict[str, dict[str, float]] = Field(
         default_factory=dict,
         description="Rubric scores for each contestant: {rubric: {a: score, b: score}}",
@@ -126,7 +126,8 @@ class TournamentRunner:
                     i,
                     j,
                 )
-                scores[result.winner_index] += 1.0
+                if result.winner_index >= 0:
+                    scores[result.winner_index] += 1.0
                 all_reasoning.append(
                     f"Contestant {i} vs {j}: winner={result.winner_index} ({result.reasoning})"
                 )
@@ -188,8 +189,8 @@ class TournamentRunner:
                 reasoning=parsed.get("reasoning", ""),
             )
         except Exception as e:
-            logger.warning("Tournament pairwise comparison failed: %s", e)
+            logger.error("Tournament pairwise comparison failed: %s", e)
             return ComparisonResult(
-                winner_index=index_a,
-                reasoning=f"Judge failed, defaulting to contestant {index_a}",
+                winner_index=-1,
+                reasoning=f"Judge failed; comparison inconclusive: {e}",
             )

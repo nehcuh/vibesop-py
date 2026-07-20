@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
-class RetentionSuggestion:
+class DeprecatedRetentionSuggestion:
     """A single retention recommendation for a skill.
 
     DEPRECATED: Use feedback_loop.RetentionSuggestion instead.
@@ -61,11 +61,11 @@ class RetentionPolicy:
     def __init__(self, evaluator: RoutingEvaluator | None = None) -> None:
         self._evaluator = evaluator or RoutingEvaluator()
 
-    def analyze_skill(self, skill_id: str) -> RetentionSuggestion:
+    def analyze_skill(self, skill_id: str) -> DeprecatedRetentionSuggestion:
         """Analyze a single skill and return retention recommendation."""
         evaluation = self._evaluator.evaluate_skill(skill_id)
         if evaluation is None:
-            return RetentionSuggestion(
+            return DeprecatedRetentionSuggestion(
                 skill_id=skill_id,
                 action="none",
                 reason="No evaluation data available",
@@ -80,7 +80,7 @@ class RetentionPolicy:
 
         # Rule: Grade F for 30+ days with < 3 uses → suggest removal
         if grade == "F" and days_since is not None and days_since >= 30 and uses < 3:
-            return RetentionSuggestion(
+            return DeprecatedRetentionSuggestion(
                 skill_id=skill_id,
                 action="remove",
                 reason=f"Grade F, only {uses} use(s), last used {days_since} days ago",
@@ -91,7 +91,7 @@ class RetentionPolicy:
 
         # Rule: Grade D for 60+ days with no improvement → warn
         if grade == "D" and days_since is not None and days_since >= 60:
-            return RetentionSuggestion(
+            return DeprecatedRetentionSuggestion(
                 skill_id=skill_id,
                 action="warn",
                 reason=f"Grade D, no improvement for {days_since} days",
@@ -102,7 +102,7 @@ class RetentionPolicy:
 
         # Rule: 90+ days unused with grade C/D/F → auto-archive
         if days_since is not None and days_since >= 90 and grade in ("C", "D", "F"):
-            return RetentionSuggestion(
+            return DeprecatedRetentionSuggestion(
                 skill_id=skill_id,
                 action="archive",
                 reason=f"Unused for {days_since} days, grade {grade} — auto-archive candidate",
@@ -113,7 +113,7 @@ class RetentionPolicy:
 
         # Rule: Grade A for 7+ days of active use → highlight
         if grade == "A" and days_since is not None and days_since < 7:
-            return RetentionSuggestion(
+            return DeprecatedRetentionSuggestion(
                 skill_id=skill_id,
                 action="highlight",
                 reason=f"Grade A, actively used ({uses} routes)",
@@ -122,7 +122,7 @@ class RetentionPolicy:
                 total_routes=uses,
             )
 
-        return RetentionSuggestion(
+        return DeprecatedRetentionSuggestion(
             skill_id=skill_id,
             action="none",
             reason=f"Grade {grade}, {uses} route(s)",
@@ -131,7 +131,7 @@ class RetentionPolicy:
             total_routes=uses,
         )
 
-    def analyze_all(self) -> list[RetentionSuggestion]:
+    def analyze_all(self) -> list[DeprecatedRetentionSuggestion]:
         """Analyze all skills and return actionable suggestions."""
         all_evals = self._evaluator.evaluate_all_skills()
         suggestions = []
@@ -144,7 +144,7 @@ class RetentionPolicy:
         suggestions.sort(key=lambda s: severity.get(s.action, 99))
         return suggestions
 
-    def apply_auto_actions(self, suggestions: list[RetentionSuggestion] | None = None) -> int:
+    def apply_auto_actions(self, suggestions: list[DeprecatedRetentionSuggestion] | None = None) -> int:
         """Apply automatic lifecycle transitions for retention recommendations.
 
         Auto-applies: archive → DEPRECATED, remove → DEPRECATED (advisory).

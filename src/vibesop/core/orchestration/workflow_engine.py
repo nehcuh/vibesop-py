@@ -29,6 +29,11 @@ from vibesop.core.models import (
     StepStatus,
     WorkflowPattern,
 )
+from vibesop.core.orchestration.collaboration_protocol import (
+    HandoffPayload,
+    ReviewVerdict,
+    create_protocol,
+)
 
 if TYPE_CHECKING:
     from vibesop.core.models import ExecutionPlan
@@ -694,7 +699,20 @@ class WorkflowEngine:
 
                 if step.role_id in ("reviewer", "red_team"):
                     target_role = self._infer_target_role(step, squad)
-                    verdict = protocol.review(target_role, [self._normalize_output(result)])
+                    try:
+                        verdict = protocol.review(target_role, [self._normalize_output(result)])
+                    except Exception as e:
+                        logger.error(
+                            "Review gate failed for role=%s target=%s: %s",
+                            step.role_id, target_role, e,
+                        )
+                        verdict = ReviewVerdict(
+                            passed=False,
+                            reviewer_role=step.role_id,
+                            target_role=target_role,
+                            issues=[str(e)],
+                            score=0.0,
+                        )
                     all_verdicts.append(verdict)
 
             round_num += 1
@@ -741,8 +759,6 @@ class WorkflowEngine:
 
     def _get_protocol(self, squad: AgentSquad) -> Any:
         """Return the collaboration protocol for a squad."""
-        from vibesop.core.orchestration.collaboration_protocol import create_protocol
-
         return create_protocol(squad, self._llm)
 
     def _find_step(self, steps: list[Any], step_id: str) -> Any:
@@ -762,7 +778,6 @@ class WorkflowEngine:
         base_context: dict[str, Any],
     ) -> dict[str, Any]:
         """Build execution context for a squad step, including handoff payload."""
-        from vibesop.core.orchestration.collaboration_protocol import HandoffPayload
 
         upstream_outputs: dict[str, Any] = {}
         for input_step_id in getattr(step, "input_from", []):

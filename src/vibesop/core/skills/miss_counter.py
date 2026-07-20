@@ -40,7 +40,7 @@ _HASH_LENGTH = 16
 
 
 @dataclass
-class MissedCluster:
+class MissedHashCluster:
     """A frequently-missed query cluster, identified by hash only (no raw text).
 
     Consumed by the P2 missed-query loop (clustering + suggestions).
@@ -90,7 +90,7 @@ class MissCounter:
         except Exception as e:  # telemetry must never break routing
             logger.debug("Failed to record missed query: %s", e)
 
-    def count_for(self, query: str) -> MissedCluster | None:
+    def count_for(self, query: str) -> MissedHashCluster | None:
         """Return the counter entry for *query* (normalized), or None if unseen.
 
         Read-only companion to ``record`` used by the P2 live suggestion path
@@ -107,16 +107,16 @@ class MissCounter:
             count = int(entry.get("n", 0))
         except (TypeError, ValueError):
             return None
-        return MissedCluster(
+        return MissedHashCluster(
             hash=digest,
             count=count,
             first=str(entry.get("first", "")),
             last=str(entry.get("last", "")),
         )
 
-    def frequent(self, min_count: int = 3) -> list[MissedCluster]:
+    def frequent(self, min_count: int = 3) -> list[MissedHashCluster]:
         """Return clusters whose count reached *min_count*, most frequent first."""
-        clusters: list[MissedCluster] = []
+        clusters: list[MissedHashCluster] = []
         for digest, entry in self._load().items():
             try:
                 count = int(entry.get("n", 0))
@@ -125,7 +125,7 @@ class MissCounter:
             if count < min_count:
                 continue
             clusters.append(
-                MissedCluster(
+                MissedHashCluster(
                     hash=digest,
                     count=count,
                     first=str(entry.get("first", "")),
@@ -184,4 +184,4 @@ class MissCounter:
         return {str(k): v for k, v in data.items() if isinstance(v, dict)}
 
 
-__all__ = ["MissCounter", "MissedCluster"]
+__all__ = ["MissCounter", "MissedHashCluster"]

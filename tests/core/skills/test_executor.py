@@ -13,7 +13,7 @@ from vibesop.core.skills.executor import (
     ExternalSkillExecutor,
     SecurityViolationError,
     SkillExecutionError,
-    SkillResult,
+    SkillExecutionResult,
 )
 from vibesop.core.skills.workflow import (
     StepType,
@@ -26,8 +26,8 @@ from vibesop.security.skill_auditor import SkillSecurityAuditor
 PROJECT_ROOT = Path(__file__).parent.parent.parent.parent.resolve()
 
 
-class TestSkillResult:
-    """Test SkillResult model."""
+class TestSkillExecutionResult:
+    """Test SkillExecutionResult model."""
 
     def test_to_dict_success(self) -> None:
         """Test converting successful result to dict."""
@@ -44,7 +44,7 @@ class TestSkillResult:
             ],
         )
 
-        result = SkillResult(
+        result = SkillExecutionResult(
             success=True,
             skill_id="test",
             workflow=workflow,
@@ -63,7 +63,7 @@ class TestSkillResult:
 
     def test_to_dict_failure(self) -> None:
         """Test converting failed result to dict."""
-        result = SkillResult(
+        result = SkillExecutionResult(
             success=False,
             skill_id="test",
             error="Something went wrong",
@@ -269,7 +269,7 @@ This is a test skill.
         )
 
         with patch.object(executor, "get_skill_definition") as mock_get:
-            mock_get.return_value = SkillResult(
+            mock_get.return_value = SkillExecutionResult(
                 success=True,
                 skill_id="test",
                 workflow=workflow,
@@ -287,7 +287,7 @@ This is a test skill.
         executor = ExternalSkillExecutor(enable_execution=True)
 
         with patch.object(executor, "get_skill_definition") as mock_get:
-            mock_get.return_value = SkillResult(
+            mock_get.return_value = SkillExecutionResult(
                 success=False,
                 skill_id="test",
                 error="Failed to get definition",
@@ -315,7 +315,7 @@ This is a test skill.
         )
 
         with patch.object(executor, "get_skill_definition") as mock_get:
-            mock_get.return_value = SkillResult(
+            mock_get.return_value = SkillExecutionResult(
                 success=True,
                 skill_id="test",
                 workflow=workflow,
@@ -331,7 +331,7 @@ This is a test skill.
         executor = ExternalSkillExecutor(project_root=PROJECT_ROOT)
 
         with patch.object(executor, "get_skill_definition") as mock_get:
-            mock_get.return_value = SkillResult(
+            mock_get.return_value = SkillExecutionResult(
                 success=False,
                 skill_id="test",
                 error="Skill not found",
