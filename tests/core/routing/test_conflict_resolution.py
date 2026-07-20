@@ -71,8 +71,8 @@ class TestNamespacePriorityStrategy:
 class TestConflictResolverDefaults:
     """Test default conflict resolver configuration."""
 
-    def test_no_explicit_override_strategy_in_defaults(self):
-        """ExplicitOverrideStrategy should not be in default strategies."""
+    def test_explicit_override_strategy_in_defaults(self):
+        """ExplicitOverrideStrategy should be in default strategies."""
         resolver = ConflictResolver()
         strategy_names = {type(s).__name__ for s in resolver._strategies}
-        assert "ExplicitOverrideStrategy" not in strategy_names
+        assert "ExplicitOverrideStrategy" in strategy_names

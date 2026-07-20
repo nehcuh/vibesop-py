@@ -347,6 +347,7 @@ class ConflictResolver:
         self._setup_default_strategies()
 
     def _setup_default_strategies(self) -> None:
+        self.add_strategy(ExplicitOverrideStrategy())
         self.add_strategy(ConfidenceGapStrategy())
         self.add_strategy(NamespacePriorityStrategy())
         self.add_strategy(RecencyStrategy())

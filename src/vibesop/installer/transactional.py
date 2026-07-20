@@ -134,9 +134,11 @@ class TransactionalInstaller:
         return snapshot_id
 
     def _restore_snapshot(self, snapshot_id: str) -> None:
-        snapshot_path = self._snapshot_dir / snapshot_id
-        if not snapshot_path.exists():
-            raise FileNotFoundError(f"Snapshot {snapshot_id} not found")
+        """Restore files from a snapshot (must be overridden by subclasses)."""
+        raise NotImplementedError(
+            "Subclasses must implement _restore_snapshot. "
+            "Use FileTransactionalInstaller for file-based snapshots."
+        )
 
     def cleanup_snapshot(self, snapshot_id: str | None = None) -> None:
         target_id = snapshot_id or self._snapshot_id

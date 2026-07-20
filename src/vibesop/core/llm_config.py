@@ -4,7 +4,7 @@
 import json
 import logging
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
 from typing import Any, ClassVar
@@ -35,16 +35,41 @@ class LLMSource(Enum):
 
 @dataclass
 class LLMConfig:
-    """LLM 配置"""
+    """LLM 配置
+
+    The ``api_key`` is masked in ``repr()`` output and serialization to
+    prevent accidental exposure in logs and tracebacks.
+    """
 
     provider: str
     model: str
-    api_key: str | None = None
+    api_key: str | None = field(default=None, repr=False)
     api_base: str | None = None
     temperature: float = 0.7
     max_tokens: int = 4096
     source: LLMSource = LLMSource.DEFAULT
     confidence: float = 1.0
+
+    def __repr__(self) -> str:
+        return (
+            f"LLMConfig(provider={self.provider!r}, model={self.model!r}, "
+            f"api_base={self.api_base!r}, temperature={self.temperature}, "
+            f"max_tokens={self.max_tokens}, source={self.source})"
+        )
+
+    def to_safe_dict(self) -> dict[str, Any]:
+        """Return a dict suitable for logging (api_key redacted)."""
+        d = {
+            "provider": self.provider,
+            "model": self.model,
+            "api_base": self.api_base,
+            "temperature": self.temperature,
+            "max_tokens": self.max_tokens,
+            "source": self.source.value,
+            "confidence": self.confidence,
+            "api_key": "***" if self.api_key else None,
+        }
+        return d
 
 
 class VibeSOPConfigManager:

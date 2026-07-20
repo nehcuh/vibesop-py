@@ -75,7 +75,7 @@ class TestTransactionalInstaller:
     def test_create_installer(self) -> None:
         """Test creating installer."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            installer = TransactionalInstaller(snapshot_dir=Path(tmpdir))
+            installer = FileTransactionalInstaller(snapshot_dir=Path(tmpdir))
             assert installer._auto_rollback is True
             assert len(installer._steps) == 0
             assert installer._snapshot_dir.exists()
@@ -89,14 +89,14 @@ class TestTransactionalInstaller:
     def test_add_step(self) -> None:
         """Test adding installation step."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            installer = TransactionalInstaller(snapshot_dir=Path(tmpdir))
+            installer = FileTransactionalInstaller(snapshot_dir=Path(tmpdir))
             installer.add_step("test", lambda: {"ok"}, lambda: {"rollback"})
             assert len(installer._steps) == 1
 
     def test_execute_successful_transaction(self) -> None:
         """Test executing a successful transaction."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            installer = TransactionalInstaller(snapshot_dir=Path(tmpdir))
+            installer = FileTransactionalInstaller(snapshot_dir=Path(tmpdir))
 
             executed_steps = []
 
@@ -120,7 +120,7 @@ class TestTransactionalInstaller:
     def test_execute_failing_transaction_with_rollback(self) -> None:
         """Test transaction failure with automatic rollback."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            installer = TransactionalInstaller(snapshot_dir=Path(tmpdir))
+            installer = FileTransactionalInstaller(snapshot_dir=Path(tmpdir))
 
             executed_steps = []
             rollback_steps = []
@@ -184,7 +184,7 @@ class TestTransactionalInstaller:
     def test_get_snapshot_id(self) -> None:
         """Test getting snapshot ID."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            installer = TransactionalInstaller(snapshot_dir=Path(tmpdir))
+            installer = FileTransactionalInstaller(snapshot_dir=Path(tmpdir))
             installer.add_step("step1", lambda: {"success": True}, lambda: {"success": True})
             result = installer.execute()
 
@@ -194,7 +194,7 @@ class TestTransactionalInstaller:
     def test_step_without_rollback_on_failure(self) -> None:
         """Test step without rollback function during failure."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            installer = TransactionalInstaller(snapshot_dir=Path(tmpdir))
+            installer = FileTransactionalInstaller(snapshot_dir=Path(tmpdir))
 
             def step1():
                 return {"success": True}
@@ -215,7 +215,7 @@ class TestTransactionalInstaller:
     def test_empty_transaction(self) -> None:
         """Test executing transaction with no steps."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            installer = TransactionalInstaller(snapshot_dir=Path(tmpdir))
+            installer = FileTransactionalInstaller(snapshot_dir=Path(tmpdir))
             result = installer.execute()
 
             assert result.success
@@ -224,7 +224,7 @@ class TestTransactionalInstaller:
     def test_execute_with_exception_in_step(self) -> None:
         """Test transaction when a step raises an exception."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            installer = TransactionalInstaller(snapshot_dir=Path(tmpdir))
+            installer = FileTransactionalInstaller(snapshot_dir=Path(tmpdir))
 
             def step1():
                 return {"success": True}
@@ -252,7 +252,7 @@ class TestTransactionalInstaller:
     def test_manual_rollback_success(self) -> None:
         """Test manual rollback after a successful transaction."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            installer = TransactionalInstaller(snapshot_dir=Path(tmpdir))
+            installer = FileTransactionalInstaller(snapshot_dir=Path(tmpdir))
             rollback_called = []
 
             def step1():
@@ -273,7 +273,7 @@ class TestTransactionalInstaller:
     def test_cleanup_snapshot(self) -> None:
         """Test cleaning up snapshots."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            installer = TransactionalInstaller(snapshot_dir=Path(tmpdir))
+            installer = FileTransactionalInstaller(snapshot_dir=Path(tmpdir))
             installer.add_step("step1", lambda: {"success": True})
             result = installer.execute()
 
@@ -287,7 +287,7 @@ class TestTransactionalInstaller:
     def test_cleanup_snapshot_no_id(self) -> None:
         """Test cleanup when no snapshot ID is provided."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            installer = TransactionalInstaller(snapshot_dir=Path(tmpdir))
+            installer = FileTransactionalInstaller(snapshot_dir=Path(tmpdir))
             # Should not raise
             installer.cleanup_snapshot()
             installer.cleanup_snapshot(None)
@@ -295,7 +295,7 @@ class TestTransactionalInstaller:
     def test_rollback_function_failure(self) -> None:
         """Test _rollback when a rollback function returns failure."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            installer = TransactionalInstaller(snapshot_dir=Path(tmpdir))
+            installer = FileTransactionalInstaller(snapshot_dir=Path(tmpdir))
 
             def step1():
                 return {"success": True}
@@ -328,7 +328,7 @@ class TestTransactionalInstallerEdgeCases:
     def test_rollback_failure_handling(self) -> None:
         """Test handling of rollback function failures."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            installer = TransactionalInstaller(snapshot_dir=Path(tmpdir))
+            installer = FileTransactionalInstaller(snapshot_dir=Path(tmpdir))
 
             def step1():
                 return {"success": True}

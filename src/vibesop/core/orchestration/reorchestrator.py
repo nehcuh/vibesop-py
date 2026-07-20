@@ -126,21 +126,19 @@ class Reorchestrator:
     ) -> bool:
         """Check if all original goals have been met.
 
-        Simple heuristic: if we have at least as many completed results
-        as detected intents, consider goals met.
+        Verifies that every detected intent has a corresponding completed
+        step, not just that the count of completed steps >= intent count.
         """
         if not plan.detected_intents:
             return False
 
-        completed_count = len(accumulated_results)
-        intent_count = len(plan.detected_intents)
+        # Collect intents covered by completed steps
+        covered_intents: set[str] = set()
+        for step in plan.steps:
+            if step.status.value == "completed" and step.intent:
+                covered_intents.add(step.intent)
 
-        if completed_count < intent_count:
-            return False
-
-        # Check that all steps are completed or we've exceeded intent count
-        completed_steps = sum(1 for s in plan.steps if s.status.value == "completed")
-        return completed_steps >= intent_count
+        return covered_intents.issuperset(set(plan.detected_intents))
 
     def goals_met(
         self,

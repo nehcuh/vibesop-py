@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+import yaml
+
 logger = logging.getLogger(__name__)
 
 
@@ -222,10 +224,17 @@ class SkillInstaller:
                 f"# Skill Registry\nskills:\n  - {manifest.id}\n", encoding="utf-8"
             )
         else:
-            content = registry_path.read_text(encoding="utf-8")
-            if manifest.id not in content:
-                with registry_path.open("a", encoding="utf-8") as f:
-                    f.write(f"  - {manifest.id}\n")
+            content = yaml.safe_load(
+                registry_path.read_text(encoding="utf-8")
+            ) or {}
+            skills = content.get("skills", [])
+            if manifest.id not in skills:
+                skills.append(manifest.id)
+                content["skills"] = skills
+                registry_path.write_text(
+                    yaml.safe_dump(content, default_flow_style=False, allow_unicode=True),
+                    encoding="utf-8",
+                )
 
         marker = project_path / ".vibe" / ".skills_reload"
         try:
@@ -237,6 +246,14 @@ class SkillInstaller:
     def _remove_from_registry(self, skill_id: str, project_path: Path) -> None:
         registry_path = project_path / ".vibe" / "skills" / "registry.yaml"
         if registry_path.exists():
-            content = registry_path.read_text(encoding="utf-8")
-            filtered_lines = [line for line in content.split("\n") if skill_id not in line]
-            registry_path.write_text("\n".join(filtered_lines), encoding="utf-8")
+            content = yaml.safe_load(
+                registry_path.read_text(encoding="utf-8")
+            ) or {}
+            skills = content.get("skills", [])
+            if skill_id in skills:
+                skills.remove(skill_id)
+                content["skills"] = skills
+                registry_path.write_text(
+                    yaml.safe_dump(content, default_flow_style=False, allow_unicode=True),
+                    encoding="utf-8",
+                )
