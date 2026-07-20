@@ -153,117 +153,19 @@ class ClaudeCodeAdapter(HookBasedAdapter):
             return True
 
     def render_config(self, manifest: Manifest, output_dir: Path) -> RenderResult:
-        """Render Claude Code configuration from manifest."""
-        result = self.create_render_result(success=True)
+        """Render full Claude Code configuration: config + skills."""
+        result = self.render_config_only(manifest, output_dir)
+        if not result.success:
+            return result
 
-        try:
-            # Validate manifest
-            errors = self.validate_manifest(manifest)
-            if errors:
-                for error in errors:
-                    result.add_error(error)
-                result.success = False
-                return result
+        (output_dir / "skills").mkdir(exist_ok=True)
 
-            # Ensure output directory exists
-            output_dir = self.ensure_output_dir(output_dir)
-
-            # Create directory structure
-            (output_dir / "rules").mkdir(exist_ok=True)
-            (output_dir / "docs").mkdir(exist_ok=True)
-            (output_dir / "skills").mkdir(exist_ok=True)
-            (output_dir / "hooks").mkdir(exist_ok=True)
-
-            # Render main CLAUDE.md
-            self._render_and_write(
-                "CLAUDE.md.j2",
-                output_dir / "CLAUDE.md",
-                manifest,
-                result,
-                validate_security=False,
-            )
-
-            # Write project-level CLAUDE.md (Claude Code reads ./CLAUDE.md with highest priority)
-            self._render_project_claude_md(manifest, result)
-
-            # Render rules (always-loaded)
-            self._render_and_write(
-                "rules/behaviors.md.j2",
-                output_dir / "rules" / "behaviors.md",
-                manifest,
-                result,
-                validate_security=False,
-            )
-            self._render_and_write(
-                "rules/routing.md.j2",
-                output_dir / "rules" / "routing.md",
-                manifest,
-                result,
-                validate_security=False,
-            )
-            self._render_and_write(
-                "rules/memory-flush.md.j2",
-                output_dir / "rules" / "memory-flush.md",
-                manifest,
-                result,
-                validate_security=False,
-            )
-
-            # Render docs (on-demand)
-            self._render_and_write(
-                "docs/routing-protocol.md.j2",
-                output_dir / "docs" / "routing-protocol.md",
-                manifest,
-                result,
-                validate_security=False,
-            )
-            self._render_and_write(
-                "docs/session-lifecycle.md.j2",
-                output_dir / "docs" / "session-lifecycle.md",
-                manifest,
-                result,
-                validate_security=False,
-            )
-            self._render_and_write(
-                "docs/safety.md.j2",
-                output_dir / "docs" / "safety.md",
-                manifest,
-                result,
-                validate_security=False,
-            )
-            self._render_and_write(
-                "docs/skills.md.j2",
-                output_dir / "docs" / "skills.md",
-                manifest,
-                result,
-                validate_security=False,
-            )
-            self._render_and_write(
-                "docs/task-routing.md.j2",
-                output_dir / "docs" / "task-routing.md",
-                manifest,
-                result,
-                validate_security=False,
-            )
-
-            # Render settings.json
-            self._render_settings_json(output_dir, manifest, result)
-
-            # Render Agent Runtime hook scripts
-            self._render_route_hook(output_dir, result)
-            self._render_track_hook(output_dir, result)
-            self._render_tool_seq_hook(output_dir, result)
-
-            # Render skill definitions - copy actual content from core/skills/
-            for skill in manifest.skills:
-                dir_name = skill.id.replace("/", "-")
-                skill_dir = output_dir / "skills" / dir_name
-                skill_dir.mkdir(parents=True, exist_ok=True)
-                self._render_skill_content(skill, skill_dir, result, manifest=manifest)
-
-        except Exception as e:
-            result.add_error(f"Failed to render configuration: {e}")
-            result.success = False
+        # Render skill definitions — copy actual content from core/skills/
+        for skill in manifest.skills:
+            dir_name = skill.id.replace("/", "-")
+            skill_dir = output_dir / "skills" / dir_name
+            skill_dir.mkdir(parents=True, exist_ok=True)
+            self._render_skill_content(skill, skill_dir, result, manifest=manifest)
 
         return result
 
