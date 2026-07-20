@@ -8,9 +8,11 @@ import logging
 import shutil
 from pathlib import Path
 
+from vibesop.constants import SUPPORTED_PLATFORMS
+
 logger = logging.getLogger(__name__)
 
-VALID_TARGETS = ["claude-code", "kimi-cli", "opencode", "superpowers", "cursor", "pi", "grok-build"]
+VALID_TARGETS = SUPPORTED_PLATFORMS
 
 PLATFORM_DIRS: dict[str, Path] = {
     "claude-code": Path.home() / ".claude",

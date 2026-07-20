@@ -155,8 +155,9 @@ class PlanBuilder:
 
         caps: list[str] = []
 
-        # 1. Try router's direct skill_loader
-        skill_loader = getattr(self._router, "_skill_loader", None)
+        # Use router's public skill loader accessor (handles both
+        # _skill_loader and _candidate_manager._skill_loader fallback)
+        skill_loader = self._router.get_skill_loader()
         if skill_loader is not None:
             try:
                 loaded = skill_loader.get_skill(skill_id)
@@ -164,19 +165,6 @@ class PlanBuilder:
                     caps = loaded.metadata.capabilities or []
             except Exception:
                 pass
-
-        # 2. Try candidate_manager's skill_loader
-        if not caps:
-            candidate_manager = getattr(self._router, "_candidate_manager", None)
-            if candidate_manager is not None:
-                cm_loader = getattr(candidate_manager, "_skill_loader", None)
-                if cm_loader is not None:
-                    try:
-                        loaded = cm_loader.get_skill(skill_id)
-                        if loaded is not None:
-                            caps = loaded.metadata.capabilities or []
-                    except Exception:
-                        pass
 
         self._capability_cache[skill_id] = caps
         return caps
@@ -697,7 +685,7 @@ class PlanBuilder:
         skills: list[dict[str, Any]] = []
 
         # Try router's skill_loader
-        skill_loader = getattr(self._router, "_skill_loader", None)
+        skill_loader = self._router.get_skill_loader()
         if skill_loader is not None:
             try:
                 discovered = getattr(skill_loader, "discover_all", lambda: {})()
@@ -705,19 +693,6 @@ class PlanBuilder:
                     skills.append(self._loaded_skill_to_dict(skill_id, loaded))
             except Exception:
                 pass
-
-        # Try candidate_manager's skill_loader
-        if not skills:
-            candidate_manager = getattr(self._router, "_candidate_manager", None)
-            if candidate_manager is not None:
-                cm_loader = getattr(candidate_manager, "_skill_loader", None)
-                if cm_loader is not None:
-                    try:
-                        discovered = getattr(cm_loader, "discover_all", lambda: {})()
-                        for skill_id, loaded in discovered.items():
-                            skills.append(self._loaded_skill_to_dict(skill_id, loaded))
-                    except Exception:
-                        pass
 
         return skills
 

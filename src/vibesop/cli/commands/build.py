@@ -35,11 +35,13 @@ from ruamel.yaml import YAML
 from vibesop.adapters.models import Manifest
 from vibesop.builder.manifest import ManifestBuilder
 from vibesop.builder.renderer import ConfigRenderer
+from vibesop.cli.commands._utils import get_configured_platform
+from vibesop.constants import SUPPORTED_PLATFORMS
 
 console = Console()
 logger = logging.getLogger(__name__)
 
-VALID_TARGETS = ["claude-code", "kimi-cli", "opencode", "superpowers", "cursor", "pi", "grok-build"]
+VALID_TARGETS = SUPPORTED_PLATFORMS
 
 PROFILES: dict[str, str] = {
     "default": "Full configuration with all skills",
@@ -172,29 +174,6 @@ def execute_build(
         raise typer.Exit(1) from None
 
 
-def _get_configured_platform() -> str | None:
-    """Get platform from .vibe/config.toml (preferred) or .vibe/config.yaml."""
-    # Prefer .toml over .yaml
-    for ext in [".toml", ".yaml"]:
-        config_path = Path(f".vibe/config{ext}")
-        if not config_path.exists():
-            continue
-        try:
-            if ext == ".toml":
-                from vibesop.utils.encoding import load_toml_with_fallback
-
-                config = load_toml_with_fallback(config_path)
-            else:
-                from vibesop.utils.encoding import read_text_with_fallback
-
-                yaml_parser = YAML()
-                config = yaml_parser.load(read_text_with_fallback(config_path))
-            return config.get("platform") if config else None
-        except Exception as e:
-            logger.debug(f"Failed to read {config_path.name}: {e}")
-    return None
-
-
 def build(
     target: str | None = typer.Argument(
         None,
@@ -233,7 +212,7 @@ def build(
 ) -> None:
     """Build platform configuration from manifest."""
     if target is None:
-        target = _get_configured_platform()
+        target = get_configured_platform()
         if target is None:
             target = "claude-code"
             console.print(f"[dim]No platform specified, using default: {target}[/dim]\n")

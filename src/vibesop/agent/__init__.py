@@ -84,8 +84,7 @@ class AgentRouter:
         Args:
             llm_factory: Callable that returns an LLM provider.
         """
-        self._router._llm_factory = llm_factory
-        self._router._triage_service._llm_factory = llm_factory
+        self._router.set_llm_factory(llm_factory)
 
     def route(
         self, query: str, enable_ai_triage: bool = True, *, record_telemetry: bool = True

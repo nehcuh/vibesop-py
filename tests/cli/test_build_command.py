@@ -164,7 +164,7 @@ class TestBuildCommand:
 
     @patch("vibesop.cli.commands.build.ConfigRenderer")
     @patch("vibesop.cli.commands.build.ManifestBuilder")
-    @patch("vibesop.cli.commands.build._get_configured_platform")
+    @patch("vibesop.cli.commands.build.get_configured_platform")
     def test_build_no_target_uses_config(
         self, mock_get_platform, mock_builder_cls, mock_renderer_cls, monkeypatch, tmp_path
     ) -> None:
@@ -250,6 +250,6 @@ class TestBuildCommand:
         config_dir.mkdir()
         (config_dir / "config.yaml").write_text("platform: opencode\n", encoding="utf-8")
 
-        from vibesop.cli.commands.build import _get_configured_platform
+        from vibesop.cli.commands._utils import get_configured_platform
 
-        assert _get_configured_platform() == "opencode"
+        assert get_configured_platform() == "opencode"

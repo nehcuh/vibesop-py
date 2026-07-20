@@ -26,6 +26,19 @@ DEFAULT_AUTO_INSTALL_PACKS: list[str] = ["superpowers", "omx", "mattpocock"]
 
 
 # ============================================
+# Platform Configuration
+# ============================================
+SUPPORTED_PLATFORMS: list[str] = [
+    "claude-code",
+    "kimi-cli",
+    "opencode",
+    "cursor",
+    "pi",
+    "grok-build",
+]
+
+
+# ============================================
 # Cache Configuration
 # ============================================
 class CacheSettings:

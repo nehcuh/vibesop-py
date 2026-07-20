@@ -46,6 +46,14 @@ class FakeRouter:
         self._default = default
         self._calls: list[str] = []
         self._context_calls: list[RoutingContext | None] = []
+        self._skill_loader: Any = None
+        self._llm_factory: Any = None
+
+    def get_skill_loader(self) -> Any:
+        return self._skill_loader
+
+    def set_llm_factory(self, factory: Any) -> None:
+        self._llm_factory = factory
 
     def _single_skill_route(
         self, query: str, context: RoutingContext | None = None, **kwargs: Any

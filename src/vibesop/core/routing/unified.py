@@ -1088,6 +1088,31 @@ class UnifiedRouter(
     def _build_ai_triage_prompt(self, query: str, skills_summary: str) -> str:
         return self._triage_service.build_ai_triage_prompt(query, skills_summary)
 
+    def set_llm_factory(self, factory: Any) -> None:
+        """Inject an LLM factory for agent-driven AI triage configuration.
+
+        Args:
+            factory: Object with ``create_provider()`` or ``create_from_env()``
+                method that returns an LLM provider with a ``call(prompt, ...)``
+                method returning an object with a ``content`` attribute.
+        """
+        self._llm_factory = factory
+        self._triage_service._llm_factory = factory
+
+    def get_skill_loader(self) -> Any:
+        """Return the skill loader used for discovering and loading skills.
+
+        Prefers the router's own ``_skill_loader``, falling back to the
+        ``_candidate_manager``'s loader when the primary loader is absent.
+        """
+        loader = getattr(self, "_skill_loader", None)
+        if loader is not None:
+            return loader
+        cm = getattr(self, "_candidate_manager", None)
+        if cm is not None:
+            return getattr(cm, "_skill_loader", None)
+        return None
+
 
 __all__ = [
     "RoutingLayer",

@@ -28,38 +28,14 @@ import typer
 from rich.console import Console
 from ruamel.yaml import YAML
 
+from vibesop.cli.commands._utils import get_configured_platform
+from vibesop.constants import SUPPORTED_PLATFORMS
+
 console = Console()
 logger = logging.getLogger(__name__)
 
 # Valid targets
-VALID_TARGETS = ["claude-code", "kimi-cli", "opencode", "superpowers", "cursor", "pi", "grok-build"]
-
-
-def _get_configured_platform() -> str | None:
-    """Get platform from .vibe/config.toml (preferred) or .vibe/config.yaml.
-
-    Returns:
-        Platform string if configured, None otherwise
-    """
-    # Prefer .toml over .yaml
-    for ext in [".toml", ".yaml"]:
-        config_path = Path(f".vibe/config{ext}")
-        if not config_path.exists():
-            continue
-        try:
-            if ext == ".toml":
-                from vibesop.utils.encoding import load_toml_with_fallback
-
-                config = load_toml_with_fallback(config_path)
-            else:
-                from vibesop.utils.encoding import read_text_with_fallback
-
-                yaml_parser = YAML()
-                config = yaml_parser.load(read_text_with_fallback(config_path))
-            return config.get("platform") if config else None
-        except Exception as e:
-            logger.debug(f"Failed to read {config_path.name}: {e}")
-    return None
+VALID_TARGETS = SUPPORTED_PLATFORMS
 
 
 def switch(
@@ -119,7 +95,7 @@ def switch(
     """
     # Determine target platform
     if platform is None:
-        platform = _get_configured_platform()
+        platform = get_configured_platform()
         if platform is None:
             console.print(
                 "[red]✗ No platform specified and no configured platform found[/red]\n"
