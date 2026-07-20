@@ -295,10 +295,12 @@ show_next_steps() {
     echo ""
     echo "  ✨ Environment ready! Now deploy VibeSOP to your AI platform:"
     echo ""
-    echo "     ./scripts/vibe-install claude-code   # Claude Code"
-    echo "     ./scripts/vibe-install opencode      # OpenCode"
-    echo "     ./scripts/vibe-install kimi-cli      # Kimi Code CLI"
-    echo "     ./scripts/vibe-install pi            # Pi Coding Agent"
+    echo "     uv run vibe build claude-code   # Claude Code"
+    echo "     uv run vibe build opencode      # OpenCode"
+    echo "     uv run vibe build kimi-cli      # Kimi Code CLI"
+    echo "     uv run vibe build grok-build    # Grok Build"
+    echo "     uv run vibe build pi            # Pi Coding Agent"
+    echo "     uv run vibe build cursor        # Cursor IDE"
     echo ""
     echo "  Or use the interactive wizard:"
     echo ""
@@ -308,7 +310,7 @@ show_next_steps() {
     if [ -n "$AUTO_PLATFORM" ]; then
         print_info "Automatically deploying to: $AUTO_PLATFORM"
         PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-        "$PROJECT_ROOT/scripts/vibe-install" "$AUTO_PLATFORM"
+        cd "$PROJECT_ROOT" && uv run vibe build "$AUTO_PLATFORM"
     fi
 }
 
@@ -340,7 +342,7 @@ main() {
                 echo "Options:"
                 echo "  --no-install     Skip 'uv sync' (check environment only)"
                 echo "  --platform NAME  Auto-deploy to platform after bootstrap"
-                echo "                   (claude-code | opencode | kimi-cli | pi)"
+                echo "                   (claude-code | opencode | kimi-cli | grok-build | pi | cursor)"
                 echo ""
                 exit 0
                 ;;

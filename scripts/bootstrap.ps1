@@ -8,7 +8,7 @@
     Skip 'uv sync' (environment check only)
 .PARAMETER Platform
     Auto-deploy to the specified platform after bootstrap
-    Valid values: claude-code, opencode, kimi-cli, pi
+    Valid values: claude-code, opencode, kimi-cli, grok-build, pi, cursor
 .PARAMETER Help
     Show this help
 .EXAMPLE
@@ -230,10 +230,12 @@ Write-Step "Phase 5: Next steps"
 Write-Host ""
 Write-Host "  Environment ready! Deploy VibeSOP to your AI platform:"
 Write-Host ""
-Write-Host "    bash scripts/vibe-install claude-code    # Claude Code"
-Write-Host "    bash scripts/vibe-install opencode       # OpenCode"
-Write-Host "    bash scripts/vibe-install kimi-cli       # Kimi Code CLI"
-Write-Host "    bash scripts/vibe-install pi             # Pi Coding Agent"
+Write-Host "    uv run vibe build claude-code    # Claude Code"
+Write-Host "    uv run vibe build opencode       # OpenCode"
+Write-Host "    uv run vibe build kimi-cli       # Kimi Code CLI"
+Write-Host "    uv run vibe build grok-build     # Grok Build"
+Write-Host "    uv run vibe build pi             # Pi Coding Agent"
+Write-Host "    uv run vibe build cursor         # Cursor IDE"
 Write-Host ""
 Write-Host "  Or use the interactive wizard:"
 Write-Host ""
@@ -243,6 +245,10 @@ Write-Host ""
 if ($Platform) {
     Write-Host "Auto-deploying to: $Platform" -ForegroundColor Blue
     $projectRoot = Split-Path -Parent (Split-Path -Parent $PSCommandPath)
-    $installScript = Join-Path (Join-Path $projectRoot "scripts") "vibe-install"
-    & bash $installScript $Platform
+    Push-Location $projectRoot
+    try {
+        uv run vibe build $Platform
+    } finally {
+        Pop-Location
+    }
 }
