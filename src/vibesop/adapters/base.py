@@ -117,6 +117,12 @@ class PlatformAdapter(ABC):
     # Empty string means no PATH-based detection (is_available returns False).
     cli_binary: ClassVar[str] = ""
 
+    # Whether this adapter deploys skills to ``output_dir/skills/`` and
+    # should clean orphan skills after rendering.  Set to False for
+    # adapters (like Grok Build) that deploy only hooks/rules, not skills,
+    # so they don't delete third-party skills in shared directories.
+    manages_skills: ClassVar[bool] = True
+
     def is_available(self) -> bool:
         """Whether this platform's AI Agent CLI is installed and on PATH.
 
@@ -147,6 +153,10 @@ class PlatformAdapter(ABC):
         from lingering in platform configs after they have been
         deleted from the registry.
 
+        Adapters that do not manage skills (``manages_skills = False``)
+        skip cleanup entirely to avoid deleting third-party skills in
+        shared directories (e.g. Grok Build's ``~/.grok/skills/``).
+
         Args:
             manifest: Current configuration manifest
             output_dir: Platform output directory (contains skills/)
@@ -154,6 +164,9 @@ class PlatformAdapter(ABC):
         Returns:
             List of paths that were removed
         """
+        if not self.manages_skills:
+            return []
+
         import shutil
 
         skills_dir = Path(output_dir).expanduser().resolve() / "skills"

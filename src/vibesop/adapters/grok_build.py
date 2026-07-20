@@ -29,13 +29,23 @@ logger = logging.getLogger(__name__)
 
 
 class GrokBuildAdapter(PlatformAdapter):
-    """Adapter for Grok Build platform."""
+    """Adapter for Grok Build platform.
+
+    Deploys only routing rules and JSON hooks — does **not** manage
+    ``~/.grok/skills/``, so orphan cleanup is disabled to avoid
+    deleting Grok's own builtin skills.
+    """
 
     def __init__(self, project_root: str | Path = ".") -> None:
         super().__init__()
         self._project_root = Path(project_root).resolve()
 
     cli_binary: str = "grok"
+
+    # Grok Build adapter does NOT deploy skills (only rules + hooks).
+    # The ``~/.grok/skills/`` directory may contain Grok's own builtin
+    # skills — orphan cleanup must not touch them.
+    manages_skills: bool = False
 
     @property
     def platform_name(self) -> str:

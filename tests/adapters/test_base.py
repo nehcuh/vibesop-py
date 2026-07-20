@@ -363,6 +363,71 @@ class TestPlatformAdapterEdgeCases:
         assert len(removed) == 1
         assert not orphan_link.exists()
 
+    def test_clean_orphan_skills_skips_when_manages_skills_is_false(
+        self, tmp_path: Path
+    ) -> None:
+        """clean_orphan_skills returns empty list when manages_skills is False."""
+        adapter = DummyAdapter()
+        adapter.manages_skills = False
+        skills_dir = tmp_path / "skills"
+        skills_dir.mkdir()
+
+        # Create a directory that would normally be an orphan
+        orphan = skills_dir / "third-party-skill"
+        orphan.mkdir()
+        (orphan / "SKILL.md").write_text("# Third party", encoding="utf-8")
+
+        metadata = ManifestMetadata(platform="dummy-platform")
+        manifest = Manifest(metadata=metadata)
+
+        removed = adapter.clean_orphan_skills(manifest, tmp_path)
+
+        assert removed == []
+        assert orphan.exists(), "third-party skill must not be deleted"
+
+    def test_grok_build_adapter_does_not_manage_skills(self) -> None:
+        """GrokBuildAdapter must have manages_skills=False to avoid
+        deleting Grok's own builtin skills from ~/.grok/skills/."""
+        from vibesop.adapters.grok_build import GrokBuildAdapter
+
+        adapter = GrokBuildAdapter()
+        assert adapter.manages_skills is False, (
+            "GrokBuildAdapter must not manage skills — "
+            "~/.grok/skills/ may contain Grok's builtin skills"
+        )
+
+    def test_clean_orphan_skills_still_works_with_default_flag(
+        self, tmp_path: Path
+    ) -> None:
+        """When manages_skills is True (default), cleanup works as before."""
+        adapter = DummyAdapter()
+        assert adapter.manages_skills is True
+        skills_dir = tmp_path / "skills"
+        skills_dir.mkdir()
+
+        orphan = skills_dir / "old-skill"
+        orphan.mkdir()
+        (orphan / "SKILL.md").write_text("# Old", encoding="utf-8")
+
+        valid = skills_dir / "valid-skill"
+        valid.mkdir()
+
+        metadata = ManifestMetadata(platform="dummy-platform")
+        manifest = Manifest(
+            metadata=metadata,
+            skills=[
+                SkillSpec(
+                    id="valid-skill", name="Valid", description="desc", trigger_when=""
+                )
+            ],
+        )
+
+        removed = adapter.clean_orphan_skills(manifest, tmp_path)
+
+        assert len(removed) == 1
+        assert not orphan.exists()
+        assert valid.exists()
+
     def test_normalize_skill_type(self) -> None:
         """Test _normalize_skill_type proxy method."""
         adapter = DummyAdapter()
