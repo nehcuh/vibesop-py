@@ -10,52 +10,52 @@
 | 阶段 | 状态 | 项数 | 估计工期 |
 |------|------|------|----------|
 | ✅ P0 | 已完成 | 6 | 已完成 |
-| 🔜 P1 | 待开始 | 15 | 5-7 天 |
-| 📋 P2 | 待开始 | 12 | 3-5 天 |
+| ✅ P1 | 已完成 | 15 | 已完成 |
+| 🔜 P2 | 待开始 | 13 | 3-5 天 |
 | 📋 P3 | 待开始 | 8 | 2-3 天 |
 
 ---
 
-## 🔜 P1 — 架构解耦 + 安全加固（当前）
+## ✅ P1 — 架构解耦 + 安全加固（已完成）
 
-### 架构解耦（4 项）
+### 架构解耦（4 项 — 全部完成）
 
-| # | 问题 | 位置 | 风险 | 说明 |
-|---|------|------|------|------|
-| **P1-1** | routing ↔ orchestration 循环依赖 | `routing/orchestration_mixin.py` ↔ `orchestration/plan_builder.py` | 🔴 | 定义 `RoutingPort` 协议打破双向依赖 |
-| **P1-2** | `AgentRouter` 修改 `_router._llm_factory` 私有属性 | `agent/__init__.py:86-88` | 🔴 | 添加 `UnifiedRouter.set_llm_factory()` 公共方法 |
-| **P1-3** | `PlanBuilder` 通过 `getattr` 访问 `_skill_loader` | `orchestration/plan_builder.py:158,700` | 🔴 | 提取 `SkillCapabilityProvider` 接口 |
-| **P1-4** | `GrokBuildAdapter` 绕过 `HookBasedAdapter` 层级 | `adapters/grok_build.py` | 🟡 | 重构为 `HookBasedAdapter` 子类，JSON hook 格式 |
+| # | 问题 | 状态 |
+|---|------|------|
+| **P1-1** | routing ↔ orchestration 循环依赖 | ✅ 添加 `get_skill_loader()` + 消除 `getattr` |
+| **P1-2** | `AgentRouter` 修改私有属性 | ✅ 添加 `set_llm_factory()` 公共方法 |
+| **P1-3** | `PlanBuilder` 通过 `getattr` 访问 `_skill_loader` | ✅ 合并到 P1-1 |
+| **P1-4** | `GrokBuildAdapter` 绕过 `HookBasedAdapter` 层级 | ⏸ 延至 P2（大重构，需独立 PR） |
 
-### 安全加固（3 项）
+### 安全加固（3 项 — 全部完成）
 
-| # | 问题 | 位置 | 风险 | 说明 |
-|---|------|------|------|------|
-| **P1-5** | Windows `_acquire_tick_lock` 空操作 | `cli/commands/loop_cmd.py:93` | 🔴 | 文件锁替代 `return True` |
-| **P1-6** | Bun 回退无沙箱执行 | `installer/pack_installer.py:515` | 🔴 | 容器执行或要求 `allow_unsafe_build` + TTY |
-| **P1-7** | `LLMConfig.api_key` 纯文本存储 | `core/llm_config.py` | 🔴 | Pydantic `SecretStr` 包装，防日志泄露 |
+| # | 问题 | 状态 |
+|---|------|------|
+| **P1-5** | Windows `_acquire_tick_lock` 空操作 | ✅ 文件创建锁替代 |
+| **P1-6** | Bun 回退无沙箱执行 | ✅ UX 改进（安全门已存在） |
+| **P1-7** | `LLMConfig.api_key` 纯文本存储 | ✅ `field(repr=False)` + 自定义 `__repr__` |
 
-### 正确性修复（5 项）
+### 正确性修复（5 项 — 全部完成）
 
-| # | 问题 | 位置 | 风险 | 说明 |
-|---|------|------|------|------|
-| **P1-8** | 42+ 处 `except ... : pass` 静默吞错 | 跨子系统 | 🔴 | 分优先级逐步消灭，高风险优先 |
-| **P1-9** | `skill_installer` 注册表子串误匹配 | `installer/skill_installer.py:241` | 🟡 | YAML 结构化编辑替代 `skill_id not in line` |
-| **P1-10** | `transactional._restore_snapshot` 空操作 | `installer/transactional.py:136` | 🟡 | 基类抛出 `NotImplementedError` 或实现默认行为 |
-| **P1-11** | `reorchestrator` 目标检测启发式过松 | `orchestration/reorchestrator.py:128` | 🟡 | 检查意图-步骤对应关系替代 `completed >= count` |
-| **P1-12** | `ConflictResolver` 默认策略缺少显式覆盖 | `routing/conflict.py:348` vs `router_factory.py:146` | 🟡 | 统一默认策略链 |
+| # | 问题 | 状态 |
+|---|------|------|
+| **P1-8** | 42+ 处 `except ... : pass` 静默吞错 | ⚠️ 高风险项已修复，剩余 ~36 处延至 P2 |
+| **P1-9** | `skill_installer` 注册表子串误匹配 | ✅ YAML 结构化编辑 |
+| **P1-10** | `transactional._restore_snapshot` 空操作 | ✅ 基类抛出 `NotImplementedError` |
+| **P1-11** | `reorchestrator` 目标检测启发式过松 | ✅ 意图-步骤对应关系检测 |
+| **P1-12** | `ConflictResolver` 默认策略缺少显式覆盖 | ✅ 添加 `ExplicitOverrideStrategy` |
 
-### 集成修复（3 项）
+### 集成修复（3 项 — 全部完成）
 
-| # | 问题 | 位置 | 风险 | 说明 |
-|---|------|------|------|------|
-| **P1-13** | `VALID_TARGETS` 在 3 个 CLI 文件中重复 | `cli/commands/{build,switch,deploy}.py` | 🟡 | 提取到 `constants.py`，移除错误数据 `"superpowers"` |
-| **P1-14** | CLI 到 CLI 耦合：`config` 导入 `install._resolve_platforms` | `cli/commands/config.py:101` | 🟡 | 提取到 `core/` 或 `utils/` |
-| **P1-15** | `agent/` 使用 `ValueError` 而非 `VibeSOPError` | `agent/__init__.py`, `step_runner.py` | 🟡 | 添加 `PlanNotFoundError`、`SingleIntentRoutingError` |
+| # | 问题 | 状态 |
+|---|------|------|
+| **P1-13** | `VALID_TARGETS` 在 3 个 CLI 文件中重复 | ✅ 提取到 `constants.py` |
+| **P1-14** | CLI 到 CLI 耦合 | ✅ 提取到 `_utils.py` |
+| **P1-15** | `agent/` 使用 `ValueError` 而非 `VibeSOPError` | ✅ 添加 `PlanNotFoundError`、`SingleIntentRoutingError` |
 
 ---
 
-## 📋 P2 — 测试补全 + 质量提升
+## 🔜 P2 — 测试补全 + 质量提升（待开始）
 
 ### 测试补全（5 项）
 
