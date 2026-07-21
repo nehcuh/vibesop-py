@@ -104,7 +104,7 @@ class TestAtomicWriter:
         target = tmp_path / "unicode.txt"
         content = "你好世界\nこんにちは\n🎉\nemoji: 😀\nnull: \x00"
         writer.write_text(target, content)
-        assert target.read_text() == content
+        assert target.read_text(encoding="utf-8") == content
 
     def test_custom_encoding(self, tmp_path: Path):
         writer = AtomicWriter()
