@@ -166,6 +166,10 @@ scan_external = true
 enabled = true
 autoload = true
 
+# Analytics: track routing activity for dashboard insights
+[analytics]
+enabled = true
+
 # Preference learning
 [preferences]
 enabled = true
@@ -349,6 +353,15 @@ transparency = "full"
 [security]
 # Scan external skills for threats before loading
 scan_external = true
+
+# ─────────────────────────────────────────────────────
+# Analytics
+# ─────────────────────────────────────────────────────
+[analytics]
+# Record routing activity to .vibe/analytics.jsonl
+# Enables the dashboard (vibe status) with routing health,
+# activity history, and usage insights.
+enabled = true
 
 # ─────────────────────────────────────────────────────
 # Preference Learning

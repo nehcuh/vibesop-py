@@ -285,6 +285,10 @@ install_deps() {
     print_info "Running: uv tool install . (installs 'vibe' CLI globally)"
     uv tool install . --force 2>/dev/null || print_warning "'uv tool install .' failed — hooks may need 'uv run vibe' instead"
 
+    # Auto-install recommended community skill packs
+    print_info "Auto-installing recommended skill packs..."
+    uv run vibe install --auto 2>/dev/null || print_warning "Skill pack auto-install skipped (non-fatal)"
+
     print_success "Dependencies installed successfully"
 }
 

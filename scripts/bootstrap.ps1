@@ -217,6 +217,10 @@ if (-not $NoInstall) {
         Write-Host "         Running: uv tool install ."
         try { uv tool install . --force 2>$null } catch { Write-Host "         (non-fatal: hooks can use 'uv run vibe')" -ForegroundColor DarkGray }
 
+        # Auto-install recommended community skill packs
+        Write-Host "         Running: uv run vibe install --auto"
+        try { uv run vibe install --auto 2>$null } catch { Write-Host "         (non-fatal: skill packs can be installed later)" -ForegroundColor DarkGray }
+
         Write-OK "Dependencies installed"
     } finally {
         Pop-Location

@@ -4,6 +4,15 @@
 
 <!-- handoff:start -->
 
+### 2026-07-21 (S34) Bootstrap auto-install + Analytics default-on
+**Session**: Fix bootstrap scripts to auto-install community skill packs; enable analytics by default.
+**Completed**:
+- `bootstrap.sh` / `bootstrap.ps1`: added `uv run vibe install --auto` after `uv sync` (community packs superpowers/omx/mattpocock)
+- `init_support.py` config templates (project + global): added `[analytics] enabled = true` — new `vibe init` projects get analytics out of the box
+- Root cause: `_analytics_enabled()` defaults to `False` (opt-in), so `vibe route` silently skips writing `analytics.jsonl` → dashboard shows 0 activity
+**Verification**: `vibe route` → `vibe status` correctly shows routing activity in Recent Activity panel
+**Next**: None — committed as `a85756e`
+
 ### 2026-07-20 (S33) BOM 修复 + 非交互终端崩溃修复 + Web Dashboard 搭建
 **Session**: 用户询问"如何后台可视化历史对话和路由信息" → 发现 `vibe route` 在 Grok Build 中崩溃（BOM + NoConsoleScreenBufferError）→ 修复两个根因 → 搭建 Web Dashboard 回答原始问题。
 **Completed**:

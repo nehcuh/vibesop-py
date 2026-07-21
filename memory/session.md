@@ -1,5 +1,21 @@
 ## Current Session
 
+### S33 (2026-07-21 09:20~) [vibesop-py] Bootstrap 技能包自动安装 + Analytics 默认启用
+
+- [x] **根因分析**：bootstrap 流程不自动下载外部技能包。`bootstrap.sh` → `vibe build` 只生成配置，未调用 `vibe install --auto`
+- [x] **修复 bootstrap 脚本**：`bootstrap.sh` 和 `bootstrap.ps1` 的 Phase 4 后新增 `uv run vibe install --auto`，在新用户 bootstrap 时自动下载 superpowers/omx/mattpocock
+- [x] **Analytics 默认禁用问题**：用户执行 `vibe route` 后 dashboard 显示 0 路由。根因：`_analytics_enabled()` 默认 `False`（opt-in），路由调用不写 `analytics.jsonl`
+- [x] **修复配置模板**：`init_support.py` 的两个配置生成函数（项目级 + 全局级）默认添加 `[analytics] enabled = true`，新 `vibe init` 项目开箱即用
+- [x] **验证**：修改后运行 `vibe route` → `vibe status`，dashboard Recent Activity 正确显示路由记录
+
+**Key Discoveries**:
+1. `vibe route` 的 analytics 是 opt-in，默认关闭 → dashboard 收不到数据但无提示
+2. `scripts/vibe-install` 有 `_auto_install` 但已不再推荐使用，bootstrap 流程未继承
+
+**Next Steps**: 无
+
+**Recorded**: yes — 2 个技术陷阱 → project-knowledge.md
+
 ### S32 (2026-07-19 15:20~23:29) [vibesop-py Windows 兼容生产化 — 多 agent 动态工作流]
 
 - [x] **环境从零搭建**：Windows 无 Python/uv → 装 uv 0.11.29 → `uv python install 3.12` → `uv sync --extra dev`（101 包）
