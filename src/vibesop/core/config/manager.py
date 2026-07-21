@@ -317,6 +317,40 @@ class LoopConfig(TolerantConfig):
     )
 
 
+class ObservabilityConfig(TolerantConfig):
+    """Configuration for agent-internal observability (span tracing).
+
+    Controls span emission, retention, and payload limits. Spans are
+    written to ``.vibe/observability/spans.jsonl`` regardless of backend.
+    """
+
+    enabled: bool = Field(
+        default=True,
+        description="Master switch for span tracing. When false, no spans are emitted.",
+    )
+    panel_url: str = Field(
+        default="http://127.0.0.1:14500",
+        description="Panel OTLP endpoint URL (for future Panel integration).",
+    )
+    span_max_payload_chars: int = Field(
+        default=16384,
+        ge=1024,
+        le=1048576,
+        description="Maximum characters for input_data / output_data in spans.",
+    )
+    span_retention_days: int = Field(
+        default=7,
+        ge=1,
+        le=365,
+        description="Number of days to retain spans before auto-cleanup.",
+    )
+    span_max_total: int = Field(
+        default=100000,
+        ge=1000,
+        description="Hard cap on total spans; oldest spans are evicted when exceeded.",
+    )
+
+
 class ConfigManager:
     """Unified configuration manager.
 
@@ -340,6 +374,7 @@ class ConfigManager:
         "prompt_chain": PromptChainConfig().model_dump(),
         "platforms": PlatformsConfig().model_dump(),
         "loop": LoopConfig().model_dump(),
+        "observability": ObservabilityConfig().model_dump(),
         "optimization": {
             "enabled": True,
             "prefilter": {

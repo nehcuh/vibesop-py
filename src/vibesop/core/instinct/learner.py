@@ -24,6 +24,7 @@ class Instinct:
     confidence: float = 0.5
     success_count: int = 0
     failure_count: int = 0
+    times_matched: int = 0  # Neutral signal: count of times the router matched this instinct
     last_used: datetime | None = None
     created_at: datetime = field(default_factory=datetime.now)
     source: str = "extracted"
@@ -72,6 +73,7 @@ class Instinct:
             "confidence": self.confidence,
             "success_count": self.success_count,
             "failure_count": self.failure_count,
+            "times_matched": self.times_matched,
             "last_used": self.last_used.isoformat() if self.last_used else None,
             "created_at": self.created_at.isoformat(),
             "source": self.source,
@@ -88,6 +90,7 @@ class Instinct:
             confidence=data.get("confidence", 0.5),
             success_count=data.get("success_count", 0),
             failure_count=data.get("failure_count", 0),
+            times_matched=data.get("times_matched", 0),
             last_used=datetime.fromisoformat(data["last_used"]) if data.get("last_used") else None,
             created_at=datetime.fromisoformat(data["created_at"]),
             source=data.get("source", "extracted"),

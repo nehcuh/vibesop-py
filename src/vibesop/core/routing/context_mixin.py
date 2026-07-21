@@ -125,6 +125,29 @@ class RouterContextMixin:
         except (OSError, ValueError, RuntimeError) as e:
             logger.debug("record_feedback_outcome failed: %s", e)
 
+    def record_instinct_matched(self, query: str, matched_skill: str) -> None:
+        """Record a neutral signal: an instinct was matched by the router.
+
+        This is called from the routing hot path (NOT from user feedback).
+        It increments ``times_matched`` on the corresponding instinct but
+        does NOT mark it as success or failure. The success/failure signal
+        comes exclusively from ``record_feedback_outcome`` (explicit user
+        confirmation/rejection via the CLI feedback path).
+
+        Neutral signals are used by auto-evolution quality gates to assess
+        pattern frequency and temporal consistency, without inflating
+        confidence from unconfirmed matches.
+        """
+        try:
+            learner = self._get_instinct_learner()
+            instinct_id = learner._generate_id(query)
+            with learner._lock:
+                if instinct_id in learner._instincts:
+                    instinct = learner._instincts[instinct_id]
+                    instinct.times_matched += 1
+        except (OSError, ValueError, RuntimeError) as e:
+            logger.debug("record_instinct_matched failed: %s", e)
+
     def _enrich_context(self, context: RoutingContext | None, query: str = "") -> RoutingContext:
         """Enrich routing context with memory, session state, recent conversation history, and project context."""
         if context is None:

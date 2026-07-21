@@ -20,8 +20,24 @@ from pathlib import Path
 from typing import Any
 
 from vibesop.agent.runtime.intent_interceptor import InterceptionMode
+from vibesop.core.observability import ObservabilityTracer, get_tracer
 
 logger = logging.getLogger(__name__)
+
+# Module-level observability tracer (lazy-initialised).
+_obs_tracer: ObservabilityTracer | None = None
+
+
+def _get_obs_tracer() -> ObservabilityTracer:
+    """Return the module-level observability tracer.
+
+    Creates it lazily so the observability module is only imported
+    when tracing is actually needed (avoids import overhead on cold starts).
+    """
+    global _obs_tracer
+    if _obs_tracer is None:
+        _obs_tracer = get_tracer(enabled=True)
+    return _obs_tracer
 
 
 @dataclass
@@ -386,164 +402,172 @@ class AgentRuntime:
         """
         result = AgentRuntimeResult(project_root=self.project_root)
 
-        # Generate conversation ID if not provided
-        if not conversation_id:
-            project_hash = hashlib.sha256(str(self.project_root).encode()).hexdigest()[:16]
-            conversation_id = project_hash
-
-        # 1. Check for slash commands (/vibe-help, /vibe-list, etc.)
-        if self.slash_executor.is_slash_command(query):
-            try:
-                # Handle route-like slash commands: strip prefix and route
-                route_match = self._ROUTE_LIKE_RE.match(query.strip())
-                if route_match:
-                    query = route_match.group(1).strip()
-                    # Fall through to normal routing below
-                else:
-                    slash_result = self.slash_executor.execute_query(query)
-                    result.intercepted = True
-                    result.mode = "slash_command"
-                    result.slash_result = {
-                        "success": slash_result.success,
-                        "message": slash_result.message,
-                        "command": slash_result.command,
-                    }
-                    return result
-            except Exception as e:
-                logger.debug(f"Slash command execution failed: {e}")
-                # Fall through to normal routing
-
-        # 2. Check if interception is needed
-        from vibesop.agent.runtime.intent_interceptor import InterceptionContext
-
-        context = InterceptionContext(
-            session_id=session_id,
-            platform=platform,
-        )
+        # --- Observability: start a trace span for this query ---
+        tracer = _get_obs_tracer()
+        trace_name = query[:80] if len(query) <= 80 else query[:77] + "..."
         try:
-            decision = self.interceptor.should_intercept(query, _context=context)
-        except Exception as e:
-            result.errors.append(f"Interception failed: {e}")
-            return result
+            with tracer.trace(
+                f"route:{trace_name}",
+                task_id=None,
+                session_id=session_id,
+                agent_id=platform,
+                metadata={"query": query[:200], "platform": platform},
+            ) as _task_span:
 
-        if not decision.should_route:
-            return result  # Not intercepted — agent handles normally
+                # Generate conversation ID if not provided
+                if not conversation_id:
+                    project_hash = hashlib.sha256(str(self.project_root).encode()).hexdigest()[:16]
+                    conversation_id = project_hash
 
-        result.intercepted = True
-        result.mode = decision.mode.value if hasattr(decision.mode, "value") else str(decision.mode)
-
-        # 3. Route the query
-        try:
-            if decision.mode in (InterceptionMode.ORCHESTRATE, InterceptionMode.MULTI_AGENT_SQUAD):
-                # v7.3.4 fix (Round 3 P0): build routing context for BOTH
-                # modes, not just MULTI_AGENT_SQUAD. Previously ORCHESTRATE
-                # passed squad_ctx=None, causing router.orchestrate() to
-                # re-decompose without the interceptor's analysis. The
-                # orchestrator reads context.intent_analysis (orchestrator.py:204+),
-                # so without it the squad plan structure was lost and the
-                # hook returned "No matching skill found" while CLI worked.
-                #
-                # The interception_mode tag tells PlanBuilder which branch
-                # to enter: "multi_agent_squad" → per-role steps, anything
-                # else → standard multi-intent decomposition.
-                squad_ctx: Any = None
-                if decision.analysis is not None:
-                    from vibesop.core.matching import RoutingContext
-
-                    mode_tag = (
-                        "multi_agent_squad"
-                        if decision.mode == InterceptionMode.MULTI_AGENT_SQUAD
-                        else "orchestrate"
-                    )
-                    squad_ctx = RoutingContext()
-                    squad_ctx.interception_mode = mode_tag
-                    squad_ctx.intent_analysis = decision.analysis.to_dict()
-                    # Legacy backchannel (kept for readers not yet migrated
-                    # to first-class fields; deprecated, will be removed in v7.1).
-                    squad_ctx.metadata["intent_analysis"] = squad_ctx.intent_analysis
-                    squad_ctx.metadata["_interception_mode"] = mode_tag
-
-                orch_result = self.router.orchestrate(query, callbacks=callbacks, context=squad_ctx)
-                if orch_result.get("is_multi_intent"):
-                    result.mode = "orchestrate"
-                    plan = orch_result.get("plan", {})
-                    result.plan = plan
-                    steps = plan.get("steps", [])
-                    if steps:
-                        result.skill_id = steps[0].get("skill_id", "")
-                        result.confidence = 0.8
-                        result.skill_name = steps[0].get("intent", "")
-                    for step in steps[1:5]:
-                        result.alternatives.append(
-                            {
-                                "skill_id": step.get("skill_id", ""),
-                                "confidence": 0.7,
+                # 1. Check for slash commands
+                if self.slash_executor.is_slash_command(query):
+                    try:
+                        route_match = self._ROUTE_LIKE_RE.match(query.strip())
+                        if route_match:
+                            query = route_match.group(1).strip()
+                        else:
+                            slash_result = self.slash_executor.execute_query(query)
+                            result.intercepted = True
+                            result.mode = "slash_command"
+                            result.slash_result = {
+                                "success": slash_result.success,
+                                "message": slash_result.message,
+                                "command": slash_result.command,
                             }
-                        )
-                else:
-                    single = orch_result.get("single_result", {})
-                    result.skill_id = single.get("skill_id", "") or ""
-                    result.confidence = single.get("confidence", 0.0)
-                    result.mode = "single"
-            else:
-                routing_result = self.router.route(query, enable_ai_triage=True)
+                            _task_span.metadata["mode"] = "slash_command"
+                            return result
+                    except Exception as e:
+                        logger.debug(f"Slash command execution failed: {e}")
 
-                # 4. Present the decision
+                # 2. Check if interception is needed
+                from vibesop.agent.runtime.intent_interceptor import InterceptionContext
+
+                context = InterceptionContext(
+                    session_id=session_id,
+                    platform=platform,
+                )
                 try:
-                    present = self.presenter.present_single_result(routing_result, platform)
-                    result.decision_message = present.message if explain else ""
+                    decision = self.interceptor.should_intercept(query, _context=context)
                 except Exception as e:
-                    logger.debug(f"Decision presentation failed: {e}")
+                    result.errors.append(f"Interception failed: {e}")
+                    _task_span.set_error(f"Interception failed: {e}")
+                    return result
 
-                # 5. Extract match details
-                if hasattr(routing_result, "has_match") and routing_result.has_match:
-                    primary = routing_result.primary if hasattr(routing_result, "primary") else None
-                    if primary:
-                        result.skill_id = getattr(primary, "skill_id", "")
-                        result.skill_name = getattr(primary, "skill_name", "")
-                        result.confidence = getattr(primary, "confidence", 0.0)
+                if not decision.should_route:
+                    _task_span.metadata["mode"] = "not_intercepted"
+                    return result
 
-                    # Capture alternatives
-                    if hasattr(routing_result, "alternatives"):
-                        for alt in routing_result.alternatives[:5]:
-                            result.alternatives.append(
-                                {
-                                    "skill_id": getattr(alt, "skill_id", ""),
-                                    "confidence": getattr(alt, "confidence", 0.0),
-                                }
+                result.intercepted = True
+                result.mode = decision.mode.value if hasattr(decision.mode, "value") else str(decision.mode)
+
+                # 3. Route the query
+                try:
+                    if decision.mode in (InterceptionMode.ORCHESTRATE, InterceptionMode.MULTI_AGENT_SQUAD):
+                        squad_ctx: Any = None
+                        if decision.analysis is not None:
+                            from vibesop.core.matching import RoutingContext
+
+                            mode_tag = (
+                                "multi_agent_squad"
+                                if decision.mode == InterceptionMode.MULTI_AGENT_SQUAD
+                                else "orchestrate"
                             )
+                            squad_ctx = RoutingContext()
+                            squad_ctx.interception_mode = mode_tag
+                            squad_ctx.intent_analysis = decision.analysis.to_dict()
+                            squad_ctx.metadata["intent_analysis"] = squad_ctx.intent_analysis
+                            squad_ctx.metadata["_interception_mode"] = mode_tag
 
-                    # Capture orchestration plan
-                    if hasattr(routing_result, "plan") and routing_result.plan:
+                        orch_result = self.router.orchestrate(query, callbacks=callbacks, context=squad_ctx)
+                        if orch_result.get("is_multi_intent"):
+                            result.mode = "orchestrate"
+                            plan = orch_result.get("plan", {})
+                            result.plan = plan
+                            steps = plan.get("steps", [])
+                            if steps:
+                                result.skill_id = steps[0].get("skill_id", "")
+                                result.confidence = 0.8
+                                result.skill_name = steps[0].get("intent", "")
+                            for step in steps[1:5]:
+                                result.alternatives.append(
+                                    {"skill_id": step.get("skill_id", ""), "confidence": 0.7}
+                                )
+                        else:
+                            single = orch_result.get("single_result", {})
+                            result.skill_id = single.get("skill_id", "") or ""
+                            result.confidence = single.get("confidence", 0.0)
+                            result.mode = "single"
+                    else:
+                        routing_result = self.router.route(query, enable_ai_triage=True)
+
+                        # 4. Present the decision
                         try:
-                            from vibesop.agent.execution_protocol import ExecutionProtocol
-
-                            result.plan = ExecutionProtocol.plan_to_json(routing_result.plan)
+                            present = self.presenter.present_single_result(routing_result, platform)
+                            result.decision_message = present.message if explain else ""
                         except Exception as e:
-                            logger.debug(f"Plan serialization failed: {e}")
-        except Exception as e:
-            result.errors.append(f"Routing failed: {e}")
-            return result
+                            logger.debug(f"Decision presentation failed: {e}")
 
-        # 6. Inject skill content (load actual SKILL.md)
-        if result.skill_id:
-            try:
-                injection = self.injector.inject_single_skill(result.skill_id, platform)
-                if isinstance(injection.payload, str):
-                    result.skill_content = injection.payload
-                elif isinstance(injection.payload, dict):
-                    # v7.3.5 fix (Round 4 P1, part 2): Claude Code injector
-                    # returns {"additionalContext": "..."}, not {"content": "..."}.
-                    # Without this fallback chain, skill_content was always ""
-                    # even when the injector successfully loaded the SKILL.md.
-                    result.skill_content = (
-                        injection.payload.get("additionalContext")
-                        or injection.payload.get("content")
-                        or ""
-                    )
-            except Exception as e:
-                logger.debug(f"Skill injection failed: {e}")
-                # Non-fatal — routing decision is still valid
+                        # 5. Extract match details
+                        if hasattr(routing_result, "has_match") and routing_result.has_match:
+                            primary = routing_result.primary if hasattr(routing_result, "primary") else None
+                            if primary:
+                                result.skill_id = getattr(primary, "skill_id", "")
+                                result.skill_name = getattr(primary, "skill_name", "")
+                                result.confidence = getattr(primary, "confidence", 0.0)
+
+                            if hasattr(routing_result, "alternatives"):
+                                for alt in routing_result.alternatives[:5]:
+                                    result.alternatives.append(
+                                        {"skill_id": getattr(alt, "skill_id", ""), "confidence": getattr(alt, "confidence", 0.0)}
+                                    )
+
+                            if hasattr(routing_result, "plan") and routing_result.plan:
+                                try:
+                                    from vibesop.agent.execution_protocol import ExecutionProtocol
+                                    result.plan = ExecutionProtocol.plan_to_json(routing_result.plan)
+                                except Exception as e:
+                                    logger.debug(f"Plan serialization failed: {e}")
+                except Exception as e:
+                    result.errors.append(f"Routing failed: {e}")
+                    _task_span.set_error(f"Routing failed: {e}")
+                    return result
+
+                # 6. Inject skill content
+                if result.skill_id:
+                    try:
+                        injection = self.injector.inject_single_skill(result.skill_id, platform)
+                        if isinstance(injection.payload, str):
+                            result.skill_content = injection.payload
+                        elif isinstance(injection.payload, dict):
+                            result.skill_content = (
+                                injection.payload.get("additionalContext")
+                                or injection.payload.get("content")
+                                or ""
+                            )
+                    except Exception as e:
+                        logger.debug(f"Skill injection failed: {e}")
+
+                # Enrich the task span with routing metadata
+                _task_span.metadata["skill_id"] = result.skill_id or ""
+                _task_span.metadata["mode"] = result.mode
+                _task_span.metadata["confidence"] = result.confidence
+                _task_span.metadata["has_match"] = result.has_match
+
+                # --- Instinct feedback bridge (neutral signal) ---
+                if result.has_match and result.skill_id:
+                    try:
+                        # Dynamic import to avoid circular dependency at module load
+                        from vibesop.core.routing.context_mixin import RouterContextMixin
+                        mixin = RouterContextMixin.__new__(RouterContextMixin)
+                        mixin._project_root = str(self.project_root)
+                        mixin.record_instinct_matched(query, result.skill_id)
+                    except Exception:
+                        pass  # instinct recording is best-effort
+
+        except Exception:
+            # Trace context-manager handles span.error() automatically.
+            # Catch here only to prevent trace failures from crashing the route.
+            pass
 
         return result
 

@@ -83,6 +83,49 @@ class LoopTrigger(StrEnum):
     """How the loop is fired. v1 ships CRON only."""
 
     CRON = "cron"
+    METRIC = "metric"  # Data-driven trigger based on observable metrics
+
+
+class MetricCondition(BaseModel):
+    """Data-driven loop trigger condition.
+
+    Evaluated alongside CRON schedule. When both CRON and METRIC are
+    configured, the loop fires when EITHER condition is met.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    metric: str = Field(
+        ...,
+        description="Metric name: 'success_rate', 'avg_duration', 'error_count', 'usage_frequency'.",
+    )
+    skill_id: str = Field(
+        ...,
+        description="Monitored skill ID.",
+    )
+    operator: str = Field(
+        default="<",
+        description="Comparison operator: '<', '>', '<=', '>='.",
+    )
+    threshold: float = Field(
+        ...,
+        description="Threshold value for the comparison.",
+    )
+    window_hours: int = Field(
+        default=168,
+        ge=1,
+        description="Lookback window in hours (default 7 days).",
+    )
+    min_samples: int = Field(
+        default=5,
+        ge=1,
+        description="Minimum samples required before condition is evaluated.",
+    )
+    cooldown_minutes: int = Field(
+        default=60,
+        ge=1,
+        description="Minimum interval between consecutive triggers.",
+    )
 
 
 class LoopSpec(BaseModel):
@@ -157,6 +200,10 @@ class LoopSpec(BaseModel):
         ),
     )
     tags: list[str] = Field(default_factory=list, description="Categorisation tags.")
+    metric_conditions: list[MetricCondition] = Field(
+        default_factory=list,
+        description="Data-driven trigger conditions. Evaluated alongside CRON schedule.",
+    )
     env_overrides: dict[str, str] = Field(
         default_factory=dict,
         description="Per-loop env var overrides applied at execution time.",
