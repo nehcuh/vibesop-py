@@ -57,6 +57,25 @@ See project-knowledge.md history for details.
 ### Analytics default-off surprises users
 - `_analytics_enabled()` in `unified.py:840` returns `False` by default (opt-in). All `vibe route` calls silently skip `analytics.jsonl` writing unless `[analytics] enabled = true` is in config
 - `vibe status` dashboard shows "No routing activity" / "Routing analytics not yet available" even though user has been routing — no error, no hint to enable
+- `vibe init` now generates `config.toml` with `analytics.enabled = true`, but old projects (pre-config-template) have no config file → analytics silently disabled despite user expectation
+
+### GitHub Actions pinned SHAs silently break when GC'd (2026-07-21)
+- `softprops/action-gh-release@3bb12739...` stopped resolving — GitHub garbage-collected the commit
+- `pypa/gh-action-pypi-publish@ec4db0b4...` also at risk
+- **Fix**: use version tags (`@v2`, `@release/v1`) for non-security-critical actions; avoid pinned SHAs
+- Only security-critical actions (publish, attestation) should pin SHAs; general-purpose actions (checkout, setup-uv) are safe with `@v4`
+
+### Windows `Path.read_text()` encoding is locale-dependent, NOT UTF-8 (2026-07-21)
+- Python's `Path.read_text()` defaults to `locale.getpreferredencoding()` — CP1252 on Windows
+- Writing UTF-8 and reading without explicit encoding → UnicodeDecodeError on emoji/Chinese
+- **Fix**: always use `target.read_text(encoding="utf-8")` in cross-platform tests and code
+- `write_text(content, encoding="utf-8")` + `read_text(encoding="utf-8")` is the safe pair
+
+### Windows `os.open(O_CREAT | O_EXCL)` lock files persist after close (2026-07-21)
+- POSIX `fcntl.flock` auto-releases on fd close; Windows `O_EXCL` file stays on disk
+- Blocking acquire with retry loop times out because stale lock file never gets deleted
+- **Fix**: delete lock file after close (`os.fdopen` handle → close → `Path.unlink()`)
+- Wrap in `_release_tick_lock()` helper that unlinks on Windows, no-op on POSIX
 
 ### Bootstrap→build gap on community skill packs
 - `bootstrap.sh`/`bootstrap.ps1` suggest `vibe build` as next step, but `vibe build` only generates config — it does not trigger `vibe install --auto` for community packs (superpowers, omx, mattpocock)
