@@ -105,6 +105,12 @@ def create_app() -> FastAPI:
         conv_count = len(_list_json_files(conv_dir)) if conv_dir.is_dir() else 0
         session_count = len(_list_json_files(session_dir)) if session_dir.is_dir() else 0
 
+        # Agent span count from observability JSONL
+        span_count = 0
+        spans_path = vibe_dir / "observability" / "spans.jsonl"
+        if spans_path.exists():
+            span_count = sum(1 for _ in spans_path.open("r", encoding="utf-8") if _.strip())
+
         # Routing stats
         total_routes = len(analytics)
         modes: dict[str, int] = {}
@@ -143,6 +149,7 @@ def create_app() -> FastAPI:
                 "total_routes": total_routes,
                 "hit_rate": round(hit_rate, 1),
                 "total_traces": trace_count,
+                "total_spans": span_count,
                 "total_conversations": conv_count,
                 "total_sessions": session_count,
                 "mode_distribution": modes,
@@ -177,23 +184,41 @@ def create_app() -> FastAPI:
         records.reverse()
         return JSONResponse(records[:limit])
 
-    # API: Traces  # noqa: ERA001
+    # ------------------------------------------------------------------
+    # API: Traces (routing decision trees + agent spans)
+    # ------------------------------------------------------------------
 
     @app.get("/api/traces")
     async def api_traces(
         limit: int = Query(default=30, ge=1, le=200),
+        source: str = Query(default="all", description="routing | agent | all"),
     ) -> JSONResponse:
         root = _resolve_project_root()
-        traces_dir = root / ".vibe" / "traces"
-        files = _list_json_files(traces_dir)[:limit]
-
         traces: list[dict[str, Any]] = []
-        for f in files:
-            data = _read_json(f)
-            if data:
-                data["_id"] = f.stem
-                traces.append(data)
-        return JSONResponse(traces)
+
+        if source in ("all", "routing"):
+            traces_dir = root / ".vibe" / "traces"
+            files = _list_json_files(traces_dir)
+            for f in files:
+                data = _read_json(f)
+                if data:
+                    data["_id"] = f.stem
+                    data["_source"] = "routing"
+                    traces.append(data)
+
+        if source in ("all", "agent"):
+            spans_path = root / ".vibe" / "observability" / "spans.jsonl"
+            agent_spans = _read_jsonl(spans_path, limit=limit * 2)
+            for span in agent_spans:
+                span["_id"] = span.get("id", "")
+                span["_source"] = "agent"
+                traces.append(span)
+
+        traces.sort(
+            key=lambda t: t.get("started_at") or t.get("timestamp") or "",
+            reverse=True,
+        )
+        return JSONResponse(traces[:limit])
 
     @app.get("/api/traces/{trace_id}")
     async def api_trace_detail(trace_id: str) -> JSONResponse:
@@ -204,6 +229,48 @@ def create_app() -> FastAPI:
             return JSONResponse({"error": "Trace not found"}, status_code=404)
         data["_id"] = trace_id
         return JSONResponse(data)
+
+    # ------------------------------------------------------------------
+    # API: Agent spans (from .vibe/observability/spans.jsonl)
+    # ------------------------------------------------------------------
+
+    @app.get("/api/spans")
+    async def api_spans(
+        limit: int = Query(default=50, ge=1, le=500),
+        span_kind: str | None = Query(default=None),
+        skill_id: str | None = Query(default=None),
+    ) -> JSONResponse:
+        root = _resolve_project_root()
+        spans_path = root / ".vibe" / "observability" / "spans.jsonl"
+        records = _read_jsonl(spans_path, limit=limit)
+
+        if span_kind:
+            records = [r for r in records if r.get("span_kind") == span_kind]
+        if skill_id:
+            records = [r for r in records if (r.get("metadata") or {}).get("skill_id") == skill_id]
+
+        records.reverse()
+        return JSONResponse(records[:limit])
+
+    @app.get("/api/spans/{span_id}")
+    async def api_span_detail(span_id: str) -> JSONResponse:
+        root = _resolve_project_root()
+        spans_path = root / ".vibe" / "observability" / "spans.jsonl"
+        if not spans_path.exists():
+            return JSONResponse({"error": "No spans data"}, status_code=404)
+
+        with spans_path.open("r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    record = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if record.get("id") == span_id:
+                    return JSONResponse(record)
+        return JSONResponse({"error": "Span not found"}, status_code=404)
 
     # API: Conversations  # noqa: ERA001
 

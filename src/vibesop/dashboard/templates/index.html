@@ -155,10 +155,28 @@
 
   <!-- Traces Tab -->
   <div id="tab-traces" class="tab">
+    <div class="filter-bar">
+      <label style="font-size:13px;color:var(--dim)">Source:</label>
+      <select id="trace-source" onchange="loadTraces()">
+        <option value="all">All (Routing + Agent)</option>
+        <option value="routing">Routing Traces</option>
+        <option value="agent">Agent Spans</option>
+      </select>
+      <label style="font-size:13px;color:var(--dim);margin-left:12px">Kind:</label>
+      <select id="span-kind-filter" onchange="loadTraces()" style="display:none">
+        <option value="">All Kinds</option>
+        <option value="task">task</option>
+        <option value="llm">llm</option>
+        <option value="tool_call">tool_call</option>
+        <option value="file_edit">file_edit</option>
+        <option value="workflow_node">workflow_node</option>
+      </select>
+      <span style="font-size:12px;color:var(--dim);margin-left:auto" id="traces-count"></span>
+    </div>
     <div class="table-wrap">
       <table>
         <thead><tr>
-          <th>Trace ID</th><th>Query</th><th>Layers</th><th>Result</th><th>Duration</th>
+          <th>ID</th><th>Source</th><th>Kind</th><th>Name/Query</th><th>Status</th><th>Duration</th>
         </tr></thead>
         <tbody id="traces-body"></tbody>
       </table>
@@ -263,7 +281,12 @@ async function loadOverview() {
     <div class="card">
       <div class="label">Traces</div>
       <div class="value accent">${h.total_traces}</div>
-      <div class="sub">recorded decision trees</div>
+      <div class="sub">routing decision trees</div>
+    </div>
+    <div class="card">
+      <div class="label">Agent Spans</div>
+      <div class="value accent">${h.total_spans}</div>
+      <div class="sub">LLM/tool/task calls</div>
     </div>
     <div class="card">
       <div class="label">Conversations</div>
@@ -332,51 +355,104 @@ async function loadHistory() {
 
 // ── Traces ─────────────────────────────────────────────────────
 async function loadTraces() {
-  const data = await api('/api/traces?limit=50');
+  const source = document.getElementById('trace-source').value;
+  const kind = document.getElementById('span-kind-filter').value;
+  const kindFilter = document.getElementById('span-kind-filter');
+
+  // Show/hide kind filter based on source
+  kindFilter.style.display = (source === 'all' || source === 'agent') ? 'inline-block' : 'none';
+
+  let url = '/api/traces?limit=100&source=' + source;
+  const data = await api(url);
   const tbody = document.getElementById('traces-body');
 
   if (!data.length) {
-    tbody.innerHTML = '<tr><td colspan="5" class="empty">No traces found. Enable tracing with <code>vibe route --trace</code>.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="6" class="empty">No traces found. Start using VibeSOP to generate routing traces and agent spans.</td></tr>';
+    document.getElementById('traces-count').textContent = '0 items';
     return;
   }
 
-  tbody.innerHTML = data.map(t => `
-    <tr>
-      <td><span class="mono clickable" onclick="showTrace('${t._id}')">${t._id.substring(0, 12)}...</span></td>
-      <td style="max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml((t.query || '').substring(0, 60))}</td>
-      <td>${(t.layer_details || []).length || t.layers || '-'}</td>
-      <td>${t.primary_skill || t.result || '-'}</td>
-      <td>${t.duration_ms ? t.duration_ms + 'ms' : '-'}</td>
-    </tr>
-  `).join('');
+  // Filter by kind if selected (for agent spans)
+  let filtered = data;
+  if (kind && (source === 'all' || source === 'agent')) {
+    filtered = data.filter(t => t.span_kind === kind || t._source === 'routing');
+  }
+
+  document.getElementById('traces-count').textContent = filtered.length + ' items';
+
+  tbody.innerHTML = filtered.map(t => {
+    const isAgent = t._source === 'agent';
+    const isRouting = t._source === 'routing';
+    const kind = t.span_kind || '-';
+    const name = isAgent ? (t.name || '').substring(0, 50) : (t.query || '').substring(0, 50);
+    const status = t.status || (t.result ? 'ok' : '-');
+    const duration = t.duration_ms ? t.duration_ms + 'ms' : '-';
+    const id = (t._id || '').substring(0, 12);
+
+    return '<tr>' +
+      '<td><span class="mono clickable" onclick="showTraceDetail(\'' + (t._id || '') + '\', \'' + (isAgent ? 'agent' : 'routing') + '\')">' + escapeHtml(id) + '...</span></td>' +
+      '<td><span class="badge ' + (isAgent ? 'orchestrated' : 'single') + '">' + (isAgent ? '🤖 Agent' : '🧭 Route') + '</span></td>' +
+      '<td><span class="mono">' + escapeHtml(kind) + '</span></td>' +
+      '<td style="max-width:250px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + escapeHtml(name) + '">' + escapeHtml(name) + '</td>' +
+      '<td><span class="badge ' + (status === 'ok' ? 'single' : status === 'error' ? 'no-match' : '') + '">' + escapeHtml(status) + '</span></td>' +
+      '<td>' + duration + '</td>' +
+      '</tr>';
+  }).join('');
 }
 
-async function showTrace(id) {
-  const t = await api('/api/traces/' + id);
-  const div = document.getElementById('trace-detail');
-  const layers = t.layer_details || t.layers || [];
+async function showTraceDetail(id, source) {
+  let t;
+  if (source === 'agent') {
+    t = await api('/api/spans/' + id);
+  } else {
+    t = await api('/api/traces/' + id);
+  }
 
+  const div = document.getElementById('trace-detail');
   div.style.display = 'block';
-  div.innerHTML = `
-    <button class="close" onclick="this.parentElement.style.display='none'">&times;</button>
-    <h3>Trace: ${id}</h3>
-    <div class="meta">Query: <strong>${escapeHtml(t.query || '')}</strong> &bull; Duration: ${t.duration_ms || '?'}ms &bull; Result: ${t.primary_skill || t.result || 'none'}</div>
-    <h4 style="font-size:13px;margin-bottom:8px;color:var(--dim)">Decision Tree</h4>
-    ${layers.map(l => `
-      <div class="layer">
-        <div class="layer-header">
-          <span class="layer-name">${l.layer || l.name || '?'}</span>
-          <span class="layer-status ${l.matched || l.match ? 'match' : 'no-match'}">${l.matched || l.match ? '✓ MATCH' : '✗ NO MATCH'}</span>
-          ${l.confidence ? `<span style="font-size:11px;color:var(--dim)">${(l.confidence*100).toFixed(0)}%</span>` : ''}
-          ${l.duration_ms ? `<span style="font-size:11px;color:var(--dim)">${l.duration_ms}ms</span>` : ''}
-        </div>
-        ${l.reason || l.detail ? `<div class="layer-detail">${escapeHtml((l.reason || l.detail || '').substring(0, 200))}</div>` : ''}
-      </div>
-    `).join('') || '<div class="empty">No layer data</div>'}
-    <details style="margin-top:10px"><summary style="cursor:pointer;font-size:12px;color:var(--dim)">Raw JSON</summary><pre>${escapeHtml(JSON.stringify(t, null, 2))}</pre></details>
-  `;
+
+  if (source === 'agent') {
+    // Agent span detail
+    const parent = t.parent_span_id ? '<div style="font-size:12px;color:var(--dim)">Parent: ' + escapeHtml(t.parent_span_id.substring(0, 12)) + '...</div>' : '';
+    const meta = t.metadata || {};
+    const metaStr = typeof meta === 'string' ? meta : JSON.stringify(meta, null, 2);
+    div.innerHTML = '<button class="close" onclick="this.parentElement.style.display=\'none\'">&times;</button>' +
+      '<h3>🤖 Agent Span: ' + escapeHtml(t.name || '') + '</h3>' +
+      '<div class="meta">' +
+        'Kind: <strong>' + escapeHtml(t.span_kind || '-') + '</strong> &bull; ' +
+        'Status: <strong>' + escapeHtml(t.status || '-') + '</strong> &bull; ' +
+        'Duration: ' + (t.duration_ms || '-') + 'ms &bull; ' +
+        'Tokens: in=' + (t.tokens_input || 0) + ' out=' + (t.tokens_output || 0) +
+      '</div>' +
+      parent +
+      '<div style="margin-top:8px"><strong>Trace ID:</strong> <span class="mono">' + escapeHtml(t.trace_id || '') + '</span></div>' +
+      '<details style="margin-top:10px"><summary style="cursor:pointer;font-size:12px;color:var(--dim)">Metadata</summary><pre>' + escapeHtml(metaStr) + '</pre></details>' +
+      '<details style="margin-top:10px"><summary style="cursor:pointer;font-size:12px;color:var(--dim)">Raw JSON</summary><pre>' + escapeHtml(JSON.stringify(t, null, 2)) + '</pre></details>';
+  } else {
+    // Routing trace detail (existing logic)
+    const layers = t.layer_details || t.layers || [];
+    div.innerHTML = '<button class="close" onclick="this.parentElement.style.display=\'none\'">&times;</button>' +
+      '<h3>🧭 Trace: ' + escapeHtml(id) + '</h3>' +
+      '<div class="meta">Query: <strong>' + escapeHtml(t.query || '') + '</strong> &bull; Duration: ' + (t.duration_ms || '?') + 'ms &bull; Result: ' + escapeHtml(t.primary_skill || t.result || 'none') + '</div>' +
+      '<h4 style="font-size:13px;margin-bottom:8px;color:var(--dim)">Decision Tree</h4>' +
+      (layers.map(function(l) {
+        return '<div class="layer">' +
+          '<div class="layer-header">' +
+            '<span class="layer-name">' + escapeHtml(l.layer || l.name || '?') + '</span>' +
+            '<span class="layer-status ' + (l.matched || l.match ? 'match' : 'no-match') + '">' + (l.matched || l.match ? '✓ MATCH' : '✗ NO MATCH') + '</span>' +
+            (l.confidence ? '<span style="font-size:11px;color:var(--dim)">' + (l.confidence*100).toFixed(0) + '%</span>' : '') +
+            (l.duration_ms ? '<span style="font-size:11px;color:var(--dim)">' + l.duration_ms + 'ms</span>' : '') +
+          '</div>' +
+          (l.reason || l.detail ? '<div class="layer-detail">' + escapeHtml((l.reason || l.detail || '').substring(0, 200)) + '</div>' : '') +
+        '</div>';
+      }).join('') || '<div class="empty">No layer data</div>') +
+      '<details style="margin-top:10px"><summary style="cursor:pointer;font-size:12px;color:var(--dim)">Raw JSON</summary><pre>' + escapeHtml(JSON.stringify(t, null, 2)) + '</pre></details>';
+  }
   div.scrollIntoView({ behavior: 'smooth' });
 }
+
+// Remove old showTrace function (replaced by showTraceDetail)
+function showTrace(id) { showTraceDetail(id, 'routing'); }
 
 // ── Conversations ──────────────────────────────────────────────
 async function loadConversations() {
