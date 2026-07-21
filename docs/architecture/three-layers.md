@@ -2,7 +2,7 @@
 
 > **版本**: 8.0.0.dev0
 > **更新时间**: 2026-06-05
-> **状态**: ✅ 架构文档化完成 (10层路由管道)
+> **状态**: ✅ 架构文档化完成 (4 阶段路由级联)
 
 ---
 
@@ -20,7 +20,7 @@ VibeSOP 采用清晰的三层架构，每层有明确的职责和边界。这种
 
 ---
 
-## 架构图 (v5.4.1)
+## 架构图 (v8.0.0)
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
@@ -50,7 +50,7 @@ VibeSOP 采用清晰的三层架构，每层有明确的职责和边界。这种
 │                                                                    │
 │  ┌─ Routing ────┐ ┌─ Orchestration ─┐ ┌─ Skills ────────┐        │
 │  │ UnifiedRouter │ │ TaskDecomposer   │ │ SkillManager    │        │
-│  │ 10-layer pipe │ │ PlanBuilder      │ │ SkillLoader     │        │
+│  │ 4-stage pipe │ │ PlanBuilder      │ │ SkillLoader     │        │
 │  │ TriageService │ │ MultiIntentDet.  │ │ LifecycleManager│        │
 │  └───────────────┘ └─────────────────┘ └─────────────────┘        │
 │                                                                    │
@@ -139,7 +139,7 @@ agent/
 **核心组件**:
 ```python
 core/routing/
-├── unified.py           # UnifiedRouter - 10层路由pipeline
+├── unified.py           # UnifiedRouter - 4 阶段路由级联
 ├── triage_service.py    # TriageService - AI语义分流
 ├── cache.py            # CacheManager - 缓存管理
 ├── layers.py           # 路由层定义
@@ -148,7 +148,7 @@ core/routing/
 ```
 
 **关键特性**:
-- 10层路由pipeline (显式覆盖 → 场景模式 → AI分流 → 关键词 → TF-IDF → Embedding → 模糊匹配 → 自定义 → 无匹配 → Fallback LLM)
+- 4 阶段路由级联 (Stage 1: 显式覆盖 → Stage 2: 场景+语义索引 → Stage 3: AI 分诊 → Stage 4: 匹配器聚合；终端: 无匹配 / Fallback LLM)
 - 智能缓存 (70%+ 命中率)
 - 冲突解决策略
 - 性能优化 (预热、并行)
@@ -559,6 +559,6 @@ python -m pytest tests/architecture/test_boundaries.py -v
 
 ---
 
-**更新时间**: 2026-04-18
-**版本**: 4.1.0
+**更新时间**: 2026-07-21
+**版本**: 8.0.0.dev0
 **状态**: ✅ 架构文档化完成

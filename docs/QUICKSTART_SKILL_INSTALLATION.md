@@ -214,7 +214,7 @@ vibe skills add tushare --manual-config
 > Yes
 
 ? Install dependencies?
-> Yes (pip install tushare>=1.2.60)
+> Yes (uv pip install tushare>=1.2.60)
 ```
 
 ### 强制重新安装
@@ -460,7 +460,7 @@ vibe config add tushare-quant.patterns ".*你的关键词.*"
 vibe skill check-deps tushare-quant
 
 # 安装依赖
-pip install -r .vibe/skills/tushare-quant/requirements.txt
+uv pip install -r .vibe/skills/tushare-quant/requirements.txt
 ```
 
 ---

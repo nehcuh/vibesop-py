@@ -25,13 +25,13 @@ uv run vibe --help
 
 ```bash
 # Basic installation (no semantic matching)
-pip install vibesop
+uv add vibesop
 
 # With semantic matching
-pip install vibesop[semantic]
+uv add vibesop --extra semantic
 
 # With development dependencies
-pip install -e "vibesop[dev]"
+uv sync --extra dev
 ```
 
 ## Quick Start

@@ -11,13 +11,11 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, Query
 from fastapi.responses import HTMLResponse, JSONResponse
-from fastapi.staticfiles import StaticFiles
 
 logger = logging.getLogger(__name__)
 
@@ -48,8 +46,8 @@ def _read_jsonl(path: Path, limit: int = 200) -> list[dict[str, Any]]:
         return []
     lines: list[str] = []
     with path.open("r", encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
+        for raw_line in f:
+            line = raw_line.strip()
             if line:
                 lines.append(line)
     records: list[dict[str, Any]] = []
@@ -91,9 +89,7 @@ def create_app() -> FastAPI:
         version="1.0.0",
     )
 
-    # ------------------------------------------------------------------
-    # API: Health / Overview
-    # ------------------------------------------------------------------
+    # API: Health / Overview  # noqa: ERA001
 
     @app.get("/api/health")
     async def api_health() -> JSONResponse:
@@ -183,9 +179,7 @@ def create_app() -> FastAPI:
         records.reverse()
         return JSONResponse(records[:limit])
 
-    # ------------------------------------------------------------------
-    # API: Traces
-    # ------------------------------------------------------------------
+    # API: Traces  # noqa: ERA001
 
     @app.get("/api/traces")
     async def api_traces(
@@ -213,9 +207,7 @@ def create_app() -> FastAPI:
         data["_id"] = trace_id
         return JSONResponse(data)
 
-    # ------------------------------------------------------------------
-    # API: Conversations
-    # ------------------------------------------------------------------
+    # API: Conversations  # noqa: ERA001
 
     @app.get("/api/conversations")
     async def api_conversations(
@@ -249,9 +241,7 @@ def create_app() -> FastAPI:
         data["_id"] = conv_id
         return JSONResponse(data)
 
-    # ------------------------------------------------------------------
-    # API: Sessions
-    # ------------------------------------------------------------------
+    # API: Sessions  # noqa: ERA001
 
     @app.get("/api/sessions")
     async def api_sessions(

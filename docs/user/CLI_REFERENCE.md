@@ -1,6 +1,6 @@
 # VibeSOP CLI Reference
 
-Complete reference for all VibeSOP CLI commands (v6.2.0+).
+Complete reference for all VibeSOP CLI commands (v8.0.0+).
 
 ---
 
@@ -977,7 +977,7 @@ vibe dashboard [options]
 **Dependencies:**
 ```bash
 uv sync --extra dashboard
-# or: pip install vibesop[dashboard]
+# or: uv pip install vibesop[dashboard]
 ```
 
 **Examples:**

@@ -35,7 +35,7 @@ VibeSOP 为你提供：
 ```bash
 git clone https://github.com/nehcuh/vibesop-py.git
 cd vibesop-py
-uv sync  # or pip install -e .
+uv sync
 ```
 
 ### 2. 第一次使用 First Use
@@ -322,5 +322,5 @@ A: 可以。没有 API key 时，VibeSOP 使用关键词和 TF-IDF 匹配（准�
 
 ---
 
-**版本 Version**: 6.2.0
+**版本 Version**: 8.0.0.dev0
 **更新时间 Last Updated**: 2026-06-05

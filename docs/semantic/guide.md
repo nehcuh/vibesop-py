@@ -2,7 +2,7 @@
 
 ## Overview
 
-VibeSOP-Py v2.1.0 introduces true semantic understanding capabilities using Sentence Transformers, moving beyond TF-IDF keyword matching to actual comprehension of meaning.
+VibeSOP-Py v2.1.0 introduced true semantic understanding capabilities (now running on v8.0.0), moving beyond TF-IDF keyword matching to actual comprehension of meaning.
 
 ### What is Semantic Matching?
 
@@ -463,7 +463,7 @@ export VIBE_SEMANTIC_HALF_PRECISION=true
 
 **Solution**:
 ```bash
-pip install vibesop[semantic]
+uv add vibesop --extra semantic
 ```
 
 ## Best Practices
@@ -529,7 +529,7 @@ if match.semantic_score:
 ### Step 1: Install Dependencies
 
 ```bash
-pip install vibesop[semantic]
+uv add vibesop --extra semantic
 ```
 
 ### Step 2: Test with Traditional (No Changes)

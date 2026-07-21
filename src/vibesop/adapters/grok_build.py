@@ -55,7 +55,7 @@ class GrokBuildAdapter(PlatformAdapter):
     def config_dir(self) -> Path:
         return Path("~/.grok").expanduser()
 
-    def render_config(self, manifest: "Manifest", output_dir: Path) -> RenderResult:
+    def render_config(self, manifest: Manifest, output_dir: Path) -> RenderResult:
         """Render Grok Build configuration.
 
         Generates:
@@ -98,7 +98,7 @@ class GrokBuildAdapter(PlatformAdapter):
 
         return result
 
-    def validate_manifest(self, manifest: "Manifest") -> list[str]:
+    def validate_manifest(self, manifest: Manifest) -> list[str]:
         errors: list[str] = []
         meta = manifest.metadata
         if meta.platform != "grok-build":

@@ -1,6 +1,6 @@
 # VibeSOP 外部技能 - 完整示例
 
-> **版本**: 4.1.0
+> **版本**: 4.1.0 (applicable to VibeSOP 8.0.0+)
 > **目标**: 展示如何创建和使用外部技能
 
 ---
@@ -355,7 +355,7 @@ print(f"输出:\n{result['output']}")
 
 ```bash
 # 1. 安装 VibeSOP
-pip install vibesop
+uv add vibesop
 
 # 2. 安装技能包
 vibe install superpowers
@@ -452,6 +452,6 @@ A: 尝试：
 
 ---
 
-**更新**: 2026-04-18
+**更新**: 2026-07-21
 **状态**: ✅ 完成
-**版本**: 4.1.0
+**版本**: 4.1.0 (applicable to VibeSOP 8.0.0+)

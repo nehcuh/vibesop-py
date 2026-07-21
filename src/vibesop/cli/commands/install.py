@@ -30,7 +30,6 @@ Examples:
 """
 
 from collections.abc import Collection
-from pathlib import Path
 from typing import Any, Literal
 
 import typer
@@ -38,11 +37,10 @@ from rich.console import Console
 from rich.progress import BarColumn, Progress, SpinnerColumn, TaskProgressColumn, TextColumn
 from rich.table import Table
 
+from vibesop.cli.commands._utils import resolve_platforms as _resolve_platforms
 from vibesop.constants import DEFAULT_AUTO_INSTALL_PACKS, TRUSTED_PACKS
 from vibesop.core.skills.external_loader import ExternalSkillLoader
-from vibesop.core.skills.storage import SkillStorage
 from vibesop.core.skills.trust import TrustStore
-from vibesop.cli.commands._utils import resolve_platforms as _resolve_platforms
 from vibesop.installer.pack_installer import PackInstaller
 
 console = Console()

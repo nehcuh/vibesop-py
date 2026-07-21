@@ -42,17 +42,14 @@ def dashboard(
       - Recent routing history (from analytics.jsonl)
       - Trace decision trees (from traces/)
       - Multi-turn conversation history (from conversations/)
-
-    Requires: ``pip install vibesop[dashboard]`` (or ``uv sync --extra dashboard``)
     """
     try:
         from vibesop.dashboard.server import run_server
     except ImportError:
         console.print(
-            "[red]✗ Dashboard dependencies not installed.[/red]\n"
-            "[dim]Install with:[/dim]\n"
-            "  [cyan]uv sync --extra dashboard[/cyan]\n"
-            "  [dim]or:[/dim] [cyan]pip install vibesop[dashboard][/cyan]"
+            "[red]✗ Dashboard server module not found.[/red]\n"
+            "[dim]This indicates a broken installation. Try:[/dim]\n"
+            "  [cyan]uv tool install --reinstall vibesop[/cyan]"
         )
         raise typer.Exit(1) from None
 

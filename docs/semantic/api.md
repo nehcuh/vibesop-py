@@ -51,7 +51,7 @@ from vibesop.semantic import SENTENCE_TRANSFORMERS_AVAILABLE
 if SENTENCE_TRANSFORMERS_AVAILABLE:
     print("Semantic matching is available!")
 else:
-    print("Install with: pip install vibesop[semantic]")
+    print("Install with: uv add vibesop --extra semantic")
 ```
 
 ### `check_semantic_available()`
@@ -720,7 +720,7 @@ try:
     encoder = SemanticEncoder()
 except ImportError as e:
     print(f"Sentence-transformers not installed: {e}")
-    print("Install with: pip install vibesop[semantic]")
+    print("Install with: uv add vibesop --extra semantic")
 ```
 
 ### ValueError

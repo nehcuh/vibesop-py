@@ -426,7 +426,7 @@ class SkillSecurityAuditor:
                         if threat.level == ThreatLevel.HIGH:
                             threat.level = ThreatLevel.MEDIUM
             except Exception as e:
-                logger.debug("Trust store lookup failed for %s: %s", skill_id, e)
+                logger.debug("Trust store lookup failed: %s", e)
                 # Trust store is best-effort — proceed without trust downgrade
 
         # 5. Calculate result

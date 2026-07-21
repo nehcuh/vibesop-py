@@ -96,8 +96,7 @@ cd vibesop-py
 # 安装（推荐使用 uv，更快）
 uv sync
 
-# 或者用 pip
-pip install -e .
+# 已通过 uv sync 安装
 ```
 
 ### 第一次使用（30 秒） First Use (30 seconds)
@@ -366,5 +365,5 @@ vibe skills --help    # skills 命令帮助
 
 **祝你使用愉快！Happy using!**
 
-**版本 Version**: 6.2.0
+**版本 Version**: 8.0.0.dev0
 **更新时间 Last Updated**: 2026-06-05

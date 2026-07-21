@@ -1,6 +1,6 @@
 # VibeSOP 哲学
 
-> **版本**: 6.2.0
+> **版本**: 8.0.0.dev0
 > **核心使命**: 成为 AI 辅助开发的技能操作系统（SkillOS）
 > **更新时间**: 2026-06-05
 
@@ -264,7 +264,7 @@ AI 辅助开发的工具爆炸式增长：
 
 ### 目标 4: 支持 10+ 平台
 
-**当前**: 3 平台 (Claude Code, OpenCode, Kimi Code CLI)
+**当前**: 5 平台 (Claude Code, OpenCode, Kimi Code CLI, Pi, Grok Build)
 **目标**: 10+ 平台
 **方法**: 适配器生态
 

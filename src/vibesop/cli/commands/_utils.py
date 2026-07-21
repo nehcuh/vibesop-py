@@ -58,8 +58,8 @@ def validate_platform(platform: str | None) -> list[str] | None:
 
     unknown = [p for p in raw_items if p not in valid]
     if unknown:
-        from rich.console import Console
         import typer
+        from rich.console import Console
         console = Console()
         console.print(
             f"[red]✗ Unknown platform: {', '.join(unknown)}[/red]\n"

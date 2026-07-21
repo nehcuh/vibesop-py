@@ -44,7 +44,7 @@ class RoutingHealth:
     fallback: int = 0  # FALLBACK_LLM sentinel
     errors: int = 0  # routing errors
 
-    # Latency (ms)
+    # Latency (ms) — noqa: ERA001
     avg_latency_ms: float = 0.0
     p50_latency_ms: float = 0.0
     p95_latency_ms: float = 0.0

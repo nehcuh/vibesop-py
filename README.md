@@ -108,9 +108,6 @@ cd vibesop-py
 
 # Install with uv (recommended - 10-100x faster than pip)
 uv sync
-
-# Or with pip
-pip install -e .
 ```
 
 ### 第一次使用
@@ -679,7 +676,7 @@ vibe route --verify "重构认证模块"
 
 ## 架构
 
-VibeSOP v6.2.0 introduces a **3-pillar architecture** (enhanced with Dynamic Workflow Engine):
+VibeSOP v8.0.0 introduces a **3-pillar architecture** (enhanced with Dynamic Workflow Engine):
 
 | Pillar | Purpose | Artifacts |
 |--------|---------|-----------|

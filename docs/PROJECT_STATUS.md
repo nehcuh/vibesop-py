@@ -160,7 +160,7 @@ TOTAL: 1,501 passed, 1 failed, 2 skipped
 
 ## Production Readiness Checklist
 
-- ✅ **All Tests Passing**: 2,972 tests green
+- ✅ **All Tests Passing**: 4,066 tests passing
 - ✅ **Security Audit**: AST-based safe evaluation, no eval()
 - ✅ **Cross-Platform**: Windows, macOS, Linux compatible
 - ✅ **Documentation**: Complete with archive organization
@@ -209,7 +209,7 @@ TOTAL: 1,501 passed, 1 failed, 2 skipped
 ### For Users
 ```bash
 # Install VibeSOP
-pip install vibesop
+uv add vibesop
 
 # Route a task
 vibe route "帮我调试这个错误"
@@ -224,10 +224,10 @@ vibe skills use systematic-debugging
 git clone https://github.com/nehcuh/vibesop-py.git
 
 # Install development dependencies
-pip install -e ".[dev]"
+uv sync --extra dev
 
 # Run tests
-pytest tests/
+uv run pytest tests/
 
 # Build documentation
 vibe build claude-code
@@ -267,5 +267,5 @@ The combination of intelligent routing, secure execution, cross-platform compati
 
 **Version**: 8.0.0.dev0
 **Status**: 🟢 Production Ready — Skill Protocol Standard + Multi-Agent Squad
-**Last Updated**: 2026-06-14
+**Last Updated**: 2026-07-18
 **Repository**: https://github.com/nehcuh/vibesop-py

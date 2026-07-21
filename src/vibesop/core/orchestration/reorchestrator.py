@@ -122,7 +122,7 @@ class Reorchestrator:
     def _check_goals_met(
         self,
         plan: ExecutionPlan,
-        accumulated_results: dict[str, str],
+        accumulated_results: dict[str, str],  # noqa: ARG002
     ) -> bool:
         """Check if all original goals have been met.
 

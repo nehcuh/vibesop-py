@@ -127,7 +127,6 @@ class TestAtomicWriter:
         target = tmp_path / "output.txt"
 
         # Force write failure by making the temp file unwritable after creation
-        original_write = Path.write_text
 
         def failing_write(self, content, encoding=None):
             raise OSError("disk full")
@@ -172,6 +171,5 @@ class TestAtomicWriteError:
         assert "write failed" in str(err)
 
     def test_error_with_path(self, tmp_path: Path):
-        target = tmp_path / "test.txt"
         err = AtomicWriteError("write failed")
         assert str(err) == "write failed"

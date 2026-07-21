@@ -9,15 +9,15 @@
 """
 
 from vibesop.adapters._content import (  # noqa: F401
+    _yaml_dquote,
     detect_tool_environment,
     find_skill_content,
     generate_fallback_skill_content,
     is_pack_installed,
     normalize_skill_type,
     render_skill_md,
-    _yaml_dquote,
 )
-from vibesop.adapters._generation import (  # noqa: F401
+from vibesop.adapters._generation import (
     generate_docs_quick_commands,
     generate_docs_routing,
     generate_docs_session_lifecycle,

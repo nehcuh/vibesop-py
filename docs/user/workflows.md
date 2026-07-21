@@ -1,6 +1,6 @@
 # Workflow Orchestration
 
-> **Version**: v5.3.0+  
+> **Version**: v8.0.0+  
 > **Last Updated**: 2026-04-17
 
 ---

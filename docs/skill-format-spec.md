@@ -189,7 +189,7 @@ echo "Pre-install checks passed"
 # 安装后配置
 
 echo "Installing dependencies..."
-pip install -r requirements.txt
+uv pip install -r requirements.txt
 
 echo "Checking TUSHARE_TOKEN..."
 if [ -z "$TUSHARE_TOKEN" ]; then

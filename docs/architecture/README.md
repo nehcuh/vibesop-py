@@ -1,6 +1,6 @@
 # VibeSOP Architecture Documentation
 
-> **Version**: 4.0.0
+> **Version**: 8.0.0.dev0
 > **Last Updated**: 2026-04-18
 
 This directory contains comprehensive architecture documentation for VibeSOP.
@@ -29,7 +29,7 @@ This directory contains comprehensive architecture documentation for VibeSOP.
 **Core Component** - Routing system deep dive
 
 - UnifiedRouter interface
-- 10-layer routing pipeline
+- 4-stage routing cascade
 - Layer-by-layer breakdown
 - Performance optimization
 - Caching strategies
@@ -42,6 +42,12 @@ This directory contains comprehensive architecture documentation for VibeSOP.
 - Skill package installation flow
 - Health monitoring
 - Platform-specific features
+
+### [skill-runtime-interface.md](skill-runtime-interface.md)
+**Contract** - SkillRuntime contract and lifecycle state machine
+
+### [cross-platform-support.md](cross-platform-support.md)
+**Compatibility** - Windows / macOS / Linux 兼容设计
 
 ## Quick Navigation
 
@@ -67,7 +73,7 @@ This directory contains comprehensive architecture documentation for VibeSOP.
          │
          ▼
 ┌─────────────────┐
-│  UnifiedRouter  │ ← 10-Layer Pipeline
+│  UnifiedRouter  │ ← 4-Stage Cascade
 └────────┬────────┘
          │
          ▼
@@ -106,5 +112,5 @@ When making architectural changes:
 
 ---
 
-*For project positioning, see [../POSITIONING.md](../POSITIONING.md)*
-*For core principles, see [../PRINCIPLES.md](../PRINCIPLES.md)*
+*[POSITIONING.md 已移除]*
+*[PRINCIPLES.md 已移除]*

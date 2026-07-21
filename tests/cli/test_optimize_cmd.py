@@ -1,8 +1,6 @@
 """Tests for optimize_cmd.py."""
 
-from pathlib import Path
 
-import pytest
 from typer.testing import CliRunner
 
 from vibesop.cli.main import app

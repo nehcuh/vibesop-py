@@ -30,7 +30,6 @@ from pathlib import Path
 import typer
 from rich.console import Console
 from rich.panel import Panel
-from ruamel.yaml import YAML
 
 from vibesop.adapters.models import Manifest
 from vibesop.builder.manifest import ManifestBuilder

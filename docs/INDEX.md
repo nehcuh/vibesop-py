@@ -169,12 +169,12 @@ These files remain in the project root for discoverability and tool integration:
 | Metric | Value |
 |--------|-------|
 | **Version** | 8.0.0.dev0 |
-| **Tests** | 1,867+ pytest passing (28 prompt-chain, 20 interceptor, 10 security) |
+| **Tests** | 4,066+ pytest passing |
 | **Coverage** | ~73% (target: 75%) |
 | **Skills Supported** | 50+ builtin + 43 community (mattpocock + superpowers) |
-| **Platforms** | Claude Code, Kimi CLI, Pi Agent, OpenCode |
+| **Platforms** | Claude Code, Kimi CLI, Pi Agent, OpenCode, Grok Build, Cursor |
 | **Cross-Cutting Workflows** | `prompt-chain-validator` (v7.0) |
-| **Routing Layers** | 10 |
+| **Routing Model** | 4-Stage Cascade |
 | **Workflow Patterns** | 6 (SEQUENTIAL, PARALLEL, FAN_OUT, ADVERSARIAL, LOOP_UNTIL_DRY, TOURNAMENT) |
 | **Spec Version** | SKILL.md v3.0 (29 fields) |
 

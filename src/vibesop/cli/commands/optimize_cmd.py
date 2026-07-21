@@ -12,9 +12,7 @@ import logging
 from pathlib import Path
 
 import typer
-from rich.box import ROUNDED
 from rich.console import Console
-from rich.panel import Panel
 
 from vibesop.core.routing_health import RoutingHealthAnalyzer
 

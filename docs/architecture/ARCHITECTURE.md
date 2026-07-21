@@ -151,7 +151,7 @@ duplication between bash and Python.
 
 ### 3. Routing Engine (`src/vibesop/core/routing/`)
 
-The heart of VibeSOP — routes queries to skills using a 10-layer pipeline.
+The heart of VibeSOP — routes queries to skills using a 4-stage branched cascade.
 
 #### UnifiedRouter
 
@@ -166,20 +166,16 @@ result = router.route("debug this error")
 # result.routing_path = [RoutingLayer.KEYWORD]
 ```
 
-**10-Layer Matching Pipeline**:
+**4-Stage Branching Cascade**:
 
-| Layer | Strategy | Speed | When Used |
+| Stage | Strategy | Speed | When Used |
 |-------|----------|-------|-----------|
-| 0 | Explicit Override | <1ms | Direct commands like `/review` |
-| 1 | Scenario Pattern | <1ms | Predefined scenarios |
-| 2 | AI Triage | ~100ms | Complex semantic queries, long queries (>5 chars by default) |
-| 3 | Keyword Matching | <1ms | Direct keyword hits (short queries) |
-| 4 | TF-IDF | ~5ms | Semantic similarity |
-| 5 | Embedding | ~20ms | Deep semantic (optional) |
-| 6 | Fuzzy Matching (Levenshtein) | ~10ms | Typo tolerance |
-| 7 | Custom Plugins | varies | User-defined matchers |
-| 8 | No Match | N/A | No confident match found |
-| 9 | Fallback LLM | ~100ms | Last-resort routing |
+| 1 | Explicit Override | <1ms | Direct commands like `/review` |
+| 2 | Scenario + Semantic Index | <1ms | Predefined scenarios + token-overlap/embedding index |
+| 3 | AI Triage | ~100ms | Complex semantic queries, long queries (>5 chars by default) |
+| 4 | Matcher Aggregation | ~5-20ms | Keyword, TF-IDF, Embedding, Levenshtein in parallel |
+
+Terminal states: No Match, Fallback LLM |
 
 **3 Optimization Mechanisms**:
 
@@ -306,7 +302,7 @@ User Query
          │
          ▼
 ┌─────────────────┐
-│ UnifiedRouter   │  → 10-layer matching pipeline
+│ UnifiedRouter   │  → 4-stage branching cascade
 │   .route()      │
 └────────┬────────┘
          │
@@ -453,7 +449,7 @@ tests/
 └── security/         # Security tests
 ```
 
-**Coverage**: ~29% (measured 2026-05-01, target: 75%)
+**Coverage**: ~73% (measured 2026-07-21, target: 75%)
 
 ---
 
@@ -473,11 +469,11 @@ tests/
 3. **Portable** — Works across AI tools
 4. **Human Readable** — Easy to understand
 
-### Why 10-Layer Pipeline?
+### Why 4-Stage Cascade?
 
 1. **Accuracy** — Multiple strategies catch different patterns
-2. **Performance** — Fast layers first, slow layers as fallback
-3. **Flexibility** — Easy to add new matchers
+2. **Performance** — Fast stages first, slow ones as fallback
+3. **Flexibility** — Easy to add new matchers in aggregation
 4. **Observability** — Clear routing path for debugging
 
 ---

@@ -10,7 +10,6 @@ These functions generate platform configuration output:
 from __future__ import annotations
 
 import logging
-import shutil
 from pathlib import Path
 from typing import Any
 

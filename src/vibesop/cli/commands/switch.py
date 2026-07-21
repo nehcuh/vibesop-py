@@ -26,7 +26,6 @@ from pathlib import Path
 
 import typer
 from rich.console import Console
-from ruamel.yaml import YAML
 
 from vibesop.cli.commands._utils import get_configured_platform
 from vibesop.constants import SUPPORTED_PLATFORMS

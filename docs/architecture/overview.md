@@ -18,8 +18,8 @@ VibeSOP is a **Skill Operating System (SkillOS)** for AI-assisted development. I
 ├─────────────────────────────────────────────────────────────────┤
 │                      Routing Engine                             │
 │  ┌─────────────────┐  ┌─────────────────┐  ┌──────────────┐   │
-│  │ UnifiedRouter   │  │ Layer Pipeline  │  │ Optimization │   │
-│  │ (Single Entry)  │  │ (10-Layer Match)│  │ (Pref/Learn) │   │
+│  │ UnifiedRouter │  │ 4-Stage        │  │ Optimization │   │
+│  │ (Single Entry) │  │ Cascade         │  │ (Pref/Learn) │   │
 │  └─────────────────┘  └─────────────────┘  └──────────────┘   │
 ├─────────────────────────────────────────────────────────────────┤
 │                    Core Services                                │
@@ -45,7 +45,7 @@ VibeSOP is a **Skill Operating System (SkillOS)** for AI-assisted development. I
 **Purpose**: Single entry point for all routing operations
 
 **Responsibilities**:
-- Coordinate 10-layer matching pipeline
+- Coordinate 4-stage branching cascade
 - Apply preference learning
 - Return routing results with confidence scores
 
@@ -54,12 +54,12 @@ VibeSOP is a **Skill Operating System (SkillOS)** for AI-assisted development. I
 ### 2. Matching Infrastructure
 **Purpose**: Provide multiple matching strategies
 
-**Layers** (tried in priority order):
-1. **AI Triage** (optional): LLM-based semantic classification
-2. **Explicit Override**: `/skill` or `use skill` patterns
-3. **Scenario Patterns**: Predefined situation mappings
-4. **Keyword/TF-IDF**: Fast lexical and semantic matching
-5. **Fuzzy Fallback**: Levenshtein distance for typos
+**Layers** (branched cascade):
+1. **Stage 1: Explicit Override**: Direct commands like `/review`
+2. **Stage 2: Scenario + Semantic Index**: Predefined scenarios + skill index (best-of-N)
+3. **Stage 3: AI Triage**: LLM-based intent understanding (complex/long queries)
+4. **Stage 4: Matcher Aggregation**: Keyword, TF-IDF, Embedding, Levenshtein in parallel
+Terminal: No Match / Fallback LLM
 
 ### 3. Skill Management
 **Purpose**: Discover, load, and manage skills
@@ -101,12 +101,11 @@ User Query
 │   UnifiedRouter     │
 ├─────────────────────┤
 │ 1. Load Candidates  │ ← Cached after first call
-│ 2. Try Layer 0      │ ← Explicit override
-│ 3. Try Layer 1      │ ← Scenario patterns
-│ 4. Try Layer 2      │ ← AI Triage (optional)
-│ 5. Try Layer 3      │ ← Keyword/TF-IDF
-│ 6. Try Layer 4      │ ← Fuzzy fallback
-│ 7. Apply Boost      │ ← Preference learning
+│ 2. Stage 1           │ ← Explicit override
+│ 3. Stage 2           │ ← Scenario + Semantic Index
+│ 4. Stage 3           │ ← AI Triage (LLM)
+│ 5. Stage 4           │ ← Matcher aggregation (parallel)
+│ 6. Apply Boost       │ ← Preference learning
 └──────┬──────────────┘
        │
        ▼

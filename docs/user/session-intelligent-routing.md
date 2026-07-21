@@ -1,6 +1,6 @@
 # Session Intelligent Routing
 
-> **Feature**: v4.2.1+
+> **Feature**: v4.2.1+ (current: v8.0.0+)
 > **Status**: Stable
 > **Purpose**: Enable AI agents to intelligently suggest skill switches during ongoing conversations, with persistent session state across CLI invocations
 > **Platforms**: Claude Code (hooks), OpenCode (CLI), Generic (CLI)
