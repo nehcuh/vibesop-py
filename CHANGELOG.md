@@ -9,6 +9,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Observability closed-loop — span tracing, aggregator, instinct bridge (2026-07-21)
+
+Agent-internal observability with span-based tracing, a metric-driven loop
+system, and an instinct feedback bridge. Enables the
+**observe → learn → optimize** closed loop for skill quality improvement.
+
+Design: adversarial grill-me (5 rounds, Kimi Code) + Claude Code review.
+Full trail: `docs/adr/010-observability-loop.md` (planned).
+
+- **Span tracing** (`core/observability/`):
+  - `Span` / `TraceContext` dataclasses with `task | llm | tool_call | file_edit | workflow_node` kinds.
+  - `ObservabilityTracer` with context-manager API + signal-safe flush (SIGINT/atexit/except hook).
+  - `SpanWriter`: JSONL persistence with `redact_sensitive()` redaction + 16KB payload truncation.
+  - `AgentRuntime.handle_query()` wrapped in task-span with skill_id metadata.
+- **Span aggregator** (`core/observability/aggregator.py`):
+  - `get_skill_metrics()`: per-skill success rate, duration, tokens, cost over configurable time windows.
+  - `get_pattern_sequences()`: repeatable tool-call sequences from span data.
+  - `get_anomaly_events()`: success rate drops / duration spikes vs baseline.
+  - Three-tier data source degradation: spans → analytics.jsonl → loop records.
+- **Metric-driven loops** (`core/loop/models.py`):
+  - `LoopTrigger.METRIC` enum value alongside existing `CRON`.
+  - `MetricCondition` model with Wilson Score confidence, cooldown, min_samples.
+  - CRON never silenced — metric conditions are accelerators, not replacements.
+- **Instinct feedback bridge** (`core/instinct/learner.py`, `core/routing/context_mixin.py`):
+  - `Instinct.times_matched`: neutral signal from routing hot path (not inflated confidence).
+  - `RouterContextMixin.record_instinct_matched()` called after successful routing.
+  - `record_feedback_outcome()` (explicit user accept/reject) preserved for CLI path only.
+- **Dashboard unified traces** (`dashboard/server.py`, `templates/index.html`):
+  - `/api/traces?source=routing|agent|all` merges routing decision trees + agent spans.
+  - `/api/spans?span_kind=&skill_id=` for filtered agent span queries.
+  - `/api/spans/{id}` for single span detail.
+  - `/api/health` now includes `total_spans`.
+  - Frontend: source filter (Routing/Agent/All), kind filter (task/llm/tool_call/...), span detail panel with tokens/parent/metadata.
+- **Config** (`core/config/manager.py`): `ObservabilityConfig` with retention (7d), max payload (16KB), hard cap (100K spans).
+
 ### Windows compatibility — production-ready (2026-07-19)
 
 Full test suite green on Windows (`88 failed → 0 failed`, 4281 passed,
