@@ -186,7 +186,7 @@ def build_spec(
         id=data.get("id", skill_id),
         name=data.get("name", skill_id),
         description=description,
-        version=data.get("version", "1.0.0"),
+        version=str(data.get("version", "1.0.0")),
         author=data.get("author", ""),
         namespace=data.get("namespace", source),
         skill_type=skill_type,  # pyright: ignore[reportCallIssue]

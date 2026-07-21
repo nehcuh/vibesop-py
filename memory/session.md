@@ -1,5 +1,20 @@
 ## Current Session
 
+### S34 (2026-07-21 09:28~09:35) [vibesop-py] YAML Skill Loader 非 Skill 文件崩溃修复
+
+- [x] **Bug 报告**：用户输入 `vibe` 后报错 `version should be a valid string (got int 2)`，来源是 `.github/dependabot.yml`
+- [x] **根因分析**：`SkillLoader.discover_all()` 的 `rglob("*.yml")` 扫描所有 YAML 文件无过滤；`_load_yaml_skill()` 只要 YAML 是 dict 就解析为 `SkillSpec`，Dependabot 的 `version: 2`（int）导致 Pydantic 验证失败
+- [x] **双重修复**：`loader.py` 添加 pre-filter（`"id" not in data and "name" not in data` → skip）；`parser.py` 的 `version` 字段加 `str()` 强制转换
+- [x] **验证**：parser 3 场景 inline test 通过；loader guard 源码验证通过；全套 4372 passed / 0 failed
+
+**Key Discoveries**:
+1. `rglob("*.yml")` 过于贪婪，不加 schema 验证就会把 CI configs、Dependabot configs 等非 skill YAML 当 skill 解析
+2. `str()` 强制转换 + pre-filter guard 是最小改动、最大保险的双层防御
+
+**Next Steps**: 无
+
+**Recorded**: yes — 1 technical pitfall → project-knowledge.md
+
 ### S33 (2026-07-21 09:20~) [vibesop-py] Bootstrap 技能包自动安装 + Analytics 默认启用
 
 - [x] **根因分析**：bootstrap 流程不自动下载外部技能包。`bootstrap.sh` → `vibe build` 只生成配置，未调用 `vibe install --auto`

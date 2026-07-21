@@ -2,6 +2,18 @@
 
 ## Technical Pitfalls
 
+### YAML Skill Loader Picks Up Non-Skill Files — `rglob` Is Too Greedy (2026-07-21)
+
+**Issue**: `vibe` 命令运行时崩溃：`Unexpected error loading YAML skill /Users/huchen/.config/skills/omx/.github/dependabot.yml: version should be a valid string (got int 2)`。
+
+**Root Cause**: `SkillLoader.discover_all()` 用 `rglob("*.yml")` 扫描所有 YAML 文件，包括 `.github/dependabot.yml`、CI configs 等非 skill 文件。`_load_yaml_skill()` 没有 pre-filter——只要 YAML 是 dict 就尝试解析为 `SkillSpec`，Dependabot 的 `version: 2`（int）导致 Pydantic 验证失败。
+
+**Solution**: 两处防御式修复
+1. `_load_yaml_skill()` 添加 pre-filter：`"id" not in data and "name" not in data` → 直接跳过
+2. `build_spec()` 的 `version` 字段加 `str()` 强制转换，即使有漏网的非 skill YAML 也不会崩溃
+
+**Files**: `src/vibesop/core/skills/loader.py:359-361`, `src/vibesop/core/skills/parser.py:189`
+
 ### UTF-8 BOM Silently Breaks TOML Parsing — `encoding="utf-8"` Is Not Enough (2026-07-20)
 
 **Issue**: `~/.vibe/config.toml` 开头有 UTF-8 BOM（`EF BB BF`），`tomllib.loads()` 报 `Invalid statement (at line 1, column 1)`，路由回退到默认配置，LLM provider 失效。

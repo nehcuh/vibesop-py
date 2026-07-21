@@ -359,6 +359,11 @@ class SkillLoader:
             if not isinstance(data, dict):
                 return
 
+            # Skip non-skill YAML files (e.g., .github/dependabot.yml, CI configs)
+            if "id" not in data and "name" not in data:
+                logger.debug("Skipping non-skill YAML file: %s", file_path)
+                return
+
             metadata = skill_parser.build_metadata(
                 data,
                 self._generate_id_from_path(file_path),
