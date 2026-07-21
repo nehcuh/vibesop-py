@@ -146,7 +146,7 @@ def _release_tick_lock(lock_handle: Any) -> None:
         import contextlib
 
         with contextlib.suppress(OSError):
-            Path(lock_path).unlink()
+            lock_path.unlink()
 
 
 # ──────────────────────────────────────────────────────────────────
@@ -569,7 +569,7 @@ def tick(
                 )
                 console.print(f"  [red]❌[/red] {record.error[:80]} [dim]({category})[/dim]")
         finally:
-    _release_tick_lock(tick_lock)  # releases the fcntl lock + unlinks on Windows
+            _release_tick_lock(tick_lock)  # releases fcntl lock + unlinks on Windows
 
     total = success_count + failure_count
     console.print(
