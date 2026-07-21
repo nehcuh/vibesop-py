@@ -117,7 +117,11 @@ def _acquire_tick_lock(store: LoopStore, name: str, *, blocking: bool = False) -
                 lock_fd = os.open(lock_path, os.O_CREAT | os.O_EXCL | os.O_RDWR)
             except FileExistsError:
                 return None
-        return os.fdopen(lock_fd, "w")
+        lock_handle = os.fdopen(lock_fd, "w")
+        # On Windows the lock file persists after close; unlink on release
+        # so the next blocking acquire doesn't time out on a stale file.
+        lock_handle._vibe_lock_path = lock_path  # type: ignore[attr-defined]
+        return lock_handle
     lock_path = store.base_dir / name / ".tick.lock"
     lock_path.parent.mkdir(parents=True, exist_ok=True)
     lock_fd = lock_path.open("w", encoding="utf-8")
@@ -128,6 +132,21 @@ def _acquire_tick_lock(store: LoopStore, name: str, *, blocking: bool = False) -
         lock_fd.close()
         return None
     return lock_fd
+
+
+def _release_tick_lock(lock_handle: Any) -> None:
+    """Release an advisory tick lock and clean up the lock file on Windows."""
+    if lock_handle is None:
+        return
+    if hasattr(lock_handle, "close"):
+        lock_handle.close()
+    # On Windows (no fcntl), the lock file must be unlinked explicitly.
+    lock_path = getattr(lock_handle, "_vibe_lock_path", None)
+    if lock_path is not None:
+        import contextlib
+
+        with contextlib.suppress(OSError):
+            Path(lock_path).unlink()
 
 
 # ──────────────────────────────────────────────────────────────────
@@ -368,8 +387,7 @@ def pause(name: str = typer.Argument(..., help="loop 名称")) -> None:
         state.status = LoopStatus.PAUSED
         store.save_state(state)
     finally:
-        if hasattr(tick_lock, "close"):
-            tick_lock.close()
+        _release_tick_lock(tick_lock)
     console.print(f"[yellow]⏸️  Loop '{name}' 已暂停[/yellow]")
 
 
@@ -408,8 +426,7 @@ def resume(name: str = typer.Argument(..., help="loop 名称")) -> None:
         state.consecutive_failures = 0
         store.save_state(state)
     finally:
-        if hasattr(tick_lock, "close"):
-            tick_lock.close()
+        _release_tick_lock(tick_lock)
     console.print(f"[green]▶️ Loop '{name}' 已恢复[/green]")
 
 
@@ -440,8 +457,7 @@ def reset(name: str = typer.Argument(..., help="loop 名称")) -> None:
         state.consecutive_failures = 0
         store.save_state(state)
     finally:
-        if hasattr(tick_lock, "close"):
-            tick_lock.close()
+        _release_tick_lock(tick_lock)
     console.print(f"[green]♻️ Loop '{name}' 已重置为 ACTIVE（连续失败计数已清零）[/green]")
 
 
@@ -553,8 +569,7 @@ def tick(
                 )
                 console.print(f"  [red]❌[/red] {record.error[:80]} [dim]({category})[/dim]")
         finally:
-            if hasattr(tick_lock, "close"):
-                tick_lock.close()  # releases the fcntl lock
+    _release_tick_lock(tick_lock)  # releases the fcntl lock + unlinks on Windows
 
     total = success_count + failure_count
     console.print(
