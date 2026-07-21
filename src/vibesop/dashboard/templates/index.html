@@ -388,9 +388,10 @@ async function loadTraces() {
     const status = t.status || (t.result ? 'ok' : '-');
     const duration = t.duration_ms ? t.duration_ms + 'ms' : '-';
     const id = (t._id || '').substring(0, 12);
+    const source = isAgent ? 'agent' : 'routing';
 
-    return '<tr>' +
-      '<td><span class="mono clickable" onclick="showTraceDetail(\'' + (t._id || '') + '\', \'' + (isAgent ? 'agent' : 'routing') + '\')">' + escapeHtml(id) + '...</span></td>' +
+    return '<tr data-trace-id="' + escapeHtml(t._id || '') + '" data-trace-source="' + source + '">' +
+      '<td><span class="mono clickable">' + escapeHtml(id) + '...</span></td>' +
       '<td><span class="badge ' + (isAgent ? 'orchestrated' : 'single') + '">' + (isAgent ? '🤖 Agent' : '🧭 Route') + '</span></td>' +
       '<td><span class="mono">' + escapeHtml(kind) + '</span></td>' +
       '<td style="max-width:250px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + escapeHtml(name) + '">' + escapeHtml(name) + '</td>' +
@@ -398,6 +399,14 @@ async function loadTraces() {
       '<td>' + duration + '</td>' +
       '</tr>';
   }).join('');
+
+  // Delegated click handler for trace rows (avoids XSS via inline onclick)
+  document.getElementById('traces-body').onclick = function(e) {
+    const row = e.target.closest('tr[data-trace-id]');
+    if (row) {
+      showTraceDetail(row.dataset.traceId, row.dataset.traceSource);
+    }
+  };
 }
 
 async function showTraceDetail(id, source) {

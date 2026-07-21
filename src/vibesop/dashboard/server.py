@@ -41,22 +41,41 @@ def _resolve_project_root() -> Path:
 
 
 def _read_jsonl(path: Path, limit: int = 200) -> list[dict[str, Any]]:
-    """Read the last *limit* lines from a JSONL file."""
+    """Read the last *limit* lines from a JSONL file.
+
+    Uses a ring buffer to avoid loading the entire file into memory.
+    Also normalises span metadata (SpanWriter serialises it as JSON string).
+    """
     if not path.exists():
         return []
-    lines: list[str] = []
+    from collections import deque
+    ring: deque[str] = deque(maxlen=limit)
     with path.open("r", encoding="utf-8") as f:
         for raw_line in f:
             line = raw_line.strip()
             if line:
-                lines.append(line)
+                ring.append(line)
     records: list[dict[str, Any]] = []
-    for raw in lines[-limit:]:
+    for raw in ring:
         try:
-            records.append(json.loads(raw))
+            record = json.loads(raw)
         except json.JSONDecodeError:
             continue
+        _normalize_span_metadata(record)
+        records.append(record)
     return records
+
+
+def _normalize_span_metadata(record: dict[str, Any]) -> None:
+    """Normalise span metadata from string (SpanWriter) to dict."""
+    meta = record.get("metadata")
+    if isinstance(meta, str):
+        try:
+            record["metadata"] = json.loads(meta)
+        except (json.JSONDecodeError, TypeError):
+            record["metadata"] = {}
+    elif not isinstance(meta, dict):
+        record["metadata"] = {}
 
 
 def _read_json(path: Path) -> dict[str, Any] | None:
@@ -105,11 +124,12 @@ def create_app() -> FastAPI:
         conv_count = len(_list_json_files(conv_dir)) if conv_dir.is_dir() else 0
         session_count = len(_list_json_files(session_dir)) if session_dir.is_dir() else 0
 
-        # Agent span count from observability JSONL
+        # Agent span count from observability JSONL (file size approximation)
         span_count = 0
         spans_path = vibe_dir / "observability" / "spans.jsonl"
         if spans_path.exists():
-            span_count = sum(1 for _ in spans_path.open("r", encoding="utf-8") if _.strip())
+            # Quick estimate: count lines without parsing JSON
+            span_count = sum(1 for _ in spans_path.open("r", encoding="utf-8"))
 
         # Routing stats
         total_routes = len(analytics)
