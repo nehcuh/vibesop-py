@@ -21,7 +21,7 @@ jobs:
     needs: ci-gate
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.1
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
@@ -50,12 +50,12 @@ jobs:
         # Generate SLSA build provenance for the dist artifacts (F-12). PyPI
         # package attestations (PEP 740) are emitted separately by the publish
         # action below via Trusted Publishing + id-token: write.
-        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373  # v4.1.1
+        uses: actions/attest-build-provenance@v2
         with:
           subject-path: dist/*
 
       - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@ec4db0b4ddc65acdf4bff5fa45ac92d78b56bdf0  # v1.9.0
+        uses: pypa/gh-action-pypi-publish@release/v1
         with:
           attestations: true
 
