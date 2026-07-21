@@ -102,6 +102,7 @@ def _acquire_tick_lock(store: LoopStore, name: str, *, blocking: bool = False) -
         lock_path.parent.mkdir(parents=True, exist_ok=True)
         if blocking:
             import time
+
             # Retry loop: spin-wait until the lock holder releases it.
             for _ in range(20):  # ~10 s timeout
                 try:
