@@ -60,6 +60,7 @@ def validate_platform(platform: str | None) -> list[str] | None:
     if unknown:
         import typer
         from rich.console import Console
+
         console = Console()
         console.print(
             f"[red]✗ Unknown platform: {', '.join(unknown)}[/red]\n"

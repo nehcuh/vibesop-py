@@ -1175,7 +1175,9 @@ def _orchestration_confirmation_flow(
     if execute and sys.stdin.isatty():
         choices.insert(1, questionary.Choice("▶️  Execute plan step-by-step", value="execute"))
 
-    choice = _safe_questionary_select("How would you like to proceed?", choices=choices, default="confirm")
+    choice = _safe_questionary_select(
+        "How would you like to proceed?", choices=choices, default="confirm"
+    )
 
     if choice == "edit":
         modified = _edit_execution_plan(result, console)

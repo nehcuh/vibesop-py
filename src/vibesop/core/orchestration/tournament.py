@@ -32,7 +32,10 @@ class TournamentConfig:
 class ComparisonResult(BaseModel):
     """Result of a pairwise comparison between two contestants."""
 
-    winner_index: int = Field(..., description="Index of the winning contestant (>=0), or -1 if comparison was inconclusive")
+    winner_index: int = Field(
+        ...,
+        description="Index of the winning contestant (>=0), or -1 if comparison was inconclusive",
+    )
     scores: dict[str, dict[str, float]] = Field(
         default_factory=dict,
         description="Rubric scores for each contestant: {rubric: {a: score, b: score}}",

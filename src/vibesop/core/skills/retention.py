@@ -144,7 +144,9 @@ class RetentionPolicy:
         suggestions.sort(key=lambda s: severity.get(s.action, 99))
         return suggestions
 
-    def apply_auto_actions(self, suggestions: list[DeprecatedRetentionSuggestion] | None = None) -> int:
+    def apply_auto_actions(
+        self, suggestions: list[DeprecatedRetentionSuggestion] | None = None
+    ) -> int:
         """Apply automatic lifecycle transitions for retention recommendations.
 
         Auto-applies: archive → DEPRECATED, remove → DEPRECATED (advisory).

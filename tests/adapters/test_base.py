@@ -363,9 +363,7 @@ class TestPlatformAdapterEdgeCases:
         assert len(removed) == 1
         assert not orphan_link.exists()
 
-    def test_clean_orphan_skills_skips_when_manages_skills_is_false(
-        self, tmp_path: Path
-    ) -> None:
+    def test_clean_orphan_skills_skips_when_manages_skills_is_false(self, tmp_path: Path) -> None:
         """clean_orphan_skills returns empty list when manages_skills is False."""
         adapter = DummyAdapter()
         adapter.manages_skills = False
@@ -396,9 +394,7 @@ class TestPlatformAdapterEdgeCases:
             "~/.grok/skills/ may contain Grok's builtin skills"
         )
 
-    def test_clean_orphan_skills_still_works_with_default_flag(
-        self, tmp_path: Path
-    ) -> None:
+    def test_clean_orphan_skills_still_works_with_default_flag(self, tmp_path: Path) -> None:
         """When manages_skills is True (default), cleanup works as before."""
         adapter = DummyAdapter()
         assert adapter.manages_skills is True
@@ -415,11 +411,7 @@ class TestPlatformAdapterEdgeCases:
         metadata = ManifestMetadata(platform="dummy-platform")
         manifest = Manifest(
             metadata=metadata,
-            skills=[
-                SkillSpec(
-                    id="valid-skill", name="Valid", description="desc", trigger_when=""
-                )
-            ],
+            skills=[SkillSpec(id="valid-skill", name="Valid", description="desc", trigger_when="")],
         )
 
         removed = adapter.clean_orphan_skills(manifest, tmp_path)

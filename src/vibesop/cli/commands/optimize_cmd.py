@@ -46,19 +46,25 @@ def optimize(
     insights = analyzer.get_actionable_insights(health)
 
     gc = _grade_color(health.health_grade)
-    console.print(f"  Grade: [{gc}]{health.health_grade}[/{gc}]  "
-                  f"Hit rate: {health.hit_rate:.0%}  "
-                  f"Routes: {health.total_routes} ({days}d)")
+    console.print(
+        f"  Grade: [{gc}]{health.health_grade}[/{gc}]  "
+        f"Hit rate: {health.hit_rate:.0%}  "
+        f"Routes: {health.total_routes} ({days}d)"
+    )
 
     if health.p50_latency_ms > 0:
-        console.print(f"  Latency: P50={health.p50_latency_ms:.0f}ms  "
-                      f"P95={health.p95_latency_ms:.0f}ms  "
-                      f"P99={health.p99_latency_ms:.0f}ms")
+        console.print(
+            f"  Latency: P50={health.p50_latency_ms:.0f}ms  "
+            f"P95={health.p95_latency_ms:.0f}ms  "
+            f"P99={health.p99_latency_ms:.0f}ms"
+        )
 
     if health.ai_triage_calls > 0:
-        console.print(f"  AI triage: {health.ai_triage_calls} calls, "
-                      f"${health.ai_triage_cost_usd:.3f}, "
-                      f"{health.ai_triage_success_rate:.0%} success")
+        console.print(
+            f"  AI triage: {health.ai_triage_calls} calls, "
+            f"${health.ai_triage_cost_usd:.3f}, "
+            f"{health.ai_triage_success_rate:.0%} success"
+        )
 
     # ── 2. Insights ────────────────────────────────────────────────────
     if insights:
@@ -102,23 +108,29 @@ def _load_quality_actions(project_root: Path) -> list[dict]:
         actions = []
         for s in suggestions:
             if s.action == "deprecate":
-                actions.append({
-                    "skill_id": s.skill_id,
-                    "reason": f"Deprecate: {s.reason} (grade {s.grade}, {s.total_routes} routes)",
-                    "applied": False,
-                })
+                actions.append(
+                    {
+                        "skill_id": s.skill_id,
+                        "reason": f"Deprecate: {s.reason} (grade {s.grade}, {s.total_routes} routes)",
+                        "applied": False,
+                    }
+                )
             elif s.action == "warn":
-                actions.append({
-                    "skill_id": s.skill_id,
-                    "reason": f"Warning: {s.reason} (grade {s.grade})",
-                    "applied": False,
-                })
+                actions.append(
+                    {
+                        "skill_id": s.skill_id,
+                        "reason": f"Warning: {s.reason} (grade {s.grade})",
+                        "applied": False,
+                    }
+                )
             elif s.action == "boost":
-                actions.append({
-                    "skill_id": s.skill_id,
-                    "reason": f"Boost: {s.reason} (grade {s.grade})",
-                    "applied": False,
-                })
+                actions.append(
+                    {
+                        "skill_id": s.skill_id,
+                        "reason": f"Boost: {s.reason} (grade {s.grade})",
+                        "applied": False,
+                    }
+                )
         return actions
     except Exception as e:
         logger.debug("Skill quality analysis unavailable: %s", e)

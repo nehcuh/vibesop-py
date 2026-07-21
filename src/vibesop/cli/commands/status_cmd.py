@@ -282,7 +282,9 @@ def _load_routing_health(project_root: Path) -> Panel:
             f"Routing grade: [{grade_color}]{health.health_grade}[/{grade_color}] "
             f"({health.hit_rate:.0%} hit rate, {health.total_routes} routes in 30d)"
         )
-        lines.append(f"[dim]{health.routes_last_24h} last 24h  ·  {health.routes_last_7d} last 7d[/dim]")
+        lines.append(
+            f"[dim]{health.routes_last_24h} last 24h  ·  {health.routes_last_7d} last 7d[/dim]"
+        )
 
         if health.single_skill_hits > 0:
             lines.append(

@@ -24,4 +24,3 @@ class TestOverlayMerger:
         bad_path.write_text("::: invalid :::")
         with pytest.raises(ValueError):
             merger.load_overlay(bad_path)
-

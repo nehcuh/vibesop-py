@@ -18,4 +18,3 @@ class TestRouterFactory:
         """RouterFactory falls back to cwd."""
         factory = RouterFactory()
         assert factory.project_root == Path.cwd()
-

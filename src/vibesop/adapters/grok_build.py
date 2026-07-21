@@ -102,9 +102,7 @@ class GrokBuildAdapter(PlatformAdapter):
         errors: list[str] = []
         meta = manifest.metadata
         if meta.platform != "grok-build":
-            errors.append(
-                f"Platform mismatch: expected 'grok-build', got '{meta.platform}'"
-            )
+            errors.append(f"Platform mismatch: expected 'grok-build', got '{meta.platform}'")
         return errors
 
     def get_settings_schema(self) -> dict[str, Any]:

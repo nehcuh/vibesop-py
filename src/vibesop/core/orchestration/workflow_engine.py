@@ -704,7 +704,9 @@ class WorkflowEngine:
                     except Exception as e:
                         logger.error(
                             "Review gate failed for role=%s target=%s: %s",
-                            step.role_id, target_role, e,
+                            step.role_id,
+                            target_role,
+                            e,
                         )
                         verdict = ReviewVerdict(
                             passed=False,

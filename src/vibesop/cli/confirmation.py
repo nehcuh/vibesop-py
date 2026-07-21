@@ -39,9 +39,7 @@ def _safe_questionary_select(
         # ``Exception`` subclass from its win32 module).  We catch broadly
         # because the exact exception class is an implementation detail of
         # prompt_toolkit and may change across versions.
-        logger.warning(
-            "Interactive prompt unavailable (no console); auto-selecting %r.", default
-        )
+        logger.warning("Interactive prompt unavailable (no console); auto-selecting %r.", default)
         return default
 
 
@@ -74,9 +72,7 @@ def _safe_questionary_text(
     try:
         return questionary.text(message, default=default).ask()
     except Exception:
-        logger.warning(
-            "Interactive prompt unavailable (no console); using default %r.", default
-        )
+        logger.warning("Interactive prompt unavailable (no console); using default %r.", default)
         return default
 
 
@@ -152,9 +148,7 @@ def _choose_alternative(result: Any) -> None:
         for alt in result.alternatives[:5]
     ]
     alt_choices.append(questionary.Choice("↩️  Back", value="back"))
-    alt_id = _safe_questionary_select(
-        "Select a skill:", choices=alt_choices, default="back"
-    )
+    alt_id = _safe_questionary_select("Select a skill:", choices=alt_choices, default="back")
 
     if alt_id and alt_id != "back":
         for alt in result.alternatives:

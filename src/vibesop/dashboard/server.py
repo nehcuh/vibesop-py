@@ -170,9 +170,7 @@ def create_app() -> FastAPI:
 
         if skill:
             records = [
-                r
-                for r in records
-                if r.get("primary_skill") == skill or r.get("skill_id") == skill
+                r for r in records if r.get("primary_skill") == skill or r.get("skill_id") == skill
             ]
 
         # Return newest first
@@ -225,9 +223,7 @@ def create_app() -> FastAPI:
                 # Truncate turns for list view
                 turns = data.get("turns", [])
                 data["turn_count"] = len(turns)
-                data["preview"] = (
-                    turns[-1].get("query", "")[:80] if turns else "(empty)"
-                )
+                data["preview"] = turns[-1].get("query", "")[:80] if turns else "(empty)"
                 conversations.append(data)
         return JSONResponse(conversations)
 

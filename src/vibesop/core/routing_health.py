@@ -135,7 +135,10 @@ class RoutingHealthAnalyzer:
             # Hit classification
             mode = rec.get("mode", "single")
             primary = rec.get("primary_skill")
-            if primary == "FALLBACK_LLM" or rec.get("metadata", {}).get("degradation") == "fallback":
+            if (
+                primary == "FALLBACK_LLM"
+                or rec.get("metadata", {}).get("degradation") == "fallback"
+            ):
                 health.fallback += 1
             elif primary is None:
                 health.no_match += 1
@@ -188,9 +191,8 @@ class RoutingHealthAnalyzer:
                     health.ai_triage_cost_usd += rec.get("estimated_cost_usd", 0)
                     if rec.get("selected_skill"):
                         health.ai_triage_success_rate = (
-                            (health.ai_triage_success_rate * (health.ai_triage_calls - 1) + 1)
-                            / health.ai_triage_calls
-                        )
+                            health.ai_triage_success_rate * (health.ai_triage_calls - 1) + 1
+                        ) / health.ai_triage_calls
                 except (json.JSONDecodeError, ValueError, TypeError):
                     continue
 
@@ -208,7 +210,7 @@ class RoutingHealthAnalyzer:
 
         if health.fallback > health.total_routes * 0.1:
             insights.append(
-                f"{health.fallback} fallback routes ({health.fallback/health.total_routes:.0%}). "
+                f"{health.fallback} fallback routes ({health.fallback / health.total_routes:.0%}). "
                 "AI triage is being relied on heavily — check if keyword matching needs tuning."
             )
 
@@ -226,7 +228,7 @@ class RoutingHealthAnalyzer:
 
         if health.no_match > health.total_routes * 0.15:
             insights.append(
-                f"{health.no_match} unmatched queries ({health.no_match/health.total_routes:.0%}). "
+                f"{health.no_match} unmatched queries ({health.no_match / health.total_routes:.0%}). "
                 "Run 'vibe skills suggest' to generate skills for missed query clusters."
             )
 

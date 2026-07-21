@@ -224,9 +224,7 @@ class SkillInstaller:
                 f"# Skill Registry\nskills:\n  - {manifest.id}\n", encoding="utf-8"
             )
         else:
-            content = yaml.safe_load(
-                registry_path.read_text(encoding="utf-8")
-            ) or {}
+            content = yaml.safe_load(registry_path.read_text(encoding="utf-8")) or {}
             skills = content.get("skills", [])
             if manifest.id not in skills:
                 skills.append(manifest.id)
@@ -246,9 +244,7 @@ class SkillInstaller:
     def _remove_from_registry(self, skill_id: str, project_path: Path) -> None:
         registry_path = project_path / ".vibe" / "skills" / "registry.yaml"
         if registry_path.exists():
-            content = yaml.safe_load(
-                registry_path.read_text(encoding="utf-8")
-            ) or {}
+            content = yaml.safe_load(registry_path.read_text(encoding="utf-8")) or {}
             skills = content.get("skills", [])
             if skill_id in skills:
                 skills.remove(skill_id)

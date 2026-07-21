@@ -66,9 +66,7 @@ def dashboard(
 
         webbrowser.open(url)
 
-    console.print(
-        "[dim]Press Ctrl+C to stop.[/dim]\n"
-    )
+    console.print("[dim]Press Ctrl+C to stop.[/dim]\n")
 
     run_server(
         host=host,

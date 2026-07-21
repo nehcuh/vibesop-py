@@ -27,8 +27,9 @@ class TestRoutingHealth:
         assert h.health_grade == "F"
 
     def test_latency_percentiles(self):
-        h = RoutingHealth(avg_latency_ms=100.0, p50_latency_ms=80.0, p95_latency_ms=200.0,
-                          p99_latency_ms=500.0)
+        h = RoutingHealth(
+            avg_latency_ms=100.0, p50_latency_ms=80.0, p95_latency_ms=200.0, p99_latency_ms=500.0
+        )
         assert h.avg_latency_ms == 100.0
         assert h.p95_latency_ms == 200.0
 
@@ -50,15 +51,20 @@ class TestRoutingHealthAnalyzer:
         assert health.health_grade == "F"
 
     def test_insights_for_healthy_routing(self):
-        h = RoutingHealth(single_skill_hits=90, orchestrated_hits=5, no_match=5,
-                          total_routes=100)
+        h = RoutingHealth(single_skill_hits=90, orchestrated_hits=5, no_match=5, total_routes=100)
         analyzer = RoutingHealthAnalyzer(".")
         insights = analyzer.get_actionable_insights(h)
         assert "looks good" in insights[0]
 
     def test_insights_for_poor_routing(self):
-        h = RoutingHealth(single_skill_hits=30, no_match=50, fallback=20,
-                          total_routes=100, p95_latency_ms=600, ai_triage_cost_usd=5.0)
+        h = RoutingHealth(
+            single_skill_hits=30,
+            no_match=50,
+            fallback=20,
+            total_routes=100,
+            p95_latency_ms=600,
+            ai_triage_cost_usd=5.0,
+        )
         analyzer = RoutingHealthAnalyzer(".")
         insights = analyzer.get_actionable_insights(h)
         assert len(insights) >= 2  # Multiple issues should be flagged
