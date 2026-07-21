@@ -226,3 +226,29 @@ instincts:
       - 批量脚本改测试要三重验证（diff 抽查 + compile + lint），第一版脚本有 bug 很正常
     created_at: "2026-07-19"
     last_used: "2026-07-19"
+
+  - id: "550e8408-double-defense-discovery-2026"
+    pattern: "贪婪发现（rglob/glob）扫到非目标文件时，双层防御：入口层做 schema 前置过滤（缺必要字段则 skip） + 解析层做类型强制（str()/int() 宽进严出）。最小改动，最大保险。"
+    confidence: 0.80
+    source_sessions: ["vibesop-py-yaml-loader-fix-2026-07-21"]
+    usage_count: 1
+    success_rate: 1.0
+    tags: ["defensive-programming", "file-discovery", "data-validation", "bug-fix"]
+    status: "active"
+    context: |
+      适用场景：
+      - glob/rglob 扫描目录，目标文件和非目标文件混在一起
+      - 非目标文件的结构与目标文件部分重叠（如 YAML dict 但缺关键字段）
+      - 字段类型与预期不一致（如 config 里 version 是 int，但 spec 要 str）
+
+      关键步骤：
+      1. 入口层：用 dict key 存在性做前置过滤（`"id" not in data and "name" not in data`）
+      2. 解析层：对弱类型字段做 `str()` / `int()` 强制转换，防 Pydantic 等严格校验崩溃
+      3. 不改 rglob 本身（搜索面不变，过滤点在消费端）
+
+      对比方案：
+      - 改 rglob pattern → 可能漏掉正确的 yaml skill
+      - 只加 try/except → 崩溃仍然发生，只是被吞掉
+      - 双保险 → 既防了已知场景，又防了未来类似场景
+    created_at: "2026-07-21"
+    last_used: "2026-07-21"
