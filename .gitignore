@@ -55,6 +55,10 @@ htmlcov/
 .vibe/sessions/
 .vibe/session/
 .vibe/preferences.json
+
+# VibeSOP observability runtime data (spans.jsonl, triage logs).
+# Per-project, generated at runtime, can grow large.
+.vibe/observability/
 # User-installed skills (mattpocock, superpowers, etc.) are environment-local.
 # Cross-cutting workflow definitions are project-shared and tracked.
 .vibe/skills/*
