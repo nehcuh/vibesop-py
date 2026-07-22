@@ -35,8 +35,10 @@ class SkillMetrics:
     avg_duration_ms: float = 0.0
     avg_tokens: int = 0
     avg_cost_usd: float = 0.0
+    total_cost_usd: float = 0.0
     top_errors: list[str] = field(default_factory=list)
     llm_success_rate: float = 0.0
+    llm_call_count: int = 0
     tool_call_distribution: dict[str, int] = field(default_factory=dict)
     source: str = "none"
     window_hours: int = 24
@@ -46,6 +48,13 @@ class SkillMetrics:
         if self.total_executions == 0:
             return 0.0
         return self.success_count / self.total_executions
+
+    @property
+    def cost_usd_per_execution(self) -> float:
+        """Average cost in USD per execution (total / executions)."""
+        if self.total_executions == 0:
+            return 0.0
+        return self.total_cost_usd / self.total_executions
 
 
 @dataclass
@@ -83,8 +92,20 @@ class SpanAggregator:
         skill_id: str,
         window_hours: int = 24,
         use_analytics_fallback: bool = True,
+        project_id: str | None = None,
     ) -> SkillMetrics:
         """Get aggregated metrics for a skill over a time window.
+
+        Attribution: a span is considered to belong to ``skill_id`` if EITHER:
+        * its own ``metadata.skill_id`` matches, OR
+        * it shares a ``trace_id`` with a task-span whose ``metadata.skill_id``
+          matches (covers llm-spans emitted by SpanWrappedProvider — they
+          carry ``task_id`` but not ``skill_id``).
+
+        If ``project_id`` is provided, spans whose ``project_id`` differs are
+        excluded — prevents cross-project contamination when multiple projects
+        share a span file (rare today; becomes important when storage path
+        is anchored to a shared cache).
 
         If no spans data is available and ``use_analytics_fallback`` is True,
         falls back to analytics.jsonl data (coarser, but available sooner).
@@ -93,7 +114,15 @@ class SpanAggregator:
 
         # Primary: spans from agent-internal observability
         spans = self._read_spans_in_window(window_hours)
-        skill_spans = [s for s in spans if s.get("metadata", {}).get("skill_id") == skill_id]
+        if project_id is not None:
+            spans = [
+                s for s in spans
+                if s.get("project_id", "default") == project_id
+            ]
+        attribution = self._build_attribution_map(spans)
+        skill_spans = [
+            s for s in spans if self._span_belongs_to_skill(s, skill_id, attribution)
+        ]
         tasks = [s for s in skill_spans if s.get("span_kind") == "task"]
 
         if tasks:
@@ -102,22 +131,51 @@ class SpanAggregator:
             metrics.success_count = sum(1 for t in tasks if t.get("status") == "ok")
             durations = [t.get("duration_ms", 0) or 0 for t in tasks if t.get("duration_ms")]
             metrics.avg_duration_ms = round(sum(durations) / len(durations)) if durations else 0.0
-            metrics.avg_tokens = round(
-                sum(t.get("tokens_input", 0) + t.get("tokens_output", 0) for t in tasks) / len(tasks)
-            ) if tasks else 0
-            metrics.avg_cost_usd = round(sum(t.get("cost_usd", 0) or 0 for t in tasks) / len(tasks), 6) if tasks else 0.0
 
-            # LLM child spans
+            # LLM child spans (now attributable via trace_id propagation)
             llm_spans = [s for s in skill_spans if s.get("span_kind") == "llm"]
+            metrics.llm_call_count = len(llm_spans)
             if llm_spans:
-                llm_ok = sum(1 for l in llm_spans if l.get("status") == "ok")
+                llm_ok = sum(1 for s in llm_spans if s.get("status") == "ok")
                 metrics.llm_success_rate = llm_ok / len(llm_spans)
+                # Token + cost aggregation prefers LLM child spans when present
+                # (they carry real token counts; task-spans have tokens_input=0
+                # pre-M2). Filter out estimated tokens to avoid polluting the mean.
+                measured = [
+                    s for s in llm_spans
+                    if (s.get("metadata", {}) or {}).get("token_accounting") == "measured"
+                ]
+                token_source = measured or llm_spans
+                metrics.avg_tokens = round(
+                    sum(s.get("tokens_input", 0) + s.get("tokens_output", 0) for s in token_source)
+                    / len(token_source)
+                )
+                metrics.total_cost_usd = round(
+                    sum(s.get("cost_usd", 0) or 0 for s in llm_spans), 6
+                )
+                metrics.avg_cost_usd = (
+                    round(metrics.total_cost_usd / len(tasks), 6) if tasks else 0.0
+                )
+            else:
+                # No LLM spans — fall back to task-span token field (often 0)
+                metrics.avg_tokens = round(
+                    sum(t.get("tokens_input", 0) + t.get("tokens_output", 0) for t in tasks)
+                    / len(tasks)
+                )
+                metrics.total_cost_usd = round(
+                    sum(t.get("cost_usd", 0) or 0 for t in tasks), 6
+                )
+                metrics.avg_cost_usd = (
+                    round(metrics.total_cost_usd / len(tasks), 6) if tasks else 0.0
+                )
 
             # Tool call child spans
             tool_spans = [s for s in skill_spans if s.get("span_kind") == "tool_call"]
             for t in tool_spans:
                 tool_name = t.get("name", "unknown").split(":", 1)[-1].strip()
-                metrics.tool_call_distribution[tool_name] = metrics.tool_call_distribution.get(tool_name, 0) + 1
+                metrics.tool_call_distribution[tool_name] = (
+                    metrics.tool_call_distribution.get(tool_name, 0) + 1
+                )
 
             # Error collection
             error_tasks = [t for t in tasks if t.get("status") == "error"]
@@ -153,7 +211,7 @@ class SpanAggregator:
 
         # Extract tool call sequences per trace
         sequence_counts: dict[str, PatternSeq] = {}
-        for tid, trace_spans in traces.items():
+        for _tid, trace_spans in traces.items():
             tools = [s for s in trace_spans if s.get("span_kind") == "tool_call"]
             if len(tools) < 2:
                 continue
@@ -210,11 +268,17 @@ class SpanAggregator:
         return anomalies
 
     def get_all_skill_ids(self) -> set[str]:
-        """Return all skill IDs observed in span data."""
+        """Return all skill IDs observed in span data (last 30 days).
+
+        Includes skills attributed via trace_id propagation (i.e. skills
+        that only show up on task-spans but whose llm-spans also belong
+        to them by attribution).
+        """
         spans = self._read_spans_in_window(window_hours=720)  # 30 days
+        attribution = self._build_attribution_map(spans)
         skill_ids: set[str] = set()
         for s in spans:
-            sid = s.get("metadata", {}).get("skill_id") if isinstance(s.get("metadata"), dict) else None
+            sid = self._skill_of(s, attribution)
             if sid:
                 skill_ids.add(sid)
         return skill_ids
@@ -229,6 +293,55 @@ class SpanAggregator:
     # Internal helpers
     # ------------------------------------------------------------------
 
+    @staticmethod
+    def _build_attribution_map(spans: list[dict[str, Any]]) -> dict[str, str]:
+        """Build a ``trace_id → skill_id`` map from task-spans.
+
+        ``agent_runtime`` writes ``metadata.skill_id`` to the root task-span
+        after routing completes (agent_runtime.py:551). Descendant llm-spans
+        share the same ``trace_id`` but don't carry ``skill_id`` themselves
+        — consumers use this map to attribute them.
+
+        Note: assumes one root task-span per trace_id (true today — only
+        ``agent_runtime.handle_query`` calls ``tracer.trace()``, once per
+        query). If nested task-spans are introduced (e.g. a workflow_node
+        that itself opens a sub-trace), the last-writer-wins here will
+        silently overwrite the root skill_id. Tagged as P2 cleanup when
+        tracer gains proper parent-child task_id inheritance.
+        """
+        mapping: dict[str, str] = {}
+        for s in spans:
+            if s.get("span_kind") != "task":
+                continue
+            tid = s.get("trace_id", "")
+            if not tid:
+                continue
+            meta = s.get("metadata") or {}
+            sid = meta.get("skill_id") if isinstance(meta, dict) else None
+            if sid:
+                mapping[tid] = sid
+        return mapping
+
+    @staticmethod
+    def _skill_of(
+        span: dict[str, Any], attribution: dict[str, str]
+    ) -> str | None:
+        """Resolve the skill_id for a span: own metadata first, then trace_id map."""
+        meta = span.get("metadata") or {}
+        own = meta.get("skill_id") if isinstance(meta, dict) else None
+        if own:
+            return own
+        tid = span.get("trace_id", "")
+        return attribution.get(tid) if tid else None
+
+    @staticmethod
+    def _span_belongs_to_skill(
+        span: dict[str, Any],
+        skill_id: str,
+        attribution: dict[str, str],
+    ) -> bool:
+        return SpanAggregator._skill_of(span, attribution) == skill_id
+
     def _read_spans_in_window(self, window_hours: int) -> list[dict[str, Any]]:
         """Read spans within the given time window from JSONL."""
         if not self._spans_path.exists():
@@ -236,8 +349,8 @@ class SpanAggregator:
         cutoff = datetime.now(UTC) - timedelta(hours=window_hours)
         spans: list[dict[str, Any]] = []
         with self._spans_path.open("r", encoding="utf-8") as f:
-            for line in f:
-                line = line.strip()
+            for raw_line in f:
+                line = raw_line.strip()
                 if not line:
                     continue
                 try:
@@ -274,8 +387,8 @@ class SpanAggregator:
         total = 0
         durations: list[float] = []
         with analytics_path.open("r", encoding="utf-8") as f:
-            for line in f:
-                line = line.strip()
+            for raw_line in f:
+                line = raw_line.strip()
                 if not line:
                     continue
                 try:
