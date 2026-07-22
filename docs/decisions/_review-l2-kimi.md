@@ -1,0 +1,123 @@
+• This is an architecture review request. I should give an independent verdict, terse, focusing on weaknesses. Should I explore the codebase to verify claims? The brief mentions specific files: `plan_executor.py`, `skill_injector.py`, `LLMProvider.call()`, `AgentRuntime.handle_query()` L461. Verifying a few claims would strengthen the review, but the user wants a terse verdict. A quick check of key claims (does LLMProvider exist? does AgentRuntime.handle_query exist? do ClassifierAgent etc. exist?) would be worthwhile. Let me do a quick grep to verify grounding — this matters because the whole GAP-1 design hinges on a single emission point existing.
+
+  Let me do a few quick searches.
+
+• I'll quickly verify a few load-bearing claims in the codebase before giving the verdict.
+
+• Two `LLMProvider` definitions exist: `core/protocols.py` (Protocol) and `llm/base.py` (ABC). Also `agent/__init__.py` has its own `call`. So "single emission point" claim needs checking: do ClassifierAgent, WorkflowEngine, MultiIntentDetector all go through `llm/base.py LLMProvider`? Let me check quickly.Key findings to inform the review:
+
+  1. Two `LLMProvider` types: `core/protocols.py` Protocol and `llm/base.py` ABC. Callers use `llm_provider: Any` duck typing in several places (`core/routing/unified.py:1045`, `core/ai_enhancer.py:38`, `agent/__init__.py:74`). The router's `set_llm` takes `Any` — meaning callers may pass arbitrary objects with a `call()` method that don't go through `llm/base.py`'s class. So "single emission point" via wrapping `LLMProvider.call()` only works if all call sites actually use the ABC subclass — but the router accepts `Any`. If anything constructs a raw provider differently or uses duck-typed wrappers, spans are missed. Also `agent/__init__.py:34` has its own `call` — a separate duck-typed path.
+
+  2. Do ClassifierAgent / WorkflowEngine / MultiIntentDetector actually call LLMs? The brief says "existing calls (now span-wrapped)". Need to verify these actually make LLM calls... quick check worthwhile. Actually the grep for ClassifierAgent shows core/orchestration/classifier.py:138. Let me not over-invest; a quick check of whether classifier uses llm.
+
+  Actually, one more important verification: does the classifier actually call LLM in-process, or is it heuristic? Let me check quickly.Confirmed: callers take `llm_client: Any` and call `.call()` duck-typed. Wrapping `llm/base.py LLMProvider.call()` covers anything that subclasses it (Anthropic/OpenAI/Ollama providers), which the factory produces — so in practice most paths do go through it. But the duck-typing (`Any`) means nothing enforces it; tests/mocks/custom providers would emit spans only if they subclass. Also `agent/__init__.py:34` has a separate duck-typed `call` (SimpleResponse) — the router's `set_llm` path.
+
+  Also important: `echo` grep hits were unrelated (templates with "echo" shell command — shell echo, not EchoEngine). So EchoEngine is not yet implemented — this is a design review, fine.
+
+  One more consideration: hooks. `adapters/claude_code.py` uses UserPromptSubmit; there is already a PreToolUse track hook template (`vibesop-track.sh.j2`). The brief's claim about UserPromptSubmit lacking `decision:"block"` is correct for Claude Code. Actually — worth noting: Claude Code's UserPromptSubmit *does* support `decision: "block"` in recent versions (it blocks the prompt from being processed, with the reason shown to the user). Hmm — actually yes, Claude Code docs: UserPromptSubmit hooks can return `{"decision": "block", "reason": "..."}` which prevents the prompt from being processed and shows reason to user. That contradicts the brief's "hook protocol reality" claim. Let me verify — Claude Code hook docs: UserPromptSubmit supports: exit code 2 = block prompt, stderr shown to user; JSON output with `decision: "block"` and `reason`; also `hookSpecificOutput.additionalContext`. So the claim "no decision/block field" is factually wrong for current Claude Code. However, blocking the prompt entirely would prevent the external agent from doing anything — which is what they want (silence the agent), but `decision:"block"` shows the reason to the user and erases the prompt — the reason is shown but the user's original prompt is not processed. Actually that could work for echo: block with reason = echo answer. But it shows as an error-ish message. Either way, the brief's claim is inaccurate and the P3 "hook architecture change to PreToolUse" may be unnecessary — PreToolUse block would be weird anyway (PreToolUse fires per tool call, not per prompt; for pure Q&A the agent may make no tool calls, so blocking at PreToolUse can't silence it). This is a real architectural flaw in the L2b plan: PreToolUse is the wrong hook for silencing a text-only answer. Actually for L2b they want to stop the agent from generating a full turn — PreToolUse only fires when the model calls a tool. A question-answering turn may not call any tool, so PreToolUse never fires and silence fails. Meanwhile UserPromptSubmit with decision:block (if supported) could work but blocks the entire prompt including... hmm, it blocks processing — the reason is shown to the user as the block message. That might actually serve as the echo channel, though UX is ugly (shown as error).
+
+  Let me be careful about factual accuracy on Claude Code hook protocol. My knowledge: Claude Code UserPromptSubmit hook JSON output: `"decision": "block"` — "Prevents Claude from processing the prompt... 'reason' is shown to the user" — yes this exists in the hooks reference. Also exit code 2 blocks. So the brief is wrong, and I should flag it with moderate confidence, recommending verification against current docs. Since I can't verify live docs reliably... I could WebSearch/FetchURL. That would strengthen the review. Let me do a quick fetch of Claude Code hooks docs.
+
+• One more check — the brief's hook-protocol claim is load-bearing for the L2a/L2b split.
+
+• Key confirmation from official Claude Code docs: **UserPromptSubmit DOES support `decision: "block"` with `reason`** — "Top-level decision: Used by UserPromptSubmit... decision: 'block', reason". And exit code 2 "Blocks prompt processing and erases the prompt". So the brief's "hook protocol reality" claim is factually wrong for current Claude Code (and even historically, UserPromptSubmit has supported block for a long time).
+
+  This is a significant finding: the entire justification for deferring "agent silence" to P3 with a PreToolUse architecture change is based on a false premise. And PreToolUse is the *wrong* hook for L2b anyway: it fires per tool call, so for pure Q&A turns where the agent makes no tool calls, there's nothing to block — plus blocking a tool call mid-turn just redirects the model rather than silencing the turn. The correct L2b mechanism is UserPromptSubmit with `decision:"block"` + reason = echo answer (though block's reason is shown to the user and the prompt is "erased" — the user sees the reason; UX needs validation). Or `continue: false` with `stopReason`. Actually wait — UserPromptSubmit block "erases the prompt" — the reason is shown to the user. Hmm, `{"continue": false, "stopReason": "..."}` — "If false, Claude stops processing entirely after the hook runs... stopReason shown to the user". That might be exactly the silence mechanism: echo answer delivered via systemMessage or stdout, then continue:false. This is a design detail for them to validate, but the point stands: the protocol claim is wrong, and L2b's planned hook is the wrong hook.
+
+  Also `decision: "block"` for UserPromptSubmit — I should note this needs empirical validation on their supported Claude Code versions, and that Kimi/Pi/Grok adapters have their own protocols (UserPromptSubmit is Claude-specific naming; other platforms may not have block semantics at all). L2b cross-platform silence is platform-dependent — the brief only addresses Claude Code.
+
+  Now assemble the review. Terse. Sections A–E.
+
+  Key findings to weave in:
+
+  Codebase verification:
+  - `llm/base.py LLMProvider` ABC exists with `call`/`acall`; providers (anthropic/openai/ollama) subclass it. But there's a second `LLMProvider` Protocol in `core/protocols.py:16`, and many call sites take `llm_client: Any` (classifier.py:151, multi_intent_detector.py:51, unified.py:1045 `set_llm(llm_provider: Any)`, ai_enhancer.py:38, agent/__init__.py). So the "single emission point" works only by convention, not enforcement: anything duck-typed that doesn't subclass the ABC bypasses spans (mocks, custom wrappers, `agent/__init__.py`'s SimpleResponse path at :34). Also two coexisting `LLMProvider` definitions is a naming collision waiting to bite. Recommendation: wrap at the ABC (fine) but either enforce type or wrap at `create_provider` factory / add a SpanWrappedProvider decorator so any duck-typed provider is covered.
+  - Classifier and MultiIntentDetector do call `.call()` — confirmed. But they're only invoked when router has LLM configured; rule-based fallback paths emit no spans (fine).
+  - Echo mode fires *after* `should_route=True` — meaning echo competes with routing; also, where does echo answer go if UserPromptSubmit can't silence? systemMessage + agent also answers → double answer, worse UX than no echo. CH-L2-4's "🔊 informational only" prefix doesn't prevent the agent from re-answering at full cost. So L2a as designed *adds* cost and latency on every echo-eligible query without saving anything — the value is only observability. But wait: the whole stated purpose of echo is to give observability real LLM call data... but classifier calls already exist in-process (confirmed above). So "no in-process LLM call sites" is only true when LLM isn't configured for routing; when it is configured, classifier spans would provide the data. The premise "v8.2 has nothing to consume" is partially false — GAP-1 wrap at provider level would emit classifier spans wherever LLM routing is enabled. Echo adds data only in the no-LLM-config case, and there the user hasn't configured API keys — so echo can't call LLM either! Circular: echo needs an LLM key; if a key exists, classifier already emits spans. That's a strong "what you missed" point. Actually the classifier path: `router.llm` — set via `set_llm`. In CLI `main.py:108` they create a provider. So in agent environments, does the hook path have a provider? The hook runs `vibe route` as a subprocess — does that configure an LLM? Possibly not by default. So echo would require API key config — and once configured, classifier could also use it. The marginal data echo adds vs. just wrapping provider + enabling classifier LLM is questionable. At minimum the brief should quantify.
+
+  Cost/budget concerns:
+  - $1/day cap with haiku: haiku ~$1/MTok in, $5/MTok out. $1 ≈ hundreds of echo answers/day; combined with 10/min rate limit the cap rarely binds — fine. But cost accounting: `response.cost_usd` — do providers actually return cost? Need to check LLMResponse... not verified. Flag: cost must be computed from token counts × price table; price tables drift (model updates). Budget enforcement across processes: hook runs as subprocess per prompt — daily budget state must be persisted and is racy across concurrent sessions; rate limit keyed on session+project also needs cross-process store. Where does this state live? Not addressed.
+  - Latency: echo adds a serial LLM call before routing on the hook path; UserPromptSubmit hook timeout default is 30s (docs confirm: "UserPromptSubmit lowers the command... default to 30"). A slow LLM call + routing must fit in 30s or the hook times out (non-blocking error, execution continues — actually fail-open, fine, but echo silently never fires under load).
+  - Async: hook subprocess is sync-blocking; `acall` exists but hook path is sync. Fine.
+
+  Gating soundness:
+  - 500-char + complexity-marker blacklist is crude i18n-wise: markers are English words ("implement/refactor/debug/migrate") — the project has Chinese users (docs contain Chinese). Chinese queries bypass complexity detection entirely → echo answers complex Chinese queries badly. This is a concrete miss.
+  - Skill blacklist by skill_id is fragile (packs, custom skills, renames).
+  - p25 per-mode baselines: with echo off by default, early echo samples are tiny; p25 of n<20 is noise. Statistical rigor missing.
+  - Echo on failure falls back silently — but partial failure mode: echo LLM call succeeded, answer returned, then span emission fails — covered. What about echo answer quality guard? No eval loop; wrong answers presented with authority ("VibeSOP Echo") damage trust in the router brand. Follow-up execution rate tracking (CH-L2-4) is good but lagging.
+
+  Section A scores:
+  (i) L2 right tier? The observability goal can be met by just doing the GAP-1 wrap (L1-ish) without EchoEngine. Echo is a product feature justified by an observability gap that's partially manufactured (classifier calls exist when LLM configured). But if the strategic direction is "VibeSOP becomes an answer engine," L2 is reasonable as opt-in. Score: 3.
+  (ii) gating: mostly sound defense-in-depth but i18n hole + skill_id blacklist fragility. 3.
+  (iii) single emission point: correct location (provider ABC) but duck-typing + duplicate LLMProvider definitions mean it's not actually single/enforced. 3 (4 if they wrap factory/decorator).
+  (iv) L2a/L2b split: based on false protocol premise; UserPromptSubmit supports decision:block (and continue:false/stopReason). Also PreToolUse is the wrong hook for silencing Q&A turns. The split itself (observability first, silence later) is acceptable, but the stated reason and the planned P3 design are both wrong. 2.
+  (v) six self-rulings: mostly correct; CH-L2-1 right; CH-L2-2 right; CH-L2-3 right direction, weak stats; CH-L2-4 insufficient (prefix doesn't stop double-answer/cost); CH-L2-5 right; CH-L2-6 right but missing state-store design. 4.
+
+  Top 3 concerns (B):
+  1. Premise circularity: echo needs LLM credentials; wherever credentials exist, classifier/orchestrator calls already emit spans once GAP-1 ships — echo's marginal observability value may be near zero, while it adds cost+latency+double answers. Quantify "how many hook-path invocations have a provider configured" before building the engine.
+  2. The hook protocol finding is wrong (UserPromptSubmit supports decision:block / continue:false — cite docs), and PreToolUse is the wrong hook for L2b anyway (fires per tool call; Q&A turns may call none; blocking a tool call redirects rather than silences). P3 plan needs redesign, and the "silence impossible in L2a" conclusion should be re-derived.
+  3. L2a ships double-answer UX: echo answer via systemMessage + agent generates its own turn anyway → user pays twice, sees two possibly conflicting answers, and every echo query gets slower. Without silence, echo's user value is negative; consider gating L2a release on at least a soft-silence mechanism or ship observability-only (echo runs, answer stored to traces, not shown).
+
+  Disagreements (C):
+  - CH-L2-4: reverse partially. Prefix + tracking is not enough; showing the echo answer without silence is net-negative. Either don't surface the answer in L2a (observability-only mode) or implement block now.
+  - CH-L2-1: agree with dropping confidence gate, but the replacement (English complexity markers) fails i18n — augment with length/structure heuristics or run the existing cheap classifier (rule-based part is free, no chicken-and-egg since rule classifier needs no LLM).
+  - Others stand.
+
+  Missing (D):
+  - Cross-process state: rate limiter + daily budget need persistent, concurrency-safe store (hook = fresh subprocess per prompt); unspecified.
+  - Hook timeout budget: UserPromptSubmit default 30s; echo LLM call + routing must fit; define internal timeout (~5s?) and fail-open.
+  - Other platforms: Kimi/Pi/Grok adapters — do their hook protocols support block? L2b per-platform matrix missing.
+  - Cost source: `response.cost_usd` — verify providers compute it; price-table drift; USD cap vs non-Anthropic providers (Ollama is free — budget cap meaningless there).
+  - Privacy: echo sends query to Anthropic from hook context — consent copy in interactive setup; data handling of stored prompts (span input stores prompt[:500]).
+  - Double-billing/accounting: echo queries also trigger classifier spans later in routing — attribution in traces (parent/child) so analyzer doesn't double count.
+  - Security: echo system prompt must resist prompt injection via query content; answer is shown to user, lower risk, but cost amplification via crafted repeated queries (rate limit covers per session+project — attacker can rotate session_ids; session_id comes from hook input, trivially spoofable). Rate limit keyed on spoofable field.
+  - Eval: no offline eval set for echo answer quality before enabling by default... it's off by default, fine, but need a quality gate before any default-on or promotion.
+  - Truncation: `prompt[:500]` in span input vs query_length ≤ 500 gating — consistent, ok.
+  - Version drift of the protocol claims: pin and CI-test hook protocol assumptions (they got this one wrong already).
+
+  E: one sentence.
+
+  Cite the docs URL. Keep terse. Write in English (user wrote in English).
+
+• Verified the load-bearing claims against the codebase and current Claude Code hook docs before answering. Two findings materially change the picture.
+
+  **Verification results:**
+  - `llm/base.py:50` has the `LLMProvider` ABC with `call`/`acall`; anthropic/openai/ollama subclass it. But there's a **second** `LLMProvider` Protocol at `core/protocols.py:16`, and the key call sites take `llm_client: Any` (`classifier.py:151`, `multi_intent_detector.py:51`, `unified.py:1045`, `ai_enhancer.py:38`, `agent/__init__.py:74`).
+  - Classifier and MultiIntentDetector **do** make in-process LLM calls today (`classifier.py:371`, `multi_intent_detector.py:85`) — whenever `router.llm` is configured.
+  - The "UserPromptSubmit has no `decision:block`" claim is **wrong**: the [current hooks reference](https://docs.anthropic.com/en/docs/claude-code/hooks) lists `decision:"block", reason` as supported for UserPromptSubmit, plus exit-code-2 ("blocks prompt processing") and the universal `{"continue": false, "stopReason": ...}`.
+
+  ## Section A — Verdict
+
+  - **(i) Right tier: 3/5.** L2 is a reasonable strategic direction, but it's being justified by a partially manufactured gap (see B1). The GAP-1 wrap alone delivers most of the observability value; EchoEngine is a product feature wearing an observability justification.
+  - **(ii) Gating: 3/5.** Defense-in-depth is right, but the complexity-marker blacklist is English-only ("implement/refactor/debug/migrate") — this repo's own docs are heavily Chinese, and a Chinese complex query sails through all four word-based gates. Skill_id blacklist is fragile against pack renames/custom skills.
+  - **(iii) Single emission point: 3/5.** Right location (provider ABC), but it's single by convention, not enforcement: duck-typed `Any` providers (mocks, custom wrappers, the separate `SimpleResponse` path in `agent/__init__.py:34`) bypass it, and two coexisting `LLMProvider` definitions will confuse exactly the people maintaining this. Wrap at `create_provider` or ship a `SpanWrappedProvider` decorator instead — then any duck-typed object is covered.
+  - **(iv) L2a/L2b split: 2/5.** Splitting observability from silence is fine. But the *stated reason* is factually wrong, and the planned P3 mechanism is the wrong hook: PreToolUse fires per tool call, so a pure Q&A turn that calls no tools can never be silenced by it, and blocking a mid-turn tool call redirects the model rather than ending the turn. The correct L2b mechanism is UserPromptSubmit itself (`decision:"block"` / `continue:false` + answer via `stopReason` or stdout context) — which means the "requires hook architecture change" premise collapses.
+  - **(v) Self-rulings: 4/5.** CH-L2-1, 2, 5, 6 correct. CH-L2-3 correct direction, weak statistics. CH-L2-4 insufficient (see C).
+
+  ## Section B — Top 3 concerns
+
+  1. **Premise circularity.** Echo needs an LLM API key configured in the hook subprocess. Wherever a key is configured, the classifier/multi-intent calls already exist and will emit spans the moment GAP-1 ships — echo's marginal observability value approaches zero. Wherever no key is configured, echo can't fire either. Quantify "hook invocations with a configured provider" before building an engine to serve a gap that may not exist.
+  2. **The protocol finding is wrong, and P3 is designed on top of it.** UserPromptSubmit supports blocking today; PreToolUse is structurally incapable of silencing answer-only turns. Re-derive the L2a/L2b boundary from actual protocol capabilities, and add a CI check pinning protocol assumptions — this is the second time an unverified protocol claim has driven scoping.
+  3. **L2a ships double-answer UX.** Echo answer via `systemMessage` + the external agent generates its own full turn anyway = every echo-eligible query gets slower, costs twice, and presents two potentially conflicting answers, one labeled "🔊 VibeSOP Echo." Without silence, echo's net user value is negative; it's pure cost to buy trace data.
+
+  ## Section C — Disagreements
+
+  - **CH-L2-4 — reverse.** A prefix plus lagging follow-up-rate analytics doesn't fix paying twice and answering twice. In L2a, either don't surface the echo answer at all (store it in traces only — closes observability, zero UX risk), or implement the UserPromptSubmit block now since the protocol supports it. "Informational only" is a label, not a mechanism.
+  - **CH-L2-1 — partially reverse.** Dropping the confidence gate is right, but the replacement has a hole: you already have a **rule-based classifier that needs no LLM** (`classifier.py:184` — LLM is optional blend). There's no chicken-and-egg; run the rule-based pass as the echo gate and drop the English keyword list, or at minimum add non-lexical signals (length, question-mark shape, code fences).
+
+  ## Section D — Missing considerations
+
+  - **Cross-process state.** Hooks run as fresh subprocesses per prompt; the 10/min rate limit and $1/day budget need a persistent, concurrency-safe store (file + flock, sqlite). Unspecified — and `session_id` comes from hook input, so it's spoofable; rate-limiting on it is advisory, not protective.
+  - **Hook timeout budget.** UserPromptSubmit command hooks default to 30s. Echo LLM call + routing + span flush must fit; define an internal echo timeout (~3–5s) with fail-open, or slow API days silently disable echo (your "silent fallback" hides this from metrics unless you count fallback reasons).
+  - **Per-platform L2b matrix.** The protocol analysis covers only Claude Code. Kimi/Pi/Grok adapters all reuse the "UserPromptSubmit" name — do their block semantics exist? Silence will ship per-platform or not at all.
+  - **Cost source.** Verify `response.cost_usd` is actually populated by all three providers (Ollama: cost is 0 — the budget cap is meaningless there). Price tables drift with model updates; `claude-haiku-4-5` pricing must live in one updateable place.
+  - **Trace attribution.** An echo-eligible query that falls through to routing will later emit classifier spans — parent/child span relationship and mode tagging must prevent the analyzer from double-counting tokens/cost per user query.
+  - **Fallback telemetry.** "Silent fallback" is correct for UX but must increment a `echo_fallback_reason` counter (rate_limited / budget / timeout / error), or you'll never know echo silently never fires.
+  - **Injection & trust.** Echo answer is shown with VibeSOP's authority; a wrong haiku answer to a "simple" question damages the router's brand more than no answer. No quality eval loop exists before any future default-on promotion — add one to the L2b exit criteria.
+  - **Span payload.** `span.set_input({"prompt": prompt[:500]})` stores user prompts in traces — state the retention/privacy story, since echo's whole pitch is observability data leaving the process.
+
+  ## Section E — Overall verdict
+
+  Ship the GAP-1 provider wrap (via factory/decorator, not the ABC) now — it's the only part with unambiguous value — and hold EchoEngine until the circular-premise question (B1) is answered with data and the silence mechanism is redesigned on what UserPromptSubmit actually supports, because L2a as specified pays real cost and latency to buy observability that the wrap already provides.
+
+To resume this session: kimi -r session_13de82e9-ac78-46f9-a83d-9686c54fa49e
