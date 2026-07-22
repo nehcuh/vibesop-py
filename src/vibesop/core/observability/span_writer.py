@@ -1,8 +1,14 @@
 """Span writer — persists spans to JSONL file storage.
 
-Writes spans to ``.vibe/observability/spans.jsonl`` using atomic writes
-(pattern matching ``AnalyticsStore``). Redacts sensitive data before
-persistence via ``redact_sensitive()``.
+Writes spans to ``.vibe/observability/spans.jsonl`` using file-locked
+appends (pattern matching ``AnalyticsStore``). Redacts sensitive data
+before persistence via ``redact_sensitive()``.
+
+Atomicity note: PIPE_BUF (4096 bytes on POSIX) only guarantees atomic
+append for lines that fit. Span lines routinely exceed this once metadata
++ input_data + output_data are populated. We use an ``fcntl`` exclusive
+lock to serialise writers across processes (multiple ``vibe`` hooks
+running concurrently) so lines do not interleave.
 """
 
 from __future__ import annotations
@@ -21,15 +27,18 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 # Default max payload chars for input_data / output_data serialisation.
+# Kept generous so we don't routinely truncate useful debugging context.
+# Cross-process serialisation is handled by fcntl lock in write_span.
 _MAX_PAYLOAD_CHARS = 16384
 
 
 class SpanWriter:
-    """Persists spans to a JSONL file with redaction and truncation.
+    """Persists spans to a JSONL file with redaction, truncation, and locking.
 
-    Thread-safe: appends are serialised through a per-instance lock.
-    JSONL append writes are inherently atomic for lines ≤ PIPE_BUF
-    on POSIX systems (typically 4096 bytes).
+    Thread-safe within a process (in-process threading.Lock) and across
+    processes (fcntl.LOCK_EX on the file). Required because span lines
+    routinely exceed PIPE_BUF (4096 bytes), so kernel-level atomic append
+    cannot be relied on.
     """
 
     def __init__(self, storage_path: Path | str | None = None) -> None:
@@ -42,7 +51,7 @@ class SpanWriter:
 
         The span's input_data/output_data are JSON-serialised and redacted.
         Payloads exceeding ``_MAX_PAYLOAD_CHARS`` are truncated.
-        Thread-safe via internal lock.
+        Thread-safe + cross-process-safe via fcntl lock.
         """
         record = span.to_dict()
 
@@ -68,8 +77,29 @@ class SpanWriter:
 
         line = json.dumps(record, ensure_ascii=False) + "\n"
         with self._lock:
+            self._locked_append(line)
+
+    def _locked_append(self, line: str) -> None:
+        """Append with cross-process fcntl lock.
+
+        On Windows (no fcntl), falls back to plain append — multiple
+        concurrent ``vibe`` processes on Windows may interleave. Acceptable
+        for P1 because Windows + multi-process is rare in the dev flow.
+        """
+        try:
+            import fcntl
+        except ImportError:
+            # Windows: fall back to plain append
             with self._path.open("a", encoding="utf-8") as f:
                 f.write(line)
+            return
+
+        with self._path.open("a", encoding="utf-8") as f:
+            fcntl.flock(f.fileno(), fcntl.LOCK_EX)
+            try:
+                f.write(line)
+            finally:
+                fcntl.flock(f.fileno(), fcntl.LOCK_UN)
 
     @staticmethod
     def _truncate(s: str, max_chars: int = _MAX_PAYLOAD_CHARS) -> str:
@@ -83,8 +113,8 @@ class SpanWriter:
             return []
         records: list[dict] = []
         with self._path.open("r", encoding="utf-8") as f:
-            for line in f:
-                line = line.strip()
+            for raw_line in f:
+                line = raw_line.strip()
                 if line:
                     try:
                         records.append(json.loads(line))
