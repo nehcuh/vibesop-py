@@ -19,6 +19,7 @@ _LAZY_MAP: dict[str, str] = {
     "AnthropicProvider": "vibesop.llm.anthropic",
     "OpenAIProvider": "vibesop.llm.openai",
     "OllamaProvider": "vibesop.llm.ollama",
+    "SpanWrappedProvider": "vibesop.llm.span_wrapped",
     "create_from_env": "vibesop.llm.factory",
     "create_provider": "vibesop.llm.factory",
     "detect_provider_from_env": "vibesop.llm.factory",
@@ -43,6 +44,7 @@ __all__ = [  # pyright: ignore[reportUnsupportedDunderAll]
     "OllamaProvider",  # pyright: ignore[reportUnsupportedDunderAll]
     "OpenAIProvider",  # pyright: ignore[reportUnsupportedDunderAll]
     "ProviderStats",
+    "SpanWrappedProvider",  # pyright: ignore[reportUnsupportedDunderAll]
     "create_from_env",  # pyright: ignore[reportUnsupportedDunderAll]
     "create_provider",  # pyright: ignore[reportUnsupportedDunderAll]
     "detect_provider_from_env",  # pyright: ignore[reportUnsupportedDunderAll]

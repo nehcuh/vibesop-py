@@ -11,6 +11,7 @@ from vibesop.llm.base import LLMProvider
 from vibesop.llm.models import OPENAI_DEFAULT_MODEL, PROVIDER_DEFAULT_MODELS
 from vibesop.llm.ollama import OllamaProvider
 from vibesop.llm.openai import OpenAIProvider
+from vibesop.llm.span_wrapped import SpanWrappedProvider
 
 ProviderType = Literal["anthropic", "openai", "ollama", "deepseek", "kimi", "zhipu"]
 
@@ -57,11 +58,11 @@ def create_provider(
 
     if provider == "anthropic":
         resolved_key = api_key or os.getenv("ANTHROPIC_API_KEY")
-        return AnthropicProvider(api_key=resolved_key, base_url=base_url)
+        return SpanWrappedProvider(AnthropicProvider(api_key=resolved_key, base_url=base_url))
     if provider == "ollama":
         resolved_key = api_key
         resolved_base = base_url or os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/v1")
-        return OllamaProvider(api_key=resolved_key, base_url=resolved_base)
+        return SpanWrappedProvider(OllamaProvider(api_key=resolved_key, base_url=resolved_base))
 
     # OpenAI and all OpenAI-compatible providers
     resolved_key = api_key
@@ -70,7 +71,9 @@ def create_provider(
         resolved_key = os.getenv(env_map.get(provider, "")) or os.getenv("OPENAI_API_KEY")
     resolved_base_url = base_url or _OPENAI_COMPATIBLE.get(provider)
     resolved_model = PROVIDER_DEFAULT_MODELS.get(provider, OPENAI_DEFAULT_MODEL)
-    return OpenAIProvider(api_key=resolved_key, base_url=resolved_base_url, model=resolved_model)
+    return SpanWrappedProvider(
+        OpenAIProvider(api_key=resolved_key, base_url=resolved_base_url, model=resolved_model)
+    )
 
 
 def detect_provider_from_env() -> ProviderType:

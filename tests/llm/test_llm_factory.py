@@ -5,16 +5,23 @@ import pytest
 from vibesop.llm.anthropic import AnthropicProvider
 from vibesop.llm.factory import create_from_env, create_provider, detect_provider_from_env
 from vibesop.llm.openai import OpenAIProvider
+from vibesop.llm.span_wrapped import SpanWrappedProvider
+
+
+def _unwrap(provider):
+    """Factory returns SpanWrappedProvider(inner) since v8.2 M2.
+    Tests that need the concrete inner type unwrap it explicitly."""
+    return provider._inner if isinstance(provider, SpanWrappedProvider) else provider
 
 
 def test_create_provider_anthropic():
     provider = create_provider("anthropic", api_key="sk-ant-" + "x" * 40)
-    assert isinstance(provider, AnthropicProvider)
+    assert isinstance(_unwrap(provider), AnthropicProvider)
 
 
 def test_create_provider_openai():
     provider = create_provider("openai", api_key="sk-" + "x" * 48)
-    assert isinstance(provider, OpenAIProvider)
+    assert isinstance(_unwrap(provider), OpenAIProvider)
 
 
 def test_create_provider_invalid():
@@ -27,7 +34,7 @@ def test_create_provider_auto_detects_anthropic(monkeypatch):
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.delenv("VIBE_LLM_PROVIDER", raising=False)
     provider = create_provider()
-    assert isinstance(provider, AnthropicProvider)
+    assert isinstance(_unwrap(provider), AnthropicProvider)
 
 
 def test_create_provider_auto_detects_openai(monkeypatch):
@@ -35,7 +42,7 @@ def test_create_provider_auto_detects_openai(monkeypatch):
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     monkeypatch.delenv("VIBE_LLM_PROVIDER", raising=False)
     provider = create_provider()
-    assert isinstance(provider, OpenAIProvider)
+    assert isinstance(_unwrap(provider), OpenAIProvider)
 
 
 def test_detect_provider_explicit(monkeypatch):
@@ -105,14 +112,14 @@ def test_create_from_env_prefers_preferred_when_configured(monkeypatch):
     monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-" + "x" * 40)
     monkeypatch.setenv("OPENAI_API_KEY", "sk-" + "x" * 48)
     provider = create_from_env(preferred_provider="openai")
-    assert isinstance(provider, OpenAIProvider)
+    assert isinstance(_unwrap(provider), OpenAIProvider)
 
 
 def test_create_from_env_fallback_when_preferred_unconfigured(monkeypatch):
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     monkeypatch.setenv("OPENAI_API_KEY", "sk-" + "x" * 48)
     provider = create_from_env(preferred_provider="anthropic")
-    assert isinstance(provider, OpenAIProvider)
+    assert isinstance(_unwrap(provider), OpenAIProvider)
 
 
 def test_create_from_env_returns_unconfigured_preferred(monkeypatch):
@@ -128,4 +135,4 @@ def test_create_from_env_returns_unconfigured_preferred(monkeypatch):
     from vibesop.llm.ollama import OllamaProvider
 
     provider = create_from_env(preferred_provider="anthropic")
-    assert isinstance(provider, OllamaProvider)
+    assert isinstance(_unwrap(provider), OllamaProvider)

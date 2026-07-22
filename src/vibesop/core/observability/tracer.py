@@ -114,6 +114,12 @@ class ObservabilityTracer:
             metadata=metadata or {},
         )
         self._push(span.id, trace_id)
+        # Stash task_id on the context so descendant spans (llm-spans emitted
+        # by SpanWrappedProvider, etc.) can inherit it without call-site
+        # plumbing. See v8.2 GAP-1 attribution fix.
+        ctx = self._get_context()
+        if ctx is not None:
+            ctx.current_task_id = task_id
 
         try:
             yield span
@@ -157,6 +163,7 @@ class ObservabilityTracer:
             name=name,
             span_kind=kind,
             parent_span_id=actual_parent,
+            task_id=ctx.current_task_id if ctx else None,
             metadata=metadata or {},
         )
         self._push(span.id, trace_id)
@@ -186,6 +193,11 @@ class ObservabilityTracer:
     ) -> _Span:
         """Manually start a span (without context manager). Caller MUST call
         ``finish_span()`` or ``fail_span()`` to persist it.
+
+        If ``task_id`` is not provided but there is an active trace, the
+        context's ``current_task_id`` is inherited. This lets inner call
+        sites (LLM providers, tool wrappers) gain task attribution
+        automatically when they run inside a ``with tracer.trace(...)`` block.
         """
         if not self._enabled:
             return _Span(id="", trace_id="", name="noop", span_kind=kind)  # type: ignore[arg-type]
@@ -193,13 +205,14 @@ class ObservabilityTracer:
         ctx = self._get_context()
         trace_id = ctx.trace_id if ctx else _Span.new_trace_id()
         actual_parent = parent_span_id or (ctx.current_span_id if ctx else None)
+        actual_task_id = task_id or (ctx.current_task_id if ctx else None)
 
         span = _Span(
             id=_Span.new_id(),
             trace_id=trace_id,
             name=name,
             span_kind=kind,
-            task_id=task_id,
+            task_id=actual_task_id,
             parent_span_id=actual_parent,
             metadata=metadata or {},
         )

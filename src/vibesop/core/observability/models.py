@@ -2,6 +2,13 @@
 
 These models are intentionally simple (no pydantic dependency) so they
 can be created cheaply on hot paths. Persistence is handled by SpanWriter.
+
+Schema versioning (v8.2):
+    Every span carries ``schema_version``. Readers MUST accept spans whose
+    version ≤ CURRENT_SPAN_SCHEMA_VERSION. Writers always emit the current
+    version. ``project_id`` discriminates spans across projects so that
+    per-skill aggregations (e.g. p25 confidence) are not contaminated by
+    other projects' codebases.
 """
 
 from __future__ import annotations
@@ -13,6 +20,8 @@ from typing import Any, Literal
 
 SpanKind = Literal["task", "llm", "tool_call", "file_edit", "workflow_node"]
 SpanStatus = Literal["running", "ok", "error"]
+
+CURRENT_SPAN_SCHEMA_VERSION = 1
 
 
 @dataclass
@@ -45,6 +54,12 @@ class Span:
     output_data: dict[str, Any] | None = None
     error_message: str | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
+    schema_version: int = CURRENT_SPAN_SCHEMA_VERSION
+    # TODO(v8.2 M3): aggregator must filter by project_id to avoid cross-project
+    # contamination. Pre-v8.2 spans default to "default" silently — until M3
+    # lands, treat "default" project spans as untrusted when querying from a
+    # different project context.
+    project_id: str = "default"
 
     # -- lifecycle helpers --
 
@@ -73,6 +88,11 @@ class Span:
         self.cost_usd = cost
         return self
 
+    def with_project_id(self, project_id: str) -> Span:
+        """Fluent setter for project discriminator. Returns self."""
+        self.project_id = project_id
+        return self
+
     # -- serialisation --
 
     def to_dict(self) -> dict[str, Any]:
@@ -96,6 +116,8 @@ class Span:
             "output_data": self.output_data,
             "error_message": self.error_message,
             "metadata": self.metadata,
+            "schema_version": self.schema_version,
+            "project_id": self.project_id,
             "duration_ms": (
                 round((self.ended_at - self.started_at).total_seconds() * 1000)
                 if self.ended_at
@@ -114,10 +136,18 @@ class Span:
 
 @dataclass
 class TraceContext:
-    """Thread-local trace context, tracking the active trace/span hierarchy."""
+    """Thread-local trace context, tracking the active trace/span hierarchy.
+
+    ``current_task_id`` is set by ``tracer.trace(...)`` and inherited by
+    descendant spans via ``start_span(...)``. This lets llm-spans emitted
+    deep in the call stack (e.g. inside ``SpanWrappedProvider``) carry
+    task attribution without each call site having to plumb task_id
+    through their signatures.
+    """
 
     trace_id: str
     current_span_id: str | None = None
+    current_task_id: str | None = None
     span_stack: list[str] = field(default_factory=list)
 
     def push_span(self, span_id: str) -> None:
