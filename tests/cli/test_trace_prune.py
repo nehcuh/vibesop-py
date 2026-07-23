@@ -139,19 +139,40 @@ class TestPruneBasic:
         assert result.exit_code == 0
         assert "Nothing to prune" in result.output
 
+    def test_empty_file_is_noop(self, runner: CliRunner, tmp_path: Path) -> None:
+        """An empty span file (total=0) is a no-op, not a crash.
+
+        Edge case kimi flagged: byte-count 0 → loop reads nothing → total=0,
+        pruned=0 → 'Nothing to prune' branch. Verifies no exception.
+        """
+        span_file = tmp_path / "spans.jsonl"
+        span_file.write_text("")  # truly empty
+
+        result = runner.invoke(
+            app, ["prune", "--days", "30", "--span-file", str(span_file)]
+        )
+        assert result.exit_code == 0
+        assert "Nothing to prune" in result.output
+        # File remains empty
+        assert span_file.read_text() == ""
+
 
 class TestPruneAtomicity:
     def test_no_tmp_file_left_on_success(
         self, runner: CliRunner, tmp_path: Path
     ) -> None:
-        """After a successful prune, no .tmp file should be left behind."""
+        """After a successful prune, no .tmp file should be left behind.
+
+        Updated for mkstemp: temp file name is randomised (prefix + suffix),
+        so we glob for ``*.tmp`` rather than hardcoding ``spans.jsonl.tmp``.
+        """
         span_file = tmp_path / "spans.jsonl"
         old = (datetime.now(UTC) - timedelta(days=60)).isoformat()
         _write_spans(span_file, [_make_span("old-1", started_at=old)])
 
         runner.invoke(app, ["prune", "--days", "30", "--span-file", str(span_file)])
 
-        assert not (tmp_path / "spans.jsonl.tmp").exists()
+        assert not list(tmp_path.glob("*.tmp"))
 
     def test_keeps_unparseable_started_at(
         self, runner: CliRunner, tmp_path: Path

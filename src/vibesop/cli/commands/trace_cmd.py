@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import contextlib
 import json
+import os
 from pathlib import Path
 
 import typer
@@ -670,9 +671,18 @@ def prune(
 
     # Atomic write: temp file + rename. A crash mid-write leaves the
     # original spans.jsonl intact and the .tmp file orphaned (recoverable).
-    tmp_file = span_file.with_suffix(span_file.suffix + ".tmp")
+    # Use mkstemp (not a fixed ``<file>.tmp`` name) so two concurrent prune
+    # runs — manual + cron, or two terminals — don't interleave writes into
+    # the same temp file (which would corrupt the output as the UNION of
+    # both survivors). Reviewer flag (kimi §5, pi §5a).
+    import tempfile
+
+    tmp_fd, tmp_path_str = tempfile.mkstemp(
+        prefix=span_file.name + ".", suffix=".tmp", dir=span_file.parent
+    )
+    tmp_file = Path(tmp_path_str)
     try:
-        with tmp_file.open("w", encoding="utf-8") as f:
+        with os.fdopen(tmp_fd, "w", encoding="utf-8") as f:
             for line in kept:
                 f.write(line + "\n")
         tmp_file.replace(span_file)

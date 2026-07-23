@@ -777,7 +777,12 @@ def route(
             getattr(_primary, "skill_id", "") or "" if _primary else ""
         )
         _mode = getattr(result, "mode", None)
-        _cli_task_span.metadata["mode"] = getattr(_mode, "value", str(_mode))
+        # Only overwrite the dispatch-level mode set at trace open time if
+        # the result actually carries a richer mode. result.mode can be None
+        # for some result shapes; overwriting would replace the good value
+        # with the literal string "None".
+        if _mode is not None:
+            _cli_task_span.metadata["mode"] = getattr(_mode, "value", str(_mode))
         _cli_task_span.metadata["has_match"] = bool(getattr(result, "has_match", False))
 
     # Phase 4: render Agent Squad summary when the plan contains a squad
