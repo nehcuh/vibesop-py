@@ -14,9 +14,12 @@ Design notes:
   ``configured``, ``stats``) delegate to inner.
 * Token accounting falls back to ``tokens_used // 2`` if the underlying
   response lacks ``input_tokens`` / ``output_tokens`` (legacy path).
-* ``cost_usd`` is left at ``0.0`` in P1 — pricing table is M3 scope. Metadata
-  carries ``cost_estimation="p1_not_available"`` so downstream aggregators
-  know not to sum the field.
+* Cost is looked up via ``vibesop.llm.pricing.get_pricing``. When the model
+  is in the table, ``cost_usd`` is populated and metadata carries
+  ``cost_estimation="measured"``. When unknown, ``cost_usd`` stays at 0
+  and metadata carries ``cost_estimation="unavailable"`` so aggregators
+  can distinguish "we know this cost nothing" (e.g. local Ollama) from
+  "we don't know the cost".
 """
 
 from __future__ import annotations
@@ -26,6 +29,7 @@ from typing import Any
 
 from vibesop.core.observability.tracer import get_tracer
 from vibesop.llm.base import LLMProvider, LLMResponse
+from vibesop.llm.pricing import get_pricing
 
 logger = logging.getLogger(__name__)
 
@@ -74,9 +78,35 @@ class SpanWrappedProvider(LLMProvider):
             "max_tokens": max_tokens,
             "temperature": temperature,
             "prompt_chars": prompt_len,
-            "cost_estimation": "p1_not_available",
+            # Set to "unavailable" by default; ``_apply_cost`` flips it to
+            # "measured" when pricing is found.
+            "cost_estimation": "unavailable",
             "token_accounting": token_accounting,
         }
+
+    def _apply_cost(
+        self,
+        span: Any,
+        metadata: dict[str, Any],
+        model: str | None,
+        tokens_in: int,
+        tokens_out: int,
+    ) -> None:
+        """Look up pricing for the model and stamp cost on the span.
+
+        Sets ``cost_estimation="measured"`` in metadata when pricing is
+        found; leaves it as ``"unavailable"`` otherwise.
+        """
+        resolved_model = model or self.default_model()
+        # Provider name normalization: inner providers use "OpenAI" /
+        # "Anthropic" but pricing table uses lowercase keys.
+        provider_key = self.provider_name.lower()
+        price = get_pricing(resolved_model, provider=provider_key)
+        if price is None:
+            return
+        cost = price.cost_usd(tokens_in, tokens_out)
+        span.with_cost(cost)
+        metadata["cost_estimation"] = "measured"
 
     @staticmethod
     def _extract_tokens(response: LLMResponse) -> tuple[int, int, bool]:
@@ -133,6 +163,7 @@ class SpanWrappedProvider(LLMProvider):
         if was_estimated:
             metadata["token_accounting"] = "estimated_50_50_from_tokens_used"
         span.with_tokens(tokens_in, tokens_out)
+        self._apply_cost(span, metadata, model, tokens_in, tokens_out)
         span.set_output(
             {
                 "content_preview": response.content[:_PROMPT_PREVIEW_LIMIT],
@@ -180,6 +211,7 @@ class SpanWrappedProvider(LLMProvider):
         if was_estimated:
             metadata["token_accounting"] = "estimated_50_50_from_tokens_used"
         span.with_tokens(tokens_in, tokens_out)
+        self._apply_cost(span, metadata, model, tokens_in, tokens_out)
         span.set_output(
             {
                 "content_preview": response.content[:_PROMPT_PREVIEW_LIMIT],

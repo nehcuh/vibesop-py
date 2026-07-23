@@ -1549,7 +1549,7 @@ Added after M5 implementation + Kimi review:
 |---|-----------|----------|---------------|
 | 1 | ~~`asyncio.gather` LIFO mis-attribution (threading.local context)~~ | ✅ Closed 2026-07-23 | Replaced `threading.local()` with `contextvars.ContextVar` in `ObservabilityTracer`. See §24.8. |
 | 2 | `set_llm_factory` injection channel bypass | Low — third-party only | Contract enforcement or factory wrapper validation |
-| 3 | Pricing table not implemented (`cost_usd=0` + metadata flag) | Medium — blocks cost-based optimisation | `llm/pricing.py` with per-model rates |
+| 3 | ~~Pricing table not implemented (`cost_usd=0` + metadata flag)~~ | ✅ Closed 2026-07-23 | `llm/pricing.py` with per-model rates. See §24.9. |
 | 4 | ~~Nested task-spans per trace_id (last-writer-wins on attribution map)~~ | ✅ Closed 2026-07-23 | CLI `vibe route` now opens `tracer.trace()` (was hook-only). See §24.7. |
 | 5 | Spans.jsonl unbounded growth, no rotation | Low — local dev only for P1 | `vibe trace clean` for spans.jsonl + size-based rotation |
 
@@ -1606,6 +1606,52 @@ ruff + basedpyright clean
 ```
 
 Kimi's #1 (loop ends at file) is the most important finding of the entire P1 cycle: **"closure" claims require a consumer, not just a producer**. Recording this in `feedback-dynamic-workflow-external-review-first` as a second example.
+
+### 24.9 Post-ship follow-up: pricing table for real cost rollup (2026-07-23)
+
+**Finding (root-caused from §24.5 #3):** Spans emitted by `SpanWrappedProvider` had `cost_usd=0.0` with `cost_estimation="p1_not_available"` metadata. The aggregator's `total_cost_usd` field existed but always summed to zero — cost-based optimisation (rotation, budget enforcement, ROI analysis) was impossible.
+
+**Fix:** New `src/vibesop/llm/pricing.py` with per-provider, per-model pricing tables (USD per million tokens):
+
+* Anthropic (Claude 3.x + 4.x)
+* OpenAI (gpt-4o family, o1/o3/o4 reasoning models, gpt-3.5/4 legacy)
+* DeepSeek (v4-flash, v4-pro, v4, chat, reasoner)
+* Kimi/Moonshot (v1-8k/32k/128k, k2)
+* Zhipu (GLM-4 family, including free tier GLM-4-Flash)
+* Ollama (local — empty table, returns None)
+
+`SpanWrappedProvider._apply_cost()` looks up pricing after each call and stamps `cost_usd` on the span. The `cost_estimation` marker is now:
+* `"measured"` — pricing found and applied (even if cost is $0, e.g. GLM-4-Flash)
+* `"unavailable"` — model not in pricing table; cost stays at $0
+
+The distinction matters: `"measured"` with cost=0 means "we know this is free"; `"unavailable"` with cost=0 means "we don't know". Aggregators can sum the former confidently and treat the latter as missing data.
+
+**Lookup strategy:**
+1. Exact match in hinted provider's table.
+2. Longest-prefix match for versioned models (`gpt-4o-mini-2024-07-18` → `gpt-4o-mini`).
+3. Cross-provider fallback — required because OpenAI-compatible proxies (e.g. DeepSeek via `openai` library) report `provider="OpenAI"` but serve `deepseek-v4-flash`. Without cross-provider scan, these would return None.
+
+**Pricing data freshness:** `LAST_UPDATED = "2026-07-23"` exported from `pricing.py`. Refresh quarterly or when major models launch. PRs welcome.
+
+**Regression tests** (`tests/llm/test_pricing.py`, 16 tests):
+1. Pricing lookup: exact match, prefix match (longest wins), cross-provider fallback, unknown model, empty model, unknown provider
+2. Cost math: simple, typical AI_TRIAGE call, zero tokens
+3. SpanWrappedProvider integration: known model gets nonzero cost, unknown keeps zero, free model has zero with `"measured"` marker
+
+**Verification (executed):**
+```
+$ vibe route "verify cost rollup $(date +%s)" --yes --quiet
+$ cat .vibe/observability/spans.jsonl | jq '.[] | {kind, cost_usd, metadata}'
+{"kind":"llm","cost_usd":0.000082,"cost_estimation":"measured","tokens":"584/2"}
+{"kind":"task","cost_usd":0,...}
+
+$ vibe trace metrics analyze
+Executions: 1 (success rate: 100%)
+LLM calls: 1 (success rate: 100%)
+Cost: total $0.0001 | avg/exec $0.0001   ← was $0.0000 before pricing
+```
+
+Test suite: 4445 pass / 0 regressions (was 4429 — +16 new pricing tests).
 
 ---
 

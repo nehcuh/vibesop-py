@@ -156,7 +156,9 @@ class TestSyncCallEmitsSpan:
         assert meta["max_tokens"] == 200
         assert meta["temperature"] == 0.7
         assert meta["prompt_chars"] == 100
-        assert meta["cost_estimation"] == "p1_not_available"
+        # fake-model isn't in the pricing table → cost stays 0 with
+        # "unavailable" marker (was "p1_not_available" pre-P2-3).
+        assert meta["cost_estimation"] == "unavailable"
 
     def test_call_input_preview_truncated(
         self, enabled_tracer: ObservabilityTracer, tmp_span_file: Path
