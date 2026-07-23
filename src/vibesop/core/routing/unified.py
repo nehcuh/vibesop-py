@@ -67,6 +67,45 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def _maybe_wrap_for_spans(provider: Any) -> Any:
+    """Best-effort wrap an injected provider with SpanWrappedProvider.
+
+    Returns the provider unchanged if:
+    * it is already a SpanWrappedProvider (idempotent),
+    * it lacks the LLMProvider shape (no ``provider_name`` / ``default_model``
+      / ``configured``) — these are duck-typed callers from agent runtimes
+      and don't fit the LLMProvider ABC; span emission is skipped for them.
+
+    Otherwise wraps in SpanWrappedProvider so llm-spans get emitted from
+    third-party injections (closes v8.2 P2 §24.5 #2).
+    """
+    # Lazy imports to avoid circulars at module load time.
+    from vibesop.llm.span_wrapped import SpanWrappedProvider
+
+    # Already wrapped (or the noop disabled-tracer variant) — leave alone.
+    if isinstance(provider, SpanWrappedProvider):
+        return provider
+
+    # Duck-typed callers from agent runtimes may pass objects that quack
+    # like ``call(prompt)`` but lack the LLMProvider surface. Don't force
+    # them through SpanWrappedProvider (it requires provider_name etc.).
+    required = ("provider_name", "default_model", "configured", "call")
+    if not all(hasattr(provider, attr) for attr in required):
+        return provider
+
+    # Don't wrap if the LLMProvider ABC already rejected it (defensive).
+    try:
+        return SpanWrappedProvider(provider)
+    except Exception as e:  # best-effort wrap; never block injection
+        logger.warning(
+            "set_llm: provider has LLMProvider shape but SpanWrappedProvider "
+            "wrap failed (%s). Using unwrapped — llm-spans will NOT be emitted "
+            "for this provider.",
+            e,
+        )
+        return provider
+
+
 class UnifiedRouter(
     RouterStatsMixin,
     RouterResultMixin,
@@ -1055,9 +1094,18 @@ class UnifiedRouter(
             ...         return type("R", (), {"content": agent_generate(prompt)})()
             >>> router = UnifiedRouter()
             >>> router.set_llm(AgentLLM())
+
+        Notes:
+            v8.2 P2 §24.5 #2: if ``llm_provider`` looks like an LLMProvider
+            (has ``provider_name`` / ``default_model`` / ``configured``) but
+            is not already a ``SpanWrappedProvider``, we auto-wrap it so
+            third-party injections still emit llm-spans. If the wrap fails
+            (missing attributes), we log a warning and use the provider
+            as-is — span emission is best-effort, not a hard requirement.
         """
-        self._llm = llm_provider
-        self._triage_service._llm = llm_provider
+        wrapped = _maybe_wrap_for_spans(llm_provider)
+        self._llm = wrapped
+        self._triage_service._llm = wrapped
 
     def get_capabilities(self) -> dict[str, Any]:
         return {

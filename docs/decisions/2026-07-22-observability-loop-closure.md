@@ -1548,10 +1548,10 @@ Added after M5 implementation + Kimi review:
 | # | Limitation | Severity | P2 fix sketch |
 |---|-----------|----------|---------------|
 | 1 | ~~`asyncio.gather` LIFO mis-attribution (threading.local context)~~ | ✅ Closed 2026-07-23 | Replaced `threading.local()` with `contextvars.ContextVar` in `ObservabilityTracer`. See §24.8. |
-| 2 | `set_llm_factory` injection channel bypass | Low — third-party only | Contract enforcement or factory wrapper validation |
+| 2 | ~~`set_llm_factory` injection channel bypass~~ | ✅ Closed 2026-07-23 | `UnifiedRouter.set_llm()` auto-wraps LLMProvider-shaped providers via `_maybe_wrap_for_spans()`. See §24.10. |
 | 3 | ~~Pricing table not implemented (`cost_usd=0` + metadata flag)~~ | ✅ Closed 2026-07-23 | `llm/pricing.py` with per-model rates. See §24.9. |
 | 4 | ~~Nested task-spans per trace_id (last-writer-wins on attribution map)~~ | ✅ Closed 2026-07-23 | CLI `vibe route` now opens `tracer.trace()` (was hook-only). See §24.7. |
-| 5 | Spans.jsonl unbounded growth, no rotation | Low — local dev only for P1 | `vibe trace clean` for spans.jsonl + size-based rotation |
+| 5 | ~~Spans.jsonl unbounded growth, no rotation~~ | ✅ Closed 2026-07-23 | `vibe trace prune --days N` command with atomic temp+rename. See §24.11. |
 
 ### 24.6 Lesson reinforced
 
@@ -1652,6 +1652,64 @@ Cost: total $0.0001 | avg/exec $0.0001   ← was $0.0000 before pricing
 ```
 
 Test suite: 4445 pass / 0 regressions (was 4429 — +16 new pricing tests).
+
+### 24.10 Post-ship follow-up: `set_llm` injection auto-wrap (2026-07-23)
+
+**Finding (from §24.5 #2):** Third-party callers that inject their own `LLMProvider` via `router.set_llm()` bypassed the `SpanWrappedProvider` wrapper (the factory-installed path went through `set_llm_factory()` which always wrapped). This meant any production caller using the lower-level `set_llm()` hook got llm-spans silently dropped — the gap was hidden because our own routing paths use the factory.
+
+**Fix:** Added `_maybe_wrap_for_spans(provider)` module-level helper in `src/vibesop/core/routing/unified.py`. `UnifiedRouter.set_llm()` now runs every injected provider through it before assignment. Behaviour:
+
+- **Already a `SpanWrappedProvider`** → idempotent return (no double-wrap).
+- **Has LLMProvider shape** (`provider_name`, `default_model`, `configured`, `call`) → wrap.
+- **Duck-typed minimal agent LLMs** (only `.call(prompt)`) → pass through unchanged. Span emission skipped, but the caller doesn't crash. Agent runtimes shouldn't have to inherit from our ABC.
+- **`None`** → pass through (disabled triage case).
+- **Wrap raises** (defensive) → log warning, fall back to unwrapped. Span emission is best-effort, not a hard requirement.
+
+**Regression tests:** `tests/core/routing/test_set_llm_wrap.py` (8 tests):
+1. `_FullProvider` (LLMProvider ABC) gets wrapped
+2. Already-wrapped is idempotent
+3. Minimal duck-typed agent LLM passes through
+4. `None` passes through
+5. Partial-shape object passes through
+6. `set_llm()` end-to-end: full provider wrapped on both `router._llm` and `router._triage_service._llm`
+7. `set_llm()` end-to-end: minimal agent LLM passes through unchanged
+8. Calling the injected provider emits an llm-span (the whole point)
+
+**Decision: contract enforcement vs. auto-wrap.** Considered two options:
+- (a) Enforce contract: reject non-`LLMProvider` injections with a `TypeError`.
+- (b) Auto-wrap: silently wrap where possible, pass through otherwise.
+
+Chose (b). Rationale: `set_llm()` is documented as the agent-integration API where callers pass their own LLM. Forcing them to inherit from our ABC would break every existing agent runtime. Auto-wrap is the same posture as `set_llm_factory()` (which always wrapped); we're closing the asymmetry, not adding strictness.
+
+### 24.11 Post-ship follow-up: `vibe trace prune` for spans.jsonl rotation (2026-07-23)
+
+**Finding (from §24.5 #5):** `.vibe/observability/spans.jsonl` grows unbounded. P1 shipped without a rotation story — for local dev that's tolerable (the file is gitignored and regeneratable), but any long-running session or CI pipeline that accumulates spans has no way to age them out without `rm`.
+
+**Fix:** Added `vibe trace prune --days N [--dry-run] [--span-file PATH]` CLI command in `src/vibesop/cli/commands/trace_cmd.py`. Behaviour:
+
+- Reads spans.jsonl, parses `started_at`, filters out anything older than `--days`.
+- Writes the survivors back **atomically**: temp file + `Path.replace()`. A crash mid-write leaves the original file intact and only the `.tmp` orphaned (recoverable).
+- `--dry-run` reports what would happen without touching the file.
+- Spans with missing or unparseable `started_at` are **kept** (defensive — never silently drop data we can't reason about).
+- Default `--days 30`, default `--span-file .vibe/observability/spans.jsonl`.
+
+**Regression tests:** `tests/cli/test_trace_prune.py` (7 tests):
+1. Old spans pruned, recent kept
+2. `--dry-run` reports counts but writes nothing (byte-for-byte file check)
+3. Missing span file → graceful message, no crash
+4. All-recent file → no-op message
+5. No `.tmp` file left after successful prune
+6. Spans with missing/garbled `started_at` are kept
+7. Prune preserves relative span order
+
+**Decision: age-based vs. size-based.** Original §24.5 sketch mentioned "size-based rotation." Switched to age-based (`--days N`) because:
+- Age matches user mental model ("clean up anything older than a month").
+- Size-based would require deciding a cap, and spans vary wildly in size (metadata-heavy llm-spans vs. tiny task spans).
+- Age-based is idempotent: running it daily with `--days 30` produces the same result. Size-based rotation with a cap can flip-flip on edge cases.
+
+**Why atomic write matters:** `spans.jsonl` is also being appended to by live `vibe route` calls. A naive `open(w)` truncate-then-write would race with concurrent appends and lose spans. Temp-file-then-rename is atomic on POSIX — concurrent appenders either see the old file or the new file, never a half-written one.
+
+Test suite: 4472 pass / 0 regressions (was 4445 — +27 new tests across P2 batch).
 
 ---
 
