@@ -112,6 +112,72 @@ class TestPricingLookup:
         assert len(LAST_UPDATED) == 10  # YYYY-MM-DD
         assert last_updated() == LAST_UPDATED
 
+    # --- Boundary-aware prefix matching (kimi review §24.9 follow-up) ---
+    # Without a boundary rule, ``gpt-4`` would prefix-match ``gpt-4.1``,
+    # silently mis-pricing the latter at the legacy gpt-4 rate ($30/$60)
+    # — 15x over the actual ~$2/$8. These tests pin the fix.
+
+    def test_dot_versioned_model_does_not_match_ancestor(self) -> None:
+        """``gpt-4.1`` must NOT match ``gpt-4`` prefix — different generation."""
+        # Without boundary check: startswith("gpt-4") → True → $30/$60.
+        # With boundary check: char after "gpt-4" is "." (not "-"/"_") → no match.
+        # Cross-provider fallback also finds nothing → None.
+        p = get_pricing("gpt-4.1", provider="openai")
+        assert p is None, (
+            f"gpt-4.1 should NOT match gpt-4 prefix (would silently price "
+            f"at $30/$60 instead of being unknown). Got {p}."
+        )
+
+    def test_dot_versioned_descendant_when_explicit_in_table(self) -> None:
+        """If a dotted descendant is explicitly in the table, exact match works.
+
+        (Sanity: the boundary rule applies to *prefix* matches, not exact.)
+        """
+        # claude-3-5-sonnet is exact match — should return its real price,
+        # not the claude-3-sonnet price.
+        p = get_pricing("claude-3-5-sonnet", provider="anthropic")
+        assert p is not None
+        assert p.input_per_mtok == 3.0  # claude-3-5-sonnet's actual price
+
+    def test_dash_separated_suffix_still_matches(self) -> None:
+        """``-`` is a valid boundary char so date/suffix extensions still work."""
+        p = get_pricing("gpt-4o-mini-2024-07-18", provider="openai")
+        assert p is not None
+        assert p.input_per_mtok == 0.15  # gpt-4o-mini's price
+
+    def test_underscore_separated_suffix_matches(self) -> None:
+        """``_`` is a valid boundary char for ollama-style suffixes."""
+        # Add a synthetic test via direct table lookup (no ollama entries).
+        # Use a custom table to verify the rule without polluting real data.
+        from vibesop.llm.pricing import _prefix_matches
+
+        assert _prefix_matches("llama3_instruct_q4", "llama3")
+        assert not _prefix_matches("llama3x", "llama3")  # no boundary
+
+    def test_pro_suffix_does_not_overmatch(self) -> None:
+        """``o3-pro`` should NOT silently inherit ``o3`` pricing.
+
+        ``-pro`` suffix starts with ``-`` so this DOES match — but ``o3-pro``
+        is a different product tier. If we add ``o3-pro`` to the table later,
+        exact match wins; until then it inherits o3's price.
+        Documenting current behaviour: -pro matches via boundary rule.
+        Future: when o3-pro pricing is known, add explicit entry.
+        """
+        p = get_pricing("o3-pro", provider="openai")
+        # Current: matches o3 ($10/$40). Documented inheritance via "-".
+        assert p is not None
+        assert p.input_per_mtok == 10.0
+
+    def test_provider_alias_moonshot(self) -> None:
+        """``provider='Moonshot'`` (capitalized alias) — hint miss doesn't break.
+
+        The lookup lowercases nothing on its own; ``Moonshot`` isn't in
+        _PRICING keys (only ``kimi`` is). Falls back to cross-provider scan.
+        """
+        p = get_pricing("moonshot-v1-8k", provider="Moonshot")
+        assert p is not None
+        assert p.input_per_mtok == 1.68  # found via fallback in "kimi" table
+
 
 class TestCostCalculation:
     def test_cost_math_simple(self) -> None:

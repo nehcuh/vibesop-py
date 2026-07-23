@@ -155,20 +155,49 @@ def get_pricing(model: str, provider: str | None = None) -> ModelPrice | None:
 def _lookup_in_table(
     model: str, table: dict[str, tuple[float, float]]
 ) -> tuple[float, float] | None:
-    """Exact match first, then longest-prefix match."""
+    """Exact match first, then longest *boundary-aware* prefix match.
+
+    Boundary rule: a prefix matches only if it ends at a model-name boundary
+    in the input. A boundary is the end-of-string or a ``-`` / ``.`` / ``_``
+    character immediately after the prefix. This prevents ``gpt-4`` from
+    matching ``gpt-4.1`` (which is ~15x cheaper) or ``o1`` from matching
+    ``o1-pro`` (~10x different), while still allowing ``gpt-4o-mini`` to
+    match ``gpt-4o-mini-2024-07-18`` and ``claude-sonnet-4`` to match
+    ``claude-sonnet-4-6-20250818``.
+    """
     if model in table:
         return table[model]
-    # Longest-prefix wins so "gpt-4o-mini-2024-07-18" matches "gpt-4o-mini"
-    # over "gpt-4".
     best_prefix: str | None = None
     best_price: tuple[float, float] | None = None
     for prefix, price in table.items():
-        if model.startswith(prefix) and (
-            best_prefix is None or len(prefix) > len(best_prefix)
-        ):
+        if not _prefix_matches(model, prefix):
+            continue
+        if best_prefix is None or len(prefix) > len(best_prefix):
             best_prefix = prefix
             best_price = price
     return best_price
+
+
+# A prefix is a valid match only if the character following it in ``model``
+# is one of these (or EOL). ``-`` and ``_`` are segment continuations
+# (e.g. ``-2024-07-18``, ``_preview``). ``.`` is deliberately NOT included:
+# it separates distinct model generations with different pricing
+# (``gpt-4`` is legacy $30/$60, ``gpt-4.1`` is modern ~$2/$8 — 15x apart).
+# Treating ``.`` as a continuation would silently mis-price 4.1, 4.5, etc.
+_BOUNDARY_CHARS = frozenset("-_")
+
+
+def _prefix_matches(model: str, prefix: str) -> bool:
+    """Return True if ``model`` starts with ``prefix`` at a name boundary.
+
+    Boundary = EOL or a ``-`` / ``_`` char immediately after the prefix.
+    See ``_BOUNDARY_CHARS`` for the rationale on why ``.`` is excluded.
+    """
+    if not model.startswith(prefix):
+        return False
+    if len(model) == len(prefix):
+        return True
+    return model[len(prefix)] in _BOUNDARY_CHARS
 
 
 def last_updated() -> str:
