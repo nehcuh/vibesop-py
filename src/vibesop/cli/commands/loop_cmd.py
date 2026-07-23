@@ -32,6 +32,7 @@ import os
 import shlex
 import subprocess
 import sys
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -164,6 +165,72 @@ def _release_tick_lock(lock_handle: Any) -> None:
 # ──────────────────────────────────────────────────────────────────
 
 
+@dataclass(frozen=True)
+class _LoopPreset:
+    """Resolved values for a ``--preset`` shortcut.
+
+    Each preset fixes the ``command`` (the string the user would have passed
+    to ``--command``) and the ``schedule`` (cron). The CLI's ``create``
+    flow then runs through the normal validation path — preset is purely a
+    "fill in the blanks" step, not a bypass.
+    """
+
+    command: str
+    schedule: str
+    description: str
+
+
+# Three scheduled loops that close the instinct learning cycle.
+# Times are staggered so the writer lock on instincts.jsonl doesn't
+# contend: promote runs first (04:17), feedback 20 min later (04:37),
+# assemble runs every 15 min but only reads sequences.jsonl (no lock
+# contention with the other two).
+_LOOP_PRESETS: dict[str, _LoopPreset] = {
+    "instinct-assemble": _LoopPreset(
+        command="sequence assemble",
+        schedule="*/15 * * * *",
+        description="Fold captured tool-call events into sequence-pattern candidates (every 15min).",
+    ),
+    "instinct-promote": _LoopPreset(
+        command="instinct auto-promote --min-confidence 0.85",
+        schedule="17 4 * * *",
+        description="Promote high-confidence sequence candidates to persistent instincts (daily 04:17).",
+    ),
+    "instinct-feedback": _LoopPreset(
+        command="instinct feedback-collect",
+        schedule="37 4 * * *",
+        description="Decay/boost instincts based on miss-counter signal (daily 04:37, 20min after promote).",
+    ),
+}
+
+
+def _resolve_preset(preset: str) -> _LoopPreset:
+    """Look up preset by name; friendly error if unknown.
+
+    The error message distinguishes two cases:
+    - The name IS a known preset but misspelled (e.g. ``instinct-asembled``)
+      → list the valid options.
+    - The name does NOT look like any preset (e.g. ``my-custom-loop``) →
+      the user probably passed ``--preset`` by mistake; suggest removing
+      it so they fall back to the normal ``--command`` / ``--skill`` path.
+    """
+    if preset not in _LOOP_PRESETS:
+        available = ", ".join(sorted(_LOOP_PRESETS))
+        if "instinct-" in preset or preset.endswith(("-assemble", "-promote", "-feedback")):
+            # Looks like a typo of a known preset name.
+            console.print(
+                f"[red]❌ 未知 preset '{preset}'。可选：{available}[/red]"
+            )
+        else:
+            # Doesn't look like any preset — user probably meant --command.
+            console.print(
+                f"[red]❌ '{preset}' 不是预设名。请去掉 --preset 改用 --command，"
+                f"或换成预设名之一：{available}[/red]"
+            )
+        raise typer.Exit(1)
+    return _LOOP_PRESETS[preset]
+
+
 @app.command()
 def create(
     name: str = typer.Argument(..., help="loop 名称（kebab-case，如 ci-watcher）"),
@@ -176,14 +243,44 @@ def create(
         "-c",
         help="vibe 子命令（shlex 解析，如 'instinct auto-promote --min-confidence 0.85'）",
     ),
+    preset: bool = typer.Option(
+        False,
+        "--preset",
+        "-p",
+        help=(
+            "用 name 参数作为 preset key 加载预定义模板（instinct-assemble / instinct-promote / instinct-feedback），"
+            "自动填入 --command 和 --schedule"
+        ),
+    ),
     schedule: str = typer.Option("0 0 * * *", "--schedule", help="cron 表达式（5 段）"),
     description: str = typer.Option("", "--desc", "-d", help="描述"),
     max_failures: int = typer.Option(3, "--max-failures", help="连续失败次数上限"),
 ) -> None:
     """创建新的定时循环任务。
 
-    必须指定 ``--skill`` / ``--query`` / ``--workflow`` / ``--command`` 之一作为执行目标。
+    必须指定 ``--skill`` / ``--query`` / ``--workflow`` / ``--command`` 之一作为执行目标，
+    或用 ``--preset`` 加载预定义模板（会同时设定 --command 和 --schedule）。
     """
+    # --preset 是一个 shortcut：根据 name 填充 --command + --schedule。
+    # 设计为"先填充、再走主路径"——所有后续校验（4-way xor、cron parse）
+    # 对 preset 与手填 command 一视同仁，避免出现"preset 绕过校验"的暗坑。
+    if preset:
+        resolved = _resolve_preset(name)
+        if command:
+            console.print(
+                f"[yellow]⚠️  --preset 已为 '{name}' 提供默认 command，"
+                f"忽略 --command '{command}'[/yellow]"
+            )
+        if schedule != "0 0 * * *":
+            console.print(
+                f"[yellow]⚠️  --preset 已为 '{name}' 提供默认 schedule，"
+                f"忽略 --schedule '{schedule}'[/yellow]"
+            )
+        command = resolved.command
+        schedule = resolved.schedule
+        if not description:
+            description = resolved.description
+
     # Parse --command via shlex so users can pass quoted args (e.g. paths
     # with spaces) without worrying about shell expansion. shlex.split raises
     # ValueError on mismatched quotes — surface as a friendly CLI error

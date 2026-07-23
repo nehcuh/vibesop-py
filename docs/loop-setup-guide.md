@@ -123,6 +123,10 @@ systemctl status vibesop-loop.timer
 
 ### 3.3 launchd（macOS，替代 cron）
 
+> **⚠️ Deprecated API 警告**：旧的 `launchctl load/unload` 自 macOS 10.10 起已被
+> 废弃。下列 plist 本身仍可工作，但建议改用 §3.4 的 `vibe loop install-launchd`
+> （自动生成 plist + 调用 modern `bootstrap/bootout` API）。
+
 ```xml
 <!-- ~/Library/LaunchAgents/com.vibesop.looptick.plist -->
 <?xml version="1.0" encoding="UTF-8"?>
@@ -158,9 +162,110 @@ systemctl status vibesop-loop.timer
 ```
 
 ```bash
+# Modern API（推荐）：
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.vibesop.looptick.plist
+launchctl bootout gui/$(id -u)/com.vibesop.looptick    # 卸载
+
+# 旧 API（deprecated, 仍可用）：
 launchctl load ~/Library/LaunchAgents/com.vibesop.looptick.plist
 launchctl start com.vibesop.looptick
 ```
+
+> **⚠️ StartInterval 不补跑警告**：如果系统睡眠（合盖、夜间休眠），
+> `StartInterval` 类型的任务**不会**在唤醒后补跑错过的触发。例如
+> `StartInterval=3600` 在睡眠 8 小时后只会立刻触发一次，而不是补跑 8 次。
+> 重要 loop 建议用 `StartCalendarInterval`（指定 `Minute/Hour`），它有
+> 补跑语义（虽然只能补一次，参考 `man launchd.plist`）。
+
+---
+
+### 3.4 一键 launchd（`vibe loop install-launchd`）
+
+Phase C 起内置 plist 生成器。**无需手写 XML**，`vibe loop install-launchd` 会：
+
+1. 解析 `~/.vibe/loops/<name>/spec.json`；
+2. 用 `shutil.which("uv")` 解析 uv 绝对路径（避免 launchd 受限 PATH 找不到 uv）；
+3. 生成 `~/Library/LaunchAgents/com.vibesop.loop.<name>.plist`，`ProgramArguments` 是**数组**（不经 shell，路径含空格安全）；
+4. 把 `StandardOutPath` / `StandardErrorPath` 指向 `~/.vibe/loops/<name>/{out,err}.log`（LoopStore 自带的目录，必然存在）；
+5. 设置 `RunAtLoad=false`（不在登录时立刻触发）；
+6. 调用 `launchctl bootstrap gui/$(id -u) <plist>` 装载。
+
+```bash
+# 创建一个 loop（必须先 create 才能 install-launchd）
+vibe loop create health-check --skill systematic-debugging --schedule "*/30 * * * *"
+
+# 生成 plist + 装载
+vibe loop install-launchd health-check
+
+# 查看生成的 plist（dry-run 不装载）
+vibe loop install-launchd health-check --dry-run
+
+# 卸载（从 launchd 移除 + 删 plist 文件）
+vibe loop uninstall-launchd health-check
+```
+
+#### Path-with-spaces 例子
+
+`ProgramArguments` 是数组而非 shell 字符串，所以路径里的空格**不需要转义**：
+
+```bash
+mkdir -p "/Users/youruser/My Projects/demo"
+cd "/Users/youruser/My Projects/demo"
+vibe loop create foo --skill slash-route --schedule "*/15 * * * *"
+vibe loop install-launchd foo --dry-run | grep -A2 WorkingDirectory
+# WorkingDirectory: /Users/youruser/My Projects/demo   ← 空格保留完整
+```
+
+#### 自定义 uv 路径
+
+如果 `shutil.which("uv")` 失败（比如 uv 装在 launchd 看不到的位置），
+用 `--vibe-prefix` 显式指定：
+
+```bash
+vibe loop install-launchd foo --vibe-prefix "/custom/path/to/uv run vibe"
+```
+
+---
+
+### 3.5 一键 instinct 学习闭环（`--preset`）
+
+Phase E 起支持预设：
+
+```bash
+# 1. 序列组装（每 15min）：把 record-tool 的原始事件折叠成 sequence pattern
+vibe loop create instinct-assemble --preset
+# 等价于：vibe loop create instinct-assemble --command "sequence assemble" --schedule "*/15 * * * *"
+
+# 2. auto-promote（每日 04:17）：把高置信度候选提升为持久 instinct
+vibe loop create instinct-promote --preset
+# 等价于：vibe loop create instinct-promote \
+#            --command "instinct auto-promote --min-confidence 0.85" \
+#            --schedule "17 4 * * *"
+
+# 3. feedback-collect（每日 04:37）：根据 miss counter 双向调整置信度
+vibe loop create instinct-feedback --preset
+# 等价于：vibe loop create instinct-feedback \
+#            --command "instinct feedback-collect" \
+#            --schedule "37 4 * * *"
+```
+
+然后逐个装载到 launchd：
+
+```bash
+for name in instinct-assemble instinct-promote instinct-feedback; do
+    vibe loop install-launchd $name
+done
+
+# 验证
+launchctl list | grep com.vibesop.loop.instinct
+```
+
+> **调度错峰**：promote 在 04:17，feedback 在 04:37（间隔 20min）——避免同时写
+> `instincts.jsonl` 触发文件锁等待。assemble 每 15min 跑一次但只读
+> `.vibe/sequences.jsonl`，与 promote/feedback 不竞争同一把锁。
+
+> **Phase A–D 设计**：见 `docs/adr/005-loop-command-target.md` 了解为什么
+> `--command` 走 `command_args: list[str]`（而非单一字符串）。
 
 ---
 

@@ -587,6 +587,7 @@ User Query
 - [ ] Voice command support → **Deferred: post-v5.2 evaluation**
 - [ ] Real-time collaboration → **Deferred: post-v5.2 evaluation**
 - [ ] Managed skill execution sandbox (for testing/validation only) → **Deferred: post-v5.2 evaluation**
+- [ ] **User-defined loop presets**（`~/.vibe/loop-presets.yaml` 合并 system presets）→ **Recorded 2026-07-24 (pi Phase E Nit-C)**：当前 `_LOOP_PRESETS` 硬编码 3 个（instinct-{assemble,promote,feedback}），等第一个真实用户提"我想每天 9 点 code-review"再做，~20 行代码即可 merge user/system presets。
 
 ### Technical Debt
 

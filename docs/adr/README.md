@@ -8,6 +8,7 @@
 | [002](002-optimization-roadmap-v55.md) | 2026-05-01 | v5.4 → v5.5 Quality Convergence Roadmap | ✅ implemented |
 | [003](003-plan-completion-criteria.md) | 2026-05-15 | Plan Completion Criteria | ✅ implemented |
 | [004](004-deprecated-types-cleanup.md) | 2026-06 | Deprecated Types Cleanup | ✅ implemented |
+| [005](005-loop-command-target.md) | 2026-07-23 | LoopSpec.command_args as Flat Fourth Target | ✅ implemented |
 
 ## ADR Format
 

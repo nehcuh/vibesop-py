@@ -212,6 +212,88 @@ class TestCreate:
 
 
 # ──────────────────────────────────────────────────────────────────
+# create --preset (Phase E)
+# ──────────────────────────────────────────────────────────────────
+
+
+class TestCreatePreset:
+    def test_preset_assemble_fills_command_and_schedule(self, isolated_store):
+        result = runner.invoke(app, ["create", "instinct-assemble", "--preset"])
+        assert result.exit_code == 0
+        assert "*/15 * * * *" in result.stdout
+        assert "sequence assemble" in result.stdout
+
+    def test_preset_promote_fills_command_and_schedule(self, isolated_store):
+        result = runner.invoke(app, ["create", "instinct-promote", "--preset"])
+        assert result.exit_code == 0
+        assert "17 4 * * *" in result.stdout
+        assert "instinct auto-promote" in result.stdout
+
+    def test_preset_feedback_fills_command_and_schedule(self, isolated_store):
+        result = runner.invoke(app, ["create", "instinct-feedback", "--preset"])
+        assert result.exit_code == 0
+        assert "37 4 * * *" in result.stdout
+        assert "feedback-collect" in result.stdout
+
+    def test_preset_unknown_name_errors(self, isolated_store):
+        result = runner.invoke(app, ["create", "bad-name", "--preset"])
+        assert result.exit_code == 1
+        # pi Phase E P2-A: name that doesn't look like a preset should
+        # suggest removing --preset (user probably meant --command).
+        assert "不是预设名" in result.stdout
+        assert "去掉 --preset" in result.stdout
+        assert "instinct-assemble" in result.stdout  # hint lists valid names
+
+    def test_preset_typo_of_known_name_errors_differently(self, isolated_store):
+        """A typo of a known preset (instinct-asemble → instinct-assemble)
+        should hint at valid options, not suggest --command."""
+        result = runner.invoke(app, ["create", "instinct-asemble", "--preset"])
+        assert result.exit_code == 1
+        assert "未知 preset" in result.stdout
+        assert "instinct-assemble" in result.stdout
+
+    def test_preset_overrides_explicit_command_with_warning(self, isolated_store):
+        """If user passes both --preset and --command, preset wins + warn."""
+        result = runner.invoke(
+            app,
+            [
+                "create",
+                "instinct-assemble",
+                "--preset",
+                "--command",
+                "some other command",
+            ],
+        )
+        assert result.exit_code == 0
+        assert "忽略 --command" in result.stdout
+        # Resulting spec uses preset's command, not the explicit one.
+        from vibesop.core.loop.store import LoopStore
+
+        spec = LoopStore().load_spec("instinct-assemble")
+        assert spec is not None
+        assert spec.command_args == ["sequence", "assemble"]
+
+    def test_preset_overrides_explicit_schedule_with_warning(self, isolated_store):
+        result = runner.invoke(
+            app,
+            [
+                "create",
+                "instinct-promote",
+                "--preset",
+                "--schedule",
+                "*/5 * * * *",
+            ],
+        )
+        assert result.exit_code == 0
+        assert "忽略 --schedule" in result.stdout
+        from vibesop.core.loop.store import LoopStore
+
+        spec = LoopStore().load_spec("instinct-promote")
+        assert spec is not None
+        assert spec.schedule == "17 4 * * *"
+
+
+# ──────────────────────────────────────────────────────────────────
 # list
 # ──────────────────────────────────────────────────────────────────
 
