@@ -157,15 +157,35 @@ class LoopSpec(BaseModel):
     )
     skill_id: str = Field(
         default="",
-        description="Target skill ID. Mutually exclusive with query/workflow_id.",
+        description="Target skill ID. Mutually exclusive with query/workflow_id/command_args.",
     )
     query: str = Field(
         default="",
-        description="Natural-language routing query. Mutually exclusive with skill_id/workflow_id.",
+        description="Natural-language routing query. Mutually exclusive with skill_id/workflow_id/command_args.",
     )
     workflow_id: str = Field(
         default="",
-        description="Cross-cutting workflow ID. Mutually exclusive with skill_id/query.",
+        description="Cross-cutting workflow ID. Mutually exclusive with skill_id/query/command_args.",
+    )
+    command_args: list[str] = Field(
+        default_factory=list,
+        description=(
+            "vibe subcommand + args (no 'vibe' prefix), e.g. ['instinct','auto-promote']. "
+            "Mutually exclusive with skill_id/query/workflow_id. When set, the executor "
+            "runs this as a subprocess instead of routing a query through AgentRuntime — "
+            "used by background maintenance loops (assemble/promote/feedback) that have "
+            "no LLM cost."
+        ),
+    )
+    timeout_s: float = Field(
+        default=600.0,
+        ge=1.0,
+        description=(
+            "Per-tick execution timeout in seconds. Applies to command_args path. "
+            "Note: setting near the 1.0 minimum is almost certainly too low for "
+            "`uv run vibe` cold starts (uv alone takes 100-500ms; vibe imports add "
+            "seconds) — raise to 30+ for real commands."
+        ),
     )
     max_failures: int = Field(
         default=3,
@@ -184,7 +204,13 @@ class LoopSpec(BaseModel):
         default=0,
         ge=0,
         le=10,
-        description="Max retries on TRANSIENT failure within one tick (0 = no retry). Capped at 10 to bound tick duration.",
+        description=(
+            "Max retries on TRANSIENT failure within one tick (0 = no retry). "
+            "Capped at 10 to bound tick duration. "
+            "Worst case per tick: max_retries × timeout_s + exponential backoff "
+            "(cap 300s/attempt) — for a 15min cadence loop, keep max_retries × "
+            "timeout_s well under 900s to avoid colliding with the next tick."
+        ),
     )
     retry_delay_base: int = Field(
         default=30,
@@ -236,11 +262,14 @@ class LoopSpec(BaseModel):
 
     @model_validator(mode="after")
     def _exactly_one_target(self) -> LoopSpec:
-        targets = [self.skill_id, self.query, self.workflow_id]
-        non_empty = [t for t in targets if t.strip()]
-        if len(non_empty) != 1:
+        str_targets = [t for t in (self.skill_id, self.query, self.workflow_id) if t.strip()]
+        has_command = bool(self.command_args)
+        non_empty = len(str_targets) + (1 if has_command else 0)
+        if non_empty != 1:
             raise ValueError(
-                f"exactly one of skill_id / query / workflow_id must be set (got {len(non_empty)})"
+                f"exactly one of skill_id / query / workflow_id / command_args must be set "
+                f"(got {len(str_targets)} str target(s)"
+                f"{' + command_args' if has_command else ''})"
             )
         return self
 

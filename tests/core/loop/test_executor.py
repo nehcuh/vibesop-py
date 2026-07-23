@@ -14,6 +14,7 @@ Covers:
 
 from __future__ import annotations
 
+import subprocess
 import tempfile
 from unittest.mock import MagicMock
 
@@ -330,3 +331,355 @@ class TestExecuteLoopTickRuntimeInjection:
             state_path = store.base_dir / "disk-write" / store.STATE_FILENAME
             assert state_path.exists()
             assert state_path.read_text(encoding="utf-8").strip().startswith("{")
+
+
+# ──────────────────────────────────────────────────────────────────
+# command_args target — subprocess dispatch (ADR-005)
+# ──────────────────────────────────────────────────────────────────
+
+
+def _cmd_spec(name: str = "cmd-loop", **overrides) -> LoopSpec:
+    """Build a LoopSpec with command_args set instead of skill_id/query/workflow_id."""
+    base: dict[str, object] = {
+        "name": name,
+        "description": f"command loop {name}",
+        "schedule": "*/15 * * * *",
+        "skill_id": "",
+        "query": "",
+        "workflow_id": "",
+        "command_args": ["sequence", "assemble"],
+    }
+    base.update(overrides)
+    return LoopSpec(**base)
+
+
+def _completed_process(returncode: int = 0, stdout: str = "", stderr: str = ""):
+    """Build a subprocess.CompletedProcess stand-in."""
+    return subprocess.CompletedProcess(
+        args=["uv", "run", "vibe", "sequence", "assemble"],
+        returncode=returncode,
+        stdout=stdout,
+        stderr=stderr,
+    )
+
+
+class TestRunCommandTarget:
+    """_run_command_target mutates the record in place; tests use a fresh record
+    per case."""
+
+    def _fresh_record(self, name: str = "cmd-loop"):
+        from datetime import UTC, datetime
+
+        from vibesop.core.loop.models import LoopRunRecord
+
+        started = datetime.now(UTC)
+        return LoopRunRecord(loop_name=name, started_at=started)
+
+    def test_success_returncode_zero_marks_record_success(self, monkeypatch):
+        from vibesop.core.loop.executor import _run_command_target
+
+        spec = _cmd_spec()
+        record = self._fresh_record()
+
+        mock_run = MagicMock(return_value=_completed_process(0, stdout="done", stderr=""))
+        monkeypatch.setattr("vibesop.core.loop.executor.subprocess.run", mock_run)
+
+        _run_command_target(spec, record)
+
+        assert record.success is True
+        assert record.error == ""
+        assert record.failure_info is None
+        assert record.output_summary == "done"
+
+    def test_no_such_command_is_classified_permanent(self, monkeypatch):
+        from vibesop.core.loop.executor import _run_command_target
+
+        spec = _cmd_spec()
+        record = self._fresh_record()
+
+        mock_run = MagicMock(
+            return_value=_completed_process(2, stdout="", stderr="Error: No such command 'nonexistent'")
+        )
+        monkeypatch.setattr("vibesop.core.loop.executor.subprocess.run", mock_run)
+
+        _run_command_target(spec, record)
+
+        assert record.success is False
+        assert record.failure_info is not None
+        from vibesop.core.loop.models import FailureCategory
+
+        assert record.failure_info.category == FailureCategory.PERMANENT
+
+    def test_unknown_stderr_defaults_to_transient(self, monkeypatch):
+        """pi MUST-FIX: command-target failures default to TRANSIENT (environmental)."""
+        from vibesop.core.loop.executor import _run_command_target
+
+        spec = _cmd_spec()
+        record = self._fresh_record()
+
+        mock_run = MagicMock(
+            return_value=_completed_process(1, stdout="", stderr="KeyError: 'foo'")
+        )
+        monkeypatch.setattr("vibesop.core.loop.executor.subprocess.run", mock_run)
+
+        _run_command_target(spec, record)
+
+        from vibesop.core.loop.models import FailureCategory
+
+        assert record.failure_info.category == FailureCategory.TRANSIENT
+
+    def test_timeout_is_transient(self, monkeypatch):
+        from vibesop.core.loop.executor import _run_command_target
+
+        spec = _cmd_spec(timeout_s=1.0)
+        record = self._fresh_record()
+
+        def raise_timeout(*args, **kwargs):
+            raise subprocess.TimeoutExpired(cmd=args[0], timeout=1.0)
+
+        mock_run = MagicMock(side_effect=raise_timeout)
+        monkeypatch.setattr("vibesop.core.loop.executor.subprocess.run", mock_run)
+
+        _run_command_target(spec, record)
+
+        from vibesop.core.loop.models import FailureCategory
+
+        assert record.success is False
+        assert "timeout" in record.error.lower()
+        assert record.failure_info.category == FailureCategory.TRANSIENT
+
+    def test_spawn_failure_is_permanent(self, monkeypatch):
+        """FileNotFoundError when prefix binary itself missing — not retryable."""
+        from vibesop.core.loop.executor import _run_command_target
+
+        spec = _cmd_spec()
+        record = self._fresh_record()
+
+        def raise_oserror(*args, **kwargs):
+            raise FileNotFoundError("[Errno 2] No such file or directory: 'uv'")
+
+        mock_run = MagicMock(side_effect=raise_oserror)
+        monkeypatch.setattr("vibesop.core.loop.executor.subprocess.run", mock_run)
+
+        _run_command_target(spec, record)
+
+        from vibesop.core.loop.models import FailureCategory
+
+        assert record.failure_info.category == FailureCategory.PERMANENT
+
+    def test_classify_command_failure_keyword_coverage(self):
+        """Characterisation tests pinning the keyword table (kimi P2 nit).
+        Run before/after any keyword-table change so regressions surface fast."""
+        from vibesop.core.loop.executor import _classify_command_failure
+        from vibesop.core.loop.models import FailureCategory
+
+        # PERMANENT markers
+        for marker in [
+            "Error: No such command 'xyz'",
+            "Error: No such option '--foo'",
+            "Permission denied: /etc/shadow",
+            "[Errno 13] Permission denied",
+            "Usage: vibe instinct [OPTIONS]",
+            "Invalid value for '--min-confidence': 'abc' is not a valid float",
+            "Missing argument: NAME",
+        ]:
+            info = _classify_command_failure(marker, return_code=2)
+            assert info.category == FailureCategory.PERMANENT, (
+                f"expected PERMANENT for {marker!r}, got {info.category}"
+            )
+
+        # TRANSIENT (default + intentionally omitted markers)
+        for transient in [
+            "KeyError: 'foo'",  # unknown
+            "The process cannot access the file because it is being used by another process",
+            "No such file or directory: '/tmp/instincts.jsonl'",  # kimi nit: file race
+            "[Errno 11] Resource temporarily unavailable",
+        ]:
+            info = _classify_command_failure(transient, return_code=1)
+            assert info.category == FailureCategory.TRANSIENT, (
+                f"expected TRANSIENT for {transient!r}, got {info.category}"
+            )
+
+
+class TestExecuteLoopTickCommandPath:
+    def test_command_target_success_does_not_call_runtime(self, monkeypatch):
+        """When spec.command_args is set, the runtime (AgentRuntime) is never
+        invoked — the subprocess path bypasses routing entirely."""
+        runtime = _mock_runtime()
+        spec = _cmd_spec(name="cmd-ok")
+
+        mock_run = MagicMock(return_value=_completed_process(0, stdout="ok", stderr=""))
+        monkeypatch.setattr("vibesop.core.loop.executor.subprocess.run", mock_run)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            store = LoopStore(base_dir=tmpdir)
+            store.save_spec(spec)
+            record = execute_loop_tick(spec, runtime=runtime, store=store)
+
+        assert record.success is True
+        assert runtime.handle_query.called is False
+
+    def test_command_target_consecutive_failures_advance_to_dead(self, monkeypatch):
+        """DEAD/FAILING state machine applies to command targets (kimi/pi MUST-FIX B)."""
+        spec = _cmd_spec(name="cmd-to-dead", max_failures=2, max_retries=0)
+
+        # "No such command" → PERMANENT, no retry, advances failure counter directly.
+        mock_run = MagicMock(
+            return_value=_completed_process(2, stdout="", stderr="Error: No such command 'xyz'")
+        )
+        monkeypatch.setattr("vibesop.core.loop.executor.subprocess.run", mock_run)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            store = LoopStore(base_dir=tmpdir)
+            store.save_spec(spec)
+
+            execute_loop_tick(spec, runtime=_mock_runtime(), store=store)
+            s1 = store.load_state("cmd-to-dead")
+            assert s1.status == LoopStatus.FAILING
+
+            execute_loop_tick(spec, runtime=_mock_runtime(), store=store)
+            s2 = store.load_state("cmd-to-dead")
+            assert s2.status == LoopStatus.DEAD
+
+    def test_command_args_with_space_in_arg_no_shell_injection(self, monkeypatch):
+        """shlex.split at the CLI layer protects us, but executor itself passes
+        command_args as argv (no shell=True) so a literal ';' is just an arg."""
+        spec = _cmd_spec(name="injection-attempt", command_args=["foo; rm -rf /"])
+        record_calls = []
+
+        def capture_run(argv, *args, **kwargs):
+            record_calls.append(argv)
+            return _completed_process(0, stdout="", stderr="")
+
+        mock_run = MagicMock(side_effect=capture_run)
+        monkeypatch.setattr("vibesop.core.loop.executor.subprocess.run", mock_run)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            store = LoopStore(base_dir=tmpdir)
+            store.save_spec(spec)
+            execute_loop_tick(spec, runtime=_mock_runtime(), store=store)
+
+        # argv is a single list — "; rm -rf /" stays as part of one literal arg.
+        called_argv = record_calls[0]
+        assert "foo; rm -rf /" in called_argv
+        # No separate "rm" element — no shell splitting happened.
+        assert "rm" not in called_argv
+
+    def test_command_target_retries_on_transient_then_succeeds(self, monkeypatch):
+        """Transient failure on attempt 1 → retry → success on attempt 2.
+        Final record must reflect attempt 2's success (no stale error fields)."""
+        spec = _cmd_spec(name="retry-then-ok", max_retries=2)
+
+        side_effects = [
+            _completed_process(1, stdout="", stderr="connection reset by peer"),
+            _completed_process(0, stdout="done", stderr=""),
+        ]
+        mock_run = MagicMock(side_effect=side_effects)
+        monkeypatch.setattr("vibesop.core.loop.executor.subprocess.run", mock_run)
+        # Skip the real sleep — the exponential backoff is tested elsewhere.
+        monkeypatch.setattr("vibesop.core.loop.executor.time.sleep", lambda _s: None)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            store = LoopStore(base_dir=tmpdir)
+            store.save_spec(spec)
+            record = execute_loop_tick(spec, runtime=_mock_runtime(), store=store)
+
+        assert record.success is True
+        assert record.error == ""
+        assert record.failure_info is None
+        assert record.output_summary == "done"
+        assert mock_run.call_count == 2
+
+    def test_command_target_retries_exhausted_commits_transient_with_history(self, monkeypatch):
+        """All retries fail with TRANSIENT — final record.error includes earlier
+        attempts for debuggability (adversarial review §2)."""
+        spec = _cmd_spec(name="retry-exhausted", max_retries=2)
+
+        mock_run = MagicMock(
+            return_value=_completed_process(1, stdout="", stderr="connection reset by peer")
+        )
+        monkeypatch.setattr("vibesop.core.loop.executor.subprocess.run", mock_run)
+        monkeypatch.setattr("vibesop.core.loop.executor.time.sleep", lambda _s: None)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            store = LoopStore(base_dir=tmpdir)
+            store.save_spec(spec)
+            record = execute_loop_tick(spec, runtime=_mock_runtime(), store=store)
+
+        assert record.success is False
+        assert mock_run.call_count == 3  # 1 initial + 2 retries
+        # All three attempts' errors captured for debugging.
+        assert "attempt 1" in record.error
+        assert "attempt 2" in record.error
+        assert "final" in record.error
+
+    def test_command_target_env_overrides_passed_to_subprocess(self, monkeypatch):
+        """spec.env_overrides must reach subprocess.run's env kwarg."""
+        spec = _cmd_spec(name="env-override", env_overrides={"VIBE_TEST": "1"})
+
+        captured_kwargs: dict[str, object] = {}
+
+        def capture_run(_argv, **kwargs):
+            captured_kwargs.update(kwargs)
+            return _completed_process(0, stdout="ok", stderr="")
+
+        mock_run = MagicMock(side_effect=capture_run)
+        monkeypatch.setattr("vibesop.core.loop.executor.subprocess.run", mock_run)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            store = LoopStore(base_dir=tmpdir)
+            store.save_spec(spec)
+            execute_loop_tick(spec, runtime=_mock_runtime(), store=store)
+
+        env = captured_kwargs.get("env")
+        assert isinstance(env, dict)
+        assert env.get("VIBE_TEST") == "1"
+
+    def test_vibesop_run_prefix_with_spaces_parses_correctly(self, monkeypatch):
+        """VIBESOP_RUN_PREFIX with quoted path-with-spaces must split into 3
+        args (binary path kept whole), not 4 (adversarial review §15).
+
+        Users must quote the path themselves — shlex.split respects quotes.
+        Without quotes, path-with-spaces is unparseable as a single argv element.
+        """
+        monkeypatch.setenv("VIBESOP_RUN_PREFIX", '"/path/with space/uv" run vibe')
+        spec = _cmd_spec(name="prefix-spaces", command_args=["instinct", "status"])
+
+        captured_argv: list[str] = []
+
+        def capture_run(argv, **_kwargs):
+            captured_argv.extend(argv)
+            return _completed_process(0, stdout="ok", stderr="")
+
+        mock_run = MagicMock(side_effect=capture_run)
+        monkeypatch.setattr("vibesop.core.loop.executor.subprocess.run", mock_run)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            store = LoopStore(base_dir=tmpdir)
+            store.save_spec(spec)
+            execute_loop_tick(spec, runtime=_mock_runtime(), store=store)
+
+        # Binary path kept whole; total argv = 3 prefix + 2 command = 5.
+        assert captured_argv[0] == "/path/with space/uv"
+        assert captured_argv[1] == "run"
+        assert captured_argv[2] == "vibe"
+        assert captured_argv[3] == "instinct"
+        assert captured_argv[4] == "status"
+
+    def test_command_target_stdout_truncated_to_200_chars(self, monkeypatch):
+        """output_summary must cap at 200 chars (post-fix slice)."""
+        long_stdout = "x" * 5000
+        spec = _cmd_spec(name="long-stdout")
+
+        mock_run = MagicMock(
+            return_value=_completed_process(0, stdout=long_stdout, stderr="")
+        )
+        monkeypatch.setattr("vibesop.core.loop.executor.subprocess.run", mock_run)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            store = LoopStore(base_dir=tmpdir)
+            store.save_spec(spec)
+            record = execute_loop_tick(spec, runtime=_mock_runtime(), store=store)
+
+        assert record.success is True
+        assert len(record.output_summary) == 200

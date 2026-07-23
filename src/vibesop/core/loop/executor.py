@@ -38,6 +38,9 @@ Concurrency:
 from __future__ import annotations
 
 import logging
+import os
+import shlex
+import subprocess
 import time
 from datetime import UTC, datetime
 from typing import Any, Protocol
@@ -81,6 +84,26 @@ _PERMANENT_KEYWORDS: tuple[str, ...] = (
     "syntax",
 )
 
+# Subprocess (command_args) failure classification. Inverted default relative to
+# routing: unknown command failures default to TRANSIENT — environment issues
+# (uv not on PATH, locked .venv, transient file locks) are far more common than
+# permanent ones, and we don't want a single broken tick to burn the DEAD budget.
+# Only clear-cut permanent markers (wrong subcommand, permission denied) skip retry.
+# Note: "no such file or directory" is INTENTIONALLY omitted — file races (e.g.
+# locked .venv, target file mid-write by an interactive session) surface as this
+# exact stderr and should be retryable, not burn the DEAD budget. Prefix-binary
+# missing (uv not installed) is handled separately via the OSError branch which
+# IS PERMANENT (PATH won't change mid-tick).
+_COMMAND_PERMANENT_KEYWORDS: tuple[str, ...] = (
+    "no such command",
+    "no such option",
+    "permission denied",
+    "errno 13",
+    "usage: ",
+    "invalid value",
+    "missing argument",
+)
+
 
 class LoopRunner(Protocol):
     """Structural type for a runtime that executes a routed query.
@@ -113,6 +136,28 @@ def _classify_failure(error: str) -> FailureInfo:
             suggestion="Not retryable — check skill/config with 'vibe doctor'.",
         )
     return FailureInfo(category=FailureCategory.PERMANENT, reason=error)
+
+
+def _classify_command_failure(stderr_tail: str, return_code: int | None) -> FailureInfo:
+    """Classify a subprocess (command_args) failure.
+
+    Inverted default vs routing: unknown command failures default to TRANSIENT.
+    Reason: command-target failures are usually environmental (uv not on PATH,
+    locked .venv, file races with interactive sessions) and worth a retry. Only
+    explicit usage/permission/file-not-found errors are PERMANENT.
+    """
+    lowered = stderr_tail.lower()
+    if any(k in lowered for k in _COMMAND_PERMANENT_KEYWORDS):
+        return FailureInfo(
+            category=FailureCategory.PERMANENT,
+            reason=f"command exited {return_code}: {stderr_tail}",
+            suggestion="Not retryable — check command spelling, file path, and permissions.",
+        )
+    return FailureInfo(
+        category=FailureCategory.TRANSIENT,
+        reason=f"command exited {return_code}: {stderr_tail}",
+        suggestion="Retryable — likely environmental; executor backs off if spec.max_retries > 0.",
+    )
 
 
 def _build_query(spec: LoopSpec, history: RunHistory | None = None) -> str:
@@ -173,6 +218,83 @@ def _build_query(spec: LoopSpec, history: RunHistory | None = None) -> str:
     return "\n".join(parts)
 
 
+def _run_command_target(
+    spec: LoopSpec,
+    record: LoopRunRecord,
+    project_root: str | None = None,
+) -> None:
+    """Execute ``spec.command_args`` as a subprocess and mutate ``record`` in place.
+
+    Called from inside ``execute_loop_tick``'s retry loop, sharing the same
+    persistence path (caller still runs ``state.record_run(record)`` +
+    ``store.save_state(state)``). Raises no exceptions — failures are written
+    into ``record`` so the existing DEAD/FAILING state machine applies.
+
+    Args:
+        spec: Loop definition with ``command_args`` set.
+        record: Pre-constructed ``LoopRunRecord`` (loop_name + started_at) to fill.
+        project_root: Working directory. ``None`` uses cwd. Override is used by
+            tests to point at a tmp_path; production callers pass ``None``.
+    """
+    # shlex.split handles quoted paths with spaces (e.g.
+    # VIBESOP_RUN_PREFIX='"/path/with space/uv" run vibe'). Plain .split()
+    # would break that into 4 args and FileNotFoundError on the binary.
+    prefix_env = os.environ.get("VIBESOP_RUN_PREFIX", "uv run vibe")
+    try:
+        prefix = shlex.split(prefix_env, posix=True)
+    except ValueError as e:
+        # Mismatched quotes — fall back to whitespace split rather than crash.
+        logger.warning("VIBESOP_RUN_PREFIX has unbalanced quotes (%r): %s", prefix_env, e)
+        prefix = prefix_env.split()
+    argv = [*prefix, *spec.command_args]
+    env = {**os.environ, **spec.env_overrides}
+
+    try:
+        result = subprocess.run(
+            argv,
+            cwd=project_root,
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=spec.timeout_s,
+            check=False,
+        )
+    except subprocess.TimeoutExpired:
+        record.success = False
+        record.error = f"command timeout after {spec.timeout_s}s: {' '.join(spec.command_args)}"
+        record.failure_info = FailureInfo(
+            category=FailureCategory.TRANSIENT,
+            reason=record.error,
+            suggestion="Retryable — command took too long; consider raising spec.timeout_s.",
+        )
+        return
+    except OSError as e:
+        # FileNotFoundError when the prefix binary itself is missing (uv not installed).
+        record.success = False
+        record.error = f"command spawn failed: {e}"
+        record.failure_info = FailureInfo(
+            category=FailureCategory.PERMANENT,
+            reason=record.error,
+            suggestion="Check VIBESOP_RUN_PREFIX / uv installation.",
+        )
+        return
+
+    stdout_tail = (result.stdout or "")[-2000:]
+    stderr_tail = (result.stderr or "")[-2000:]
+
+    if result.returncode == 0:
+        record.success = True
+        record.matched_skill = ""  # command targets have no skill
+        record.output_summary = (stdout_tail or stderr_tail)[:200]
+        record.error = ""
+        record.failure_info = None
+        return
+
+    record.success = False
+    record.error = f"command exited {result.returncode}: {stderr_tail}"
+    record.failure_info = _classify_command_failure(stderr_tail, result.returncode)
+
+
 def execute_loop_tick(
     spec: LoopSpec,
     runtime: LoopRunner,
@@ -208,28 +330,41 @@ def execute_loop_tick(
     )
 
     attempt = 0
+    attempt_errors: list[str] = []  # accumulated across retries for debugging
+    failure: FailureInfo | None = None  # initialised defensively (kimi latent-risk)
     while True:
         err = ""
         try:
-            query = _build_query(spec, history=history)
-            # explain=True populates result.decision_message so output_summary
-            # captures routing context for post-mortem debugging.
-            result = runtime.handle_query(query, platform="generic", explain=True)
-
-            if result.success and result.has_match:
-                record.success = True
-                record.matched_skill = result.skill_id or spec.skill_id
-                record.output_summary = (result.decision_message or "")[:200]
-                record.error = ""
-                record.failure_info = None
-                break
-
-            if result.errors:
-                err = "; ".join(result.errors)
-            elif not result.has_match:
-                err = "no matching skill found"
+            if spec.command_args:
+                # Command-target path: no routing query, no AgentRuntime —
+                # direct subprocess invocation. Reuses the same record/state
+                # machine as routing so DEAD/FAILING transitions still fire.
+                _run_command_target(spec, record)
+                if record.success:
+                    break
+                err = record.error or "command failed"
+                failure = record.failure_info or _classify_command_failure(err, return_code=None)
             else:
-                err = "routing completed without success"
+                query = _build_query(spec, history=history)
+                # explain=True populates result.decision_message so output_summary
+                # captures routing context for post-mortem debugging.
+                result = runtime.handle_query(query, platform="generic", explain=True)
+
+                if result.success and result.has_match:
+                    record.success = True
+                    record.matched_skill = result.skill_id or spec.skill_id
+                    record.output_summary = (result.decision_message or "")[:200]
+                    record.error = ""
+                    record.failure_info = None
+                    break
+
+                if result.errors:
+                    err = "; ".join(result.errors)
+                elif not result.has_match:
+                    err = "no matching skill found"
+                else:
+                    err = "routing completed without success"
+                failure = _classify_failure(err)
         except Exception as e:
             # AgentRuntime.handle_query already swallows its own exceptions
             # into result.errors. This outer guard is for _build_query
@@ -237,21 +372,29 @@ def execute_loop_tick(
             # catastrophic runtime failures (e.g. import errors).
             err = f"executor exception: {e}"
             logger.exception("Loop tick raised unexpectedly [%s]", spec.name)
+            failure = _classify_failure(err)
 
-        failure = _classify_failure(err)
+        assert failure is not None  # defensive: every path above assigns it
+
         # Retry only TRANSIENT failures, up to spec.max_retries (default 0 = off).
         # The retry stays inside the persistence boundary so a transient blip
         # does NOT advance the DEAD failure counter — only the final outcome
         # of the tick is recorded once.
         if failure.category == FailureCategory.TRANSIENT and attempt < spec.max_retries:
             attempt += 1
+            attempt_errors.append(f"attempt {attempt}: {err}")
             delay = min(2 ** (attempt - 1) * spec.retry_delay_base, 300)
             time.sleep(delay)
             continue
 
-        # Final failure — commit to record.
+        # Final failure — commit to record. If retries happened, prepend
+        # earlier attempts' errors so post-mortem debugging isn't blind to
+        # the first failure (adversarial review §2).
         record.success = False
-        record.error = err
+        if attempt_errors:
+            record.error = " | ".join([*attempt_errors, f"final: {err}"])
+        else:
+            record.error = err
         record.failure_info = failure
         break
 

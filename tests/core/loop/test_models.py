@@ -169,6 +169,79 @@ def test_spec_rejects_when_multiple_targets_set():
 
 
 # ──────────────────────────────────────────────────────────────────
+# LoopSpec — command_args target (ADR-005)
+# ──────────────────────────────────────────────────────────────────
+
+
+def test_spec_accepts_command_args_target_when_others_absent():
+    spec = LoopSpec(
+        name="instinct-assemble",
+        description="Assemble tool sequences",
+        schedule="*/15 * * * *",
+        skill_id="",
+        query="",
+        workflow_id="",
+        command_args=["sequence", "assemble"],
+    )
+    assert spec.command_args == ["sequence", "assemble"]
+
+
+def test_spec_rejects_command_args_with_skill_id():
+    with pytest.raises(ValidationError):
+        LoopSpec(**_valid_spec_kwargs(command_args=["sequence", "assemble"]))
+
+
+def test_spec_rejects_command_args_with_query():
+    with pytest.raises(ValidationError):
+        LoopSpec(
+            **_valid_spec_kwargs(
+                skill_id="",
+                query="check ci",
+                command_args=["sequence", "assemble"],
+            )
+        )
+
+
+def test_spec_rejects_command_args_with_workflow_id():
+    with pytest.raises(ValidationError):
+        LoopSpec(
+            **_valid_spec_kwargs(
+                skill_id="",
+                workflow_id="ci-triage",
+                command_args=["sequence", "assemble"],
+            )
+        )
+
+
+def test_spec_command_args_round_trips_through_json():
+    original = LoopSpec(
+        name="instinct-feedback",
+        description="Daily feedback loop",
+        schedule="37 4 * * *",
+        skill_id="",
+        query="",
+        workflow_id="",
+        command_args=["instinct", "feedback-collect"],
+        timeout_s=300.0,
+    )
+    restored = LoopSpec.model_validate_json(original.model_dump_json())
+    assert restored == original
+    assert restored.timeout_s == 300.0
+
+
+def test_spec_command_args_default_timeout_is_600s():
+    spec = LoopSpec(
+        name="x",
+        description="x",
+        skill_id="",
+        query="",
+        workflow_id="",
+        command_args=["x"],
+    )
+    assert spec.timeout_s == 600.0
+
+
+# ──────────────────────────────────────────────────────────────────
 # LoopSpec — JSON round-trip (BaseModel native)
 # ──────────────────────────────────────────────────────────────────
 
