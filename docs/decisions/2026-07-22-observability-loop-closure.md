@@ -1547,7 +1547,7 @@ Added after M5 implementation + Kimi review:
 
 | # | Limitation | Severity | P2 fix sketch |
 |---|-----------|----------|---------------|
-| 1 | `asyncio.gather` LIFO mis-attribution (threading.local context) | Medium — affects concurrent async LLM calls | Move to `contextvars.ContextVar` for asyncio task isolation |
+| 1 | ~~`asyncio.gather` LIFO mis-attribution (threading.local context)~~ | ✅ Closed 2026-07-23 | Replaced `threading.local()` with `contextvars.ContextVar` in `ObservabilityTracer`. See §24.8. |
 | 2 | `set_llm_factory` injection channel bypass | Low — third-party only | Contract enforcement or factory wrapper validation |
 | 3 | Pricing table not implemented (`cost_usd=0` + metadata flag) | Medium — blocks cost-based optimisation | `llm/pricing.py` with per-model rates |
 | 4 | ~~Nested task-spans per trace_id (last-writer-wins on attribution map)~~ | ✅ Closed 2026-07-23 | CLI `vibe route` now opens `tracer.trace()` (was hook-only). See §24.7. |
@@ -1577,6 +1577,32 @@ $ cat .vibe/observability/spans.jsonl | jq -c '{kind, id, parent, name}'
 $ vibe trace metrics <skill-from-task-meta>
 Executions: 1 (success rate: 100%)
 LLM calls: 1 (success rate: 100%)
+```
+
+### 24.8 Post-ship follow-up: asyncio Task isolation (2026-07-23)
+
+**Finding (root-caused from §24.5 #1):** `ObservabilityTracer` used `threading.local()` for span-stack isolation. asyncio Tasks on the same thread share thread-local state, so concurrent `asyncio.gather` traces stomped each other:
+
+```
+task_a opens trace_a → _local.trace_context = ctx_a  (with task_a's task span)
+task_b opens trace_b → _local.trace_context = ctx_b  (OVERWRITES)
+task_a emits llm-span → reads ctx_b → parent = task_b's task span  ❌
+```
+
+Concurrent paths are real: `core/orchestration/parallel_scheduler.py:129` and `agent/step_runner.py:438` both call `asyncio.gather(...)` for parallel step execution. Each step can fire an LLM call via SpanWrappedProvider.acall().
+
+**Fix:** Swapped `threading.local()` for `contextvars.ContextVar` in `ObservabilityTracer`. asyncio copies the current context into each new Task at creation, so Tasks get isolated span stacks automatically. Sync code is unaffected — each thread still sees its own context.
+
+**Regression tests** (`tests/core/observability/test_async_isolation.py`, 4 tests):
+1. `test_concurrent_traces_do_not_steal_parents` — 2 concurrent traces via `asyncio.gather`, asserts each task-span owns its llm-span (the bug would mix parents).
+2. `test_high_concurrency_eight_tasks` — stress test with 8 concurrent traces.
+3. `test_sync_nested_spans_still_work` — sync path unchanged.
+4. `test_mixed_sync_and_async` — sync-opened trace inherited by awaited task.
+
+**Verification (executed):**
+```
+4429 tests pass / 0 regressions
+ruff + basedpyright clean
 ```
 
 Kimi's #1 (loop ends at file) is the most important finding of the entire P1 cycle: **"closure" claims require a consumer, not just a producer**. Recording this in `feedback-dynamic-workflow-external-review-first` as a second example.

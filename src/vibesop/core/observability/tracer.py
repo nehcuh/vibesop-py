@@ -3,13 +3,18 @@
 Provides context-manager APIs for creating traces and nested spans.
 All spans are persisted via ``SpanWriter`` to ``.vibe/observability/spans.jsonl``.
 
-Thread-safety: uses ``threading.local()`` for trace context isolation.
+Concurrency-safety: uses ``contextvars.ContextVar`` for trace context
+isolation. This is asyncio-aware — each ``asyncio.Task`` gets its own
+copy of the context, so concurrent ``asyncio.gather`` calls cannot
+interleave their span stacks (which was the bug with ``threading.local``).
+Sync code behaves the same as before: each thread has its own context.
 Signal-safety: registers SIGINT/SIGTERM handlers and atexit hook for flush.
 """
 
 from __future__ import annotations
 
 import atexit
+import contextvars
 import logging
 import signal
 import sys
@@ -19,7 +24,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Generator
 
 if TYPE_CHECKING:
-    from vibesop.core.observability.models import Span, SpanKind, TraceContext
+    from vibesop.core.observability.models import SpanKind, TraceContext
 
 from vibesop.core.observability.models import Span as _Span
 from vibesop.core.observability.span_writer import SpanWriter
@@ -72,7 +77,13 @@ class ObservabilityTracer:
     ) -> None:
         self._enabled = enabled
         self._writer = SpanWriter(storage_path=storage_path) if enabled else None
-        self._local = threading.local()
+        # ContextVar (not threading.local) so concurrent asyncio.gather tasks
+        # each get an isolated span stack. ThreadPoolExecutor threads also
+        # get isolation because ContextVar lookup hits the thread's current
+        # context (a fresh one for new threads unless explicitly copied).
+        self._ctx_var: contextvars.ContextVar["TraceContext | None"] = contextvars.ContextVar(
+            "vibesop_trace_context"
+        )
         self._installed_handlers = False
         if enabled:
             self._install_handlers()
@@ -240,12 +251,16 @@ class ObservabilityTracer:
     # ------------------------------------------------------------------
 
     def _get_context(self) -> "TraceContext | None":
-        return getattr(self._local, "trace_context", None)
+        return self._ctx_var.get(None)
 
     def _set_context(self, ctx: "TraceContext | None") -> None:
-        from vibesop.core.observability.models import TraceContext
-
-        self._local.trace_context = ctx
+        # Intentionally not tracking tokens — the span stack's push/pop is
+        # symmetric within a single Task, and asyncio.Task isolation handles
+        # the cross-task case. Token tracking would only matter if we needed
+        # to support nested context restoration within the same Task, which
+        # we don't (the _push/_pop pair already handles nesting via the
+        # span_id stack on the context object itself).
+        self._ctx_var.set(ctx)
 
     def _push(self, span_id: str, trace_id: str) -> None:
         from vibesop.core.observability.models import TraceContext
