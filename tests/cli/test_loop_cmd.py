@@ -440,3 +440,446 @@ class TestTick:
         assert "disabled" in result.stdout.lower()
         assert "every-min" in result.stdout  # reports what would trigger
         mock_exec.assert_not_called()  # but does NOT execute
+
+
+# ──────────────────────────────────────────────────────────────────
+# install-launchd / uninstall-launchd (Phase C)
+# ──────────────────────────────────────────────────────────────────
+
+
+@pytest.fixture
+def launchd_home(tmp_path, monkeypatch):
+    """Redirect Path.home() so LaunchAgents writes go to tmp_path.
+
+    install-launchd writes to ~/Library/LaunchAgents/. We isolate this to
+    tmp_path so tests don't pollute the developer's real launchd state.
+    """
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    return tmp_path
+
+
+def test_install_launchd_dry_run_prints_plist_no_file(isolated_store, launchd_home) -> None:
+    """--dry-run prints plist to stdout but writes nothing."""
+    isolated_store.save_spec(
+        LoopSpec.model_validate(
+            {"name": "test", "description": "d", "schedule": "*/15 * * * *", "skill_id": "x"}
+        )
+    )
+    result = runner.invoke(app, ["install-launchd", "test", "--dry-run"])
+
+    assert result.exit_code == 0
+    assert "<?xml" in result.stdout
+    assert "com.vibesop.loop.test" in result.stdout
+    # Plist file must NOT exist in dry-run mode.
+    plist_path = launchd_home / "Library" / "LaunchAgents" / "com.vibesop.loop.test.plist"
+    assert not plist_path.exists()
+
+
+def test_install_launchd_missing_loop_errors(isolated_store, launchd_home) -> None:
+    result = runner.invoke(app, ["install-launchd", "nonexistent", "--dry-run"])
+    assert result.exit_code == 1
+    assert "不存在" in result.stdout
+
+
+def test_install_launchd_writes_plist_and_bootstraps(
+    isolated_store, launchd_home, monkeypatch
+) -> None:
+    """Real (non-dry-run) install writes the plist file and invokes launchctl."""
+    isolated_store.save_spec(
+        LoopSpec.model_validate(
+            {"name": "real", "description": "d", "schedule": "*/15 * * * *", "skill_id": "x"}
+        )
+    )
+
+    # Stub subprocess.run so we don't actually invoke launchctl.
+    captured_runs: list[list[str]] = []
+
+    def fake_run(cmd, *args, **kwargs):
+        captured_runs.append(list(cmd))
+        result = MagicMock()
+        result.returncode = 0
+        result.stdout = ""
+        result.stderr = ""
+        return result
+
+    monkeypatch.setattr("subprocess.run", fake_run)
+
+    result = runner.invoke(app, ["install-launchd", "real"])
+
+    assert result.exit_code == 0, result.stdout
+    plist_path = launchd_home / "Library" / "LaunchAgents" / "com.vibesop.loop.real.plist"
+    assert plist_path.exists()
+    # Bootstrap was called with the modern gui/<uid> form.
+    assert any(
+        "launchctl" in cmd and "bootstrap" in cmd and "gui/" in " ".join(cmd)
+        for cmd in captured_runs
+    )
+
+
+def test_install_launchd_already_bootstrapped_refreshes(
+    isolated_store, launchd_home, monkeypatch
+) -> None:
+    """If launchctl says already bootstrapped (125 / stderr), the refresh path
+    boots out the stale entry and re-bootstraps. This is critical because
+    launchd caches the parsed plist at bootstrap time — without refresh, the
+    new schedule/env_overrides would be silently ignored (adversarial review
+    Phase C FLAW #2)."""
+    isolated_store.save_spec(
+        LoopSpec.model_validate(
+            {"name": "idem", "description": "d", "schedule": "*/15 * * * *", "skill_id": "x"}
+        )
+    )
+
+    # Sequence of subprocess.run calls the install will make:
+    #   1. bootstrap → 125 ("already bootstrapped")
+    #   2. bootout (refresh) → 0
+    #   3. bootstrap retry → 0
+    call_sequence: list[list[str]] = []
+
+    def fake_run(cmd, *args, **kwargs):
+        call_sequence.append(list(cmd))
+        is_bootstrap = "bootstrap" in cmd
+        is_bootout = "bootout" in cmd
+        result = MagicMock()
+        if is_bootstrap and len(call_sequence) == 1:
+            result.returncode = 125
+            result.stderr = "Service is already bootstrapped"
+        elif is_bootout:
+            result.returncode = 0
+            result.stderr = ""
+        elif is_bootstrap:
+            # Retry after bootout succeeds.
+            result.returncode = 0
+            result.stderr = ""
+        else:
+            result.returncode = 0
+            result.stderr = ""
+        result.stdout = ""
+        return result
+
+    monkeypatch.setattr("subprocess.run", fake_run)
+    result = runner.invoke(app, ["install-launchd", "idem"])
+    assert result.exit_code == 0, result.stdout
+    # Verify the refresh path actually fired.
+    actions = ["bootstrap" if "bootstrap" in c else "bootout" for c in call_sequence]
+    assert actions == ["bootstrap", "bootout", "bootstrap"]
+
+
+def test_install_launchd_real_failure_cleans_up_plist(
+    isolated_store, launchd_home, monkeypatch
+) -> None:
+    """FLAW #1 regression test: if bootstrap returns a real (non-125) error,
+    the orphaned plist must be cleaned up so we don't leave a half-installed
+    state that launchd might pick up at next login."""
+    isolated_store.save_spec(
+        LoopSpec.model_validate(
+            {"name": "fail", "description": "d", "schedule": "*/15 * * * *", "skill_id": "x"}
+        )
+    )
+
+    def fake_run(cmd, *args, **kwargs):
+        result = MagicMock()
+        result.returncode = 1  # generic failure, not 125
+        result.stderr = "Bootstrap failed: 1536"
+        result.stdout = ""
+        return result
+
+    monkeypatch.setattr("subprocess.run", fake_run)
+    result = runner.invoke(app, ["install-launchd", "fail"])
+    assert result.exit_code == 1
+    assert "失败" in result.stdout
+    # Plist must NOT exist (cleaned up).
+    plist_path = launchd_home / "Library" / "LaunchAgents" / "com.vibesop.loop.fail.plist"
+    assert not plist_path.exists()
+
+
+def test_install_launchd_malformed_vibe_prefix_fails(
+    isolated_store, launchd_home, monkeypatch
+) -> None:
+    """FLAW #4 regression test: shlex error on mismatched quotes must surface
+    to the user, not silently fall back to whitespace split (which would
+    produce a broken plist that launchd rejects every tick)."""
+    isolated_store.save_spec(
+        LoopSpec.model_validate(
+            {"name": "bad-prefix", "description": "d", "schedule": "*/15 * * * *", "skill_id": "x"}
+        )
+    )
+
+    result = runner.invoke(
+        app,
+        ["install-launchd", "bad-prefix", "--vibe-prefix", '"unbalanced quote run vibe'],
+    )
+    assert result.exit_code == 1
+    assert "解析失败" in result.stdout
+    plist_path = launchd_home / "Library" / "LaunchAgents" / "com.vibesop.loop.bad-prefix.plist"
+    assert not plist_path.exists()
+
+
+def test_uninstall_launchd_bootouts_and_deletes_plist(
+    isolated_store, launchd_home, monkeypatch
+) -> None:
+    """uninstall-launchd invokes bootout (tolerates not-loaded) and unlinks plist."""
+    plist_path = launchd_home / "Library" / "LaunchAgents" / "com.vibesop.loop.x.plist"
+    plist_path.parent.mkdir(parents=True, exist_ok=True)
+    plist_path.write_bytes(b"<plist/>")
+
+    captured_runs: list[list[str]] = []
+
+    def fake_run(cmd, *args, **kwargs):
+        captured_runs.append(list(cmd))
+        result = MagicMock()
+        result.returncode = 0
+        result.stdout = ""
+        result.stderr = ""
+        return result
+
+    monkeypatch.setattr("subprocess.run", fake_run)
+
+    result = runner.invoke(app, ["uninstall-launchd", "x"])
+    assert result.exit_code == 0, result.stdout
+    assert not plist_path.exists()
+    assert any("bootout" in " ".join(cmd) for cmd in captured_runs)
+
+
+def test_uninstall_launchd_keep_plist(isolated_store, launchd_home, monkeypatch) -> None:
+    """--keep-plist preserves the file; only bootouts."""
+    plist_path = launchd_home / "Library" / "LaunchAgents" / "com.vibesop.loop.x.plist"
+    plist_path.parent.mkdir(parents=True, exist_ok=True)
+    plist_path.write_bytes(b"<plist/>")
+
+    monkeypatch.setattr(
+        "subprocess.run",
+        lambda *a, **k: MagicMock(returncode=0, stdout="", stderr=""),
+    )
+
+    result = runner.invoke(app, ["uninstall-launchd", "x", "--keep-plist"])
+    assert result.exit_code == 0
+    assert plist_path.exists()
+
+
+def test_uninstall_launchd_already_uninstalled_is_idempotent(
+    isolated_store, launchd_home, monkeypatch
+) -> None:
+    """If launchctl says 'Could not find', treat as success (already gone)."""
+    monkeypatch.setattr(
+        "subprocess.run",
+        lambda *a, **k: MagicMock(
+            returncode=1, stdout="", stderr="Could not find com.vibesop.loop.x"
+        ),
+    )
+    result = runner.invoke(app, ["uninstall-launchd", "x"])
+    assert result.exit_code == 0
+
+
+def test_delete_also_uninstalls_plist(isolated_store, launchd_home, monkeypatch) -> None:
+    """delete on a loop with a plist must bootout + unlink before removing spec
+    (pi plan v2 must-fix)."""
+    spec = LoopSpec.model_validate(
+        {"name": "doomed", "description": "d", "schedule": "*/15 * * * *", "skill_id": "x"}
+    )
+    isolated_store.save_spec(spec)
+    # Drop a fake plist as if install-launchd had been run.
+    plist_path = launchd_home / "Library" / "LaunchAgents" / "com.vibesop.loop.doomed.plist"
+    plist_path.parent.mkdir(parents=True, exist_ok=True)
+    plist_path.write_bytes(b"<plist/>")
+
+    captured_runs: list[list[str]] = []
+
+    def fake_run(cmd, *args, **kwargs):
+        captured_runs.append(list(cmd))
+        return MagicMock(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr("subprocess.run", fake_run)
+
+    result = runner.invoke(app, ["delete", "doomed", "--force"])
+    assert result.exit_code == 0, result.stdout
+    assert not plist_path.exists()
+    # launchctl bootout was attempted.
+    assert any("bootout" in " ".join(cmd) for cmd in captured_runs)
+    # Spec is gone.
+    assert isolated_store.load_spec("doomed") is None
+
+
+def test_delete_without_plist_is_normal(isolated_store, launchd_home, monkeypatch) -> None:
+    """delete on a loop without a launchd plist should not attempt bootout."""
+    isolated_store.save_spec(
+        LoopSpec.model_validate(
+            {"name": "plain", "description": "d", "schedule": "*/15 * * * *", "skill_id": "x"}
+        )
+    )
+    captured_runs: list[list[str]] = []
+
+    def fake_run(cmd, *args, **kwargs):
+        captured_runs.append(list(cmd))
+        return MagicMock(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr("subprocess.run", fake_run)
+
+    result = runner.invoke(app, ["delete", "plain", "--force"])
+    assert result.exit_code == 0, result.stdout
+    # No launchctl calls when no plist exists.
+    assert not captured_runs
+
+
+def test_delete_with_bootout_failure_keeps_plist_and_warns(
+    isolated_store, launchd_home, monkeypatch
+) -> None:
+    """FLAW #5 regression test: if bootout fails for a real reason (not "could
+    not find"), the plist must NOT be unlinked — keep it as a recovery
+    artifact. The spec is still deleted (user wants the loop gone) but the
+    warning tells them the launchd label may still be active.
+    """
+    spec = LoopSpec.model_validate(
+        {"name": "stuck", "description": "d", "schedule": "*/15 * * * *", "skill_id": "x"}
+    )
+    isolated_store.save_spec(spec)
+    plist_path = launchd_home / "Library" / "LaunchAgents" / "com.vibesop.loop.stuck.plist"
+    plist_path.parent.mkdir(parents=True, exist_ok=True)
+    plist_path.write_bytes(b"<plist/>")
+
+    # bootout returns a real failure (not "Could not find").
+    def fake_run(cmd, *args, **kwargs):
+        return MagicMock(returncode=1, stdout="", stderr="Bootout failed: 36")
+
+    monkeypatch.setattr("subprocess.run", fake_run)
+
+    result = runner.invoke(app, ["delete", "stuck", "--force"])
+    assert result.exit_code == 0  # delete itself succeeds
+    assert "bootout 失败" in result.stdout
+    assert "launchd label 可能仍活跃" in result.stdout
+    # Plist preserved for manual recovery.
+    assert plist_path.exists()
+    # Spec still gone.
+    assert isolated_store.load_spec("stuck") is None
+
+
+# ──────────────────────────────────────────────────────────────────
+# K-P1-2: install-launchd resolves uv to absolute path
+# ──────────────────────────────────────────────────────────────────
+
+
+def test_install_launchd_resolves_uv_absolute_path(
+    isolated_store, launchd_home, monkeypatch
+) -> None:
+    """K-P1-2 regression: launchd's default PATH is ``/usr/bin:/bin:/usr/sbin:/sbin``
+    and does NOT include ``/opt/homebrew/bin`` where Homebrew installs uv on
+    Apple Silicon. A bare ``uv run vibe`` would fail every tick. When the
+    user hasn't pinned ``--vibe-prefix``, install must resolve ``uv`` via
+    ``shutil.which`` and bake the absolute path into ProgramArguments."""
+    isolated_store.save_spec(
+        LoopSpec.model_validate(
+            {"name": "uv-abs", "description": "d", "schedule": "*/15 * * * *", "skill_id": "x"}
+        )
+    )
+    # Simulate uv installed via Homebrew on Apple Silicon.
+    monkeypatch.setattr("shutil.which", lambda cmd: "/opt/homebrew/bin/uv" if cmd == "uv" else None)
+
+    result = runner.invoke(app, ["install-launchd", "uv-abs", "--dry-run"])
+    assert result.exit_code == 0, result.stdout
+    # ProgramArguments[0] must be the resolved absolute path, not bare "uv".
+    assert "/opt/homebrew/bin/uv" in result.stdout
+    assert "uv run vibe" not in result.stdout  # bare form must not appear in argv
+
+
+def test_install_launchd_uv_not_found_warns_and_falls_back(
+    isolated_store, launchd_home, monkeypatch
+) -> None:
+    """If uv isn't on PATH at install time, warn loudly and fall back to the
+    bare ``uv run vibe`` default (user can override via --vibe-prefix)."""
+    isolated_store.save_spec(
+        LoopSpec.model_validate(
+            {"name": "no-uv", "description": "d", "schedule": "*/15 * * * *", "skill_id": "x"}
+        )
+    )
+    monkeypatch.setattr("shutil.which", lambda cmd: None)
+
+    result = runner.invoke(app, ["install-launchd", "no-uv", "--dry-run"])
+    assert result.exit_code == 0
+    assert "未在 PATH 找到" in result.stdout
+    assert "Homebrew" in result.stdout  # warning mentions Homebrew
+    # Falls back to bare uv (broken but documented).
+    assert "uv run vibe" in result.stdout
+
+
+def test_install_launchd_user_prefix_skips_uv_resolution(
+    isolated_store, launchd_home, monkeypatch
+) -> None:
+    """If the user explicitly passes --vibe-prefix, don't second-guess them
+    by resolving uv. Their prefix wins as-is."""
+    isolated_store.save_spec(
+        LoopSpec.model_validate(
+            {"name": "custom", "description": "d", "schedule": "*/15 * * * *", "skill_id": "x"}
+        )
+    )
+    # Even if uv exists on PATH, the user's prefix should win.
+    monkeypatch.setattr("shutil.which", lambda cmd: "/fake/uv")
+    # Mock launchctl so we don't actually bootstrap.
+    monkeypatch.setattr(
+        "subprocess.run",
+        lambda *a, **k: MagicMock(returncode=0, stdout="", stderr=""),
+    )
+
+    result = runner.invoke(
+        app, ["install-launchd", "custom", "--vibe-prefix", "/usr/local/bin/uv run vibe"]
+    )
+    assert result.exit_code == 0, result.stdout
+    # install_launchd prints "ProgramArguments: <prefix> loop tick --name X"
+    # to the console — the contiguous prefix string appears there, not in
+    # the plist XML (which breaks it into separate <string> elements).
+    assert "/usr/local/bin/uv run vibe" in result.stdout
+    assert "/fake/uv" not in result.stdout
+
+
+# ──────────────────────────────────────────────────────────────────
+# P-P1-1: FileNotFoundError when launchctl not on PATH
+# ──────────────────────────────────────────────────────────────────
+
+
+def test_install_launchd_missing_launchctl_friendly_error(
+    isolated_store, launchd_home, monkeypatch
+) -> None:
+    """P-P1-1 regression: if launchctl isn't on PATH (containers, broken PATH),
+    subprocess.run raises FileNotFoundError. The CLI must catch it and print
+    a friendly message instead of dumping a traceback."""
+    isolated_store.save_spec(
+        LoopSpec.model_validate(
+            {"name": "no-launchctl", "description": "d", "schedule": "*/15 * * * *", "skill_id": "x"}
+        )
+    )
+
+    # Force uv to resolve so we get past prefix resolution.
+    monkeypatch.setattr("shutil.which", lambda cmd: "/fake/uv")
+
+    # Make subprocess.run raise FileNotFoundError as if launchctl were missing.
+    def raise_fnf(*a, **k):
+        raise FileNotFoundError("[Errno 2] No such file or directory: 'launchctl'")
+
+    monkeypatch.setattr("subprocess.run", raise_fnf)
+
+    result = runner.invoke(app, ["install-launchd", "no-launchctl"])
+    # Exit code 1 (failure), but NO traceback — friendly message instead.
+    assert result.exit_code == 1, result.stdout
+    assert "找不到 launchctl" in result.stdout
+    # Plist should have been cleaned up (FLAW #1 cleanup still applies).
+    plist_path = launchd_home / "Library" / "LaunchAgents" / "com.vibesop.loop.no-launchctl.plist"
+    assert not plist_path.exists()
+
+
+def test_uninstall_launchd_missing_launchctl_friendly_error(
+    isolated_store, launchd_home, monkeypatch
+) -> None:
+    """P-P1-1: same friendly error for uninstall path."""
+    monkeypatch.setattr("shutil.which", lambda cmd: None)
+
+    def raise_fnf(*a, **k):
+        raise FileNotFoundError("[Errno 2] No such file or directory: 'launchctl'")
+
+    monkeypatch.setattr("subprocess.run", raise_fnf)
+
+    result = runner.invoke(app, ["uninstall-launchd", "anything"])
+    assert result.exit_code == 1, result.stdout
+    assert "找不到 launchctl" in result.stdout
+
+
+# Late import so the fixture above can be defined without mandatory import-time cost.
+from unittest.mock import MagicMock  # noqa: E402

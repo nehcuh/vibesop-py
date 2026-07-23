@@ -29,7 +29,10 @@ from __future__ import annotations
 
 import logging
 import os
+import subprocess
+import sys
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
 import typer
@@ -350,8 +353,42 @@ def delete(
             console.print("[yellow]取消删除[/yellow]")
             raise typer.Exit(1)
 
+    # Phase C (pi plan v2 新增 + 对抗 review FLAW #5): if a launchd plist
+    # exists, best-effort bootout and delete it too — otherwise the orphaned
+    # plist keeps firing tick on a spec that no longer exists, producing noise
+    # in the log every minute. If bootout fails for a real reason (not "could
+    # not find"), do NOT unlink the plist — keep it as a recovery artifact so
+    # the user can re-run uninstall-launchd. Warn loudly that the launchd
+    # label may still be active even though the spec is gone.
+    plist_cleanup_failed = False
+    if _is_macos():
+        from vibesop.core.loop.launchd import default_plist_path
+
+        plist_path = default_plist_path(name)
+        if plist_path.exists():
+            console.print("[dim]检测到 launchd plist，先注销…[/dim]")
+            bootout_ok = _bootout_launchd(name, console=console, missing_ok=True)
+            if bootout_ok:
+                try:
+                    plist_path.unlink()
+                except OSError as e:
+                    logger.warning("Failed to remove plist %s: %s", plist_path, e)
+            else:
+                plist_cleanup_failed = True
+                console.print(
+                    f"[yellow]⚠️  bootout 失败 — 保留 plist {plist_path}[/yellow]\n"
+                    f"[yellow]   launchd label 可能仍活跃，请手工运行 "
+                    f"'vibe loop uninstall-launchd {name}'[/yellow]"
+                )
+
     store.delete_spec(name)
-    console.print(f"[green]✅ Loop '{name}' 已删除[/green]")
+    if plist_cleanup_failed:
+        console.print(
+            f"[green]✅ Loop '{name}' 已删除[/green] "
+            f"[yellow](但 launchd 清理未完成，见上)[/yellow]"
+        )
+    else:
+        console.print(f"[green]✅ Loop '{name}' 已删除[/green]")
 
 
 # ──────────────────────────────────────────────────────────────────
@@ -582,6 +619,242 @@ def tick(
     # documented deployment (external cron every minute).
     if failure_count:
         raise typer.Exit(code=1)
+
+
+# ──────────────────────────────────────────────────────────────────
+# install-launchd / uninstall-launchd (Phase C)
+# ──────────────────────────────────────────────────────────────────
+
+
+def _run_launchctl(cmd: list[str], *, console: Console) -> subprocess.CompletedProcess[str] | None:
+    """Run a launchctl subprocess and translate FileNotFoundError to None.
+
+    ``subprocess.run`` raises ``FileNotFoundError`` when ``launchctl`` isn't
+    on PATH (rare on macOS but possible in containers / when PATH is broken).
+    Callers check for ``None`` and treat it as a soft failure with a friendly
+    message instead of letting the raw traceback surface (pi Phase C P-P1-1).
+    """
+    try:
+        return subprocess.run(cmd, capture_output=True, text=True, check=False)
+    except FileNotFoundError:
+        console.print(
+            f"[red]❌ 找不到 launchctl——PATH 中缺失。命令: {' '.join(cmd)}[/red]"
+        )
+        return None
+
+
+def _bootstrap_launchd(plist_path: Path, *, console: Console, loop_name: str) -> bool:
+    """Run ``launchctl bootstrap`` and report. Returns True on success.
+
+    Refresh handling: if the label is already bootstrapped (returncode 125 or
+    stderr contains "already bootstrapped"), launchd has cached the OLD plist
+    and will NOT re-read the file. We detect this and do an automatic
+    bootout-then-bootstrap so the new schedule/env_overrides actually take
+    effect (adversarial review Phase C FLAW #2).
+
+    Args:
+        plist_path: Path to the plist file to bootstrap.
+        console: Rich console for status output.
+        loop_name: Bare loop name (without label prefix) — used to construct
+            the bootout command on the refresh path, and to print accurate
+            recovery hints (FLAW #3: don't print the prefixed stem).
+    """
+    from vibesop.core.loop.launchd import bootstrap_command
+
+    cmd = bootstrap_command(plist_path)
+    result = _run_launchctl(cmd, console=console)
+    if result is None:
+        return False
+    if result.returncode == 0:
+        return True
+
+    already = result.returncode == 125 or "already bootstrapped" in (result.stderr or "").lower()
+    if already:
+        # Refresh path: bootout the stale entry, then re-bootstrap. The plist
+        # on disk is already the new one (caller wrote it before invoking us).
+        console.print("[dim]已注册，重新加载（bootout → bootstrap）…[/dim]")
+        if not _bootout_launchd(loop_name, console=console, missing_ok=True):
+            return False
+        result2 = _run_launchctl(cmd, console=console)
+        if result2 is None:
+            return False
+        if result2.returncode == 0:
+            return True
+        console.print(f"[red]❌ refresh 后 bootstrap 仍失败 (exit {result2.returncode})[/red]")
+        if result2.stderr:
+            console.print(f"[dim]{result2.stderr.strip()}[/dim]")
+        return False
+
+    console.print(f"[red]❌ launchctl bootstrap 失败 (exit {result.returncode})[/red]")
+    if result.stderr:
+        console.print(f"[dim]{result.stderr.strip()}[/dim]")
+    return False
+
+
+def _bootout_launchd(loop_name: str, *, console: Console, missing_ok: bool = False) -> bool:
+    """Run ``launchctl bootout`` for ``loop_name``. Returns True on success.
+
+    ``missing_ok=True`` treats "not bootstrapped" as success (used by ``delete``
+    so a loop whose plist was already removed doesn't fail teardown).
+    """
+    from vibesop.core.loop.launchd import bootout_command, plist_label
+
+    cmd = bootout_command(loop_name)
+    result = _run_launchctl(cmd, console=console)
+    if result is None:
+        return False
+    if result.returncode == 0:
+        return True
+    stderr_lower = (result.stderr or "").lower()
+    # launchctl prints "Could not find ..." when the label was never bootstrapped
+    # (or was already booted out). Non-fatal for delete / uninstall idempotency.
+    if missing_ok and ("could not find" in stderr_lower or "no such" in stderr_lower):
+        return True
+    console.print(f"[red]❌ launchctl bootout 失败 (exit {result.returncode})[/red]")
+    if result.stderr:
+        console.print(f"[dim]{result.stderr.strip()}[/dim]")
+    console.print(f"[dim]label: {plist_label(loop_name)}[/dim]")
+    return False
+
+
+def _is_macos() -> bool:
+    return sys.platform == "darwin"
+
+
+@app.command("install-launchd")
+def install_launchd(
+    name: str = typer.Argument(..., help="loop 名称"),
+    vibe_prefix: str | None = typer.Option(
+        None,
+        "--vibe-prefix",
+        envvar="VIBESOP_RUN_PREFIX",
+        help="vibe CLI 调用前缀（默认自动解析 uv 绝对路径 + ' run vibe'）。带空格的路径需加引号。",
+    ),
+    dry_run: bool = typer.Option(False, "--dry-run", help="只打印 plist，不写盘、不 bootstrap"),
+) -> None:
+    """生成 launchd plist 并注册到 ~/Library/LaunchAgents/（仅 macOS）。
+
+    流程：
+        1. 加载 LoopSpec
+        2. 渲染 plist XML（ProgramArguments = prefix + ['loop','tick','--name',NAME]）
+        3. 写到 ~/Library/LaunchAgents/com.vibesop.loop.<name>.plist
+        4. 调 ``launchctl bootstrap gui/$(id -u) <plist>`` 注册
+
+    ProgramArguments 调用通用的 ``vibe loop tick``，所以同一 plist 模板适用
+    于 skill / query / workflow / command_args 四种 target。Target dispatch
+    和 PAUSED/DEAD/RETIRED 过滤由 tick 内部处理。
+
+    注：``vibe loop create`` 暂未暴露 ``--command`` flag（Phase D 补），所以
+    command_args loop 需手工编辑 spec.json 或通过 ``--dry-run`` 检查后再用。
+    """
+    if not _is_macos():
+        console.print("[red]❌ install-launchd 仅支持 macOS（其他平台请用 cron 或 systemd）[/red]")
+        raise typer.Exit(1)
+
+    from vibesop.core.loop.launchd import (
+        DEFAULT_VIBE_PREFIX,
+        default_plist_path,
+        render_plist,
+    )
+
+    store = LoopStore()
+    spec = store.load_spec(name)
+    if spec is None:
+        console.print(f"[red]❌ Loop '{name}' 不存在[/red]")
+        raise typer.Exit(1)
+
+    # launchd's default PATH is `/usr/bin:/bin:/usr/sbin:/sbin` — it does NOT
+    # inherit the user's shell PATH, so `/opt/homebrew/bin` (where Homebrew
+    # installs uv on Apple Silicon) is missing. A bare ``uv run vibe`` would
+    # fail every tick with "uv: command not found". When the user hasn't
+    # pinned a prefix, resolve ``uv`` to its absolute path at install time
+    # so the plist is self-contained (kimi Phase C K-P1-2).
+    if vibe_prefix is None:
+        import shutil
+
+        uv_path = shutil.which("uv")
+        if uv_path:
+            prefix = f"{uv_path} run vibe"
+        else:
+            console.print(
+                "[yellow]⚠️  未在 PATH 找到 'uv'——回退到 'uv run vibe'。"
+                " launchd 默认 PATH 不含 Homebrew，tick 大概率失败。"
+                " 请用 --vibe-prefix 指定绝对路径，如 "
+                "'/opt/homebrew/bin/uv run vibe'。[/yellow]"
+            )
+            prefix = DEFAULT_VIBE_PREFIX
+    else:
+        prefix = vibe_prefix
+    project_root = Path.cwd()
+    try:
+        plist_bytes = render_plist(spec, project_root=project_root, vibe_prefix=prefix)
+    except ValueError as e:
+        # shlex.split raises ValueError on mismatched quotes — fail loud at
+        # install time rather than silently producing a broken plist that
+        # launchd would reject every tick (adversarial review Phase C FLAW #4).
+        console.print(f"[red]❌ VIBESOP_RUN_PREFIX / --vibe-prefix 解析失败: {e}[/red]")
+        raise typer.Exit(1) from e
+
+    if dry_run:
+        console.print(Panel(plist_bytes.decode(), title=f"[bold]DRY RUN: {name}[/bold]"))
+        return
+
+    plist_path = default_plist_path(spec.name)
+    plist_path.parent.mkdir(parents=True, exist_ok=True)
+    plist_path.write_bytes(plist_bytes)
+
+    console.print(f"[green]✅ plist 已写入: {plist_path}[/green]")
+    console.print(f"[dim]ProgramArguments: {prefix} loop tick --name {name}[/dim]")
+    console.print(f"[dim]WorkingDirectory: {project_root}[/dim]")
+
+    if not _bootstrap_launchd(plist_path, console=console, loop_name=spec.name):
+        # Clean up the orphaned plist so we don't leave a half-installed state
+        # (adversarial review Phase C FLAW #1). The user can re-run after fixing
+        # whatever blocked bootstrap.
+        try:
+            plist_path.unlink()
+        except OSError as e2:
+            logger.warning("Failed to clean up plist after bootstrap failure: %s", e2)
+        raise typer.Exit(1)
+
+    console.print(
+        f"\n[bold]下一步[/bold]: launchd 已注册。查看状态:\n"
+        f"  [dim]launchctl print gui/$(id -u)/com.vibesop.loop.{name}[/dim]\n"
+        f"  [dim]tail -f ~/.vibe/loops/{name}/out.log[/dim]"
+    )
+
+
+@app.command("uninstall-launchd")
+def uninstall_launchd(
+    name: str = typer.Argument(..., help="loop 名称"),
+    keep_plist: bool = typer.Option(
+        False, "--keep-plist", help="保留 plist 文件（仅 bootout）"
+    ),
+) -> None:
+    """从 launchd 注销 loop（``launchctl bootout``）并删除 plist。
+
+    幂等：loop 未注册时也返回成功。
+    """
+    if not _is_macos():
+        console.print("[red]❌ uninstall-launchd 仅支持 macOS[/red]")
+        raise typer.Exit(1)
+
+    from vibesop.core.loop.launchd import default_plist_path
+
+    plist_path = default_plist_path(name)
+    bootout_ok = _bootout_launchd(name, console=console, missing_ok=True)
+    if not bootout_ok:
+        raise typer.Exit(1)
+
+    if keep_plist:
+        console.print(f"[green]✅ 已 bootout（保留 plist: {plist_path}）[/green]")
+        return
+
+    if plist_path.exists():
+        plist_path.unlink()
+        console.print(f"[green]✅ 已删除 plist: {plist_path}[/green]")
+    else:
+        console.print("[green]✅ 已 bootout（plist 本来就不存在）[/green]")
 
 
 __all__ = ["app"]

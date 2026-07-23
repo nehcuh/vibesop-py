@@ -38,3 +38,10 @@ enabled = true
 
 [preferences]
 learning_enabled = true
+
+[loop]
+# Master switch — must be true for `vibe loop tick` to actually execute.
+# Default false is intentional (prevents accidental LLM spend). Flip back to false to kill all loops.
+enabled = true
+default_tick_seconds = 60
+max_active_loops = 20
