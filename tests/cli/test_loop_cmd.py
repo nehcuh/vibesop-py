@@ -140,6 +140,76 @@ class TestCreate:
         assert result.exit_code == 1
         assert "已存在" in result.stdout
 
+    def test_create_with_command_target(self, isolated_store):
+        """Phase D: ``--command`` flag exposes the command_args target."""
+        result = runner.invoke(
+            app,
+            [
+                "create",
+                "promoter",
+                "--command",
+                "instinct auto-promote --min-confidence 0.85",
+                "--schedule",
+                "17 4 * * *",
+            ],
+        )
+        assert result.exit_code == 0, result.stdout
+        spec = isolated_store.load_spec("promoter")
+        assert spec is not None
+        assert spec.command_args == [
+            "instinct",
+            "auto-promote",
+            "--min-confidence",
+            "0.85",
+        ]
+        # skill_id / query / workflow_id must all be empty (4-way xor).
+        assert not spec.skill_id
+        assert not spec.query
+        assert not spec.workflow_id
+
+    def test_create_command_with_quoted_spaces(self, isolated_store):
+        """shlex.split must handle quoted paths with spaces."""
+        result = runner.invoke(
+            app,
+            [
+                "create",
+                "spaces",
+                "--command",
+                "'/path/with space/uv' run vibe",
+            ],
+        )
+        assert result.exit_code == 0, result.stdout
+        spec = isolated_store.load_spec("spaces")
+        assert spec.command_args[0] == "/path/with space/uv"
+
+    def test_create_command_with_mismatched_quotes_fails(self, isolated_store):
+        """shlex error must surface as friendly CLI error, not traceback."""
+        result = runner.invoke(
+            app,
+            ["create", "bad-quote", "--command", '"unbalanced quote run vibe'],
+        )
+        assert result.exit_code == 1
+        assert "解析失败" in result.stdout
+
+    def test_create_command_and_skill_mutually_exclusive(self, isolated_store):
+        """4-way xor: can't set both --command and --skill."""
+        result = runner.invoke(
+            app,
+            ["create", "both", "--skill", "x", "--command", "instinct eval"],
+        )
+        # ValidationError from LoopSpec._exactly_one_target.
+        assert result.exit_code == 1
+        assert "校验失败" in result.stdout or "exactly one" in result.stdout.lower()
+
+    def test_create_command_empty_string_rejected(self, isolated_store):
+        """Empty --command '' should not count as a target (shlex → [])."""
+        result = runner.invoke(
+            app,
+            ["create", "empty-cmd", "--command", ""],
+        )
+        assert result.exit_code == 1
+        assert "至少需要指定" in result.stdout
+
 
 # ──────────────────────────────────────────────────────────────────
 # list

@@ -142,7 +142,12 @@ class MissCounter:
         except OSError as e:
             logger.warning("Failed to clear miss counter: %s", e)
 
-    def decay_frequent(self, min_count: int = 3) -> list[MissedHashCluster]:
+    def decay_frequent(
+        self,
+        min_count: int = 3,
+        *,
+        hashes: set[str] | None = None,
+    ) -> list[MissedHashCluster]:
         """Halve counts for clusters at or above *min_count*, persist, return
         the decayed clusters.
 
@@ -150,6 +155,14 @@ class MissCounter:
         the feedback loop doesn't erase its own signal after the first tick
         (plan v2 §4 — kimi/pi MUST-FIX D). Each decay leaves the residual
         count in place so a persistent miss still surfaces next tick.
+
+        Args:
+            min_count: Clusters with count below this are left untouched.
+            hashes: If provided, only clusters whose digest is in this set
+                are decayed. Pass the set of hashes the caller actually
+                acted on so unrelated clusters keep their full count (pi
+                Phase D P2-D). If None, decay every cluster at or above
+                ``min_count`` (legacy behaviour).
 
         Returns:
             The list of clusters that were decayed this call (pre-decay
@@ -160,6 +173,8 @@ class MissCounter:
             data = self._load()
             decayed: list[MissedHashCluster] = []
             for digest, entry in data.items():
+                if hashes is not None and digest not in hashes:
+                    continue
                 try:
                     count = int(entry.get("n", 0))
                 except (TypeError, ValueError):

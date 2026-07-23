@@ -408,3 +408,256 @@ When this pattern matches, {ins.action}.
     console.print(
         "[dim]Next: run [cyan]vibe skills suggestions[/cyan] to register it formally.[/dim]"
     )
+
+
+# ──────────────────────────────────────────────────────────────────
+# auto-promote / feedback-collect (Phase D — scheduled loop entry points)
+# ──────────────────────────────────────────────────────────────────
+
+
+def _feedback_watermark_path() -> Path:
+    """Per-project watermark tracking which miss-hashes feedback-collect has
+    already processed (so re-runs don't double-decay the same cluster)."""
+    return Path.cwd() / ".vibe" / "instincts" / "feedback_watermark.json"
+
+
+def _load_watermark() -> dict[str, None]:
+    """Load processed-hash watermark as an insertion-ordered dict.
+
+    Using ``dict[str, None]`` (Python 3.7+ preserves insertion order) gives
+    us both O(1) membership tests AND deterministic FIFO trimming — a plain
+    ``set`` would lose insertion order and `list(set)[-N:]` would trim
+    arbitrarily depending on hash seed (pi Phase D P1-C). Empty dict on
+    first run / corruption.
+    """
+    path = _feedback_watermark_path()
+    if not path.exists():
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        hashes = data.get("processed_hashes", [])
+        return {h: None for h in hashes if isinstance(h, str)}
+    except (json.JSONDecodeError, OSError) as e:
+        logger.warning("Failed to load feedback watermark (%s): %s", path, e)
+        return {}
+
+
+def _save_watermark(hashes: dict[str, None]) -> None:
+    """Persist watermark atomically. Cap at 10k entries (FIFO trim oldest).
+
+    Uses ``atomic_writer.write_text`` (temp file + rename) so a crash mid-write
+    leaves the previous watermark intact rather than a truncated JSON file —
+    losing the watermark would cause the next feedback-collect to re-decay
+    every previously-processed hash (pi Phase D P1-C).
+    """
+    from vibesop.utils.atomic_writer import write_text
+
+    path = _feedback_watermark_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    # dict preserves insertion order — list(...) gives oldest-first, so
+    # [-10000:] keeps the most recent 10k. Re-decaying occasional hashes
+    # shed by the cap is harmless (decay is bounded by early-stop at ≤ 0.1).
+    trimmed = list(hashes)[-10000:]
+    payload = {"processed_hashes": trimmed}
+    write_text(path, json.dumps(payload, ensure_ascii=False))
+
+
+def _add_watermark(watermark: dict[str, None], h: str) -> None:
+    """Add hash to watermark preserving insertion order (re-adding moves to end).
+
+    A re-added hash bubbles to the tail so the FIFO trim in ``_save_watermark``
+    prefers keeping recently-observed hashes over ancient ones.
+    """
+    watermark.pop(h, None)
+    watermark[h] = None
+
+
+def _candidate_to_instinct(learner: Any, candidate: Any, source: str) -> Any:
+    """Convert a ``SequencePattern`` into a persistent ``Instinct``.
+
+    Why manual construction instead of ``learner.learn(...)``: ``learn`` does
+    fuzzy pattern matching and may merge into an existing instinct. For
+    auto-promote we want a 1:1 conversion from candidate → instinct, with
+    the candidate's success/failure counts preserved verbatim. The learner's
+    public ``generate_id`` gives us a deterministic id (same steps → same
+    id), so re-running auto-promote on the same candidate is a no-op
+    rather than a duplicate.
+    """
+    from vibesop.core.instinct.learner import Instinct
+
+    pattern = " → ".join(candidate.steps)
+    failure_count = max(0, candidate.total_count - candidate.success_count)
+    return Instinct(
+        id=learner.generate_id(pattern),
+        pattern=pattern,
+        action=f"Consider this sequence as a repeatable workflow: {pattern}",
+        context=", ".join(candidate.context_tags) if candidate.context_tags else "",
+        confidence=min(0.95, max(0.5, candidate.success_rate)),
+        success_count=candidate.success_count,
+        failure_count=failure_count,
+        source=source,
+        tags=[*candidate.context_tags, "sequence-promoted"],
+    )
+
+
+@app.command("auto-promote")
+def auto_promote(
+    min_confidence: float = typer.Option(
+        0.85, "--min-confidence", help="候选 success_rate 下限（默认 0.85）"
+    ),
+    min_count: int = typer.Option(
+        5, "--min-count", help="候选 total_count 下限（默认 5）"
+    ),
+    growth_cap_pct: int = typer.Option(
+        20,
+        "--growth-cap-pct",
+        help=(
+            "单次 promote 数量上限 = 当前 instinct 数 × pct%（防失控）。"
+            "冷启动（before=0）时强制允许 1 个。"
+        ),
+    ),
+    dry_run: bool = typer.Option(False, "--dry-run", help="只打印，不写盘"),
+) -> None:
+    """把高置信度 sequence 候选提升为持久 instinct（计划 §5d）。
+
+    Growth cap (plan v2 §C)：单次 promote 不超过现有 instinct 数的
+    ``growth_cap_pct%``（至少 1 个），避免一次性灌入大量低质 instinct
+    污染路由。重跑幂等——同一候选的 id 由 pattern 决定，
+    ``set_instinct`` 覆盖写不复制。
+    """
+    from vibesop.core.instinct.learner import InstinctLearner
+
+    learner = InstinctLearner(_get_storage_path())
+    before = len(learner.instincts)
+    allowed = max(1, int(before * growth_cap_pct / 100))
+
+    candidates = learner.get_sequence_candidates(min_confidence=min_confidence)
+    promoted = 0
+    capped = False
+    for c in candidates:
+        if promoted >= allowed:
+            capped = True
+            break
+        if c.total_count < min_count:
+            continue
+        instinct = _candidate_to_instinct(learner, c, source="auto-promote")
+        if dry_run:
+            console.print(
+                f"[dim]would promote:[/dim] {instinct.pattern} "
+                f"({c.success_rate:.0%}, n={c.total_count})"
+            )
+        else:
+            learner.set_instinct(instinct)
+        promoted += 1
+
+    if not dry_run and promoted:
+        learner.save()  # 显式 save（plan v2 §C kimi must-fix）
+
+    console.print(
+        f"[green]✅ Promoted {promoted}[/green] candidate(s) "
+        f"(eligible={len(candidates)}, before={before}, cap={allowed})"
+    )
+    if capped:
+        console.print(
+            f"[yellow]⚠️  growth cap {allowed} hit — 剩余候选延后到下次 promote[/yellow]"
+        )
+    if not dry_run and promoted:
+        console.print(f"[dim]saved to {_get_storage_path()}[/dim]")
+
+
+@app.command("feedback-collect")
+def feedback_collect(
+    min_miss_count: int = typer.Option(
+        3, "--min-miss-count", help="miss hash 被纳入衰减的次数下限"
+    ),
+    boost_threshold_apps: int = typer.Option(
+        2,
+        "--boost-threshold-apps",
+        help="单 instinct 应用次数 ≤ 此值且 success_rate ≥ 0.8 时增强",
+    ),
+    dry_run: bool = typer.Option(False, "--dry-run", help="只打印，不写盘"),
+) -> None:
+    """根据 miss counter 反馈双向调整 instinct 置信度（计划 §5e）。
+
+    - **Decay**：高频 miss 命中的 instinct → ``record_outcome(success=False)``，
+      让 Wilson score 自动下调 confidence。
+    - **Boost**：success_rate ≥ 0.8 且应用次数少 → ``record_outcome(success=True)``，
+      加速其从候选变可靠。
+    - **Early-stop**：confidence ≥ 0.95 或 ≤ 0.1 跳过（避免无意义震荡）。
+    - **Watermark**：处理过的 miss hash 写盘，下次跳过；``miss.decay_frequent``
+      把 frequent count 减半（不 clear，保留 first/last）。
+    """
+    from vibesop.core.instinct.learner import InstinctLearner
+    from vibesop.core.skills.miss_counter import MissCounter
+
+    miss = MissCounter(Path.cwd())
+    processed_watermark = _load_watermark()
+    frequent_clusters = miss.frequent(min_count=min_miss_count)
+    frequent_hashes = {
+        c.hash for c in frequent_clusters if c.hash not in processed_watermark
+    }
+
+    learner = InstinctLearner(_get_storage_path())
+    decayed = 0
+    boosted = 0
+    skipped_early_stop = 0
+    decayed_hashes: set[str] = set()
+    # Iterate ALL instincts, not just reliable ones. Plan v2 §5e originally
+    # specified ``get_reliable_instincts()`` but combined with the default
+    # ``boost_threshold_apps=2`` it made the boost branch unreachable:
+    # reliable requires ``total_applications >= 3`` while boost requires
+    # ``<= 2``. The plan's intent was "boost under-utilized instincts to
+    # surface them faster" — that's only possible if we look outside the
+    # already-reliable set. Early-stop at confidence ≤ 0.1 protects against
+    # boosting dying instincts; early-stop at ≥ 0.95 prevents saturation;
+    # ``total_applications >= 1`` skips never-applied instincts (pi P2-B)
+    # so a freshly-imported or theory-only instinct can't get a free boost.
+    all_instincts = sorted(
+        learner.instincts.values(), key=lambda i: i.confidence, reverse=True
+    )
+    for ins in all_instincts:
+        # Early-stop: 置信度已饱和或已死亡，不再调整
+        if ins.confidence >= 0.95 or ins.confidence <= 0.1:
+            skipped_early_stop += 1
+            continue
+
+        h = miss.hash_for(ins.pattern)
+        if h in frequent_hashes:
+            if dry_run:
+                console.print(f"[dim]would decay:[/dim] {ins.pattern} (confidence={ins.confidence:.0%})")
+            else:
+                learner.record_outcome(ins.id, success=False)
+            decayed += 1
+            decayed_hashes.add(h)
+            _add_watermark(processed_watermark, h)
+        elif (
+            ins.total_applications >= 1
+            and ins.success_rate >= 0.8
+            and ins.total_applications <= boost_threshold_apps
+        ):
+            if dry_run:
+                console.print(f"[dim]would boost:[/dim] {ins.pattern} (n={ins.total_applications})")
+            else:
+                learner.record_outcome(ins.id, success=True)
+            boosted += 1
+
+    if not dry_run:
+        if decayed:
+            # Scope the miss-counter decay to hashes feedback-collect actually
+            # touched — without this filter, ``decay_frequent`` halves every
+            # cluster at ≥ min_miss_count, erasing signal for instincts that
+            # were early-stopped or already in the watermark (pi Phase D P2-D).
+            miss.decay_frequent(min_miss_count, hashes=decayed_hashes)
+        if decayed or boosted:
+            learner.save()
+        if decayed:
+            _save_watermark(processed_watermark)
+
+    console.print(
+        f"[bold]Feedback collected[/bold]: "
+        f"[red]{decayed} decayed[/red], "
+        f"[green]{boosted} boosted[/green], "
+        f"[dim]{skipped_early_stop} early-stop skipped[/dim]"
+    )
+    if dry_run:
+        console.print("[dim](dry-run: no writes)[/dim]")

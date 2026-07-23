@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import logging
 import os
+import shlex
 import subprocess
 import sys
 from datetime import UTC, datetime
@@ -75,7 +76,13 @@ _STATUS_ICONS: dict[LoopStatus, str] = {
 
 def _target_str(spec: LoopSpec, truncate: int = 0) -> str:
     """Human-readable target string for table cells."""
-    raw = spec.skill_id or spec.query or spec.workflow_id
+    raw = (
+        spec.skill_id
+        or spec.query
+        or spec.workflow_id
+        or " ".join(spec.command_args)
+        or "(no target)"
+    )
     if truncate and len(raw) > truncate:
         return raw[: truncate - 3] + "..."
     return raw
@@ -163,26 +170,45 @@ def create(
     skill_id: str = typer.Option("", "--skill", "-s", help="目标技能 ID"),
     query: str = typer.Option("", "--query", "-q", help="路由查询语句"),
     workflow: str = typer.Option("", "--workflow", "-w", help="工作流 ID"),
+    command: str = typer.Option(
+        "",
+        "--command",
+        "-c",
+        help="vibe 子命令（shlex 解析，如 'instinct auto-promote --min-confidence 0.85'）",
+    ),
     schedule: str = typer.Option("0 0 * * *", "--schedule", help="cron 表达式（5 段）"),
     description: str = typer.Option("", "--desc", "-d", help="描述"),
     max_failures: int = typer.Option(3, "--max-failures", help="连续失败次数上限"),
 ) -> None:
     """创建新的定时循环任务。
 
-    必须指定 ``--skill`` / ``--query`` / ``--workflow`` 之一作为执行目标。
+    必须指定 ``--skill`` / ``--query`` / ``--workflow`` / ``--command`` 之一作为执行目标。
     """
-    if not any([skill_id, query, workflow]):
-        console.print("[red]❌ 至少需要指定 --skill、--query 或 --workflow 之一[/red]")
+    # Parse --command via shlex so users can pass quoted args (e.g. paths
+    # with spaces) without worrying about shell expansion. shlex.split raises
+    # ValueError on mismatched quotes — surface as a friendly CLI error
+    # rather than a traceback (mirrors Phase C FLAW #4 fix in install-launchd).
+    try:
+        command_args = shlex.split(command) if command else []
+    except ValueError as e:
+        console.print(f"[red]❌ --command 解析失败: {e}[/red]")
+        raise typer.Exit(1) from e
+
+    if not any([skill_id, query, workflow, command_args]):
+        console.print(
+            "[red]❌ 至少需要指定 --skill、--query、--workflow 或 --command 之一[/red]"
+        )
         raise typer.Exit(1)
 
     try:
         spec = LoopSpec(
             name=name,
-            description=description or f"Loop: {skill_id or query or workflow}",
+            description=description or f"Loop: {skill_id or query or workflow or command}",
             schedule=schedule,
             skill_id=skill_id,
             query=query,
             workflow_id=workflow,
+            command_args=command_args,
             max_failures=max_failures,
         )
     except ValidationError as e:

@@ -140,7 +140,7 @@ class RouterContextMixin:
         """
         try:
             learner = self._get_instinct_learner()
-            instinct_id = learner._generate_id(query)
+            instinct_id = learner.generate_id(query)
             with learner._lock:
                 if instinct_id in learner._instincts:
                     instinct = learner._instincts[instinct_id]

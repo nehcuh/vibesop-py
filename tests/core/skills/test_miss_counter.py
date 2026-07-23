@@ -178,6 +178,31 @@ def test_decay_frequent_idempotent_under_threshold(tmp_path: Path) -> None:
     assert next(iter(data.values()))["n"] == 2  # unchanged
 
 
+def test_decay_frequent_hashes_filter_skips_unrelated_clusters(tmp_path: Path) -> None:
+    """pi Phase D P2-D regression: ``hashes`` filter must restrict decay to
+    the specified clusters so unrelated signals keep their full count."""
+    counter = MissCounter(tmp_path)
+    # Cluster A: 6 misses, will be decayed.
+    for _ in range(6):
+        counter.record("alpha pattern")
+    # Cluster B: 6 misses, NOT in filter — must stay at 6.
+    for _ in range(6):
+        counter.record("beta pattern")
+
+    h_alpha = counter.hash_for("alpha pattern")
+
+    decayed = counter.decay_frequent(min_count=3, hashes={h_alpha})
+    assert len(decayed) == 1
+    assert decayed[0].hash == h_alpha
+
+    # Reload and verify only alpha was halved.
+    reloaded = MissCounter(tmp_path)
+    data = _load(tmp_path)
+    h_beta = reloaded.hash_for("beta pattern")
+    assert data[h_alpha]["n"] == 3  # 6 // 2
+    assert data[h_beta]["n"] == 6  # untouched
+
+
 def test_hash_for_matches_internal_hash(tmp_path: Path) -> None:
     """Public hash_for must produce the same digest as _hash for identical
     input — feedback-collect uses hash_for to match instinct patterns against

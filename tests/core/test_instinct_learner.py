@@ -590,8 +590,8 @@ class TestInstinctLearnerCrossProcessLock:
         learner_b = InstinctLearner(storage_path=storage_path)
 
         # Both start with the same disk view (empty).
-        a_id = learner_a._generate_id("alpha pattern")
-        b_id = learner_b._generate_id("beta pattern")
+        a_id = learner_a.generate_id("alpha pattern")
+        b_id = learner_b.generate_id("beta pattern")
 
         learner_a.learn(pattern="alpha pattern", action="do alpha")
         # learner_b's in-memory still empty; save writes only its new instinct,

@@ -431,7 +431,7 @@ class InstinctLearner:
         source: str = "manual",
     ) -> Instinct:
         # Generate ID from pattern
-        instinct_id = self._generate_id(pattern)
+        instinct_id = self.generate_id(pattern)
 
         # Check if already exists
         if instinct_id in self._instincts:
@@ -472,7 +472,7 @@ class InstinctLearner:
         a route — this is the missing reward signal that closes the instinct ->
         routing feedback loop (Phase 0 finding).
         """
-        self.record_outcome(self._generate_id(query), success)
+        self.record_outcome(self.generate_id(query), success)
 
     def find_matching(
         self,
@@ -540,7 +540,13 @@ class InstinctLearner:
 
         return instinct
 
-    def _generate_id(self, pattern: str) -> str:
+    def generate_id(self, pattern: str) -> str:
+        """Deterministic id for a pattern (same normalized pattern → same id).
+
+        Public so that callers like ``vibe instinct auto-promote`` can derive
+        the same id a ``learner.learn`` call would have produced, enabling
+        idempotent re-runs (set_instinct overwrites instead of duplicating).
+        """
         import hashlib
 
         # Normalize and hash
