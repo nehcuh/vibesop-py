@@ -709,40 +709,76 @@ def route(
         _print_fallback(query, decision.reason, json_output=json_output)
         raise typer.Exit(0)
 
-    if decision.mode == InterceptionMode.SINGLE:
-        routing_result = router.route(decision.query, context=context)
-        result = router._to_orchestration_result(routing_result, decision.query)
-    elif decision.mode == InterceptionMode.SINGLE_AGENT:
-        enriched_ctx = _build_single_agent_context(context, decision)
-        routing_result = router.route(decision.query, context=enriched_ctx)
-        result = router._to_orchestration_result(routing_result, decision.query)
-    elif decision.mode == InterceptionMode.MULTI_AGENT_SQUAD:
-        enriched_ctx = _build_multi_agent_squad_context(context, decision)
-        if use_live_progress:
+    # Open a trace span so CLI-routed llm-spans get a task parent. Without
+    # this, llm-spans emitted by SpanWrappedProvider are orphans — replay
+    # renders flat, and aggregator can't attribute them to a skill via
+    # trace_id. Mirrors hook path in agent_runtime.handle_query line 409.
+    from vibesop.core.observability import get_tracer as _get_cli_tracer
+
+    _cli_tracer = _get_cli_tracer()
+    _cli_trace_name = (
+        decision.query[:80] if len(decision.query) <= 80 else decision.query[:77] + "..."
+    )
+    with _cli_tracer.trace(
+        f"route:{_cli_trace_name}",
+        agent_id="vibe-cli",
+        metadata={
+            "query": decision.query[:200],
+            "platform": "vibe-cli",
+            "mode": decision.mode.value,
+            "source": "cli",
+        },
+    ) as _cli_task_span:
+        if decision.mode == InterceptionMode.SINGLE:
+            routing_result = router.route(decision.query, context=context)
+            result = router._to_orchestration_result(routing_result, decision.query)
+        elif decision.mode == InterceptionMode.SINGLE_AGENT:
+            enriched_ctx = _build_single_agent_context(context, decision)
+            routing_result = router.route(decision.query, context=enriched_ctx)
+            result = router._to_orchestration_result(routing_result, decision.query)
+        elif decision.mode == InterceptionMode.MULTI_AGENT_SQUAD:
+            enriched_ctx = _build_multi_agent_squad_context(context, decision)
+            if use_live_progress:
+                from vibesop.cli.progress import LiveOrchestrationCallbacks
+
+                with LiveOrchestrationCallbacks(console=console) as callbacks:
+                    result = router.orchestrate(
+                        decision.query, context=enriched_ctx, callbacks=callbacks
+                    )
+            else:
+                result = router.orchestrate(decision.query, context=enriched_ctx)
+        elif decision.mode == InterceptionMode.ORCHESTRATE:
+            if use_live_progress:
+                from vibesop.cli.progress import LiveOrchestrationCallbacks
+
+                with LiveOrchestrationCallbacks(console=console) as callbacks:
+                    result = router.orchestrate(
+                        decision.query, context=context, callbacks=callbacks
+                    )
+            else:
+                result = router.orchestrate(decision.query, context=context)
+        # Unknown mode: fall back to orchestration for backward compatibility
+        elif use_live_progress:
             from vibesop.cli.progress import LiveOrchestrationCallbacks
 
             with LiveOrchestrationCallbacks(console=console) as callbacks:
                 result = router.orchestrate(
-                    decision.query, context=enriched_ctx, callbacks=callbacks
+                    decision.query, context=context, callbacks=callbacks
                 )
         else:
-            result = router.orchestrate(decision.query, context=enriched_ctx)
-    elif decision.mode == InterceptionMode.ORCHESTRATE:
-        if use_live_progress:
-            from vibesop.cli.progress import LiveOrchestrationCallbacks
-
-            with LiveOrchestrationCallbacks(console=console) as callbacks:
-                result = router.orchestrate(decision.query, context=context, callbacks=callbacks)
-        else:
             result = router.orchestrate(decision.query, context=context)
-    # Unknown mode: fall back to orchestration for backward compatibility
-    elif use_live_progress:
-        from vibesop.cli.progress import LiveOrchestrationCallbacks
 
-        with LiveOrchestrationCallbacks(console=console) as callbacks:
-            result = router.orchestrate(decision.query, context=context, callbacks=callbacks)
-    else:
-        result = router.orchestrate(decision.query, context=context)
+        # Populate skill_id / mode / confidence on the task span so
+        # SpanAggregator can attribute llm-spans to a skill via trace_id.
+        # Mirrors agent_runtime.handle_query lines 551-554. Defensive
+        # getattr because some test fixtures use SimpleNamespace mocks.
+        _primary = getattr(result, "primary", None)
+        _cli_task_span.metadata["skill_id"] = (
+            getattr(_primary, "skill_id", "") or "" if _primary else ""
+        )
+        _mode = getattr(result, "mode", None)
+        _cli_task_span.metadata["mode"] = getattr(_mode, "value", str(_mode))
+        _cli_task_span.metadata["has_match"] = bool(getattr(result, "has_match", False))
 
     # Phase 4: render Agent Squad summary when the plan contains a squad
     squad_already_rendered = False

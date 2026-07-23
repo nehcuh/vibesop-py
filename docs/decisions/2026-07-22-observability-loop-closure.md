@@ -1550,10 +1550,34 @@ Added after M5 implementation + Kimi review:
 | 1 | `asyncio.gather` LIFO mis-attribution (threading.local context) | Medium — affects concurrent async LLM calls | Move to `contextvars.ContextVar` for asyncio task isolation |
 | 2 | `set_llm_factory` injection channel bypass | Low — third-party only | Contract enforcement or factory wrapper validation |
 | 3 | Pricing table not implemented (`cost_usd=0` + metadata flag) | Medium — blocks cost-based optimisation | `llm/pricing.py` with per-model rates |
-| 4 | Nested task-spans per trace_id (last-writer-wins on attribution map) | Low — only `agent_runtime` opens traces today | Add `parent_task_id` chain lookup in `_build_attribution_map` |
+| 4 | ~~Nested task-spans per trace_id (last-writer-wins on attribution map)~~ | ✅ Closed 2026-07-23 | CLI `vibe route` now opens `tracer.trace()` (was hook-only). See §24.7. |
 | 5 | Spans.jsonl unbounded growth, no rotation | Low — local dev only for P1 | `vibe trace clean` for spans.jsonl + size-based rotation |
 
 ### 24.6 Lesson reinforced
+
+Kimi's #1 (loop ends at file) is the most important finding of the entire P1 cycle: **"closure" claims require a consumer, not just a producer**. Recording this in `feedback-dynamic-workflow-external-review-first` as a second example.
+
+### 24.7 Post-ship follow-up: CLI path trace nesting (2026-07-23)
+
+**Finding (during manual verification):** The hook path (`agent_runtime.handle_query`) opened a `tracer.trace()` block, but the CLI path (`vibe route`) called `router.route()` / `router.orchestrate()` directly without opening one. Result: CLI-routed llm-spans had no task parent, replay rendered flat, aggregator couldn't attribute them to a skill via trace_id.
+
+**Fix:** Wrapped the routing dispatch block in `src/vibesop/cli/main.py:route()` with `tracer.trace("route:...", agent_id="vibe-cli", ...)`. Task span's `metadata.skill_id` / `mode` / `has_match` populated after dispatch completes (mirroring `agent_runtime.py:551-554`).
+
+**Regression tests:** `tests/cli/test_route_cli_trace.py` (3 tests):
+1. SINGLE dispatch persists task span with `skill_id` metadata
+2. llm-span emitted inside routing flow has task span as `parent_span_id`
+3. Early-exit (`should_route=False`) doesn't emit a task span
+
+**Verification (executed):**
+```
+$ vibe route "verify cli trace nesting $(date +%s)" --yes --quiet
+$ cat .vibe/observability/spans.jsonl | jq -c '{kind, id, parent, name}'
+{"kind":"task","parent":null,"name":"route:verify cli trace nesting ..."}
+{"kind":"llm","parent":"<task-id>","name":"llm:OpenAI:deepseek-v4-flash"}
+$ vibe trace metrics <skill-from-task-meta>
+Executions: 1 (success rate: 100%)
+LLM calls: 1 (success rate: 100%)
+```
 
 Kimi's #1 (loop ends at file) is the most important finding of the entire P1 cycle: **"closure" claims require a consumer, not just a producer**. Recording this in `feedback-dynamic-workflow-external-review-first` as a second example.
 
