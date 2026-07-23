@@ -477,20 +477,47 @@ class ClaudeCodeAdapter(HookBasedAdapter):
         """Install Claude Code hooks."""
         results: dict[str, bool] = {}
 
-        # Install pre-session-end hook
+        # Install pre-session-end hook. Mirrors the Jinja template at
+        # src/vibesop/hooks/templates/pre-session-end.sh.j2 — kept inline
+        # here because this adapter predates the HookInstaller refactor.
+        # If you change one, change the other.
         hook_path = config_dir / "hooks" / "pre-session-end.sh"
         try:
             hook_content = """#!/bin/bash
-# Pre-session-end hook for VibeSOP
-# This hook runs before the session ends
+# Pre-session-end hook for Claude Code
+# Closes the instinct-learning loop: mines the session for patterns and
+# promotes matured candidates into skill suggestions.
 
-# Trigger memory flush
-if command -v vibe &> /dev/null; then
-    echo "Flushing session memory..."
-    # Note: 'vibe memory flush' command will be available in future release
-    # For now, just log that session is ending
-    echo "Session ending at $(date)"
+set -e
+
+echo "[pre-session-end] Session ending at $(date)"
+
+if ! command -v vibe &> /dev/null; then
+    echo "[pre-session-end] VibeSOP CLI not found, skipping instinct learning"
+    exit 0
 fi
+
+# Locate the session jsonl (Claude Code stores under .claude/projects/).
+session_file="${VIBE_SESSION_FILE:-}"
+if [ -z "$session_file" ]; then
+    session_file=$(find .claude/projects/-* -name "*.jsonl" -type f \\
+        -printf '%T@ %p\\n' 2>/dev/null | sort -n | tail -1 | cut -d' ' -f2-)
+fi
+
+# (a) Mine the session for repeated tool patterns -> skill suggestions.
+if [ -n "$session_file" ] && [ -f "$session_file" ]; then
+    echo "[pre-session-end] Analyzing session: $(basename "$session_file")"
+    vibe analyze session "$session_file" || true
+else
+    vibe analyze session || true
+fi
+
+# (b) Promote any sequence candidates that matured during this session.
+echo "[pre-session-end] Evaluating instinct candidates"
+vibe instinct eval || true
+
+echo "[pre-session-end] Instinct learning complete"
+exit 0
 """
             hook_path.parent.mkdir(parents=True, exist_ok=True)
             self.write_file_atomic(hook_path, hook_content, validate_security=False)

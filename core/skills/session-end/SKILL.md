@@ -123,22 +123,44 @@ git add [specific files]  # Never git add .
 git commit -m "[type]: [description]"
 ```
 
-### 6. Instinct Learning (Automatic)
+### 6. Instinct Learning
 
 **Condition**: Session had ≥5 tool calls.
 
-Automatically extract reusable patterns from the session:
+Run the two commands that close the instinct loop. Both are idempotent —
+no-op if there's nothing new, so always-safe to invoke.
 
-1. Analyze tool call sequences for successful patterns
-2. Compare with existing instincts in `memory/instincts.yaml`
-3. Create new instinct candidates or update existing confidence scores
+```bash
+# (a) Mine this session's tool sequences for skill candidates.
+#     Reads the current session jsonl, looks for repeated tool patterns,
+#     surfaces anything crossing min-frequency / min-confidence thresholds.
+vibe analyze session
+
+# (b) Promote any sequence candidates that have matured during the session
+#     into skill suggestions. Reads .vibe/instincts.jsonl (the live store,
+#     not memory/instincts.yaml — the latter was a stale doc reference).
+vibe instinct eval
+
+# (c) Show the current instinct inventory (optional, for visibility).
+vibe instinct status
+```
+
+**What each command does**:
+- `vibe analyze session` → `SessionAnalyzer` reads `.vibe/session.jsonl`
+  (or platform equivalent), extracts repeated tool-call patterns,
+  outputs skill suggestions. Use `--auto-craft` to auto-create them.
+- `vibe instinct eval` → `InstinctLearner.get_sequence_candidates()`
+  returns candidates with ≥5 occurrences and ≥80% success rate; those
+  get fed to `SkillSuggestionCollector` for review.
+- `vibe instinct status` → inventory by confidence band.
 
 **Output**:
 ```
-Instincts: [Extracted N patterns / Updated M confidence scores / No new patterns]
+Instincts: [analyze: N suggestions / eval: M promoted / status: K total]
 ```
 
-**Note**: This step runs automatically. Use `vibe instinct status` to review learned patterns.
+**Skipped silently when**: `vibe` CLI not found, or `.vibe/instincts.jsonl`
+doesn't exist (no routing has happened yet).
 
 ### 7. Content Mining (Optional)
 
