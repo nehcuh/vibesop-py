@@ -136,7 +136,10 @@ class Span:
 
 @dataclass
 class TraceContext:
-    """Thread-local trace context, tracking the active trace/span hierarchy.
+    """Per-context trace state, tracking the active trace/span hierarchy.
+
+    Bound to a ``contextvars.ContextVar`` (not ``threading.local``) so
+    ``asyncio.gather`` tasks each get their own binding.
 
     ``current_task_id`` is set by ``tracer.trace(...)`` and inherited by
     descendant spans via ``start_span(...)``. This lets llm-spans emitted

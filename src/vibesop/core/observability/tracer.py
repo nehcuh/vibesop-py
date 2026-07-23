@@ -78,9 +78,16 @@ class ObservabilityTracer:
         self._enabled = enabled
         self._writer = SpanWriter(storage_path=storage_path) if enabled else None
         # ContextVar (not threading.local) so concurrent asyncio.gather tasks
-        # each get an isolated span stack. ThreadPoolExecutor threads also
-        # get isolation because ContextVar lookup hits the thread's current
-        # context (a fresh one for new threads unless explicitly copied).
+        # each get an isolated span stack. asyncio's create_task copies the
+        # context (PEP 567) so each Task gets its own binding.
+        #
+        # WARNING: ``loop.run_in_executor`` and ``ThreadPoolExecutor.submit``
+        # do NOT propagate the calling context — workers get a fresh default
+        # context, so spans emitted inside them are orphaned (standalone
+        # trace_id). This was equally broken under threading.local. If you
+        # need to emit spans from inside an executor, use
+        # ``contextvars.copy_context().run(fn)`` to propagate explicitly, or
+        # ``asyncio.to_thread`` (which copies context by default).
         self._ctx_var: contextvars.ContextVar["TraceContext | None"] = contextvars.ContextVar(
             "vibesop_trace_context"
         )
