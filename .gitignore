@@ -65,6 +65,12 @@ htmlcov/
 !.vibe/skills/cross-cutting/
 .vibe/instincts/
 .vibe/instincts.jsonl
+.vibe/instincts.jsonl.lock
+.vibe/instincts.jsonl.bak
+.vibe/sequences.jsonl
+.vibe/sequences.jsonl.lock
+.vibe/sequences.jsonl.bak
+.vibe/clear_epoch
 .vibe/snapshots/
 .vibe/cache/
 .vibe/dist/

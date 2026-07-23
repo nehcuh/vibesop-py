@@ -683,3 +683,31 @@ class TestExecuteLoopTickCommandPath:
 
         assert record.success is True
         assert len(record.output_summary) == 200
+
+    def test_command_target_unicode_args_pass_through_unchanged(self, monkeypatch):
+        """command_args with non-ASCII (CJK, accented Latin) must reach
+        subprocess.run as the original argv elements, not mojibake.
+
+        Defended-against: any accidental encode/decode in _run_command_target
+        would corrupt non-ASCII args (Phase A deferred item from pi review).
+        """
+        unicode_args = ["instinct", "学会", "naïve-repo", "测试/路径"]
+        spec = _cmd_spec(name="unicode", command_args=unicode_args)
+
+        captured_argv: list[str] = []
+
+        def capture_run(argv, **_kwargs):
+            captured_argv.extend(argv)
+            return _completed_process(0, stdout="ok", stderr="")
+
+        mock_run = MagicMock(side_effect=capture_run)
+        monkeypatch.setattr("vibesop.core.loop.executor.subprocess.run", mock_run)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            store = LoopStore(base_dir=tmpdir)
+            store.save_spec(spec)
+            record = execute_loop_tick(spec, runtime=_mock_runtime(), store=store)
+
+        # Argv tail (after the 3-element prefix) must equal the unicode args exactly.
+        assert captured_argv[-len(unicode_args):] == unicode_args
+        assert record.success is True

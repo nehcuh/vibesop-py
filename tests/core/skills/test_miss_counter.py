@@ -139,3 +139,60 @@ def test_record_empty_query_is_noop(tmp_path: Path) -> None:
     counter.record("")
     counter.record("   \n\t  ")
     assert not _data_file(tmp_path).exists()
+
+
+def test_decay_frequent_halves_counts_and_returns_decayed(tmp_path: Path) -> None:
+    """decay_frequent halves counts at/above min_count and returns pre-decay
+    clusters (plan v2 §4 — feedback loop must not erase its own signal).
+    """
+    counter = MissCounter(tmp_path)
+    for _ in range(6):
+        counter.record("frequent query A")
+    for _ in range(3):
+        counter.record("frequent query B")
+    counter.record("rare query C")
+
+    decayed = counter.decay_frequent(min_count=3)
+    # Pre-decay counts (>= min_count only): A=6, B=3
+    decayed_counts = sorted(c.count for c in decayed)
+    assert decayed_counts == [3, 6]
+    # All returned clusters have hashes (not raw queries)
+    assert all(len(c.hash) == 16 for c in decayed)
+
+    # After decay: A=3 (6//2), B=1 (3//2), C untouched (count 1 < min)
+    data = _load(tmp_path)
+    counts = sorted(int(v["n"]) for v in data.values())
+    assert counts == [1, 1, 3]
+
+
+def test_decay_frequent_idempotent_under_threshold(tmp_path: Path) -> None:
+    """decay_frequent with no clusters at/above min_count returns empty and
+    writes nothing changed."""
+    counter = MissCounter(tmp_path)
+    counter.record("only twice")
+    counter.record("only twice")
+
+    decayed = counter.decay_frequent(min_count=3)
+    assert decayed == []
+    data = _load(tmp_path)
+    assert next(iter(data.values()))["n"] == 2  # unchanged
+
+
+def test_hash_for_matches_internal_hash(tmp_path: Path) -> None:
+    """Public hash_for must produce the same digest as _hash for identical
+    input — feedback-collect uses hash_for to match instinct patterns against
+    frequent() hashes (plan v2 §4)."""
+    counter = MissCounter(tmp_path)
+    normalized = "deploy the front end service"
+    assert counter.hash_for(normalized) == counter._hash(normalized)
+    # And actually equals the stored hash when the same normalized form is recorded.
+    counter.record(normalized.upper())  # normalization happens inside record
+    assert counter.hash_for(normalized) in _load(tmp_path)
+
+
+def test_hash_for_is_deterministic_across_instances(tmp_path: Path) -> None:
+    """Same salt → same hash_for output across separate MissCounter instances."""
+    normalized = "refactor the auth middleware"
+    h1 = MissCounter(tmp_path).hash_for(normalized)
+    h2 = MissCounter(tmp_path).hash_for(normalized)
+    assert h1 == h2

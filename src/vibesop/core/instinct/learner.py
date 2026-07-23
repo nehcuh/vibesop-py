@@ -3,14 +3,19 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 import threading
+from collections.abc import Generator
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 from vibesop.utils.atomic_writer import write_text
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -164,28 +169,191 @@ class InstinctLearner:
         except ImportError:
             self._numpy = None
         self._lock = threading.RLock()
+        # Generation counter for clear() — bumped on every purge so concurrent
+        # learners detect that their in-memory state is stale (loaded before
+        # the clear) and drop it instead of resurrecting purged data via merge
+        # (adversarial review Phase B FLAW #1, CRITICAL).
+        self._clear_epoch_at_load = self._read_clear_epoch()
         self._load()
 
-    def _load(self) -> None:
-        if not self.storage_path.exists():
-            return
+    def _clear_epoch_path(self) -> Path:
+        return self.storage_path.parent / "clear_epoch"
 
-        with self.storage_path.open(encoding="utf-8") as f:
-            for raw_line in f:
-                stripped = raw_line.strip()
-                if not stripped:
-                    continue
-                try:
-                    data = json.loads(stripped)
-                    instinct = Instinct.from_dict(data)
-                    self._instincts[instinct.id] = instinct
-                except (json.JSONDecodeError, KeyError):
-                    continue
-        self._embedding_cache.clear()
+    def _read_clear_epoch(self) -> int:
+        """Return the current clear-generation marker (0 if absent)."""
+        try:
+            return int(self._clear_epoch_path().read_text(encoding="utf-8").strip())
+        except (OSError, ValueError):
+            return 0
+
+    def _bump_clear_epoch_locked(self) -> None:
+        """Increment the clear-generation marker. Called inside the
+        cross-process lock during ``clear()``."""
+        try:
+            write_text(self._clear_epoch_path(), str(self._read_clear_epoch() + 1))
+        except OSError as e:
+            # Non-fatal — at worst, a concurrent learner resurrects data on
+            # its next save. Worst case is no worse than pre-fix behavior.
+            logger.warning("Failed to bump clear epoch: %s", e)
+
+    def _load(self) -> None:
+        if self.storage_path.exists():
+            with self.storage_path.open(encoding="utf-8") as f:
+                for raw_line in f:
+                    stripped = raw_line.strip()
+                    if not stripped:
+                        continue
+                    try:
+                        data = json.loads(stripped)
+                        instinct = Instinct.from_dict(data)
+                        self._instincts[instinct.id] = instinct
+                    except (json.JSONDecodeError, KeyError):
+                        continue
+            self._embedding_cache.clear()
+        # Always probe for sequences.jsonl even when instincts.jsonl is absent
+        # — otherwise a project that has recorded tool-call sequences but no
+        # learned instincts would silently drop every sequence on next load
+        # (adversarial review Phase B note: pre-existing Phase A bug surfaced
+        # by the record_sequence lock test).
         self._load_sequences()
 
+    @contextmanager
+    def _cross_process_lock(self, data_path: Path) -> Generator[None]:
+        """Acquire an exclusive advisory lock on a sibling ``.lock`` file.
+
+        Threading is already protected by ``self._lock`` (RLock); this adds
+        cross-process serialisation so a launchd tick running
+        ``vibe instinct feedback-collect`` and an interactive session running
+        ``vibe instinct learn`` cannot race the read-modify-write of
+        ``instincts.jsonl`` / ``sequences.jsonl``.
+
+        POSIX only — Windows falls back to no-op (single-user CLI
+        assumption; matches ``core/observability/span_writer.py`` precedent).
+        The lock lives on a sibling file (not the data file) so atomic
+        rename inside ``write_text`` does not release it.
+        """
+        try:
+            import fcntl
+        except ImportError:
+            yield  # Windows: no-op
+            return
+        lock_path = data_path.with_suffix(data_path.suffix + ".lock")
+        try:
+            lock_path.parent.mkdir(parents=True, exist_ok=True)
+            with lock_path.open("w") as lock_f:
+                fcntl.flock(lock_f.fileno(), fcntl.LOCK_EX)
+                try:
+                    yield
+                finally:
+                    fcntl.flock(lock_f.fileno(), fcntl.LOCK_UN)
+        except OSError as e:
+            # Lock acquisition failure is non-fatal — warn and proceed unlocked.
+            # Better to write with a race window than to lose the entire tick.
+            logger.warning("Failed to acquire cross-process lock on %s: %s", lock_path, e)
+            yield
+
+    @staticmethod
+    def _backup_locked(data_path: Path) -> None:
+        """Copy ``data_path`` to ``data_path.bak`` before overwriting.
+
+        Provides a single-step recovery point if the write succeeds but a
+        later read is corrupt (rare; usually caused by external tampering).
+        Called inside the cross-process lock.
+        """
+        if not data_path.exists():
+            return
+        try:
+            backup_path = data_path.with_suffix(data_path.suffix + ".bak")
+            backup_path.write_bytes(data_path.read_bytes())
+        except OSError as e:
+            logger.warning("Failed to back up %s: %s", data_path, e)
+
+    def _merge_disk_into_memory_locked(self) -> None:
+        """Re-read ``instincts.jsonl`` from disk and merge any IDs that are
+        NOT in our in-memory ``_instincts`` dict.
+
+        In-memory wins for shared IDs (we just modified them). Disk-only IDs
+        are promoted so a concurrent process's writes are not clobbered when
+        we save. Called inside the cross-process lock; doesn't take
+        ``self._lock`` (caller already holds it).
+
+        Known limitation (adversarial review Phase B FLAW #2): for shared IDs,
+        this merge replaces disk's ``success_count`` / ``failure_count`` with
+        in-memory values, which silently drops a concurrent writer's counter
+        updates. A delta-based merge (tracking per-id counts at load time and
+        applying ``disk + (memory - loaded)``) is the proper fix but adds
+        non-trivial state; deferred unless the feedback loop surfaces real
+        loss. Trigger requires two writers mutating the SAME instinct's
+        counters within the same load-save window — unlikely with the daily
+        04:37 feedback-collect schedule vs daytime interactive use.
+        """
+        if not self.storage_path.exists():
+            return
+        try:
+            with self.storage_path.open(encoding="utf-8") as f:
+                for raw_line in f:
+                    stripped = raw_line.strip()
+                    if not stripped:
+                        continue
+                    try:
+                        data = json.loads(stripped)
+                        instinct = Instinct.from_dict(data)
+                    except (json.JSONDecodeError, KeyError):
+                        continue
+                    if instinct.id not in self._instincts:
+                        self._instincts[instinct.id] = instinct
+        except OSError as e:
+            logger.warning("Failed to re-read %s for merge: %s", self.storage_path, e)
+
+    def _merge_disk_sequences_into_memory_locked(self) -> None:
+        """Same merge semantics for ``sequences.jsonl``."""
+        seq_path = self.storage_path.parent / "sequences.jsonl"
+        if not seq_path.exists():
+            return
+        try:
+            with seq_path.open(encoding="utf-8") as f:
+                for raw_line in f:
+                    stripped = raw_line.strip()
+                    if not stripped:
+                        continue
+                    try:
+                        data = json.loads(stripped)
+                        pattern = SequencePattern.from_dict(data)
+                    except (json.JSONDecodeError, KeyError):
+                        continue
+                    if pattern.sequence_hash not in self._sequences:
+                        self._sequences[pattern.sequence_hash] = pattern
+        except OSError as e:
+            logger.warning("Failed to re-read %s for merge: %s", seq_path, e)
+
     def _save(self) -> None:
-        with self._lock:
+        with self._lock, self._cross_process_lock(self.storage_path):
+            # Clear-epoch guard (adversarial review Phase B FLAW #1): if
+            # another process called clear() after we loaded, our in-memory
+            # state is stale and would resurrect purged data via the merge
+            # below. Detect via the generation counter and drop our state.
+            current_epoch = self._read_clear_epoch()
+            if current_epoch > self._clear_epoch_at_load:
+                logger.info(
+                    "Detected clear() epoch advance (%d -> %d); dropping stale in-memory state",
+                    self._clear_epoch_at_load,
+                    current_epoch,
+                )
+                self._instincts.clear()
+                self._sequences.clear()
+                self._embedding_cache.clear()
+                self._clear_epoch_at_load = current_epoch
+
+            # Pick up concurrent writes from other processes (launchd
+            # promote vs interactive learn, etc.). In-memory wins for
+            # shared IDs; disk-only IDs are preserved.
+            self._merge_disk_into_memory_locked()
+            self._merge_disk_sequences_into_memory_locked()
+            self._backup_locked(self.storage_path)
+            seq_path = self.storage_path.parent / "sequences.jsonl"
+            if seq_path.exists():
+                self._backup_locked(seq_path)
+
             content = "".join(
                 json.dumps(instinct.to_dict()) + "\n" for instinct in self._instincts.values()
             )
@@ -212,13 +380,35 @@ class InstinctLearner:
         self._save()
 
     def clear(self) -> int:
-        """Remove all learned instincts (F-08). Returns count removed."""
-        with self._lock:
+        """Remove all learned instincts (F-08). Returns count removed.
+
+        Skips the disk-merge step that ``_save`` normally does — clear is a
+        destructive privacy purge, so disk state must NOT be preserved.
+        Deletes the data files entirely (``.bak`` included so the pre-clear
+        state cannot be recovered post-purge). Bumps a generation counter so
+        any concurrent in-memory learner detects the clear on its next save
+        and drops its stale state instead of resurrecting purged data via
+        merge (adversarial review Phase B FLAW #1, CRITICAL).
+        """
+        with self._lock, self._cross_process_lock(self.storage_path):
             count = len(self._instincts)
             self._instincts.clear()
             self._sequences.clear()
             self._embedding_cache.clear()
-            self._save()
+            for path in (
+                self.storage_path,
+                self.storage_path.with_suffix(self.storage_path.suffix + ".bak"),
+                self.storage_path.parent / "sequences.jsonl",
+                self.storage_path.parent / "sequences.jsonl.bak",
+            ):
+                try:
+                    path.unlink(missing_ok=True)
+                except OSError as e:
+                    logger.warning("Failed to remove %s during clear: %s", path, e)
+            # Bump the epoch AFTER file deletion so a concurrent reader sees
+            # the new epoch only once the data is gone.
+            self._bump_clear_epoch_locked()
+            self._clear_epoch_at_load = self._read_clear_epoch()
         return count
 
     def learn(
@@ -468,9 +658,26 @@ class InstinctLearner:
         if len(steps) < 3:
             return None
 
-        # Hold the lock across mutation + persist (kimi HIGH: was lock-free, racing
-        # with learn/record_outcome which now take self._lock).
-        with self._lock:
+        seq_path = self.storage_path.parent / "sequences.jsonl"
+        # Hold the *store-level* lock (storage_path) across mutation + persist.
+        # Phase B kimi milestone P1: must NOT use seq_path's own lock, because
+        # _save() and clear() take the storage_path lock while writing
+        # sequences.jsonl. Two different lock files would not mutually exclude,
+        # reopening both FLAW #1 (sequences resurrection) and FLAW #3 (lost
+        # sequence updates). Single lock file for the whole store.
+        with self._lock, self._cross_process_lock(self.storage_path):
+            # Clear-epoch guard: if another process purged since we loaded,
+            # drop our stale in-memory sequences (mirrors _save's check).
+            current_epoch = self._read_clear_epoch()
+            if current_epoch > self._clear_epoch_at_load:
+                self._sequences.clear()
+                self._clear_epoch_at_load = current_epoch
+
+            # Pick up sequences written by a concurrent process so we don't
+            # clobber them. In-memory wins for shared hashes (we just bumped
+            # the count); disk-only hashes are preserved.
+            self._merge_disk_sequences_into_memory_locked()
+
             import hashlib
 
             seq_hash = hashlib.md5("→".join(steps).encode()).hexdigest()[:12]
@@ -500,6 +707,10 @@ class InstinctLearner:
                     if tag in context_lower and tag not in pattern.context_tags:
                         pattern.context_tags.append(tag)
 
+            # Symmetric .bak rotation with _save (pi P2 nit #1): without this,
+            # sequences.jsonl had no recovery point when written via
+            # record_sequence.
+            self._backup_locked(seq_path)
             self._save_sequences()
 
             return pattern if pattern.is_candidate else None

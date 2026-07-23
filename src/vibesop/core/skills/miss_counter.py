@@ -142,6 +142,56 @@ class MissCounter:
         except OSError as e:
             logger.warning("Failed to clear miss counter: %s", e)
 
+    def decay_frequent(self, min_count: int = 3) -> list[MissedHashCluster]:
+        """Halve counts for clusters at or above *min_count*, persist, return
+        the decayed clusters.
+
+        Used by ``vibe instinct feedback-collect`` instead of ``clear()`` so
+        the feedback loop doesn't erase its own signal after the first tick
+        (plan v2 §4 — kimi/pi MUST-FIX D). Each decay leaves the residual
+        count in place so a persistent miss still surfaces next tick.
+
+        Returns:
+            The list of clusters that were decayed this call (pre-decay
+            counts), so the caller can correlate with which instincts it
+            penalised.
+        """
+        try:
+            data = self._load()
+            decayed: list[MissedHashCluster] = []
+            for digest, entry in data.items():
+                try:
+                    count = int(entry.get("n", 0))
+                except (TypeError, ValueError):
+                    continue
+                if count < min_count:
+                    continue
+                decayed.append(
+                    MissedHashCluster(
+                        hash=digest,
+                        count=count,
+                        first=str(entry.get("first", "")),
+                        last=str(entry.get("last", "")),
+                    )
+                )
+                entry["n"] = count // 2
+            write_text(self._data_path, json.dumps(data, ensure_ascii=False, indent=2))
+            return decayed
+        except Exception as e:  # telemetry must never break routing
+            logger.debug("Failed to decay miss counter: %s", e)
+            return []
+
+    def hash_for(self, normalized_query: str) -> str:
+        """Public wrapper over ``_hash`` for callers that need to match
+        patterns against frequent misses (e.g. ``feedback-collect`` matching
+        instinct patterns to ``frequent()`` hashes).
+
+        Privacy: the salt is mode 0o600 local-only; calling this with raw
+        user input is safe but defeats the purpose — pass normalised instinct
+        patterns only.
+        """
+        return self._hash(normalized_query)
+
     # ------------------------------------------------------------------
     # Internals
     # ------------------------------------------------------------------
