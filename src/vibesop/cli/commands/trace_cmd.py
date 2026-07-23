@@ -3,7 +3,7 @@
 Usage:
     vibe trace list                  List recent routing traces
     vibe trace show <trace_id>       Show full trace detail
-    vibe trace clean [--keep N]      Remove old traces
+    vibe trace clean [--keep N]      Remove old traces (legacy .vibe/traces/*.json)
     vibe trace replay [--trace-id ID] [--span-file PATH]
                                      Replay agent-internal spans
                                      (.vibe/observability/spans.jsonl)
@@ -12,10 +12,14 @@ Usage:
     vibe trace metrics <skill_id>    Aggregate metrics for a skill from
                                      spans.jsonl (closes GAP-3 by
                                      consuming SpanAggregator).
+    vibe trace prune [--days N]      Prune old spans from spans.jsonl by age.
+                                     Writes atomically (temp + rename) so a
+                                     crash mid-prune cannot corrupt the file.
 """
 
 from __future__ import annotations
 
+import contextlib
 import json
 from pathlib import Path
 
@@ -584,3 +588,102 @@ def metrics(
             console.print(f"  [dim]•[/dim] {err}")
 
     console.print()
+
+
+@app.command()
+def prune(
+    days: int = typer.Option(
+        30,
+        "--days",
+        "-d",
+        help="Remove spans whose started_at is older than N days (default: 30).",
+    ),
+    dry_run: bool = typer.Option(
+        False, "--dry-run", help="Show what would be pruned without writing."
+    ),
+    span_file: Path = typer.Option(
+        Path(".vibe/observability/spans.jsonl"),
+        "--span-file",
+        help="Span JSONL file to prune (default: .vibe/observability/spans.jsonl).",
+    ),
+) -> None:
+    """Prune old spans from spans.jsonl by age (closes v8.2 P2 §24.5 #5).
+
+    Reads the span file, filters out spans older than ``--days``, writes
+    the surviving spans back atomically (temp file + rename). Use
+    ``--dry-run`` to preview without modifying.
+
+    Spans without a parseable ``started_at`` are kept (defensive — never
+    silently drop data we can't reason about).
+    """
+    from datetime import UTC, datetime, timedelta
+
+    if not span_file.exists():
+        console.print(f"[dim]Span file not found: {span_file}[/dim]")
+        return
+
+    cutoff = datetime.now(UTC) - timedelta(days=days)
+
+    kept: list[str] = []
+    pruned = 0
+    unparseable = 0
+    total = 0
+
+    with span_file.open("r", encoding="utf-8") as f:
+        for raw_line in f:
+            stripped = raw_line.strip()
+            if not stripped:
+                continue
+            total += 1
+            try:
+                record = json.loads(stripped)
+                started_at = record.get("started_at")
+                if not started_at:
+                    unparseable += 1
+                    kept.append(stripped)
+                    continue
+                # Tolerate both ISO-with-tz and ISO-without-tz.
+                # SpanWriter always writes timezone-aware ISO, but be defensive.
+                ts = datetime.fromisoformat(started_at.replace("Z", "+00:00"))
+                if ts.tzinfo is None:
+                    ts = ts.replace(tzinfo=UTC)
+                if ts < cutoff:
+                    pruned += 1
+                    continue
+                kept.append(stripped)
+            except (json.JSONDecodeError, ValueError, TypeError):
+                unparseable += 1
+                kept.append(stripped)
+
+    console.print(
+        f"[dim]Total: {total} spans | would prune: {pruned} | "
+        f"keep: {len(kept)} (incl. {unparseable} unparseable)[/dim]"
+    )
+
+    if dry_run:
+        console.print("[yellow]Dry-run mode — no changes written.[/yellow]")
+        return
+
+    if pruned == 0:
+        console.print("[dim]Nothing to prune.[/dim]")
+        return
+
+    # Atomic write: temp file + rename. A crash mid-write leaves the
+    # original spans.jsonl intact and the .tmp file orphaned (recoverable).
+    tmp_file = span_file.with_suffix(span_file.suffix + ".tmp")
+    try:
+        with tmp_file.open("w", encoding="utf-8") as f:
+            for line in kept:
+                f.write(line + "\n")
+        tmp_file.replace(span_file)
+    except Exception as e:
+        # Best-effort cleanup of orphaned temp file
+        with contextlib.suppress(Exception):
+            tmp_file.unlink(missing_ok=True)
+        console.print(f"[red]Failed to prune: {e}[/red]")
+        raise typer.Exit(1) from e
+
+    console.print(
+        f"[green]Pruned {pruned} span(s) older than {days} day(s).[/green] "
+        f"[dim]Kept {len(kept)} in {span_file}.[/dim]"
+    )
