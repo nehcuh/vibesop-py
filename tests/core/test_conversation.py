@@ -49,6 +49,52 @@ class TestConversationTurn:
         assert restored.query == original.query
         assert restored.skill_id == original.skill_id
 
+    def test_role_defaults_to_user(self) -> None:
+        """Pre-mirror data and user turns get role='user' by default."""
+        turn = ConversationTurn(query="q", skill_id=None, timestamp=1.0)
+        assert turn.role == "user"
+        assert turn.content is None
+
+    def test_role_and_content_roundtrip(self) -> None:
+        """New role/content fields survive to_dict → from_dict."""
+        original = ConversationTurn(
+            query="",
+            skill_id=None,
+            timestamp=1.0,
+            role="assistant",
+            content="Here is the plan...",
+        )
+        restored = ConversationTurn.from_dict(original.to_dict())
+        assert restored.role == "assistant"
+        assert restored.content == "Here is the plan..."
+
+    def test_from_dict_legacy_data_without_role_content(self) -> None:
+        """Old conversation files (pre-mirror) load with role='user', content=None."""
+        legacy = {
+            "query": "old query",
+            "skill_id": "a/b",
+            "timestamp": 1.0,
+            "intent": "review",
+        }
+        turn = ConversationTurn.from_dict(legacy)
+        assert turn.role == "user"
+        assert turn.content is None
+        assert turn.query == "old query"
+        assert turn.intent == "review"
+
+    def test_tool_turn_construction(self) -> None:
+        """Tool turns carry role='tool' and a description in content."""
+        turn = ConversationTurn(
+            query="",
+            skill_id=None,
+            timestamp=1.0,
+            role="tool",
+            content="Bash(command)",
+        )
+        data = turn.to_dict()
+        assert data["role"] == "tool"
+        assert data["content"] == "Bash(command)"
+
 
 class TestConversationContext:
     """Test ConversationContext persistence and logic."""

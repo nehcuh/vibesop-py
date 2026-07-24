@@ -17,6 +17,7 @@ Complete reference for all VibeSOP CLI commands (v8.0.0+).
   - [`vibe install`](#vibe-install)
   - [`vibe market`](#vibe-market)
   - [`vibe sequence`](#vibe-sequence)
+  - [`vibe conversation`](#vibe-conversation)
   - [`vibe data purge`](#vibe-data-purge)
 - [Skills Management](#skills-management)
   - [`vibe skills`](#vibe-skills)
@@ -314,6 +315,26 @@ vibe sequence <command>
 - `assemble` - Assemble recorded tool events into sequences (grouped by session, 30-min window fallback) and feed them to the instinct learner (`record_sequence`, application-only weight)
 
 **Related:** the Claude Code adapter ships the `vibesop-tool-seq.sh` hook (installed when `sequences.enabled` is true) which pipes PostToolUse events to `vibe sequence record-tool`. Captured data lives in `.vibe/tool_sequences.jsonl` (rotated at 10MB) and can be removed with `vibe data purge --tool-sequences`.
+
+### `vibe conversation`
+
+Mirror Claude Code conversations into `.vibe/conversations/<id>.json` so they appear in the dashboard's Conversations tab. Two complementary paths:
+
+```bash
+vibe conversation <command>
+```
+
+**Commands:**
+- `import-claude` - Batch-import one or more Claude Code transcript `.jsonl` files. Auto-discovers `~/.claude/projects/<escaped-cwd>/*.jsonl` when `--source` is empty. Idempotent (re-importing a growing session adds only new turns). Use `--all-sessions` to import every file in a directory as a separate conversation.
+- `append-turn` - Real-time hook entry point (reads JSON from stdin). Dispatches `UserPromptSubmit` → user turn, `PostToolUse` → tool turn (only stores tool name + input keys, **never** `tool_input` values). Always exits 0 — hook contract. Fail-open on malformed input.
+
+**Options (import-claude):**
+- `--source <path>` - File or directory. Empty = auto-discover.
+- `--conversation-id <id>` - Empty = `mirror-claude-<jsonl-stem>`.
+- `--storage-dir <path>` - Default `.vibe/conversations`.
+- `--all-sessions` - Import every `.jsonl` in directory as its own conversation.
+
+**Related:** the Claude Code adapter ships two opt-in hooks (`vibesop-mirror-prompt.sh` + `vibesop-mirror-session-end.sh`) when `conversation_mirror.enabled = true` in `.vibe/config.toml`. **Default false** (opt-in, since mirror captures user prompts which may contain secrets). The SessionEnd hook triggers a full `import-claude` for the just-ended session — this is the only way to surface assistant responses (Claude Code has no real-time assistant hook). Mirror data is already covered by `.gitignore:122` (`.vibe/conversations/`).
 
 ### `vibe data purge`
 

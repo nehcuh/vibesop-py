@@ -15,7 +15,7 @@ degradation_fallback_always_ask = true
 session_aware = true
 
 [orchestration]
-enabled = true
+enabled = false
 
 [security]
 threat_level = "medium"
@@ -34,7 +34,7 @@ superpowers = 80
 project = 100
 
 [analytics]
-enabled = true
+enabled = false
 
 [preferences]
 learning_enabled = true
@@ -45,3 +45,9 @@ learning_enabled = true
 enabled = true
 default_tick_seconds = 60
 max_active_loops = 20
+
+[conversation_mirror]
+# Mirror Claude Code conversations into .vibe/conversations/ for dashboard.
+# Default false — opt-in (mirror captures user prompts which may contain secrets).
+# Hooks shipped: vibesop-mirror-prompt.sh (UserPromptSubmit), vibesop-mirror-session-end.sh (SessionEnd).
+enabled = true

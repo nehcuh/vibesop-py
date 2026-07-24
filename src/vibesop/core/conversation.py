@@ -20,12 +20,25 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class ConversationTurn:
-    """A single turn in a conversation."""
+    """A single turn in a conversation.
+
+    ``role`` distinguishes who produced the turn — ``"user"`` (default,
+    preserved for backward compat with pre-mirror data), ``"assistant"``
+    (captured only via jsonl import, since Claude Code has no real-time
+    assistant hook), or ``"tool"`` (PostToolUse capture, name + input keys
+    only — never ``tool_input`` values).
+
+    ``content`` carries the assistant/tool text. For user turns it stays
+    ``None`` and ``query`` is the canonical field; the dashboard template
+    renders ``t.query || t.content`` so both shapes display correctly.
+    """
 
     query: str
     skill_id: str | None
     timestamp: float
     intent: str | None = None
+    role: str = "user"
+    content: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -33,6 +46,8 @@ class ConversationTurn:
             "skill_id": self.skill_id,
             "timestamp": self.timestamp,
             "intent": self.intent,
+            "role": self.role,
+            "content": self.content,
         }
 
     @classmethod
@@ -42,6 +57,8 @@ class ConversationTurn:
             skill_id=data.get("skill_id"),
             timestamp=data["timestamp"],
             intent=data.get("intent"),
+            role=data.get("role", "user"),
+            content=data.get("content"),
         )
 
 
@@ -182,19 +199,37 @@ class ConversationContext:
     # History management
     # ------------------------------------------------------------------
 
-    def add_turn(self, query: str, skill_id: str | None = None, intent: str | None = None) -> None:
-        """Record a new conversation turn."""
+    def add_turn(
+        self,
+        query: str,
+        skill_id: str | None = None,
+        intent: str | None = None,
+        *,
+        role: str = "user",
+        content: str | None = None,
+        timestamp: float | None = None,
+    ) -> None:
+        """Record a new conversation turn.
+
+        ``role``/``content``/``timestamp`` are kwarg-only to keep positional
+        callers (pre-mirror, all-user code) source-compatible. Mirror callers
+        pass ``role="assistant", content="..."`` or ``role="tool", content="..."``;
+        ``timestamp`` lets batch importers preserve the original event time
+        instead of using now.
+        """
         with self._lock:
             turn = ConversationTurn(
                 query=query,
                 skill_id=skill_id,
-                timestamp=time.time(),
+                timestamp=timestamp if timestamp is not None else time.time(),
                 intent=intent,
+                role=role,
+                content=content,
             )
             self._turns.append(turn)
             if len(self._turns) > self._max_history:
                 self._turns = self._turns[-self._max_history :]
-            self._last_activity = time.time()
+            self._last_activity = turn.timestamp
         self.save()
 
     def get_history(self) -> list[ConversationTurn]:

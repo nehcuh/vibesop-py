@@ -39,6 +39,7 @@ if TYPE_CHECKING:
 from vibesop import __version__
 from vibesop.cli.commands import (
     badges_cmd,
+    conversation_cmd,
     dashboard_cmd,
     data_cmd,
     deviation_cmd,
@@ -168,6 +169,7 @@ app.add_typer(workflows_cmd.app, name="workflows")
 app.add_typer(instinct_cmd.app, name="instinct")
 app.add_typer(prompt_chain_cmd.app, name="prompt-chain")
 app.add_typer(sequence_cmd.app, name="sequence")
+app.add_typer(conversation_cmd.app, name="conversation")
 app.add_typer(loop_cmd.app, name="loop")
 app.add_typer(optimize_cmd.app, name="optimize")
 app.add_typer(data_cmd.app, name="data")

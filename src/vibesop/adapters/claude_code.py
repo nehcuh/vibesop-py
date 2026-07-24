@@ -152,6 +152,25 @@ class ClaudeCodeAdapter(HookBasedAdapter):
             logger.debug("sequences.enabled lookup failed, defaulting to enabled")
             return True
 
+    def _conversation_mirror_enabled(self) -> bool:
+        """Read the ``conversation_mirror.enabled`` switch (default false).
+
+        Unlike ``sequences.enabled`` (default true), conversation mirror is
+        opt-in: it captures user prompts verbatim, which may contain secrets,
+        so the user must explicitly enable. Fail-closed on config errors —
+        a broken config must not silently flip capture on.
+        """
+        try:
+            from vibesop.core.config.manager import ConfigManager
+
+            enabled = ConfigManager(self._project_root).get("conversation_mirror.enabled", False)
+            if isinstance(enabled, str):  # env vars are returned as raw strings
+                enabled = enabled.strip().lower() in ("true", "1", "yes", "on")
+            return bool(enabled)
+        except Exception:
+            logger.debug("conversation_mirror.enabled lookup failed, defaulting to disabled")
+            return False
+
     def render_config(self, manifest: Manifest, output_dir: Path) -> RenderResult:
         """Render full Claude Code configuration: config + skills."""
         result = self.render_config_only(manifest, output_dir)
@@ -269,6 +288,7 @@ class ClaudeCodeAdapter(HookBasedAdapter):
             self._render_route_hook(output_dir, result)
             self._render_track_hook(output_dir, result)
             self._render_tool_seq_hook(output_dir, result)
+            self._render_conversation_mirror_hooks(output_dir, result)
 
         except Exception as e:
             result.add_error(f"Failed to render configuration: {e}")
@@ -385,6 +405,33 @@ class ClaudeCodeAdapter(HookBasedAdapter):
                 }
             ]
 
+        # Register the conversation-mirror hooks (UserPromptSubmit for
+        # real-time prompt mirroring, SessionEnd for transcript import).
+        # Opt-in — captures user prompts verbatim, which may contain secrets.
+        if self._conversation_mirror_enabled():
+            settings["hooks"]["UserPromptSubmit"].append(
+                {
+                    "matcher": "",
+                    "hooks": [
+                        {
+                            "type": "command",
+                            "command": f"bash {hooks_dir}/vibesop-mirror-prompt.sh",
+                        }
+                    ],
+                }
+            )
+            settings["hooks"]["SessionEnd"] = [
+                {
+                    "matcher": "",
+                    "hooks": [
+                        {
+                            "type": "command",
+                            "command": f"bash {hooks_dir}/vibesop-mirror-session-end.sh",
+                        }
+                    ],
+                }
+            ]
+
         settings_path = output_dir / "settings.json"
         self.write_file_atomic(
             settings_path,
@@ -472,6 +519,43 @@ class ClaudeCodeAdapter(HookBasedAdapter):
             result.add_file(hook_path)
         except Exception as e:
             result.add_warning(f"Failed to write vibesop-tool-seq.sh: {e}")
+
+    def _render_conversation_mirror_hooks(
+        self,
+        output_dir: Path,
+        result: RenderResult,
+    ) -> None:
+        """Render both conversation-mirror hook scripts (prompt + session-end).
+
+        Opt-in via ``conversation_mirror.enabled`` (default false). Both
+        templates share the same project-root resolution as the tool-seq
+        hook — see ``_tool_seq_project_root``.
+        """
+        if not self._conversation_mirror_enabled():
+            return
+        try:
+            from vibesop._version import __version__
+
+            env = self._get_template_env()
+            project_root = _tool_seq_project_root(output_dir)
+            for template_name, out_name in (
+                ("hooks/vibesop-mirror-prompt.sh.j2", "vibesop-mirror-prompt.sh"),
+                ("hooks/vibesop-mirror-session-end.sh.j2", "vibesop-mirror-session-end.sh"),
+            ):
+                try:
+                    template = env.get_template(template_name)
+                    hook_content = template.render(
+                        version=__version__,
+                        project_root=project_root,
+                    )
+                    hook_path = output_dir / "hooks" / out_name
+                    self.write_file_atomic(hook_path, hook_content, validate_security=False)
+                    hook_path.chmod(0o755)
+                    result.add_file(hook_path)
+                except Exception as e:
+                    result.add_warning(f"Failed to write {out_name}: {e}")
+        except Exception as e:
+            result.add_warning(f"Failed to render conversation-mirror hooks: {e}")
 
     def install_hooks(self, config_dir: Path) -> dict[str, bool]:
         """Install Claude Code hooks."""
@@ -589,5 +673,38 @@ exit 0
             except Exception as e:
                 logger.debug(f"Failed to install vibesop-tool-seq hook: {e}")
                 results["vibesop-tool-seq"] = False
+
+        # Install conversation-mirror hooks (opt-in: prompts may contain secrets)
+        if self._conversation_mirror_enabled():
+            from vibesop._version import __version__
+
+            env = self._get_template_env()
+            project_root = _tool_seq_project_root(config_dir)
+            for template_name, out_name, key in (
+                (
+                    "hooks/vibesop-mirror-prompt.sh.j2",
+                    "vibesop-mirror-prompt.sh",
+                    "vibesop-mirror-prompt",
+                ),
+                (
+                    "hooks/vibesop-mirror-session-end.sh.j2",
+                    "vibesop-mirror-session-end.sh",
+                    "vibesop-mirror-session-end",
+                ),
+            ):
+                hook_path = config_dir / "hooks" / out_name
+                try:
+                    template = env.get_template(template_name)
+                    content = template.render(
+                        version=__version__,
+                        project_root=project_root,
+                    )
+                    hook_path.parent.mkdir(parents=True, exist_ok=True)
+                    self.write_file_atomic(hook_path, content, validate_security=False)
+                    hook_path.chmod(0o755)
+                    results[key] = True
+                except Exception as e:
+                    logger.debug(f"Failed to install {out_name} hook: {e}")
+                    results[key] = False
 
         return results
