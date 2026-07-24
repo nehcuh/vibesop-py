@@ -256,3 +256,75 @@ class TestPreferenceStorage:
         assert storage.skill_scores == {}
         assert storage.word_associations == {}
         assert storage.ngram_associations == {}
+
+
+class TestPreferenceLockfileConsistency:
+    """deep-diagnosis-2026-07-24 P1-8 regression: SH (read) and EX (write)
+    locks must be on the SAME ``.lock`` file. Previously the SH lock was on
+    the data file itself, so readers never blocked writers (different inodes)
+    and a writer's ``_load_storage`` inside the EX section could observe
+    mid-write state from a concurrent reader — classic TOCTOU."""
+
+    def test_external_ex_blocks_reader(self, tmp_path: Path) -> None:
+        """Holding EX on the .lock file from an external fd must block the
+        learner's reader. Before P1-8 the reader locked the data file (not
+        .lock), so an external EX on .lock wouldn't block it."""
+        import fcntl as _fcntl
+
+        storage_path = tmp_path / "prefs.json"
+        lock_path = storage_path.with_suffix(".lock")
+        lock_path.parent.mkdir(parents=True, exist_ok=True)
+        # Seed the data file so _load_storage actually has something to read.
+        storage_path.write_text("{}", encoding="utf-8")
+
+        # Take EX on the .lock file from a separate fd.
+        blocker = lock_path.open("a+")
+        _fcntl.flock(blocker.fileno(), _fcntl.LOCK_EX)
+
+        import threading
+
+        read_completed = threading.Event()
+
+        def try_read():
+            learner = PreferenceLearner(storage_path=storage_path)
+            learner._load_storage()
+            read_completed.set()
+
+        t = threading.Thread(target=try_read)
+        t.start()
+        # Reader should be stuck behind the EX we hold.
+        assert not read_completed.wait(timeout=0.3), (
+            "reader completed while EX on .lock held externally — SH lock is on the wrong file"
+        )
+        # Release — reader should now finish.
+        _fcntl.flock(blocker.fileno(), _fcntl.LOCK_UN)
+        blocker.close()
+        assert read_completed.wait(timeout=2.0), "reader didn't complete after lock released"
+
+    def test_external_ex_blocks_writer(self, tmp_path: Path) -> None:
+        """Symmetric: external EX on .lock must block writers too. Sanity
+        check that EX serialisation still works after consolidating SH/EX
+        onto the same .lock file."""
+        import fcntl as _fcntl
+        import threading
+
+        storage_path = tmp_path / "prefs.json"
+        lock_path = storage_path.with_suffix(".lock")
+        lock_path.parent.mkdir(parents=True, exist_ok=True)
+
+        blocker = lock_path.open("a+")
+        _fcntl.flock(blocker.fileno(), _fcntl.LOCK_EX)
+
+        write_completed = threading.Event()
+
+        def try_write():
+            learner = PreferenceLearner(storage_path=storage_path)
+            learner.record_feedback("s", "q", helpful=True)
+            write_completed.set()
+
+        t = threading.Thread(target=try_write)
+        t.start()
+        assert not write_completed.wait(timeout=0.3), "writer completed while EX held externally"
+        _fcntl.flock(blocker.fileno(), _fcntl.LOCK_UN)
+        blocker.close()
+        assert write_completed.wait(timeout=2.0), "writer didn't complete after lock released"

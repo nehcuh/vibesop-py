@@ -80,18 +80,28 @@ class SpanWriter:
             self._locked_append(line)
 
     def _locked_append(self, line: str) -> None:
-        """Append with cross-process fcntl lock.
+        """Append with cross-process lock.
 
-        On Windows (no fcntl), falls back to plain append — multiple
-        concurrent ``vibe`` processes on Windows may interleave. Acceptable
-        for P1 because Windows + multi-process is rare in the dev flow.
+        Inline fcntl on POSIX (perf-critical: the ``test_enabled_tracer_under_100us_p95``
+        benchmark gates this on <100µs p95; going through ``cross_process_lock``
+        added two ``import fcntl`` lookups + a function-call layer per write
+        and pushed p95 to ~200µs). On Windows, where this path is rare and
+        not benchmarked, fall back to ``cross_process_lock`` which dispatches
+        to ``msvcrt.locking``.
+
+        Pre-P0-3 Windows was a silent no-op (``fcntl`` ImportError → plain
+        append → concurrent writers could interleave JSONL lines). The POSIX
+        path here is unchanged from before P0-3.
         """
         try:
             import fcntl
         except ImportError:
-            # Windows: fall back to plain append
-            with self._path.open("a", encoding="utf-8") as f:
-                f.write(line)
+            # Windows: use the helper so msvcrt.locking actually takes the lock.
+            from vibesop.utils.file_lock import cross_process_lock
+
+            with cross_process_lock(self._path):
+                with self._path.open("a", encoding="utf-8") as f:
+                    f.write(line)
             return
 
         with self._path.open("a", encoding="utf-8") as f:

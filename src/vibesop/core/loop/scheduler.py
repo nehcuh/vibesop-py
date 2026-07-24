@@ -146,8 +146,10 @@ class CronExpr:
     def __init__(self, expr: str) -> None:
         fields = expr.strip().split()
         if len(fields) != 5:
-            raise ValueError(
-                f"cron 表达式必须为 5 段（分 时 日 月 周），收到 {len(fields)} 段: {expr!r}"
+            from vibesop.core.exceptions import CronParseError
+
+            raise CronParseError(
+                expr, f"必须为 5 段（分 时 日 月 周），收到 {len(fields)} 段"
             )
 
         self.minutes = _parse_field(fields[0], 0, 59)
@@ -178,7 +180,9 @@ class CronExpr:
             if not vals
         ]
         if empty_fields:
-            raise ValueError(f"cron 表达式 {expr!r} 字段无合法值: {', '.join(empty_fields)}")
+            from vibesop.core.exceptions import CronParseError
+
+            raise CronParseError(expr, f"字段无合法值: {', '.join(empty_fields)}")
 
         self._raw = expr
 

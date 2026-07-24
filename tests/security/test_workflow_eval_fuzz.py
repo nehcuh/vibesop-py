@@ -144,6 +144,20 @@ class TestWorkflowEvalFuzz:
         "[].__iter__",
         "{}.__iter__",
         "().__repr__",
+        # deep-diagnosis-2026-07-24 P1-10: the canonical escape chain.
+        # Each segment is dunder so the AST guard at workflow.py:695-701 must
+        # block it, but we never had an explicit test for the FULL chained
+        # form — only segments of it. Adds the proper regression.
+        "().__class__.__bases__[0].__subclasses__()",
+        "[].__class__.__bases__[0].__subclasses__()",
+        "''.__class__.__mro__[1].__subclasses__()",
+        "{}.__class__.__mro__[1].__subclasses__()[0]('whoami')",
+        # getattr-driven full chain (subscript-then-call form)
+        "getattr(getattr((), '__class__'), '__bases__')[0].__subclasses__()",
+        # The "if true then chain" obfuscation
+        "().__class__.__bases__[0].__subclasses__() if True else None",
+        # Generator-of-subclasses (hides the call inside comprehension)
+        "[c for c in ().__class__.__bases__[0].__subclasses__()[:5]]",
     ]
 
     # Benign payloads that should evaluate without error (result is a bool).

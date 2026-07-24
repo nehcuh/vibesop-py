@@ -88,6 +88,49 @@ class ConfigurationError(VibeSOPError):
     pass
 
 
+class CronParseError(ConfigurationError, ValueError):
+    """Raised when a cron expression cannot be parsed.
+
+    Multi-inherits ``ValueError`` so Pydantic field validators that construct
+    ``CronExpr`` still surface the failure as ``ValidationError`` to the CLI
+    layer — changing the type to a plain ``VibeSOPError`` would break that
+    contract (Pydantic only catches ``ValueError`` / ``AssertionError`` from
+    validators). CLI code that wants to distinguish "user mistyped the cron"
+    from "internal bug" can catch ``CronParseError`` explicitly.
+
+    (deep-diagnosis-2026-07-24 P0-2 — new modules were raising bare
+    ``ValueError`` / ``RuntimeError``, leaving the CLI no way to tell user
+    config errors apart from internal failures.)
+    """
+
+    def __init__(self, expr: str, reason: str) -> None:
+        super().__init__(
+            f"Invalid cron expression {expr!r}: {reason}",
+            details={"expr": expr, "reason": reason},
+        )
+        self.expr = expr
+        self.reason = reason
+
+
+class LoopNameError(ConfigurationError, ValueError):
+    """Raised when a loop name fails safety validation (path traversal etc.).
+
+    Multi-inherits ``ValueError`` for the same Pydantic-compat reason as
+    ``CronParseError`` — ``LoopSpec.model_validator`` chains name-safety
+    checks that need Pydantic to surface as ``ValidationError``.
+
+    (deep-diagnosis-2026-07-24 P0-2.)
+    """
+
+    def __init__(self, name: str, reason: str) -> None:
+        super().__init__(
+            f"unsafe loop name {name!r}: {reason}",
+            details={"name": name, "reason": reason},
+        )
+        self.name = name
+        self.reason = reason
+
+
 class InvalidConfigError(ConfigurationError):
     """Raised when the configuration is invalid."""
 

@@ -2,11 +2,15 @@
 
 from pathlib import Path
 
+import pytest
+
 from vibesop.core.exceptions import (
     CacheError,
     ConfigurationError,
+    CronParseError,
     InvalidConfigError,
     LLMError,
+    LoopNameError,
     MatcherError,
     NoMatchingSkillError,
     PermissionError,
@@ -121,3 +125,53 @@ class TestCacheError:
     def test_cache_error(self) -> None:
         exc = CacheError("Cache miss")
         assert str(exc) == "Cache miss"
+
+
+class TestCronParseError:
+    """deep-diagnosis-2026-07-24 P0-2: new exception types in the loop /
+    instinct / observability modules must be VibeSOPError subclasses AND
+    multi-inherit ValueError so Pydantic validators still surface them as
+    ValidationError. Otherwise the CLI can't tell user config errors
+    (catch VibeSOPError → friendly message) apart from internal bugs."""
+
+    def test_is_vibesop_error(self) -> None:
+        exc = CronParseError("foo bar", "test reason")
+        assert isinstance(exc, VibeSOPError)
+        assert isinstance(exc, ConfigurationError)
+
+    def test_is_value_error(self) -> None:
+        """Pydantic only catches ValueError in validators — multi-inheritance
+        keeps the new exception type compatible with existing validator usage."""
+        exc = CronParseError("foo bar", "test reason")
+        assert isinstance(exc, ValueError)
+
+    def test_caught_by_value_error_except(self) -> None:
+        """Existing CLI code with ``except ValueError`` must keep working."""
+        with pytest.raises(ValueError, match="foo bar"):
+            raise CronParseError("foo bar", "demo")
+
+    def test_attributes_preserved(self) -> None:
+        exc = CronParseError("*/foo * * * *", "must be 5 fields")
+        assert exc.expr == "*/foo * * * *"
+        assert exc.reason == "must be 5 fields"
+        assert "*/foo * * * *" in str(exc)
+
+
+class TestLoopNameError:
+    """Same multi-inheritance rationale as CronParseError."""
+
+    def test_is_vibesop_error(self) -> None:
+        exc = LoopNameError("../etc", "pattern mismatch")
+        assert isinstance(exc, VibeSOPError)
+        assert isinstance(exc, ConfigurationError)
+
+    def test_is_value_error(self) -> None:
+        exc = LoopNameError("../etc", "pattern mismatch")
+        assert isinstance(exc, ValueError)
+
+    def test_message_format(self) -> None:
+        """Existing test_store.py asserts regex 'unsafe loop name' — keep the
+        lowercase prefix stable."""
+        exc = LoopNameError("../etc", "must match pattern")
+        assert "unsafe loop name" in str(exc)
+        assert "../etc" in str(exc)

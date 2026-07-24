@@ -227,26 +227,19 @@ class InstinctLearner:
         ``vibe instinct learn`` cannot race the read-modify-write of
         ``instincts.jsonl`` / ``sequences.jsonl``.
 
-        POSIX only — Windows falls back to no-op (single-user CLI
-        assumption; matches ``core/observability/span_writer.py`` precedent).
+        Delegates to ``vibesop.utils.file_lock.cross_process_lock`` so
+        Windows gets real mutual exclusion via ``msvcrt.locking`` instead
+        of the previous silent no-op (deep-diagnosis-2026-07-24 P0-3).
         The lock lives on a sibling file (not the data file) so atomic
         rename inside ``write_text`` does not release it.
         """
-        try:
-            import fcntl
-        except ImportError:
-            yield  # Windows: no-op
-            return
+        from vibesop.utils.file_lock import CouldNotLock, cross_process_lock
+
         lock_path = data_path.with_suffix(data_path.suffix + ".lock")
         try:
-            lock_path.parent.mkdir(parents=True, exist_ok=True)
-            with lock_path.open("w") as lock_f:
-                fcntl.flock(lock_f.fileno(), fcntl.LOCK_EX)
-                try:
-                    yield
-                finally:
-                    fcntl.flock(lock_f.fileno(), fcntl.LOCK_UN)
-        except OSError as e:
+            with cross_process_lock(lock_path):
+                yield
+        except (OSError, CouldNotLock) as e:
             # Lock acquisition failure is non-fatal — warn and proceed unlocked.
             # Better to write with a race window than to lose the entire tick.
             logger.warning("Failed to acquire cross-process lock on %s: %s", lock_path, e)

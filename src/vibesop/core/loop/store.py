@@ -140,9 +140,17 @@ class LoopStore:
 
     @classmethod
     def _require_safe_name(cls, name: str) -> None:
-        """Raise ``ValueError`` if ``name`` could enable path traversal."""
+        """Raise ``LoopNameError`` if ``name`` could enable path traversal.
+
+        ``LoopNameError`` multi-inherits ``ValueError`` so callers that still
+        ``except ValueError`` keep working (deep-diagnosis-2026-07-24 P0-2).
+        """
         if not cls._is_safe_name(name):
-            raise ValueError(f"unsafe loop name {name!r}: must match {_SAFE_NAME_PATTERN.pattern}")
+            from vibesop.core.exceptions import LoopNameError
+
+            raise LoopNameError(
+                name, f"must match {_SAFE_NAME_PATTERN.pattern}"
+            )
 
     # ── 文件 IO ───────────────────────────────────────────────────────
 
