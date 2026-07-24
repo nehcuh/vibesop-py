@@ -12,6 +12,7 @@ Covers:
 from __future__ import annotations
 
 import json
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -38,8 +39,18 @@ def _make_span(
     tokens_out: int = 0,
     cost_usd: float = 0.0,
     skill_id: str | None = None,
-    started_at: str = "2026-07-22T10:00:00+00:00",
+    started_at: str | None = None,
 ) -> dict:
+    """Build a span dict for tests.
+
+    ``started_at`` defaults to **now** (not a hardcoded date) so the span
+    always lands inside ``SpanAggregator._read_spans_in_window``'s 24h
+    cutoff — otherwise metrics tests fail by ~48h when run days after the
+    file was authored. Tests that need a deterministic timestamp (e.g.
+    replay ordering) can still pass their own ``started_at``.
+    """
+    if started_at is None:
+        started_at = datetime.now(UTC).isoformat()
     metadata: dict = {}
     if skill_id is not None:
         metadata["skill_id"] = skill_id
@@ -365,3 +376,46 @@ class TestMetricsCommand:
         assert result.exit_code == 0
         data = json.loads(result.output)
         assert data["total_executions"] == 1  # only proj-a span counted
+
+    def test_metrics_excludes_spans_outside_window(
+        self, runner: CliRunner, tmp_path: Path
+    ) -> None:
+        """Spans whose ``started_at`` is older than ``--window`` hours must
+        not contribute to metrics — guards against the regression where
+        ``_make_span`` hardcoded a 2026-07-22 timestamp and tests silently
+        broke ~48h later when the spans fell out of the 24h cutoff."""
+        from datetime import UTC, timedelta
+
+        span_file = tmp_path / "spans.jsonl"
+        # 48h ago — outside the default 24h window but inside a 72h window.
+        old_ts = (datetime.now(UTC) - timedelta(hours=48)).isoformat()
+        _write_spans(span_file, [
+            _make_span(
+                "task-old", "trace-old", kind="task", skill_id="mcp-install",
+                started_at=old_ts,
+            ),
+        ])
+
+        result = runner.invoke(
+            app,
+            ["metrics", "mcp-install", "--span-file", str(span_file), "--json"],
+        )
+        assert result.exit_code == 0
+        data = json.loads(result.output)
+        assert data["source"] == "none"
+        assert data["total_executions"] == 0
+
+        # Widening the window to 72h brings it back.
+        result = runner.invoke(
+            app,
+            [
+                "metrics", "mcp-install",
+                "--span-file", str(span_file),
+                "--window", "72",
+                "--json",
+            ],
+        )
+        assert result.exit_code == 0
+        data = json.loads(result.output)
+        assert data["source"] == "spans"
+        assert data["total_executions"] == 1
