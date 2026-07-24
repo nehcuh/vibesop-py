@@ -19,6 +19,63 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
+class ToolCall:
+    """One ``tool_use`` block emitted by the assistant.
+
+    ``id`` is the Anthropic-assigned tool-use ID — required to link
+    subsequent ``tool_result`` blocks back to this call when they land on
+    the next user-role message (Claude Code transcript convention).
+
+    ``input_keys`` carries **key names only**, never values. Privacy
+    invariant matches ``vibe conversation append-turn`` contract.
+    """
+
+    id: str
+    name: str
+    input_keys: list[str]
+
+    def to_dict(self) -> dict[str, Any]:
+        return {"id": self.id, "name": self.name, "input_keys": self.input_keys}
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> ToolCall:
+        return cls(
+            id=data["id"],
+            name=data["name"],
+            input_keys=list(data.get("input_keys", [])),
+        )
+
+
+@dataclass
+class ToolResult:
+    """One ``tool_result`` block following a ``tool_use`` call.
+
+    ``content_preview`` is opt-in (``capture_depth = "full"``) — tool
+    results routinely contain file bodies, shell output, and stack traces
+    that can leak secrets. ``is_error`` is always safe and always captured.
+    """
+
+    tool_use_id: str
+    is_error: bool = False
+    content_preview: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "tool_use_id": self.tool_use_id,
+            "is_error": self.is_error,
+            "content_preview": self.content_preview,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> ToolResult:
+        return cls(
+            tool_use_id=data["tool_use_id"],
+            is_error=bool(data.get("is_error", False)),
+            content_preview=data.get("content_preview"),
+        )
+
+
+@dataclass
 class ConversationTurn:
     """A single turn in a conversation.
 
@@ -31,6 +88,16 @@ class ConversationTurn:
     ``content`` carries the assistant/tool text. For user turns it stays
     ``None`` and ``query`` is the canonical field; the dashboard template
     renders ``t.query || t.content`` so both shapes display correctly.
+
+    Mirror-extension fields (added after Path-1 review, default None for
+    backward compat with pre-existing JSON):
+    - ``thinking``: concatenated ``thinking`` blocks from assistant turns.
+    - ``tool_calls``: ``tool_use`` blocks (keys only, never values).
+    - ``tool_results``: ``tool_result`` blocks; on user-role turns per
+      Claude Code transcript convention.
+    - ``model``: per-turn model name (e.g. ``claude-sonnet-4-6``).
+    - ``usage``: token usage dict (input/output/cache_read/cache_creation).
+    - ``stop_reason``: why the model stopped (``end_turn``, ``tool_use``, …).
     """
 
     query: str
@@ -39,6 +106,12 @@ class ConversationTurn:
     intent: str | None = None
     role: str = "user"
     content: str | None = None
+    thinking: str | None = None
+    tool_calls: list[ToolCall] | None = None
+    tool_results: list[ToolResult] | None = None
+    model: str | None = None
+    usage: dict[str, int] | None = None
+    stop_reason: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -48,10 +121,20 @@ class ConversationTurn:
             "intent": self.intent,
             "role": self.role,
             "content": self.content,
+            "thinking": self.thinking,
+            "tool_calls": [tc.to_dict() for tc in self.tool_calls] if self.tool_calls else None,
+            "tool_results": [tr.to_dict() for tr in self.tool_results]
+            if self.tool_results
+            else None,
+            "model": self.model,
+            "usage": dict(self.usage) if self.usage else None,
+            "stop_reason": self.stop_reason,
         }
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> ConversationTurn:
+        tool_calls_raw = data.get("tool_calls")
+        tool_results_raw = data.get("tool_results")
         return cls(
             query=data["query"],
             skill_id=data.get("skill_id"),
@@ -59,6 +142,16 @@ class ConversationTurn:
             intent=data.get("intent"),
             role=data.get("role", "user"),
             content=data.get("content"),
+            thinking=data.get("thinking"),
+            tool_calls=[ToolCall.from_dict(tc) for tc in tool_calls_raw]
+            if tool_calls_raw
+            else None,
+            tool_results=[ToolResult.from_dict(tr) for tr in tool_results_raw]
+            if tool_results_raw
+            else None,
+            model=data.get("model"),
+            usage=data.get("usage"),
+            stop_reason=data.get("stop_reason"),
         )
 
 
@@ -208,14 +301,21 @@ class ConversationContext:
         role: str = "user",
         content: str | None = None,
         timestamp: float | None = None,
+        thinking: str | None = None,
+        tool_calls: list[ToolCall] | None = None,
+        tool_results: list[ToolResult] | None = None,
+        model: str | None = None,
+        usage: dict[str, int] | None = None,
+        stop_reason: str | None = None,
     ) -> None:
         """Record a new conversation turn.
 
-        ``role``/``content``/``timestamp`` are kwarg-only to keep positional
-        callers (pre-mirror, all-user code) source-compatible. Mirror callers
-        pass ``role="assistant", content="..."`` or ``role="tool", content="..."``;
-        ``timestamp`` lets batch importers preserve the original event time
-        instead of using now.
+        ``role``/``content``/``timestamp``/mirror-extension fields are
+        kwarg-only to keep positional callers (pre-mirror, all-user code)
+        source-compatible. Mirror callers pass ``role="assistant",
+        content="..."`` and may attach ``thinking`` / ``tool_calls`` /
+        ``tool_results`` / ``model`` / ``usage`` / ``stop_reason`` parsed
+        from the source transcript.
         """
         with self._lock:
             turn = ConversationTurn(
@@ -225,6 +325,12 @@ class ConversationContext:
                 intent=intent,
                 role=role,
                 content=content,
+                thinking=thinking,
+                tool_calls=tool_calls,
+                tool_results=tool_results,
+                model=model,
+                usage=usage,
+                stop_reason=stop_reason,
             )
             self._turns.append(turn)
             if len(self._turns) > self._max_history:

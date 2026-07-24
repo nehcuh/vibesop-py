@@ -8,6 +8,7 @@ derivation from filename.
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -16,6 +17,15 @@ from typer.testing import CliRunner
 from vibesop.cli.commands.conversation_cmd import app
 
 runner = CliRunner()
+
+# Rich auto-highlights numbers and certain keywords when the env looks like a
+# terminal (FORCE_COLOR / GITHUB_ACTIONS). Strip ANSI before asserting so the
+# tests are CI-flake-proof regardless of env. Found by grok review 2026-07-24.
+_ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
+
+
+def _strip_ansi(s: str) -> str:
+    return _ANSI_RE.sub("", s)
 
 
 def _make_jsonl(path: Path, lines: list[dict]) -> Path:
@@ -61,7 +71,7 @@ def test_import_claude_file_happy_path(tmp_path: Path) -> None:
         ],
     )
     assert result.exit_code == 0, result.output
-    assert "Imported 2 new turns" in result.output
+    assert "Imported 2 new turns" in _strip_ansi(result.output)
     assert (tmp_path / "conv" / "mirror-claude-sess.json").exists()
 
 
@@ -77,7 +87,7 @@ def test_import_claude_missing_source_exits_nonzero(tmp_path: Path) -> None:
         ],
     )
     assert result.exit_code != 0
-    assert "does not exist" in result.output
+    assert "does not exist" in _strip_ansi(result.output)
 
 
 def test_import_claude_conversation_id_derived_from_filename(tmp_path: Path) -> None:
@@ -121,7 +131,7 @@ def test_import_claude_auto_discover_via_home(tmp_path: Path, monkeypatch: pytes
         ["import-claude", "--storage-dir", str(storage)],
     )
     assert result.exit_code == 0, result.output
-    assert "Imported 1 new turns" in result.output
+    assert "Imported 1 new turns" in _strip_ansi(result.output)
     assert (storage / "mirror-claude-new.json").exists()
     # old not imported (no --all-sessions)
     assert not (storage / "mirror-claude-old.json").exists()
@@ -142,7 +152,7 @@ def test_import_claude_auto_discover_nothing_found(
         ["import-claude", "--storage-dir", str(tmp_path / "conv")],
     )
     assert result.exit_code != 0
-    assert "no Claude jsonl found" in result.output
+    assert "no Claude jsonl found" in _strip_ansi(result.output)
 
 
 def test_import_claude_all_sessions_directory_mode(tmp_path: Path) -> None:
@@ -167,7 +177,7 @@ def test_import_claude_all_sessions_directory_mode(tmp_path: Path) -> None:
     assert result.exit_code == 0, result.output
     assert (storage / "mirror-claude-a.json").exists()
     assert (storage / "mirror-claude-b.json").exists()
-    assert "2 session(s)" in result.output
+    assert "2 session(s)" in _strip_ansi(result.output)
 
 
 def test_import_claude_directory_default_picks_only_newest(tmp_path: Path) -> None:
@@ -204,10 +214,282 @@ def test_import_claude_idempotent_re_run(tmp_path: Path) -> None:
     args = ["import-claude", "--source", str(src), "--storage-dir", str(storage)]
     first = runner.invoke(app, args)
     assert first.exit_code == 0
-    assert "Imported 1 new turns" in first.output
+    assert "Imported 1 new turns" in _strip_ansi(first.output)
     second = runner.invoke(app, args)
     assert second.exit_code == 0
-    assert "Imported 0 new turns" in second.output
+    assert "Imported 0 new turns" in _strip_ansi(second.output)
+
+
+# ----------------------------------------------------------------------
+# Phase 2 (Path-1 extension): --capture-depth flag + config fallback
+# ----------------------------------------------------------------------
+
+
+def _assistant_with_thinking(thinking: str, text: str, ts: str = "2026-07-23T15:20:00.000Z") -> dict:
+    return {
+        "type": "assistant",
+        "message": {
+            "role": "assistant",
+            "content": [
+                {"type": "thinking", "thinking": thinking},
+                {"type": "text", "text": text},
+            ],
+        },
+        "timestamp": ts,
+    }
+
+
+def test_import_claude_capture_depth_standard_by_default(tmp_path: Path) -> None:
+    """No --capture-depth and no config → standard (thinking captured)."""
+    src = _make_jsonl(
+        tmp_path / "s.jsonl",
+        [_assistant_with_thinking("pondering", "answer")],
+    )
+    storage = tmp_path / "conv"
+    result = runner.invoke(
+        app,
+        ["import-claude", "--source", str(src), "--storage-dir", str(storage)],
+    )
+    assert result.exit_code == 0, result.output
+    assert "capture_depth=standard" in _strip_ansi(result.output)
+    conv = _read_conv(storage, "mirror-claude-s")
+    assert conv["turns"][0]["thinking"] == "pondering"
+
+
+def test_import_claude_capture_depth_minimal_flag_suppresses_thinking(tmp_path: Path) -> None:
+    """--capture-depth minimal → thinking dropped."""
+    src = _make_jsonl(
+        tmp_path / "s.jsonl",
+        [_assistant_with_thinking("secret", "answer")],
+    )
+    storage = tmp_path / "conv"
+    result = runner.invoke(
+        app,
+        [
+            "import-claude",
+            "--source",
+            str(src),
+            "--storage-dir",
+            str(storage),
+            "--capture-depth",
+            "minimal",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert "capture_depth=minimal" in _strip_ansi(result.output)
+    conv = _read_conv(storage, "mirror-claude-s")
+    assert conv["turns"][0]["thinking"] is None
+
+
+def test_import_claude_capture_depth_full_includes_tool_result_preview(tmp_path: Path) -> None:
+    """--capture-depth full → tool_result.content_preview captured."""
+    src = _make_jsonl(
+        tmp_path / "s.jsonl",
+        [
+            {
+                "type": "user",
+                "message": {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "tool_result",
+                            "tool_use_id": "tu_1",
+                            "is_error": False,
+                            "content": "real output text",
+                        },
+                    ],
+                },
+                "timestamp": "2026-07-23T15:20:00.000Z",
+            },
+        ],
+    )
+    storage = tmp_path / "conv"
+    result = runner.invoke(
+        app,
+        [
+            "import-claude",
+            "--source",
+            str(src),
+            "--storage-dir",
+            str(storage),
+            "--capture-depth",
+            "full",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert "capture_depth=full" in _strip_ansi(result.output)
+    conv = _read_conv(storage, "mirror-claude-s")
+    assert conv["turns"][0]["tool_results"][0]["content_preview"] == "real output text"
+
+
+def test_import_claude_capture_depth_config_fallback(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """No --capture-depth, but config sets capture_depth=minimal → respected."""
+    # Create .vibe/config.toml in the isolated cwd
+    vibe_dir = tmp_path / ".vibe"
+    vibe_dir.mkdir()
+    (vibe_dir / "config.toml").write_text(
+        '[conversation_mirror]\ncapture_depth = "minimal"\n',
+        encoding="utf-8",
+    )
+
+    src = _make_jsonl(
+        tmp_path / "s.jsonl",
+        [_assistant_with_thinking("pondering", "answer")],
+    )
+    storage = tmp_path / "conv"
+    result = runner.invoke(
+        app,
+        ["import-claude", "--source", str(src), "--storage-dir", str(storage)],
+    )
+    assert result.exit_code == 0, result.output
+    assert "capture_depth=minimal" in _strip_ansi(result.output)
+    conv = _read_conv(storage, "mirror-claude-s")
+    assert conv["turns"][0]["thinking"] is None
+
+
+def test_import_claude_cli_flag_overrides_config(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Config says minimal, CLI flag says full → full wins."""
+    vibe_dir = tmp_path / ".vibe"
+    vibe_dir.mkdir()
+    (vibe_dir / "config.toml").write_text(
+        '[conversation_mirror]\ncapture_depth = "minimal"\n',
+        encoding="utf-8",
+    )
+
+    src = _make_jsonl(
+        tmp_path / "s.jsonl",
+        [_assistant_with_thinking("pondering", "answer")],
+    )
+    storage = tmp_path / "conv"
+    result = runner.invoke(
+        app,
+        [
+            "import-claude",
+            "--source",
+            str(src),
+            "--storage-dir",
+            str(storage),
+            "--capture-depth",
+            "full",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert "capture_depth=full" in _strip_ansi(result.output)
+    conv = _read_conv(storage, "mirror-claude-s")
+    assert conv["turns"][0]["thinking"] == "pondering"
+
+
+# ----------------------------------------------------------------------
+# P1 fix (grok+pi review): --purge flag + thin-turn warning
+# ----------------------------------------------------------------------
+
+
+def _write_thin_mirror_file(storage: Path, cid: str = "s") -> None:
+    """Simulate a pre-Path-1 mirror file: turns lack thinking/tool_calls keys."""
+    storage.mkdir(parents=True, exist_ok=True)
+    (storage / f"mirror-claude-{cid}.json").write_text(
+        json.dumps({
+            "conversation_id": f"mirror-claude-{cid}",
+            "turns": [
+                # Pre-Path-1 shape: only query/skill_id/timestamp/role/content.
+                # No thinking, tool_calls, tool_results, model, usage, stop_reason.
+                {"query": "old q", "skill_id": None, "timestamp": 1.0, "role": "user"}
+            ],
+            "last_activity": 1.0,
+        }),
+        encoding="utf-8",
+    )
+
+
+def test_import_claude_warns_on_thin_turns_without_purge(tmp_path: Path) -> None:
+    """Re-importing over a pre-Path-1 file prints the warning (no purge)."""
+    src = _make_jsonl(
+        tmp_path / "s.jsonl",
+        [_assistant_with_thinking("rich thinking", "rich answer")],
+    )
+    storage = tmp_path / "conv"
+    _write_thin_mirror_file(storage)
+
+    result = runner.invoke(
+        app,
+        ["import-claude", "--source", str(src), "--storage-dir", str(storage)],
+    )
+    assert result.exit_code == 0, result.output
+    assert "pre-Path-1 turns" in _strip_ansi(result.output)
+    assert "--purge" in _strip_ansi(result.output)
+
+
+def test_import_claude_purge_wipes_then_imports_clean(tmp_path: Path) -> None:
+    """--purge deletes the thin file, then imports cleanly (no dups)."""
+    src = _make_jsonl(
+        tmp_path / "s.jsonl",
+        [_assistant_with_thinking("rich thinking", "rich answer")],
+    )
+    storage = tmp_path / "conv"
+    _write_thin_mirror_file(storage)
+    # Sanity: thin file exists
+    thin_path = storage / "mirror-claude-s.json"
+    assert thin_path.exists()
+
+    result = runner.invoke(
+        app,
+        [
+            "import-claude",
+            "--source",
+            str(src),
+            "--storage-dir",
+            str(storage),
+            "--purge",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert "Purged mirror-claude-s.json" in _strip_ansi(result.output)
+    # No warning when --purge is set
+    assert "pre-Path-1 turns" not in _strip_ansi(result.output)
+    # File now has the rich turn only
+    conv = _read_conv(storage, "mirror-claude-s")
+    assert len(conv["turns"]) == 1
+    assert conv["turns"][0]["thinking"] == "rich thinking"
+
+
+def test_import_claude_no_warning_when_file_has_path1_fields(tmp_path: Path) -> None:
+    """Files with Path-1 fields (even if all None) don't trigger the warning."""
+    src = _make_jsonl(
+        tmp_path / "s.jsonl",
+        [_user("q2")],
+    )
+    storage = tmp_path / "conv"
+    storage.mkdir(parents=True)
+    # File already has Path-1 keys (even though values are None) — not thin.
+    (storage / "mirror-claude-s.json").write_text(
+        json.dumps({
+            "conversation_id": "mirror-claude-s",
+            "turns": [
+                {
+                    "query": "q1",
+                    "skill_id": None,
+                    "timestamp": 1.0,
+                    "role": "user",
+                    "thinking": None,  # key present → not thin
+                    "tool_calls": None,
+                    "tool_results": None,
+                    "model": None,
+                }
+            ],
+        }),
+        encoding="utf-8",
+    )
+
+    result = runner.invoke(
+        app,
+        ["import-claude", "--source", str(src), "--storage-dir", str(storage)],
+    )
+    assert result.exit_code == 0, result.output
+    assert "pre-Path-1" not in _strip_ansi(result.output)
 
 
 # ----------------------------------------------------------------------
@@ -448,4 +730,56 @@ class TestAppendTurnStorageDefault:
         assert result.exit_code == 0, result.output
         # Storage lives at <project_root>/.vibe/conversations/, NOT cwd's .vibe.
         assert (tmp_path / ".vibe" / "conversations" / "mirror-claude-loc-test.json").exists()
+
+
+class TestAppendTurnMaxHistory:
+    """P0 regression: live mirror MUST NOT truncate at ConversationContext's
+    default of 10. The original ConversationContext default is tuned for
+    routing hints; mirror use case needs the larger 200 default that
+    batch-import uses. Found by pi review 2026-07-24."""
+
+    def test_15_turns_all_preserved_default(self, tmp_path: Path) -> None:
+        """Default config (no conversation_mirror.max_history) keeps all 15."""
+        for i in range(15):
+            payload = {
+                "hook_event_name": "UserPromptSubmit",
+                "session_id": "stress-sid",
+                "prompt": f"turn-{i}",
+            }
+            result = runner.invoke(
+                app,
+                ["append-turn", "--project-root", str(tmp_path)],
+                input=json.dumps(payload),
+            )
+            assert result.exit_code == 0, result.output
+        conv = _read_conv(tmp_path / ".vibe" / "conversations", "mirror-claude-stress-sid")
+        # CRITICAL: would be 10 if we forgot to override max_history
+        assert len(conv["turns"]) == 15
+        queries = [t["query"] for t in conv["turns"]]
+        assert queries[0] == "turn-0"
+        assert queries[-1] == "turn-14"
+
+    def test_max_history_config_respected(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """conversation_mirror.max_history=5 → only last 5 kept."""
+        vibe_dir = tmp_path / ".vibe"
+        vibe_dir.mkdir()
+        (vibe_dir / "config.toml").write_text(
+            '[conversation_mirror]\nmax_history = 5\n',
+            encoding="utf-8",
+        )
+        for i in range(10):
+            payload = {
+                "hook_event_name": "UserPromptSubmit",
+                "session_id": "cfg-sid",
+                "prompt": f"t{i}",
+            }
+            result = runner.invoke(
+                app,
+                ["append-turn", "--project-root", str(tmp_path)],
+                input=json.dumps(payload),
+            )
+            assert result.exit_code == 0, result.output
+        conv = _read_conv(tmp_path / ".vibe" / "conversations", "mirror-claude-cfg-sid")
+        assert len(conv["turns"]) == 5
+        assert [t["query"] for t in conv["turns"]] == ["t5", "t6", "t7", "t8", "t9"]
 

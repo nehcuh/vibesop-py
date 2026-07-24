@@ -96,6 +96,111 @@ class TestConversationTurn:
         assert data["content"] == "Bash(command)"
 
 
+class TestToolCallAndResult:
+    """Test ToolCall / ToolResult dataclasses added in Path-1 extension."""
+
+    def test_tool_call_roundtrip(self) -> None:
+        from vibesop.core.conversation import ToolCall
+
+        tc = ToolCall(id="toolu_01abc", name="Bash", input_keys=["command", "description"])
+        restored = ToolCall.from_dict(tc.to_dict())
+        assert restored.id == "toolu_01abc"
+        assert restored.name == "Bash"
+        assert restored.input_keys == ["command", "description"]
+
+    def test_tool_result_roundtrip_with_preview(self) -> None:
+        from vibesop.core.conversation import ToolResult
+
+        tr = ToolResult(tool_use_id="toolu_01abc", is_error=False, content_preview="ok")
+        restored = ToolResult.from_dict(tr.to_dict())
+        assert restored.tool_use_id == "toolu_01abc"
+        assert restored.is_error is False
+        assert restored.content_preview == "ok"
+
+    def test_tool_result_defaults(self) -> None:
+        from vibesop.core.conversation import ToolResult
+
+        tr = ToolResult(tool_use_id="x")
+        assert tr.is_error is False
+        assert tr.content_preview is None
+
+
+class TestConversationTurnMirrorExtension:
+    """Path-1 fields (thinking/tool_calls/tool_results/model/usage/stop_reason)."""
+
+    def test_mirror_fields_default_none(self) -> None:
+        turn = ConversationTurn(query="q", skill_id=None, timestamp=1.0)
+        assert turn.thinking is None
+        assert turn.tool_calls is None
+        assert turn.tool_results is None
+        assert turn.model is None
+        assert turn.usage is None
+        assert turn.stop_reason is None
+
+    def test_mirror_fields_roundtrip(self) -> None:
+        from vibesop.core.conversation import ToolCall, ToolResult
+
+        original = ConversationTurn(
+            query="",
+            skill_id=None,
+            timestamp=1.0,
+            role="assistant",
+            content="Here is the plan",
+            thinking="Considering options...",
+            tool_calls=[ToolCall(id="toolu_01", name="Bash", input_keys=["command"])],
+            tool_results=None,
+            model="claude-sonnet-4-6",
+            usage={"input_tokens": 100, "output_tokens": 50},
+            stop_reason="end_turn",
+        )
+        restored = ConversationTurn.from_dict(original.to_dict())
+        assert restored.role == "assistant"
+        assert restored.thinking == "Considering options..."
+        assert restored.tool_calls is not None
+        assert restored.tool_calls[0].id == "toolu_01"
+        assert restored.tool_calls[0].name == "Bash"
+        assert restored.tool_calls[0].input_keys == ["command"]
+        assert restored.model == "claude-sonnet-4-6"
+        assert restored.usage == {"input_tokens": 100, "output_tokens": 50}
+        assert restored.stop_reason == "end_turn"
+
+    def test_user_turn_with_tool_results_roundtrip(self) -> None:
+        """Claude Code convention: tool_result lands on the FOLLOWING user message."""
+        from vibesop.core.conversation import ToolResult
+
+        original = ConversationTurn(
+            query="",  # no user text, only tool results
+            skill_id=None,
+            timestamp=2.0,
+            role="user",
+            tool_results=[
+                ToolResult(tool_use_id="toolu_01", is_error=False, content_preview=None)
+            ],
+        )
+        restored = ConversationTurn.from_dict(original.to_dict())
+        assert restored.role == "user"
+        assert restored.tool_results is not None
+        assert len(restored.tool_results) == 1
+        assert restored.tool_results[0].tool_use_id == "toolu_01"
+
+    def test_from_dict_legacy_data_without_mirror_fields(self) -> None:
+        """Old JSON files (pre-Path-1) load with all new fields = None."""
+        legacy = {
+            "query": "old query",
+            "skill_id": "a/b",
+            "timestamp": 1.0,
+            "role": "user",
+            "content": None,
+        }
+        turn = ConversationTurn.from_dict(legacy)
+        assert turn.thinking is None
+        assert turn.tool_calls is None
+        assert turn.tool_results is None
+        assert turn.model is None
+        assert turn.usage is None
+        assert turn.stop_reason is None
+
+
 class TestConversationContext:
     """Test ConversationContext persistence and logic."""
 

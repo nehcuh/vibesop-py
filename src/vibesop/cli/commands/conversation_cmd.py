@@ -42,6 +42,52 @@ def _discover_jsonl_files(project_dir: Path) -> list[Path]:
     return sorted(project_dir.glob("*.jsonl"), key=lambda p: p.stat().st_mtime, reverse=True)
 
 
+def _resolve_capture_depth(cli_value: str) -> str:
+    """Resolve capture_depth: CLI flag wins; else read config; else 'standard'.
+
+    Reads ``conversation_mirror.capture_depth`` from .vibe/config.toml. Any
+    unrecognized value (CLI or config) falls back to ``standard`` — the
+    parser's own coercion handles the actual validation, this just sources
+    the value.
+    """
+    if cli_value:
+        return cli_value
+    try:
+        from vibesop.core.config.manager import ConfigManager
+
+        config_val = ConfigManager(Path.cwd()).get("conversation_mirror.capture_depth", "")
+        if isinstance(config_val, str) and config_val.strip():
+            return config_val.strip()
+    except Exception:
+        logger.debug("capture_depth config lookup failed, defaulting to 'standard'")
+    return "standard"
+
+
+def _resolve_max_history() -> int | None:
+    """Read ``conversation_mirror.max_history`` from config, if set.
+
+    Returns None when the key is absent — the caller's own default
+    (200 for import_session, 200 for live mirror) is then used. Both
+    paths MUST agree on the default; otherwise live-captured turns
+    get truncated at 10 while batch-imported turns survive to 200.
+    """
+    try:
+        from vibesop.core.config.manager import ConfigManager
+
+        val = ConfigManager(Path.cwd()).get("conversation_mirror.max_history", None)
+        if isinstance(val, int) and val > 0:
+            return val
+    except Exception:
+        logger.debug("max_history config lookup failed")
+    return None
+
+
+# Both batch-import and live-mirror paths use this default. ConversationContext
+# itself defaults to 10 (tuned for routing hints), which is wrong for mirror —
+# silently truncates real conversations. Caller must override.
+_MIRROR_DEFAULT_MAX_HISTORY = 200
+
+
 @app.command("import-claude")
 def import_claude(
     source: Path = typer.Option(
@@ -67,9 +113,31 @@ def import_claude(
         "--all-sessions",
         help="When --source is a directory, import every .jsonl as a separate conversation.",
     ),
+    capture_depth: str = typer.Option(
+        "",
+        "--capture-depth",
+        help=(
+            "How much to capture: 'minimal' (text only), 'standard' (default; "
+            "+thinking +tool keys +tool_result is_error +model/usage), "
+            "'full' (+tool_result content_preview, 200 chars). "
+            "Empty = read from conversation_mirror.capture_depth config."
+        ),
+    ),
+    purge: bool = typer.Option(
+        False,
+        "--purge",
+        help=(
+            "Delete the target conversation file before importing. Use this "
+            "after upgrading capture_depth to avoid duplicate 'thin' + 'rich' "
+            "turns from pre-Path-1 mirror files."
+        ),
+    ),
 ) -> None:
     """Batch-import Claude Code transcript(s) into .vibe/conversations/."""
-    from vibesop.core.conversation_import import import_session
+    from vibesop.core.conversation_import import append_parsed_turns, parse_claude_jsonl
+
+    depth = _resolve_capture_depth(capture_depth)
+    max_history = _resolve_max_history() or _MIRROR_DEFAULT_MAX_HISTORY
 
     # Resolve the list of (source_path, conversation_id) pairs to process.
     targets: list[tuple[Path, str]] = []
@@ -108,14 +176,32 @@ def import_claude(
         console.print("[red]Error:[/red] no sessions to import.")
         raise typer.Exit(1)
 
+    console.print(f"[dim]capture_depth={depth}[/dim]")
+
     total_new = 0
     total_skip = 0
     for path, cid in targets:
-        from vibesop.core.conversation_import import parse_claude_jsonl
+        # Detect pre-Path-1 "thin" turns BEFORE import — warn user about
+        # the duplicate-append failure mode (found by grok+pi review).
+        target_file = storage_dir / f"{cid}.json"
+        if target_file.exists() and not purge:
+            if _file_has_thin_turns(target_file):
+                console.print(
+                    f"[yellow]Warning:[/yellow] {cid}.json contains pre-Path-1 turns "
+                    f"(no thinking/tool_calls fields). Re-importing will append duplicates. "
+                    f"Pass --purge to wipe + re-import cleanly."
+                )
 
-        parsed_count = len(parse_claude_jsonl(path))
-        new_count = import_session(path, cid, storage_dir)
-        skipped = parsed_count - new_count
+        if purge and target_file.exists():
+            target_file.unlink()
+            console.print(f"[dim]Purged {target_file.name}[/dim]")
+
+        # Single parse — append_parsed_turns consumes the list directly,
+        # avoiding the previous double-parse (found by pi review).
+        parsed = parse_claude_jsonl(path, capture_depth=depth)
+        new_count, skipped = append_parsed_turns(
+            parsed, cid, storage_dir, max_history=max_history
+        )
         total_new += new_count
         total_skip += skipped
         console.print(
@@ -127,6 +213,33 @@ def import_claude(
         f"[green]Done:[/green] {total_new} new turn(s) across {len(targets)} session(s), "
         f"{total_skip} duplicate(s) skipped."
     )
+
+
+def _file_has_thin_turns(path: Path) -> bool:
+    """Detect pre-Path-1 mirror files lacking thinking/tool_calls fields.
+
+    Returns True if the file has at least one turn that lacks ALL Path-1
+    extension keys (thinking, tool_calls, tool_results). Used to warn the
+    user before re-import creates duplicate "thin + rich" turns.
+    """
+    import json
+
+    try:
+        with path.open(encoding="utf-8") as f:
+            data = json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return False
+    turns = data.get("turns", []) if isinstance(data, dict) else []
+    if not turns:
+        return False
+    # Thin = none of the Path-1 fields present in this turn's dict
+    path1_keys = ("thinking", "tool_calls", "tool_results", "model", "usage", "stop_reason")
+    for t in turns:
+        if not isinstance(t, dict):
+            continue
+        if not any(k in t for k in path1_keys):
+            return True
+    return False
 
 
 # ----------------------------------------------------------------------
@@ -214,8 +327,11 @@ def _dispatch_mirror_event(payload: dict[str, Any], project_root: Path) -> None:
 
     conversation_id = _resolve_mirror_conversation_id(payload)
     storage_dir = project_root.resolve() / ".vibe" / "conversations"
+    max_history = _resolve_max_history() or _MIRROR_DEFAULT_MAX_HISTORY
     context = ConversationContext(
-        conversation_id=conversation_id, storage_dir=storage_dir
+        conversation_id=conversation_id,
+        storage_dir=storage_dir,
+        max_history=max_history,
     )
     context.add_turn(query=query, skill_id=None, intent=None, role=role, content=content)
 

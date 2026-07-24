@@ -82,10 +82,24 @@
   .turn { padding: 10px 14px; border-left: 3px solid var(--border); margin: 8px 0; border-radius: 0 6px 6px 0; }
   .turn.user { border-color: var(--accent); }
   .turn.assistant { border-color: var(--purple); }
+  .turn.tool { border-color: var(--dim); }
   .turn .role { font-size: 11px; text-transform: uppercase; letter-spacing: .5px; margin-bottom: 4px; }
   .turn .role.user { color: var(--accent); }
   .turn .role.assistant { color: var(--purple); }
+  .turn .role.tool { color: var(--dim); }
   .turn .content { font-size: 13px; }
+
+  /* Path-1 mirror blocks */
+  .turn .thinking { margin: 4px 0 8px; }
+  .turn .thinking summary { cursor: pointer; font-size: 11px; color: var(--dim); font-style: italic; }
+  .turn .thinking .thinking-body { font-size: 12px; color: var(--dim); margin-top: 6px; padding: 6px 10px; background: rgba(255,255,255,0.02); border-radius: 4px; white-space: pre-wrap; }
+  .turn .tool-calls { margin: 4px 0; display: flex; flex-wrap: wrap; gap: 6px; }
+  .turn .tool-call-badge { font: 11px var(--mono); background: rgba(255,255,255,0.06); padding: 2px 8px; border-radius: 10px; color: var(--dim); }
+  .turn .tool-results { margin: 6px 0; }
+  .turn .tool-result { font: 11px var(--mono); color: var(--dim); padding: 2px 0; }
+  .turn .tool-result.error { color: #e66; }
+  .turn .tool-result-preview { display: block; margin-top: 2px; padding: 4px 8px; background: rgba(255,255,255,0.03); border-radius: 3px; white-space: pre-wrap; }
+  .turn .meta-line { font-size: 11px; color: var(--dim); margin-top: 4px; }
 
   /* Loading */
   .loading { text-align: center; padding: 40px; color: var(--dim); }
@@ -483,6 +497,87 @@ async function loadConversations() {
   `).join('');
 }
 
+function renderThinking(thinking) {
+  if (!thinking) return '';
+  // Collapsed by default — thinking is verbose, user opts in to expand.
+  const preview = thinking.slice(0, 80);
+  return `
+    <details class="thinking">
+      <summary>💭 thinking (${thinking.length} chars): ${escapeHtml(preview)}${thinking.length > 80 ? '…' : ''}</summary>
+      <div class="thinking-body">${escapeHtml(thinking)}</div>
+    </details>`;
+}
+
+function renderToolCalls(toolCalls) {
+  if (!toolCalls || !toolCalls.length) return '';
+  // Privacy invariant: input_keys only — values never persisted.
+  const badges = toolCalls.map(tc => {
+    const keys = (tc.input_keys || []).join(', ');
+    return `<span class="tool-call-badge">🔧 ${escapeHtml(tc.name || '?')}(${escapeHtml(keys)})</span>`;
+  }).join('');
+  return `<div class="tool-calls">${badges}</div>`;
+}
+
+function renderToolResults(toolResults) {
+  if (!toolResults || !toolResults.length) return '';
+  const items = toolResults.map(tr => {
+    const errCls = tr.is_error ? ' error' : '';
+    const icon = tr.is_error ? '✗' : '✓';
+    let preview = '';
+    if (tr.content_preview) {
+      preview = `<span class="tool-result-preview">${escapeHtml(tr.content_preview)}</span>`;
+    }
+    return `<div class="tool-result${errCls}">${icon} ${escapeHtml(tr.tool_use_id || '?')}${preview}</div>`;
+  }).join('');
+  return `<div class="tool-results">${items}</div>`;
+}
+
+function renderMetaLine(t) {
+  // Compact "model · N tokens · stop_reason" line — dim so it doesn't dominate.
+  const parts = [];
+  if (t.model) parts.push(t.model);
+  if (t.usage) {
+    const u = t.usage;
+    const total = (u.input_tokens || 0) + (u.output_tokens || 0);
+    if (total > 0) {
+      const cache = (u.cache_read_input_tokens || 0) + (u.cache_creation_input_tokens || 0);
+      parts.push(`${total} tok${cache > 0 ? ` (${cache} cached)` : ''}`);
+    }
+  }
+  if (t.stop_reason) parts.push(`stop: ${t.stop_reason}`);
+  if (!parts.length) return '';
+  return `<div class="meta-line">${escapeHtml(parts.join(' · '))}</div>`;
+}
+
+function renderTurn(t) {
+  const role = t.role || 'user';
+  // Render order (per design review): thinking → tool_calls → text → tool_results.
+  // Assistant loop narrative: "agent thought X, called tools, wrote text Y,
+  // observed results Z." User turns carry tool_results (Claude Code convention).
+  const content = escapeHtml(t.query || t.content || '');
+  const thinking = role === 'assistant' ? renderThinking(t.thinking) : '';
+  const toolCalls = role === 'assistant' ? renderToolCalls(t.tool_calls) : '';
+  const toolResults = role === 'user' ? renderToolResults(t.tool_results) : '';
+  const meta = role === 'assistant' ? renderMetaLine(t) : '';
+  // Tool-result-only user turn (Claude Code convention): no human text, just
+  // results from the prior assistant's tool calls. Without this subtitle the
+  // card reads as "user said nothing" — found by grok+pi review.
+  const isToolResultOnlyUser = role === 'user' && !content && toolResults;
+  const toolResultLabel = isToolResultOnlyUser
+    ? '<div class="meta-line" style="font-style:italic">← results from prior tool calls</div>'
+    : '';
+  return `
+    <div class="turn ${role}">
+      <div class="role ${role}">${role}</div>
+      ${thinking}
+      ${toolCalls}
+      ${content ? `<div class="content">${content}</div>` : ''}
+      ${toolResultLabel}
+      ${toolResults}
+      ${meta}
+    </div>`;
+}
+
 async function showConversation(id) {
   const c = await api('/api/conversations/' + id);
   const div = document.getElementById('conv-detail');
@@ -493,12 +588,7 @@ async function showConversation(id) {
     <button class="close" onclick="this.parentElement.style.display='none'">&times;</button>
     <h3>Conversation: ${id}</h3>
     <div class="meta">${turns.length} turns &bull; Current skill: ${c.current_skill || c.previous_skill || 'none'}</div>
-    ${turns.map(t => `
-      <div class="turn ${t.role || 'user'}">
-        <div class="role ${t.role || 'user'}">${t.role || 'user'}</div>
-        <div class="content">${escapeHtml(t.query || t.content || '')}</div>
-      </div>
-    `).join('')}
+    ${turns.map(renderTurn).join('')}
     <details style="margin-top:10px"><summary style="cursor:pointer;font-size:12px;color:var(--dim)">Raw JSON</summary><pre>${escapeHtml(JSON.stringify(c, null, 2))}</pre></details>
   `;
   div.scrollIntoView({ behavior: 'smooth' });
