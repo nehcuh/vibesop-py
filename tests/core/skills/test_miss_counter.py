@@ -221,3 +221,30 @@ def test_hash_for_is_deterministic_across_instances(tmp_path: Path) -> None:
     h1 = MissCounter(tmp_path).hash_for(normalized)
     h2 = MissCounter(tmp_path).hash_for(normalized)
     assert h1 == h2
+
+
+def test_hash_for_normalizes_like_record(tmp_path: Path) -> None:
+    """Phase D P0-1 regression: ``hash_for`` MUST apply the same
+    normalization (strip + collapse whitespace + lowercase) as ``record()``,
+    otherwise callers passing a raw instinct ``pattern`` get a different
+    digest than what ``record()`` stored for the same query. Without this,
+    feedback-collect's decay branch silently never fires.
+
+    Original bug: feedback-collect called ``hash_for(ins.pattern)`` with
+    raw pattern; record() hashed ``" ".join(q.split()).lower()``. The two
+    digests never matched → decay was dead code.
+    """
+    counter = MissCounter(tmp_path)
+    # Record with cosmetic noise (extra spaces, mixed case).
+    counter.record("  Deploy   The  FRONT-END  ")
+
+    # Lookup with raw noise — must still hit the same hash.
+    h_raw = counter.hash_for("  Deploy   The  FRONT-END  ")
+    h_normalized = counter.hash_for("deploy the front-end")
+
+    assert h_raw == h_normalized
+
+    # And the hash actually appears in stored data.
+    data = _load(tmp_path)
+    assert h_raw in data
+    assert data[h_raw]["n"] == 1

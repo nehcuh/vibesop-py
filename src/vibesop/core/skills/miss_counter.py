@@ -196,16 +196,25 @@ class MissCounter:
             logger.debug("Failed to decay miss counter: %s", e)
             return []
 
-    def hash_for(self, normalized_query: str) -> str:
+    def hash_for(self, query: str) -> str:
         """Public wrapper over ``_hash`` for callers that need to match
         patterns against frequent misses (e.g. ``feedback-collect`` matching
         instinct patterns to ``frequent()`` hashes).
 
+        Idempotent normalization (strip + collapse whitespace + lowercase)
+        is applied to match what ``record()`` does internally — without this,
+        a caller passing an instinct's raw ``pattern`` (possibly mixed-case,
+        original whitespace) would get a different digest than the one
+        ``record()`` stored for the same query, and the lookup would silently
+        miss every time (Phase D P0 bug surfaced 2026-07-24 by deep-diagnosis
+        agent).
+
         Privacy: the salt is mode 0o600 local-only; calling this with raw
-        user input is safe but defeats the purpose — pass normalised instinct
-        patterns only.
+        user input is safe (it gets hashed before any storage) but
+        redaction works best on normalised text.
         """
-        return self._hash(normalized_query)
+        normalized = " ".join(query.split()).lower()
+        return self._hash(normalized)
 
     # ------------------------------------------------------------------
     # Internals
