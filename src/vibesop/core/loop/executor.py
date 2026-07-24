@@ -261,7 +261,13 @@ def _run_command_target(
         )
     except subprocess.TimeoutExpired:
         record.success = False
-        record.error = f"command timeout after {spec.timeout_s}s: {' '.join(spec.command_args)}"
+        # Use shlex.join so multi-line argv / unicode args survive in logs
+        # readable and round-trippable (deep-diagnosis-2026-07-24 P1-9 —
+        # plain ' '.join corrupts on whitespace/newlines inside an arg).
+        record.error = (
+            f"command timeout after {spec.timeout_s}s: "
+            f"{shlex.join(spec.command_args)}"
+        )
         record.failure_info = FailureInfo(
             category=FailureCategory.TRANSIENT,
             reason=record.error,

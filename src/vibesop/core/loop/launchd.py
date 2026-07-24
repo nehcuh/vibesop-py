@@ -80,7 +80,11 @@ def cron_to_start_calendar(cron: CronExpr) -> dict[str, list[int]] | None:
     if not _is_wildcard(cron.months, set(range(1, 13))):
         out["Month"] = sorted(cron.months)
     if not _is_wildcard(cron.dow, set(range(0, 7))):
-        out["Weekday"] = sorted(cron.dow)
+        # Cron uses 0=Sunday (POSIX); CronExpr normalises 7→0 in __init__.
+        # launchd's StartCalendarInterval.Weekday also treats 0 and 7 as
+        # Sunday, but 7 is the unambiguous form — some launchd consumers
+        # reject 0 outright (deep-diagnosis-2026-07-24 P1-1).
+        out["Weekday"] = sorted(7 if d == 0 else d for d in cron.dow)
     return out or None
 
 

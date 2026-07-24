@@ -158,11 +158,22 @@ class MissCounter:
 
         Args:
             min_count: Clusters with count below this are left untouched.
-            hashes: If provided, only clusters whose digest is in this set
-                are decayed. Pass the set of hashes the caller actually
-                acted on so unrelated clusters keep their full count (pi
-                Phase D P2-D). If None, decay every cluster at or above
-                ``min_count`` (legacy behaviour).
+            hashes: Filter restricting which clusters get decayed.
+                Three distinct behaviours (deep-diagnosis-2026-07-24 P1-7 —
+                a previous version conflated these and made the API a trap):
+
+                * ``None``       → decay EVERY cluster at or above ``min_count``
+                                   (legacy / global-decay behaviour).
+                * ``set()``      → decay NOTHING (filter is empty).
+                * ``{"<hash>"}`` → decay ONLY those clusters whose digest is
+                                   in the set (and that meet ``min_count``).
+
+                Pass the set of hashes the caller actually acted on so
+                unrelated clusters keep their full count (pi Phase D P2-D).
+                If you want "decay everything I touched or didn't touch",
+                pass None; if you have nothing to decay, pass an empty set
+                (or skip the call entirely — both are no-ops on the data
+                file, but ``set()`` still pays the load+write cost).
 
         Returns:
             The list of clusters that were decayed this call (pre-decay

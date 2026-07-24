@@ -64,16 +64,25 @@ class TestCronConversion:
         assert cal == {"Minute": [17], "Hour": [4]}
 
     def test_weekly_on_sunday_becomes_calendar(self) -> None:
-        # Sunday = 0 in both cron and launchd.
+        # Cron Sunday = 0; launchd accepts 0 or 7 but 7 is unambiguous —
+        # deep-diagnosis-2026-07-24 P1-1: emit 7 to satisfy strict consumers.
         cron = CronExpr("0 2 * * 0")
         cal = cron_to_start_calendar(cron)
-        assert cal == {"Minute": [0], "Hour": [2], "Weekday": [0]}
+        assert cal == {"Minute": [0], "Hour": [2], "Weekday": [7]}
 
     def test_dow_7_normalises_to_0(self) -> None:
-        # POSIX allows 7 = Sunday; CronExpr normalises to 0.
+        # POSIX allows 7 = Sunday; CronExpr normalises 7→0 internally,
+        # then launchd converter re-emits as 7 (see test_weekly_on_sunday).
         cron = CronExpr("0 2 * * 7")
         cal = cron_to_start_calendar(cron)
-        assert cal == {"Minute": [0], "Hour": [2], "Weekday": [0]}
+        assert cal == {"Minute": [0], "Hour": [2], "Weekday": [7]}
+
+    def test_dow_weekday_range_preserves_mon_to_sat(self) -> None:
+        """Mon-Sat cron (1-6) must pass through unchanged — only Sunday (0)
+        gets remapped to 7."""
+        cron = CronExpr("0 2 * * 1-6")
+        cal = cron_to_start_calendar(cron)
+        assert cal == {"Minute": [0], "Hour": [2], "Weekday": [1, 2, 3, 4, 5, 6]}
 
     def test_step_in_minute_expands_to_array(self) -> None:
         # */7 not clean divisor → falls through to CronExpr, expands to array
