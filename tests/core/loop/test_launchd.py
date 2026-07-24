@@ -255,6 +255,18 @@ class TestRenderPlist:
         assert parsed["StandardOutPath"] == str(out)
         assert parsed["StandardErrorPath"] == str(err)
 
+    def test_loop_base_dir_drives_log_paths(self, tmp_path: Path) -> None:
+        """deep-diagnosis-2026-07-24 P1-6: when LoopStore is configured with a
+        custom base_dir, plist log paths must follow it — otherwise logs end
+        up under the default ``~/.vibe/loops`` while tick state lives under
+        the custom dir, decoupling logs from the data they describe."""
+        custom_base = tmp_path / "custom-loops"
+        spec = _spec()
+        plist_bytes = render_plist(spec, project_root=tmp_path, loop_base_dir=custom_base)
+        parsed = plistlib.loads(plist_bytes)
+        assert parsed["StandardOutPath"] == str(custom_base / "test-loop" / "out.log")
+        assert parsed["StandardErrorPath"] == str(custom_base / "test-loop" / "err.log")
+
     def test_shell_injection_in_name_is_safe(self, tmp_path: Path) -> None:
         """ProgramArguments is an array — no shell interpretation. Even if a
         malicious spec name contained shell metacharacters, they would be

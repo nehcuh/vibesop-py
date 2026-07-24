@@ -160,6 +160,7 @@ def render_plist(
     vibe_prefix: str = DEFAULT_VIBE_PREFIX,
     stdout_path: Path | None = None,
     stderr_path: Path | None = None,
+    loop_base_dir: Path | None = None,
 ) -> bytes:
     """Render a launchd plist (XML bytes) for ``spec``.
 
@@ -174,6 +175,12 @@ def render_plist(
             its parents). Override via ``VIBESOP_RUN_PREFIX`` env var.
         stdout_path: ``StandardOutPath``. Defaults to ``<loop_dir>/out.log``.
         stderr_path: ``StandardErrorPath``. Defaults to ``<loop_dir>/err.log``.
+        loop_base_dir: Base directory for per-loop state/logs. Defaults to
+            ``~/.vibe/loops`` (the ``LoopStore`` default). Pass the actual
+            ``LoopStore.base_dir`` so plist log paths stay aligned with where
+            the tick process will read/write state (deep-diagnosis-2026-07-24
+            P1-6 — previously hardcoded, so a custom store base_dir would
+            decouple logs from state).
 
     Returns:
         XML plist bytes suitable for writing to ``~/Library/LaunchAgents/``.
@@ -189,7 +196,8 @@ def render_plist(
     # at bootstrap time. Using ``project_root`` would point into a dir that
     # nothing creates, and launchd refuses to spawn jobs whose
     # ``StandardOutPath`` parent doesn't exist (kimi Phase C K-P1-1).
-    loop_dir = Path.home() / ".vibe" / "loops" / spec.name
+    base = loop_base_dir if loop_base_dir is not None else (Path.home() / ".vibe" / "loops")
+    loop_dir = base / spec.name
     stdout = stdout_path or (loop_dir / "out.log")
     stderr = stderr_path or (loop_dir / "err.log")
 

@@ -372,6 +372,15 @@ class SpanAggregator:
                 if started:
                     try:
                         dt = datetime.fromisoformat(started.replace("Z", "+00:00"))
+                        # Span writers should always emit tz-aware ISO strings,
+                        # but a tz-naive value (e.g. "2026-07-24T10:00:00")
+                        # would raise TypeError against the tz-aware cutoff and
+                        # be silently included via the except branch — masking
+                        # real out-of-window data. Treat naive as UTC (matches
+                        # the rest of the observability stack).
+                        # (deep-diagnosis-2026-07-24 P1-2.)
+                        if dt.tzinfo is None:
+                            dt = dt.replace(tzinfo=UTC)
                         if dt >= cutoff:
                             spans.append(record)
                     except (ValueError, TypeError):
@@ -400,6 +409,12 @@ class SpanAggregator:
                     if ts:
                         try:
                             dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+                            # Same tz-naive guard as _read_spans_in_window
+                            # (deep-diagnosis-2026-07-24 P1-2 — naive dt would
+                            # TypeError on the cutoff compare and fall through,
+                            # including out-of-window analytics rows).
+                            if dt.tzinfo is None:
+                                dt = dt.replace(tzinfo=UTC)
                             if dt < cutoff:
                                 continue
                         except (ValueError, TypeError):

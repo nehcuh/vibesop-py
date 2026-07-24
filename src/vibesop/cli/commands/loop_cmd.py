@@ -844,6 +844,44 @@ def _is_macos() -> bool:
     return sys.platform == "darwin"
 
 
+# Whitelisted directories where ``uv`` may live without raising suspicion
+# (deep-diagnosis-2026-07-24 P1-5). A ``uv`` resolved from ``.``, ``$HOME``,
+# or a world-writable tmp dir could be a malicious binary planted to be picked
+# up by ``shutil.which``; persisting that path into a launchd plist bakes the
+# attacker's binary into every scheduled tick.
+UV_PATH_WHITELIST: tuple[str, ...] = (
+    "/opt/homebrew/bin",  # Homebrew on Apple Silicon
+    "/usr/local/bin",  # Homebrew on Intel / manual install
+    "/usr/bin",  # system package manager
+    str(Path.home() / ".local/bin"),  # pipx / uv self-install
+)
+
+
+def _is_uv_path_trusted(uv_path: str) -> bool:
+    """Return True iff ``uv_path`` lives under a whitelisted directory."""
+    path = Path(uv_path)
+    for whitelist_dir in UV_PATH_WHITELIST:
+        wl = Path(whitelist_dir)
+        try:
+            path.relative_to(wl)
+            return True
+        except ValueError:
+            continue
+    return False
+
+
+def _is_project_root_trusted(project_root: Path) -> bool:
+    """Return True iff ``project_root`` looks like a real project root.
+
+    A git working tree (``.git/``) is the cheapest signal that the user is
+    intentionally working here, not a directory an attacker lured them into
+    cd-ing to before running ``install-launchd`` (deep-diagnosis-2026-07-24
+    P1-4 — without this check the attacker-controlled cwd would be persisted
+    into launchd's WorkingDirectory and re-run on every tick).
+    """
+    return (project_root / ".git").exists() or (project_root / "pyproject.toml").exists()
+
+
 @app.command("install-launchd")
 def install_launchd(
     name: str = typer.Argument(..., help="loop 名称"),
@@ -852,6 +890,16 @@ def install_launchd(
         "--vibe-prefix",
         envvar="VIBESOP_RUN_PREFIX",
         help="vibe CLI 调用前缀（默认自动解析 uv 绝对路径 + ' run vibe'）。带空格的路径需加引号。",
+    ),
+    trust_cwd: bool = typer.Option(
+        False,
+        "--trust-cwd",
+        help="跳过 cwd 校验：当前目录不是 git repo / pyproject.toml 时也允许安装 (P1-4)。",
+    ),
+    trust_uv_path: bool = typer.Option(
+        False,
+        "--trust-uv-path",
+        help="跳过 uv 路径白名单校验：uv 来自非白名单目录时也允许安装 (P1-5)。",
     ),
     dry_run: bool = typer.Option(False, "--dry-run", help="只打印 plist，不写盘、不 bootstrap"),
 ) -> None:
@@ -866,6 +914,12 @@ def install_launchd(
     ProgramArguments 调用通用的 ``vibe loop tick``，所以同一 plist 模板适用
     于 skill / query / workflow / command_args 四种 target。Target dispatch
     和 PAUSED/DEAD/RETIRED 过滤由 tick 内部处理。
+
+    安全 (deep-diagnosis-2026-07-24 P1-4 / P1-5)：
+        - 默认拒绝把不可信 cwd 持久化为 launchd WorkingDirectory；cwd 必须含
+          ``.git/`` 或 ``pyproject.toml``，否则用 ``--trust-cwd`` 显式放行。
+        - 默认拒绝把非白名单 ``uv`` 路径写入 plist；白名单覆盖 Homebrew /
+          ``~/.local/bin`` / ``/usr/bin``，否则用 ``--trust-uv-path`` 放行。
 
     注：``vibe loop create`` 暂未暴露 ``--command`` flag（Phase D 补），所以
     command_args loop 需手工编辑 spec.json 或通过 ``--dry-run`` 检查后再用。
@@ -897,6 +951,16 @@ def install_launchd(
 
         uv_path = shutil.which("uv")
         if uv_path:
+            # P1-5: refuse non-whitelisted uv paths unless the user explicitly
+            # trusts them. An attacker who controls PATH (or plants a ``uv``
+            # in ``.`` or a tmp dir) could otherwise persist their binary
+            # into the launchd plist.
+            if not _is_uv_path_trusted(uv_path) and not trust_uv_path:
+                console.print(
+                    f"[red]❌ uv 路径 {uv_path} 不在白名单 {list(UV_PATH_WHITELIST)}。"
+                    f" 若确实可信，加 --trust-uv-path 显式放行 (P1-5)。[/red]"
+                )
+                raise typer.Exit(1)
             prefix = f"{uv_path} run vibe"
         else:
             console.print(
@@ -909,8 +973,25 @@ def install_launchd(
     else:
         prefix = vibe_prefix
     project_root = Path.cwd()
+    # P1-4: refuse unvetted cwds so an attacker can't lure the user into a
+    # hostile directory and persist it via launchd's WorkingDirectory.
+    if not _is_project_root_trusted(project_root) and not trust_cwd:
+        console.print(
+            f"[red]❌ cwd {project_root} 既非 git repo (无 .git/) 也无 pyproject.toml。"
+            f" launchd 会把此目录持久化为 WorkingDirectory——若确实可信，"
+            f" 加 --trust-cwd 显式放行 (P1-4)。[/red]"
+        )
+        raise typer.Exit(1)
     try:
-        plist_bytes = render_plist(spec, project_root=project_root, vibe_prefix=prefix)
+        plist_bytes = render_plist(
+            spec,
+            project_root=project_root,
+            vibe_prefix=prefix,
+            # Keep plist log paths aligned with where the tick process actually
+            # reads/writes state — pass the store's real base_dir instead of
+            # assuming ~/.vibe/loops (deep-diagnosis-2026-07-24 P1-6).
+            loop_base_dir=store.base_dir,
+        )
     except ValueError as e:
         # shlex.split raises ValueError on mismatched quotes — fail loud at
         # install time rather than silently producing a broken plist that

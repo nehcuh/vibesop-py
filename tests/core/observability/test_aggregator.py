@@ -259,3 +259,73 @@ class TestHasData:
         _write_spans(spans_file, [_task_span("t1", "x")])
         agg = SpanAggregator(spans_path=spans_file)
         assert agg.has_data() is True
+
+
+class TestTzNaiveTimestamps:
+    """deep-diagnosis-2026-07-24 P1-2 regression: tz-naive ``started_at`` /
+    ``timestamp`` values used to TypeError against the tz-aware cutoff and
+    get silently included via the except branch, masking out-of-window data.
+    """
+
+    def test_tz_naive_recent_span_is_included(self, spans_file: Path) -> None:
+        """A tz-naive timestamp within the window must be included once the
+        naive→UTC coercion lands (it was included *accidentally* before via
+        the TypeError fallthrough; the fix makes the inclusion explicit)."""
+        recent_naive = datetime.now(UTC).replace(tzinfo=None).isoformat()
+        _write_spans(
+            spans_file,
+            [
+                {
+                    "id": "s1",
+                    "trace_id": "t1",
+                    "span_kind": "task",
+                    "name": "route:test",
+                    "status": "ok",
+                    "duration_ms": 100,
+                    "started_at": recent_naive,
+                    "tokens_input": 0,
+                    "tokens_output": 0,
+                    "cost_usd": 0.0,
+                    "metadata": {"skill_id": "naive-recent"},
+                }
+            ],
+        )
+        agg = SpanAggregator(spans_path=spans_file)
+        metrics = agg.get_skill_metrics("naive-recent", use_analytics_fallback=False)
+        assert metrics.total_executions == 1
+
+    def test_tz_naive_old_span_is_excluded(self, spans_file: Path) -> None:
+        """A tz-naive timestamp OUTSIDE the window (48h ago) must be excluded.
+        Without the fix: TypeError → except → record appended unconditionally.
+        With the fix: naive→UTC coercion lets the cutoff compare correctly."""
+        from datetime import timedelta
+
+        old_naive = (datetime.now(UTC) - timedelta(hours=48)).replace(tzinfo=None).isoformat()
+        _write_spans(
+            spans_file,
+            [
+                {
+                    "id": "s-old",
+                    "trace_id": "t-old",
+                    "span_kind": "task",
+                    "name": "route:test",
+                    "status": "ok",
+                    "duration_ms": 100,
+                    "started_at": old_naive,
+                    "tokens_input": 0,
+                    "tokens_output": 0,
+                    "cost_usd": 0.0,
+                    "metadata": {"skill_id": "naive-old"},
+                }
+            ],
+        )
+        agg = SpanAggregator(spans_path=spans_file)
+        # Default window 24h → 48h-old span excluded; expand to 72h includes it.
+        metrics_24h = agg.get_skill_metrics(
+            "naive-old", window_hours=24, use_analytics_fallback=False
+        )
+        assert metrics_24h.total_executions == 0
+        metrics_72h = agg.get_skill_metrics(
+            "naive-old", window_hours=72, use_analytics_fallback=False
+        )
+        assert metrics_72h.total_executions == 1

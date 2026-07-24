@@ -999,8 +999,10 @@ def test_install_launchd_missing_launchctl_friendly_error(
         )
     )
 
-    # Force uv to resolve so we get past prefix resolution.
-    monkeypatch.setattr("shutil.which", lambda cmd: "/fake/uv")
+    # Force uv to resolve so we get past prefix resolution. Use a whitelisted
+    # path so the P1-5 check doesn't reject it (test focus is launchctl
+    # FileNotFoundError, not uv validation).
+    monkeypatch.setattr("shutil.which", lambda cmd: "/opt/homebrew/bin/uv")
 
     # Make subprocess.run raise FileNotFoundError as if launchctl were missing.
     def raise_fnf(*a, **k):
@@ -1031,6 +1033,108 @@ def test_uninstall_launchd_missing_launchctl_friendly_error(
     result = runner.invoke(app, ["uninstall-launchd", "anything"])
     assert result.exit_code == 1, result.stdout
     assert "找不到 launchctl" in result.stdout
+
+
+# ──────────────────────────────────────────────────────────────────
+# deep-diagnosis-2026-07-24 P1-4 / P1-5: install-launchd hardening
+# ──────────────────────────────────────────────────────────────────
+
+
+def test_install_launchd_rejects_non_git_cwd(
+    isolated_store, launchd_home, monkeypatch, tmp_path
+) -> None:
+    """P1-4 regression: cwd without ``.git/`` or ``pyproject.toml`` must be
+    refused — otherwise an attacker who lures the user into a hostile
+    directory persists that dir as launchd WorkingDirectory."""
+    isolated_store.save_spec(
+        LoopSpec.model_validate(
+            {"name": "p1-4", "description": "d", "schedule": "*/15 * * * *", "skill_id": "x"}
+        )
+    )
+    # Drop the test runner into a tmp dir that has neither .git nor pyproject.toml.
+    monkeypatch.chdir(tmp_path)
+    # Whitelisted uv so P1-5 doesn't fire and confuse the assertion.
+    monkeypatch.setattr("shutil.which", lambda cmd: "/opt/homebrew/bin/uv")
+
+    result = runner.invoke(app, ["install-launchd", "p1-4", "--dry-run"])
+    assert result.exit_code == 1
+    assert "P1-4" in result.stdout
+    assert "trust-cwd" in result.stdout
+
+
+def test_install_launchd_trust_cwd_bypasses_p1_4(
+    isolated_store, launchd_home, monkeypatch, tmp_path
+) -> None:
+    """``--trust-cwd`` explicitly allows non-git cwd (user knows what they're doing)."""
+    isolated_store.save_spec(
+        LoopSpec.model_validate(
+            {"name": "p1-4-trust", "description": "d", "schedule": "*/15 * * * *", "skill_id": "x"}
+        )
+    )
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("shutil.which", lambda cmd: "/opt/homebrew/bin/uv")
+
+    result = runner.invoke(app, ["install-launchd", "p1-4-trust", "--trust-cwd", "--dry-run"])
+    assert result.exit_code == 0, result.stdout
+    assert "<?xml" in result.stdout
+
+
+def test_install_launchd_accepts_pyproject_cwd(
+    isolated_store, launchd_home, monkeypatch, tmp_path
+) -> None:
+    """pyproject.toml alone (no .git) also satisfies the trust check — covers
+    users running from a fresh checkout before their first commit."""
+    isolated_store.save_spec(
+        LoopSpec.model_validate(
+            {"name": "p1-4-pyproj", "description": "d", "schedule": "*/15 * * * *", "skill_id": "x"}
+        )
+    )
+    (tmp_path / "pyproject.toml").write_text("[project]\nname = 'x'\n")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("shutil.which", lambda cmd: "/opt/homebrew/bin/uv")
+
+    result = runner.invoke(app, ["install-launchd", "p1-4-pyproj", "--dry-run"])
+    assert result.exit_code == 0, result.stdout
+
+
+def test_install_launchd_rejects_non_whitelisted_uv(
+    isolated_store, launchd_home, monkeypatch
+) -> None:
+    """P1-5 regression: ``uv`` resolved from outside the whitelist (e.g. cwd
+    or a tmp dir) must be refused — attacker could otherwise persist a
+    malicious binary into the launchd plist."""
+    isolated_store.save_spec(
+        LoopSpec.model_validate(
+            {"name": "p1-5", "description": "d", "schedule": "*/15 * * * *", "skill_id": "x"}
+        )
+    )
+    monkeypatch.setattr("shutil.which", lambda cmd: "/tmp/suspicious/uv")
+
+    result = runner.invoke(app, ["install-launchd", "p1-5", "--dry-run"])
+    assert result.exit_code == 1
+    assert "P1-5" in result.stdout
+    assert "/tmp/suspicious/uv" in result.stdout
+    assert "trust-uv-path" in result.stdout
+
+
+def test_install_launchd_trust_uv_path_bypasses_p1_5(
+    isolated_store, launchd_home, monkeypatch
+) -> None:
+    """``--trust-uv-path`` explicitly allows non-whitelisted uv paths."""
+    isolated_store.save_spec(
+        LoopSpec.model_validate(
+            {"name": "p1-5-trust", "description": "d", "schedule": "*/15 * * * *", "skill_id": "x"}
+        )
+    )
+    monkeypatch.setattr("shutil.which", lambda cmd: "/tmp/suspicious/uv")
+
+    result = runner.invoke(
+        app, ["install-launchd", "p1-5-trust", "--trust-uv-path", "--dry-run"]
+    )
+    assert result.exit_code == 0, result.stdout
+    # Dry-run prints the plist XML; verify the trusted uv path appears as the
+    # first ProgramArguments element (rather than being rejected).
+    assert "/tmp/suspicious/uv" in result.stdout
 
 
 # Late import so the fixture above can be defined without mandatory import-time cost.
