@@ -11,6 +11,21 @@
 
 ---
 
+## 实施进度（2026-07-24 收工）
+
+✅ **已完成（12 fix, 4 commit）**：P0-1, P0-2, P0-3, P1-1, P1-2, P1-4, P1-5, P1-6, P1-7, P1-8, P1-9, P1-10
+- Batch 1 (f05fcbe): P0-1, P1-1, P1-7, P1-9
+- Batch 2 (6b98ca5): P1-2, P1-4, P1-5, P1-6
+- Batch 3 (ff0e6d7): P0-2, P0-3, P1-8, P1-10
+- pi 评审（Batch 1+2，gemini-2.5-flash 替代 kimi）：无 BLOCKER/HIGH/MEDIUM/LOW
+- 全套测试：4633 passed（+22 新增）, 14 skipped, 1 benchmark（pre-existing flake, CI 已 `-m "not benchmark"` 排除）
+
+⏸ **Defer（按 synthesis 既定计划）**：P0-4（lima shell 不可利用）、P1-3（attribution schema change）、所有 P2
+
+🟡 **24h 观察 in-progress**：3 个 launchd preset 已安装（assemble 15min / promote 04:17 UTC / feedback 04:37 UTC），明天（2026-07-25）早晨复查。
+
+---
+
 ## P0（release-blocking — 立即修）
 
 ### P0-1 — `feedback-collect` hash 不匹配，decay 分支几乎永不命中（instinct agent）
