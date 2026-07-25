@@ -1,6 +1,6 @@
 # Overview - VibeSOP Project
 
-**Last Updated**: 2026-07-21 (S33 — Bootstrap + Analytics fix)
+**Last Updated**: 2026-07-25 (S36 — Conversation mirror Path-2)
 
 ---
 
@@ -14,7 +14,15 @@
    - 多 agent 动态工作流（设计→对抗→开发→评审→pi/Grok 签字），全套文档 docs/dev/windows-compat/
 2. **test-windows CI 观察期**（至 ~2026-08-02）
    - `continue-on-error: true` 稳定两周后转强约束（05-review.md 遗留项 #1）
-3. **Skill 商店重构 + 智能建议**（新方向，待启动）
+3. **Observability loop closure (v8.2)** ✅ (Completed - July 22-24)
+   - P1 ship：SpanWrappedProvider + SpanAggregator + `vibe trace replay/metrics` CLI；Kimi 4 blocker 全处理
+   - Deep diagnosis (07-24)：4 agent 诊断 + 12 P0/P1 fix（3 batch）+ pi 评审双清；4633 tests
+   - Instinct loop Phase A-E (07-24)：command_args / 文件锁 / launchd / auto-promote+feedback-collect / preset+ADR-005
+4. **Conversation mirror (Path-1 + Path-2)** ✅ (Completed - July 24-25)
+   - Path-1：thinking/tool_calls/tool_results/model/usage/stop_reason 端到端捕获（commit d7ddfeb）
+   - Path-2：sub-agent transcripts — 每个 sub-agent 独立 mirror conversation + metadata bag（commits 6f2f7f0 + 23f478e）
+   - 3 轮 grok+pi review，全 must-fix 修完
+5. **Skill 商店重构 + 智能建议**（新方向，待启动）
    - GitHub 按需搜索替代 issues 版市场；未命中查询追踪；重复任务蒸馏为技能
 
 ### Previous Week (July 13-18, 2026) — Completed
@@ -87,9 +95,9 @@
 ## Projects Summary
 
 ### VibeSOP (vibesop-py)
-**Status**: v8.0.0.dev0 (Loop System Phase 1 + 供应链加固；CI 全绿)
+**Status**: v8.0.0.dev0 (Loop System Phase 1 + Observability v8.2 P1 + Conversation mirror；CI 全绿)
 **Description**: AI SkillOS — vibe-coding 脚手架、语义级 query→skill 路由、编程 agent（Claude Code/Kimi/Pi/Cursor/Zed）优化
-**Coverage**: 4,067 tests passing（4,095 collected），覆盖率 74.65%（门禁 73）
+**Coverage**: ~4,633 tests passing，覆盖率 ~74%（门禁 73）
 **Key Metrics**:
 - Routing accuracy: 94%
 - Performance: 44 QPS (target: 40+ QPS)

@@ -3,6 +3,25 @@
 ## Session Handoff
 
 <!-- handoff:start -->
+### 2026-07-25 S36 [vibesop-py] Conversation mirror Path-2 — sub-agent transcripts
+
+**Session Summary**:
+- Path-2 实现：每个 sub-agent 独立 mirror conversation（agentType/description/parent_session 元数据）
+- id 稳定性：`<parent>-sub-<sanitized_agent_id>` — meta 编辑/mtime 重排不 orphan
+- 路径安全：`_sanitize_for_path` strip `[^A-Za-z0-9_-]+`（path-traversal 防御）
+- Dashboard：type badge + 描述（escape；preview fallback 也 escape）；data-conv-id + addEventListener
+- CLI flag：`--include-subagents/--no-include-subagents`（默认 on）
+- grok+pi 评审 8 must-fix 全修，单独拆 test commit；grok 抓到 pi 漏的 XSS
+
+**Key Decisions**:
+- Sub-agent 存储路径：`<session-id>/subagents/agent-<hex>.jsonl` + sibling `.meta.json`
+- macOS zsh `cp` 是 `cp -i` alias，shell pipeline 中用 `/bin/cp` 绕过
+- `Path.iterdir` monkeypatch 安全，`Path.stat` monkeypatch 破坏 pytest tmp_path cleanup
+
+**Next Steps**:
+- 24 commits 待 push（d7ddfeb Path-1 / 6f2f7f0+23f478e Path-2 + 其他 instinct loop / diagnosis 提交）
+- 等 instinct loop 24h 观察结果（2026-07-24 装 launchd，今天 review）
+
 ### 2026-07-21 S35 [vibesop-py] 文档审计 + CI 修复 + v8.0.0 发布
 
 **Session Summary**:
@@ -20,10 +39,4 @@
 **Next Steps**:
 - 全局工具重装: `uv tool install --reinstall /path/to/vibesop-py`
 - 旧项目需手动创建 config.toml 启用 analytics
-
-### 2026-07-21 S33 [vibesop-py] Bootstrap 技能包自动安装 + Analytics 默认启用
-
-- 修复 bootstrap.sh 未调用 vibe install --auto
-- init_support.py 默认 analytics.enabled=true
-- 路由 analytics 默认 opt-in → init 模板已修复
 <!-- handoff:end -->
