@@ -961,6 +961,58 @@ def test_derive_subagent_conversation_id_stable_and_readable(tmp_path: Path) -> 
     assert cid == derive_subagent_conversation_id("mirror-claude-4c0b62ec", record)
 
 
+def test_derive_subagent_conversation_id_ignores_type_changes() -> None:
+    """agentType / description edits must NOT change id (would orphan old file).
+
+    This is the regression grok+pi flagged: previously id embedded agentType,
+    so any meta correction (description filled in, type relabeled) orphaned
+    the old conversation file.
+    """
+    from vibesop.core.conversation_import import (
+        SubagentRecord,
+        derive_subagent_conversation_id,
+    )
+
+    base_record = SubagentRecord(
+        jsonl_path=Path("x"),
+        agent_id="a007cb9a1cdae69c4",
+        meta={"agentType": "Explore", "description": "first"},
+    )
+    reordered = SubagentRecord(
+        jsonl_path=Path("x"),
+        agent_id="a007cb9a1cdae69c4",
+        meta={"agentType": "general-purpose", "description": "edited later"},
+    )
+    parent = "mirror-claude-sess"
+    base_id = derive_subagent_conversation_id(parent, base_record)
+    # Different agentType / description (meta corrected after first import)
+    assert derive_subagent_conversation_id(parent, reordered) == base_id
+
+
+def test_derive_subagent_conversation_id_sanitizes_path_traversal() -> None:
+    """agentId containing '/' or '..' cannot escape storage_dir.
+
+    Found by grok+pi review: _slugify_agent_type only truncated, leaving
+    '/' intact. Defense-in-depth even though Claude Code emits hex today.
+    """
+    from vibesop.core.conversation_import import (
+        SubagentRecord,
+        derive_subagent_conversation_id,
+    )
+
+    malicious = SubagentRecord(
+        jsonl_path=Path("x"),
+        agent_id="../../etc/passwd",
+        meta={},
+    )
+    cid = derive_subagent_conversation_id("mirror-claude-x", malicious)
+    # No '/', no '..', only path-safe chars
+    assert "/" not in cid
+    assert ".." not in cid
+    # Resulting filename stays a single segment under storage_dir
+    assert cid.count("/") == 0
+
+
 def test_import_subagent_writes_metadata_and_turns(tmp_path: Path) -> None:
     """import_subagent persists agentType/description in metadata + turns in file."""
     from vibesop.core.conversation_import import (
@@ -1083,6 +1135,224 @@ def test_import_subagent_respects_capture_depth(tmp_path: Path) -> None:
     assert len(turns) == 1
     assert turns[0].thinking is None
     assert turns[0].tool_calls is None
+
+
+# ──────────────────────────────────────────────────────────────────
+# Phase 2 P1 regressions (grok + pi review)
+# ──────────────────────────────────────────────────────────────────
+
+
+def test_import_subagent_persists_metadata_on_zero_new_turns(tmp_path: Path) -> None:
+    """Re-import with 0 new turns (all duplicates) still writes updated metadata.
+
+    Found by grok+pi review: previously ``import_subagent`` only saved via
+    ``add_turn``, so when every parsed turn hashed as duplicate the new
+    metadata (e.g. corrected description) never landed on disk.
+    """
+    from vibesop.core.conversation_import import (
+        SubagentRecord,
+        import_subagent,
+    )
+
+    storage = tmp_path / "conv"
+    sub_jsonl = tmp_path / "agent.jsonl"
+    _write_jsonl(
+        sub_jsonl,
+        [{"type": "user", "message": {"role": "user", "content": "x"}, "timestamp": "2026-07-23T15:20:00.000Z"}],
+    )
+
+    # First import with empty description
+    record_v1 = SubagentRecord(
+        jsonl_path=sub_jsonl,
+        agent_id="abc",
+        meta={"agentType": "Explore", "description": ""},
+    )
+    import_subagent(record_v1, "c1", storage, parent_session_id="p")
+    ctx1 = ConversationContext(conversation_id="c1", storage_dir=storage)
+    assert ctx1.metadata.get("description") in (None, "")
+
+    # Re-import with corrected description (same transcript → all dupes)
+    record_v2 = SubagentRecord(
+        jsonl_path=sub_jsonl,
+        agent_id="abc",
+        meta={"agentType": "Explore", "description": "Map server"},
+    )
+    new = import_subagent(record_v2, "c1", storage, parent_session_id="p")
+    assert new == 0  # all turns were duplicates
+
+    # Reload from disk — metadata update must have persisted
+    ctx2 = ConversationContext(conversation_id="c1", storage_dir=storage)
+    assert ctx2.metadata.get("description") == "Map server"
+
+
+def test_import_subagent_persists_metadata_on_empty_transcript(tmp_path: Path) -> None:
+    """Sub-agent with no user/assistant turns still gets a metadata-only file.
+
+    Found by grok review (issue 8): previously ``if not parsed: return 0``
+    skipped saving, leaving the dashboard blind to the sub-agent.
+    """
+    from vibesop.core.conversation_import import (
+        SubagentRecord,
+        import_subagent,
+    )
+
+    storage = tmp_path / "conv"
+    sub_jsonl = tmp_path / "agent.jsonl"
+    # Only non-user/assistant lines → parse_claude_jsonl returns []
+    _write_jsonl(
+        sub_jsonl,
+        [
+            {"type": "mode", "mode": "normal"},
+            {"type": "attachment", "attachment": {}},
+        ],
+    )
+    record = SubagentRecord(
+        jsonl_path=sub_jsonl,
+        agent_id="abc",
+        meta={"agentType": "Explore", "description": "no turns yet"},
+    )
+    new = import_subagent(record, "c1", storage, parent_session_id="p")
+    assert new == 0
+
+    # File must still exist + carry metadata (so dashboard lists the sub-agent)
+    ctx = ConversationContext(conversation_id="c1", storage_dir=storage)
+    assert ctx.metadata["agent_type"] == "Explore"
+    assert ctx.metadata["description"] == "no turns yet"
+    assert ctx.metadata["is_subagent"] is True
+
+
+def test_discover_subagents_does_not_raise_on_unreadable_dir(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Permission errors during iterdir return [] rather than crashing CLI.
+
+    Found by grok review (issue 6): docstring promised "never raises" but
+    iterdir could raise on race or permission error.
+    """
+    from vibesop.core.conversation_import import discover_subagents
+
+    main = _write_subagent_tree(
+        tmp_path,
+        subagents=[
+            (
+                "abc123",
+                {"agentType": "Explore"},
+                [{"type": "user", "message": {"role": "user", "content": "go"}, "timestamp": "2026-07-23T15:20:00.000Z"}],
+            ),
+        ],
+    )
+
+    # Patch Path.iterdir to raise only when scanning the subagents dir.
+    # Scoped monkeypatch — pytest's own tmp_path cleanup uses ``unlink`` /
+    # ``stat``, not ``iterdir``, so this is safe within the test body.
+    original_iterdir = Path.iterdir
+
+    def raising_iterdir(self: Path) -> Any:
+        if self.name == "subagents":
+            raise PermissionError("denied")
+        return original_iterdir(self)
+
+    monkeypatch.setattr(Path, "iterdir", raising_iterdir)
+    records = discover_subagents(main)
+    assert records == []
+
+
+def test_discover_subagents_handles_stat_race(tmp_path: Path) -> None:
+    """If jsonl vanishes between listing and stat, sort uses mtime=0 (no crash).
+
+    Found by grok review (issue 6): mid-scan unlink could raise
+    FileNotFoundError during the sort key evaluation. Verified via a
+    direct call to the internal sort-key helper rather than monkey-patching
+    Path.stat (which would break pytest's tmp_path cleanup).
+    """
+    from vibesop.core.conversation_import import SubagentRecord, _sort_key_safe
+
+    # Vanished jsonl — Path.stat raises FileNotFoundError (subclass of OSError)
+    vanished = tmp_path / "does-not-exist.jsonl"
+    record = SubagentRecord(jsonl_path=vanished, agent_id="abc123", meta={})
+    # Must not raise; mtime falls back to 0.0
+    mtime, aid = _sort_key_safe(record)
+    assert mtime == 0.0
+    assert aid == "abc123"
+
+
+def test_subagent_id_scheme_dropped_old_format_orphans(
+    tmp_path: Path,
+) -> None:
+    """Re-import after mtime reorder must NOT produce duplicate conversation files.
+
+    End-to-end regression for grok+pi finding: previously the id embedded
+    spawn index, so the same agent could land in two different files across
+    re-imports. With the new scheme (id = parent + agent_id only), the file
+    is reused.
+    """
+    from vibesop.core.conversation_import import (
+        SubagentRecord,
+        derive_subagent_conversation_id,
+        import_subagent,
+    )
+
+    storage = tmp_path / "conv"
+    sub_jsonl = tmp_path / "agent.jsonl"
+    _write_jsonl(
+        sub_jsonl,
+        [{"type": "user", "message": {"role": "user", "content": "x"}, "timestamp": "2026-07-23T15:20:00.000Z"}],
+    )
+    record = SubagentRecord(
+        jsonl_path=sub_jsonl,
+        agent_id="a007cb9a1cdae69c4",
+        meta={"agentType": "Explore", "description": "first"},
+    )
+    parent = "mirror-claude-sess"
+
+    # Simulate two re-import passes — id must be the same (no spawn-index dependence)
+    cid_a = derive_subagent_conversation_id(parent, record)
+    cid_b = derive_subagent_conversation_id(parent, record)
+    assert cid_a == cid_b, "id must be deterministic"
+
+    # Both imports land in the same file → no orphan
+    import_subagent(record, cid_a, storage, parent_session_id="sess")
+    files_before = sorted(p.name for p in storage.glob("*.json"))
+    import_subagent(record, cid_b, storage, parent_session_id="sess")
+    files_after = sorted(p.name for p in storage.glob("*.json"))
+    assert files_before == files_after
+
+
+def test_path_traversal_safe_agent_id_cannot_escape_storage(
+    tmp_path: Path,
+) -> None:
+    """A crafted agentId (e.g. '../../etc/passwd') cannot write outside storage_dir.
+
+    Found by grok+pi review: slugify must strip '/' and '..' before the
+    id is joined into a filesystem path.
+    """
+    from vibesop.core.conversation_import import (
+        SubagentRecord,
+        import_subagent,
+    )
+
+    storage = tmp_path / "conv"
+    storage.mkdir()
+    sub_jsonl = tmp_path / "agent.jsonl"
+    _write_jsonl(
+        sub_jsonl,
+        [{"type": "user", "message": {"role": "user", "content": "x"}, "timestamp": "2026-07-23T15:20:00.000Z"}],
+    )
+    malicious = SubagentRecord(
+        jsonl_path=sub_jsonl,
+        agent_id="../../etc/passwd",
+        meta={},
+    )
+
+    # Must not raise and must not create files outside storage_dir
+    import_subagent(malicious, "mirror-claude-x", storage, parent_session_id="p")
+
+    # All written files live INSIDE storage_dir (no traversal)
+    for written in storage.rglob("*.json"):
+        assert storage in written.parents or written.parent == storage
+    # Specifically, no /etc/passwd-related file was created
+    assert not (tmp_path / "etc").exists()
+    assert not (tmp_path / "passwd").exists()
 
 
 # ──────────────────────────────────────────────────────────────────
