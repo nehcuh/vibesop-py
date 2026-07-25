@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
 from vibesop.core.conversation import ConversationContext
 from vibesop.core.conversation_import import (
@@ -16,6 +17,9 @@ from vibesop.core.conversation_import import (
     import_session,
     parse_claude_jsonl,
 )
+
+if TYPE_CHECKING:
+    import pytest
 
 
 def _write_jsonl(path: Path, lines: list[dict]) -> Path:
@@ -806,3 +810,333 @@ def test_turn_hash_stable_across_roles() -> None:
     assert _turn_hash(a) == _turn_hash(
         ConversationTurn(query="q", skill_id=None, timestamp=1.0, role="user")
     )
+
+
+# ──────────────────────────────────────────────────────────────────
+# Sub-agent discovery + import (Phase 2)
+# ──────────────────────────────────────────────────────────────────
+
+
+def _write_subagent_tree(
+    tmp_path: Path,
+    *,
+    session_id: str = "4c0b62ec-2a4b-435c-8088-a4d3be903f16",
+    main_lines: list[dict] | None = None,
+    subagents: list[tuple[str, dict, list[dict]]] | None = None,
+) -> Path:
+    """Lay out a Claude Code project dir with sub-agent transcripts.
+
+    ``subagents`` is a list of ``(agent_id_hex, meta_dict, transcript_lines)``
+    tuples. Writes the canonical paths:
+
+        <escaped>/  <session>.jsonl
+                    <session>/subagents/agent-<id>.jsonl
+                    <session>/subagents/agent-<id>.meta.json
+
+    Returns the path to the main session jsonl.
+    """
+    project_dir = tmp_path / "proj"
+    project_dir.mkdir()
+    main_path = project_dir / f"{session_id}.jsonl"
+    _write_jsonl(main_path, main_lines or [{"type": "user", "message": {"role": "user", "content": "hi"}, "timestamp": "2026-07-23T15:20:00.000Z"}])
+
+    if subagents:
+        sub_dir = project_dir / session_id / "subagents"
+        sub_dir.mkdir(parents=True)
+        for idx, (agent_id, meta, lines) in enumerate(subagents):
+            sub_jsonl = sub_dir / f"agent-{agent_id}.jsonl"
+            _write_jsonl(sub_jsonl, lines)
+            (sub_dir / f"agent-{agent_id}.meta.json").write_text(
+                json.dumps(meta), encoding="utf-8"
+            )
+            # Force ascending mtimes so discover_subagents returns spawn order.
+            import os
+
+            os.utime(sub_jsonl, (10.0 + idx, 10.0 + idx))
+    return main_path
+
+
+def test_discover_subagents_empty_when_no_dir(tmp_path: Path) -> None:
+    """No subagents/ dir → empty list, no error."""
+    from vibesop.core.conversation_import import discover_subagents
+
+    main = tmp_path / "sess.jsonl"
+    _write_jsonl(main, [{"type": "user", "message": {"role": "user", "content": "x"}, "timestamp": "2026-07-23T15:20:00.000Z"}])
+    assert discover_subagents(main) == []
+
+
+def test_discover_subagents_pairs_jsonl_with_meta(tmp_path: Path) -> None:
+    """Each agent-<id>.jsonl is paired with its sibling .meta.json."""
+    from vibesop.core.conversation_import import discover_subagents
+
+    main = _write_subagent_tree(
+        tmp_path,
+        subagents=[
+            (
+                "a007cb9a1cdae69c4",
+                {"agentType": "Explore", "description": "Map server", "toolUseId": "call_1"},
+                [{"type": "user", "message": {"role": "user", "content": "go"}, "timestamp": "2026-07-23T15:20:00.000Z"}],
+            ),
+            (
+                "b0522f2c200b3bc06",
+                {"agentType": "general-purpose", "description": "Adversary", "toolUseId": "call_2"},
+                [{"type": "user", "message": {"role": "user", "content": "attack"}, "timestamp": "2026-07-23T15:21:00.000Z"}],
+            ),
+        ],
+    )
+    records = discover_subagents(main)
+    assert len(records) == 2
+    # Sorted by mtime ascending (spawn order)
+    assert records[0].agent_id == "a007cb9a1cdae69c4"
+    assert records[0].meta["agentType"] == "Explore"
+    assert records[0].meta["description"] == "Map server"
+    assert records[1].agent_id == "b0522f2c200b3bc06"
+
+
+def test_discover_subagents_handles_missing_meta(tmp_path: Path) -> None:
+    """agent-<id>.jsonl without .meta.json still discovered — meta is empty dict."""
+    from vibesop.core.conversation_import import discover_subagents
+
+    main = _write_subagent_tree(
+        tmp_path,
+        subagents=[
+            ("a007cb9a1cdae69c4", {}, []),  # meta dict empty → don't write meta.json
+        ],
+    )
+    # Manually remove the meta.json that _write_subagent_tree wrote (since
+    # we passed an empty meta dict it still wrote "{}" — delete for this test).
+    meta_path = main.parent / main.stem / "subagents" / "agent-a007cb9a1cdae69c4.meta.json"
+    meta_path.unlink()
+
+    records = discover_subagents(main)
+    assert len(records) == 1
+    assert records[0].meta == {}
+
+
+def test_discover_subagents_ignores_orphan_meta(tmp_path: Path) -> None:
+    """meta.json without matching transcript is skipped silently."""
+    from vibesop.core.conversation_import import discover_subagents
+
+    main = _write_subagent_tree(tmp_path, subagents=[])
+    sub_dir = main.parent / main.stem / "subagents"
+    sub_dir.mkdir(parents=True)
+    (sub_dir / "agent-orphanforsure0000.meta.json").write_text(
+        json.dumps({"agentType": "Explore"}), encoding="utf-8"
+    )
+    records = discover_subagents(main)
+    assert records == []
+
+
+def test_parse_subagent_meta_returns_none_for_missing(tmp_path: Path) -> None:
+    from vibesop.core.conversation_import import parse_subagent_meta
+
+    assert parse_subagent_meta(tmp_path / "nope.json") is None
+
+
+def test_parse_subagent_meta_returns_none_for_invalid_json(tmp_path: Path) -> None:
+    from vibesop.core.conversation_import import parse_subagent_meta
+
+    bad = tmp_path / "bad.meta.json"
+    bad.write_text("{not json", encoding="utf-8")
+    assert parse_subagent_meta(bad) is None
+
+
+def test_derive_subagent_conversation_id_stable_and_readable(tmp_path: Path) -> None:
+    """Identity = parent + agent_id; stable across mtime/meta changes."""
+    from vibesop.core.conversation_import import (
+        SubagentRecord,
+        derive_subagent_conversation_id,
+    )
+
+    record = SubagentRecord(
+        jsonl_path=Path("x"),
+        agent_id="a007cb9a1cdae69c4",
+        meta={"agentType": "Explore", "description": "Map server"},
+    )
+    cid = derive_subagent_conversation_id("mirror-claude-4c0b62ec", record)
+    # Identity no longer carries index or agentType — both can mutate across
+    # re-imports (mtime reorders, meta edits). Found by grok+pi review.
+    assert cid == "mirror-claude-4c0b62ec-sub-a007cb9a1cdae69c4"
+    # Same inputs → same id (idempotent re-import)
+    assert cid == derive_subagent_conversation_id("mirror-claude-4c0b62ec", record)
+
+
+def test_import_subagent_writes_metadata_and_turns(tmp_path: Path) -> None:
+    """import_subagent persists agentType/description in metadata + turns in file."""
+    from vibesop.core.conversation_import import (
+        SubagentRecord,
+        import_subagent,
+    )
+
+    storage = tmp_path / "conv"
+    sub_jsonl = tmp_path / "agent.jsonl"
+    _write_jsonl(
+        sub_jsonl,
+        [
+            {"type": "user", "message": {"role": "user", "content": "go"}, "timestamp": "2026-07-23T15:20:00.000Z"},
+            {
+                "type": "assistant",
+                "message": {
+                    "role": "assistant",
+                    "model": "claude-sonnet-4-6",
+                    "content": [
+                        {"type": "thinking", "thinking": "planning"},
+                        {"type": "tool_use", "id": "t1", "name": "Read", "input": {"file_path": "/x"}},
+                        {"type": "text", "text": "done"},
+                    ],
+                },
+                "timestamp": "2026-07-23T15:20:01.000Z",
+            },
+        ],
+    )
+    record = SubagentRecord(
+        jsonl_path=sub_jsonl,
+        agent_id="a007cb9a1cdae69c4",
+        meta={"agentType": "Explore", "description": "Map server", "toolUseId": "call_x"},
+    )
+    n = import_subagent(
+        record,
+        "mirror-claude-sess-sub1-Explore-a007cb9a",
+        storage,
+        parent_session_id="sess",
+    )
+    assert n == 2  # one user + one assistant turn
+
+    ctx = ConversationContext(
+        conversation_id="mirror-claude-sess-sub1-Explore-a007cb9a",
+        storage_dir=storage,
+    )
+    # Metadata persisted
+    assert ctx.metadata["agent_type"] == "Explore"
+    assert ctx.metadata["description"] == "Map server"
+    assert ctx.metadata["parent_session"] == "sess"
+    assert ctx.metadata["tool_use_id"] == "call_x"
+    assert ctx.metadata["agent_id"] == "a007cb9a1cdae69c4"
+    assert ctx.metadata["is_subagent"] is True
+    # Turns parsed
+    turns = ctx.get_history()
+    assert len(turns) == 2
+    assert turns[1].thinking == "planning"
+    assert turns[1].tool_calls is not None and turns[1].tool_calls[0].name == "Read"
+    assert turns[1].model == "claude-sonnet-4-6"
+
+
+def test_import_subagent_idempotent_on_rerun(tmp_path: Path) -> None:
+    """Running import_subagent twice on the same transcript → 0 new turns."""
+    from vibesop.core.conversation_import import (
+        SubagentRecord,
+        import_subagent,
+    )
+
+    storage = tmp_path / "conv"
+    sub_jsonl = tmp_path / "agent.jsonl"
+    _write_jsonl(
+        sub_jsonl,
+        [{"type": "user", "message": {"role": "user", "content": "go"}, "timestamp": "2026-07-23T15:20:00.000Z"}],
+    )
+    record = SubagentRecord(
+        jsonl_path=sub_jsonl,
+        agent_id="a007cb9a1cdae69c4",
+        meta={"agentType": "Explore"},
+    )
+    cid = "mirror-claude-sess-sub1-Explore-a007cb9a"
+    assert import_subagent(record, cid, storage, parent_session_id="sess") == 1
+    assert import_subagent(record, cid, storage, parent_session_id="sess") == 0
+
+
+def test_import_subagent_respects_capture_depth(tmp_path: Path) -> None:
+    """minimal depth skips thinking/tool_calls even on sub-agent transcripts."""
+    from vibesop.core.conversation_import import (
+        SubagentRecord,
+        import_subagent,
+    )
+
+    storage = tmp_path / "conv"
+    sub_jsonl = tmp_path / "agent.jsonl"
+    _write_jsonl(
+        sub_jsonl,
+        [
+            {
+                "type": "assistant",
+                "message": {
+                    "role": "assistant",
+                    "content": [
+                        {"type": "thinking", "thinking": "hidden"},
+                        {"type": "tool_use", "id": "t1", "name": "Read", "input": {}},
+                        {"type": "text", "text": "ok"},
+                    ],
+                },
+                "timestamp": "2026-07-23T15:20:00.000Z",
+            },
+        ],
+    )
+    record = SubagentRecord(jsonl_path=sub_jsonl, agent_id="abc", meta={})
+    import_subagent(
+        record,
+        "c-min",
+        storage,
+        parent_session_id="p",
+        capture_depth="minimal",
+    )
+    ctx = ConversationContext(conversation_id="c-min", storage_dir=storage)
+    turns = ctx.get_history()
+    assert len(turns) == 1
+    assert turns[0].thinking is None
+    assert turns[0].tool_calls is None
+
+
+# ──────────────────────────────────────────────────────────────────
+# ConversationContext metadata persistence
+# ──────────────────────────────────────────────────────────────────
+
+
+def test_conversation_context_persists_metadata(tmp_path: Path) -> None:
+    """metadata dict round-trips through save/load."""
+    ctx = ConversationContext(
+        conversation_id="c1",
+        storage_dir=tmp_path / "conv",
+        metadata={"agent_type": "Explore", "is_subagent": True},
+    )
+    ctx.add_turn(query="hi", skill_id=None, intent=None, role="user")
+    # Reload from disk via a fresh instance — caller-supplied metadata=None
+    # so the stored metadata is adopted.
+    ctx2 = ConversationContext(conversation_id="c1", storage_dir=tmp_path / "conv")
+    assert ctx2.metadata["agent_type"] == "Explore"
+    assert ctx2.metadata["is_subagent"] is True
+
+
+def test_conversation_context_caller_metadata_wins(tmp_path: Path) -> None:
+    """When caller passes metadata, it overrides what's on disk (re-import case)."""
+    storage = tmp_path / "conv"
+    ctx = ConversationContext(
+        conversation_id="c1",
+        storage_dir=storage,
+        metadata={"agent_type": "Old"},
+    )
+    ctx.add_turn(query="hi", skill_id=None, intent=None, role="user")
+
+    ctx2 = ConversationContext(
+        conversation_id="c1",
+        storage_dir=storage,
+        metadata={"agent_type": "New"},
+    )
+    assert ctx2.metadata["agent_type"] == "New"
+
+
+def test_conversation_context_no_metadata_backward_compat(tmp_path: Path) -> None:
+    """Pre-Path-2 files (no metadata key) load cleanly with empty metadata."""
+    storage = tmp_path / "conv"
+    storage.mkdir()
+    # Hand-write a minimal pre-Path-2 conversation file.
+    (storage / "c1.json").write_text(
+        json.dumps(
+            {
+                "conversation_id": "c1",
+                "turns": [],
+                "last_activity": 0.0,
+            }
+        ),
+        encoding="utf-8",
+    )
+    ctx = ConversationContext(conversation_id="c1", storage_dir=storage)
+    assert ctx.metadata == {}

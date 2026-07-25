@@ -238,6 +238,7 @@ class ConversationContext:
         max_history: int = 10,
         follow_up_timeout: float = 900.0,  # 15 minutes
         storage_dir: str | Path = ".vibe/conversations",
+        metadata: dict[str, Any] | None = None,
     ) -> None:
         self.conversation_id = conversation_id or str(uuid.uuid4())[:8]
         self._max_history = max_history
@@ -246,6 +247,11 @@ class ConversationContext:
         self._lock = threading.Lock()
         self._turns: list[ConversationTurn] = []
         self._last_activity = time.time()
+        # Opaque metadata bag for mirror importers (e.g. sub-agent
+        # agentType/description/parent_session). Not consulted by any
+        # routing logic — purely for dashboard display + dashboard-side
+        # grouping. Loaded from JSON if present; caller may override.
+        self.metadata: dict[str, Any] = dict(metadata) if metadata else {}
         # Reusable similarity calculator (cosine over term-frequency vectors)
         from vibesop.core.matching.base import SimilarityMetric
         from vibesop.core.matching.similarity import SimilarityCalculator
@@ -269,6 +275,11 @@ class ConversationContext:
                 data = json.load(f)
             self._turns = [ConversationTurn.from_dict(t) for t in data.get("turns", [])]
             self._last_activity = data.get("last_activity", time.time())
+            stored_meta = data.get("metadata")
+            if isinstance(stored_meta, dict) and not self.metadata:
+                # Only adopt stored metadata when the caller didn't pass their
+                # own (caller-supplied wins; supports re-import overwriting).
+                self.metadata = dict(stored_meta)
         except (OSError, json.JSONDecodeError):
             pass
 
@@ -276,17 +287,15 @@ class ConversationContext:
         """Persist conversation state to disk."""
         self._storage_dir.mkdir(parents=True, exist_ok=True)
         path = self._file_path()
+        payload: dict[str, Any] = {
+            "conversation_id": self.conversation_id,
+            "turns": [t.to_dict() for t in self._turns],
+            "last_activity": self._last_activity,
+        }
+        if self.metadata:
+            payload["metadata"] = self.metadata
         with path.open("w", encoding="utf-8") as f:
-            json.dump(
-                {
-                    "conversation_id": self.conversation_id,
-                    "turns": [t.to_dict() for t in self._turns],
-                    "last_activity": self._last_activity,
-                },
-                f,
-                ensure_ascii=False,
-                indent=2,
-            )
+            json.dump(payload, f, ensure_ascii=False, indent=2)
 
     # ------------------------------------------------------------------
     # History management

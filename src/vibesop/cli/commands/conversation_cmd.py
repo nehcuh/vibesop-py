@@ -132,9 +132,25 @@ def import_claude(
             "turns from pre-Path-1 mirror files."
         ),
     ),
+    include_subagents: bool = typer.Option(
+        True,
+        "--include-subagents/--no-include-subagents",
+        help=(
+            "Also import each sub-agent transcript (Claude Code stores them "
+            "under <session-id>/subagents/agent-*.jsonl). Each spawns its "
+            "own mirror conversation so the dashboard surfaces the sub-agent's "
+            "internal thinking/tool calls. Disable for top-level-only mirror."
+        ),
+    ),
 ) -> None:
     """Batch-import Claude Code transcript(s) into .vibe/conversations/."""
-    from vibesop.core.conversation_import import append_parsed_turns, parse_claude_jsonl
+    from vibesop.core.conversation_import import (
+        append_parsed_turns,
+        derive_subagent_conversation_id,
+        discover_subagents,
+        import_subagent,
+        parse_claude_jsonl,
+    )
 
     depth = _resolve_capture_depth(capture_depth)
     max_history = _resolve_max_history() or _MIRROR_DEFAULT_MAX_HISTORY
@@ -180,6 +196,8 @@ def import_claude(
 
     total_new = 0
     total_skip = 0
+    total_subagents = 0
+    total_sub_new = 0
     for path, cid in targets:
         # Detect pre-Path-1 "thin" turns BEFORE import — warn user about
         # the duplicate-append failure mode (found by grok+pi review).
@@ -209,10 +227,57 @@ def import_claude(
             f"from {path.name}"
         )
 
-    console.print(
+        # Phase 2: sub-agent transcripts live under <session>/subagents/.
+        # Each becomes its own mirror conversation so the dashboard shows
+        # the sub-agent's internal thinking/tool calls — without this the
+        # user only sees the parent's Task tool_use block.
+        if include_subagents:
+            subagents = discover_subagents(path)
+            if subagents:
+                console.print(
+                    f"[dim]Discovered {len(subagents)} sub-agent transcript(s) "
+                    f"for {path.stem}[/dim]"
+                )
+            for idx, record in enumerate(subagents, start=1):
+                sub_cid = derive_subagent_conversation_id(cid, record)
+                # When --purge is set the parent file was wiped above; apply
+                # the same to sub-agent conversations so re-imports stay clean.
+                sub_target = storage_dir / f"{sub_cid}.json"
+                if purge and sub_target.exists():
+                    sub_target.unlink()
+                    console.print(f"[dim]Purged {sub_target.name}[/dim]")
+                sub_new = import_subagent(
+                    record,
+                    sub_cid,
+                    storage_dir,
+                    parent_session_id=path.stem,
+                    max_history=max_history,
+                    capture_depth=depth,
+                )
+                total_subagents += 1
+                total_sub_new += sub_new
+                agent_type = record.meta.get("agentType") or "agent"
+                desc = record.meta.get("description") or ""
+                label = f"{agent_type}"
+                if desc:
+                    label += f" — {desc[:60]}"
+                console.print(
+                    f"  ↳ sub-agent {idx}/{len(subagents)}: {sub_new} new turns "
+                    f"into {sub_cid} [{label}]"
+                )
+
+    footer = (
         f"[green]Done:[/green] {total_new} new turn(s) across {len(targets)} session(s), "
         f"{total_skip} duplicate(s) skipped."
     )
+    # Only mention sub-agents when there were any — avoids noisy "0 sub-agent
+    # turn(s)" tail on sessions that never spawned a Task.
+    if include_subagents and total_subagents > 0:
+        footer += (
+            f" [cyan]+ {total_sub_new} sub-agent turn(s) across "
+            f"{total_subagents} sub-agent transcript(s).[/cyan]"
+        )
+    console.print(footer)
 
 
 def _file_has_thin_turns(path: Path) -> bool:

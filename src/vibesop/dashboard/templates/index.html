@@ -487,14 +487,36 @@ async function loadConversations() {
     return;
   }
 
-  tbody.innerHTML = data.map(c => `
-    <tr>
-      <td><span class="mono clickable" onclick="showConversation('${c._id}')">${c._id.substring(0, 16)}...</span></td>
-      <td>${c.turn_count || '-'}</td>
-      <td style="max-width:350px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(c.preview || '')}</td>
+  tbody.innerHTML = data.map(c => {
+    // Sub-agent mirror conversations carry metadata.agent_type / description.
+    // Surface them as a badge + alt preview so the dashboard list distinguishes
+    // "Explore — Map companion server" from the parent session at a glance.
+    const meta = c.metadata || {};
+    const isSub = meta.is_subagent;
+    const typeBadge = meta.agent_type
+      ? `<span class="tool-call-badge" style="margin-right:6px">${escapeHtml(meta.agent_type)}</span>`
+      : '';
+    // Privacy/safety: every text interpolation into innerHTML must pass
+    // escapeHtml. Previously c.preview was raw in the fallback path — that
+    // XSS'd any user-prompt containing HTML (found by grok review).
+    const desc = meta.description
+      ? escapeHtml(meta.description)
+      : escapeHtml(c.preview || '');
+    const idPrefix = isSub ? '↳ ' : '';
+    return `
+    <tr data-conv-id="${escapeHtml(c._id)}">
+      <td><span class="mono clickable">${idPrefix}${escapeHtml(c._id.substring(0, 20))}…</span></td>
+      <td>${typeBadge}${c.turn_count || '-'}</td>
+      <td style="max-width:350px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${desc}</td>
       <td>${timeAgo(c.updated_at || c.timestamp)}</td>
-    </tr>
-  `).join('');
+    </tr>`;
+  }).join('');
+  // Wire up clicks via data-conv-id rather than inline onclick — escapes-free
+  // dispatch prevents _id (now carrying agentType) from breaking out of the
+  // JS string context. Found by grok review (issue 7).
+  document.querySelectorAll('tr[data-conv-id]').forEach(tr => {
+    tr.addEventListener('click', () => showConversation(tr.dataset.convId));
+  });
 }
 
 function renderThinking(thinking) {
@@ -549,6 +571,20 @@ function renderMetaLine(t) {
   return `<div class="meta-line">${escapeHtml(parts.join(' · '))}</div>`;
 }
 
+function renderConversationBanner(c) {
+  // Sub-agent conversations carry metadata about their role in the parent
+  // workflow. Show a compact banner so the dashboard reader immediately
+  // sees "this is an Explore sub-agent of session X" without scrolling.
+  const meta = c.metadata;
+  if (!meta || !meta.is_subagent) return '';
+  const parts = [];
+  if (meta.agent_type) parts.push(`<span class="tool-call-badge">${escapeHtml(meta.agent_type)}</span>`);
+  if (meta.description) parts.push(`<span style="color:var(--dim)">${escapeHtml(meta.description)}</span>`);
+  if (meta.parent_session) parts.push(`<span style="color:var(--dim);font-size:11px">parent: ${escapeHtml(String(meta.parent_session).substring(0, 16))}…</span>`);
+  if (!parts.length) return '';
+  return `<div class="meta" style="margin-bottom:10px;padding:6px 10px;background:rgba(255,255,255,0.03);border-radius:4px">↳ sub-agent · ${parts.join(' · ')}</div>`;
+}
+
 function renderTurn(t) {
   const role = t.role || 'user';
   // Render order (per design review): thinking → tool_calls → text → tool_results.
@@ -586,8 +622,9 @@ async function showConversation(id) {
   div.style.display = 'block';
   div.innerHTML = `
     <button class="close" onclick="this.parentElement.style.display='none'">&times;</button>
-    <h3>Conversation: ${id}</h3>
-    <div class="meta">${turns.length} turns &bull; Current skill: ${c.current_skill || c.previous_skill || 'none'}</div>
+    <h3>Conversation: ${escapeHtml(id)}</h3>
+    <div class="meta">${turns.length} turns &bull; Current skill: ${escapeHtml(c.current_skill || c.previous_skill || 'none')}</div>
+    ${renderConversationBanner(c)}
     ${turns.map(renderTurn).join('')}
     <details style="margin-top:10px"><summary style="cursor:pointer;font-size:12px;color:var(--dim)">Raw JSON</summary><pre>${escapeHtml(JSON.stringify(c, null, 2))}</pre></details>
   `;

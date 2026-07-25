@@ -783,3 +783,165 @@ class TestAppendTurnMaxHistory:
         assert len(conv["turns"]) == 5
         assert [t["query"] for t in conv["turns"]] == ["t5", "t6", "t7", "t8", "t9"]
 
+
+# ──────────────────────────────────────────────────────────────────
+# Sub-agent mirror (Phase 2)
+# ──────────────────────────────────────────────────────────────────
+
+
+def _make_subagent_tree(
+    tmp_path: Path,
+    *,
+    session_id: str = "4c0b62ec-2a4b-435c-8088-a4d3be903f16",
+    subagents: list[tuple[str, dict, list[dict]]],
+) -> Path:
+    """Lay out a Claude project dir with one session jsonl + N sub-agent jsonls.
+
+    Mirrors the on-disk layout produced by Claude Code:
+
+        <tmp>/proj/  <session>.jsonl
+                     <session>/subagents/agent-<id>.jsonl
+                     <session>/subagents/agent-<id>.meta.json
+    """
+    import os
+
+    proj = tmp_path / "proj"
+    proj.mkdir()
+    main = proj / f"{session_id}.jsonl"
+    _make_jsonl(main, [_user("kickoff"), _assistant("dispatching")])
+    sub_dir = proj / session_id / "subagents"
+    sub_dir.mkdir(parents=True)
+    for idx, (agent_id, meta, lines) in enumerate(subagents):
+        sub_jsonl = sub_dir / f"agent-{agent_id}.jsonl"
+        _make_jsonl(sub_jsonl, lines)
+        (sub_dir / f"agent-{agent_id}.meta.json").write_text(
+            json.dumps(meta), encoding="utf-8"
+        )
+        os.utime(sub_jsonl, (10.0 + idx, 10.0 + idx))
+    return main
+
+
+def test_import_claude_default_includes_subagents(tmp_path: Path) -> None:
+    """Default invocation imports both main + each sub-agent transcript."""
+    main = _make_subagent_tree(
+        tmp_path,
+        subagents=[
+            (
+                "a007cb9a1cdae69c4",
+                {"agentType": "Explore", "description": "Map server"},
+                [_user("explore"), _assistant("found it")],
+            ),
+            (
+                "b0522f2c200b3bc06",
+                {"agentType": "general-purpose", "description": "Adversary"},
+                [_user("attack")],
+            ),
+        ],
+    )
+    storage = tmp_path / "conv"
+    result = runner.invoke(
+        app,
+        ["import-claude", "--source", str(main), "--storage-dir", str(storage)],
+    )
+    assert result.exit_code == 0, result.output
+    output = _strip_ansi(result.output)
+
+    # Main conversation imported
+    assert (storage / "mirror-claude-4c0b62ec-2a4b-435c-8088-a4d3be903f16.json").exists()
+    # Two sub-agent conversations imported with derived ids.
+    # ID format changed in Phase 2 P1 fix: <parent>-sub-<agentId> (no index/type)
+    # so that mtime reorders / meta edits don't orphan old conversation files.
+    sub1 = storage / "mirror-claude-4c0b62ec-2a4b-435c-8088-a4d3be903f16-sub-a007cb9a1cdae69c4.json"
+    sub2 = storage / "mirror-claude-4c0b62ec-2a4b-435c-8088-a4d3be903f16-sub-b0522f2c200b3bc06.json"
+    assert sub1.exists(), output
+    assert sub2.exists(), output
+
+    # Output reports sub-agent counts (Rich may line-wrap, so check fragments)
+    assert "2 sub-agent transcript(s)" in output
+    assert "sub-agent 1/2" in output and "sub-agent 2/2" in output
+    assert "Explore — Map server" in output
+
+
+def test_import_claude_no_include_subagents_skips_subagents(tmp_path: Path) -> None:
+    """--no-include-subagents → only main transcript; no sub-agent files written."""
+    main = _make_subagent_tree(
+        tmp_path,
+        subagents=[
+            (
+                "a007cb9a1cdae69c4",
+                {"agentType": "Explore"},
+                [_user("explore")],
+            ),
+        ],
+    )
+    storage = tmp_path / "conv"
+    result = runner.invoke(
+        app,
+        [
+            "import-claude",
+            "--source",
+            str(main),
+            "--storage-dir",
+            str(storage),
+            "--no-include-subagents",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    output = _strip_ansi(result.output)
+    assert "sub-agent turn(s)" not in output
+
+    # Only main conversation file exists
+    files = list(storage.glob("*.json"))
+    assert len(files) == 1
+    assert files[0].name.startswith("mirror-claude-4c0b62ec")
+
+
+def test_import_claude_subagent_purge_wipes_subagent_files(tmp_path: Path) -> None:
+    """--purge wipes both main + sub-agent conversations before re-import."""
+    main = _make_subagent_tree(
+        tmp_path,
+        subagents=[
+            (
+                "a007cb9a1cdae69c4",
+                {"agentType": "Explore", "description": "first"},
+                [_user("v1")],
+            ),
+        ],
+    )
+    storage = tmp_path / "conv"
+    args = ["import-claude", "--source", str(main), "--storage-dir", str(storage)]
+    # First import creates the files
+    first = runner.invoke(app, args)
+    assert first.exit_code == 0, first.output
+    sub_file = storage / "mirror-claude-4c0b62ec-2a4b-435c-8088-a4d3be903f16-sub-a007cb9a1cdae69c4.json"
+    assert sub_file.exists()
+    # Manually add a stale turn to verify purge actually wipes (not just idempotent skip)
+    sub_data = json.loads(sub_file.read_text(encoding="utf-8"))
+    sub_data["turns"].append({"query": "STALE", "skill_id": None, "timestamp": 0.0})
+    sub_file.write_text(json.dumps(sub_data), encoding="utf-8")
+
+    # Re-import with --purge
+    purge_result = runner.invoke(app, [*args, "--purge"])
+    assert purge_result.exit_code == 0, purge_result.output
+    purged_data = json.loads(sub_file.read_text(encoding="utf-8"))
+    assert all(t.get("query") != "STALE" for t in purged_data["turns"])
+
+
+def test_import_claude_subagent_no_subagents_dir_is_noop(tmp_path: Path) -> None:
+    """Session with no subagents/ dir imports cleanly — no sub-agent lines in output."""
+    # Build a main jsonl with no sibling <session>/ dir
+    proj = tmp_path / "proj"
+    proj.mkdir()
+    main = proj / "sess.jsonl"
+    _make_jsonl(main, [_user("hi")])
+
+    storage = tmp_path / "conv"
+    result = runner.invoke(
+        app,
+        ["import-claude", "--source", str(main), "--storage-dir", str(storage)],
+    )
+    assert result.exit_code == 0, result.output
+    output = _strip_ansi(result.output)
+    assert "sub-agent" not in output
+    assert "0 sub-agent turn(s)" not in output  # the summary line is suppressed entirely
+

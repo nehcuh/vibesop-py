@@ -21,6 +21,16 @@ Per Claude Code transcript convention, ``tool_result`` blocks land on the
 FOLLOWING user-role message — the parser preserves that placement rather
 than trying to re-attach to the preceding assistant turn.
 
+Sub-agent transcripts (Phase 2): Claude Code stores each Task-tool spawn
+under ``<session-id>/subagents/agent-<id>.jsonl`` with a sibling
+``agent-<id>.meta.json`` containing ``agentType`` / ``description`` /
+``toolUseId``. Each sub-agent transcript uses the same line schema as the
+parent (with extra ``isSidechain: true`` + ``agentId`` fields), so
+``parse_claude_jsonl`` parses them unchanged. ``discover_subagents``
+enumerates these for the CLI; ``import_subagent`` wires one into its own
+mirror conversation so the dashboard surfaces the sub-agent's internal
+thinking/tool_calls/tool_results that the parent transcript never sees.
+
 TODO(secret-redaction): Phase 2+ should add an opt-in secret-scrubber pass
 over parsed content before persisting (e.g. API keys, tokens). Today we
 trust Claude Code's own redaction of stdin/tool results; the mirror use
@@ -32,6 +42,8 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import re
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -43,6 +55,14 @@ logger = logging.getLogger(__name__)
 _CAPTURE_DEPTHS = ("minimal", "standard", "full")
 _RESULT_PREVIEW_LIMIT = 200
 _HASH_VERSION = "v2"
+
+# Sub-agent transcript files live alongside the main session jsonl under a
+# ``<session-id>/subagents/`` directory. Claude Code today emits hex agentIds
+# (no dashes), but the format isn't a hard contract — accept any non-dot
+# run so future identifiers don't silently get dropped from the mirror.
+# ``_sanitize_for_path`` defends against traversal regardless of charset.
+_SUBAGENT_RE = re.compile(r"^agent-(?P<agent_id>[^.]+)\.jsonl$")
+_SUBAGENT_META_RE = re.compile(r"^agent-(?P<agent_id>[^.]+)\.meta\.json$")
 
 
 def _parse_timestamp(raw: Any) -> float:
@@ -319,6 +339,7 @@ def append_parsed_turns(
     storage_dir: Path,
     *,
     max_history: int = 200,
+    metadata: dict[str, Any] | None = None,
 ) -> tuple[int, int]:
     """Dedupe + append already-parsed turns to a conversation file.
 
@@ -334,6 +355,13 @@ def append_parsed_turns(
     and re-importing at ``standard`` depth produces "rich" turns whose
     hashes differ from the thin originals — resulting in duplicate
     appends. Detect this in the CLI layer (purge flag) rather than here.
+
+    ``metadata`` (when supplied) is written onto the
+    ``ConversationContext`` (caller-wins over stored). Even when every
+    parsed turn hashes as duplicate, the metadata is persisted to disk so
+    re-importing with updated meta (e.g. a corrected description) doesn't
+    silently no-op. Found by grok+pi review (originally only saved via
+    ``add_turn`` → 0-new-turn re-import dropped meta updates on the floor).
     """
     if not parsed:
         return (0, 0)
@@ -342,7 +370,26 @@ def append_parsed_turns(
         conversation_id=conversation_id,
         max_history=max_history,
         storage_dir=storage_dir,
+        metadata=metadata,
     )
+    new_count, skipped = _append_dedup_turns(ctx, parsed)
+    # Force a save when nothing else triggered one — guarantees metadata
+    # updates land on disk even for the all-duplicates re-import path.
+    if new_count == 0 and metadata:
+        ctx.save()
+    return (new_count, skipped)
+
+
+def _append_dedup_turns(
+    ctx: ConversationContext, parsed: list[ConversationTurn]
+) -> tuple[int, int]:
+    """Append ``parsed`` to ``ctx`` skipping hash-duplicates of existing turns.
+
+    Shared by the parent-transcript path (``append_parsed_turns``) and the
+    sub-agent path (``import_subagent``) so dedupe semantics stay in one
+    place — found by grok+pi review (previously two near-verbatim copies
+    that would drift if ``_turn_hash`` ever revved again).
+    """
     existing = {_turn_hash(t) for t in ctx.get_history()}
     new_count = 0
     skipped = 0
@@ -393,4 +440,229 @@ def import_session(
     new_count, _skipped = append_parsed_turns(
         parsed, conversation_id, storage_dir, max_history=max_history
     )
+    return new_count
+
+
+# ----------------------------------------------------------------------
+# Sub-agent transcript discovery + import (Phase 2)
+# ----------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class SubagentRecord:
+    """One Claude Code sub-agent transcript discovered on disk.
+
+    ``jsonl_path`` points to ``agent-<id>.jsonl`` (same line schema as the
+    parent session). ``agent_id`` is the hex hash Claude Code assigns.
+    ``meta`` carries ``agentType`` / ``description`` / ``toolUseId`` from
+    the sibling ``.meta.json`` — empty dict when meta is missing or
+    unreadable (sub-agent still importable, just less well-labeled).
+    """
+
+    jsonl_path: Path
+    agent_id: str
+    meta: dict[str, Any]
+
+
+def parse_subagent_meta(meta_path: Path) -> dict[str, Any] | None:
+    """Parse a Claude Code ``agent-*.meta.json`` file.
+
+    Returns the dict unchanged on success (keys observed in the wild:
+    ``agentType``, ``description``, ``toolUseId``). Returns ``None`` when
+    the file is missing, unreadable, or doesn't decode to a dict — caller
+    should still be able to import the sub-agent transcript without meta.
+    """
+    if not meta_path.exists():
+        return None
+    try:
+        with meta_path.open(encoding="utf-8") as f:
+            data = json.load(f)
+    except (OSError, json.JSONDecodeError) as exc:
+        logger.debug("failed to read subagent meta %s: %s", meta_path, exc)
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def _sort_key_safe(record: SubagentRecord) -> tuple[float, str]:
+    """Sort sub-agent records by ``(mtime, agent_id)`` with OSError fallback.
+
+    Pulled out of ``discover_subagents`` so the safety contract (mid-scan
+    unlink → mtime=0.0, never raises) is unit-testable directly. Found by
+    grok review (issue 6): the original inline sort key could raise
+    ``FileNotFoundError`` / ``PermissionError`` if a file vanished between
+    the directory listing and the stat call.
+    """
+    try:
+        mtime = record.jsonl_path.stat().st_mtime
+    except OSError:
+        mtime = 0.0
+    return (mtime, record.agent_id)
+
+
+def discover_subagents(session_jsonl: Path) -> list[SubagentRecord]:
+    """Enumerate sub-agent transcripts for a given main session jsonl.
+
+    Claude Code writes sub-agent transcripts to a sibling directory named
+    after the session: ``<session-stem>/subagents/agent-<id>.jsonl`` with
+    a ``agent-<id>.meta.json`` sibling. This helper scans that directory
+    and returns records ordered by jsonl mtime (ascending — matches the
+    order the parent agent spawned them).
+
+    Returns an empty list when the ``subagents/`` directory doesn't exist
+    (no Task tool was used in the session) or is unreadable. Best-effort
+    throughout: any I/O error during listing or stat returns either a
+    partial result or an empty list rather than raising — the mirror is a
+    read-only, opt-in convenience feature and must never crash the CLI.
+    Found by grok/pi review (originally documented as "never raises" but
+    could raise on ``PermissionError`` / mid-scan ``FileNotFoundError``).
+    """
+    subagents_dir = session_jsonl.parent / session_jsonl.stem / "subagents"
+    if not subagents_dir.is_dir():
+        return []
+
+    # Pair each agent-<id>.jsonl with its .meta.json (meta is best-effort).
+    by_agent_id: dict[str, dict[str, Any]] = {}
+    try:
+        entries = list(subagents_dir.iterdir())
+    except OSError as exc:
+        logger.debug("subagents dir unreadable %s: %s", subagents_dir, exc)
+        return []
+    for entry in entries:
+        if not entry.is_file():
+            continue
+        name = entry.name
+        m = _SUBAGENT_RE.match(name)
+        if m:
+            aid = m.group("agent_id")
+            by_agent_id.setdefault(aid, {})["jsonl"] = entry
+            continue
+        mm = _SUBAGENT_META_RE.match(name)
+        if mm:
+            aid = mm.group("agent_id")
+            by_agent_id.setdefault(aid, {})["meta_path"] = entry
+
+    records: list[SubagentRecord] = []
+    for aid, bundle in by_agent_id.items():
+        jsonl_path = bundle.get("jsonl")
+        if not isinstance(jsonl_path, Path):
+            continue  # orphan meta.json without a transcript — skip
+        meta_path = bundle.get("meta_path")
+        meta = parse_subagent_meta(meta_path) if isinstance(meta_path, Path) else {}
+        records.append(SubagentRecord(jsonl_path=jsonl_path, agent_id=aid, meta=meta or {}))
+
+    # Sort by transcript mtime so the dashboard list reflects spawn order.
+    # Tiebreaker by agent_id so the order is deterministic across runs even
+    # when two transcripts share an mtime (HFS+/ext3 1s granularity) — found
+    # by pi review. Without this the same agent could land under a different
+    # ``index`` on re-import and produce a stale orphan conversation file.
+    records.sort(key=_sort_key_safe)
+    return records
+
+
+_PATH_SAFE_RE = re.compile(r"[^A-Za-z0-9_-]+")
+
+
+def _sanitize_for_path(value: str | None, *, fallback: str, max_len: int = 64) -> str:
+    """Reduce a free-form external string to a path-component-safe slug.
+
+    Used for any value that flows from a Claude Code transcript/meta into a
+    filesystem path via ``conversation_id``. Strips ``/``, ``..``, spaces,
+    quotes, and any other character that could let the value escape
+    ``storage_dir`` when ``_file_path`` joins it back. Collapses runs of
+    stripped chars to a single ``-`` so the slug stays readable.
+
+    Found by grok+pi review: the original ``_slugify_agent_type`` only
+    truncated, leaving ``/`` intact — a crafted ``agentType`` (or any
+    future field that surfaces in the id) could traverse out of
+    ``storage_dir``. Defense-in-depth: callers should also avoid putting
+    free-form values into ids, but this guarantees safety even if they do.
+    """
+    if not isinstance(value, str) or not value.strip():
+        return fallback
+    slug = _PATH_SAFE_RE.sub("-", value.strip()).strip("-")
+    if not slug:
+        return fallback
+    return slug[:max_len]
+
+
+def derive_subagent_conversation_id(
+    parent_conversation_id: str,
+    record: SubagentRecord,
+) -> str:
+    """Build a stable, filesystem-safe id for a sub-agent's mirror conversation.
+
+    Format: ``<parent_conv_id>-sub-<sanitized_agent_id>``
+
+    Identity comes from ``parent_conv_id`` + ``agent_id`` only — both are
+    stable across re-imports (mtime reorders, meta edits, capture-depth
+    upgrades). Previously the id embedded a 1-based spawn ``index`` and
+    the agentType; both mutated across runs and orphaned old conversation
+    files. Found by grok+pi review.
+
+    ``agent_id`` is sanitized defensively — Claude Code emits hex today,
+    but we don't want to assume that forever. ``_sanitize_for_path``
+    strips ``/``, ``..``, etc. so a malformed id can't traverse out of
+    ``storage_dir`` via ``_file_path``.
+    """
+    aid_slug = _sanitize_for_path(record.agent_id, fallback="unknown")
+    return f"{parent_conversation_id}-sub-{aid_slug}"
+
+
+def import_subagent(
+    record: SubagentRecord,
+    conversation_id: str,
+    storage_dir: Path,
+    parent_session_id: str,
+    *,
+    max_history: int = 200,
+    capture_depth: str = "standard",
+) -> int:
+    """Import one sub-agent transcript into its own mirror conversation.
+
+    Same parser + dedupe semantics as ``import_session``. The conversation
+    file gets a ``metadata`` block on disk recording ``agent_type`` /
+    ``description`` / ``parent_session`` / ``tool_use_id`` so the dashboard
+    can render the sub-agent's role alongside its internal turns.
+
+    Returns the count of NEW turns written (skipped duplicates don't count).
+
+    Metadata persistence: even when ``parsed`` is empty OR every turn is a
+    hash duplicate, the caller-supplied metadata is still written to disk.
+    This matters because ``.meta.json`` may be corrected after a first
+    import (description / agentType filled in) — without the forced save
+    the re-import would no-op silently and the dashboard would keep
+    showing stale metadata. Found by grok+pi review.
+    """
+    parsed = parse_claude_jsonl(record.jsonl_path, capture_depth=capture_depth)
+
+    metadata = {
+        "agent_type": record.meta.get("agentType"),
+        "description": record.meta.get("description"),
+        "parent_session": parent_session_id,
+        "tool_use_id": record.meta.get("toolUseId"),
+        "agent_id": record.agent_id,
+        "is_subagent": True,
+    }
+    # Strip None values so the persisted metadata stays compact — dashboard
+    # treats absent keys the same as None.
+    metadata = {k: v for k, v in metadata.items() if v is not None}
+
+    ctx = ConversationContext(
+        conversation_id=conversation_id,
+        storage_dir=storage_dir,
+        max_history=max_history,
+        metadata=metadata,
+    )
+    if not parsed:
+        # Empty transcript but metadata is meaningful (sub-agent existed,
+        # just emitted no user/assistant turns yet). Persist so the
+        # dashboard still lists it. Found by grok review (issue 8).
+        ctx.save()
+        return 0
+
+    new_count, _skipped = _append_dedup_turns(ctx, parsed)
+    if new_count == 0:
+        # All turns were duplicates — still refresh metadata on disk so
+        # updated descriptions / agentType land. Found by grok+pi review.
+        ctx.save()
     return new_count
