@@ -16,6 +16,7 @@ import time
 from typing import TYPE_CHECKING, Any, cast
 
 from vibesop.core.models import OrchestrationMode, OrchestrationResult
+from vibesop.core.observability.tracer import get_tracer
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +37,27 @@ class Orchestrator:
         context: RoutingContext | None = None,
         callbacks: Any | None = None,
     ) -> OrchestrationResult:
-        """Orchestrate a query — detect multi-intent and build execution plan if needed."""
+        """Orchestrate a query — detect multi-intent and build execution plan if needed.
+
+        Wraps the implementation in a trace context so all spans emitted during
+        orchestration (phase workflow_node spans + downstream LLM spans via
+        SpanWrappedProvider) share a single ``trace_id``. This is the natural
+        trace root for any complex query (v3 Phase A Task 2).
+        """
+        with get_tracer().trace(
+            "orchestrate",
+            metadata={"query": query[:500]},
+        ):
+            return self._orchestrate_impl(query, candidates, context, callbacks)
+
+    def _orchestrate_impl(
+        self,
+        query: str,
+        candidates: list[dict[str, Any]] | None = None,
+        context: RoutingContext | None = None,
+        callbacks: Any | None = None,
+    ) -> OrchestrationResult:
+        """Actual orchestration logic — see ``orchestrate()`` for trace wrapping."""
         from vibesop.core.orchestration.callbacks import (
             ErrorPolicy,
             NoOpCallbacks,
