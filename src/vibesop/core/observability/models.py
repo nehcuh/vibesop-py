@@ -141,16 +141,19 @@ class TraceContext:
     Bound to a ``contextvars.ContextVar`` (not ``threading.local``) so
     ``asyncio.gather`` tasks each get their own binding.
 
-    ``current_task_id`` is set by ``tracer.trace(...)`` and inherited by
-    descendant spans via ``start_span(...)``. This lets llm-spans emitted
-    deep in the call stack (e.g. inside ``SpanWrappedProvider``) carry
-    task attribution without each call site having to plumb task_id
-    through their signatures.
+    ``current_task_id`` / ``current_role_id`` are set by ``tracer.trace(...)``
+    and inherited by descendant spans via ``start_span(...)``. This lets
+    llm-spans emitted deep in the call stack (e.g. inside ``SpanWrappedProvider``)
+    carry task attribution without each call site having to plumb task_id
+    through their signatures. ``bind_task_context(...)`` further mutates
+    these mid-trace to support step-level binding (e.g. orchestrator
+    iterating ``plan.steps``).
     """
 
     trace_id: str
     current_span_id: str | None = None
     current_task_id: str | None = None
+    current_role_id: str | None = None
     span_stack: list[str] = field(default_factory=list)
 
     def push_span(self, span_id: str) -> None:

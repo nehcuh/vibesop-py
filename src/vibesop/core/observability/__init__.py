@@ -17,7 +17,7 @@ Usage::
 
 from vibesop.core.observability.models import Span, SpanKind, SpanStatus, TraceContext
 from vibesop.core.observability.span_writer import SpanWriter
-from vibesop.core.observability.tracer import ObservabilityTracer, get_tracer
+from vibesop.core.observability.tracer import ObservabilityTracer, bind_task_context, get_tracer
 
 __all__ = [
     "ObservabilityTracer",
@@ -26,5 +26,6 @@ __all__ = [
     "SpanStatus",
     "SpanWriter",
     "TraceContext",
+    "bind_task_context",
     "get_tracer",
 ]

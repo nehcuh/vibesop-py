@@ -57,6 +57,49 @@ def get_tracer(
     return _tracer
 
 
+@contextmanager
+def bind_task_context(
+    task_id: str | None, role_id: str | None = None
+) -> Generator[None, None, None]:
+    """Bind ``task_id`` / ``role_id`` to the active trace context.
+
+    Descendant spans emitted inside this block (via ``tracer.span()`` or
+    ``start_span()``) will inherit these values instead of the trace root's.
+    Useful when orchestrator iterates ``plan.steps`` and wants each step's
+    LLM calls tagged with ``step.step_id`` + ``step.assigned_role``.
+
+    No-op if no active trace or tracer disabled. Callers should run inside
+    ``with tracer.trace(...)`` for binding to take effect.
+
+    **Cross-process limitation**: ``contextvars`` does NOT cross process
+    boundaries. Sub-agent execution (Claude Code CLI etc.) runs as a
+    separate OS process — bind has no effect there. Cross-process task
+    attribution is established via the mirror hook writing
+    ``metadata.parent_session``, which the DAG rebuilder joins on.
+    See dashboard v3 Phase A "Data Boundary" doc for the full picture.
+    """
+    tracer = get_tracer()
+    if not tracer._enabled:
+        yield
+        return
+
+    ctx = tracer._get_context()
+    if ctx is None:
+        # No active trace — binding is meaningless but not an error
+        yield
+        return
+
+    old_task = ctx.current_task_id
+    old_role = ctx.current_role_id
+    ctx.current_task_id = task_id
+    ctx.current_role_id = role_id
+    try:
+        yield
+    finally:
+        ctx.current_task_id = old_task
+        ctx.current_role_id = old_role
+
+
 class ObservabilityTracer:
     """Core trace/span manager with context-manager APIs.
 
@@ -132,12 +175,14 @@ class ObservabilityTracer:
             metadata=metadata or {},
         )
         self._push(span.id, trace_id)
-        # Stash task_id on the context so descendant spans (llm-spans emitted
-        # by SpanWrappedProvider, etc.) can inherit it without call-site
-        # plumbing. See v8.2 GAP-1 attribution fix.
+        # Stash task_id / role_id on the context so descendant spans (llm-spans
+        # emitted by SpanWrappedProvider, etc.) can inherit them without
+        # call-site plumbing. See v8.2 GAP-1 attribution fix + v3 Phase A Task 1
+        # for role_id extension.
         ctx = self._get_context()
         if ctx is not None:
             ctx.current_task_id = task_id
+            ctx.current_role_id = role_id
 
         try:
             yield span
@@ -182,6 +227,7 @@ class ObservabilityTracer:
             span_kind=kind,
             parent_span_id=actual_parent,
             task_id=ctx.current_task_id if ctx else None,
+            role_id=ctx.current_role_id if ctx else None,
             metadata=metadata or {},
         )
         self._push(span.id, trace_id)
@@ -207,15 +253,17 @@ class ObservabilityTracer:
         *,
         parent_span_id: str | None = None,
         task_id: str | None = None,
+        role_id: str | None = None,
         metadata: dict[str, Any] | None = None,
     ) -> _Span:
         """Manually start a span (without context manager). Caller MUST call
         ``finish_span()`` or ``fail_span()`` to persist it.
 
-        If ``task_id`` is not provided but there is an active trace, the
-        context's ``current_task_id`` is inherited. This lets inner call
-        sites (LLM providers, tool wrappers) gain task attribution
-        automatically when they run inside a ``with tracer.trace(...)`` block.
+        If ``task_id`` / ``role_id`` are not provided but there is an active
+        trace, the context's ``current_task_id`` / ``current_role_id`` are
+        inherited. This lets inner call sites (LLM providers, tool wrappers)
+        gain task attribution automatically when they run inside a
+        ``with tracer.trace(...)`` block or ``bind_task_context(...)`` block.
         """
         if not self._enabled:
             return _Span(id="", trace_id="", name="noop", span_kind=kind)  # type: ignore[arg-type]
@@ -224,6 +272,7 @@ class ObservabilityTracer:
         trace_id = ctx.trace_id if ctx else _Span.new_trace_id()
         actual_parent = parent_span_id or (ctx.current_span_id if ctx else None)
         actual_task_id = task_id or (ctx.current_task_id if ctx else None)
+        actual_role_id = role_id or (ctx.current_role_id if ctx else None)
 
         span = _Span(
             id=_Span.new_id(),
@@ -231,6 +280,7 @@ class ObservabilityTracer:
             name=name,
             span_kind=kind,
             task_id=actual_task_id,
+            role_id=actual_role_id,
             parent_span_id=actual_parent,
             metadata=metadata or {},
         )
