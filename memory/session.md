@@ -1,4 +1,29 @@
 
+### S37 (2026-07-27) [vibesop-py] Dashboard v3 Phase A — Tasks 1-9 (data instrumentation)
+
+- [x] **Task 1-5** (前序 session 已完成)：trace context 包裹 + workflow_node phase spans + per-step task_id binding (no plan_id fallback, P0-1) + orchestration_id/trace_id 写入 conversation metadata (Task 5 跨进程 JOIN)
+- [x] **Task 6 / P0-3**：mirror hook 加 `--include-subagents`；`import_subagent` 新增 `parent_conversation_id` 写入 metadata（双写策略：legacy `parent_session`=raw + 新 `parent_conversation_id`=resolved mirror id）；CLI `conversation_cmd.py` 把 `cid` 透传进去
+- [x] **Task 7**：`Reflection` dataclass — 7 kinds (routing_miss/skill_misuse/trigger_vague/cost_blow/agent_choice/positive_pattern/context_note) × 3 statuses (open/addressed/dismissed) × 5 target_types；dataclass + Literal + `__post_init__` 校验（不引 Pydantic）；JSON round-trip 13/13
+- [x] **Task 8**：`ReflectionStore` append + `list_all` — JSONL append-only，cross-process lock（POSIX fcntl inline / Windows cross_process_lock）+ threading.Lock，pattern 直接抄 SpanWriter._locked_append；4-thread × 25-write 含 500-byte payload 无 interleaving
+- [x] **Task 9**：`list_by_task` / `list_open` / `update_status` — atomic rewrite 用 AtomicWriter（tmp+rename），同一把 cross-process lock 防 lost-update race；unknown id raise KeyError（fail loud 不 silent no-op）；2-thread × 10-update 无 lost mutation
+
+**Commits**：`a760971` (Task 6) / `aecccc7` (Task 7) / `faf762f` (Task 8) / `614e877` (Task 9) — 累计 11 commits ahead of origin/main
+
+**Key Discoveries**:
+1. **PEP 567 contextvars 不跨进程**：sub-agent 跑独立 OS process，`contextvars` 在 fork/spawn 后丢失 — 跨进程 JOIN 必须落盘（conversation metadata），不能靠 in-process var
+2. **JSONL store 双锁 pattern**：in-process threading.Lock + cross-process fcntl/cross_process_lock 两层叠加；append 走 locked_append，update 走 atomic rewrite（AtomicWriter tmp+rename），两层用同一把 cross-process lock 防 appender vs updater race
+3. **Plan path 与 codebase 约定冲突时跟约定**：plan 写 `src/vibesop/observability/reflection.py`（top-level），实际 codebase observability 全在 `src/vibesop/core/observability/`（与 tracer/aggregator/span_writer/models 同居）— 选了后者避免分裂
+4. **Plain dataclass + Literal + `__post_init__` validator**：避免为单个 dataclass 引入 Pydantic 依赖；`__post_init__` 内做 `_validate_choice(value, frozenset(get_args(Literal)), field_name)` 即可达到 runtime 校验效果
+5. **update_status fail loud 设计**：unknown id → KeyError（而非 silent no-op）；理由：stale id post-rebuild 是 dashboard bug，silent no-op 会掩盖
+
+**Next Steps**:
+- 11 commits 待 push（Task 1-9 + design docs + bind_task_context 早期 ship）
+- Task 10 (P0-2 mandatory)：`Orchestrator.orchestrate()` 接 `PlanTracker.create_plan()` + `plan.metadata["trace_id"]` — DAG rebuilder 的 plan↔span JOIN 契约，目前完全没接
+- Task 11/12：DAG rebuilder (load_plans_for_trace + build step tree)
+- Task 13：fixture-based E2E (zero LLM) — 验收关卡从 fill rate 改为 rebuild_dag 真实数据 smoke
+
+**Recorded**: yes — Phase A Tasks 1-9 progress + cross-process JSONL store pattern → auto-memory project-dashboard-v3-phase-a-tasks-1-9-shipped.md
+
 ### S36 (2026-07-25) [vibesop-py] Conversation mirror Path-2 — sub-agent transcripts
 
 - [x] **Path-2 实现**：discover_subagents + import_subagent + derive_subagent_conversation_id；每个 sub-agent 独立 mirror conversation，metadata bag (agentType/description/parent_session/tool_use_id/agent_id/is_subagent)

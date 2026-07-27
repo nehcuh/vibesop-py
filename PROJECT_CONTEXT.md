@@ -3,6 +3,27 @@
 ## Session Handoff
 
 <!-- handoff:start -->
+### 2026-07-27 S37 [vibesop-py] Dashboard v3 Phase A — Tasks 1-9 (data instrumentation)
+
+**Session Summary**:
+- Task 1-5 (前序 session)：trace context 包裹 + workflow_node phase spans + per-step task_id binding (P0-1) + orchestration_id/trace_id 写 conversation metadata
+- Task 6 / P0-3：mirror hook `--include-subagents`；`import_subagent` 双写 `parent_session`（raw, legacy）+ `parent_conversation_id`（resolved, 新 JOIN key）
+- Task 7：`Reflection` dataclass — 7 kinds × 3 statuses × 5 target_types；dataclass + Literal + `__post_init__`（不引 Pydantic）；JSON round-trip 13/13
+- Task 8：`ReflectionStore` append + `list_all` — JSONL append-only，cross-process lock（POSIX fcntl inline / Windows cross_process_lock）；4-thread × 25-write 无 interleaving
+- Task 9：`list_by_task` / `list_open` / `update_status` — atomic rewrite via AtomicWriter（tmp+rename），同一把 cross-process lock 防 lost-update race；2-thread × 10-update 无 lost mutation
+
+**Key Decisions**:
+- PEP 567 contextvars 不跨进程 — sub-agent 跑独立 OS process，跨进程 JOIN 必须落盘
+- JSONL store 双锁 pattern：in-process threading.Lock + cross-process fcntl/cross_process_lock；append + update 共用同一把 cross-process lock
+- Plan path (`src/vibesop/observability/`) 与 codebase 约定 (`src/vibesop/core/observability/`) 冲突时跟约定，避免分裂
+- update_status unknown id → KeyError（fail loud）；理由：stale id post-rebuild 是 dashboard bug，silent no-op 会掩盖
+
+**Next Steps**:
+- 11 commits 待 push
+- Task 10 (P0-2 mandatory)：`Orchestrator.orchestrate()` 接 `PlanTracker.create_plan()` + `plan.metadata["trace_id"]` — DAG rebuilder plan↔span JOIN 契约
+- Task 11/12：DAG rebuilder (load_plans_for_trace + build step tree)
+- Task 13：fixture-based E2E (zero LLM)；验收关卡从 fill rate 改为 rebuild_dag smoke
+
 ### 2026-07-25 S36 [vibesop-py] Conversation mirror Path-2 — sub-agent transcripts
 
 **Session Summary**:

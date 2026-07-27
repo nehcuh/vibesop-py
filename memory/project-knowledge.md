@@ -101,6 +101,25 @@ See project-knowledge.md history for details.
 
 ## Reusable Patterns
 
+### Cross-process JSONL store pattern (append + atomic update) (2026-07-27)
+
+任何需要跨进程并发安全读写的 JSONL 持久层（spans / reflections / 未来的 DAG 节点），用同一套 pattern：
+
+1. **三层锁**（按开销递增）：
+   - in-process `threading.Lock` 阻止同进程多线程 race
+   - cross-process POSIX `fcntl.flock(LOCK_EX)` 阻止多进程 race
+   - Windows 没有 `fcntl`，fallback 到 `vibesop.utils.file_lock.cross_process_lock`（dispatch 到 `msvcrt.locking`）
+2. **append path**：`json.dumps(record) + "\n"` → 在锁内 `f.write(line)`；inline `fcntl` 而非走 helper（perf-critical 路径省一次 import lookup）
+3. **update path**（read-modify-write 整个文件）：在 cross-process 锁内 `read → mutate one row → AtomicWriter.atomic_open(path, "w") 重写全文`；AtomicWriter 走 tmp + rename，crash 留旧文件而非 truncated mix
+4. **append vs update 必须共用同一把 cross-process lock**，否则 appender 在 updater 重写中途穿插会丢
+5. **list tolerates corruption**：`json.loads` 失败 / `Reflection.from_dict` 校验失败 → debug log + skip；dashboard 不应因为一行坏数据整个崩
+
+参考实现：`src/vibesop/core/observability/span_writer.py` (SpanWriter._locked_append) + `src/vibesop/core/observability/reflection.py` (ReflectionStore.append / _locked_update_status)。
+
+### Plan path 与 codebase 约定冲突时跟约定 (2026-07-27)
+
+当 plan 文档写的目标路径与 codebase 已有目录约定冲突时，跟 codebase 约定（而非 plan 字面值）。例：plan 说 `src/vibesop/observability/reflection.py`（top-level），实际 observability 全在 `src/vibesop/core/observability/`（与 tracer/aggregator/span_writer/models 同居）— 选了后者避免分裂。在 commit message + PR 描述里明说 deviation 原因即可。
+
 ### Plan → Adversarial → Execute → Verify
 1. Write structured plan with exact diffs
 2. Spawn adversarial `plan` agent to challenge the plan

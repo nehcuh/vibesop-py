@@ -1,29 +1,36 @@
 # Overview - VibeSOP Project
 
-**Last Updated**: 2026-07-25 (S36 — Conversation mirror Path-2)
+**Last Updated**: 2026-07-27 (S37 — Dashboard v3 Phase A Tasks 1-9)
 
 ---
 
 ## Goals
 
-### Current Week (July 19-25, 2026)
+### Current Week (July 26-August 1, 2026)
+
+1. **Dashboard v3 Phase A — data instrumentation** 🔄 (In Progress - July 27)
+   - 13-task TDD plan；grok+pi CONDITIONAL 全吸收（4 P0 + 3 P1 + 1 Nit）；3 Blocker 双方独立点名（task_id fallback / PlanTracker 未接入 / contextvars 跨进程）
+   - Tasks 1-9 shipped：trace context + workflow_node phase spans + per-step task_id (P0-1) + conversation metadata writeback + mirror hook `--include-subagents` (P0-3) + Reflection dataclass + ReflectionStore append/list/update
+   - 剩余：Task 10 (P0-2 mandatory PlanTracker 接入) + Task 11/12 DAG rebuilder + Task 13 fixture E2E
+2. **test-windows CI 观察期**（至 ~2026-08-02）
+   - `continue-on-error: true` 稳定两周后转强约束（05-review.md 遗留项 #1）
+3. **Skill 商店重构 + 智能建议**（待启动）
+   - GitHub 按需搜索替代 issues 版市场；未命中查询追踪；重复任务蒸馏为技能
+
+### Previous Week (July 19-25, 2026) — Completed
 
 1. **Windows 兼容生产化** ✅ (Completed - July 19)
    - 套件 88 failed → 0 failed（本地 4282 passed）+ CI test-windows job 全绿 + ubuntu 零回归
    - 9 个真实生产 bug 修复（GBK 自毒/场景路由禁用/fd 泄漏丢状态/shlex 引号泄漏等）
    - 多 agent 动态工作流（设计→对抗→开发→评审→pi/Grok 签字），全套文档 docs/dev/windows-compat/
-2. **test-windows CI 观察期**（至 ~2026-08-02）
-   - `continue-on-error: true` 稳定两周后转强约束（05-review.md 遗留项 #1）
-3. **Observability loop closure (v8.2)** ✅ (Completed - July 22-24)
+2. **Observability loop closure (v8.2)** ✅ (Completed - July 22-24)
    - P1 ship：SpanWrappedProvider + SpanAggregator + `vibe trace replay/metrics` CLI；Kimi 4 blocker 全处理
    - Deep diagnosis (07-24)：4 agent 诊断 + 12 P0/P1 fix（3 batch）+ pi 评审双清；4633 tests
    - Instinct loop Phase A-E (07-24)：command_args / 文件锁 / launchd / auto-promote+feedback-collect / preset+ADR-005
-4. **Conversation mirror (Path-1 + Path-2)** ✅ (Completed - July 24-25)
+3. **Conversation mirror (Path-1 + Path-2)** ✅ (Completed - July 24-25)
    - Path-1：thinking/tool_calls/tool_results/model/usage/stop_reason 端到端捕获（commit d7ddfeb）
    - Path-2：sub-agent transcripts — 每个 sub-agent 独立 mirror conversation + metadata bag（commits 6f2f7f0 + 23f478e）
    - 3 轮 grok+pi review，全 must-fix 修完
-5. **Skill 商店重构 + 智能建议**（新方向，待启动）
-   - GitHub 按需搜索替代 issues 版市场；未命中查询追踪；重复任务蒸馏为技能
 
 ### Previous Week (July 13-18, 2026) — Completed
 
