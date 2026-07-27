@@ -125,3 +125,25 @@ class TestBindTaskContext:
         child = next(s for s in spans if s["name"] == "child")
         assert child["task_id"] == "root-task"
         assert child["role_id"] == "reviewer"
+
+    def test_bind_propagates_via_start_span(
+        self, fresh_tracer: ObservabilityTracer, tmp_path: Path
+    ) -> None:
+        """bind_task_context must propagate task_id/role_id to spans created
+        via start_span()/finish_span() (manual API), not just the span()
+        context manager.
+
+        Regression for pi Q2 review: SpanWrappedProvider uses start_span
+        (span_wrapped.py:150 / :196), not span(). Without this test, a future
+        refactor that breaks start_span's ctx inheritance would pass all
+        existing tests but break production LLM call attribution.
+        """
+        with fresh_tracer.trace("root", task_id="outer-task", role_id="outer-role"):
+            with bind_task_context(task_id="step-1", role_id="implementer"):
+                span = fresh_tracer.start_span("llm-call", "llm")
+                fresh_tracer.finish_span(span)
+
+        spans = _read_spans(tmp_path / "spans.jsonl")
+        llm_span = next(s for s in spans if s["name"] == "llm-call")
+        assert llm_span["task_id"] == "step-1"
+        assert llm_span["role_id"] == "implementer"

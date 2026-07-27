@@ -71,6 +71,16 @@ def bind_task_context(
     No-op if no active trace or tracer disabled. Callers should run inside
     ``with tracer.trace(...)`` for binding to take effect.
 
+    **Concurrency limitation**: uses mutation-based binding on the shared
+    ``TraceContext`` object. Safe for **sequential** step iteration
+    (``for step in plan.steps: with bind_task_context(...): ...``).
+    **NOT safe for concurrent coroutines inside a single trace** via
+    ``asyncio.gather()`` — coroutines share the same ``TraceContext``
+    reference (``contextvars`` copies the binding, not the object), so
+    interleaved binds corrupt each other. For parallel steps, run each
+    in its own ``tracer.trace()`` (which calls ``_set_context(new_ctx)``
+    creating an independent object).
+
     **Cross-process limitation**: ``contextvars`` does NOT cross process
     boundaries. Sub-agent execution (Claude Code CLI etc.) runs as a
     separate OS process — bind has no effect there. Cross-process task
