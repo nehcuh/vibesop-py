@@ -244,3 +244,95 @@ class ReflectionStore:
                     continue
         return out
 
+    def list_by_task(self, task_id: str) -> list[Reflection]:
+        """Return only reflections whose ``task_id`` matches.
+
+        Used by the dashboard's task-detail view to render reflections
+        scoped to one task. Order matches ``list_all`` (insertion order).
+        """
+        return [r for r in self.list_all() if r.task_id == task_id]
+
+    def list_open(self) -> list[Reflection]:
+        """Return only reflections whose ``status == "open"``.
+
+        The dashboard's reflection inbox shows only open items — addressed
+        / dismissed are archived. Order matches ``list_all``.
+        """
+        return [r for r in self.list_all() if r.status == "open"]
+
+    def update_status(self, reflection_id: str, new_status: ReflectionStatus) -> None:
+        """Flip one reflection's status (open → addressed / dismissed).
+
+        Atomicity: this is a read-modify-write cycle on the whole file —
+        the entire ``reflections.jsonl`` is rewritten via ``AtomicWriter``
+        (tmp file + rename) under the same cross-process lock as ``append``.
+        Without the lock, two concurrent updates would each read the
+        pre-update file and the loser's mutation would be silently dropped
+        (lost-update race).
+
+        Raises:
+            KeyError: ``reflection_id`` not present in the log. Failing
+                loud is intentional — a silent no-op would hide dashboard
+                bugs where a stale id (post-rebuild) is sent to the store.
+            ValueError / TypeError: ``new_status`` not in
+                ``ReflectionStatus`` Literal.
+        """
+        # Validate the new status literal BEFORE acquiring the lock — fail
+        # fast on caller bugs without blocking other writers.
+        _validate_choice(new_status, _VALID_STATUS, "new_status")
+
+        with self._lock:
+            self._locked_update_status(reflection_id, new_status)
+
+    def _locked_update_status(
+        self, reflection_id: str, new_status: ReflectionStatus
+    ) -> None:
+        """Read → mutate one row → atomic rewrite. MUST be called under
+        ``self._lock`` AND the cross-process lock to be safe."""
+        from vibesop.utils.atomic_writer import AtomicWriter
+
+        # Read pre-state
+        current = self.list_all()
+        if not current:
+            raise KeyError(reflection_id)
+        target_idx = next(
+            (i for i, r in enumerate(current) if r.id == reflection_id), None
+        )
+        if target_idx is None:
+            raise KeyError(reflection_id)
+
+        # Mutate (dataclass replace via direct field set — Reflection is
+        # mutable by default; ``frozen=True`` would block this)
+        current[target_idx].status = new_status
+
+        # Atomic rewrite under cross-process lock so concurrent appenders
+        # cannot interleave with this rewrite.
+        try:
+            import fcntl
+        except ImportError:
+            from vibesop.utils.file_lock import cross_process_lock
+
+            with cross_process_lock(self._path):
+                self._atomic_write_all(current, AtomicWriter())
+            return
+
+        with self._path.open("a", encoding="utf-8") as f:
+            fcntl.flock(f.fileno(), fcntl.LOCK_EX)
+            try:
+                self._atomic_write_all(current, AtomicWriter())
+            finally:
+                fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+
+    def _atomic_write_all(
+        self, reflections: list[Reflection], writer: Any
+    ) -> None:
+        """Rewrite the entire JSONL file atomically.
+
+        ``AtomicWriter`` writes to ``<path>.tmp`` and renames into place —
+        a crash mid-write leaves the old file intact rather than a
+        truncated mix of old + new lines.
+        """
+        with writer.atomic_open(self._path, "w") as f:
+            for r in reflections:
+                f.write(json.dumps(r.to_dict(), ensure_ascii=False) + "\n")
+

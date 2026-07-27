@@ -21,6 +21,8 @@ from __future__ import annotations
 import threading
 from pathlib import Path
 
+import pytest
+
 from vibesop.core.observability.reflection import Reflection, ReflectionStore
 
 
@@ -235,3 +237,177 @@ class TestReflectionStoreRoundTripIntegrity:
         loaded = store.list_all()
         assert len(loaded) == 2
         assert loaded[0].id == loaded[1].id == r.id
+
+
+class TestReflectionStoreQuery:
+    """Task 9.1: list_by_task + list_open."""
+
+    def test_list_by_task_filters_correctly(self, tmp_path: Path) -> None:
+        """list_by_task returns ONLY reflections whose task_id matches."""
+        store = ReflectionStore(storage_dir=tmp_path)
+        store.append(_make_reflection(content="r1", target_id="t1", task_id="task-A"))
+        store.append(_make_reflection(content="r2", target_id="t2", task_id="task-B"))
+        store.append(_make_reflection(content="r3", target_id="t3", task_id="task-A"))
+        store.append(_make_reflection(content="r4", target_id="t4", task_id="task-C"))
+
+        a_only = store.list_by_task("task-A")
+        assert {r.target_id for r in a_only} == {"t1", "t3"}
+        # No cross-task leakage
+        assert all(r.task_id == "task-A" for r in a_only)
+
+    def test_list_by_task_empty_when_no_match(self, tmp_path: Path) -> None:
+        """list_by_task on unknown task_id returns [], not raises."""
+        store = ReflectionStore(storage_dir=tmp_path)
+        store.append(_make_reflection(task_id="task-A"))
+        assert store.list_by_task("task-Z") == []
+
+    def test_list_by_task_empty_when_no_file(self, tmp_path: Path) -> None:
+        """list_by_task on a fresh store returns [] (no file yet)."""
+        store = ReflectionStore(storage_dir=tmp_path)
+        assert store.list_by_task("task-A") == []
+
+    def test_list_open_returns_only_open(self, tmp_path: Path) -> None:
+        """list_open filters out addressed + dismissed — only 'open' status."""
+        store = ReflectionStore(storage_dir=tmp_path)
+        # Append 3, mutate 2 of them, then verify list_open excludes mutated.
+        r1 = _make_reflection(content="open-one", target_id="t1")
+        r2 = _make_reflection(content="addressed", target_id="t2")
+        r3 = _make_reflection(content="dismissed", target_id="t3")
+        store.append(r1)
+        store.append(r2)
+        store.append(r3)
+        store.update_status(r2.id, "addressed")
+        store.update_status(r3.id, "dismissed")
+
+        open_only = store.list_open()
+        assert len(open_only) == 1
+        assert open_only[0].id == r1.id
+        assert open_only[0].status == "open"
+
+    def test_list_open_empty_when_all_addressed(self, tmp_path: Path) -> None:
+        """All reflections addressed → list_open returns []."""
+        store = ReflectionStore(storage_dir=tmp_path)
+        r = _make_reflection(content="r")
+        store.append(r)
+        store.update_status(r.id, "addressed")
+        assert store.list_open() == []
+
+
+class TestReflectionStoreUpdateStatus:
+    """Task 9.1: update_status — atomic rewrite to flip status lifecycle."""
+
+    def test_update_status_changes_state(self, tmp_path: Path) -> None:
+        """update_status(id, 'addressed') flips the persisted status."""
+        store = ReflectionStore(storage_dir=tmp_path)
+        r = _make_reflection(content="orig")
+        store.append(r)
+        assert store.list_all()[0].status == "open"
+
+        store.update_status(r.id, "addressed")
+
+        loaded = store.list_all()
+        assert len(loaded) == 1
+        assert loaded[0].status == "addressed"
+        # Other fields preserved
+        assert loaded[0].content == "orig"
+        assert loaded[0].id == r.id
+
+    def test_update_status_to_dismissed(self, tmp_path: Path) -> None:
+        """All 3 statuses reachable via update_status."""
+        store = ReflectionStore(storage_dir=tmp_path)
+        r = _make_reflection()
+        store.append(r)
+        for new_status in ("addressed", "open", "dismissed"):
+            store.update_status(r.id, new_status)
+            assert store.list_all()[0].status == new_status
+
+    def test_update_status_unknown_id_raises(self, tmp_path: Path) -> None:
+        """Updating an id that doesn't exist must raise — silently no-op
+        would hide dashboard bugs (e.g. stale id after rebuild)."""
+        store = ReflectionStore(storage_dir=tmp_path)
+        r = _make_reflection()
+        store.append(r)
+        with pytest.raises(KeyError):
+            store.update_status("nonexistent-id", "addressed")
+
+    def test_update_status_invalid_status_raises(self, tmp_path: Path) -> None:
+        """Invalid status value must raise — Literal validation applies on
+        update path too, not just on construction."""
+        store = ReflectionStore(storage_dir=tmp_path)
+        r = _make_reflection()
+        store.append(r)
+        with pytest.raises((ValueError, TypeError)):
+            store.update_status(r.id, "wontfix")  # type: ignore[arg-type]
+
+    def test_update_status_atomic_rewrite_preserves_other_reflections(
+        self, tmp_path: Path
+    ) -> None:
+        """Mutating one reflection's status must NOT alter any other
+        reflection in the file — the atomic rewrite path reads → mutates
+        one → writes all back. Regression guard for off-by-one / wrong-row
+        mutations."""
+        store = ReflectionStore(storage_dir=tmp_path)
+        r1 = _make_reflection(content="r1", target_id="t1", task_id="task-A")
+        r2 = _make_reflection(content="r2", target_id="t2", task_id="task-B")
+        r3 = _make_reflection(content="r3", target_id="t3", task_id="task-C")
+        store.append(r1)
+        store.append(r2)
+        store.append(r3)
+
+        store.update_status(r2.id, "addressed")
+
+        loaded = store.list_all()
+        assert len(loaded) == 3
+        by_id = {r.id: r for r in loaded}
+        # Only r2 mutated
+        assert by_id[r1.id].status == "open"
+        assert by_id[r2.id].status == "addressed"
+        assert by_id[r3.id].status == "open"
+        # Other fields intact
+        assert by_id[r1.id].content == "r1"
+        assert by_id[r3.id].content == "r3"
+
+    def test_update_status_round_trip_idempotent(self, tmp_path: Path) -> None:
+        """Calling update_status(id, current_status) is a no-op — does not
+        corrupt or duplicate the line."""
+        store = ReflectionStore(storage_dir=tmp_path)
+        r = _make_reflection()
+        store.append(r)
+        store.update_status(r.id, "open")  # already open
+        store.update_status(r.id, "open")  # idempotent
+        loaded = store.list_all()
+        assert len(loaded) == 1
+        assert loaded[0].status == "open"
+
+    def test_update_status_concurrent_safe(self, tmp_path: Path) -> None:
+        """Two threads updating DIFFERENT reflections concurrently must not
+        lose either update. Cross-process lock + atomic rewrite must
+        serialise the read-modify-write cycles."""
+        store = ReflectionStore(storage_dir=tmp_path)
+        n = 20
+        reflections = [_make_reflection(content=f"r{i}", target_id=f"t{i}") for i in range(n)]
+        for r in reflections:
+            store.append(r)
+
+        barrier = threading.Barrier(2)
+
+        def updater(start: int) -> None:
+            barrier.wait()
+            for i in range(start, start + n // 2):
+                store.update_status(reflections[i].id, "addressed")
+
+        t1 = threading.Thread(target=updater, args=(0,))
+        t2 = threading.Thread(target=updater, args=(n // 2,))
+        t1.start()
+        t2.start()
+        t1.join(timeout=10)
+        t2.join(timeout=10)
+        assert not t1.is_alive()
+        assert not t2.is_alive()
+
+        loaded = store.list_all()
+        assert len(loaded) == n, "some reflections were lost in concurrent rewrites"
+        addressed = sum(1 for r in loaded if r.status == "addressed")
+        assert addressed == n, (
+            f"expected all {n} reflections addressed, only {addressed} made it"
+        )
