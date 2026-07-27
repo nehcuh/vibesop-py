@@ -29,15 +29,22 @@ Reflection, including ``created_at`` (ISO 8601 with tz) and ``linked_action``
 
 from __future__ import annotations
 
+import json
+import logging
+import threading
 import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any, Literal, get_args
+
+logger = logging.getLogger(__name__)
 
 __all__ = [
     "Reflection",
     "ReflectionKind",
     "ReflectionStatus",
+    "ReflectionStore",
     "TargetType",
 ]
 
@@ -135,3 +142,105 @@ class Reflection:
         if isinstance(raw_created, str):
             payload["created_at"] = datetime.fromisoformat(raw_created)
         return cls(**payload)
+
+
+class ReflectionStore:
+    """Append-only JSONL store for Reflections.
+
+    File layout: ``<storage_dir>/reflections.jsonl`` — one Reflection per
+    line, serialised via ``Reflection.to_dict``. Production callers pass
+    ``storage_dir=.vibe/observability`` (matching the SpanWriter convention
+    where ``storage_dir`` IS the leaf directory).
+
+    Concurrency: in-process ``threading.Lock`` + cross-process ``fcntl``
+    on POSIX (or ``cross_process_lock`` on Windows). Same pattern as
+    ``SpanWriter._locked_append``: PIPE_BUF (4096 bytes on POSIX) does not
+    guarantee atomic append for reflection payloads that exceed it once
+    ``content`` + ``linked_action`` are populated, so we MUST take the lock.
+
+    Failure mode: ``list_all`` skips malformed JSON lines instead of
+    raising — a partially-written file (e.g. disk-full mid-append in a
+    pre-lock era, or a hand-edited corruption) must not crash the
+    dashboard that reads this file.
+    """
+
+    FILENAME = "reflections.jsonl"
+
+    def __init__(self, storage_dir: Path | str) -> None:
+        self._dir = Path(storage_dir)
+        self._dir.mkdir(parents=True, exist_ok=True)
+        self._path = self._dir / self.FILENAME
+        self._lock = threading.Lock()
+
+    def append(self, reflection: Reflection) -> None:
+        """Append one reflection to the JSONL log.
+
+        Atomicity: cross-process serialised via fcntl.LOCK_EX (POSIX) or
+        ``cross_process_lock`` (Windows). In-process serialised via
+        ``threading.Lock``. The two-layer locking matches SpanWriter.
+        """
+        line = json.dumps(reflection.to_dict(), ensure_ascii=False) + "\n"
+        with self._lock:
+            self._locked_append(line)
+
+    def _locked_append(self, line: str) -> None:
+        """Append with cross-process lock (pattern from SpanWriter._locked_append).
+
+        Inline fcntl on POSIX — the import is cheap and flock is the right
+        primitive. Windows falls back to ``cross_process_lock`` (which
+        dispatches to ``msvcrt.locking``).
+        """
+        try:
+            import fcntl
+        except ImportError:
+            from vibesop.utils.file_lock import cross_process_lock
+
+            with cross_process_lock(self._path), self._path.open("a", encoding="utf-8") as f:
+                f.write(line)
+            return
+
+        with self._path.open("a", encoding="utf-8") as f:
+            fcntl.flock(f.fileno(), fcntl.LOCK_EX)
+            try:
+                f.write(line)
+            finally:
+                fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+
+    def list_all(self) -> list[Reflection]:
+        """Read all reflections from the log.
+
+        Returns reflections in file order (insertion order; newest last).
+        Malformed JSON lines are skipped with a debug log — the dashboard
+        must not crash because of one corrupt line.
+        """
+        if not self._path.exists():
+            return []
+        out: list[Reflection] = []
+        with self._path.open("r", encoding="utf-8") as f:
+            for lineno, raw in enumerate(f, start=1):
+                line = raw.strip()
+                if not line:
+                    continue
+                try:
+                    d = json.loads(line)
+                except json.JSONDecodeError:
+                    logger.debug(
+                        "skipping malformed reflection line %d in %s",
+                        lineno,
+                        self._path,
+                    )
+                    continue
+                try:
+                    out.append(Reflection.from_dict(d))
+                except (ValueError, TypeError):
+                    # Schema-violating line (bad kind / status / etc.) — skip
+                    # rather than crash. Hand-edited files are a real failure
+                    # mode and the dashboard should still render the rest.
+                    logger.debug(
+                        "skipping schema-invalid reflection line %d in %s",
+                        lineno,
+                        self._path,
+                    )
+                    continue
+        return out
+
