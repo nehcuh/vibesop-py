@@ -7,6 +7,7 @@ classification for ambiguous or complex queries.
 
 from __future__ import annotations
 
+import json
 import logging
 from typing import Any
 
@@ -469,6 +470,74 @@ class ClassifierAgent:
             confidence=0.5,
             reasoning="Classification failed, falling back to sequential",
         )
+
+    # ------------------------------------------------------------------
+    # Per-step classification (v3 Phase A Task 4)
+    # ------------------------------------------------------------------
+
+    def classify_step(
+        self,
+        step: Any,
+        sub_task: Any | None = None,
+    ) -> dict[str, Any]:
+        """Lightweight per-step refinement via LLM.
+
+        Emits an llm span via SpanWrappedProvider when ``self._llm`` is set.
+        The span inherits ``task_id`` / ``role_id`` from the active
+        ``bind_task_context`` block (set by Orchestrator around each
+        ``classify_step`` call), so the dashboard's DAG rebuilder can join
+        ``step.spans = [s for s in spans if s.task_id == step.step_id]``.
+
+        Returns:
+            Dict with optional ``role`` / ``confidence`` keys, or empty dict
+            when LLM is unavailable or parsing fails. The Orchestrator may
+            merge the result into ``step.metadata``.
+
+        Cost note: adds N LLM calls per plan (one per step, ~100 tokens each).
+        Acceptable for v3 dashboard instrumentation; gate behind a config
+        flag if cost becomes a concern.
+        """
+        if self._llm is None:
+            return {}
+        prompt = self._build_step_prompt(step, sub_task)
+        try:
+            response = self._llm.call(prompt, max_tokens=100, temperature=0.0)
+        except Exception as e:  # LLM failures must not break orchestration
+            logger.debug("classify_step LLM call failed for step %s: %s", step.step_id, e)
+            return {}
+        content = getattr(response, "content", str(response))
+        return self._parse_step_response(content)
+
+    def _build_step_prompt(self, step: Any, sub_task: Any | None = None) -> str:
+        """Build a per-step classification prompt."""
+        parts = [
+            f"Step intent: {step.intent}",
+            f"Skill: {step.skill_id}",
+        ]
+        if sub_task is not None:
+            task_type = getattr(sub_task, "task_type", "")
+            if task_type:
+                parts.append(f"Task type: {task_type}")
+        parts.append(
+            "Suggest the best role for this step "
+            "(implementer/reviewer/planner/architect). Reply as JSON: "
+            '{"role": "<role>", "confidence": <0-1>}'
+        )
+        return "\n".join(parts)
+
+    def _parse_step_response(self, content: str) -> dict[str, Any]:
+        """Parse the per-step LLM response into a dict."""
+        try:
+            data = json.loads(content)
+            if isinstance(data, dict):
+                return data
+        except (json.JSONDecodeError, ValueError):
+            pass
+        # Best-effort fallback: treat the first token as a role name
+        first_token = content.strip().split()[0] if content.strip() else ""
+        if first_token:
+            return {"role": first_token}
+        return {}
 
     @staticmethod
     def _blend_results(

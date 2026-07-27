@@ -18,7 +18,7 @@ from contextlib import contextmanager
 from typing import TYPE_CHECKING, Any, cast
 
 from vibesop.core.models import OrchestrationMode, OrchestrationResult
-from vibesop.core.observability.tracer import get_tracer
+from vibesop.core.observability.tracer import bind_task_context, get_tracer
 
 logger = logging.getLogger(__name__)
 
@@ -342,6 +342,18 @@ class Orchestrator:
                     },
                 )
             )
+
+            # Per-step classification with task_id binding (v3 Phase A Task 4).
+            # Each classify_step() call emits an llm span via SpanWrappedProvider;
+            # bind_task_context propagates step.step_id into the span so the DAG
+            # rebuilder can JOIN step.spans = [s for s in spans if s.task_id == step.step_id].
+            # grok+pi P0-1: NO plan_id fallback — every bound span must carry a step_id.
+            step_classifier = ClassifierAgent(llm_client=self._router._llm)
+            for step in plan.steps:
+                idx = step.step_number - 1
+                sub_task = sub_tasks[idx] if 0 <= idx < len(sub_tasks) else None
+                with bind_task_context(step.step_id, step.assigned_role):
+                    step_classifier.classify_step(step, sub_task)
 
         duration_ms = (time.perf_counter() - start_time) * 1000
 
