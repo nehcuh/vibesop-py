@@ -856,12 +856,24 @@ class UnifiedRouter(
         candidates: list[dict[str, Any]] | None = None,
         context: RoutingContext | None = None,
         callbacks: Any | None = None,
+        conversation_id: str | None = None,
+        storage_dir: Any = None,
     ) -> OrchestrationResult:
         """Orchestrate a query — detect multi-intent and build execution plan if needed.
 
         Delegates to Orchestrator to keep UnifiedRouter focused on routing.
+        ``conversation_id`` + ``storage_dir`` (v3 Phase A Task 5) trigger
+        best-effort writeback of orchestration_id + trace_id into the
+        conversation metadata file for cross-process join.
         """
-        return self._get_orchestrator().orchestrate(query, candidates, context, callbacks)
+        return self._get_orchestrator().orchestrate(
+            query,
+            candidates,
+            context,
+            callbacks,
+            conversation_id=conversation_id,
+            storage_dir=storage_dir,
+        )
 
     # ================================================================
     # Result building

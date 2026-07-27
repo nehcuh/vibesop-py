@@ -15,6 +15,7 @@ import logging
 import time
 from collections.abc import Generator
 from contextlib import contextmanager
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
 from vibesop.core.models import OrchestrationMode, OrchestrationResult
@@ -54,6 +55,8 @@ class Orchestrator:
         candidates: list[dict[str, Any]] | None = None,
         context: RoutingContext | None = None,
         callbacks: Any | None = None,
+        conversation_id: str | None = None,
+        storage_dir: str | Path | None = None,
     ) -> OrchestrationResult:
         """Orchestrate a query — detect multi-intent and build execution plan if needed.
 
@@ -61,12 +64,64 @@ class Orchestrator:
         orchestration (phase workflow_node spans + downstream LLM spans via
         SpanWrappedProvider) share a single ``trace_id``. This is the natural
         trace root for any complex query (v3 Phase A Task 2).
+
+        When ``conversation_id`` is provided, also writes
+        ``orchestration_id`` (= plan_id when a plan was built) and
+        ``orchestration_trace_id`` into the conversation metadata file (v3
+        Phase A Task 5). This is the cross-process join key — ``contextvars``
+        does NOT cross process boundaries, so the dashboard must read these
+        from the persisted conversation JSON to JOIN conversation ↔ plan ↔
+        spans. Best-effort: writeback failures never break orchestration.
         """
         with get_tracer().trace(
             "orchestrate",
             metadata={"query": query[:500]},
-        ):
-            return self._orchestrate_impl(query, candidates, context, callbacks)
+        ) as root_span:
+            result = self._orchestrate_impl(query, candidates, context, callbacks)
+            if conversation_id:
+                self._writeback_to_conversation(
+                    conversation_id=conversation_id,
+                    storage_dir=storage_dir,
+                    plan=result.execution_plan,
+                    trace_id=root_span.trace_id,
+                )
+            return result
+
+    @staticmethod
+    def _writeback_to_conversation(
+        *,
+        conversation_id: str,
+        storage_dir: str | Path | None,
+        plan: Any,
+        trace_id: str,
+    ) -> None:
+        """Persist orchestration_id + trace_id to conversation metadata.
+
+        Cross-process join contract (v3 Phase A Task 5):
+        - ``orchestration_id`` = ``plan.plan_id`` (None when single-skill path
+          was taken — no plan built).
+        - ``orchestration_trace_id`` = the root 'orchestrate' span's trace_id,
+          so the DAG rebuilder can join conversation ↔ spans.jsonl.
+
+        Best-effort: any IO failure is logged + swallowed — orchestrate must
+        never fail because of writeback.
+        """
+        try:
+            from vibesop.core.conversation import ConversationContext
+
+            ctx = ConversationContext(
+                conversation_id=conversation_id,
+                storage_dir=storage_dir or ".vibe/conversations",
+            )
+            ctx.metadata["orchestration_id"] = plan.plan_id if plan is not None else None
+            ctx.metadata["orchestration_trace_id"] = trace_id
+            ctx.save()
+        except Exception as e:
+            logger.warning(
+                "Failed to write orchestration metadata to conversation %s: %s",
+                conversation_id,
+                e,
+            )
 
     def _orchestrate_impl(
         self,
