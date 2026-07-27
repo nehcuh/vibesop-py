@@ -616,15 +616,25 @@ def import_subagent(
     *,
     max_history: int = 200,
     capture_depth: str = "standard",
+    parent_conversation_id: str | None = None,
 ) -> int:
     """Import one sub-agent transcript into its own mirror conversation.
 
     Same parser + dedupe semantics as ``import_session``. The conversation
     file gets a ``metadata`` block on disk recording ``agent_type`` /
-    ``description`` / ``parent_session`` / ``tool_use_id`` so the dashboard
-    can render the sub-agent's role alongside its internal turns.
+    ``description`` / ``parent_session`` / ``parent_conversation_id`` /
+    ``tool_use_id`` so the dashboard can render the sub-agent's role
+    alongside its internal turns.
 
     Returns the count of NEW turns written (skipped duplicates don't count).
+
+    Two parent keys are written deliberately (v3 Phase A Task 6 / grok+pi P0-3):
+    - ``parent_session`` = the raw Claude Code session id (``path.stem``).
+      Legacy field; kept so older dashboards still render.
+    - ``parent_conversation_id`` = the resolved mirror conversation id
+      (e.g. ``mirror-claude-abc123``). This is the JOIN key the v3 DAG
+      rebuilder uses to walk parent ↔ sub-agent conversations across
+      process boundaries — ``contextvars`` does NOT cross processes.
 
     Metadata persistence: even when ``parsed`` is empty OR every turn is a
     hash duplicate, the caller-supplied metadata is still written to disk.
@@ -639,6 +649,7 @@ def import_subagent(
         "agent_type": record.meta.get("agentType"),
         "description": record.meta.get("description"),
         "parent_session": parent_session_id,
+        "parent_conversation_id": parent_conversation_id,
         "tool_use_id": record.meta.get("toolUseId"),
         "agent_id": record.agent_id,
         "is_subagent": True,

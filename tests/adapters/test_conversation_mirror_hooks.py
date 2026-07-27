@@ -104,6 +104,17 @@ class TestMirrorSessionEndHookTemplate:
         assert "vibe conversation import-claude" in content
         assert content.rstrip().endswith("exit 0")
 
+    def test_passes_include_subagents_flag(self) -> None:
+        """v3 Phase A Task 6 / grok+pi P0-3: the rendered hook MUST pass
+        ``--include-subagents`` to ``vibe conversation import-claude`` so
+        sub-agent transcripts get mirrored in the production path — without
+        this flag, sub-agent import in production mirror path = 0%."""
+        content = _rendered_session_end_hook()
+        assert "--include-subagents" in content, (
+            "session-end hook must pass --include-subagents to "
+            "import-claude so sub-agent transcripts are mirrored"
+        )
+
     def test_uses_jq_for_session_id_extraction(self) -> None:
         content = _rendered_session_end_hook()
         assert "jq" in content  # required for session_id field extraction

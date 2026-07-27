@@ -253,6 +253,7 @@ def import_claude(
                     parent_session_id=path.stem,
                     max_history=max_history,
                     capture_depth=depth,
+                    parent_conversation_id=cid,
                 )
                 total_subagents += 1
                 total_sub_new += sub_new

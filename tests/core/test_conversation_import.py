@@ -941,6 +941,110 @@ def test_parse_subagent_meta_returns_none_for_invalid_json(tmp_path: Path) -> No
     assert parse_subagent_meta(bad) is None
 
 
+# ──────────────────────────────────────────────────────────────────
+# parent_conversation_id join contract (v3 Phase A Task 6 / P0-3)
+# ──────────────────────────────────────────────────────────────────
+
+
+def test_import_subagent_writes_parent_conversation_id(tmp_path: Path) -> None:
+    """v3 Phase A Task 6 / grok+pi P0-3: sub-agent conversation metadata
+    must include ``parent_conversation_id`` (resolved mirror-claude-* id)
+    so the DAG rebuilder can JOIN child.parent_conversation_id ==
+    parent.conversation_id.
+
+    Background: ``parent_session`` (raw path.stem) does NOT match the
+    parent's mirror conversation id (``mirror-claude-{session[:20]}``),
+    so JOIN by parent_session alone always misses.
+    """
+    from vibesop.core.conversation_import import (
+        discover_subagents,
+        import_subagent,
+    )
+
+    main = _write_subagent_tree(
+        tmp_path,
+        subagents=[
+            (
+                "a007cb9a1cdae69c4",
+                {"agentType": "Explore", "description": "Map server"},
+                [
+                    {
+                        "type": "user",
+                        "message": {"role": "user", "content": "go"},
+                        "timestamp": "2026-07-23T15:20:00.000Z",
+                    }
+                ],
+            ),
+        ],
+    )
+    record = discover_subagents(main)[0]
+
+    # Parent conversation_id is the resolved mirror id (truncated + prefixed)
+    parent_conv_id = "mirror-claude-abc123def456"
+    sub_cid = "mirror-claude-abc123def456-sub-a007cb9a1cdae69c4"
+
+    storage_dir = tmp_path / "conversations"
+    import_subagent(
+        record,
+        sub_cid,
+        storage_dir,
+        parent_session_id=main.stem,  # raw session id (legacy)
+        parent_conversation_id=parent_conv_id,  # resolved (new)
+    )
+
+    # Read sub-agent conversation file and verify both keys are persisted
+    import json as _json
+
+    sub_file = storage_dir / f"{sub_cid}.json"
+    assert sub_file.exists(), f"sub-agent conversation not written: {sub_file}"
+    data = _json.loads(sub_file.read_text())
+    meta = data.get("metadata", {})
+    assert meta.get("parent_conversation_id") == parent_conv_id, (
+        f"parent_conversation_id missing or wrong: {meta}"
+    )
+    # Legacy parent_session is still written (raw path.stem) for backward compat
+    assert meta.get("parent_session") == main.stem
+
+
+def test_import_subagent_parent_conversation_id_optional(tmp_path: Path) -> None:
+    """When parent_conversation_id is None (older callers), metadata should
+    not contain the key — backward compat for code paths not yet migrated."""
+    from vibesop.core.conversation_import import (
+        discover_subagents,
+        import_subagent,
+    )
+
+    main = _write_subagent_tree(
+        tmp_path,
+        subagents=[
+            (
+                "b0522f2c200b3bc06",
+                {"agentType": "general-purpose"},
+                [{"type": "user", "message": {"role": "user", "content": "x"}, "timestamp": "2026-07-23T15:20:00.000Z"}],
+            ),
+        ],
+    )
+    record = discover_subagents(main)[0]
+    storage_dir = tmp_path / "conversations"
+
+    import_subagent(
+        record,
+        "sub-conv-no-parent",
+        storage_dir,
+        parent_session_id=main.stem,
+        # parent_conversation_id omitted (default None)
+    )
+
+    import json as _json
+
+    sub_file = storage_dir / "sub-conv-no-parent.json"
+    data = _json.loads(sub_file.read_text())
+    meta = data.get("metadata", {})
+    assert "parent_conversation_id" not in meta, (
+        f"parent_conversation_id should be absent when not passed: {meta}"
+    )
+
+
 def test_derive_subagent_conversation_id_stable_and_readable(tmp_path: Path) -> None:
     """Identity = parent + agent_id; stable across mtime/meta changes."""
     from vibesop.core.conversation_import import (

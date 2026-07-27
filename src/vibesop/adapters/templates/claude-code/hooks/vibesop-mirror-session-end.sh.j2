@@ -71,9 +71,9 @@ _CONV_ID="mirror-claude-$(printf '%s' "$_SESSION_ID" | cut -c1-20)"
 # never block the host agent.
 _STORAGE_DIR="$_MIRROR_ROOT/.vibe/conversations"
 if command -v vibe >/dev/null 2>&1; then
-    vibe conversation import-claude --source "$_JSONL" --conversation-id "$_CONV_ID" --storage-dir "$_STORAGE_DIR" >/dev/null 2>&1 || true
+    vibe conversation import-claude --source "$_JSONL" --conversation-id "$_CONV_ID" --storage-dir "$_STORAGE_DIR" --include-subagents >/dev/null 2>&1 || true
 elif [ -n "$_VIBESOP_PROJECT_ROOT" ] && command -v uv >/dev/null 2>&1; then
-    (cd "$_VIBESOP_PROJECT_ROOT" && uv run vibe conversation import-claude --source "$_JSONL" --conversation-id "$_CONV_ID" --storage-dir "$_STORAGE_DIR") >/dev/null 2>&1 || true
+    (cd "$_VIBESOP_PROJECT_ROOT" && uv run vibe conversation import-claude --source "$_JSONL" --conversation-id "$_CONV_ID" --storage-dir "$_STORAGE_DIR" --include-subagents) >/dev/null 2>&1 || true
 fi
 
 exit 0
