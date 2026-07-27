@@ -13,6 +13,8 @@ from __future__ import annotations
 import contextlib
 import logging
 import time
+from collections.abc import Generator
+from contextlib import contextmanager
 from typing import TYPE_CHECKING, Any, cast
 
 from vibesop.core.models import OrchestrationMode, OrchestrationResult
@@ -29,6 +31,22 @@ class Orchestrator:
 
     def __init__(self, router: Any) -> None:
         self._router = router
+
+    @contextmanager
+    def _phase_span(self, phase: str, query: str) -> Generator[None, None, None]:
+        """Open a ``workflow_node`` span for one orchestration phase.
+
+        Each phase (routing / detection / decomposition / plan_building /
+        complete) is wrapped so the dashboard's Orchestration Map can render
+        phase boundaries. Spans share the parent trace opened by
+        ``orchestrate()``.
+        """
+        with get_tracer().span(
+            f"orchestrate:{phase}",
+            kind="workflow_node",
+            metadata={"phase": phase, "query": query[:200]},
+        ):
+            yield
 
     def orchestrate(
         self,
@@ -69,257 +87,261 @@ class Orchestrator:
         start_time = time.perf_counter()
 
         # 1. Single-skill routing (fast path)
-        cb.on_phase_start(
-            PhaseInfo(
-                phase=OrchestrationPhase.ROUTING,
-                message="Analyzing query for skill match...",
-                progress=0.0,
+        with self._phase_span("routing", query):
+            cb.on_phase_start(
+                PhaseInfo(
+                    phase=OrchestrationPhase.ROUTING,
+                    message="Analyzing query for skill match...",
+                    progress=0.0,
+                )
             )
-        )
-        single_result = self._router._single_skill_route(query, candidates, context)
-        cb.on_phase_complete(
-            PhaseInfo(
-                phase=OrchestrationPhase.ROUTING,
-                message=f"Single-skill match: {single_result.primary.skill_id if single_result.primary else 'none'}",
-                progress=0.2,
-                metadata={
-                    "primary_confidence": single_result.primary.confidence
-                    if single_result.primary
-                    else 0.0
-                },
+            single_result = self._router._single_skill_route(query, candidates, context)
+            cb.on_phase_complete(
+                PhaseInfo(
+                    phase=OrchestrationPhase.ROUTING,
+                    message=f"Single-skill match: {single_result.primary.skill_id if single_result.primary else 'none'}",
+                    progress=0.2,
+                    metadata={
+                        "primary_confidence": single_result.primary.confidence
+                        if single_result.primary
+                        else 0.0
+                    },
+                )
             )
-        )
 
         # 2. Check if orchestration is enabled
         if not self._router._config.enable_orchestration:
             return self._router._to_orchestration_result(single_result, query)
 
         # 3. Multi-intent detection
-        cb.on_phase_start(
-            PhaseInfo(
-                phase=OrchestrationPhase.DETECTION,
-                message="Detecting multiple intents...",
-                progress=0.2,
+        with self._phase_span("detection", query):
+            cb.on_phase_start(
+                PhaseInfo(
+                    phase=OrchestrationPhase.DETECTION,
+                    message="Detecting multiple intents...",
+                    progress=0.2,
+                )
             )
-        )
-        detector = self._router._get_multi_intent_detector()
-        should_decompose = detector.should_decompose(
-            query, single_result, llm_client=self._router._llm
-        )
-        cb.on_phase_complete(
-            PhaseInfo(
-                phase=OrchestrationPhase.DETECTION,
-                message=f"Multi-intent detected: {should_decompose}",
-                progress=0.4,
-                metadata={"should_decompose": should_decompose},
+            detector = self._router._get_multi_intent_detector()
+            should_decompose = detector.should_decompose(
+                query, single_result, llm_client=self._router._llm
             )
-        )
+            cb.on_phase_complete(
+                PhaseInfo(
+                    phase=OrchestrationPhase.DETECTION,
+                    message=f"Multi-intent detected: {should_decompose}",
+                    progress=0.4,
+                    metadata={"should_decompose": should_decompose},
+                )
+            )
 
         if not should_decompose:
             return self._router._to_orchestration_result(single_result, query)
 
         # 4. Decompose into sub-tasks
-        cb.on_phase_start(
-            PhaseInfo(
-                phase=OrchestrationPhase.DECOMPOSITION,
-                message="Decomposing query into sub-tasks...",
-                progress=0.4,
-            )
-        )
-        decomposer = self._router._get_task_decomposer()
-        try:
-            skills = self._router._build_decomposition_skills(candidates, query=query)
-            sub_tasks = decomposer.decompose(query, skills=skills)
-        except Exception as e:
-            policy = cb.on_phase_error(
+        with self._phase_span("decomposition", query):
+            cb.on_phase_start(
                 PhaseInfo(
                     phase=OrchestrationPhase.DECOMPOSITION,
-                    message="Task decomposition failed",
+                    message="Decomposing query into sub-tasks...",
                     progress=0.4,
-                ),
-                e,
-                ErrorPolicy.ABORT,
+                )
             )
-            if policy == ErrorPolicy.ABORT:
-                return self._router._to_orchestration_result(single_result, query)
-            sub_tasks = []
+            decomposer = self._router._get_task_decomposer()
+            try:
+                skills = self._router._build_decomposition_skills(candidates, query=query)
+                sub_tasks = decomposer.decompose(query, skills=skills)
+            except Exception as e:
+                policy = cb.on_phase_error(
+                    PhaseInfo(
+                        phase=OrchestrationPhase.DECOMPOSITION,
+                        message="Task decomposition failed",
+                        progress=0.4,
+                    ),
+                    e,
+                    ErrorPolicy.ABORT,
+                )
+                if policy == ErrorPolicy.ABORT:
+                    return self._router._to_orchestration_result(single_result, query)
+                sub_tasks = []
 
-        cb.on_phase_complete(
-            PhaseInfo(
-                phase=OrchestrationPhase.DECOMPOSITION,
-                message=f"Decomposed into {len(sub_tasks)} sub-tasks",
-                progress=0.6,
-                metadata={"sub_task_count": len(sub_tasks)},
+            cb.on_phase_complete(
+                PhaseInfo(
+                    phase=OrchestrationPhase.DECOMPOSITION,
+                    message=f"Decomposed into {len(sub_tasks)} sub-tasks",
+                    progress=0.6,
+                    metadata={"sub_task_count": len(sub_tasks)},
+                )
             )
-        )
 
         if len(sub_tasks) <= 1:
             return self._router._to_orchestration_result(single_result, query)
 
-        # 5. Classify workflow pattern (Phase 1: generative dynamic)
-        cb.on_phase_start(
-            PhaseInfo(
-                phase=OrchestrationPhase.PLAN_BUILDING,
-                message="Selecting workflow pattern...",
-                progress=0.55,
-            )
-        )
-        from vibesop.core.models import ClassifierResult, WorkflowPattern
-        from vibesop.core.orchestration.classifier import ClassifierAgent
-
-        classifier = ClassifierAgent(llm_client=self._router._llm)
-        classification = classifier.classify(query, sub_tasks)
-
-        # Check for explicit overrides from CLI (e.g. --pattern fan_out --verify)
-        if context is not None:
-            hint = getattr(context, "strategy_hint", None) or ""
-            # Parse space-separated key:value pairs from strategy_hint
-            hint_tokens = {}
-            for token in hint.split():
-                if ":" in token:
-                    k, v = token.split(":", 1)
-                    hint_tokens[k.strip()] = v.strip()
-
-            if "workflow_pattern" in hint_tokens:
-                override = hint_tokens["workflow_pattern"]
-                with contextlib.suppress(ValueError):  # Invalid override, keep classifier result
-                    classification = ClassifierResult(
-                        pattern=WorkflowPattern(override),
-                        confidence=1.0,
-                        reasoning=f"User explicitly selected {override} pattern",
-                    )
-
-            # Store verify hint for plan execution phase
-            if "verify" in hint_tokens:
-                context._verify_hint = hint_tokens["verify"]
-        cb.on_phase_complete(
-            PhaseInfo(
-                phase=OrchestrationPhase.PLAN_BUILDING,
-                message=f"Pattern: {classification.pattern.value} ({classification.confidence:.0%})",
-                progress=0.6,
-                metadata={
-                    "pattern": classification.pattern.value,
-                    "confidence": classification.confidence,
-                    "reasoning": classification.reasoning,
-                },
-            )
-        )
-
-        # 6. Build execution plan with pattern awareness
-        cb.on_phase_start(
-            PhaseInfo(
-                phase=OrchestrationPhase.PLAN_BUILDING,
-                message="Building execution plan...",
-                progress=0.6,
-            )
-        )
-        builder = self._router._get_plan_builder()
-
-        # Carry intent analysis from the routing context so PlanBuilder can
-        # enter the squad path (per-role steps + agent_squad metadata) when
-        # the interceptor decided MULTI_AGENT_SQUAD. Without this passthrough,
-        # the analysis attached to RoutingContext.metadata is silently dropped.
-        plan_metadata: dict[str, Any] = dict(getattr(classification, "metadata", None) or {})
-        effective_pattern = classification.pattern
-        if context is not None:
-            ctx_metadata = getattr(context, "metadata", None) or {}
-            # Read intent_analysis: first-class field first, fall back to the
-            # legacy metadata backchannel for code paths not yet migrated
-            # (deprecated; will be removed in v7.1).
-            ctx_analysis_dict = getattr(context, "intent_analysis", None)
-            if ctx_analysis_dict is None:
-                ctx_analysis_dict = ctx_metadata.get("intent_analysis")
-            # Same field-first / metadata-fallback policy for interception_mode.
-            interception_mode = getattr(context, "interception_mode", None) or ""
-            if not interception_mode:
-                interception_mode = ctx_metadata.get("_interception_mode", "")
-            if ctx_analysis_dict is not None:
-                # Prefer the context's analysis — the interceptor already
-                # committed to MULTI_AGENT_SQUAD and built a complete analysis.
-                plan_metadata["intent_analysis"] = ctx_analysis_dict
-
-                # Force a squad-oriented pattern when the interceptor flagged
-                # multi_agent_squad; otherwise PlanBuilder skips _build_squad_steps.
-                if interception_mode == "multi_agent_squad" and effective_pattern not in (
-                    WorkflowPattern.AGENT_SQUAD,
-                    WorkflowPattern.DEBATE,
-                    WorkflowPattern.RED_TEAM,
-                ):
-                    protocol = ctx_analysis_dict.get("collaboration_protocol", "sequential")
-                    if protocol == "debate":
-                        effective_pattern = WorkflowPattern.DEBATE
-                    elif protocol == "red_team":
-                        effective_pattern = WorkflowPattern.RED_TEAM
-                    else:
-                        effective_pattern = WorkflowPattern.AGENT_SQUAD
-
-        try:
-            plan = builder.build_plan(
-                query,
-                sub_tasks,
-                workflow_pattern=effective_pattern,
-                metadata=plan_metadata,
-            )
-        except Exception as e:
-            policy = cb.on_phase_error(
+        with self._phase_span("plan_building", query):
+            # 5. Classify workflow pattern (Phase 1: generative dynamic)
+            cb.on_phase_start(
                 PhaseInfo(
                     phase=OrchestrationPhase.PLAN_BUILDING,
-                    message="Plan building failed",
-                    progress=0.6,
-                ),
-                e,
-                ErrorPolicy.ABORT,
+                    message="Selecting workflow pattern...",
+                    progress=0.55,
+                )
             )
-            if policy == ErrorPolicy.ABORT:
-                return self._router._to_orchestration_result(single_result, query)
-            plan = cast("Any", None)
+            from vibesop.core.models import ClassifierResult, WorkflowPattern
+            from vibesop.core.orchestration.classifier import ClassifierAgent
 
-        if not plan or not plan.steps:
+            classifier = ClassifierAgent(llm_client=self._router._llm)
+            classification = classifier.classify(query, sub_tasks)
+
+            # Check for explicit overrides from CLI (e.g. --pattern fan_out --verify)
+            if context is not None:
+                hint = getattr(context, "strategy_hint", None) or ""
+                # Parse space-separated key:value pairs from strategy_hint
+                hint_tokens = {}
+                for token in hint.split():
+                    if ":" in token:
+                        k, v = token.split(":", 1)
+                        hint_tokens[k.strip()] = v.strip()
+
+                if "workflow_pattern" in hint_tokens:
+                    override = hint_tokens["workflow_pattern"]
+                    with contextlib.suppress(ValueError):  # Invalid override, keep classifier result
+                        classification = ClassifierResult(
+                            pattern=WorkflowPattern(override),
+                            confidence=1.0,
+                            reasoning=f"User explicitly selected {override} pattern",
+                        )
+
+                # Store verify hint for plan execution phase
+                if "verify" in hint_tokens:
+                    context._verify_hint = hint_tokens["verify"]
             cb.on_phase_complete(
                 PhaseInfo(
                     phase=OrchestrationPhase.PLAN_BUILDING,
-                    message="No valid plan could be built, falling back to single skill",
-                    progress=0.8,
+                    message=f"Pattern: {classification.pattern.value} ({classification.confidence:.0%})",
+                    progress=0.6,
+                    metadata={
+                        "pattern": classification.pattern.value,
+                        "confidence": classification.confidence,
+                        "reasoning": classification.reasoning,
+                    },
                 )
             )
-            return self._router._to_orchestration_result(single_result, query)
 
-        # 7. Apply --verify override: force adversarial pattern if verification requested
-        verify_hint = getattr(context, "_verify_hint", None) if context else None
-        if verify_hint and plan.workflow_pattern != WorkflowPattern.ADVERSARIAL:
-            from vibesop.core.models import ExecutionMode, TrustLevel
-
-            original_pattern = plan.workflow_pattern
-            plan.workflow_pattern = WorkflowPattern.ADVERSARIAL
-            plan.execution_mode = ExecutionMode.SEQUENTIAL
-
-            # Append verification step to the plan
-            from vibesop.core.orchestration.plan_builder import PlanBuilder
-
-            PlanBuilder._apply_adversarial(plan.steps, query)
-            # Mark the new verification step with QUARANTINE trust
-            if plan.steps:
-                plan.steps[-1].is_verification_step = True
-                plan.steps[-1].trust_level = TrustLevel.QUARANTINE
-
-            logger.info(
-                "--verify: upgraded plan from %s to adversarial (%d steps)",
-                original_pattern.value,
-                len(plan.steps),
+            # 6. Build execution plan with pattern awareness
+            cb.on_phase_start(
+                PhaseInfo(
+                    phase=OrchestrationPhase.PLAN_BUILDING,
+                    message="Building execution plan...",
+                    progress=0.6,
+                )
             )
+            builder = self._router._get_plan_builder()
 
-        cb.on_phase_complete(
-            PhaseInfo(
-                phase=OrchestrationPhase.PLAN_BUILDING,
-                message=f"Execution plan built with {len(plan.steps)} steps ({'dynamic' if WorkflowPattern(plan.workflow_pattern) in (WorkflowPattern.LOOP_UNTIL_DRY, WorkflowPattern.TOURNAMENT) else 'static'})",
-                progress=0.9,
-                metadata={
-                    "step_count": len(plan.steps),
-                    "strategy": plan.execution_mode.value,
-                    "pattern": plan.workflow_pattern.value,
-                },
+            # Carry intent analysis from the routing context so PlanBuilder can
+            # enter the squad path (per-role steps + agent_squad metadata) when
+            # the interceptor decided MULTI_AGENT_SQUAD. Without this passthrough,
+            # the analysis attached to RoutingContext.metadata is silently dropped.
+            plan_metadata: dict[str, Any] = dict(getattr(classification, "metadata", None) or {})
+            effective_pattern = classification.pattern
+            if context is not None:
+                ctx_metadata = getattr(context, "metadata", None) or {}
+                # Read intent_analysis: first-class field first, fall back to the
+                # legacy metadata backchannel for code paths not yet migrated
+                # (deprecated; will be removed in v7.1).
+                ctx_analysis_dict = getattr(context, "intent_analysis", None)
+                if ctx_analysis_dict is None:
+                    ctx_analysis_dict = ctx_metadata.get("intent_analysis")
+                # Same field-first / metadata-fallback policy for interception_mode.
+                interception_mode = getattr(context, "interception_mode", None) or ""
+                if not interception_mode:
+                    interception_mode = ctx_metadata.get("_interception_mode", "")
+                if ctx_analysis_dict is not None:
+                    # Prefer the context's analysis — the interceptor already
+                    # committed to MULTI_AGENT_SQUAD and built a complete analysis.
+                    plan_metadata["intent_analysis"] = ctx_analysis_dict
+
+                    # Force a squad-oriented pattern when the interceptor flagged
+                    # multi_agent_squad; otherwise PlanBuilder skips _build_squad_steps.
+                    if interception_mode == "multi_agent_squad" and effective_pattern not in (
+                        WorkflowPattern.AGENT_SQUAD,
+                        WorkflowPattern.DEBATE,
+                        WorkflowPattern.RED_TEAM,
+                    ):
+                        protocol = ctx_analysis_dict.get("collaboration_protocol", "sequential")
+                        if protocol == "debate":
+                            effective_pattern = WorkflowPattern.DEBATE
+                        elif protocol == "red_team":
+                            effective_pattern = WorkflowPattern.RED_TEAM
+                        else:
+                            effective_pattern = WorkflowPattern.AGENT_SQUAD
+
+            try:
+                plan = builder.build_plan(
+                    query,
+                    sub_tasks,
+                    workflow_pattern=effective_pattern,
+                    metadata=plan_metadata,
+                )
+            except Exception as e:
+                policy = cb.on_phase_error(
+                    PhaseInfo(
+                        phase=OrchestrationPhase.PLAN_BUILDING,
+                        message="Plan building failed",
+                        progress=0.6,
+                    ),
+                    e,
+                    ErrorPolicy.ABORT,
+                )
+                if policy == ErrorPolicy.ABORT:
+                    return self._router._to_orchestration_result(single_result, query)
+                plan = cast("Any", None)
+
+            if not plan or not plan.steps:
+                cb.on_phase_complete(
+                    PhaseInfo(
+                        phase=OrchestrationPhase.PLAN_BUILDING,
+                        message="No valid plan could be built, falling back to single skill",
+                        progress=0.8,
+                    )
+                )
+                return self._router._to_orchestration_result(single_result, query)
+
+            # 7. Apply --verify override: force adversarial pattern if verification requested
+            verify_hint = getattr(context, "_verify_hint", None) if context else None
+            if verify_hint and plan.workflow_pattern != WorkflowPattern.ADVERSARIAL:
+                from vibesop.core.models import ExecutionMode, TrustLevel
+
+                original_pattern = plan.workflow_pattern
+                plan.workflow_pattern = WorkflowPattern.ADVERSARIAL
+                plan.execution_mode = ExecutionMode.SEQUENTIAL
+
+                # Append verification step to the plan
+                from vibesop.core.orchestration.plan_builder import PlanBuilder
+
+                PlanBuilder._apply_adversarial(plan.steps, query)
+                # Mark the new verification step with QUARANTINE trust
+                if plan.steps:
+                    plan.steps[-1].is_verification_step = True
+                    plan.steps[-1].trust_level = TrustLevel.QUARANTINE
+
+                logger.info(
+                    "--verify: upgraded plan from %s to adversarial (%d steps)",
+                    original_pattern.value,
+                    len(plan.steps),
+                )
+
+            cb.on_phase_complete(
+                PhaseInfo(
+                    phase=OrchestrationPhase.PLAN_BUILDING,
+                    message=f"Execution plan built with {len(plan.steps)} steps ({'dynamic' if WorkflowPattern(plan.workflow_pattern) in (WorkflowPattern.LOOP_UNTIL_DRY, WorkflowPattern.TOURNAMENT) else 'static'})",
+                    progress=0.9,
+                    metadata={
+                        "step_count": len(plan.steps),
+                        "strategy": plan.execution_mode.value,
+                        "pattern": plan.workflow_pattern.value,
+                    },
+                )
             )
-        )
 
         duration_ms = (time.perf_counter() - start_time) * 1000
 
@@ -342,14 +364,15 @@ class Orchestrator:
         # the only success=True source — so this path never double-counts.
         self._record_plan_sequence(query, plan, context)
 
-        cb.on_plan_ready(plan)
-        cb.on_phase_complete(
-            PhaseInfo(
-                phase=OrchestrationPhase.COMPLETE,
-                message="Orchestration complete",
-                progress=1.0,
+        with self._phase_span("complete", query):
+            cb.on_plan_ready(plan)
+            cb.on_phase_complete(
+                PhaseInfo(
+                    phase=OrchestrationPhase.COMPLETE,
+                    message="Orchestration complete",
+                    progress=1.0,
+                )
             )
-        )
 
         return result
 
