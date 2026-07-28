@@ -12,10 +12,13 @@ from __future__ import annotations
 import json
 import logging
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import FastAPI, Query
 from fastapi.responses import HTMLResponse, JSONResponse
+
+from vibesop.core.observability.reflection import Reflection, ReflectionStore
+from vibesop.dashboard._schemas import ReflectionCreate, ReflectionStatusUpdate
 
 logger = logging.getLogger(__name__)
 
@@ -94,6 +97,68 @@ def _list_json_files(directory: Path, pattern: str = "*.json") -> list[Path]:
         return []
     files = sorted(directory.glob(pattern), key=lambda p: p.stat().st_mtime, reverse=True)
     return files
+
+
+def _trace_exists(trace_id: str, vibe_dir: Path) -> bool:
+    """Return True if ``trace_id`` appears in any persisted artefact.
+
+    Scans ``execution_plans.jsonl`` (matching ``metadata.trace_id``) and
+    ``observability/spans.jsonl`` (matching top-level ``trace_id``). Used
+    by ``GET /api/orchestration/dag`` to distinguish 404 (trace_id not
+    found anywhere) from 200-with-partial-DAG (trace exists but maybe
+    only plans OR only spans persisted).
+
+    Uses JSON parse + exact-field match — NOT substring search. A naive
+    ``trace_id in line`` would false-positive when one trace_id is a
+    prefix of another (e.g. ``T-1`` vs ``T-1x``). Per Phase B Q5
+    closeout:Pi/grok independently flagged this.
+    """
+    plans_path = vibe_dir / "execution_plans.jsonl"
+    if plans_path.exists():
+        with plans_path.open("r", encoding="utf-8") as f:
+            for raw in f:
+                line = raw.strip()
+                if not line:
+                    continue
+                try:
+                    record = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                meta = record.get("metadata") or {}
+                if isinstance(meta, str):
+                    try:
+                        meta = json.loads(meta)
+                    except json.JSONDecodeError:
+                        meta = {}
+                if meta.get("trace_id") == trace_id:
+                    return True
+
+    spans_path = vibe_dir / "observability" / "spans.jsonl"
+    if spans_path.exists():
+        with spans_path.open("r", encoding="utf-8") as f:
+            for raw in f:
+                line = raw.strip()
+                if not line:
+                    continue
+                try:
+                    record = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if record.get("trace_id") == trace_id:
+                    return True
+
+    return False
+
+
+def _get_reflection_store(vibe_dir: Path) -> ReflectionStore:
+    """Construct a ReflectionStore rooted at ``vibe_dir/observability``.
+
+    Construction is cheap (just opens the dir + creates a threading.Lock);
+    no need to cache. Each request gets a fresh store so file-level state
+    (reflections.jsonl mtime) is always current — important because the
+    dashboard runs alongside CLI writers that may append between requests.
+    """
+    return ReflectionStore(vibe_dir / "observability")
 
 
 # ---------------------------------------------------------------------------
@@ -280,8 +345,8 @@ def create_app() -> FastAPI:
             return JSONResponse({"error": "No spans data"}, status_code=404)
 
         with spans_path.open("r", encoding="utf-8") as f:
-            for line in f:
-                line = line.strip()
+            for raw_line in f:
+                line = raw_line.strip()
                 if not line:
                     continue
                 try:
@@ -291,6 +356,129 @@ def create_app() -> FastAPI:
                 if record.get("id") == span_id:
                     return JSONResponse(record)
         return JSONResponse({"error": "Span not found"}, status_code=404)
+
+    # ------------------------------------------------------------------
+    # API: Orchestration DAG (Phase B — v3 Orchestration Map data source)
+    # ------------------------------------------------------------------
+
+    @app.get("/api/orchestration/dag")
+    async def api_orchestration_dag(
+        trace_id: str = Query(..., description="Trace root id from orchestrate()"),
+    ) -> JSONResponse:
+        """Return the reconstructed DAG for a given trace root.
+
+        Status codes:
+        - 200: trace_id found in artefacts (DAG may be partial — only plans,
+          only spans, or both)
+        - 404: trace_id not present in execution_plans.jsonl OR spans.jsonl
+
+        The 404-vs-200 distinction matters for dashboard UX: a typo'd
+        trace_id in the URL should look obviously wrong, not render an
+        empty graph that looks like "trace ran but produced no data."
+        """
+        root = _resolve_project_root()
+        vibe_dir = root / ".vibe"
+
+        if not _trace_exists(trace_id, vibe_dir):
+            return JSONResponse(
+                {"error": f"trace_id={trace_id!r} not found"},
+                status_code=404,
+            )
+
+        from vibesop.core.observability.dag_rebuilder import rebuild_dag
+
+        dag = rebuild_dag(trace_id=trace_id, storage_dir=vibe_dir)
+        return JSONResponse(dag.to_dict())
+
+    # ------------------------------------------------------------------
+    # API: Reflections (Phase B — v3 Reflection Layer CRUD)
+    # ------------------------------------------------------------------
+
+    @app.post("/api/reflections", status_code=201)
+    async def create_reflection(
+        body: ReflectionCreate,
+    ) -> JSONResponse:
+        """Append a new reflection to the store.
+
+        Pydantic validates the body before this handler runs; Literal
+        drift (invalid kind/severity/target_type) returns 422 at the API
+        edge instead of bubbling up from ``Reflection.__post_init__``.
+        """
+        root = _resolve_project_root()
+        store = _get_reflection_store(root / ".vibe")
+
+        reflection = Reflection(
+            target_type=body.target_type,
+            target_id=body.target_id,
+            task_id=body.task_id,
+            kind=body.kind,
+            content=body.content,
+            severity=body.severity,
+            linked_action=body.linked_action,
+        )
+        store.append(reflection)
+        return JSONResponse(reflection.to_dict(), status_code=201)
+
+    @app.get("/api/reflections")
+    async def list_reflections(
+        task_id: str | None = Query(default=None),
+        target_id: str | None = Query(default=None),
+        status: Literal["open", "addressed", "dismissed"] | None = Query(default=None),
+    ) -> JSONResponse:
+        """List reflections, optionally filtered.
+
+        Filters are AND-combined when multiple are present (e.g.
+        ``?task_id=T-1&status=open``). Default returns all reflections
+        in store order (insertion order; newest last).
+        """
+        root = _resolve_project_root()
+        store = _get_reflection_store(root / ".vibe")
+
+        reflections = store.list_open() if status == "open" else store.list_all()
+
+        if task_id:
+            reflections = [r for r in reflections if r.task_id == task_id]
+        if target_id:
+            reflections = [r for r in reflections if r.target_id == target_id]
+        if status and status != "open":
+            reflections = [r for r in reflections if r.status == status]
+
+        return JSONResponse([r.to_dict() for r in reflections])
+
+    @app.patch("/api/reflections/{reflection_id}")
+    async def update_reflection(
+        reflection_id: str,
+        body: ReflectionStatusUpdate,
+    ) -> JSONResponse:
+        """Update one reflection's status (open → addressed | dismissed).
+
+        Error mapping:
+        - ``KeyError`` from store (id not found) → 404
+        - ``ValueError`` from store (invalid status literal) → 422 — but
+          Pydantic catches this at the API edge first
+        - 200 returns the updated reflection
+        """
+        root = _resolve_project_root()
+        store = _get_reflection_store(root / ".vibe")
+
+        try:
+            store.update_status(reflection_id, body.status)
+        except KeyError:
+            return JSONResponse(
+                {"error": f"reflection {reflection_id!r} not found"},
+                status_code=404,
+            )
+
+        # Read back the updated reflection. list_all is O(N) but reflection
+        # volumes are low (UI-driven, ~10s per project).
+        updated = next(
+            (r for r in store.list_all() if r.id == reflection_id), None
+        )
+        assert updated is not None, (
+            "update_status succeeded but reflection vanished from store — "
+            "store invariant broken"
+        )
+        return JSONResponse(updated.to_dict())
 
     # API: Conversations  # noqa: ERA001
 

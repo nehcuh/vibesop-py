@@ -105,6 +105,32 @@ class DAG:
     phases: list[dict[str, Any]] = field(default_factory=list)
     iterations: int = 0
 
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize to a JSON-safe dict for the dashboard API boundary.
+
+        Mirrors ``Reflection.to_dict``: caller is responsible for JSON-safety
+        of nested ``metadata`` values. ``metadata`` is passed by reference
+        (no deep copy) — the dashboard layer should treat it as read-only.
+        """
+        return {
+            "nodes": [
+                {
+                    "id": n.id,
+                    "kind": n.kind,
+                    "label": n.label,
+                    "metadata": n.metadata,
+                    "children": n.children,
+                }
+                for n in self.nodes
+            ],
+            "edges": [
+                {"src": e.src, "dst": e.dst, "kind": e.kind}
+                for e in self.edges
+            ],
+            "phases": self.phases,
+            "iterations": self.iterations,
+        }
+
 
 # ---------------------------------------------------------------------------
 # build_span_tree

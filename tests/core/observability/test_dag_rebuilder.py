@@ -78,6 +78,72 @@ class TestDAGDataclasses:
         assert dag.phases == []
         assert dag.iterations == 0
 
+    def test_dag_to_dict_serializes_all_fields(self) -> None:
+        """``DAG.to_dict`` is the API boundary for the dashboard's
+        ``/api/orchestration/dag`` endpoint — must produce a JSON-safe dict
+        that mirrors the dataclass shape exactly so FastAPI can return it
+        directly."""
+        node = DAGNode(
+            id="n1",
+            kind="step",
+            label="step-1",
+            metadata={"skill_id": "skill-x", "step_id": "s1"},
+            children=["n2", "n3"],
+        )
+        edge = DAGEdge(src="n1", dst="n2", kind="parent_child")
+        dag = DAG(
+            nodes=[node],
+            edges=[edge],
+            phases=[{"phase": "routing", "span_id": "phase-1"}],
+            iterations=2,
+        )
+
+        result = dag.to_dict()
+
+        assert result == {
+            "nodes": [
+                {
+                    "id": "n1",
+                    "kind": "step",
+                    "label": "step-1",
+                    "metadata": {"skill_id": "skill-x", "step_id": "s1"},
+                    "children": ["n2", "n3"],
+                }
+            ],
+            "edges": [
+                {"src": "n1", "dst": "n2", "kind": "parent_child"}
+            ],
+            "phases": [{"phase": "routing", "span_id": "phase-1"}],
+            "iterations": 2,
+        }
+
+    def test_dag_to_dict_empty_dag_returns_empty_lists(self) -> None:
+        """Empty DAG → all-lists-zero shape, still JSON-safe. The 404 path
+        never reaches here, but the 200-with-no-data path does."""
+        dag = DAG()
+        result = dag.to_dict()
+        assert result == {
+            "nodes": [],
+            "edges": [],
+            "phases": [],
+            "iterations": 0,
+        }
+
+    def test_dag_to_dict_metadata_passthrough_no_mutation(self) -> None:
+        """to_dict must NOT deep-copy metadata — it's an API boundary, not a
+        snapshot. Mutation of the returned dict's metadata should be visible
+        on the dataclass (callers don't expect stealth copies)."""
+        original_meta = {"key": "value"}
+        node = DAGNode(id="n", kind="plan", label="l", metadata=original_meta)
+        dag = DAG(nodes=[node])
+
+        result = dag.to_dict()
+        result["nodes"][0]["metadata"]["new_key"] = "new_value"
+
+        assert original_meta["new_key"] == "new_value", (
+            "metadata should be the same object (no deep copy) — API boundary"
+        )
+
     def test_dag_node_kind_literal_validates(self) -> None:
         """``kind`` is a Literal — invalid values should be caught at type
         checking time. Runtime is permissive (Python Literals aren't enforced),
