@@ -262,7 +262,11 @@ def rebuild_dag(
           ``parent_conversation_id`` → main conversation's
           ``orchestration_id`` chain (MVP: plan-level attachment; step-level
           requires ``tool_use_id`` matching, deferred to Phase B)
-        * ``iterations`` = number of plans (reorchestration creates new plans)
+        * ``iterations`` = max(len(plans), reorchestration rounds + 1).
+          A single ``orchestrate()`` with N ``loop_until_dry`` rounds keeps
+          one plan_id and accumulates ``reorchestration_history``; we read
+          that to count rounds. Falls back to plan count for multi-plan
+          traces. See ``_derive_iterations`` for the exact rule.
 
         Empty ``DAG`` if no spans AND no plans match the trace id.
     """
@@ -312,7 +316,7 @@ def rebuild_dag(
                         kind="parent_child",
                     )
                 )
-                dag.nodes[-2].children.append(orch_id)
+                _attach_child(dag, user_intent_id, orch_id)
 
         # Phase children of orchestrator
         phase_spans = [
@@ -336,13 +340,24 @@ def rebuild_dag(
                 dag.edges.append(
                     DAGEdge(src=orch_id, dst=phase_node.id, kind="parent_child")
                 )
-                for n in dag.nodes:
-                    if n.id == orch_id:
-                        n.children.append(phase_node.id)
-                        break
+                _attach_child(dag, orch_id, phase_node.id)
 
     # ------------------------------------------------------------------
-    # Plan + step nodes
+    # Pre-build indexes for O(1) JOIN (perf fix flagged independently by
+    # grok+pi Q5). The task_id index also drives the dedup contract: each
+    # span attaches to AT MOST ONE step across all plans (multi-plan shared
+    # step_id fix flagged independently by grok+pi Q1).
+    # ------------------------------------------------------------------
+    spans_by_task: dict[str, list[dict[str, Any]]] = {}
+    matched_span_ids: set[str] = set()
+    for s in spans:
+        tid = s.get("task_id")
+        if tid and s.get("span_kind") in ("llm", "tool", "tool_call"):
+            spans_by_task.setdefault(str(tid), []).append(s)
+
+    # ------------------------------------------------------------------
+    # Plan + step nodes — step ids are plan-scoped to avoid collision
+    # when reorchestration creates a new plan with overlapping step_ids.
     # ------------------------------------------------------------------
     for plan in plans:
         plan_node_id = f"plan:{plan.plan_id}"
@@ -362,22 +377,18 @@ def rebuild_dag(
             dag.edges.append(
                 DAGEdge(src=orch_id, dst=plan_node_id, kind="parent_child")
             )
-            for n in dag.nodes:
-                if n.id == orch_id:
-                    n.children.append(plan_node_id)
-                    break
+            _attach_child(dag, orch_id, plan_node_id)
 
-        # Step nodes
-        step_node_ids: list[str] = []
+        # Step nodes (plan-scoped ids)
         for step in plan.steps:
-            step_node_id = f"step:{step.step_id}"
-            step_node_ids.append(step_node_id)
+            step_node_id = f"step:{plan.plan_id}:{step.step_id}"
             step_node = DAGNode(
                 id=step_node_id,
                 kind="step",
                 label=step.skill_id or step.step_id,
                 metadata={
                     "step_id": step.step_id,
+                    "plan_id": plan.plan_id,
                     "skill_id": step.skill_id,
                     "role": step.assigned_role,
                 },
@@ -388,25 +399,29 @@ def rebuild_dag(
             )
             plan_node.children.append(step_node_id)
 
-        # Dependency edges (from step.dependencies)
+        # Dependency edges (intra-plan, plan-scoped ids)
         for step in plan.steps:
             for dep in step.dependencies or []:
                 dag.edges.append(
                     DAGEdge(
-                        src=f"step:{dep}",
-                        dst=f"step:{step.step_id}",
+                        src=f"step:{plan.plan_id}:{dep}",
+                        dst=f"step:{plan.plan_id}:{step.step_id}",
                         kind="dependency",
                     )
                 )
 
-        # Attach llm/tool spans to steps via task_id == step_id (P0-1)
+        # Attach llm/tool spans to steps via task_id == step_id (P0-1).
+        # Dedup: each span attaches to AT MOST ONE step. First plan that
+        # claims a step_id wins; later plans with the same step_id see an
+        # empty list (spans consumed). This matches the invariant that
+        # production step_ids are uuid[:8] — collision is abnormal and
+        # surfaced via the orphan log below.
         for step in plan.steps:
-            attached = [
-                s for s in spans
-                if s.get("task_id") == step.step_id
-                and s.get("span_kind") in ("llm", "tool", "tool_call")
-            ]
-            for s in attached:
+            candidates = spans_by_task.get(step.step_id, [])
+            for s in candidates:
+                if s.get("id") in matched_span_ids:
+                    continue
+                matched_span_ids.add(s.get("id", ""))
                 span_kind = s.get("span_kind")
                 node_kind: NodeKind = "llm" if span_kind == "llm" else "tool"
                 span_node = DAGNode(
@@ -416,7 +431,7 @@ def rebuild_dag(
                     metadata={"trace_id": s.get("trace_id", trace_id)},
                 )
                 dag.nodes.append(span_node)
-                step_node_id = f"step:{step.step_id}"
+                step_node_id = f"step:{plan.plan_id}:{step.step_id}"
                 dag.edges.append(
                     DAGEdge(
                         src=step_node_id,
@@ -424,13 +439,27 @@ def rebuild_dag(
                         kind="parent_child",
                     )
                 )
-                for n in dag.nodes:
-                    if n.id == step_node_id:
-                        n.children.append(span_node.id)
-                        break
+                _attach_child(dag, step_node_id, span_node.id)
+
+    # Orphan spans: task_id set but no matching step in any plan.
+    # Logged at debug so Task 13 E2E can diagnose JOIN misses without
+    # spamming production logs. (grok+pi Q1b concern.)
+    for tid, span_list in spans_by_task.items():
+        for s in span_list:
+            if s.get("id") not in matched_span_ids:
+                logger.debug(
+                    "vibesop.orphan_span task_id=%s span_id=%s has no matching step",
+                    tid,
+                    s.get("id"),
+                    extra={"vibesop_event": "orphan_span"},
+                )
 
     # ------------------------------------------------------------------
     # Sub-agent nodes (attached to plans via parent_conversation_id chain)
+    #
+    # TODO(Phase B): step-level attachment via tool_use_id matching —
+    # current MVP attaches to the PLAN, not the step that spawned it.
+    # Flagged as acceptable by grok+pi Q2.
     # ------------------------------------------------------------------
     subagent_attachments = _discover_subagents(storage, plans)
     for attach in subagent_attachments:
@@ -452,13 +481,14 @@ def rebuild_dag(
         dag.edges.append(
             DAGEdge(src=plan_node_id, dst=sub_node.id, kind="parent_child")
         )
-        for n in dag.nodes:
-            if n.id == plan_node_id:
-                n.children.append(sub_node.id)
-                break
+        _attach_child(dag, plan_node_id, sub_node.id)
 
-    # Iterations = number of plans (reorchestration rounds)
-    dag.iterations = len(plans)
+    # ------------------------------------------------------------------
+    # Iterations: prefer reorchestration_history (real loop rounds keep
+    # the same plan_id and accumulate history); fall back to plan count
+    # for multi-plan traces. (grok Q3 finding — pi missed this.)
+    # ------------------------------------------------------------------
+    dag.iterations = _derive_iterations(plans)
 
     return dag
 
@@ -466,6 +496,47 @@ def rebuild_dag(
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
+
+
+def _attach_child(dag: DAG, parent_id: str, child_id: str) -> None:
+    """Append ``child_id`` to ``parent_id``'s ``children`` list.
+
+    Helper exists to avoid the ``for n in dag.nodes: if n.id == ...: ...``
+    pattern that litters the build loop. We still pay O(N) per call, but
+    call sites are bounded (one per edge) so total cost stays O(N²) only
+    in pathological cases — fine for MVP DAG sizes.
+    """
+    for n in dag.nodes:
+        if n.id == parent_id:
+            n.children.append(child_id)
+            return
+
+
+def _derive_iterations(plans: list[Any]) -> int:
+    """Derive ``DAG.iterations`` from plan data.
+
+    Rule:
+
+    * No plans → 0
+    * Plans with ``reorchestration_history`` → ``max(history) + 1``
+      (the +1 counts the initial orchestration; rounds are *re*-orchestrations)
+    * Plans without history → fall back to ``len(plans)`` (multi-plan traces
+      where each plan represents a separate orchestration round)
+
+    The "max + 1" rule is the fix for grok Q3: ``loop_until_dry`` reuses
+    one ``plan_id`` and appends to ``reorchestration_history``, so counting
+    plans under-counts real loop rounds.
+    """
+    if not plans:
+        return 0
+    rounds_per_plan = [
+        len(getattr(p, "reorchestration_history", None) or [])
+        for p in plans
+    ]
+    max_rounds = max(rounds_per_plan) if rounds_per_plan else 0
+    if max_rounds > 0:
+        return max(len(plans), max_rounds + 1)
+    return len(plans)
 
 
 def _find_root_span(spans: list[dict[str, Any]]) -> dict[str, Any] | None:
@@ -497,12 +568,17 @@ def _discover_subagents(
 
     Plans not in ``plans`` are skipped — we only attach to plans visible
     in this trace's rebuild.
+
+    A ``conversation_id → orchestration_id`` cache avoids re-reading the
+    same parent conversation file when multiple sub-agents share a parent
+    (perf fix flagged by grok+pi Q5).
     """
     plan_ids = {p.plan_id for p in plans}
     conv_dir = storage_dir / "conversations"
     if not conv_dir.exists():
         return []
 
+    orch_cache: dict[str, str | None] = {}
     attachments: list[dict[str, Any]] = []
     try:
         for conv_file in conv_dir.glob("*.json"):
@@ -517,7 +593,11 @@ def _discover_subagents(
             if not parent_conv_id:
                 continue
 
-            plan_id = _lookup_orchestration_id(storage_dir, parent_conv_id)
+            if parent_conv_id in orch_cache:
+                plan_id = orch_cache[parent_conv_id]
+            else:
+                plan_id = _lookup_orchestration_id(storage_dir, parent_conv_id)
+                orch_cache[parent_conv_id] = plan_id
             if not plan_id or plan_id not in plan_ids:
                 continue
 

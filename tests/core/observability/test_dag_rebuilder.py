@@ -398,11 +398,11 @@ class TestRebuildDagJoin:
         dag = rebuild_dag(trace_id="T1", storage_dir=storage)
 
         step_node = next(
-            (n for n in dag.nodes if n.id == "step:s1"), None
+            (n for n in dag.nodes if n.id == "step:plan-1:s1"), None
         )
-        assert step_node is not None, "step node s1 must exist"
+        assert step_node is not None, "step node plan-1:s1 must exist"
         assert "llm-1" in step_node.children, (
-            f"llm-1 must be a child of step:s1 (JOIN via task_id), "
+            f"llm-1 must be a child of step:plan-1:s1 (JOIN via task_id), "
             f"got children={step_node.children}"
         )
 
@@ -436,9 +436,9 @@ class TestRebuildDagJoin:
 
         dep_edges = [e for e in dag.edges if e.kind == "dependency"]
         edge_pairs = {(e.src, e.dst) for e in dep_edges}
-        assert ("step:s1", "step:s2") in edge_pairs
-        assert ("step:s1", "step:s3") in edge_pairs
-        assert ("step:s2", "step:s3") in edge_pairs
+        assert ("step:plan-deps:s1", "step:plan-deps:s2") in edge_pairs
+        assert ("step:plan-deps:s1", "step:plan-deps:s3") in edge_pairs
+        assert ("step:plan-deps:s2", "step:plan-deps:s3") in edge_pairs
 
     def test_rebuild_dag_attaches_subagent_to_plan_via_parent_conversation(
         self, tmp_path: Path
@@ -565,9 +565,13 @@ class TestRebuildDagJoin:
             phase_names
         )
 
-    def test_rebuild_dag_iterations_counts_plans(self, tmp_path: Path) -> None:
-        """``iterations`` field equals number of plans found for the trace —
-        reorchestration rounds each create a new plan, so this counts them."""
+    def test_rebuild_dag_iterations_falls_back_to_plan_count_without_history(
+        self, tmp_path: Path
+    ) -> None:
+        """``iterations`` falls back to plan count when no
+        ``reorchestration_history`` exists. Covers the rare multi-plan case
+        (two orchestrate() calls under same trace_id) — most production
+        traces have one plan and zero history, yielding iterations=1."""
         from vibesop.core.observability.dag_rebuilder import rebuild_dag
 
         storage = tmp_path / ".vibe"
@@ -588,11 +592,137 @@ class TestRebuildDagJoin:
             storage,
             plan_id="plan-iter-2",
             trace_id="T-iter",
-            steps=[{"step_id": "s1"}],
+            steps=[{"step_id": "s2"}],
         )
 
         dag = rebuild_dag(trace_id="T-iter", storage_dir=storage)
         assert dag.iterations == 2
+
+    def test_rebuild_dag_iterations_derives_from_reorchestration_history(
+        self, tmp_path: Path
+    ) -> None:
+        """``iterations`` = ``max(reorchestration_history) + 1`` —
+        ``loop_until_dry`` keeps ONE ``plan_id`` and accumulates history,
+        so counting plans under-counts real loop rounds.
+
+        Regression for grok Q3 finding: a single plan with 2 history
+        entries means 3 rounds total (initial + 2 reorchestrations).
+        Pre-fix this returned iterations=1 because ``len(plans) == 1``.
+        """
+        import json
+
+        from vibesop.core.models import (
+            ExecutionMode,
+            ExecutionPlan,
+            ExecutionStep,
+            WorkflowPattern,
+        )
+        from vibesop.core.observability.dag_rebuilder import rebuild_dag
+
+        storage = tmp_path / ".vibe"
+        _write_span_fixture(
+            storage,
+            span_id="root",
+            trace_id="T-loop",
+            span_kind="task",
+            name="orchestrate",
+        )
+        plan = ExecutionPlan(
+            plan_id="plan-loop",
+            original_query="loop test",
+            steps=[
+                ExecutionStep(
+                    step_id="s1",
+                    step_number=1,
+                    skill_id="skill-x",
+                    intent="intent-x",
+                )
+            ],
+            workflow_pattern=WorkflowPattern.SEQUENTIAL,
+            execution_mode=ExecutionMode.SEQUENTIAL,
+        )
+        plan.metadata["trace_id"] = "T-loop"
+        plan.reorchestration_history = [
+            {"round": 1, "reason": "step failed"},
+            {"round": 2, "reason": "validation gap"},
+        ]
+        storage.mkdir(parents=True, exist_ok=True)
+        with (storage / "execution_plans.jsonl").open("a") as f:
+            f.write(json.dumps(plan.to_dict()) + "\n")
+
+        dag = rebuild_dag(trace_id="T-loop", storage_dir=storage)
+        assert dag.iterations == 3, (
+            f"1 plan + 2 reorchestration rounds = 3 iterations; "
+            f"got {dag.iterations}"
+        )
+
+    def test_rebuild_dag_multi_plan_shared_step_id_attaches_span_once(
+        self, tmp_path: Path
+    ) -> None:
+        """Multi-plan trace where two plans share the same ``step_id``
+        must produce **distinct** plan-scoped step node ids, and a single
+        matching span must attach to AT MOST ONE step.
+
+        Regression for grok+pi Q1 finding: pre-fix, both plans got
+        ``step:s1`` (id collision) and the span was attached to BOTH,
+        producing a corrupted graph with duplicate node ids.
+        """
+        from vibesop.core.observability.dag_rebuilder import rebuild_dag
+
+        storage = tmp_path / ".vibe"
+        _write_span_fixture(
+            storage,
+            span_id="root",
+            trace_id="T-collide",
+            span_kind="task",
+            name="orchestrate",
+        )
+        _write_plan_fixture(
+            storage,
+            plan_id="plan-A",
+            trace_id="T-collide",
+            steps=[{"step_id": "s1", "skill_id": "skill-a"}],
+        )
+        _write_plan_fixture(
+            storage,
+            plan_id="plan-B",
+            trace_id="T-collide",
+            steps=[{"step_id": "s1", "skill_id": "skill-b"}],
+        )
+        _write_span_fixture(
+            storage,
+            span_id="llm-shared",
+            trace_id="T-collide",
+            parent_span_id="root",
+            span_kind="llm",
+            name="classify",
+            task_id="s1",
+        )
+
+        dag = rebuild_dag(trace_id="T-collide", storage_dir=storage)
+
+        node_ids = [n.id for n in dag.nodes]
+        # No duplicate node ids anywhere in the DAG
+        assert len(node_ids) == len(set(node_ids)), (
+            f"duplicate node ids detected: {node_ids}"
+        )
+        # Both plan-scoped step ids exist
+        assert "step:plan-A:s1" in node_ids
+        assert "step:plan-B:s1" in node_ids
+        # The span attaches to exactly one step (first plan wins)
+        step_a = next(n for n in dag.nodes if n.id == "step:plan-A:s1")
+        step_b = next(n for n in dag.nodes if n.id == "step:plan-B:s1")
+        a_has = "llm-shared" in step_a.children
+        b_has = "llm-shared" in step_b.children
+        assert a_has != b_has, (
+            f"span must attach to exactly one step, "
+            f"plan-A={a_has} plan-B={b_has}"
+        )
+        # Exactly one llm span node exists
+        llm_nodes = [n for n in dag.nodes if n.id == "llm-shared"]
+        assert len(llm_nodes) == 1, (
+            f"span should not be duplicated in DAG, found {len(llm_nodes)}"
+        )
 
     def test_rebuild_dag_load_span_trace_id_filter(self, tmp_path: Path) -> None:
         """``load_spans_for_trace`` filters by trace_id — spans from other
