@@ -168,6 +168,14 @@ def load_plans_for_trace(
         deduplicated by ``plan_id`` (latest entry wins, mirroring
         ``PlanTracker.get_plan()`` semantics). Empty list if no match or the
         JSONL file does not exist.
+
+    .. warning::
+        ``storage_dir`` resolves relative to **CWD** when passed as a relative
+        path. The Orchestrator writes to ``router.project_root / ".vibe"``
+        (always absolute); callers reading from a different CWD will silently
+        get ``[]``. **DAG rebuilder callers must pass an absolute path**
+        (typically ``project_root / ".vibe"``) to avoid this footgun.
+        (Flagged independently by grok + pi review of Task 10.)
     """
     plans_path = Path(storage_dir) / "execution_plans.jsonl"
     if not plans_path.exists():

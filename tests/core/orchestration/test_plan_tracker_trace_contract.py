@@ -346,3 +346,109 @@ class TestLoadPlansForTrace:
         assert len(result) == 1, (
             f"expected dedup to 1 entry, got {len(result)}"
         )
+
+    def test_update_step_status_preserves_trace_id(self, tmp_path: Path) -> None:
+        """``PlanTracker.update_step_status`` re-appends the full plan dict;
+        the trace_id written by Orchestrator must survive any number of
+        subsequent step status updates (otherwise the JOIN key evaporates
+        mid-execution). Regression guard flagged independently by grok+pi."""
+        from vibesop.core.models import (
+            ExecutionMode,
+            ExecutionPlan,
+            ExecutionStep,
+            StepStatus,
+            WorkflowPattern,
+        )
+        from vibesop.core.orchestration.plan_tracker import (
+            PlanTracker,
+            load_plans_for_trace,
+        )
+
+        storage = tmp_path / ".vibe"
+        tracker = PlanTracker(storage_dir=storage)
+        plan = ExecutionPlan(
+            plan_id="plan-update-test",
+            original_query="q",
+            steps=[
+                ExecutionStep(
+                    step_id="s1",
+                    step_number=1,
+                    skill_id="skill-a",
+                    intent="task-a",
+                )
+            ],
+            workflow_pattern=WorkflowPattern.SEQUENTIAL,
+            execution_mode=ExecutionMode.SEQUENTIAL,
+        )
+        plan.metadata["trace_id"] = "trace-preserved"
+        tracker.create_plan(plan)
+
+        # Simulate execution: 5 step status updates append 5 new lines.
+        for status in (
+            StepStatus.IN_PROGRESS,
+            StepStatus.COMPLETED,
+        ):
+            tracker.update_step_status(
+                plan_id="plan-update-test",
+                step_id="s1",
+                status=status,
+            )
+
+        # Latest line for this plan_id still has trace_id.
+        result = load_plans_for_trace("trace-preserved", storage_dir=storage)
+        assert len(result) == 1
+        latest = result[0]
+        assert latest.plan_id == "plan-update-test"
+        assert latest.metadata.get("trace_id") == "trace-preserved"
+
+
+# ---------------------------------------------------------------------------
+# Tracing-disabled behaviour (grok+pi polish: split `if trace_id:`)
+# ---------------------------------------------------------------------------
+
+
+class TestTracingDisabled:
+    """When tracing is disabled, the plan must still persist (PlanTracker is
+    the canonical record), but ``metadata.trace_id`` must NOT be set (no
+    spans exist either, so the JOIN is moot). This guards against the
+    regression where splitting ``if trace_id:`` accidentally drops the
+    whole persist call."""
+
+    def test_plan_persists_without_trace_id_when_tracing_disabled(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        import vibesop.core.observability.tracer as tracer_mod
+        from vibesop.core.observability.tracer import ObservabilityTracer
+
+        # Tracer with enabled=False — trace() yields noop span with trace_id="".
+        noop_tracer = ObservabilityTracer(enabled=False)
+        monkeypatch.setattr(tracer_mod, "_tracer", noop_tracer)
+
+        router = UnifiedRouter(project_root=tmp_path)
+        monkeypatch.setattr(router, "_get_multi_intent_detector", _StubDetector)
+        monkeypatch.setattr(router, "_get_task_decomposer", _StubDecomposer)
+        monkeypatch.setattr(router, "_get_plan_builder", _StubBuilder)
+        monkeypatch.setattr(
+            "vibesop.core.orchestration.classifier.ClassifierAgent.classify",
+            _stub_classify,
+        )
+        monkeypatch.setattr(
+            "vibesop.core.orchestration.classifier.ClassifierAgent.classify_step",
+            _stub_classify_step,
+        )
+
+        router.orchestrate("do task a then task b")
+
+        plans = _read_plans(tmp_path / ".vibe" / "execution_plans.jsonl")
+        matching = [p for p in plans if p["plan_id"] == "stub-plan-trace-contract"]
+        assert matching, (
+            "Plan MUST persist even with tracing disabled — PlanTracker is "
+            "the canonical record, not just a JOIN target"
+        )
+        latest = matching[-1]
+        assert "trace_id" not in latest["metadata"], (
+            "metadata.trace_id must be absent (not empty string) when "
+            "tracing is disabled — load_plans_for_trace filters by equality"
+        )

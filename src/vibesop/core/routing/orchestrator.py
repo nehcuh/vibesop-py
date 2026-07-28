@@ -429,19 +429,29 @@ class Orchestrator:
             # can JOIN plan ↔ spans.jsonl (v3 Phase A Task 10, P0-2). The
             # trace_id is the cross-process JOIN key — contextvars does NOT
             # cross process boundaries, so the rebuilder reads it from
-            # ``plan.metadata["trace_id"]`` instead. Best-effort: persistence
-            # failure must never break orchestration.
+            # ``plan.metadata["trace_id"]`` instead.
+            #
+            # Always persist (PlanTracker is the canonical record even when
+            # tracing is off — the plan is still queryable via list_plans()).
+            # Only the JOIN key is conditional on tracing being enabled: an
+            # empty trace_id means no spans exist either, so no JOIN to do.
+            #
+            # Best-effort: persistence failure must never break orchestration
+            # (per Task 5 conversation writeback policy). Logged at ERROR
+            # with a stable event key so log-based alerting can detect
+            # silent dashboard data loss.
             if trace_id:
                 plan.metadata["trace_id"] = trace_id
-                plan.metadata["orchestration_id"] = plan.plan_id
-                try:
-                    self._router._get_plan_tracker().create_plan(plan)
-                except Exception as e:
-                    logger.warning(
-                        "Failed to persist plan %s via PlanTracker: %s",
-                        plan.plan_id,
-                        e,
-                    )
+            plan.metadata["orchestration_id"] = plan.plan_id
+            try:
+                self._router._get_plan_tracker().create_plan(plan)
+            except Exception as e:
+                logger.error(
+                    "vibesop.plan_persist_failed plan_id=%s error=%s",
+                    plan.plan_id,
+                    e,
+                    extra={"vibesop_event": "plan_persist_failed"},
+                )
 
         duration_ms = (time.perf_counter() - start_time) * 1000
 
