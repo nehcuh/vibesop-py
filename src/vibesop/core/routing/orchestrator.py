@@ -77,7 +77,13 @@ class Orchestrator:
             "orchestrate",
             metadata={"query": query[:500]},
         ) as root_span:
-            result = self._orchestrate_impl(query, candidates, context, callbacks)
+            result = self._orchestrate_impl(
+                query,
+                candidates,
+                context,
+                callbacks,
+                trace_id=root_span.trace_id,
+            )
             if conversation_id:
                 self._writeback_to_conversation(
                     conversation_id=conversation_id,
@@ -129,8 +135,17 @@ class Orchestrator:
         candidates: list[dict[str, Any]] | None = None,
         context: RoutingContext | None = None,
         callbacks: Any | None = None,
+        *,
+        trace_id: str = "",
     ) -> OrchestrationResult:
-        """Actual orchestration logic — see ``orchestrate()`` for trace wrapping."""
+        """Actual orchestration logic — see ``orchestrate()`` for trace wrapping.
+
+        ``trace_id`` is the root trace's id (passed in by ``orchestrate()``).
+        It's written into ``plan.metadata`` so the DAG rebuilder can JOIN
+        plan ↔ spans.jsonl via ``metadata.trace_id == span.trace_id`` (v3
+        Phase A Task 10, P0-2 mandatory). Empty string = tracing disabled
+        → JOIN key omitted (DAG rebuilder will skip the plan).
+        """
         from vibesop.core.orchestration.callbacks import (
             ErrorPolicy,
             NoOpCallbacks,
@@ -409,6 +424,24 @@ class Orchestrator:
                 sub_task = sub_tasks[idx] if 0 <= idx < len(sub_tasks) else None
                 with bind_task_context(step.step_id, step.assigned_role):
                     step_classifier.classify_step(step, sub_task)
+
+            # Persist final plan state via PlanTracker so the DAG rebuilder
+            # can JOIN plan ↔ spans.jsonl (v3 Phase A Task 10, P0-2). The
+            # trace_id is the cross-process JOIN key — contextvars does NOT
+            # cross process boundaries, so the rebuilder reads it from
+            # ``plan.metadata["trace_id"]`` instead. Best-effort: persistence
+            # failure must never break orchestration.
+            if trace_id:
+                plan.metadata["trace_id"] = trace_id
+                plan.metadata["orchestration_id"] = plan.plan_id
+                try:
+                    self._router._get_plan_tracker().create_plan(plan)
+                except Exception as e:
+                    logger.warning(
+                        "Failed to persist plan %s via PlanTracker: %s",
+                        plan.plan_id,
+                        e,
+                    )
 
         duration_ms = (time.perf_counter() - start_time) * 1000
 

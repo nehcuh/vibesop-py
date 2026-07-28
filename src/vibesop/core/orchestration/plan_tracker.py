@@ -14,6 +14,8 @@ from vibesop.core.models import ExecutionPlan, PlanStatus, StepStatus
 
 logger = logging.getLogger(__name__)
 
+__all__ = ["PlanTracker", "load_plans_for_trace"]
+
 
 class PlanTracker:
     """Tracks execution plan state with append-only JSONL storage.
@@ -143,3 +145,64 @@ class PlanTracker:
         fields survive the to_dict() → from_dict() round-trip.
         """
         return ExecutionPlan.from_dict(data)
+
+
+def load_plans_for_trace(
+    trace_id: str,
+    storage_dir: str | Path = ".vibe",
+) -> list[ExecutionPlan]:
+    """Return all plans whose ``metadata.trace_id`` matches ``trace_id``.
+
+    Cross-process JOIN contract (v3 Phase A Task 10): the DAG rebuilder uses
+    this to find plans that belong to a given trace root. Plans persisted
+    before Task 10 lack ``metadata.trace_id`` and are silently skipped
+    (NOT crashed on) so historical data stays readable.
+
+    Args:
+        trace_id: The root trace id produced by ``orchestrate()``.
+        storage_dir: Directory containing ``execution_plans.jsonl``. Defaults
+            to ``.vibe`` — same default as ``PlanTracker``.
+
+    Returns:
+        Plans whose latest persisted state has ``metadata.trace_id == trace_id``,
+        deduplicated by ``plan_id`` (latest entry wins, mirroring
+        ``PlanTracker.get_plan()`` semantics). Empty list if no match or the
+        JSONL file does not exist.
+    """
+    plans_path = Path(storage_dir) / "execution_plans.jsonl"
+    if not plans_path.exists():
+        return []
+
+    seen: dict[str, dict[str, Any]] = {}
+    try:
+        with plans_path.open("r", encoding="utf-8") as f:
+            for raw_line in f:
+                line = raw_line.strip()
+                if not line:
+                    continue
+                try:
+                    data = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                plan_id = data.get("plan_id")
+                if plan_id:
+                    # Last write wins — append-only model means later lines
+                    # supersede earlier ones for the same plan_id.
+                    seen[plan_id] = data
+    except OSError as e:
+        logger.warning("Failed to read plans from %s: %s", plans_path, e)
+        return []
+
+    result: list[ExecutionPlan] = []
+    for data in seen.values():
+        metadata = data.get("metadata") or {}
+        if metadata.get("trace_id") == trace_id:
+            try:
+                result.append(ExecutionPlan.from_dict(data))
+            except Exception as e:
+                logger.warning(
+                    "Skipping malformed plan entry while loading trace %s: %s",
+                    trace_id,
+                    e,
+                )
+    return result
