@@ -1,4 +1,28 @@
 
+### S38 (2026-07-28) [vibesop-py] Dashboard v3 Phase A 收尾 (Tasks 10-13) + Phase B 全 ship
+
+- [x] **Task 10 / P0-2**：`Orchestrator.orchestrate()` 接 `PlanTracker.create_plan()`，写 `plan.metadata["trace_id"]` — DAG rebuilder 的 plan↔span JOIN 契约；grok+pi 评审双清
+- [x] **Task 11/12**：`rebuild_dag()` — 多 plan 聚合 + step tree build + sub-agent attach；plan-scoped step ids（`step:{plan_id}:{step_id}`）避免跨 plan 共享 step_id 时节点重复；iterations 从 `reorchestration_history` 推导（不是 `len(plans)`）
+- [x] **Task 13**：fixture-based E2E（4 tests，zero LLM）+ orchestrate→rebuild_dag integration smoke（3 tests）— 验收关卡从 fill rate 改为 rebuild_dag 真实数据 smoke
+- [x] **Phase B（HTTP API layer）**：4 endpoints（GET /api/orchestration/dag, POST/GET/PATCH /api/reflections）+ 28 tests + Pydantic schemas + `_trace_exists`（JSON parse + exact-field match，非 substring，防 T-1 vs T-1x 误判）
+- [x] **Phase B Polish（grok+pi closeout）**：P0 fix — `ReflectionStore._locked_update_status` list_all() 在 flock 外导致 RMW lost-update race（Phase A 遗留，Phase B 写路径让其 user-visible）；P1 — assert → 显式 500 JSONResponse；P2 — `DAG.to_dict()` 只读契约 docstring
+
+**Commits**: 21 commits pushed (`54655fe` → `865c6e7`)，覆盖 Phase A Task 10-13 + Phase B + grok+pi 两轮评审 fix。`git push origin main` 成功：`f760c62..865c6e7 main -> main`
+
+**Key Discoveries**:
+1. **跨进程 RMW 必须把 read 放进锁内**：append-only 走锁 + update 走锁 不够 — update 是 RMW，read 在锁外则 read 和 mutate 之间穿插的 appender 会被 rewrite 静默吃掉；AtomicWriter tmp+rename 让 bug 无 crash 痕迹。已记入 project-knowledge.md Technical Pitfalls
+2. **plan-scoped step ids 防跨 plan 节点重复**：多 plan 共享 step_id（如 `s1`）在 dict-as-index 模型下会互相覆盖；scope 为 `step:{plan_id}:{step_id}` 后去重自然解决
+3. **substring match 是 trace_id 误判源**：`T-1 in line` 会匹配 `T-1x`；用 JSON parse + `record.get("trace_id") == trace_id` 精确匹配
+4. **Pydantic + dataclass 双层校验**：API 边界 Pydantic 给干净 422，核心层 dataclass `__post_init__` 是 backstop（防 hand-edited JSON 文件）；Literal 类型从 core re-import 防 drift
+5. **`loop_until_dry` 重用 plan_id + 累积 `reorchestration_history`**：iterations 应从 history 推导，不能用 plan 数（同 plan_id 多次循环会被去重）
+
+**Next Steps**:
+- Phase C（UI 前端 — Orchestration Map Cytoscape.js + Reflection Inbox）可基于 `rebuild_dag` API + 4 reflection endpoints 直接开干
+- Phase B+1（deferred）：AtomicWriter sibling lock file 修 rename+inode race；trace_id 内存 index + mtime cache 优化 `_trace_exists` perf
+- 后续 24h 观察期：跑实际 orchestrate 看 trace_id 是否正确落盘到 execution_plans.jsonl（grok+pi P0 验证）
+
+**Recorded**: yes — RMW race pitfall → project-knowledge.md；auto-memory project-dashboard-v3-phase-a-shipped + project-dashboard-v3-phase-b-shipped 已更新
+
 ### S37 (2026-07-27) [vibesop-py] Dashboard v3 Phase A — Tasks 1-9 (data instrumentation)
 
 - [x] **Task 1-5** (前序 session 已完成)：trace context 包裹 + workflow_node phase spans + per-step task_id binding (no plan_id fallback, P0-1) + orchestration_id/trace_id 写入 conversation metadata (Task 5 跨进程 JOIN)

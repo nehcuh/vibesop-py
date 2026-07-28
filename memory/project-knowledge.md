@@ -99,6 +99,35 @@ See project-knowledge.md history for details.
 - f-strings are simpler than Jinja2 for inline TOML generation (proportional simplicity)
 - Python dicts are better than YAML files for internal routing rules (no I/O, no enum deserialization)
 
+### Cross-process RMW: `list_all()` MUST run INSIDE `fcntl.flock`, not before (2026-07-28)
+
+**Issue**: `ReflectionStore._locked_update_status` 在 Phase A 写出来后通过所有测试，但 Phase B 第一次让 dashboard 走写路径时立即被 grok+pi 同时抓到 P0 race。Race timeline（pre-fix）：
+
+```
+1. dashboard: list_all() reads N rows           ← no lock held
+2. CLI:       flock → append row N+1 → funlock
+3. dashboard: flock → rewrite with N rows       ← row N+1 LOST
+4. dashboard: funlock
+```
+
+**Root Cause**: 直觉上 "append 走锁，update 走锁" 已经够了 — 但 update 是 read-modify-write，read 部分如果不在锁内，read 和 modify 之间穿插的 appender 会被随后的 rewrite 静默吃掉。AtomicWriter 的 tmp+rename 让这个 bug 更隐蔽：crash 不留痕迹，文件就是少一行。
+
+**Solution**: 把 list_all 移到 flock 内（抽 `_do_locked_update` helper 整个 RMW 都在锁里）：
+```python
+with self._path.open("a") as f:
+    fcntl.flock(f.fileno(), fcntl.LOCK_EX)
+    try:
+        self._do_locked_update(...)  # list_all + mutate + AtomicWriter 全在里面
+    finally:
+        fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+```
+
+**Why hidden in Phase A**: Phase A 只有 CLI write path（append-only，没有跨 process 的 update），race window 存在但没人触发。Phase B 引入 dashboard PATCH 后 user-visible。
+
+**Test pattern**: 用 monkeypatch instrument `fcntl.flock` + `list_all` 记录调用顺序，断言 list_all 的 index 在 LOCK_EX 和 LOCK_UN 之间。`tests/core/observability/test_reflection_store.py::test_update_status_list_all_runs_inside_cross_process_lock`。
+
+**Known limitation**（defer Phase B+1）: AtomicWriter rename 换 inode — flock 锁的是旧 inode，rename 后新 inode 不受保护。Fix 是 sibling lock file（`reflections.jsonl.lock`），更大重构。
+
 ## Reusable Patterns
 
 ### Cross-process JSONL store pattern (append + atomic update) (2026-07-27)
