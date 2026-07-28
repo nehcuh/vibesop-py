@@ -231,3 +231,398 @@ class TestLoadPlansForTraceReExport:
 
         result = load_plans_for_trace("any-trace", storage_dir=tmp_path / ".vibe")
         assert result == []
+
+
+# ---------------------------------------------------------------------------
+# rebuild_dag() — JOIN plan ↔ span + sub-agent attach (Task 12)
+# ---------------------------------------------------------------------------
+
+
+def _write_plan_fixture(
+    storage_dir: Path,
+    plan_id: str,
+    trace_id: str,
+    steps: list[dict[str, Any]],
+    dependencies: dict[str, list[str]] | None = None,
+) -> None:
+    """Write a single ExecutionPlan line to execution_plans.jsonl."""
+    import json
+
+    from vibesop.core.models import (
+        ExecutionMode,
+        ExecutionPlan,
+        ExecutionStep,
+        WorkflowPattern,
+    )
+
+    plan = ExecutionPlan(
+        plan_id=plan_id,
+        original_query=f"query for {plan_id}",
+        steps=[
+            ExecutionStep(
+                step_id=s["step_id"],
+                step_number=i + 1,
+                skill_id=s.get("skill_id", "skill-x"),
+                intent=s.get("intent", "intent-x"),
+                dependencies=dependencies.get(s["step_id"], []) if dependencies else [],
+            )
+            for i, s in enumerate(steps)
+        ],
+        workflow_pattern=WorkflowPattern.SEQUENTIAL,
+        execution_mode=ExecutionMode.SEQUENTIAL,
+    )
+    plan.metadata["trace_id"] = trace_id
+    storage_dir.mkdir(parents=True, exist_ok=True)
+    with (storage_dir / "execution_plans.jsonl").open("a") as f:
+        f.write(json.dumps(plan.to_dict()) + "\n")
+
+
+def _write_span_fixture(
+    storage_dir: Path,
+    span_id: str,
+    trace_id: str,
+    *,
+    parent_span_id: str | None = None,
+    span_kind: str = "task",
+    name: str | None = None,
+    task_id: str | None = None,
+    metadata: dict[str, Any] | None = None,
+) -> None:
+    """Append one span line to observability/spans.jsonl (matches SpanWriter layout)."""
+    import json
+
+    span: dict[str, Any] = {
+        "id": span_id,
+        "trace_id": trace_id,
+        "name": name or span_id,
+        "span_kind": span_kind,
+    }
+    if parent_span_id:
+        span["parent_span_id"] = parent_span_id
+    if task_id:
+        span["task_id"] = task_id
+    if metadata:
+        span["metadata"] = metadata
+    obs_dir = storage_dir / "observability"
+    obs_dir.mkdir(parents=True, exist_ok=True)
+    with (obs_dir / "spans.jsonl").open("a") as f:
+        f.write(json.dumps(span) + "\n")
+
+
+def _write_conversation_fixture(
+    storage_dir: Path,
+    conversation_id: str,
+    *,
+    is_subagent: bool = False,
+    parent_conversation_id: str | None = None,
+    orchestration_id: str | None = None,
+    orchestration_trace_id: str | None = None,
+    agent_type: str | None = "claude-code",
+    description: str | None = None,
+) -> Path:
+    """Write a conversation JSON file mirroring ConversationContext.save() shape."""
+    import json
+
+    conv_dir = storage_dir / "conversations"
+    conv_dir.mkdir(parents=True, exist_ok=True)
+    metadata: dict[str, Any] = {}
+    if is_subagent:
+        metadata["is_subagent"] = True
+        if parent_conversation_id:
+            metadata["parent_conversation_id"] = parent_conversation_id
+        if agent_type:
+            metadata["agent_type"] = agent_type
+        if description:
+            metadata["description"] = description
+    if orchestration_id is not None:
+        metadata["orchestration_id"] = orchestration_id
+    if orchestration_trace_id is not None:
+        metadata["orchestration_trace_id"] = orchestration_trace_id
+
+    payload = {
+        "conversation_id": conversation_id,
+        "metadata": metadata,
+        "turns": [],
+    }
+    path = conv_dir / f"{conversation_id}.json"
+    path.write_text(json.dumps(payload))
+    return path
+
+
+class TestRebuildDagJoin:
+    """``rebuild_dag(trace_id, storage_dir)`` JOINs plan ↔ spans + attaches
+    sub-agents. Phase A Task 12 contract."""
+
+    def test_rebuild_dag_returns_empty_when_no_data(self, tmp_path: Path) -> None:
+        from vibesop.core.observability.dag_rebuilder import rebuild_dag
+
+        dag = rebuild_dag(trace_id="nonexistent", storage_dir=tmp_path / ".vibe")
+        assert dag.nodes == []
+        assert dag.edges == []
+        assert dag.phases == []
+        assert dag.iterations == 0
+
+    def test_rebuild_dag_joins_plan_step_to_llm_span_via_task_id(
+        self, tmp_path: Path
+    ) -> None:
+        """Plan with step_id='s1' + llm span with task_id='s1' → step node
+        has the llm span as a child. JOIN key is task_id == step_id (NOT
+        plan_id — grok+pi P0-1 contract)."""
+        from vibesop.core.observability.dag_rebuilder import rebuild_dag
+
+        storage = tmp_path / ".vibe"
+        _write_plan_fixture(
+            storage,
+            plan_id="plan-1",
+            trace_id="T1",
+            steps=[{"step_id": "s1", "skill_id": "skill-a"}],
+        )
+        _write_span_fixture(
+            storage,
+            span_id="root",
+            trace_id="T1",
+            span_kind="task",
+            name="orchestrate",
+            metadata={"query": "test query"},
+        )
+        _write_span_fixture(
+            storage,
+            span_id="llm-1",
+            trace_id="T1",
+            parent_span_id="root",
+            span_kind="llm",
+            name="classify",
+            task_id="s1",
+        )
+
+        dag = rebuild_dag(trace_id="T1", storage_dir=storage)
+
+        step_node = next(
+            (n for n in dag.nodes if n.id == "step:s1"), None
+        )
+        assert step_node is not None, "step node s1 must exist"
+        assert "llm-1" in step_node.children, (
+            f"llm-1 must be a child of step:s1 (JOIN via task_id), "
+            f"got children={step_node.children}"
+        )
+
+    def test_rebuild_dag_creates_dependency_edges_between_steps(
+        self, tmp_path: Path
+    ) -> None:
+        """Steps with `depends_on` produce ``dependency`` kind edges."""
+        from vibesop.core.observability.dag_rebuilder import rebuild_dag
+
+        storage = tmp_path / ".vibe"
+        _write_plan_fixture(
+            storage,
+            plan_id="plan-deps",
+            trace_id="T-deps",
+            steps=[
+                {"step_id": "s1"},
+                {"step_id": "s2"},
+                {"step_id": "s3"},
+            ],
+            dependencies={"s2": ["s1"], "s3": ["s1", "s2"]},
+        )
+        _write_span_fixture(
+            storage,
+            span_id="root",
+            trace_id="T-deps",
+            span_kind="task",
+            name="orchestrate",
+        )
+
+        dag = rebuild_dag(trace_id="T-deps", storage_dir=storage)
+
+        dep_edges = [e for e in dag.edges if e.kind == "dependency"]
+        edge_pairs = {(e.src, e.dst) for e in dep_edges}
+        assert ("step:s1", "step:s2") in edge_pairs
+        assert ("step:s1", "step:s3") in edge_pairs
+        assert ("step:s2", "step:s3") in edge_pairs
+
+    def test_rebuild_dag_attaches_subagent_to_plan_via_parent_conversation(
+        self, tmp_path: Path
+    ) -> None:
+        """Sub-agent conversation with ``parent_conversation_id`` pointing
+        to a main conversation whose ``metadata.orchestration_id`` matches
+        a plan → sub_agent node attached to that plan node.
+
+        Chain: sub-agent → parent_conversation_id → main conv metadata.orchestration_id → plan_id.
+        Phase A MVP attaches at PLAN level (step-level attachment requires
+        tool_use_id matching, deferred to Phase B per design)."""
+        from vibesop.core.observability.dag_rebuilder import rebuild_dag
+
+        storage = tmp_path / ".vibe"
+        _write_plan_fixture(
+            storage,
+            plan_id="plan-sub-test",
+            trace_id="T-sub",
+            steps=[{"step_id": "s1"}],
+        )
+        _write_span_fixture(
+            storage,
+            span_id="root",
+            trace_id="T-sub",
+            span_kind="task",
+            name="orchestrate",
+        )
+        _write_conversation_fixture(
+            storage,
+            conversation_id="main-conv-1",
+            orchestration_id="plan-sub-test",
+            orchestration_trace_id="T-sub",
+        )
+        _write_conversation_fixture(
+            storage,
+            conversation_id="main-conv-1-sub-agent-abc",
+            is_subagent=True,
+            parent_conversation_id="main-conv-1",
+            agent_type="claude-code",
+            description="investigator",
+        )
+
+        dag = rebuild_dag(trace_id="T-sub", storage_dir=storage)
+
+        sub_nodes = [n for n in dag.nodes if n.kind == "sub_agent"]
+        assert len(sub_nodes) == 1
+        sub_node = sub_nodes[0]
+        assert sub_node.metadata.get("plan_id") == "plan-sub-test"
+
+        # plan node has sub_node as child
+        plan_node = next(
+            (n for n in dag.nodes if n.id == "plan:plan-sub-test"), None
+        )
+        assert plan_node is not None
+        assert sub_node.id in plan_node.children, (
+            f"sub_agent must be attached to plan node, got children={plan_node.children}"
+        )
+
+    def test_rebuild_dag_user_intent_node_uses_query_from_root_span(
+        self, tmp_path: Path
+    ) -> None:
+        """Root 'orchestrate' span metadata.query becomes the user_intent
+        node label — preserves the original user request in the map."""
+        from vibesop.core.observability.dag_rebuilder import rebuild_dag
+
+        storage = tmp_path / ".vibe"
+        _write_span_fixture(
+            storage,
+            span_id="root",
+            trace_id="T-intent",
+            span_kind="task",
+            name="orchestrate",
+            metadata={"query": "analyse my code and add tests"},
+        )
+
+        dag = rebuild_dag(trace_id="T-intent", storage_dir=storage)
+
+        ui_nodes = [n for n in dag.nodes if n.kind == "user_intent"]
+        assert ui_nodes, "user_intent node must exist when root span present"
+        assert "analyse my code" in ui_nodes[0].label
+
+    def test_rebuild_dag_emits_orchestrator_and_phase_nodes(
+        self, tmp_path: Path
+    ) -> None:
+        """Root 'orchestrate' span becomes orchestrator node; workflow_node
+        phase spans become its children. dag.phases carries the phase list."""
+        from vibesop.core.observability.dag_rebuilder import rebuild_dag
+
+        storage = tmp_path / ".vibe"
+        _write_span_fixture(
+            storage,
+            span_id="root",
+            trace_id="T-phase",
+            span_kind="task",
+            name="orchestrate",
+            metadata={"query": "q"},
+        )
+        for phase in ("routing", "detection", "plan_building", "complete"):
+            _write_span_fixture(
+                storage,
+                span_id=f"phase-{phase}",
+                trace_id="T-phase",
+                parent_span_id="root",
+                span_kind="workflow_node",
+                name=f"orchestrate:{phase}",
+                metadata={"phase": phase},
+            )
+
+        dag = rebuild_dag(trace_id="T-phase", storage_dir=storage)
+
+        orch_nodes = [n for n in dag.nodes if n.kind == "orchestrator"]
+        assert orch_nodes, "orchestrator node must exist"
+        orch = orch_nodes[0]
+        # phase nodes attached as children
+        for phase in ("routing", "detection", "plan_building", "complete"):
+            phase_id = f"phase-{phase}"
+            assert phase_id in orch.children, (
+                f"phase {phase} must be child of orchestrator, "
+                f"got children={orch.children}"
+            )
+
+        phase_names = {p["phase"] for p in dag.phases}
+        assert {"routing", "detection", "plan_building", "complete"}.issubset(
+            phase_names
+        )
+
+    def test_rebuild_dag_iterations_counts_plans(self, tmp_path: Path) -> None:
+        """``iterations`` field equals number of plans found for the trace —
+        reorchestration rounds each create a new plan, so this counts them."""
+        from vibesop.core.observability.dag_rebuilder import rebuild_dag
+
+        storage = tmp_path / ".vibe"
+        _write_span_fixture(
+            storage,
+            span_id="root",
+            trace_id="T-iter",
+            span_kind="task",
+            name="orchestrate",
+        )
+        _write_plan_fixture(
+            storage,
+            plan_id="plan-iter-1",
+            trace_id="T-iter",
+            steps=[{"step_id": "s1"}],
+        )
+        _write_plan_fixture(
+            storage,
+            plan_id="plan-iter-2",
+            trace_id="T-iter",
+            steps=[{"step_id": "s1"}],
+        )
+
+        dag = rebuild_dag(trace_id="T-iter", storage_dir=storage)
+        assert dag.iterations == 2
+
+    def test_rebuild_dag_load_span_trace_id_filter(self, tmp_path: Path) -> None:
+        """``load_spans_for_trace`` filters by trace_id — spans from other
+        traces must NOT leak into the rebuilt DAG."""
+        from vibesop.core.observability.dag_rebuilder import (
+            load_spans_for_trace,
+            rebuild_dag,
+        )
+
+        storage = tmp_path / ".vibe"
+        _write_span_fixture(
+            storage,
+            span_id="span-A",
+            trace_id="T-A",
+            span_kind="task",
+            name="orchestrate-A",
+        )
+        _write_span_fixture(
+            storage,
+            span_id="span-B",
+            trace_id="T-B",
+            span_kind="task",
+            name="orchestrate-B",
+        )
+
+        spans_a = load_spans_for_trace("T-A", storage_dir=storage)
+        ids_a = {s["id"] for s in spans_a}
+        assert ids_a == {"span-A"}, f"T-B span leaked into T-A result: {ids_a}"
+
+        dag = rebuild_dag(trace_id="T-A", storage_dir=storage)
+        node_ids = {n.id for n in dag.nodes}
+        assert "span-A" in node_ids
+        assert "span-B" not in node_ids
