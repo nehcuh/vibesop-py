@@ -110,7 +110,10 @@ class DAG:
 
         Mirrors ``Reflection.to_dict``: caller is responsible for JSON-safety
         of nested ``metadata`` values. ``metadata`` is passed by reference
-        (no deep copy) — the dashboard layer should treat it as read-only.
+        (no deep copy) — callers MUST treat the returned dict as read-only.
+        Today this is safe because ``rebuild_dag`` constructs fresh node
+        instances per call (no caching); adding an ``lru_cache`` on
+        ``rebuild_dag`` would make mutation a cache-corruption time-bomb.
         """
         return {
             "nodes": [

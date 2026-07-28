@@ -474,10 +474,26 @@ def create_app() -> FastAPI:
         updated = next(
             (r for r in store.list_all() if r.id == reflection_id), None
         )
-        assert updated is not None, (
-            "update_status succeeded but reflection vanished from store — "
-            "store invariant broken"
-        )
+        if updated is None:
+            # Should never happen — update_status succeeded so the row is
+            # in the file. If we hit this, the store invariant is broken
+            # (cross-process writer rewrote the file between our update
+            # and our read-back). Explicit 500 instead of assert so it
+            # survives ``python -O`` (grok Q4 finding).
+            logger.error(
+                "vibesop.reflection_vanished_after_update id=%s",
+                reflection_id,
+                extra={"vibesop_event": "reflection_vanished_after_update"},
+            )
+            return JSONResponse(
+                {
+                    "error": (
+                        f"reflection {reflection_id!r} vanished after update "
+                        "— store invariant broken (concurrent rewrite?)"
+                    )
+                },
+                status_code=500,
+            )
         return JSONResponse(updated.to_dict())
 
     # API: Conversations  # noqa: ERA001

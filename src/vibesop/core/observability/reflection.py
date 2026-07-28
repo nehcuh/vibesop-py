@@ -288,10 +288,56 @@ class ReflectionStore:
         self, reflection_id: str, new_status: ReflectionStatus
     ) -> None:
         """Read → mutate one row → atomic rewrite. MUST be called under
-        ``self._lock`` AND the cross-process lock to be safe."""
+        ``self._lock`` AND the cross-process lock to be safe.
+
+        Phase B regression fix (grok+pi closeout Q4): ``list_all()`` MUST
+        run inside the cross-process lock. Pre-fix it ran OUTSIDE, so a
+        concurrent CLI ``append()`` between ``list_all()`` and the flock
+        acquisition was silently dropped by the atomic rewrite:
+
+            1. dashboard: list_all() reads N rows           ← no lock yet
+            2. CLI:       flock → append row N+1 → funlock
+            3. dashboard: flock → rewrite with N rows       ← row N+1 LOST
+            4. dashboard: funlock
+
+        Post-fix, list_all() runs under flock, so step 2 blocks until
+        step 3-4 complete — no loss window.
+
+        Known limitation: ``AtomicWriter`` renames a new inode over the
+        path while we hold flock on the original inode. A concurrent
+        ``append()`` that opens the path *after* the rename gets a
+        different inode and its flock doesn't conflict — but its write
+        goes to the live file, so it survives. A concurrent ``append()``
+        that opened the path *before* the rename holds flock on the
+        same inode and blocks correctly. Fixing the inode-rename race
+        requires a sibling lock file; deferred to Phase B+1.
+        """
         from vibesop.utils.atomic_writer import AtomicWriter
 
-        # Read pre-state
+        try:
+            import fcntl
+        except ImportError:
+            from vibesop.utils.file_lock import cross_process_lock
+
+            with cross_process_lock(self._path):
+                self._do_locked_update(reflection_id, new_status, AtomicWriter())
+            return
+
+        with self._path.open("a", encoding="utf-8") as f:
+            fcntl.flock(f.fileno(), fcntl.LOCK_EX)
+            try:
+                self._do_locked_update(reflection_id, new_status, AtomicWriter())
+            finally:
+                fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+
+    def _do_locked_update(
+        self,
+        reflection_id: str,
+        new_status: ReflectionStatus,
+        writer: Any,
+    ) -> None:
+        """Read → mutate → atomic rewrite. Caller MUST hold both
+        ``self._lock`` (threading) AND the cross-process lock."""
         current = self.list_all()
         if not current:
             raise KeyError(reflection_id)
@@ -305,23 +351,7 @@ class ReflectionStore:
         # mutable by default; ``frozen=True`` would block this)
         current[target_idx].status = new_status
 
-        # Atomic rewrite under cross-process lock so concurrent appenders
-        # cannot interleave with this rewrite.
-        try:
-            import fcntl
-        except ImportError:
-            from vibesop.utils.file_lock import cross_process_lock
-
-            with cross_process_lock(self._path):
-                self._atomic_write_all(current, AtomicWriter())
-            return
-
-        with self._path.open("a", encoding="utf-8") as f:
-            fcntl.flock(f.fileno(), fcntl.LOCK_EX)
-            try:
-                self._atomic_write_all(current, AtomicWriter())
-            finally:
-                fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+        self._atomic_write_all(current, writer)
 
     def _atomic_write_all(
         self, reflections: list[Reflection], writer: Any

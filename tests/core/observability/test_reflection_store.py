@@ -411,3 +411,72 @@ class TestReflectionStoreUpdateStatus:
         assert addressed == n, (
             f"expected all {n} reflections addressed, only {addressed} made it"
         )
+
+    def test_update_status_list_all_runs_inside_cross_process_lock(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Regression: grok+pi Phase B closeout Q4. ``list_all()`` MUST
+        execute between ``fcntl.flock(LOCK_EX)`` and ``fcntl.flock(LOCK_UN)``
+        so a concurrent CLI ``append()`` cannot sneak in between the read
+        and the rewrite (lost-update race).
+
+        Pre-fix ordering: ``list_all`` → ``flock`` → ``rewrite`` → ``funlock``
+        Post-fix ordering: ``flock`` → ``list_all`` → ``rewrite`` → ``funlock``
+
+        This test instruments ``fcntl.flock`` and ``ReflectionStore.list_all``
+        to record call order, then asserts the post-fix ordering holds.
+        """
+        pytest.importorskip("fcntl")
+        import fcntl as fcntl_mod
+
+        from vibesop.core.observability import reflection as ref_mod
+
+        store = ReflectionStore(storage_dir=tmp_path)
+        r = _make_reflection(content="seed", target_id="t1")
+        store.append(r)
+
+        events: list[tuple[str, int]] = []
+        real_flock = fcntl_mod.flock
+        real_list_all = ref_mod.ReflectionStore.list_all
+
+        def tracking_flock(fd: int, op: int) -> None:
+            events.append(("flock", op))
+            return real_flock(fd, op)
+
+        def tracking_list_all(self: ReflectionStore) -> list[Reflection]:
+            events.append(("list_all", 0))
+            return real_list_all(self)
+
+        monkeypatch.setattr(fcntl_mod, "flock", tracking_flock)
+        monkeypatch.setattr(ref_mod.ReflectionStore, "list_all", tracking_list_all)
+
+        store.update_status(r.id, "addressed")
+
+        # Find the LOCK_EX / LOCK_UN pair that wraps update_status's rewrite.
+        # (append's flock is also tracked, so we look for the last EX/UN
+        # pair which is update_status's.)
+        lock_ex_idx = max(
+            i for i, (name, op) in enumerate(events)
+            if name == "flock" and op == fcntl_mod.LOCK_EX
+        )
+        lock_un_idx = max(
+            i for i, (name, op) in enumerate(events)
+            if name == "flock" and op == fcntl_mod.LOCK_UN
+        )
+        list_all_indices = [
+            i for i, (name, _) in enumerate(events) if name == "list_all"
+        ]
+
+        assert lock_ex_idx < lock_un_idx, (
+            f"LOCK_EX must precede LOCK_UN; events: {events}"
+        )
+        # At least one list_all call (from _do_locked_update) must be BETWEEN
+        # LOCK_EX and LOCK_UN — that's the regression fix.
+        locked_list_alls = [
+            i for i in list_all_indices if lock_ex_idx < i < lock_un_idx
+        ]
+        assert locked_list_alls, (
+            "list_all() must run INSIDE fcntl.flock(LOCK_EX/LOCK_UN) — "
+            "lost-update race window. Pre-fix it ran outside the lock. "
+            f"Events: {events}"
+        )
