@@ -463,14 +463,15 @@ def rebuild_dag(
     # ------------------------------------------------------------------
     subagent_attachments = _discover_subagents(storage, plans)
     for attach in subagent_attachments:
+        description = attach.get("description")
+        agent_type = attach.get("agent_type")
         sub_node = DAGNode(
             id=f"subagent:{attach['conversation_id']}",
             kind="sub_agent",
-            label=attach.get("description")
-            or attach.get("agent_type")
-            or "sub-agent",
+            label=description or agent_type or "sub-agent",
             metadata={
-                "agent_type": attach.get("agent_type"),
+                "agent_type": agent_type,
+                "description": description,
                 "parent_conversation_id": attach.get("parent_conversation_id"),
                 "plan_id": attach.get("plan_id"),
                 "conversation_id": attach.get("conversation_id"),
