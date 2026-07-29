@@ -1015,3 +1015,291 @@ def _cleanup_cmd(  # pyright: ignore[reportUnusedFunction]
     dry_run: bool = typer.Option(False, "--dry-run", "-n", help="Preview without making changes"),
 ) -> None:
     cleanup(auto=auto, dry_run=dry_run)
+
+
+# ---------------------------------------------------------------------------
+# W4: task-memory-loop candidates (scan / candidates / promote / dismiss)
+# ---------------------------------------------------------------------------
+
+
+def _get_candidate_store() -> ClusterCandidateStore:
+    """Resolve the ClusterCandidateStore for the current project.
+
+    Path: ``<cwd>/.vibe/observability/cluster_candidates.jsonl`` —
+    mirrors ReflectionStore and SpanWriter conventions. Tests patch
+    this helper to point at a tmp_path.
+    """
+    storage_dir = Path.cwd() / ".vibe" / "observability"
+    return ClusterCandidateStore(storage_dir=storage_dir)
+
+
+def _slugify(text: str, max_len: int = 50) -> str:
+    """Make a URL-safe skill slug from arbitrary text.
+
+    Used to derive a ``skill_id`` from a candidate's representative
+    query when the user runs ``promote`` without specifying one.
+    """
+    slug = "".join(c if c.isalnum() or c in "-/" else "-" for c in text.lower())
+    while "--" in slug:
+        slug = slug.replace("--", "-")
+    return slug.strip("-")[:max_len] or "candidate"
+
+
+@app.command(name="scan-candidates")
+def scan_candidates_cmd(  # pyright: ignore[reportUnusedFunction]
+    dry_run: bool = typer.Option(
+        False, "--dry-run", help="Classify clusters without writing to the pool"
+    ),
+    min_cluster_size: int = typer.Option(
+        3, "--min-cluster-size", help="Min spans per cluster to qualify (>=1)"
+    ),
+    min_gold_rate: float = typer.Option(
+        0.60, "--min-gold-rate", help="Stable candidate threshold (0.0-1.0)"
+    ),
+    limit: int = typer.Option(100, "--limit", help="Number of recent spans to scan (>=1)"),
+) -> None:
+    """Cluster recent spans → populate the skill-candidate pool.
+
+    Trigger (W4 design, reviewer Q1): clusters with span_count ≥
+    --min-cluster-size AND gold_rate ≥ --min-gold-rate become stable
+    candidates. Clusters with gold_rate < 0.30 become unstable
+    (diagnosis bucket; reviewer Q2). In-between gold_rates are silent
+    skip.
+
+    Idempotent: re-scanning the same spans refreshes counts but does
+    not duplicate rows. TTL-expired pending rows are pruned at start.
+    """
+    # Validate CLI arg bounds (grok P1: prior version accepted any int/float).
+    if min_cluster_size < 1:
+        console.print(f"[red]✗[/red] --min-cluster-size must be >=1, got {min_cluster_size}")
+        raise typer.Exit(1)
+    if not (0.0 <= min_gold_rate <= 1.0):
+        console.print(f"[red]✗[/red] --min-gold-rate must be in [0.0, 1.0], got {min_gold_rate}")
+        raise typer.Exit(1)
+    if limit < 1:
+        console.print(f"[red]✗[/red] --limit must be >=1, got {limit}")
+        raise typer.Exit(1)
+
+    from vibesop.core.instinct.learner import InstinctLearner
+    from vibesop.core.observability.embedding import get_embedding_cache
+    from vibesop.core.observability.skill_promote import (
+        DEFAULT_UNSTABLE_GOLD_RATE,
+        scan_candidates,
+    )
+    from vibesop.core.observability.span_writer import SpanWriter
+
+    spans = SpanWriter().query_recent(limit=limit)
+    learner = InstinctLearner()
+    cache = get_embedding_cache()
+    store = _get_candidate_store()
+
+    summary = scan_candidates(
+        spans,
+        learner,
+        store,
+        cache=cache,
+        min_cluster_size=min_cluster_size,
+        min_gold_rate=min_gold_rate,
+        unstable_gold_rate=DEFAULT_UNSTABLE_GOLD_RATE,
+        dry_run=dry_run,
+    )
+
+    mode = "[dim]DRY-RUN[/dim] " if dry_run else ""
+    console.print(
+        f"[green]✓[/green] {mode}Scanned {summary.clusters_seen} cluster(s) "
+        f"→ {summary.promoted_count} stable, {summary.unstable_count} unstable"
+    )
+    if summary.pruned_count:
+        console.print(f"  [dim]pruned {summary.pruned_count} TTL-expired row(s)[/dim]")
+    if summary.capped:
+        console.print(
+            "  [yellow]⚠ hard cap reached — review backlog or dismiss to make room[/yellow]"
+        )
+    console.print(
+        f"  [dim]pool: {store.pending_count()} stable pending, "
+        f"{store.pending_count(include_unstable=True)} total "
+        f"(use `vibe skill candidates` to review)[/dim]"
+    )
+
+
+@app.command(name="candidates")
+def candidates_cmd(  # pyright: ignore[reportUnusedFunction]
+    unstable: bool = typer.Option(
+        False, "--unstable", help="Show only unstable candidates (gold_rate<0.30)"
+    ),
+    include_unstable: bool = typer.Option(
+        False,
+        "--include-unstable",
+        help="Show stable AND unstable candidates in one list (default: stable only)",
+    ),
+    json_output: bool = typer.Option(False, "--json", help="Machine-readable JSON output"),
+) -> None:
+    """List pending skill candidates from the pool.
+
+    Default: stable candidates sorted by gold_rate desc. Use
+    ``--unstable`` for the diagnosis bucket only (gold_rate<0.30,
+    sorted asc). Use ``--include-unstable`` to see both in one list.
+    """
+    import json as _json
+    from datetime import UTC, datetime
+
+    store = _get_candidate_store()
+    if unstable:
+        # Diagnosis-only view: unstable rows, sorted worst-first.
+        rows = store.list_unstable()
+    elif include_unstable:
+        # Combined view for audit / dashboard use.
+        rows = store.list_pending(include_unstable=True)
+    else:
+        # Default review queue: stable candidates only.
+        rows = store.list_pending()
+
+    if json_output:
+        now = datetime.now(UTC)
+        payload = [
+            {
+                "cluster_id": r.cluster_id,
+                "task_ids": r.task_ids,
+                "queries": r.queries,
+                "span_count": r.span_count,
+                "gold_rate": round(r.gold_rate, 4),
+                "is_unstable": r.is_unstable,
+                "ttl_days_left": max(
+                    0,
+                    int((r.ttl_expires_at - now).total_seconds() // 86400)
+                    if r.ttl_expires_at
+                    else 0,
+                ),
+                "core_steps": r.core_steps,
+                "status": r.status,
+            }
+            for r in rows
+        ]
+        console.print(_json.dumps(payload, ensure_ascii=False, indent=2))
+        return
+
+    if not rows:
+        label = "unstable " if unstable else ""
+        console.print(f"[dim]No {label}candidates in pool[/dim]")
+        return
+
+    title = "Unstable candidates" if unstable else "Skill candidates"
+    table = Table(title=title)
+    table.add_column("ID", style="bold")
+    table.add_column("Representative query", max_width=40)
+    table.add_column("Spans", justify="right")
+    table.add_column("Gold%", justify="right")
+    table.add_column("Bucket", justify="center")
+    table.add_column("TTL", justify="right")
+    table.add_column("Core steps")
+
+    now = datetime.now(UTC)
+    for r in rows:
+        days_left = (
+            int((r.ttl_expires_at - now).total_seconds() // 86400) if r.ttl_expires_at else 0
+        )
+        bucket = "[red]unstable[/red]" if r.is_unstable else "[green]stable[/green]"
+        ttl_color = "green" if days_left > 7 else "yellow" if days_left > 1 else "red"
+        core_str = ", ".join(r.core_steps[:3])
+        if len(r.core_steps) > 3:
+            core_str += f", +{len(r.core_steps) - 3}"
+        # First query, truncated for the table column. Pi P1: gives the
+        # user a semantic anchor instead of an opaque hash.
+        query_str = (r.queries[0] if r.queries else "")[:40]
+        table.add_row(
+            r.cluster_id[:8],
+            query_str or "[dim]—[/dim]",
+            str(r.span_count),
+            f"{r.gold_rate * 100:.0f}%",
+            bucket,
+            f"[{ttl_color}]{days_left}d[/{ttl_color}]",
+            core_str or "[dim]—[/dim]",
+        )
+
+    console.print(table)
+    console.print(
+        "\n[dim]Next: `vibe skill promote <id>` to draft SKILL.md, "
+        "or `vibe skill dismiss <id>` to reject.[/dim]"
+    )
+
+
+@app.command(name="promote")
+def promote_cmd(  # pyright: ignore[reportUnusedFunction]
+    cluster_id: str = typer.Argument(..., help="Cluster ID from `vibe skill candidates`"),
+) -> None:
+    """Promote a candidate → draft SKILL.md + flip status.
+
+    The drafted SKILL.md is written to
+    ``.vibe/observability/skill_drafts/<id>/`` — a path that
+    ``CandidateManager`` does NOT auto-discover. To inject the skill
+    into routing, copy the draft into ``.vibe/skills/`` and run
+    ``vibe skill add .vibe/skills/<id>``. This is the literal
+    "未审不注入" guarantee (W4 review P0 — prior version wrote under
+    ``.vibe/skills/`` which IS auto-discovered).
+    """
+    store = _get_candidate_store()
+    candidate = store.get(cluster_id)
+    if candidate is None:
+        console.print(f"[red]✗[/red] Cluster '{cluster_id}' not in pool")
+        raise typer.Exit(1)
+
+    if candidate.status == "dismissed":
+        console.print(
+            f"[yellow]⚠ Cluster '{cluster_id}' is dismissed — "
+            "dismiss is sticky; cannot promote.[/yellow]"
+        )
+        raise typer.Exit(1)
+
+    # Derive skill_id with cluster_id prefix (pi P1: avoids collision
+    # when two clusters share a first query — both would slug to the
+    # same custom/<slug> and silently no-op on second promote).
+    base_query = candidate.queries[0] if candidate.queries else "candidate"
+    skill_id = f"custom/{_slugify(base_query)}-{cluster_id[:8]}"
+
+    # W4.E: materialize SKILL.md draft outside discovery paths.
+    skill_path = materialize_candidate(candidate, skill_id)
+
+    # Flip store status (idempotent on already-promoted rows).
+    store.promote(cluster_id, skill_id)
+
+    console.print(f"[green]✓[/green] Promoted '{cluster_id}' → skill_id={skill_id}")
+    console.print(f"  [dim]draft:[/dim] {skill_path}")
+    console.print(
+        f"  [dim]next:[/dim] review the draft, then copy to "
+        f"`.vibe/skills/{skill_id}/` and run "
+        f"`vibe skill add .vibe/skills/{skill_id}` to inject into routing"
+    )
+
+
+@app.command(name="dismiss")
+def dismiss_cmd(  # pyright: ignore[reportUnusedFunction]
+    cluster_id: str = typer.Argument(..., help="Cluster ID to dismiss"),
+    reason: str = typer.Option(None, "--reason", help="Why this candidate is rejected (recorded)"),
+) -> None:
+    """Dismiss a candidate with optional reason. Status is sticky."""
+    store = _get_candidate_store()
+    candidate = store.get(cluster_id)
+    if candidate is None:
+        console.print(f"[red]✗[/red] Cluster '{cluster_id}' not in pool")
+        raise typer.Exit(1)
+
+    if candidate.status == "promoted":
+        console.print(
+            f"[yellow]⚠ Cluster '{cluster_id}' is already promoted — "
+            "promote is sticky; cannot dismiss.[/yellow]"
+        )
+        raise typer.Exit(1)
+
+    store.dismiss(cluster_id, reason=reason)
+    console.print(f"[green]✓[/green] Dismissed '{cluster_id}'")
+    if reason:
+        console.print(f"  [dim]reason:[/dim] {reason}")
+
+
+# Top-level imports for W4 commands. These are scoped to this module's
+# end so the existing W0-W3 commands above don't pay the import cost
+# unless W4 features are used.
+from vibesop.core.observability.skill_promote import (  # noqa: E402
+    ClusterCandidateStore,
+    materialize_candidate,
+)
