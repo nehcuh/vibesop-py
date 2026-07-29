@@ -82,6 +82,53 @@ class TestFeaturedRegistry:
                 or "debug" in r.category.lower()
             )
 
+    def test_wayfinder_batch_present(self):
+        """v1.1 wayfinder batch is registered with wayfinder as top priority.
+
+        Verifies the seven mattpocock v1.1 skills (wayfinder + grilling +
+        domain-modeling + to-spec + to-tickets + research + prototype)
+        are all in the default registry and discoverable via search.
+        """
+        reg = FeaturedRegistry()
+        expected = {
+            "mattpocock/wayfinder",
+            "mattpocock/grilling",
+            "mattpocock/domain-modeling",
+            "mattpocock/to-spec",
+            "mattpocock/to-tickets",
+            "mattpocock/research",
+            "mattpocock/prototype",
+        }
+        actual = {s.skill_id for s in reg.skills}
+        missing = expected - actual
+        assert not missing, f"wayfinder batch missing from registry: {missing}"
+
+    def test_wayfinder_is_top_priority_mattpocock(self):
+        """wayfinder has the highest priority among mattpocock skills —
+        it's the headline of the v1.1 batch."""
+        reg = FeaturedRegistry()
+        mp_skills = [s for s in reg.skills if s.install_source == "mattpocock"]
+        assert mp_skills, "expected mattpocock skills in registry"
+        top = max(mp_skills, key=lambda s: s.priority)
+        assert top.skill_id == "mattpocock/wayfinder", (
+            f"wayfinder should be top mattpocock skill; got {top.skill_id} "
+            f"(priority={top.priority})"
+        )
+
+    def test_search_wayfinder_returns_dependencies(self):
+        """Searching 'wayfinder' returns the headline skill plus its
+        tagged dependencies (grilling, domain-modeling, etc.)."""
+        reg = FeaturedRegistry()
+        results = reg.search("wayfinder")
+        result_ids = {s.skill_id for s in results}
+        assert "mattpocock/wayfinder" in result_ids
+        # At least 2 dependencies should be discoverable via the
+        # wayfinder-dependency / wayfinder-output tags.
+        deps = result_ids - {"mattpocock/wayfinder"}
+        assert len(deps) >= 2, (
+            f"expected ≥2 wayfinder dependencies in search results; got {deps}"
+        )
+
     def test_get_by_id(self):
         reg = FeaturedRegistry()
         s = reg.get_by_id("superpowers/tdd")
