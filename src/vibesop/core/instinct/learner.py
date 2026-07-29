@@ -467,6 +467,18 @@ class InstinctLearner:
         """
         self.record_outcome(self.generate_id(query), success)
 
+    def get_instinct_for_query(self, query: str) -> Instinct | None:
+        """Look up the instinct whose pattern matches this query.
+
+        Returns ``None`` if no instinct has been learned for the query.
+        Used by task-memory gold-standard detection (W1 Task C) to find
+        the success/failure record for a given cluster's representative
+        query without breaking ``_instincts`` encapsulation.
+        """
+        instinct_id = self.generate_id(query)
+        with self._lock:
+            return self._instincts.get(instinct_id)
+
     def find_matching(
         self,
         query: str,
