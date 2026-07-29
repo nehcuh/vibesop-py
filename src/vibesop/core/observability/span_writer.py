@@ -9,6 +9,12 @@ append for lines that fit. Span lines routinely exceed this once metadata
 + input_data + output_data are populated. We use an ``fcntl`` exclusive
 lock to serialise writers across processes (multiple ``vibe`` hooks
 running concurrently) so lines do not interleave.
+
+Dev/prod isolation: when ``storage_path`` is None and the current process
+is detected as a dev/test context (see ``dev_detect.is_dev_environment``),
+spans route to ``spans.dev.jsonl`` instead of ``spans.jsonl``. This keeps
+synthetic test traffic out of the production span stream that
+``vibe recall`` reads from. An explicit ``storage_path`` always wins.
 """
 
 from __future__ import annotations
@@ -19,6 +25,7 @@ import threading
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from vibesop.core.observability.dev_detect import is_dev_environment
 from vibesop.utils.redaction import redact_sensitive
 
 if TYPE_CHECKING:
@@ -31,6 +38,9 @@ logger = logging.getLogger(__name__)
 # Cross-process serialisation is handled by fcntl lock in write_span.
 _MAX_PAYLOAD_CHARS = 16384
 
+_PROD_SPANS_FILE = "spans.jsonl"
+_DEV_SPANS_FILE = "spans.dev.jsonl"
+
 
 class SpanWriter:
     """Persists spans to a JSONL file with redaction, truncation, and locking.
@@ -39,11 +49,24 @@ class SpanWriter:
     processes (fcntl.LOCK_EX on the file). Required because span lines
     routinely exceed PIPE_BUF (4096 bytes), so kernel-level atomic append
     cannot be relied on.
+
+    Path resolution order (only when ``storage_path`` is None):
+    1. ``VIBESOP_OBSERVABILITY_MODE=dev|prod`` env override
+    2. Auto-detect via pytest signals
+    3. Default to prod file (``spans.jsonl``)
     """
 
     def __init__(self, storage_path: Path | str | None = None) -> None:
-        self._path = Path(storage_path) if storage_path else Path(".vibe/observability/spans.jsonl")
+        if storage_path is None:
+            filename = _DEV_SPANS_FILE if is_dev_environment() else _PROD_SPANS_FILE
+            self._path = Path(".vibe/observability") / filename
+        else:
+            self._path = Path(storage_path)
         self._path.parent.mkdir(parents=True, exist_ok=True)
+        # Track parent-dir existence so we don't repeat the mkdir on every
+        # write (the 100µs p95 tracer benchmark gates this hot path).
+        # Re-check mkdir only if the path changes (CWD shift) or first write.
+        self._parent_ensured = False
         self._lock = threading.Lock()
 
     def write_span(self, span: Span) -> None:
@@ -92,16 +115,24 @@ class SpanWriter:
         Pre-P0-3 Windows was a silent no-op (``fcntl`` ImportError → plain
         append → concurrent writers could interleave JSONL lines). The POSIX
         path here is unchanged from before P0-3.
+
+        Parent dir is ensured on first write only (gated by ``_parent_ensured``
+        flag). The 100µs p95 tracer benchmark gates this hot path — repeating
+        mkdir per write pushed p95 over budget. If the path changes (CWD shift
+        in tests), the flag is reset by the test fixture via a fresh SpanWriter.
         """
+        if not self._parent_ensured:
+            self._path.parent.mkdir(parents=True, exist_ok=True)
+            self._parent_ensured = True
+
         try:
             import fcntl
         except ImportError:
             # Windows: use the helper so msvcrt.locking actually takes the lock.
             from vibesop.utils.file_lock import cross_process_lock
 
-            with cross_process_lock(self._path):
-                with self._path.open("a", encoding="utf-8") as f:
-                    f.write(line)
+            with cross_process_lock(self._path), self._path.open("a", encoding="utf-8") as f:
+                f.write(line)
             return
 
         with self._path.open("a", encoding="utf-8") as f:

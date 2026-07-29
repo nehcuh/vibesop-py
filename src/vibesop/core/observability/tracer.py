@@ -19,9 +19,10 @@ import logging
 import signal
 import sys
 import threading
+from collections.abc import Generator
 from contextlib import contextmanager
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Generator
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from vibesop.core.observability.models import SpanKind, TraceContext
@@ -39,7 +40,7 @@ _lock = threading.Lock()
 def get_tracer(
     storage_path: Path | str | None = None,
     enabled: bool = True,
-) -> "ObservabilityTracer":
+) -> ObservabilityTracer:
     """Return the module-level ObservabilityTracer singleton.
 
     Args:
@@ -55,6 +56,21 @@ def get_tracer(
             if _tracer is None:
                 _tracer = ObservabilityTracer(storage_path=storage_path, enabled=enabled)
     return _tracer
+
+
+def _reset_tracer_for_tests() -> None:
+    """Tear down the singleton so the next ``get_tracer()`` call re-creates it.
+
+    Test-only escape hatch: the singleton's SpanWriter captures CWD +
+    is_dev_environment() at construction, which couples it to the first
+    test that triggered creation. Tests that need to verify path routing
+    end-to-end should call this in setup to start fresh.
+
+    Not exported via ``__all__`` — internal use only.
+    """
+    global _tracer
+    with _lock:
+        _tracer = None
 
 
 @contextmanager
@@ -141,7 +157,7 @@ class ObservabilityTracer:
         # need to emit spans from inside an executor, use
         # ``contextvars.copy_context().run(fn)`` to propagate explicitly, or
         # ``asyncio.to_thread`` (which copies context by default).
-        self._ctx_var: contextvars.ContextVar["TraceContext | None"] = contextvars.ContextVar(
+        self._ctx_var: contextvars.ContextVar[TraceContext | None] = contextvars.ContextVar(
             "vibesop_trace_context"
         )
         self._installed_handlers = False
@@ -208,7 +224,7 @@ class ObservabilityTracer:
     def span(
         self,
         name: str,
-        kind: "SpanKind",
+        kind: SpanKind,
         *,
         parent_span_id: str | None = None,
         metadata: dict[str, Any] | None = None,
@@ -259,7 +275,7 @@ class ObservabilityTracer:
     def start_span(
         self,
         name: str,
-        kind: "SpanKind",
+        kind: SpanKind,
         *,
         parent_span_id: str | None = None,
         task_id: str | None = None,
@@ -317,10 +333,10 @@ class ObservabilityTracer:
     # Internal
     # ------------------------------------------------------------------
 
-    def _get_context(self) -> "TraceContext | None":
+    def _get_context(self) -> TraceContext | None:
         return self._ctx_var.get(None)
 
-    def _set_context(self, ctx: "TraceContext | None") -> None:
+    def _set_context(self, ctx: TraceContext | None) -> None:
         # Intentionally not tracking tokens — the span stack's push/pop is
         # symmetric within a single Task, and asyncio.Task isolation handles
         # the cross-task case. Token tracking would only matter if we needed

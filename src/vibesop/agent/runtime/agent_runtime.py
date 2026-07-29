@@ -405,10 +405,16 @@ class AgentRuntime:
         # --- Observability: start a trace span for this query ---
         tracer = _get_obs_tracer()
         trace_name = query[:80] if len(query) <= 80 else query[:77] + "..."
+        # Pure-query task_id: same query → same task_id across the parent
+        # process and any sub-agent CLIs it spawns (contextvars cannot cross
+        # process boundaries; pure derivation can). None for empty queries.
+        from vibesop.core.observability.task_id import derive_task_id
+
+        _task_id = derive_task_id(query)
         try:
             with tracer.trace(
                 f"route:{trace_name}",
-                task_id=None,
+                task_id=_task_id,
                 session_id=session_id,
                 agent_id=platform,
                 metadata={"query": query[:200], "platform": platform},

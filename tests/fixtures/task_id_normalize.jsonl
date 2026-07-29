@@ -1,0 +1,12 @@
+{"a": "CMspark.app 截图权限弹窗", "b": "  CMspark.app 截图权限弹窗  ", "note": "trim + collapse ws"}
+{"a": "Hello World", "b": "hello world", "note": "case"}
+{"a": "hello, world!", "b": "hello world", "note": "punctuation"}
+{"a": "test query", "b": "Test Query", "note": "mixed case + no punct"}
+{"a": "cmSpark.app 截屏 权限 弹窗", "b": "cmSpark.app 截屏  权限  弹窗", "note": "internal whitespace collapse (CJK)"}
+{"a": "<user_query>\n我先离开了\n</user_query>", "b": "我先离开了", "note": "strip simple xml-like tags + trim"}
+{"a": "vibe route --help", "b": "vibe  route --help", "note": "internal whitespace"}
+{"a": "调试 1784770362", "b": "调试 1784770362", "note": "digit preservation"}
+{"a": "全角ＡＢＣ测试", "b": "全角ABC测试", "note": "NFKC fullwidth to halfwidth"}
+{"a": "ﬁnish the task", "b": "finish the task", "note": "NFKC ligature decomposition"}
+{"a": "  \t\n hello\tworld \n ", "b": "hello world", "note": "mixed tab/newline/space collapse"}
+{"a": "「截图权限」问题", "b": "截图权限 问题", "note": "CJK punctuation stripping"}

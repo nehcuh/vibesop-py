@@ -716,14 +716,20 @@ def route(
     # renders flat, and aggregator can't attribute them to a skill via
     # trace_id. Mirrors hook path in agent_runtime.handle_query line 409.
     from vibesop.core.observability import get_tracer as _get_cli_tracer
+    from vibesop.core.observability.task_id import derive_task_id as _derive_task_id
 
     _cli_tracer = _get_cli_tracer()
     _cli_trace_name = (
         decision.query[:80] if len(decision.query) <= 80 else decision.query[:77] + "..."
     )
+    # Pure-query derivation: same query → same task_id across processes.
+    # Survives where contextvars cannot (sub-agent CLIs, separate `vibe`
+    # invocations). None when query normalises to empty.
+    _cli_task_id = _derive_task_id(decision.query)
     with _cli_tracer.trace(
         f"route:{_cli_trace_name}",
         agent_id="vibe-cli",
+        task_id=_cli_task_id,
         metadata={
             "query": decision.query[:200],
             "platform": "vibe-cli",
