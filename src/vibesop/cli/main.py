@@ -534,6 +534,11 @@ def route(
         "-m",
         help="Minimal JSON output for sub-agent consumption (requires --json)",
     ),
+    no_replay: bool = typer.Option(
+        False,
+        "--no-replay",
+        help="Suppress auto-prompt for replaying gold-standard prior traces",
+    ),
 ) -> None:
     """Route a query to the appropriate skill using unified orchestration.
 
@@ -739,6 +744,19 @@ def route(
             "source": "cli",
         },
     ) as _cli_task_span:
+        # W3: auto-prompt for replay on gold-standard prior trace hit.
+        # Skip entirely under --no-replay, --json (programmatic consumers),
+        # or --minimal. Failures here must not break routing (defensive try).
+        if not no_replay and not json_output and not minimal:
+            try:
+                _maybe_prompt_replay(
+                    tracer=_cli_tracer,
+                    query=decision.query,
+                    console=console,
+                )
+            except Exception as _replay_exc:
+                logger.warning("replay prompt skipped due to: %s", _replay_exc)
+
         if decision.mode == InterceptionMode.SINGLE:
             routing_result = router.route(decision.query, context=context)
             result = router._to_orchestration_result(routing_result, decision.query)
@@ -1865,6 +1883,100 @@ def _check_hooks() -> tuple[bool, str]:
         return False, "No platforms checked"
     except Exception as e:
         return False, f"Failed to check: {e}"
+
+
+# ── W3: Replay prompt helper ──────────────────────────────────────────────────
+
+
+def _is_interactive_stdio() -> bool:
+    """Return True iff stdin is a real TTY (safe to fire Y/n prompts).
+
+    Extracted as a helper so tests can patch it without fighting
+    ``CliRunner``'s replacement of ``sys.stdin`` (grok P0-2).
+    """
+    import sys
+
+    return bool(sys.stdin.isatty())
+
+
+def _maybe_prompt_replay(
+    tracer: Any,
+    query: str,
+    console: Console,
+) -> None:
+    """Check for gold-standard prior trace and prompt user to replay.
+
+    Called inside the route command's trace block. If ``should_replay``
+    returns a gold match, shows the prior trace_id + step_sequence +
+    asks Y/n. On Y, emits a ``replay:<old_task_id>`` workflow_node span
+    linking new trace ↔ old trace_id, then prints the step sequence for
+    the user to reference. On n, silently continues to normal routing.
+
+    **Honest scope** (grok P0-1): Y does NOT inject the prior skill into
+    routing context. It emits a provenance span (new trace ↔ old trace)
+    and displays the prior step_sequence for the user/agent to reference.
+    Normal routing proceeds untouched. The panel makes this explicit.
+
+    **Non-interactive guard** (grok P0-2): when stdin is not a TTY, the
+    prompt is silently skipped to avoid hangs in scripts/subagents.
+
+    All other failures are swallowed by the caller (route command) —
+    replay is a UX affordance, not a critical path.
+    """
+    from vibesop.core.instinct.learner import InstinctLearner
+    from vibesop.core.observability.replay import emit_replay_span, should_replay
+    from vibesop.core.observability.span_writer import SpanWriter
+
+    # Non-interactive guard: never block automation on a Y/n prompt.
+    if not _is_interactive_stdio():
+        logger.debug("replay prompt skipped: stdin is not a TTY")
+        return
+
+    spans = SpanWriter().query_recent(limit=500)
+    if not spans:
+        return
+
+    try:
+        learner = InstinctLearner()
+    except Exception as exc:  # noqa: BLE001 — replay must not break routing
+        logger.warning("replay learner unavailable: %s", exc)
+        return
+
+    decision = should_replay(query=query, spans=spans, learner=learner)
+    if not decision.should_prompt or decision.top_match is None:
+        return
+
+    top = decision.top_match
+    console.print()
+    console.print(
+        Panel(
+            f"[bold green]★ Gold match[/bold green] — [cyan]{top.gold_success_count}[/cyan] "
+            f"prior success(es) across [cyan]{top.distinct_trace_count}[/cyan] "
+            f"prior run(s) for a similar task.\n\n"
+            f"[dim]Representative prior query:[/dim] {top.representative_query[:100]}\n"
+            f"[dim]Last trace:[/dim] [bold]{top.trace_id or '(unrecorded)'}[/bold]\n"
+            f"[dim]Last skill routed:[/dim] [magenta]{top.skill_id or '(unknown)'}[/magenta]\n"
+            f"[dim]Steps:[/dim] {' → '.join(top.step_sequence[:6]) if top.step_sequence else '(no steps)'}\n\n"
+            f"[dim]Y will:[/dim] emit a provenance span linking this run to the prior "
+            f"trace, then print the full step list. Routing is unchanged.",
+            title=f"Proven prior solution found — {query[:60]}",
+            border_style="green",
+        )
+    )
+
+    confirmed = typer.confirm("  Mark as replay of prior trace?", default=True)
+    if not confirmed:
+        console.print("[dim]Skipping replay marker, continuing with normal routing.[/dim]")
+        return
+
+    emit_replay_span(tracer=tracer, top_match=top)
+    if top.step_sequence:
+        console.print("[dim]Prior step sequence (for reference):[/dim]")
+        for i, step in enumerate(top.step_sequence[:10], 1):
+            console.print(f"  [bold cyan]{i}.[/bold cyan] {step}")
+        if len(top.step_sequence) > 10:
+            console.print(f"  [dim]... (+{len(top.step_sequence) - 10} more)[/dim]")
+    console.print()
 
 
 # ── Phase 4: Agent Squad CLI helpers ─────────────────────────────────────────

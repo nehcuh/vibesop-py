@@ -1,4 +1,4 @@
-"""Recall retrieval logic for task-memory loop (W2 Task A).
+"""Recall retrieval logic for task-memory loop (W2 Task A + W3 extension).
 
 Given a query and a list of historical spans, returns the top-k most
 similar past task_ids by cosine similarity on representative query
@@ -6,7 +6,8 @@ embeddings (cached via ``EmbeddingCache``).
 
 Output: ``RecallResult`` per match containing the task_id, similarity
 score, representative query, span_count, step sequence (span names in
-temporal order), and last_seen timestamp.
+temporal order), last_seen timestamp, and (W3) trace_id + skill_id +
+gold status when an ``InstinctLearner`` is supplied.
 
 Default absolute threshold of 0.70 filters weak matches — per v3 design
 §3 W2: "默认未达阈值视为无召回（防错召回污染信任）".
@@ -16,12 +17,16 @@ from __future__ import annotations
 
 import json
 import logging
-from collections import defaultdict
+from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
+from typing import TYPE_CHECKING
 
 from vibesop.core.observability.clustering import _cosine
 from vibesop.core.observability.embedding import EmbeddingCache, get_embedding_cache
+
+if TYPE_CHECKING:
+    from vibesop.core.instinct.learner import InstinctLearner
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +35,12 @@ __all__ = ["RecallResult", "recall_similar"]
 _DEFAULT_TOP_K = 3
 _DEFAULT_THRESHOLD = 0.70
 _DEFAULT_DAYS_WINDOW = 30
+# W3 per-task gold gate. Unit = distinct trace_ids (= distinct runs), not raw
+# span lines. A single chatty route can emit ≥5 child spans (llm:, tool:,
+# workflow_node) in one execution; counting spans as evidence of "proven"
+# inflates false gold (grok P0-3). Fallback to span_count when trace_id
+# absent from legacy spans.
+_DEFAULT_MIN_GOLD_RUN_COUNT = 3
 
 
 @dataclass
@@ -53,9 +64,29 @@ class RecallResult:
     last_seen:
         ISO timestamp of the most recent span for this task_id.
     is_gold:
-        True if this task_id belongs to a gold cluster (W1 Task C).
-        False otherwise. Populated downstream by callers that run
-        ``assess_gold_status``; recall itself doesn't query InstinctLearner.
+        True if this task_id has a successful instinct AND ≥ ``min_gold_run_count``
+        distinct trace_ids (W3 per-task gold). Distinct traces are the unit of
+        "proven" — a single chatty execution emitting ≥5 child spans must not
+        qualify (grok P0-3). When trace_ids are absent from legacy spans, falls
+        back to span_count >= ``min_gold_run_count``. Populated only when
+        ``recall_similar`` is called with a ``learner``; otherwise stays False
+        (preserves W2 D5 retrieval-primitive purity).
+    trace_id:
+        Most recent trace_id observed for this task_id. None if spans
+        don't carry trace_id. Used by W3 replay span emission to link
+        new trace ↔ old trace.
+    skill_id:
+        Most common skill_id routed for this task_id (mode over spans).
+        None if no skill_id in spans. Used by W3 prompt to show
+        "last time routed to skill X".
+    gold_success_count:
+        ``success_count`` from the matched Instinct, or 0 if no instinct
+        or no learner provided. Surfaces "how many times this task
+        succeeded historically" in the replay prompt.
+    distinct_trace_count:
+        Number of distinct trace_ids observed for this task_id. The gold
+        size unit (see ``is_gold``). Falls back to ``span_count`` semantic
+        when no traces carry trace_id.
     """
 
     task_id: str
@@ -65,15 +96,21 @@ class RecallResult:
     step_sequence: list[str] = field(default_factory=list)
     last_seen: str | None = None
     is_gold: bool = False
+    trace_id: str | None = None
+    skill_id: str | None = None
+    gold_success_count: int = 0
+    distinct_trace_count: int = 0
 
 
 def recall_similar(
     query: str,
     spans: list[dict],
     cache: EmbeddingCache | None = None,
+    learner: InstinctLearner | None = None,
     top_k: int = _DEFAULT_TOP_K,
     threshold: float = _DEFAULT_THRESHOLD,
     days: int = _DEFAULT_DAYS_WINDOW,
+    min_gold_run_count: int = _DEFAULT_MIN_GOLD_RUN_COUNT,
 ) -> list[RecallResult]:
     """Return top-k similar past task_ids by cosine on query embedding.
 
@@ -86,12 +123,21 @@ def recall_similar(
         ``task_id`` and ``input_data.query`` for the recall path.
     cache:
         Embedding cache. Defaults to module singleton.
+    learner:
+        Optional InstinctLearner. When provided, each result's
+        ``is_gold`` / ``gold_success_count`` are populated via
+        ``learner.get_instinct_for_query(representative_query)``.
+        When None, both stay at default (False / 0).
     top_k:
         Maximum number of matches to return.
     threshold:
         Minimum cosine similarity to include in results.
     days:
         Look-back window. Spans older than this are excluded.
+    min_gold_run_count:
+        Minimum distinct trace_id count for ``is_gold=True``. Distinct
+        traces are the "proven" unit; falls back to span_count when
+        spans lack trace_id (legacy compatibility).
 
     Returns
     -------
@@ -137,17 +183,37 @@ def recall_similar(
     scored.sort(reverse=True)
     top = scored[:top_k]
 
-    return [
-        RecallResult(
-            task_id=tid,
-            similarity=sim,
-            representative_query=per_task[tid]["query"],
-            span_count=per_task[tid]["count"],
-            step_sequence=per_task[tid]["steps"],
-            last_seen=per_task[tid]["last_seen"],
+    results: list[RecallResult] = []
+    for sim, tid in top:
+        task_info = per_task[tid]
+        is_gold = False
+        gold_success_count = 0
+        if learner is not None:
+            instinct = learner.get_instinct_for_query(task_info["query"])
+            if instinct is not None and instinct.success_count >= 1:
+                gold_success_count = instinct.success_count
+                # Gold size unit = distinct trace_ids (= distinct runs).
+                # Fall back to span_count when legacy spans lack trace_id
+                # (grok P0-3: span lines inflate false gold).
+                distinct_count = task_info["distinct_trace_count"]
+                size_signal = distinct_count if distinct_count > 0 else task_info["count"]
+                is_gold = size_signal >= min_gold_run_count
+        results.append(
+            RecallResult(
+                task_id=tid,
+                similarity=sim,
+                representative_query=task_info["query"],
+                span_count=task_info["count"],
+                step_sequence=task_info["steps"],
+                last_seen=task_info["last_seen"],
+                trace_id=task_info["trace_id"],
+                skill_id=task_info["skill_id"],
+                is_gold=is_gold,
+                gold_success_count=gold_success_count,
+                distinct_trace_count=task_info["distinct_trace_count"],
+            )
         )
-        for sim, tid in top
-    ]
+    return results
 
 
 def _filter_recent(spans: list[dict], cutoff: datetime) -> list[dict]:
@@ -197,6 +263,9 @@ def _group_by_task_id(spans: list[dict]) -> dict[str, dict]:
                 "count": <total spans>,
                 "steps": <list of span names in temporal order>,
                 "last_seen": <ISO timestamp of most recent span>,
+                "trace_id": <most recent trace_id>,     # W3
+                "skill_id": <most common skill_id>,     # W3
+                "distinct_trace_count": <len(set(trace_ids))>,  # W3 Fix-1
             }
         }
     """
@@ -237,16 +306,81 @@ def _group_by_task_id(spans: list[dict]) -> dict[str, dict]:
             for s in group
             if _parse_timestamp(s.get("timestamp", ""))
         ]
-        last_seen = max(timestamps).isoformat() if timestamps else None
+        last_seen_dt = max(timestamps) if timestamps else None
+        last_seen = last_seen_dt.isoformat() if last_seen_dt else None
+
+        # W3: trace_id = trace_id of the most recent span that has one.
+        trace_id: str | None = None
+        if last_seen_dt is not None:
+            for s in sorted_group:
+                if _parse_timestamp(s.get("timestamp", "")) == last_seen_dt:
+                    tid_field = s.get("trace_id")
+                    if isinstance(tid_field, str) and tid_field:
+                        trace_id = tid_field
+                        break
+        if trace_id is None:
+            # Fallback: first span with a trace_id, any position.
+            for s in group:
+                tid_field = s.get("trace_id")
+                if isinstance(tid_field, str) and tid_field:
+                    trace_id = tid_field
+                    break
+
+        # W3: skill_id = most common skill_id across spans (mode).
+        skill_counter: Counter[str] = Counter()
+        for s in group:
+            sk_id = _extract_skill_id(s)
+            if sk_id:
+                skill_counter[sk_id] += 1
+        skill_id = skill_counter.most_common(1)[0][0] if skill_counter else None
+
+        # W3 Fix-1: distinct trace_id count = number of separate runs.
+        # The gold size unit. Empty when legacy spans don't carry trace_id;
+        # caller falls back to span_count.
+        distinct_trace_ids: set[str] = set()
+        for s in group:
+            tid_field = s.get("trace_id")
+            if isinstance(tid_field, str) and tid_field:
+                distinct_trace_ids.add(tid_field)
+        distinct_trace_count = len(distinct_trace_ids)
 
         per_task[tid] = {
             "query": rep_query,
             "count": len(group),
             "steps": steps,
             "last_seen": last_seen,
+            "trace_id": trace_id,
+            "skill_id": skill_id,
+            "distinct_trace_count": distinct_trace_count,
         }
 
     return per_task
+
+
+def _extract_skill_id(span: dict) -> str | None:
+    """Extract skill_id from a span.
+
+    Spans store skill_id in one of three places depending on age:
+    - Top-level ``skill_id`` field (newer schema)
+    - ``metadata.skill_id`` (current main.py:786 pattern)
+    - ``output_data.skill_id`` (route decision result)
+
+    Returns None if no skill_id is found.
+    """
+    top = span.get("skill_id")
+    if isinstance(top, str) and top:
+        return top
+    metadata = span.get("metadata")
+    if isinstance(metadata, dict):
+        sk = metadata.get("skill_id")
+        if isinstance(sk, str) and sk:
+            return sk
+    output = span.get("output_data")
+    if isinstance(output, dict):
+        sk = output.get("skill_id")
+        if isinstance(sk, str) and sk:
+            return sk
+    return None
 
 
 def _extract_query(span: dict) -> str | None:

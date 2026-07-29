@@ -15,15 +15,13 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pytest
 
 from vibesop.core.observability.embedding import EmbeddingCache
-from vibesop.core.observability.recall import (
-    recall_similar,
-)
+from vibesop.core.observability.recall import recall_similar
 
 
 def _unit_vec(angle: float, dim: int = 384) -> np.ndarray:
@@ -273,3 +271,268 @@ class TestTopKBound:
         with patch.object(cache, "_compute", side_effect=_fake_embedding):
             results = recall_similar("q0", spans, cache=cache, top_k=3)
         assert len(results) <= 3
+
+
+class TestW3TraceIdAndSkillId:
+    """W3.1: RecallResult carries trace_id + skill_id from spans."""
+
+    def test_trace_id_from_most_recent_span(self, tmp_path: Path) -> None:
+        cache = EmbeddingCache(cache_path=tmp_path / "emb.npz")
+        old_ts = datetime(2026, 7, 1, 12, 0, tzinfo=UTC)
+        new_ts = datetime(2026, 7, 28, 18, 30, tzinfo=UTC)
+        spans = [
+            {
+                "task_id": "t1",
+                "input_data": {"query": "hello"},
+                "name": "route:query",
+                "timestamp": old_ts.isoformat(),
+                "trace_id": "T-old",
+            },
+            {
+                "task_id": "t1",
+                "input_data": {"query": "hello"},
+                "name": "route:query",
+                "timestamp": new_ts.isoformat(),
+                "trace_id": "T-new",
+            },
+        ]
+        with patch.object(cache, "_compute", side_effect=_fake_embedding):
+            [r] = recall_similar("hello", spans, cache=cache)
+        assert r.trace_id == "T-new", "trace_id should be from most recent span"
+
+    def test_trace_id_none_when_no_trace_in_spans(self, tmp_path: Path) -> None:
+        cache = EmbeddingCache(cache_path=tmp_path / "emb.npz")
+        spans = [_span("t1", "hello")]  # _span helper doesn't add trace_id
+        with patch.object(cache, "_compute", side_effect=_fake_embedding):
+            [r] = recall_similar("hello", spans, cache=cache)
+        assert r.trace_id is None
+
+    def test_skill_id_mode_across_spans(self, tmp_path: Path) -> None:
+        """skill_id = most common (mode) across spans for the task_id."""
+        cache = EmbeddingCache(cache_path=tmp_path / "emb.npz")
+        spans = [
+            {
+                "task_id": "t1",
+                "input_data": {"query": "hello"},
+                "name": "route:query",
+                "timestamp": datetime(2026, 7, 1, tzinfo=UTC).isoformat(),
+                "metadata": {"skill_id": "skill_a"},
+            },
+            {
+                "task_id": "t1",
+                "input_data": {"query": "hello"},
+                "name": "route:query",
+                "timestamp": datetime(2026, 7, 2, tzinfo=UTC).isoformat(),
+                "metadata": {"skill_id": "skill_a"},
+            },
+            {
+                "task_id": "t1",
+                "input_data": {"query": "hello"},
+                "name": "route:query",
+                "timestamp": datetime(2026, 7, 3, tzinfo=UTC).isoformat(),
+                "metadata": {"skill_id": "skill_b"},
+            },
+        ]
+        with patch.object(cache, "_compute", side_effect=_fake_embedding):
+            [r] = recall_similar("hello", spans, cache=cache)
+        assert r.skill_id == "skill_a", "mode should win (2 vs 1)"
+
+    def test_skill_id_from_top_level_field(self, tmp_path: Path) -> None:
+        """Newer span schema stores skill_id at top level."""
+        cache = EmbeddingCache(cache_path=tmp_path / "emb.npz")
+        spans = [
+            {
+                "task_id": "t1",
+                "input_data": {"query": "hello"},
+                "name": "route:query",
+                "timestamp": datetime.now(UTC).isoformat(),
+                "skill_id": "top_level_skill",
+            }
+        ]
+        with patch.object(cache, "_compute", side_effect=_fake_embedding):
+            [r] = recall_similar("hello", spans, cache=cache)
+        assert r.skill_id == "top_level_skill"
+
+    def test_skill_id_none_when_missing(self, tmp_path: Path) -> None:
+        cache = EmbeddingCache(cache_path=tmp_path / "emb.npz")
+        spans = [_span("t1", "hello")]
+        with patch.object(cache, "_compute", side_effect=_fake_embedding):
+            [r] = recall_similar("hello", spans, cache=cache)
+        assert r.skill_id is None
+
+
+class TestW3LearnerGoldFusion:
+    """W3.2: recall_similar accepts optional learner to populate is_gold."""
+
+    def test_no_learner_keeps_is_gold_false(self, tmp_path: Path) -> None:
+        cache = EmbeddingCache(cache_path=tmp_path / "emb.npz")
+        spans = [_span("t1", "hello")]
+        with patch.object(cache, "_compute", side_effect=_fake_embedding):
+            [r] = recall_similar("hello", spans, cache=cache, learner=None)
+        assert r.is_gold is False
+        assert r.gold_success_count == 0
+
+    def test_learner_with_success_marks_gold_when_span_count_sufficient(
+        self, tmp_path: Path
+    ) -> None:
+        cache = EmbeddingCache(cache_path=tmp_path / "emb.npz")
+        # 5 spans for the same task_id to meet min_gold_span_count=5
+        spans = [_span("t1", "hello") for _ in range(5)]
+
+        fake_learner = MagicMock()
+        fake_instinct = MagicMock()
+        fake_instinct.success_count = 3
+        fake_learner.get_instinct_for_query.return_value = fake_instinct
+
+        with patch.object(cache, "_compute", side_effect=_fake_embedding):
+            [r] = recall_similar("hello", spans, cache=cache, learner=fake_learner)
+        assert r.is_gold is True
+        assert r.gold_success_count == 3
+
+    def test_learner_with_success_but_few_spans_not_gold(self, tmp_path: Path) -> None:
+        """Success but span_count < 5 → is_gold=False (mirrors W1 candidate logic)."""
+        cache = EmbeddingCache(cache_path=tmp_path / "emb.npz")
+        spans = [_span("t1", "hello") for _ in range(2)]  # only 2 spans
+
+        fake_learner = MagicMock()
+        fake_instinct = MagicMock()
+        fake_instinct.success_count = 5
+        fake_learner.get_instinct_for_query.return_value = fake_instinct
+
+        with patch.object(cache, "_compute", side_effect=_fake_embedding):
+            [r] = recall_similar("hello", spans, cache=cache, learner=fake_learner)
+        assert r.is_gold is False, "span_count < 5 should not be gold"
+        assert r.gold_success_count == 5, "but success_count still surfaced"
+
+    def test_learner_no_instinct_for_query(self, tmp_path: Path) -> None:
+        cache = EmbeddingCache(cache_path=tmp_path / "emb.npz")
+        spans = [_span("t1", "hello") for _ in range(5)]
+
+        fake_learner = MagicMock()
+        fake_learner.get_instinct_for_query.return_value = None  # no instinct
+
+        with patch.object(cache, "_compute", side_effect=_fake_embedding):
+            [r] = recall_similar("hello", spans, cache=cache, learner=fake_learner)
+        assert r.is_gold is False
+        assert r.gold_success_count == 0
+
+    def test_learner_zero_success_not_gold(self, tmp_path: Path) -> None:
+        cache = EmbeddingCache(cache_path=tmp_path / "emb.npz")
+        spans = [_span("t1", "hello") for _ in range(5)]
+
+        fake_learner = MagicMock()
+        fake_instinct = MagicMock()
+        fake_instinct.success_count = 0  # never succeeded
+        fake_learner.get_instinct_for_query.return_value = fake_instinct
+
+        with patch.object(cache, "_compute", side_effect=_fake_embedding):
+            [r] = recall_similar("hello", spans, cache=cache, learner=fake_learner)
+        assert r.is_gold is False
+        assert r.gold_success_count == 0
+
+
+class TestW3RealInstinctLearnerIntegration:
+    """W3 Fix-6 (P1-3): real InstinctLearner integration for gold fusion.
+
+    All other tests use MagicMock for learner. This class uses a real
+    InstinctLearner on tmp storage to verify:
+    - representative_query → instinct_id normalization matches
+    - record_outcome → success_count actually increments
+    - get_instinct_for_query → returns the learned instinct
+    - recall_similar picks up real gold signal end-to-end
+    """
+
+    def test_real_learner_gold_path(
+        self, tmp_path: Path
+    ) -> None:
+        """Real learner + real record_outcome → recall returns is_gold=True."""
+        from vibesop.core.instinct.learner import InstinctLearner
+        from vibesop.core.observability.embedding import EmbeddingCache
+        from vibesop.core.observability.recall import recall_similar
+
+        # Real learner on tmp storage
+        learner = InstinctLearner(storage_path=tmp_path / "instincts.jsonl")
+        query_text = "fix cmspark screenshot permission popup"
+        learner.learn(pattern=query_text, action="cmspark-permission-fix")
+        # Bump success_count via the public API
+        for _ in range(2):
+            learner.record_outcome_for_query(query_text, success=True)
+
+        # Verify learner state via its own API
+        instinct = learner.get_instinct_for_query(query_text)
+        assert instinct is not None, "real learner should return learned instinct"
+        assert instinct.success_count >= 1, f"expected success_count>=1, got {instinct.success_count}"
+
+        # Cache with deterministic fake embedding
+        cache = EmbeddingCache(cache_path=tmp_path / "emb.npz", dim=384)
+
+        # Spans: 3 distinct traces for same task_id → distinct_trace_count=3
+        spans = [
+            {
+                "task_id": "t_cmspark_real",
+                "input_data": {"query": query_text},
+                "name": "route:query",
+                "timestamp": f"2026-07-2{i}T12:00:00+00:00",
+                "trace_id": f"T-real-{i}",
+                "metadata": {"skill_id": "cmspark-fix"},
+            }
+            for i in range(1, 4)
+        ]
+
+        with patch.object(cache, "_compute", side_effect=_fake_embedding):
+            results = recall_similar(
+                query_text, spans, cache=cache, learner=learner, threshold=0.30
+            )
+
+        assert len(results) >= 1
+        top = results[0]
+        assert top.task_id == "t_cmspark_real"
+        assert top.is_gold is True, (
+            f"real learner + 3 distinct traces should be gold; "
+            f"gold_success_count={top.gold_success_count}, "
+            f"distinct_trace_count={top.distinct_trace_count}"
+        )
+        assert top.distinct_trace_count == 3
+        assert top.gold_success_count >= 1
+
+    def test_real_learner_normalization_drift_safe(
+        self, tmp_path: Path
+    ) -> None:
+        """Verify recall's representative_query feeds correctly into generate_id.
+
+        recall uses task_info["query"] (first raw query) as lookup key for
+        learner.get_instinct_for_query. This test verifies the normalization
+        chain doesn't drift between learn() and get_instinct_for_query().
+        """
+        from vibesop.core.instinct.learner import InstinctLearner
+        from vibesop.core.observability.embedding import EmbeddingCache
+        from vibesop.core.observability.recall import recall_similar
+
+        learner = InstinctLearner(storage_path=tmp_path / "instincts.jsonl")
+        # Learn with EXACT same string as the span's representative_query
+        # (this is what production path does)
+        canonical_query = "macbook lid closed overheating"
+        learner.learn(pattern=canonical_query, action="mac-thermal-fix")
+        learner.record_outcome_for_query(canonical_query, success=True)
+
+        cache = EmbeddingCache(cache_path=tmp_path / "emb.npz", dim=384)
+        # Span query matches canonical_query exactly (first span = rep_query)
+        spans = [
+            {
+                "task_id": "t_lid_real",
+                "input_data": {"query": canonical_query},
+                "name": "route:query",
+                "timestamp": f"2026-07-2{i}T18:00:00+00:00",
+                "trace_id": f"T-lid-{i}",
+            }
+            for i in range(1, 4)
+        ]
+
+        with patch.object(cache, "_compute", side_effect=_fake_embedding):
+            results = recall_similar(
+                canonical_query, spans, cache=cache, learner=learner, threshold=0.30
+            )
+
+        assert len(results) == 1
+        assert results[0].is_gold is True
+        assert results[0].gold_success_count >= 1
