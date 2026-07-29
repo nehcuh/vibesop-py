@@ -50,6 +50,7 @@ from vibesop.cli.commands import (
     optimize_cmd,
     plan_cmd,
     prompt_chain_cmd,
+    recall_cmd,
     sequence_cmd,
     snapshot_cmd,
     sync_cmd,
@@ -164,6 +165,7 @@ app.add_typer(badges_cmd.app, name="badges")
 app.add_typer(market_cmd.app, name="market")
 app.add_typer(snapshot_cmd.app, name="snapshot")
 app.add_typer(trace_cmd.app, name="trace")
+recall_cmd.register(app)
 app.add_typer(sync_cmd.app, name="sync-registry")
 app.add_typer(workflows_cmd.app, name="workflows")
 app.add_typer(instinct_cmd.app, name="instinct")

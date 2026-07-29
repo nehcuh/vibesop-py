@@ -1,0 +1,20 @@
+{"task_id": "t_cmspark_01", "input_data": {"query": "CMSpark screenshot permission popup keeps appearing"}, "name": "route:query", "timestamp": "2026-07-20T10:15:00+00:00"}
+{"task_id": "t_cmspark_02", "input_data": {"query": "CMSpark 截图权限弹窗一直出现"}, "name": "route:query", "timestamp": "2026-07-20T11:02:00+00:00"}
+{"task_id": "t_cmspark_03", "input_data": {"query": "why does CMSpark ask for screenshot permission every time"}, "name": "route:query", "timestamp": "2026-07-21T09:30:00+00:00"}
+{"task_id": "t_cmspark_04", "input_data": {"query": "CMSpark screenshot authorization popup repeats"}, "name": "route:query", "timestamp": "2026-07-21T14:22:00+00:00"}
+{"task_id": "t_cmspark_05", "input_data": {"query": "disable CMSpark screenshot permission prompt"}, "name": "route:query", "timestamp": "2026-07-22T08:11:00+00:00"}
+{"task_id": "t_cmspark_06", "input_data": {"query": "CMSpark keeps requesting screen capture permission"}, "name": "route:query", "timestamp": "2026-07-22T16:45:00+00:00"}
+{"task_id": "t_cmspark_07", "input_data": {"query": "how to stop CMSpark screenshot permission popup"}, "name": "route:query", "timestamp": "2026-07-23T10:00:00+00:00"}
+{"task_id": "t_cmspark_08", "input_data": {"query": "CMSpark 截图权限反复弹出怎么解决"}, "name": "route:query", "timestamp": "2026-07-23T13:30:00+00:00"}
+{"task_id": "t_cmspark_09", "input_data": {"query": "screenshot permission popup CMSpark recurring"}, "name": "route:query", "timestamp": "2026-07-24T09:18:00+00:00"}
+{"task_id": "t_cmspark_10", "input_data": {"query": "CMSpark screen capture authorization keeps popping up"}, "name": "route:query", "timestamp": "2026-07-24T15:55:00+00:00"}
+{"task_id": "t_cmspark_11", "input_data": {"query": "every launch CMSpark asks screenshot permission"}, "name": "route:query", "timestamp": "2026-07-25T11:42:00+00:00"}
+{"task_id": "t_cmspark_12", "input_data": {"query": "CMSpark screenshot permission dialog won't go away"}, "name": "route:query", "timestamp": "2026-07-25T18:09:00+00:00"}
+{"task_id": "t_lidsleep_01", "input_data": {"query": "MacBook lid sleep overheating"}, "name": "route:query", "timestamp": "2026-07-20T22:00:00+00:00"}
+{"task_id": "t_lidsleep_02", "input_data": {"query": "合盖之后 Mac 发热严重"}, "name": "route:query", "timestamp": "2026-07-21T07:30:00+00:00"}
+{"task_id": "t_lidsleep_03", "input_data": {"query": "lid closed MacBook gets hot"}, "name": "route:query", "timestamp": "2026-07-22T23:15:00+00:00"}
+{"task_id": "t_lidsleep_04", "input_data": {"query": "MacBook sleeps with lid but fan runs hot"}, "name": "route:query", "timestamp": "2026-07-23T19:00:00+00:00"}
+{"task_id": "t_lidsleep_05", "input_data": {"query": "clamshell mode MacBook overheating"}, "name": "route:query", "timestamp": "2026-07-24T22:45:00+00:00"}
+{"task_id": "t_distract_01", "input_data": {"query": "rust async tokio spawn vs task create performance"}, "name": "route:query", "timestamp": "2026-07-22T14:00:00+00:00"}
+{"task_id": "t_distract_02", "input_data": {"query": "postgres jsonb index gin vs btree choice"}, "name": "route:query", "timestamp": "2026-07-23T16:30:00+00:00"}
+{"task_id": "t_distract_03", "input_data": {"query": "react useEffect cleanup memory leak patterns"}, "name": "route:query", "timestamp": "2026-07-24T11:15:00+00:00"}
