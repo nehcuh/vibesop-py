@@ -158,6 +158,68 @@ class TestDaysWindow:
         assert len(results) == 1
 
 
+class TestProdShapeStartedAt:
+    """Regression: spans in production carry ``started_at`` (written by
+    ``Span.to_dict()`` at ``models.py:110``), NOT ``timestamp``. Pre-fix,
+    ``_filter_recent`` read ``span.get("timestamp")`` which returned None
+    on every prod span, taking the ``if not ts_raw`` branch and keeping
+    every span — ``--days`` was a silent no-op on real data. Tests used
+    the wrong key too, so they stayed green.
+
+    These fixtures mirror the real ``Span.to_dict()`` shape (only
+    ``started_at``, no ``timestamp`` key) to lock down the prod path.
+    """
+
+    @staticmethod
+    def _prod_span(task_id: str, query: str, *, started_at: datetime) -> dict:
+        return {
+            "task_id": task_id,
+            "input_data": {"query": query},
+            "name": "route:query",
+            "started_at": started_at.isoformat(),
+            # deliberately NO "timestamp" key — matches real Span.to_dict()
+        }
+
+    def test_old_started_at_excluded(self, tmp_path: Path) -> None:
+        cache = EmbeddingCache(cache_path=tmp_path / "emb.npz")
+        old = datetime.now(UTC) - timedelta(days=60)
+        spans = [self._prod_span("t1", "hello", started_at=old)]
+        with patch.object(cache, "_compute", side_effect=_fake_embedding):
+            results = recall_similar("hello", spans, cache=cache, days=30)
+        assert results == [], (
+            "prod-shape span (started_at only) older than window must be excluded; "
+            "if this fails, --days is silently no-op on real data again"
+        )
+
+    def test_recent_started_at_included(self, tmp_path: Path) -> None:
+        cache = EmbeddingCache(cache_path=tmp_path / "emb.npz")
+        recent = datetime.now(UTC) - timedelta(days=5)
+        spans = [self._prod_span("t1", "hello", started_at=recent)]
+        with patch.object(cache, "_compute", side_effect=_fake_embedding):
+            results = recall_similar("hello", spans, cache=cache, days=30)
+        assert len(results) == 1
+
+    def test_mixed_old_and_new_started_at_filters_correctly(self, tmp_path: Path) -> None:
+        """The scenario that was completely broken pre-fix: t1 has both an
+        old and a recent span with the same query. Pre-fix, ``--days`` was
+        no-op so both were kept and ``span_count=2``. Post-fix the old one
+        is dropped and ``span_count=1``.
+        """
+        cache = EmbeddingCache(cache_path=tmp_path / "emb.npz")
+        old = datetime.now(UTC) - timedelta(days=60)
+        recent = datetime.now(UTC) - timedelta(days=3)
+        spans = [
+            self._prod_span("t1", "hello", started_at=old),
+            self._prod_span("t1", "hello", started_at=recent),
+        ]
+        with patch.object(cache, "_compute", side_effect=_fake_embedding):
+            [r] = recall_similar("hello", spans, cache=cache, days=30)
+        assert r.span_count == 1, (
+            f"expected only the recent span kept (span_count=1); got {r.span_count}. "
+            "Pre-fix span_count=2 because --days was no-op on started_at-only spans."
+        )
+
+
 class TestFilterRecentEdgeCases:
     """P1-4: _filter_recent keeps spans with missing/malformed/future timestamps.
 
@@ -247,7 +309,11 @@ class TestEdgeCases:
     def test_spans_without_task_id_skipped(self, tmp_path: Path) -> None:
         cache = EmbeddingCache(cache_path=tmp_path / "emb.npz")
         spans = [
-            {"name": "route:query", "input_data": {"query": "no task"}, "timestamp": datetime.now(UTC).isoformat()},
+            {
+                "name": "route:query",
+                "input_data": {"query": "no task"},
+                "timestamp": datetime.now(UTC).isoformat(),
+            },
             _span("t1", "hello"),
         ]
         with patch.object(cache, "_compute", side_effect=_fake_embedding):
@@ -442,9 +508,7 @@ class TestW3RealInstinctLearnerIntegration:
     - recall_similar picks up real gold signal end-to-end
     """
 
-    def test_real_learner_gold_path(
-        self, tmp_path: Path
-    ) -> None:
+    def test_real_learner_gold_path(self, tmp_path: Path) -> None:
         """Real learner + real record_outcome → recall returns is_gold=True."""
         from vibesop.core.instinct.learner import InstinctLearner
         from vibesop.core.observability.embedding import EmbeddingCache
@@ -461,7 +525,9 @@ class TestW3RealInstinctLearnerIntegration:
         # Verify learner state via its own API
         instinct = learner.get_instinct_for_query(query_text)
         assert instinct is not None, "real learner should return learned instinct"
-        assert instinct.success_count >= 1, f"expected success_count>=1, got {instinct.success_count}"
+        assert instinct.success_count >= 1, (
+            f"expected success_count>=1, got {instinct.success_count}"
+        )
 
         # Cache with deterministic fake embedding
         cache = EmbeddingCache(cache_path=tmp_path / "emb.npz", dim=384)
@@ -495,9 +561,7 @@ class TestW3RealInstinctLearnerIntegration:
         assert top.distinct_trace_count == 3
         assert top.gold_success_count >= 1
 
-    def test_real_learner_normalization_drift_safe(
-        self, tmp_path: Path
-    ) -> None:
+    def test_real_learner_normalization_drift_safe(self, tmp_path: Path) -> None:
         """Verify recall's representative_query feeds correctly into generate_id.
 
         recall uses task_info["query"] (first raw query) as lookup key for

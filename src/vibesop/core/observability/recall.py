@@ -216,6 +216,25 @@ def recall_similar(
     return results
 
 
+def _span_timestamp(span: dict) -> str | None:
+    """Read a span's timestamp, preferring ``started_at`` (the field
+    ``Span.to_dict()`` actually writes — see ``models.py:110``).
+
+    Falls back to ``timestamp`` for backwards compatibility with older
+    data and test fixtures that pre-date the ``started_at`` rename.
+
+    Pre-fix bug: callers read ``span.get("timestamp")`` directly, which
+    returned ``None`` on every production span (they only carry
+    ``started_at``). ``_filter_recent`` then took the ``if not ts_raw``
+    branch and kept every span — ``--days`` was a complete no-op on real
+    data. Tests didn't catch it because fixtures used the same wrong key.
+    """
+    ts = span.get("started_at")
+    if ts:
+        return ts  # type: ignore[return-value]
+    return span.get("timestamp")  # backwards compat
+
+
 def _filter_recent(spans: list[dict], cutoff: datetime) -> list[dict]:
     """Keep spans whose timestamp is at or after ``cutoff``.
 
@@ -225,7 +244,7 @@ def _filter_recent(spans: list[dict], cutoff: datetime) -> list[dict]:
     """
     recent: list[dict] = []
     for span in spans:
-        ts_raw = span.get("timestamp")
+        ts_raw = _span_timestamp(span)
         if not ts_raw:
             recent.append(span)
             continue
@@ -294,7 +313,7 @@ def _group_by_task_id(spans: list[dict]) -> dict[str, dict]:
 
         # Sort by timestamp for stable step sequence; fall back to file order.
         def _ts_key(s: dict) -> datetime:
-            ts = _parse_timestamp(s.get("timestamp", ""))
+            ts = _parse_timestamp(_span_timestamp(s) or "")
             return ts or datetime.min.replace(tzinfo=UTC)
 
         sorted_group = sorted(group, key=_ts_key)
@@ -302,9 +321,9 @@ def _group_by_task_id(spans: list[dict]) -> dict[str, dict]:
 
         # Last seen = max timestamp.
         timestamps = [
-            _parse_timestamp(s.get("timestamp", ""))
+            parsed
             for s in group
-            if _parse_timestamp(s.get("timestamp", ""))
+            if (parsed := _parse_timestamp(_span_timestamp(s) or "")) is not None
         ]
         last_seen_dt = max(timestamps) if timestamps else None
         last_seen = last_seen_dt.isoformat() if last_seen_dt else None
@@ -313,7 +332,7 @@ def _group_by_task_id(spans: list[dict]) -> dict[str, dict]:
         trace_id: str | None = None
         if last_seen_dt is not None:
             for s in sorted_group:
-                if _parse_timestamp(s.get("timestamp", "")) == last_seen_dt:
+                if _parse_timestamp(_span_timestamp(s) or "") == last_seen_dt:
                     tid_field = s.get("trace_id")
                     if isinstance(tid_field, str) and tid_field:
                         trace_id = tid_field
