@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
 from vibesop.core.models import OrchestrationMode, OrchestrationResult
+from vibesop.core.observability.task_id import derive_task_id
 from vibesop.core.observability.tracer import bind_task_context, get_tracer
 
 logger = logging.getLogger(__name__)
@@ -75,6 +76,7 @@ class Orchestrator:
         """
         with get_tracer().trace(
             "orchestrate",
+            task_id=derive_task_id(query),
             metadata={"query": query[:500]},
         ) as root_span:
             result = self._orchestrate_impl(

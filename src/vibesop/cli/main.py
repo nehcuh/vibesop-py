@@ -23,6 +23,7 @@ import importlib.util
 import logging
 import os
 import sys
+import uuid
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -723,7 +724,14 @@ def route(
     # renders flat, and aggregator can't attribute them to a skill via
     # trace_id. Mirrors hook path in agent_runtime.handle_query line 409.
     from vibesop.core.observability import get_tracer as _get_cli_tracer
+    from vibesop.core.observability.process_identity import set_process_session_id
     from vibesop.core.observability.task_id import derive_task_id as _derive_task_id
+
+    # W5.0.A.4: mint one session_id per CLI invocation. Distinct across `vibe`
+    # calls, stable within one. Descendant spans (llm, tool) inherit it via
+    # TraceContext, so all spans from one CLI run share a session_id — enables
+    # future "session-scoped recall" without call-site plumbing.
+    set_process_session_id(str(uuid.uuid4()))
 
     _cli_tracer = _get_cli_tracer()
     _cli_trace_name = (

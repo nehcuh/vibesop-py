@@ -221,3 +221,94 @@ class TestClusterObject:
         s = repr(c)
         assert "abc123" in s
         assert "t1" in s
+
+
+class TestMaxSpansPerTaskSampling:
+    """W5.0.C: ``max_spans_per_task`` caps the spans counted per task_id.
+
+    When a task has more spans than the cap, only the most-recent-N (by
+    ``started_at`` descending) contribute to ``Cluster.span_count``.
+    Default ``None`` preserves all spans (pre-W5.0 behavior).
+    """
+
+    @staticmethod
+    def _span_with_ts(task_id: str, query: str, started_at: str) -> dict:
+        return {
+            "task_id": task_id,
+            "input_data": {"query": query},
+            "name": "route:query",
+            "started_at": started_at,
+        }
+
+    def test_default_none_preserves_all_spans(self, tmp_path: Path) -> None:
+        """max_spans_per_task=None (default) → all spans counted."""
+        cache = EmbeddingCache(cache_path=tmp_path / "emb.npz")
+        spans = _spans([("t1", "hello")] * 10)  # 10 spans same task
+        with patch.object(cache, "_compute", side_effect=_angle_embedding):
+            clusters = cluster_queries(spans, cache=cache)
+        assert len(clusters) == 1
+        assert clusters[0].span_count == 10
+
+    def test_cap_limits_span_count_to_most_recent_n(self, tmp_path: Path) -> None:
+        """max_spans_per_task=3 → span_count capped at 3 even when task has 10."""
+        from datetime import UTC, datetime, timedelta
+
+        now = datetime.now(UTC)
+        # 10 spans for task t1, each 1 day apart, oldest first.
+        spans = [
+            self._span_with_ts("t1", "hello", (now - timedelta(days=9 - i)).isoformat())
+            for i in range(10)
+        ]
+        cache = EmbeddingCache(cache_path=tmp_path / "emb.npz")
+        with patch.object(cache, "_compute", side_effect=_angle_embedding):
+            clusters = cluster_queries(spans, cache=cache, max_spans_per_task=3)
+        assert len(clusters) == 1
+        assert clusters[0].span_count == 3
+
+    def test_cap_does_not_affect_tasks_below_limit(self, tmp_path: Path) -> None:
+        """Tasks with ≤ max_spans_per_task spans are unchanged."""
+        cache = EmbeddingCache(cache_path=tmp_path / "emb.npz")
+        spans = _spans([("t1", "hello"), ("t1", "hello"), ("t2", "world")])
+
+        def _orthogonal(query: str) -> np.ndarray:
+            # hello → dim 0; anything else → dim 1. Cosine = 0 (below 0.80 threshold).
+            v = np.zeros(384, dtype=np.float32)
+            v[0 if query == "hello" else 1] = 1.0
+            return v
+
+        with patch.object(cache, "_compute", side_effect=_orthogonal):
+            clusters = cluster_queries(spans, cache=cache, max_spans_per_task=10)
+        # Both tasks below cap — span_count unchanged. Two clusters (orthogonal).
+        assert len(clusters) == 2
+        by_task = {c.task_ids[0]: c.span_count for c in clusters}
+        assert by_task["t1"] == 2
+        assert by_task["t2"] == 1
+
+    def test_cap_does_not_change_cluster_count(self, tmp_path: Path) -> None:
+        """Sampling is per-task; doesn't merge/split clusters."""
+        from datetime import UTC, datetime, timedelta
+
+        now = datetime.now(UTC)
+        # Two tasks, each with 5 spans. Cap at 3.
+        spans = []
+        for tid in ("t1", "t2"):
+            for i in range(5):
+                spans.append(
+                    self._span_with_ts(
+                        tid, f"query-{tid}", (now - timedelta(days=4 - i)).isoformat()
+                    )
+                )
+
+        def _orthogonal(query: str) -> np.ndarray:
+            # query-t1 → dim 0; query-t2 → dim 1. Orthogonal → no soft merge.
+            v = np.zeros(384, dtype=np.float32)
+            v[0 if "t1" in query else 1] = 1.0
+            return v
+
+        cache = EmbeddingCache(cache_path=tmp_path / "emb.npz")
+        with patch.object(cache, "_compute", side_effect=_orthogonal):
+            clusters = cluster_queries(spans, cache=cache, max_spans_per_task=3)
+        # Still 2 clusters (orthogonal), each capped at 3.
+        assert len(clusters) == 2
+        assert all(c.span_count == 3 for c in clusters)
+

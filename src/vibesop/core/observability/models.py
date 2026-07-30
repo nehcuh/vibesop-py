@@ -148,12 +148,20 @@ class TraceContext:
     through their signatures. ``bind_task_context(...)`` further mutates
     these mid-trace to support step-level binding (e.g. orchestrator
     iterating ``plan.steps``).
+
+    ``current_session_id`` / ``current_project_id`` (W5.0.A.2): same
+    inheritance pattern, but for session-level and project-level identity.
+    Set by ``tracer.trace(...)`` from kwargs or ``process_identity`` defaults;
+    child spans pick them up so all spans in one CLI run share a session_id
+    and project_id even when emitted from nested call sites.
     """
 
     trace_id: str
     current_span_id: str | None = None
     current_task_id: str | None = None
     current_role_id: str | None = None
+    current_session_id: str | None = None
+    current_project_id: str | None = None
     span_stack: list[str] = field(default_factory=list)
 
     def push_span(self, span_id: str) -> None:

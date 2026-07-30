@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import json
 import logging
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -1057,6 +1058,16 @@ def scan_candidates_cmd(  # pyright: ignore[reportUnusedFunction]
         0.60, "--min-gold-rate", help="Stable candidate threshold (0.0-1.0)"
     ),
     limit: int = typer.Option(100, "--limit", help="Number of recent spans to scan (>=1)"),
+    days: int | None = typer.Option(
+        None,
+        "--days",
+        "-d",
+        help=(
+            "Best-effort look-back window in days (default: no filter). "
+            "Spans with missing/malformed timestamps are kept regardless. "
+            "Recommended: 7-30."
+        ),
+    ),
 ) -> None:
     """Cluster recent spans → populate the skill-candidate pool.
 
@@ -1068,6 +1079,14 @@ def scan_candidates_cmd(  # pyright: ignore[reportUnusedFunction]
 
     Idempotent: re-scanning the same spans refreshes counts but does
     not duplicate rows. TTL-expired pending rows are pruned at start.
+
+    ``--days`` (W5.0.B): restricts the scan to spans emitted within the
+    last N days. Without this, the scan covers all history since project
+    inception. Time filter applies AFTER ``query_recent(limit=)`` returns
+    the most recent ``limit`` spans — so the actual scanned set is
+    "min(limit, spans_younger_than_days)". Filter reads ``started_at``
+    (real production schema); malformed timestamps are kept rather than
+    dropped (see recall._filter_recent rationale).
     """
     # Validate CLI arg bounds (grok P1: prior version accepted any int/float).
     if min_cluster_size < 1:
@@ -1079,9 +1098,13 @@ def scan_candidates_cmd(  # pyright: ignore[reportUnusedFunction]
     if limit < 1:
         console.print(f"[red]✗[/red] --limit must be >=1, got {limit}")
         raise typer.Exit(1)
+    if days is not None and days < 1:
+        console.print(f"[red]✗[/red] --days must be >=1, got {days}")
+        raise typer.Exit(1)
 
     from vibesop.core.instinct.learner import InstinctLearner
     from vibesop.core.observability.embedding import get_embedding_cache
+    from vibesop.core.observability.recall import _filter_recent
     from vibesop.core.observability.skill_promote import (
         DEFAULT_UNSTABLE_GOLD_RATE,
         scan_candidates,
@@ -1089,6 +1112,10 @@ def scan_candidates_cmd(  # pyright: ignore[reportUnusedFunction]
     from vibesop.core.observability.span_writer import SpanWriter
 
     spans = SpanWriter().query_recent(limit=limit)
+    if days is not None:
+        cutoff = datetime.now(UTC) - timedelta(days=days)
+        spans = _filter_recent(spans, cutoff)
+
     learner = InstinctLearner()
     cache = get_embedding_cache()
     store = _get_candidate_store()

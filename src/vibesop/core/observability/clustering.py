@@ -27,6 +27,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
+from vibesop.core.observability._span_fields import span_timestamp
 from vibesop.core.observability.embedding import EmbeddingCache, get_embedding_cache
 
 logger = logging.getLogger(__name__)
@@ -67,6 +68,12 @@ class Cluster:
         Fraction of member task_ids with success signal
         (``len(gold_task_ids) / len(task_ids)``). Used by W4 skill
         promote trigger (``gold_rate >= 0.6``).
+
+    Note on ``span_count`` semantics (W5.0.C): when ``cluster_queries`` is
+    called with ``max_spans_per_task=N``, ``span_count`` reflects the
+    post-cap count (most-recent-N per task_id), not the raw count. The
+    representative ``queries[0]`` is also drawn from the post-cap set,
+    keeping both fields consistent with the same sampling window.
     """
 
     cluster_id: str
@@ -127,6 +134,7 @@ def cluster_queries(
     spans: list[dict],
     cache: EmbeddingCache | None = None,
     threshold: float = _DEFAULT_THRESHOLD,
+    max_spans_per_task: int | None = None,
 ) -> list[Cluster]:
     """Cluster spans by task_id (hard) + cosine similarity (soft).
 
@@ -142,6 +150,14 @@ def cluster_queries(
         Cosine similarity threshold for soft merge. Default 0.80 per
         v3 design §8.1 (Benchmark decision: MiniLM p90 near-miss at 0.894
         — 0.80 absorbs screenshot-adjacent queries into gold clusters).
+    max_spans_per_task:
+        Optional cap on spans counted per task_id. When a task has more
+        than this many spans, only the most-recent-N (by ``started_at``
+        descending) contribute to ``Cluster.span_count``. Default None =
+        no cap (all spans counted). Does NOT bound the O(n²) cosine pass
+        (that's across distinct task_ids, not spans) — bounds the span
+        counter so a chatty hot task doesn't dominate ``span_count``.
+        W5.0.C instrumentation; not yet exposed via CLI.
 
     Returns
     -------
@@ -152,21 +168,48 @@ def cluster_queries(
         return []
     cache = cache or get_embedding_cache()
 
-    # 1) Group spans by task_id (hard group) and collect representative query.
+    # 1) Group spans by task_id (hard group). Representative query is picked
+    #    AFTER the sampling cap (W5.0 review H2): post-cap the list is sorted
+    #    by started_at desc, so [0] is the most recent span's query.
     per_task_queries: dict[str, str] = {}
-    per_task_count: dict[str, int] = defaultdict(int)
+    per_task_spans: dict[str, list[dict]] = defaultdict(list)
     for span in spans:
         tid = span.get("task_id")
         if not tid:
             continue
-        per_task_count[tid] += 1
-        if tid not in per_task_queries:
+        per_task_spans[tid].append(span)
+
+    if not per_task_spans:
+        return []
+
+    # 1b) W5.0.C: apply per-task sampling cap. Most-recent-N by started_at desc.
+    #     Doesn't bound O(n²) cosine (that's across distinct task_ids); bounds
+    #     span_count so one chatty task can't dwarf smaller clusters.
+    if max_spans_per_task is not None:
+        for tid in list(per_task_spans.keys()):
+            group = per_task_spans[tid]
+            if len(group) > max_spans_per_task:
+                group_sorted = sorted(
+                    group,
+                    key=lambda s: span_timestamp(s) or "",
+                    reverse=True,
+                )
+                per_task_spans[tid] = group_sorted[:max_spans_per_task]
+
+    # 1c) Pick representative query per task. Post-cap, per_task_spans[tid][0]
+    #     is the most recent span in the (possibly sampled) set. This keeps
+    #     span_count + representative query consistent with the same time window.
+    for tid, group in per_task_spans.items():
+        for span in group:
             query = _extract_query(span)
             if query:
                 per_task_queries[tid] = query
+                break
 
     if not per_task_queries:
         return []
+
+    per_task_count = {tid: len(spans) for tid, spans in per_task_spans.items()}
 
     # 2) Compute embedding for each representative query (cache-backed).
     task_ids_sorted = sorted(per_task_queries.keys())
@@ -201,14 +244,8 @@ def cluster_queries(
             e = embeddings[i]
             if e is not None:
                 member_embeddings.append(e)
-        centroid = (
-            np.mean(np.stack(member_embeddings), axis=0)
-            if member_embeddings
-            else None
-        )
-        cluster_id = hashlib.sha1(
-            "\x1f".join(member_tids).encode("utf-8")
-        ).hexdigest()[:16]
+        centroid = np.mean(np.stack(member_embeddings), axis=0) if member_embeddings else None
+        cluster_id = hashlib.sha1("\x1f".join(member_tids).encode("utf-8")).hexdigest()[:16]
         total_spans = sum(per_task_count[t] for t in member_tids)
         clusters.append(
             Cluster(

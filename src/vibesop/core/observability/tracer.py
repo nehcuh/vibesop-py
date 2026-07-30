@@ -28,6 +28,10 @@ if TYPE_CHECKING:
     from vibesop.core.observability.models import SpanKind, TraceContext
 
 from vibesop.core.observability.models import Span as _Span
+from vibesop.core.observability.process_identity import (
+    get_process_project_id,
+    get_process_session_id,
+)
 from vibesop.core.observability.span_writer import SpanWriter
 
 logger = logging.getLogger(__name__)
@@ -175,6 +179,7 @@ class ObservabilityTracer:
         *,
         task_id: str | None = None,
         session_id: str | None = None,
+        project_id: str | None = None,
         agent_id: str | None = None,
         role_id: str | None = None,
         metadata: dict[str, Any] | None = None,
@@ -183,10 +188,22 @@ class ObservabilityTracer:
 
         Automatically sets span status to 'ok' on normal exit or 'error' on
         exception. The span is always persisted regardless of outcome.
+
+        ``session_id`` / ``project_id`` default to ``process_identity``
+        values (set by CLI entry point — one UUID per CLI run, cwd-as-project).
+        Explicit kwargs override. Both are stashed on ``TraceContext`` so
+        descendant spans inherit them without each call site plumbing them.
         """
         if not self._enabled:
             yield _Span(id="", trace_id="", name="noop", span_kind="task")  # type: ignore[arg-type]
             return
+
+        # W5.0.A.3: pull process-level defaults when caller didn't pass explicit values.
+        # session_id: None if process_identity wasn't seeded (non-CLI callers, tests).
+        # project_id: lazy-computes str(cwd); falls back to "default" if unavailable
+        # to preserve Span.project_id's data contract.
+        actual_session_id = session_id or get_process_session_id()
+        actual_project_id = project_id or get_process_project_id() or "default"
 
         trace_id = _Span.new_trace_id()
         span = _Span(
@@ -195,20 +212,24 @@ class ObservabilityTracer:
             name=name,
             span_kind="task",
             task_id=task_id,
-            session_id=session_id,
+            session_id=actual_session_id,
             agent_id=agent_id,
             role_id=role_id,
             metadata=metadata or {},
+            project_id=actual_project_id,
         )
         self._push(span.id, trace_id)
-        # Stash task_id / role_id on the context so descendant spans (llm-spans
-        # emitted by SpanWrappedProvider, etc.) can inherit them without
-        # call-site plumbing. See v8.2 GAP-1 attribution fix + v3 Phase A Task 1
-        # for role_id extension.
+        # Stash task_id / role_id / session_id / project_id on the context so
+        # descendant spans (llm-spans emitted by SpanWrappedProvider, etc.)
+        # can inherit them without call-site plumbing. See v8.2 GAP-1
+        # attribution fix + v3 Phase A Task 1 for role_id extension +
+        # W5.0.A.2 for session_id / project_id extension.
         ctx = self._get_context()
         if ctx is not None:
             ctx.current_task_id = task_id
             ctx.current_role_id = role_id
+            ctx.current_session_id = actual_session_id
+            ctx.current_project_id = actual_project_id
 
         try:
             yield span
@@ -246,6 +267,10 @@ class ObservabilityTracer:
             trace_id = ctx.trace_id
 
         actual_parent = parent_span_id or (ctx.current_span_id if ctx else None)
+        # ctx.current_project_id is None when the trace root was opened without
+        # a process_identity seed (e.g. legacy tests) — fall back to "default"
+        # to preserve Span.project_id's str contract.
+        ctx_project_id = (ctx.current_project_id if ctx else None) or "default"
         span = _Span(
             id=_Span.new_id(),
             trace_id=trace_id,
@@ -254,6 +279,8 @@ class ObservabilityTracer:
             parent_span_id=actual_parent,
             task_id=ctx.current_task_id if ctx else None,
             role_id=ctx.current_role_id if ctx else None,
+            session_id=ctx.current_session_id if ctx else None,
+            project_id=ctx_project_id,
             metadata=metadata or {},
         )
         self._push(span.id, trace_id)
@@ -280,16 +307,19 @@ class ObservabilityTracer:
         parent_span_id: str | None = None,
         task_id: str | None = None,
         role_id: str | None = None,
+        session_id: str | None = None,
+        project_id: str | None = None,
         metadata: dict[str, Any] | None = None,
     ) -> _Span:
         """Manually start a span (without context manager). Caller MUST call
         ``finish_span()`` or ``fail_span()`` to persist it.
 
-        If ``task_id`` / ``role_id`` are not provided but there is an active
-        trace, the context's ``current_task_id`` / ``current_role_id`` are
-        inherited. This lets inner call sites (LLM providers, tool wrappers)
-        gain task attribution automatically when they run inside a
-        ``with tracer.trace(...)`` block or ``bind_task_context(...)`` block.
+        If ``task_id`` / ``role_id`` / ``session_id`` / ``project_id`` are not
+        provided but there is an active trace, the context's current values
+        are inherited. This lets inner call sites (LLM providers, tool
+        wrappers) gain task + session + project attribution automatically
+        when they run inside a ``with tracer.trace(...)`` block or
+        ``bind_task_context(...)`` block.
         """
         if not self._enabled:
             return _Span(id="", trace_id="", name="noop", span_kind=kind)  # type: ignore[arg-type]
@@ -299,6 +329,10 @@ class ObservabilityTracer:
         actual_parent = parent_span_id or (ctx.current_span_id if ctx else None)
         actual_task_id = task_id or (ctx.current_task_id if ctx else None)
         actual_role_id = role_id or (ctx.current_role_id if ctx else None)
+        actual_session_id = session_id or (ctx.current_session_id if ctx else None)
+        # Fall back to "default" when neither kwarg nor ctx provides a project_id
+        # (preserves Span.project_id's str contract).
+        actual_project_id = project_id or (ctx.current_project_id if ctx else None) or "default"
 
         span = _Span(
             id=_Span.new_id(),
@@ -307,6 +341,8 @@ class ObservabilityTracer:
             span_kind=kind,
             task_id=actual_task_id,
             role_id=actual_role_id,
+            session_id=actual_session_id,
+            project_id=actual_project_id,
             parent_span_id=actual_parent,
             metadata=metadata or {},
         )
