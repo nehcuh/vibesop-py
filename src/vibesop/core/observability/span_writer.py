@@ -57,11 +57,16 @@ class SpanWriter:
     """
 
     def __init__(self, storage_path: Path | str | None = None) -> None:
+        # Eager-resolve to absolute path at construction. The tracer singleton
+        # is built at first emit (tracer.py:40); if a caller later os.chdir(),
+        # a relative path would silently land in the new cwd while
+        # process_identity reports the old cwd (W5.1 Task 1.1).
         if storage_path is None:
             filename = _DEV_SPANS_FILE if is_dev_environment() else _PROD_SPANS_FILE
-            self._path = Path(".vibe/observability") / filename
+            self._path = (Path.cwd() / ".vibe/observability" / filename).resolve()
         else:
-            self._path = Path(storage_path)
+            candidate = Path(storage_path)
+            self._path = candidate.resolve() if not candidate.is_absolute() else candidate
         self._path.parent.mkdir(parents=True, exist_ok=True)
         # Track parent-dir existence so we don't repeat the mkdir on every
         # write (the 100µs p95 tracer benchmark gates this hot path).

@@ -15,6 +15,7 @@ import hashlib
 import json
 import logging
 import re
+import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -381,7 +382,7 @@ class AgentRuntime:
         query: str,
         *,
         platform: str = "generic",
-        session_id: str = "default",
+        session_id: str | None = None,
         conversation_id: str = "",
         explain: bool = False,
         callbacks: Any | None = None,
@@ -391,7 +392,10 @@ class AgentRuntime:
         Args:
             query: The user's natural language query.
             platform: Platform identifier (claude-code, opencode, kimi-cli, pi).
-            session_id: Session identifier for context-aware routing.
+            session_id: Session identifier for context-aware routing. When
+                None (default), a UUID is minted for this process and seeded
+                into ``process_identity`` so descendant spans via TraceContext
+                inherit it. Explicit non-None values win and are also seeded.
             conversation_id: Conversation ID for multi-turn continuity.
                 Auto-generated from project path if empty.
             explain: When True, include full decision transparency output.
@@ -400,6 +404,27 @@ class AgentRuntime:
         Returns:
             AgentRuntimeResult with routing decision, skill content, and metadata.
         """
+        # W5.1 Task 1.2: seed process_identity so descendant spans inherit the
+        # session_id via TraceContext. Mirrors CLI pattern at cli/main.py:734.
+        # Idempotent: only mint + seed if no explicit session_id was passed AND
+        # the process identity is still unset. Per-call re-seeding would race
+        # with concurrent handle_query invocations and orphan async spans onto
+        # whichever UUID was last written (architect review BLOCK).
+        from vibesop.core.observability.process_identity import (
+            get_process_session_id,
+            set_process_session_id,
+        )
+
+        if session_id is None:
+            existing = get_process_session_id()
+            if existing is None:
+                session_id = str(uuid.uuid4())
+                set_process_session_id(session_id)
+            else:
+                session_id = existing
+        else:
+            set_process_session_id(session_id)
+
         result = AgentRuntimeResult(project_root=self.project_root)
 
         # --- Observability: start a trace span for this query ---
@@ -612,7 +637,7 @@ class AgentRuntime:
         hook_event_name: str = "",
         include_additional_context: bool = True,
         no_match_message: bool = True,
-        session_id: str = "default",
+        session_id: str | None = None,
         conversation_id: str = "",
     ) -> str:
         """Handle a query and return a platform hook response JSON string.
@@ -627,7 +652,8 @@ class AgentRuntime:
             hook_event_name: Hook event name for hookSpecificOutput.
             include_additional_context: Attach skill content as additionalContext.
             no_match_message: Produce fallback message when no skill matches.
-            session_id: Session identifier for context-aware routing.
+            session_id: Session identifier; None mints a process UUID (see
+                ``handle_query`` for seeding semantics).
             conversation_id: Conversation ID for multi-turn continuity.
 
         Returns:
