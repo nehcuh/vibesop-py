@@ -96,7 +96,7 @@ class TestSkillRecommenderRecommendations:
         with patch.object(recommender, "_get_installed_skill_ids", return_value=set()):
             recs = recommender.detect_missing_skills()
         skill_ids = [r.skill_id for r in recs]
-        assert "systematic-debugging" in skill_ids
+        assert "superpowers/systematic-debugging" in skill_ids
         assert "mattpocock/diagnosing-bugs" in skill_ids
         assert "mattpocock/tdd" in skill_ids
 
@@ -105,7 +105,11 @@ class TestSkillRecommenderRecommendations:
         with patch.object(
             recommender,
             "_get_installed_skill_ids",
-            return_value={"systematic-debugging", "mattpocock/diagnosing-bugs", "mattpocock/tdd"},
+            return_value={
+                "superpowers/systematic-debugging",
+                "mattpocock/diagnosing-bugs",
+                "mattpocock/tdd",
+            },
         ):
             recs = recommender.detect_missing_skills()
         assert recs == []
@@ -119,8 +123,7 @@ class TestSkillRecommenderRecommendations:
 
         assert len(recs) > 0
         skill_ids = [r.skill_id for r in recs]
-        assert "superpowers/tdd" in skill_ids
-        assert "superpowers/refactor" in skill_ids
+        assert "superpowers/test-driven-development" in skill_ids
 
     def test_recommend_for_project_default(self, tmp_path: Path):
         recommender = SkillRecommender(project_root=tmp_path)

@@ -120,29 +120,21 @@ DEFAULT_FEATURED_SKILLS: list[dict[str, Any]] = [
         "priority": 70,
     },
     # --- Existing Trusted Packs ---
+    # obra/superpowers only ships workflow-level skills (no language-specific ones).
+    # skill_id must match the `name:` field in the upstream SKILL.md, otherwise
+    # post-install _load_skill_content() can't resolve the directory and the
+    # injector falls back to placeholder text.
     {
-        "skill_id": "superpowers/tdd",
-        "name": "Superpowers TDD",
-        "description": "Test-driven development for Python projects with safety checks.",
+        "skill_id": "superpowers/test-driven-development",
+        "name": "Test-Driven Development",
+        "description": "Test-driven development with red-green-refactor. Write the test first, watch it fail, write minimal code to pass.",
         "category": "development",
-        "stacks": ["python"],
+        "stacks": ["python", "typescript", "javascript"],
         "quality_rating": 0.82,
         "install_source": "superpowers",
         "compatible_platforms": ["claude-code", "opencode"],
-        "tags": ["tdd", "testing", "python"],
+        "tags": ["tdd", "testing"],
         "priority": 80,
-    },
-    {
-        "skill_id": "superpowers/refactor",
-        "name": "Systematic Refactor",
-        "description": "Systematic refactoring with safety checks and validation steps.",
-        "category": "development",
-        "stacks": ["python", "typescript", "javascript"],
-        "quality_rating": 0.80,
-        "install_source": "superpowers",
-        "compatible_platforms": ["claude-code", "opencode"],
-        "tags": ["refactoring", "code-quality"],
-        "priority": 72,
     },
     # --- Productivity ---
     {

@@ -47,7 +47,7 @@ class TestFeaturedRegistry:
         reg = FeaturedRegistry()
         assert reg.count() > 0
         skills = reg.skills
-        assert any(s.skill_id == "superpowers/tdd" for s in skills)
+        assert any(s.skill_id == "superpowers/test-driven-development" for s in skills)
         assert any(s.skill_id == "mattpocock/tdd" for s in skills)
 
     def test_for_stack(self):
@@ -131,9 +131,9 @@ class TestFeaturedRegistry:
 
     def test_get_by_id(self):
         reg = FeaturedRegistry()
-        s = reg.get_by_id("superpowers/tdd")
+        s = reg.get_by_id("superpowers/test-driven-development")
         assert s is not None
-        assert s.skill_id == "superpowers/tdd"
+        assert s.skill_id == "superpowers/test-driven-development"
         assert s.install_source == "superpowers"
 
     def test_get_by_id_missing(self):
@@ -183,7 +183,9 @@ class TestFeaturedRegistry:
     def test_merge_no_duplicates(self):
         reg = FeaturedRegistry()
         before = reg.count()
-        added = reg.merge_remote([{"skill_id": "superpowers/tdd", "name": "Duplicate"}])
+        added = reg.merge_remote(
+            [{"skill_id": "superpowers/test-driven-development", "name": "Duplicate"}]
+        )
         assert added == 0
         assert reg.count() == before
 

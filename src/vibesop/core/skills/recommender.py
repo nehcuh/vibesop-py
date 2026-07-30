@@ -41,8 +41,7 @@ class SkillRecommender:
 
     STACK_RECOMMENDATIONS: ClassVar[dict[str, list[tuple[str, str]]]] = {
         "python": [
-            ("superpowers/tdd", "Test-driven development for Python projects"),
-            ("superpowers/refactor", "Systematic refactoring with safety checks"),
+            ("superpowers/test-driven-development", "Test-driven development (red-green-refactor)"),
         ],
         "javascript": [
             ("mattpocock/tdd", "Test-driven development with red-green-refactor"),
@@ -55,13 +54,6 @@ class SkillRecommender:
                 "mattpocock/improve-codebase-architecture",
                 "Architecture improvement with domain language",
             ),
-            ("superpowers/refactor", "Systematic refactoring"),
-        ],
-        "rust": [
-            ("superpowers/optimize", "Performance profiling and optimization"),
-        ],
-        "go": [
-            ("superpowers/architect", "System architecture design"),
         ],
         "default": [
             ("mattpocock/diagnosing-bugs", "Disciplined diagnosis loop for hard bugs"),
@@ -192,7 +184,7 @@ class SkillRecommender:
             recs.append(
                 SkillRecommendation(
                     skill_id="mattpocock/tdd",
-                    reason="Structured TDD complement to superpowers/tdd",
+                    reason="Structured TDD complement to superpowers/test-driven-development",
                     confidence=0.68,
                 )
             )
@@ -200,14 +192,14 @@ class SkillRecommender:
         if has_mattpocock and not has_superpowers:
             recs.append(
                 SkillRecommendation(
-                    skill_id="superpowers/tdd",
+                    skill_id="superpowers/test-driven-development",
                     reason="Users with mattpocock skills often also use superpowers",
                     confidence=0.75,
                 )
             )
             recs.append(
                 SkillRecommendation(
-                    skill_id="superpowers/refactor",
+                    skill_id="superpowers/systematic-debugging",
                     reason="Complementary to mattpocock/diagnosing-bugs",
                     confidence=0.70,
                 )
@@ -220,7 +212,7 @@ class SkillRecommender:
         recs: list[SkillRecommendation] = []
 
         essential = [
-            ("systematic-debugging", "Essential debugging workflow"),
+            ("superpowers/systematic-debugging", "Essential debugging workflow"),
             ("mattpocock/diagnosing-bugs", "Disciplined diagnosis loop for hard bugs"),
             ("mattpocock/tdd", "Test-driven development with red-green-refactor"),
         ]
