@@ -7,11 +7,12 @@ above an absolute cosine threshold.
 
 Usage::
 
-    vibe recall "<query>"                # default top-3, threshold 0.70, 30d
-    vibe recall "<query>" -k 5           # top-5 matches
-    vibe recall "<query>" -t 0.80        # stricter threshold
-    vibe recall "<query>" --json         # JSON output for programmatic use
-    vibe recall "<query>" --days 7       # restrict to last 7 days
+    vibe recall "<query>"                       # default top-3, threshold 0.70, 30d
+    vibe recall "<query>" -k 5                  # top-5 matches
+    vibe recall "<query>" -t 0.80               # stricter threshold
+    vibe recall "<query>" --json                # JSON output for programmatic use
+    vibe recall "<query>" --days 7              # restrict to last 7 days
+    vibe recall "<query>" --cross-project       # aggregate across pool members
 
 Registered as a direct ``@app.command()`` on the main Typer app rather
 than a nested sub-Typer — the nested form interpreted ``--json`` and
@@ -29,7 +30,7 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
-from vibesop.core.observability.recall import recall_similar
+from vibesop.core.observability.recall import RecallResult, recall_similar
 from vibesop.core.observability.span_writer import SpanWriter
 
 console = Console()
@@ -49,8 +50,24 @@ def recall_command(
     limit: int = typer.Option(
         5000, "--limit", help="Max spans to scan (newest first)"
     ),
+    cross_project: bool = typer.Option(
+        False,
+        "--cross-project",
+        help="Aggregate matches across all projects in the pool (W5.1)",
+    ),
 ) -> None:
     """Find past traces similar to ``query`` by embedding cosine similarity."""
+    if cross_project:
+        _run_cross_project(
+            query=query,
+            top_k=top_k,
+            threshold=threshold,
+            days=days,
+            json_output=json_output,
+            limit=limit,
+        )
+        return
+
     writer = SpanWriter(storage_path=span_file) if span_file else SpanWriter()
     spans = writer.query_recent(limit=limit)
 
@@ -95,6 +112,168 @@ def recall_command(
         return
 
     _render_results(query, results)
+
+
+def _run_cross_project(
+    *,
+    query: str,
+    top_k: int,
+    threshold: float,
+    days: int,
+    json_output: bool,
+    limit: int,
+) -> None:
+    """Aggregate recall results across all projects in the pool (W5.1).
+
+    For each pool member, read its ``.vibe/observability/spans.jsonl``,
+    run ``recall_similar`` scoped to that project's spans, tag results
+    with the pool alias, then merge + re-sort by similarity descending.
+    """
+    # Late import: pool_cmd itself imports nothing from recall_cmd, but
+    # avoiding the top-level import keeps CLI startup fast and sidesteps
+    # any future circular dependency if pool_cmd grows reverse references.
+    from vibesop.cli.commands.pool_cmd import load_pool
+
+    pool_data = load_pool()
+    projects = pool_data.get("projects") or []
+    if not projects:
+        console.print(
+            "[red]✗ No projects in pool.[/red] "
+            "Add with: [cyan]vibe pool add <path>[/cyan]"
+        )
+        raise typer.Exit(1)
+
+    tagged: list[tuple[str, str, RecallResult]] = []
+    for entry in projects:
+        alias = entry.get("alias", "?")
+        project_path = Path(entry.get("path", ""))
+        spans_file = project_path / ".vibe" / "observability" / "spans.jsonl"
+        if not spans_file.exists():
+            continue
+        try:
+            writer = SpanWriter(storage_path=spans_file)
+            spans = writer.query_recent(limit=limit)
+        except (OSError, ValueError):
+            continue
+        if not spans:
+            continue
+        # Spans carry their own project_id; record it for the Project column.
+        project_id = next(
+            (s.get("project_id") for s in spans if s.get("project_id")),
+            str(project_path),
+        )
+        results = recall_similar(
+            query=query,
+            spans=spans,
+            top_k=top_k,
+            threshold=threshold,
+            days=days,
+        )
+        for r in results:
+            tagged.append((alias, str(project_id), r))
+
+    if not tagged:
+        if json_output:
+            payload = {
+                "query": query,
+                "threshold": threshold,
+                "days": days,
+                "cross_project": True,
+                "projects_searched": len(projects),
+                "total": 0,
+                "matches": [],
+            }
+            print(json.dumps(payload, indent=2, ensure_ascii=False))
+        else:
+            console.print()
+            console.print(
+                Panel(
+                    f"[dim]No matches above cosine {threshold:.2f} across "
+                    f"{len(projects)} pool project(s).[/dim]",
+                    title=f"Cross-Project Recall — {query[:60]}",
+                    border_style="yellow",
+                )
+            )
+            console.print()
+        return
+
+    # Re-sort by similarity desc, then cap at top_k.
+    tagged.sort(key=lambda t: t[2].similarity, reverse=True)
+    tagged = tagged[:top_k]
+
+    if json_output:
+        payload = {
+            "query": query,
+            "threshold": threshold,
+            "days": days,
+            "cross_project": True,
+            "projects_searched": len(projects),
+            "total": len(tagged),
+            "matches": [
+                {
+                    "project_alias": alias,
+                    "project_id": project_id,
+                    "task_id": r.task_id,
+                    "similarity": round(r.similarity, 4),
+                    "representative_query": r.representative_query,
+                    "span_count": r.span_count,
+                    "step_sequence": r.step_sequence,
+                    "last_seen": r.last_seen,
+                    "is_gold": r.is_gold,
+                }
+                for alias, project_id, r in tagged
+            ],
+        }
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
+        return
+
+    _render_cross_project_results(query, tagged, projects_searched=len(projects))
+
+
+def _render_cross_project_results(
+    query: str,
+    tagged: list[tuple[str, str, RecallResult]],
+    *,
+    projects_searched: int,
+) -> None:
+    console.print()
+    console.print(
+        Panel(
+            f"[bold]{len(tagged)}[/bold] match(es) for [cyan]{query[:80]}[/cyan]\n"
+            f"[dim]Aggregated across {projects_searched} pool project(s)[/dim]",
+            title="Cross-Project Recall",
+            border_style="magenta",
+        )
+    )
+
+    any_gold = any(r.is_gold for _, _, r in tagged)
+
+    table = Table(show_header=True, header_style="bold")
+    table.add_column("Sim", style="green", justify="right")
+    table.add_column("Project", style="magenta")
+    table.add_column("Task ID", style="cyan")
+    table.add_column("Query", max_width=32)
+    table.add_column("Spans", justify="right")
+    if any_gold:
+        table.add_column("Gold", justify="center")
+
+    for alias, _project_id, r in tagged:
+        sim_color = (
+            "green" if r.similarity >= 0.85 else "yellow" if r.similarity >= 0.75 else "red"
+        )
+        row = [
+            f"[{sim_color}]{r.similarity:.3f}[/{sim_color}]",
+            alias,
+            r.task_id[:12],
+            r.representative_query[:32],
+            str(r.span_count),
+        ]
+        if any_gold:
+            row.append("★" if r.is_gold else "")
+        table.add_row(*row)
+
+    console.print(table)
+    console.print()
 
 
 def register(app: typer.Typer) -> None:

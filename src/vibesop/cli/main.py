@@ -50,6 +50,7 @@ from vibesop.cli.commands import (
     matcher_cmd,
     optimize_cmd,
     plan_cmd,
+    pool_cmd,
     prompt_chain_cmd,
     recall_cmd,
     sequence_cmd,
@@ -170,6 +171,7 @@ recall_cmd.register(app)
 app.add_typer(sync_cmd.app, name="sync-registry")
 app.add_typer(workflows_cmd.app, name="workflows")
 app.add_typer(instinct_cmd.app, name="instinct")
+app.add_typer(pool_cmd.app, name="pool")
 app.add_typer(prompt_chain_cmd.app, name="prompt-chain")
 app.add_typer(sequence_cmd.app, name="sequence")
 app.add_typer(conversation_cmd.app, name="conversation")
