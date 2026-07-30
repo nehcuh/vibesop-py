@@ -46,11 +46,11 @@ class SkillRecommender:
         ],
         "javascript": [
             ("mattpocock/tdd", "Test-driven development with red-green-refactor"),
-            ("mattpocock/diagnose", "Disciplined diagnosis loop for hard bugs"),
+            ("mattpocock/diagnosing-bugs", "Disciplined diagnosis loop for hard bugs"),
         ],
         "typescript": [
             ("mattpocock/tdd", "Test-driven development with red-green-refactor"),
-            ("mattpocock/diagnose", "Disciplined diagnosis loop for hard bugs"),
+            ("mattpocock/diagnosing-bugs", "Disciplined diagnosis loop for hard bugs"),
             (
                 "mattpocock/improve-codebase-architecture",
                 "Architecture improvement with domain language",
@@ -64,7 +64,7 @@ class SkillRecommender:
             ("superpowers/architect", "System architecture design"),
         ],
         "default": [
-            ("mattpocock/diagnose", "Disciplined diagnosis loop for hard bugs"),
+            ("mattpocock/diagnosing-bugs", "Disciplined diagnosis loop for hard bugs"),
             ("mattpocock/tdd", "Test-driven development"),
         ],
     }
@@ -184,7 +184,7 @@ class SkillRecommender:
         if has_superpowers and not has_mattpocock:
             recs.append(
                 SkillRecommendation(
-                    skill_id="mattpocock/diagnose",
+                    skill_id="mattpocock/diagnosing-bugs",
                     reason="Users with superpowers often also use mattpocock skills for debugging",
                     confidence=0.72,
                 )
@@ -208,7 +208,7 @@ class SkillRecommender:
             recs.append(
                 SkillRecommendation(
                     skill_id="superpowers/refactor",
-                    reason="Complementary to mattpocock/diagnose",
+                    reason="Complementary to mattpocock/diagnosing-bugs",
                     confidence=0.70,
                 )
             )
@@ -221,7 +221,7 @@ class SkillRecommender:
 
         essential = [
             ("systematic-debugging", "Essential debugging workflow"),
-            ("mattpocock/diagnose", "Disciplined diagnosis loop for hard bugs"),
+            ("mattpocock/diagnosing-bugs", "Disciplined diagnosis loop for hard bugs"),
             ("mattpocock/tdd", "Test-driven development with red-green-refactor"),
         ]
         for skill_id, reason in essential:

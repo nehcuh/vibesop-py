@@ -80,7 +80,7 @@ class TestSkillRecommenderRecommendations:
         with patch.object(recommender, "_get_installed_packs", return_value={"superpowers"}):
             recs = recommender.recommend_collaborative()
         skill_ids = [r.skill_id for r in recs]
-        assert "mattpocock/diagnose" in skill_ids
+        assert "mattpocock/diagnosing-bugs" in skill_ids
         assert "mattpocock/tdd" in skill_ids
 
     def test_recommend_collaborative_both(self, tmp_path: Path):
@@ -97,7 +97,7 @@ class TestSkillRecommenderRecommendations:
             recs = recommender.detect_missing_skills()
         skill_ids = [r.skill_id for r in recs]
         assert "systematic-debugging" in skill_ids
-        assert "mattpocock/diagnose" in skill_ids
+        assert "mattpocock/diagnosing-bugs" in skill_ids
         assert "mattpocock/tdd" in skill_ids
 
     def test_detect_missing_skills_none_missing(self, tmp_path: Path):
@@ -105,7 +105,7 @@ class TestSkillRecommenderRecommendations:
         with patch.object(
             recommender,
             "_get_installed_skill_ids",
-            return_value={"systematic-debugging", "mattpocock/diagnose", "mattpocock/tdd"},
+            return_value={"systematic-debugging", "mattpocock/diagnosing-bugs", "mattpocock/tdd"},
         ):
             recs = recommender.detect_missing_skills()
         assert recs == []
@@ -129,7 +129,7 @@ class TestSkillRecommenderRecommendations:
                 recs = recommender.recommend_for_project()
 
         skill_ids = [r.skill_id for r in recs]
-        assert "mattpocock/diagnose" in skill_ids
+        assert "mattpocock/diagnosing-bugs" in skill_ids
 
     def test_recommend_for_project_with_analytics(self, tmp_path: Path):
         recommender = SkillRecommender(project_root=tmp_path)

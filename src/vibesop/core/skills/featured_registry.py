@@ -84,8 +84,8 @@ DEFAULT_FEATURED_SKILLS: list[dict[str, Any]] = [
         "priority": 85,
     },
     {
-        "skill_id": "mattpocock/diagnose",
-        "name": "Disciplined Diagnosis",
+        "skill_id": "mattpocock/diagnosing-bugs",
+        "name": "Diagnosing Bugs",
         "description": "Systematic diagnosis loop for hard bugs and performance regressions. Reproduction, minimisation, hypothesising, instrumentation, fix, regression-test.",
         "category": "debugging",
         "stacks": ["typescript", "javascript", "python", "go", "rust"],

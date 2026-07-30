@@ -198,8 +198,8 @@ class SkillInjector:
 
         For each path, three lookup strategies are tried in order:
         - Exact flat id: ``{skill_id.replace('/', '-')}`` (e.g. ``gstack-review``)
-        - Pack-prefix glob: ``*-{flat_id}`` (e.g. ``mattpocock-diagnose``)
-        - Nested glob: ``**/{flat_id}/SKILL.md`` (e.g. ``mattpocock/engineering/diagnose``)
+        - Pack-prefix glob: ``*-{flat_id}`` (e.g. ``mattpocock-diagnosing-bugs``)
+        - Nested glob: ``**/{flat_id}/SKILL.md`` (e.g. ``mattpocock/engineering/diagnosing-bugs``)
         """
         flat_id = skill_id.replace("/", "-")
         home = Path.home()
