@@ -77,7 +77,8 @@ class TestTracePullsProcessDefaults:
             pass
 
         spans = _read_spans(tmp_path / "spans.jsonl")
-        assert spans[0]["project_id"] == "/tmp/mycms"
+        # W5.1: project_id resolves symlinks so it agrees with SpanWriter._path.
+        assert spans[0]["project_id"] == str(Path("/tmp/mycms").resolve())
 
     def test_explicit_session_id_overrides_process(self, fresh_tracer, tmp_path):
         """Explicit kwarg wins over process default."""
@@ -161,7 +162,8 @@ class TestChildSpanInheritsSessionProject:
         spans = _read_spans(tmp_path / "spans.jsonl")
         child = next(s for s in spans if s["name"] == "llm:call")
         assert child["session_id"] == "cli-session"
-        assert child["project_id"] == "/tmp/cli-project"
+        # W5.1: project_id resolves symlinks so it agrees with SpanWriter._path.
+        assert child["project_id"] == str(Path("/tmp/cli-project").resolve())
 
     def test_start_span_inherits_session_project(self, fresh_tracer, tmp_path):
         """start_span() (manual API) inherits session_id + project_id too.

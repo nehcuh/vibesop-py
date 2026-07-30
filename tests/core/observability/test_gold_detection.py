@@ -32,7 +32,12 @@ def _fake_embedding(query: str) -> np.ndarray:
 
 def _spans(task_id_queries: list[tuple[str, str]]) -> list[dict]:
     return [
-        {"task_id": tid, "input_data": {"query": q}, "name": "route:query"}
+        {
+            "task_id": tid,
+            "input_data": {"query": q},
+            "name": "route:query",
+            "project_id": "test",
+        }
         for tid, q in task_id_queries
     ]
 

@@ -47,9 +47,20 @@ def _angle_embedding(query: str) -> np.ndarray:
 
 
 def _spans(task_id_queries: list[tuple[str, str]]) -> list[dict]:
-    """Build minimal span dicts for clustering input."""
+    """Build minimal span dicts for clustering input.
+
+    Includes ``project_id="test"`` so the lazy age-out filter (W5.1 Task 2.3)
+    does not exclude them. Pre-W5.0 spans (project_id="default") are filtered
+    out by default in cluster_queries; tests that want to exercise legacy
+    filtering pass project_id="default" explicitly.
+    """
     return [
-        {"task_id": tid, "input_data": {"query": q}, "name": "route:query"}
+        {
+            "task_id": tid,
+            "input_data": {"query": q},
+            "name": "route:query",
+            "project_id": "test",
+        }
         for tid, q in task_id_queries
     ]
 
@@ -175,9 +186,23 @@ class TestEdgeCases:
         """A span missing task_id should be ignored, not crash."""
         cache = EmbeddingCache(cache_path=tmp_path / "emb.npz")
         spans = [
-            {"task_id": "t1", "input_data": {"query": "hello"}, "name": "route:query"},
-            {"task_id": None, "input_data": {"query": "noise"}, "name": "route:query"},
-            {"input_data": {"query": "no-task-id"}, "name": "route:query"},
+            {
+                "task_id": "t1",
+                "input_data": {"query": "hello"},
+                "name": "route:query",
+                "project_id": "test",
+            },
+            {
+                "task_id": None,
+                "input_data": {"query": "noise"},
+                "name": "route:query",
+                "project_id": "test",
+            },
+            {
+                "input_data": {"query": "no-task-id"},
+                "name": "route:query",
+                "project_id": "test",
+            },
         ]
         with patch.object(cache, "_compute", side_effect=_angle_embedding):
             clusters = cluster_queries(spans, cache=cache)
@@ -238,6 +263,7 @@ class TestMaxSpansPerTaskSampling:
             "input_data": {"query": query},
             "name": "route:query",
             "started_at": started_at,
+            "project_id": "test",
         }
 
     def test_default_none_preserves_all_spans(self, tmp_path: Path) -> None:

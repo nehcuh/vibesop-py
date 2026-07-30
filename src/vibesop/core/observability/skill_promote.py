@@ -705,6 +705,7 @@ def scan_candidates(
     min_gold_rate: float = DEFAULT_MIN_GOLD_RATE,
     unstable_gold_rate: float = DEFAULT_UNSTABLE_GOLD_RATE,
     dry_run: bool = False,
+    include_legacy: bool = False,
 ) -> ScanSummary:
     """Cluster recent spans → label → populate candidate pool.
 
@@ -745,6 +746,12 @@ def scan_candidates(
     if not spans:
         return summary
 
+    # W5.1 Task 2.3: lazy age-out for pre-W5.0 spans.
+    if not include_legacy:
+        spans = [s for s in spans if (s.get("project_id") or "default") != "default"]
+        if not spans:
+            return summary
+
     # 2) Cluster recent spans.
     clusters = cluster_queries(spans, cache=cache)
     summary.clusters_seen = len(clusters)
@@ -770,8 +777,24 @@ def scan_candidates(
             # flag. Skip silently.
             continue
 
-        cluster_task_ids = set(cluster.task_ids)
-        cluster_spans = [s for s in spans if s.get("task_id") in cluster_task_ids]
+        # W5.1 Task 2.1: filter spans by composite (project_id, task_id) key.
+        # Pre-W5.1 used `task_id in cluster.task_ids` which collapsed the same
+        # task_id across projects. Composite key is unambiguous.
+        #
+        # Invariant: ``cluster_queries`` always populates ``task_keys`` post-W5.1.
+        # If empty, the cluster was constructed elsewhere (test fixture, manual);
+        # fail loud rather than silently assuming "default" project_id (which
+        # the lazy age-out filter has just excluded).
+        assert cluster.task_keys, (
+            "W5.1 invariant: cluster_queries must populate task_keys. "
+            "Manually-constructed Cluster objects must set task_keys explicitly."
+        )
+        cluster_task_keys = set(cluster.task_keys)
+        cluster_spans = [
+            s
+            for s in spans
+            if (s.get("project_id") or "default", s.get("task_id")) in cluster_task_keys
+        ]
         freq, labels, core_steps = label_step_frequency(
             cluster_spans, total_span_count=cluster.span_count
         )

@@ -71,11 +71,17 @@ def get_process_project_id() -> str | None:
     Returns None if cwd can't be resolved (extremely rare; caller —
     ``tracer.trace()`` — falls back to Span.project_id's "default" in
     that case). Cached after first successful resolution.
+
+    W5.1: resolves symlinks so the canonical form agrees with
+    ``SpanWriter._path`` (which calls ``Path.resolve()`` at construction).
+    Without this, macOS tmpdir-backed paths (``/tmp/...`` →
+    ``/private/tmp/...``) would disagree with SpanWriter, breaking
+    Phase 3 ``vibe pool`` membership matching.
     """
     global _process_project_id
     if _process_project_id is None:
         try:
-            cwd = Path.cwd()
+            cwd = Path.cwd().resolve()
             _process_project_id = str(cwd)
         except (OSError, RuntimeError):
             # cwd unavailable (deleted, permission, etc.). Leave None;

@@ -42,13 +42,20 @@ def _span(
     *,
     name: str = "route:query",
     timestamp: datetime | None = None,
+    project_id: str = "test",
 ) -> dict:
+    """Build a minimal span dict for recall input.
+
+    ``project_id="test"`` keeps the span out of the W5.1 Task 2.3 lazy
+    age-out filter (which excludes ``project_id="default"``).
+    """
     ts = timestamp or datetime.now(UTC)
     return {
         "task_id": task_id,
         "input_data": {"query": query},
         "name": name,
         "timestamp": ts.isoformat(),
+        "project_id": project_id,
     }
 
 
@@ -178,6 +185,7 @@ class TestProdShapeStartedAt:
             "name": "route:query",
             "started_at": started_at.isoformat(),
             # deliberately NO "timestamp" key — matches real Span.to_dict()
+            "project_id": "test",
         }
 
     def test_old_started_at_excluded(self, tmp_path: Path) -> None:
@@ -234,6 +242,7 @@ class TestFilterRecentEdgeCases:
                 "task_id": "t1",
                 "input_data": {"query": "hello"},
                 "name": "route:query",
+                "project_id": "test",
                 # no "timestamp" key
             }
         ]
@@ -249,6 +258,7 @@ class TestFilterRecentEdgeCases:
                 "input_data": {"query": "hello"},
                 "name": "route:query",
                 "timestamp": "not-a-date",
+                "project_id": "test",
             }
         ]
         with patch.object(cache, "_compute", side_effect=_fake_embedding):
@@ -271,6 +281,7 @@ class TestFilterRecentEdgeCases:
                 "input_data": {"query": "hello"},
                 "name": "route:query",
                 "timestamp": "",
+                "project_id": "test",
             }
         ]
         with patch.object(cache, "_compute", side_effect=_fake_embedding):
@@ -289,6 +300,7 @@ class TestEmptyQuerySkipped:
                 "input_data": {},  # no "query" key
                 "name": "route:query",
                 "timestamp": datetime.now(UTC).isoformat(),
+                "project_id": "test",
             },
             _span("t_real", "hello"),
         ]
@@ -313,6 +325,7 @@ class TestEdgeCases:
                 "name": "route:query",
                 "input_data": {"query": "no task"},
                 "timestamp": datetime.now(UTC).isoformat(),
+                "project_id": "test",
             },
             _span("t1", "hello"),
         ]
@@ -353,6 +366,7 @@ class TestW3TraceIdAndSkillId:
                 "name": "route:query",
                 "timestamp": old_ts.isoformat(),
                 "trace_id": "T-old",
+                "project_id": "test",
             },
             {
                 "task_id": "t1",
@@ -360,6 +374,7 @@ class TestW3TraceIdAndSkillId:
                 "name": "route:query",
                 "timestamp": new_ts.isoformat(),
                 "trace_id": "T-new",
+                "project_id": "test",
             },
         ]
         with patch.object(cache, "_compute", side_effect=_fake_embedding):
@@ -383,6 +398,7 @@ class TestW3TraceIdAndSkillId:
                 "name": "route:query",
                 "timestamp": datetime(2026, 7, 1, tzinfo=UTC).isoformat(),
                 "metadata": {"skill_id": "skill_a"},
+                "project_id": "test",
             },
             {
                 "task_id": "t1",
@@ -390,6 +406,7 @@ class TestW3TraceIdAndSkillId:
                 "name": "route:query",
                 "timestamp": datetime(2026, 7, 2, tzinfo=UTC).isoformat(),
                 "metadata": {"skill_id": "skill_a"},
+                "project_id": "test",
             },
             {
                 "task_id": "t1",
@@ -397,6 +414,7 @@ class TestW3TraceIdAndSkillId:
                 "name": "route:query",
                 "timestamp": datetime(2026, 7, 3, tzinfo=UTC).isoformat(),
                 "metadata": {"skill_id": "skill_b"},
+                "project_id": "test",
             },
         ]
         with patch.object(cache, "_compute", side_effect=_fake_embedding):
@@ -413,6 +431,7 @@ class TestW3TraceIdAndSkillId:
                 "name": "route:query",
                 "timestamp": datetime.now(UTC).isoformat(),
                 "skill_id": "top_level_skill",
+                "project_id": "test",
             }
         ]
         with patch.object(cache, "_compute", side_effect=_fake_embedding):
@@ -541,6 +560,7 @@ class TestW3RealInstinctLearnerIntegration:
                 "timestamp": f"2026-07-2{i}T12:00:00+00:00",
                 "trace_id": f"T-real-{i}",
                 "metadata": {"skill_id": "cmspark-fix"},
+                "project_id": "test",
             }
             for i in range(1, 4)
         ]
@@ -588,6 +608,7 @@ class TestW3RealInstinctLearnerIntegration:
                 "name": "route:query",
                 "timestamp": f"2026-07-2{i}T18:00:00+00:00",
                 "trace_id": f"T-lid-{i}",
+                "project_id": "test",
             }
             for i in range(1, 4)
         ]

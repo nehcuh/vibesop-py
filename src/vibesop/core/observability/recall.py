@@ -112,6 +112,7 @@ def recall_similar(
     threshold: float = _DEFAULT_THRESHOLD,
     days: int = _DEFAULT_DAYS_WINDOW,
     min_gold_run_count: int = _DEFAULT_MIN_GOLD_RUN_COUNT,
+    include_legacy: bool = False,
 ) -> list[RecallResult]:
     """Return top-k similar past task_ids by cosine on query embedding.
 
@@ -139,6 +140,9 @@ def recall_similar(
         Minimum distinct trace_id count for ``is_gold=True``. Distinct
         traces are the "proven" unit; falls back to span_count when
         spans lack trace_id (legacy compatibility).
+    include_legacy:
+        When False (default), spans with ``project_id == "default"``
+        (pre-W5.0 instrumentation) are excluded. W5.1 Task 2.3.
 
     Returns
     -------
@@ -149,6 +153,12 @@ def recall_similar(
     if not spans or not query.strip():
         return []
     cache = cache or get_embedding_cache()
+
+    # W5.1 Task 2.3: lazy age-out for pre-W5.0 spans.
+    if not include_legacy:
+        spans = [s for s in spans if (s.get("project_id") or "default") != "default"]
+        if not spans:
+            return []
 
     # Filter spans by days window.
     cutoff = datetime.now(UTC) - timedelta(days=days)

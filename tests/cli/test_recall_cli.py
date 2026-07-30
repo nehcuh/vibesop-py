@@ -84,6 +84,7 @@ class TestRecallCli:
                     "task_id": "t1",
                     "input_data": {"query": "screenshot permission popup"},
                     "name": "route:query",
+                    "project_id": "test",
                     "timestamp": "2026-07-28T12:00:00+00:00",
                 }
             ],
@@ -122,6 +123,7 @@ class TestRecallCli:
                     "task_id": "t1",
                     "input_data": {"query": "screenshot permission"},
                     "name": "route:query",
+                    "project_id": "test",
                     "timestamp": "2026-07-28T12:00:00+00:00",
                 }
             ],
@@ -154,6 +156,7 @@ class TestRecallCli:
                     "task_id": "t1",
                     "input_data": {"query": "alpha"},
                     "name": "route:query",
+                    "project_id": "test",
                     "timestamp": "2026-07-28T12:00:00+00:00",
                 }
             ],

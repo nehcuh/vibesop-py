@@ -1,15 +1,15 @@
-{"task_id": "w4-auth-t1", "input_data": {"query": "auth login user"}, "name": "route:query", "trace_id": "T-w4-auth-1", "timestamp": "2026-07-25T10:00:00+00:00"}
-{"task_id": "w4-auth-t2", "input_data": {"query": "auth signup new user"}, "name": "route:query", "trace_id": "T-w4-auth-2", "timestamp": "2026-07-25T10:01:00+00:00"}
-{"task_id": "w4-auth-t3", "input_data": {"query": "auth logout session"}, "name": "route:query", "trace_id": "T-w4-auth-3", "timestamp": "2026-07-25T10:02:00+00:00"}
-{"task_id": "w4-file-t1", "input_data": {"query": "file read contents"}, "name": "route:query", "trace_id": "T-w4-file-1", "timestamp": "2026-07-25T11:00:00+00:00"}
-{"task_id": "w4-file-t2", "input_data": {"query": "file write bytes"}, "name": "route:query", "trace_id": "T-w4-file-2", "timestamp": "2026-07-25T11:01:00+00:00"}
-{"task_id": "w4-file-t3", "input_data": {"query": "file delete path"}, "name": "route:query", "trace_id": "T-w4-file-3", "timestamp": "2026-07-25T11:02:00+00:00"}
-{"task_id": "w4-image-t1", "input_data": {"query": "image resize pixels"}, "name": "route:query", "trace_id": "T-w4-image-1", "timestamp": "2026-07-25T12:00:00+00:00"}
-{"task_id": "w4-image-t2", "input_data": {"query": "image crop bounds"}, "name": "route:query", "trace_id": "T-w4-image-2", "timestamp": "2026-07-25T12:01:00+00:00"}
-{"task_id": "w4-image-t3", "input_data": {"query": "image rotate degrees"}, "name": "route:query", "trace_id": "T-w4-image-3", "timestamp": "2026-07-25T12:02:00+00:00"}
-{"task_id": "w4-git-t1", "input_data": {"query": "git commit message"}, "name": "route:query", "trace_id": "T-w4-git-1", "timestamp": "2026-07-25T13:00:00+00:00"}
-{"task_id": "w4-git-t2", "input_data": {"query": "git push remote"}, "name": "route:query", "trace_id": "T-w4-git-2", "timestamp": "2026-07-25T13:01:00+00:00"}
-{"task_id": "w4-git-t3", "input_data": {"query": "git pull branch"}, "name": "route:query", "trace_id": "T-w4-git-3", "timestamp": "2026-07-25T13:02:00+00:00"}
-{"task_id": "w4-test-t1", "input_data": {"query": "test run unit"}, "name": "route:query", "trace_id": "T-w4-test-1", "timestamp": "2026-07-25T14:00:00+00:00"}
-{"task_id": "w4-test-t2", "input_data": {"query": "test coverage report"}, "name": "route:query", "trace_id": "T-w4-test-2", "timestamp": "2026-07-25T14:01:00+00:00"}
-{"task_id": "w4-test-t3", "input_data": {"query": "test fixture setup"}, "name": "route:query", "trace_id": "T-w4-test-3", "timestamp": "2026-07-25T14:02:00+00:00"}
+{"task_id": "w4-auth-t1", "input_data": {"query": "auth login user"}, "name": "route:query", "trace_id": "T-w4-auth-1", "timestamp": "2026-07-25T10:00:00+00:00", "project_id": "test"}
+{"task_id": "w4-auth-t2", "input_data": {"query": "auth signup new user"}, "name": "route:query", "trace_id": "T-w4-auth-2", "timestamp": "2026-07-25T10:01:00+00:00", "project_id": "test"}
+{"task_id": "w4-auth-t3", "input_data": {"query": "auth logout session"}, "name": "route:query", "trace_id": "T-w4-auth-3", "timestamp": "2026-07-25T10:02:00+00:00", "project_id": "test"}
+{"task_id": "w4-file-t1", "input_data": {"query": "file read contents"}, "name": "route:query", "trace_id": "T-w4-file-1", "timestamp": "2026-07-25T11:00:00+00:00", "project_id": "test"}
+{"task_id": "w4-file-t2", "input_data": {"query": "file write bytes"}, "name": "route:query", "trace_id": "T-w4-file-2", "timestamp": "2026-07-25T11:01:00+00:00", "project_id": "test"}
+{"task_id": "w4-file-t3", "input_data": {"query": "file delete path"}, "name": "route:query", "trace_id": "T-w4-file-3", "timestamp": "2026-07-25T11:02:00+00:00", "project_id": "test"}
+{"task_id": "w4-image-t1", "input_data": {"query": "image resize pixels"}, "name": "route:query", "trace_id": "T-w4-image-1", "timestamp": "2026-07-25T12:00:00+00:00", "project_id": "test"}
+{"task_id": "w4-image-t2", "input_data": {"query": "image crop bounds"}, "name": "route:query", "trace_id": "T-w4-image-2", "timestamp": "2026-07-25T12:01:00+00:00", "project_id": "test"}
+{"task_id": "w4-image-t3", "input_data": {"query": "image rotate degrees"}, "name": "route:query", "trace_id": "T-w4-image-3", "timestamp": "2026-07-25T12:02:00+00:00", "project_id": "test"}
+{"task_id": "w4-git-t1", "input_data": {"query": "git commit message"}, "name": "route:query", "trace_id": "T-w4-git-1", "timestamp": "2026-07-25T13:00:00+00:00", "project_id": "test"}
+{"task_id": "w4-git-t2", "input_data": {"query": "git push remote"}, "name": "route:query", "trace_id": "T-w4-git-2", "timestamp": "2026-07-25T13:01:00+00:00", "project_id": "test"}
+{"task_id": "w4-git-t3", "input_data": {"query": "git pull branch"}, "name": "route:query", "trace_id": "T-w4-git-3", "timestamp": "2026-07-25T13:02:00+00:00", "project_id": "test"}
+{"task_id": "w4-test-t1", "input_data": {"query": "test run unit"}, "name": "route:query", "trace_id": "T-w4-test-1", "timestamp": "2026-07-25T14:00:00+00:00", "project_id": "test"}
+{"task_id": "w4-test-t2", "input_data": {"query": "test coverage report"}, "name": "route:query", "trace_id": "T-w4-test-2", "timestamp": "2026-07-25T14:01:00+00:00", "project_id": "test"}
+{"task_id": "w4-test-t3", "input_data": {"query": "test fixture setup"}, "name": "route:query", "trace_id": "T-w4-test-3", "timestamp": "2026-07-25T14:02:00+00:00", "project_id": "test"}

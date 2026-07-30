@@ -50,7 +50,10 @@ def test_session_id_defaults_none_when_unset():
 
 
 def test_project_id_lazy_computed_from_cwd(monkeypatch):
-    """First ``get_process_project_id()`` call resolves str(Path.cwd())."""
+    """First ``get_process_project_id()`` call resolves str(Path.cwd()).
+
+    W5.1: resolves symlinks so it agrees with SpanWriter._path's resolved form.
+    """
 
     # Force lazy re-resolution by clearing cache.
     process_identity._process_project_id = None
@@ -59,7 +62,7 @@ def test_project_id_lazy_computed_from_cwd(monkeypatch):
     monkeypatch.setattr(Path, "cwd", lambda: fake_cwd)
 
     result = get_process_project_id()
-    assert result == "/tmp/some-project"
+    assert result == str(fake_cwd.resolve())
 
 
 def test_project_id_cached_after_first_resolution(monkeypatch):

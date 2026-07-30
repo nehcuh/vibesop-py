@@ -52,6 +52,7 @@ def _gold_spans() -> list[dict]:
             "task_id": "t_cmspark_01",
             "input_data": {"query": "cmspark screenshot permission popup"},
             "name": "route:query",
+            "project_id": "test",
             "timestamp": f"2026-07-2{i}T12:00:00+00:00",
             "trace_id": f"T-prior-{i}",
             "metadata": {"skill_id": "cmspark-fix"},

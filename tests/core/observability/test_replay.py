@@ -50,6 +50,7 @@ def _span(
         "input_data": {"query": query},
         "name": "route:query",
         "timestamp": ts.isoformat(),
+        "project_id": "test",
     }
     if trace_id:
         s["trace_id"] = trace_id
@@ -113,6 +114,7 @@ class TestShouldReplayDecisions:
                 "input_data": {"query": "no task"},
                 "name": "route:query",
                 "timestamp": datetime.now(UTC).isoformat(),
+                "project_id": "test",
             }
         ]
         with patch.object(cache, "_compute", side_effect=_fake_embedding):
