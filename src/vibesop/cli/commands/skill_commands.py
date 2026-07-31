@@ -21,7 +21,7 @@ import json
 import logging
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import questionary
 import typer
@@ -1023,14 +1023,29 @@ def _cleanup_cmd(  # pyright: ignore[reportUnusedFunction]
 # ---------------------------------------------------------------------------
 
 
-def _get_candidate_store() -> ClusterCandidateStore:
-    """Resolve the ClusterCandidateStore for the current project.
+_GLOBAL_OBSERVABILITY_DIR = Path.home() / ".vibe" / "observability"
 
-    Path: ``<cwd>/.vibe/observability/cluster_candidates.jsonl`` —
-    mirrors ReflectionStore and SpanWriter conventions. Tests patch
-    this helper to point at a tmp_path.
+_CandidateStoreScope = Literal["project", "global"]
+
+
+def _get_candidate_store(scope: _CandidateStoreScope = "project") -> ClusterCandidateStore:
+    """Resolve the ClusterCandidateStore for the requested scope.
+
+    - ``project`` (default): ``<cwd>/.vibe/observability/cluster_candidates.jsonl``
+      — mirrors ReflectionStore and SpanWriter conventions.
+    - ``global``: ``~/.vibe/observability/cluster_candidates.jsonl`` —
+      W5.2 cross-project candidates land here so they're visible from any
+      cwd. Path is NOT under ``ExternalSkillLoader.EXTERNAL_PATHS`` (which
+      includes ``~/.vibe/skills/``, not ``~/.vibe/observability/``) —
+      drafts stay outside discovery roots (W4 未审不注入 invariant).
+
+    Tests patch this helper (or ``_GLOBAL_OBSERVABILITY_DIR``) to redirect.
     """
-    storage_dir = Path.cwd() / ".vibe" / "observability"
+    storage_dir = (
+        Path.cwd() / ".vibe" / "observability"
+        if scope == "project"
+        else _GLOBAL_OBSERVABILITY_DIR
+    )
     return ClusterCandidateStore(storage_dir=storage_dir)
 
 
@@ -1068,6 +1083,15 @@ def scan_candidates_cmd(  # pyright: ignore[reportUnusedFunction]
             "Recommended: 7-30."
         ),
     ),
+    cross_project: bool = typer.Option(
+        False,
+        "--cross-project",
+        help=(
+            "Scan spans across all pool members (W5.2). "
+            "Candidates land in the global store at ~/.vibe/observability/. "
+            "Register pool members first via `vibe pool add <path>`."
+        ),
+    ),
 ) -> None:
     """Cluster recent spans → populate the skill-candidate pool.
 
@@ -1087,6 +1111,12 @@ def scan_candidates_cmd(  # pyright: ignore[reportUnusedFunction]
     "min(limit, spans_younger_than_days)". Filter reads ``started_at``
     (real production schema); malformed timestamps are kept rather than
     dropped (see recall._filter_recent rationale).
+
+    ``--cross-project`` (W5.2): unions spans from every pool member's
+    ``spans.jsonl``. Cross-project clusters (queries that recur across
+    multiple projects) only surface via this flag — the default scan
+    reads only local spans. Candidates land in the global store so
+    they're visible from any cwd.
     """
     # Validate CLI arg bounds (grok P1: prior version accepted any int/float).
     if min_cluster_size < 1:
@@ -1111,14 +1141,28 @@ def scan_candidates_cmd(  # pyright: ignore[reportUnusedFunction]
     )
     from vibesop.core.observability.span_writer import SpanWriter
 
-    spans = SpanWriter().query_recent(limit=limit)
+    if cross_project:
+        from vibesop.cli.commands.pool_cmd import collect_pool_spans
+
+        spans, aliases_with_data = collect_pool_spans(limit=limit)
+        if not aliases_with_data:
+            console.print(
+                "[red]✗[/red] No pool members with spans found. "
+                "Add with: [cyan]vibe pool add <path>[/cyan]"
+            )
+            raise typer.Exit(1)
+        scope_msg = f"cross-project ({len(aliases_with_data)} pool member(s))"
+    else:
+        spans = SpanWriter().query_recent(limit=limit)
+        scope_msg = "project"
+
     if days is not None:
         cutoff = datetime.now(UTC) - timedelta(days=days)
         spans = _filter_recent(spans, cutoff)
 
     learner = InstinctLearner()
     cache = get_embedding_cache()
-    store = _get_candidate_store()
+    store = _get_candidate_store(scope="global" if cross_project else "project")
 
     summary = scan_candidates(
         spans,
@@ -1143,9 +1187,81 @@ def scan_candidates_cmd(  # pyright: ignore[reportUnusedFunction]
             "  [yellow]⚠ hard cap reached — review backlog or dismiss to make room[/yellow]"
         )
     console.print(
-        f"  [dim]pool: {store.pending_count()} stable pending, "
+        f"  [dim]scope: {scope_msg} | "
+        f"pool: {store.pending_count()} stable pending, "
         f"{store.pending_count(include_unstable=True)} total "
         f"(use `vibe skill candidates` to review)[/dim]"
+    )
+
+
+def _resolve_project_alias(project_id: str) -> str:
+    """Map an absolute-path project_id to a pool alias (W5.2).
+
+    Spans store ``project_id = str(Path.cwd().resolve())`` (W5.0).
+    Pool entries store ``path`` (which may be relative or absolute) +
+    ``alias``. We resolve both sides and match.
+
+    Falls back to the basename if no pool entry matches (so the column
+    stays readable even when projects aren't registered).
+    """
+    from vibesop.cli.commands.pool_cmd import load_pool
+
+    try:
+        target = Path(project_id).resolve()
+    except (OSError, ValueError):
+        return Path(project_id).name or project_id[:8]
+
+    for entry in load_pool().get("projects", []):
+        entry_path = Path(entry.get("path", ""))
+        try:
+            if entry_path.resolve() == target:
+                return entry.get("alias") or entry_path.name
+        except (OSError, ValueError):
+            continue
+
+    return target.name or project_id[:8]
+
+
+def _format_projects_column(project_distribution: dict[str, int]) -> str:
+    """Render project_distribution as a compact comma-separated alias list."""
+    if not project_distribution:
+        return "[dim]—[/dim]"
+    parts = [
+        f"{_resolve_project_alias(pid)}×{count}"
+        for pid, count in sorted(
+            project_distribution.items(), key=lambda kv: kv[1], reverse=True
+        )
+    ]
+    return ", ".join(parts)
+
+
+def _merge_dedup_candidates(
+    project_rows: list[ClusterCandidate],
+    global_rows: list[ClusterCandidate],
+) -> list[ClusterCandidate]:
+    """Merge project + global candidates by cluster_id.
+
+    When the same ``cluster_id`` exists in both stores, the record with
+    larger ``len(project_distribution)`` wins (more heterogeneous view
+    is strictly more informative — captures cross-project state the
+    per-project scan can't see).
+
+    Stable-sort by ``(gold_rate, span_count)`` desc to match
+    ``ClusterCandidateStore.list_pending`` ordering.
+    """
+    by_id: dict[str, ClusterCandidate] = {}
+    for row in (*project_rows, *global_rows):
+        existing = by_id.get(row.cluster_id)
+        if existing is None:
+            by_id[row.cluster_id] = row
+            continue
+        # Prefer more-heterogeneous record (brief v2 §7 Q1).
+        if len(row.project_distribution) > len(existing.project_distribution):
+            by_id[row.cluster_id] = row
+    return sorted(
+        by_id.values(),
+        key=lambda r: (r.gold_rate, r.span_count),
+        reverse=True,
     )
 
 
@@ -1160,26 +1276,40 @@ def candidates_cmd(  # pyright: ignore[reportUnusedFunction]
         help="Show stable AND unstable candidates in one list (default: stable only)",
     ),
     json_output: bool = typer.Option(False, "--json", help="Machine-readable JSON output"),
+    cross_project_only: bool = typer.Option(
+        False,
+        "--cross-project-only",
+        help="Show only candidates from the global (cross-project) store (W5.2).",
+    ),
 ) -> None:
     """List pending skill candidates from the pool.
 
     Default: stable candidates sorted by gold_rate desc. Use
     ``--unstable`` for the diagnosis bucket only (gold_rate<0.30,
     sorted asc). Use ``--include-unstable`` to see both in one list.
+
+    W5.2: reads from BOTH the project store (``<cwd>/.vibe/observability/``)
+    AND the global store (``~/.vibe/observability/``). Cross-project
+    candidates are tagged ``[XP]`` (short for "cross-project"; chosen for
+    column width — the full label would force Rich to wrap the table).
+    Use ``--cross-project-only`` to filter to global store rows only.
     """
     import json as _json
     from datetime import UTC, datetime
 
-    store = _get_candidate_store()
-    if unstable:
-        # Diagnosis-only view: unstable rows, sorted worst-first.
-        rows = store.list_unstable()
-    elif include_unstable:
-        # Combined view for audit / dashboard use.
-        rows = store.list_pending(include_unstable=True)
-    else:
-        # Default review queue: stable candidates only.
-        rows = store.list_pending()
+    project_store = _get_candidate_store(scope="project")
+    global_store = _get_candidate_store(scope="global")
+
+    def _select(store: ClusterCandidateStore) -> list[ClusterCandidate]:
+        if unstable:
+            return store.list_unstable()
+        elif include_unstable:
+            return store.list_pending(include_unstable=True)
+        return store.list_pending()
+
+    project_rows = [] if cross_project_only else _select(project_store)
+    global_rows = _select(global_store)
+    rows = _merge_dedup_candidates(project_rows, global_rows)
 
     if json_output:
         now = datetime.now(UTC)
@@ -1191,6 +1321,14 @@ def candidates_cmd(  # pyright: ignore[reportUnusedFunction]
                 "span_count": r.span_count,
                 "gold_rate": round(r.gold_rate, 4),
                 "is_unstable": r.is_unstable,
+                "is_cross_project": r.is_cross_project,
+                # Privacy: basenames only, collision-suffixed. The table
+                # view already redacts via _format_projects_column; JSON
+                # consumers (dashboards, CI logs) get the same treatment
+                # so absolute filesystem paths never leave the user's
+                # machine via --json (omx-code-review HIGH #2, brief v2
+                # §6 P-5).
+                "project_distribution": dedupe_project_distribution(r.project_distribution),
                 "ttl_days_left": max(
                     0,
                     int((r.ttl_expires_at - now).total_seconds() // 86400)
@@ -1206,17 +1344,18 @@ def candidates_cmd(  # pyright: ignore[reportUnusedFunction]
         return
 
     if not rows:
-        label = "unstable " if unstable else ""
+        label = "unstable " if unstable else ("cross-project " if cross_project_only else "")
         console.print(f"[dim]No {label}candidates in pool[/dim]")
         return
 
     title = "Unstable candidates" if unstable else "Skill candidates"
     table = Table(title=title)
-    table.add_column("ID", style="bold")
+    table.add_column("ID", style="bold", max_width=30, no_wrap=False)
     table.add_column("Representative query", max_width=40)
     table.add_column("Spans", justify="right")
     table.add_column("Gold%", justify="right")
     table.add_column("Bucket", justify="center")
+    table.add_column("Projects", max_width=30)
     table.add_column("TTL", justify="right")
     table.add_column("Core steps")
 
@@ -1233,17 +1372,32 @@ def candidates_cmd(  # pyright: ignore[reportUnusedFunction]
         # First query, truncated for the table column. Pi P1: gives the
         # user a semantic anchor instead of an opaque hash.
         query_str = (r.queries[0] if r.queries else "")[:40]
+        # Cross-project tag on the ID column for visual scannability.
+        # Tag is short ("[XP]") so it survives Rich's narrow-table truncation.
+        id_str = r.cluster_id[:8]
+        if r.is_cross_project:
+            id_str = f"[cyan][XP][/cyan] {id_str}"
         table.add_row(
-            r.cluster_id[:8],
+            id_str,
             query_str or "[dim]—[/dim]",
             str(r.span_count),
             f"{r.gold_rate * 100:.0f}%",
             bucket,
+            _format_projects_column(r.project_distribution),
             f"[{ttl_color}]{days_left}d[/{ttl_color}]",
             core_str or "[dim]—[/dim]",
         )
 
     console.print(table)
+    # pi re-review M5: in-product legend for the [XP] tag + Projects column
+    # format. Only printed when at least one row in the current listing is
+    # cross-project (avoids noise for the common single-project case).
+    has_xp = any(r.is_cross_project for r in rows)
+    if has_xp:
+        console.print(
+            "[dim][XP] = cross-project cluster (spans sourced from ≥2 pool "
+            "members). Projects column shows alias × span count.[/dim]"
+        )
     console.print(
         "\n[dim]Next: `vibe skill promote <id>` to draft SKILL.md, "
         "or `vibe skill dismiss <id>` to reject.[/dim]"
@@ -1253,19 +1407,58 @@ def candidates_cmd(  # pyright: ignore[reportUnusedFunction]
 @app.command(name="promote")
 def promote_cmd(  # pyright: ignore[reportUnusedFunction]
     cluster_id: str = typer.Argument(..., help="Cluster ID from `vibe skill candidates`"),
+    scope: Literal["project", "global"] = typer.Option(
+        "project",
+        "--scope",
+        help=(
+            "Draft destination: 'project' writes to <cwd>/.vibe/observability/skill_drafts/ "
+            "(default); 'global' writes to ~/.vibe/observability/skill_drafts/ (W5.2). "
+            "Global drafts are visible from any cwd but still require explicit "
+            "`vibe skill add` to activate — drafts are NEVER auto-discovered."
+        ),
+    ),
 ) -> None:
     """Promote a candidate → draft SKILL.md + flip status.
 
     The drafted SKILL.md is written to
-    ``.vibe/observability/skill_drafts/<id>/`` — a path that
-    ``CandidateManager`` does NOT auto-discover. To inject the skill
-    into routing, copy the draft into ``.vibe/skills/`` and run
-    ``vibe skill add .vibe/skills/<id>``. This is the literal
+    ``.vibe/observability/skill_drafts/<id>/`` (project scope, default) or
+    ``~/.vibe/observability/skill_drafts/<id>/`` (global scope, W5.2) —
+    paths that ``CandidateManager`` does NOT auto-discover. To inject the
+    skill into routing, copy the draft into the appropriate ``skills/``
+    dir and run ``vibe skill add <path>``. This is the literal
     "未审不注入" guarantee (W4 review P0 — prior version wrote under
     ``.vibe/skills/`` which IS auto-discovered).
+
+    W5.2: For cross-project clusters, the candidate is loaded from the
+    global store; promote with ``--scope global`` to keep the draft
+    visible across all projects. ``--scope project`` on a cross-project
+    cluster is allowed (permissive policy) but emits a warning — the
+    drafted SKILL.md will contain queries from multiple projects.
     """
-    store = _get_candidate_store()
-    candidate = store.get(cluster_id)
+    # W5.2 omx-code-review ARCHITECT #2: --scope is AUTHORITATIVE for
+    # store selection. The prior logic picked "more heterogeneous" even
+    # when the user explicitly asked for project scope — that could flip
+    # the GLOBAL store's status while the draft landed in project drafts,
+    # making the row appear "promoted" to other pool members who never
+    # opted in. Now: try the requested scope's store first; fall back to
+    # the other store ONLY if the cluster isn't in the requested one
+    # (with a visible hint so the user sees the redirect).
+    primary_store = _get_candidate_store(scope=scope)
+    fallback_scope: _CandidateStoreScope = "global" if scope == "project" else "project"
+    fallback_store = _get_candidate_store(scope=fallback_scope)
+    candidate = primary_store.get(cluster_id)
+    store = primary_store
+    if candidate is None:
+        fallback = fallback_store.get(cluster_id)
+        if fallback is not None:
+            candidate = fallback
+            store = fallback_store
+            console.print(
+                f"[dim]Cluster '{cluster_id}' found in {fallback_scope} store; "
+                f"flipping that store's status. Draft still lands at --scope {scope} "
+                f"(per user request).[/dim]"
+            )
+
     if candidate is None:
         console.print(f"[red]✗[/red] Cluster '{cluster_id}' not in pool")
         raise typer.Exit(1)
@@ -1277,6 +1470,23 @@ def promote_cmd(  # pyright: ignore[reportUnusedFunction]
         )
         raise typer.Exit(1)
 
+    # W5.2 Task 3.2: permissive policy. Cross-project cluster + project
+    # scope → loud warning (user opted into permissive redaction; this
+    # is the safeguard per brief v2 §7a A2). Cross-project + global is
+    # the natural fit → mild info line.
+    if candidate.is_cross_project and scope == "project":
+        projects_summary = _format_projects_column(candidate.project_distribution)
+        console.print(
+            f"[yellow]⚠ Cross-project cluster[/yellow] ({projects_summary}) "
+            f"promoted to [bold]project[/bold] scope. "
+            f"SKILL.md will contain queries from multiple projects — "
+            f"review before activating."
+        )
+    elif candidate.is_cross_project and scope == "global":
+        console.print(
+            f"[dim]Cross-project cluster → global drafts ({len(candidate.project_distribution)} projects).[/dim]"
+        )
+
     # Derive skill_id with cluster_id prefix (pi P1: avoids collision
     # when two clusters share a first query — both would slug to the
     # same custom/<slug> and silently no-op on second promote).
@@ -1284,28 +1494,67 @@ def promote_cmd(  # pyright: ignore[reportUnusedFunction]
     skill_id = f"custom/{_slugify(base_query)}-{cluster_id[:8]}"
 
     # W4.E: materialize SKILL.md draft outside discovery paths.
-    skill_path = materialize_candidate(candidate, skill_id)
+    # W5.2: --scope global routes to ~/.vibe/observability/skill_drafts/.
+    drafts_root = (
+        Path.cwd() / ".vibe" / "observability" / "skill_drafts"
+        if scope == "project"
+        else _GLOBAL_OBSERVABILITY_DIR / "skill_drafts"
+    )
+    skill_path = materialize_candidate(candidate, skill_id, drafts_root=drafts_root, scope=scope)
 
     # Flip store status (idempotent on already-promoted rows).
+    # Promote the store that actually holds the candidate.
     store.promote(cluster_id, skill_id)
 
     console.print(f"[green]✓[/green] Promoted '{cluster_id}' → skill_id={skill_id}")
     console.print(f"  [dim]draft:[/dim] {skill_path}")
-    console.print(
-        f"  [dim]next:[/dim] review the draft, then copy to "
-        f"`.vibe/skills/{skill_id}/` and run "
-        f"`vibe skill add .vibe/skills/{skill_id}` to inject into routing"
-    )
+    if scope == "global":
+        console.print(
+            f"  [dim]activate:[/dim] copy to ~/.vibe/skills/{skill_id}/ and run "
+            f"`vibe skill add ~/.vibe/skills/{skill_id}`"
+        )
+    else:
+        console.print(
+            f"  [dim]activate:[/dim] copy to .vibe/skills/{skill_id}/ and run "
+            f"`vibe skill add .vibe/skills/{skill_id}`"
+        )
 
 
 @app.command(name="dismiss")
 def dismiss_cmd(  # pyright: ignore[reportUnusedFunction]
     cluster_id: str = typer.Argument(..., help="Cluster ID to dismiss"),
     reason: str = typer.Option(None, "--reason", help="Why this candidate is rejected (recorded)"),
+    scope: _CandidateStoreScope = typer.Option(
+        "project",
+        "--scope",
+        help=(
+            "Which store to dismiss from: 'project' (default) or 'global'. "
+            "If the cluster isn't in the requested store, VibeSOP falls back "
+            "to the other store with a hint (W5.2 pi re-review H1: cross-project "
+            "candidates live in global store and would otherwise be undismissable)."
+        ),
+    ),
 ) -> None:
     """Dismiss a candidate with optional reason. Status is sticky."""
-    store = _get_candidate_store()
-    candidate = store.get(cluster_id)
+    # pi re-review H1: mirror promote_cmd's dual-store lookup so cross-project
+    # candidates in the global store can actually be dismissed. Prior version
+    # hard-coded scope='project' and reported "not in pool" for clusters that
+    # visibly appeared in `candidates` listing — user trap.
+    primary_store = _get_candidate_store(scope=scope)
+    fallback_scope: _CandidateStoreScope = "global" if scope == "project" else "project"
+    fallback_store = _get_candidate_store(scope=fallback_scope)
+    candidate = primary_store.get(cluster_id)
+    store = primary_store
+    if candidate is None:
+        fallback = fallback_store.get(cluster_id)
+        if fallback is not None:
+            candidate = fallback
+            store = fallback_store
+            console.print(
+                f"[dim]Cluster '{cluster_id}' found in {fallback_scope} store; "
+                f"dismissing there.[/dim]"
+            )
+
     if candidate is None:
         console.print(f"[red]✗[/red] Cluster '{cluster_id}' not in pool")
         raise typer.Exit(1)
@@ -1327,6 +1576,8 @@ def dismiss_cmd(  # pyright: ignore[reportUnusedFunction]
 # end so the existing W0-W3 commands above don't pay the import cost
 # unless W4 features are used.
 from vibesop.core.observability.skill_promote import (  # noqa: E402
+    ClusterCandidate,
     ClusterCandidateStore,
+    dedupe_project_distribution,
     materialize_candidate,
 )

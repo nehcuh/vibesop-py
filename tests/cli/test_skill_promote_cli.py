@@ -25,7 +25,10 @@ from vibesop.core.observability.skill_promote import ClusterCandidate
 
 @pytest.fixture
 def cli_runner() -> CliRunner:
-    return CliRunner()
+    # W5.2: candidates_cmd gained a Projects column; force a wide
+    # terminal so the query column doesn't wrap and break substring
+    # assertions on multi-word queries.
+    return CliRunner(env={"COLUMNS": "200"})
 
 
 @pytest.fixture
@@ -316,7 +319,7 @@ class TestScanCandidatesDaysWindow:
         (grok P1-3). This test confirms both flags coexist without crash
         and produce a valid scan output.
         """
-        from datetime import UTC, datetime, timedelta
+        from datetime import UTC, datetime
 
         now = datetime.now(UTC)
         spans = [
@@ -560,6 +563,78 @@ class TestDismiss:
         r = cli_runner.invoke(app, ["skill", "dismiss", "no-such-id"])
         assert r.exit_code == 1
         assert "not in pool" in r.output
+
+    def test_dismiss_cross_project_candidate_via_global_fallback(
+        self,
+        cli_runner: CliRunner,
+        tmp_store,
+        tmp_path: Path,
+        monkeypatch,
+    ) -> None:
+        """Pi re-review H1: cross-project candidate lives in global store;
+        ``dismiss`` must find it via fallback rather than reporting
+        "not in pool" for a cluster the user just saw in the listing.
+
+        Reproduces the user trap: candidate exists in global store only,
+        user runs ``vibe skill dismiss <id>`` from a project cwd → prior
+        version exit-1'd because the default scope is 'project' and the
+        project store is empty.
+        """
+        from datetime import UTC, datetime
+        from unittest.mock import patch
+
+        from vibesop.cli.commands import skill_commands
+        from vibesop.core.observability.skill_promote import (
+            ClusterCandidate,
+            ClusterCandidateStore,
+        )
+
+        # Global store under a sandbox home.
+        fake_home = tmp_path / "fake_home"
+        monkeypatch.setattr(
+            skill_commands,
+            "_GLOBAL_OBSERVABILITY_DIR",
+            fake_home / ".vibe" / "observability",
+        )
+        global_store = ClusterCandidateStore(
+            storage_dir=fake_home / ".vibe" / "observability"
+        )
+        global_store.upsert(
+            ClusterCandidate(
+                cluster_id="xp-only-dismiss",
+                task_ids=["t-xp"],
+                queries=["cross task"],
+                span_count=4,
+                gold_rate=0.75,
+                gold_task_ids=["t-xp"],
+                created_at=datetime(2026, 7, 31, tzinfo=UTC),
+                project_distribution={"/users/me/a": 2, "/users/me/b": 2},
+            )
+        )
+
+        # Default dismiss scope is 'project'; project store is empty.
+        # Fallback should find the candidate in global store and dismiss it.
+        with patch.object(skill_commands, "_get_candidate_store") as mock_get:
+            project_store = ClusterCandidateStore(
+                storage_dir=tmp_path / ".vibe" / "observability"
+            )
+
+            def fake_get(scope: str = "project"):
+                return global_store if scope == "global" else project_store
+
+            mock_get.side_effect = fake_get
+
+            result = cli_runner.invoke(
+                app, ["skill", "dismiss", "xp-only-dismiss", "--reason", "test"]
+            )
+
+        assert result.exit_code == 0, result.output
+        assert "found in global store" in result.output
+        # Status actually flipped in the global store.
+        row = global_store.get("xp-only-dismiss")
+        assert row is not None
+        assert row.status == "dismissed"
+        assert row.dismiss_reason == "test"
 
 
 # ---------------------------------------------------------------------------

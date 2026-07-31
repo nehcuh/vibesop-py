@@ -89,6 +89,55 @@ def load_pool(path: Path | None = None) -> dict[str, Any]:
 _load_pool = load_pool
 
 
+def collect_pool_spans(
+    *,
+    limit: int,
+    pool_path: Path | None = None,
+) -> tuple[list[dict[str, Any]], list[str]]:
+    """Union spans from every pool member's spans.jsonl (W5.2).
+
+    For each pool entry, read ``<project_path>/.vibe/observability/spans.jsonl``
+    via ``SpanWriter.query_recent`` and append to a flat list. Each span
+    already carries its own ``project_id`` (set by tracer), so we don't
+    tag here — callers that need alias mapping resolve it at render time
+    via ``load_pool``.
+
+    Returns ``(spans, aliases_with_data)``. The second value lets callers
+    report how many pool members actually contributed (vs. missing files).
+
+    Missing spans.jsonl or read errors are silently skipped (mirrors
+    ``recall_cmd._run_cross_project`` behavior).
+
+    Empty pool → returns ``([], [])``. The caller decides whether that's
+    an error (cross-project scan: yes) or a no-op.
+    """
+    from vibesop.core.observability.span_writer import SpanWriter
+
+    pool_data = load_pool(pool_path)
+    projects = pool_data.get("projects") or []
+
+    spans: list[dict[str, Any]] = []
+    aliases_with_data: list[str] = []
+    for entry in projects:
+        alias = entry.get("alias", "?")
+        project_path = Path(entry.get("path", ""))
+        spans_file = project_path / ".vibe" / "observability" / "spans.jsonl"
+        if not spans_file.exists():
+            continue
+        try:
+            writer = SpanWriter(storage_path=spans_file)
+            member_spans = writer.query_recent(limit=limit)
+        except (OSError, ValueError) as e:
+            logger.debug("Failed to read %s: %s", spans_file, e)
+            continue
+        if not member_spans:
+            continue
+        spans.extend(member_spans)
+        aliases_with_data.append(alias)
+
+    return spans, aliases_with_data
+
+
 def _save_pool_locked(
     path: Path,
     mutator: Callable[[dict[str, Any]], None],

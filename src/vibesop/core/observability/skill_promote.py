@@ -137,6 +137,7 @@ class ClusterCandidate:
     reviewed_at: datetime | None = None
     source_skill_id: str | None = None
     dismiss_reason: str | None = None
+    project_distribution: dict[str, int] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         _validate_choice(self.status, _VALID_STATUS, "status")
@@ -144,6 +145,15 @@ class ClusterCandidate:
             self.ttl_expires_at = self.created_at + timedelta(days=_TTL_DAYS)
         for label in self.step_labels.values():
             _validate_choice(label, _VALID_STEP_LABEL, "step_labels value")
+
+    @property
+    def is_cross_project(self) -> bool:
+        """True when the candidate spans >1 project (W5.2).
+
+        Mirrors ``Cluster.is_cross_project`` from ``clustering.py`` so
+        consumers can branch on heterogeneity without re-reading spans.
+        """
+        return len(self.project_distribution) > 1
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize to a JSON-safe dict.
@@ -810,6 +820,7 @@ def scan_candidates(
             step_labels=labels,
             core_steps=core_steps,
             is_unstable=is_unstable,
+            project_distribution=dict(cluster.project_distribution),
         )
 
         if is_unstable:
@@ -851,7 +862,100 @@ def _sanitize_yaml_value(text: str, max_len: int = 80) -> str:
     return f'"{escaped}"'
 
 
-def _render_skill_md(candidate: ClusterCandidate, skill_id: str) -> str:
+def _project_id_to_basename(project_id: str) -> str:
+    """Render a project_id (absolute path) as a portable basename.
+
+    Privacy: the SKILL.md may be shared across machines or committed to
+    version control. Absolute filesystem paths leak user / org structure
+    (e.g. ``/Users/jane.doe/…``); basenames don't. The pool alias (which
+    ``candidates`` CLI shows) is not available here because the renderer
+    runs at promote time inside ``materialize_candidate`` and shouldn't
+    depend on the CLI layer to look up the pool.
+    """
+    try:
+        return Path(project_id).name or project_id[:8]
+    except (OSError, ValueError):
+        return project_id[:8]
+
+
+def dedupe_project_distribution(distribution: dict[str, int]) -> dict[str, int]:
+    """Collapse ``{abs_path: count}`` to ``{basename: count}`` collision-free.
+
+    Two pool members may share a basename (multiple checkouts of the same
+    repo, sibling ``playground/`` dirs, etc.). Naive ``{basename: count}``
+    would then emit duplicate YAML keys → ``ruamel.yaml`` raises
+    ``DuplicateKeyError`` → ``SkillLoader`` returns ``None`` frontmatter
+    and silently fails to load the skill (omx-code-review CRITICAL #1).
+
+    Collisions get ``-2``, ``-3`` suffixes (the second occurrence is the
+    one that needs disambiguation; the first stays bare). Counts from
+    same-basename projects are NOT summed — the user can tell from the
+    suffix that there are two sources.
+
+    Grok re-review CRITICAL: the suffix algorithm must also avoid
+    colliding with REAL basenames that already end in ``-N``. Example:
+    ``{"/p/foo": 1, "/q/foo": 3, "/q/foo-2": 4}`` must NOT collapse to
+    ``{foo: 1, foo-2: 4}`` (silently dropping the second synthetic key).
+    The taken-keys set below ensures synthetic suffixes increment until
+    a free slot is found.
+
+    Also the privacy boundary: returned keys are basenames only, never
+    absolute paths. Used by both ``_render_skill_md`` (YAML frontmatter
+    + warning prose) and the CLI's JSON output (omx-code-review HIGH #2).
+    """
+    taken: set[str] = set()
+    seen_count: dict[str, int] = {}
+    out: dict[str, int] = {}
+    for pid, count in distribution.items():
+        base = _project_id_to_basename(pid)
+        if base in taken:
+            # Find next free synthetic key. Start at 2; if `foo-2` is
+            # already taken (by a real `foo-2` path or an earlier synthetic),
+            # keep incrementing.
+            seen_count[base] = seen_count.get(base, 1) + 1
+            candidate = f"{base}-{seen_count[base]}"
+            while candidate in taken:
+                seen_count[base] += 1
+                candidate = f"{base}-{seen_count[base]}"
+            base = candidate
+        taken.add(base)
+        out[base] = count
+    return out
+
+
+def _format_cross_project_warning(distribution: dict[str, int]) -> str:
+    """Render the warning header for a heterogeneous cluster (W5.2).
+
+    Permissive policy: all queries + steps are kept in the SKILL.md body.
+    The warning is the safeguard — the user opted in via explicit
+    ``--scope`` flag at promote time.
+
+    Names source projects by basename only (no absolute paths) per the
+    privacy assertion in kill criteria (brief v2 §6, tightened P-5).
+    """
+    if not distribution:
+        return ""
+    deduped = dedupe_project_distribution(distribution)
+    parts = sorted(deduped.items(), key=lambda kv: kv[1], reverse=True)
+    listing = ", ".join(f"`{name}` ({count} spans)" for name, count in parts)
+    return (
+        "\n> ⚠ **Cross-project cluster — handle with care.**\n"
+        "> \n"
+        "> This skill was synthesized from queries across multiple projects:\n"
+        f"> {listing}. Example queries and step sequences below may encode\n"
+        "> one project's workflow that doesn't apply to the other. Review\n"
+        "> carefully before activating.\n"
+        "> \n"
+        "> Activate via: `vibe skill add <path> --scope global`\n"
+    )
+
+
+def _render_skill_md(
+    candidate: ClusterCandidate,
+    skill_id: str,
+    *,
+    scope: Literal["project", "global"] = "project",
+) -> str:
     """Render SKILL.md content for a promoted cluster candidate.
 
     Template mirrors ``instinct_cmd.evolve`` (lines 370-402) — YAML
@@ -865,6 +969,11 @@ def _render_skill_md(candidate: ClusterCandidate, skill_id: str) -> str:
     YAML frontmatter values are sanitized via ``_sanitize_yaml_value``
     to prevent parse failures on multi-line / colon-bearing queries
     (grok P1).
+
+    W5.2: For cross-project clusters, ``project_distribution`` is added
+    to YAML frontmatter (basenames only — absolute paths leak user /
+    org structure and must never appear in the SKILL.md body) and a
+    warning header is prepended after the frontmatter.
     """
     name_raw = candidate.queries[0] if candidate.queries else "Promoted candidate"
     name = _sanitize_yaml_value(name_raw, max_len=80)
@@ -887,6 +996,40 @@ def _render_skill_md(candidate: ClusterCandidate, skill_id: str) -> str:
             "name appearing in ≥70% of spans)"
         )
 
+    # W5.2: cross-project frontmatter + warning header (permissive policy).
+    if candidate.is_cross_project:
+        # Basenames only, collision-suffixed — never emit absolute paths
+        # (privacy P-5) AND avoid duplicate YAML keys when two pool
+        # members share a basename (omx-code-review CRITICAL #1).
+        deduped = dedupe_project_distribution(candidate.project_distribution)
+        dist_yaml_lines = "\n".join(
+            f"  {name}: {count}"
+            for name, count in sorted(deduped.items(), key=lambda kv: kv[1], reverse=True)
+        )
+        cross_project_frontmatter = f"""project_distribution:
+{dist_yaml_lines}
+scope_recommended: global
+"""
+        warning_block = _format_cross_project_warning(candidate.project_distribution)
+    else:
+        cross_project_frontmatter = ""
+        warning_block = ""
+
+    # pi re-review H2: warning_block sits ABOVE ## Overview so the user
+    # sees it the instant they open the SKILL.md. Trailing blank line
+    # separates the last ``> ...`` quote from the heading.
+    if warning_block:
+        warning_block = warning_block.rstrip() + "\n\n"
+
+    # W5.2 omx-code-review HIGH #3: footer activate path must match the
+    # --scope the user actually passed. Prior version hardcoded
+    # ``.vibe/skills/{id}`` regardless of scope, contradicting the stdout
+    # hint for ``--scope global`` promotes within the same run.
+    if scope == "global":
+        activate_path = f"~/.vibe/skills/{skill_id}"
+    else:
+        activate_path = f".vibe/skills/{skill_id}"
+
     return f"""---
 id: {skill_id}
 name: {name}
@@ -898,8 +1041,8 @@ version: 1.0.0
 type: prompt
 source: cluster-candidate
 cluster_id: {candidate.cluster_id}
----
-
+{cross_project_frontmatter}---
+{warning_block}
 ## Overview
 
 This skill was auto-drafted from **{candidate.span_count}** task executions
@@ -936,8 +1079,8 @@ starting point — edit, reorder, or replace based on domain knowledge.
 ---
 
 *Auto-drafted by `vibe skill promote`. Edit before use. To inject into
-routing, copy this directory into `.vibe/skills/` and run
-`vibe skill add .vibe/skills/{skill_id}`.*
+routing, copy this directory into `{activate_path.rsplit("/", 1)[0]}/` and run
+`vibe skill add {activate_path}`.*
 
 
 """
@@ -948,6 +1091,7 @@ def materialize_candidate(
     skill_id: str,
     *,
     drafts_root: Path | None = None,
+    scope: Literal["project", "global"] = "project",
 ) -> Path:
     """Write a SKILL.md draft for a promoted cluster candidate.
 
@@ -984,6 +1128,11 @@ def materialize_candidate(
     drafts_root:
         Optional override for the drafts directory. Tests pass a
         tmp_path here; production callers leave None for cwd default.
+    scope:
+        ``"project"`` or ``"global"`` — used only to vary the
+        activate-on-inject hint in the SKILL.md footer so it matches
+        the CLI's stdout hint (omx-code-review HIGH #3). Does NOT
+        affect where the draft is written (that's ``drafts_root``).
 
     Returns
     -------
@@ -1006,6 +1155,12 @@ def materialize_candidate(
         )
         return skill_path
 
-    content = _render_skill_md(candidate, skill_id)
-    skill_path.write_text(content, encoding="utf-8")
+    content = _render_skill_md(candidate, skill_id, scope=scope)
+    # Grok re-review HIGH: use AtomicWriter (temp + rename) so a crash
+    # mid-write never leaves a partial SKILL.md. SkillLoader would parse
+    # garbage and silently fail to load the very promote the user just
+    # confirmed. Mirrors ``ClusterCandidateStore._rewrite_all_locked``.
+    from vibesop.utils.atomic_writer import write_text
+
+    write_text(skill_path, content)
     return skill_path
