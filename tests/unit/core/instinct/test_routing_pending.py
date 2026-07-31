@@ -15,7 +15,17 @@ def test_should_enqueue_policy() -> None:
     assert should_enqueue_from_route(has_match=False, confidence=0.0) == "no_match"
     assert should_enqueue_from_route(has_match=True, confidence=0.3) == "low_confidence"
     assert should_enqueue_from_route(has_match=True, confidence=0.9) is None
-
+    # cmspark dogfood: last-resort levenshtein often reports conf=1.0
+    assert (
+        should_enqueue_from_route(
+            has_match=True, confidence=1.0, layer="levenshtein"
+        )
+        == "low_confidence"
+    )
+    assert (
+        should_enqueue_from_route(has_match=True, confidence=0.95, layer="ai_triage")
+        is None
+    )
 
 def test_reason_zh_chinese() -> None:
     r = build_reason_zh("low_confidence", skill_id="superpowers/debug", confidence=0.4)

@@ -999,9 +999,18 @@ class UnifiedRouter(
             )
             from vibesop.utils.redaction import redact_sensitive
 
+            layer = None
+            if result.primary is not None:
+                layer_val = getattr(result.primary, "layer", None)
+                layer = (
+                    layer_val.value
+                    if layer_val is not None and hasattr(layer_val, "value")
+                    else (str(layer_val) if layer_val is not None else None)
+                )
             kind = should_enqueue_from_route(
                 has_match=bool(result.has_match),
                 confidence=float(result.primary.confidence) if result.primary else 0.0,
+                layer=layer,
             )
             if kind is None:
                 return
@@ -1021,7 +1030,7 @@ class UnifiedRouter(
                 confidence=confidence,
                 kind=kind,
                 reason_zh=build_reason_zh(
-                    kind, skill_id=skill_id, confidence=confidence
+                    kind, skill_id=skill_id, confidence=confidence, layer=layer
                 ),
                 query_hash=query_hash,
             )

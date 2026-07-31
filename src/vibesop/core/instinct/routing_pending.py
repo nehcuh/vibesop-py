@@ -316,17 +316,29 @@ class RoutingPendingStore:
             }
 
 
+# Last-resort matchers often report inflated confidence (e.g. Levenshtein
+# normalized distance → 1.0). Still surface them for human review in dogfood.
+_WEAK_MATCH_LAYERS = frozenset({"levenshtein", "custom", "fallback_llm"})
+
+
 def build_reason_zh(
     kind: PendingKind,
     *,
     skill_id: str | None,
     confidence: float,
+    layer: str | None = None,
 ) -> str:
     """Human-readable Chinese reason for pending list."""
     if kind == "no_match":
         return "路由未命中任何技能。请确认意图后 accept（可 --skill）或 dismiss。"
     if kind == "low_confidence":
         skill = skill_id or "（未知）"
+        layer_norm = (layer or "").strip().lower()
+        if layer_norm in _WEAK_MATCH_LAYERS:
+            return (
+                f"末层弱匹配（{layer_norm}）到 {skill}（报告置信 {confidence:.0%}，"
+                f"可能虚高）。若正确请 accept，错误请 dismiss。"
+            )
         return (
             f"低置信路由到 {skill}（{confidence:.0%}）。"
             f"若正确请 accept，错误请 dismiss。"
@@ -339,10 +351,22 @@ def should_enqueue_from_route(
     has_match: bool,
     confidence: float,
     threshold: float = _LOW_CONF_THRESHOLD,
+    layer: str | None = None,
 ) -> PendingKind | None:
-    """Decide whether a route result should create a pending item."""
+    """Decide whether a route result should create a pending item.
+
+    Enqueue when:
+    - no match / FALLBACK_LLM sentinel (``has_match`` false), or
+    - confidence below threshold, or
+    - primary layer is a weak last-resort matcher (levenshtein/custom) even if
+      confidence looks high — real cmspark dogfood: nonsense queries still hit
+      levenshtein@1.0 and never entered the queue under conf-only rules.
+    """
     if not has_match:
         return "no_match"
     if confidence < threshold:
+        return "low_confidence"
+    layer_norm = (layer or "").strip().lower()
+    if layer_norm in _WEAK_MATCH_LAYERS:
         return "low_confidence"
     return None
