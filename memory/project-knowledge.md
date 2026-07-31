@@ -195,3 +195,17 @@ Full write-up: `docs/decisions/2026-07-31-positioning-vs-llm-space.md`.
 **90 天 Spine**: Sprint1 黄金 aha（pending+accept+replay+outcome）→ Sprint2 Task 真相+Inbox 薄盘 → Sprint3 外部价值 loop+METRIC 接线 → Sprint4 memory 运营化（非重建）。
 
 **禁**: route-auditor 当唯一默认 onboarding；Cytoscape 先于 DAG 质量；auto-write skill 热路径；观察军备当 P0。
+
+### Levenshtein Last-Resort Inflates Confidence → Pending Never Fills (2026-07-31)
+
+**Issue**: Sprint 1 `should_enqueue_from_route` only used `confidence < 0.5`. On cmspark, nonsense queries still matched via **LEVENSHTEIN with conf ≈ 0.9–1.0**, so routing_pending stayed empty and the aha path looked broken.
+
+**Root Cause**: Distance-normalized last-resort matchers report high "confidence" that is not semantic trust. Conf threshold alone is the wrong gate for human review.
+
+**Solution**: Also enqueue when primary layer ∈ `{levenshtein, custom, fallback_llm}` as `low_confidence`, with Chinese reason noting 虚高置信. Real low-conf (<0.5) and no_match unchanged.
+
+**Files**: `src/vibesop/core/instinct/routing_pending.py`, `unified.py` `_maybe_enqueue_routing_pending`
+
+### Dogfood Checklist: Reinstall CLI + Rebuild Platform Hooks
+
+After shipping vibe features that change CLI surface or hooks: (1) `uv tool install --reinstall --force .` from vibesop-py; (2) `vibe build claude-code -o <project>/.claude` and `vibe build grok-build -o <project>/.grok` (+ user homes if used); (3) restart agents; (4) verify in dogfood project (`cmspark`) with `vibe instinct stats/pending`. Version string may still say 8.1.0 while code is newer — trust command surface, not the banner.

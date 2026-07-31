@@ -1,6 +1,6 @@
 # Overview - VibeSOP Project
 
-**Last Updated**: 2026-07-28 (S38 — Dashboard v3 Phase A 全 ship + Phase B ship)
+**Last Updated**: 2026-07-31 (S39 — product evolution + Sprint1 dogfood)
 
 ---
 
@@ -9,19 +9,15 @@
 ### Current Week (July 26-August 1, 2026)
 
 1. **Dashboard v3 Phase A — data instrumentation** ✅ (Completed - July 28)
-   - 13-task TDD plan；grok+pi CONDITIONAL 全吸收；3 Blocker 双方独立点名（task_id fallback / PlanTracker 未接入 / contextvars 跨进程）
-   - Tasks 1-13 全 ship：trace context + phase spans + per-step task_id + conversation metadata writeback + mirror hook --include-subagents + Reflection dataclass + ReflectionStore + PlanTracker trace_id 接入 + rebuild_dag() + fixture E2E
-   - 验收关卡：integration smoke 替代 fill rate（零 LLM，3 tests 验证 producer→consumer pipeline）
 2. **Dashboard v3 Phase B — HTTP API layer** ✅ (Completed - July 28)
-   - 4 endpoints：GET /api/orchestration/dag + POST/GET/PATCH /api/reflections
-   - 28 new tests + Pydantic schemas + _trace_exists（exact-field match，非 substring）
-   - grok+pi closeout P0/P1/P2 全修；同步修了 ReflectionStore 跨进程 RMW race（Phase A 遗留）
-3. **Dashboard v3 Phase C — UI frontend**（待启动）
-   - Orchestration Map (Cytoscape.js + ELK) + Reflection Inbox (7 类)
-   - 可基于 rebuild_dag API + 4 reflection endpoints 直接开干
-   - Phase B+1 deferred：AtomicWriter sibling lock file + trace_id index cache
-4. **test-windows CI 观察期**（至 ~2026-08-02）
-   - `continue-on-error: true` 稳定两周后转强约束（05-review.md 遗留项 #1）
+3. **Product evolution + Sprint 1 golden aha** ✅ (July 31)
+   - Adversarial final Binding；Pi CONDITIONAL → GO
+   - RoutingPending + accept/dismiss/stats + replay inject；weak-layer enqueue fix
+   - cmspark dogfood CLI reinstall + platform build；14 天 kill 观察开始
+4. **Dashboard v3 Phase C — UI frontend**（defer after Sprint 2 Task 真相）
+   - Orchestration Map + Reflection Inbox；树先于 Cytoscape
+5. **test-windows CI 观察期**（至 ~2026-08-02）
+   - `continue-on-error: true` 稳定两周后转强约束
 
 ### Previous Week (July 19-25, 2026) — Completed
 

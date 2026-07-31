@@ -1,15 +1,14 @@
 
-### S39 (2026-07-31) [vibesop-py] 对抗验证 → Pi 复审 CONDITIONAL → Sprint 1 开工
+### S39 (2026-07-31) [vibesop-py + cmspark] 定位对抗 → Sprint1 → cmspark dogfood
 
-- [x] 定位 + 对抗终裁 → `docs/decisions/2026-07-31-product-evolution-adversarial.md`
-- [x] Pi 复审 **CONDITIONAL** → `_review-sprint1-evolution-pi.md` + merged
-- [x] **Sprint 1 黄金 aha 路径接线**:
-  - `RoutingPendingStore`（低置信/no-match 入队，≤3/日，dismiss 24h 抑制）
-  - `UnifiedRouter._maybe_enqueue_routing_pending`
-  - `vibe instinct pending|accept|dismiss|stats`
-  - Replay Y **注入** prior skill（context habit_boost + learn/outcome）
-- [x] 8 unit tests green
-- **Next**: 真实使用路径 smoke；14 天 kill 观察；可选 commit
+- [x] 对照 LLM Space 定位 + 4 路对抗终裁 → `docs/decisions/2026-07-31-product-evolution-adversarial.md`（Binding）
+- [x] Pi 复审 **CONDITIONAL** → must-fix 吸收后 GO Sprint 1
+- [x] Sprint 1 黄金 aha：`RoutingPendingStore` + route 入队 + `vibe instinct pending|accept|dismiss|stats` + replay Y inject
+- [x] Commits：`b5d9fe2` Sprint1；`f77943f` levenshtein 弱层也入 pending（cmspark dogfood 发现）
+- [x] cmspark：reinstall CLI + build claude/grok hooks；analytics on；e2e dismiss → outcomes=1
+- **Key discovery**: 末层 levenshtein conf≈1.0 会让 conf-only pending 永远空 — 已记 project-knowledge
+- **Next**: 14 天观察 accept/dismiss 与 outcome 密度；Sprint 2 Task 真相 / Inbox 薄盘；main **ahead 2 未 push**
+- **Recorded**: yes — product evolution + levenshtein pitfall + dogfood checklist
 
 ### S38 (2026-07-28) [vibesop-py] Dashboard v3 Phase A 收尾 (Tasks 10-13) + Phase B 全 ship
 
