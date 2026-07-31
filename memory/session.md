@@ -1,4 +1,16 @@
 
+### S39 (2026-07-31) [vibesop-py] 对抗验证 → Pi 复审 CONDITIONAL → Sprint 1 开工
+
+- [x] 定位 + 对抗终裁 → `docs/decisions/2026-07-31-product-evolution-adversarial.md`
+- [x] Pi 复审 **CONDITIONAL** → `_review-sprint1-evolution-pi.md` + merged
+- [x] **Sprint 1 黄金 aha 路径接线**:
+  - `RoutingPendingStore`（低置信/no-match 入队，≤3/日，dismiss 24h 抑制）
+  - `UnifiedRouter._maybe_enqueue_routing_pending`
+  - `vibe instinct pending|accept|dismiss|stats`
+  - Replay Y **注入** prior skill（context habit_boost + learn/outcome）
+- [x] 8 unit tests green
+- **Next**: 真实使用路径 smoke；14 天 kill 观察；可选 commit
+
 ### S38 (2026-07-28) [vibesop-py] Dashboard v3 Phase A 收尾 (Tasks 10-13) + Phase B 全 ship
 
 - [x] **Task 10 / P0-2**：`Orchestrator.orchestrate()` 接 `PlanTracker.create_plan()`，写 `plan.metadata["trace_id"]` — DAG rebuilder 的 plan↔span JOIN 契约；grok+pi 评审双清

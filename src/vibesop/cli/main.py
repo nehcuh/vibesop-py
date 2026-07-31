@@ -754,18 +754,30 @@ def route(
             "source": "cli",
         },
     ) as _cli_task_span:
-        # W3: auto-prompt for replay on gold-standard prior trace hit.
-        # Skip entirely under --no-replay, --json (programmatic consumers),
-        # or --minimal. Failures here must not break routing (defensive try).
+        # W3/Sprint1: auto-prompt for replay on gold-standard prior trace hit.
+        # On Y, inject preferred skill into RoutingContext (pi FIX-1).
+        # Skip under --no-replay, --json, or --minimal.
+        _replay_skill: str | None = None
         if not no_replay and not json_output and not minimal:
             try:
-                _maybe_prompt_replay(
+                _replay_skill = _maybe_prompt_replay(
                     tracer=_cli_tracer,
                     query=decision.query,
                     console=console,
                 )
             except Exception as _replay_exc:
                 logger.warning("replay prompt skipped due to: %s", _replay_exc)
+
+        if _replay_skill:
+            from vibesop.core.matching.base import RoutingContext as _RC
+
+            if context is None:
+                context = _RC()
+            context.current_skill = _replay_skill
+            boosts = dict(context.habit_boosts or {})
+            boosts[_replay_skill] = max(boosts.get(_replay_skill, 0.0), 0.20)
+            context.habit_boosts = boosts
+            context.metadata = {**(context.metadata or {}), "replay_skill_id": _replay_skill}
 
         if decision.mode == InterceptionMode.SINGLE:
             routing_result = router.route(decision.query, context=context)
@@ -1913,25 +1925,22 @@ def _maybe_prompt_replay(
     tracer: Any,
     query: str,
     console: Console,
-) -> None:
+) -> str | None:
     """Check for gold-standard prior trace and prompt user to replay.
 
-    Called inside the route command's trace block. If ``should_replay``
-    returns a gold match, shows the prior trace_id + step_sequence +
-    asks Y/n. On Y, emits a ``replay:<old_task_id>`` workflow_node span
-    linking new trace ↔ old trace_id, then prints the step sequence for
-    the user to reference. On n, silently continues to normal routing.
+    Called inside the route command's trace block **before** routing. If
+    ``should_replay`` returns a gold match, shows prior evidence and asks Y/n.
 
-    **Honest scope** (grok P0-1): Y does NOT inject the prior skill into
-    routing context. It emits a provenance span (new trace ↔ old trace)
-    and displays the prior step_sequence for the user/agent to reference.
-    Normal routing proceeds untouched. The panel makes this explicit.
+    On Y (Sprint 1 / pi FIX-1):
+    - emit provenance span linking new run ↔ prior trace
+    - learn + ``record_outcome(success=True)`` for the prior skill
+    - return ``skill_id`` so caller injects habit/session boost into
+      ``RoutingContext`` (routing **does** prefer the prior skill)
 
-    **Non-interactive guard** (grok P0-2): when stdin is not a TTY, the
-    prompt is silently skipped to avoid hangs in scripts/subagents.
+    On n: return None; normal routing continues.
 
-    All other failures are swallowed by the caller (route command) —
-    replay is a UX affordance, not a critical path.
+    **Non-interactive guard**: when stdin is not a TTY, skip silently.
+    Failures are swallowed by the caller — replay is a UX affordance.
     """
     from vibesop.core.instinct.learner import InstinctLearner
     from vibesop.core.observability.replay import emit_replay_span, should_replay
@@ -1940,23 +1949,24 @@ def _maybe_prompt_replay(
     # Non-interactive guard: never block automation on a Y/n prompt.
     if not _is_interactive_stdio():
         logger.debug("replay prompt skipped: stdin is not a TTY")
-        return
+        return None
 
     spans = SpanWriter().query_recent(limit=500)
     if not spans:
-        return
+        return None
 
     try:
         learner = InstinctLearner()
-    except Exception as exc:  # noqa: BLE001 — replay must not break routing
+    except Exception as exc:
         logger.warning("replay learner unavailable: %s", exc)
-        return
+        return None
 
     decision = should_replay(query=query, spans=spans, learner=learner)
     if not decision.should_prompt or decision.top_match is None:
-        return
+        return None
 
     top = decision.top_match
+    skill_label = top.skill_id or "(unknown)"
     console.print()
     console.print(
         Panel(
@@ -1965,28 +1975,47 @@ def _maybe_prompt_replay(
             f"prior run(s) for a similar task.\n\n"
             f"[dim]Representative prior query:[/dim] {top.representative_query[:100]}\n"
             f"[dim]Last trace:[/dim] [bold]{top.trace_id or '(unrecorded)'}[/bold]\n"
-            f"[dim]Last skill routed:[/dim] [magenta]{top.skill_id or '(unknown)'}[/magenta]\n"
+            f"[dim]Last skill routed:[/dim] [magenta]{skill_label}[/magenta]\n"
             f"[dim]Steps:[/dim] {' → '.join(top.step_sequence[:6]) if top.step_sequence else '(no steps)'}\n\n"
-            f"[dim]Y will:[/dim] emit a provenance span linking this run to the prior "
-            f"trace, then print the full step list. Routing is unchanged.",
+            f"[dim]Y will:[/dim] prefer skill [magenta]{skill_label}[/magenta] for this route, "
+            f"emit provenance span, and record a positive outcome for next time.",
             title=f"Proven prior solution found — {query[:60]}",
             border_style="green",
         )
     )
 
-    confirmed = typer.confirm("  Mark as replay of prior trace?", default=True)
+    confirmed = typer.confirm("  Replay prior skill for this route?", default=True)
     if not confirmed:
-        console.print("[dim]Skipping replay marker, continuing with normal routing.[/dim]")
-        return
+        console.print("[dim]Skipping replay, continuing with normal routing.[/dim]")
+        return None
 
     emit_replay_span(tracer=tracer, top_match=top)
+    # Write outcome so gold density rises and instinct boost can fire next time.
+    if top.skill_id:
+        try:
+            learner.learn(
+                pattern=query.lower().strip(),
+                action=f"suggest {top.skill_id} skill",
+                context="replay",
+                tags=["routing", "replay"],
+                source="replay_confirm",
+            )
+            learner.record_outcome_for_query(query.lower().strip(), success=True)
+        except Exception as exc:
+            logger.debug("replay outcome write failed: %s", exc)
+
     if top.step_sequence:
         console.print("[dim]Prior step sequence (for reference):[/dim]")
         for i, step in enumerate(top.step_sequence[:10], 1):
             console.print(f"  [bold cyan]{i}.[/bold cyan] {step}")
         if len(top.step_sequence) > 10:
             console.print(f"  [dim]... (+{len(top.step_sequence) - 10} more)[/dim]")
+    if top.skill_id:
+        console.print(
+            f"[green]✓[/green] Will prefer [magenta]{top.skill_id}[/magenta] for this route."
+        )
     console.print()
+    return top.skill_id
 
 
 # ── Phase 4: Agent Squad CLI helpers ─────────────────────────────────────────

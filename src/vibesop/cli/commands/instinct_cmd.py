@@ -7,6 +7,10 @@ Provides:
 - vibe instinct export [--output]: Export instincts to JSON
 - vibe instinct import <file> [--force]: Import instincts from JSON
 - vibe instinct evolve [--index]: Upgrade a high-confidence instinct to a formal skill
+- vibe instinct pending: List routing-quality pending items (Sprint 1)
+- vibe instinct accept <id>: Accept a pending route (write-back success)
+- vibe instinct dismiss <id>: Dismiss a pending route (write-back failure)
+- vibe instinct stats: Outcome density + pending queue stats
 """
 
 from __future__ import annotations
@@ -161,6 +165,243 @@ def eval(
             console.print(
                 f"[green]✓[/green] [bold]{len(pending)}[/bold] suggestion(s) pending. Run [cyan]vibe skills suggestions[/cyan] to review."
             )
+
+
+def _pending_store_path() -> Path:
+    return Path.cwd() / ".vibe" / "instincts" / "routing_pending.jsonl"
+
+
+def _apply_accept_writeback(query: str, skill_id: str | None) -> None:
+    """Learn + positive outcome + preference (accept path)."""
+    from vibesop.core.instinct.learner import InstinctLearner
+
+    learner = InstinctLearner(_get_storage_path())
+    pattern = query.lower().strip()
+    if skill_id:
+        learner.learn(
+            pattern=pattern,
+            action=f"suggest {skill_id} skill",
+            context="routing_pending_accept",
+            tags=["routing", "pending_accept"],
+            source="routing_pending",
+        )
+        learner.record_outcome_for_query(pattern, success=True)
+        try:
+            from vibesop.core.optimization import PreferenceBooster
+
+            PreferenceBooster().get_learner().record_selection(
+                skill_id, pattern, was_helpful=True
+            )
+        except Exception as exc:
+            logger.debug("preference writeback failed: %s", exc)
+    else:
+        # No skill on accept of no_match without --skill: still mark outcome if known
+        learner.record_outcome_for_query(pattern, success=True)
+
+
+def _apply_dismiss_writeback(query: str, skill_id: str | None) -> None:
+    """Negative outcome + preference (dismiss path)."""
+    from vibesop.core.instinct.learner import InstinctLearner
+
+    learner = InstinctLearner(_get_storage_path())
+    pattern = query.lower().strip()
+    # Ensure instinct exists so record_outcome is not a silent no-op
+    if skill_id:
+        learner.learn(
+            pattern=pattern,
+            action=f"suggest {skill_id} skill",
+            context="routing_pending_dismiss",
+            tags=["routing", "pending_dismiss"],
+            source="routing_pending",
+        )
+        try:
+            from vibesop.core.optimization import PreferenceBooster
+
+            PreferenceBooster().get_learner().record_selection(
+                skill_id, pattern, was_helpful=False
+            )
+        except Exception as exc:
+            logger.debug("preference dismiss writeback failed: %s", exc)
+    learner.record_outcome_for_query(pattern, success=False)
+
+
+@app.command("pending")
+def pending_cmd(
+    limit: int = typer.Option(20, "--limit", "-n", help="Max items to show"),
+    json_output: bool = typer.Option(False, "--json", "-j", help="Output as JSON"),
+) -> None:
+    """List routing-quality pending items (low-conf / no-match) awaiting accept/dismiss.
+
+    Sprint 1 golden path — separate from ``vibe skills suggestions`` (workflow drafts).
+    """
+    from vibesop.core.instinct.routing_pending import RoutingPendingStore
+
+    store = RoutingPendingStore(_pending_store_path())
+    items = store.list_pending(limit=limit)
+    stats = store.stats()
+
+    if json_output:
+        console.print(
+            json.dumps(
+                {
+                    "items": [i.to_dict() for i in items],
+                    "stats": stats,
+                },
+                indent=2,
+                ensure_ascii=False,
+            )
+        )
+        return
+
+    if not items:
+        console.print(
+            "[dim]没有待审路由项。低置信 / 未命中路由会自动进入此队列"
+            f"（每日最多 {stats['daily_cap']} 条）。[/dim]"
+        )
+        console.print(
+            f"[dim]今日已创建 {stats['created_today']}/{stats['daily_cap']} · "
+            f"历史 accept={stats['accepted']} dismiss={stats['dismissed']}[/dim]"
+        )
+        return
+
+    console.print(
+        f"[bold]待审路由[/bold] [dim]({len(items)} pending · "
+        f"今日 {stats['created_today']}/{stats['daily_cap']})[/dim]\n"
+    )
+    for item in items:
+        skill = item.skill_id or "（未命中）"
+        console.print(
+            f"  [cyan]{item.id}[/cyan]  [{item.kind}]  conf={item.confidence:.0%}  "
+            f"skill=[magenta]{skill}[/magenta]"
+        )
+        console.print(f"    [dim]query:[/dim] {item.query[:120]}")
+        console.print(f"    [green]{item.reason_zh}[/green]")
+        console.print()
+    console.print(
+        "[dim]操作: [cyan]vibe instinct accept <id>[/cyan]  "
+        "或  [cyan]vibe instinct dismiss <id>[/cyan][/dim]"
+    )
+
+
+@app.command("accept")
+def accept_cmd(
+    item_id: str = typer.Argument(..., help="Pending item id (rp-…)"),
+    skill: str | None = typer.Option(
+        None,
+        "--skill",
+        "-s",
+        help="Override skill id (required for no_match if item has no skill)",
+    ),
+) -> None:
+    """Accept a pending route: write positive outcome so next route prefers it."""
+    from vibesop.core.instinct.routing_pending import RoutingPendingStore
+
+    store = RoutingPendingStore(_pending_store_path())
+    item = store.get(item_id)
+    if item is None:
+        console.print(f"[red]找不到 id={item_id}[/red]")
+        raise typer.Exit(1)
+    if item.status != "pending":
+        console.print(f"[yellow]已是 {item.status}，跳过。[/yellow]")
+        raise typer.Exit(1)
+
+    skill_id = skill or item.skill_id
+    if not skill_id and item.kind == "no_match":
+        console.print(
+            "[red]no_match 项需要 --skill <id> 才能 accept（否则不知道该强化谁）。[/red]"
+        )
+        raise typer.Exit(1)
+
+    resolved = store.accept(item_id)
+    if resolved is None:
+        console.print("[red]accept 失败（可能已被处理）[/red]")
+        raise typer.Exit(1)
+
+    # If --skill override, update the resolved view for writeback
+    if skill:
+        resolved.skill_id = skill
+
+    _apply_accept_writeback(resolved.query, skill_id)
+    console.print(
+        f"[green]✓ accepted[/green] {item_id} → skill=[magenta]{skill_id}[/magenta]\n"
+        f"[dim]已写入 instinct outcome + preference。下次同类 query 应更准。[/dim]"
+    )
+
+
+@app.command("dismiss")
+def dismiss_cmd(
+    item_id: str = typer.Argument(..., help="Pending item id (rp-…)"),
+) -> None:
+    """Dismiss a pending route: negative outcome; suppress re-prompt 24h."""
+    from vibesop.core.instinct.routing_pending import RoutingPendingStore
+
+    store = RoutingPendingStore(_pending_store_path())
+    item = store.get(item_id)
+    if item is None:
+        console.print(f"[red]找不到 id={item_id}[/red]")
+        raise typer.Exit(1)
+    if item.status != "pending":
+        console.print(f"[yellow]已是 {item.status}，跳过。[/yellow]")
+        raise typer.Exit(1)
+
+    resolved = store.dismiss(item_id)
+    if resolved is None:
+        console.print("[red]dismiss 失败[/red]")
+        raise typer.Exit(1)
+
+    _apply_dismiss_writeback(resolved.query, resolved.skill_id)
+    console.print(
+        f"[green]✓ dismissed[/green] {item_id}\n"
+        f"[dim]已记负反馈；24h 内同 query+skill 不再入队。[/dim]"
+    )
+
+
+@app.command("stats")
+def stats_cmd(
+    json_output: bool = typer.Option(False, "--json", "-j", help="Output as JSON"),
+) -> None:
+    """Outcome density + routing pending queue stats (Sprint 1 kill-criteria signal)."""
+    from vibesop.core.instinct.learner import InstinctLearner
+    from vibesop.core.instinct.routing_pending import RoutingPendingStore
+
+    learner = InstinctLearner(_get_storage_path())
+    all_instincts = list(learner._instincts.values())
+    outcomes = sum(i.success_count + i.failure_count for i in all_instincts)
+    successes = sum(i.success_count for i in all_instincts)
+    failures = sum(i.failure_count for i in all_instincts)
+    with_outcome = sum(1 for i in all_instincts if i.total_applications > 0)
+
+    store = RoutingPendingStore(_pending_store_path())
+    pstats = store.stats()
+
+    payload = {
+        "instincts_total": len(all_instincts),
+        "instincts_with_outcome": with_outcome,
+        "outcomes_total": outcomes,
+        "outcomes_success": successes,
+        "outcomes_failure": failures,
+        "routing_pending": pstats,
+    }
+
+    if json_output:
+        console.print(json.dumps(payload, indent=2, ensure_ascii=False))
+        return
+
+    console.print("[bold]Instinct / 路由闭环统计[/bold]")
+    console.print(f"  instincts: {payload['instincts_total']} (有 outcome: {with_outcome})")
+    console.print(
+        f"  outcomes: {outcomes}  (✓ {successes} / ✗ {failures})"
+    )
+    console.print(
+        f"  routing pending: open={pstats['pending']}  "
+        f"accept={pstats['accepted']} dismiss={pstats['dismissed']}  "
+        f"today={pstats['created_today']}/{pstats['daily_cap']}"
+    )
+    if outcomes == 0:
+        console.print(
+            "[yellow]⚠ outcome 密度为 0 — 请 accept/dismiss 待审项，"
+            "或确认 replay Y 路径；否则 14 天 kill 会触发。[/yellow]"
+        )
 
 
 @app.command()

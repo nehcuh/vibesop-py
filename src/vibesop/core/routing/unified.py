@@ -842,6 +842,8 @@ class UnifiedRouter(
         if record_telemetry:
             self._record_single_route_execution(query, result)
             self._record_route_miss(query, result)
+            # Sprint 1: low-conf / no-match → routing pending (human accept/dismiss)
+            self._maybe_enqueue_routing_pending(query, result)
         return result
 
     def _get_orchestrator(self) -> Orchestrator:
@@ -981,6 +983,58 @@ class UnifiedRouter(
             MissCounter(self.project_root).record(query)
         except Exception as e:  # telemetry must never break routing
             logger.debug("Failed to record route miss: %s", e)
+
+    def _maybe_enqueue_routing_pending(self, query: str, result: RoutingResult) -> None:
+        """Sprint 1: enqueue low-confidence / no-match routes for human review.
+
+        Does **not** auto-call ``record_outcome`` on every hit (would poison
+        Wilson confidence). Accept/dismiss via ``vibe instinct accept|dismiss``
+        is the explicit reward signal. Failures never break routing.
+        """
+        try:
+            from vibesop.core.instinct.routing_pending import (
+                RoutingPendingStore,
+                build_reason_zh,
+                should_enqueue_from_route,
+            )
+            from vibesop.utils.redaction import redact_sensitive
+
+            kind = should_enqueue_from_route(
+                has_match=bool(result.has_match),
+                confidence=float(result.primary.confidence) if result.primary else 0.0,
+            )
+            if kind is None:
+                return
+
+            skill_id = result.primary.skill_id if result.primary else None
+            confidence = float(result.primary.confidence) if result.primary else 0.0
+            safe_query = redact_sensitive(query)
+            learner = self._get_instinct_learner()
+            query_hash = learner.generate_id(safe_query.lower().strip())
+
+            store = RoutingPendingStore(
+                self.project_root / ".vibe" / "instincts" / "routing_pending.jsonl"
+            )
+            item = store.try_enqueue(
+                query=safe_query,
+                skill_id=skill_id,
+                confidence=confidence,
+                kind=kind,
+                reason_zh=build_reason_zh(
+                    kind, skill_id=skill_id, confidence=confidence
+                ),
+                query_hash=query_hash,
+            )
+            if item is not None:
+                logger.debug(
+                    "routing pending enqueued id=%s kind=%s skill=%s conf=%.2f",
+                    item.id,
+                    kind,
+                    skill_id,
+                    confidence,
+                )
+        except Exception as e:  # pending must never break routing
+            logger.debug("Failed to enqueue routing pending: %s", e)
 
     def _record_routing_decision(
         self,

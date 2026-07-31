@@ -170,3 +170,28 @@ with self._path.open("a") as f:
 - GrokBuildAdapter Liskov fix explicitly rejected — JSON hooks ≠ shell hooks
 - understander.py → YAML deferred — data tables as Python dicts are simpler
 - init_support.py → Jinja2 deferred — f-strings are better for inline template generation
+
+## Product Positioning (2026-07-31 — vs LLM Space)
+
+**Insight**: [deer-flow/llm-space](https://github.com/deer-flow/llm-space) productizes Agent harness Build–Trace–Debug–Eval (desktop IDE for threads/runs). It does **not** replace VibeSOP's SkillOS loop (route → remember → autonomous cron → write-back).
+
+**One-liner**: VibeSOP is not an agent workbench — it is the skill OS that finds the right skill, remembers what worked, and keeps loops running when humans leave.
+
+**Narrative**: Mastra/LLM Space show what the agent is doing; VibeSOP makes the agent remember what you did and runs L0 work off-loop.
+
+**Absorb (UX only)**: run/task as first-class replay artifact; step-level cost; path vs DAG toggle; immutable history snapshots.  
+**Do not absorb**: Thread/prompt editor, desktop harness shell, LangGraph export as product core.
+
+Full write-up: `docs/decisions/2026-07-31-positioning-vs-llm-space.md`.
+
+## Product Evolution — Adversarial Final (2026-07-31)
+
+**Binding**: `docs/decisions/2026-07-31-product-evolution-adversarial.md`（4 路对抗终裁；覆盖 positioning 文的 Phase 排序）。
+
+**Aha 北极星**: 「指出路由蠢 → 我 accept → 第二天更准 → 第三次回放上次。」
+
+**完成度倒挂（工程事实）**: task-memory ~85% 已发货；METRIC 闭环 ~25% 断线；Dashboard Phase C UI ~10%。
+
+**90 天 Spine**: Sprint1 黄金 aha（pending+accept+replay+outcome）→ Sprint2 Task 真相+Inbox 薄盘 → Sprint3 外部价值 loop+METRIC 接线 → Sprint4 memory 运营化（非重建）。
+
+**禁**: route-auditor 当唯一默认 onboarding；Cytoscape 先于 DAG 质量；auto-write skill 热路径；观察军备当 P0。
