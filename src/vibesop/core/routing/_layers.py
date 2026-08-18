@@ -250,10 +250,16 @@ def _tokenize_query(query: str) -> set[str]:
     # English words
     for word in re.findall(r"[a-zA-Z]{2,}", query.lower()):
         tokens.add(word)
-    # CJK characters (each char is a meaningful token)
-    for char in query:
-        if "一" <= char <= "鿿":
-            tokens.add(char)
+    # CJK bigrams over contiguous CJK runs (e.g. "提交代码" → {提交, 交代, 代码}).
+    # Single-char tokenization made Jaccard overlap near-noise for CJK queries
+    # ("提交代码" vs "提交PR" shared most chars); bigrams restore selectivity.
+    # A lone CJK char keeps its unigram so single-char queries still match.
+    for run in re.findall(r"[一-鿿]+", query):
+        if len(run) == 1:
+            tokens.add(run)
+        else:
+            for i in range(len(run) - 1):
+                tokens.add(run[i : i + 2])
     return tokens
 
 

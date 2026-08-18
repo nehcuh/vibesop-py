@@ -66,6 +66,55 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# Harness-injected context markers (e.g. Kimi Code <system-reminder>, Claude
+# Code <system_reminder>, <environment_details>). Production logs showed
+# reminder blocks reaching route() as if they were user queries, producing
+# garbage matches and polluting miss analytics. Junk queries are rejected at
+# the routing entry point with a no-match result, before any matching layer,
+# telemetry, or analytics write. (Constant, not config: there is no legitimate
+# reason to route harness markup.)
+_JUNK_QUERY_MARKERS = (
+    "<system-reminder",
+    "<system_reminder",
+    "<environment_details",
+)
+
+
+def _is_junk_query(query: str) -> bool:
+    """True when the query IS harness markup, not when it merely mentions it.
+
+    Criterion: the query (ignoring leading whitespace) starts with one of the
+    known injection markers. The injection shape seen in production logs is
+    the whole query being a markup block, so a prefix check catches it. A
+    plain substring match was rejected: it also kills legitimate queries that
+    literally discuss a marker (e.g. developing this repo's own junk filter).
+    """
+    stripped = query.lstrip()
+    return any(stripped.startswith(marker) for marker in _JUNK_QUERY_MARKERS)
+
+
+def _junk_query_result(query: str) -> RoutingResult:
+    """No-match result for harness-markup junk queries.
+
+    Shared by the route() entry guard and the _single_skill_route() head
+    guard: same primary=None shape as fallback_mode="disabled" (minus the
+    matcher-pipeline nearest scan, which would be meaningless for markup).
+    """
+    return RoutingResult(
+        primary=None,
+        alternatives=[],
+        routing_path=[],
+        layer_details=[
+            LayerDetail(
+                layer=RoutingLayer.NO_MATCH,
+                matched=False,
+                reason="Query rejected: harness-injected markup, not a user query",
+            )
+        ],
+        query=query,
+        duration_ms=0.0,
+    )
+
 
 def _maybe_wrap_for_spans(provider: Any) -> Any:
     """Best-effort wrap an injected provider with SpanWrappedProvider.
@@ -157,6 +206,12 @@ class UnifiedRouter(
         self.project_root = Path(project_root).resolve()
         self._llm_factory = llm_factory
         self._prompt_builder = prompt_builder
+        if prompt_builder is None:
+            logger.warning(
+                "No prompt_builder provided; AI triage will use the minimal "
+                "fallback prompt ('Query: ... Select best skill.'), which the "
+                "LLM may answer as chat, so skill selection is likely to fail."
+            )
         if skill_loader is not None:
             self._skill_loader = skill_loader
 
@@ -408,6 +463,14 @@ class UnifiedRouter(
         context: RoutingContext | None = None,
     ) -> RoutingResult:
         """Internal: route a query to the best matching skill."""
+        # Junk guard (defense in depth): Orchestrator, session context, and
+        # PlanBuilder call this method directly, bypassing route()'s entry
+        # guard, so the same rejection lives here too — before stats,
+        # tracing, and any matching layer. route()'s own guard is kept: it
+        # sits before the telemetry block and additionally skips the
+        # analytics / miss-counter writes.
+        if _is_junk_query(query):
+            return _junk_query_result(query)
         start_time = time.perf_counter()
         with self._stats_lock:
             self._total_routes += 1
@@ -543,7 +606,17 @@ class UnifiedRouter(
         early_match = self._try_early_layers(
             query, early_candidates, routing_path, layer_details, use_keyword
         )
-        if early_match is not None:
+        scenario_candidate: SkillRoute | None = None
+        if early_match is not None and early_match.layer == RoutingLayer.SCENARIO:
+            # Scenario hits are pure keyword-regex matches at a fixed 0.9
+            # confidence, so they used to win every best-of and short-circuit
+            # the cascade — shelving AI triage, the only semantic layer, and
+            # misrouting real queries (e.g. "全面审查这个仓库的代码质量").
+            # A scenario hit is now only a candidate: AI triage arbitrates,
+            # and the scenario match is used only as fallback when triage
+            # produces nothing (see below).
+            scenario_candidate = early_match
+        elif early_match is not None:
             self._record_layer(early_match.layer)
             return self._build_match_result(
                 query,
@@ -558,22 +631,57 @@ class UnifiedRouter(
                 context,
             )
 
-        # Step 2: AI Triage (force for long/LLM queries, normal for keyword)
+        # Step 2: AI Triage (force for long/LLM queries, normal for keyword).
+        # A pending scenario candidate also forces triage: scenario-matching
+        # queries are exactly the ambiguity hot spots where the short-query
+        # bypass does not apply — bypassing here would let the fixed-0.9
+        # regex hit win through the fallback below without any semantic
+        # arbitration (the original "全面审查这个仓库的代码质量" misroute).
         match, detail = _layers.try_ai_triage_layer(
             self,
             query,
             candidates,
             context,  # pyright: ignore[reportArgumentType]
-            force=not use_keyword,
+            force=(not use_keyword) or (scenario_candidate is not None),
         )
         routing_path.append(RoutingLayer.AI_TRIAGE)
         layer_details.append(detail)
         self._tracer.record_layer(RoutingLayer.AI_TRIAGE, detail, len(candidates))
         if match and match.confidence >= self._config.min_confidence:
             self._record_layer(RoutingLayer.AI_TRIAGE)
+            if scenario_candidate is not None:
+                # Triage arbitrated over a pending scenario candidate and won:
+                # scenario still participated in this routing decision, so
+                # count it — otherwise layer stats under-report scenario
+                # involvement. (The scenario_fallback branch below records
+                # its own count; this branch is mutually exclusive with it.)
+                self._record_layer(RoutingLayer.SCENARIO)
             return self._build_match_result(
                 query,
                 match,
+                [],
+                routing_path,
+                layer_details,
+                start_time,
+                deprecated_warnings,
+                conversation,
+                original_query,
+                context,
+            )
+
+        # Scenario fallback: a scenario hit forces triage above (the
+        # short-query bypass is skipped for it), so landing here means
+        # triage actually ran — or tried to — and produced nothing usable
+        # (unavailable, error, or below min_confidence). The demoted
+        # scenario match then becomes the result. The fallback is flagged
+        # so downstream consumers can tell "scenario won by default" from
+        # a triage-arbitrated match.
+        if scenario_candidate is not None:
+            scenario_candidate.metadata["scenario_fallback"] = True
+            self._record_layer(RoutingLayer.SCENARIO)
+            return self._build_match_result(
+                query,
+                scenario_candidate,
                 [],
                 routing_path,
                 layer_details,
@@ -624,9 +732,9 @@ class UnifiedRouter(
             self._tracer.record_layer(RoutingLayer.SCENARIO, scen_detail, len(candidates))
 
             idx_match, idx_detail = _layers.try_index_layer(self, query, candidates)  # pyright: ignore[reportArgumentType]
-            routing_path.append(RoutingLayer.AI_TRIAGE)
+            routing_path.append(RoutingLayer.SEMANTIC_INDEX)
             layer_details.append(idx_detail)
-            self._tracer.record_layer(RoutingLayer.AI_TRIAGE, idx_detail, len(candidates))
+            self._tracer.record_layer(RoutingLayer.SEMANTIC_INDEX, idx_detail, len(candidates))
 
             best = max(
                 (m for m in (scen_match, idx_match) if m is not None),
@@ -638,9 +746,9 @@ class UnifiedRouter(
         else:
             # Index standalone
             match, detail = _layers.try_index_layer(self, query, candidates)  # pyright: ignore[reportArgumentType]
-            routing_path.append(RoutingLayer.AI_TRIAGE)
+            routing_path.append(RoutingLayer.SEMANTIC_INDEX)
             layer_details.append(detail)
-            self._tracer.record_layer(RoutingLayer.AI_TRIAGE, detail, len(candidates))
+            self._tracer.record_layer(RoutingLayer.SEMANTIC_INDEX, detail, len(candidates))
             if match and match.confidence >= self._config.min_confidence:
                 return match
 
@@ -830,6 +938,13 @@ class UnifiedRouter(
         Returns:
             RoutingResult with primary match or no-match sentinel.
         """
+        # Junk guard: reject harness-injected <system-reminder> content before
+        # it reaches any matching layer. Returns the same primary=None no-match
+        # shape as fallback_mode="disabled" (minus the matcher-pipeline nearest
+        # scan, which would be meaningless for markup), and skips the telemetry
+        # block below so junk never lands in analytics / the miss counter.
+        if _is_junk_query(query):
+            return _junk_query_result(query)
         result = self._single_skill_route(query, candidates, context)
         # P1 telemetry — the single exit point for the single-route path (hit,
         # low-confidence, and no-match/fallback all land here). Both writes are

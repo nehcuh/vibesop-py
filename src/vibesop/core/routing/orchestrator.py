@@ -185,6 +185,17 @@ class Orchestrator:
         if not self._router._config.enable_orchestration:
             return self._router._to_orchestration_result(single_result, query)
 
+        # Junk short-circuit: _single_skill_route already returned a no-match
+        # for harness-markup queries, but the detector's primary=None branch
+        # treats any long no-match query as a possible multi-part request and
+        # would decompose the garbage text. Reuse unified.py's predicate (lazy
+        # import — unified imports Orchestrator at module load) rather than a
+        # third copy of the criterion.
+        from vibesop.core.routing.unified import _is_junk_query
+
+        if _is_junk_query(query):
+            return self._router._to_orchestration_result(single_result, query)
+
         # 3. Multi-intent detection
         with self._phase_span("detection", query):
             cb.on_phase_start(

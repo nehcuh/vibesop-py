@@ -6,6 +6,9 @@ import json
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+from vibesop.core.config.manager import RoutingConfig
+from vibesop.core.models import LayerDetail, RoutingLayer
+from vibesop.core.routing import UnifiedRouter
 from vibesop.core.routing._layers import (
     _compute_index_score,
     _tokenize_query,
@@ -28,18 +31,43 @@ class TestTokenizeQuery:
 
     def test_cjk_characters(self) -> None:
         tokens = _tokenize_query("帮我审查代码")
-        assert "帮" in tokens
-        assert "审" in tokens
-        assert "查" in tokens
-        assert "代" in tokens
-        assert "码" in tokens
+        # CJK is tokenized as bigrams over contiguous runs
+        assert "帮我" in tokens
+        assert "我审" in tokens
+        assert "审查" in tokens
+        assert "查代" in tokens
+        assert "代码" in tokens
+        # Single chars are no longer tokens for multi-char runs
+        assert "帮" not in tokens
+        assert "审" not in tokens
+
+    def test_single_cjk_char_keeps_unigram(self) -> None:
+        tokens = _tokenize_query("好")
+        assert tokens == {"好"}
+
+    def test_cjk_run_separated_by_non_cjk(self) -> None:
+        # Non-CJK characters break runs: no bigram may bridge across them
+        tokens = _tokenize_query("提交PR代码")
+        assert "提交" in tokens
+        assert "代码" in tokens
+        assert "交代" not in tokens
+
+    def test_cjk_bigram_reduces_spurious_overlap(self) -> None:
+        # "提交代码" vs "提交PR": unigram tokenization shared every char;
+        # bigrams share only the leading "提交".
+        commit_tokens = _tokenize_query("提交代码")
+        pr_tokens = _tokenize_query("提交PR")
+        assert commit_tokens & pr_tokens == {"提交"}
+        assert len(commit_tokens & pr_tokens) < len(commit_tokens) / 2
 
     def test_mixed_text(self) -> None:
         tokens = _tokenize_query("review 代码 security 审查")
         assert "review" in tokens
         assert "security" in tokens
-        assert "代" in tokens
-        assert "审" in tokens
+        assert "代码" in tokens
+        assert "审查" in tokens
+        assert "代" not in tokens
+        assert "审" not in tokens
 
 
 class TestComputeIndexScore:
@@ -278,15 +306,70 @@ class TestEmbeddingFallback:
         }
         index_path.write_text(json.dumps(index_data), encoding="utf-8")
 
-        # Ensure sentence_transformers is NOT importable by removing any mock
-        # that earlier tests may have injected into sys.modules.
-        _saved = sys.modules.pop("sentence_transformers", None)
-        try:
+        # Simulate sentence-transformers being uninstalled: a None entry in
+        # sys.modules makes any import of the package raise ImportError,
+        # regardless of whether it is actually installed in this environment.
+        with patch.dict(sys.modules, {"sentence_transformers": None}):
             match, detail = try_index_layer(router, "audit the auth flow", [])
-        finally:
-            if _saved is not None:
-                sys.modules["sentence_transformers"] = _saved
 
         assert match is None
         assert detail.matched is False
         assert "not available" in detail.reason.lower()
+
+
+class TestEarlyLayersRoutingPath:
+    """Regression: the semantic index layer must be recorded as SEMANTIC_INDEX
+    in routing_path and traces, not mislabeled as AI_TRIAGE (M1a)."""
+
+    def _make_router(self, tmp_path: Path) -> UnifiedRouter:
+        config = RoutingConfig(enable_ai_triage=False)
+        return UnifiedRouter(project_root=tmp_path, config=config)
+
+    def test_keyword_branch_records_semantic_index(self, tmp_path: Path) -> None:
+        """Scenario+index best-of branch: index layer is SEMANTIC_INDEX."""
+        router = self._make_router(tmp_path)
+        router._tracer.enabled = True
+        router._tracer.start_trace("review code")
+
+        routing_path: list[RoutingLayer] = []
+        layer_details: list[LayerDetail] = []
+        scen_detail = LayerDetail(layer=RoutingLayer.SCENARIO, matched=False, reason="miss")
+        idx_detail = LayerDetail(layer=RoutingLayer.SEMANTIC_INDEX, matched=False, reason="miss")
+
+        with (
+            patch(
+                "vibesop.core.routing._layers.try_scenario_layer",
+                return_value=(None, scen_detail),
+            ),
+            patch(
+                "vibesop.core.routing._layers.try_index_layer",
+                return_value=(None, idx_detail),
+            ),
+        ):
+            router._try_early_layers("review code", [], routing_path, layer_details, use_keyword=True)
+
+        assert routing_path == [RoutingLayer.SCENARIO, RoutingLayer.SEMANTIC_INDEX]
+        assert RoutingLayer.AI_TRIAGE not in routing_path
+        traced = [lt.layer for lt in router._tracer._current.layers]  # type: ignore[union-attr]
+        assert traced == ["scenario", "semantic_index"]
+
+    def test_llm_branch_records_semantic_index(self, tmp_path: Path) -> None:
+        """Index-standalone branch: index layer is SEMANTIC_INDEX."""
+        router = self._make_router(tmp_path)
+        router._tracer.enabled = True
+        router._tracer.start_trace("review code")
+
+        routing_path: list[RoutingLayer] = []
+        layer_details: list[LayerDetail] = []
+        idx_detail = LayerDetail(layer=RoutingLayer.SEMANTIC_INDEX, matched=False, reason="miss")
+
+        with patch(
+            "vibesop.core.routing._layers.try_index_layer",
+            return_value=(None, idx_detail),
+        ):
+            router._try_early_layers("review code", [], routing_path, layer_details, use_keyword=False)
+
+        assert routing_path == [RoutingLayer.SEMANTIC_INDEX]
+        assert RoutingLayer.AI_TRIAGE not in routing_path
+        traced = [lt.layer for lt in router._tracer._current.layers]  # type: ignore[union-attr]
+        assert traced == ["semantic_index"]
