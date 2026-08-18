@@ -122,6 +122,7 @@ class SkillRoute(BaseModel):
             "confidence": self.confidence,
             "layer": self.layer.value,
             "source": self.source,
+            "description": self.description,
             "metadata": self.metadata,
         }
 

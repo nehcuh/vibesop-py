@@ -163,6 +163,22 @@ class RoutingConfig(TolerantConfig):
     ai_triage_circuit_breaker_failure_threshold: int = Field(default=3, ge=1, le=10)
     ai_triage_circuit_breaker_latency_threshold_ms: float = Field(default=500.0, ge=100.0)
     ai_triage_circuit_breaker_cooldown_seconds: int = Field(default=60, ge=10)
+    ai_triage_timeout_seconds: float = Field(
+        default=15.0,
+        ge=1.0,
+        le=120.0,
+        description="Hard timeout for a single AI triage LLM call. Provider "
+        "clients carry their own ~30s transport timeouts; this caps triage "
+        "lower for interactive routing. A timed-out call falls back to the "
+        "persistent last-good entry when available.",
+    )
+    triage_cache_ttl_hours: int = Field(
+        default=72,
+        ge=1,
+        description="TTL for the persistent cross-process triage cache "
+        "(.vibe/triage_cache.json). Expired entries are treated as misses "
+        "but retained as last-good fallbacks when the LLM fails.",
+    )
     ai_triage_short_query_bypass_chars: int = Field(
         default=15,
         ge=0,

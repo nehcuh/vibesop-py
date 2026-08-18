@@ -76,6 +76,15 @@ class TestSkillRoute:
         assert d["confidence"] == pytest.approx(0.8)
         assert d["layer"] == "explicit"
 
+    def test_to_dict_includes_description(self):
+        """to_dict persists the description (e.g. into the triage cache);
+        previously it was silently dropped and reloaded as ""."""
+        route = SkillRoute(
+            skill_id="s", confidence=0.8, layer=RoutingLayer.EXPLICIT, description="a skill"
+        )
+        d = route.to_dict()
+        assert d["description"] == "a skill"
+
 
 class TestRejectedCandidate:
     """Test RejectedCandidate model."""

@@ -2,10 +2,17 @@
 
 from __future__ import annotations
 
+import logging
+from typing import TYPE_CHECKING
 from unittest.mock import MagicMock, patch
 
-from vibesop.core.models import RoutingLayer
 from vibesop.core.routing.triage_service import TriageService
+
+if TYPE_CHECKING:
+    from pathlib import Path
+    from typing import ClassVar
+
+    import pytest
 
 
 def _make_service(
@@ -34,7 +41,6 @@ def _make_service(
     cost_tracker.get_monthly_cost.return_value = 0.0
     prefilter = MagicMock()
     cache_manager = MagicMock()
-    cache_manager.get.return_value = None
 
     return TriageService(
         config=config,
@@ -221,29 +227,32 @@ class TestQueryAugmentation:
 
 
 class TestCache:
-    """Test cache hit/miss behavior."""
+    """Triage no longer uses the CacheManager; the persistent TriageCache
+    (fresh-hit path, B1 aliveness) is covered in test_triage_cache.py."""
 
-    def test_cache_hit_returns_cached(self) -> None:
-        """Cache hit returns LayerResult without LLM call."""
+    def test_cache_manager_not_used_by_triage(self) -> None:
+        """A full triage call never reads or writes the CacheManager."""
         service = _make_service()
         service._llm = MagicMock()
         service._llm.configured.return_value = True
+        service._llm.call.return_value = MagicMock(
+            content="skill-a",
+            model="test",
+            tokens_used=10,
+            input_tokens=5,
+            output_tokens=5,
+        )
 
-        cached_route = {
-            "skill_id": "skill-a",
-            "confidence": 0.9,
-            "layer": "ai_triage",
-            "source": "builtin",
-            "description": "test",
-            "metadata": {},
-        }
-        service._cache_manager.get.return_value = cached_route
+        with patch.object(
+            service,
+            "parse_ai_triage_response",
+            return_value={"skill_id": "skill-a", "structured": True},
+        ):
+            result = service.try_ai_triage("test", [{"id": "skill-a", "intent": "test"}])
 
-        result = service.try_ai_triage("test", [{"id": "skill-a", "intent": "test"}])
         assert result is not None
-        assert result.layer == RoutingLayer.AI_TRIAGE
-        assert result.match.skill_id == "skill-a"
-        service._llm.call.assert_not_called()
+        service._cache_manager.get.assert_not_called()
+        service._cache_manager.set.assert_not_called()
 
     def test_cache_miss_calls_llm(self) -> None:
         """Cache miss proceeds to LLM call."""
@@ -257,7 +266,6 @@ class TestCache:
             input_tokens=5,
             output_tokens=5,
         )
-        service._cache_manager.get.return_value = None
 
         with patch.object(service, "parse_ai_triage_response", return_value={"skill_id": None}):
             service.try_ai_triage("test", [{"id": "skill-a", "intent": "test"}])
@@ -279,7 +287,6 @@ class TestTokenFallback:
             tokens_used=100,
             # No input_tokens or output_tokens
         )
-        service._cache_manager.get.return_value = None
 
         with patch.object(service, "parse_ai_triage_response", return_value={"skill_id": None}):
             service.try_ai_triage("test", [{"id": "skill-a", "intent": "test"}])
@@ -298,7 +305,6 @@ class TestTokenFallback:
             model="test-model",
             # No tokens at all
         )
-        service._cache_manager.get.return_value = None
 
         with patch.object(service, "parse_ai_triage_response", return_value={"skill_id": None}):
             service.try_ai_triage("test", [{"id": "skill-a", "intent": "test"}])
@@ -317,7 +323,6 @@ class TestExceptionHandling:
         service._llm = MagicMock()
         service._llm.configured.return_value = True
         service._llm.call.side_effect = RuntimeError("LLM error")
-        service._cache_manager.get.return_value = None
 
         result = service.try_ai_triage("test", [{"id": "skill-a", "intent": "test"}])
         assert result is None
@@ -436,45 +441,6 @@ class TestInitLlmClient:
         assert result is None
 
 
-class TestCacheHelpers:
-    """Test _get_cache and _set_cache."""
-
-    def test_get_cache_valid_data(self) -> None:
-        """Valid cached data deserialized to SkillRoute."""
-        service = _make_service()
-        service._cache_manager.get.return_value = {
-            "skill_id": "debug",
-            "confidence": 0.9,
-            "layer": "ai_triage",
-            "source": "builtin",
-            "description": "test",
-            "metadata": {},
-        }
-        result = service._get_cache("key")
-        assert result is not None
-        assert result.skill_id == "debug"
-
-    def test_get_cache_invalid_data_returns_none(self) -> None:
-        """Invalid cached data returns None."""
-        service = _make_service()
-        service._cache_manager.get.return_value = {"skill_id": "debug"}  # missing fields
-        result = service._get_cache("key")
-        assert result is None
-
-    def test_get_cache_none_returns_none(self) -> None:
-        """Cache miss returns None."""
-        service = _make_service()
-        service._cache_manager.get.return_value = None
-        result = service._get_cache("key")
-        assert result is None
-
-    def test_set_cache(self) -> None:
-        """_set_cache delegates to cache_manager with TTL."""
-        service = _make_service()
-        service._set_cache("key", {"skill_id": "debug"})
-        service._cache_manager.set.assert_called_once_with("key", {"skill_id": "debug"}, ttl=3600)
-
-
 class TestSkillIdNotInCandidates:
     """Test when parsed skill_id is not found in candidates list."""
 
@@ -490,7 +456,6 @@ class TestSkillIdNotInCandidates:
             input_tokens=5,
             output_tokens=5,
         )
-        service._cache_manager.get.return_value = None
 
         with patch.object(
             service, "parse_ai_triage_response", return_value={"skill_id": "unknown-skill"}
@@ -514,7 +479,6 @@ class TestSessionEndGuard:
             input_tokens=5,
             output_tokens=5,
         )
-        service._cache_manager.get.return_value = None
         return service
 
     def test_session_end_rejected_without_explicit_signal(self) -> None:
@@ -594,3 +558,151 @@ class TestSessionEndGuard:
             result = service.try_ai_triage("that's all for now", candidates)
 
         assert result is None
+
+
+class TestFreshCacheHit:
+    """Persistent-cache fresh hits: session-end guard reuse and metadata keys."""
+
+    def _make_service_with_fresh_hit(self, fresh_entry: dict) -> TriageService:
+        service = _make_service()
+        service._llm = MagicMock()
+        service._llm.configured.return_value = True
+        service._llm.call.return_value = MagicMock(
+            content="debug-skill",
+            model="test",
+            tokens_used=10,
+            input_tokens=5,
+            output_tokens=5,
+        )
+        service._triage_cache = MagicMock()
+        service._triage_cache.lookup.return_value = (fresh_entry, None)
+        return service
+
+    _CANDIDATES: ClassVar = [
+        {
+            "id": "builtin/session-end",
+            "intent": "wrap up session",
+            "triggers": ["that's all for now", "拜拜"],
+        },
+        {"id": "debug-skill", "intent": "debug things"},
+    ]
+
+    def test_fresh_hit_session_end_rejected_without_explicit_signal(self) -> None:
+        """A fresh cached session-end hit is bypassed without an explicit
+        signal (same guard as the LLM path); triage continues to the LLM."""
+        service = self._make_service_with_fresh_hit(
+            {
+                "skill_id": "builtin/session-end",
+                "confidence": 0.9,
+                "source": "builtin/session-end",
+                "description": "wrap up session",
+            }
+        )
+
+        with patch.object(
+            service,
+            "parse_ai_triage_response",
+            return_value={"skill_id": "debug-skill", "structured": True},
+        ):
+            result = service.try_ai_triage(
+                "有点奇怪，当前 MCP 支持有问题，无法获取工具列表",
+                self._CANDIDATES,
+            )
+
+        service._llm.call.assert_called_once()
+        assert result is not None
+        assert result.match.skill_id == "debug-skill"
+
+    def test_fresh_hit_session_end_allowed_with_explicit_signal(self) -> None:
+        """A fresh cached session-end hit is honored on an explicit signal."""
+        service = self._make_service_with_fresh_hit(
+            {
+                "skill_id": "builtin/session-end",
+                "confidence": 0.9,
+                "source": "builtin/session-end",
+                "description": "wrap up session",
+            }
+        )
+
+        result = service.try_ai_triage("that's all for now", self._CANDIDATES)
+
+        service._llm.call.assert_not_called()
+        assert result is not None
+        assert result.match.skill_id == "builtin/session-end"
+
+    def test_fresh_hit_metadata_keys_match_llm_path(self) -> None:
+        """Fresh-hit metadata carries the same keys as the LLM path."""
+        service = self._make_service_with_fresh_hit(
+            {
+                "skill_id": "debug-skill",
+                "confidence": 0.9,
+                "source": "builtin/debug-skill",
+                "description": "debug things",
+            }
+        )
+
+        result = service.try_ai_triage("debug this", self._CANDIDATES)
+
+        service._llm.call.assert_not_called()
+        assert result is not None
+        metadata = result.match.metadata
+        assert metadata["model"] == "cache"
+        assert metadata["structured"] is False
+        assert metadata["candidates_sent"] == 0
+        assert metadata["recall_method"] is None
+
+
+class TestBudgetExhaustedLogging:
+    """Budget exhaustion must produce exactly one log (the trip warning)."""
+
+    def test_budget_exhausted_logs_single_warning(self, caplog: pytest.LogCaptureFixture) -> None:
+        service = _make_service(ai_triage_budget_monthly=5.0)
+        service._cost_tracker.get_monthly_cost.return_value = 5.5
+        service._llm = MagicMock()
+        service._llm.configured.return_value = True
+
+        with caplog.at_level(logging.WARNING):
+            result = service.try_ai_triage("test", [{"id": "skill-a", "intent": "test"}])
+
+        assert result is None
+        assert len(caplog.records) == 1
+        message = caplog.records[0].getMessage()
+        assert caplog.records[0].levelno == logging.WARNING
+        assert "budget exhausted" in message
+        assert "5.5000/5.0000" in message
+
+
+class TestCacheDirResolution:
+    """The .vibe dir is derived from cache_dir for both layouts."""
+
+    def _make_service_at(self, cache_dir: Path) -> TriageService:
+        config = MagicMock()
+        cache_manager = MagicMock()
+        cache_manager.cache_dir = cache_dir
+        return TriageService(
+            config=config,
+            cost_tracker=MagicMock(),
+            prefilter=MagicMock(),
+            cache_manager=cache_manager,
+            get_skill_source=lambda sid, ns: f"{ns}/{sid}",
+        )
+
+    def test_standard_cache_subdir_layout(self, tmp_path: Path) -> None:
+        """<root>/.vibe/cache -> the .vibe dir is the parent."""
+        vibe_dir = tmp_path / ".vibe"
+        service = self._make_service_at(vibe_dir / "cache")
+
+        assert service._triage_cache is not None
+        assert service._triage_cache.cache_path == vibe_dir / "triage_cache.json"
+        assert service._embedding_recall is not None
+        assert service._embedding_recall.cache_path == vibe_dir / "skill_embeddings.json"
+
+    def test_cache_dir_is_vibe_dir_itself(self, tmp_path: Path) -> None:
+        """A custom cache_dir that already IS .vibe is used as-is."""
+        vibe_dir = tmp_path / ".vibe"
+        service = self._make_service_at(vibe_dir)
+
+        assert service._triage_cache is not None
+        assert service._triage_cache.cache_path == vibe_dir / "triage_cache.json"
+        assert service._embedding_recall is not None
+        assert service._embedding_recall.cache_path == vibe_dir / "skill_embeddings.json"
