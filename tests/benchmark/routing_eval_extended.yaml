@@ -1,0 +1,855 @@
+# Extended routing eval set, weak-labeled from production logs (M1c).
+# All entries need human review; confirm via --merge after fixing expect/needs_review.
+- query: 'You are an adversarial SKEPTIC. Your job is to REFUTE the finding if possible.
+    Default real=false unless you independently read the code and confirm the defect
+    is present and impactful. Finding id: TEST-3 Claimed severity: high Title: host_computer
+    task-mutex integration fully skipped on Linux CI File: companion/tests/integration/computer-task-mutex.test.ts:41,196-229;
+    .github/workflows/ci.yml:10-11,56-58 Claimed evidence: const WIN = process.platform
+    === "win32"; all three R1 tests use { skip: !WIN }. CI runs-on: ubuntu-latest
+    so npm test never executes mutex/L2 admission properties for host_computer. Impact:
+    COMPUTER_TASK_BUSY pre-dialog and check-and-set race regressions can land without
+    CI red; only win32 developers exercise this path. METHOD: open the cited file(s)
+    with read_file; grep related symbols; check for mitigations the reporter missed
+    (auth, flush, tests, feature flags). If partially true, set real=true but severity_adjusted
+    lower. If fixed already, real=false severity_adjusted=refuted. evidence must quote
+    current code. <output-contract> Do the work above with your tools first. Then
+    end your final message with a single ```json fenced block containing exactly one
+    JSON value that conforms to this JSON Schema (no prose inside the block): {"properties":{"evidence":{"type":"string"},"finding_id":{"type":"string"},"real":{"type":"boolean"},"reason":{"type":"string"},"severity_adjusted":{"enum":["critical","high","medium","low","info","wontfix","refuted"],"type":"string"}},"required":["finding_id","real","reason","evidence"],"type":"object"}
+    </output-contract>'
+  expect:
+  - builtin/deep-diagnosis-optimization
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: 检查下当前项目进展
+  expect: []
+  category: production_log
+  needs_review: true
+- query: 1. 会议只能通过 / 输入 meeting 才能加载，其他地方找不到，我预期的是在 装配 -> 场景 -> 会议 这样的逻辑层级 2. 我需要字级流式
+    3. 理解，但是在设置中应该支持按住键盘快捷键，自动识别 4. 请继续 D2 后面的 UX 增量 5. 优化点：插件应该支持文字/语音输入，然后对插件自身设置
+  expect: []
+  category: production_log
+  needs_review: true
+- query: 继续做 URL/cookie admission
+  expect:
+  - improve-codebase-architecture
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: 很棒，帮我合并到主分支并提交吧
+  expect:
+  - git-guardrails-claude-code
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: 我看 PR87 失败了，其他都成功了
+  expect:
+  - mattpocock/review
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: 加吧
+  expect:
+  - builtin/riper-workflow
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: B+C
+  expect:
+  - builtin/riper-workflow
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: 对了，当前项目的文档是否更新了？
+  expect:
+  - grill-with-docs
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: 我用的是 dist-package 下面的 chrome-extension
+  expect:
+  - mattpocock/diagnose
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: 似乎有其他进程没有关闭，帮我先关闭了
+  expect:
+  - diagnose
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: push到远程
+  expect: []
+  category: production_log
+  needs_review: true
+- query: CI 绿了以后帮我合并到 main
+  expect:
+  - project/omx/ci
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: '先合 #177 再合 #178'
+  expect:
+  - git-guardrails-claude-code
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: 'You are an independent PRODUCT/UX acceptance agent for CMspark coding-handoff
+    (feat/coding-handoff). Read: - docs/coding-handoff-user-guide.md - docs/decisions/acp-coding-handoff-product-design-2026-08-13.md
+    §5.7 UX Consistency Contract - chrome-extension CodingTaskPackageModal, CodingSessionChip,
+    FocusBand, coding-handoff/copy.ts Checklist vs design: 1. No new bottom tab 2.
+    Stop ≠ 急停 3. Mode honesty (not false sandbox) 4. Outbound vs 编程接力 separation in
+    copy 5. Task package path works without ACP 6. Live progress + stop + followup
+    + apply UX 7. Empty states when no agent / no workspace Score each PASS/FAIL.
+    List residual UX gaps for users. Final line: VERDICT: APPROVE | APPROVE_WITH_NITS
+    | REJECT'
+  expect:
+  - design-an-interface
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: 使用独立多路对抗的方式，将所有分歧收敛
+  expect:
+  - builtin/deep-diagnosis-optimization
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: PI REVIEWER gate for CMspark UIUX v2 node PR6 - review uncommitted git diff
+  expect: []
+  category: production_log
+  needs_review: true
+- query: 创建并打开 PR，没问题就帮我合并到 main
+  expect:
+  - mattpocock/review
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: INDEPENDENT adversarial TEST/QA reviewer for coding-handoff ACP feature -
+    run acp tests, map product gates
+  expect: []
+  category: production_log
+  needs_review: true
+- query: commit 三批改动
+  expect:
+  - builtin/session-end
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: 我看下恢复了
+  expect:
+  - diagnose
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: 拉取最新变更并进行评审
+  expect:
+  - mattpocock/review
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: 那么在提示上是不是可以更加浅显易懂并指明操作路径会更好？
+  expect:
+  - analyze
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: 'Implement M1 Task 6 ONLY on branch feat/voice-local-stt-m1: local-stt-adapter
+    + stt-engine factory + useVoiceInput wiring'
+  expect: []
+  category: production_log
+  needs_review: true
+- query: 删掉 mission-pack-p0 worktree 并清理远程分
+  expect:
+  - using-git-worktrees
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: 这块也可以作为后续优化的一个方向
+  expect:
+  - builtin/deep-diagnosis-optimization
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: docs reorg Phase 1 factual corrections README GOAL architecture TESTING ADR-016
+  expect:
+  - improve-codebase-architecture
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: Do not re-implement code. Dual external review P1-1
+  expect: []
+  category: production_log
+  needs_review: true
+- query: 本地也帮我切到main 与远程保持一致，其他分支都清理干净
+  expect:
+  - mattpocock/review
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: 当前代码是否保存并提交远程了？
+  expect:
+  - git-guardrails-claude-code
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: 我们在文档中是否说明了这些？
+  expect:
+  - grill-with-docs
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: 'src/tabs/voice-spike.tsx:256:56 - error TS2339: Property ''reason'' does
+    not exist on type ''VoiceSupport''. Property ''reason'' does not exist on type
+    ''{ ok: true; ctorName: "SpeechRecognition" | "webkitSpeechRecognition"; }''.
+    256 {support.ok ? support.ctorName : support.reason} ~~~~~~ Found 1 error in src/tabs/voice-spike.tsx:256'
+  expect:
+  - mattpocock/review
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: 保存并提交远程
+  expect:
+  - git-guardrails-claude-code
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: 我们当前项目集成的文档解析器是什么？效果如何，是否能够实现图文解析？
+  expect:
+  - builtin/deep-diagnosis-optimization
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: PI REVIEWER gate for CMspark UIUX v2 node PR7
+  expect:
+  - builtin/riper-workflow
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: 做一轮 dual-review
+  expect:
+  - mattpocock/review
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: P1-1 God-mode / dangerous flag companion step-up security arm confirmation_phrase
+  expect:
+  - builtin/session-end
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: 可以，使用 workflow 的方式开始吧，注意，每个重要节点需要 pi 介入进行复审，里程碑则需要 pi 和claude 进行双路复审
+  expect:
+  - builtin/riper-workflow
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: 首先我需要你使用 fanout 对项目做多维度，深度的体检和审查
+  expect:
+  - builtin/deep-diagnosis-optimization
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: 'A -> 可以打开微信，但是出现的问题和之前遇到的一模一样，需要不断去批准操作，点击chrome后，微信切换后台，无法点击 -> 人工将chrome缩小，让
+    微信界面显示，但是依然失败，对话编号：#wrsihk B -> 确认 C -> 可以读取 cloud 邮箱内容，但是配置了其他的邮箱，譬如 Exchange
+    邮箱，即使在 Mail.app 中有邮件，但是没有读取出来，对话编号 #mxz27i D -> 看起来所有需要截图点击的 APP 都是失败的，包括网易云音乐，而且，每个
+    APP 操作都要反复不断点击插件内的允许操作，对话 #ykazn8 E -> 插件操作 APP 需要前台的时候，目前测试下来经常性的 APP 还是藏在后台'
+  expect:
+  - builtin/session-end
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: 先让 pi 和 claude 进入评审，看是否有哪里没有考虑清楚或者有问题，双路复审确认后，我们进行具体的开发
+  expect:
+  - mattpocock/review
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: 清 worktree/stash
+  expect:
+  - using-git-worktrees
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: 1. 输入 "/code" 后弹窗，选择工作区直接没有反映 2. 既然是 ACP 进入编程助手了， 我理解界面旁边就应该有独立的 Agent，可以看到编程助手内部的操作和流转才对
+    3. Agent 如何和类似 github 这种网页联动，应该支持快捷操作，譬如 clone 当前仓库，或者关联当前仓库到本地仓库，或者如果网页就是没有涉及相关代码仓库，支持直接关联本地仓库
+    4. 关联的编程 Agent 应该读取本地配置 5. 当前的编程设置很怪异，我觉得在场景中是不是可以独立出来一个编程场景？ 请你使用独立对抗的多 agent
+    方式进行产品的重新思考，对于交互的重新理解，从用户角度出发，思考我们的产品形态到底应该如何，你可以使用ASCII图先把相应流程画出来
+  expect:
+  - builtin/riper-workflow
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: 本机转写：麦克风音频经鉴权通道送至本机 Companion，写入临时文件后由本机 Whisper 识别，结果填入草稿（默认不自动发送）；识别后删除临时音频，不保证
+    OS 交换/崩溃转储等零痕迹。发送后的文字与键入相同，仍受现有确认与信任设置约束。模型需用户显式下载（HTTPS + 校验）。与电脑控制实验模型同时使用可能占用大量内存。
+    扩展版本过旧或不匹配，请在 chrome://extensions 重新加载 CMspark。
+  expect:
+  - builtin/autonomous-experiment
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: 几个优化点：1. 目前设置选项太多了，是不是可以设置分类，每个分类展开，设置也需要有足够的逻辑性 2. 当前的对话，今日对话和昨日对话，默认平铺，但是没法折叠，这个不太好
+    3. 同一个对话太长的时候，是不是可以加入自动压缩
+  expect:
+  - ui-ux-pro-max-skill/design
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: commit 修订后开始按照我们之前设定的开发方式进行开发吧
+  expect:
+  - builtin/riper-workflow
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: 现在我想你帮我重新思考我们的APP，界面如何设计，如何交互，使用什么视觉元素更合适，重新来组织我们的表现形式和交互逻辑
+  expect:
+  - design-an-interface
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: P1-2 MCP + navigate L2 originWs binding Trust multi-peer security confirmations
+  expect:
+  - builtin/riper-workflow
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: 帮我合并到 main 吧
+  expect:
+  - git-guardrails-claude-code
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: 'Computer-Use Mechanism Research — Review Request: validate cmSpark CGEvent
+    vs Hermes SLEventPostToPid vs open-computer-use postToPid diagnosis'
+  expect:
+  - mattpocock/review
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: 您提到的一个点我觉得很重要，当某个 sub agent操作 tab 的时候，其他 agent 不能再去操作 tab，必须等待相应 tab 操作的锁释放，然后我希望你能使用对抗验证的方式，使用
+    workflow 来针对这里的feature进行深入探讨，等待结论出来后，引入 claude 和 pi 进行二次探讨
+  expect:
+  - builtin/riper-workflow
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: 帮我合并到主分支吧
+  expect:
+  - git-guardrails-claude-code
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: 直接按「P0 + P3 模板」开一版实现计划，刚点开始录就出现这样的情况
+  expect:
+  - builtin/riper-workflow
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: full-autonomy 之前做的，也要提交
+  expect:
+  - builtin/riper-workflow
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: 'reply with exactly: claude-ok'
+  expect:
+  - ask-claude
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: 我注意到插件中，关于模块 shell 和 netsec 未启用，无法点击，这块我们还没进行实现么？
+  expect:
+  - builtin/riper-workflow
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: 有个问题，为什么语音识别只能识别几句话，然后就停了
+  expect:
+  - builtin/session-end
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: 1. 拉取最新代码，编译并替换当前系统安装的 CMspark.app 2. 使用多路对抗方式进行代码评审，从架构，设计，代码实现，文档等多个方面进行深入调研
+  expect:
+  - builtin/deep-diagnosis-optimization
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: '对话 #mhwofh 提示 ❌ 400 An assistant message with ''tool_calls'' must be followed
+    by tool messages responding to each ''tool_call_id''. (insufficient tool messages
+    following tool_calls message)'
+  expect:
+  - builtin/deep-diagnosis-optimization
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: 现在更差了，再次弹窗说 CMspark.app 需要授权，打开后，显示已经授权了，chrome 插件内部弹窗，点击允许后，直接失败，对话 ID 为
+    b0faek
+  expect:
+  - builtin/deep-diagnosis-optimization
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: 用户实测 A微信反复批准前台失败 C邮箱只读iCloud不读Exchange D截图点击APP全失败反复允许 E APP常藏后台
+  expect:
+  - project/ui-ux-pro-max-skill/feature_request
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: 开始 M1
+  expect:
+  - builtin/riper-workflow
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: 帮我重新编译 DMG 并替换当前运行的程序吧
+  expect:
+  - improve-codebase-architecture
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: 帮我 commit 并发起 PR
+  expect:
+  - mattpocock/review
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: '模拟点击全部失败 前台切换和截图正常 对话 #32c2b0 #mvt4t8'
+  expect:
+  - builtin/deep-diagnosis-optimization
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: 项目当前进展如何？
+  expect: []
+  category: production_log
+  needs_review: true
+- query: 模型文件缺失 Qwen3-VL 模型未下载或已被删除。UIA / OCR / 用户框选定位不受影响；在设置页下载模型后可启用本实验层， 实际点击下载，提示失败
+  expect:
+  - diagnose
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: 然后帮我合并到主分支吧
+  expect:
+  - git-guardrails-claude-code
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: 我先离开了
+  expect:
+  - builtin/session-end
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: 走一遍 dual-review 对 diff 再
+  expect:
+  - requesting-code-review
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: 先让 pi 和 claude 进行双路复审
+  expect:
+  - omx/ask-claude
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: 'Harden companion/src/acp/open-local-terminal.ts: require absolute path after
+    realpath, no COLORTERM on Linux, Windows commandLine quote paths safely, L0 degrade
+    option, unit tests for shell escape + absolute path rejection'
+  expect:
+  - verification-before-completion
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: 清理吧
+  expect:
+  - 清理吧
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: 使用 pi 进行复审，并没有发 PR
+  expect:
+  - project/omx/pr-check
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: God Mode就是需要全自动巡航，产品未来肯定需要自动长程执行的能力的，无人值守是硬需求
+  expect:
+  - builtin/riper-workflow
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: P1-3 evaluate post-approval code integrity sanitizeText security_token
+  expect: []
+  category: production_log
+  needs_review: true
+- query: '我记得之前出现过类似的问题，就是在推特网页上，进行往下翻页操作失败，提示是推特禁止 CSP 注入，当时用了其他方式去解决了翻页问题，目前好像又出现了同样问题，对话
+    #gt24cb 最后几条就是这样的问题'
+  expect:
+  - omx/analyze
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: 将所有未完成事项使用 workflow 合适方式进行收敛
+  expect:
+  - builtin/riper-workflow
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: PR5 — Hide/remove BottomBar strip behind flag (Host SoT)
+  expect:
+  - builtin/riper-workflow
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: 可以的，来修复吧，另外，提示词也帮我优化下
+  expect:
+  - builtin/deep-diagnosis-optimization
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: 现在先让我们关注另外一个问题，在对话#lruusn最后几条中对话记录中，可以看到再次出现，我们插件操作外部程序的时候，无法截图查看，但是从弹出的设置看，已经给
+    CMspark.app 授权了，这个问题我记得之前开发的时候反复出现过
+  expect:
+  - diagnose
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: 1. 接受 C′ 2. D
+  expect:
+  - builtin/riper-workflow
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: Write ship note for P0 Anthropic protocol
+  expect:
+  - writing-shape
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: 1. 互斥 2. 不禁 evaluate 3. 并发最多到 5 吧 4. 根据你们的建议来选择合适的方案 5. 能
+  expect:
+  - builtin/riper-workflow
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: 帮我找找看中文视觉模型，我记得百度、阿里、腾讯、智谱都开源了很多视觉小模型
+  expect:
+  - analyze
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: 单独 PR，没问题了帮我合并到 main 上面
+  expect:
+  - git-guardrails-claude-code
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: 'You are an adversarial SKEPTIC. Your job is to REFUTE the finding if possible.
+    Default real=false unless you independently read the code and confirm the defect
+    is present and impactful. Finding id: PERS-1 Claimed severity: high Title: threadFilePath
+    does not sanitize thread_id — path escape under DATA_DIR File: companion/src/threads/thread-manager.ts:242-244
+    Claimed evidence: private threadFilePath(threadId: string): string { return path.join(getConfigDir(),
+    "threads", `${threadId}.json`) } — only create() calls sanitizeId (alphanumeric/hyphen/underscore).
+    getMessages/addMessage/updateMessage/deleteMessagesFrom/delete use raw threadId.
+    path.join normalizes ''..'', so thread_id ''../config'' resolves to ~/.cmspark-agent/config.json;
+    addMessage atomicWriteJSON would overwrite it with {messages:[...]}; delete would
+    unlinkSync it. message-router passes rest.thread_id through without sanitization.
+    Impact: Authenticated peer (or compromised extension holding ws_secret) can corrupt
+    or delete config.json / other DATA_DIR JSON via crafted thread_id on message or
+    delete APIs — silent data loss of API keys, domains, MCP/apps config. METHOD:
+    open the cited file(s) with read_file; grep related symbols; check for mitigations
+    the reporter missed (auth, flush, tests, feature flags). If partially true, set
+    real=true but severity_adjusted lower. If fixed already, real=false severity_adjusted=refuted.
+    evidence must quote current code. <output-contract> Do the work above with your
+    tools first. Then end your final message with a single ```json fenced block containing
+    exactly one JSON value that conforms to this JSON Schema (no prose inside the
+    block): {"properties":{"evidence":{"type":"string"},"finding_id":{"type":"string"},"real":{"type":"boolean"},"reason":{"type":"string"},"severity_adjusted":{"enum":["critical","high","medium","low","info","wontfix","refuted"],"type":"string"}},"required":["finding_id","real","reason","evidence"],"type":"object"}
+    </output-contract>'
+  expect:
+  - builtin/deep-diagnosis-optimization
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: 文档是否有记录这块内容？
+  expect:
+  - grill-with-docs
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: '对话 #l74du8 可以看到当我们的插件尝试从网页下载的时候，会报 “❌ 不可恢复错误: url and expression required“
+    这样的错误'
+  expect:
+  - builtin/skill-craft
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: 当前是否还有代码没有提交的？
+  expect:
+  - git-guardrails-claude-code
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: 帮我把 /Applications 下面备份的其他文件都清理了吧
+  expect:
+  - improve-codebase-architecture
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: 我运行的是 /Application/CMspark.app
+  expect:
+  - builtin/deep-diagnosis-optimization
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: 'Deep-dive analysis of CMspark Computer Use failures on macOS vs success
+    path on Windows. Repo: [REDACTED_PATH] Read and compare: 1. companion/src/computer/darwin-estop.ts,
+    darwin-adapters.ts, host-use/darwin/host.swift (screenshot SCK, inject, estop
+    CGEventTap code 4) 2. companion/src/computer/estop.ts, win-adapters (or similar
+    Windows host path) 3. docs/superpowers/plans/2026-08-01-macos-tcc-estop-BLOCKED-HANDOFF.md
+    4. docs/superpowers/specs/2026-08-01-macos-tcc-product-identity-design.md (if
+    exists) 5. host-bin.ts resolvePackagedContentsDir 6. packaging create-dmg.sh -
+    adhoc codesign Known symptoms (from HANDOFF): - User: estop helper exit code 4
+    (Accessibility/CGEventTap) - Also ScreenCaptureKit -3801 - CLI manual MacOS/CMspark
+    screenshot/inject/estop WORKS - Companion host_computer path FAILS after user
+    approval - Product identity moved to com.cmspark.agent / MacOS/CMspark Mach-O
+    (PR #103) - Windows works better for computer use Answer: 1. Full macOS call chain
+    for host_computer (extension → WS → companion → host binary) 2. Full Windows call
+    chain 3. Why macOS fails repeatedly (TCC CDHash, adhoc, dual process, estop preflight
+    fail-closed, daemon spawn) 4. Why Windows doesn''t hit the same walls 5. Ranked
+    root causes with confidence 6. Concrete fix directions Return structured markdown.
+    [inspected] evidence with file:line when possible. Read-only.'
+  expect:
+  - improve-codebase-architecture
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: grill N1-N10, 使用 pi agent 和 claude code 一起讨论的方式来明确细节
+  expect:
+  - grill-with-docs
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: 继续往后做吧
+  expect:
+  - builtin/riper-workflow
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: '不对啊，我都已经给了截图权限，怎么还是弹窗问我要权限？对话 #7n9nvl'
+  expect:
+  - builtin/session-end
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: Verify CONDITIONAL GO acceptance A1-A5 for Side Panel design debt W1-W3
+  expect: []
+  category: production_log
+  needs_review: true
+- query: 可以，开始吧 Daily Content Loop 场景 brief
+  expect:
+  - mattpocock/grill-me
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: 插件操作外部程序时无法截图查看，设置里 CMspark.app 已授权，反复出现
+  expect:
+  - diagnose
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: Batch 2 (Correctness P0s) Implementation Brief — for Grok Review
+  expect: []
+  category: production_log
+  needs_review: true
+- query: 继续按照之前的流程，把所有其他工作都完成
+  expect:
+  - builtin/riper-workflow
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: 帮我重新编译 DMG 并替换当前运行的程序
+  expect:
+  - improve-codebase-architecture
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: '❌ 安全阻断: Security Block: Access to cookie for domain "Global / All Domains"
+    is blocked. This domain is not in the trusted_domains list. Please configure trusted
+    domains in settings.'
+  expect: []
+  category: production_log
+  needs_review: true
+- query: 使用 Claude + Pi 的双路评审
+  expect:
+  - builtin/deep-diagnosis-optimization
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: 'WORKTREE: [REDACTED_PATH] 1) cd companion && npx tsc -p tsconfig.json --noEmit
+    2) node --import tsx --test tests/acp-confirm-copy.test.ts tests/acp-handlers-gates.test.ts
+    tests/message-router-config-acp.test.ts 3) Also run any new tests you find matching
+    *git-status* *open-local* *coding* 4) cd chrome-extension && npx tsc --noEmit
+    2>&1 | head -40 If DATA_DIR pollution fails gates, fix isolation not skip. ok=true
+    only if tsc clean for touched areas and tests pass. <output-contract> Do the work
+    above with your tools first. Then end your final message with a single ```json
+    fenced block containing exactly one JSON value that conforms to this JSON Schema
+    (no prose inside the block): {"properties":{"commands":{"items":{"type":"string"},"type":"array"},"log":{"type":"string"},"ok":{"type":"boolean"}},"required":["ok","log"],"type":"object"}
+    </output-contract>'
+  expect:
+  - builtin/riper-workflow
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: Verify UIUX node PR3 on CMspark.
+  expect:
+  - review
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: 根据评审意见，使用 workflow 进行完整优化，记住在 worktree 中进行相应的优化工作，每个重要节点务必进行双路复审，必须要完成所有阶段的优化工作，中间不能停止，必须要
+    pi 和 claude 都确认完全优化完成才可以停止
+  expect:
+  - builtin/deep-diagnosis-optimization
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: 补 HTTP e2e
+  expect:
+  - improve-codebase-architecture
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: 非常棒，现在只剩一个小问题了，我看你刚才说： 当前会话未挂载 cmspark MCP 工具；改走 Companion Outbound HTTP（与
+    Grok MCP 同一链路）读取推特页。 这是怎么回事呢？
+  expect:
+  - diagnose
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: Implement W4+W5 for CMspark Side Panel design debt remaining batch
+  expect:
+  - builtin/deep-diagnosis-optimization
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: 帮我创建 PR，然后个饼
+  expect:
+  - builtin/riper-workflow
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: 你要不也看下 zed 这个项目，他们的 acp 是如何实现的，我觉得他们做的就挺优雅的，对于编程场景，从用户交互而言，既然从我们插件发起了，那就不应该再去来回切换，我们相当于给编程
+    tui 套了一层壳，底层能力是编程 agent 的，但是用户是可以在浏览器端进行输入，查看，设置等操作的
+  expect:
+  - builtin/deep-diagnosis-optimization
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: 当前 /Applications/CMspark.app 是否是最新代码编译出来的
+  expect:
+  - builtin/deep-diagnosis-optimization
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: 按批次拆 commit
+  expect:
+  - mattpocock/request-refactor-plan
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: 继续 Phase2b 和 Phase3
+  expect:
+  - builtin/riper-workflow
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: 继续拆 WS lifecycle / confirm response
+  expect:
+  - mattpocock/grill-with-docs
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: 我设想在未来，给我们插件新增一个场景，会议记录，专门识别会议中不同人的说话，转写文字，总结提炼，生成会议纪要，按照目前的设计，做不到么？
+  expect:
+  - builtin/skill-craft
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: 现在，我们项目暂时稳定，帮我更新下文档和版本号吧
+  expect:
+  - builtin/session-end
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: 当前项目的 tinyclick 点击下载模型没有反映
+  expect:
+  - project/ui-ux-pro-max-skill/bug_report
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: 盯 CI / 自动合并
+  expect:
+  - project/omx/ci
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: 帮我热更新下，我使用的是 dist-package 下面的
+  expect:
+  - diagnose
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: 帮我判断下还有哪些没有合并进来的，是否还需要合并，然后已经合并的都帮我删除了吧，无论是本地还是远程
+  expect:
+  - improve-codebase-architecture
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: 使用合适的 workflow 在独立的 worktree 上进行开发吧，注意，如果开发过程中有不明确的地方，首先使用独立对抗agent进行选择，然后和pi
+    和 claude 进行双路确认，中间不要停，我去睡觉了，请你将所有阶段全部开发完成
+  expect:
+  - builtin/riper-workflow
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: Code review for a focus-preservation fix in a Swift tray binary (companion
+    process). Focus on Q1-Q6 at the end. Be terse, ~500 words max, lead with APPROVE
+    / APPROVE WITH AMENDMENTS / REJECT, then amendments if any.
+  expect: []
+  category: production_log
+  needs_review: true
+- query: 帮我合 130 吧
+  expect:
+  - builtin/riper-workflow
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: 当前进展如何，还有未完成工作么？
+  expect:
+  - builtin/riper-workflow
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: 做 D1c
+  expect:
+  - builtin/riper-workflow
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: 当前项目整体进展如何了？
+  expect:
+  - triage
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: 继续 P2 抛光
+  expect:
+  - builtin/riper-workflow
+  category: production_log
+  needs_review: true
+  weak_label: true
+- query: '[Image #1]'
+  expect: []
+  category: production_log
+  needs_review: true

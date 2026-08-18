@@ -6,6 +6,7 @@ to enable continuous improvement of the routing system.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 from dataclasses import dataclass, field
@@ -16,6 +17,10 @@ from typing import Any
 from vibesop.utils.redaction import redact_sensitive
 
 logger = logging.getLogger(__name__)
+
+_RAPID_REROUTE_SECONDS = 10.0
+_OVERLAP_THRESHOLD = 0.5
+_HASH_LENGTH = 16
 
 
 @dataclass
@@ -66,6 +71,120 @@ class ExecutionRecord:
         )
 
 
+class LastRouteTracker:
+    """Tracks the previous route per project to derive implicit feedback signals.
+
+    Persists ``.vibe/last_route.json`` (token hashes + skill + timestamp — no
+    raw query text). Read-modify-write is serialised via a sibling ``.lock``
+    file (same pattern as ``.vibe/instincts.jsonl.lock``). The state this
+    process last wrote is cached in memory, so the steady-state critical
+    section skips the file read entirely; cross-process interleavings degrade
+    to per-process signals (best-effort telemetry, last writer wins).
+
+    Fails open: corrupt state, lock contention, or any IO error yields no
+    implicit signals and never breaks the routing/analytics main flow.
+    """
+
+    def __init__(self, storage_dir: str | Path = ".vibe") -> None:
+        self.state_path = Path(storage_dir) / "last_route.json"
+        self.lock_path = Path(storage_dir) / "last_route.lock"
+        # In-memory copy of the state this process last wrote. While held,
+        # the file read inside the lock is skipped (steady-state hot path
+        # drops from stat+open+read+parse to zero reads). Cross-process
+        # staleness is accepted: implicit signals are best-effort telemetry
+        # about *this* session's re-routes, and a concurrent writer's state
+        # being overwritten by our next write matches "last route wins".
+        self._cached_state: dict[str, Any] | None = None
+
+    def compute_and_update(
+        self,
+        query: str,
+        skill: str | None,
+        now: datetime | None = None,
+    ) -> dict[str, Any]:
+        """Compute implicit signals vs. the last route, then record this one.
+
+        Returns the signal fields to merge into the analytics event; empty
+        dict on first route or any failure (silent degradation).
+        """
+        try:
+            from vibesop.utils.file_lock import cross_process_lock
+
+            now = now or datetime.now(UTC)
+            normalized = " ".join(redact_sensitive(query).split()).lower()
+            token_hashes = sorted(
+                {_hash_token(t) for t in normalized.split() if t}
+            )
+            # Non-blocking: a contended lock must never stall routing (M1d);
+            # the critical section is a tiny RMW so contention is rare.
+            with cross_process_lock(self.lock_path, blocking=False):
+                last = self._cached_state if self._cached_state is not None else self._read()
+                signals = _implicit_signals(last, token_hashes, now)
+                state = {
+                    "token_hashes": token_hashes,
+                    "skill": skill,
+                    "timestamp": now.isoformat(),
+                }
+                self._write(state)
+                # Cache only after a successful write, so a failed _write
+                # (exception → silent degradation) never poisons the cache.
+                self._cached_state = state
+            return signals
+        except Exception as e:  # telemetry must never break routing
+            logger.debug("Implicit feedback signals unavailable: %s", e)
+            return {}
+
+    def _read(self) -> dict[str, Any] | None:
+        """Read last-route state; corrupt/missing state returns None (self-heals
+        on the next ``_write``). Single open — no ``exists()`` pre-check."""
+        try:
+            with self.state_path.open("r", encoding="utf-8") as f:
+                data = json.load(f)
+        except (json.JSONDecodeError, OSError):
+            return None
+        return data if isinstance(data, dict) else None
+
+    def _write(self, state: dict[str, Any]) -> None:
+        self.state_path.parent.mkdir(parents=True, exist_ok=True)
+        with self.state_path.open("w", encoding="utf-8") as f:
+            json.dump(state, f, ensure_ascii=False)
+
+
+def _hash_token(token: str) -> str:
+    """Per-token hash so Jaccard overlap can be computed without storing raw
+    query text (hashed-set equality matches raw-set equality)."""
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()[:_HASH_LENGTH]
+
+
+def _implicit_signals(
+    last: dict[str, Any] | None,
+    token_hashes: list[str],
+    now: datetime,
+) -> dict[str, Any]:
+    """Derive implicit quality signals from the previous route state."""
+    if not last:
+        return {}
+
+    signals: dict[str, Any] = {}
+    try:
+        last_ts = datetime.fromisoformat(str(last["timestamp"]))
+        # Clamp clock skew (e.g. NTP rollback) to 0 instead of reporting
+        # negative seconds.
+        seconds = max(0.0, (now - last_ts).total_seconds())
+        signals["seconds_since_last_route"] = round(seconds, 3)
+        signals["is_rapid_reroute"] = seconds < _RAPID_REROUTE_SECONDS
+    except (KeyError, TypeError, ValueError):
+        pass
+
+    last_tokens = set(last.get("token_hashes") or [])
+    if last_tokens and token_hashes:
+        union = last_tokens | set(token_hashes)
+        jaccard = len(last_tokens & set(token_hashes)) / len(union)
+        signals["query_overlap_with_last"] = jaccard > _OVERLAP_THRESHOLD
+
+    return signals
+
+
 class AnalyticsStore:
     """Persistent store for execution analytics.
 
@@ -75,12 +194,31 @@ class AnalyticsStore:
     def __init__(self, storage_dir: str | Path = ".vibe") -> None:
         self.storage_path = Path(storage_dir) / "analytics.jsonl"
         self.storage_path.parent.mkdir(parents=True, exist_ok=True)
+        # One tracker per store: previously constructed per record(), which
+        # also defeated its in-memory state cache (see LastRouteTracker).
+        self._last_route = LastRouteTracker(self.storage_path.parent)
 
     def record(self, record: ExecutionRecord) -> None:
-        """Append an execution record (query redacted — F-06)."""
+        """Append an execution record (query redacted — F-06).
+
+        Also merges implicit feedback signals (seconds since last route,
+        rapid re-route, query overlap) derived from ``.vibe/last_route.json``
+        — additive fields only, absent when unavailable (M1d).
+
+        Hot-path IO: the analytics write itself is a bare O(1) append (no
+        lock, no read). The implicit-signal update adds one non-blocking
+        lock + one small JSON write; the state read is served from the
+        tracker's in-memory cache in steady state, so a record costs one
+        lock + two writes total instead of lock + read + two writes.
+        """
         try:
             data = record.to_dict()
             data["query"] = redact_sensitive(data["query"])
+            data.update(
+                self._last_route.compute_and_update(
+                    record.query, record.primary_skill
+                )
+            )
             with self.storage_path.open("a", encoding="utf-8") as f:
                 f.write(json.dumps(data, ensure_ascii=False) + "\n")
         except OSError as e:
