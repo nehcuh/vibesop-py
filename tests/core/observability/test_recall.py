@@ -134,8 +134,10 @@ class TestRecallResult:
 
     def test_result_has_last_seen_timestamp(self, tmp_path: Path) -> None:
         cache = EmbeddingCache(cache_path=tmp_path / "emb.npz")
-        old_ts = datetime(2026, 7, 1, 12, 0, tzinfo=UTC)
-        new_ts = datetime(2026, 7, 28, 18, 30, tzinfo=UTC)
+        # Relative timestamps keep the spans inside the 30-day look-back
+        # window regardless of when the test runs.
+        old_ts = datetime.now(UTC) - timedelta(days=10)
+        new_ts = datetime.now(UTC) - timedelta(days=1)
         spans = [
             _span("t1", "hello", timestamp=old_ts),
             _span("t1", "hello", timestamp=new_ts),
@@ -144,7 +146,7 @@ class TestRecallResult:
             [r] = recall_similar("hello", spans, cache=cache)
         assert r.last_seen is not None
         # last_seen should be the most recent
-        assert "2026-07-28" in r.last_seen
+        assert new_ts.date().isoformat() in r.last_seen
 
 
 class TestDaysWindow:
@@ -357,8 +359,8 @@ class TestW3TraceIdAndSkillId:
 
     def test_trace_id_from_most_recent_span(self, tmp_path: Path) -> None:
         cache = EmbeddingCache(cache_path=tmp_path / "emb.npz")
-        old_ts = datetime(2026, 7, 1, 12, 0, tzinfo=UTC)
-        new_ts = datetime(2026, 7, 28, 18, 30, tzinfo=UTC)
+        old_ts = datetime.now(UTC) - timedelta(days=10)
+        new_ts = datetime.now(UTC) - timedelta(days=1)
         spans = [
             {
                 "task_id": "t1",
@@ -396,7 +398,7 @@ class TestW3TraceIdAndSkillId:
                 "task_id": "t1",
                 "input_data": {"query": "hello"},
                 "name": "route:query",
-                "timestamp": datetime(2026, 7, 1, tzinfo=UTC).isoformat(),
+                "timestamp": (datetime.now(UTC) - timedelta(days=3)).isoformat(),
                 "metadata": {"skill_id": "skill_a"},
                 "project_id": "test",
             },
@@ -404,7 +406,7 @@ class TestW3TraceIdAndSkillId:
                 "task_id": "t1",
                 "input_data": {"query": "hello"},
                 "name": "route:query",
-                "timestamp": datetime(2026, 7, 2, tzinfo=UTC).isoformat(),
+                "timestamp": (datetime.now(UTC) - timedelta(days=2)).isoformat(),
                 "metadata": {"skill_id": "skill_a"},
                 "project_id": "test",
             },
@@ -412,7 +414,7 @@ class TestW3TraceIdAndSkillId:
                 "task_id": "t1",
                 "input_data": {"query": "hello"},
                 "name": "route:query",
-                "timestamp": datetime(2026, 7, 3, tzinfo=UTC).isoformat(),
+                "timestamp": (datetime.now(UTC) - timedelta(days=1)).isoformat(),
                 "metadata": {"skill_id": "skill_b"},
                 "project_id": "test",
             },

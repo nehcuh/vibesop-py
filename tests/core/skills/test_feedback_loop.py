@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from unittest.mock import MagicMock, patch
 
 from vibesop.core.skills.evaluator import SkillEvaluation
@@ -108,7 +109,10 @@ class TestFeedbackLoop:
                 "test/active",
                 "C",
                 total_routes=10,
-                last_used="2026-05-01T00:00:00",
+                # FeedbackLoop parses last_used as a naive datetime, so
+                # strip tzinfo. Relative "now" keeps this test from
+                # rotting into the 90-day archive window.
+                last_used=datetime.now(UTC).replace(tzinfo=None).isoformat(),
                 quality=0.7,
             ),
         }
