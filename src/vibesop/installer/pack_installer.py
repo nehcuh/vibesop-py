@@ -790,6 +790,18 @@ class PackInstaller:
 
             shutil.copytree(skill_dir, dest_path)
             write_copy_source_marker(dest_path, skill_dir)
+            # Ownership marker so clean_orphan_skills can reclaim this dir;
+            # keeps the source marker if copytree already carried one over.
+            try:
+                from vibesop.adapters.base import write_skill_marker
+
+                write_skill_marker(dest_path, flat_name, "pack-copy", str(skill_dir))
+            except OSError as marker_err:
+                logger.warning(
+                    "copy succeeded but ownership marker write failed for %s: %s",
+                    dest_path,
+                    marker_err,
+                )
             if dedupe_by_name:
                 skill_name = self._parse_skill_name(skill_file)
                 if skill_name and skill_name not in existing_names:

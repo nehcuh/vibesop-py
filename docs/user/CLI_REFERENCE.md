@@ -1387,6 +1387,7 @@ export ANTHROPIC_API_KEY=sk-ant-...
 | `OLLAMA_MODEL` | `Qwen3.6-35B-A3B-mlx-mxfp8` | Default Ollama model |
 | `ANTHROPIC_API_KEY` | — | Anthropic API key |
 | `OPENAI_API_KEY` | — | OpenAI API key |
+| `VIBE_AI_TRIAGE_ENABLED` | — | `0`/`false`/`no` disables the AI-triage LLM call only — fresh hits from the persistent triage cache (`.vibe/triage_cache.json`) are still served. Set `enable_ai_triage = false` in config for a full kill switch |
 
 ### Provider Detection Priority
 

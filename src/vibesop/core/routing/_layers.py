@@ -462,7 +462,7 @@ def try_index_layer(
             best_score = score
             best_skill_id = skill_id
 
-    threshold = getattr(router._config, "index_match_threshold", 0.20)
+    threshold = router._config.index_match_threshold
     if best_score < threshold or not best_skill_id:
         # Token overlap missed — try semantic embedding fallback when available.
         emb_match, emb_detail = _try_embedding_fallback(

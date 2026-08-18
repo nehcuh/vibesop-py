@@ -122,15 +122,6 @@ class TriageService:
         if not self._config.enable_ai_triage:
             return None
 
-        if self._llm is None:
-            self._llm = self.init_llm_client()
-
-        if self._llm is None or not self._llm.configured():
-            # LLM unconfigured means the whole triage layer is off — including
-            # the persistent cache below ("layer closed = fully closed"), even
-            # though a fresh hit itself would cost nothing.
-            return None
-
         # Build augmented query with memory context (before the cache lookup
         # so the persisted key matches what would be sent to the LLM).
         augmented_query = query
@@ -151,9 +142,16 @@ class TriageService:
         # Persistent cross-process cache: fresh entries skip the LLM entirely;
         # stale ones (expired TTL / changed candidates) are kept as last-good.
         # A fresh hit costs nothing (no recall, no LLM call), so it runs
-        # before the prefilter and the budget/circuit gates below — those only
-        # guard the LLM call path. The hash covers the FULL candidate set (not
-        # the prefiltered window), which is what makes lookup possible before
+        # before the LLM-availability check, the prefilter, and the
+        # budget/circuit gates below — those only guard the LLM call path.
+        # Serving a fresh hit with no LLM configured is safe: the entry was
+        # itself an LLM routing decision, the candidates hash proves the
+        # decision context is unchanged, and the session-end guard below is
+        # re-validated on every hit. (Note: VIBE_AI_TRIAGE_ENABLED=0 only
+        # gates the LLM client, so fresh hits are still served under it; the
+        # config-level enable_ai_triage switch above remains the full
+        # kill switch.) The hash covers the FULL candidate set (not the
+        # prefiltered window), which is what makes lookup possible before
         # prefiltering; a changed set demotes the entry to stale, and
         # _last_good_route then re-validates the skill still exists.
         stale_entry: dict[str, Any] | None = None
@@ -200,6 +198,17 @@ class TriageService:
                         return LayerResult(match=route, layer=RoutingLayer.AI_TRIAGE)
                 except (KeyError, TypeError, ValueError) as e:
                     logger.debug("Failed to deserialize persistent triage entry: %s", e)
+
+        # LLM availability gate: checked AFTER the persistent-cache lookup so
+        # a fresh hit is still served when no LLM is configured; a miss (or a
+        # stale-only entry) falls through to here and short-circuits exactly
+        # as before — no last-good fallback, since a deliberately LLM-less
+        # layer should not extend decayed stale results either.
+        if self._llm is None:
+            self._llm = self.init_llm_client()
+
+        if self._llm is None or not self._llm.configured():
+            return None
 
         # Budget enforcement. Cheap check, runs before the (expensive)
         # prefilter below: a closed gate must not pay the recall cost.
@@ -611,7 +620,13 @@ class TriageService:
                     # Last-good: nothing was sent to the LLM (the gates
                     # closed or the call failed before a new prompt).
                     "candidates_sent": 0,
-                    "recall_method": self._last_recall_method,
+                    # No recall fed this route: it replays a stale cache
+                    # entry, so reporting self._last_recall_method here would
+                    # leak the previous request's value (or, on the
+                    # LLM-failure path, a recall whose result was discarded)
+                    # in long-lived processes. Fixed None, same convention as
+                    # the fresh-cache path above.
+                    "recall_method": None,
                 },
             )
         except (KeyError, TypeError, ValueError) as e:

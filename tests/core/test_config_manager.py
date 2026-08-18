@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
 
 from vibesop.core.config.manager import (
     ConfigManager,
@@ -112,6 +113,7 @@ def test_get_routing_config_type_and_defaults(manager_no_files: ConfigManager) -
     assert rc.enable_ai_triage is True
     assert rc.enable_embedding is False
     assert rc.confirmation_mode == "always"
+    assert rc.index_match_threshold == pytest.approx(0.20)
 
 
 # ---------------------------------------------------------------------------
@@ -453,3 +455,53 @@ def test_get_routing_config_tolerates_legacy_preferences(
     rc = manager.get_routing_config()  # must not raise ValidationError
     assert isinstance(rc, RoutingConfig)
     assert rc.min_confidence == pytest.approx(0.3)
+
+
+# ---------------------------------------------------------------------------
+# 11. routing.index_match_threshold (SEMANTIC_INDEX bigram hit threshold)
+# ---------------------------------------------------------------------------
+
+
+def test_index_match_threshold_default() -> None:
+    """Default stays 0.20 — calibration data is insufficient to justify a change."""
+    assert RoutingConfig().index_match_threshold == pytest.approx(0.20)
+
+
+def test_index_match_threshold_from_project_toml(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """A [routing] index_match_threshold in .vibe/config.toml takes effect."""
+    vibe_dir = tmp_path / ".vibe"
+    vibe_dir.mkdir()
+    (vibe_dir / "config.toml").write_text(
+        "[routing]\nindex_match_threshold = 0.42\n",
+        encoding="utf-8",
+    )
+    real_resolve = ConfigSource._resolve_config_path  # pyright: ignore[reportPrivateUsage]
+
+    def _no_global(base_dir: Path, name: str) -> Path | None:
+        # Keep the real home ~/.vibe config out of this test.
+        if base_dir == Path.home() / ".vibe":
+            return None
+        return real_resolve(base_dir, name)
+
+    monkeypatch.setattr(
+        ConfigSource,
+        "_resolve_config_path",
+        staticmethod(_no_global),  # type: ignore[arg-type]
+    )
+    manager = ConfigManager(project_root=str(tmp_path))
+    rc = manager.get_routing_config()
+    assert rc.index_match_threshold == pytest.approx(0.42)
+
+
+def test_index_match_threshold_out_of_range_rejected() -> None:
+    """Values outside [0.0, 1.0) are rejected by pydantic — TolerantConfig
+    only ignores unknown keys, it does not relax field constraints. 1.0 is
+    excluded because the confidence scaling divides by (1.0 - threshold)."""
+    with pytest.raises(ValidationError):
+        RoutingConfig(index_match_threshold=1.5)
+    with pytest.raises(ValidationError):
+        RoutingConfig(index_match_threshold=-0.1)
+    with pytest.raises(ValidationError):
+        RoutingConfig(index_match_threshold=1.0)

@@ -4,6 +4,7 @@ This module provides the abstract base class that all platform
 adapters must inherit from, along with shared utility methods.
 """
 
+import json
 import logging
 from abc import ABC, abstractmethod
 from pathlib import Path
@@ -13,6 +14,48 @@ from vibesop.adapters.models import Manifest, RenderResult
 from vibesop.security import PathSafety, SecurityScanner
 
 logger = logging.getLogger(__name__)
+
+# Marker file identifying a skill directory as vibe-managed.  Written into
+# central storage at install time by ``SkillStorage._write_metadata`` and
+# into rendered/copied platform dirs by ``write_skill_marker``.
+# ``clean_orphan_skills`` only removes dirs carrying this marker.
+SKILL_MARKER_FILE = ".vibe-manifest.json"
+
+
+def write_skill_marker(
+    skill_dir: Path,
+    skill_id: str,
+    source_type: str,
+    source_path: str = "",
+) -> None:
+    """Write a vibe-ownership marker into a rendered/copied skill directory.
+
+    Minimal companion to ``SkillStorage._write_metadata`` (which writes the
+    full SkillManifest into central storage).  Rendered platform dirs lack
+    full source metadata, so only ownership-identifying fields are written
+    and no checksum is fabricated.  Does nothing when a marker already
+    exists (e.g. carried over by copytree from central storage) — the
+    source marker always wins.
+
+    Args:
+        skill_dir: Skill directory receiving the marker
+        skill_id: Skill identifier recorded in the marker
+        source_type: Origin kind, e.g. "render" or "pack-copy"
+        source_path: Optional origin path for copy provenance
+    """
+    marker_path = skill_dir / SKILL_MARKER_FILE
+    if marker_path.exists():
+        return
+    payload = {
+        "id": skill_id,
+        "source": {
+            "type": source_type,
+            "path": source_path,
+            "version": None,
+            "ref": None,
+        },
+    }
+    marker_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
 
 class PlatformAdapter(ABC):
@@ -145,13 +188,22 @@ class PlatformAdapter(ABC):
         manifest: Manifest,
         output_dir: Path,
     ) -> list[Path]:
-        """Remove skill directories not present in the manifest.
+        """Remove vibe-managed skill directories not present in the manifest.
 
         After rendering, any skill directory in ``output_dir/skills/``
         whose name does not correspond to a skill in the manifest is
-        considered an orphan and removed.  This prevents stale skills
-        from lingering in platform configs after they have been
-        deleted from the registry.
+        considered an orphan.  Only vibe-managed orphans are removed —
+        a directory is vibe-managed when it contains a
+        ``.vibe-manifest.json`` marker, written either at install time
+        by :meth:`SkillStorage._write_metadata` or at render/copy time
+        by :func:`write_skill_marker`.  Directories without a marker
+        are treated as user/third-party content and are skipped
+        untouched (counted in a summary log).  Orphan symlinks are
+        unlinked as before.
+
+        This prevents stale skills from lingering in platform configs
+        after they have been deleted from the registry, without
+        deleting user-owned skills in shared directories.
 
         Adapters that do not manage skills (``manages_skills = False``)
         skip cleanup entirely to avoid deleting third-party skills in
@@ -176,20 +228,42 @@ class PlatformAdapter(ABC):
         expected_dirs = {skill.id.replace("/", "-") for skill in manifest.skills}
 
         removed: list[Path] = []
+        skipped_user_owned = 0
         for item in skills_dir.iterdir():
             if not item.is_dir() and not item.is_symlink():
                 continue
             if item.name.startswith("."):
                 continue
             if item.name not in expected_dirs:
-                try:
-                    if item.is_symlink():
+                if item.is_symlink():
+                    # Orphan symlinks are unlinked (existing behavior).
+                    try:
                         item.unlink(missing_ok=True)
-                    else:
+                        removed.append(item)
+                    except OSError as e:
+                        logger.debug(f"Failed to remove orphan skill symlink {item}: {e}")
+                elif (item / SKILL_MARKER_FILE).exists():
+                    # Only remove orphans that vibe manages (marker file
+                    # written at install/render/copy time); user-owned
+                    # dirs are kept.
+                    try:
                         shutil.rmtree(item)
-                    removed.append(item)
-                except OSError as e:
-                    logger.debug(f"Failed to remove orphan skill dir {item}: {e}")
+                        removed.append(item)
+                    except OSError as e:
+                        logger.debug(f"Failed to remove orphan skill dir {item}: {e}")
+                else:
+                    skipped_user_owned += 1
+                    logger.debug(
+                        f"Skipping orphan skill dir {item}: no {SKILL_MARKER_FILE}, "
+                        "treating as user-owned content"
+                    )
+
+        if skipped_user_owned:
+            logger.info(
+                "Orphan cleanup: skipped %d user-owned skill dir(s) without %s",
+                skipped_user_owned,
+                SKILL_MARKER_FILE,
+            )
 
         return removed
 
@@ -454,6 +528,12 @@ class PlatformAdapter(ABC):
         if skill_content:
             skill_content = self._normalize_skill_type(skill_content)
             self.write_file_atomic(skill_output_path, skill_content, validate_security=False)
+            # Ownership marker so clean_orphan_skills can reclaim this dir
+            # once the skill leaves the manifest.
+            try:
+                write_skill_marker(skill_dir, skill_id, "render")
+            except OSError as e:
+                logger.warning("skill rendered but marker write failed for %s: %s", skill_dir, e)
             result.add_file(skill_output_path)
             return
 
@@ -527,6 +607,9 @@ class PlatformAdapter(ABC):
             else:
                 # Marker failure must not discard a successful copy — the skill
                 # content is usable; it just won't show up in pack discovery.
+                # The two marker writes are deliberately decoupled: a failure
+                # of the copy-source marker must not skip the ownership marker
+                # (an unmarked copy would never be orphan-cleaned).
                 try:
                     from vibesop.core.skills.storage import write_copy_source_marker
 
@@ -534,6 +617,18 @@ class PlatformAdapter(ABC):
                 except OSError as marker_err:
                     logger.warning(
                         "copy succeeded but copy-source marker write failed for %s: %s",
+                        skill_dir,
+                        marker_err,
+                    )
+                try:
+                    # Ownership marker for orphan cleanup; keeps the source
+                    # marker if copytree already carried one over.
+                    write_skill_marker(
+                        skill_dir, skill_id, "pack-copy", str(resolved_installed)
+                    )
+                except OSError as marker_err:
+                    logger.warning(
+                        "copy succeeded but ownership marker write failed for %s: %s",
                         skill_dir,
                         marker_err,
                     )

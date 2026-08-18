@@ -9,6 +9,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Routing nits convergence — triage cache & threshold config (2026-08-18)
+
+- **AI triage serves fresh persistent-cache hits without an LLM**
+  (`core/routing/triage_service.py`): when the triage LLM is unconfigured,
+  a fresh `.vibe/triage_cache.json` hit (same candidates hash, within TTL)
+  is still returned — a zero-cost replay of a previous LLM routing decision.
+  A miss (or a stale-only entry) still short-circuits to `None` as before,
+  with no last-good fallback on this path. The two kill switches now differ
+  in scope: `VIBE_AI_TRIAGE_ENABLED=0` gates only the LLM call (fresh cache
+  hits are still served); the config-level `enable_ai_triage = false`
+  remains the full kill switch.
+- **`index_match_threshold` is now a formal `RoutingConfig` key**
+  (`core/config/manager.py`): a value set under this key was previously
+  silently ignored by `TolerantConfig`; it now takes effect (default
+  `0.20`, `0.0 <= value < 1.0`). An out-of-range value such as `1.0` now
+  raises a `ValidationError` at startup instead of being ignored.
+
 ### Observability closed-loop — span tracing, aggregator, instinct bridge (2026-07-21)
 
 Agent-internal observability with span-based tracing, a metric-driven loop

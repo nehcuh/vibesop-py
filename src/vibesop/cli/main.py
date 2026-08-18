@@ -1073,6 +1073,22 @@ def decompose(
 
     from vibesop.core.orchestration import TaskDecomposer
     from vibesop.core.routing import UnifiedRouter
+    from vibesop.core.routing.unified import _is_junk_query
+
+    # Junk guard: harness-injected markup is not a user query — reject before
+    # decomposition (same predicate as the route() entry guard in unified.py).
+    if _is_junk_query(query):
+        if json_output:
+            import json
+
+            # Plain print (not console.print) so rich never wraps the JSON —
+            # a wrapped line inside a string value breaks json.loads.
+            print(json.dumps({"query": query, "sub_tasks": []}, indent=2, ensure_ascii=False))
+        else:
+            console.print(
+                "[yellow]Query rejected: harness-injected markup, not a user query.[/yellow]"
+            )
+        return
 
     router = UnifiedRouter(
         project_root=Path.cwd(),
@@ -1086,7 +1102,10 @@ def decompose(
     if json_output:
         import json
 
-        console.print(
+        # Plain print (not console.print) so rich never wraps the JSON — a
+        # wrapped line inside a string value breaks json.loads. Same output
+        # channel as the junk-guard branch above and route --json (:1055).
+        print(
             json.dumps(
                 {
                     "query": query,

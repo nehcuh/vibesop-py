@@ -299,6 +299,59 @@ class TestSkillSymlinks:
 
         assert count == 2
 
+    def test_copy_skill_dirs_writes_ownership_marker(self, tmp_path):
+        """Copied skill dirs get .vibe-manifest.json so clean_orphan_skills
+        can reclaim them later."""
+        import json
+
+        from vibesop.installer.pack_installer import PackInstaller
+
+        central = tmp_path / "central"
+        pack = central / "testpack"
+        skill_dir = pack / "review"
+        skill_dir.mkdir(parents=True)
+        (skill_dir / "SKILL.md").write_text(
+            "---\nname: review\ndescription: Review code changes\n---\n# Test skill",
+            encoding="utf-8",
+        )
+
+        platform = tmp_path / "platform"
+        platform.mkdir(parents=True)
+
+        installer = PackInstaller(central_storage=central, platform_paths=[platform])
+        count = installer._copy_skill_dirs(pack, platform, "testpack")
+
+        assert count == 1
+        marker = platform / "testpack-review" / ".vibe-manifest.json"
+        assert marker.exists(), "pack copy must write the ownership marker"
+        data = json.loads(marker.read_text(encoding="utf-8"))
+        assert data["source"]["type"] == "pack-copy"
+
+    def test_copy_skill_dirs_preserves_source_marker(self, tmp_path):
+        """A marker already present in central storage is kept as-is."""
+        central = tmp_path / "central"
+        pack = central / "testpack"
+        skill_dir = pack / "review"
+        skill_dir.mkdir(parents=True)
+        (skill_dir / "SKILL.md").write_text(
+            "---\nname: review\ndescription: Review code changes\n---\n# Test skill",
+            encoding="utf-8",
+        )
+        (skill_dir / ".vibe-manifest.json").write_text(
+            '{"id": "review", "source": {"type": "local"}}', encoding="utf-8"
+        )
+
+        platform = tmp_path / "platform"
+        platform.mkdir(parents=True)
+
+        installer = PackInstaller(central_storage=central, platform_paths=[platform])
+        installer._copy_skill_dirs(pack, platform, "testpack")
+
+        marker = platform / "testpack-review" / ".vibe-manifest.json"
+        assert marker.read_text(encoding="utf-8") == (
+            '{"id": "review", "source": {"type": "local"}}'
+        ), "source marker must be preserved"
+
 
 class TestPostInstallHook:
     """Tests for _run_post_install build script detection and execution."""

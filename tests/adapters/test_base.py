@@ -1,6 +1,7 @@
 """Tests for PlatformAdapter base class."""
 
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -305,16 +306,22 @@ class TestPlatformAdapterEdgeCases:
         errors = adapter.validate_manifest(manifest)
         assert errors == []
 
-    def test_clean_orphan_skills(self, tmp_path: Path) -> None:
-        """Test clean_orphan_skills removes unexpected directories."""
+    def test_clean_orphan_skills(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Test clean_orphan_skills removes vibe-managed orphan directories."""
         adapter = DummyAdapter()
         skills_dir = tmp_path / "skills"
         skills_dir.mkdir()
 
-        # Create an orphan dir
+        # Produce the orphan through the real render path —
+        # _render_skill_content writes .vibe-manifest.json as the
+        # ownership marker (no hand-crafted fixture).
         orphan = skills_dir / "old-skill"
         orphan.mkdir()
-        (orphan / "SKILL.md").write_text("# Old", encoding="utf-8")
+        monkeypatch.setattr(adapter, "_find_skill_content", lambda _: "# Old")
+        adapter._render_skill_content(
+            SimpleNamespace(id="old-skill"), orphan, RenderResult(success=True)
+        )
+        assert (orphan / ".vibe-manifest.json").exists()
 
         # Create a valid skill dir
         valid = skills_dir / "valid-skill"
@@ -331,6 +338,104 @@ class TestPlatformAdapterEdgeCases:
         assert len(removed) == 1
         assert not orphan.exists()
         assert valid.exists()
+
+    def test_rendered_skill_is_cleaned_after_manifest_removal(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Regression: a skill dir produced by the render content-hit branch
+        (base.py: SKILL.md + marker, no copy) is reclaimed once the skill
+        leaves the manifest."""
+        adapter = DummyAdapter()
+        skills_dir = tmp_path / "skills"
+        skills_dir.mkdir()
+
+        skill_dir = skills_dir / "rendered-skill"
+        skill_dir.mkdir()
+        monkeypatch.setattr(adapter, "_find_skill_content", lambda _: "# Rendered")
+        adapter._render_skill_content(
+            SimpleNamespace(id="rendered-skill"), skill_dir, RenderResult(success=True)
+        )
+        assert (skill_dir / "SKILL.md").exists()
+        assert (skill_dir / ".vibe-manifest.json").exists(), (
+            "render path must write the ownership marker"
+        )
+
+        # Skill removed from registry → empty manifest → orphan cleanup
+        metadata = ManifestMetadata(platform="dummy-platform")
+        manifest = Manifest(metadata=metadata)
+
+        removed = adapter.clean_orphan_skills(manifest, tmp_path)
+
+        assert removed == [skill_dir]
+        assert not skill_dir.exists()
+
+    def test_render_copy_fallback_writes_ownership_marker(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The copy fallback branch writes .vibe-manifest.json alongside the
+        copy-source marker when the installed source dir has no marker."""
+        adapter = DummyAdapter()
+        skills_dir = tmp_path / "skills"
+        skills_dir.mkdir()
+
+        installed = tmp_path / "installed" / "pack-skill"
+        installed.mkdir(parents=True)
+        (installed / "SKILL.md").write_text("# Pack skill", encoding="utf-8")
+
+        skill_dir = skills_dir / "pack-skill"
+        monkeypatch.setattr(adapter, "_find_skill_content", lambda _: None)
+        monkeypatch.setattr(
+            "vibesop.adapters._shared.is_pack_installed", lambda _: installed
+        )
+        monkeypatch.setattr(
+            "vibesop.utils.symlinks.can_create_dir_symlink", lambda _: False
+        )
+
+        adapter._render_skill_content(
+            SimpleNamespace(id="pack-skill"), skill_dir, RenderResult(success=True)
+        )
+
+        assert (skill_dir / "SKILL.md").exists()
+        marker = skill_dir / ".vibe-manifest.json"
+        assert marker.exists(), "copy fallback must write the ownership marker"
+        import json
+
+        data = json.loads(marker.read_text(encoding="utf-8"))
+        assert data["id"] == "pack-skill"
+        assert data["source"]["type"] == "pack-copy"
+
+    def test_render_copy_fallback_preserves_source_marker(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """If the source dir already carries a marker, copytree keeps it and
+        the fallback must not overwrite it."""
+        adapter = DummyAdapter()
+        skills_dir = tmp_path / "skills"
+        skills_dir.mkdir()
+
+        installed = tmp_path / "installed" / "pack-skill"
+        installed.mkdir(parents=True)
+        (installed / "SKILL.md").write_text("# Pack skill", encoding="utf-8")
+        (installed / ".vibe-manifest.json").write_text(
+            '{"id": "pack-skill", "source": {"type": "local"}}', encoding="utf-8"
+        )
+
+        skill_dir = skills_dir / "pack-skill"
+        monkeypatch.setattr(adapter, "_find_skill_content", lambda _: None)
+        monkeypatch.setattr(
+            "vibesop.adapters._shared.is_pack_installed", lambda _: installed
+        )
+        monkeypatch.setattr(
+            "vibesop.utils.symlinks.can_create_dir_symlink", lambda _: False
+        )
+
+        adapter._render_skill_content(
+            SimpleNamespace(id="pack-skill"), skill_dir, RenderResult(success=True)
+        )
+
+        assert (skill_dir / ".vibe-manifest.json").read_text(encoding="utf-8") == (
+            '{"id": "pack-skill", "source": {"type": "local"}}'
+        ), "source marker must be preserved"
 
     def test_clean_orphan_skills_no_skills_dir(self, tmp_path: Path) -> None:
         """Test clean_orphan_skills when skills dir doesn't exist."""
@@ -404,6 +509,9 @@ class TestPlatformAdapterEdgeCases:
         orphan = skills_dir / "old-skill"
         orphan.mkdir()
         (orphan / "SKILL.md").write_text("# Old", encoding="utf-8")
+        # The marker normally comes from the render/install path; written
+        # by hand here to keep this test focused on the manages_skills flag.
+        (orphan / ".vibe-manifest.json").write_text("{}", encoding="utf-8")
 
         valid = skills_dir / "valid-skill"
         valid.mkdir()
@@ -418,6 +526,45 @@ class TestPlatformAdapterEdgeCases:
 
         assert len(removed) == 1
         assert not orphan.exists()
+        assert valid.exists()
+
+    def test_clean_orphan_skills_keeps_user_owned_dirs(self, tmp_path: Path) -> None:
+        """Orphan dirs without .vibe-manifest.json are user-owned and kept."""
+        adapter = DummyAdapter()
+        skills_dir = tmp_path / "skills"
+        skills_dir.mkdir()
+
+        # Simulate a hand-written user skill (cmspark incident: no marker file)
+        user_skill = skills_dir / "cmspark-eval-engineering-gate"
+        user_skill.mkdir()
+        (user_skill / "SKILL.md").write_text("# User skill", encoding="utf-8")
+
+        metadata = ManifestMetadata(platform="dummy-platform")
+        manifest = Manifest(metadata=metadata)
+
+        removed = adapter.clean_orphan_skills(manifest, tmp_path)
+
+        assert removed == []
+        assert user_skill.exists(), "user-owned skill must not be deleted"
+
+    def test_clean_orphan_skills_keeps_manifest_dirs(self, tmp_path: Path) -> None:
+        """Skill dirs present in the manifest are kept regardless of marker."""
+        adapter = DummyAdapter()
+        skills_dir = tmp_path / "skills"
+        skills_dir.mkdir()
+
+        valid = skills_dir / "valid-skill"
+        valid.mkdir()
+
+        metadata = ManifestMetadata(platform="dummy-platform")
+        manifest = Manifest(
+            metadata=metadata,
+            skills=[SkillSpec(id="valid-skill", name="Valid", description="desc", trigger_when="")],
+        )
+
+        removed = adapter.clean_orphan_skills(manifest, tmp_path)
+
+        assert removed == []
         assert valid.exists()
 
     def test_normalize_skill_type(self) -> None:

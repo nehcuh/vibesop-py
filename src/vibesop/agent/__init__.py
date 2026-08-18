@@ -197,8 +197,21 @@ class AgentRouter:
         }
 
     def decompose(self, query: str) -> list[dict[str, str]]:
-        """Decompose a complex query into independent sub-tasks."""
+        """Decompose a complex query into independent sub-tasks.
+
+        Returns an empty list both for junk queries (harness-injected markup,
+        rejected by the ``_is_junk_query`` guard) and for legitimate
+        single-intent queries with nothing to decompose — the two cases are
+        indistinguishable to the caller at this API layer. The ``vibe
+        decompose`` CLI command prints a distinct rejection message for junk.
+        """
         from vibesop.core.orchestration import TaskDecomposer
+        from vibesop.core.routing.unified import _is_junk_query
+
+        # Junk guard: harness-injected markup is not a user query — return an
+        # empty decomposition (same predicate as the route() entry guard).
+        if _is_junk_query(query):
+            return []
 
         # Initialize decomposer with injected LLM
         decomposer = TaskDecomposer(llm_client=self._router.llm)
@@ -228,13 +241,20 @@ class AgentRouter:
         """Build an execution plan for a complex query."""
         from vibesop.core.models import WorkflowPattern
         from vibesop.core.orchestration import PlanBuilder, SubTask, TaskDecomposer
+        from vibesop.core.routing.unified import _is_junk_query
 
         # Auto-decompose if sub_tasks not provided. Keep SubTask objects directly
         # so the LLM-assigned skill_id (and task_type) are preserved into PlanBuilder.
         if sub_tasks is None:
-            decomposer = TaskDecomposer(llm_client=self._router.llm)
-            skills = self._router.build_decomposition_skills(query=query)
-            sub_task_objects = decomposer.decompose(query, skills=skills)
+            if _is_junk_query(query):
+                # Junk guard: harness-injected markup is not a user query —
+                # plan from an empty decomposition (same predicate as the
+                # route() entry guard).
+                sub_task_objects: list[SubTask] = []
+            else:
+                decomposer = TaskDecomposer(llm_client=self._router.llm)
+                skills = self._router.build_decomposition_skills(query=query)
+                sub_task_objects = decomposer.decompose(query, skills=skills)
         else:
             # External caller provided dicts — read skill_id/task_type if present.
             sub_task_objects = [

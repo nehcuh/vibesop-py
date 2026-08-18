@@ -197,6 +197,16 @@ class RoutingConfig(TolerantConfig):
         "long queries rely on LLM semantic triage. "
         "Set to 0 to always use LLM, 200 to always use keyword matching.",
     )
+    index_match_threshold: float = Field(
+        default=0.20,
+        ge=0.0,
+        lt=1.0,
+        description="Hit threshold for bigram token-overlap matching in the "
+        "SEMANTIC_INDEX routing layer. Kept at 0.20 because calibration data "
+        "is insufficient to justify a change; lowering it increases false "
+        "hits (see scripts/calibrate_index_threshold.py). Must be < 1.0: the "
+        "confidence scaling in _layers.py divides by (1.0 - threshold).",
+    )
     session_aware: bool = Field(
         default=True,
         description="Enable session-state-aware routing for multi-turn conversations",
