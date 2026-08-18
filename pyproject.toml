@@ -63,12 +63,14 @@ test = [
 
 semantic = [
     "sentence-transformers>=5.5.0,<6.0.0",
-    "numpy>=1.24.0,<2.0.0",
+    "numpy>=1.24.0,<3.0.0",
     # FastEmbed: ONNX-based lightweight embeddings (used by W0.C benchmark
     # and W1 embedding cache). Optional because (a) it pulls onnxruntime
     # (~50MB) and (b) most users don't need local embeddings — they hit
     # the API path. Install via `uv sync --extra semantic`.
-    "fastembed>=0.4.2",
+    # >=0.8.0: 0.4.2 pins pillow<11 and onnx<2 (28 Dependabot CVEs); 0.8
+    # relaxes pillow to <13 and drops the direct onnx dependency.
+    "fastembed>=0.8.0,<1.0.0",
 ]
 
 dashboard = [
