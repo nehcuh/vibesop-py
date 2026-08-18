@@ -107,6 +107,13 @@ class VibeSOPConfigManager:
                 if "llm" in data:
                     llm_data = data["llm"]
 
+                    if config_path.is_relative_to(Path.home()):
+                        logger.info(
+                            "No usable project LLM config found in cwd "
+                            "(.vibe/config.*); falling back to global config: %s",
+                            config_path,
+                        )
+
                     return LLMConfig(
                         provider=llm_data.get("provider", "deepseek"),
                         model=llm_data.get("model", "deepseek-v4-flash"),
@@ -118,6 +125,7 @@ class VibeSOPConfigManager:
                     )
 
             except Exception as e:
+                logger.warning("Failed to load config %s: %s", config_path, e)
                 console.print(f"[dim]Warning: Failed to load {config_path}: {e}[/dim]")
 
         return None

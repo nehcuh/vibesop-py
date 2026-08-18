@@ -118,6 +118,15 @@ def _build_llm_factory() -> Any:
                 api_key=llm_config.api_key,
                 base_url=llm_config.api_base,
             )
+        if llm_config is not None:
+            logger.warning(
+                "Config [llm] found but api_key is empty; configured "
+                "provider/api_base (%s/%s) are ignored, falling back to "
+                "environment variable detection. Set api_key in the config "
+                "or export the provider's API key env var.",
+                llm_config.provider,
+                llm_config.api_base,
+            )
         return create_provider()
 
     return factory

@@ -323,6 +323,18 @@ class AgentRuntime:
             cfg = resolver.get_llm_for_understanding()
             if not cfg or not cfg.provider:
                 return None
+            if not cfg.api_key:
+                # Same warning as cli/main.py:_build_llm_factory() — an
+                # empty api_key means the configured provider/api_base fall
+                # back to environment variable detection.
+                logger.warning(
+                    "Config [llm] found but api_key is empty; configured "
+                    "provider/api_base (%s/%s) are ignored, falling back to "
+                    "environment variable detection. Set api_key in the config "
+                    "or export the provider's API key env var.",
+                    cfg.provider,
+                    cfg.api_base,
+                )
 
             def _factory():
                 return create_provider(
