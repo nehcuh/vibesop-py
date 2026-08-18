@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sys
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -223,11 +224,9 @@ class TestEmbeddingMatcher:
 
     def test_load_model_import_error(self):
         m = EmbeddingMatcher()
-        with patch(
-            "vibesop.core.matching.strategies.SentenceTransformer",
-            side_effect=ImportError,
-            create=True,
-        ):
+        # None in sys.modules makes the lazy in-function import raise
+        # ImportError regardless of whether the library is installed.
+        with patch.dict(sys.modules, {"sentence_transformers": None}):
             with pytest.raises(ImportError, match="sentence-transformers"):
                 m._load_model()
 

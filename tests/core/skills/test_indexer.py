@@ -1404,6 +1404,10 @@ class TestParallelism:
             ),
             patch.object(indexer, "_get_llm", return_value=SimpleNamespace()),
             patch.object(indexer, "_analyze_skill", side_effect=_slow_analyze),
+            # Embedding computation is out of scope for this test; with the
+            # semantic extra installed it would load a real model (~10s) and
+            # drown the parallelism timing assertion.
+            patch.object(indexer, "_compute_embeddings"),
         ):
             result = indexer.build_index(scope="global", show_progress=False, max_workers=8)
         elapsed = time.perf_counter() - start
@@ -1570,8 +1574,13 @@ class TestEmbeddingSupport:
 
     def test_compute_embeddings_skips_when_library_missing(self, indexer: SkillIndexer) -> None:
         """If sentence-transformers is not installed, embeddings stay None."""
+        import sys
+
         prof = _make_profile("a/b")
-        indexer._compute_embeddings({"a/b": prof})
+        # None in sys.modules simulates a missing library even when the
+        # semantic extra is installed in the test environment.
+        with patch.dict(sys.modules, {"sentence_transformers": None}):
+            indexer._compute_embeddings({"a/b": prof})
         assert prof.embedding is None
 
     def test_compute_embeddings_uses_fake_module(self, indexer: SkillIndexer) -> None:
