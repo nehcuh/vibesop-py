@@ -13,6 +13,282 @@ from vibesop.spec.models import SkillSpec
 runner = CliRunner()
 
 
+class TestIncrementalIndexing:
+    """M7 — `vibe skill add` Phase 6 incrementally indexes the new skill.
+
+    `_index_newly_added_skill` must be best-effort: degrade to False
+    (never raise) when no LLM is configured, and merge the single new
+    profile into the existing index layer on success.
+    """
+
+    def test_returns_false_when_no_llm_configured(self) -> None:
+        from vibesop.cli.commands.skill_commands import _index_newly_added_skill
+
+        mock_resolver = Mock()
+        mock_resolver.get_llm_for_understanding.return_value = None
+
+        with patch(
+            "vibesop.core.llm_config.LLMConfigResolver", return_value=mock_resolver
+        ):
+            assert _index_newly_added_skill("test-skill", "project") is False
+
+    def test_returns_false_when_provider_missing(self) -> None:
+        from vibesop.cli.commands.skill_commands import _index_newly_added_skill
+
+        mock_cfg = Mock(provider=None)
+        mock_resolver = Mock()
+        mock_resolver.get_llm_for_understanding.return_value = mock_cfg
+
+        with patch(
+            "vibesop.core.llm_config.LLMConfigResolver", return_value=mock_resolver
+        ):
+            assert _index_newly_added_skill("test-skill", "project") is False
+
+    def test_success_merges_single_profile_into_project_layer(self, tmp_path) -> None:
+        from vibesop.cli.commands.skill_commands import _index_newly_added_skill
+
+        mock_cfg = Mock(provider="deepseek", api_key="k", api_base=None, model="m")
+        mock_resolver = Mock()
+        mock_resolver.get_llm_for_understanding.return_value = mock_cfg
+
+        mock_profile = Mock()
+        mock_indexer = Mock()
+        mock_indexer._get_llm.return_value = Mock()  # LLM available
+        mock_indexer._analyze_skill.return_value = mock_profile
+        mock_indexer.project_index_path = tmp_path / "proj" / "skill-index.json"
+        mock_indexer.global_index_path = tmp_path / "glob" / "skill-index.json"
+        mock_indexer._load_single_index.return_value = {"existing/skill": Mock()}
+
+        mock_loader = Mock()
+        mock_loader.get_skill.return_value = Mock()  # skill discoverable
+
+        with (
+            patch("vibesop.core.llm_config.LLMConfigResolver", return_value=mock_resolver),
+            patch("vibesop.core.skills.indexer.SkillIndexer", return_value=mock_indexer),
+            patch("vibesop.core.skills.loader.SkillLoader", return_value=mock_loader),
+            patch("vibesop.llm.factory.create_provider", return_value=Mock()),
+        ):
+            assert _index_newly_added_skill("test-skill", "project") is True
+
+        # Only the new skill was analyzed (incremental, not full rebuild).
+        mock_indexer._analyze_skill.assert_called_once()
+        mock_loader.get_skill.assert_called_once_with("test-skill")
+        # Merged into the project layer, preserving existing entries.
+        saved_profiles, = mock_indexer._save_index.call_args.args[:1]
+        assert "test-skill" in saved_profiles
+        assert "existing/skill" in saved_profiles
+        assert mock_indexer._save_index.call_args.kwargs["scope"] == "project"
+
+    def test_global_scope_saves_to_global_layer(self, tmp_path) -> None:
+        """Layer-routing contract: scope="global" saves to the global index.
+
+        gate7b honesty note (pi / claude #4): this branch is NOT reachable
+        in production today — `vibe skill add --global` installs outside
+        SkillLoader's search paths, so `get_skill` returns None and the
+        function degrades before reaching the save (that's what
+        ``test_returns_false_when_skill_not_discoverable`` covers). The
+        mock here forces discoverability to pin the layer-selection logic
+        against regressions; keep the test, but don't read it as evidence
+        the global path works end-to-end (Tier2 item).
+        """
+        from vibesop.cli.commands.skill_commands import _index_newly_added_skill
+
+        mock_cfg = Mock(provider="deepseek", api_key="k", api_base=None, model="m")
+        mock_resolver = Mock()
+        mock_resolver.get_llm_for_understanding.return_value = mock_cfg
+
+        mock_indexer = Mock()
+        mock_indexer._get_llm.return_value = Mock()
+        mock_indexer._analyze_skill.return_value = Mock()
+        mock_indexer.project_index_path = tmp_path / "proj" / "skill-index.json"
+        mock_indexer.global_index_path = tmp_path / "glob" / "skill-index.json"
+        mock_indexer._load_single_index.return_value = {}
+
+        mock_loader = Mock()
+        mock_loader.get_skill.return_value = Mock()
+
+        with (
+            patch("vibesop.core.llm_config.LLMConfigResolver", return_value=mock_resolver),
+            patch("vibesop.core.skills.indexer.SkillIndexer", return_value=mock_indexer),
+            patch("vibesop.core.skills.loader.SkillLoader", return_value=mock_loader),
+            patch("vibesop.llm.factory.create_provider", return_value=Mock()),
+        ):
+            assert _index_newly_added_skill("test-skill", "global") is True
+
+        assert mock_indexer._save_index.call_args.kwargs["scope"] == "global"
+
+    def test_global_scope_not_discoverable_points_to_manual_index(self, capsys) -> None:
+        """gate7b claude #4: scope="global" + skill not discoverable →
+        the degrade message must be the honest one: incremental indexing
+        is project-scope only, run `vibe skills index --scope global`.
+        """
+        from vibesop.cli.commands.skill_commands import _index_newly_added_skill
+
+        mock_cfg = Mock(provider="deepseek", api_key="k", api_base=None, model="m")
+        mock_resolver = Mock()
+        mock_resolver.get_llm_for_understanding.return_value = mock_cfg
+
+        mock_indexer = Mock()
+        mock_indexer._get_llm.return_value = Mock()
+
+        mock_loader = Mock()
+        mock_loader.get_skill.return_value = None  # not discoverable
+
+        with (
+            patch("vibesop.core.llm_config.LLMConfigResolver", return_value=mock_resolver),
+            patch("vibesop.core.skills.indexer.SkillIndexer", return_value=mock_indexer),
+            patch("vibesop.core.skills.loader.SkillLoader", return_value=mock_loader),
+            patch("vibesop.llm.factory.create_provider", return_value=Mock()),
+        ):
+            assert _index_newly_added_skill("ghost-skill", "global") is False
+
+        # Flatten rich's line wrapping before substring assertions.
+        out = " ".join(capsys.readouterr().out.split())
+        assert "project-scope only" in out
+        assert "vibe skills index --scope global" in out
+        mock_indexer._save_index.assert_not_called()
+
+    def test_returns_false_when_skill_not_discoverable(self) -> None:
+        from vibesop.cli.commands.skill_commands import _index_newly_added_skill
+
+        mock_cfg = Mock(provider="deepseek", api_key="k", api_base=None, model="m")
+        mock_resolver = Mock()
+        mock_resolver.get_llm_for_understanding.return_value = mock_cfg
+
+        mock_indexer = Mock()
+        mock_indexer._get_llm.return_value = Mock()
+
+        mock_loader = Mock()
+        mock_loader.get_skill.return_value = None  # not discoverable
+
+        with (
+            patch("vibesop.core.llm_config.LLMConfigResolver", return_value=mock_resolver),
+            patch("vibesop.core.skills.indexer.SkillIndexer", return_value=mock_indexer),
+            patch("vibesop.core.skills.loader.SkillLoader", return_value=mock_loader),
+            patch("vibesop.llm.factory.create_provider", return_value=Mock()),
+        ):
+            assert _index_newly_added_skill("ghost-skill", "project") is False
+
+    def test_never_raises_on_unexpected_error(self) -> None:
+        from vibesop.cli.commands.skill_commands import _index_newly_added_skill
+
+        with patch(
+            "vibesop.core.llm_config.LLMConfigResolver",
+            side_effect=RuntimeError("config exploded"),
+        ):
+            assert _index_newly_added_skill("test-skill", "project") is False
+
+    def test_concurrent_indexing_loses_no_entries(self, tmp_path) -> None:
+        """gate7 claude NIT-1 + gate7b pi NIT-6: the load→merge→save RMW
+        runs under a cross-process sidecar lock — two concurrent
+        incremental indexes must both land, not silently overwrite.
+
+        Deterministic interleaving: the mock ``_load_single_index``
+        snapshots the store FIRST, then blocks on an event until the
+        second reader arrives. With the lock, the second reader can't
+        enter until the first finishes (the wait times out, first saves,
+        second then reads the merged state) → green. With the lock
+        removed (mutation: swap cross_process_lock for nullcontext), both
+        threads snapshot the SAME pre-merge state before either saves,
+        the second save clobbers the first → red. Verified by mutation.
+        """
+        import threading
+
+        from vibesop.cli.commands.skill_commands import _index_newly_added_skill
+
+        mock_cfg = Mock(provider="deepseek", api_key="k", api_base=None, model="m")
+        mock_resolver = Mock()
+        mock_resolver.get_llm_for_understanding.return_value = mock_cfg
+
+        store: dict[str, Mock] = {}
+        readers: list[str] = []
+        second_reader_arrived = threading.Event()
+
+        def _load(_path):
+            snapshot = dict(store)  # read BEFORE the rendezvous — the point
+            readers.append(threading.current_thread().name)
+            if len(readers) == 2:
+                second_reader_arrived.set()
+            else:
+                # First reader waits for the second — only reachable
+                # together when the write lock is absent (mutation).
+                second_reader_arrived.wait(timeout=1)
+            return snapshot
+
+        def _save(profiles, *, scope):
+            store.clear()
+            store.update(profiles)
+
+        mock_indexer = Mock()
+        mock_indexer._get_llm.return_value = Mock()
+        mock_indexer._analyze_skill.side_effect = lambda loaded, llm: Mock()
+        mock_indexer.project_index_path = tmp_path / "proj" / "skill-index.json"
+        mock_indexer.global_index_path = tmp_path / "glob" / "skill-index.json"
+        mock_indexer._load_single_index.side_effect = _load
+        mock_indexer._save_index.side_effect = _save
+
+        mock_loader = Mock()
+        mock_loader.get_skill.return_value = Mock()
+
+        results: list[bool] = []
+        with (
+            patch("vibesop.core.llm_config.LLMConfigResolver", return_value=mock_resolver),
+            patch("vibesop.core.skills.indexer.SkillIndexer", return_value=mock_indexer),
+            patch("vibesop.core.skills.loader.SkillLoader", return_value=mock_loader),
+            patch("vibesop.llm.factory.create_provider", return_value=Mock()),
+        ):
+            threads = [
+                threading.Thread(
+                    target=lambda sid: results.append(
+                        _index_newly_added_skill(sid, "project")
+                    ),
+                    args=(f"skill-{i}",),
+                )
+                for i in range(2)
+            ]
+            for t in threads:
+                t.start()
+            for t in threads:
+                t.join()
+
+        assert sorted(results) == [True, True]
+        assert set(store.keys()) == {"skill-0", "skill-1"}, (
+            f"concurrent RMW lost an entry: {sorted(store.keys())}"
+        )
+
+    def test_degrades_false_when_lock_io_fails(self, tmp_path) -> None:
+        """Lock-file OSError degrades to False (never raises), same style
+        as every other failure mode in the function."""
+        from vibesop.cli.commands.skill_commands import _index_newly_added_skill
+
+        mock_cfg = Mock(provider="deepseek", api_key="k", api_base=None, model="m")
+        mock_resolver = Mock()
+        mock_resolver.get_llm_for_understanding.return_value = mock_cfg
+
+        mock_indexer = Mock()
+        mock_indexer._get_llm.return_value = Mock()
+        mock_indexer._analyze_skill.return_value = Mock()
+        mock_indexer.project_index_path = tmp_path / "proj" / "skill-index.json"
+        mock_indexer.global_index_path = tmp_path / "glob" / "skill-index.json"
+
+        mock_loader = Mock()
+        mock_loader.get_skill.return_value = Mock()
+
+        with (
+            patch("vibesop.core.llm_config.LLMConfigResolver", return_value=mock_resolver),
+            patch("vibesop.core.skills.indexer.SkillIndexer", return_value=mock_indexer),
+            patch("vibesop.core.skills.loader.SkillLoader", return_value=mock_loader),
+            patch("vibesop.llm.factory.create_provider", return_value=Mock()),
+            patch(
+                "vibesop.utils.file_lock.cross_process_lock",
+                side_effect=OSError("lock file unavailable"),
+            ),
+        ):
+            assert _index_newly_added_skill("test-skill", "project") is False
+
+        mock_indexer._save_index.assert_not_called()
+
+
 class TestSkillAddCommand:
     """Test suite for skill add command."""
 

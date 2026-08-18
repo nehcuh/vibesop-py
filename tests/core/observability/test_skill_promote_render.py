@@ -19,6 +19,7 @@ from vibesop.core.observability.skill_promote import (
     _format_cross_project_warning,
     _project_id_to_basename,
     _render_skill_md,
+    _sanitize_body_text,
     dedupe_project_distribution,
 )
 
@@ -288,3 +289,71 @@ class TestRenderScopeFooter:
         for s in ("project", "global"):
             content = _render_skill_md(c, "custom/foo", scope=s)  # type: ignore[arg-type]
             assert "## Overview" in content
+
+
+class TestDraftName:
+    """M7 F3 — name is a neutral draft slug, NOT derived from queries.
+
+    Adjudicated design: ``name`` is the strongest routing-match magnet
+    (+0.4 containment bonus), so a raw query there makes an unedited
+    draft over-match once injected. ``description`` stays provenance-only
+    on purpose. These tests pin the decision so nobody "optimizes" it
+    back.
+    """
+
+    def test_name_is_draft_cluster_slug(self) -> None:
+        c = _make_candidate(cluster_id="abc123def456", queries=["do the thing"])
+        content = _render_skill_md(c, "custom/test-name")
+        frontmatter = content.split("---\n", 2)[1]
+        assert "name: draft-abc123de" in frontmatter
+        # The raw query must NOT appear in the name field.
+        name_line = next(ln for ln in frontmatter.splitlines() if ln.startswith("name:"))
+        assert "do the thing" not in name_line
+
+    def test_name_does_not_leak_query_even_when_hostile(self) -> None:
+        c = _make_candidate(queries=["setup: config\nthen deploy"])
+        content = _render_skill_md(c, "custom/test-hostile-name")
+        frontmatter = content.split("---\n", 2)[1]
+        name_line = next(ln for ln in frontmatter.splitlines() if ln.startswith("name:"))
+        assert "setup" not in name_line
+        assert "\n" not in name_line
+
+    def test_description_keeps_provenance(self) -> None:
+        c = _make_candidate(cluster_id="abc123def456", span_count=7)
+        content = _render_skill_md(c, "custom/test-desc")
+        frontmatter = content.split("---\n", 2)[1]
+        assert "Auto-drafted from cluster abc123def456" in frontmatter
+        assert "7 spans" in frontmatter
+
+
+class TestSanitizeBodyText:
+    """M7 F6 — queries embedded in the body are single-line + truncated."""
+
+    def test_collapses_newlines_and_whitespace_runs(self) -> None:
+        q = "first line\n\nsecond   paragraph\twith\ttabs"
+        assert _sanitize_body_text(q) == "first line second paragraph with tabs"
+
+    def test_truncates_long_queries_with_ellipsis(self) -> None:
+        q = "x" * 700
+        out = _sanitize_body_text(q)
+        assert out.endswith("…")
+        assert len(out) <= 201
+
+    def test_render_queries_block_is_single_line_per_query(self) -> None:
+        c = _make_candidate(queries=["line one\n\nline two", "short"])
+        content = _render_skill_md(c, "custom/test-body-sanitize")
+        assert "- line one line two" in content
+        # No raw multi-line query survives into the body.
+        assert "line one\n\nline two" not in content
+
+    def test_render_truncates_700_char_query(self) -> None:
+        long_q = "word " * 200  # 1000 chars
+        c = _make_candidate(queries=[long_q])
+        content = _render_skill_md(c, "custom/test-body-truncate")
+        body = content.split("---\n", 2)[2]
+        query_lines = [
+            ln for ln in body.splitlines() if ln.startswith("- word")
+        ]
+        assert len(query_lines) == 1
+        assert query_lines[0].endswith("…")
+        assert len(query_lines[0]) < 250

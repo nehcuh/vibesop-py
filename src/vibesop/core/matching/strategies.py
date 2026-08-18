@@ -48,6 +48,19 @@ class MatcherConfig:
     tokenizer_config: TokenizerConfig = field(default_factory=TokenizerConfig)
 
 
+def _is_meaningful_token(token: str) -> bool:
+    """Shared meaningful-token convention for scoring denominators/filters.
+
+    CJK characters are meaningful even as 2-character tokens; Latin tokens
+    need at least 3 characters. Used by KeywordMatcher (partial-match bonus)
+    and LevenshteinMatcher (coverage denominator); also imported by
+    core/instinct/routing_pending.py for its low-information query gate.
+    """
+    if any("\u4e00" <= ch <= "\u9fff" for ch in token):
+        return len(token) >= 2
+    return len(token) >= 3
+
+
 class KeywordMatcher:
     """Fast keyword-based matcher."""
 
@@ -136,13 +149,6 @@ class KeywordMatcher:
 
         exact_matches = query_tokens & candidate_tokens
         base_score = len(exact_matches) / len(union)
-
-        def _is_meaningful_token(token: str) -> bool:
-            # CJK characters are meaningful even as 2-character tokens;
-            # Latin tokens need at least 3 characters.
-            if any("\u4e00" <= ch <= "\u9fff" for ch in token):
-                return len(token) >= 2
-            return len(token) >= 3
 
         # Bonus for prefix/substring matches (e.g., "debug" matches "debugging")
         partial_bonus = 0.0
@@ -524,19 +530,21 @@ class LevenshteinMatcher:
             text = self._candidate_to_text(candidate)
             return self._normalized_similarity(query, text)
 
-        # Score each query token against the best-matching candidate token,
-        # but only keep high-similarity matches (typo-level)
+        # Score every meaningful query token against the best-matching
+        # candidate token. Tokens below the similarity threshold count as 0
+        # in the average — they used to be dropped from the denominator
+        # entirely, so a single matching token could inflate the score to
+        # 1.0 (e.g. "使用 review" scored 1.0 because only "review" counted).
         SIMILARITY_THRESHOLD = 0.7
-        token_scores = []
-        for qt in query_tokens:
-            if len(qt) <= 2:
-                continue  # Skip very short tokens
-            best = max(self._normalized_similarity(qt, ct) for ct in candidate_tokens)
-            if best >= SIMILARITY_THRESHOLD:
-                token_scores.append(best)
 
-        if not token_scores:
+        meaningful_tokens = [qt for qt in query_tokens if _is_meaningful_token(qt)]
+        if not meaningful_tokens:
             return 0.0
+
+        token_scores = []
+        for qt in meaningful_tokens:
+            best = max(self._normalized_similarity(qt, ct) for ct in candidate_tokens)
+            token_scores.append(best if best >= SIMILARITY_THRESHOLD else 0.0)
 
         # Also include a bonus for exact name match
         name = str(candidate.get("name", "")).lower()
@@ -574,13 +582,37 @@ class LevenshteinMatcher:
         return list(tokens)
 
     def _levenshtein_distance(self, s1: str, s2: str) -> int:
+        """Optimal string alignment distance (Levenshtein + adjacent transposition).
+
+        Transposing adjacent characters costs 1 edit instead of 2: it is the
+        most common typo class, and plain Levenshtein scored "reivew"→"review"
+        at 2/6 = 0.667 similarity — below the 0.7 token threshold, so the
+        coverage fix above would have zeroed genuine transposition typos.
+
+        The discount only applies when BOTH tokens are ≥6 chars: at 4-5 chars
+        it promoted real distinct-word pairs over the 0.7 threshold and
+        misrouted end-to-end (form/from 0.75, trail/trial 0.8, angel/angle
+        0.8, dairy/diary 0.8 — gate7 pi finding). Shorter pairs fall back to
+        plain Levenshtein, i.e. exactly the pre-OSA behavior.
+
+        Known residual: even at exactly 6+ chars, real distinct-word pairs
+        can still clear 0.7 (casual/causal = 0.833 routable end-to-end —
+        gate7b). Accepted with mitigations rather than a higher cutoff (which
+        would kill genuine long-token typos like configuartion): Levenshtein
+        is last-resort in the matcher pipeline, and weak-layer hits go to the
+        human review queue (routing_pending).
+        """
         if len(s1) < len(s2):
             return self._levenshtein_distance(s2, s1)
 
         if len(s2) == 0:
             return len(s1)
 
+        # s2 is the shorter token, so this means both are ≥6 chars.
+        allow_transposition = len(s2) >= 6
+
         previous_row = list(range(len(s2) + 1))
+        prev_prev_row: list[int] | None = None
 
         for i, c1 in enumerate(s1):
             current_row = [i + 1]
@@ -590,8 +622,20 @@ class LevenshteinMatcher:
                 deletions = current_row[j] + 1
                 substitutions = previous_row[j] + (c1 != c2)
 
-                current_row.append(min(insertions, deletions, substitutions))
+                best = min(insertions, deletions, substitutions)
+                if (
+                    allow_transposition
+                    and prev_prev_row is not None
+                    and i > 0
+                    and j > 0
+                    and c1 == s2[j - 1]
+                    and s1[i - 1] == c2
+                ):
+                    best = min(best, prev_prev_row[j - 1] + 1)
 
+                current_row.append(best)
+
+            prev_prev_row = previous_row
             previous_row = current_row
 
         return previous_row[-1]

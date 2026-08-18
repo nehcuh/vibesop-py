@@ -862,6 +862,29 @@ def _sanitize_yaml_value(text: str, max_len: int = 80) -> str:
     return f'"{escaped}"'
 
 
+def _sanitize_body_text(text: str, max_len: int = 200) -> str:
+    """Collapse a raw query to a single display line for the SKILL.md body.
+
+    M7 F6: raw cluster queries were embedded verbatim into the queries
+    list; real queries contain ``\\n\\n`` and run to 700+ chars, which
+    breaks the markdown list structure and can smuggle pseudo-instruction
+    blocks into the rendered draft. Collapsing all whitespace runs to
+    single spaces + truncating keeps the example readable without
+    altering its wording.
+
+    Deliberately NOT a full markdown/prompt escape: these entries are
+    *examples for a human reviewer*, not executable content. Residual
+    instruction-like text is inherent to showing real queries at all —
+    the safeguard is human review before activation (plus the
+    cross-project warning block), not character-level mangling that
+    would make the examples useless.
+    """
+    cleaned = " ".join(str(text).split())
+    if len(cleaned) > max_len:
+        cleaned = cleaned[:max_len].rstrip() + "…"
+    return cleaned
+
+
 def _project_id_to_basename(project_id: str) -> str:
     """Render a project_id (absolute path) as a portable basename.
 
@@ -975,15 +998,25 @@ def _render_skill_md(
     org structure and must never appear in the SKILL.md body) and a
     warning header is prepended after the frontmatter.
     """
-    name_raw = candidate.queries[0] if candidate.queries else "Promoted candidate"
-    name = _sanitize_yaml_value(name_raw, max_len=80)
+    # M7 F3 (adjudicated design — do NOT "optimize" this back into a
+    # query-derived name): ``name`` is the strongest routing-match magnet
+    # (the INDEX layer grants a +0.4 containment bonus on it), so a raw
+    # query here makes an unedited draft over-match the moment it is
+    # injected. A neutral ``draft-<cluster>`` slug marks the draft as
+    # unfinished and fails safe against accidental activation.
+    # ``description`` intentionally stays provenance-only: it satisfies
+    # the spec-v3 required field, acts as a neutral diluent for matching,
+    # and provenance is exactly what belongs here pre-review.
+    name = f"draft-{candidate.cluster_id[:8]}"
     description = _sanitize_yaml_value(
         f"Auto-drafted from cluster {candidate.cluster_id} "
         f"({candidate.span_count} spans, gold_rate={candidate.gold_rate:.0%})",
         max_len=140,
     )
+    # M7 F6: queries are sanitized to single display lines (see
+    # ``_sanitize_body_text``) before entering the markdown body.
     queries_block = (
-        "\n".join(f"- {q}" for q in candidate.queries[:5])
+        "\n".join(f"- {_sanitize_body_text(q)}" for q in candidate.queries[:5])
         or "- (no representative queries recorded)"
     )
     if candidate.core_steps:

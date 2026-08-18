@@ -811,22 +811,20 @@ def feedback_collect(
     min_miss_count: int = typer.Option(
         3, "--min-miss-count", help="miss hash 被纳入衰减的次数下限"
     ),
-    boost_threshold_apps: int = typer.Option(
-        2,
-        "--boost-threshold-apps",
-        help="单 instinct 应用次数 ≤ 此值且 success_rate ≥ 0.8 时增强",
-    ),
     dry_run: bool = typer.Option(False, "--dry-run", help="只打印，不写盘"),
 ) -> None:
-    """根据 miss counter 反馈双向调整 instinct 置信度（计划 §5e）。
+    """根据 miss counter 反馈下调 instinct 置信度（计划 §5e，仅 decay 方向）。
 
     - **Decay**：高频 miss 命中的 instinct → ``record_outcome(success=False)``，
-      让 Wilson score 自动下调 confidence。
-    - **Boost**：success_rate ≥ 0.8 且应用次数少 → ``record_outcome(success=True)``，
-      加速其从候选变可靠。
+      让 Wilson score 自动下调 confidence。负信号有真实外部来源（miss counter）。
     - **Early-stop**：confidence ≥ 0.95 或 ≤ 0.1 跳过（避免无意义震荡）。
     - **Watermark**：处理过的 miss hash 写盘，下次跳过；``miss.decay_frequent``
       把 frequent count 减半（不 clear，保留 first/last）。
+
+    正向（boost）分支已拆除：正信号的唯一合法来源是显式人确认
+    （CLI feedback、pending accept、replay 确认），自动
+    ``record_outcome(success=True)`` 会毒化 Wilson confidence
+    （与 unified.py 的既有设计哲学一致）。
     """
     from vibesop.core.instinct.learner import InstinctLearner
     from vibesop.core.skills.miss_counter import MissCounter
@@ -840,19 +838,13 @@ def feedback_collect(
 
     learner = InstinctLearner(_get_storage_path())
     decayed = 0
-    boosted = 0
     skipped_early_stop = 0
     decayed_hashes: set[str] = set()
-    # Iterate ALL instincts, not just reliable ones. Plan v2 §5e originally
-    # specified ``get_reliable_instincts()`` but combined with the default
-    # ``boost_threshold_apps=2`` it made the boost branch unreachable:
-    # reliable requires ``total_applications >= 3`` while boost requires
-    # ``<= 2``. The plan's intent was "boost under-utilized instincts to
-    # surface them faster" — that's only possible if we look outside the
-    # already-reliable set. Early-stop at confidence ≤ 0.1 protects against
-    # boosting dying instincts; early-stop at ≥ 0.95 prevents saturation;
-    # ``total_applications >= 1`` skips never-applied instincts (pi P2-B)
-    # so a freshly-imported or theory-only instinct can't get a free boost.
+    # Iterate ALL instincts, not just reliable ones (``get_reliable_instincts``
+    # requires ``total_applications >= 3``): an under-utilized instinct that
+    # keeps accumulating frequent misses should decay too, not get a free
+    # pass just because it hasn't been applied often. Early-stop guards both
+    # ends of the confidence range.
     all_instincts = sorted(
         learner.instincts.values(), key=lambda i: i.confidence, reverse=True
     )
@@ -871,33 +863,19 @@ def feedback_collect(
             decayed += 1
             decayed_hashes.add(h)
             _add_watermark(processed_watermark, h)
-        elif (
-            ins.total_applications >= 1
-            and ins.success_rate >= 0.8
-            and ins.total_applications <= boost_threshold_apps
-        ):
-            if dry_run:
-                console.print(f"[dim]would boost:[/dim] {ins.pattern} (n={ins.total_applications})")
-            else:
-                learner.record_outcome(ins.id, success=True)
-            boosted += 1
 
-    if not dry_run:
-        if decayed:
-            # Scope the miss-counter decay to hashes feedback-collect actually
-            # touched — without this filter, ``decay_frequent`` halves every
-            # cluster at ≥ min_miss_count, erasing signal for instincts that
-            # were early-stopped or already in the watermark (pi Phase D P2-D).
-            miss.decay_frequent(min_miss_count, hashes=decayed_hashes)
-        if decayed or boosted:
-            learner.save()
-        if decayed:
-            _save_watermark(processed_watermark)
+    if not dry_run and decayed:
+        # Scope the miss-counter decay to hashes feedback-collect actually
+        # touched — without this filter, ``decay_frequent`` halves every
+        # cluster at ≥ min_miss_count, erasing signal for instincts that
+        # were early-stopped or already in the watermark (pi Phase D P2-D).
+        miss.decay_frequent(min_miss_count, hashes=decayed_hashes)
+        learner.save()
+        _save_watermark(processed_watermark)
 
     console.print(
         f"[bold]Feedback collected[/bold]: "
         f"[red]{decayed} decayed[/red], "
-        f"[green]{boosted} boosted[/green], "
         f"[dim]{skipped_early_stop} early-stop skipped[/dim]"
     )
     if dry_run:

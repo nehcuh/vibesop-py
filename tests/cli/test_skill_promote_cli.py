@@ -500,6 +500,30 @@ class TestPromote:
         assert stored.source_skill_id is not None
         assert stored.source_skill_id.startswith("custom/")
 
+    def test_promote_prints_index_hint_and_review_checklist(
+        self, cli_runner: CliRunner, tmp_store
+    ) -> None:
+        """M7: promote stdout includes the index hint + 3-line human
+        review checklist after the activate instructions."""
+        c = ClusterCandidate(
+            cluster_id="abc123def456",
+            task_ids=["t1"],
+            queries=["topic-A one"],
+            span_count=5,
+            gold_rate=0.8,
+            gold_task_ids=["t1"],
+        )
+        tmp_store.upsert(c)
+
+        r = cli_runner.invoke(app, ["skill", "promote", "abc123def456"])
+        assert r.exit_code == 0, f"failed: {r.output}"
+        assert "incrementally" in r.output
+        assert "vibe skills index" in r.output
+        assert "review checklist before activating:" in r.output
+        assert "1. rewrite name/description into intent keywords" in r.output
+        assert "2. confirm the example queries are a single workflow" in r.output
+        assert "3. spell out when this skill should NOT be used" in r.output
+
     def test_promote_unknown_id_errors(
         self, cli_runner: CliRunner, tmp_store
     ) -> None:

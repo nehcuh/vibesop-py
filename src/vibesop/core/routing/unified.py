@@ -8,7 +8,9 @@ match wins.
 Architecture:
     route() → [_try_explicit, _try_scenario, _try_ai_triage, _try_matchers]
                                                         ↓
-                              matcher loop: keyword → tfidf → embedding → levenshtein
+                              matcher aggregation: keyword/tfidf/embedding,
+                              max confidence wins; levenshtein is last-resort
+                              (only consulted when the others find nothing)
                                                         ↓
                               optimization: prefilter → preference_boost → conflict_resolution
 
@@ -21,6 +23,7 @@ Example:
 from __future__ import annotations
 
 import logging
+import re
 import threading
 import time
 from pathlib import Path
@@ -91,6 +94,24 @@ def _is_junk_query(query: str) -> bool:
     """
     stripped = query.lstrip()
     return any(stripped.startswith(marker) for marker in _JUNK_QUERY_MARKERS)
+
+
+# Platform hooks may wrap the user query in <user_query>...</user_query>
+# before handing it to route(). Production logs showed the wrapper reaching
+# matching verbatim, so "user"/"query" became query tokens and polluted
+# every matcher's scoring. Only a full-wrap (modulo surrounding whitespace)
+# is unwrapped; other tags and partial markup are left untouched. The inner
+# content may not itself contain a closing tag — pathological input like
+# "<user_query>fix</user_query> mid </user_query>" must NOT unwrap.
+_USER_QUERY_WRAPPER_RE = re.compile(
+    r"\A\s*<user_query>\s*((?:(?!</user_query>).)*?)\s*</user_query>\s*\Z", re.DOTALL
+)
+
+
+def _unwrap_user_query(query: str) -> str:
+    """Strip a whole-query <user_query>...</user_query> wrapper, if present."""
+    match = _USER_QUERY_WRAPPER_RE.match(query)
+    return match.group(1) if match else query
 
 
 def _junk_query_result(query: str) -> RoutingResult:
@@ -179,8 +200,10 @@ class UnifiedRouter(
     #   Stage 1: EXPLICIT (short-circuit on hit)
     #   Stage 2: SCENARIO + Semantic Index (best-of-N, keyword/short-query path)
     #   Stage 3: AI_TRIAGE (LLM, long-query path)
-    #   Stage 4: Matcher aggregation (keyword/tfidf/embedding/levenshtein run in
-    #            parallel, max confidence wins — not serial fallback)
+    #   Stage 4: Matcher aggregation (keyword/tfidf/embedding run together,
+    #            max confidence wins — not serial fallback; levenshtein is
+    #            last-resort and only consulted when the others produce
+    #            nothing — see _run_matcher_pipeline_levenshtein_last)
     # NO_MATCH and FALLBACK_LLM are terminal states, not matching layers.
     _LAYER_PRIORITY: ClassVar[list[RoutingLayer]] = [
         RoutingLayer.EXPLICIT,
@@ -471,6 +494,13 @@ class UnifiedRouter(
         # analytics / miss-counter writes.
         if _is_junk_query(query):
             return _junk_query_result(query)
+        # Same direct-caller reasoning for the platform-hook <user_query>
+        # wrapper: unwrap here too (idempotent — an already-unwrapped query
+        # passes through unchanged), then re-run the junk guard so markup
+        # hidden inside the wrapper is still rejected on this path.
+        query = _unwrap_user_query(query)
+        if _is_junk_query(query):
+            return _junk_query_result(query)
         start_time = time.perf_counter()
         with self._stats_lock:
             self._total_routes += 1
@@ -692,9 +722,10 @@ class UnifiedRouter(
                 context,
             )
 
-        # Step 3: Matcher pipeline (shared fallback)
-        primary, alternatives, detail = _pipeline.run_matcher_pipeline(
-            self, query, candidates, context, collect_rejected=True
+        # Step 3: Matcher pipeline (shared fallback). Levenshtein runs as
+        # last resort only — see _run_matcher_pipeline_levenshtein_last.
+        primary, alternatives, detail = self._run_matcher_pipeline_levenshtein_last(
+            query, candidates, context
         )
         routing_path.append(detail.layer)
         layer_details.append(detail)
@@ -714,6 +745,59 @@ class UnifiedRouter(
             )
 
         return None
+
+    def _run_matcher_pipeline_levenshtein_last(
+        self,
+        query: str,
+        candidates: list[dict[str, Any]],
+        context: RoutingContext | None,
+    ) -> tuple[Any | None, list[Any], Any]:
+        """Run the matcher pipeline with Levenshtein demoted to last resort.
+
+        The pipeline aggregates all matchers by max confidence, and
+        Levenshtein's fuzzy scores systematically out-scored the calibrated
+        matchers on weak evidence (production incident: "使用 review" →
+        levenshtein @1.0). ``_LAYER_PRIORITY`` already declares LEVENSHTEIN
+        the last matcher layer, so:
+
+        - First pass runs WITHOUT Levenshtein. If it hits, Levenshtein never
+          enters ``merged_matches`` / ``apply_optimizations`` at all — this
+          is where its influence is removed.
+        - On a first-pass miss, the second pass is the full, unmodified
+          pipeline: Levenshtein's results go through ``apply_optimizations``
+          exactly like any other matcher's.
+        """
+        pipeline = self._matcher_pipeline
+        # Read, swap, restore, AND the full second pass must all happen in
+        # the same critical section: reading full_matchers outside the lock
+        # let a concurrent route snapshot the *reduced* list and later
+        # "restore" it as if it were the full one (permanently dropping
+        # Levenshtein, gate7 pi BLOCK); running pass 2 outside the lock let
+        # it execute while another thread held the reduced list, so the
+        # "full" pass silently lacked Levenshtein (transient typo-query
+        # miss, gate7b claude #2). The lock has no other holder, so keeping
+        # both passes inside costs no contention.
+        with self._route_lock:
+            full_matchers = pipeline._matchers
+            calibrated = [m for m in full_matchers if m[0] != RoutingLayer.LEVENSHTEIN]
+            primary: Any | None = None
+            alternatives: list[Any] = []
+            detail: Any = None
+            if len(calibrated) != len(full_matchers):
+                pipeline._matchers = calibrated
+                try:
+                    primary, alternatives, detail = _pipeline.run_matcher_pipeline(
+                        self, query, candidates, context, collect_rejected=True
+                    )
+                finally:
+                    pipeline._matchers = full_matchers
+            if primary is None:
+                # First-pass miss (or no Levenshtein configured): full
+                # pipeline, still inside the critical section.
+                primary, alternatives, detail = _pipeline.run_matcher_pipeline(
+                    self, query, candidates, context, collect_rejected=True
+                )
+        return primary, alternatives, detail
 
     def _try_early_layers(
         self,
@@ -943,6 +1027,14 @@ class UnifiedRouter(
         # shape as fallback_mode="disabled" (minus the matcher-pipeline nearest
         # scan, which would be meaningless for markup), and skips the telemetry
         # block below so junk never lands in analytics / the miss counter.
+        if _is_junk_query(query):
+            return _junk_query_result(query)
+        # Pre-clean: unwrap platform-hook <user_query> packaging before any
+        # matching (see _USER_QUERY_WRAPPER_RE).
+        query = _unwrap_user_query(query)
+        # The unwrap can reveal harness markup that was hidden inside the
+        # wrapper — reject it here too, so the telemetry block below keeps
+        # the "junk never lands in analytics / the miss counter" invariant.
         if _is_junk_query(query):
             return _junk_query_result(query)
         result = self._single_skill_route(query, candidates, context)

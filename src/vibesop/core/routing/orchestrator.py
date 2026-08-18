@@ -190,10 +190,11 @@ class Orchestrator:
         # treats any long no-match query as a possible multi-part request and
         # would decompose the garbage text. Reuse unified.py's predicate (lazy
         # import — unified imports Orchestrator at module load) rather than a
-        # third copy of the criterion.
-        from vibesop.core.routing.unified import _is_junk_query
+        # third copy of the criterion. Unwrap first: platform hooks may wrap
+        # the markup in <user_query> tags, which the raw prefix check misses.
+        from vibesop.core.routing.unified import _is_junk_query, _unwrap_user_query
 
-        if _is_junk_query(query):
+        if _is_junk_query(_unwrap_user_query(query)):
             return self._router._to_orchestration_result(single_result, query)
 
         # 3. Multi-intent detection

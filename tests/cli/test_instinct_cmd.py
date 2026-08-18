@@ -7,7 +7,7 @@ call an LLM — purely local file operations on instincts.jsonl + miss_counter.j
 
 Covers:
     - auto-promote: candidate filtering, growth cap, dry-run, idempotency
-    - feedback-collect: decay/boost decision tree, early-stop, watermark
+    - feedback-collect: decay decision tree, early-stop, watermark
 """
 
 from __future__ import annotations
@@ -216,7 +216,7 @@ class TestFeedbackCollect:
         result = runner.invoke(app, ["feedback-collect"])
         assert result.exit_code == 0
         assert "0 decayed" in result.stdout
-        assert "0 boosted" in result.stdout
+        assert "boosted" not in result.stdout
 
     def test_dry_run_does_not_write(self, isolated_cwd, learner, miss_counter):
         _seed_reliable_instinct(learner, "do thing")
@@ -248,27 +248,28 @@ class TestFeedbackCollect:
         assert ins is not None
         assert ins.failure_count == 2  # was 1, +1 from decay
 
-    def test_boosts_high_success_few_apps(self, isolated_cwd, learner, miss_counter):
-        """success_rate ≥ 0.8 and total_applications ≤ boost_threshold_apps
-        → boost (record_outcome success=True). No frequent misses for this
-        pattern, so it doesn't decay first."""
-        # success_rate = 4/5 = 0.8, total_applications=5 — but default
-        # boost_threshold_apps=2, so we need ≤ 2 apps. Use 2/2 = 1.0.
+    def test_no_auto_boost_for_high_success_few_apps(
+        self, isolated_cwd, learner, miss_counter
+    ):
+        """Boost 分支已拆除：success_rate ≥ 0.8 且应用次数少的 instinct 不再
+        被自动 record_outcome(success=True) —— 正信号只能来自显式人确认。
+        feedback-collect 跑完后其 success_count 必须不变。"""
         _seed_reliable_instinct(
             learner, "good instinct", success_count=2, failure_count=0, confidence=0.6
         )
 
         result = runner.invoke(app, ["feedback-collect"])
         assert result.exit_code == 0
-        assert "1 boosted" in result.stdout
+        assert "boosted" not in result.stdout
+        assert "0 decayed" in result.stdout
 
         reloaded = InstinctLearner(learner.storage_path)
         ins = reloaded.instincts.get("instinct_good_instinct")
         assert ins is not None
-        assert ins.success_count == 3  # was 2, +1 from boost
+        assert ins.success_count == 2  # unchanged — no auto boost
 
     def test_early_stop_at_confidence_ceiling(self, isolated_cwd, learner, miss_counter):
-        """confidence ≥ 0.95 → skip entirely (no decay, no boost)."""
+        """confidence ≥ 0.95 → skip entirely (no decay)."""
         _seed_reliable_instinct(learner, "saturated", confidence=0.96)
         for _ in range(5):
             miss_counter.record("saturated")

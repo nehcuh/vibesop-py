@@ -351,14 +351,42 @@ class SkillIndexer:
                 if sid in project_profiles:
                     project_profiles[sid] = prof
 
-        # Save to appropriate files
-        if scope in ("all", "global") and global_profiles:
-            self._save_index(global_profiles, scope="global")
-        if scope in ("all", "project") and project_profiles:
-            self._save_index(project_profiles, scope="project")
-            result.index_path = self.project_index_path
+        # Save to appropriate files. gate7b (pi NIT-5 / claude #5): the
+        # save phase is mutex'd against the incremental single-skill
+        # merge in `vibe skill add` via the same sidecar lock name
+        # (``{index_path}.lock`` — names must match to exclude each
+        # other). Profiles are the full dict computed OUTSIDE the lock;
+        # nothing is re-read or recomputed inside it — the lock only
+        # serializes writers so this atomic rename can't land interleaved
+        # with an incremental merge and silently clobber it. Semantics
+        # confirmed: last writer still wins (a full rebuild started
+        # before an add may not contain the new skill); the lock makes
+        # the write ordering explicit rather than racy, it does not make
+        # a stale rebuild merge-aware.
+        from vibesop.utils.file_lock import cross_process_lock
 
-        if global_profiles or project_profiles:
+        save_failed = False
+        if scope in ("all", "global") and global_profiles:
+            try:
+                with cross_process_lock(Path(f"{self.global_index_path}.lock")):
+                    self._save_index(global_profiles, scope="global")
+            except OSError as e:
+                # Explicit batch op — surface the failure via the existing
+                # error path, never swallow it silently.
+                logger.warning("Failed to save global skill index: %s", e)
+                result.errors.append(f"global index save failed: {e}")
+                save_failed = True
+        if scope in ("all", "project") and project_profiles:
+            try:
+                with cross_process_lock(Path(f"{self.project_index_path}.lock")):
+                    self._save_index(project_profiles, scope="project")
+                    result.index_path = self.project_index_path
+            except OSError as e:
+                logger.warning("Failed to save project skill index: %s", e)
+                result.errors.append(f"project index save failed: {e}")
+                save_failed = True
+
+        if (global_profiles or project_profiles) and not save_failed:
             result.success = True
 
         if show_progress:

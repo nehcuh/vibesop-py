@@ -7,9 +7,19 @@ and explicit user corrections waiting for accept/dismiss.
 Design constraints (pi H1 + evolution final):
 - Human-readable Chinese reasons
 - ≤3 new pending items per calendar day (rate limit)
-- Dedup: same query_hash + skill_id while still pending → no re-add
+- Dedup: same query_hash while still pending → no re-add (M7: the same
+  garbage query routed to 2 skills must not consume 2 of the 3 daily slots;
+  the daily cap likewise counts distinct query_hash, not rows)
+- Low-information queries (<2 meaningful tokens — "可以", "✓", "/review")
+  are NOT enqueued; they degrade into MissCounter records so a genuine
+  false positive still surfaces as a frequent miss (M7 dogfood: the review
+  queue died of alert fatigue, 7/7 items were low-info junk)
 - Dismiss suppresses re-enqueue for 24h
 - Accept/dismiss write back via InstinctLearner + PreferenceLearner (callers)
+- Writes are serialized cross-process: every ``vibe route`` builds a fresh
+  store instance, so ``try_enqueue``/``_resolve`` re-read the file under a
+  ``cross_process_lock`` sidecar lock before rewriting it (RMW — locking
+  only the write would still lose updates from stale in-memory items)
 """
 
 from __future__ import annotations
@@ -24,6 +34,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 from vibesop.utils.atomic_writer import write_text
+from vibesop.utils.file_lock import cross_process_lock
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +42,7 @@ __all__ = [
     "RoutingPendingItem",
     "RoutingPendingStore",
     "default_pending_path",
+    "is_low_information_query",
 ]
 
 PendingKind = Literal["low_confidence", "no_match", "user_correction"]
@@ -53,6 +65,71 @@ def _now() -> datetime:
 
 def _day_key(dt: datetime | None = None) -> str:
     return (dt or _now()).date().isoformat()
+
+
+# Exact-match acknowledgment/confirmation phrases (pi NIT-7): CJK replies
+# like "知道了" tokenize into >=2 overlapping bigrams, all "meaningful" under
+# the shared convention, so the token rule alone lets them through. Matching
+# is whole-string exact (after strip + lowercase + whitespace collapse) so a
+# real query merely containing one of these words ("修一下没问题这个报错")
+# is NOT blocked.
+_ACKNOWLEDGMENT_QUERIES = frozenset(
+    {
+        "知道了",
+        "没问题",
+        "收到",
+        "好的",
+        "可以",
+        "可以吗",
+        "好",
+        "嗯",
+        "谢谢",
+        "ok",
+        "okay",
+        "yes",
+        "no",
+        "thanks",
+    }
+)
+
+
+def is_low_information_query(query: str) -> bool:
+    """True when *query* carries too little signal to be worth human review.
+
+    Token-based, not char-based: a character wall would kill legitimate short
+    forms, while the token rule only blocks queries with fewer than 2
+    *meaningful* tokens ("可以" → 1 CJK token, "✓" → 0, "/review" → 1).
+    Multi-token queries like "review my code" pass — their review-queue
+    noise is a matcher-side problem, handled elsewhere.
+
+    Two rules, either suffices:
+
+    1. **Acknowledgment stopword** — the whole query (strip + lowercase +
+       collapsed whitespace) exactly equals a member of
+       ``_ACKNOWLEDGMENT_QUERIES``. This catches CJK confirmation replies
+       ("知道了", "没问题", "收到") that penetrate the token rule: their
+       overlapping bigrams are all >=2-char CJK tokens and thus all
+       "meaningful". Exact-match only, so real queries containing these
+       words are never blocked. Residual boundary (accepted): longer
+       variants like "好的明白了" are not in the set and pass — if they are
+       junk they surface via the MissCounter degradation record instead.
+    2. **Token rule** — fewer than 2 meaningful tokens.
+
+    The meaningful-token criterion is the shared module-level
+    ``_is_meaningful_token`` from ``core/matching/strategies.py`` (CJK >=2
+    chars, Latin >=3) — imported lazily alongside the tokenizer, mirroring
+    ``instinct/learner.py``; matching never imports instinct, so there is
+    no import cycle.
+    """
+    normalized = " ".join(query.split()).lower()
+    if normalized in _ACKNOWLEDGMENT_QUERIES:
+        return True
+
+    from vibesop.core.matching.strategies import _is_meaningful_token
+    from vibesop.core.matching.tokenizers import tokenize
+
+    meaningful = sum(1 for t in tokenize(query) if _is_meaningful_token(t))
+    return meaningful < 2
 
 
 @dataclass
@@ -103,10 +180,20 @@ class RoutingPendingItem:
 class RoutingPendingStore:
     """Append-friendly JSONL store for routing pending items."""
 
-    def __init__(self, path: Path | str | None = None) -> None:
+    def __init__(
+        self,
+        path: Path | str | None = None,
+        *,
+        miss_counter: Any | None = None,
+    ) -> None:
         self._path = Path(path) if path else default_pending_path()
+        self._lock_path = self._path.with_name(self._path.name + ".lock")
         self._lock = threading.Lock()
         self._items: list[RoutingPendingItem] = []
+        # MissCounter for gate-blocked low-info queries. Injectable for
+        # tests; otherwise lazily derived from the default store layout.
+        self._miss_counter = miss_counter
+        self._miss_counter_probed = miss_counter is not None
         self._load()
 
     @property
@@ -155,20 +242,69 @@ class RoutingPendingStore:
 
     def count_created_today(self) -> int:
         """How many items were *created* today (any status) — rate limit basis."""
-        today = _day_key()
         with self._lock:
-            n = 0
-            for item in self._items:
-                try:
-                    created = datetime.fromisoformat(item.created_at)
-                    if _day_key(created) == today:
-                        n += 1
-                except ValueError:
-                    continue
-            return n
+            return self._created_today_locked()
+
+    def _created_today_locked(self) -> int:
+        """Daily-cap count. Caller must hold ``self._lock``.
+
+        Counted by distinct query_hash (M7): one garbage query routed to N
+        skills costs 1 daily slot, not N. Legacy rows with an empty
+        query_hash count individually so historical files keep working.
+        """
+        today = _day_key()
+        hashes: set[str] = set()
+        legacy_rows = 0
+        for item in self._items:
+            try:
+                created = datetime.fromisoformat(item.created_at)
+            except ValueError:
+                continue
+            if _day_key(created) != today:
+                continue
+            if item.query_hash:
+                hashes.add(item.query_hash)
+            else:
+                legacy_rows += 1
+        return len(hashes) + legacy_rows
+
+    def _get_miss_counter(self) -> Any | None:
+        """Lazy MissCounter for gate-blocked low-info queries.
+
+        Derived from the default layout (``<root>/.vibe/instincts/...`` →
+        ``MissCounter(<root>)`` writes ``<root>/.vibe/miss_counter.json``).
+        Returns None for non-standard store paths — the gate still blocks,
+        just without a degradation record.
+        """
+        if self._miss_counter_probed:
+            return self._miss_counter
+        self._miss_counter_probed = True
+        if self._path.parent.name != "instincts" or self._path.parent.parent.name != ".vibe":
+            return None
+        try:
+            from vibesop.core.skills.miss_counter import MissCounter
+
+            self._miss_counter = MissCounter(self._path.parent.parent.parent)
+        except Exception as exc:  # telemetry must never break routing
+            logger.debug("miss counter unavailable for low-info gate: %s", exc)
+        return self._miss_counter
+
+    def _record_low_info_miss(self, query: str) -> None:
+        counter = self._get_miss_counter()
+        if counter is None:
+            return
+        try:
+            counter.record(query)
+        except Exception as exc:  # telemetry must never break routing
+            logger.debug("failed to record low-info query miss: %s", exc)
 
     def is_suppressed(self, query_hash: str, skill_id: str | None) -> bool:
-        """True if a dismiss for same key happened within suppress window."""
+        """True if a dismiss for same query_hash happened within the window.
+
+        Keyed by query_hash only, aligned with the dedup key (M7): a
+        dismissed query re-routed through a different skill_id stays
+        suppressed. Empty legacy hashes fall back to (hash, skill_id).
+        """
         cutoff = _now() - timedelta(hours=_DISMISS_SUPPRESS_HOURS)
         with self._lock:
             for item in self._items:
@@ -176,7 +312,7 @@ class RoutingPendingStore:
                     continue
                 if item.query_hash != query_hash:
                     continue
-                if (item.skill_id or None) != (skill_id or None):
+                if not query_hash and (item.skill_id or None) != (skill_id or None):
                     continue
                 try:
                     resolved = (
@@ -213,64 +349,113 @@ class RoutingPendingStore:
         reason_zh: str,
         query_hash: str,
     ) -> RoutingPendingItem | None:
-        """Enqueue if rate limit / dedup / suppress allow. Returns item or None."""
+        """Enqueue if rate limit / dedup / suppress allow. Returns item or None.
+
+        Low-information queries (<2 meaningful tokens) are not enqueued;
+        they degrade into a MissCounter record so a genuine false positive
+        still surfaces as a frequent miss. The read-modify-write cycle runs
+        under both the threading lock and a cross-process sidecar lock, and
+        the file is re-read inside the lock — every ``vibe route`` builds a
+        fresh store instance, so in-memory ``_items`` may be stale.
+        """
+        if is_low_information_query(query):
+            logger.debug("routing pending: skip low-information query %r", query[:80])
+            # no_match queries are already counted by the router's always-on
+            # miss telemetry (UnifiedRouter._record_route_miss fires on the
+            # same event just before enqueue) — recording again would
+            # double-count a single user query. low_confidence / correction
+            # kinds are not covered there, so record the degradation here.
+            if kind != "no_match":
+                self._record_low_info_miss(query)
+            return None
         with self._lock:
-            # Rate limit (created today, any status)
-            today = _day_key()
-            created_today = 0
-            for item in self._items:
-                try:
-                    if _day_key(datetime.fromisoformat(item.created_at)) == today:
-                        created_today += 1
-                except ValueError:
-                    continue
-            if created_today >= _MAX_NEW_PER_DAY:
-                logger.debug("routing pending daily cap reached (%d)", _MAX_NEW_PER_DAY)
+            try:
+                with cross_process_lock(self._lock_path):
+                    self._load()
+                    return self._try_enqueue_locked(
+                        query=query,
+                        skill_id=skill_id,
+                        confidence=confidence,
+                        kind=kind,
+                        reason_zh=reason_zh,
+                        query_hash=query_hash,
+                    )
+            except OSError as exc:
+                logger.warning("routing pending enqueue skipped (lock failed: %s)", exc)
                 return None
 
-            # Dedup open
-            for item in self._items:
-                if (
-                    item.status == "pending"
-                    and item.query_hash == query_hash
-                    and (item.skill_id or None) == (skill_id or None)
-                ):
+    def _try_enqueue_locked(
+        self,
+        *,
+        query: str,
+        skill_id: str | None,
+        confidence: float,
+        kind: PendingKind,
+        reason_zh: str,
+        query_hash: str,
+    ) -> RoutingPendingItem | None:
+        """Caller must hold ``self._lock`` and the cross-process lock."""
+        # Rate limit (created today, any status, distinct query_hash)
+        if self._created_today_locked() >= _MAX_NEW_PER_DAY:
+            logger.debug("routing pending daily cap reached (%d)", _MAX_NEW_PER_DAY)
+            return None
+
+        # Dedup open — keyed by query_hash only (M7): the same query routed
+        # to a different skill must not enqueue a second row. Empty legacy
+        # hashes fall back to (hash, skill_id) so a hash-less historical row
+        # cannot block every future enqueue.
+        #
+        # Accepted tradeoff (pi NIT-4, gate7b review): pending dedup has no
+        # expiry — if the query first pends under the WRONG skill A and the
+        # router later lands on the correct skill B, that newer (better)
+        # signal is swallowed until a human resolves A. Accepted because the
+        # queue is tiny (daily cap 3) and the pending row still carries the
+        # query text for review; the alternative (expiry/re-enqueue) would
+        # re-open the alert-fatigue flood this queue died of in dogfood.
+        for item in self._items:
+            if item.status != "pending" or item.query_hash != query_hash:
+                continue
+            if query_hash or (item.skill_id or None) == (skill_id or None):
+                return None
+
+        # Suppress after dismiss — keyed by query_hash only, aligned with the
+        # dedup key above (M7): a dismissed query re-routed through a
+        # different skill_id must stay suppressed, otherwise the "one garbage
+        # query costs one daily slot" intent is bypassed. Empty legacy hashes
+        # fall back to (hash, skill_id), same as dedup.
+        cutoff = _now() - timedelta(hours=_DISMISS_SUPPRESS_HOURS)
+        for item in self._items:
+            if item.status != "dismissed":
+                continue
+            if item.query_hash != query_hash:
+                continue
+            if not query_hash and (item.skill_id or None) != (skill_id or None):
+                continue
+            try:
+                resolved = (
+                    datetime.fromisoformat(item.resolved_at)
+                    if item.resolved_at
+                    else datetime.fromisoformat(item.created_at)
+                )
+                if resolved.tzinfo is None:
+                    resolved = resolved.replace(tzinfo=UTC)
+                if resolved >= cutoff:
                     return None
+            except ValueError:
+                continue
 
-            # Suppress after dismiss
-            cutoff = _now() - timedelta(hours=_DISMISS_SUPPRESS_HOURS)
-            for item in self._items:
-                if item.status != "dismissed":
-                    continue
-                if item.query_hash != query_hash:
-                    continue
-                if (item.skill_id or None) != (skill_id or None):
-                    continue
-                try:
-                    resolved = (
-                        datetime.fromisoformat(item.resolved_at)
-                        if item.resolved_at
-                        else datetime.fromisoformat(item.created_at)
-                    )
-                    if resolved.tzinfo is None:
-                        resolved = resolved.replace(tzinfo=UTC)
-                    if resolved >= cutoff:
-                        return None
-                except ValueError:
-                    continue
-
-            item = RoutingPendingItem(
-                id=f"rp-{uuid.uuid4().hex[:12]}",
-                query=query[:500],
-                skill_id=skill_id,
-                confidence=confidence,
-                kind=kind,
-                reason_zh=reason_zh,
-                query_hash=query_hash,
-            )
-            self._items.append(item)
-            self._save()
-            return item
+        item = RoutingPendingItem(
+            id=f"rp-{uuid.uuid4().hex[:12]}",
+            query=query[:500],
+            skill_id=skill_id,
+            confidence=confidence,
+            kind=kind,
+            reason_zh=reason_zh,
+            query_hash=query_hash,
+        )
+        self._items.append(item)
+        self._save()
+        return item
 
     def accept(self, item_id: str) -> RoutingPendingItem | None:
         return self._resolve(item_id, "accepted")
@@ -282,35 +467,35 @@ class RoutingPendingStore:
         self, item_id: str, status: PendingStatus
     ) -> RoutingPendingItem | None:
         with self._lock:
-            for item in self._items:
-                if item.id != item_id:
-                    continue
-                if item.status != "pending":
+            try:
+                with cross_process_lock(self._lock_path):
+                    # Re-read under the lock: the item may have been resolved
+                    # by another process since this instance loaded.
+                    self._load()
+                    for item in self._items:
+                        if item.id != item_id:
+                            continue
+                        if item.status != "pending":
+                            return None
+                        item.status = status
+                        item.resolved_at = _now().isoformat()
+                        self._save()
+                        return item
                     return None
-                item.status = status
-                item.resolved_at = _now().isoformat()
-                self._save()
-                return item
-            return None
+            except OSError as exc:
+                logger.warning("routing pending resolve skipped (lock failed: %s)", exc)
+                return None
 
     def stats(self) -> dict[str, int]:
         with self._lock:
             pending = sum(1 for i in self._items if i.status == "pending")
             accepted = sum(1 for i in self._items if i.status == "accepted")
             dismissed = sum(1 for i in self._items if i.status == "dismissed")
-            today = _day_key()
-            created_today = 0
-            for item in self._items:
-                try:
-                    if _day_key(datetime.fromisoformat(item.created_at)) == today:
-                        created_today += 1
-                except ValueError:
-                    continue
             return {
                 "pending": pending,
                 "accepted": accepted,
                 "dismissed": dismissed,
-                "created_today": created_today,
+                "created_today": self._created_today_locked(),
                 "daily_cap": _MAX_NEW_PER_DAY,
                 "total": len(self._items),
             }
@@ -354,6 +539,10 @@ def should_enqueue_from_route(
     layer: str | None = None,
 ) -> PendingKind | None:
     """Decide whether a route result should create a pending item.
+
+    Note: this is the route-quality half of the policy. The low-information
+    query gate runs separately (and first) inside
+    ``RoutingPendingStore.try_enqueue`` — see ``is_low_information_query``.
 
     Enqueue when:
     - no match / FALLBACK_LLM sentinel (``has_match`` false), or

@@ -530,12 +530,23 @@ def add(
         _manual_configure_skill(metadata, scope)
 
     console.print("\n[dim]Phase 6: Verifying...[/dim]")
-    _verify_and_sync(metadata.id, scope)
+    indexed = _verify_and_sync(metadata.id, scope)
 
     console.print("\n[bold green]✨ Installation complete![/bold green]")
+    if indexed:
+        ready_line = f"[bold]{metadata.name}[/bold] is now ready to use!"
+    else:
+        # Honest fallback (M7): without the semantic index entry the skill
+        # is invisible to the SEMANTIC_INDEX routing layer — don't claim
+        # "ready to use" until `vibe skills index` has run.
+        ready_line = (
+            f"[bold]{metadata.name}[/bold] is installed.\n"
+            f"[yellow]Run [cyan]vibe skills index[/cyan] before it can be "
+            f"semantically routed.[/yellow]"
+        )
     console.print(
         Panel(
-            f"[bold]{metadata.name}[/bold] is now ready to use!\n\n"
+            f"{ready_line}\n\n"
             f"[dim]Test it with:[/dim]\n"
             f'  [cyan]vibe route "{metadata.trigger_when or "test query"}"[/cyan]\n\n'
             f"[dim]View details:[/dim]\n"
@@ -983,7 +994,15 @@ def _extract_keywords(text: str) -> list[str]:
     return [word for word, _ in counter.most_common(5)]
 
 
-def _verify_and_sync(skill_id: str, _scope: str) -> None:
+def _verify_and_sync(skill_id: str, scope: str) -> bool:
+    """Smoke-test routing, then incrementally index the newly added skill.
+
+    Returns True when the skill's profile was merged into the semantic
+    index (SEMANTIC_INDEX layer); False when indexing was skipped or
+    failed (no LLM configured, analysis failed) — the caller must then
+    say ``vibe skills index`` is still required instead of claiming the
+    skill is "ready to use" (M7 skill add activation breakpoint).
+    """
     from vibesop.core.routing.unified import UnifiedRouter
 
     router = UnifiedRouter(project_root=Path())
@@ -1004,8 +1023,125 @@ def _verify_and_sync(skill_id: str, _scope: str) -> None:
     if not matched:
         console.print("[yellow]⚠ Routing test: No direct match (this is OK)[/yellow]")
 
+    indexed = _index_newly_added_skill(skill_id, scope)
+
     console.print("[dim]Syncing to platform...[/dim]")
     console.print("[green]✓ Synced[/green]")
+    return indexed
+
+
+def _index_newly_added_skill(skill_id: str, scope: str) -> bool:
+    """Incrementally index ONE newly installed skill into the semantic index.
+
+    Analyzes just the new skill (one LLM call + one embedding) and merges
+    its profile into the matching index layer — project index for project
+    installs, global index otherwise. A full ``build_index`` is
+    deliberately avoided: it would re-walk every discovered skill and
+    re-write whole layers, far too slow for an install path.
+
+    Scope caveat (gate7 pi NIT-b): incremental indexing currently only
+    takes effect for PROJECT-scope installs. ``vibe skill add --global``
+    installs to ``~/.vibe/.vibe/skills/<id>``, which is outside
+    ``SkillLoader``'s search paths, so global installs always degrade to
+    "not yet discoverable" — run ``vibe skills index --scope global``
+    after a global install. Unifying the global install path is a Tier2
+    item; this function's contract is honesty, not coverage.
+
+    Uses SkillIndexer's single-skill building blocks — no public
+    single-skill API exists and the indexer is outside this change's
+    edit scope. Best-effort: degrades to False (never raises) when no
+    LLM is configured or analysis fails, so installation itself never
+    fails because the optional index step couldn't run.
+    """
+    try:
+        from vibesop.core.llm_config import LLMConfigResolver
+        from vibesop.core.skills.indexer import SkillIndexer
+        from vibesop.core.skills.loader import SkillLoader
+        from vibesop.llm.factory import create_provider
+        from vibesop.utils.file_lock import cross_process_lock
+
+        cfg = LLMConfigResolver().get_llm_for_understanding()
+        if not cfg or not cfg.provider:
+            console.print(
+                "[dim]No LLM configured — skipping semantic indexing "
+                "(run `vibe skills index` later)[/dim]"
+            )
+            return False
+
+        indexer = SkillIndexer(
+            project_root=Path(),
+            llm_factory=lambda: create_provider(
+                provider=cfg.provider,
+                api_key=cfg.api_key,
+                base_url=cfg.api_base,
+            ),
+        )
+        llm = indexer._get_llm()
+        if llm is None:
+            return False
+
+        loaded = SkillLoader(project_root=Path()).get_skill(skill_id)
+        if loaded is None:
+            if scope == "global":
+                # See docstring: global installs land outside SkillLoader's
+                # search paths (Tier2 known issue) — this is the expected
+                # path for --global, not a transient failure.
+                console.print(
+                    f"[yellow]⚠ Incremental indexing is project-scope only — "
+                    f"run `vibe skills index --scope global` to make "
+                    f"'{skill_id}' semantically routable.[/yellow]"
+                )
+            else:
+                console.print(
+                    f"[dim]Skill '{skill_id}' not yet discoverable — "
+                    "skipping semantic indexing "
+                    "(run `vibe skills index` later)[/dim]"
+                )
+            return False
+
+        console.print("[dim]Indexing new skill (incremental, single skill)...[/dim]")
+        profile = indexer._analyze_skill(loaded, llm)
+        if profile is None:
+            return False
+        indexer._compute_embeddings({skill_id: profile})
+
+        layer = "project" if scope == "project" else "global"
+        index_path = (
+            indexer.project_index_path if layer == "project" else indexer.global_index_path
+        )
+        # gate7 claude NIT-1 / gate7b pi NIT-5: the load→merge→save
+        # read-modify-write runs under a cross-process sidecar lock,
+        # mutex'd against concurrent `skill add` runs AND the save phase
+        # of `vibe skills index` — build_index takes the same sidecar
+        # (names must match, ``{index_path}.lock``, or the locks don't
+        # exclude each other). The index is RE-READ inside the lock —
+        # merging into a dict read before acquiring it would defeat the
+        # lock entirely. Caveat: a full rebuild still last-writer-wins
+        # over an earlier incremental merge (its profiles are computed
+        # outside the lock); the lock excludes interleaved/clobbering
+        # writes, not stale ones.
+        lock_path = Path(f"{index_path}.lock")
+        try:
+            with cross_process_lock(lock_path):
+                existing = indexer._load_single_index(index_path)
+                existing[skill_id] = profile
+                indexer._save_index(existing, scope=layer)
+        except OSError as e:  # lock file unavailable / IO error → degrade
+            logger.debug("Incremental indexing lock/IO failed for %s: %s", skill_id, e)
+            console.print(
+                "[yellow]⚠ Semantic indexing failed — "
+                "run `vibe skills index` to enable semantic routing[/yellow]"
+            )
+            return False
+        console.print(f"[green]✓ Indexed into {layer} semantic index[/green]")
+        return True
+    except Exception as e:  # indexing is best-effort; never fail the install
+        logger.debug("Incremental indexing failed for %s: %s", skill_id, e)
+        console.print(
+            "[yellow]⚠ Semantic indexing failed — "
+            "run `vibe skills index` to enable semantic routing[/yellow]"
+        )
+        return False
 
 
 @app.command(name="cleanup", help="Interactively review and clean up low-quality or stale skills")
@@ -1518,6 +1654,22 @@ def promote_cmd(  # pyright: ignore[reportUnusedFunction]
             f"  [dim]activate:[/dim] copy to .vibe/skills/{skill_id}/ and run "
             f"`vibe skill add .vibe/skills/{skill_id}`"
         )
+    # M7: `vibe skill add` now incrementally indexes the installed skill,
+    # so no separate full rebuild is needed when an LLM is configured.
+    console.print(
+        "  [dim]index:[/dim] `vibe skill add` indexes the skill incrementally "
+        "(needs a configured LLM); otherwise run `vibe skills index`"
+    )
+    console.print("  [dim]review checklist before activating:[/dim]")
+    console.print(
+        "    [dim]1. rewrite name/description into intent keywords "
+        "(the draft name is a placeholder)[/dim]"
+    )
+    console.print(
+        "    [dim]2. confirm the example queries are a single workflow — "
+        "split the draft if they aren't[/dim]"
+    )
+    console.print("    [dim]3. spell out when this skill should NOT be used[/dim]")
 
 
 @app.command(name="dismiss")

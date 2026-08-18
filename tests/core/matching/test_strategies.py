@@ -354,6 +354,70 @@ class TestLevenshteinMatcher:
         m = LevenshteinMatcher()
         m.warm_up([])  # Should not raise
 
+    def test_score_unmatched_tokens_count_as_zero(self):
+        """Unmatched meaningful tokens must count as 0 in the denominator.
+
+        Regression for the production incident where "使用 review" scored 1.0:
+        only "review" passed the similarity threshold, and the average was
+        taken over passing tokens only. Now "使用" (a meaningful CJK token)
+        counts as 0, so the score is ~0.5, not 1.0.
+        """
+        m = LevenshteinMatcher()
+        c = _make_candidate("kimi-gated-fix", name="kimi gated fix", keywords=["review"])
+        score = m.score("使用 review", c)
+        assert score < 0.7
+        # (1.0 for "review" + 0.0 for "使用") / 2 tokens
+        assert score == pytest.approx(0.5, abs=0.01)
+
+    def test_score_typo_still_high(self):
+        """A genuine typo (all meaningful tokens near-match) keeps a high score."""
+        m = LevenshteinMatcher()
+        c = _make_candidate(
+            "code-review", name="code review", keywords=["review", "code"]
+        )
+        score = m.score("reivew my code", c)
+        # "my" is too short to be meaningful; "reivew"≈"review", "code"=="code"
+        assert score >= 0.9
+
+    def test_score_short_tokens_excluded_from_denominator(self):
+        """Non-meaningful tokens (latin <3 chars) are skipped, not zeroed."""
+        m = LevenshteinMatcher()
+        c = _make_candidate("debug", name="debug", keywords=["debug"])
+        # "my" is not meaningful; only "debug" counts → perfect score.
+        score = m.score("my debug", c)
+        assert score >= 0.9
+
+    def test_transposition_discount_long_tokens(self):
+        """Adjacent transposition costs 1 edit for tokens ≥6 chars."""
+        m = LevenshteinMatcher()
+        assert m._levenshtein_distance("reivew", "review") == 1
+        assert m._levenshtein_distance("configuartion", "configuration") == 1
+
+    def test_transposition_discount_short_tokens_disabled(self):
+        """Below 6 chars the transposition discount is off: real distinct-word
+        pairs (form/from, trail/trial, angel/angle, dairy/diary) must stay at
+        plain-Levenshtein distance 2 so they can't cross the 0.7 threshold."""
+        m = LevenshteinMatcher()
+        assert m._levenshtein_distance("form", "from") == 2
+        assert m._levenshtein_distance("trail", "trial") == 2
+        assert m._levenshtein_distance("angel", "angle") == 2
+        assert m._levenshtein_distance("dairy", "diary") == 2
+
+    def test_short_distinct_word_pair_scores_low(self):
+        """End-to-end: "form" must not fuzzy-match a "from" skill."""
+        m = LevenshteinMatcher()
+        c = _make_candidate("from-skill", name="from", keywords=["from"])
+        assert m.score("form", c) < 0.7
+
+    def test_cjk_transposition_reverts_to_plain_levenshtein(self):
+        """"配置禁门"↔"配置门禁" (4 chars): no discount, distance 2 → sim 0.5,
+        identical to pre-OSA behavior — a CJK transposition typo at this
+        length no longer matches, same as before OSA was introduced."""
+        m = LevenshteinMatcher()
+        assert m._levenshtein_distance("配置禁门", "配置门禁") == 2
+        c = _make_candidate("gate-skill", name="gate", keywords=["配置门禁"])
+        assert m.score("配置禁门", c) < 0.7
+
 
 class TestLazyEmbeddingMatcher:
     """Test LazyEmbeddingMatcher proxy."""
