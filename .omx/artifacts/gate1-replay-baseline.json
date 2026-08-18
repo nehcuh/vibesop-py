@@ -1,0 +1,192 @@
+{
+  "no_llm": true,
+  "total": 1843,
+  "skipped": 63,
+  "agreement": {
+    "matches": 202,
+    "changed": 1641,
+    "rate": 0.1096
+  },
+  "layer_distribution": {
+    "old": {
+      "ai_triage": 1585,
+      "keyword": 128,
+      "fallback_llm": 33,
+      "explicit": 2,
+      "unknown": 69,
+      "levenshtein": 26
+    },
+    "new": {
+      "levenshtein": 296,
+      "keyword": 150,
+      "fallback_llm": 950,
+      "scenario": 421,
+      "explicit": 2,
+      "semantic_index": 19,
+      "tfidf": 5
+    }
+  },
+  "top_changes": [
+    {
+      "query": "发现一个新问题，通过 tray 停止 companion 会失败，这是怎么回事？",
+      "old_primary": "diagnose",
+      "old_layer": "ai_triage",
+      "new_primary": "fallback-llm",
+      "new_layer": "fallback_llm",
+      "new_confidence": 1.0
+    },
+    {
+      "query": "tray 菜单中查看状态，即使 companion 是启动状态，但是这里展示还是 Companion: 已停止，点击刷新状态，弹窗显示又是 companion 已连接",
+      "old_primary": "diagnose",
+      "old_layer": "ai_triage",
+      "new_primary": "fallback-llm",
+      "new_layer": "fallback_llm",
+      "new_confidence": 1.0
+    },
+    {
+      "query": "坐标任务：完成 ?/? 步\n{\n  \"success\": false,\n  \"error\": \"computer: coordinate computer-use is disabled globally (computer.coordinateEnabled=false)\"\n}",
+      "old_primary": "diagnose",
+      "old_layer": "ai_triage",
+      "new_primary": "fallback-llm",
+      "new_layer": "fallback_llm",
+      "new_confidence": 1.0
+    },
+    {
+      "query": "⛔ coordinateAllowed denied (timeout) — bit unchanged\n不对哦，我都已经给独立的 APP 启用了坐标操作了啊",
+      "old_primary": "builtin/riper-workflow",
+      "old_layer": "ai_triage",
+      "new_primary": "fallback-llm",
+      "new_layer": "fallback_llm",
+      "new_confidence": 1.0
+    },
+    {
+      "query": "进入实施，记住使用 worktree 进行开发，使用对抗验证，端到端验证的方式来开发",
+      "old_primary": "builtin/adversarial-optimization",
+      "old_layer": "ai_triage",
+      "new_primary": "fallback-llm",
+      "new_layer": "fallback_llm",
+      "new_confidence": 1.0
+    },
+    {
+      "query": "继续迭代后续工作，按照之前一眼的流程",
+      "old_primary": "builtin/riper-workflow",
+      "old_layer": "ai_triage",
+      "new_primary": "fallback-llm",
+      "new_layer": "fallback_llm",
+      "new_confidence": 1.0
+    },
+    {
+      "query": "你要不帮我部署下我看看效果？",
+      "old_primary": "prototype",
+      "old_layer": "ai_triage",
+      "new_primary": "fallback-llm",
+      "new_layer": "fallback_llm",
+      "new_confidence": 1.0
+    },
+    {
+      "query": "好的，帮我合并到当前主分支，然后提交到远程吧",
+      "old_primary": "git-guardrails-claude-code",
+      "old_layer": "ai_triage",
+      "new_primary": "fallback-llm",
+      "new_layer": "fallback_llm",
+      "new_confidence": 1.0
+    },
+    {
+      "query": "对了，文档，版本号等是否需要更新",
+      "old_primary": "edit-article",
+      "old_layer": "ai_triage",
+      "new_primary": "fallback-llm",
+      "new_layer": "fallback_llm",
+      "new_confidence": 1.0
+    },
+    {
+      "query": "顺便帮我给当前项目重新部署我们最新的项目，../cmspark 也部署下",
+      "old_primary": "improve-codebase-architecture",
+      "old_layer": "ai_triage",
+      "new_primary": "fallback-llm",
+      "new_layer": "fallback_llm",
+      "new_confidence": 1.0
+    },
+    {
+      "query": "我先离开了",
+      "old_primary": "builtin/session-end",
+      "old_layer": "keyword",
+      "new_primary": "fallback-llm",
+      "new_layer": "fallback_llm",
+      "new_confidence": 1.0
+    },
+    {
+      "query": "有点奇怪，现在电脑合盖以后似乎不会关机，然后会异常发热，我怀疑是不是因为我们当前项目 CMspark.app 后台有进程会一直跑，阻断了 mac 合盖休眠的能力？",
+      "old_primary": "builtin/deep-diagnosis-optimization",
+      "old_layer": "ai_triage",
+      "new_primary": "fallback-llm",
+      "new_layer": "fallback_llm",
+      "new_confidence": 1.0
+    },
+    {
+      "query": "我现在合盖试试？你能帮我做一个后台监控的脚本么？",
+      "old_primary": "builtin/autonomous-experiment",
+      "old_layer": "ai_triage",
+      "new_primary": "fallback-llm",
+      "new_layer": "fallback_llm",
+      "new_confidence": 1.0
+    },
+    {
+      "query": "我电脑合盖后再开盖会出现发热，电脑屏幕闪屏的情况，刚才我已经使用 pmset -g log > /tmp/bt-on-before.log h和 pmset -g log > /tmp/bt-on-rt.log 分别记录了合盖前后的日志，日志在 ../../Downloads 下面，你帮我排查下原因？",
+      "old_primary": "builtin/deep-diagnosis-optimization",
+      "old_layer": "ai_triage",
+      "new_primary": "superpowers/verification-before-completion",
+      "new_layer": "levenshtein",
+      "new_confidence": 1.0
+    },
+    {
+      "query": "不好意思，在 /tmp 目录下面",
+      "old_primary": "builtin/autonomous-experiment",
+      "old_layer": "ai_triage",
+      "new_primary": "fallback-llm",
+      "new_layer": "fallback_llm",
+      "new_confidence": 1.0
+    },
+    {
+      "query": "当前项目在chrome插件中，当执行到截图的时候，会弹窗提示 CMspark.app 需要截图权限，实际已经给了，但是还是会弹窗，然后失败",
+      "old_primary": "builtin/deep-diagnosis-optimization",
+      "old_layer": "ai_triage",
+      "new_primary": "fallback-llm",
+      "new_layer": "fallback_llm",
+      "new_confidence": 1.0
+    },
+    {
+      "query": "插件内弹窗已经允许了，但是外面有个弹窗，提示 CMspark.app 需要权限，点击后可以看到已经给 CMspark.app 相应权限了",
+      "old_primary": "builtin/deep-diagnosis-optimization",
+      "old_layer": "ai_triage",
+      "new_primary": "fallback-llm",
+      "new_layer": "fallback_llm",
+      "new_confidence": 1.0
+    },
+    {
+      "query": "现在更差了，再次弹窗说 CMspark.app 需要授权，打开后，显示已经授权了，chrome 插件内部弹窗，点击允许后，直接失败，对话 ID 为 b0faek",
+      "old_primary": "builtin/deep-diagnosis-optimization",
+      "old_layer": "ai_triage",
+      "new_primary": "fallback-llm",
+      "new_layer": "fallback_llm",
+      "new_confidence": 1.0
+    },
+    {
+      "query": "先拉取最新代码，查看下我在其他地方开发的代码怎么样",
+      "old_primary": "builtin/riper-workflow",
+      "old_layer": "ai_triage",
+      "new_primary": "fallback-llm",
+      "new_layer": "fallback_llm",
+      "new_confidence": 1.0
+    },
+    {
+      "query": "又一次出现之前反复出现的问题，chrome 插件执行过程中反复弹窗提示 CMspark.app 需要截屏权限，实际打开都已经有权限的，然后插件内部弹窗批准后，直接失败",
+      "old_primary": "builtin/deep-diagnosis-optimization",
+      "old_layer": "ai_triage",
+      "new_primary": "fallback-llm",
+      "new_layer": "fallback_llm",
+      "new_confidence": 1.0
+    }
+  ],
+  "log": "/Users/huchen/Projects/cmspark/.vibe/analytics.jsonl"
+}

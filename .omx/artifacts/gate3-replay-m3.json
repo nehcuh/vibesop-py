@@ -1,0 +1,192 @@
+{
+  "no_llm": true,
+  "total": 1850,
+  "skipped": 63,
+  "agreement": {
+    "matches": 353,
+    "changed": 1497,
+    "rate": 0.1908
+  },
+  "layer_distribution": {
+    "old": {
+      "ai_triage": 1592,
+      "keyword": 128,
+      "fallback_llm": 33,
+      "explicit": 2,
+      "unknown": 69,
+      "levenshtein": 26
+    },
+    "new": {
+      "levenshtein": 407,
+      "keyword": 540,
+      "fallback_llm": 817,
+      "explicit": 2,
+      "semantic_index": 73,
+      "tfidf": 11
+    }
+  },
+  "top_changes": [
+    {
+      "query": "发现一个新问题，通过 tray 停止 companion 会失败，这是怎么回事？",
+      "old_primary": "diagnose",
+      "old_layer": "ai_triage",
+      "new_primary": "fallback-llm",
+      "new_layer": "fallback_llm",
+      "new_confidence": 1.0
+    },
+    {
+      "query": "好的，帮我合并到当前主分支，然后提交到远程吧",
+      "old_primary": "git-guardrails-claude-code",
+      "old_layer": "ai_triage",
+      "new_primary": "fallback-llm",
+      "new_layer": "fallback_llm",
+      "new_confidence": 1.0
+    },
+    {
+      "query": "对了，文档，版本号等是否需要更新",
+      "old_primary": "edit-article",
+      "old_layer": "ai_triage",
+      "new_primary": "fallback-llm",
+      "new_layer": "fallback_llm",
+      "new_confidence": 1.0
+    },
+    {
+      "query": "顺便帮我给当前项目重新部署我们最新的项目，../cmspark 也部署下",
+      "old_primary": "improve-codebase-architecture",
+      "old_layer": "ai_triage",
+      "new_primary": "fallback-llm",
+      "new_layer": "fallback_llm",
+      "new_confidence": 1.0
+    },
+    {
+      "query": "我现在合盖试试？你能帮我做一个后台监控的脚本么？",
+      "old_primary": "builtin/autonomous-experiment",
+      "old_layer": "ai_triage",
+      "new_primary": "fallback-llm",
+      "new_layer": "fallback_llm",
+      "new_confidence": 1.0
+    },
+    {
+      "query": "不好意思，在 /tmp 目录下面",
+      "old_primary": "builtin/autonomous-experiment",
+      "old_layer": "ai_triage",
+      "new_primary": "fallback-llm",
+      "new_layer": "fallback_llm",
+      "new_confidence": 1.0
+    },
+    {
+      "query": "测试下来，还是弹窗提示需要给 CMspark.app 授权，然后失败了",
+      "old_primary": "builtin/deep-diagnosis-optimization",
+      "old_layer": "ai_triage",
+      "new_primary": "fallback-llm",
+      "new_layer": "fallback_llm",
+      "new_confidence": 1.0
+    },
+    {
+      "query": "插件内弹窗已经允许了，但是外面有个弹窗，提示 CMspark.app 需要权限，点击后可以看到已经给 CMspark.app 相应权限了",
+      "old_primary": "builtin/deep-diagnosis-optimization",
+      "old_layer": "ai_triage",
+      "new_primary": "fallback-llm",
+      "new_layer": "fallback_llm",
+      "new_confidence": 1.0
+    },
+    {
+      "query": "目前验证下来，还是弹窗提示：\n“CMspark.app”想要录制此电脑的屏幕和音频。在“系统设置”的“隐私与安全性”设置中允许此应用程序访问。",
+      "old_primary": "builtin/deep-diagnosis-optimization",
+      "old_layer": "ai_triage",
+      "new_primary": "fallback-llm",
+      "new_layer": "fallback_llm",
+      "new_confidence": 1.0
+    },
+    {
+      "query": "现在有个非常明显的问题，chrome 插件不断弹出提示，点击授权的时候，前台应用自动切换后台，此时，插件再去模拟鼠标点击，点击的位置都是现在的 chrome 插件了",
+      "old_primary": "builtin/deep-diagnosis-optimization",
+      "old_layer": "ai_triage",
+      "new_primary": "fallback-llm",
+      "new_layer": "fallback_llm",
+      "new_confidence": 1.0
+    },
+    {
+      "query": "可以，同步调用 grok 和 pi agent 进行复审和确认",
+      "old_primary": "dispatching-parallel-agents",
+      "old_layer": "ai_triage",
+      "new_primary": "fallback-llm",
+      "new_layer": "fallback_llm",
+      "new_confidence": 1.0
+    },
+    {
+      "query": "提交 P0-B, 然后继续 P0-C",
+      "old_primary": "builtin/riper-workflow",
+      "old_layer": "ai_triage",
+      "new_primary": "fallback-llm",
+      "new_layer": "fallback_llm",
+      "new_confidence": 1.0
+    },
+    {
+      "query": "不用等 pi 的结果了，往下推进",
+      "old_primary": "builtin/riper-workflow",
+      "old_layer": "ai_triage",
+      "new_primary": "fallback-llm",
+      "new_layer": "fallback_llm",
+      "new_confidence": 1.0
+    },
+    {
+      "query": "吧",
+      "old_primary": "builtin/riper-workflow",
+      "old_layer": "keyword",
+      "new_primary": "fallback-llm",
+      "new_layer": "fallback_llm",
+      "new_confidence": 1.0
+    },
+    {
+      "query": "继续把",
+      "old_primary": "builtin/riper-workflow",
+      "old_layer": "ai_triage",
+      "new_primary": "fallback-llm",
+      "new_layer": "fallback_llm",
+      "new_confidence": 1.0
+    },
+    {
+      "query": "帮我创建 PR，然后个饼",
+      "old_primary": "builtin/riper-workflow",
+      "old_layer": "ai_triage",
+      "new_primary": "fallback-llm",
+      "new_layer": "fallback_llm",
+      "new_confidence": 1.0
+    },
+    {
+      "query": "帮我创建 PR，然后合并",
+      "old_primary": "migrate-to-shoehorn",
+      "old_layer": "ai_triage",
+      "new_primary": "fallback-llm",
+      "new_layer": "fallback_llm",
+      "new_confidence": 1.0
+    },
+    {
+      "query": "帮我编译下，我手动验证下",
+      "old_primary": "builtin/riper-workflow",
+      "old_layer": "ai_triage",
+      "new_primary": "fallback-llm",
+      "new_layer": "fallback_llm",
+      "new_confidence": 1.0
+    },
+    {
+      "query": "我想要使用 DMG 的方式，另外，我们之前遇到过的签名问题，现在是不是还有？",
+      "old_primary": "builtin/riper-workflow",
+      "old_layer": "ai_triage",
+      "new_primary": "fallback-llm",
+      "new_layer": "fallback_llm",
+      "new_confidence": 1.0
+    },
+    {
+      "query": "已经处理好了？",
+      "old_primary": "triage",
+      "old_layer": "ai_triage",
+      "new_primary": "fallback-llm",
+      "new_layer": "fallback_llm",
+      "new_confidence": 1.0
+    }
+  ],
+  "log": "/Users/huchen/Projects/cmspark/.vibe/analytics.jsonl",
+  "project_root": "/Users/huchen/Projects/cmspark"
+}

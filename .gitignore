@@ -83,6 +83,12 @@ htmlcov/
 .vibe/routing_counter.json
 .vibe/miss_counter.json
 .vibe/miss_salt
+# Routing runtime caches/state (triage cache, last route, skill embeddings)
+.vibe/triage_cache.json
+.vibe/triage_cache.lock
+.vibe/last_route.json
+.vibe/skill_embeddings.json
+.vibe/skill_embeddings.lock
 .vibe/*.bak*
 .vibe/*.backup
 .vibe/*-report.md
