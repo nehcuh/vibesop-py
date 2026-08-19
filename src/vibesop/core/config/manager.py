@@ -202,9 +202,13 @@ class RoutingConfig(TolerantConfig):
         ge=0.0,
         lt=1.0,
         description="Hit threshold for bigram token-overlap matching in the "
-        "SEMANTIC_INDEX routing layer. Kept at 0.20 because calibration data "
-        "is insufficient to justify a change; lowering it increases false "
-        "hits (see scripts/calibrate_index_threshold.py). Must be < 1.0: the "
+        "SEMANTIC_INDEX routing layer. Kept at 0.20: re-calibrated 2026-08-19 "
+        "after the routing_eval_extended label audit "
+        "(.omx/artifacts/tier3-eval-label-audit.md), but the cleaned set has "
+        "only 8 confirmed positives — too thin to justify a change (raw "
+        "accuracy argmax of 0.05 is dominated by wrong accepts: main-set "
+        "precision of accepted hits is 0.455 at 0.05 vs 0.750 at 0.20; see "
+        "scripts/calibrate_index_threshold.py). Must be < 1.0: the "
         "confidence scaling in _layers.py divides by (1.0 - threshold).",
     )
     ai_triage_recall_min_similarity: float = Field(

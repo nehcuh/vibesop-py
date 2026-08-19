@@ -1,0 +1,77 @@
+=== yaml changes summary ===
+ tests/benchmark/routing_eval_extended.yaml | 806 ++++++++---------------------
+ 1 file changed, 218 insertions(+), 588 deletions(-)
+
+=== NEW FILE: tests/benchmark/routing_eval_retention.yaml (header only) ===
+# Retention pool — NOT scored by the eval harness.
+#
+# Purpose: insight mining only. These 23 entries were moved out of
+# routing_eval_extended.yaml during the 2026-08-19 label audit
+# (.omx/artifacts/tier3-eval-label-audit.md): 13 low-signal fragments
+# (continuation tokens, option replies, connectivity probes) and 10
+# agent-to-agent prompts (subagent instructions with output contracts).
+# They carry no routing ground truth but are raw material for understanding
+# real usage (e.g. how users phrase follow-ups, what subagent prompts look
+# like). Queries are kept verbatim; expect values are the ORIGINAL weak
+# labels, preserved for provenance — do not treat them as ground truth.
+#
+# retain_until: 2026-09-19
+# Purge: after that date, mine any remaining insights (e.g. into new scored
+# eval entries or skill trigger improvements), then delete this file.
+- query: 'You are an adversarial SKEPTIC. Your job is to REFUTE the finding if possible.
+    Default real=false unless you independently read the code and confirm the defect
+    is present and impactful. Finding id: TEST-3 Claimed severity: high Title: host_computer
+    task-mutex integration fully skipped on Linux CI File: companion/tests/integration/computer-task-mutex.test.ts:41,196-229;
+    .github/workflows/ci.yml:10-11,56-58 Claimed evidence: const WIN = process.platform
+    === "win32"; all three R1 tests use { skip: !WIN }. CI runs-on: ubuntu-latest
+    so npm test never executes mutex/L2 admission properties for host_computer. Impact:
+    COMPUTER_TASK_BUSY pre-dialog and check-and-set race regressions can land without
+    CI red; only win32 developers exercise this path. METHOD: open the cited file(s)
+    with read_file; grep related symbols; check for mitigations the reporter missed
+    (auth, flush, tests, feature flags). If partially true, set real=true but severity_adjusted
+    lower. If fixed already, real=false severity_adjusted=refuted. evidence must quote
+    current code. <output-contract> Do the work above with your tools first. Then
+    end your final message with a single ```json fenced block containing exactly one
+    JSON value that conforms to this JSON Schema (no prose inside the block): {"properties":{"evidence":{"type":"string"},"finding_id":{"type":"string"},"real":{"type":"boolean"},"reason":{"type":"string"},"severity_adjusted":{"enum":["critical","high","medium","low","info","wontfix","refuted"],"type":"string"}},"required":["finding_id","real","reason","evidence"],"type":"object"}
+
+=== extended yaml header ===
+# Extended routing eval set — human-audited labels (2026-08-19).
+#
+# Provenance: weak-labeled from CMspark production triage logs (M1c,
+# scripts/build_eval_from_logs.py), then audited per
+# .omx/artifacts/tier3-eval-label-audit.md. All labels below are confirmed
+# (needs_review: false); confirm via `build_eval_from_logs.py --merge` when
+# ready to fold positives into routing_eval.yaml.
+#
+# Label space: only skill ids this repo's router can produce, in canonical
+# `namespace/name` form (builtin/*, superpowers/*, omx/* per core/registry.yaml).
+# External/unresolvable ids (mattpocock/*, git-guardrails-claude-code, bare
+# ids, source-project-local project/omx/*) were relabeled to [] or to the
+# semantically correct repo-resolvable id.
+#
+# Semantics (scripts/eval_routing.py):
+#   expect: [ids...]  — primary must be one of ids (top-1); recall@3 checks top-3.
+#   expect: [] + reject: [ids...] — primary must NOT be any rejected id.
+#   expect: [] with no reject — explicit NO-MATCH assertion: passes iff the
+#       router produced no real skill match, i.e. RoutingResult.has_match is
+#       False (primary is None or layer == fallback_llm; skill id
+#       "fallback-llm" counts as no match).
+#
+# Low-signal and agent-to-agent entries were moved (not deleted) to
+# routing_eval_retention.yaml for insight mining; they are NOT scored.
+- query: 检查下当前项目进展
+  expect: []
+  category: production_log
+  needs_review: false
+- query: 1. 会议只能通过 / 输入 meeting 才能加载，其他地方找不到，我预期的是在 装配 -> 场景 -> 会议 这样的逻辑层级 2. 我需要字级流式
+    3. 理解，但是在设置中应该支持按住键盘快捷键，自动识别 4. 请继续 D2 后面的 UX 增量 5. 优化点：插件应该支持文字/语音输入，然后对插件自身设置
+  expect: []
+  category: production_log
+  needs_review: false
+- query: 继续做 URL/cookie admission
+  expect: []
+  category: production_log
+  needs_review: false
+- query: 很棒，帮我合并到主分支并提交吧
+  expect: []
+  category: production_log

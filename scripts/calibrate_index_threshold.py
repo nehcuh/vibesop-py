@@ -56,12 +56,13 @@ def _profile_text(profile: dict) -> str:
 
 
 def _is_hit(top1: str | None, expect: list[str]) -> bool:
-    """Hit on full id or last path segment (weak labels often drop the
-    namespace, e.g. ``diagnose`` vs ``mattpocock/diagnose``)."""
+    """Hit on exact canonical id match only. The last-path-segment tolerance
+    was removed after the 2026-08-19 label audit: labels are canonical
+    `namespace/name` now, so tolerating namespace-less matches would hide
+    id-form bugs instead of weak-label sloppiness."""
     if top1 is None:
         return False
-    top1_seg = top1.split("/")[-1]
-    return any(e == top1 or e.split("/")[-1] == top1_seg for e in expect)
+    return top1 in expect
 
 
 def _load_eval_entries() -> tuple[list[dict], list[dict]]:
@@ -70,13 +71,12 @@ def _load_eval_entries() -> tuple[list[dict], list[dict]]:
         for e in yaml.safe_load(MAIN_EVAL.read_text(encoding="utf-8"))
         if e.get("expect")
     ]
+    # Extended set was human-audited 2026-08-19 (see file header /
+    # .omx/artifacts/tier3-eval-label-audit.md): labels are confirmed, no
+    # longer weak — select confirmed positives (expect non-empty).
     extended = yaml.safe_load(EXTENDED_EVAL.read_text(encoding="utf-8"))
-    weak = [
-        e
-        for e in extended
-        if e.get("needs_review") and e.get("weak_label") and e.get("expect")
-    ]
-    return main, weak
+    confirmed = [e for e in extended if e.get("expect")]
+    return main, confirmed
 
 
 def _top1_scores(
@@ -144,8 +144,8 @@ def main() -> int:
     index = json.loads(INDEX_PATH.read_text(encoding="utf-8"))["skills"]
     print(f"profiles: {len(index)}")
 
-    main_entries, weak_entries = _load_eval_entries()
-    print(f"main eval entries: {len(main_entries)}  weak-labeled entries: {len(weak_entries)}")
+    main_entries, extended_entries = _load_eval_entries()
+    print(f"main eval entries: {len(main_entries)}  extended (audited) entries: {len(extended_entries)}")
 
     schemes = {"bigram": _tokenize_query, "unigram": _tokenize_unigram}
     results: dict[str, dict[str, list]] = {}
@@ -153,7 +153,7 @@ def main() -> int:
         profile_tokens = {sid: tokenize(_profile_text(p)) for sid, p in index.items()}
         results[name] = {
             "main": _top1_scores(main_entries, profile_tokens, tokenize),
-            "weak": _top1_scores(weak_entries, profile_tokens, tokenize),
+            "extended": _top1_scores(extended_entries, profile_tokens, tokenize),
         }
 
     # Score-direction sanity check (pi's example): "提交" vs "提交代码".
@@ -164,16 +164,16 @@ def main() -> int:
         print(f"{name}: score('提交' vs '提交代码') = {_score_overlap(a, b):.3f}")
 
     curves_main = {n: _accuracy_curve(r["main"]) for n, r in results.items()}
-    curves_weak = {n: _accuracy_curve(r["weak"]) for n, r in results.items()}
+    curves_ext = {n: _accuracy_curve(r["extended"]) for n, r in results.items()}
     _print_table("main eval (strong-labeled)", curves_main)
-    _print_table("extended weak-labeled (low confidence)", curves_weak)
+    _print_table("extended (audited labels)", curves_ext)
     _precision_table("main eval", {n: r["main"] for n, r in results.items()})
-    _precision_table("extended weak-labeled", {n: r["weak"] for n, r in results.items()})
+    _precision_table("extended (audited)", {n: r["extended"] for n, r in results.items()})
 
     # Unthresholded top-1 accuracy + score distribution summary.
     print("\n## unthresholded top-1 accuracy / mean top-1 score")
     for name, r in results.items():
-        for label in ("main", "weak"):
+        for label in ("main", "extended"):
             rows = r[label]
             acc = sum(1 for *_, hit in rows if hit) / len(rows)
             mean = sum(score for _, _, score, _ in rows) / len(rows)

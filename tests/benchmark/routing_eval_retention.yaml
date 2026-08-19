@@ -1,0 +1,249 @@
+# Retention pool — NOT scored by the eval harness.
+#
+# Purpose: insight mining only. These 22 entries were moved out of
+# routing_eval_extended.yaml during the 2026-08-19 label audit
+# (.omx/artifacts/tier3-eval-label-audit.md): 12 low-signal fragments
+# (continuation tokens, option replies, connectivity probes) and 10
+# agent-to-agent prompts (subagent instructions with output contracts).
+# They carry no routing ground truth but are raw material for understanding
+# real usage (e.g. how users phrase follow-ups, what subagent prompts look
+# like). Queries are kept verbatim; expect values are the ORIGINAL weak
+# labels, preserved for provenance — do not treat them as ground truth.
+# (A 13th low-signal entry, `[Image #1]`, was moved back into the scored
+# set as an explicit no-match negative per gate10 review.)
+# Full arithmetic: 130 raw = 107 scored + 22 here + 1 dropped near-dup
+# (DMG-rebuild query, 吧-less variant of the scored one).
+#
+# retain_until: 2026-09-19
+# Purge: after that date, mine any remaining insights (e.g. into new scored
+# eval entries or skill trigger improvements), then delete this file.
+- query: 'You are an adversarial SKEPTIC. Your job is to REFUTE the finding if possible.
+    Default real=false unless you independently read the code and confirm the defect
+    is present and impactful. Finding id: TEST-3 Claimed severity: high Title: host_computer
+    task-mutex integration fully skipped on Linux CI File: companion/tests/integration/computer-task-mutex.test.ts:41,196-229;
+    .github/workflows/ci.yml:10-11,56-58 Claimed evidence: const WIN = process.platform
+    === "win32"; all three R1 tests use { skip: !WIN }. CI runs-on: ubuntu-latest
+    so npm test never executes mutex/L2 admission properties for host_computer. Impact:
+    COMPUTER_TASK_BUSY pre-dialog and check-and-set race regressions can land without
+    CI red; only win32 developers exercise this path. METHOD: open the cited file(s)
+    with read_file; grep related symbols; check for mitigations the reporter missed
+    (auth, flush, tests, feature flags). If partially true, set real=true but severity_adjusted
+    lower. If fixed already, real=false severity_adjusted=refuted. evidence must quote
+    current code. <output-contract> Do the work above with your tools first. Then
+    end your final message with a single ```json fenced block containing exactly one
+    JSON value that conforms to this JSON Schema (no prose inside the block): {"properties":{"evidence":{"type":"string"},"finding_id":{"type":"string"},"real":{"type":"boolean"},"reason":{"type":"string"},"severity_adjusted":{"enum":["critical","high","medium","low","info","wontfix","refuted"],"type":"string"}},"required":["finding_id","real","reason","evidence"],"type":"object"}
+    </output-contract>'
+  expect:
+  - builtin/deep-diagnosis-optimization
+  category: production_log
+  needs_review: true
+  weak_label: true
+  retention_reason: agent-to-agent prompt (subagent instructions, not a user routing
+    query)
+- query: 加吧
+  expect:
+  - builtin/riper-workflow
+  category: production_log
+  needs_review: true
+  weak_label: true
+  retention_reason: low-signal continuation/option-reply/probe (no routing signal)
+- query: B+C
+  expect:
+  - builtin/riper-workflow
+  category: production_log
+  needs_review: true
+  weak_label: true
+  retention_reason: low-signal continuation/option-reply/probe (no routing signal)
+- query: 我用的是 dist-package 下面的 chrome-extension
+  expect:
+  - mattpocock/diagnose
+  category: production_log
+  needs_review: true
+  weak_label: true
+  retention_reason: low-signal continuation/option-reply/probe (no routing signal)
+- query: 'You are an independent PRODUCT/UX acceptance agent for CMspark coding-handoff
+    (feat/coding-handoff). Read: - docs/coding-handoff-user-guide.md - docs/decisions/acp-coding-handoff-product-design-2026-08-13.md
+    §5.7 UX Consistency Contract - chrome-extension CodingTaskPackageModal, CodingSessionChip,
+    FocusBand, coding-handoff/copy.ts Checklist vs design: 1. No new bottom tab 2.
+    Stop ≠ 急停 3. Mode honesty (not false sandbox) 4. Outbound vs 编程接力 separation in
+    copy 5. Task package path works without ACP 6. Live progress + stop + followup
+    + apply UX 7. Empty states when no agent / no workspace Score each PASS/FAIL.
+    List residual UX gaps for users. Final line: VERDICT: APPROVE | APPROVE_WITH_NITS
+    | REJECT'
+  expect:
+  - design-an-interface
+  category: production_log
+  needs_review: true
+  weak_label: true
+  retention_reason: agent-to-agent prompt (subagent instructions, not a user routing
+    query)
+- query: PI REVIEWER gate for CMspark UIUX v2 node PR6 - review uncommitted git diff
+  expect: []
+  category: production_log
+  needs_review: true
+  retention_reason: agent-to-agent prompt (subagent instructions, not a user routing
+    query)
+- query: INDEPENDENT adversarial TEST/QA reviewer for coding-handoff ACP feature -
+    run acp tests, map product gates
+  expect: []
+  category: production_log
+  needs_review: true
+  retention_reason: agent-to-agent prompt (subagent instructions, not a user routing
+    query)
+- query: 我看下恢复了
+  expect:
+  - diagnose
+  category: production_log
+  needs_review: true
+  weak_label: true
+  retention_reason: low-signal continuation/option-reply/probe (no routing signal)
+- query: PI REVIEWER gate for CMspark UIUX v2 node PR7
+  expect:
+  - builtin/riper-workflow
+  category: production_log
+  needs_review: true
+  weak_label: true
+  retention_reason: agent-to-agent prompt (subagent instructions, not a user routing
+    query)
+- query: 'Computer-Use Mechanism Research — Review Request: validate cmSpark CGEvent
+    vs Hermes SLEventPostToPid vs open-computer-use postToPid diagnosis'
+  expect:
+  - mattpocock/review
+  category: production_log
+  needs_review: true
+  weak_label: true
+  retention_reason: agent-to-agent prompt (subagent instructions, not a user routing
+    query)
+- query: 'reply with exactly: claude-ok'
+  expect:
+  - ask-claude
+  category: production_log
+  needs_review: true
+  weak_label: true
+  retention_reason: low-signal continuation/option-reply/probe (no routing signal)
+- query: 开始 M1
+  expect:
+  - builtin/riper-workflow
+  category: production_log
+  needs_review: true
+  weak_label: true
+  retention_reason: low-signal continuation/option-reply/probe (no routing signal)
+- query: 1. 接受 C′ 2. D
+  expect:
+  - builtin/riper-workflow
+  category: production_log
+  needs_review: true
+  weak_label: true
+  retention_reason: low-signal continuation/option-reply/probe (no routing signal)
+- query: 1. 互斥 2. 不禁 evaluate 3. 并发最多到 5 吧 4. 根据你们的建议来选择合适的方案 5. 能
+  expect:
+  - builtin/riper-workflow
+  category: production_log
+  needs_review: true
+  weak_label: true
+  retention_reason: low-signal continuation/option-reply/probe (no routing signal)
+- query: 'You are an adversarial SKEPTIC. Your job is to REFUTE the finding if possible.
+    Default real=false unless you independently read the code and confirm the defect
+    is present and impactful. Finding id: PERS-1 Claimed severity: high Title: threadFilePath
+    does not sanitize thread_id — path escape under DATA_DIR File: companion/src/threads/thread-manager.ts:242-244
+    Claimed evidence: private threadFilePath(threadId: string): string { return path.join(getConfigDir(),
+    "threads", `${threadId}.json`) } — only create() calls sanitizeId (alphanumeric/hyphen/underscore).
+    getMessages/addMessage/updateMessage/deleteMessagesFrom/delete use raw threadId.
+    path.join normalizes ''..'', so thread_id ''../config'' resolves to ~/.cmspark-agent/config.json;
+    addMessage atomicWriteJSON would overwrite it with {messages:[...]}; delete would
+    unlinkSync it. message-router passes rest.thread_id through without sanitization.
+    Impact: Authenticated peer (or compromised extension holding ws_secret) can corrupt
+    or delete config.json / other DATA_DIR JSON via crafted thread_id on message or
+    delete APIs — silent data loss of API keys, domains, MCP/apps config. METHOD:
+    open the cited file(s) with read_file; grep related symbols; check for mitigations
+    the reporter missed (auth, flush, tests, feature flags). If partially true, set
+    real=true but severity_adjusted lower. If fixed already, real=false severity_adjusted=refuted.
+    evidence must quote current code. <output-contract> Do the work above with your
+    tools first. Then end your final message with a single ```json fenced block containing
+    exactly one JSON value that conforms to this JSON Schema (no prose inside the
+    block): {"properties":{"evidence":{"type":"string"},"finding_id":{"type":"string"},"real":{"type":"boolean"},"reason":{"type":"string"},"severity_adjusted":{"enum":["critical","high","medium","low","info","wontfix","refuted"],"type":"string"}},"required":["finding_id","real","reason","evidence"],"type":"object"}
+    </output-contract>'
+  expect:
+  - builtin/deep-diagnosis-optimization
+  category: production_log
+  needs_review: true
+  weak_label: true
+  retention_reason: agent-to-agent prompt (subagent instructions, not a user routing
+    query)
+- query: 'Deep-dive analysis of CMspark Computer Use failures on macOS vs success
+    path on Windows. Repo: [REDACTED_PATH] Read and compare: 1. companion/src/computer/darwin-estop.ts,
+    darwin-adapters.ts, host-use/darwin/host.swift (screenshot SCK, inject, estop
+    CGEventTap code 4) 2. companion/src/computer/estop.ts, win-adapters (or similar
+    Windows host path) 3. docs/superpowers/plans/2026-08-01-macos-tcc-estop-BLOCKED-HANDOFF.md
+    4. docs/superpowers/specs/2026-08-01-macos-tcc-product-identity-design.md (if
+    exists) 5. host-bin.ts resolvePackagedContentsDir 6. packaging create-dmg.sh -
+    adhoc codesign Known symptoms (from HANDOFF): - User: estop helper exit code 4
+    (Accessibility/CGEventTap) - Also ScreenCaptureKit -3801 - CLI manual MacOS/CMspark
+    screenshot/inject/estop WORKS - Companion host_computer path FAILS after user
+    approval - Product identity moved to com.cmspark.agent / MacOS/CMspark Mach-O
+    (PR #103) - Windows works better for computer use Answer: 1. Full macOS call chain
+    for host_computer (extension → WS → companion → host binary) 2. Full Windows call
+    chain 3. Why macOS fails repeatedly (TCC CDHash, adhoc, dual process, estop preflight
+    fail-closed, daemon spawn) 4. Why Windows doesn''t hit the same walls 5. Ranked
+    root causes with confidence 6. Concrete fix directions Return structured markdown.
+    [inspected] evidence with file:line when possible. Read-only.'
+  expect:
+  - improve-codebase-architecture
+  category: production_log
+  needs_review: true
+  weak_label: true
+  retention_reason: agent-to-agent prompt (subagent instructions, not a user routing
+    query)
+- query: 继续往后做吧
+  expect:
+  - builtin/riper-workflow
+  category: production_log
+  needs_review: true
+  weak_label: true
+  retention_reason: low-signal continuation/option-reply/probe (no routing signal)
+- query: 'WORKTREE: [REDACTED_PATH] 1) cd companion && npx tsc -p tsconfig.json --noEmit
+    2) node --import tsx --test tests/acp-confirm-copy.test.ts tests/acp-handlers-gates.test.ts
+    tests/message-router-config-acp.test.ts 3) Also run any new tests you find matching
+    *git-status* *open-local* *coding* 4) cd chrome-extension && npx tsc --noEmit
+    2>&1 | head -40 If DATA_DIR pollution fails gates, fix isolation not skip. ok=true
+    only if tsc clean for touched areas and tests pass. <output-contract> Do the work
+    above with your tools first. Then end your final message with a single ```json
+    fenced block containing exactly one JSON value that conforms to this JSON Schema
+    (no prose inside the block): {"properties":{"commands":{"items":{"type":"string"},"type":"array"},"log":{"type":"string"},"ok":{"type":"boolean"}},"required":["ok","log"],"type":"object"}
+    </output-contract>'
+  expect:
+  - builtin/riper-workflow
+  category: production_log
+  needs_review: true
+  weak_label: true
+  retention_reason: agent-to-agent prompt (subagent instructions, not a user routing
+    query)
+- query: 继续 Phase2b 和 Phase3
+  expect:
+  - builtin/riper-workflow
+  category: production_log
+  needs_review: true
+  weak_label: true
+  retention_reason: low-signal continuation/option-reply/probe (no routing signal)
+- query: Code review for a focus-preservation fix in a Swift tray binary (companion
+    process). Focus on Q1-Q6 at the end. Be terse, ~500 words max, lead with APPROVE
+    / APPROVE WITH AMENDMENTS / REJECT, then amendments if any.
+  expect: []
+  category: production_log
+  needs_review: true
+  retention_reason: agent-to-agent prompt (subagent instructions, not a user routing
+    query)
+- query: 做 D1c
+  expect:
+  - builtin/riper-workflow
+  category: production_log
+  needs_review: true
+  weak_label: true
+  retention_reason: low-signal continuation/option-reply/probe (no routing signal)
+- query: 继续 P2 抛光
+  expect:
+  - builtin/riper-workflow
+  category: production_log
+  needs_review: true
+  weak_label: true
+  retention_reason: low-signal continuation/option-reply/probe (no routing signal)

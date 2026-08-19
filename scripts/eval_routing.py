@@ -1,13 +1,24 @@
 #!/usr/bin/env python3
 """Routing accuracy evaluation harness (SOP §6).
 
-Runs tests/benchmark/routing_eval.yaml against UnifiedRouter and reports
-top-1 accuracy, Recall@3, and the confusion pairs. Misroutes are appended
-to memory/routing-errors.jsonl when --record is passed (error-to-knowledge
+Runs a routing eval dataset (default: tests/benchmark/routing_eval.yaml;
+override with --file) against UnifiedRouter and reports top-1 accuracy,
+Recall@3, and the confusion pairs. Misroutes are appended to
+memory/routing-errors.jsonl when --record is passed (error-to-knowledge
 loop, step 1).
 
+Entry semantics:
+- expect: [ids...]           — pass iff primary is one of the ids (top-1);
+                               recall@3 also checks the first 2 alternatives.
+- expect: [] + reject: [...] — pass iff primary is NOT any rejected id.
+- expect: [] with no reject  — explicit NO-MATCH assertion: pass iff the
+                               router produced no real skill match, i.e.
+                               RoutingResult.has_match is False (primary is
+                               None or its layer is fallback_llm; the
+                               "fallback-llm" skill id counts as no match).
+
 Usage:
-    uv run python scripts/eval_routing.py [--record] [--json]
+    uv run python scripts/eval_routing.py [--file PATH] [--record] [--json]
 """
 
 from __future__ import annotations
@@ -32,9 +43,16 @@ def main() -> int:
         "--record", action="store_true", help="append misroutes to memory/routing-errors.jsonl"
     )
     parser.add_argument("--json", action="store_true", help="machine-readable output")
+    parser.add_argument(
+        "--file",
+        type=Path,
+        default=ROOT / "tests" / "benchmark" / "routing_eval.yaml",
+        help="eval dataset YAML; relative paths resolve against the repo root "
+        "(default: tests/benchmark/routing_eval.yaml)",
+    )
     args = parser.parse_args()
 
-    eval_file = ROOT / "tests" / "benchmark" / "routing_eval.yaml"
+    eval_file = args.file if args.file.is_absolute() else ROOT / args.file
     entries = yaml.safe_load(eval_file.read_text(encoding="utf-8"))
     router = UnifiedRouter(project_root=ROOT)
 
@@ -52,7 +70,13 @@ def main() -> int:
         alts = [a.skill_id for a in (result.alternatives or [])][:2]
         top3 = ([primary] if primary else []) + alts
 
-        ok1 = (primary in expect) if expect else (primary not in reject)
+        ok1 = (
+            (primary in expect)
+            if expect
+            else (primary not in reject)
+            if reject
+            else not result.has_match  # empty expect + empty reject = no-match assertion
+        )
         ok3 = (any(s in expect for s in top3)) if expect else ok1
         hits1 += ok1
         hits3 += ok3

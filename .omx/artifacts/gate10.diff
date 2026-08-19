@@ -1,0 +1,150 @@
+diff --git a/scripts/calibrate_index_threshold.py b/scripts/calibrate_index_threshold.py
+index c17a110..3d5ce57 100644
+--- a/scripts/calibrate_index_threshold.py
++++ b/scripts/calibrate_index_threshold.py
+@@ -70,13 +70,12 @@ def _load_eval_entries() -> tuple[list[dict], list[dict]]:
+         for e in yaml.safe_load(MAIN_EVAL.read_text(encoding="utf-8"))
+         if e.get("expect")
+     ]
++    # Extended set was human-audited 2026-08-19 (see file header /
++    # .omx/artifacts/tier3-eval-label-audit.md): labels are confirmed, no
++    # longer weak — select confirmed positives (expect non-empty).
+     extended = yaml.safe_load(EXTENDED_EVAL.read_text(encoding="utf-8"))
+-    weak = [
+-        e
+-        for e in extended
+-        if e.get("needs_review") and e.get("weak_label") and e.get("expect")
+-    ]
+-    return main, weak
++    confirmed = [e for e in extended if e.get("expect")]
++    return main, confirmed
+ 
+ 
+ def _top1_scores(
+@@ -144,8 +143,8 @@ def main() -> int:
+     index = json.loads(INDEX_PATH.read_text(encoding="utf-8"))["skills"]
+     print(f"profiles: {len(index)}")
+ 
+-    main_entries, weak_entries = _load_eval_entries()
+-    print(f"main eval entries: {len(main_entries)}  weak-labeled entries: {len(weak_entries)}")
++    main_entries, extended_entries = _load_eval_entries()
++    print(f"main eval entries: {len(main_entries)}  extended (audited) entries: {len(extended_entries)}")
+ 
+     schemes = {"bigram": _tokenize_query, "unigram": _tokenize_unigram}
+     results: dict[str, dict[str, list]] = {}
+@@ -153,7 +152,7 @@ def main() -> int:
+         profile_tokens = {sid: tokenize(_profile_text(p)) for sid, p in index.items()}
+         results[name] = {
+             "main": _top1_scores(main_entries, profile_tokens, tokenize),
+-            "weak": _top1_scores(weak_entries, profile_tokens, tokenize),
++            "extended": _top1_scores(extended_entries, profile_tokens, tokenize),
+         }
+ 
+     # Score-direction sanity check (pi's example): "提交" vs "提交代码".
+@@ -164,16 +163,16 @@ def main() -> int:
+         print(f"{name}: score('提交' vs '提交代码') = {_score_overlap(a, b):.3f}")
+ 
+     curves_main = {n: _accuracy_curve(r["main"]) for n, r in results.items()}
+-    curves_weak = {n: _accuracy_curve(r["weak"]) for n, r in results.items()}
++    curves_ext = {n: _accuracy_curve(r["extended"]) for n, r in results.items()}
+     _print_table("main eval (strong-labeled)", curves_main)
+-    _print_table("extended weak-labeled (low confidence)", curves_weak)
++    _print_table("extended (audited labels)", curves_ext)
+     _precision_table("main eval", {n: r["main"] for n, r in results.items()})
+-    _precision_table("extended weak-labeled", {n: r["weak"] for n, r in results.items()})
++    _precision_table("extended (audited)", {n: r["extended"] for n, r in results.items()})
+ 
+     # Unthresholded top-1 accuracy + score distribution summary.
+     print("\n## unthresholded top-1 accuracy / mean top-1 score")
+     for name, r in results.items():
+-        for label in ("main", "weak"):
++        for label in ("main", "extended"):
+             rows = r[label]
+             acc = sum(1 for *_, hit in rows if hit) / len(rows)
+             mean = sum(score for _, _, score, _ in rows) / len(rows)
+diff --git a/scripts/eval_routing.py b/scripts/eval_routing.py
+index ca2de42..2bff322 100644
+--- a/scripts/eval_routing.py
++++ b/scripts/eval_routing.py
+@@ -1,13 +1,24 @@
+ #!/usr/bin/env python3
+ """Routing accuracy evaluation harness (SOP §6).
+ 
+-Runs tests/benchmark/routing_eval.yaml against UnifiedRouter and reports
+-top-1 accuracy, Recall@3, and the confusion pairs. Misroutes are appended
+-to memory/routing-errors.jsonl when --record is passed (error-to-knowledge
++Runs a routing eval dataset (default: tests/benchmark/routing_eval.yaml;
++override with --file) against UnifiedRouter and reports top-1 accuracy,
++Recall@3, and the confusion pairs. Misroutes are appended to
++memory/routing-errors.jsonl when --record is passed (error-to-knowledge
+ loop, step 1).
+ 
++Entry semantics:
++- expect: [ids...]           — pass iff primary is one of the ids (top-1);
++                               recall@3 also checks the first 2 alternatives.
++- expect: [] + reject: [...] — pass iff primary is NOT any rejected id.
++- expect: [] with no reject  — explicit NO-MATCH assertion: pass iff the
++                               router produced no real skill match, i.e.
++                               RoutingResult.has_match is False (primary is
++                               None or its layer is fallback_llm; the
++                               "fallback-llm" skill id counts as no match).
++
+ Usage:
+-    uv run python scripts/eval_routing.py [--record] [--json]
++    uv run python scripts/eval_routing.py [--file PATH] [--record] [--json]
+ """
+ 
+ from __future__ import annotations
+@@ -32,9 +43,15 @@ def main() -> int:
+         "--record", action="store_true", help="append misroutes to memory/routing-errors.jsonl"
+     )
+     parser.add_argument("--json", action="store_true", help="machine-readable output")
++    parser.add_argument(
++        "--file",
++        type=Path,
++        default=ROOT / "tests" / "benchmark" / "routing_eval.yaml",
++        help="eval dataset YAML (default: tests/benchmark/routing_eval.yaml)",
++    )
+     args = parser.parse_args()
+ 
+-    eval_file = ROOT / "tests" / "benchmark" / "routing_eval.yaml"
++    eval_file = args.file if args.file.is_absolute() else Path.cwd() / args.file
+     entries = yaml.safe_load(eval_file.read_text(encoding="utf-8"))
+     router = UnifiedRouter(project_root=ROOT)
+ 
+@@ -52,7 +69,13 @@ def main() -> int:
+         alts = [a.skill_id for a in (result.alternatives or [])][:2]
+         top3 = ([primary] if primary else []) + alts
+ 
+-        ok1 = (primary in expect) if expect else (primary not in reject)
++        ok1 = (
++            (primary in expect)
++            if expect
++            else (primary not in reject)
++            if reject
++            else not result.has_match  # empty expect + empty reject = no-match assertion
++        )
+         ok3 = (any(s in expect for s in top3)) if expect else ok1
+         hits1 += ok1
+         hits3 += ok3
+diff --git a/src/vibesop/core/config/manager.py b/src/vibesop/core/config/manager.py
+index 9a134f6..0bd10df 100644
+--- a/src/vibesop/core/config/manager.py
++++ b/src/vibesop/core/config/manager.py
+@@ -202,9 +202,13 @@ class RoutingConfig(TolerantConfig):
+         ge=0.0,
+         lt=1.0,
+         description="Hit threshold for bigram token-overlap matching in the "
+-        "SEMANTIC_INDEX routing layer. Kept at 0.20 because calibration data "
+-        "is insufficient to justify a change; lowering it increases false "
+-        "hits (see scripts/calibrate_index_threshold.py). Must be < 1.0: the "
++        "SEMANTIC_INDEX routing layer. Kept at 0.20: re-calibrated 2026-08-19 "
++        "after the routing_eval_extended label audit "
++        "(.omx/artifacts/tier3-eval-label-audit.md), but the cleaned set has "
++        "only 8 confirmed positives — too thin to justify a change (raw "
++        "accuracy argmax of 0.05 is dominated by wrong accepts: main-set "
++        "precision of accepted hits is 0.455 at 0.05 vs 0.750 at 0.20; see "
++        "scripts/calibrate_index_threshold.py). Must be < 1.0: the "
+         "confidence scaling in _layers.py divides by (1.0 - threshold).",
+     )
+     ai_triage_recall_min_similarity: float = Field(
