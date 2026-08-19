@@ -1,0 +1,47 @@
+=== NEW FILE: tests/benchmark/routing_eval_oneshot.yaml ===
+# Extension eval set for the oneshot-web-spec skill (tier3 measurement).
+# Does NOT modify routing_eval_extended.yaml; run standalone or concatenated.
+# Categories: oneshot_spec (must route), junk (must not route), adjacent (must not route).
+- query: 帮我写一个贪吃蛇单页游戏的任务书
+  expect:
+  - oneshot-web-spec
+  category: oneshot_spec
+  note: real one-shot web game spec request (zh)
+- query: write a one-shot spec for a markdown editor single-page web app, offline, no CDN
+  expect:
+  - oneshot-web-spec
+  category: oneshot_spec
+  note: real one-shot web app spec request (en)
+- query: 帮我起草一个数据看板网站的建站规格书，要求 AI 一次性交付可运行的成品
+  expect:
+  - oneshot-web-spec
+  category: oneshot_spec
+  note: dashboard site spec, one-shot delivery (zh)
+- query: 可以
+  expect: []
+  reject:
+  - oneshot-web-spec
+  category: junk
+  note: junk counterexample, must not route to oneshot-web-spec
+- query: ok
+  expect: []
+  reject:
+  - oneshot-web-spec
+  category: junk
+  note: junk counterexample, must not route to oneshot-web-spec
+- query: review 这个 PR
+  expect: []
+  reject:
+  - oneshot-web-spec
+  category: adjacent
+  note: semantically adjacent (authoring-ish) but must NOT route to oneshot-web-spec
+- query: 写一个 python 脚本统计日志里的错误码
+  expect: []
+  reject:
+  - oneshot-web-spec
+  category: adjacent
+  note: code-writing request, not a web spec; must NOT route to oneshot-web-spec
+
+=== .vibe/skill-index.json diff summary (tracked runtime index) ===
+ .vibe/skill-index.json | 442 +++++++++++++++++++++++++++++++++++++++++++++----
+ 1 file changed, 414 insertions(+), 28 deletions(-)

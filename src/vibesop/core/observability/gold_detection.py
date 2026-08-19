@@ -72,7 +72,22 @@ def assess_gold_status(
             cluster.gold_rate = 0.0
             continue
 
-        for tid, query in zip(cluster.task_ids, cluster.queries, strict=True):
+        # ``cluster_queries`` always emits one query per task_id, so the
+        # lengths match in production. Manually-constructed clusters (or
+        # future producers) may not honour that — truncate to the shorter
+        # instead of ``strict=True``, which would raise ValueError and take
+        # down a whole cron-scheduled candidate scan on one malformed
+        # cluster (review finding F1). Repo convention: skip bad rows,
+        # never take down the batch.
+        if len(cluster.task_ids) != len(cluster.queries):
+            logger.warning(
+                "cluster %s: task_ids/queries length mismatch (%d vs %d) — "
+                "truncating to the shorter for gold assessment",
+                cluster.cluster_id,
+                len(cluster.task_ids),
+                len(cluster.queries),
+            )
+        for tid, query in zip(cluster.task_ids, cluster.queries):
             instinct = learner.get_instinct_for_query(query)
             if instinct is not None and instinct.success_count >= min_success_count:
                 gold_task_ids.append(tid)

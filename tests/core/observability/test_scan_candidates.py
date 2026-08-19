@@ -12,6 +12,7 @@ Plus: dry-run, idempotent rescan, prune-before-upsert, summary shape.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import asdict
 from datetime import UTC, datetime
 from pathlib import Path
@@ -344,3 +345,49 @@ class TestSummaryShape:
         assert isinstance(d["pruned_count"], int)
         assert isinstance(d["capped"], bool)
         assert isinstance(d["clusters_seen"], int)
+
+
+class TestEmptyTaskKeysGuard:
+    """F2: empty ``cluster.task_keys`` must skip the cluster with an ERROR
+    log — never an ``assert`` (stripped under ``python -O``), never a
+    silently-promoted zero-step shell candidate."""
+
+    def test_empty_task_keys_skips_candidate_and_logs_error(
+        self,
+        fresh_learner: InstinctLearner,
+        cache: EmbeddingCache,
+        store: ClusterCandidateStore,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        from vibesop.core.observability.clustering import Cluster
+
+        spans = _spans([("t1", "topic-A one")])
+        fresh_learner.learn(pattern="topic-A one", action="x")
+        fresh_learner.record_outcome_for_query("topic-A one", success=True)
+
+        # Manually-constructed cluster (not from cluster_queries) that
+        # would otherwise qualify as a stable candidate.
+        rogue = Cluster(
+            cluster_id="rogue",
+            task_ids=["t1"],
+            span_count=3,
+            queries=["topic-A one"],
+            task_keys=[],  # invariant violated
+        )
+
+        with (
+            patch(
+                "vibesop.core.observability.clustering.cluster_queries",
+                return_value=[rogue],
+            ),
+            caplog.at_level(logging.ERROR, logger="vibesop.core.observability.skill_promote"),
+        ):
+            summary = scan_candidates(spans, fresh_learner, store, cache=cache)
+
+        assert summary.promoted_count == 0
+        assert summary.unstable_count == 0
+        assert store.list_all() == []
+        assert any(
+            "empty task_keys" in rec.message and rec.levelno == logging.ERROR
+            for rec in caplog.records
+        )

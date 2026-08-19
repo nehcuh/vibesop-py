@@ -1,0 +1,199 @@
+{
+  "dataset": "tests/benchmark/routing_eval_oneshot.yaml",
+  "total": 11,
+  "top1_accuracy": 0.9091,
+  "recall_at_3": 0.9091,
+  "errors": [
+    {
+      "query": "compose a detailed requirement sheet an AI assistant can follow to produce a fully playable chess game in the browser, starting from an empty folder, with objectively verifiable checks",
+      "expect": [
+        "oneshot-web-spec"
+      ],
+      "reject": [],
+      "actual": "omx/ask",
+      "top3": [
+        "omx/ask",
+        "kimi-gated-fix",
+        "builtin/deep-diagnosis-optimization"
+      ],
+      "layer": "semantic_index",
+      "confidence": 0.66,
+      "category": "oneshot_spec_heldout"
+    }
+  ],
+  "confusion_pairs": {
+    "oneshot-web-spec -> omx/ask": 1
+  },
+  "per_query": [
+    {
+      "query": "帮我写一个贪吃蛇单页游戏的任务书",
+      "expect": [
+        "oneshot-web-spec"
+      ],
+      "reject": [],
+      "primary": "oneshot-web-spec",
+      "top3": [
+        "oneshot-web-spec",
+        "kimi-gated-fix",
+        "builtin/deep-diagnosis-optimization"
+      ],
+      "layer": "semantic_index",
+      "confidence": 0.76,
+      "ok1": true
+    },
+    {
+      "query": "write a one-shot spec for a markdown editor single-page web app, offline, no CDN",
+      "expect": [
+        "oneshot-web-spec"
+      ],
+      "reject": [],
+      "primary": "oneshot-web-spec",
+      "top3": [
+        "oneshot-web-spec",
+        "kimi-gated-fix",
+        "builtin/deep-diagnosis-optimization"
+      ],
+      "layer": "semantic_index",
+      "confidence": 0.77,
+      "ok1": true
+    },
+    {
+      "query": "帮我起草一个数据看板网站的建站规格书，要求 AI 一次性交付可运行的成品",
+      "expect": [
+        "oneshot-web-spec"
+      ],
+      "reject": [],
+      "primary": "oneshot-web-spec",
+      "top3": [
+        "oneshot-web-spec",
+        "kimi-gated-fix",
+        "builtin/deep-diagnosis-optimization"
+      ],
+      "layer": "semantic_index",
+      "confidence": 0.76,
+      "ok1": true
+    },
+    {
+      "query": "可以",
+      "expect": [],
+      "reject": [
+        "oneshot-web-spec"
+      ],
+      "primary": "fallback-llm",
+      "top3": [
+        "fallback-llm"
+      ],
+      "layer": "fallback_llm",
+      "confidence": 1.0,
+      "ok1": true
+    },
+    {
+      "query": "ok",
+      "expect": [],
+      "reject": [
+        "oneshot-web-spec"
+      ],
+      "primary": "fallback-llm",
+      "top3": [
+        "fallback-llm"
+      ],
+      "layer": "fallback_llm",
+      "confidence": 1.0,
+      "ok1": true
+    },
+    {
+      "query": "review 这个 PR",
+      "expect": [],
+      "reject": [
+        "oneshot-web-spec"
+      ],
+      "primary": "mattpocock/review",
+      "top3": [
+        "mattpocock/review",
+        "kimi-gated-fix",
+        "builtin/deep-diagnosis-optimization"
+      ],
+      "layer": "scenario",
+      "confidence": 0.9,
+      "ok1": true
+    },
+    {
+      "query": "写一个 python 脚本统计日志里的错误码",
+      "expect": [],
+      "reject": [
+        "oneshot-web-spec"
+      ],
+      "primary": "fallback-llm",
+      "top3": [
+        "fallback-llm"
+      ],
+      "layer": "fallback_llm",
+      "confidence": 1.0,
+      "ok1": true
+    },
+    {
+      "query": "想让 AI 从零直接做出一个能玩的五子棋网页，帮我把要交给它的详细要求写成一份说明",
+      "expect": [
+        "oneshot-web-spec"
+      ],
+      "reject": [],
+      "primary": "oneshot-web-spec",
+      "top3": [
+        "oneshot-web-spec",
+        "kimi-gated-fix",
+        "builtin/deep-diagnosis-optimization"
+      ],
+      "layer": "semantic_index",
+      "confidence": 0.75,
+      "ok1": true
+    },
+    {
+      "query": "draft the complete instructions I would hand to an AI so it builds a playable Te",
+      "expect": [
+        "oneshot-web-spec"
+      ],
+      "reject": [],
+      "primary": "oneshot-web-spec",
+      "top3": [
+        "oneshot-web-spec",
+        "kimi-gated-fix",
+        "builtin/deep-diagnosis-optimization"
+      ],
+      "layer": "semantic_index",
+      "confidence": 0.76,
+      "ok1": true
+    },
+    {
+      "query": "compose a detailed requirement sheet an AI assistant can follow to produce a ful",
+      "expect": [
+        "oneshot-web-spec"
+      ],
+      "reject": [],
+      "primary": "omx/ask",
+      "top3": [
+        "omx/ask",
+        "kimi-gated-fix",
+        "builtin/deep-diagnosis-optimization"
+      ],
+      "layer": "semantic_index",
+      "confidence": 0.66,
+      "ok1": false
+    },
+    {
+      "query": "我有个互动星空动画页面的想法，想整理成可以直接发给 AI 执行的自包含任务说明，做完双击就能打开用",
+      "expect": [
+        "oneshot-web-spec"
+      ],
+      "reject": [],
+      "primary": "oneshot-web-spec",
+      "top3": [
+        "oneshot-web-spec",
+        "kimi-gated-fix",
+        "builtin/deep-diagnosis-optimization"
+      ],
+      "layer": "semantic_index",
+      "confidence": 0.71,
+      "ok1": true
+    }
+  ]
+}

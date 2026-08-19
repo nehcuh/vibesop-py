@@ -1,0 +1,174 @@
+diff --git a/src/vibesop/core/observability/gold_detection.py b/src/vibesop/core/observability/gold_detection.py
+index 2fc0c1f..30c96fd 100644
+--- a/src/vibesop/core/observability/gold_detection.py
++++ b/src/vibesop/core/observability/gold_detection.py
+@@ -72,7 +72,22 @@ def assess_gold_status(
+             cluster.gold_rate = 0.0
+             continue
+ 
+-        for tid, query in zip(cluster.task_ids, cluster.queries, strict=True):
++        # ``cluster_queries`` always emits one query per task_id, so the
++        # lengths match in production. Manually-constructed clusters (or
++        # future producers) may not honour that — truncate to the shorter
++        # instead of ``strict=True``, which would raise ValueError and take
++        # down a whole cron-scheduled candidate scan on one malformed
++        # cluster (review finding F1). Repo convention: skip bad rows,
++        # never take down the batch.
++        if len(cluster.task_ids) != len(cluster.queries):
++            logger.warning(
++                "cluster %s: task_ids/queries length mismatch (%d vs %d) — "
++                "truncating to the shorter for gold assessment",
++                cluster.cluster_id,
++                len(cluster.task_ids),
++                len(cluster.queries),
++            )
++        for tid, query in zip(cluster.task_ids, cluster.queries):
+             instinct = learner.get_instinct_for_query(query)
+             if instinct is not None and instinct.success_count >= min_success_count:
+                 gold_task_ids.append(tid)
+diff --git a/src/vibesop/core/observability/skill_promote.py b/src/vibesop/core/observability/skill_promote.py
+index ce6babe..ef70a2d 100644
+--- a/src/vibesop/core/observability/skill_promote.py
++++ b/src/vibesop/core/observability/skill_promote.py
+@@ -793,12 +793,21 @@ def scan_candidates(
+         #
+         # Invariant: ``cluster_queries`` always populates ``task_keys`` post-W5.1.
+         # If empty, the cluster was constructed elsewhere (test fixture, manual);
+-        # fail loud rather than silently assuming "default" project_id (which
+-        # the lazy age-out filter has just excluded).
+-        assert cluster.task_keys, (
+-            "W5.1 invariant: cluster_queries must populate task_keys. "
+-            "Manually-constructed Cluster objects must set task_keys explicitly."
+-        )
++        # skip with an error log rather than silently assuming "default"
++        # project_id (which the lazy age-out filter has just excluded). This
++        # MUST NOT be an ``assert`` — under ``python -O`` asserts are stripped,
++        # the guard would vanish, and the empty ``cluster_spans`` below would
++        # promote a zero-step zero-query shell candidate that renders a
++        # garbage SKILL.md (review finding F2). Skip-and-log matches the
++        # repo's bad-record policy (see ``_parse_lines``).
++        if not cluster.task_keys:
++            logger.error(
++                "skipping cluster %s: empty task_keys (W5.1 invariant violated — "
++                "cluster not built by cluster_queries). Manually-constructed "
++                "Cluster objects must set task_keys explicitly.",
++                cluster.cluster_id,
++            )
++            continue
+         cluster_task_keys = set(cluster.task_keys)
+         cluster_spans = [
+             s
+diff --git a/tests/core/observability/test_gold_detection.py b/tests/core/observability/test_gold_detection.py
+index 436cc8b..9199129 100644
+--- a/tests/core/observability/test_gold_detection.py
++++ b/tests/core/observability/test_gold_detection.py
+@@ -12,6 +12,7 @@ Contract (per v3 design §3 W1 Task C):
+ 
+ from __future__ import annotations
+ 
++import logging
+ from pathlib import Path
+ from unittest.mock import patch
+ 
+@@ -167,3 +168,39 @@ class TestEmptyInput:
+     def test_empty_clusters_returns_empty(self, fresh_learner: InstinctLearner) -> None:
+         result = assess_gold_status([], fresh_learner)
+         assert result == []
++
++
++class TestMismatchedLengths:
++    """F1: mismatched ``task_ids`` / ``queries`` lengths must NOT raise —
++    truncate to the shorter and log a WARNING (repo convention: skip bad
++    rows, never take down the batch)."""
++
++    def test_mismatched_lengths_do_not_raise(
++        self, fresh_learner: InstinctLearner, caplog: pytest.LogCaptureFixture
++    ) -> None:
++        from vibesop.core.observability.clustering import Cluster
++
++        fresh_learner.learn(pattern="q1", action="a1")
++        fresh_learner.record_outcome_for_query("q1", success=True)
++
++        # 3 task_ids but only 2 queries — previously crashed the whole
++        # scan via zip(..., strict=True) ValueError.
++        cluster = Cluster(
++            cluster_id="mismatched",
++            task_ids=["t1", "t2", "t3"],
++            span_count=6,
++            queries=["q1", "q2"],
++        )
++
++        with caplog.at_level(logging.WARNING, logger="vibesop.core.observability.gold_detection"):
++            [enriched] = assess_gold_status([cluster], fresh_learner)
++
++        # Truncated to the shorter (2 pairs): t1/q1 has success →
++        # gold_task_ids == ["t1"], rate denominator stays len(task_ids)=3.
++        assert enriched.gold_task_ids == ["t1"]
++        assert enriched.gold_rate == pytest.approx(1 / 3)
++        assert enriched.is_gold is True
++        assert any(
++            "length mismatch" in rec.message and rec.levelno == logging.WARNING
++            for rec in caplog.records
++        )
+diff --git a/tests/core/observability/test_scan_candidates.py b/tests/core/observability/test_scan_candidates.py
+index f85c23d..925d177 100644
+--- a/tests/core/observability/test_scan_candidates.py
++++ b/tests/core/observability/test_scan_candidates.py
+@@ -12,6 +12,7 @@ Plus: dry-run, idempotent rescan, prune-before-upsert, summary shape.
+ 
+ from __future__ import annotations
+ 
++import logging
+ from dataclasses import asdict
+ from datetime import UTC, datetime
+ from pathlib import Path
+@@ -344,3 +345,49 @@ class TestSummaryShape:
+         assert isinstance(d["pruned_count"], int)
+         assert isinstance(d["capped"], bool)
+         assert isinstance(d["clusters_seen"], int)
++
++
++class TestEmptyTaskKeysGuard:
++    """F2: empty ``cluster.task_keys`` must skip the cluster with an ERROR
++    log — never an ``assert`` (stripped under ``python -O``), never a
++    silently-promoted zero-step shell candidate."""
++
++    def test_empty_task_keys_skips_candidate_and_logs_error(
++        self,
++        fresh_learner: InstinctLearner,
++        cache: EmbeddingCache,
++        store: ClusterCandidateStore,
++        caplog: pytest.LogCaptureFixture,
++    ) -> None:
++        from vibesop.core.observability.clustering import Cluster
++
++        spans = _spans([("t1", "topic-A one")])
++        fresh_learner.learn(pattern="topic-A one", action="x")
++        fresh_learner.record_outcome_for_query("topic-A one", success=True)
++
++        # Manually-constructed cluster (not from cluster_queries) that
++        # would otherwise qualify as a stable candidate.
++        rogue = Cluster(
++            cluster_id="rogue",
++            task_ids=["t1"],
++            span_count=3,
++            queries=["topic-A one"],
++            task_keys=[],  # invariant violated
++        )
++
++        with (
++            patch(
++                "vibesop.core.observability.clustering.cluster_queries",
++                return_value=[rogue],
++            ),
++            caplog.at_level(logging.ERROR, logger="vibesop.core.observability.skill_promote"),
++        ):
++            summary = scan_candidates(spans, fresh_learner, store, cache=cache)
++
++        assert summary.promoted_count == 0
++        assert summary.unstable_count == 0
++        assert store.list_all() == []
++        assert any(
++            "empty task_keys" in rec.message and rec.levelno == logging.ERROR
++            for rec in caplog.records
++        )

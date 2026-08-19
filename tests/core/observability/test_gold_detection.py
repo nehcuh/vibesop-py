@@ -12,6 +12,7 @@ Contract (per v3 design §3 W1 Task C):
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from unittest.mock import patch
 
@@ -167,3 +168,39 @@ class TestEmptyInput:
     def test_empty_clusters_returns_empty(self, fresh_learner: InstinctLearner) -> None:
         result = assess_gold_status([], fresh_learner)
         assert result == []
+
+
+class TestMismatchedLengths:
+    """F1: mismatched ``task_ids`` / ``queries`` lengths must NOT raise —
+    truncate to the shorter and log a WARNING (repo convention: skip bad
+    rows, never take down the batch)."""
+
+    def test_mismatched_lengths_do_not_raise(
+        self, fresh_learner: InstinctLearner, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        from vibesop.core.observability.clustering import Cluster
+
+        fresh_learner.learn(pattern="q1", action="a1")
+        fresh_learner.record_outcome_for_query("q1", success=True)
+
+        # 3 task_ids but only 2 queries — previously crashed the whole
+        # scan via zip(..., strict=True) ValueError.
+        cluster = Cluster(
+            cluster_id="mismatched",
+            task_ids=["t1", "t2", "t3"],
+            span_count=6,
+            queries=["q1", "q2"],
+        )
+
+        with caplog.at_level(logging.WARNING, logger="vibesop.core.observability.gold_detection"):
+            [enriched] = assess_gold_status([cluster], fresh_learner)
+
+        # Truncated to the shorter (2 pairs): t1/q1 has success →
+        # gold_task_ids == ["t1"], rate denominator stays len(task_ids)=3.
+        assert enriched.gold_task_ids == ["t1"]
+        assert enriched.gold_rate == pytest.approx(1 / 3)
+        assert enriched.is_gold is True
+        assert any(
+            "length mismatch" in rec.message and rec.levelno == logging.WARNING
+            for rec in caplog.records
+        )

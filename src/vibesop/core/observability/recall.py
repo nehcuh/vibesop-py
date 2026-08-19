@@ -184,6 +184,12 @@ def recall_similar(
 
     # Score by cosine.
     scored: list[tuple[float, str]] = []
+    # Lockstep pair by construction: ``rep_queries`` is derived 1:1 from
+    # ``task_ids`` above, and ``embed_batch`` guarantees one output slot per
+    # input query. A length mismatch would signal a bug in ``embed_batch``,
+    # not bad input data — failing loud with ``strict=True`` is correct here
+    # (contrast gold_detection.assess_gold_status, where lengths come from
+    # potentially-malformed stored records and must be tolerated).
     for tid, vec in zip(task_ids, task_vecs, strict=True):
         if vec is None:
             continue

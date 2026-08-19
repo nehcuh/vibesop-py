@@ -2,6 +2,9 @@
 
 import json
 import time
+from types import SimpleNamespace
+
+import pytest
 
 from vibesop.core.sessions import (
     ContextChange,
@@ -9,6 +12,28 @@ from vibesop.core.sessions import (
     SessionContext,
     ToolUseEvent,
 )
+
+
+class _StubRouter:
+    """UnifiedRouter stand-in: no skill index, no embedding model.
+
+    Returns a controlled, stable no-match so these tests pin SessionContext
+    bookkeeping (cooldown, history, persistence) instead of live routing
+    outcomes, which depend on the developer's local .vibe index and the
+    HuggingFace embedding model (~50s load).
+    """
+
+    def __init__(self, *_args, **_kwargs):
+        pass
+
+    def _single_skill_route(self, _query):
+        return SimpleNamespace(has_match=False, primary=None)
+
+
+@pytest.fixture(autouse=True)
+def _stub_router(monkeypatch):
+    """Keep every SessionContext in this file off the live .vibe index/model."""
+    monkeypatch.setattr("vibesop.core.sessions.context.UnifiedRouter", _StubRouter)
 
 
 class TestToolUseEvent:

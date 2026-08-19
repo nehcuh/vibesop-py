@@ -793,12 +793,21 @@ def scan_candidates(
         #
         # Invariant: ``cluster_queries`` always populates ``task_keys`` post-W5.1.
         # If empty, the cluster was constructed elsewhere (test fixture, manual);
-        # fail loud rather than silently assuming "default" project_id (which
-        # the lazy age-out filter has just excluded).
-        assert cluster.task_keys, (
-            "W5.1 invariant: cluster_queries must populate task_keys. "
-            "Manually-constructed Cluster objects must set task_keys explicitly."
-        )
+        # skip with an error log rather than silently assuming "default"
+        # project_id (which the lazy age-out filter has just excluded). This
+        # MUST NOT be an ``assert`` — under ``python -O`` asserts are stripped,
+        # the guard would vanish, and the empty ``cluster_spans`` below would
+        # promote a zero-step zero-query shell candidate that renders a
+        # garbage SKILL.md (review finding F2). Skip-and-log matches the
+        # repo's bad-record policy (see ``_parse_lines``).
+        if not cluster.task_keys:
+            logger.error(
+                "skipping cluster %s: empty task_keys (W5.1 invariant violated — "
+                "cluster not built by cluster_queries). Manually-constructed "
+                "Cluster objects must set task_keys explicitly.",
+                cluster.cluster_id,
+            )
+            continue
         cluster_task_keys = set(cluster.task_keys)
         cluster_spans = [
             s

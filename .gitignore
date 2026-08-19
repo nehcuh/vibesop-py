@@ -89,6 +89,7 @@ htmlcov/
 .vibe/last_route.json
 .vibe/skill_embeddings.json
 .vibe/skill_embeddings.lock
+.vibe/skill-index.json.lock
 .vibe/*.bak*
 .vibe/*.backup
 .vibe/*-report.md

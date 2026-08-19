@@ -7,12 +7,30 @@ from __future__ import annotations
 
 import json
 
+import pytest
 from typer.testing import CliRunner
 
 from vibesop.cli.main import _extract_squad_from_result, _format_squad_summary, app
-from vibesop.core.models import WorkflowPattern
+from vibesop.core.models import OrchestrationMode, OrchestrationResult, WorkflowPattern
 
 runner = CliRunner()
+
+
+class _FakeOrchestrateRouter:
+    """UnifiedRouter stand-in for `vibe orchestrate` tests.
+
+    The command builds its router from Path.cwd() — the developer's live
+    .vibe index plus the HuggingFace embedding model (~10-50s load, and HF
+    warnings leak into stdout, breaking JSON parsing). Return a controlled,
+    stable result so these tests pin CLI plumbing (exit code, JSON shape),
+    not live routing outcomes.
+    """
+
+    def __init__(self, *_args, **_kwargs) -> None:
+        pass
+
+    def orchestrate(self, query: str, context: object = None) -> OrchestrationResult:
+        return OrchestrationResult(mode=OrchestrationMode.SINGLE, original_query=query)
 
 
 class TestRouteCommand:
@@ -60,6 +78,12 @@ class TestRouteCommand:
 
 class TestOrchestrateCommand:
     """Test `vibe orchestrate` command."""
+
+    @pytest.fixture(autouse=True)
+    def _fake_router(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        # orchestrate() imports UnifiedRouter lazily inside the command body,
+        # so patching the attribute on vibesop.core.routing intercepts it.
+        monkeypatch.setattr("vibesop.core.routing.UnifiedRouter", _FakeOrchestrateRouter)
 
     def test_orchestrate_basic(self) -> None:
         """Orchestrate should work for single-intent queries."""
