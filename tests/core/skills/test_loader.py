@@ -200,6 +200,39 @@ description: Desc
         skills = loader.discover_all()
         assert len(skills) == 0
 
+    def test_skips_vibe_state_yaml_files(self, tmp_path: Path):
+        """auto-config.yaml / registry.yaml under .vibe/skills are VibeSOP
+        state files, not skills — even with top-level id/name keys they must
+        not be discovered. A dir with both state files plus one real skill
+        must yield exactly that one skill."""
+        skills_dir = tmp_path / ".vibe" / "skills"
+        skills_dir.mkdir(parents=True)
+        # Top-level "name" defeats the id/name guard; only the filename
+        # exclusion keeps these out.
+        (skills_dir / "auto-config.yaml").write_text(
+            "name: auto config\nskills:\n  real-skill:\n    enabled: true\n",
+            encoding="utf-8",
+        )
+        (skills_dir / "registry.yaml").write_text(
+            "name: registry\nskills:\n  - real-skill\n",
+            encoding="utf-8",
+        )
+        real_dir = skills_dir / "real-skill"
+        real_dir.mkdir()
+        (real_dir / "SKILL.md").write_text(
+            """---
+id: real-skill
+name: Real Skill
+description: A real skill
+---
+# Real
+""",
+            encoding="utf-8",
+        )
+        loader = SkillLoader(project_root=tmp_path, enable_external=False)
+        skills = loader.discover_all()
+        assert set(skills) == {"real-skill"}
+
     def test_empty_search_paths(self, tmp_path: Path):
         loader = SkillLoader(project_root=tmp_path, enable_external=False)
         skills = loader.discover_all()
@@ -597,6 +630,19 @@ description: A duplicate
         yaml_file.write_text("- item1\n- item2\n", encoding="utf-8")
         loader = SkillLoader(project_root=tmp_path, enable_external=False)
         loader._load_yaml_skill(yaml_file)
+        assert len(loader._skill_cache) == 0
+
+    def test_skips_known_state_files_by_name(self, tmp_path: Path):
+        """auto-config.yaml / registry.yaml are excluded by filename even when
+        they contain top-level id/name keys (the generic guard is not enough)."""
+        loader = SkillLoader(project_root=tmp_path, enable_external=False)
+        for name in ("auto-config.yaml", "registry.yaml"):
+            yaml_file = tmp_path / name
+            yaml_file.write_text(
+                "id: not-a-skill\nname: Not A Skill\ndescription: state file\n",
+                encoding="utf-8",
+            )
+            loader._load_yaml_skill(yaml_file)
         assert len(loader._skill_cache) == 0
 
 

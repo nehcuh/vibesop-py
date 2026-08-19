@@ -505,3 +505,15 @@ def test_index_match_threshold_out_of_range_rejected() -> None:
         RoutingConfig(index_match_threshold=-0.1)
     with pytest.raises(ValidationError):
         RoutingConfig(index_match_threshold=1.0)
+
+
+def test_ai_triage_recall_min_similarity_bounds() -> None:
+    """ai_triage_recall_min_similarity is bounded to [0.0, 1.0] inclusive —
+    unlike index_match_threshold, 1.0 is valid here (drop everything)."""
+    assert RoutingConfig().ai_triage_recall_min_similarity == pytest.approx(0.25)
+    RoutingConfig(ai_triage_recall_min_similarity=0.0)
+    RoutingConfig(ai_triage_recall_min_similarity=1.0)
+    with pytest.raises(ValidationError):
+        RoutingConfig(ai_triage_recall_min_similarity=-0.1)
+    with pytest.raises(ValidationError):
+        RoutingConfig(ai_triage_recall_min_similarity=1.1)

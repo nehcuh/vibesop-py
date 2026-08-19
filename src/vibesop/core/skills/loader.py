@@ -24,6 +24,16 @@ from vibesop.spec.models import SkillSpec, SkillType
 
 logger = logging.getLogger(__name__)
 
+# YAML files that live under skills directories but are VibeSOP state/config,
+# not skill definitions (``.vibe/skills/auto-config.yaml`` is written by
+# SkillConfigManager, ``.vibe/skills/registry.yaml`` by SkillInstaller). The
+# id/name guard in ``_load_yaml_skill`` only catches YAML lacking skill fields;
+# these files are excluded by name so they never become routing candidates even
+# if they happen to contain a top-level "id"/"name" key. The exclusion matches
+# the exact filename at any rglob depth (a nested ``sub/dir/auto-config.yaml``
+# is excluded too).
+NON_SKILL_YAML_FILENAMES = frozenset({"auto-config.yaml", "registry.yaml"})
+
 
 @dataclass
 class LoadedSkill:
@@ -351,6 +361,9 @@ class SkillLoader:
 
     def _load_yaml_skill(self, file_path: Path) -> None:
         """Load a skill from a YAML file."""
+        if file_path.name in NON_SKILL_YAML_FILENAMES:
+            logger.debug("Skipping non-skill state file: %s", file_path)
+            return
         try:
             yaml_parser = YAML()
             with file_path.open("r", encoding="utf-8") as f:

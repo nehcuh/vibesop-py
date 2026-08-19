@@ -114,6 +114,12 @@ class SkillIndexer:
     """Builds and manages the skill semantic index."""
 
     INDEX_FILENAME = "skill-index.json"
+    # Index schema/behavior version. 1.4.0: non-skill state files
+    # (``.vibe/skills/auto-config.yaml``, ``registry.yaml``) are no longer
+    # discovered as skills; profiles written for them by pre-fix indexers
+    # (ids like ``project/auto-config.yaml/auto-config``) are pruned at load
+    # time so stale on-disk indexes self-heal without a manual rebuild.
+    INDEX_VERSION = "1.4.0"
 
     def __init__(
         self,
@@ -535,7 +541,7 @@ class SkillIndexer:
         index_path.parent.mkdir(parents=True, exist_ok=True)
 
         index_data = {
-            "version": "1.3.0",
+            "version": self.INDEX_VERSION,
             "indexed_at": datetime.now(UTC).isoformat(),
             "scope": scope,
             "indexed_count": len(profiles),
@@ -573,6 +579,7 @@ class SkillIndexer:
             return {
                 skill_id: SkillProfile.from_dict(profile_data)
                 for skill_id, profile_data in skills_data.items()
+                if not _is_non_skill_profile_id(skill_id)
             }
         except (json.JSONDecodeError, KeyError, TypeError, OSError) as e:
             logger.debug("Failed to load skill index from %s: %s", index_path, e)
@@ -752,6 +759,24 @@ class SkillIndexer:
     def get_profile(self, skill_id: str) -> SkillProfile | None:
         index = self.load_index()
         return index.get(skill_id)
+
+
+def _is_non_skill_profile_id(skill_id: str) -> bool:
+    """True for phantom profiles indexed from non-skill state files.
+
+    Pre-1.4 indexers loaded ANY YAML under a skills dir as a skill, so
+    ``.vibe/skills/auto-config.yaml`` / ``registry.yaml`` were analyzed and
+    persisted under synthesized ids like ``project/auto-config.yaml/auto-config``.
+    Dropping them at load self-heals polluted on-disk indexes without waiting
+    for a rebuild.
+
+    The check matches whole "/" separated id segments against the loader's
+    exact-filename exclusion list — NOT substrings — so a legitimate skill id
+    like ``project/registry.yaml-tools/main`` is kept.
+    """
+    from vibesop.core.skills.loader import NON_SKILL_YAML_FILENAMES
+
+    return any(seg in NON_SKILL_YAML_FILENAMES for seg in skill_id.split("/"))
 
 
 __all__ = [

@@ -38,13 +38,35 @@ logger = logging.getLogger(__name__)
 MODEL_NAME = "paraphrase-multilingual-MiniLM-L12-v2"
 _HASH_LENGTH = 16
 
+# Minimum cosine similarity for a recall candidate to enter the triage window.
+# paraphrase-multilingual-MiniLM-L12-v2 assigns roughly 0.1-0.3 cosine to
+# unrelated text pairs, so 0.25 sits just above the noise floor: without a
+# floor, a junk query still gets its top-N "best" garbage forwarded to the
+# LLM. Recall is a top-N prefilter (not a hard match — the SEMANTIC_INDEX
+# embedding fallback uses 0.45 for that), so the floor stays permissive.
+# The floor is only consulted when recall actually runs — i.e. when eligible
+# candidates exceed the triage window; smaller sets are forwarded whole (see
+# TriageService.prefilter_ai_triage_candidates).
+# Configurable via RoutingConfig.ai_triage_recall_min_similarity.
+DEFAULT_MIN_SIMILARITY = 0.25
+
 
 class EmbeddingRecall:
-    """Semantic top-N candidate recall with a persistent embedding cache."""
+    """Semantic top-N candidate recall with a persistent embedding cache.
 
-    def __init__(self, storage_dir: str | Path = ".vibe") -> None:
+    ``min_similarity`` is a public attribute: TriageService re-reads the
+    configured floor into it per prefilter call so a config swap after
+    construction takes effect.
+    """
+
+    def __init__(
+        self,
+        storage_dir: str | Path = ".vibe",
+        min_similarity: float = DEFAULT_MIN_SIMILARITY,
+    ) -> None:
         self.cache_path = Path(storage_dir) / "skill_embeddings.json"
         self.lock_path = Path(storage_dir) / "skill_embeddings.lock"
+        self.min_similarity = min_similarity
         self._model: Any | None = None
         self._model_failed = False
 
@@ -57,7 +79,12 @@ class EmbeddingRecall:
         """Return up to ``top_n`` candidate ids ranked by embedding similarity.
 
         ``None`` on any failure — the caller must fall back to keyword
-        prefiltering.
+        prefiltering. Candidates scoring below ``min_similarity`` are dropped;
+        when nothing clears the floor the result is an empty list, which the
+        caller treats as "recall ran, nothing is semantically relevant"
+        (distinct from ``None`` = recall unavailable). Note the caller only
+        invokes recall when the eligible candidate count exceeds ``top_n``;
+        smaller sets bypass this floor entirely.
         """
         try:
             model = self._get_model()
@@ -76,7 +103,8 @@ class EmbeddingRecall:
                 key=lambda kv: kv[1],
                 reverse=True,
             )
-            return [skill_id for skill_id, _ in scored[:top_n]]
+            # Drop everything below the similarity floor; may be empty.
+            return [skill_id for skill_id, s in scored[:top_n] if s >= self.min_similarity]
         except Exception as e:  # recall must never break routing
             logger.debug("Embedding recall unavailable: %s", e)
             return None

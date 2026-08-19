@@ -8,7 +8,12 @@ from contextlib import contextmanager
 from typing import Any
 from unittest.mock import MagicMock, patch
 
-from vibesop.core.routing.triage_recall import MODEL_NAME, EmbeddingRecall
+from vibesop.core.routing.triage_recall import (
+    DEFAULT_MIN_SIMILARITY,
+    MODEL_NAME,
+    EmbeddingRecall,
+    _cosine_similarity,
+)
 from vibesop.core.routing.triage_service import TriageService
 from vibesop.utils import file_lock
 from vibesop.utils.file_lock import CouldNotLock
@@ -36,9 +41,17 @@ def _candidates() -> list[dict[str, Any]]:
     ]
 
 
-def _make_recall(tmp_path: Any, query_vector: list[float]) -> tuple[EmbeddingRecall, _FakeModel]:
-    """Recall with a fake model: query aligned with 'deploy', others orthogonal."""
-    recall = EmbeddingRecall(tmp_path)
+def _make_recall(
+    tmp_path: Any,
+    query_vector: list[float],
+    min_similarity: float = 0.0,
+) -> tuple[EmbeddingRecall, _FakeModel]:
+    """Recall with a fake model: query aligned with 'deploy', others orthogonal.
+
+    ``min_similarity`` defaults to 0.0 so the pre-threshold ranking behavior
+    of the existing tests is preserved (orthogonal candidates score 0.0).
+    """
+    recall = EmbeddingRecall(tmp_path, min_similarity=min_similarity)
     vectors = {"ship it": query_vector}
     for c in _candidates():
         text = EmbeddingRecall._candidate_text(c)
@@ -79,6 +92,39 @@ class TestEmbeddingRecall:
         recall._model = model
         # Unknown texts -> KeyError inside encode -> fail open.
         assert recall.recall("ship it", _candidates(), 2) is None
+
+
+class TestRecallMinSimilarity:
+    """Similarity floor: junk queries must not flood the LLM triage window."""
+
+    def test_default_threshold_is_set(self, tmp_path: Any) -> None:
+        assert EmbeddingRecall(tmp_path).min_similarity == DEFAULT_MIN_SIMILARITY
+
+    def test_below_threshold_candidates_dropped(self, tmp_path: Any) -> None:
+        # query ~0.99 similar to 'deploy', orthogonal (0.0) to the rest.
+        recall, _ = _make_recall(tmp_path, [1.0, 0.0, 0.0], min_similarity=0.5)
+        assert recall.recall("ship it", _candidates(), 3) == ["deploy"]
+
+    def test_threshold_boundary_is_inclusive(self, tmp_path: Any) -> None:
+        """A candidate scoring exactly ``min_similarity`` is kept (>=)."""
+        candidates = [{"id": "edge", "description": "edge case"}]
+        query_vec = [1.0, 0.0]
+        candidate_vec = [1.0, 3**0.5]  # cosine vs query_vec ≈ 0.5
+        floor = _cosine_similarity(query_vec, candidate_vec)
+        text = EmbeddingRecall._candidate_text(candidates[0])
+        recall = EmbeddingRecall(tmp_path, min_similarity=floor)
+        recall._model = _FakeModel({"q": query_vec, text: candidate_vec})
+        assert recall.recall("q", candidates, 1) == ["edge"]
+        # Just above the floor: dropped.
+        recall.min_similarity = floor + 1e-9
+        assert recall.recall("q", candidates, 1) == []
+
+    def test_all_below_threshold_returns_empty_list_not_none(self, tmp_path: Any) -> None:
+        """Empty list = recall ran, nothing relevant; None = recall
+        unavailable (keyword fallback). The distinction matters to the caller."""
+        recall, _ = _make_recall(tmp_path, [1.0, 0.0, 0.0], min_similarity=0.999)
+        result = recall.recall("ship it", _candidates(), 2)
+        assert result == []
 
 
 class TestEmbeddingCache:
@@ -310,3 +356,100 @@ class TestPrefilterIntegration:
         assert result.match is not None
         assert result.match.metadata["recall_method"] == "embedding"
         assert result.match.metadata["candidates_sent"] == 2
+
+    def test_empty_recall_result_returns_no_candidates(self, tmp_path: Any) -> None:
+        """All candidates below the similarity floor: the window is empty
+        rather than backfilled with arbitrary (unranked) candidates."""
+        recall, _ = _make_recall(tmp_path, [1.0, 0.0, 0.0], min_similarity=0.999)
+        service = self._make_service(embedding_recall=recall)
+        result = service.prefilter_ai_triage_candidates("ship it", _candidates(), 2)
+        assert result == []
+        assert service._last_recall_method == "embedding"
+
+    def test_partial_clear_backfills_with_below_floor_candidates(self, tmp_path: Any) -> None:
+        """When ≥1 but fewer than max_skills candidates clear the floor, the
+        window is padded with below-floor candidates in original order — the
+        floor only abstains when NOTHING clears it."""
+        recall, _ = _make_recall(tmp_path, [1.0, 0.0, 0.0], min_similarity=0.5)
+        service = self._make_service(embedding_recall=recall)
+        result = service.prefilter_ai_triage_candidates("ship it", _candidates(), 2)
+        # Only 'deploy' clears 0.5; 'debug' backfills the window.
+        assert [c["id"] for c in result] == ["deploy", "debug"]
+        assert service._last_recall_method == "embedding"
+
+    def test_try_ai_triage_skips_llm_when_recall_finds_nothing(self, tmp_path: Any) -> None:
+        recall, _ = _make_recall(tmp_path, [1.0, 0.0, 0.0], min_similarity=0.999)
+        service = self._make_service(embedding_recall=recall)
+        service._config.enable_ai_triage = True
+        service._config.ai_triage_max_skills = 2
+        service._config.ai_triage_max_tokens = 500
+        service._config.ai_triage_budget_monthly = 5.0
+        service._config.ai_triage_log_calls = False
+        service._config.ai_triage_timeout_seconds = 15.0
+        service._cost_tracker.get_monthly_cost.return_value = 0.0
+        service._llm = MagicMock()
+        service._llm.configured.return_value = True
+
+        result = service.try_ai_triage("ship it", _candidates())
+
+        assert result is None
+        service._llm.call.assert_not_called()
+
+
+class TestRecallThresholdConfig:
+    """RoutingConfig.ai_triage_recall_min_similarity plumbing."""
+
+    @staticmethod
+    def _make_service(tmp_path: Any, **config_overrides: Any) -> TriageService:
+        config = MagicMock()
+        config.ai_triage_circuit_breaker_enabled = True
+        config.ai_triage_circuit_breaker_failure_threshold = 3
+        config.ai_triage_circuit_breaker_latency_threshold_ms = 500.0
+        config.ai_triage_circuit_breaker_cooldown_seconds = 60
+        for key, value in config_overrides.items():
+            setattr(config, key, value)
+        cache_manager = MagicMock()
+        cache_manager.cache_dir = tmp_path / "cache"
+        return TriageService(
+            config=config,
+            cost_tracker=MagicMock(),
+            prefilter=MagicMock(),
+            cache_manager=cache_manager,
+            get_skill_source=lambda sid, ns: f"{ns}/{sid}",
+        )
+
+    def test_configured_threshold_reaches_recall(self, tmp_path: Any) -> None:
+        service = self._make_service(tmp_path, ai_triage_recall_min_similarity=0.5)
+        assert service._embedding_recall is not None
+        assert service._embedding_recall.min_similarity == 0.5
+
+    def test_missing_threshold_uses_default(self, tmp_path: Any) -> None:
+        # MagicMock attribute access returns a MagicMock (not a number) —
+        # the service must fall back to the default instead of crashing.
+        service = self._make_service(tmp_path)
+        assert service._embedding_recall is not None
+        assert service._embedding_recall.min_similarity == DEFAULT_MIN_SIMILARITY
+
+    def test_config_swap_after_construction_takes_effect(self, tmp_path: Any) -> None:
+        """The floor is re-read from the config per prefilter call, so the
+        ``config`` setter swapping in a new RoutingConfig propagates to the
+        already-constructed EmbeddingRecall."""
+        service = self._make_service(tmp_path, ai_triage_recall_min_similarity=0.5)
+        assert service._embedding_recall is not None
+        assert service._embedding_recall.min_similarity == 0.5
+
+        new_config = MagicMock()
+        new_config.ai_triage_recall_min_similarity = 0.9
+        service.config = new_config
+        # ≤ max_skills candidates: recall itself is not invoked (no model
+        # load), but the floor is still synced at the top of the prefilter.
+        service.prefilter_ai_triage_candidates("q", _candidates(), 10)
+        assert service._embedding_recall.min_similarity == 0.9
+
+    def test_injected_recall_floor_not_overridden(self, tmp_path: Any) -> None:
+        """An injected EmbeddingRecall owns its floor; config sync only
+        applies to the recall the service constructed itself."""
+        recall, _ = _make_recall(tmp_path, [1.0, 0.0, 0.0], min_similarity=0.7)
+        service = TestPrefilterIntegration._make_service(embedding_recall=recall)
+        service.prefilter_ai_triage_candidates("ship it", _candidates(), 10)
+        assert recall.min_similarity == 0.7

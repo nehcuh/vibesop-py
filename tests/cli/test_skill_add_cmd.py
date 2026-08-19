@@ -82,14 +82,11 @@ class TestIncrementalIndexing:
     def test_global_scope_saves_to_global_layer(self, tmp_path) -> None:
         """Layer-routing contract: scope="global" saves to the global index.
 
-        gate7b honesty note (pi / claude #4): this branch is NOT reachable
-        in production today — `vibe skill add --global` installs outside
-        SkillLoader's search paths, so `get_skill` returns None and the
-        function degrades before reaching the save (that's what
-        ``test_returns_false_when_skill_not_discoverable`` covers). The
-        mock here forces discoverability to pin the layer-selection logic
-        against regressions; keep the test, but don't read it as evidence
-        the global path works end-to-end (Tier2 item).
+        The mock forces discoverability to pin the layer-selection logic
+        against regressions. Since the global install path was unified to
+        ``~/.vibe/skills/<id>`` (in ExternalSkillLoader's search paths),
+        global installs are discoverable in production too, subject to
+        the external audit gate.
         """
         from vibesop.cli.commands.skill_commands import _index_newly_added_skill
 
@@ -118,9 +115,9 @@ class TestIncrementalIndexing:
         assert mock_indexer._save_index.call_args.kwargs["scope"] == "global"
 
     def test_global_scope_not_discoverable_points_to_manual_index(self, capsys) -> None:
-        """gate7b claude #4: scope="global" + skill not discoverable →
-        the degrade message must be the honest one: incremental indexing
-        is project-scope only, run `vibe skills index --scope global`.
+        """scope="global" + skill not discoverable → the degrade message
+        must point at the global-scope rebuild:
+        `vibe skills index --scope global`.
         """
         from vibesop.cli.commands.skill_commands import _index_newly_added_skill
 
@@ -144,7 +141,7 @@ class TestIncrementalIndexing:
 
         # Flatten rich's line wrapping before substring assertions.
         out = " ".join(capsys.readouterr().out.split())
-        assert "project-scope only" in out
+        assert "not discoverable" in out
         assert "vibe skills index --scope global" in out
         mock_indexer._save_index.assert_not_called()
 
@@ -734,6 +731,205 @@ class TestAgentEnvironmentBranch:
 
         assert result.category == "development"  # unchanged
         assert result.priority == 50  # unchanged
+
+
+class TestGlobalInstallPath:
+    """Tier2 fix: `vibe skill add --global` must install to
+    ``~/.vibe/skills/<id>`` — the unified global location that
+    ExternalSkillLoader searches and the promote hints reference.
+    Previously the CLI passed ``~/.vibe`` as the install root and the
+    installer appended ``.vibe/skills``, producing the undiscoverable
+    doubled path ``~/.vibe/.vibe/skills/<id>``.
+    """
+
+    def test_install_root_project_vs_global(self, tmp_path, monkeypatch) -> None:
+        from vibesop.cli.commands.skill_commands import _install_root
+
+        monkeypatch.setattr(Path, "home", lambda: tmp_path)
+        assert _install_root("project") == Path()
+        assert _install_root("global") == tmp_path
+        # Installer appends .vibe/skills → unified global target.
+        assert _install_root("global") / ".vibe" / "skills" == tmp_path / ".vibe" / "skills"
+
+    def test_global_install_lands_in_unified_path(self, tmp_path, monkeypatch) -> None:
+        from vibesop.cli.commands.skill_commands import _install_root
+        from vibesop.installer.skill_installer import SkillInstaller
+
+        monkeypatch.setattr(Path, "home", lambda: tmp_path)
+
+        skill_dir = tmp_path / "src-skill"
+        skill_dir.mkdir()
+        (skill_dir / "SKILL.md").write_text("---\nid: glob-skill\n---\n", encoding="utf-8")
+
+        result = SkillInstaller().install_skill(skill_dir, _install_root("global"))
+
+        assert result["success"] is True
+        # Skill, registry and reload marker all land in the unified paths.
+        assert (tmp_path / ".vibe" / "skills" / "glob-skill" / "SKILL.md").exists()
+        registry = tmp_path / ".vibe" / "skills" / "registry.yaml"
+        assert registry.exists()
+        assert "glob-skill" in registry.read_text(encoding="utf-8")
+        assert (tmp_path / ".vibe" / ".skills_reload").exists()
+        # The legacy doubled path is never created.
+        assert not (tmp_path / ".vibe" / ".vibe").exists()
+
+    def test_loader_discovers_global_install(self, tmp_path, monkeypatch) -> None:
+        """A skill installed at ``~/.vibe/skills/<id>`` is discoverable
+        through SkillLoader's external search paths."""
+        from vibesop.core.skills.external_loader import ExternalSkillLoader
+        from vibesop.core.skills.loader import SkillLoader
+
+        global_skills = tmp_path / "home" / ".vibe" / "skills"
+        skill_dir = global_skills / "test-glob-discover-skill"
+        skill_dir.mkdir(parents=True)
+        (skill_dir / "SKILL.md").write_text(
+            "---\nid: test-glob-discover-skill\nname: Glob Discover\n---\n",
+            encoding="utf-8",
+        )
+
+        # EXTERNAL_PATHS is a class var bound to the real home at import;
+        # repoint it at the tmp home's unified global skills dir.
+        monkeypatch.setattr(ExternalSkillLoader, "EXTERNAL_PATHS", [global_skills])
+
+        project_root = tmp_path / "proj"
+        project_root.mkdir()
+        loader = SkillLoader(project_root=project_root, require_audit=False)
+
+        loaded = loader.get_skill("test-glob-discover-skill")
+        assert loaded is not None
+        assert loaded.metadata.id == "test-glob-discover-skill"
+
+
+class TestMigrateLegacyGlobalSkills:
+    """Migration for the legacy doubled path ``~/.vibe/.vibe/skills/``."""
+
+    def _make_skill(self, parent: Path, skill_id: str) -> Path:
+        skill_dir = parent / skill_id
+        skill_dir.mkdir(parents=True)
+        (skill_dir / "SKILL.md").write_text(
+            f"---\nid: {skill_id}\n---\n", encoding="utf-8"
+        )
+        return skill_dir
+
+    def test_noop_when_no_legacy_dir(self, tmp_path) -> None:
+        from vibesop.cli.commands.skill_commands import _migrate_legacy_global_skills
+
+        _migrate_legacy_global_skills(tmp_path)  # must not raise
+        assert not (tmp_path / ".vibe").exists()
+
+    def test_moves_legacy_installs(self, tmp_path, capsys) -> None:
+        from vibesop.cli.commands.skill_commands import _migrate_legacy_global_skills
+
+        legacy = tmp_path / ".vibe" / ".vibe" / "skills"
+        self._make_skill(legacy, "legacy-a")
+        self._make_skill(legacy, "legacy-b")
+
+        _migrate_legacy_global_skills(tmp_path)
+
+        assert (tmp_path / ".vibe" / "skills" / "legacy-a" / "SKILL.md").exists()
+        assert (tmp_path / ".vibe" / "skills" / "legacy-b" / "SKILL.md").exists()
+        assert not (legacy / "legacy-a").exists()
+        assert not (legacy / "legacy-b").exists()
+        assert "Migrated 2 skill(s)" in capsys.readouterr().out
+
+    def test_conflict_is_skipped_with_warning(self, tmp_path, capsys) -> None:
+        from vibesop.cli.commands.skill_commands import _migrate_legacy_global_skills
+
+        legacy = tmp_path / ".vibe" / ".vibe" / "skills"
+        legacy_skill = self._make_skill(legacy, "clash")
+        (legacy_skill / "SKILL.md").write_text("---\nid: clash\nlegacy: yes\n---\n")
+        # Unified target already has a skill with the same name.
+        existing = self._make_skill(tmp_path / ".vibe" / "skills", "clash")
+        (existing / "SKILL.md").write_text("---\nid: clash\n---\n", encoding="utf-8")
+
+        _migrate_legacy_global_skills(tmp_path)
+
+        # Existing install untouched; legacy copy left in place.
+        assert "legacy" not in (existing / "SKILL.md").read_text(encoding="utf-8")
+        assert (legacy_skill / "SKILL.md").exists()
+        out = capsys.readouterr().out
+        assert "Skipping legacy global skill 'clash'" in out
+        assert "Migrated" not in out
+
+
+class TestGlobalAddComposition:
+    """Command-level coverage for `vibe skill add --global`: migration,
+    unified install root, and installer-warning surfacing, wired together
+    through the real SkillInstaller (only I/O-heavy phases are mocked).
+    """
+
+    def _invoke_global_add(self, tmp_path: Path, skill_id: str):
+        """Run `skill add <src> --global` against a tmp HOME.
+
+        Returns the CliRunner result. The real SkillInstaller runs against
+        the patched home; detection, audit, auto-config and verify phases
+        are mocked to keep the test hermetic.
+        """
+        src = tmp_path / "src" / skill_id
+        src.mkdir(parents=True)
+        (src / "SKILL.md").write_text(f"---\nid: {skill_id}\n---\n", encoding="utf-8")
+
+        metadata = SkillSpec(
+            id=skill_id,
+            name=skill_id.replace("-", " ").title(),
+            description="A test skill",
+            intent="Test",
+            trigger_when="User asks for test",
+        )
+        mock_audit = Mock()
+        mock_audit.risk_level = "safe"
+        mock_audit.reason = ""
+
+        with (
+            patch(
+                "vibesop.cli.commands.skill_commands._detect_and_load_skill",
+                return_value=(src, metadata),
+            ),
+            patch("vibesop.security.skill_auditor.SkillSecurityAuditor") as mock_auditor,
+            patch("vibesop.cli.commands.skill_commands._auto_configure_skill_with_llm"),
+            patch(
+                "vibesop.cli.commands.skill_commands._verify_and_sync",
+                return_value=False,
+            ),
+        ):
+            mock_auditor.return_value.audit_skill_file.return_value = mock_audit
+            return runner.invoke(skills_app, ["add", str(src), "--global"])
+
+    def test_global_add_migrates_legacy_skills(self, tmp_path, monkeypatch) -> None:
+        """gate8 nit: `vibe skill add --global` must actually invoke the
+        legacy-path migration — a pre-existing ``~/.vibe/.vibe/skills/<id>``
+        install is moved to ``~/.vibe/skills/<id>`` during the add."""
+        home = tmp_path / "home"
+        monkeypatch.setattr(Path, "home", lambda: home)
+        legacy = home / ".vibe" / ".vibe" / "skills" / "legacy-skill"
+        legacy.mkdir(parents=True)
+        (legacy / "SKILL.md").write_text("---\nid: legacy-skill\n---\n", encoding="utf-8")
+
+        result = self._invoke_global_add(tmp_path, "new-skill")
+
+        assert result.exit_code == 0, result.output
+        # Legacy install migrated to the unified global path.
+        assert (home / ".vibe" / "skills" / "legacy-skill" / "SKILL.md").exists()
+        assert not legacy.exists()
+        assert "Migrated 1 skill(s)" in result.output
+        # New skill installed to the unified global path, not the doubled one.
+        assert (home / ".vibe" / "skills" / "new-skill" / "SKILL.md").exists()
+        assert not (home / ".vibe" / ".vibe" / "skills" / "new-skill").exists()
+
+    def test_installer_warnings_are_printed(self, tmp_path, monkeypatch) -> None:
+        """gate8 nit: a non-force reinstall returns 'already installed' as
+        a warning — it must reach the console, not be silently dropped."""
+        home = tmp_path / "home"
+        monkeypatch.setattr(Path, "home", lambda: home)
+        # Pre-install the same skill id at the unified global path.
+        existing = home / ".vibe" / "skills" / "new-skill"
+        existing.mkdir(parents=True)
+        (existing / "SKILL.md").write_text("---\nid: new-skill\n---\n", encoding="utf-8")
+
+        result = self._invoke_global_add(tmp_path, "new-skill")
+
+        assert result.exit_code == 0, result.output
+        assert "already installed" in result.output
 
 
 if __name__ == "__main__":

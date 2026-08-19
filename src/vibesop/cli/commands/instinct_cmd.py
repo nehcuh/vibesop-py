@@ -11,6 +11,7 @@ Provides:
 - vibe instinct accept <id>: Accept a pending route (write-back success)
 - vibe instinct dismiss <id>: Dismiss a pending route (write-back failure)
 - vibe instinct stats: Outcome density + pending queue stats
+- vibe instinct prune --auto-extracted [--apply]: Remove junk auto_extracted instincts (dry-run by default)
 """
 
 from __future__ import annotations
@@ -23,6 +24,7 @@ from typing import Any
 
 import typer
 from rich.console import Console
+from rich.markup import escape as rich_escape
 from rich.table import Table
 
 logger = logging.getLogger(__name__)
@@ -178,13 +180,28 @@ def _apply_accept_writeback(query: str, skill_id: str | None) -> None:
     learner = InstinctLearner(_get_storage_path())
     pattern = query.lower().strip()
     if skill_id:
-        learner.learn(
+        instinct = learner.learn(
             pattern=pattern,
             action=f"suggest {skill_id} skill",
             context="routing_pending_accept",
             tags=["routing", "pending_accept"],
             source="routing_pending",
         )
+        # learn() merges by id and does NOT re-tag/re-source an existing
+        # instinct — a previously auto-minted row would keep
+        # source="auto_routing" + the auto_extracted tag, and
+        # prune_auto_extracted would delete this human-confirmed instinct
+        # (gate8 review: pi reproduction). Stamp the confirmation explicitly.
+        if instinct.source == "auto_routing" or "auto_extracted" in instinct.tags:
+            instinct.source = "routing_pending"
+            instinct.tags = ["routing", "pending_accept"]
+            instinct.context = "routing_pending_accept"
+            # NOTE (gate8b): learn() has already persisted once above, so a
+            # concurrent cross-process prune could still delete the row in the
+            # microsecond window before this save() lands. Manual-CLI-only,
+            # .bak recovery exists — accepted; the success_count>0 guard in
+            # prune closes the window for anything feedback-confirmed.
+            learner.save()
         learner.record_outcome_for_query(pattern, success=True)
         try:
             from vibesop.core.optimization import PreferenceBooster
@@ -649,6 +666,55 @@ When this pattern matches, {ins.action}.
     console.print(
         "[dim]Next: run [cyan]vibe skills suggestions[/cyan] to register it formally.[/dim]"
     )
+
+
+# ──────────────────────────────────────────────────────────────────
+# prune (Tier2 — existing-data hygiene for junk auto_extracted instincts)
+# ──────────────────────────────────────────────────────────────────
+
+
+@app.command("prune")
+def prune_cmd(
+    auto_extracted: bool = typer.Option(
+        False,
+        "--auto-extracted",
+        help="清理 auto_extracted instinct（路由自动 mint）中质量不达标的条目",
+    ),
+    apply: bool = typer.Option(
+        False, "--apply", help="真正删除（默认 dry-run，只打印）"
+    ),
+) -> None:
+    """清理质量门控不达标的 auto_extracted instinct（Tier2 存量数据卫生）。
+
+    与路由侧新 mint 使用同一道质量门（低信息 query / 超长 megaprompt）。
+    默认 dry-run：只列出将被删除的条目；加 ``--apply`` 才真正删除。
+    人工确认的 instinct（pending accept/dismiss、manual）不受影响。
+    """
+    from vibesop.core.instinct.learner import InstinctLearner
+
+    if not auto_extracted:
+        console.print("[yellow]请指定清理范围：--auto-extracted[/yellow]")
+        raise typer.Exit(1)
+
+    learner = InstinctLearner(_get_storage_path())
+    victims = learner.prune_auto_extracted(dry_run=not apply)
+
+    if not victims:
+        console.print("[green]✓[/green] 没有需要清理的 auto_extracted instinct。")
+        return
+
+    for v in victims:
+        # rich_escape on user-derived pattern text — a pattern containing
+        # "[/x]" would otherwise raise MarkupError (after the deletion in
+        # --apply mode). Convention: cli/main.py, cli/render.py.
+        console.print(f"  [dim]{v.id}[/dim] {rich_escape(v.pattern[:100])}")
+    if apply:
+        console.print(f"[bold]已删除 {len(victims)} 条[/bold]")
+    else:
+        console.print(
+            f"[bold]将被删除 {len(victims)} 条[/bold] "
+            "[dim](dry-run：加 --apply 执行)[/dim]"
+        )
 
 
 # ──────────────────────────────────────────────────────────────────

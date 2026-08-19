@@ -406,3 +406,94 @@ class TestFeedbackCollect:
             MissCounter(isolated_cwd).hash_for(p) for p in ("first", "second", "third")
         ]
         assert hashes == expected_order
+
+
+# ──────────────────────────────────────────────────────────────────
+# prune --auto-extracted (Tier2 — existing-data hygiene)
+# ──────────────────────────────────────────────────────────────────
+
+
+class TestPruneAutoExtracted:
+    def _learn_auto(self, learner, pattern: str) -> None:
+        learner.learn(
+            pattern=pattern,
+            action="suggest builtin/systematic-debugging skill",
+            context="keyword",
+            tags=["routing", "auto_extracted"],
+            source="auto_routing",
+        )
+
+    def test_requires_scope_flag(self, isolated_cwd, learner):
+        result = runner.invoke(app, ["prune"])
+        assert result.exit_code == 1
+        assert "--auto-extracted" in result.stdout
+
+    def test_dry_run_by_default_writes_nothing(self, isolated_cwd, learner):
+        self._learn_auto(learner, "ok ok ok ok")  # low-info junk
+        self._learn_auto(learner, "debug this routing error now")  # good
+
+        result = runner.invoke(app, ["prune", "--auto-extracted"])
+        assert result.exit_code == 0
+        assert "dry-run" in result.stdout
+        # Dry-run: both entries still on disk.
+        reloaded = InstinctLearner(isolated_cwd / ".vibe" / "instincts.jsonl")
+        assert len(reloaded.instincts) == 2
+
+    def test_apply_removes_junk_and_keeps_good(self, isolated_cwd, learner):
+        self._learn_auto(learner, "ok ok ok ok")  # low-info junk
+        self._learn_auto(learner, " ".join(["fix the flaky routing test"] * 30))  # megaprompt
+        self._learn_auto(learner, "debug this routing error now")  # good
+
+        result = runner.invoke(app, ["prune", "--auto-extracted", "--apply"])
+        assert result.exit_code == 0
+        assert "已删除 2 条" in result.stdout
+
+        reloaded = InstinctLearner(isolated_cwd / ".vibe" / "instincts.jsonl")
+        assert {i.pattern for i in reloaded.instincts.values()} == {
+            "debug this routing error now"
+        }
+
+    def test_nothing_to_prune(self, isolated_cwd, learner):
+        self._learn_auto(learner, "debug this routing error now")
+        result = runner.invoke(app, ["prune", "--auto-extracted", "--apply"])
+        assert result.exit_code == 0
+        assert "没有需要清理" in result.stdout
+
+    def test_accepted_megaprompt_survives_prune(self, isolated_cwd, learner):
+        """gate8 nit 1 regression (pi reproduction): a junk-pattern instinct
+        that the user later confirmed via the accept write-back path must
+        survive prune — accept re-sources/re-tags the merged instinct."""
+        from vibesop.cli.commands.instinct_cmd import _apply_accept_writeback
+
+        mega = " ".join(["fix the flaky routing test"] * 30)
+        self._learn_auto(learner, mega)  # auto-minted junk pattern
+
+        _apply_accept_writeback(mega, "builtin/systematic-debugging")
+
+        result = runner.invoke(app, ["prune", "--auto-extracted", "--apply"])
+        assert result.exit_code == 0
+        reloaded = InstinctLearner(isolated_cwd / ".vibe" / "instincts.jsonl")
+        kept = {i.pattern: i for i in reloaded.instincts.values()}
+        assert mega.lower() in kept
+        assert kept[mega.lower()].source == "routing_pending"
+        assert "auto_extracted" not in kept[mega.lower()].tags
+
+    def test_markup_in_pattern_does_not_crash(self, isolated_cwd, learner):
+        """gate8 nit 3 regression: a pattern containing Rich markup must not
+        raise MarkupError — especially AFTER deletion succeeded in --apply."""
+        learner.learn(
+            pattern="[/dim] ok ok ok",
+            action="suggest builtin/systematic-debugging skill",
+            context="levenshtein",  # weak layer: pruned despite pattern length
+            tags=["routing", "auto_extracted"],
+            source="auto_routing",
+        )
+
+        dry = runner.invoke(app, ["prune", "--auto-extracted"])
+        assert dry.exit_code == 0
+        applied = runner.invoke(app, ["prune", "--auto-extracted", "--apply"])
+        assert applied.exit_code == 0
+        assert "已删除 1 条" in applied.stdout
+
+        reloaded = InstinctLearner(isolated_cwd / ".vibe" / "instincts.jsonl")
+        assert reloaded.instincts == {}

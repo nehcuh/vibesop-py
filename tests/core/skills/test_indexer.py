@@ -155,12 +155,12 @@ class TestClassifySkillSource:
 
 
 class TestSaveIndexSchema:
-    def test_save_writes_v1_3_0_schema(self, indexer: SkillIndexer) -> None:
+    def test_save_writes_v1_4_0_schema(self, indexer: SkillIndexer) -> None:
         profiles = {"a/b": _make_profile("a/b")}
         indexer._save_index(profiles, scope="global")
 
         data = json.loads(indexer.global_index_path.read_text(encoding="utf-8"))
-        assert data["version"] == "1.3.0"
+        assert data["version"] == "1.4.0"
         assert data["scope"] == "global"
         assert data["indexed_count"] == 1
         assert "indexed_at" in data
@@ -225,6 +225,58 @@ class TestLoadSingleIndex:
         loaded = indexer._load_single_index(indexer.global_index_path)
         assert "foo" in loaded
         assert loaded["foo"].skill_id == "foo"
+
+    def test_prunes_non_skill_state_file_profiles(self, indexer: SkillIndexer) -> None:
+        """Pre-1.4 indexers treated any YAML under .vibe/skills as a skill, so
+        auto-config.yaml / registry.yaml were indexed under synthesized ids like
+        ``project/auto-config.yaml/auto-config``. Those phantom profiles are
+        pruned at load time so stale on-disk indexes self-heal."""
+        indexer.global_index_path.parent.mkdir(parents=True, exist_ok=True)
+        indexer.global_index_path.write_text(
+            json.dumps(
+                {
+                    "version": "1.3.0",
+                    "scope": "project",
+                    "skills": {
+                        "project/auto-config.yaml/auto-config": _make_profile(
+                            "project/auto-config.yaml/auto-config"
+                        ).to_dict(),
+                        "project/registry.yaml/registry": _make_profile(
+                            "project/registry.yaml/registry"
+                        ).to_dict(),
+                        "real-skill": _make_profile("real-skill").to_dict(),
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
+        loaded = indexer._load_single_index(indexer.global_index_path)
+        assert set(loaded) == {"real-skill"}
+
+    def test_prune_matches_whole_id_segments_only(self, indexer: SkillIndexer) -> None:
+        """The prune matches "/" separated id segments exactly (mirroring the
+        loader's exact-filename exclusion): a real skill whose id merely
+        CONTAINS a state filename as a non-final component is kept."""
+        indexer.global_index_path.parent.mkdir(parents=True, exist_ok=True)
+        indexer.global_index_path.write_text(
+            json.dumps(
+                {
+                    "version": "1.3.0",
+                    "scope": "project",
+                    "skills": {
+                        "project/registry.yaml-tools/main": _make_profile(
+                            "project/registry.yaml-tools/main"
+                        ).to_dict(),
+                        "project/auto-config.yaml/auto-config": _make_profile(
+                            "project/auto-config.yaml/auto-config"
+                        ).to_dict(),
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
+        loaded = indexer._load_single_index(indexer.global_index_path)
+        assert set(loaded) == {"project/registry.yaml-tools/main"}
 
     def test_missing_file_returns_empty(self, indexer: SkillIndexer) -> None:
         # Path that doesn't exist
@@ -1541,13 +1593,13 @@ class TestEmbeddingSupport:
         prof = SkillProfile.from_dict(d)
         assert prof.embedding is None
 
-    def test_save_index_writes_v1_3_0_schema(self, indexer: SkillIndexer) -> None:
+    def test_save_index_writes_v1_4_0_schema(self, indexer: SkillIndexer) -> None:
         prof = _make_profile("a/b")
         prof.embedding = [0.1, 0.2]
         indexer._save_index({"a/b": prof}, scope="global")
 
         data = json.loads(indexer.global_index_path.read_text(encoding="utf-8"))
-        assert data["version"] == "1.3.0"
+        assert data["version"] == "1.4.0"
         assert data["skills"]["a/b"]["embedding"] == [0.1, 0.2]
 
     def test_load_single_index_restores_embedding(self, indexer: SkillIndexer) -> None:

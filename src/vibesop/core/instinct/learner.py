@@ -150,6 +150,60 @@ class SequencePattern:
         )
 
 
+# Auto-extraction quality gate (Tier2 junk-instinct fix). The router only
+# auto-mints instincts from patterns passing ``is_auto_extract_worthy``, and
+# ``InstinctLearner.prune_auto_extracted`` removes existing auto_extracted
+# rows that fail it. Patterns longer than this many chars are one-off
+# megaprompts, not reusable routing patterns (real-world dogfood: 700+ char
+# prompts were stored as instinct patterns and can never match again via the
+# Jaccard/bigram scorer).
+AUTO_EXTRACT_MAX_PATTERN_CHARS = 300
+
+
+def is_auto_extract_worthy(pattern: str) -> bool:
+    """True when a query pattern is worth minting as an auto_extracted instinct.
+
+    Rejects on either rule:
+      1. length — beyond ``AUTO_EXTRACT_MAX_PATTERN_CHARS`` the pattern is a
+         one-off megaprompt that will never re-match;
+      2. low information — reuses ``is_low_information_query`` from
+         ``routing_pending`` (the M7 review-queue gate), imported lazily;
+         routing_pending only imports utils at module level, so no cycle.
+    """
+    if len(pattern) > AUTO_EXTRACT_MAX_PATTERN_CHARS:
+        return False
+    from vibesop.core.instinct.routing_pending import is_low_information_query
+
+    return not is_low_information_query(pattern)
+
+
+def _is_untrusted_layer_context(context: str) -> bool:
+    """True when *context* is a known routing layer the mint gate distrusts.
+
+    ``Instinct.context`` stores ``match.layer.value`` at mint time, so this
+    lets prune catch legacy instincts minted by weak last-resort layers
+    (levenshtein/custom/fallback_llm) or ai_triage even when their pattern
+    passes the quality gate (gate8 nit: mint gate is conf AND layer AND
+    quality, prune must enforce the same axes).
+
+    Unknown/missing context (empty string, free-text contexts like
+    ``"extracted_from_experiment"``) returns False — the decision then falls
+    back to the quality gate alone. Lazy imports: models is light, and
+    unified is only pulled in here (never at module level) so learner stays
+    importable without the router stack.
+    """
+    normalized = (context or "").strip().lower()
+    if not normalized:
+        return False
+    from vibesop.core.models import RoutingLayer
+    from vibesop.core.routing.unified import AUTO_EXTRACT_TRUSTED_LAYERS
+
+    known = {layer.value for layer in RoutingLayer}
+    if normalized not in known:
+        return False
+    return normalized not in {layer.value for layer in AUTO_EXTRACT_TRUSTED_LAYERS}
+
+
 class InstinctLearner:
     """Learn and manage instincts from experience."""
 
@@ -403,6 +457,75 @@ class InstinctLearner:
             self._bump_clear_epoch_locked()
             self._clear_epoch_at_load = self._read_clear_epoch()
         return count
+
+    def prune_auto_extracted(self, *, dry_run: bool = True) -> list[Instinct]:
+        """Remove auto_extracted instincts that fail the mint-time gates.
+
+        Targets only instincts minted by the router's auto_extract path
+        (``source == "auto_routing"`` or tagged ``auto_extracted``). A row is
+        pruned when EITHER gate fails (gate8 review nit — the mint gate
+        requires conf AND trusted layer AND quality, so prune enforces both
+        the quality and the layer axis):
+
+          1. quality gate — pattern fails ``is_auto_extract_worthy``; or
+          2. layer gate — stored ``context`` (the layer value recorded at
+             mint time) is a known routing layer outside
+             ``unified.AUTO_EXTRACT_TRUSTED_LAYERS`` (legacy weak-layer
+             mints whose pattern happens to look fine). Unknown/missing
+             context falls back to the quality gate alone (documented
+             leniency for pre-layer-tracking rows).
+
+        Human-confirmed instincts are NEVER touched:
+
+          - ``vibe instinct accept`` re-sources/re-tags merged instincts to
+            ``routing_pending``/``pending_accept`` at accept time (gate8
+            fix: ``learn()`` merges by id and used to keep the auto_extracted
+            tag), and
+          - any row with ``success_count > 0`` is skipped outright — that
+            count is only ever incremented by explicit positive user
+            feedback (accept / ``vibe feedback`` yes), which protects rows
+            accepted before the re-tagging fix.
+
+        ``dry_run=True`` (default) writes nothing; the returned list is what
+        WOULD be removed. Returns the pruned (or would-be-pruned) instincts.
+        """
+        with self._lock, self._cross_process_lock(self.storage_path):
+            # Clear-epoch guard, mirroring _save exactly (sequences too): if
+            # another process purged since we loaded, drop stale in-memory
+            # state instead of resurrecting it via the merge below or a later
+            # save.
+            current_epoch = self._read_clear_epoch()
+            if current_epoch > self._clear_epoch_at_load:
+                self._instincts.clear()
+                self._sequences.clear()
+                self._embedding_cache.clear()
+                self._clear_epoch_at_load = current_epoch
+            # Merge concurrent writes first so we prune against the fullest
+            # view of the store (same RMW discipline as _save).
+            self._merge_disk_into_memory_locked()
+            victims = [
+                i
+                for i in self._instincts.values()
+                if (i.source == "auto_routing" or "auto_extracted" in i.tags)
+                and i.success_count == 0  # explicit positive feedback => human-confirmed
+                and (
+                    not is_auto_extract_worthy(i.pattern)
+                    or _is_untrusted_layer_context(i.context)
+                )
+            ]
+            if dry_run or not victims:
+                return victims
+            for victim in victims:
+                del self._instincts[victim.id]
+            self._embedding_cache.clear()
+            self._backup_locked(self.storage_path)
+            # Write instincts.jsonl directly — NOT _save(), which re-acquires
+            # the cross-process lock on the same file (non-reentrant flock).
+            content = "".join(
+                json.dumps(instinct.to_dict()) + "\n" for instinct in self._instincts.values()
+            )
+            write_text(self.storage_path, content)
+            return victims
 
     def learn(
         self,

@@ -15,7 +15,7 @@ from vibesop.core.routing._protocols import LLMFactory, PromptBuilder
 from vibesop.core.routing.circuit_breaker import TriageCircuitBreaker
 from vibesop.core.routing.layers import LayerResult
 from vibesop.core.routing.triage_cache import TriageCache
-from vibesop.core.routing.triage_recall import EmbeddingRecall
+from vibesop.core.routing.triage_recall import DEFAULT_MIN_SIMILARITY, EmbeddingRecall
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -87,13 +87,20 @@ class TriageService:
         # cache dir is available; the prefilter then uses KeywordMatcher.
         if embedding_recall is not None:
             self._embedding_recall = embedding_recall
+            # Injected recall: its configured floor is authoritative — the
+            # config sync in prefilter_ai_triage_candidates skips it.
+            self._owns_embedding_recall = False
         else:
             cache_dir = getattr(cache_manager, "cache_dir", None)
             self._embedding_recall = (
-                EmbeddingRecall(_resolve_vibe_dir(cache_dir))
+                EmbeddingRecall(
+                    _resolve_vibe_dir(cache_dir),
+                    min_similarity=self._recall_min_similarity(),
+                )
                 if isinstance(cache_dir, (str, Path))
                 else None
             )
+            self._owns_embedding_recall = self._embedding_recall is not None
         self._last_recall_method: str | None = None
         self._circuit_breaker = TriageCircuitBreaker(
             enabled=getattr(config, "ai_triage_circuit_breaker_enabled", True),
@@ -251,6 +258,13 @@ class TriageService:
         # recall cost.
         max_skills = self._config.ai_triage_max_skills
         triage_candidates = self.prefilter_ai_triage_candidates(query, candidates, max_skills)
+        if not triage_candidates:
+            # Embedding recall found nothing above the similarity floor
+            # (junk query) — skip the LLM call entirely. Only reachable when
+            # the candidate count exceeds ai_triage_max_skills; smaller sets
+            # bypass the floor (see prefilter_ai_triage_candidates).
+            logger.debug("AI triage skipped: prefilter found no relevant candidates")
+            return None
 
         def _skill_summary(c: dict[str, Any]) -> str:
             text = c.get("intent", c.get("description", "N/A"))
@@ -372,10 +386,27 @@ class TriageService:
         Instead of sending all candidates to the LLM (wasteful), we rank
         them by embedding similarity and only send the top N. Any recall
         failure falls back to KeywordMatcher ranking, identical to the
-        previous behavior.
+        previous behavior. An EMPTY recall result is different from a
+        failure: recall ran and every candidate scored below the similarity
+        floor, so nothing is semantically relevant — return [] (the caller
+        skips the LLM call) rather than backfilling the window with
+        arbitrary candidates.
+
+        Scope note: recall (and therefore the similarity floor + abstain)
+        only runs when the eligible count exceeds ``max_skills`` — at or
+        below the window every candidate is forwarded as-is. That is
+        deliberate: for small candidate sets the floor would mostly reject
+        terse/CJK queries whose embedding similarity to English skill
+        descriptions is systematically low, and the LLM disambiguates
+        cheaply when the window already fits.
         """
         eligible = [c for c in candidates if not c.get("management_only")]
         self._last_recall_method = None
+        if self._embedding_recall is not None and self._owns_embedding_recall:
+            # Sync the floor per call (not per candidate) so swapping
+            # self.config after construction takes effect; an injected recall
+            # keeps its own configured floor.
+            self._embedding_recall.min_similarity = self._recall_min_similarity()
         if len(eligible) <= max_skills:
             return eligible
 
@@ -399,6 +430,10 @@ class TriageService:
 
         # Preserve original order for matched candidates, then backfill if needed
         prefiltered = [c for c in eligible if c["id"] in matched_ids]
+        if not prefiltered and recall_ids is not None:
+            # Embedding recall is healthy but found nothing above the floor:
+            # abstain instead of sending arbitrary candidates to the LLM.
+            return []
         if len(prefiltered) < max_skills:
             remaining = [c for c in eligible if c["id"] not in matched_ids]
             prefiltered.extend(remaining[: max_skills - len(prefiltered)])
@@ -536,6 +571,11 @@ class TriageService:
         """Persistent-cache TTL in hours (default 72); tolerant of mocks."""
         ttl = getattr(self._config, "triage_cache_ttl_hours", 72)
         return float(ttl) if isinstance(ttl, (int, float)) else 72.0
+
+    def _recall_min_similarity(self) -> float:
+        """Embedding-recall similarity floor; tolerant of mocks/bad config."""
+        value = getattr(self._config, "ai_triage_recall_min_similarity", None)
+        return float(value) if isinstance(value, (int, float)) else DEFAULT_MIN_SIMILARITY
 
     def _call_llm(self, prompt: str) -> Any:
         """Call the LLM with a hard timeout (config: ai_triage_timeout_seconds).

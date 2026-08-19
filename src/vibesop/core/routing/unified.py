@@ -83,6 +83,28 @@ _JUNK_QUERY_MARKERS = (
 )
 
 
+# Layers trusted to auto-mint instincts in _record_routing_decision (Tier2
+# junk-instinct fix): deterministic Stage 1/2 layers plus the classic Stage-4
+# matchers. Excluded on purpose:
+#   - LEVENSHTEIN / CUSTOM / FALLBACK_LLM: weak last-resort layers whose
+#     reported confidence is inflated (levenshtein normalized distance hits
+#     1.0 on near-garbage — see routing_pending._WEAK_MATCH_LAYERS);
+#   - AI_TRIAGE: LLM triage outcomes are already human-reviewed via the
+#     routing pending queue (accept/dismiss write-back) — auto-minting would
+#     bypass that review;
+#   - NO_MATCH: nothing to learn from.
+AUTO_EXTRACT_TRUSTED_LAYERS = frozenset(
+    {
+        RoutingLayer.EXPLICIT,
+        RoutingLayer.SCENARIO,
+        RoutingLayer.SEMANTIC_INDEX,
+        RoutingLayer.KEYWORD,
+        RoutingLayer.TFIDF,
+        RoutingLayer.EMBEDDING,
+    }
+)
+
+
 def _is_junk_query(query: str) -> bool:
     """True when the query IS harness markup, not when it merely mentions it.
 
@@ -1259,9 +1281,9 @@ class UnifiedRouter(
         context: RoutingContext | None,
     ) -> None:
         # F-06 (Kimi review #2): redact PII/secrets before the query is persisted
-        # to the instinct/preference learners (instincts.jsonl, preferences.json)
-        # — same plaintext-PII leak class as analytics; non-PII queries are
-        # unchanged so instinct pattern-matching is preserved for the common case.
+        # to the instinct learner (instincts.jsonl) — same plaintext-PII leak
+        # class as analytics; non-PII queries are unchanged so instinct
+        # pattern-matching is preserved for the common case.
         from vibesop.utils.redaction import redact_sensitive
 
         query = redact_sensitive(query)
@@ -1274,9 +1296,23 @@ class UnifiedRouter(
                     metadata={"skill_id": match.skill_id, "layer": match.layer.value},
                 )
 
-            # Extract a simple instinct: query pattern -> skill suggestion
-            # Only record if query is non-trivial and confidence is high
-            if match.confidence >= 0.7 and len(query) > 5:
+            # Extract a simple instinct: query pattern -> skill suggestion.
+            # Tier2 junk-instinct fix: auto-mint only when ALL hold —
+            #   1. high confidence + non-trivial query (pre-existing rule);
+            #   2. the match came from a trusted layer (see
+            #      AUTO_EXTRACT_TRUSTED_LAYERS) — weak last-resort layers
+            #      report inflated confidence and minted garbage instincts;
+            #   3. the pattern passes the shared auto-extract quality gate
+            #      (low-info queries and megaprompt-length patterns never
+            #      become instincts).
+            from vibesop.core.instinct.learner import is_auto_extract_worthy
+
+            if (
+                match.confidence >= 0.7
+                and len(query) > 5
+                and match.layer in AUTO_EXTRACT_TRUSTED_LAYERS
+                and is_auto_extract_worthy(query.lower())
+            ):
                 self._get_instinct_learner().learn(
                     pattern=query.lower(),
                     action=f"suggest {match.skill_id} skill",
@@ -1285,12 +1321,12 @@ class UnifiedRouter(
                     source="auto_routing",
                 )
 
-            # Record to preference learner for personalization
-            try:
-                learner = self._preference_booster.get_learner()
-                learner.record_selection(match.skill_id, query, was_helpful=True)
-            except Exception as e:
-                logger.debug("Failed to record preference selection: %s", e)
+            # Preference: merely being routed is NOT evidence of helpfulness.
+            # Recording was_helpful=True here inflated helpful counts for
+            # every routed skill — a positive-feedback loop. Real signal comes
+            # only from explicit feedback paths (cli/feedback.py, vibe instinct
+            # accept/dismiss); PreferenceLearner has no neutral recording mode,
+            # so routing alone records nothing.
         except (OSError, ValueError, RuntimeError) as e:
             logger.debug("Failed to record routing decision: %s", e)
 

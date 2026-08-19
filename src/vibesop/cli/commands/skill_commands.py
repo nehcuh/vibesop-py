@@ -507,7 +507,9 @@ def add(
 
     installer = SkillInstaller()
 
-    project_path = Path() if scope == "project" else Path.home() / ".vibe"
+    project_path = _install_root(scope)
+    if scope == "global":
+        _migrate_legacy_global_skills(Path.home())
     install_result = installer.install_skill(
         skill_path=skill_path,
         project_path=project_path,
@@ -520,6 +522,8 @@ def add(
             console.print(f"  [dim]• {error}[/dim]")
         raise typer.Exit(1)
 
+    for warning in install_result["warnings"]:
+        console.print(f"[yellow]⚠ {warning}[/yellow]")
     console.print(f"[green]✓ Installed to:[/green] {install_result['installed_path']}")
 
     if auto_config:
@@ -554,6 +558,65 @@ def add(
             border_style="green",
         )
     )
+
+
+def _install_root(scope: str) -> Path:
+    """Install root passed to SkillInstaller for the given scope.
+
+    The installer appends ``.vibe/skills`` to this root, so ``global``
+    must be the home directory itself: ``~/.vibe/skills/<id>`` is the
+    unified global location — it is in ``ExternalSkillLoader``'s search
+    paths and matches the `vibe skill promote` activate hints. (An
+    earlier version passed ``~/.vibe`` here, producing the doubled,
+    undiscoverable ``~/.vibe/.vibe/skills/<id>``.)
+    """
+    return Path() if scope == "project" else Path.home()
+
+
+def _migrate_legacy_global_skills(home: Path) -> None:
+    """Move skills from the legacy doubled path into ``~/.vibe/skills/``.
+
+    Older versions installed ``--global`` skills to
+    ``~/.vibe/.vibe/skills/<id>``, which no discovery path reads — those
+    installs are invisible. Defensive: skills are moved (never deleted
+    before the move succeeds); on a name conflict the legacy copy is
+    left in place with a warning; non-directory entries (e.g. the legacy
+    registry.yaml) are left untouched.
+    """
+    import shutil
+
+    legacy_dir = home / ".vibe" / ".vibe" / "skills"
+    if not legacy_dir.is_dir():
+        return
+
+    target_dir = home / ".vibe" / "skills"
+    moved = 0
+    for child in sorted(legacy_dir.iterdir()):
+        if not child.is_dir():
+            continue
+        dest = target_dir / child.name
+        if dest.exists():
+            console.print(
+                f"[yellow]⚠ Skipping legacy global skill '{child.name}': "
+                f"{dest} already exists — remove the legacy copy at {child} "
+                f"manually if unwanted[/yellow]"
+            )
+            continue
+        try:
+            target_dir.mkdir(parents=True, exist_ok=True)
+            shutil.move(str(child), str(dest))
+            moved += 1
+        except OSError as e:
+            console.print(
+                f"[yellow]⚠ Could not migrate legacy global skill "
+                f"'{child.name}': {e}[/yellow]"
+            )
+
+    if moved:
+        console.print(
+            f"[dim]Migrated {moved} skill(s) from legacy "
+            f"~/.vibe/.vibe/skills/ to ~/.vibe/skills/[/dim]"
+        )
 
 
 def _detect_and_load_skill(source: str) -> tuple[Path, Any]:
@@ -1039,13 +1102,12 @@ def _index_newly_added_skill(skill_id: str, scope: str) -> bool:
     deliberately avoided: it would re-walk every discovered skill and
     re-write whole layers, far too slow for an install path.
 
-    Scope caveat (gate7 pi NIT-b): incremental indexing currently only
-    takes effect for PROJECT-scope installs. ``vibe skill add --global``
-    installs to ``~/.vibe/.vibe/skills/<id>``, which is outside
-    ``SkillLoader``'s search paths, so global installs always degrade to
-    "not yet discoverable" — run ``vibe skills index --scope global``
-    after a global install. Unifying the global install path is a Tier2
-    item; this function's contract is honesty, not coverage.
+    Scope note: ``vibe skill add --global`` installs to
+    ``~/.vibe/skills/<id>`` (see ``_install_root``), which IS in
+    ``ExternalSkillLoader``'s search paths, so incremental indexing
+    applies to both scopes. A global skill can still be undiscoverable
+    here when the external audit gate rejects it — in that case the
+    degrade message points to ``vibe skills index --scope global``.
 
     Uses SkillIndexer's single-skill building blocks — no public
     single-skill API exists and the indexer is outside this change's
@@ -1083,13 +1145,14 @@ def _index_newly_added_skill(skill_id: str, scope: str) -> bool:
         loaded = SkillLoader(project_root=Path()).get_skill(skill_id)
         if loaded is None:
             if scope == "global":
-                # See docstring: global installs land outside SkillLoader's
-                # search paths (Tier2 known issue) — this is the expected
-                # path for --global, not a transient failure.
+                # Global installs land in ~/.vibe/skills/ (in the external
+                # search paths) — reaching this branch means discovery
+                # failed anyway (e.g. external audit gate), so point at
+                # the global-scope index rebuild.
                 console.print(
-                    f"[yellow]⚠ Incremental indexing is project-scope only — "
-                    f"run `vibe skills index --scope global` to make "
-                    f"'{skill_id}' semantically routable.[/yellow]"
+                    f"[yellow]⚠ Skill '{skill_id}' is not discoverable by "
+                    f"SkillLoader — run `vibe skills index --scope global` "
+                    f"to make it semantically routable.[/yellow]"
                 )
             else:
                 console.print(

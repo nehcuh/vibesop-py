@@ -207,6 +207,20 @@ class RoutingConfig(TolerantConfig):
         "hits (see scripts/calibrate_index_threshold.py). Must be < 1.0: the "
         "confidence scaling in _layers.py divides by (1.0 - threshold).",
     )
+    ai_triage_recall_min_similarity: float = Field(
+        default=0.25,
+        ge=0.0,
+        le=1.0,
+        description="Minimum cosine similarity for the AI-triage embedding "
+        "recall prefilter (paraphrase-multilingual-MiniLM-L12-v2). Candidates "
+        "below this floor are dropped from the LLM triage window; when nothing "
+        "clears the floor, triage is skipped instead of sending garbage. Only "
+        "applies when the eligible candidate count exceeds ai_triage_max_skills "
+        "— smaller sets are forwarded whole (protective for terse/CJK queries). "
+        "0.25 sits just above the model's ~0.1-0.3 noise floor for unrelated "
+        "pairs (recall is a top-N prefilter, so it stays lower than the 0.45 "
+        "hard-match floor used by the SEMANTIC_INDEX embedding fallback).",
+    )
     session_aware: bool = Field(
         default=True,
         description="Enable session-state-aware routing for multi-turn conversations",
