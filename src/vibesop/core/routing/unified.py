@@ -646,6 +646,32 @@ class UnifiedRouter(
                 context,
             )
 
+        # Layer 0.6: Explicit signals for the other guarded skills (e.g.
+        # riper-workflow). Same rationale as 0.5: a user who literally names
+        # the skill ("用 RIPER 流程来做这个功能") has declared intent; the
+        # fuzzy layers cannot be relied on to surface the guarded skill
+        # because its contract strips the generic vocabulary they key on
+        # (production miss: the query above fell to fallback-llm while the
+        # guard only gates matches, never promotes them).
+        match, detail = self._try_guarded_explicit_layer(query, candidates)
+        routing_path.append(RoutingLayer.KEYWORD)
+        layer_details.append(detail)
+        self._tracer.record_layer(RoutingLayer.KEYWORD, detail, len(candidates))
+        if match:
+            self._record_layer(RoutingLayer.KEYWORD)
+            return self._build_match_result(
+                query,
+                match,
+                [],
+                routing_path,
+                layer_details,
+                start_time,
+                deprecated_warnings,
+                conversation,
+                original_query,
+                context,
+            )
+
         use_keyword = self._should_use_keyword_routing(query, context)
 
         # Management gate for the early layers (scenario / semantic index):
@@ -773,9 +799,7 @@ class UnifiedRouter(
                 alternatives = [
                     a
                     for a in alternatives
-                    if self._triage_service.has_explicit_guard_signal(
-                        query, candidates, a.skill_id
-                    )
+                    if self._triage_service.has_explicit_guard_signal(query, candidates, a.skill_id)
                 ]
         if primary:
             self._record_layer(detail.layer)
@@ -930,6 +954,42 @@ class UnifiedRouter(
             reason=f"Explicit session-end signal matched '{skill_id}'",
         )
 
+    def _try_guarded_explicit_layer(
+        self,
+        query: str,
+        candidates: list[dict[str, Any]],
+    ) -> tuple[SkillRoute | None, LayerDetail]:
+        """Fast-path explicit signals for guarded skills other than session-end.
+
+        Mirrors _try_session_end_layer: a declared trigger phrase or an
+        always-explicit token (matched case-insensitively, see TriageService.
+        has_explicit_guard_signal) is user-declared intent and routes
+        directly at high confidence. Session-end keeps its own layer because
+        its trigger semantics are stricter.
+        """
+        candidate = self._triage_service.explicit_guarded_skill_match(query, candidates)
+        if candidate is None:
+            return None, LayerDetail(
+                layer=RoutingLayer.KEYWORD,
+                matched=False,
+                reason="No explicit guarded-skill signal detected",
+            )
+
+        skill_id = str(candidate.get("id", ""))
+        match = SkillRoute(
+            skill_id=skill_id,
+            confidence=0.95,
+            layer=RoutingLayer.KEYWORD,
+            source=self._get_skill_source(skill_id, candidate.get("namespace", "builtin")),
+            description=str(candidate.get("description", "")),
+            metadata={"guarded_explicit_signal": True},
+        )
+        return match, LayerDetail(
+            layer=RoutingLayer.KEYWORD,
+            matched=True,
+            reason=f"Explicit guarded-skill signal matched '{skill_id}'",
+        )
+
     def enable_trace(self) -> None:
         """Enable per-layer routing trace recording.
 
@@ -1013,9 +1073,7 @@ class UnifiedRouter(
                 nearest = [
                     r
                     for r in nearest
-                    if self._triage_service.has_explicit_guard_signal(
-                        query, candidates, r.skill_id
-                    )
+                    if self._triage_service.has_explicit_guard_signal(query, candidates, r.skill_id)
                 ]
             result = RoutingResult(
                 primary=None,

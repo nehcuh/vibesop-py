@@ -904,7 +904,9 @@ class TestGuardedSkills:
         """「我先离开了」 contains the 离开了 trigger → explicit signal."""
         service = _make_service()
         assert (
-            service.has_explicit_guard_signal("我先离开了", self._candidates(), "builtin/session-end")
+            service.has_explicit_guard_signal(
+                "我先离开了", self._candidates(), "builtin/session-end"
+            )
             is True
         )
 
@@ -955,7 +957,9 @@ class TestGuardedSkills:
     def test_riper_fallback_triggers_when_candidate_missing(self) -> None:
         """Without a riper candidate, the conservative fallback list applies."""
         service = _make_service()
-        assert service.has_explicit_guard_signal("tell me about riper", [], "builtin/riper-workflow")
+        assert service.has_explicit_guard_signal(
+            "tell me about riper", [], "builtin/riper-workflow"
+        )
         assert not service.has_explicit_guard_signal("make a plan", [], "builtin/riper-workflow")
 
     def test_session_end_real_skill_md_covers_leaving(self) -> None:
@@ -987,7 +991,6 @@ class TestGuardedSkills:
             is True
         )
 
-
     def test_riper_fallback_triggers_cover_real_skill_md(self) -> None:
         """The riper fallback trigger list must cover the real SKILL.md.
 
@@ -1009,14 +1012,83 @@ class TestGuardedSkills:
         declared = [str(t).lower() for t in (frontmatter.get("triggers") or [])]
 
         service = _make_service()
-        fallback = [
-            t.lower()
-            for t in service._GUARDED_SKILL_FALLBACK_TRIGGERS["riper-workflow"]
-        ]
+        fallback = [t.lower() for t in service._GUARDED_SKILL_FALLBACK_TRIGGERS["riper-workflow"]]
         for trigger in declared:
             # Each declared trigger must be represented: either verbatim in
             # the fallback list, or covered by the "riper" extra token /
             # a broader fallback entry that is a substring of it.
-            assert trigger in fallback or any(
-                f in trigger for f in fallback
-            ), f"declared trigger {trigger!r} not covered by fallback list"
+            assert trigger in fallback or any(f in trigger for f in fallback), (
+                f"declared trigger {trigger!r} not covered by fallback list"
+            )
+
+
+class TestExplicitGuardedSkillMatch:
+    """Promotion direction for guarded skills: an explicit signal routes the
+    skill directly, complementing has_explicit_guard_signal (the gate)."""
+
+    _RIPER: ClassVar[dict] = {
+        "id": "builtin/riper-workflow",
+        "description": "RIPER 5-phase workflow",
+        "namespace": "builtin",
+        "triggers": ["use riper", "riper workflow", "riper 工作流", "五阶段工作流"],
+    }
+    _SESSION_END: ClassVar[dict] = {
+        "id": "builtin/session-end",
+        "description": "Session wrap-up",
+        "namespace": "builtin",
+        "triggers": ["收工", "拜拜"],
+    }
+    _OTHER: ClassVar[dict] = {
+        "id": "omx/plan",
+        "description": "Planning",
+        "namespace": "omx",
+    }
+
+    def _candidates(self) -> list[dict]:
+        return [dict(self._SESSION_END), dict(self._RIPER), dict(self._OTHER)]
+
+    def test_uppercase_name_token_is_explicit_signal(self) -> None:
+        """Case-insensitivity: an all-caps mention of the guarded skill's
+        distinctive name token counts as explicit intent."""
+        service = _make_service()
+        assert (
+            service.has_explicit_guard_signal(
+                "PLEASE SWITCH TO RIPER FOR THIS SPIKE",
+                self._candidates(),
+                "builtin/riper-workflow",
+            )
+            is True
+        )
+
+    def test_mixed_case_trigger_phrase_is_explicit_signal(self) -> None:
+        service = _make_service()
+        assert (
+            service.has_explicit_guard_signal(
+                "Let's Run The RiPeR Workflow Now", self._candidates(), "builtin/riper-workflow"
+            )
+            is True
+        )
+
+    def test_promotes_guarded_skill_on_explicit_signal(self) -> None:
+        service = _make_service()
+        match = service.explicit_guarded_skill_match(
+            "Let's do this refactor with the RIPER approach", self._candidates()
+        )
+        assert match is not None
+        assert match["id"] == "builtin/riper-workflow"
+
+    def test_no_signal_no_promotion(self) -> None:
+        service = _make_service()
+        assert (
+            service.explicit_guarded_skill_match("tidy up the module structure", self._candidates())
+            is None
+        )
+
+    def test_session_end_excluded_has_own_fast_path(self) -> None:
+        service = _make_service()
+        assert service.explicit_guarded_skill_match("收工", self._candidates()) is None
+
+    def test_guarded_skill_not_installed_no_promotion(self) -> None:
+        service = _make_service()
+        candidates = [dict(self._SESSION_END), dict(self._OTHER)]
+        assert service.explicit_guarded_skill_match("switch to RIPER please", candidates) is None

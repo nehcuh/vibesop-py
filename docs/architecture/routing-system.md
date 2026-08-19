@@ -102,6 +102,35 @@ scenarios:
 - Cost-sensitive environments
 - Simple queries
 
+### Semantic Index Layer (Stage 2) — Acceptance Gates (M9)
+
+**Implementation**: `try_index_layer()` / `_try_embedding_fallback()` in `_layers.py`
+
+The index layer matches against LLM-generated skill profiles (token bigram
+overlap first, embedding cosine as fallback). Because profile catalogs are
+large and pack-generated, a match must clear ALL of these gates, in order:
+
+1. **Installed-only ranking** — profiles for uninstalled skills never compete
+   (a stale winner would otherwise dead-end the layer).
+2. **Trusted token bar** (`index_match_threshold`, 0.20) — builtin/project/
+   custom/cross-cutting namespaces.
+3. **External token bar** (`index_external_match_threshold`, 0.30) — pack
+   profiles are LLM-generated dozens at a time with overlapping vocabulary,
+   so marginal overlap with them is weaker evidence.
+4. **Embedding floor** (`index_embedding_threshold`, 0.45) — absolute cosine
+   floor, just above the model's noise band for unrelated pairs.
+5. **Margin gate** (`index_embedding_min_margin`, 0.05) — top-1 must beat
+   top-2 by a clear gap; argmax over a big catalog otherwise always accepts
+   noise. Deliberately namespace-blind: abstaining defers to AI triage,
+   which is the intended escalation for ambiguous semantic matches.
+6. **Guarded-skill signal** — guarded skills (session-end, riper-workflow)
+   additionally need an explicit user-intent signal.
+
+**Design story**: the cheap layers stay strict on weak evidence and defer to
+AI triage (or a clean no-match) instead of accepting marginal hits. This
+trades a little recall for a large precision win on machines with many
+installed packs (M9: 67→76/107 on routing_eval_extended, zero regressions).
+
 ### Layer 3: Keyword Matching
 
 **Implementation**: `KeywordMatcher`
@@ -280,6 +309,10 @@ routing:
   fallback_mode: transparent     # transparent / silent / disabled
   enable_quality_boost: true     # Grade-based confidence adjustment
   keyword_match_max_chars: 5     # Max chars for keyword routing (0=always LLM, 200=always keyword)
+  index_match_threshold: 0.20    # SEMANTIC_INDEX token bar, curated namespaces
+  index_external_match_threshold: 0.30  # Token bar for external pack profiles
+  index_embedding_threshold: 0.45       # Embedding-fallback cosine floor
+  index_embedding_min_margin: 0.05      # Embedding top1-top2 gap (0 disables)
 ```
 
 ## Degradation System (v5.2.0)

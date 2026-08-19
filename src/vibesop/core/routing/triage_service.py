@@ -538,6 +538,33 @@ class TriageService:
 
         return any(tok in normalized_query for tok in self._GUARDED_SKILL_EXTRA_TOKENS[short])
 
+    def explicit_guarded_skill_match(
+        self,
+        query: str,
+        candidates: list[dict[str, Any]],
+    ) -> dict[str, Any] | None:
+        """Return the guarded skill whose explicit signal appears in the query.
+
+        Complement to has_explicit_guard_signal (a GATE on fuzzy matches):
+        this is the promotion direction — when the user literally names a
+        guarded skill (declared trigger phrase or always-explicit token,
+        case-insensitive via the same normalization), the skill should win
+        outright instead of hoping a fuzzy layer scores it first. Its
+        contract suppresses exactly the generic vocabulary those layers key
+        on, so without this path an explicit 「用 RIPER 流程…」 can fall all
+        the way to fallback-llm. Session-end is excluded: it has its own
+        fast path (UnifiedRouter._try_session_end_layer) with stricter
+        trigger semantics.
+        """
+        for c in candidates:
+            skill_id = str(c.get("id", ""))
+            short = self.guarded_skill_name(skill_id)
+            if short is None or short == "session-end":
+                continue
+            if self.has_explicit_guard_signal(query, candidates, skill_id):
+                return c
+        return None
+
     def is_explicit_session_end_signal(
         self,
         query: str,

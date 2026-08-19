@@ -348,6 +348,32 @@ def _cosine_similarity(a: list[float], b: list[float]) -> float:
     return dot / (norm_a * norm_b + 1e-10)
 
 
+def _cfg_float(config: Any, name: str) -> float:
+    """Read a float RoutingConfig knob, tolerating MagicMock configs in tests.
+
+    ``getattr`` on a MagicMock always succeeds, so a plain ``getattr(...,
+    default)`` would return a MagicMock (not the default) when a test only
+    sets the knobs it cares about. Fall back to the RoutingConfig Field
+    default in that case — single source of truth, so this fallback can never
+    diverge from the declared default.
+    """
+    value = getattr(config, name, None)
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        from vibesop.core.config.manager import RoutingConfig
+
+        field = RoutingConfig.model_fields.get(name)
+        default = getattr(field, "default", None) if field is not None else None
+        return float(default) if isinstance(default, (int, float)) else 0.0
+    return float(value)
+
+
+# Namespaces whose skills are curated by this repo or the project itself
+# (core/skills and .vibe/skills — the project-local skills here declare
+# namespace "custom"/"cross-cutting" in their frontmatter). Everything else
+# (superpowers, omx, mattpocock, ...) is an external pack.
+_TRUSTED_INDEX_NAMESPACES = frozenset({"builtin", "project", "custom", "cross-cutting"})
+
+
 def _try_embedding_fallback(
     router: RoutingCore,
     query: str,
@@ -395,22 +421,54 @@ def _try_embedding_fallback(
             duration_ms=(time.perf_counter() - index_start) * 1000,
         )
 
+    # Rank only profiles whose skill is actually installed: an uninstalled
+    # profile can never be routed, and letting it occupy the top-1/top-2
+    # slots would both report a dead match and corrupt the margin below.
+    candidate_ids = {str(c.get("id", "")) for c in candidates}
     best_skill_id: str | None = None
     best_similarity = 0.0
+    second_similarity = 0.0
     for skill_id, profile in profiles_with_emb.items():
+        if skill_id not in candidate_ids:
+            continue
         sim = _cosine_similarity(query_emb, profile.embedding)
         if sim > best_similarity:
+            second_similarity = best_similarity
             best_similarity = sim
             best_skill_id = skill_id
+        elif sim > second_similarity:
+            second_similarity = sim
 
-    EMBEDDING_THRESHOLD = 0.45
-    if best_similarity < EMBEDDING_THRESHOLD or not best_skill_id:
+    embedding_threshold = _cfg_float(router._config, "index_embedding_threshold")
+    if best_similarity < embedding_threshold or not best_skill_id:
         return None, LayerDetail(
             layer=RoutingLayer.SEMANTIC_INDEX,
             matched=False,
             reason=(
                 f"Embedding fallback: no match above threshold "
-                f"({best_similarity:.2f} < {EMBEDDING_THRESHOLD})"
+                f"({best_similarity:.2f} < {embedding_threshold})"
+            ),
+            duration_ms=(time.perf_counter() - index_start) * 1000,
+        )
+
+    # Margin gate: argmax over a large catalog of LLM-generated profiles
+    # always finds a nearest neighbor, even for unrelated queries — the
+    # top-1 then sits inside the model's noise band just above the absolute
+    # threshold. Genuine intent separates clearly from the runner-up; noise
+    # does not. Require a minimum top1-minus-top2 gap. The gate is
+    # deliberately namespace-blind: a noisy builtin argmax is no more
+    # trustworthy than a noisy pack one, and abstaining here does not dead-end
+    # the query — it defers to AI triage, which is the intended escalation
+    # for genuinely ambiguous semantic matches.
+    min_margin = _cfg_float(router._config, "index_embedding_min_margin")
+    margin = best_similarity - second_similarity
+    if margin < min_margin:
+        return None, LayerDetail(
+            layer=RoutingLayer.SEMANTIC_INDEX,
+            matched=False,
+            reason=(
+                f"Embedding fallback: '{best_skill_id}' too close to runner-up "
+                f"(margin {margin:.3f} < {min_margin:.2f}); treating as noise"
             ),
             duration_ms=(time.perf_counter() - index_start) * 1000,
         )
@@ -440,7 +498,7 @@ def _try_embedding_fallback(
         )
 
     # Scale similarity [threshold..1.0] → confidence [0.65..0.95]
-    confidence = 0.65 + (best_similarity - EMBEDDING_THRESHOLD) / (1.0 - EMBEDDING_THRESHOLD) * 0.30
+    confidence = 0.65 + (best_similarity - embedding_threshold) / (1.0 - embedding_threshold) * 0.30
 
     match = SkillRoute(
         skill_id=best_skill_id,
@@ -508,10 +566,36 @@ def try_index_layer(
         profile_tokens_by_id_raw if isinstance(profile_tokens_by_id_raw, dict) else {}
     )
     query_tokens = _tokenize_query(query)
+
+    # Namespace-aware hit threshold. External pack profiles are LLM-generated
+    # per installed pack, dozens at a time, with heavily overlapping
+    # vocabulary — a marginal bigram overlap with one is much weaker evidence
+    # than the same overlap with a curated builtin/project profile, so packs
+    # must clear a higher bar (index_external_match_threshold).
+    ns_by_id = {str(c.get("id", "")): str(c.get("namespace", "")) for c in candidates}
+    threshold = _cfg_float(router._config, "index_match_threshold")
+    external_threshold = max(
+        threshold,
+        _cfg_float(router._config, "index_external_match_threshold"),
+    )
+
+    def _threshold_for(skill_id: str) -> float:
+        if ns_by_id.get(skill_id) in _TRUSTED_INDEX_NAMESPACES:
+            return threshold
+        return external_threshold
+
+    # Eligibility-first selection over INSTALLED skills only: each profile
+    # competes only if it clears its own bar; the winner is the highest
+    # scorer among the eligible. Stale profiles for uninstalled skills are
+    # skipped up front (same installed-only invariant as the embedding
+    # fallback) — a stale winner would otherwise hard-miss at the candidate
+    # check below and pre-empt the embedding fallback entirely.
     best_skill_id: str | None = None
     best_score = 0.0
 
     for skill_id in index:
+        if skill_id not in ns_by_id:
+            continue
         profile_tokens = profile_tokens_by_id.get(skill_id)
         if profile_tokens is None:
             # Cache miss for a profile (e.g. cache populated by older code path);
@@ -519,12 +603,11 @@ def try_index_layer(
             profile_tokens = _build_profile_token_index({skill_id: index[skill_id]})[skill_id]
             profile_tokens_by_id[skill_id] = profile_tokens
         score = _score_overlap(query_tokens, profile_tokens)
-        if score > best_score:
+        if score >= _threshold_for(skill_id) and score > best_score:
             best_score = score
             best_skill_id = skill_id
 
-    threshold = router._config.index_match_threshold
-    if best_score < threshold or not best_skill_id:
+    if not best_skill_id:
         # Token overlap missed — try semantic embedding fallback when available.
         emb_match, emb_detail = _try_embedding_fallback(
             router, query, index, candidates, index_start
@@ -534,6 +617,9 @@ def try_index_layer(
         # Fallback ran but also missed; return its (more informative) detail.
         return None, emb_detail
 
+    # Defensive: unreachable while the loop above filters to installed
+    # candidates; kept so a future caller-side change degrades to a clean
+    # no-match instead of routing to a skill that is not installed.
     candidate = next((c for c in candidates if c["id"] == best_skill_id), None)
     if not candidate:
         return None, LayerDetail(
@@ -563,10 +649,13 @@ def try_index_layer(
             duration_ms=(time.perf_counter() - index_start) * 1000,
         )
 
-    # Confidence: scale score [threshold..1.0] → [0.65..0.95]
+    # Confidence: scale score [winner_threshold..1.0] → [0.65..0.95]
     # Lower bound 0.65 (vs SCENARIO's fixed 0.9) signals "weaker" match,
     # so a strong scenario keyword hit can still take precedence when it follows.
-    confidence = 0.65 + (best_score - threshold) / (1.0 - threshold) * 0.30
+    # The scale starts at the winner's own bar (external skills clear a higher
+    # one), so a marginal external hit is not inflated by the lower builtin bar.
+    winner_threshold = _threshold_for(best_skill_id)
+    confidence = 0.65 + (best_score - winner_threshold) / (1.0 - winner_threshold) * 0.30
 
     match = SkillRoute(
         skill_id=best_skill_id,

@@ -350,3 +350,41 @@ tags: [test, example]
         assert workflow.metadata.get("version") == "2.0.0"
         assert workflow.metadata.get("author") == "Test Author"
         assert workflow.metadata.get("tags") == ["test", "example"]
+
+
+class TestInferSource:
+    """infer_source path → namespace mapping.
+
+    Only the repo's own core/skills tree may be "builtin"; every user-home
+    agent skills dir is external. Pre-M9-fix, ~/.kimi/skills and
+    ~/.config/opencode/skills fell through to "builtin", giving pack skills
+    the trusted routing bar.
+    """
+
+    def test_repo_core_skills_are_builtin(self) -> None:
+        from pathlib import Path
+
+        from vibesop.core.skills.parser import infer_source
+
+        assert infer_source(Path("/repo/core/skills/session-end/SKILL.md")) == "builtin"
+
+    def test_project_vibe_skills_are_project(self) -> None:
+        from pathlib import Path
+
+        from vibesop.core.skills.parser import infer_source
+
+        assert infer_source(Path("/repo/.vibe/skills/x/SKILL.md")) == "project"
+
+    def test_home_agent_skill_dirs_are_external(self) -> None:
+        from pathlib import Path
+
+        from vibesop.core.skills.parser import infer_source
+
+        home = Path("/home/u")
+        for p in (
+            home / ".claude" / "skills" / "pack" / "SKILL.md",
+            home / ".config" / "skills" / "pack" / "SKILL.md",
+            home / ".kimi" / "skills" / "pack" / "SKILL.md",
+            home / ".config" / "opencode" / "skills" / "pack" / "SKILL.md",
+        ):
+            assert infer_source(p) == "external", p

@@ -271,9 +271,24 @@ def extract_trigger_from_description(description: str) -> str:
 
 
 def infer_source(skill_path: Path) -> str:
-    """Infer skill source from path."""
+    """Infer skill source from path.
+
+    Only the repo's own core/skills tree (and packaged copies) may fall
+    through to "builtin". User-home agent skill dirs are all external:
+    pre-M9 only ~/.claude/skills and ~/.config/skills were recognized, so
+    skills under ~/.kimi/skills or ~/.config/opencode/skills fell through to
+    "builtin" and inherited the trusted routing bar reserved for curated
+    skills. Callers checked: agent_runtime.py keys on the skill-ID prefix
+    (``builtin/...``), not this value; the loader's external-pack path
+    overrides namespace from pack metadata; no test pins the old mapping.
+    """
     path_str = str(skill_path)
-    if ".claude/skills" in path_str or ".config/skills" in path_str:
+    if (
+        ".claude/skills" in path_str
+        or ".config/skills" in path_str
+        or ".kimi/skills" in path_str
+        or ".config/opencode/skills" in path_str
+    ):
         return "external"
     if ".vibe/skills" in path_str:
         return "project"

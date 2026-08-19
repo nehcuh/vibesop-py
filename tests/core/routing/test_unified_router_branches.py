@@ -11,7 +11,7 @@ Covers:
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, ClassVar
 
 import pytest
 
@@ -84,9 +84,7 @@ class TestRouteScenarioLayer:
 
         assert not result.has_match
         assert result.primary is None or result.primary.layer == RoutingLayer.FALLBACK_LLM
-        assert all(
-            a.skill_id != "builtin/riper-workflow" for a in (result.alternatives or [])
-        )
+        assert all(a.skill_id != "builtin/riper-workflow" for a in (result.alternatives or []))
 
     def test_scenario_review_code(self, tmp_path: Path) -> None:
         """Review-related queries should match review skills."""
@@ -516,3 +514,84 @@ class TestGuardedSkillMatcherGate:
         assert result.has_match
         assert result.primary is not None
         assert result.primary.skill_id == "builtin/riper-workflow"
+
+
+class TestGuardedExplicitPromotion:
+    """Layer 0.6: an explicit signal for a guarded skill routes it directly.
+
+    Complements the M8 guard (which only GATES fuzzy matches): when the user
+    literally names the guarded skill, fuzzy layers cannot be relied on to
+    surface it — the skill's contract strips the generic vocabulary those
+    layers key on — so the explicit signal promotes it at fixed confidence.
+    """
+
+    _RIPER_CANDIDATE: ClassVar[dict] = {
+        "id": "builtin/riper-workflow",
+        "name": "riper-workflow",
+        "description": "Use ONLY when the user explicitly requests the RIPER "
+        "structured 5-phase development workflow (Research, Innovate, "
+        "Plan, Execute, Review)",
+        "namespace": "builtin",
+        "keywords": ["riper", "riper-workflow", "5-phase", "structured-workflow"],
+        "triggers": ["use riper", "riper workflow", "riper 工作流", "五阶段工作流"],
+    }
+    _OTHER_CANDIDATE: ClassVar[dict] = {
+        "id": "debug-skill",
+        "name": "debug-skill",
+        "description": "Debug things",
+        "namespace": "builtin",
+    }
+
+    def _candidates(self) -> list[dict]:
+        return [dict(self._RIPER_CANDIDATE), dict(self._OTHER_CANDIDATE)]
+
+    def test_uppercase_skill_name_token_promotes(self, tmp_path: Path) -> None:
+        """All-caps mention of the distinctive name token routes to riper."""
+        config = RoutingConfig(enable_ai_triage=False)
+        router = UnifiedRouter(project_root=tmp_path, config=config)
+
+        result = router._single_skill_route(
+            "Build the exporter using the RIPER method end to end",
+            candidates=self._candidates(),
+        )
+
+        assert result.primary is not None
+        assert result.primary.skill_id == "builtin/riper-workflow"
+        assert result.primary.confidence == pytest.approx(0.95)
+        assert result.primary.metadata.get("guarded_explicit_signal") is True
+
+    def test_trigger_phrase_mixed_case_promotes(self, tmp_path: Path) -> None:
+        config = RoutingConfig(enable_ai_triage=False)
+        router = UnifiedRouter(project_root=tmp_path, config=config)
+
+        result = router._single_skill_route(
+            "Please run the RiPeR workflow on this migration",
+            candidates=self._candidates(),
+        )
+
+        assert result.primary is not None
+        assert result.primary.skill_id == "builtin/riper-workflow"
+
+    def test_no_signal_no_promotion(self, tmp_path: Path) -> None:
+        """A generic query that merely shares vocabulary must not promote."""
+        config = RoutingConfig(enable_ai_triage=False)
+        router = UnifiedRouter(project_root=tmp_path, config=config)
+
+        result = router._single_skill_route(
+            "tidy up the parser module structure",
+            candidates=self._candidates(),
+        )
+
+        assert result.primary is None or result.primary.skill_id != "builtin/riper-workflow"
+
+    def test_guarded_skill_absent_no_promotion(self, tmp_path: Path) -> None:
+        """Signal present but skill not installed → no promotion."""
+        config = RoutingConfig(enable_ai_triage=False)
+        router = UnifiedRouter(project_root=tmp_path, config=config)
+
+        result = router._single_skill_route(
+            "Build the exporter using the RIPER method end to end",
+            candidates=[dict(self._OTHER_CANDIDATE)],
+        )
+
+        assert result.primary is None or result.primary.skill_id != "builtin/riper-workflow"

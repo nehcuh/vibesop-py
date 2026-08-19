@@ -211,6 +211,52 @@ class RoutingConfig(TolerantConfig):
         "scripts/calibrate_index_threshold.py). Must be < 1.0: the "
         "confidence scaling in _layers.py divides by (1.0 - threshold).",
     )
+    index_external_match_threshold: float = Field(
+        default=0.30,
+        ge=0.0,
+        lt=1.0,
+        description="Token-overlap hit threshold in the SEMANTIC_INDEX layer "
+        "for skills OUTSIDE the curated namespaces (builtin/project/custom/"
+        "cross-cutting) — i.e. external packs. "
+        "Pack profiles are LLM-generated across dozens of same-pack skills "
+        "with heavily overlapping vocabulary, so a marginal bigram overlap "
+        "with a pack profile is far weaker evidence than the same overlap "
+        "with a curated builtin/project profile (M9: 27 of 40 residual eval "
+        "misroutes were marginal index hits on locally-installed packs). "
+        "Effective threshold is max(index_match_threshold, this value), so "
+        "lowering index_match_threshold never lowers the external bar below "
+        "it. Values below index_match_threshold are therefore inert.",
+    )
+    index_embedding_threshold: float = Field(
+        default=0.45,
+        ge=0.0,
+        lt=1.0,
+        description="Absolute cosine-similarity floor for the SEMANTIC_INDEX "
+        "embedding fallback (paraphrase-multilingual-MiniLM-L12-v2). 0.45 "
+        "sits just above the model's ~0.1-0.3 noise floor for unrelated "
+        "pairs (see ai_triage_recall_min_similarity), and was the only "
+        "acceptance criterion pre-M9 — necessary but not sufficient once the "
+        "catalog is large, which is what index_embedding_min_margin adds. "
+        "Must be < 1.0: the confidence scaling divides by (1.0 - threshold).",
+    )
+    index_embedding_min_margin: float = Field(
+        default=0.05,
+        ge=0.0,
+        le=0.5,
+        description="Minimum cosine-similarity gap between the top-1 and "
+        "top-2 profile for the SEMANTIC_INDEX embedding fallback to accept a "
+        "match. The fallback is an argmax over the whole profile catalog; "
+        "with ~100 LLM-generated profiles installed, the nearest profile of "
+        "an UNRELATED query lands in the model's 0.45-0.55 noise band, so an "
+        "absolute floor alone always accepts something. Genuine intent "
+        "separates from the runner-up; noise does not. 0 disables the check. "
+        "MEASURED FRAGILITY (2026-08, routing_eval_extended): the sole "
+        "passing entry routed by this layer sits at margin 0.071 while the "
+        "nearest accepted noise hit sits at 0.0702 — the gate is sharp, and "
+        "an index rebuild (fresh LLM-generated profiles/embeddings) can flip "
+        "either side of it. Recalibrate against the eval set after any "
+        "rebuild before tuning this value.",
+    )
     ai_triage_recall_min_similarity: float = Field(
         default=0.25,
         ge=0.0,

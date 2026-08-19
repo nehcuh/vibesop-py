@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import ClassVar
 from unittest.mock import MagicMock, patch
 
 from vibesop.core.config.manager import RoutingConfig
@@ -172,6 +173,14 @@ class TestTryIndexLayer:
         assert "index match" in detail.reason.lower()
 
     def test_index_match_skill_not_in_candidates(self, tmp_path: Path) -> None:
+        """Stale profiles (skill no longer installed) are skipped up front.
+
+        Pre-M9-fix the token loop let a stale profile win and then hard-miss
+        at the candidate check WITHOUT trying the embedding fallback. Now the
+        loop is installed-only, so this query misses the token path and the
+        (here: embedding-less) fallback produces the final detail instead of
+        the dead "not in candidates" short-circuit.
+        """
         router = MagicMock()
         router.project_root = tmp_path
         router._config.index_match_threshold = 0.35
@@ -198,7 +207,8 @@ class TestTryIndexLayer:
         match, detail = try_index_layer(router, "review this code", candidates)
 
         assert match is None
-        assert "not in candidates" in detail.reason.lower()
+        assert detail.matched is False
+        assert "not in candidates" not in detail.reason.lower()
 
 
 class TestEmbeddingFallback:
@@ -346,7 +356,9 @@ class TestEarlyLayersRoutingPath:
                 return_value=(None, idx_detail),
             ),
         ):
-            router._try_early_layers("review code", [], routing_path, layer_details, use_keyword=True)
+            router._try_early_layers(
+                "review code", [], routing_path, layer_details, use_keyword=True
+            )
 
         assert routing_path == [RoutingLayer.SCENARIO, RoutingLayer.SEMANTIC_INDEX]
         assert RoutingLayer.AI_TRIAGE not in routing_path
@@ -367,7 +379,9 @@ class TestEarlyLayersRoutingPath:
             "vibesop.core.routing._layers.try_index_layer",
             return_value=(None, idx_detail),
         ):
-            router._try_early_layers("review code", [], routing_path, layer_details, use_keyword=False)
+            router._try_early_layers(
+                "review code", [], routing_path, layer_details, use_keyword=False
+            )
 
         assert routing_path == [RoutingLayer.SEMANTIC_INDEX]
         assert RoutingLayer.AI_TRIAGE not in routing_path
@@ -418,9 +432,7 @@ class TestIndexLayerGuardedSkills:
             encoding="utf-8",
         )
 
-    def test_token_match_on_guarded_skill_without_signal_abstains(
-        self, tmp_path: Path
-    ) -> None:
+    def test_token_match_on_guarded_skill_without_signal_abstains(self, tmp_path: Path) -> None:
         self._write_session_end_index(tmp_path)
         router = self._router(tmp_path, self._guard_all)
         candidates = [
@@ -446,9 +458,7 @@ class TestIndexLayerGuardedSkills:
         assert match.skill_id == "builtin/session-end"
         assert detail.matched is True
 
-    def test_embedding_match_on_guarded_skill_without_signal_abstains(
-        self, tmp_path: Path
-    ) -> None:
+    def test_embedding_match_on_guarded_skill_without_signal_abstains(self, tmp_path: Path) -> None:
         import sys
 
         self._write_session_end_index(tmp_path, embedding=[1.0, 0.0, 0.0])
@@ -470,3 +480,453 @@ class TestIndexLayerGuardedSkills:
         assert match is None
         assert detail.matched is False
         assert "guarded" in detail.reason.lower()
+
+
+class TestExternalTokenThreshold:
+    """External pack profiles must clear a higher token-overlap bar.
+
+    Pack profiles are LLM-generated per installed pack (dozens at a time,
+    with heavily overlapping vocabulary), so a marginal bigram overlap with
+    a pack profile is much weaker evidence than the same overlap with a
+    curated builtin/project profile. The layer applies
+    ``index_external_match_threshold`` to non-builtin/non-project skills.
+    """
+
+    _PROFILE_TEXT: ClassVar[dict[str, object]] = {
+        "scenarios": ["deploy release candidate build"],
+        "query_patterns": [
+            "publish staging artifact bundle",
+            "rollout production hotfix pipeline",
+            "tag version changelog draft",
+        ],
+        "differentiation": "",
+        "confidence_boosters": [],
+    }
+    # Profile token pool = scenarios + query_patterns + confidence_boosters
+    # (differentiation is NOT indexed) = 16 unique tokens.
+    # Overlap {deploy, release} = 2 / max(3, 16 * 0.5) = 0.25 — above the
+    # 0.20 builtin bar, below the 0.30 external bar.
+    _WEAK_QUERY = "deploy release notes"
+    _STRONG_QUERY = "deploy release candidate build publish staging"
+
+    def _router(self, tmp_path: Path, external_threshold: object = None) -> MagicMock:
+        router = MagicMock()
+        router.project_root = tmp_path
+        router._config.index_match_threshold = 0.20
+        if external_threshold is not None:
+            router._config.index_external_match_threshold = external_threshold
+        router._get_skill_source = lambda sid, ns: ns
+        router._index_embedding_model = None  # Prevent MagicMock auto-creation
+        return router
+
+    def _write_index(self, tmp_path: Path, skill_ids: list[str]) -> None:
+        index_path = tmp_path / ".vibe" / "skill-index.json"
+        index_path.parent.mkdir(parents=True, exist_ok=True)
+        profiles = {sid: {"skill_id": sid, **self._PROFILE_TEXT} for sid in skill_ids}
+        index_path.write_text(
+            json.dumps({"version": "1.3.0", "skills": profiles}), encoding="utf-8"
+        )
+
+    def test_weak_overlap_matches_builtin_but_not_external(self, tmp_path: Path) -> None:
+        """Same profile text, same weak overlap: builtin wins, pack abstains."""
+        self._write_index(tmp_path, ["acme-pack/ship-release", "builtin/ship-release"])
+        router = self._router(tmp_path)
+        candidates = [
+            {"id": "acme-pack/ship-release", "description": "d", "namespace": "acme-pack"},
+            {"id": "builtin/ship-release", "description": "d", "namespace": "builtin"},
+        ]
+
+        match, detail = try_index_layer(router, self._WEAK_QUERY, candidates)
+
+        assert match is not None
+        assert match.skill_id == "builtin/ship-release"
+        assert detail.matched is True
+
+    def test_weak_overlap_external_only_abstains(self, tmp_path: Path) -> None:
+        """A weak overlap that would match a builtin profile is rejected for packs."""
+        self._write_index(tmp_path, ["acme-pack/ship-release"])
+        router = self._router(tmp_path)
+        candidates = [
+            {"id": "acme-pack/ship-release", "description": "d", "namespace": "acme-pack"},
+        ]
+
+        match, detail = try_index_layer(router, self._WEAK_QUERY, candidates)
+
+        assert match is None
+        assert detail.matched is False
+
+    def test_strong_overlap_external_still_matches(self, tmp_path: Path) -> None:
+        """The higher bar does not block genuinely strong pack matches."""
+        self._write_index(tmp_path, ["acme-pack/ship-release"])
+        router = self._router(tmp_path)
+        candidates = [
+            {"id": "acme-pack/ship-release", "description": "d", "namespace": "acme-pack"},
+        ]
+
+        match, detail = try_index_layer(router, self._STRONG_QUERY, candidates)
+
+        assert match is not None
+        assert match.skill_id == "acme-pack/ship-release"
+        assert detail.matched is True
+
+    def test_external_threshold_is_configurable(self, tmp_path: Path) -> None:
+        """Lowering the external bar below the weak score re-admits the pack."""
+        self._write_index(tmp_path, ["acme-pack/ship-release"])
+        router = self._router(tmp_path, external_threshold=0.10)
+        candidates = [
+            {"id": "acme-pack/ship-release", "description": "d", "namespace": "acme-pack"},
+        ]
+
+        match, detail = try_index_layer(router, self._WEAK_QUERY, candidates)
+
+        assert match is not None
+        assert match.skill_id == "acme-pack/ship-release"
+        assert detail.matched is True
+
+
+class TestEmbeddingMargin:
+    """Embedding fallback requires a clear top1-minus-top2 gap.
+
+    The fallback is an argmax over the whole profile catalog; with many
+    LLM-generated profiles installed, the nearest profile of an unrelated
+    query lands in the model's noise band just above the absolute threshold.
+    Genuine intent separates from the runner-up; noise does not.
+    """
+
+    def _router(self, tmp_path: Path, margin: object = None) -> MagicMock:
+        router = MagicMock()
+        router.project_root = tmp_path
+        router._config.index_match_threshold = 0.35
+        if margin is not None:
+            router._config.index_embedding_min_margin = margin
+        router._get_skill_source = lambda sid, ns: ns
+        router._index_embedding_model = None  # Prevent MagicMock auto-creation
+        router._triage_service = MagicMock()
+        router._triage_service.has_explicit_guard_signal = lambda q, c, s: True
+        return router
+
+    @staticmethod
+    def _write_index(tmp_path: Path, profiles: dict[str, list[float]]) -> None:
+        index_path = tmp_path / ".vibe" / "skill-index.json"
+        index_path.parent.mkdir(parents=True, exist_ok=True)
+        index_path.write_text(
+            json.dumps(
+                {
+                    "version": "1.3.0",
+                    "skills": {
+                        sid: {
+                            "skill_id": sid,
+                            "scenarios": ["unrelated scenario text"],
+                            "query_patterns": ["unrelated query pattern"],
+                            "differentiation": "",
+                            "confidence_boosters": [],
+                            "embedding": emb,
+                        }
+                        for sid, emb in profiles.items()
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
+
+    @staticmethod
+    def _fake_model(vector: list[float]) -> MagicMock:
+        mock_model = MagicMock()
+        mock_model.encode.return_value = [vector]
+        fake_st = MagicMock()
+        fake_st.SentenceTransformer.return_value = mock_model
+        return fake_st
+
+    def test_close_runner_up_abstains(self, tmp_path: Path) -> None:
+        """Top-1 barely ahead of top-2 → treated as catalog noise."""
+        import sys
+
+        self._write_index(
+            tmp_path,
+            {
+                "acme-pack/alpha": [1.0, 0.0, 0.0],
+                "acme-pack/beta": [0.999, 0.04, 0.0],
+            },
+        )
+        router = self._router(tmp_path)
+        candidates = [
+            {"id": "acme-pack/alpha", "description": "d", "namespace": "acme-pack"},
+            {"id": "acme-pack/beta", "description": "d", "namespace": "acme-pack"},
+        ]
+
+        # Token-disjoint query so the token path misses and the fallback runs.
+        with patch.dict(sys.modules, {"sentence_transformers": self._fake_model([1.0, 0.0, 0.0])}):
+            match, detail = try_index_layer(router, "zq wv xk", candidates)
+
+        assert match is None
+        assert detail.matched is False
+        assert "margin" in detail.reason.lower()
+
+    def test_clear_gap_matches(self, tmp_path: Path) -> None:
+        """Top-1 far ahead of top-2 → accepted."""
+        import sys
+
+        self._write_index(
+            tmp_path,
+            {
+                "acme-pack/alpha": [1.0, 0.0, 0.0],
+                "acme-pack/beta": [0.0, 1.0, 0.0],
+            },
+        )
+        router = self._router(tmp_path)
+        candidates = [
+            {"id": "acme-pack/alpha", "description": "d", "namespace": "acme-pack"},
+            {"id": "acme-pack/beta", "description": "d", "namespace": "acme-pack"},
+        ]
+
+        with patch.dict(sys.modules, {"sentence_transformers": self._fake_model([1.0, 0.0, 0.0])}):
+            match, _detail = try_index_layer(router, "zq wv xk", candidates)
+
+        assert match is not None
+        assert match.skill_id == "acme-pack/alpha"
+        assert match.metadata.get("embedding_match") is True
+
+    def test_margin_check_disabled_at_zero(self, tmp_path: Path) -> None:
+        """index_embedding_min_margin = 0 restores pure argmax behavior."""
+        import sys
+
+        self._write_index(
+            tmp_path,
+            {
+                "acme-pack/alpha": [1.0, 0.0, 0.0],
+                "acme-pack/beta": [0.999, 0.04, 0.0],
+            },
+        )
+        router = self._router(tmp_path, margin=0.0)
+        candidates = [
+            {"id": "acme-pack/alpha", "description": "d", "namespace": "acme-pack"},
+            {"id": "acme-pack/beta", "description": "d", "namespace": "acme-pack"},
+        ]
+
+        with patch.dict(sys.modules, {"sentence_transformers": self._fake_model([1.0, 0.0, 0.0])}):
+            match, _detail = try_index_layer(router, "zq wv xk", candidates)
+
+        assert match is not None
+        assert match.skill_id == "acme-pack/alpha"
+
+    def test_uninstalled_profile_excluded_from_ranking(self, tmp_path: Path) -> None:
+        """A stale profile for an uninstalled skill must not win or eat the margin."""
+        import sys
+
+        self._write_index(
+            tmp_path,
+            {
+                "gone-pack/removed-skill": [1.0, 0.0, 0.0],  # not installed
+                "acme-pack/alpha": [0.9, 0.1, 0.0],
+            },
+        )
+        router = self._router(tmp_path)
+        candidates = [
+            {"id": "acme-pack/alpha", "description": "d", "namespace": "acme-pack"},
+        ]
+
+        with patch.dict(sys.modules, {"sentence_transformers": self._fake_model([1.0, 0.0, 0.0])}):
+            match, _detail = try_index_layer(router, "zq wv xk", candidates)
+
+        assert match is not None
+        assert match.skill_id == "acme-pack/alpha"
+
+
+class TestStaleProfilePreemption:
+    """Installed-only invariant, token path: a stale profile (skill no longer
+    installed) must not win the token match and thereby pre-empt the
+    embedding fallback, which ranks installed candidates only."""
+
+    def test_stale_token_hit_does_not_block_installed_embedding_match(self, tmp_path: Path) -> None:
+        import sys
+
+        router = MagicMock()
+        router.project_root = tmp_path
+        router._config.index_match_threshold = 0.20
+        router._get_skill_source = lambda sid, ns: ns
+        router._index_embedding_model = None  # Prevent MagicMock auto-creation
+        router._triage_service = MagicMock()
+        router._triage_service.has_explicit_guard_signal = lambda q, c, s: True
+
+        index_path = tmp_path / ".vibe" / "skill-index.json"
+        index_path.parent.mkdir(parents=True, exist_ok=True)
+        index_path.write_text(
+            json.dumps(
+                {
+                    "version": "1.3.0",
+                    "skills": {
+                        # Stale: NOT installed. Token overlap with the query
+                        # is total (score 1.0) — it would always win the
+                        # token race if it were allowed to compete.
+                        "gone-pack/stale-skill": {
+                            "skill_id": "gone-pack/stale-skill",
+                            "scenarios": ["archive the quarterly report"],
+                            "query_patterns": ["archive the quarterly report"],
+                            "differentiation": "",
+                            "confidence_boosters": [],
+                        },
+                        # Installed: token-disjoint, embedding-matched.
+                        "acme-pack/real-skill": {
+                            "skill_id": "acme-pack/real-skill",
+                            "scenarios": ["unrelated potato gardening"],
+                            "query_patterns": ["unrelated potato gardening"],
+                            "differentiation": "",
+                            "confidence_boosters": [],
+                            "embedding": [1.0, 0.0, 0.0],
+                        },
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
+        candidates = [
+            {"id": "acme-pack/real-skill", "description": "d", "namespace": "acme-pack"},
+        ]
+
+        mock_model = MagicMock()
+        mock_model.encode.return_value = [[1.0, 0.0, 0.0]]
+        fake_st = MagicMock()
+        fake_st.SentenceTransformer.return_value = mock_model
+
+        with patch.dict(sys.modules, {"sentence_transformers": fake_st}):
+            match, _detail = try_index_layer(router, "archive the quarterly report", candidates)
+
+        assert match is not None
+        assert match.skill_id == "acme-pack/real-skill"
+        assert match.metadata.get("embedding_match") is True
+
+
+class TestTrustedNamespaceCoverage:
+    """The trusted bar applies to every repo/project-curated namespace,
+    including the "custom"/"cross-cutting" namespaces the project-local
+    .vibe/skills entries declare in their frontmatter."""
+
+    _PROFILE_TEXT: ClassVar[dict[str, object]] = {
+        "scenarios": ["deploy release candidate build"],
+        "query_patterns": [
+            "publish staging artifact bundle",
+            "rollout production hotfix pipeline",
+            "tag version changelog draft",
+        ],
+        "differentiation": "",
+        "confidence_boosters": [],
+    }
+    # Overlap {deploy, release} = 2 / max(3, 16 * 0.5) = 0.25 — above the
+    # 0.20 trusted bar, below the 0.30 external bar.
+    _WEAK_QUERY = "deploy release notes"
+
+    def _router(self, tmp_path: Path, bare_config: bool = False) -> MagicMock:
+        router = MagicMock()
+        router.project_root = tmp_path
+        if not bare_config:
+            router._config.index_match_threshold = 0.20
+        router._get_skill_source = lambda sid, ns: ns
+        router._index_embedding_model = None  # Prevent MagicMock auto-creation
+        return router
+
+    def _write_index(self, tmp_path: Path, skill_id: str) -> None:
+        index_path = tmp_path / ".vibe" / "skill-index.json"
+        index_path.parent.mkdir(parents=True, exist_ok=True)
+        index_path.write_text(
+            json.dumps(
+                {
+                    "version": "1.3.0",
+                    "skills": {skill_id: {"skill_id": skill_id, **self._PROFILE_TEXT}},
+                }
+            ),
+            encoding="utf-8",
+        )
+
+    def test_custom_namespace_gets_trusted_bar(self, tmp_path: Path) -> None:
+        self._write_index(tmp_path, "custom/ship-release")
+        router = self._router(tmp_path)
+        candidates = [
+            {"id": "custom/ship-release", "description": "d", "namespace": "custom"},
+        ]
+
+        match, _detail = try_index_layer(router, self._WEAK_QUERY, candidates)
+
+        assert match is not None
+        assert match.skill_id == "custom/ship-release"
+
+    def test_cross_cutting_namespace_gets_trusted_bar(self, tmp_path: Path) -> None:
+        self._write_index(tmp_path, "cross-cutting/ship-release")
+        router = self._router(tmp_path)
+        candidates = [
+            {"id": "cross-cutting/ship-release", "description": "d", "namespace": "cross-cutting"},
+        ]
+
+        match, _detail = try_index_layer(router, self._WEAK_QUERY, candidates)
+
+        assert match is not None
+        assert match.skill_id == "cross-cutting/ship-release"
+
+    def test_unset_config_knobs_fall_back_to_field_defaults(self, tmp_path: Path) -> None:
+        """A bare MagicMock config (no knob set) must behave as the declared
+        RoutingConfig defaults: 0.20 trusted bar, 0.30 external bar."""
+        self._write_index(tmp_path, "acme-pack/ship-release")
+        router = self._router(tmp_path, bare_config=True)
+        candidates = [
+            {"id": "acme-pack/ship-release", "description": "d", "namespace": "acme-pack"},
+        ]
+
+        match, detail = try_index_layer(router, self._WEAK_QUERY, candidates)
+
+        # 0.25 clears the 0.20 default trusted bar but not the 0.30 default
+        # external bar → abstain.
+        assert match is None
+        assert detail.matched is False
+
+
+class TestEmbeddingThresholdKnob:
+    """index_embedding_threshold is a config field like its neighbors."""
+
+    def test_raised_threshold_rejects_match(self, tmp_path: Path) -> None:
+        import sys
+
+        router = MagicMock()
+        router.project_root = tmp_path
+        router._config.index_match_threshold = 0.35
+        router._config.index_embedding_threshold = 0.99
+        router._get_skill_source = lambda sid, ns: ns
+        router._index_embedding_model = None  # Prevent MagicMock auto-creation
+        router._triage_service = MagicMock()
+        router._triage_service.has_explicit_guard_signal = lambda q, c, s: True
+
+        index_path = tmp_path / ".vibe" / "skill-index.json"
+        index_path.parent.mkdir(parents=True, exist_ok=True)
+        index_path.write_text(
+            json.dumps(
+                {
+                    "version": "1.3.0",
+                    "skills": {
+                        "acme-pack/alpha": {
+                            "skill_id": "acme-pack/alpha",
+                            "scenarios": ["unrelated scenario text"],
+                            "query_patterns": ["unrelated query pattern"],
+                            "differentiation": "",
+                            "confidence_boosters": [],
+                            "embedding": [1.0, 0.0, 0.0],
+                        }
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
+        candidates = [
+            {"id": "acme-pack/alpha", "description": "d", "namespace": "acme-pack"},
+        ]
+
+        mock_model = MagicMock()
+        # sim([0.7, 0.7, 0], [1, 0, 0]) ≈ 0.707 — above the 0.45 default but
+        # below the raised 0.99 knob.
+        mock_model.encode.return_value = [[0.7, 0.7, 0.0]]
+        fake_st = MagicMock()
+        fake_st.SentenceTransformer.return_value = mock_model
+
+        with patch.dict(sys.modules, {"sentence_transformers": fake_st}):
+            match, detail = try_index_layer(router, "zq wv xk", candidates)
+
+        assert match is None
+        assert detail.matched is False
+        assert "threshold" in detail.reason.lower()

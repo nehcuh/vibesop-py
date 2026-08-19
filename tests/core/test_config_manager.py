@@ -517,3 +517,39 @@ def test_ai_triage_recall_min_similarity_bounds() -> None:
         RoutingConfig(ai_triage_recall_min_similarity=-0.1)
     with pytest.raises(ValidationError):
         RoutingConfig(ai_triage_recall_min_similarity=1.1)
+
+
+def test_index_external_match_threshold_default_and_bounds() -> None:
+    """External pack profiles clear a higher SEMANTIC_INDEX token bar (0.30);
+    bounded to [0.0, 1.0) like index_match_threshold."""
+    assert RoutingConfig().index_external_match_threshold == pytest.approx(0.30)
+    RoutingConfig(index_external_match_threshold=0.0)
+    RoutingConfig(index_external_match_threshold=0.9)
+    with pytest.raises(ValidationError):
+        RoutingConfig(index_external_match_threshold=1.0)
+    with pytest.raises(ValidationError):
+        RoutingConfig(index_external_match_threshold=-0.1)
+
+
+def test_index_embedding_min_margin_default_and_bounds() -> None:
+    """Embedding fallback requires a top1-top2 gap (default 0.05); 0 disables
+    the check, values above 0.5 are rejected as nonsense."""
+    assert RoutingConfig().index_embedding_min_margin == pytest.approx(0.05)
+    RoutingConfig(index_embedding_min_margin=0.0)
+    RoutingConfig(index_embedding_min_margin=0.5)
+    with pytest.raises(ValidationError):
+        RoutingConfig(index_embedding_min_margin=-0.1)
+    with pytest.raises(ValidationError):
+        RoutingConfig(index_embedding_min_margin=0.6)
+
+
+def test_index_embedding_threshold_default_and_bounds() -> None:
+    """index_embedding_threshold (embedding-fallback cosine floor) defaults to
+    0.45 and is bounded to [0.0, 1.0) like index_match_threshold."""
+    assert RoutingConfig().index_embedding_threshold == pytest.approx(0.45)
+    RoutingConfig(index_embedding_threshold=0.0)
+    RoutingConfig(index_embedding_threshold=0.9)
+    with pytest.raises(ValidationError):
+        RoutingConfig(index_embedding_threshold=1.0)
+    with pytest.raises(ValidationError):
+        RoutingConfig(index_embedding_threshold=-0.1)
