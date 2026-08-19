@@ -862,3 +862,161 @@ class TestLlmUnconfiguredCacheLookup:
 
         service._llm.call.assert_not_called()
         assert result is None
+
+
+class TestGuardedSkills:
+    """Guarded skills (session-end, riper-workflow) require explicit intent.
+
+    Session-end is high side-effect (wrap-up, commit, memory writes);
+    riper-workflow's own contract is explicit-RIPER-requests-only. Fuzzy
+    layers (keyword/embedding/scenario) must not select them unless the
+    query carries the skill's trigger phrases or distinctive name token.
+    """
+
+    _SESSION_END: ClassVar[dict] = {
+        "id": "builtin/session-end",
+        "description": "Session wrap-up",
+        "namespace": "builtin",
+        "triggers": ["我要离开了", "离开了", "先走了", "收工", "拜拜"],
+    }
+    _RIPER: ClassVar[dict] = {
+        "id": "builtin/riper-workflow",
+        "description": "RIPER 5-phase workflow",
+        "namespace": "builtin",
+        "triggers": ["use riper", "riper workflow", "riper 工作流", "五阶段工作流"],
+    }
+
+    def _candidates(self) -> list[dict]:
+        return [dict(self._SESSION_END), dict(self._RIPER)]
+
+    def test_guarded_skill_name(self) -> None:
+        service = _make_service()
+        assert service.guarded_skill_name("builtin/session-end") == "session-end"
+        assert service.guarded_skill_name("session-end") == "session-end"
+        assert service.guarded_skill_name("builtin/riper-workflow") == "riper-workflow"
+        assert service.guarded_skill_name("omx/plan") is None
+
+    def test_unguarded_skill_always_passes(self) -> None:
+        service = _make_service()
+        assert service.has_explicit_guard_signal("anything", [], "omx/plan") is True
+
+    def test_session_end_leaving_signal(self) -> None:
+        """「我先离开了」 contains the 离开了 trigger → explicit signal."""
+        service = _make_service()
+        assert (
+            service.has_explicit_guard_signal("我先离开了", self._candidates(), "builtin/session-end")
+            is True
+        )
+
+    def test_session_end_close_something_is_not_a_signal(self) -> None:
+        """「帮我先关闭了」 (close a process) must NOT count as an exit signal."""
+        service = _make_service()
+        assert (
+            service.has_explicit_guard_signal(
+                "似乎有其他进程没有关闭，帮我先关闭了", self._candidates(), "builtin/session-end"
+            )
+            is False
+        )
+
+    def test_riper_generic_workflow_query_blocked(self) -> None:
+        """Generic 'workflow' queries carry no explicit RIPER intent."""
+        service = _make_service()
+        assert (
+            service.has_explicit_guard_signal(
+                "使用合适的 workflow 在独立的 worktree 上进行开发吧",
+                self._candidates(),
+                "builtin/riper-workflow",
+            )
+            is False
+        )
+
+    def test_riper_name_token_counts_as_explicit(self) -> None:
+        """The distinctive 'riper' token is explicit intent even when no full
+        trigger phrase appears verbatim (「用 RIPER 流程来做这个功能」)."""
+        service = _make_service()
+        assert (
+            service.has_explicit_guard_signal(
+                "用 RIPER 流程来做这个功能", self._candidates(), "builtin/riper-workflow"
+            )
+            is True
+        )
+
+    def test_riper_trigger_phrase_counts_as_explicit(self) -> None:
+        service = _make_service()
+        assert (
+            service.has_explicit_guard_signal(
+                "run the riper workflow for this feature",
+                self._candidates(),
+                "builtin/riper-workflow",
+            )
+            is True
+        )
+
+    def test_riper_fallback_triggers_when_candidate_missing(self) -> None:
+        """Without a riper candidate, the conservative fallback list applies."""
+        service = _make_service()
+        assert service.has_explicit_guard_signal("tell me about riper", [], "builtin/riper-workflow")
+        assert not service.has_explicit_guard_signal("make a plan", [], "builtin/riper-workflow")
+
+    def test_session_end_real_skill_md_covers_leaving(self) -> None:
+        """The shipped session-end SKILL.md triggers must detect 「我先离开了」.
+
+        Ties the frontmatter trigger list (core/skills/session-end/SKILL.md)
+        to the guard semantics so removing the trigger fails this test.
+        """
+        from pathlib import Path
+
+        from vibesop.core.skills.parser import extract_frontmatter
+
+        repo_root = Path(__file__).resolve().parents[4]
+        content = (repo_root / "core" / "skills" / "session-end" / "SKILL.md").read_text(
+            encoding="utf-8"
+        )
+        frontmatter, _ = extract_frontmatter(content)
+        assert frontmatter is not None
+        candidates = [
+            {
+                "id": "builtin/session-end",
+                "namespace": "builtin",
+                "triggers": list(frontmatter.get("triggers") or []),
+            }
+        ]
+        service = _make_service()
+        assert (
+            service.has_explicit_guard_signal("我先离开了", candidates, "builtin/session-end")
+            is True
+        )
+
+
+    def test_riper_fallback_triggers_cover_real_skill_md(self) -> None:
+        """The riper fallback trigger list must cover the real SKILL.md.
+
+        When no riper candidate is loaded, the guard falls back to
+        _GUARDED_SKILL_FALLBACK_TRIGGERS; that list must contain every
+        trigger declared in core/skills/riper-workflow/SKILL.md so the two
+        never drift apart.
+        """
+        from pathlib import Path
+
+        from vibesop.core.skills.parser import extract_frontmatter
+
+        repo_root = Path(__file__).resolve().parents[4]
+        content = (repo_root / "core" / "skills" / "riper-workflow" / "SKILL.md").read_text(
+            encoding="utf-8"
+        )
+        frontmatter, _ = extract_frontmatter(content)
+        assert frontmatter is not None
+        declared = [str(t).lower() for t in (frontmatter.get("triggers") or [])]
+
+        service = _make_service()
+        fallback = [
+            t.lower()
+            for t in service._GUARDED_SKILL_FALLBACK_TRIGGERS["riper-workflow"]
+        ]
+        for trigger in declared:
+            # Each declared trigger must be represented: either verbatim in
+            # the fallback list, or covered by the "riper" extra token /
+            # a broader fallback entry that is a substring of it.
+            assert trigger in fallback or any(
+                f in trigger for f in fallback
+            ), f"declared trigger {trigger!r} not covered by fallback list"

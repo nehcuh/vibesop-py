@@ -1,15 +1,26 @@
 """Tests for CLI route/orchestrate/decompose commands.
 
 Covers the core CLI entry points for skill routing.
+
+All routing is hermetic: the IntentInterceptor/AgentRuntime and
+UnifiedRouter seams are stubbed (same pattern as
+tests/cli/test_route_market_suggestion.py), so no test touches the
+developer's live .vibe index, the HuggingFace embedding model, or the
+network. State writes (missed-query inbox, routing counter, plan tracker)
+are redirected to tmp_path via monkeypatch.chdir.
 """
 
 from __future__ import annotations
 
 import json
+from types import SimpleNamespace
+from typing import Any
+from unittest.mock import MagicMock
 
 import pytest
 from typer.testing import CliRunner
 
+from vibesop.agent.runtime import InterceptionMode
 from vibesop.cli.main import _extract_squad_from_result, _format_squad_summary, app
 from vibesop.core.models import OrchestrationMode, OrchestrationResult, WorkflowPattern
 
@@ -26,15 +37,113 @@ class _FakeOrchestrateRouter:
     not live routing outcomes.
     """
 
-    def __init__(self, *_args, **_kwargs) -> None:
+    def __init__(self, *_args: Any, **_kwargs: Any) -> None:
         pass
 
     def orchestrate(self, query: str, context: object = None) -> OrchestrationResult:
         return OrchestrationResult(mode=OrchestrationMode.SINGLE, original_query=query)
 
 
+class _FakeDecomposeRouter:
+    """UnifiedRouter stand-in for `vibe decompose` tests.
+
+    The real router reads the live skill catalog and may build an LLM
+    client; here the decomposer gets no LLM (deterministic rule-based
+    fallback) and an empty catalog (skill_id is always None).
+    """
+
+    def __init__(self, *_args: Any, **_kwargs: Any) -> None:
+        self.llm = None
+
+    def build_decomposition_skills(self, query: str = "") -> list[str]:
+        return []
+
+
+def _routing_decision(query: str, mode: InterceptionMode) -> MagicMock:
+    """Interceptor decision that always routes with the given mode."""
+    decision = MagicMock()
+    decision.should_route = True
+    decision.mode = mode
+    decision.query = query
+    decision.reason = "route it"
+    decision.analysis = None
+    return decision
+
+
+def _single_no_match_router() -> MagicMock:
+    """UnifiedRouter-like mock whose single-route result is a stable no-match.
+
+    Returns real OrchestrationResult objects (not MagicMocks) so JSON
+    serialization and Rich renderers behave exactly as in production.
+    """
+    router = MagicMock()
+    router.route.return_value = MagicMock(name="routing_result")
+    router._to_orchestration_result.side_effect = lambda _rr, query: OrchestrationResult(
+        mode=OrchestrationMode.SINGLE, original_query=query, duration_ms=1.0
+    )
+    router._config = SimpleNamespace(confirmation_mode="never", auto_select_threshold=0.9)
+    router.routing_config = SimpleNamespace(transparency="full")
+    return router
+
+
+def _squad_router() -> MagicMock:
+    """UnifiedRouter-like mock whose orchestrate() returns a fixed squad plan."""
+    from vibesop.core.models import AgentRole, AgentSquad, ExecutionPlan, SquadStep
+
+    squad = AgentSquad(
+        squad_id="squad-test",
+        roles=[AgentRole(role_id="architect", name="Architect", required_skills=["design"])],
+        steps=[SquadStep(step_id="s1", role_id="architect", skill_ids=["design"])],
+        execution_order=["s1"],
+    )
+    plan = ExecutionPlan(
+        plan_id="plan-1",
+        original_query="multi-agent query",
+        workflow_pattern=WorkflowPattern.AGENT_SQUAD,
+        metadata={"agent_squad": squad.to_dict()},
+    )
+    result = OrchestrationResult(
+        mode=OrchestrationMode.ORCHESTRATED,
+        original_query="multi-agent query",
+        execution_plan=plan,
+        duration_ms=1.0,
+    )
+    router = _single_no_match_router()
+    router.orchestrate.return_value = result
+    return router
+
+
+def _patch_route_runtime(
+    monkeypatch: pytest.MonkeyPatch,
+    router: MagicMock,
+    *,
+    mode: InterceptionMode = InterceptionMode.SINGLE,
+) -> None:
+    """Patch the IntentInterceptor/AgentRuntime seam used by `vibe route`.
+
+    route() imports both lazily inside the command body from
+    vibesop.agent.runtime, so patching the attributes on that module
+    intercepts construction.
+    """
+    interceptor = MagicMock()
+    interceptor.should_intercept.side_effect = lambda query: _routing_decision(query, mode)
+    monkeypatch.setattr("vibesop.agent.runtime.IntentInterceptor", lambda: interceptor)
+    runtime = MagicMock()
+    runtime.router._router = router
+    monkeypatch.setattr("vibesop.agent.runtime.AgentRuntime", lambda **_kwargs: runtime)
+
+
 class TestRouteCommand:
     """Test `vibe route` command."""
+
+    @pytest.fixture(autouse=True)
+    def _hermetic_runtime(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Any
+    ) -> None:
+        # Redirect .vibe state writes (missed-query inbox, routing counter,
+        # trace spans) to a tmp dir, then stub the routing boundary.
+        monkeypatch.chdir(tmp_path)
+        _patch_route_runtime(monkeypatch, _single_no_match_router())
 
     def test_route_basic_query(self) -> None:
         """Basic routing should return a result."""
@@ -106,6 +215,12 @@ class TestOrchestrateCommand:
 class TestDecomposeCommand:
     """Test `vibe decompose` command."""
 
+    @pytest.fixture(autouse=True)
+    def _fake_router(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        # decompose() imports UnifiedRouter lazily inside the command body,
+        # so patching the attribute on vibesop.core.routing intercepts it.
+        monkeypatch.setattr("vibesop.core.routing.UnifiedRouter", _FakeDecomposeRouter)
+
     def test_decompose_basic(self) -> None:
         """Decompose should return sub-tasks."""
         result = runner.invoke(app, ["decompose", "分析架构然后写测试"])
@@ -139,6 +254,13 @@ class TestDecomposeCommand:
 
 class TestRouteEdgeCases:
     """Edge cases for routing commands."""
+
+    @pytest.fixture(autouse=True)
+    def _hermetic_runtime(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Any
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
+        _patch_route_runtime(monkeypatch, _single_no_match_router())
 
     def test_route_empty_query(self) -> None:
         """Empty query should handle gracefully."""
@@ -242,10 +364,20 @@ class TestRouteSquadDisplay:
 
         assert _extract_squad_from_result(result) is None
 
-    def test_route_multi_agent_squad_query_renders_squad(self) -> None:
+    def test_route_multi_agent_squad_query_renders_squad(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Any
+    ) -> None:
         """A multi-agent query should render squad summary in CLI output."""
+        monkeypatch.chdir(tmp_path)
+        _patch_route_runtime(
+            monkeypatch, _squad_router(), mode=InterceptionMode.MULTI_AGENT_SQUAD
+        )
         result = runner.invoke(app, ["route", "multi-agent: 设计架构、实现代码、做安全审查"])
         assert result.exit_code == 0
         output = result.output
-        # Squad summary should appear
-        assert "Agent Squad" in output or "Squad" in output or "🔍 Semantic Analysis" in output
+        # The fixture's squad renders deterministically — pin the exact block
+        # (no OR-chain fallbacks that could mask a squad-rendering regression).
+        assert "Agent Squad" in output
+        assert "🏗️" in output  # architect role icon
+        assert "Skills: design" in output
+        assert "Protocol: sequential" in output

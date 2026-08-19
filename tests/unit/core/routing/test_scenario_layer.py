@@ -3,13 +3,17 @@
 from __future__ import annotations
 
 from pathlib import Path
+from unittest.mock import MagicMock
 
+from vibesop.core.routing._layers import try_scenario_layer
 from vibesop.core.routing.scenario_layer import (
     _matches_keyword,
     load_scenario_config,
     load_scenarios,
     match_scenario,
 )
+
+REPO_ROOT = Path(__file__).resolve().parents[4]
 
 
 class TestMatchesKeyword:
@@ -175,3 +179,94 @@ class TestMatchScenario:
         result = match_scenario("帮我调试这个错误", scenarios)
         assert result is not None
         assert result["scenario"] == "调试"
+
+
+class TestScenarioPrimarySource:
+    """try_scenario_layer must honor a scenario's declared primary_source.
+
+    Regression guard for the code_review hijack: a bare ``primary: /review``
+    used to resolve to the FIRST installed pack skill named ``review``
+    (e.g. mattpocock/review) at a fixed 0.9 confidence, hijacking generic
+    review/评审/pr/merge queries on machines without the intended pack.
+    """
+
+    def _router(self, strategies: list[dict], keywords: dict[str, list[str]]) -> MagicMock:
+        router = MagicMock()
+        router._scenario_cache = {"strategies": strategies, "keywords": keywords}
+        router._get_skill_source = lambda sid, ns: ns
+        return router
+
+    def test_declared_source_missing_fails_closed(self) -> None:
+        """Declared primary_source with no installed candidate → no match."""
+        router = self._router(
+            [{"scenario": "code_review", "primary": "/review", "primary_source": "gstack"}],
+            {"code_review": ["review"]},
+        )
+        candidates = [
+            {"id": "mattpocock/review", "description": "Review", "namespace": "mattpocock"},
+        ]
+        match, detail = try_scenario_layer(router, "please review this", candidates)
+        assert match is None
+        assert detail.matched is False
+        assert "gstack" in detail.reason
+
+    def test_declared_source_match_resolves(self) -> None:
+        """Candidate in the declared namespace resolves normally."""
+        router = self._router(
+            [{"scenario": "code_review", "primary": "/review", "primary_source": "gstack"}],
+            {"code_review": ["review"]},
+        )
+        candidates = [
+            {"id": "mattpocock/review", "description": "Pack review", "namespace": "mattpocock"},
+            {"id": "gstack/review", "description": "GStack review", "namespace": "gstack"},
+        ]
+        match, detail = try_scenario_layer(router, "please review this", candidates)
+        assert match is not None
+        assert match.skill_id == "gstack/review"
+        assert detail.matched is True
+
+    def test_undeclared_source_keeps_legacy_resolution(self) -> None:
+        """Without primary_source, the first matching candidate still wins."""
+        router = self._router(
+            [{"scenario": "code_review", "primary": "/review"}],
+            {"code_review": ["review"]},
+        )
+        candidates = [
+            {"id": "mattpocock/review", "description": "Review", "namespace": "mattpocock"},
+        ]
+        match, _detail = try_scenario_layer(router, "please review this", candidates)
+        assert match is not None
+        assert match.skill_id == "mattpocock/review"
+
+    def test_id_prefix_counts_as_source(self) -> None:
+        """Namespace missing from candidate dict: id prefix is accepted."""
+        router = self._router(
+            [{"scenario": "code_review", "primary": "/review", "primary_source": "gstack"}],
+            {"code_review": ["review"]},
+        )
+        candidates = [{"id": "gstack/review", "description": "Review"}]
+        match, _detail = try_scenario_layer(router, "please review this", candidates)
+        assert match is not None
+        assert match.skill_id == "gstack/review"
+
+
+class TestRegistryScenarioConfig:
+    """Regression guards on the real core/registry.yaml scenario config."""
+
+    def test_planning_scenario_removed(self) -> None:
+        """The planning scenario coupled broad plan/design keywords to
+        builtin/riper-workflow at a fixed 0.9, contradicting that skill's
+        explicit-intent-only contract. It must stay removed."""
+        config = load_scenario_config(REPO_ROOT / "core" / "registry.yaml")
+        names = {s.get("scenario") or s.get("id") for s in config["strategies"]}
+        assert "planning" not in names
+        assert "planning" not in config["keywords"]
+
+    def test_code_review_scenario_pinned_to_gstack(self) -> None:
+        """code_review's primary must stay source-pinned so it fails closed
+        on machines without the intended pack installed."""
+        config = load_scenario_config(REPO_ROOT / "core" / "registry.yaml")
+        code_review = next(
+            s for s in config["strategies"] if s.get("scenario") == "code_review"
+        )
+        assert code_review.get("primary_source") == "gstack"

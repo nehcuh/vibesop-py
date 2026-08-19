@@ -753,6 +753,31 @@ class UnifiedRouter(
         layer_details.append(detail)
         self._tracer.record_layer(detail.layer, detail, len(candidates))
         if primary:
+            # Guarded skills (session-end, riper-workflow, ...) require
+            # explicit user intent; fuzzy matcher scores alone must not
+            # select them (same criterion as the triage/index guards —
+            # e.g. a query merely mentioning 会话/工作流 must not trigger
+            # wrap-up or RIPER). Rejecting the primary falls through to the
+            # no-match path rather than promoting an unguarded runner-up:
+            # the runner-up already lost the aggregate vote.
+            if not self._triage_service.has_explicit_guard_signal(
+                query, candidates, primary.skill_id
+            ):
+                detail.matched = False
+                detail.reason = (
+                    f"Matcher selected guarded skill '{primary.skill_id}' but the query "
+                    f"carries no explicit signal for it"
+                )
+                primary = None
+            else:
+                alternatives = [
+                    a
+                    for a in alternatives
+                    if self._triage_service.has_explicit_guard_signal(
+                        query, candidates, a.skill_id
+                    )
+                ]
+        if primary:
             self._record_layer(detail.layer)
             return self._build_match_result(
                 query,
@@ -980,6 +1005,18 @@ class UnifiedRouter(
                     nearest = [nearest_primary, *nearest_alts]
             except (RuntimeError, ValueError):
                 pass
+            # The suggestion re-run above bypasses the matcher gate in
+            # _try_layers; keep guarded skills (session-end, riper-workflow)
+            # out of the suggestions unless the query carries their explicit
+            # signal. Same filter as _build_fallback_result.
+            if nearest:
+                nearest = [
+                    r
+                    for r in nearest
+                    if self._triage_service.has_explicit_guard_signal(
+                        query, candidates, r.skill_id
+                    )
+                ]
             result = RoutingResult(
                 primary=None,
                 alternatives=nearest,

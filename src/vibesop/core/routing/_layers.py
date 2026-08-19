@@ -11,6 +11,7 @@ from `unified.py`. Circular imports will occur if this rule is violated.
 
 from __future__ import annotations
 
+import logging
 import time
 from typing import Any
 
@@ -21,6 +22,8 @@ from vibesop.core.routing.explicit_layer import check_explicit_override
 from vibesop.core.routing.project_config import load_merged_scenario_config
 from vibesop.core.routing.scenario_layer import match_scenario
 from vibesop.core.skills.indexer import SkillIndexer
+
+logger = logging.getLogger(__name__)
 
 
 def try_explicit_layer(
@@ -88,28 +91,71 @@ def try_scenario_layer(
             diagnostics={"scenario": scenario.get("scenario")},
         )
 
-    candidate = next((c for c in candidates if c["id"] == target_skill), None)
+    # Honor the scenario's declared primary_source: when a scenario pins its
+    # primary to a specific namespace (e.g. primary_source: gstack), only a
+    # candidate from that namespace may resolve it. Without this check a bare
+    # "/review" resolved to the FIRST installed pack skill with that name
+    # (e.g. mattpocock/review) at a fixed 0.9 confidence, hijacking every
+    # "review/评审/pr/merge" query on machines where the intended pack is not
+    # installed. Fail closed instead: no candidate in the declared namespace
+    # means the scenario does not match, and lower layers arbitrate.
+    primary_source = scenario.get("primary_source")
+
+    def _source_ok(c: dict[str, Any]) -> bool:
+        if not primary_source:
+            return True
+        cid = str(c.get("id", ""))
+        namespace = str(c.get("namespace", ""))
+        prefix = cid.split("/", maxsplit=1)[0] if "/" in cid else ""
+        return primary_source in (namespace, prefix)
+
+    candidate = next((c for c in candidates if c["id"] == target_skill and _source_ok(c)), None)
     if not candidate:
         candidate = next(
-            (c for c in candidates if c["id"].endswith(f"/{target_skill}")),
+            (c for c in candidates if c["id"].endswith(f"/{target_skill}") and _source_ok(c)),
             None,
         )
     if not candidate and target_skill.startswith("/"):
         short_name = target_skill[1:]
         candidate = next(
-            (c for c in candidates if c["id"].endswith(f"/{short_name}")),
+            (c for c in candidates if c["id"].endswith(f"/{short_name}") and _source_ok(c)),
             None,
         )
         if not candidate:
             candidate = next(
-                (c for c in candidates if c["id"].endswith(f"-{short_name}")),
+                (c for c in candidates if c["id"].endswith(f"-{short_name}") and _source_ok(c)),
                 None,
             )
         if not candidate:
             candidate = next(
-                (c for c in candidates if c["id"] == short_name),
+                (c for c in candidates if c["id"] == short_name and _source_ok(c)),
                 None,
             )
+    if not candidate and primary_source:
+        # By design, not a failure worth a warning: the scenario simply stays
+        # inert on machines without the declared pack installed.
+        logger.debug(
+            "Scenario '%s' inert: declared primary_source '%s' has no installed "
+            "candidate for target '%s' (fail-closed; not substituting an "
+            "unrelated pack skill)",
+            scenario.get("scenario"),
+            primary_source,
+            target_skill,
+        )
+        return None, LayerDetail(
+            layer=RoutingLayer.SCENARIO,
+            matched=False,
+            reason=(
+                f"Scenario matched '{target_skill}' but declared primary_source "
+                f"'{primary_source}' has no installed candidate; refusing to "
+                f"substitute an unrelated pack skill"
+            ),
+            diagnostics={
+                "scenario": scenario.get("scenario"),
+                "target_skill": target_skill,
+                "primary_source": primary_source,
+            },
+        )
     if not candidate:
         return None, LayerDetail(
             layer=RoutingLayer.SCENARIO,
@@ -378,6 +424,21 @@ def _try_embedding_fallback(
             duration_ms=(time.perf_counter() - index_start) * 1000,
         )
 
+    # Guarded skills (session-end, riper-workflow, ...) require explicit user
+    # intent; embedding similarity alone must not select them (same criterion
+    # as the AI-triage guard — e.g. "似乎有其他进程没有关闭，帮我先关闭了"
+    # embedded closest to session-end at 0.52 without any exit intent).
+    if not router._triage_service.has_explicit_guard_signal(query, candidates, best_skill_id):
+        return None, LayerDetail(
+            layer=RoutingLayer.SEMANTIC_INDEX,
+            matched=False,
+            reason=(
+                f"Embedding matched guarded skill '{best_skill_id}' but the query "
+                f"carries no explicit signal for it"
+            ),
+            duration_ms=(time.perf_counter() - index_start) * 1000,
+        )
+
     # Scale similarity [threshold..1.0] → confidence [0.65..0.95]
     confidence = 0.65 + (best_similarity - EMBEDDING_THRESHOLD) / (1.0 - EMBEDDING_THRESHOLD) * 0.30
 
@@ -479,6 +540,26 @@ def try_index_layer(
             layer=RoutingLayer.SEMANTIC_INDEX,
             matched=False,
             reason=f"Index matched '{best_skill_id}' but skill not in candidates",
+            duration_ms=(time.perf_counter() - index_start) * 1000,
+        )
+
+    # Guarded skills (session-end, riper-workflow, ...) require explicit user
+    # intent; token overlap alone must not select them. Treat a guarded
+    # best-match without an explicit signal like a token miss: fall through
+    # to the embedding fallback, which applies the same guard.
+    if not router._triage_service.has_explicit_guard_signal(query, candidates, best_skill_id):
+        emb_match, emb_detail = _try_embedding_fallback(
+            router, query, index, candidates, index_start
+        )
+        if emb_match is not None:
+            return emb_match, emb_detail
+        return None, LayerDetail(
+            layer=RoutingLayer.SEMANTIC_INDEX,
+            matched=False,
+            reason=(
+                f"Index matched guarded skill '{best_skill_id}' but the query "
+                f"carries no explicit signal for it"
+            ),
             duration_ms=(time.perf_counter() - index_start) * 1000,
         )
 

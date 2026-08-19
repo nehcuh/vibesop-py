@@ -1,0 +1,1047 @@
+diff --git a/core/registry.yaml b/core/registry.yaml
+index 50db96f..74d32c9 100644
+--- a/core/registry.yaml
++++ b/core/registry.yaml
+@@ -106,15 +106,11 @@ conflict_resolution:
+       - "头脑风暴"
+       - "idea"
+       - "想法"
+-    planning:
+-      - "plan"
+-      - "规划"
+-      - "计划"
+-      - "方案"
+-      - "design"
+-      - "设计"
+-      - "architect"
+-      - "架构"
++    # "planning" keywords removed (2026-08): the planning scenario routed broad
++    # plan/design/方案 keywords to builtin/riper-workflow at a fixed 0.9,
++    # contradicting that skill's explicit-intent-only contract and hijacking
++    # generic design/planning queries. RIPER now routes only via its own
++    # explicit triggers.
+     refactoring:
+       - "refactor"
+       - "重构"
+@@ -190,9 +186,12 @@ conflict_resolution:
+         - "用 superpowers"
+ 
+     # Code review: prefer gstack for pre-landing (SQL safety, auto-fixes)
++    # primary_source is enforced fail-closed: without an installed gstack
++    # candidate the scenario stays inert instead of hijacking an unrelated
++    # pack's review skill at the fixed scenario confidence.
+     - scenario: code_review
+       primary: /review
+-#       primary_source: gstack
++      primary_source: gstack
+       alternatives:
+         - skill: /receiving-code-review
+           source: superpowers
+@@ -214,29 +213,12 @@ conflict_resolution:
+       override_keywords:
+         - "用 superpowers"
+ 
+-    # Planning: builtin fallback, gstack/omx for specific angles
+-    - scenario: planning
+-      primary: riper-workflow
+-      primary_source: builtin
+-      alternatives:
+-        - skill: /plan-ceo-review
+-#           source: gstack
+-          trigger: "CEO/产品角度"
+-        - skill: /plan-eng-review
+-#           source: gstack
+-          trigger: "架构技术角度"
+-        - skill: /plan-design-review
+-#           source: gstack
+-          trigger: "设计/UX 角度"
+-        - skill: /autoplan
+-#           source: gstack
+-          trigger: "完整自动审查"
+-        - skill: /writing-plans
+-          source: superpowers
+-          trigger: "创建设计文档"
+-      override_keywords:
+-#         - "用 gstack"
+-        - "用 superpowers"
++    # Planning: REMOVED (2026-08). The scenario coupled broad planning
++    # keywords (plan/design/方案/计划) to builtin/riper-workflow at a fixed
++    # 0.9 confidence, but that skill's contract is explicit-RIPER-intent
++    # only — generic planning queries were systematically misrouted to it.
++    # RIPER remains reachable via its own triggers ("use riper",
++    # "riper workflow", "五阶段工作流", ...) and the guarded-skill rule.
+ 
+     # Refactoring: prefer superpowers
+     - scenario: refactoring
+diff --git a/core/skills/session-end/SKILL.md b/core/skills/session-end/SKILL.md
+index 968a934..ed504cf 100644
+--- a/core/skills/session-end/SKILL.md
++++ b/core/skills/session-end/SKILL.md
+@@ -12,6 +12,7 @@ triggers:
+   - "I'm done"
+   - "gotta go"
+   - "我要离开了"
++  - "离开了"
+   - "先走了"
+   - "收工"
+   - "拜拜"
+diff --git a/src/vibesop/core/routing/_layers.py b/src/vibesop/core/routing/_layers.py
+index bcc499d..f467244 100644
+--- a/src/vibesop/core/routing/_layers.py
++++ b/src/vibesop/core/routing/_layers.py
+@@ -88,28 +88,61 @@ def try_scenario_layer(
+             diagnostics={"scenario": scenario.get("scenario")},
+         )
+ 
+-    candidate = next((c for c in candidates if c["id"] == target_skill), None)
++    # Honor the scenario's declared primary_source: when a scenario pins its
++    # primary to a specific namespace (e.g. primary_source: gstack), only a
++    # candidate from that namespace may resolve it. Without this check a bare
++    # "/review" resolved to the FIRST installed pack skill with that name
++    # (e.g. mattpocock/review) at a fixed 0.9 confidence, hijacking every
++    # "review/评审/pr/merge" query on machines where the intended pack is not
++    # installed. Fail closed instead: no candidate in the declared namespace
++    # means the scenario does not match, and lower layers arbitrate.
++    primary_source = scenario.get("primary_source")
++
++    def _source_ok(c: dict[str, Any]) -> bool:
++        if not primary_source:
++            return True
++        cid = str(c.get("id", ""))
++        namespace = str(c.get("namespace", ""))
++        prefix = cid.split("/", maxsplit=1)[0] if "/" in cid else ""
++        return primary_source in (namespace, prefix)
++
++    candidate = next((c for c in candidates if c["id"] == target_skill and _source_ok(c)), None)
+     if not candidate:
+         candidate = next(
+-            (c for c in candidates if c["id"].endswith(f"/{target_skill}")),
++            (c for c in candidates if c["id"].endswith(f"/{target_skill}") and _source_ok(c)),
+             None,
+         )
+     if not candidate and target_skill.startswith("/"):
+         short_name = target_skill[1:]
+         candidate = next(
+-            (c for c in candidates if c["id"].endswith(f"/{short_name}")),
++            (c for c in candidates if c["id"].endswith(f"/{short_name}") and _source_ok(c)),
+             None,
+         )
+         if not candidate:
+             candidate = next(
+-                (c for c in candidates if c["id"].endswith(f"-{short_name}")),
++                (c for c in candidates if c["id"].endswith(f"-{short_name}") and _source_ok(c)),
+                 None,
+             )
+         if not candidate:
+             candidate = next(
+-                (c for c in candidates if c["id"] == short_name),
++                (c for c in candidates if c["id"] == short_name and _source_ok(c)),
+                 None,
+             )
++    if not candidate and primary_source:
++        return None, LayerDetail(
++            layer=RoutingLayer.SCENARIO,
++            matched=False,
++            reason=(
++                f"Scenario matched '{target_skill}' but declared primary_source "
++                f"'{primary_source}' has no installed candidate; refusing to "
++                f"substitute an unrelated pack skill"
++            ),
++            diagnostics={
++                "scenario": scenario.get("scenario"),
++                "target_skill": target_skill,
++                "primary_source": primary_source,
++            },
++        )
+     if not candidate:
+         return None, LayerDetail(
+             layer=RoutingLayer.SCENARIO,
+@@ -378,6 +411,21 @@ def _try_embedding_fallback(
+             duration_ms=(time.perf_counter() - index_start) * 1000,
+         )
+ 
++    # Guarded skills (session-end, riper-workflow, ...) require explicit user
++    # intent; embedding similarity alone must not select them (same criterion
++    # as the AI-triage guard — e.g. "似乎有其他进程没有关闭，帮我先关闭了"
++    # embedded closest to session-end at 0.52 without any exit intent).
++    if not router._triage_service.has_explicit_guard_signal(query, candidates, best_skill_id):
++        return None, LayerDetail(
++            layer=RoutingLayer.SEMANTIC_INDEX,
++            matched=False,
++            reason=(
++                f"Embedding matched guarded skill '{best_skill_id}' but the query "
++                f"carries no explicit signal for it"
++            ),
++            duration_ms=(time.perf_counter() - index_start) * 1000,
++        )
++
+     # Scale similarity [threshold..1.0] → confidence [0.65..0.95]
+     confidence = 0.65 + (best_similarity - EMBEDDING_THRESHOLD) / (1.0 - EMBEDDING_THRESHOLD) * 0.30
+ 
+@@ -482,6 +530,26 @@ def try_index_layer(
+             duration_ms=(time.perf_counter() - index_start) * 1000,
+         )
+ 
++    # Guarded skills (session-end, riper-workflow, ...) require explicit user
++    # intent; token overlap alone must not select them. Treat a guarded
++    # best-match without an explicit signal like a token miss: fall through
++    # to the embedding fallback, which applies the same guard.
++    if not router._triage_service.has_explicit_guard_signal(query, candidates, best_skill_id):
++        emb_match, emb_detail = _try_embedding_fallback(
++            router, query, index, candidates, index_start
++        )
++        if emb_match is not None:
++            return emb_match, emb_detail
++        return None, LayerDetail(
++            layer=RoutingLayer.SEMANTIC_INDEX,
++            matched=False,
++            reason=(
++                f"Index matched guarded skill '{best_skill_id}' but the query "
++                f"carries no explicit signal for it"
++            ),
++            duration_ms=(time.perf_counter() - index_start) * 1000,
++        )
++
+     # Confidence: scale score [threshold..1.0] → [0.65..0.95]
+     # Lower bound 0.65 (vs SCENARIO's fixed 0.9) signals "weaker" match,
+     # so a strong scenario keyword hit can still take precedence when it follows.
+diff --git a/src/vibesop/core/routing/triage_service.py b/src/vibesop/core/routing/triage_service.py
+index 04843eb..e820d28 100644
+--- a/src/vibesop/core/routing/triage_service.py
++++ b/src/vibesop/core/routing/triage_service.py
+@@ -7,7 +7,7 @@ import os
+ import threading
+ import time
+ from pathlib import Path
+-from typing import TYPE_CHECKING, Any
++from typing import TYPE_CHECKING, Any, ClassVar
+ 
+ from vibesop.core.matching import KeywordMatcher, MatcherConfig
+ from vibesop.core.models import RoutingLayer, SkillRoute
+@@ -444,6 +444,76 @@ class TriageService:
+         """Return True if the selected skill is the session-end skill."""
+         return skill_id in {"session-end", "builtin/session-end"}
+ 
++    # --- Guarded skills ---------------------------------------------------
++    #
++    # Some skills must only win on explicit user intent, never on fuzzy
++    # (keyword/embedding/scenario) evidence:
++    # - session-end: high side effects (wrap-up, commit, memory writes);
++    #   guarded by is_explicit_session_end_signal at the triage layers.
++    # - riper-workflow: its own contract ("Use ONLY when the user explicitly
++    #   requests the RIPER ... workflow. Not for generic analysis, planning,
++    #   or review tasks") — yet generic "workflow"/"design" queries matched
++    #   it via keyword substring bonuses ("workflow" ⊂ "riper-workflow") and
++    #   embedding similarity. Extra tokens let the skill's distinctive name
++    #   fragment count as explicit intent even when no full trigger phrase
++    #   appears verbatim (e.g. "用 RIPER 流程来做这个功能").
++    _GUARDED_SKILL_EXTRA_TOKENS: ClassVar[dict[str, tuple[str, ...]]] = {
++        "riper-workflow": ("riper",),
++    }
++    _GUARDED_SKILL_FALLBACK_TRIGGERS: ClassVar[dict[str, list[str]]] = {
++        "riper-workflow": ["riper", "riper workflow", "riper 工作流", "五阶段工作流"],
++    }
++
++    def guarded_skill_name(self, skill_id: str) -> str | None:
++        """Return the short name if the skill requires explicit intent, else None."""
++        short = skill_id.rsplit("/", maxsplit=1)[-1].lower()
++        if self.is_session_end_skill(skill_id):
++            return "session-end"
++        if short in self._GUARDED_SKILL_EXTRA_TOKENS:
++            return short
++        return None
++
++    def has_explicit_guard_signal(
++        self,
++        query: str,
++        candidates: list[dict[str, Any]],
++        skill_id: str,
++    ) -> bool:
++        """Check whether the query carries explicit intent for a guarded skill.
++
++        Returns True for non-guarded skills (no guard to satisfy). For guarded
++        skills, explicit intent means a declared trigger phrase appears in the
++        query (verbatim substring, apostrophe-normalized) or one of the skill's
++        extra always-explicit tokens does. Session-end delegates to the
++        long-standing is_explicit_session_end_signal semantics.
++        """
++        short = self.guarded_skill_name(skill_id)
++        if short is None:
++            return True
++        if short == "session-end":
++            return self.is_explicit_session_end_signal(query, candidates)
++
++        candidate: dict[str, Any] | None = None
++        for c in candidates:
++            if str(c.get("id", "")).rsplit("/", maxsplit=1)[-1].lower() == short:
++                candidate = c
++                break
++
++        triggers: list[Any] = []
++        if candidate is not None:
++            raw = candidate.get("triggers", [])
++            triggers = list(raw) if isinstance(raw, list) else []
++        if not triggers:
++            triggers = list(self._GUARDED_SKILL_FALLBACK_TRIGGERS.get(short, []))
++
++        normalized_query = query.lower().replace("'", "").replace("’", "")
++        for trigger in triggers:
++            trigger_norm = str(trigger).lower().replace("'", "").replace("’", "")
++            if trigger_norm and trigger_norm in normalized_query:
++                return True
++
++        return any(tok in normalized_query for tok in self._GUARDED_SKILL_EXTRA_TOKENS[short])
++
+     def is_explicit_session_end_signal(
+         self,
+         query: str,
+diff --git a/src/vibesop/core/routing/unified.py b/src/vibesop/core/routing/unified.py
+index d08a216..6a664ce 100644
+--- a/src/vibesop/core/routing/unified.py
++++ b/src/vibesop/core/routing/unified.py
+@@ -752,6 +752,31 @@ class UnifiedRouter(
+         routing_path.append(detail.layer)
+         layer_details.append(detail)
+         self._tracer.record_layer(detail.layer, detail, len(candidates))
++        if primary:
++            # Guarded skills (session-end, riper-workflow, ...) require
++            # explicit user intent; fuzzy matcher scores alone must not
++            # select them (same criterion as the triage/index guards —
++            # e.g. a query merely mentioning 会话/工作流 must not trigger
++            # wrap-up or RIPER). Rejecting the primary falls through to the
++            # no-match path rather than promoting an unguarded runner-up:
++            # the runner-up already lost the aggregate vote.
++            if not self._triage_service.has_explicit_guard_signal(
++                query, candidates, primary.skill_id
++            ):
++                detail.matched = False
++                detail.reason = (
++                    f"Matcher selected guarded skill '{primary.skill_id}' but the query "
++                    f"carries no explicit signal for it"
++                )
++                primary = None
++            else:
++                alternatives = [
++                    a
++                    for a in alternatives
++                    if self._triage_service.has_explicit_guard_signal(
++                        query, candidates, a.skill_id
++                    )
++                ]
+         if primary:
+             self._record_layer(detail.layer)
+             return self._build_match_result(
+diff --git a/tests/cli/test_route_commands.py b/tests/cli/test_route_commands.py
+index fbeba7d..ca450c6 100644
+--- a/tests/cli/test_route_commands.py
++++ b/tests/cli/test_route_commands.py
+@@ -1,15 +1,26 @@
+ """Tests for CLI route/orchestrate/decompose commands.
+ 
+ Covers the core CLI entry points for skill routing.
++
++All routing is hermetic: the IntentInterceptor/AgentRuntime and
++UnifiedRouter seams are stubbed (same pattern as
++tests/cli/test_route_market_suggestion.py), so no test touches the
++developer's live .vibe index, the HuggingFace embedding model, or the
++network. State writes (missed-query inbox, routing counter, plan tracker)
++are redirected to tmp_path via monkeypatch.chdir.
+ """
+ 
+ from __future__ import annotations
+ 
+ import json
++from types import SimpleNamespace
++from typing import Any
++from unittest.mock import MagicMock
+ 
+ import pytest
+ from typer.testing import CliRunner
+ 
++from vibesop.agent.runtime import InterceptionMode
+ from vibesop.cli.main import _extract_squad_from_result, _format_squad_summary, app
+ from vibesop.core.models import OrchestrationMode, OrchestrationResult, WorkflowPattern
+ 
+@@ -26,16 +37,114 @@ class _FakeOrchestrateRouter:
+     not live routing outcomes.
+     """
+ 
+-    def __init__(self, *_args, **_kwargs) -> None:
++    def __init__(self, *_args: Any, **_kwargs: Any) -> None:
+         pass
+ 
+     def orchestrate(self, query: str, context: object = None) -> OrchestrationResult:
+         return OrchestrationResult(mode=OrchestrationMode.SINGLE, original_query=query)
+ 
+ 
++class _FakeDecomposeRouter:
++    """UnifiedRouter stand-in for `vibe decompose` tests.
++
++    The real router reads the live skill catalog and may build an LLM
++    client; here the decomposer gets no LLM (deterministic rule-based
++    fallback) and an empty catalog (skill_id is always None).
++    """
++
++    def __init__(self, *_args: Any, **_kwargs: Any) -> None:
++        self.llm = None
++
++    def build_decomposition_skills(self, query: str = "") -> list[str]:
++        return []
++
++
++def _routing_decision(query: str, mode: InterceptionMode) -> MagicMock:
++    """Interceptor decision that always routes with the given mode."""
++    decision = MagicMock()
++    decision.should_route = True
++    decision.mode = mode
++    decision.query = query
++    decision.reason = "route it"
++    decision.analysis = None
++    return decision
++
++
++def _single_no_match_router() -> MagicMock:
++    """UnifiedRouter-like mock whose single-route result is a stable no-match.
++
++    Returns real OrchestrationResult objects (not MagicMocks) so JSON
++    serialization and Rich renderers behave exactly as in production.
++    """
++    router = MagicMock()
++    router.route.return_value = MagicMock(name="routing_result")
++    router._to_orchestration_result.side_effect = lambda _rr, query: OrchestrationResult(
++        mode=OrchestrationMode.SINGLE, original_query=query, duration_ms=1.0
++    )
++    router._config = SimpleNamespace(confirmation_mode="never", auto_select_threshold=0.9)
++    router.routing_config = SimpleNamespace(transparency="full")
++    return router
++
++
++def _squad_router() -> MagicMock:
++    """UnifiedRouter-like mock whose orchestrate() returns a fixed squad plan."""
++    from vibesop.core.models import AgentRole, AgentSquad, ExecutionPlan, SquadStep
++
++    squad = AgentSquad(
++        squad_id="squad-test",
++        roles=[AgentRole(role_id="architect", name="Architect", required_skills=["design"])],
++        steps=[SquadStep(step_id="s1", role_id="architect", skill_ids=["design"])],
++        execution_order=["s1"],
++    )
++    plan = ExecutionPlan(
++        plan_id="plan-1",
++        original_query="multi-agent query",
++        workflow_pattern=WorkflowPattern.AGENT_SQUAD,
++        metadata={"agent_squad": squad.to_dict()},
++    )
++    result = OrchestrationResult(
++        mode=OrchestrationMode.ORCHESTRATED,
++        original_query="multi-agent query",
++        execution_plan=plan,
++        duration_ms=1.0,
++    )
++    router = _single_no_match_router()
++    router.orchestrate.return_value = result
++    return router
++
++
++def _patch_route_runtime(
++    monkeypatch: pytest.MonkeyPatch,
++    router: MagicMock,
++    *,
++    mode: InterceptionMode = InterceptionMode.SINGLE,
++) -> None:
++    """Patch the IntentInterceptor/AgentRuntime seam used by `vibe route`.
++
++    route() imports both lazily inside the command body from
++    vibesop.agent.runtime, so patching the attributes on that module
++    intercepts construction.
++    """
++    interceptor = MagicMock()
++    interceptor.should_intercept.side_effect = lambda query: _routing_decision(query, mode)
++    monkeypatch.setattr("vibesop.agent.runtime.IntentInterceptor", lambda: interceptor)
++    runtime = MagicMock()
++    runtime.router._router = router
++    monkeypatch.setattr("vibesop.agent.runtime.AgentRuntime", lambda **_kwargs: runtime)
++
++
+ class TestRouteCommand:
+     """Test `vibe route` command."""
+ 
++    @pytest.fixture(autouse=True)
++    def _hermetic_runtime(
++        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Any
++    ) -> None:
++        # Redirect .vibe state writes (missed-query inbox, routing counter,
++        # trace spans) to a tmp dir, then stub the routing boundary.
++        monkeypatch.chdir(tmp_path)
++        _patch_route_runtime(monkeypatch, _single_no_match_router())
++
+     def test_route_basic_query(self) -> None:
+         """Basic routing should return a result."""
+         result = runner.invoke(app, ["route", "route my query"])
+@@ -106,6 +215,12 @@ class TestOrchestrateCommand:
+ class TestDecomposeCommand:
+     """Test `vibe decompose` command."""
+ 
++    @pytest.fixture(autouse=True)
++    def _fake_router(self, monkeypatch: pytest.MonkeyPatch) -> None:
++        # decompose() imports UnifiedRouter lazily inside the command body,
++        # so patching the attribute on vibesop.core.routing intercepts it.
++        monkeypatch.setattr("vibesop.core.routing.UnifiedRouter", _FakeDecomposeRouter)
++
+     def test_decompose_basic(self) -> None:
+         """Decompose should return sub-tasks."""
+         result = runner.invoke(app, ["decompose", "分析架构然后写测试"])
+@@ -140,6 +255,13 @@ class TestDecomposeCommand:
+ class TestRouteEdgeCases:
+     """Edge cases for routing commands."""
+ 
++    @pytest.fixture(autouse=True)
++    def _hermetic_runtime(
++        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Any
++    ) -> None:
++        monkeypatch.chdir(tmp_path)
++        _patch_route_runtime(monkeypatch, _single_no_match_router())
++
+     def test_route_empty_query(self) -> None:
+         """Empty query should handle gracefully."""
+         result = runner.invoke(app, ["route", ""])
+@@ -242,8 +364,14 @@ class TestRouteSquadDisplay:
+ 
+         assert _extract_squad_from_result(result) is None
+ 
+-    def test_route_multi_agent_squad_query_renders_squad(self) -> None:
++    def test_route_multi_agent_squad_query_renders_squad(
++        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Any
++    ) -> None:
+         """A multi-agent query should render squad summary in CLI output."""
++        monkeypatch.chdir(tmp_path)
++        _patch_route_runtime(
++            monkeypatch, _squad_router(), mode=InterceptionMode.MULTI_AGENT_SQUAD
++        )
+         result = runner.invoke(app, ["route", "multi-agent: 设计架构、实现代码、做安全审查"])
+         assert result.exit_code == 0
+         output = result.output
+diff --git a/tests/core/routing/test_index_layer.py b/tests/core/routing/test_index_layer.py
+index 5cefd87..bf8ca98 100644
+--- a/tests/core/routing/test_index_layer.py
++++ b/tests/core/routing/test_index_layer.py
+@@ -373,3 +373,100 @@ class TestEarlyLayersRoutingPath:
+         assert RoutingLayer.AI_TRIAGE not in routing_path
+         traced = [lt.layer for lt in router._tracer._current.layers]  # type: ignore[union-attr]
+         assert traced == ["semantic_index"]
++
++
++class TestIndexLayerGuardedSkills:
++    """Guarded skills (session-end, riper-workflow) must not win the index
++    layer on token overlap or embedding similarity alone — they require an
++    explicit signal in the query (same criterion as the AI-triage guard).
++
++    Regression: 「似乎有其他进程没有关闭，帮我先关闭了」 embedded closest to
++    builtin/session-end (similarity 0.52) without any exit intent.
++    """
++
++    @staticmethod
++    def _guard_all(_query: str, _candidates: list, _skill_id: str) -> bool:
++        return False
++
++    @staticmethod
++    def _allow_all(_query: str, _candidates: list, _skill_id: str) -> bool:
++        return True
++
++    def _router(self, tmp_path: Path, guard) -> MagicMock:
++        router = MagicMock()
++        router.project_root = tmp_path
++        router._config.index_match_threshold = 0.35
++        router._get_skill_source = lambda sid, ns: "builtin"
++        router._index_embedding_model = None  # Prevent MagicMock auto-creation
++        router._triage_service = MagicMock()
++        router._triage_service.has_explicit_guard_signal = guard
++        return router
++
++    def _write_session_end_index(self, tmp_path: Path, **extra: object) -> None:
++        index_path = tmp_path / ".vibe" / "skill-index.json"
++        index_path.parent.mkdir(parents=True, exist_ok=True)
++        profile = {
++            "skill_id": "builtin/session-end",
++            "scenarios": ["wrap up session"],
++            "query_patterns": ["收工 总结 会话"],
++            "differentiation": "",
++            "confidence_boosters": ["会话", "总结"],
++            **extra,
++        }
++        index_path.write_text(
++            json.dumps({"version": "1.3.0", "skills": {"builtin/session-end": profile}}),
++            encoding="utf-8",
++        )
++
++    def test_token_match_on_guarded_skill_without_signal_abstains(
++        self, tmp_path: Path
++    ) -> None:
++        self._write_session_end_index(tmp_path)
++        router = self._router(tmp_path, self._guard_all)
++        candidates = [
++            {"id": "builtin/session-end", "description": "Wrap up", "namespace": "builtin"}
++        ]
++
++        match, detail = try_index_layer(router, "收工 总结 会话 记录", candidates)
++
++        assert match is None
++        assert detail.matched is False
++        assert "guarded" in detail.reason.lower()
++
++    def test_token_match_on_guarded_skill_with_signal_passes(self, tmp_path: Path) -> None:
++        self._write_session_end_index(tmp_path)
++        router = self._router(tmp_path, self._allow_all)
++        candidates = [
++            {"id": "builtin/session-end", "description": "Wrap up", "namespace": "builtin"}
++        ]
++
++        match, detail = try_index_layer(router, "收工 总结 会话 记录", candidates)
++
++        assert match is not None
++        assert match.skill_id == "builtin/session-end"
++        assert detail.matched is True
++
++    def test_embedding_match_on_guarded_skill_without_signal_abstains(
++        self, tmp_path: Path
++    ) -> None:
++        import sys
++
++        self._write_session_end_index(tmp_path, embedding=[1.0, 0.0, 0.0])
++        router = self._router(tmp_path, self._guard_all)
++        candidates = [
++            {"id": "builtin/session-end", "description": "Wrap up", "namespace": "builtin"}
++        ]
++
++        mock_model = MagicMock()
++        mock_model.encode.return_value = [[0.9, 0.1, 0.0]]
++        fake_st = MagicMock()
++        fake_st.SentenceTransformer.return_value = mock_model
++
++        with patch.dict(sys.modules, {"sentence_transformers": fake_st}):
++            # Query shares no tokens with the profile → token path misses and
++            # the embedding fallback runs.
++            match, detail = try_index_layer(router, "zz qq xx", candidates)
++
++        assert match is None
++        assert detail.matched is False
++        assert "guarded" in detail.reason.lower()
+diff --git a/tests/core/routing/test_unified_router_branches.py b/tests/core/routing/test_unified_router_branches.py
+index d2e4075..e2ee8bb 100644
+--- a/tests/core/routing/test_unified_router_branches.py
++++ b/tests/core/routing/test_unified_router_branches.py
+@@ -54,16 +54,32 @@ class TestRouteScenarioLayer:
+     """Test scenario pattern layer (Layer 1)."""
+ 
+     def test_scenario_planning_query(self, tmp_path: Path) -> None:
+-        """Planning-related queries should match planning skills via scenario layer."""
++        """Generic planning queries must NOT route to builtin/riper-workflow.
++
++        The planning scenario (broad plan/design keywords → riper-workflow at
++        a fixed 0.9) was removed: the skill's contract is explicit-RIPER-
++        intent-only, and riper-workflow is now a guarded skill that fuzzy
++        layers cannot select without an explicit signal.
++        """
+         config = RoutingConfig(enable_ai_triage=False)
+         router = UnifiedRouter(project_root=tmp_path, config=config)
+ 
+-        result = router._single_skill_route("plan this complex task")
++        candidates = [
++            {
++                "id": "builtin/riper-workflow",
++                "name": "riper-workflow",
++                "description": "Use ONLY when the user explicitly requests the RIPER "
++                "structured 5-phase development workflow (Research, Innovate, "
++                "Plan, Execute, Review)",
++                "namespace": "builtin",
++                "keywords": ["riper", "riper-workflow", "5-phase", "structured-workflow"],
++                "triggers": ["use riper", "riper workflow", "riper 工作流", "五阶段工作流"],
++            },
++            {"id": "debug-skill", "name": "debug-skill", "description": "Debug things"},
++        ]
++        result = router._single_skill_route("plan this complex task", candidates=candidates)
+ 
+-        assert result.has_match
+-        if result.has_match:
+-            primary = result.primary.skill_id.lower()
+-            assert any(kw in primary for kw in ["plan", "riper", "orchestrate"])
++        assert result.primary is None or result.primary.skill_id != "builtin/riper-workflow"
+ 
+     def test_scenario_review_code(self, tmp_path: Path) -> None:
+         """Review-related queries should match review skills."""
+@@ -136,8 +152,21 @@ class TestKeywordRoutingFallback:
+         config = RoutingConfig(enable_ai_triage=False, keyword_match_max_chars=15)
+         router = UnifiedRouter(project_root=tmp_path, config=config)
+ 
+-        # Query longer than keyword_match_max_chars but AI triage is disabled
+-        result = router._single_skill_route("plan this complex task")
++        # Query longer than keyword_match_max_chars but AI triage is disabled.
++        # Uses an unguarded builtin candidate: guarded skills (riper-workflow,
++        # session-end) are correctly rejected without an explicit signal.
++        candidates = [
++            {
++                "id": "builtin/deep-diagnosis-optimization",
++                "name": "deep-diagnosis-optimization",
++                "description": "Deep diagnosis and optimization of the whole project",
++                "namespace": "builtin",
++                "keywords": ["diagnosis", "optimization", "deep"],
++            }
++        ]
++        result = router._single_skill_route(
++            "deep diagnosis and optimization of this project", candidates=candidates
++        )
+ 
+         # Should still produce a match via keyword/TF-IDF/levenshtein pipeline
+         assert result.has_match
+@@ -382,3 +411,101 @@ class TestSessionEndLayer:
+ 
+         assert match is None
+         assert detail.matched is False
++
++
++class TestSessionEndLeavingSignal:
++    """「我先离开了」 is an exit signal and must hit the session-end fast path.
++
++    Regression: the trigger list covered 我要离开了/先走了 but not the bare
++    离开了 pattern, so 「我先离开了」 fell through to fallback-llm.
++    """
++
++    def test_wo_xian_li_kai_le_matches(self, tmp_path: Path) -> None:
++        config = RoutingConfig(enable_ai_triage=True)
++        router = UnifiedRouter(project_root=tmp_path, config=config)
++
++        candidates = [
++            {
++                "id": "builtin/session-end",
++                "description": "Session wrap-up",
++                "namespace": "builtin",
++                # Mirrors core/skills/session-end/SKILL.md triggers.
++                "triggers": ["我要离开了", "离开了", "先走了", "收工", "拜拜"],
++            },
++            {"id": "debug-skill", "description": "Debug things", "namespace": "builtin"},
++        ]
++
++        result = router._single_skill_route("我先离开了", candidates=candidates)
++
++        assert result.has_match
++        assert result.primary is not None
++        assert result.primary.skill_id == "builtin/session-end"
++
++
++class TestGuardedSkillMatcherGate:
++    """Guarded skills must not win the matcher pipeline on fuzzy scores alone.
++
++    Regression: 「似乎有其他进程没有关闭，帮我先关闭了」 keyword-matched
++    session-end (0.65) via the 会话 tag, and 「使用合适的 workflow …」
++    keyword-matched riper-workflow (0.86) via 'workflow' ⊂ 'riper-workflow'.
++    """
++
++    def _candidates(self) -> list[dict]:
++        return [
++            {
++                "id": "builtin/session-end",
++                "name": "session-end",
++                "description": "Session wrap-up - update handoff + commit",
++                "namespace": "builtin",
++                "keywords": ["session", "会话", "结束", "总结"],
++                "triggers": ["我要离开了", "离开了", "先走了", "收工", "拜拜"],
++            },
++            {
++                "id": "builtin/riper-workflow",
++                "name": "riper-workflow",
++                "description": "Use ONLY when the user explicitly requests the RIPER "
++                "structured 5-phase development workflow",
++                "namespace": "builtin",
++                "keywords": ["riper", "riper-workflow", "5-phase", "structured-workflow"],
++                "triggers": ["use riper", "riper workflow", "riper 工作流", "五阶段工作流"],
++            },
++            {
++                "id": "debug-skill",
++                "name": "debug-skill",
++                "description": "Debug things",
++                "namespace": "builtin",
++            },
++        ]
++
++    def test_close_something_does_not_route_session_end(self, tmp_path: Path) -> None:
++        config = RoutingConfig(enable_ai_triage=False)
++        router = UnifiedRouter(project_root=tmp_path, config=config)
++
++        result = router._single_skill_route(
++            "似乎有其他进程没有关闭，帮我先关闭了", candidates=self._candidates()
++        )
++
++        assert result.primary is None or result.primary.skill_id != "builtin/session-end"
++
++    def test_generic_workflow_query_does_not_route_riper(self, tmp_path: Path) -> None:
++        config = RoutingConfig(enable_ai_triage=False)
++        router = UnifiedRouter(project_root=tmp_path, config=config)
++
++        result = router._single_skill_route(
++            "使用合适的 workflow 在独立的 worktree 上进行开发吧", candidates=self._candidates()
++        )
++
++        assert result.primary is None or result.primary.skill_id != "builtin/riper-workflow"
++
++    def test_explicit_riper_query_still_routes(self, tmp_path: Path) -> None:
++        """Explicit RIPER intent keeps routing to riper-workflow."""
++        config = RoutingConfig(enable_ai_triage=False)
++        router = UnifiedRouter(project_root=tmp_path, config=config)
++
++        result = router._single_skill_route(
++            "use riper workflow for this feature", candidates=self._candidates()
++        )
++
++        assert result.has_match
++        assert result.primary is not None
++        assert result.primary.skill_id == "builtin/riper-workflow"
+diff --git a/tests/unit/core/routing/test_scenario_layer.py b/tests/unit/core/routing/test_scenario_layer.py
+index ad32d4f..07d4d79 100644
+--- a/tests/unit/core/routing/test_scenario_layer.py
++++ b/tests/unit/core/routing/test_scenario_layer.py
+@@ -3,7 +3,9 @@
+ from __future__ import annotations
+ 
+ from pathlib import Path
++from unittest.mock import MagicMock
+ 
++from vibesop.core.routing._layers import try_scenario_layer
+ from vibesop.core.routing.scenario_layer import (
+     _matches_keyword,
+     load_scenario_config,
+@@ -11,6 +13,8 @@ from vibesop.core.routing.scenario_layer import (
+     match_scenario,
+ )
+ 
++REPO_ROOT = Path(__file__).resolve().parents[4]
++
+ 
+ class TestMatchesKeyword:
+     """Test keyword matching with word boundaries and CJK support."""
+@@ -175,3 +179,94 @@ class TestMatchScenario:
+         result = match_scenario("帮我调试这个错误", scenarios)
+         assert result is not None
+         assert result["scenario"] == "调试"
++
++
++class TestScenarioPrimarySource:
++    """try_scenario_layer must honor a scenario's declared primary_source.
++
++    Regression guard for the code_review hijack: a bare ``primary: /review``
++    used to resolve to the FIRST installed pack skill named ``review``
++    (e.g. mattpocock/review) at a fixed 0.9 confidence, hijacking generic
++    review/评审/pr/merge queries on machines without the intended pack.
++    """
++
++    def _router(self, strategies: list[dict], keywords: dict[str, list[str]]) -> MagicMock:
++        router = MagicMock()
++        router._scenario_cache = {"strategies": strategies, "keywords": keywords}
++        router._get_skill_source = lambda sid, ns: ns
++        return router
++
++    def test_declared_source_missing_fails_closed(self) -> None:
++        """Declared primary_source with no installed candidate → no match."""
++        router = self._router(
++            [{"scenario": "code_review", "primary": "/review", "primary_source": "gstack"}],
++            {"code_review": ["review"]},
++        )
++        candidates = [
++            {"id": "mattpocock/review", "description": "Review", "namespace": "mattpocock"},
++        ]
++        match, detail = try_scenario_layer(router, "please review this", candidates)
++        assert match is None
++        assert detail.matched is False
++        assert "gstack" in detail.reason
++
++    def test_declared_source_match_resolves(self) -> None:
++        """Candidate in the declared namespace resolves normally."""
++        router = self._router(
++            [{"scenario": "code_review", "primary": "/review", "primary_source": "gstack"}],
++            {"code_review": ["review"]},
++        )
++        candidates = [
++            {"id": "mattpocock/review", "description": "Pack review", "namespace": "mattpocock"},
++            {"id": "gstack/review", "description": "GStack review", "namespace": "gstack"},
++        ]
++        match, detail = try_scenario_layer(router, "please review this", candidates)
++        assert match is not None
++        assert match.skill_id == "gstack/review"
++        assert detail.matched is True
++
++    def test_undeclared_source_keeps_legacy_resolution(self) -> None:
++        """Without primary_source, the first matching candidate still wins."""
++        router = self._router(
++            [{"scenario": "code_review", "primary": "/review"}],
++            {"code_review": ["review"]},
++        )
++        candidates = [
++            {"id": "mattpocock/review", "description": "Review", "namespace": "mattpocock"},
++        ]
++        match, _detail = try_scenario_layer(router, "please review this", candidates)
++        assert match is not None
++        assert match.skill_id == "mattpocock/review"
++
++    def test_id_prefix_counts_as_source(self) -> None:
++        """Namespace missing from candidate dict: id prefix is accepted."""
++        router = self._router(
++            [{"scenario": "code_review", "primary": "/review", "primary_source": "gstack"}],
++            {"code_review": ["review"]},
++        )
++        candidates = [{"id": "gstack/review", "description": "Review"}]
++        match, _detail = try_scenario_layer(router, "please review this", candidates)
++        assert match is not None
++        assert match.skill_id == "gstack/review"
++
++
++class TestRegistryScenarioConfig:
++    """Regression guards on the real core/registry.yaml scenario config."""
++
++    def test_planning_scenario_removed(self) -> None:
++        """The planning scenario coupled broad plan/design keywords to
++        builtin/riper-workflow at a fixed 0.9, contradicting that skill's
++        explicit-intent-only contract. It must stay removed."""
++        config = load_scenario_config(REPO_ROOT / "core" / "registry.yaml")
++        names = {s.get("scenario") or s.get("id") for s in config["strategies"]}
++        assert "planning" not in names
++        assert "planning" not in config["keywords"]
++
++    def test_code_review_scenario_pinned_to_gstack(self) -> None:
++        """code_review's primary must stay source-pinned so it fails closed
++        on machines without the intended pack installed."""
++        config = load_scenario_config(REPO_ROOT / "core" / "registry.yaml")
++        code_review = next(
++            s for s in config["strategies"] if s.get("scenario") == "code_review"
++        )
++        assert code_review.get("primary_source") == "gstack"
+diff --git a/tests/unit/core/routing/test_triage_service.py b/tests/unit/core/routing/test_triage_service.py
+index d2fabc1..aeb8498 100644
+--- a/tests/unit/core/routing/test_triage_service.py
++++ b/tests/unit/core/routing/test_triage_service.py
+@@ -862,3 +862,127 @@ class TestLlmUnconfiguredCacheLookup:
+ 
+         service._llm.call.assert_not_called()
+         assert result is None
++
++
++class TestGuardedSkills:
++    """Guarded skills (session-end, riper-workflow) require explicit intent.
++
++    Session-end is high side-effect (wrap-up, commit, memory writes);
++    riper-workflow's own contract is explicit-RIPER-requests-only. Fuzzy
++    layers (keyword/embedding/scenario) must not select them unless the
++    query carries the skill's trigger phrases or distinctive name token.
++    """
++
++    _SESSION_END: ClassVar[dict] = {
++        "id": "builtin/session-end",
++        "description": "Session wrap-up",
++        "namespace": "builtin",
++        "triggers": ["我要离开了", "离开了", "先走了", "收工", "拜拜"],
++    }
++    _RIPER: ClassVar[dict] = {
++        "id": "builtin/riper-workflow",
++        "description": "RIPER 5-phase workflow",
++        "namespace": "builtin",
++        "triggers": ["use riper", "riper workflow", "riper 工作流", "五阶段工作流"],
++    }
++
++    def _candidates(self) -> list[dict]:
++        return [dict(self._SESSION_END), dict(self._RIPER)]
++
++    def test_guarded_skill_name(self) -> None:
++        service = _make_service()
++        assert service.guarded_skill_name("builtin/session-end") == "session-end"
++        assert service.guarded_skill_name("session-end") == "session-end"
++        assert service.guarded_skill_name("builtin/riper-workflow") == "riper-workflow"
++        assert service.guarded_skill_name("omx/plan") is None
++
++    def test_unguarded_skill_always_passes(self) -> None:
++        service = _make_service()
++        assert service.has_explicit_guard_signal("anything", [], "omx/plan") is True
++
++    def test_session_end_leaving_signal(self) -> None:
++        """「我先离开了」 contains the 离开了 trigger → explicit signal."""
++        service = _make_service()
++        assert (
++            service.has_explicit_guard_signal("我先离开了", self._candidates(), "builtin/session-end")
++            is True
++        )
++
++    def test_session_end_close_something_is_not_a_signal(self) -> None:
++        """「帮我先关闭了」 (close a process) must NOT count as an exit signal."""
++        service = _make_service()
++        assert (
++            service.has_explicit_guard_signal(
++                "似乎有其他进程没有关闭，帮我先关闭了", self._candidates(), "builtin/session-end"
++            )
++            is False
++        )
++
++    def test_riper_generic_workflow_query_blocked(self) -> None:
++        """Generic 'workflow' queries carry no explicit RIPER intent."""
++        service = _make_service()
++        assert (
++            service.has_explicit_guard_signal(
++                "使用合适的 workflow 在独立的 worktree 上进行开发吧",
++                self._candidates(),
++                "builtin/riper-workflow",
++            )
++            is False
++        )
++
++    def test_riper_name_token_counts_as_explicit(self) -> None:
++        """The distinctive 'riper' token is explicit intent even when no full
++        trigger phrase appears verbatim (「用 RIPER 流程来做这个功能」)."""
++        service = _make_service()
++        assert (
++            service.has_explicit_guard_signal(
++                "用 RIPER 流程来做这个功能", self._candidates(), "builtin/riper-workflow"
++            )
++            is True
++        )
++
++    def test_riper_trigger_phrase_counts_as_explicit(self) -> None:
++        service = _make_service()
++        assert (
++            service.has_explicit_guard_signal(
++                "run the riper workflow for this feature",
++                self._candidates(),
++                "builtin/riper-workflow",
++            )
++            is True
++        )
++
++    def test_riper_fallback_triggers_when_candidate_missing(self) -> None:
++        """Without a riper candidate, the conservative fallback list applies."""
++        service = _make_service()
++        assert service.has_explicit_guard_signal("tell me about riper", [], "builtin/riper-workflow")
++        assert not service.has_explicit_guard_signal("make a plan", [], "builtin/riper-workflow")
++
++    def test_session_end_real_skill_md_covers_leaving(self) -> None:
++        """The shipped session-end SKILL.md triggers must detect 「我先离开了」.
++
++        Ties the frontmatter trigger list (core/skills/session-end/SKILL.md)
++        to the guard semantics so removing the trigger fails this test.
++        """
++        from pathlib import Path
++
++        from vibesop.core.skills.parser import extract_frontmatter
++
++        repo_root = Path(__file__).resolve().parents[4]
++        content = (repo_root / "core" / "skills" / "session-end" / "SKILL.md").read_text(
++            encoding="utf-8"
++        )
++        frontmatter, _ = extract_frontmatter(content)
++        assert frontmatter is not None
++        candidates = [
++            {
++                "id": "builtin/session-end",
++                "namespace": "builtin",
++                "triggers": list(frontmatter.get("triggers") or []),
++            }
++        ]
++        service = _make_service()
++        assert (
++            service.has_explicit_guard_signal("我先离开了", candidates, "builtin/session-end")
++            is True
++        )

@@ -264,3 +264,40 @@ class TestBuildFallbackResult:
         )
         assert len(result.alternatives) >= 1
         assert result.alternatives[0].skill_id == "nearest"
+
+    def test_fallback_excludes_guarded_skill_without_signal(self, monkeypatch) -> None:
+        """Guarded skills rejected by the matcher gate must not resurface as
+        'nearest' suggestions in the fallback result."""
+        guarded = SkillRoute(
+            skill_id="builtin/riper-workflow",
+            confidence=0.8,
+            layer=RoutingLayer.KEYWORD,
+            source="builtin",
+        )
+        legit = SkillRoute(
+            skill_id="other/skill", confidence=0.3, layer=RoutingLayer.TFIDF, source="external"
+        )
+
+        def mock_run_matcher(*args, **kwargs):
+            return (guarded, [legit], MagicMock())
+
+        monkeypatch.setattr(
+            "vibesop.core.routing._pipeline.run_matcher_pipeline",
+            mock_run_matcher,
+        )
+        mixin = RouterResultMixin()
+        mixin._config = MagicMock()
+        mixin._config.fallback_mode = "silent"
+        mixin._triage_service = MagicMock()
+        mixin._triage_service.has_explicit_guard_signal = (
+            lambda query, candidates, skill_id: skill_id != "builtin/riper-workflow"
+        )
+        result = mixin._build_fallback_result(
+            query="使用合适的 workflow 开发",
+            candidates=[{"id": "builtin/riper-workflow"}, {"id": "other/skill"}],
+            routing_path=[],
+            layer_details=[],
+            duration_ms=50.0,
+        )
+        assert all(a.skill_id != "builtin/riper-workflow" for a in result.alternatives)
+        assert any(a.skill_id == "other/skill" for a in result.alternatives)

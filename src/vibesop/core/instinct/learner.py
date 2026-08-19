@@ -717,7 +717,13 @@ class InstinctLearner:
                 np.dot(pattern_emb, text_emb)
                 / (np.linalg.norm(pattern_emb) * np.linalg.norm(text_emb) + 1e-10)
             )
-        except (ValueError, TypeError, RuntimeError):
+        except (OSError, ValueError, TypeError, RuntimeError) as e:
+            # Fail open (same "recall must never break routing" convention as
+            # triage_recall.recall): embedding I/O failures — a flaky model
+            # download or corrupt HF cache surfacing as OSError from the
+            # load/encode path — must not break matching; callers fall back
+            # to the lexical score.
+            logger.debug("Embedding similarity unavailable, using lexical only: %s", e)
             return 0.0
 
     def _match_score(self, pattern: str, text: str) -> float:

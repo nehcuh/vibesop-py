@@ -4,8 +4,9 @@
 Validates the M2/M3 milestone behavior end-to-end with a real LLM
 (DEEPSEEK_API_KEY must be set in the environment):
 
-  T1  incident query (13 chars, scenario-match) -> AI triage must arbitrate
-      (scenario short-circuit authority removed, force=True path).
+  T1  scenario-matching query (11 chars, project scenario vibesop_dev) ->
+      AI triage must arbitrate (scenario short-circuit authority removed,
+      force=True path).
   T2  identical repeat query -> persistent triage cache hit (2nd run skips LLM).
   T3  <system-reminder> junk query -> no-match, zero telemetry written.
   T4  stale cache entry + broken LLM endpoint -> last-good degradation.
@@ -27,11 +28,20 @@ import traceback
 from pathlib import Path
 
 INCIDENT_QUERY = "全面审查这个仓库的代码质量"  # 13 chars — original scenario misfire case
-# Scenario query whose target is a *builtin* skill (riper-workflow via the
-# 'planning' scenario keyword 规划), resolvable even in a minimal container
-# candidate set. The incident query's scenario target '/review' resolves to
-# user-scope packs (mattpocock/review) that only exist on the host.
-SCENARIO_QUERY = "帮我规划下一步"
+# Scenario query whose target is a *builtin* skill, resolvable even in a
+# minimal container candidate set (builtin skills only — no gstack/omx packs).
+# All registry scenarios now fail closed without their declared primary_source
+# pack (code_review pins gstack; the old builtin-resolvable 'planning' scenario
+# was removed for over-triggering riper-workflow on generic plan/design
+# queries). The remaining builtin-resolvable scenario is the project-level
+# 'vibesop_dev' pattern from .vibe/skill-routing.yaml (tracked + mounted into
+# the container): 改进路由 -> builtin/riper-workflow. That target is a guarded
+# skill, but scenario bindings are user-declared intent and deliberately
+# exempt from the guard (see TriageService.guarded_skill_name), so the
+# scenario hit still demotes to a candidate and forces AI triage — the exact
+# mechanism under test. Token-overlap index score for this query is ~0.05,
+# far below threshold, so no index hit can pre-empt the scenario candidate.
+SCENARIO_QUERY = "帮我改进路由的匹配逻辑"
 JUNK_QUERY = "<system-reminder>Auto permission mode is active.</system-reminder>"
 
 

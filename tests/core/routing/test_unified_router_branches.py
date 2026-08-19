@@ -54,16 +54,39 @@ class TestRouteScenarioLayer:
     """Test scenario pattern layer (Layer 1)."""
 
     def test_scenario_planning_query(self, tmp_path: Path) -> None:
-        """Planning-related queries should match planning skills via scenario layer."""
+        """Generic planning queries must NOT route to builtin/riper-workflow.
+
+        The planning scenario (broad plan/design keywords → riper-workflow at
+        a fixed 0.9) was removed: the skill's contract is explicit-RIPER-
+        intent-only, and riper-workflow is now a guarded skill that fuzzy
+        layers cannot select without an explicit signal. Pinned behavior for
+        a generic planning query: NO skill match — the router falls back to
+        the LLM, and riper-workflow must not even resurface among the
+        fallback's nearest-skill suggestions.
+        """
         config = RoutingConfig(enable_ai_triage=False)
         router = UnifiedRouter(project_root=tmp_path, config=config)
 
-        result = router._single_skill_route("plan this complex task")
+        candidates = [
+            {
+                "id": "builtin/riper-workflow",
+                "name": "riper-workflow",
+                "description": "Use ONLY when the user explicitly requests the RIPER "
+                "structured 5-phase development workflow (Research, Innovate, "
+                "Plan, Execute, Review)",
+                "namespace": "builtin",
+                "keywords": ["riper", "riper-workflow", "5-phase", "structured-workflow"],
+                "triggers": ["use riper", "riper workflow", "riper 工作流", "五阶段工作流"],
+            },
+            {"id": "debug-skill", "name": "debug-skill", "description": "Debug things"},
+        ]
+        result = router._single_skill_route("plan this complex task", candidates=candidates)
 
-        assert result.has_match
-        if result.has_match:
-            primary = result.primary.skill_id.lower()
-            assert any(kw in primary for kw in ["plan", "riper", "orchestrate"])
+        assert not result.has_match
+        assert result.primary is None or result.primary.layer == RoutingLayer.FALLBACK_LLM
+        assert all(
+            a.skill_id != "builtin/riper-workflow" for a in (result.alternatives or [])
+        )
 
     def test_scenario_review_code(self, tmp_path: Path) -> None:
         """Review-related queries should match review skills."""
@@ -136,8 +159,21 @@ class TestKeywordRoutingFallback:
         config = RoutingConfig(enable_ai_triage=False, keyword_match_max_chars=15)
         router = UnifiedRouter(project_root=tmp_path, config=config)
 
-        # Query longer than keyword_match_max_chars but AI triage is disabled
-        result = router._single_skill_route("plan this complex task")
+        # Query longer than keyword_match_max_chars but AI triage is disabled.
+        # Uses an unguarded builtin candidate: guarded skills (riper-workflow,
+        # session-end) are correctly rejected without an explicit signal.
+        candidates = [
+            {
+                "id": "builtin/deep-diagnosis-optimization",
+                "name": "deep-diagnosis-optimization",
+                "description": "Deep diagnosis and optimization of the whole project",
+                "namespace": "builtin",
+                "keywords": ["diagnosis", "optimization", "deep"],
+            }
+        ]
+        result = router._single_skill_route(
+            "deep diagnosis and optimization of this project", candidates=candidates
+        )
 
         # Should still produce a match via keyword/TF-IDF/levenshtein pipeline
         assert result.has_match
@@ -382,3 +418,101 @@ class TestSessionEndLayer:
 
         assert match is None
         assert detail.matched is False
+
+
+class TestSessionEndLeavingSignal:
+    """「我先离开了」 is an exit signal and must hit the session-end fast path.
+
+    Regression: the trigger list covered 我要离开了/先走了 but not the bare
+    离开了 pattern, so 「我先离开了」 fell through to fallback-llm.
+    """
+
+    def test_wo_xian_li_kai_le_matches(self, tmp_path: Path) -> None:
+        config = RoutingConfig(enable_ai_triage=True)
+        router = UnifiedRouter(project_root=tmp_path, config=config)
+
+        candidates = [
+            {
+                "id": "builtin/session-end",
+                "description": "Session wrap-up",
+                "namespace": "builtin",
+                # Mirrors core/skills/session-end/SKILL.md triggers.
+                "triggers": ["我要离开了", "离开了", "先走了", "收工", "拜拜"],
+            },
+            {"id": "debug-skill", "description": "Debug things", "namespace": "builtin"},
+        ]
+
+        result = router._single_skill_route("我先离开了", candidates=candidates)
+
+        assert result.has_match
+        assert result.primary is not None
+        assert result.primary.skill_id == "builtin/session-end"
+
+
+class TestGuardedSkillMatcherGate:
+    """Guarded skills must not win the matcher pipeline on fuzzy scores alone.
+
+    Regression: 「似乎有其他进程没有关闭，帮我先关闭了」 keyword-matched
+    session-end (0.65) via the 会话 tag, and 「使用合适的 workflow …」
+    keyword-matched riper-workflow (0.86) via 'workflow' ⊂ 'riper-workflow'.
+    """
+
+    def _candidates(self) -> list[dict]:
+        return [
+            {
+                "id": "builtin/session-end",
+                "name": "session-end",
+                "description": "Session wrap-up - update handoff + commit",
+                "namespace": "builtin",
+                "keywords": ["session", "会话", "结束", "总结"],
+                "triggers": ["我要离开了", "离开了", "先走了", "收工", "拜拜"],
+            },
+            {
+                "id": "builtin/riper-workflow",
+                "name": "riper-workflow",
+                "description": "Use ONLY when the user explicitly requests the RIPER "
+                "structured 5-phase development workflow",
+                "namespace": "builtin",
+                "keywords": ["riper", "riper-workflow", "5-phase", "structured-workflow"],
+                "triggers": ["use riper", "riper workflow", "riper 工作流", "五阶段工作流"],
+            },
+            {
+                "id": "debug-skill",
+                "name": "debug-skill",
+                "description": "Debug things",
+                "namespace": "builtin",
+            },
+        ]
+
+    def test_close_something_does_not_route_session_end(self, tmp_path: Path) -> None:
+        config = RoutingConfig(enable_ai_triage=False)
+        router = UnifiedRouter(project_root=tmp_path, config=config)
+
+        result = router._single_skill_route(
+            "似乎有其他进程没有关闭，帮我先关闭了", candidates=self._candidates()
+        )
+
+        assert result.primary is None or result.primary.skill_id != "builtin/session-end"
+
+    def test_generic_workflow_query_does_not_route_riper(self, tmp_path: Path) -> None:
+        config = RoutingConfig(enable_ai_triage=False)
+        router = UnifiedRouter(project_root=tmp_path, config=config)
+
+        result = router._single_skill_route(
+            "使用合适的 workflow 在独立的 worktree 上进行开发吧", candidates=self._candidates()
+        )
+
+        assert result.primary is None or result.primary.skill_id != "builtin/riper-workflow"
+
+    def test_explicit_riper_query_still_routes(self, tmp_path: Path) -> None:
+        """Explicit RIPER intent keeps routing to riper-workflow."""
+        config = RoutingConfig(enable_ai_triage=False)
+        router = UnifiedRouter(project_root=tmp_path, config=config)
+
+        result = router._single_skill_route(
+            "use riper workflow for this feature", candidates=self._candidates()
+        )
+
+        assert result.has_match
+        assert result.primary is not None
+        assert result.primary.skill_id == "builtin/riper-workflow"

@@ -29,6 +29,7 @@ class _ResultHost(Protocol):
     _degradation_manager: Any
     _skill_recommender: Any | None
     _candidate_manager: Any
+    _triage_service: Any
     _config: Any
     project_root: Path
 
@@ -286,6 +287,19 @@ class RouterResultMixin:
             )
             if nearest_primary:
                 nearest = [nearest_primary, *nearest_alts]
+            # The fallback suggestion path re-runs the matcher pipeline
+            # ungated, so a guarded skill (session-end, riper-workflow) that
+            # was already rejected by the matcher gate in _try_layers would
+            # resurface here as a "nearest" suggestion. Filter it out again
+            # unless the query carries its explicit signal. getattr: bare
+            # mixin instances in unit tests have no triage service.
+            triage = getattr(self, "_triage_service", None)
+            if triage is not None and nearest:
+                nearest = [
+                    r
+                    for r in nearest
+                    if triage.has_explicit_guard_signal(query, candidates, r.skill_id)
+                ]
         except (RuntimeError, ValueError):
             logger.debug("Failed to get nearest candidates for fallback")
 

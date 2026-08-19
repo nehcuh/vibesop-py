@@ -106,15 +106,11 @@ conflict_resolution:
       - "头脑风暴"
       - "idea"
       - "想法"
-    planning:
-      - "plan"
-      - "规划"
-      - "计划"
-      - "方案"
-      - "design"
-      - "设计"
-      - "architect"
-      - "架构"
+    # "planning" keywords removed (2026-08): the planning scenario routed broad
+    # plan/design/方案 keywords to builtin/riper-workflow at a fixed 0.9,
+    # contradicting that skill's explicit-intent-only contract and hijacking
+    # generic design/planning queries. RIPER now routes only via its own
+    # explicit triggers.
     refactoring:
       - "refactor"
       - "重构"
@@ -178,6 +174,11 @@ conflict_resolution:
 
   strategies:
     # Debugging: gstack/investigate is primary, superpowers/debug as alternative
+    # NOTE: primary_source deliberately left commented (2026-08). Pinning it to
+    # gstack would make this high-traffic scenario inert on every machine
+    # without the gstack pack (fail-closed semantics, see code_review below);
+    # leaving it unpinned keeps legacy any-namespace resolution. Trade-off: an
+    # unrelated pack shipping an */investigate skill would still be picked up.
     - scenario: debugging
       primary: /investigate
 #       primary_source: gstack
@@ -190,9 +191,15 @@ conflict_resolution:
         - "用 superpowers"
 
     # Code review: prefer gstack for pre-landing (SQL safety, auto-fixes)
+    # primary_source is enforced fail-closed (2026-08): without an installed
+    # gstack candidate the scenario stays INERT — that is the intended default
+    # on machines without the gstack pack. Generic review/评审/pr/merge queries
+    # then fall through to the fuzzy layers instead of being hijacked at a
+    # fixed 0.9 confidence by whichever local pack happens to ship a */review
+    # skill (production hijack: mattpocock/review swallowed 12 eval queries).
     - scenario: code_review
       primary: /review
-#       primary_source: gstack
+      primary_source: gstack
       alternatives:
         - skill: /receiving-code-review
           source: superpowers
@@ -204,6 +211,9 @@ conflict_resolution:
         - "用 superpowers"
 
     # Product thinking: gstack for early (reframing), superpowers for refinement
+    # NOTE: primary_source deliberately left commented — same reasoning as
+    # debugging above (inert-by-default would disable the scenario for all
+    # non-gstack machines; revisit when the gstack pack story settles).
     - scenario: product_thinking
       primary: /office-hours
 #       primary_source: gstack
@@ -214,29 +224,12 @@ conflict_resolution:
       override_keywords:
         - "用 superpowers"
 
-    # Planning: builtin fallback, gstack/omx for specific angles
-    - scenario: planning
-      primary: riper-workflow
-      primary_source: builtin
-      alternatives:
-        - skill: /plan-ceo-review
-#           source: gstack
-          trigger: "CEO/产品角度"
-        - skill: /plan-eng-review
-#           source: gstack
-          trigger: "架构技术角度"
-        - skill: /plan-design-review
-#           source: gstack
-          trigger: "设计/UX 角度"
-        - skill: /autoplan
-#           source: gstack
-          trigger: "完整自动审查"
-        - skill: /writing-plans
-          source: superpowers
-          trigger: "创建设计文档"
-      override_keywords:
-#         - "用 gstack"
-        - "用 superpowers"
+    # Planning: REMOVED (2026-08). The scenario coupled broad planning
+    # keywords (plan/design/方案/计划) to builtin/riper-workflow at a fixed
+    # 0.9 confidence, but that skill's contract is explicit-RIPER-intent
+    # only — generic planning queries were systematically misrouted to it.
+    # RIPER remains reachable via its own triggers ("use riper",
+    # "riper workflow", "五阶段工作流", ...) and the guarded-skill rule.
 
     # Refactoring: prefer superpowers
     - scenario: refactoring

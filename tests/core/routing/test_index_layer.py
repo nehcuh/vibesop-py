@@ -373,3 +373,100 @@ class TestEarlyLayersRoutingPath:
         assert RoutingLayer.AI_TRIAGE not in routing_path
         traced = [lt.layer for lt in router._tracer._current.layers]  # type: ignore[union-attr]
         assert traced == ["semantic_index"]
+
+
+class TestIndexLayerGuardedSkills:
+    """Guarded skills (session-end, riper-workflow) must not win the index
+    layer on token overlap or embedding similarity alone — they require an
+    explicit signal in the query (same criterion as the AI-triage guard).
+
+    Regression: 「似乎有其他进程没有关闭，帮我先关闭了」 embedded closest to
+    builtin/session-end (similarity 0.52) without any exit intent.
+    """
+
+    @staticmethod
+    def _guard_all(_query: str, _candidates: list, _skill_id: str) -> bool:
+        return False
+
+    @staticmethod
+    def _allow_all(_query: str, _candidates: list, _skill_id: str) -> bool:
+        return True
+
+    def _router(self, tmp_path: Path, guard) -> MagicMock:
+        router = MagicMock()
+        router.project_root = tmp_path
+        router._config.index_match_threshold = 0.35
+        router._get_skill_source = lambda sid, ns: "builtin"
+        router._index_embedding_model = None  # Prevent MagicMock auto-creation
+        router._triage_service = MagicMock()
+        router._triage_service.has_explicit_guard_signal = guard
+        return router
+
+    def _write_session_end_index(self, tmp_path: Path, **extra: object) -> None:
+        index_path = tmp_path / ".vibe" / "skill-index.json"
+        index_path.parent.mkdir(parents=True, exist_ok=True)
+        profile = {
+            "skill_id": "builtin/session-end",
+            "scenarios": ["wrap up session"],
+            "query_patterns": ["收工 总结 会话"],
+            "differentiation": "",
+            "confidence_boosters": ["会话", "总结"],
+            **extra,
+        }
+        index_path.write_text(
+            json.dumps({"version": "1.3.0", "skills": {"builtin/session-end": profile}}),
+            encoding="utf-8",
+        )
+
+    def test_token_match_on_guarded_skill_without_signal_abstains(
+        self, tmp_path: Path
+    ) -> None:
+        self._write_session_end_index(tmp_path)
+        router = self._router(tmp_path, self._guard_all)
+        candidates = [
+            {"id": "builtin/session-end", "description": "Wrap up", "namespace": "builtin"}
+        ]
+
+        match, detail = try_index_layer(router, "收工 总结 会话 记录", candidates)
+
+        assert match is None
+        assert detail.matched is False
+        assert "guarded" in detail.reason.lower()
+
+    def test_token_match_on_guarded_skill_with_signal_passes(self, tmp_path: Path) -> None:
+        self._write_session_end_index(tmp_path)
+        router = self._router(tmp_path, self._allow_all)
+        candidates = [
+            {"id": "builtin/session-end", "description": "Wrap up", "namespace": "builtin"}
+        ]
+
+        match, detail = try_index_layer(router, "收工 总结 会话 记录", candidates)
+
+        assert match is not None
+        assert match.skill_id == "builtin/session-end"
+        assert detail.matched is True
+
+    def test_embedding_match_on_guarded_skill_without_signal_abstains(
+        self, tmp_path: Path
+    ) -> None:
+        import sys
+
+        self._write_session_end_index(tmp_path, embedding=[1.0, 0.0, 0.0])
+        router = self._router(tmp_path, self._guard_all)
+        candidates = [
+            {"id": "builtin/session-end", "description": "Wrap up", "namespace": "builtin"}
+        ]
+
+        mock_model = MagicMock()
+        mock_model.encode.return_value = [[0.9, 0.1, 0.0]]
+        fake_st = MagicMock()
+        fake_st.SentenceTransformer.return_value = mock_model
+
+        with patch.dict(sys.modules, {"sentence_transformers": fake_st}):
+            # Query shares no tokens with the profile → token path misses and
+            # the embedding fallback runs.
+            match, detail = try_index_layer(router, "zz qq xx", candidates)
+
+        assert match is None
+        assert detail.matched is False
+        assert "guarded" in detail.reason.lower()

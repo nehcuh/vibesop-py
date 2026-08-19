@@ -7,7 +7,7 @@ import os
 import threading
 import time
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from vibesop.core.matching import KeywordMatcher, MatcherConfig
 from vibesop.core.models import RoutingLayer, SkillRoute
@@ -443,6 +443,100 @@ class TriageService:
     def is_session_end_skill(self, skill_id: str) -> bool:
         """Return True if the selected skill is the session-end skill."""
         return skill_id in {"session-end", "builtin/session-end"}
+
+    # --- Guarded skills ---------------------------------------------------
+    #
+    # Some skills must only win on explicit user intent, never on fuzzy
+    # evidence (keyword substring bonuses, TF-IDF, token overlap, embedding
+    # similarity):
+    # - session-end: high side effects (wrap-up, commit, memory writes);
+    #   guarded by is_explicit_session_end_signal at the triage layers.
+    # - riper-workflow: its own contract ("Use ONLY when the user explicitly
+    #   requests the RIPER ... workflow. Not for generic analysis, planning,
+    #   or review tasks") — yet generic "workflow"/"design" queries matched
+    #   it via keyword substring bonuses ("workflow" ⊂ "riper-workflow") and
+    #   embedding similarity. Extra tokens let the skill's distinctive name
+    #   fragment count as explicit intent even when no full trigger phrase
+    #   appears verbatim (e.g. "用 RIPER 流程来做这个功能").
+    #
+    # SCOPE (deliberate): the guard covers only FUZZY layers — the matcher
+    # pipeline (keyword/tfidf/levenshtein, enforced in
+    # UnifiedRouter._try_layers) and the semantic index layer (token overlap
+    # + embedding fallback, enforced in _layers.py). The EXPLICIT layer
+    # (@skill syntax) and the SCENARIO layer are exempt BY DESIGN: both
+    # encode user-declared intent — an explicit mention by the user, or an
+    # explicit binding written by the user/project into registry.yaml /
+    # .vibe/skill-routing.yaml (e.g. this repo's vibesop_dev pattern binds
+    # 「改进路由」 to riper-workflow). Overriding such declared bindings
+    # would make project routing configuration untrustworthy; fuzzy layers,
+    # by contrast, only ever produce *inferred* matches, which is exactly
+    # where the guard belongs.
+    _GUARDED_SKILL_EXTRA_TOKENS: ClassVar[dict[str, tuple[str, ...]]] = {
+        "riper-workflow": ("riper",),
+    }
+    _GUARDED_SKILL_FALLBACK_TRIGGERS: ClassVar[dict[str, list[str]]] = {
+        "riper-workflow": [
+            # Mirrors core/skills/riper-workflow/SKILL.md frontmatter triggers;
+            # used only when no riper candidate (hence no declared triggers)
+            # is present. A test pins this list against the real SKILL.md.
+            "use riper",
+            "riper workflow",
+            "riper 工作流",
+            "5 phase workflow",
+            "五阶段工作流",
+            "structured workflow",
+        ],
+    }
+
+    def guarded_skill_name(self, skill_id: str) -> str | None:
+        """Return the short name if the skill requires explicit intent, else None."""
+        short = skill_id.rsplit("/", maxsplit=1)[-1].lower()
+        if self.is_session_end_skill(skill_id):
+            return "session-end"
+        if short in self._GUARDED_SKILL_EXTRA_TOKENS:
+            return short
+        return None
+
+    def has_explicit_guard_signal(
+        self,
+        query: str,
+        candidates: list[dict[str, Any]],
+        skill_id: str,
+    ) -> bool:
+        """Check whether the query carries explicit intent for a guarded skill.
+
+        Returns True for non-guarded skills (no guard to satisfy). For guarded
+        skills, explicit intent means a declared trigger phrase appears in the
+        query (verbatim substring, apostrophe-normalized) or one of the skill's
+        extra always-explicit tokens does. Session-end delegates to the
+        long-standing is_explicit_session_end_signal semantics.
+        """
+        short = self.guarded_skill_name(skill_id)
+        if short is None:
+            return True
+        if short == "session-end":
+            return self.is_explicit_session_end_signal(query, candidates)
+
+        candidate: dict[str, Any] | None = None
+        for c in candidates:
+            if str(c.get("id", "")).rsplit("/", maxsplit=1)[-1].lower() == short:
+                candidate = c
+                break
+
+        triggers: list[Any] = []
+        if candidate is not None:
+            raw = candidate.get("triggers", [])
+            triggers = list(raw) if isinstance(raw, list) else []
+        if not triggers:
+            triggers = list(self._GUARDED_SKILL_FALLBACK_TRIGGERS.get(short, []))
+
+        normalized_query = query.lower().replace("'", "").replace("’", "")
+        for trigger in triggers:
+            trigger_norm = str(trigger).lower().replace("'", "").replace("’", "")
+            if trigger_norm and trigger_norm in normalized_query:
+                return True
+
+        return any(tok in normalized_query for tok in self._GUARDED_SKILL_EXTRA_TOKENS[short])
 
     def is_explicit_session_end_signal(
         self,
