@@ -930,3 +930,172 @@ class TestEmbeddingThresholdKnob:
         assert match is None
         assert detail.matched is False
         assert "threshold" in detail.reason.lower()
+
+
+class TestPackTrustedArbitration:
+    """Pack-vs-trusted arbitration in the embedding fallback (M10).
+
+    An external pack winner is accepted only when no trusted-namespace
+    (builtin/project/custom/cross-cutting) profile shows real evidence for
+    the query (best trusted sim >= index_external_trusted_floor, i.e. above
+    the embedding model's noise band). Otherwise the layer abstains and
+    defers to AI triage. All vectors are 3-dim; the query embedding is the
+    x-axis unit vector, so a profile [x, y, 0] has cosine sim x/sqrt(x²+y²).
+    """
+
+    def _router(self, tmp_path: Path, floor: object = None) -> MagicMock:
+        router = MagicMock()
+        router.project_root = tmp_path
+        router._config.index_match_threshold = 0.35
+        if floor is not None:
+            router._config.index_external_trusted_floor = floor
+        router._get_skill_source = lambda sid, ns: ns
+        router._index_embedding_model = None  # Prevent MagicMock auto-creation
+        router._triage_service = MagicMock()
+        router._triage_service.has_explicit_guard_signal = lambda q, c, s: True
+        return router
+
+    @staticmethod
+    def _write_index(tmp_path: Path, profiles: dict[str, list[float]]) -> None:
+        index_path = tmp_path / ".vibe" / "skill-index.json"
+        index_path.parent.mkdir(parents=True, exist_ok=True)
+        index_path.write_text(
+            json.dumps(
+                {
+                    "version": "1.3.0",
+                    "skills": {
+                        sid: {
+                            "skill_id": sid,
+                            "scenarios": ["unrelated scenario text"],
+                            "query_patterns": ["unrelated query pattern"],
+                            "differentiation": "",
+                            "confidence_boosters": [],
+                            "embedding": emb,
+                        }
+                        for sid, emb in profiles.items()
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
+
+    @staticmethod
+    def _fake_st(vector: list[float]) -> MagicMock:
+        mock_model = MagicMock()
+        mock_model.encode.return_value = [vector]
+        fake_st = MagicMock()
+        fake_st.SentenceTransformer.return_value = mock_model
+        return fake_st
+
+    def test_pack_winner_abstains_when_trusted_evidence_comparable(self, tmp_path: Path) -> None:
+        """External winner 1.0, trusted runner-up sim 0.6 (>= 0.35 floor) —
+        margin gate passes (1.0-0.6 = 0.4), but arbitration abstains."""
+        import sys
+
+        self._write_index(
+            tmp_path,
+            {
+                "acme-pack/alpha": [1.0, 0.0, 0.0],
+                "builtin/beta": [0.6, 0.8, 0.0],  # sim 0.6
+            },
+        )
+        router = self._router(tmp_path)
+        candidates = [
+            {"id": "acme-pack/alpha", "description": "d", "namespace": "acme-pack"},
+            {"id": "builtin/beta", "description": "d", "namespace": "builtin"},
+        ]
+
+        with patch.dict(sys.modules, {"sentence_transformers": self._fake_st([1.0, 0.0, 0.0])}):
+            match, detail = try_index_layer(router, "zq wv xk", candidates)
+
+        assert match is None
+        assert detail.matched is False
+        assert "trusted" in detail.reason.lower()
+
+    def test_pack_winner_kept_when_trusted_evidence_below_floor(self, tmp_path: Path) -> None:
+        """External winner 1.0, trusted runner-up sim ~0.30 (below floor):
+        the query is not about anything the trusted catalog covers, so the
+        pack win stands."""
+        import sys
+
+        self._write_index(
+            tmp_path,
+            {
+                "acme-pack/alpha": [1.0, 0.0, 0.0],
+                "builtin/beta": [0.3, 0.95, 0.0],  # sim ~0.301 < 0.35
+            },
+        )
+        router = self._router(tmp_path)
+        candidates = [
+            {"id": "acme-pack/alpha", "description": "d", "namespace": "acme-pack"},
+            {"id": "builtin/beta", "description": "d", "namespace": "builtin"},
+        ]
+
+        with patch.dict(sys.modules, {"sentence_transformers": self._fake_st([1.0, 0.0, 0.0])}):
+            match, _detail = try_index_layer(router, "zq wv xk", candidates)
+
+        assert match is not None
+        assert match.skill_id == "acme-pack/alpha"
+
+    def test_pack_winner_kept_when_no_trusted_candidates(self, tmp_path: Path) -> None:
+        """No trusted skills installed at all → packs remain routable."""
+        import sys
+
+        self._write_index(tmp_path, {"acme-pack/alpha": [1.0, 0.0, 0.0]})
+        router = self._router(tmp_path)
+        candidates = [
+            {"id": "acme-pack/alpha", "description": "d", "namespace": "acme-pack"},
+        ]
+
+        with patch.dict(sys.modules, {"sentence_transformers": self._fake_st([1.0, 0.0, 0.0])}):
+            match, _detail = try_index_layer(router, "zq wv xk", candidates)
+
+        assert match is not None
+        assert match.skill_id == "acme-pack/alpha"
+
+    def test_trusted_winner_not_arbitrated(self, tmp_path: Path) -> None:
+        """Arbitration only fires AGAINST external winners; a trusted winner
+        over a strong pack runner-up is unaffected."""
+        import sys
+
+        self._write_index(
+            tmp_path,
+            {
+                "builtin/beta": [1.0, 0.0, 0.0],
+                "acme-pack/alpha": [0.6, 0.8, 0.0],  # sim 0.6
+            },
+        )
+        router = self._router(tmp_path)
+        candidates = [
+            {"id": "builtin/beta", "description": "d", "namespace": "builtin"},
+            {"id": "acme-pack/alpha", "description": "d", "namespace": "acme-pack"},
+        ]
+
+        with patch.dict(sys.modules, {"sentence_transformers": self._fake_st([1.0, 0.0, 0.0])}):
+            match, _detail = try_index_layer(router, "zq wv xk", candidates)
+
+        assert match is not None
+        assert match.skill_id == "builtin/beta"
+
+    def test_floor_zero_disables_arbitration(self, tmp_path: Path) -> None:
+        """index_external_trusted_floor = 0 disables the check entirely."""
+        import sys
+
+        self._write_index(
+            tmp_path,
+            {
+                "acme-pack/alpha": [1.0, 0.0, 0.0],
+                "builtin/beta": [0.6, 0.8, 0.0],
+            },
+        )
+        router = self._router(tmp_path, floor=0.0)
+        candidates = [
+            {"id": "acme-pack/alpha", "description": "d", "namespace": "acme-pack"},
+            {"id": "builtin/beta", "description": "d", "namespace": "builtin"},
+        ]
+
+        with patch.dict(sys.modules, {"sentence_transformers": self._fake_st([1.0, 0.0, 0.0])}):
+            match, _detail = try_index_layer(router, "zq wv xk", candidates)
+
+        assert match is not None
+        assert match.skill_id == "acme-pack/alpha"

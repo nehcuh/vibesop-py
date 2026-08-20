@@ -1,0 +1,548 @@
+diff --git a/docs/architecture/routing-system.md b/docs/architecture/routing-system.md
+index 083654f..12dcd2b 100644
+--- a/docs/architecture/routing-system.md
++++ b/docs/architecture/routing-system.md
+@@ -126,6 +126,16 @@ large and pack-generated, a match must clear ALL of these gates, in order:
+ 6. **Guarded-skill signal** — guarded skills (session-end, riper-workflow)
+    additionally need an explicit user-intent signal.
+ 
++**Pack-vs-trusted arbitration (M10)**: separate from the per-match gates
++above, the embedding fallback arbitrates between namespaces: an external
++pack winner is accepted only when no trusted-namespace profile reaches
++`index_external_trusted_floor` (0.35, just above the model's noise band).
++A trusted profile above the floor means the query has trusted-catalog
++content and the pack win is crowd-out — the layer abstains to AI triage.
++Below the floor, the query simply isn't about anything curated and a clear
++pack win is legitimately routable (this is what keeps e.g. git-workflow
++pack skills reachable for genuine git queries).
++
+ **Design story**: the cheap layers stay strict on weak evidence and defer to
+ AI triage (or a clean no-match) instead of accepting marginal hits. This
+ trades a little recall for a large precision win on machines with many
+@@ -313,6 +323,7 @@ routing:
+   index_external_match_threshold: 0.30  # Token bar for external pack profiles
+   index_embedding_threshold: 0.45       # Embedding-fallback cosine floor
+   index_embedding_min_margin: 0.05      # Embedding top1-top2 gap (0 disables)
++  index_external_trusted_floor: 0.35    # Pack-vs-trusted arbitration floor (0 disables)
+ ```
+ 
+ ## Degradation System (v5.2.0)
+diff --git a/src/vibesop/core/config/manager.py b/src/vibesop/core/config/manager.py
+index 2ce25d0..70eb1ae 100644
+--- a/src/vibesop/core/config/manager.py
++++ b/src/vibesop/core/config/manager.py
+@@ -257,6 +257,30 @@ class RoutingConfig(TolerantConfig):
+         "either side of it. Recalibrate against the eval set after any "
+         "rebuild before tuning this value.",
+     )
++    index_external_trusted_floor: float = Field(
++        default=0.35,
++        ge=0.0,
++        lt=1.0,
++        description="Pack-vs-trusted arbitration floor (M10) for the "
++        "SEMANTIC_INDEX embedding fallback: an external pack winner is "
++        "accepted only when NO trusted-namespace (builtin/project/custom/"
++        "cross-cutting) profile reaches this cosine similarity — i.e. no "
++        "trusted skill shows real evidence. 0.35 sits just above the "
++        "paraphrase-multilingual-MiniLM-L12-v2 noise band for unrelated "
++        "pairs (~0.1-0.3, see ai_triage_recall_min_similarity) and below the "
++        "0.45 hard-match floor: a trusted profile in between is evidence the "
++        "query has trusted-catalog content but not enough to route to it, so "
++        "a pack winner there is crowd-out, not a genuine hit, and the layer "
++        "abstains to AI triage. Calibration (2026-08, routing_eval_extended): "
++        "the one passing pack positive (omx/git-master) has best-trusted "
++        "0.274 (safely below); the strong-overlap misroute cluster sits at "
++        "0.352-0.502. Fragility note: the lowest cluster member (0.352) is "
++        "only 0.002 above the floor — an index rebuild can flip it; "
++        "recalibrate before tuning. 0 disables the arbitration (every pack "
++        "win is accepted); values approaching 1.0 make pack acceptance "
++        "nearly impossible (any trusted profile above the noise band "
++        "arbitrates).",
++    )
+     ai_triage_recall_min_similarity: float = Field(
+         default=0.25,
+         ge=0.0,
+diff --git a/src/vibesop/core/routing/_layers.py b/src/vibesop/core/routing/_layers.py
+index 6521de2..ada226a 100644
+--- a/src/vibesop/core/routing/_layers.py
++++ b/src/vibesop/core/routing/_layers.py
+@@ -424,14 +424,24 @@ def _try_embedding_fallback(
+     # Rank only profiles whose skill is actually installed: an uninstalled
+     # profile can never be routed, and letting it occupy the top-1/top-2
+     # slots would both report a dead match and corrupt the margin below.
+-    candidate_ids = {str(c.get("id", "")) for c in candidates}
++    # Also track the best TRUSTED-namespace (builtin/project/curated) sim for
++    # the pack-arbitration check below.
++    candidate_ns = {str(c.get("id", "")): str(c.get("namespace", "")) for c in candidates}
+     best_skill_id: str | None = None
+     best_similarity = 0.0
+     second_similarity = 0.0
++    best_trusted_similarity = 0.0
++    best_trusted_id: str | None = None
+     for skill_id, profile in profiles_with_emb.items():
+-        if skill_id not in candidate_ids:
++        if skill_id not in candidate_ns:
+             continue
+         sim = _cosine_similarity(query_emb, profile.embedding)
++        if (
++            candidate_ns.get(skill_id) in _TRUSTED_INDEX_NAMESPACES
++            and sim > best_trusted_similarity
++        ):
++            best_trusted_similarity = sim
++            best_trusted_id = skill_id
+         if sim > best_similarity:
+             second_similarity = best_similarity
+             best_similarity = sim
+@@ -473,6 +483,44 @@ def _try_embedding_fallback(
+             duration_ms=(time.perf_counter() - index_start) * 1000,
+         )
+ 
++    # Pack-vs-trusted arbitration (M10): an external pack winner is accepted
++    # only when NO trusted (builtin/project/curated) profile shows real
++    # evidence for the query. "Real evidence" = the best trusted sim clears
++    # index_external_trusted_floor, i.e. sits above the embedding model's
++    # noise band for unrelated pairs (~0.1-0.3, see
++    # ai_triage_recall_min_similarity). The two cases:
++    #   - trusted best BELOW the floor (e.g. "commit 三批改动": best trusted
++    #     0.27): the query is simply not about anything the trusted catalog
++    #     covers — a clear pack winner is legitimately routable.
++    #   - trusted best ABOVE the floor (e.g. a generic status query with a
++    #     builtin profile at 0.39-0.50): the query DOES have trusted-catalog
++    #     content and the pack profile is crowding it out. We abstain rather
++    #     than route to the trusted runner-up (its sim is below the match
++    #     floor — promoting it would route on evidence we already rejected);
++    #     abstention defers to AI triage, the intended escalation.
++    # This lives in the layer (not the unified arbitration stage) because the
++    # per-profile similarities exist only here; the rule itself IS the
++    # arbitration policy.
++    winner_ns = candidate_ns.get(best_skill_id or "", "")
++    if winner_ns not in _TRUSTED_INDEX_NAMESPACES:
++        trusted_floor = _cfg_float(router._config, "index_external_trusted_floor")
++        if (
++            trusted_floor > 0
++            and best_trusted_id is not None
++            and best_trusted_similarity >= trusted_floor
++        ):
++            return None, LayerDetail(
++                layer=RoutingLayer.SEMANTIC_INDEX,
++                matched=False,
++                reason=(
++                    f"Embedding fallback: external '{best_skill_id}' abstains — "
++                    f"trusted '{best_trusted_id}' shows comparable evidence "
++                    f"({best_trusted_similarity:.2f} >= {trusted_floor:.2f}); "
++                    f"deferring to AI triage"
++                ),
++                duration_ms=(time.perf_counter() - index_start) * 1000,
++            )
++
+     candidate = next((c for c in candidates if c["id"] == best_skill_id), None)
+     if not candidate:
+         return None, LayerDetail(
+diff --git a/tests/conftest.py b/tests/conftest.py
+index bd36785..beb22bc 100644
+--- a/tests/conftest.py
++++ b/tests/conftest.py
+@@ -1,5 +1,6 @@
+ """Root conftest with shared fixtures for all tests."""
+ 
++import sys
+ from collections.abc import Generator
+ from pathlib import Path
+ from unittest.mock import Mock, patch
+@@ -277,6 +278,49 @@ def _isolated_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+     _redirect_frozen_home_paths(monkeypatch, home)
+ 
+ 
++@pytest.fixture(autouse=True)
++def _no_real_embedding_model(
++    request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch
++) -> Generator[None, None, None]:
++    """Keep the suite hermetic: never load the real sentence-transformers model.
++
++    The autouse ``_isolated_home`` fixture above redirects HOME per test, which
++    hides the real HF cache — so every test reaching an embedding code path
++    (InstinctLearner.find_matching, SkillIndexer.build, the routing index
++    layer, EmbeddingRecall, the semantic matcher) used to download/load the
++    458MB paraphrase-multilingual-MiniLM-L12-v2 model, at ~10-12s per test
++    (huggingface_hub's cache dir freezes at first lazy import, so one test's
++    download is shared, but every load still pays the disk+torch cost). The
++    durations profile showed ~60 tests at 10s+ each — the dominant share of
++    suite wall time — plus one 458MB network download per run (flaky).
++
++    Stubbing the import to None makes every load site take its existing
++    ImportError/fail-open path (lexical-only scoring, no embeddings in the
++    index). Tests whose PURPOSE is embedding behavior override this stub with
++    a nested ``patch.dict(sys.modules, {"sentence_transformers": fake_st})``
++    (inner patch wins during its block), e.g. tests/core/skills/test_indexer.py
++    TestEmbeddingSupport and tests/unit/core/routing/test_triage_recall.py's
++    _FakeModel DI seam.
++
++    tests/benchmark is intentionally live (routing performance measured with
++    the real model) and is exempted here.
++
++    NOTE: implemented with ``monkeypatch.setitem``, NOT ``patch.dict`` —
++    patch.dict's exit deletes keys ADDED to sys.modules during the test,
++    which breaks ``monkeypatch.setattr("dotted.path", ...)`` in later tests
++    (the parent package keeps a stale attribute while sys.modules loses the
++    key; monkeypatch.resolve finds the stale attr via getattr and patches a
++    dead module object — see test_storage_tar_safety.py
++    TestInstallFromUrlTarSafety regression). monkeypatch.setitem restores
++    only this one key.
++    """
++    if "benchmark" in request.node.path.parts:
++        yield
++        return
++    monkeypatch.setitem(sys.modules, "sentence_transformers", None)
++    yield
++
++
+ @pytest.fixture(scope="session")
+ def symlink_supported(tmp_path_factory: pytest.TempPathFactory) -> bool:
+     """Probe once per session whether directory symlinks can be created.
+diff --git a/tests/core/routing/test_index_layer.py b/tests/core/routing/test_index_layer.py
+index f6691bf..fe03a4d 100644
+--- a/tests/core/routing/test_index_layer.py
++++ b/tests/core/routing/test_index_layer.py
+@@ -930,3 +930,172 @@ class TestEmbeddingThresholdKnob:
+         assert match is None
+         assert detail.matched is False
+         assert "threshold" in detail.reason.lower()
++
++
++class TestPackTrustedArbitration:
++    """Pack-vs-trusted arbitration in the embedding fallback (M10).
++
++    An external pack winner is accepted only when no trusted-namespace
++    (builtin/project/custom/cross-cutting) profile shows real evidence for
++    the query (best trusted sim >= index_external_trusted_floor, i.e. above
++    the embedding model's noise band). Otherwise the layer abstains and
++    defers to AI triage. All vectors are 3-dim; the query embedding is the
++    x-axis unit vector, so a profile [x, y, 0] has cosine sim x/sqrt(x²+y²).
++    """
++
++    def _router(self, tmp_path: Path, floor: object = None) -> MagicMock:
++        router = MagicMock()
++        router.project_root = tmp_path
++        router._config.index_match_threshold = 0.35
++        if floor is not None:
++            router._config.index_external_trusted_floor = floor
++        router._get_skill_source = lambda sid, ns: ns
++        router._index_embedding_model = None  # Prevent MagicMock auto-creation
++        router._triage_service = MagicMock()
++        router._triage_service.has_explicit_guard_signal = lambda q, c, s: True
++        return router
++
++    @staticmethod
++    def _write_index(tmp_path: Path, profiles: dict[str, list[float]]) -> None:
++        index_path = tmp_path / ".vibe" / "skill-index.json"
++        index_path.parent.mkdir(parents=True, exist_ok=True)
++        index_path.write_text(
++            json.dumps(
++                {
++                    "version": "1.3.0",
++                    "skills": {
++                        sid: {
++                            "skill_id": sid,
++                            "scenarios": ["unrelated scenario text"],
++                            "query_patterns": ["unrelated query pattern"],
++                            "differentiation": "",
++                            "confidence_boosters": [],
++                            "embedding": emb,
++                        }
++                        for sid, emb in profiles.items()
++                    },
++                }
++            ),
++            encoding="utf-8",
++        )
++
++    @staticmethod
++    def _fake_st(vector: list[float]) -> MagicMock:
++        mock_model = MagicMock()
++        mock_model.encode.return_value = [vector]
++        fake_st = MagicMock()
++        fake_st.SentenceTransformer.return_value = mock_model
++        return fake_st
++
++    def test_pack_winner_abstains_when_trusted_evidence_comparable(self, tmp_path: Path) -> None:
++        """External winner 1.0, trusted runner-up sim 0.6 (>= 0.35 floor) —
++        margin gate passes (1.0-0.6 = 0.4), but arbitration abstains."""
++        import sys
++
++        self._write_index(
++            tmp_path,
++            {
++                "acme-pack/alpha": [1.0, 0.0, 0.0],
++                "builtin/beta": [0.6, 0.8, 0.0],  # sim 0.6
++            },
++        )
++        router = self._router(tmp_path)
++        candidates = [
++            {"id": "acme-pack/alpha", "description": "d", "namespace": "acme-pack"},
++            {"id": "builtin/beta", "description": "d", "namespace": "builtin"},
++        ]
++
++        with patch.dict(sys.modules, {"sentence_transformers": self._fake_st([1.0, 0.0, 0.0])}):
++            match, detail = try_index_layer(router, "zq wv xk", candidates)
++
++        assert match is None
++        assert detail.matched is False
++        assert "trusted" in detail.reason.lower()
++
++    def test_pack_winner_kept_when_trusted_evidence_below_floor(self, tmp_path: Path) -> None:
++        """External winner 1.0, trusted runner-up sim ~0.30 (below floor):
++        the query is not about anything the trusted catalog covers, so the
++        pack win stands."""
++        import sys
++
++        self._write_index(
++            tmp_path,
++            {
++                "acme-pack/alpha": [1.0, 0.0, 0.0],
++                "builtin/beta": [0.3, 0.95, 0.0],  # sim ~0.301 < 0.35
++            },
++        )
++        router = self._router(tmp_path)
++        candidates = [
++            {"id": "acme-pack/alpha", "description": "d", "namespace": "acme-pack"},
++            {"id": "builtin/beta", "description": "d", "namespace": "builtin"},
++        ]
++
++        with patch.dict(sys.modules, {"sentence_transformers": self._fake_st([1.0, 0.0, 0.0])}):
++            match, _detail = try_index_layer(router, "zq wv xk", candidates)
++
++        assert match is not None
++        assert match.skill_id == "acme-pack/alpha"
++
++    def test_pack_winner_kept_when_no_trusted_candidates(self, tmp_path: Path) -> None:
++        """No trusted skills installed at all → packs remain routable."""
++        import sys
++
++        self._write_index(tmp_path, {"acme-pack/alpha": [1.0, 0.0, 0.0]})
++        router = self._router(tmp_path)
++        candidates = [
++            {"id": "acme-pack/alpha", "description": "d", "namespace": "acme-pack"},
++        ]
++
++        with patch.dict(sys.modules, {"sentence_transformers": self._fake_st([1.0, 0.0, 0.0])}):
++            match, _detail = try_index_layer(router, "zq wv xk", candidates)
++
++        assert match is not None
++        assert match.skill_id == "acme-pack/alpha"
++
++    def test_trusted_winner_not_arbitrated(self, tmp_path: Path) -> None:
++        """Arbitration only fires AGAINST external winners; a trusted winner
++        over a strong pack runner-up is unaffected."""
++        import sys
++
++        self._write_index(
++            tmp_path,
++            {
++                "builtin/beta": [1.0, 0.0, 0.0],
++                "acme-pack/alpha": [0.6, 0.8, 0.0],  # sim 0.6
++            },
++        )
++        router = self._router(tmp_path)
++        candidates = [
++            {"id": "builtin/beta", "description": "d", "namespace": "builtin"},
++            {"id": "acme-pack/alpha", "description": "d", "namespace": "acme-pack"},
++        ]
++
++        with patch.dict(sys.modules, {"sentence_transformers": self._fake_st([1.0, 0.0, 0.0])}):
++            match, _detail = try_index_layer(router, "zq wv xk", candidates)
++
++        assert match is not None
++        assert match.skill_id == "builtin/beta"
++
++    def test_floor_zero_disables_arbitration(self, tmp_path: Path) -> None:
++        """index_external_trusted_floor = 0 disables the check entirely."""
++        import sys
++
++        self._write_index(
++            tmp_path,
++            {
++                "acme-pack/alpha": [1.0, 0.0, 0.0],
++                "builtin/beta": [0.6, 0.8, 0.0],
++            },
++        )
++        router = self._router(tmp_path, floor=0.0)
++        candidates = [
++            {"id": "acme-pack/alpha", "description": "d", "namespace": "acme-pack"},
++            {"id": "builtin/beta", "description": "d", "namespace": "builtin"},
++        ]
++
++        with patch.dict(sys.modules, {"sentence_transformers": self._fake_st([1.0, 0.0, 0.0])}):
++            match, _detail = try_index_layer(router, "zq wv xk", candidates)
++
++        assert match is not None
++        assert match.skill_id == "acme-pack/alpha"
+diff --git a/tests/core/test_config_manager.py b/tests/core/test_config_manager.py
+index 10068ba..769bab2 100644
+--- a/tests/core/test_config_manager.py
++++ b/tests/core/test_config_manager.py
+@@ -553,3 +553,15 @@ def test_index_embedding_threshold_default_and_bounds() -> None:
+         RoutingConfig(index_embedding_threshold=1.0)
+     with pytest.raises(ValidationError):
+         RoutingConfig(index_embedding_threshold=-0.1)
++
++
++def test_index_external_trusted_floor_default_and_bounds() -> None:
++    """index_external_trusted_floor (pack-vs-trusted arbitration) defaults to
++    0.35; bounded to [0.0, 1.0). 0 disables the arbitration."""
++    assert RoutingConfig().index_external_trusted_floor == pytest.approx(0.35)
++    RoutingConfig(index_external_trusted_floor=0.0)
++    RoutingConfig(index_external_trusted_floor=0.9)
++    with pytest.raises(ValidationError):
++        RoutingConfig(index_external_trusted_floor=1.0)
++    with pytest.raises(ValidationError):
++        RoutingConfig(index_external_trusted_floor=-0.1)
+diff --git a/tests/core/test_instinct_learner.py b/tests/core/test_instinct_learner.py
+index c61d7d3..0eee58a 100644
+--- a/tests/core/test_instinct_learner.py
++++ b/tests/core/test_instinct_learner.py
+@@ -7,7 +7,7 @@ import tempfile
+ from collections.abc import Iterator
+ from datetime import datetime
+ from pathlib import Path
+-from unittest.mock import MagicMock, patch
++from unittest.mock import MagicMock
+ 
+ import pytest
+ 
+@@ -19,20 +19,12 @@ from vibesop.core.instinct.learner import (
+     learn_instinct,
+ )
+ 
+-
+-@pytest.fixture(autouse=True)
+-def _no_embedding_model() -> Iterator[None]:
+-    """Keep these tests hermetic: never load the real sentence-transformers model.
+-
+-    Without this stub, the find_matching/get_routing_suggestion tests download
+-    the 458MB paraphrase-multilingual-MiniLM-L12-v2 model into the per-test
+-    isolated HOME (tests/conftest.py ``_isolated_home``) — ~60s per cold test
+-    and network-flaky under full-suite load (same flake class as the
+-    test_instinct_feedback_loop.py failure). The lexical scorer alone covers
+-    every assertion in this file.
+-    """
+-    with patch.dict(sys.modules, {"sentence_transformers": None}):
+-        yield
++# NOTE: sentence_transformers is stubbed to None suite-wide by the autouse
++# ``_no_real_embedding_model`` fixture in tests/conftest.py (embedding paths
++# fail open to lexical scoring), so the find_matching/get_routing_suggestion
++# tests here never download the 458MB paraphrase-multilingual-MiniLM-L12-v2
++# model into the per-test isolated HOME. The lexical scorer alone covers every
++# assertion in this file.
+ 
+ 
+ class TestInstinct:
+@@ -334,16 +326,19 @@ class TestInstinctLearner:
+         # With 10 successes the confidence should be high enough
+         assert len(matches) >= 0  # at least doesn't crash
+ 
+-    def test_find_matching_survives_embedding_oserror(self, learner: InstinctLearner) -> None:
++    def test_find_matching_survives_embedding_oserror(
++        self, learner: InstinctLearner, monkeypatch: pytest.MonkeyPatch
++    ) -> None:
+         """encode() raising OSError must not break matching — fall back to lexical.
+ 
+         Regression for the test_instinct_feedback_loop flake: a flaky model
+         download / corrupt HF cache surfaces as OSError from the embedding
+         path; ``_compute_embedding_similarity`` must fail open (same
+         convention as triage_recall.recall) so find_matching still returns
+-        the lexical match. Overrides the module-level autouse stub, which
+-        removes sentence_transformers entirely; here we need the model to
+-        "load" and then blow up at encode time.
++        the lexical match. Overrides the suite-wide autouse stub (tests/
++        conftest.py ``_no_real_embedding_model``), which removes
++        sentence_transformers entirely; here we need the model to "load" and
++        then blow up at encode time.
+         """
+         learner.learn(pattern="debug database error", action="use systematic-debugging")
+         instinct_id = next(iter(learner._instincts.keys()))
+@@ -354,8 +349,8 @@ class TestInstinctLearner:
+         fake_st.SentenceTransformer.return_value.encode.side_effect = OSError(
+             "simulated corrupt HF cache"
+         )
+-        with patch.dict(sys.modules, {"sentence_transformers": fake_st}):
+-            matches = learner.find_matching(query="database error occurred")
++        monkeypatch.setitem(sys.modules, "sentence_transformers", fake_st)
++        matches = learner.find_matching(query="database error occurred")
+ 
+         assert len(matches) > 0
+         assert matches[0].action == "use systematic-debugging"
+diff --git a/tests/performance/test_performance.py b/tests/performance/test_performance.py
+index 13c6792..3f121c9 100644
+--- a/tests/performance/test_performance.py
++++ b/tests/performance/test_performance.py
+@@ -236,8 +236,16 @@ class TestMemoryEfficiency:
+         """
+         import gc
+ 
+-        # Get initial memory
++        # Warm up once with a sacrificial router so one-time lazy imports and
++        # module-level caches from the routing pipeline (scipy/sklearn TF-IDF
++        # stack, fallback layers — which path runs depends on whether the
++        # embedding model is stubbed) are not mistaken for a leak below.
++        # Without this the measurement is order-dependent: the imports are
++        # absorbed by whichever test triggers them first.
++        UnifiedRouter(config=RoutingConfig(enable_ai_triage=False)).route("test")
+         gc.collect()
++
++        # Get initial memory
+         initial_objects = len(gc.get_objects())
+ 
+         # Create many routers
+diff --git a/tests/unit/core/routing/test_instinct_feedback_loop.py b/tests/unit/core/routing/test_instinct_feedback_loop.py
+index fdf2b24..003a334 100644
+--- a/tests/unit/core/routing/test_instinct_feedback_loop.py
++++ b/tests/unit/core/routing/test_instinct_feedback_loop.py
+@@ -28,12 +28,8 @@ routing-level test will confirm maturation.
+ 
+ from __future__ import annotations
+ 
+-import sys
+-from collections.abc import Generator
+ from pathlib import Path
+-from unittest.mock import MagicMock, patch
+-
+-import pytest
++from unittest.mock import MagicMock
+ 
+ from vibesop.core.instinct.learner import InstinctLearner
+ from vibesop.core.matching.base import MatchResult, MatcherType
+@@ -77,28 +73,12 @@ def _match(skill_id: str, confidence: float) -> MatchResult:
+         score_breakdown={},
+     )
+ 
+-
+-@pytest.fixture(autouse=True)
+-def _no_embedding_model() -> Generator[None]:
+-    """Keep these tests hermetic: never load the real sentence-transformers model.
+-
+-    Without this stub, the first ``find_matching``/``apply_instinct_boost``
+-    call downloads the 458MB paraphrase-multilingual-MiniLM-L12-v2 model into
+-    the per-test isolated HOME (tests/conftest.py ``_isolated_home`` redirects
+-    HOME, so the real HF cache is invisible and huggingface_hub's cache dir
+-    freezes to whichever test first triggers the lazy import — seed-dependent
+-    under pytest-randomly). That made each affected test take ~60s and,
+-    worse, flaky under a full-suite run: an OSError from the download/cache/
+-    encode path escapes ``_compute_embedding_similarity`` (it catches only
+-    ValueError/TypeError/RuntimeError) and is then swallowed by
+-    ``apply_instinct_boost``, silently dropping the boost.
+-
+-    The lexical scorer alone deterministically scores the identical
+-    query/pattern at 1.0, which is all these tests need. Same stub pattern as
+-    tests/unit/core/routing/test_triage_recall.py.
+-    """
+-    with patch.dict(sys.modules, {"sentence_transformers": None}):
+-        yield
++# NOTE: sentence_transformers is stubbed to None suite-wide by the autouse
++# ``_no_real_embedding_model`` fixture in tests/conftest.py (embedding paths
++# fail open to lexical scoring), so these tests never download the 458MB
++# paraphrase-multilingual-MiniLM-L12-v2 model into the per-test isolated HOME.
++# The lexical scorer deterministically scores the identical query/pattern at
++# 1.0, which is all the assertions below need.
+ 
+ 
+ class TestInstinctFeedbackLoopDead:

@@ -1,5 +1,6 @@
 """Root conftest with shared fixtures for all tests."""
 
+import sys
 from collections.abc import Generator
 from pathlib import Path
 from unittest.mock import Mock, patch
@@ -275,6 +276,55 @@ def _isolated_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(Path, "home", classmethod(lambda cls: home))
 
     _redirect_frozen_home_paths(monkeypatch, home)
+
+
+@pytest.fixture(autouse=True)
+def _no_real_embedding_model(
+    request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch
+) -> Generator[None, None, None]:
+    """Keep the suite hermetic: never load the real sentence-transformers model.
+
+    The autouse ``_isolated_home`` fixture above redirects HOME per test, which
+    hides the real HF cache — so every test reaching an embedding code path
+    (InstinctLearner.find_matching, SkillIndexer.build, the routing index
+    layer, EmbeddingRecall, the semantic matcher) used to download/load the
+    458MB paraphrase-multilingual-MiniLM-L12-v2 model, at ~10-12s per test
+    (huggingface_hub's cache dir freezes at first lazy import, so one test's
+    download is shared, but every load still pays the disk+torch cost). The
+    durations profile showed ~60 tests at 10s+ each — the dominant share of
+    suite wall time — plus one 458MB network download per run (flaky).
+
+    Stubbing the import to None makes every load site take its existing
+    ImportError/fail-open path (lexical-only scoring, no embeddings in the
+    index). Tests whose PURPOSE is embedding behavior override this stub with
+    a nested ``patch.dict(sys.modules, {"sentence_transformers": fake_st})``
+    (inner patch wins during its block), e.g. tests/core/skills/test_indexer.py
+    TestEmbeddingSupport and tests/unit/core/routing/test_triage_recall.py's
+    _FakeModel DI seam.
+
+    Benchmark tests are intentionally live (they measure the real model) and
+    are exempted by DIRECTORY (``tests/benchmark``) or by MARKER
+    (``@pytest.mark.benchmark`` — e.g. tests/performance/test_benchmarks.py,
+    which lives outside tests/benchmark but must stay live if collected).
+
+    NOTE: implemented with ``monkeypatch.setitem``, NOT ``patch.dict`` —
+    patch.dict's exit deletes keys ADDED to sys.modules during the test,
+    which breaks ``monkeypatch.setattr("dotted.path", ...)`` in later tests
+    (the parent package keeps a stale attribute while sys.modules loses the
+    key; monkeypatch.resolve finds the stale attr via getattr and patches a
+    dead module object — see test_storage_tar_safety.py
+    TestInstallFromUrlTarSafety regression). monkeypatch.setitem restores
+    only this one key.
+    """
+    is_benchmark = (
+        "benchmark" in request.node.path.parts
+        or request.node.get_closest_marker("benchmark") is not None
+    )
+    if is_benchmark:
+        yield
+        return
+    monkeypatch.setitem(sys.modules, "sentence_transformers", None)
+    yield
 
 
 @pytest.fixture(scope="session")

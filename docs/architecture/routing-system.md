@@ -126,6 +126,16 @@ large and pack-generated, a match must clear ALL of these gates, in order:
 6. **Guarded-skill signal** — guarded skills (session-end, riper-workflow)
    additionally need an explicit user-intent signal.
 
+**Pack-vs-trusted arbitration (M10)**: separate from the per-match gates
+above, the embedding fallback arbitrates between namespaces: an external
+pack winner is accepted only when no trusted-namespace profile reaches
+`index_external_trusted_floor` (0.35, just above the model's noise band).
+A trusted profile above the floor means the query has trusted-catalog
+content and the pack win is crowd-out — the layer abstains to AI triage.
+Below the floor, the query simply isn't about anything curated and a clear
+pack win is legitimately routable (this is what keeps e.g. git-workflow
+pack skills reachable for genuine git queries).
+
 **Design story**: the cheap layers stay strict on weak evidence and defer to
 AI triage (or a clean no-match) instead of accepting marginal hits. This
 trades a little recall for a large precision win on machines with many
@@ -313,6 +323,7 @@ routing:
   index_external_match_threshold: 0.30  # Token bar for external pack profiles
   index_embedding_threshold: 0.45       # Embedding-fallback cosine floor
   index_embedding_min_margin: 0.05      # Embedding top1-top2 gap (0 disables)
+  index_external_trusted_floor: 0.35    # Pack-vs-trusted arbitration floor (0 disables)
 ```
 
 ## Degradation System (v5.2.0)

@@ -553,3 +553,15 @@ def test_index_embedding_threshold_default_and_bounds() -> None:
         RoutingConfig(index_embedding_threshold=1.0)
     with pytest.raises(ValidationError):
         RoutingConfig(index_embedding_threshold=-0.1)
+
+
+def test_index_external_trusted_floor_default_and_bounds() -> None:
+    """index_external_trusted_floor (pack-vs-trusted arbitration) defaults to
+    0.35; bounded to [0.0, 1.0). 0 disables the arbitration."""
+    assert RoutingConfig().index_external_trusted_floor == pytest.approx(0.35)
+    RoutingConfig(index_external_trusted_floor=0.0)
+    RoutingConfig(index_external_trusted_floor=0.9)
+    with pytest.raises(ValidationError):
+        RoutingConfig(index_external_trusted_floor=1.0)
+    with pytest.raises(ValidationError):
+        RoutingConfig(index_external_trusted_floor=-0.1)

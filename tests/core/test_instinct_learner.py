@@ -7,7 +7,7 @@ import tempfile
 from collections.abc import Iterator
 from datetime import datetime
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -19,20 +19,12 @@ from vibesop.core.instinct.learner import (
     learn_instinct,
 )
 
-
-@pytest.fixture(autouse=True)
-def _no_embedding_model() -> Iterator[None]:
-    """Keep these tests hermetic: never load the real sentence-transformers model.
-
-    Without this stub, the find_matching/get_routing_suggestion tests download
-    the 458MB paraphrase-multilingual-MiniLM-L12-v2 model into the per-test
-    isolated HOME (tests/conftest.py ``_isolated_home``) — ~60s per cold test
-    and network-flaky under full-suite load (same flake class as the
-    test_instinct_feedback_loop.py failure). The lexical scorer alone covers
-    every assertion in this file.
-    """
-    with patch.dict(sys.modules, {"sentence_transformers": None}):
-        yield
+# NOTE: sentence_transformers is stubbed to None suite-wide by the autouse
+# ``_no_real_embedding_model`` fixture in tests/conftest.py (embedding paths
+# fail open to lexical scoring), so the find_matching/get_routing_suggestion
+# tests here never download the 458MB paraphrase-multilingual-MiniLM-L12-v2
+# model into the per-test isolated HOME. The lexical scorer alone covers every
+# assertion in this file.
 
 
 class TestInstinct:
@@ -334,16 +326,19 @@ class TestInstinctLearner:
         # With 10 successes the confidence should be high enough
         assert len(matches) >= 0  # at least doesn't crash
 
-    def test_find_matching_survives_embedding_oserror(self, learner: InstinctLearner) -> None:
+    def test_find_matching_survives_embedding_oserror(
+        self, learner: InstinctLearner, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """encode() raising OSError must not break matching — fall back to lexical.
 
         Regression for the test_instinct_feedback_loop flake: a flaky model
         download / corrupt HF cache surfaces as OSError from the embedding
         path; ``_compute_embedding_similarity`` must fail open (same
         convention as triage_recall.recall) so find_matching still returns
-        the lexical match. Overrides the module-level autouse stub, which
-        removes sentence_transformers entirely; here we need the model to
-        "load" and then blow up at encode time.
+        the lexical match. Overrides the suite-wide autouse stub (tests/
+        conftest.py ``_no_real_embedding_model``), which removes
+        sentence_transformers entirely; here we need the model to "load" and
+        then blow up at encode time.
         """
         learner.learn(pattern="debug database error", action="use systematic-debugging")
         instinct_id = next(iter(learner._instincts.keys()))
@@ -354,8 +349,8 @@ class TestInstinctLearner:
         fake_st.SentenceTransformer.return_value.encode.side_effect = OSError(
             "simulated corrupt HF cache"
         )
-        with patch.dict(sys.modules, {"sentence_transformers": fake_st}):
-            matches = learner.find_matching(query="database error occurred")
+        monkeypatch.setitem(sys.modules, "sentence_transformers", fake_st)
+        matches = learner.find_matching(query="database error occurred")
 
         assert len(matches) > 0
         assert matches[0].action == "use systematic-debugging"

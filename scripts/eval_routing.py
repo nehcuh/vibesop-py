@@ -19,6 +19,7 @@ Entry semantics:
 
 Usage:
     uv run python scripts/eval_routing.py [--file PATH] [--record] [--json]
+                                          [--json-out PATH]
 """
 
 from __future__ import annotations
@@ -44,6 +45,14 @@ def main() -> int:
     )
     parser.add_argument("--json", action="store_true", help="machine-readable output")
     parser.add_argument(
+        "--json-out",
+        type=Path,
+        default=None,
+        help="write metrics plus per-query records (query, expect, reject, "
+        "primary, top3, layer, confidence, ok1, ok3) to this JSON file — "
+        "for byte-level failing-set diffs",
+    )
+    parser.add_argument(
         "--file",
         type=Path,
         default=ROOT / "tests" / "benchmark" / "routing_eval.yaml",
@@ -59,6 +68,7 @@ def main() -> int:
     total = len(entries)
     hits1 = hits3 = 0
     errors: list[dict] = []
+    per_query: list[dict] = []
     for e in entries:
         query = e["query"]
         expect: list[str] = e.get("expect", [])
@@ -80,6 +90,19 @@ def main() -> int:
         ok3 = (any(s in expect for s in top3)) if expect else ok1
         hits1 += ok1
         hits3 += ok3
+        per_query.append(
+            {
+                "query": query[:80],
+                "expect": expect,
+                "reject": reject,
+                "primary": primary,
+                "top3": top3,
+                "layer": layer,
+                "confidence": round(confidence, 3),
+                "ok1": bool(ok1),
+                "ok3": bool(ok3),
+            }
+        )
         if not ok1:
             errors.append(
                 {
@@ -115,6 +138,19 @@ def main() -> int:
             for err in errors:
                 err["recorded_at"] = datetime.now(UTC).isoformat()
                 f.write(json.dumps(err, ensure_ascii=False) + "\n")
+
+    if args.json_out:
+        out = args.json_out
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(
+            json.dumps(
+                {**metrics, "dataset": str(eval_file), "per_query": per_query},
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+        print(f"saved -> {out}", file=sys.stderr)
 
     if args.json:
         print(json.dumps(metrics, ensure_ascii=False, indent=2))

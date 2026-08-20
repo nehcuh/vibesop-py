@@ -257,6 +257,35 @@ class RoutingConfig(TolerantConfig):
         "either side of it. Recalibrate against the eval set after any "
         "rebuild before tuning this value.",
     )
+    index_external_trusted_floor: float = Field(
+        default=0.35,
+        ge=0.0,
+        lt=1.0,
+        description="Pack-vs-trusted arbitration floor (M10) for the "
+        "SEMANTIC_INDEX embedding fallback: an external pack winner is "
+        "accepted only when NO trusted-namespace (builtin/project/custom/"
+        "cross-cutting) profile reaches this cosine similarity — i.e. no "
+        "trusted skill shows real evidence. 0.35 sits just above the "
+        "paraphrase-multilingual-MiniLM-L12-v2 noise band for unrelated "
+        "pairs (~0.1-0.3, see ai_triage_recall_min_similarity) and below the "
+        "0.45 hard-match floor: a trusted profile in between is evidence the "
+        "query has trusted-catalog content but not enough to route to it, so "
+        "a pack winner there is crowd-out, not a genuine hit, and the layer "
+        "abstains to AI triage. Calibration (2026-08, routing_eval_extended): "
+        "the one passing pack positive (omx/git-master) has best-trusted "
+        "0.274 (safely below) — that keep-side positive is the binding "
+        "constraint on raising this floor, while abstain-side failures fail "
+        "soft (no-match, then AI triage). The strong-overlap misroute "
+        "cluster sits at 0.351-0.502. Fragility note: TWO cluster members "
+        "(0.351 and 0.352) sit within 0.002 of the floor. Re-embedding "
+        "identical profile text is near-deterministic, so a plain index "
+        "rebuild will NOT move these; the real trigger is pack profile TEXT "
+        "drift when a skill's content is updated and re-analyzed. "
+        "Recalibrate before tuning after any pack content change. 0 disables "
+        "the arbitration (every pack win is accepted); values approaching "
+        "1.0 make pack acceptance nearly impossible (any trusted profile "
+        "above the noise band arbitrates).",
+    )
     ai_triage_recall_min_similarity: float = Field(
         default=0.25,
         ge=0.0,

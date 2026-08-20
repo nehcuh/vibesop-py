@@ -424,14 +424,24 @@ def _try_embedding_fallback(
     # Rank only profiles whose skill is actually installed: an uninstalled
     # profile can never be routed, and letting it occupy the top-1/top-2
     # slots would both report a dead match and corrupt the margin below.
-    candidate_ids = {str(c.get("id", "")) for c in candidates}
+    # Also track the best TRUSTED-namespace (builtin/project/curated) sim for
+    # the pack-arbitration check below.
+    candidate_ns = {str(c.get("id", "")): str(c.get("namespace", "")) for c in candidates}
     best_skill_id: str | None = None
     best_similarity = 0.0
     second_similarity = 0.0
+    best_trusted_similarity = 0.0
+    best_trusted_id: str | None = None
     for skill_id, profile in profiles_with_emb.items():
-        if skill_id not in candidate_ids:
+        if skill_id not in candidate_ns:
             continue
         sim = _cosine_similarity(query_emb, profile.embedding)
+        if (
+            candidate_ns.get(skill_id) in _TRUSTED_INDEX_NAMESPACES
+            and sim > best_trusted_similarity
+        ):
+            best_trusted_similarity = sim
+            best_trusted_id = skill_id
         if sim > best_similarity:
             second_similarity = best_similarity
             best_similarity = sim
@@ -472,6 +482,48 @@ def _try_embedding_fallback(
             ),
             duration_ms=(time.perf_counter() - index_start) * 1000,
         )
+
+    # Pack-vs-trusted arbitration (M10): an external pack winner is accepted
+    # only when NO trusted (builtin/project/curated) profile shows real
+    # evidence for the query. "Real evidence" = the best trusted sim clears
+    # index_external_trusted_floor, i.e. sits above the embedding model's
+    # noise band for unrelated pairs (~0.1-0.3, see
+    # ai_triage_recall_min_similarity). The two cases:
+    #   - trusted best BELOW the floor (e.g. the one must-keep pack positive
+    #     from the extended eval set: best trusted 0.27): the query is simply
+    #     not about anything the trusted catalog covers — a clear pack winner
+    #     is legitimately routable.
+    #   - trusted best ABOVE the floor: the query has trusted-catalog content
+    #     AND a pack profile outscored it — two defensible answers with
+    #     contested evidence. Choosing between above-floor candidates is AI
+    #     triage's job, not this layer's: the index layer abstains and defers
+    #     to triage, the intended escalation. This holds regardless of which
+    #     side of the 0.45 match floor the trusted runner-up sits — part of
+    #     the calibrated cluster has trusted sims >= 0.45 (they merely lost
+    #     the argmax), so "the runner-up was already rejected" is NOT the
+    #     justification.
+    # This lives in the layer (not the unified arbitration stage) because the
+    # per-profile similarities exist only here; the rule itself IS the
+    # arbitration policy.
+    winner_ns = candidate_ns.get(best_skill_id or "", "")
+    if winner_ns not in _TRUSTED_INDEX_NAMESPACES:
+        trusted_floor = _cfg_float(router._config, "index_external_trusted_floor")
+        if (
+            trusted_floor > 0
+            and best_trusted_id is not None
+            and best_trusted_similarity >= trusted_floor
+        ):
+            return None, LayerDetail(
+                layer=RoutingLayer.SEMANTIC_INDEX,
+                matched=False,
+                reason=(
+                    f"Embedding fallback: external '{best_skill_id}' abstains — "
+                    f"trusted '{best_trusted_id}' shows comparable evidence "
+                    f"({best_trusted_similarity:.2f} >= {trusted_floor:.2f}); "
+                    f"deferring to AI triage"
+                ),
+                duration_ms=(time.perf_counter() - index_start) * 1000,
+            )
 
     candidate = next((c for c in candidates if c["id"] == best_skill_id), None)
     if not candidate:

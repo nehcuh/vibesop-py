@@ -28,12 +28,8 @@ routing-level test will confirm maturation.
 
 from __future__ import annotations
 
-import sys
-from collections.abc import Generator
 from pathlib import Path
-from unittest.mock import MagicMock, patch
-
-import pytest
+from unittest.mock import MagicMock
 
 from vibesop.core.instinct.learner import InstinctLearner
 from vibesop.core.matching.base import MatchResult, MatcherType
@@ -77,28 +73,12 @@ def _match(skill_id: str, confidence: float) -> MatchResult:
         score_breakdown={},
     )
 
-
-@pytest.fixture(autouse=True)
-def _no_embedding_model() -> Generator[None]:
-    """Keep these tests hermetic: never load the real sentence-transformers model.
-
-    Without this stub, the first ``find_matching``/``apply_instinct_boost``
-    call downloads the 458MB paraphrase-multilingual-MiniLM-L12-v2 model into
-    the per-test isolated HOME (tests/conftest.py ``_isolated_home`` redirects
-    HOME, so the real HF cache is invisible and huggingface_hub's cache dir
-    freezes to whichever test first triggers the lazy import — seed-dependent
-    under pytest-randomly). That made each affected test take ~60s and,
-    worse, flaky under a full-suite run: an OSError from the download/cache/
-    encode path escapes ``_compute_embedding_similarity`` (it catches only
-    ValueError/TypeError/RuntimeError) and is then swallowed by
-    ``apply_instinct_boost``, silently dropping the boost.
-
-    The lexical scorer alone deterministically scores the identical
-    query/pattern at 1.0, which is all these tests need. Same stub pattern as
-    tests/unit/core/routing/test_triage_recall.py.
-    """
-    with patch.dict(sys.modules, {"sentence_transformers": None}):
-        yield
+# NOTE: sentence_transformers is stubbed to None suite-wide by the autouse
+# ``_no_real_embedding_model`` fixture in tests/conftest.py (embedding paths
+# fail open to lexical scoring), so these tests never download the 458MB
+# paraphrase-multilingual-MiniLM-L12-v2 model into the per-test isolated HOME.
+# The lexical scorer deterministically scores the identical query/pattern at
+# 1.0, which is all the assertions below need.
 
 
 class TestInstinctFeedbackLoopDead:

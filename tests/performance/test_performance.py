@@ -236,8 +236,16 @@ class TestMemoryEfficiency:
         """
         import gc
 
-        # Get initial memory
+        # Warm up once with a sacrificial router so one-time lazy imports and
+        # module-level caches from the routing pipeline (scipy/sklearn TF-IDF
+        # stack, fallback layers — which path runs depends on whether the
+        # embedding model is stubbed) are not mistaken for a leak below.
+        # Without this the measurement is order-dependent: the imports are
+        # absorbed by whichever test triggers them first.
+        UnifiedRouter(config=RoutingConfig(enable_ai_triage=False)).route("test")
         gc.collect()
+
+        # Get initial memory
         initial_objects = len(gc.get_objects())
 
         # Create many routers
