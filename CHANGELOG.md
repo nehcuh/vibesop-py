@@ -9,6 +9,58 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### M12 M2 — miss-cluster admission + unified Discovery CLI (2026-08-20)
+
+The discovery half of the skill-discovery design
+(`.omx/artifacts/m12-product-design.md`): clusters made entirely of route
+misses can now become human-reviewable candidates, and there is one
+unified place to see and act on every candidate.
+
+- **miss_recurrence admission** (`skill_promote.py`, `gold_detection.py`):
+  miss-only clusters (route span, `has_match=False`, `not_intercepted`
+  excluded, unknown excluded) bypass the gold gate when recurrence is
+  strong: distinct (task_id, natural-day) pairs ≥3 **and** ≥2 distinct
+  days (conjunction). Admitted candidates enter the stable review queue
+  with `source="miss_recurrence"`, `gold_rate=0.0` recorded honestly.
+  Same-day/cross-day synthetic injection tests pin both gate failure
+  modes. Degenerate content-free queries ("继续"/"可以"/"ok") are
+  filtered BEFORE pooling — calibration showed they cosine-match
+  everything at 0.72–0.82. A pending gold row with the same cluster_id
+  is never overwritten by weaker miss evidence.
+- **Threshold calibrated, not guessed**: 48 hand-labelled pairs →
+  `MISS_COSINE_THRESHOLD = 0.70` (minimum-error plateau 0.47–0.71, upper
+  edge; the 0.82 starting point splits 17/20 same-intent pairs and was
+  rejected). Reproducible: `scripts/calibrate_discovery_threshold.py` +
+  `.omx/artifacts/m12-threshold-calibration.md`. Recalibration trigger:
+  ≥30 distinct real misses. Knobs exposed as `--miss-cosine-threshold/
+  --miss-min-pairs/--miss-min-days` flags, defaults tracking the
+  calibrated constants.
+- **`<user_query>` envelope unwrap** (`clustering.py`): legacy spans'
+  shared wrapper tokens inflated cosine until EVERY wrapped query merged
+  into one garbage cluster; whole-string envelopes are now unwrapped at
+  extraction.
+- **Embedding health is loud**: M2 prerequisite — fastembed ≥0.8 requires
+  the namespaced model id (bare name silently killed ALL embeddings
+  since the 0.8 upgrade); fixed + supported-list smoke test. Scans probe
+  embedding health once and the CLI prints a bold degraded-mode warning
+  plus the always-on `miss pool: N → M admitted` line (silent-churn
+  detection), including cap refusals.
+- **`vibe skill discover`** (new `core/observability/discovery.py` + CLI
+  group): unified queue cards (evidence score, source metrics, capture
+  age, [XP]), sticky dismiss with negative list (fingerprint-keyed,
+  cross-scope in one dismissal, count ≥5 suggests threshold tightening —
+  advice only), `--mute` (14-day, distinct from dismiss), 14-day
+  no-growth cooldown, `--history` with precision metric and
+  post-promote route-hit≥5 closed loop (time-windowed, scope disclosed).
+  Both new stores follow the repo's threading.Lock + fcntl double-lock
+  convention.
+- M2 exit criterion recorded as **deferred**: 0 real-data admissions
+  (miss pool is 4–6 distinct keys) — an accumulation issue, not an
+  implementation gap; re-verification at ≥30 distinct misses.
+- Reviews: gate17/17b (claude+pi) — pi BLOCK on 2 contract items
+  (embedding-health annotation, exit fallback), all converged. Full
+  suite green; orbstack e2e 7/7.
+
 ### M12 M0+M1 — Skill-discovery data link: clustering extraction fix + behavior bridge (2026-08-20)
 
 First two milestones of the conversation-insight → skill-discovery design

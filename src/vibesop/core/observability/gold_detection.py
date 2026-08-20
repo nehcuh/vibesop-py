@@ -17,14 +17,16 @@ Rules (per v3 design §3 W1 Task C):
 
 from __future__ import annotations
 
+import json
 import logging
+from typing import Any
 
 from vibesop.core.instinct.learner import InstinctLearner
 from vibesop.core.observability.clustering import Cluster
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["assess_gold_status"]
+__all__ = ["assess_gold_status", "is_route_miss_span"]
 
 _DEFAULT_MIN_CLUSTER_SIZE = 5
 _DEFAULT_MIN_SUCCESS_COUNT = 1
@@ -87,7 +89,7 @@ def assess_gold_status(
                 len(cluster.task_ids),
                 len(cluster.queries),
             )
-        for tid, query in zip(cluster.task_ids, cluster.queries):
+        for tid, query in zip(cluster.task_ids, cluster.queries, strict=False):
             instinct = learner.get_instinct_for_query(query)
             if instinct is not None and instinct.success_count >= min_success_count:
                 gold_task_ids.append(tid)
@@ -96,10 +98,60 @@ def assess_gold_status(
         gold_rate = len(gold_task_ids) / member_count
 
         cluster.is_gold = has_success and cluster.span_count >= min_cluster_size
-        cluster.is_candidate = (
-            has_success and cluster.span_count < min_cluster_size
-        )
+        cluster.is_candidate = has_success and cluster.span_count < min_cluster_size
         cluster.gold_task_ids = gold_task_ids
         cluster.gold_rate = gold_rate
 
     return clusters
+
+
+def is_route_miss_span(span: dict[str, Any]) -> bool:
+    """M12 miss classification (design v3, gate15b final rule).
+
+    A span is a route **miss** iff ALL of:
+
+    - it is a route span: ``span_kind == "task"`` and ``name`` starts
+      with ``"route:"``;
+    - ``metadata.has_match`` is explicitly ``False`` (producers set
+      ``has_match=False`` for no-match, which already excludes the
+      ``fallback_llm`` sentinel — a fallback is not a match);
+    - ``metadata.mode`` is NOT ``"not_intercepted"`` (the interceptor
+      deliberately abstained — e.g. "继续"-style continuation prompts —
+      so no routing attempt happened).
+
+    Spans with ``has_match`` missing (CLI error paths, pre-W5.0 legacy
+    spans) are **unknown**, never misses (conservative direction).
+
+    Metadata may be a dict or a JSON-encoded string (SpanWriter
+    serialises it); malformed JSON is treated as unknown, never raises.
+
+    Cross-reference (gate17 claude nit 6): ``tool_call_bridge._is_miss``
+    classifies misses too, but is DELIBERATELY stricter — it additionally
+    excludes CLI-path spans (``is_cli``) and ``mode="slash_command"``.
+    The divergence is intentional, not drift: the bridge predicate feeds
+    **outcome-signal derivation** (a CLI invocation mints a one-shot
+    session, so "session continued" evidence can never exist for it and
+    its misses would decay into hollow weak positives), while THIS
+    predicate feeds **discovery candidates** (a CLI miss is a legitimate
+    discovery signal — the user asked, routing had no answer). If you
+    change one, re-read the other before deciding they should match.
+    """
+    if span.get("span_kind") != "task":
+        return False
+    name = span.get("name")
+    if not isinstance(name, str) or not name.startswith("route:"):
+        return False
+
+    meta = span.get("metadata")
+    if isinstance(meta, str):
+        try:
+            meta = json.loads(meta)
+        except (TypeError, ValueError):
+            return False
+    if not isinstance(meta, dict):
+        return False
+
+    has_match = meta.get("has_match")
+    if has_match is not False:  # True → hit; missing/other → unknown
+        return False
+    return meta.get("mode") != "not_intercepted"

@@ -608,8 +608,7 @@ def _migrate_legacy_global_skills(home: Path) -> None:
             moved += 1
         except OSError as e:
             console.print(
-                f"[yellow]⚠ Could not migrate legacy global skill "
-                f"'{child.name}': {e}[/yellow]"
+                f"[yellow]⚠ Could not migrate legacy global skill '{child.name}': {e}[/yellow]"
             )
 
     if moved:
@@ -1169,9 +1168,7 @@ def _index_newly_added_skill(skill_id: str, scope: str) -> bool:
         indexer._compute_embeddings({skill_id: profile})
 
         layer = "project" if scope == "project" else "global"
-        index_path = (
-            indexer.project_index_path if layer == "project" else indexer.global_index_path
-        )
+        index_path = indexer.project_index_path if layer == "project" else indexer.global_index_path
         # gate7 claude NIT-1 / gate7b pi NIT-5: the load→merge→save
         # read-modify-write runs under a cross-process sidecar lock,
         # mutex'd against concurrent `skill add` runs AND the save phase
@@ -1241,9 +1238,7 @@ def _get_candidate_store(scope: _CandidateStoreScope = "project") -> ClusterCand
     Tests patch this helper (or ``_GLOBAL_OBSERVABILITY_DIR``) to redirect.
     """
     storage_dir = (
-        Path.cwd() / ".vibe" / "observability"
-        if scope == "project"
-        else _GLOBAL_OBSERVABILITY_DIR
+        Path.cwd() / ".vibe" / "observability" if scope == "project" else _GLOBAL_OBSERVABILITY_DIR
     )
     return ClusterCandidateStore(storage_dir=storage_dir)
 
@@ -1258,6 +1253,16 @@ def _slugify(text: str, max_len: int = 50) -> str:
     while "--" in slug:
         slug = slug.replace("--", "-")
     return slug.strip("-")[:max_len] or "candidate"
+
+
+# Miss-knob defaults track the calibrated constants in skill_promote so a
+# re-calibration touches one place (gate17b pi nit — the gold knobs above
+# keep their pre-existing literal defaults).
+from vibesop.core.observability import skill_promote as _sp  # noqa: E402
+
+_MISS_COSINE_THRESHOLD_DEFAULT = _sp.MISS_COSINE_THRESHOLD
+_MISS_MIN_PAIRS_DEFAULT = _sp.MISS_RECURRENCE_MIN_PAIRS
+_MISS_MIN_DAYS_DEFAULT = _sp.MISS_RECURRENCE_MIN_DAYS
 
 
 @app.command(name="scan-candidates")
@@ -1281,6 +1286,26 @@ def scan_candidates_cmd(  # pyright: ignore[reportUnusedFunction]
             "Spans with missing/malformed timestamps are kept regardless. "
             "Recommended: 7-30."
         ),
+    ),
+    miss_cosine_threshold: float = typer.Option(
+        _MISS_COSINE_THRESHOLD_DEFAULT,
+        "--miss-cosine-threshold",
+        help=(
+            "Cosine threshold for miss-vs-miss soft-merge clustering "
+            "(0.0-1.0, default from MISS_COSINE_THRESHOLD — calibrated on "
+            "hand-labelled dogfood miss pairs; miss-vs-miss is a different "
+            "distribution from the gold-neighbour 0.80)."
+        ),
+    ),
+    miss_min_pairs: int = typer.Option(
+        _MISS_MIN_PAIRS_DEFAULT,
+        "--miss-min-pairs",
+        help="Min distinct (task_key, natural-day) pairs for miss_recurrence admission (>=1)",
+    ),
+    miss_min_days: int = typer.Option(
+        _MISS_MIN_DAYS_DEFAULT,
+        "--miss-min-days",
+        help="Min distinct natural days for miss_recurrence admission (>=1, conjunctive)",
     ),
     cross_project: bool = typer.Option(
         False,
@@ -1316,6 +1341,14 @@ def scan_candidates_cmd(  # pyright: ignore[reportUnusedFunction]
     multiple projects) only surface via this flag — the default scan
     reads only local spans. Candidates land in the global store so
     they're visible from any cwd.
+
+    ``--miss-cosine-threshold`` / ``--miss-min-pairs`` / ``--miss-min-days``
+    (M12 M2, gate17 claude nit 3): the miss_recurrence admission knobs —
+    miss clusters are admitted on distinct (task_key, natural-day) pairs
+    AND distinct days (conjunction), clustered with a miss-vs-miss cosine
+    threshold. These wire straight onto ``scan_candidates`` kwargs; they
+    do NOT affect gold-cluster admission (that's --min-cluster-size /
+    --min-gold-rate).
     """
     # Validate CLI arg bounds (grok P1: prior version accepted any int/float).
     if min_cluster_size < 1:
@@ -1329,6 +1362,17 @@ def scan_candidates_cmd(  # pyright: ignore[reportUnusedFunction]
         raise typer.Exit(1)
     if days is not None and days < 1:
         console.print(f"[red]✗[/red] --days must be >=1, got {days}")
+        raise typer.Exit(1)
+    if not (0.0 <= miss_cosine_threshold <= 1.0):
+        console.print(
+            f"[red]✗[/red] --miss-cosine-threshold must be in [0.0, 1.0], got {miss_cosine_threshold}"
+        )
+        raise typer.Exit(1)
+    if miss_min_pairs < 1:
+        console.print(f"[red]✗[/red] --miss-min-pairs must be >=1, got {miss_min_pairs}")
+        raise typer.Exit(1)
+    if miss_min_days < 1:
+        console.print(f"[red]✗[/red] --miss-min-days must be >=1, got {miss_min_days}")
         raise typer.Exit(1)
 
     from vibesop.core.instinct.learner import InstinctLearner
@@ -1371,6 +1415,9 @@ def scan_candidates_cmd(  # pyright: ignore[reportUnusedFunction]
         min_cluster_size=min_cluster_size,
         min_gold_rate=min_gold_rate,
         unstable_gold_rate=DEFAULT_UNSTABLE_GOLD_RATE,
+        miss_cosine_threshold=miss_cosine_threshold,
+        miss_min_pairs=miss_min_pairs,
+        miss_min_days=miss_min_days,
         dry_run=dry_run,
     )
 
@@ -1379,6 +1426,25 @@ def scan_candidates_cmd(  # pyright: ignore[reportUnusedFunction]
         f"[green]✓[/green] {mode}Scanned {summary.clusters_seen} cluster(s) "
         f"→ {summary.promoted_count} stable, {summary.unstable_count} unstable"
     )
+    # pi gate17 BLOCK-1: embedding degradation must be LOUD, not a per-query
+    # warning — otherwise clustering silently degrades to hard task_id
+    # grouping (the M0 fastembed-model-name incident proved this failure
+    # mode is invisible without an explicit marker).
+    if getattr(summary, "embedding_degraded", False):
+        console.print(
+            "[bold yellow]⚠ embedding 不可用：soft-merge 未生效，"
+            "簇仅按 task_id 硬分组（降级模式）[/bold yellow]"
+        )
+    # pi gate17 BLOCK-2: silent-churn detection fields — computed by the
+    # scan but previously never displayed. gate17b claude nit 2: surface
+    # cap-refusals too, not just via logger.
+    miss_line = (
+        f"  [dim]miss pool: {summary.miss_pool_size} span(s) → "
+        f"{summary.miss_admitted_count} miss_recurrence candidate(s) admitted"
+    )
+    if getattr(summary, "miss_rejected_count", 0):
+        miss_line += f" ({summary.miss_rejected_count} refused: pool at cap)"
+    console.print(miss_line + "[/dim]")
     if summary.pruned_count:
         console.print(f"  [dim]pruned {summary.pruned_count} TTL-expired row(s)[/dim]")
     if summary.capped:
@@ -1427,9 +1493,7 @@ def _format_projects_column(project_distribution: dict[str, int]) -> str:
         return "[dim]—[/dim]"
     parts = [
         f"{_resolve_project_alias(pid)}×{count}"
-        for pid, count in sorted(
-            project_distribution.items(), key=lambda kv: kv[1], reverse=True
-        )
+        for pid, count in sorted(project_distribution.items(), key=lambda kv: kv[1], reverse=True)
     ]
     return ", ".join(parts)
 
@@ -1790,9 +1854,447 @@ def dismiss_cmd(  # pyright: ignore[reportUnusedFunction]
 # Top-level imports for W4 commands. These are scoped to this module's
 # end so the existing W0-W3 commands above don't pay the import cost
 # unless W4 features are used.
+# ---------------------------------------------------------------------------
+# M12 M2: unified Discovery queue (vibe skill discover)
+# ---------------------------------------------------------------------------
+#
+# 呈现层合一裁决（m12-product-design.md v3）：用户只面对一个 Discovery
+# 队列——本命令组就是候选池（stable/unstable/miss_recurrence 全来源）的
+# 统一视图。routing_pending / SkillSuggestionCollector 降为信号源，本里程
+# 碑不合并进队列。dismiss 走粘性否定列表（discovery_dismissals.jsonl，
+# 不动候选行状态，--all 仍可见），与 `vibe skill dismiss`（翻候选行
+# status）是两套机制。
+#
+# Imports live at the TOP of this section (not module-end like W4): the
+# callback's option defaults (DEFAULT_MUTE_DAYS) are evaluated at
+# definition time. The discovery module is lightweight (stdlib only).
+from vibesop.core.observability.discovery import (  # noqa: E402
+    DEFAULT_MUTE_DAYS,
+    HISTORY_HIT_THRESHOLD,
+    DiscoveryObservationStore,
+    DiscoveryRow,
+    DiscoverySignalStore,
+    build_queue,
+    candidate_source,
+    cluster_fingerprint,
+    count_skill_route_hits,
+    threshold_suggestion,
+)
 from vibesop.core.observability.skill_promote import (  # noqa: E402
     ClusterCandidate,
     ClusterCandidateStore,
     dedupe_project_distribution,
     materialize_candidate,
 )
+
+discover_app = typer.Typer(
+    name="discover",
+    help="Unified Discovery queue — one view over all skill candidates (M12 M2).",
+    no_args_is_help=False,
+)
+
+
+def _get_discovery_dir(scope: _CandidateStoreScope = "project") -> Path:
+    """Dir holding discovery_dismissals.jsonl / discovery_observations.json.
+
+    Mirrors the candidate-store scoping (project → <cwd>/.vibe/observability,
+    global → ~/.vibe/observability). Tests patch this helper to redirect.
+    """
+    return (
+        Path.cwd() / ".vibe" / "observability" if scope == "project" else _GLOBAL_OBSERVABILITY_DIR
+    )
+
+
+def _gather_scoped_candidates() -> dict[str, tuple[_CandidateStoreScope, ClusterCandidate]]:
+    """All pending candidates (stable + unstable + all sources), both scopes.
+
+    Dedup by cluster_id preferring the more heterogeneous record (same
+    rule as ``_merge_dedup_candidates``), keeping the scope so dismiss /
+    mute land in the matching signal store.
+    """
+    by_id: dict[str, tuple[_CandidateStoreScope, ClusterCandidate]] = {}
+    for scope in ("project", "global"):
+        store = _get_candidate_store(scope=scope)  # type: ignore[arg-type]
+        for candidate in store.list_pending(include_unstable=True):
+            existing = by_id.get(candidate.cluster_id)
+            if existing is None or len(candidate.project_distribution) > len(
+                existing[1].project_distribution
+            ):
+                by_id[candidate.cluster_id] = (scope, candidate)  # type: ignore[assignment]
+    return by_id
+
+
+def _discovery_rows(*, observe: bool = True) -> list[DiscoveryRow]:
+    """Compose the unified queue: candidates joined with dismiss/mute/cooling.
+
+    Cross-scope wiring (gate17 claude nit 1 / pi nit 3): the union of BOTH
+    scopes' dismissed fingerprints and active mutes is fed into every
+    ``build_queue`` call, so a candidate dismissed once (in either scope's
+    negative list) is treated as dismissed everywhere — same fingerprint,
+    one dismissal.
+    """
+    by_id = _gather_scoped_candidates()
+    signal_stores = {
+        scope: DiscoverySignalStore(_get_discovery_dir(scope))  # type: ignore[arg-type]
+        for scope in ("project", "global")
+    }
+    dismissed_union: set[str] = set()
+    mutes_union: dict[str, datetime] = {}
+    for signal_store in signal_stores.values():
+        dismissed_union |= signal_store.dismissed_fingerprints()
+        mutes_union.update(signal_store.active_mutes())
+
+    rows: list[DiscoveryRow] = []
+    for scope in ("project", "global"):
+        group = [c for s, c in by_id.values() if s == scope]
+        if not group:
+            continue
+        rows.extend(
+            build_queue(
+                group,
+                signal_stores[scope],
+                DiscoveryObservationStore(_get_discovery_dir(scope)),  # type: ignore[arg-type]
+                observe=observe,
+                extra_dismissed=dismissed_union,
+                extra_mutes=mutes_union,
+            )
+        )
+    rows.sort(
+        key=lambda r: (r.score, r.candidate.span_count, r.candidate.cluster_id),
+        reverse=True,
+    )
+    return rows
+
+
+def _discovery_dismiss_total() -> int:
+    """Dismiss count across BOTH scopes (gate17 pi nit 8).
+
+    Summed rather than local-only so the one-way-tightening hint uses the
+    same cross-scope口径 as ``--history`` — a user dismissing 3 project +
+    2 global candidates has still dismissed 5 suggestions.
+    """
+    return sum(
+        DiscoverySignalStore(_get_discovery_dir(scope)).dismiss_count()  # type: ignore[arg-type]
+        for scope in ("project", "global")
+    )
+
+
+def _resolve_discovery_candidate(
+    cluster_id: str,
+) -> tuple[_CandidateStoreScope, ClusterCandidate] | None:
+    """Resolve a full or 8-char-prefix cluster_id to (scope, candidate)."""
+    by_id = _gather_scoped_candidates()
+    exact = by_id.get(cluster_id)
+    if exact is not None:
+        return exact
+    matches = [pair for cid, pair in by_id.items() if cid.startswith(cluster_id)]
+    if len(matches) == 1:
+        return matches[0]
+    if len(matches) > 1:
+        console.print(f"[red]✗[/red] Cluster id prefix '{cluster_id}' is ambiguous")
+        raise typer.Exit(1)
+    return None
+
+
+def _redact_query(query: str, max_len: int) -> str:
+    """Defensive redaction + single-line collapse + truncate for card display.
+
+    Queries are already redacted at the write side (集中脱敏); this is a
+    display-side second pass so a hand-edited store file can't leak
+    secrets into the terminal.
+    """
+    from vibesop.utils.redaction import redact_sensitive
+
+    cleaned = " ".join(redact_sensitive(str(query)).split())
+    if len(cleaned) > max_len:
+        cleaned = cleaned[:max_len].rstrip() + "…"
+    return cleaned
+
+
+def _render_source(row: DiscoveryRow) -> str:
+    if row.source == "miss_recurrence":
+        return "[magenta]miss×复现[/magenta]"
+    return f"gold {row.candidate.gold_rate * 100:.0f}%"
+
+
+def _render_behavior(row: DiscoveryRow) -> str:
+    if row.behavior == "consistent":
+        return "[green]consistent[/green]"
+    if row.behavior == "unavailable":
+        return "[yellow]unavailable[/yellow]"
+    return "[dim]未采集[/dim]"
+
+
+def _render_discovery_list(rows: list[DiscoveryRow], *, show_all: bool) -> None:
+    visible = rows if show_all else [r for r in rows if not r.dismissed and not r.muted]
+    if not visible:
+        if rows:
+            console.print(
+                "[dim]队列中的候选均已 dismiss/mute —— `vibe skill discover --all` 查看全部。[/dim]"
+            )
+            return
+        console.print("[dim]Discovery 队列暂无候选。[/dim]")
+        console.print("候选来自路由数据的自动汇聚，积累方式：")
+        console.print("  [dim]1. 正常使用 vibe —— 每次路由都会静默记录观测数据[/dim]")
+        console.print(
+            "  [dim]2. 定期运行 [cyan]vibe skill scan-candidates --days 7[/cyan] "
+            "把复现模式聚成候选[/dim]"
+        )
+        console.print(
+            "  [dim]3. 跨项目复现用 [cyan]vibe skill scan-candidates "
+            "--cross-project[/cyan]（先入 pool）[/dim]"
+        )
+        return
+
+    table = Table(title="Discovery queue" + (" (all)" if show_all else ""))
+    table.add_column("ID", style="bold", max_width=20)
+    table.add_column("Score", justify="right")
+    table.add_column("Pattern", max_width=36)
+    table.add_column("Examples", max_width=40)
+    table.add_column("Source", justify="right")
+    table.add_column("Behavior")
+    table.add_column("Age", justify="right")
+    if show_all:
+        table.add_column("Status")
+
+    for row in rows if show_all else visible:
+        candidate = row.candidate
+        id_str = candidate.cluster_id[:8]
+        if candidate.is_cross_project:
+            id_str = f"[cyan][XP][/cyan] {id_str}"
+        examples = "\n".join(_redact_query(q, 40) for q in candidate.queries[:3]) or "[dim]—[/dim]"
+        age_str = f"{row.age_days}d"
+        if row.cooling:
+            age_str += "\n[dim]冷却中[/dim]"
+        cells = [
+            id_str,
+            f"{row.score:.2f}",
+            _redact_query(candidate.queries[0], 60) if candidate.queries else "[dim]—[/dim]",
+            examples,
+            _render_source(row),
+            _render_behavior(row),
+            age_str,
+        ]
+        if show_all:
+            if row.dismissed:
+                cells.append("[red]dismissed[/red]")
+            elif row.muted and row.mute_expires_at is not None:
+                cells.append(f"[yellow]muted → {row.mute_expires_at.date()}[/yellow]")
+            else:
+                cells.append("[dim]—[/dim]")
+        table.add_row(*cells)
+
+    console.print(table)
+    if any(r.cooling for r in visible):
+        console.print(
+            "[dim]「冷却中」= 14 天无新增成员，已降档不再主动提示（新成员出现时自动恢复）。[/dim]"
+        )
+    console.print(
+        "\n[dim]Next: `vibe skill promote <id>` 起草 SKILL.md · "
+        "`vibe skill discover dismiss <id>` 否决 · "
+        "`vibe skill discover --mute <id>` 静音 14 天 · "
+        "`vibe skill discover --history` 闭环记录[/dim]"
+    )
+
+
+def _render_discovery_history() -> None:
+    """已闭环记录 + 发现精度 + 提升后命中闭环检查.
+
+    闭环检查数据源：.vibe/analytics.jsonl 的 ExecutionRecord.primary_skill
+    （unified router 每次路由自动写入）。instinct/learner 无按 skill 命中
+    计数；FeedbackCollector 只记显式反馈——analytics 是唯一自动累计源。
+    文件不存在时如实标注「暂无数据源」。
+    """
+    all_rows: list[ClusterCandidate] = []
+    dismiss_total = 0
+    for scope in ("project", "global"):
+        store = _get_candidate_store(scope=scope)  # type: ignore[arg-type]
+        all_rows.extend(store.list_all())
+        dismiss_total += DiscoverySignalStore(
+            _get_discovery_dir(scope)  # type: ignore[arg-type]
+        ).dismiss_count()
+
+    promoted = [r for r in all_rows if r.status == "promoted"]
+    store_dismissed = [r for r in all_rows if r.status == "dismissed"]
+    dismissed_total = len(store_dismissed) + dismiss_total
+
+    if not promoted and not dismissed_total:
+        console.print("[dim]暂无闭环记录（尚无 promoted/dismissed 候选）。[/dim]")
+        return
+
+    if promoted:
+        table = Table(title="Promoted（已提升）")
+        table.add_column("Cluster", style="bold")
+        table.add_column("Skill ID", max_width=44)
+        table.add_column("Promoted at")
+        table.add_column("路由命中闭环", max_width=40)
+        analytics_path = Path.cwd() / ".vibe" / "analytics.jsonl"
+        for row in promoted:
+            skill_id = row.source_skill_id or "—"
+            if row.source_skill_id:
+                # gate17 pi nit 4: only hits AT/AFTER the promotion count —
+                # pre-promotion hits are outside the window.
+                hits = count_skill_route_hits(
+                    row.source_skill_id, analytics_path, since=row.reviewed_at
+                )
+                if hits is None:
+                    closed = "[dim]暂无数据源（analytics.jsonl 不存在）[/dim]"
+                elif hits >= HISTORY_HIT_THRESHOLD:
+                    closed = f"[green]✓ 提升后 {hits} 次命中（≥{HISTORY_HIT_THRESHOLD}）[/green]"
+                else:
+                    closed = f"[yellow]提升后 {hits}/{HISTORY_HIT_THRESHOLD} 次命中[/yellow]"
+            else:
+                closed = "[dim]无 skill_id 记录[/dim]"
+            table.add_row(
+                row.cluster_id[:8],
+                skill_id,
+                row.reviewed_at.date().isoformat() if row.reviewed_at else "—",
+                closed,
+            )
+        console.print(table)
+        console.print(
+            "[dim]命中按 promote 时记录的 skill_id 匹配；激活时改过名的技能无法关联。[/dim]"
+        )
+        # gate17 claude nit 9: disclose the counting口径 — cwd project only.
+        console.print(
+            "[dim]命中口径：仅统计当前项目（cwd）的 analytics.jsonl；"
+            "全局 scope 提升在其他项目的命中不计入。[/dim]"
+        )
+
+    if store_dismissed or dismiss_total:
+        table = Table(title="Dismissed（已否决）")
+        table.add_column("Cluster", style="bold")
+        table.add_column("Reason", max_width=50)
+        table.add_column("Via")
+        for row in store_dismissed:
+            table.add_row(
+                row.cluster_id[:8], row.dismiss_reason or "[dim]—[/dim]", "candidate pool"
+            )
+        for scope in ("project", "global"):
+            signals = DiscoverySignalStore(
+                _get_discovery_dir(scope)  # type: ignore[arg-type]
+            ).dismissals()
+            for signal in signals:
+                table.add_row(
+                    signal.cluster_id[:8] or signal.fingerprint[:8],
+                    signal.reason or "[dim]—[/dim]",
+                    f"negative list ({scope})",
+                )
+        console.print(table)
+
+    total = len(promoted) + dismissed_total
+    precision = len(promoted) / total if total else 0.0
+    console.print(
+        f"\n[bold]发现精度[/bold] promoted/(promoted+dismissed) = "
+        f"{len(promoted)}/{total} = [cyan]{precision:.0%}[/cyan]"
+    )
+    suggestion = threshold_suggestion(dismissed_total)
+    if suggestion:
+        console.print(f"[yellow]⚠ {suggestion}[/yellow]")
+
+
+@discover_app.callback(invoke_without_command=True)
+def _discover_main(  # pyright: ignore[reportUnusedFunction]
+    ctx: typer.Context,
+    show_all: bool = typer.Option(
+        False, "--all", help="Show dismissed/muted candidates too (default: hidden)"
+    ),
+    mute: str | None = typer.Option(
+        None, "--mute", help="Temporarily mute a candidate by cluster id (auto-restores)"
+    ),
+    mute_days: int = typer.Option(
+        DEFAULT_MUTE_DAYS, "--mute-days", help="Mute duration in days (default 14)"
+    ),
+    history: bool = typer.Option(
+        False, "--history", help="Show closed-loop record + discovery precision"
+    ),
+) -> None:
+    """Unified Discovery queue: one ranked view over all skill candidates.
+
+    Default lists pending candidates sorted by evidence_score (簇规模 /
+    distinct task 数 / 来源信号 / 跨项目加权——公式见
+    observability.discovery 模块 docstring)。Dismissed 与静音中的候选
+    默认隐藏，--all 可见。
+    """
+    if ctx.invoked_subcommand is not None:
+        return
+    if mute is not None and history:
+        console.print("[red]✗[/red] --mute and --history cannot be combined")
+        raise typer.Exit(1)
+
+    if mute is not None:
+        if mute_days < 1:
+            console.print(f"[red]✗[/red] --mute-days must be >=1, got {mute_days}")
+            raise typer.Exit(1)
+        resolved = _resolve_discovery_candidate(mute)
+        if resolved is None:
+            console.print(f"[red]✗[/red] Cluster '{mute}' not in Discovery queue")
+            raise typer.Exit(1)
+        scope, candidate = resolved
+        signal_store = DiscoverySignalStore(_get_discovery_dir(scope))
+        signal = signal_store.record_mute(
+            cluster_fingerprint(candidate.queries), candidate.cluster_id, days=mute_days
+        )
+        console.print(
+            f"[green]✓[/green] Muted '{candidate.cluster_id[:8]}' until "
+            f"{signal.expires_at.date() if signal.expires_at else '?'} "
+            f"[dim](不进否定列表，到期自动恢复)[/dim]"
+        )
+        return
+
+    if history:
+        _render_discovery_history()
+        return
+
+    _render_discovery_list(_discovery_rows(), show_all=show_all)
+
+
+@discover_app.command(name="dismiss")
+def discover_dismiss_cmd(  # pyright: ignore[reportUnusedFunction]
+    cluster_id: str = typer.Argument(..., help="Cluster ID (full or 8-char prefix)"),
+    reason: str | None = typer.Option(
+        None, "--reason", help="Why this candidate is rejected (recorded in the negative list)"
+    ),
+) -> None:
+    """Dismiss a candidate into the sticky negative list.
+
+    记录到 ``discovery_dismissals.jsonl``（cluster 指纹 + 原因 + 时间）：
+    不再主动提示、列表默认隐藏（--all 可见）。不翻候选行状态——与
+    `vibe skill dismiss`（candidate pool status）是两套机制。反馈单向
+    收紧：dismiss 计数达到阈值时建议上调准入阈值（只建议，不自动改）。
+    """
+    resolved = _resolve_discovery_candidate(cluster_id)
+    if resolved is None:
+        console.print(f"[red]✗[/red] Cluster '{cluster_id}' not in Discovery queue")
+        raise typer.Exit(1)
+    scope, candidate = resolved
+    signal_store = DiscoverySignalStore(_get_discovery_dir(scope))
+    fingerprint = cluster_fingerprint(candidate.queries)
+
+    # Cross-scope semantics (gate17 claude nit 1): a dismissal in EITHER
+    # scope's negative list covers this fingerprint.
+    other_scope: _CandidateStoreScope = "global" if scope == "project" else "project"
+    other_store = DiscoverySignalStore(_get_discovery_dir(other_scope))
+    if (
+        fingerprint in signal_store.dismissed_fingerprints()
+        or fingerprint in other_store.dismissed_fingerprints()
+    ):
+        console.print(f"[dim]Cluster '{candidate.cluster_id[:8]}' is already dismissed.[/dim]")
+        return
+
+    signal_store.record_dismiss(fingerprint, candidate.cluster_id, reason)
+    console.print(f"[green]✓[/green] Dismissed '{candidate.cluster_id[:8]}' (sticky negative list)")
+    if reason:
+        console.print(f"  [dim]reason:[/dim] {reason}")
+
+    # gate17 pi nit 8 + claude nit 3: count dismissals across BOTH scopes
+    # (same口径 as --history), and point at the knobs that actually gate
+    # this candidate's admission source.
+    suggestion = threshold_suggestion(
+        _discovery_dismiss_total(), source=candidate_source(candidate)
+    )
+    if suggestion:
+        console.print(f"[yellow]⚠ {suggestion}[/yellow]")
+
+
+app.add_typer(discover_app, name="discover")

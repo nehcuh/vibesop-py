@@ -11,7 +11,12 @@ Pipeline:
    ``assess_gold_status`` (W1 primitives). Clusters with
    ``span_count >= 3 and gold_rate >= 0.60`` become pending candidates.
    Clusters with ``gold_rate < 0.30`` become *unstable* candidates
-   (surfaced via ``--unstable`` for diagnosis).
+   (surfaced via ``--unstable`` for diagnosis). M12 M2: clusters made
+   entirely of route-miss spans with sufficient cross-day recurrence
+   (>=3 distinct (task_id, day) pairs AND >=2 distinct days) are
+   admitted as ``source="miss_recurrence"`` candidates without a
+   gold-rate requirement — pure-miss clusters previously sank into the
+   unstable bucket, invisible to human review.
 2. Human reviews the pool via ``vibe skill candidates``.
 3. ``vibe skill promote <id>`` writes a SKILL.md draft to
    ``.vibe/observability/skill_drafts/<id>/`` and flips status to
@@ -56,11 +61,13 @@ if TYPE_CHECKING:
     # to avoid forcing all callers to have clustering/gold_detection deps
     # loaded when they only want the dataclass / store.
     from vibesop.core.instinct.learner import InstinctLearner
+    from vibesop.core.observability.clustering import Cluster
     from vibesop.core.observability.embedding import EmbeddingCache
 
 logger = logging.getLogger(__name__)
 
 __all__ = [
+    "CandidateSource",
     "CandidateStatus",
     "ClusterCandidate",
     "ClusterCandidateStore",
@@ -71,9 +78,11 @@ __all__ = [
 ]
 
 CandidateStatus = Literal["pending", "promoted", "dismissed"]
+CandidateSource = Literal["gold", "miss_recurrence"]
 StepLabel = Literal["core", "common", "optional"]
 
 _VALID_STATUS: frozenset[str] = frozenset(get_args(CandidateStatus))
+_VALID_SOURCE: frozenset[str] = frozenset(get_args(CandidateSource))
 _VALID_STEP_LABEL: frozenset[str] = frozenset(get_args(StepLabel))
 
 _TTL_DAYS = 30
@@ -90,6 +99,74 @@ _COMMON_THRESHOLD = 0.30  # 30–70% → common; <30% → optional
 DEFAULT_MIN_CLUSTER_SIZE = 3
 DEFAULT_MIN_GOLD_RATE = 0.60  # ≥60% gold member task_ids → stable candidate
 DEFAULT_UNSTABLE_GOLD_RATE = 0.30  # <30% → unstable (diagnosis bucket)
+
+# M12 M2 — miss_recurrence admission gate (design v3 §阈值哲学, gate15b).
+# A cluster composed entirely of route-miss spans bypasses the gold gate
+# when its recurrence evidence is strong enough. The gate is a CONJUNCTION
+# (gate15b: v2 falsely claimed cross-day was implied by pair counting —
+# it is not, both conditions are required):
+#   distinct (task_key, natural-day) pairs >= MISS_RECURRENCE_MIN_PAIRS
+#   AND distinct natural days        >= MISS_RECURRENCE_MIN_DAYS
+# Pair counting blocks same-day repeat spam; the day condition blocks
+# same-day multi-key iterative rephrasing bursts.
+#
+# Knob ownership: DiscoveryConfig domain — module constants + scan_candidates
+# kwargs (the scan-candidates CLI flags wire onto those kwargs), deliberately
+# NOT in RoutingConfig (design v3 §knob 归属, adopting B §9).
+MISS_COSINE_THRESHOLD = 0.70  # Calibrated on 48 hand-labelled pairs
+# (.omx/artifacts/m12-threshold-calibration.md): the should-merge /
+# should-not-merge distributions overlap over 0.41–0.79 with a minimum-error
+# plateau at 0.47–0.71; 0.70 takes the plateau's upper edge (merge errors
+# cost more than splits under Union-Find chaining). The 0.82 starting point
+# was REJECTED by calibration — it splits 17/20 same-intent pairs (it belongs
+# to the gold near-neighbour distribution, not miss-vs-miss). Re-calibrate
+# once the real miss pool reaches ≥30 distinct keys.
+MISS_RECURRENCE_MIN_PAIRS = 3
+MISS_RECURRENCE_MIN_DAYS = 2
+
+# Known behaviour (gate17 claude nit 8): when the candidate store is at
+# MAX_PENDING, the admit-only-if-better policy compares gold_rate — and
+# miss_recurrence candidates carry gold_rate=0.0, so they ALWAYS lose and
+# are silently refused. The eviction policy itself is deliberately NOT
+# changed in M2 (prioritisation is a DiscoveryConfig-era decision); the
+# scan surfaces the loss via ScanSummary.miss_rejected_count.
+
+# Fixed probe text for the embedding health check (gate17 pi BLOCK-1).
+# One embed per scan; the fixed text makes repeat scans an EmbeddingCache
+# hit, so the probe costs nothing after the first run.
+_EMBEDDING_PROBE_TEXT = "vibesop embedding health probe"
+
+# Degenerate content-free queries that must never enter the miss pool
+# (calibration finding: they cosine-match EVERYTHING at 0.72–0.82, so no
+# threshold can keep them from poisoning clusters).
+_DEGENERATE_QUERIES = frozenset(
+    {
+        "继续",
+        "可以",
+        "好的",
+        "好",
+        "是",
+        "行",
+        "ok",
+        "okay",
+        "yes",
+        "go",
+        "continue",
+        "proceed",
+        "done",
+        "next",
+    }
+)
+
+
+def _is_low_information_query(query: str) -> bool:
+    """True for content-free queries (calibration: pre-pool filter, M2c)."""
+    q = query.strip().lower()
+    if q in _DEGENERATE_QUERIES:
+        return True
+    # The length rule is Latin-only: short CJK strings CAN carry intent
+    # (清理吧 — a calibration pair), short Latin ones can't (gate17 pi).
+    return len(q) <= 4 and not any("一" <= ch <= "鿿" for ch in q)
 
 
 def _validate_choice(value: str, valid: frozenset[str], field_name: str) -> str:
@@ -134,6 +211,7 @@ class ClusterCandidate:
     core_steps: list[str] = field(default_factory=list)
     status: CandidateStatus = "pending"
     is_unstable: bool = False
+    source: CandidateSource = "gold"
     reviewed_at: datetime | None = None
     source_skill_id: str | None = None
     dismiss_reason: str | None = None
@@ -141,6 +219,7 @@ class ClusterCandidate:
 
     def __post_init__(self) -> None:
         _validate_choice(self.status, _VALID_STATUS, "status")
+        _validate_choice(self.source, _VALID_SOURCE, "source")
         if self.ttl_expires_at is None:
             self.ttl_expires_at = self.created_at + timedelta(days=_TTL_DAYS)
         for label in self.step_labels.values():
@@ -693,9 +772,33 @@ class ScanSummary:
         scan. The hard cap evicts the lowest-gold_rate pending row on
         each new insert past the cap (reviewer Q4).
     clusters_seen:
-        Total clusters returned by ``cluster_queries``. Includes clusters
-        too small or in the neutral gold_rate zone that did not become
-        candidates.
+        Total clusters returned by ``cluster_queries`` across both
+        clusterings (gold path over all spans + M12 M2 miss path over
+        miss-only spans). Includes clusters too small or in the neutral
+        gold_rate zone that did not become candidates.
+    miss_pool_size:
+        Number of route-miss spans in the input (M12 M2) — spans passing
+        ``is_route_miss_span`` (explicit ``has_match=False``, mode not
+        ``not_intercepted``). Informational, for silent-spin detection.
+    miss_admitted_count:
+        Miss clusters admitted via the ``miss_recurrence`` gate this run
+        (M12 M2) AND accepted by the store (gate17 claude nit 8: counted
+        only after ``store.upsert`` actually lands the row; in dry-run,
+        counted on classification since no store interaction happens).
+        These become stable-visible candidates with
+        ``source="miss_recurrence"`` despite ``gold_rate == 0.0``.
+    miss_rejected_count:
+        Admitted miss candidates the store REFUSED — at ``MAX_PENDING``
+        the admit-only-if-better policy compares ``gold_rate``, and miss
+        candidates carry 0.0, so they always lose (gate17 claude nit 8).
+        Without this field a full pool would silently swallow them.
+    embedding_degraded:
+        True when the pre-clustering embedding probe (one fixed-string
+        ``cache.embed`` — a cache hit on repeat scans) returned None,
+        meaning cosine soft-merge silently no-ops and clusters are hard
+        task_id groupings only (gate17 pi BLOCK-1; design v3 M2 前置:
+        degradation must be explicit in scan output, not just per-query
+        warnings). The CLI lane renders the marker; this is the signal.
     """
 
     promoted_count: int = 0
@@ -703,6 +806,10 @@ class ScanSummary:
     pruned_count: int = 0
     capped: bool = False
     clusters_seen: int = 0
+    miss_pool_size: int = 0
+    miss_admitted_count: int = 0
+    miss_rejected_count: int = 0
+    embedding_degraded: bool = False
 
 
 def scan_candidates(
@@ -714,6 +821,9 @@ def scan_candidates(
     min_cluster_size: int = DEFAULT_MIN_CLUSTER_SIZE,
     min_gold_rate: float = DEFAULT_MIN_GOLD_RATE,
     unstable_gold_rate: float = DEFAULT_UNSTABLE_GOLD_RATE,
+    miss_cosine_threshold: float = MISS_COSINE_THRESHOLD,
+    miss_min_pairs: int = MISS_RECURRENCE_MIN_PAIRS,
+    miss_min_days: int = MISS_RECURRENCE_MIN_DAYS,
     dry_run: bool = False,
     include_legacy: bool = False,
 ) -> ScanSummary:
@@ -730,6 +840,16 @@ def scan_candidates(
        - Stable candidate if ``gold_rate >= min_gold_rate``.
        - Unstable candidate if ``gold_rate < unstable_gold_rate``.
        - Otherwise (neutral zone, between the two thresholds): skip.
+    4b. M12 M2 miss_recurrence admission (parallel to the gold path):
+       route-miss spans (``is_route_miss_span``) are clustered separately
+       at ``miss_cosine_threshold``. A miss cluster is admitted when it
+       has >= ``miss_min_pairs`` distinct (task_id, natural-day) pairs
+       AND covers >= ``miss_min_days`` distinct natural days
+       (conjunction — gate15b). Admitted clusters bypass the gold gate:
+       they become stable-visible candidates with
+       ``source="miss_recurrence"`` and ``gold_rate=0.0`` recorded as-is.
+       Pure-miss clusters already admitted here are NOT also filed into
+       the unstable diagnosis bucket by step 4.
     5. ``label_step_frequency`` on the cluster's spans → step_freq +
        step_labels + core_steps attached to the candidate.
     6. ``store.upsert(candidate)`` (skipped in dry-run).
@@ -743,8 +863,12 @@ def scan_candidates(
     idempotent on ``cluster_id``, so re-scanning the same spans produces
     the same pending rows (refreshed counts, no duplicates).
     """
-    from vibesop.core.observability.clustering import cluster_queries
-    from vibesop.core.observability.gold_detection import assess_gold_status
+    from vibesop.core.observability.clustering import _extract_query, cluster_queries
+    from vibesop.core.observability.embedding import get_embedding_cache
+    from vibesop.core.observability.gold_detection import (
+        assess_gold_status,
+        is_route_miss_span,
+    )
 
     summary = ScanSummary()
 
@@ -762,8 +886,25 @@ def scan_candidates(
         if not spans:
             return summary
 
+    # gate17 pi BLOCK-1: embedding health probe before clustering. One
+    # fixed-string embed — a cache hit on repeat scans, so no per-query
+    # cost. None (or a backend exception) means cosine soft-merge silently
+    # no-ops and every cluster below is a hard task_id grouping; that MUST
+    # be explicit in scan output (design v3 M2 前置), not just per-query
+    # warnings. The resolved cache is reused for both clusterings.
+    resolved_cache = cache or get_embedding_cache()
+    try:
+        summary.embedding_degraded = resolved_cache.embed(_EMBEDDING_PROBE_TEXT) is None
+    except Exception:  # backend failure modes vary (model download, OOM, ...)
+        summary.embedding_degraded = True
+    if summary.embedding_degraded:
+        logger.warning(
+            "embedding probe returned None — cosine soft-merge is degraded "
+            "this scan; clusters fall back to hard task_id grouping"
+        )
+
     # 2) Cluster recent spans.
-    clusters = cluster_queries(spans, cache=cache)
+    clusters = cluster_queries(spans, cache=resolved_cache)
     summary.clusters_seen = len(clusters)
     if not clusters:
         return summary
@@ -771,6 +912,46 @@ def scan_candidates(
     # 3) Assess gold status (mutates clusters in place, populates
     # gold_task_ids + gold_rate regardless of size).
     assess_gold_status(clusters, learner, min_cluster_size=min_cluster_size)
+
+    # 4b-pre) M12 M2 miss_recurrence path. Cluster miss-only spans at the
+    # miss-specific cosine threshold (miss-vs-miss is a different
+    # distribution than the gold 0.80 default — design v3 §阈值哲学) and
+    # apply the recurrence gate BEFORE the gold loop so admitted pure-miss
+    # clusters are not also filed into the unstable bucket.
+    #
+    # Degenerate content-free queries ("继续"/"可以"/"ok" — calibration
+    # finding: they cosine-match EVERYTHING at 0.72–0.82) are excluded
+    # BEFORE pooling; no threshold can fix a query with no information.
+    miss_spans = [
+        s
+        for s in spans
+        if is_route_miss_span(s) and not _is_low_information_query(_extract_query(s) or "")
+    ]
+    summary.miss_pool_size = len(miss_spans)
+    admitted_miss: list[Cluster] = []
+    if miss_spans:
+        miss_clusters = cluster_queries(
+            miss_spans,
+            cache=resolved_cache,
+            threshold=miss_cosine_threshold,
+            include_legacy=True,  # age-out already applied above
+        )
+        summary.clusters_seen += len(miss_clusters)
+        for mc in miss_clusters:
+            pairs, days = _miss_recurrence_counts(mc, miss_spans)
+            if pairs >= miss_min_pairs and days >= miss_min_days:
+                admitted_miss.append(mc)
+            else:
+                logger.debug(
+                    "miss cluster %s not admitted: %d (task_id, day) pairs "
+                    "(need >=%d), %d distinct days (need >=%d)",
+                    mc.cluster_id,
+                    pairs,
+                    miss_min_pairs,
+                    days,
+                    miss_min_days,
+                )
+    admitted_miss_keys = [frozenset(mc.task_keys) for mc in admitted_miss]
 
     # 4+5+6) Classify → label → upsert.
     for cluster in clusters:
@@ -780,6 +961,13 @@ def scan_candidates(
         if cluster.gold_rate >= min_gold_rate:
             is_unstable = False
         elif cluster.gold_rate < unstable_gold_rate:
+            # M12 M2: a pure-miss cluster already admitted via the
+            # miss_recurrence gate becomes a stable-visible candidate
+            # below — filing it into the unstable diagnosis bucket too
+            # would double-count it and hide it from list_pending().
+            cluster_keys = frozenset(cluster.task_keys)
+            if any(cluster_keys <= admitted for admitted in admitted_miss_keys):
+                continue
             is_unstable = True
         else:
             # Neutral zone (between unstable_gold_rate and min_gold_rate)
@@ -844,7 +1032,119 @@ def scan_candidates(
         if store.pending_count() >= MAX_PENDING:
             summary.capped = True
 
+    # 4b-post) Upsert admitted miss_recurrence candidates. Same shape as
+    # gold-path candidates; ``gold_rate`` is recorded as 0.0 as-is (miss
+    # clusters carry no success signal by construction) but the row is
+    # stable-visible (``is_unstable=False``) — that is the whole point of
+    # the admission gate.
+    for mc in admitted_miss:
+        mc_keys = set(mc.task_keys)
+        mc_spans = [
+            s for s in miss_spans if (s.get("project_id") or "default", s.get("task_id")) in mc_keys
+        ]
+        freq, labels, core_steps = label_step_frequency(mc_spans, total_span_count=mc.span_count)
+        candidate = ClusterCandidate(
+            cluster_id=mc.cluster_id,
+            task_ids=list(mc.task_ids),
+            queries=list(mc.queries),
+            span_count=mc.span_count,
+            gold_rate=0.0,
+            gold_task_ids=[],
+            step_freq=freq,
+            step_labels=labels,
+            core_steps=core_steps,
+            is_unstable=False,
+            source="miss_recurrence",
+            project_distribution=dict(mc.project_distribution),
+        )
+        if dry_run:
+            # No store interaction — count the classification itself
+            # (matches promoted_count/unstable_count dry-run semantics).
+            summary.miss_admitted_count += 1
+            continue
+        # gate17b claude nit 1: if a PENDING row with the same cluster_id
+        # already exists from the gold path, do NOT let the weaker miss
+        # evidence overwrite it (source gold→miss_recurrence, gold_rate→0.0,
+        # both counters incremented for one row). The gold row is the
+        # stronger evidence; the pattern stays reviewable either way.
+        # Terminal rows (promoted/dismissed) are sticky by store contract,
+        # and refreshing an existing miss_recurrence row is the intended
+        # rescan path — only the gold-pending collision is guarded.
+        existing = store.get(candidate.cluster_id)
+        if (
+            existing is not None
+            and existing.status == "pending"
+            and existing.source != "miss_recurrence"
+        ):
+            logger.info(
+                "miss_recurrence candidate %s skipped: a pending gold row "
+                "with the same cluster_id exists (stronger evidence wins)",
+                candidate.cluster_id,
+            )
+            continue
+        store.upsert(candidate)
+        # gate17 claude nit 8: count only when the row actually LANDED.
+        # upsert silently refuses new rows at MAX_PENDING under
+        # admit-only-if-better, and a gold_rate=0.0 miss candidate always
+        # loses that comparison — detect the refusal (row absent) and
+        # surface it via miss_rejected_count instead of lying in
+        # miss_admitted_count. An existing terminal row counts as landed
+        # (the candidate IS in the pool, human already decided).
+        if store.get(candidate.cluster_id) is not None:
+            summary.miss_admitted_count += 1
+        else:
+            summary.miss_rejected_count += 1
+            logger.warning(
+                "miss_recurrence candidate %s refused by store (pool at "
+                "MAX_PENDING=%d; gold_rate=0.0 always loses "
+                "admit-only-if-better). Review backlog or dismiss to make room.",
+                candidate.cluster_id,
+                MAX_PENDING,
+            )
+        if store.pending_count() >= MAX_PENDING:
+            summary.capped = True
+
     return summary
+
+
+def _miss_recurrence_counts(cluster: Cluster, miss_spans: list[dict[str, Any]]) -> tuple[int, int]:
+    """Count distinct (task_id, natural-day) pairs and days in a miss cluster.
+
+    The M12 M2 recurrence gate (design v3 §阈值哲学): admission requires
+    ``pairs >= MISS_RECURRENCE_MIN_PAIRS`` AND ``days >=
+    MISS_RECURRENCE_MIN_DAYS`` — a conjunction, not one implying the
+    other (gate15b). ``task_id`` is the span's full-text-derived task key
+    (same derivation as re-ask detection — no 200-char truncation
+    collision). Natural days are UTC dates from the span timestamp.
+
+    Spans with a missing/unparseable timestamp contribute NOTHING to the
+    counts (conservative — an undated miss cannot prove recurrence).
+    """
+    from vibesop.core.observability._span_fields import span_timestamp
+
+    member_keys = set(cluster.task_keys)
+    pairs: set[tuple[str, object]] = set()
+    for span in miss_spans:
+        key = (span.get("project_id") or "default", span.get("task_id"))
+        if key not in member_keys:
+            continue
+        task_id = span.get("task_id")
+        raw_ts = span_timestamp(span)
+        if not task_id or not raw_ts:
+            continue
+        try:
+            ts = datetime.fromisoformat(str(raw_ts).replace("Z", "+00:00"))
+        except ValueError:
+            continue
+        if ts.tzinfo is None:
+            ts = ts.replace(tzinfo=UTC)
+        # Pair key is (task_id, UTC date) WITHOUT the project component:
+        # the same query missed in N projects on one day counts once.
+        # Conservative (never over-admits) — cross-project recurrence is
+        # already signalled separately via the [XP] marker (gate17b pi).
+        pairs.add((task_id, ts.date()))
+    days = {day for _tid, day in pairs}
+    return len(pairs), len(days)
 
 
 def _sanitize_yaml_value(text: str, max_len: int = 80) -> str:

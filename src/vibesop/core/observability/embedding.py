@@ -43,7 +43,11 @@ logger = logging.getLogger(__name__)
 __all__ = ["EmbeddingCache", "get_embedding_cache"]
 
 _DEFAULT_CACHE_PATH = Path(".vibe/cache/embeddings.npz")
-_DEFAULT_MODEL_NAME = "paraphrase-multilingual-MiniLM-L12-v2"
+# fastembed ≥0.8 requires the namespaced id; the bare name raises
+# ValueError("not supported") at TextEmbedding() — which was swallowed into
+# a per-query warning and silently disabled ALL embeddings (soft-merge
+# never fired) until gate16 caught it on real data.
+_DEFAULT_MODEL_NAME = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
 _DEFAULT_MODEL_ID = "minilm-l12-v2"
 _DEFAULT_DIM = 384
 

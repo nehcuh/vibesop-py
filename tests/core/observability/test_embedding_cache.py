@@ -31,6 +31,19 @@ def _fake_embedding(text: str) -> np.ndarray:
     return rng.standard_normal(384).astype(np.float32)
 
 
+class TestDefaultModelSupported:
+    def test_default_model_name_is_supported_by_fastembed(self) -> None:
+        """M2 prerequisite (gate16): fastembed ≥0.8 rejects the bare model
+        name — the failure was swallowed per-query and silently disabled
+        ALL embeddings (soft-merge never fired). Pin the default name
+        against fastembed's own supported list (no download needed)."""
+        fastembed = pytest.importorskip("fastembed")
+        from vibesop.core.observability.embedding import _DEFAULT_MODEL_NAME
+
+        supported = {m["model"] for m in fastembed.TextEmbedding.list_supported_models()}
+        assert _DEFAULT_MODEL_NAME in supported
+
+
 class TestEmbeddingCacheBasic:
     def test_returns_vector_for_query(self, tmp_path: Path) -> None:
         cache = EmbeddingCache(cache_path=tmp_path / "emb.npz")

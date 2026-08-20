@@ -162,6 +162,12 @@ kimi/pi 行为采集强行适配、看板写操作、任何云端共享。
   含阈值标定；含同日/跨日 synthetic injection tests 作为准入门验收）。
   出口：真实数据准入的候选 ≥1 条出现在 `vibe skill discover`，
   证据卡片完整（防止「准入了但队列仍为空」的第三种静默空转）。
+  **出口状态（gate17 记录）：延期**——当前真实 miss 池仅 6 distinct key
+  （低信息量过滤后 4）,0 准入，闭环无法端到端演示；按设计回退链执行
+  「采集至 N 条真实 miss 再验」（触发条件：miss 池 ≥30 distinct key 时
+  重跑标定与出口验证）。实现与验收手段（合成注入测试、
+  miss_pool_size/miss_admitted_count 操作员可见、embedding 降级显式
+  标注）均已落地，延期仅是数据积累问题。
 - **M3 行为一致性门**（依赖 M1）。
 - **M4 看板发现页（只读）**（依赖 M2，可与 M3 并行）；ScanSummary 加
   各层 miss 份额分布（上线前后对比，供 dismiss 熔断观测）。

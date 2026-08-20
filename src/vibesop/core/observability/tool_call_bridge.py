@@ -475,6 +475,15 @@ def _is_miss(rs: _RouteSpan) -> bool:
     never show "session continued" evidence and would decay into hollow
     ``session_expired`` weak positives after 24h, polluting M2's precision
     metrics (gate16 pi nit).
+
+    Cross-reference (gate17 claude nit 6):
+    ``gold_detection.is_route_miss_span`` classifies misses for the M2
+    discovery path and is DELIBERATELY looser — it does NOT exclude CLI
+    spans or ``slash_command``. The divergence is intentional, not drift:
+    THIS predicate feeds **outcome-signal derivation** (where one-shot
+    CLI sessions are meaningless), while the scan predicate feeds
+    **discovery candidates** (where a CLI miss is a legitimate signal).
+    If you change one, re-read the other before deciding they should match.
     """
     if rs.is_cli:
         return False

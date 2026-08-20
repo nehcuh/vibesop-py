@@ -32,6 +32,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import re
 from collections import defaultdict
 from dataclasses import dataclass, field
 
@@ -341,6 +342,26 @@ def cluster_queries(
 
 
 def _extract_query(span: dict) -> str | None:
+    """Pull the user query out of a span, unwrapped from any envelope.
+
+    Legacy AgentRuntime spans wrap the query in a ``<user_query>…</user_query>``
+    envelope. The shared envelope tokens inflate pairwise cosine so badly
+    that EVERY wrapped query merges into one cluster (measured: degenerate
+    continuations like "继续" merged with unrelated cmspark queries at
+    0.70) and defeat content-length filters. Unwrap when the whole string
+    is exactly one envelope; partial/embedded envelopes are left alone.
+    """
+    q = _extract_query_raw(span)
+    if q is None:
+        return None
+    m = _USER_QUERY_ENVELOPE_RE.match(q)
+    return m.group(1) if m else q
+
+
+_USER_QUERY_ENVELOPE_RE = re.compile(r"^\s*<user_query>\s*(.*?)\s*</user_query>\s*$", re.DOTALL)
+
+
+def _extract_query_raw(span: dict) -> str | None:
     """Pull the user query out of a span.
 
     Compatibility strategy (M12 M0): ``input_data`` is preferred (more

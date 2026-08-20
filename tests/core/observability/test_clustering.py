@@ -407,6 +407,20 @@ class TestExtractQueryMetadataFallback:
         assert _extract_query({"metadata": '["a", "b"]'}) is None
         assert _extract_query({"metadata": "42"}) is None
 
+    def test_user_query_envelope_unwrapped(self) -> None:
+        """Legacy AgentRuntime <user_query> envelopes inflate cosine (shared
+        wrapper tokens merge EVERYTHING — measured on real dogfood spans)
+        and defeat content filters; whole-string envelopes are unwrapped."""
+        assert (
+            _extract_query({"metadata": '{"query": "<user_query> 继续 </user_query>"}'}) == "继续"
+        )
+        assert _extract_query({"input_data": {"query": "<user_query>hi</user_query>"}}) == "hi"
+        # Partial/embedded envelopes are left alone.
+        assert (
+            _extract_query({"input_data": {"query": "x <user_query>hi</user_query>"}})
+            == "x <user_query>hi</user_query>"
+        )
+
     def test_input_data_shapes_unchanged(self) -> None:
         """Regression: the three pre-M0 input_data shapes still work."""
         assert _extract_query({"input_data": {"query": "dict shape"}}) == "dict shape"

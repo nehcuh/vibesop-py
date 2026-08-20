@@ -215,9 +215,7 @@ class TestDryRun:
         fresh_learner.record_outcome_for_query("topic-A two", success=True)
 
         with patch.object(cache, "_compute", side_effect=_fake_embedding):
-            summary = scan_candidates(
-                spans, fresh_learner, store, cache=cache, dry_run=True
-            )
+            summary = scan_candidates(spans, fresh_learner, store, cache=cache, dry_run=True)
 
         # Classification happened.
         assert summary.promoted_count == 1
@@ -334,6 +332,10 @@ class TestSummaryShape:
             "pruned_count",
             "capped",
             "clusters_seen",
+            "miss_pool_size",
+            "miss_admitted_count",
+            "miss_rejected_count",
+            "embedding_degraded",
         }
         assert d["promoted_count"] == 1
         assert d["unstable_count"] == 0
