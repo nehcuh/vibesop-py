@@ -183,6 +183,21 @@ class KimiCliAdapter(FileBasedAdapter):
             ]
         )
 
+        if self._sequences_enabled():
+            lines.extend(
+                [
+                    "# Tool-sequence capture (M12): record tool calls for local",
+                    "# skill-distillation behavior evidence. PostToolUse is",
+                    "# observation-only and the hook never blocks (always exits 0).",
+                    "# Requires ~/.kimi-code/hooks/vibesop-tool-seq.sh.",
+                    "[[hooks]]",
+                    'event = "PostToolUse"',
+                    'command = "bash ~/.kimi-code/hooks/vibesop-tool-seq.sh"',
+                    "timeout = 10",
+                    "",
+                ]
+            )
+
         return "\n".join(lines)
 
     def _merge_config_with_existing(self, config_path: Path, new_config: str) -> str:
@@ -271,6 +286,9 @@ class KimiCliAdapter(FileBasedAdapter):
 
             # 3. Route hook
             self._render_route_hook(output_dir, result)
+
+            # 4. Tool-sequence capture hook (PostToolUse — M12 behavior evidence)
+            self._render_tool_seq_hook(output_dir, result)
 
         except Exception as e:
             result.add_error(str(e))
@@ -516,6 +534,60 @@ class KimiCliAdapter(FileBasedAdapter):
     # ---- No-op: Kimi CLI doesn't use env scripts ----
     def _render_env_script(self, output_dir: Path, result: RenderResult) -> None:
         """Kimi CLI does not use environment scripts."""
+
+    # ---- Tool-sequence capture hook (M12) ----
+    def _sequences_enabled(self) -> bool:
+        """Read the ``sequences.enabled`` switch (default true).
+
+        Same reading pattern as the Claude Code adapter — env vars arrive as
+        raw strings. Fail-open on config errors: capture is local-only
+        telemetry, and a broken config must not silently disable it.
+        """
+        try:
+            from vibesop.core.config.manager import ConfigManager
+
+            enabled = ConfigManager(self._project_root).get("sequences.enabled", True)
+            if isinstance(enabled, str):  # env vars are returned as raw strings
+                enabled = enabled.strip().lower() in ("true", "1", "yes", "on")
+            return bool(enabled)
+        except Exception:
+            logger.debug("sequences.enabled lookup failed, defaulting to enabled", exc_info=True)
+            return True
+
+    def _render_tool_seq_hook(self, output_dir: Path, result: RenderResult) -> None:
+        """Render the PostToolUse tool-sequence capture hook.
+
+        Kimi Code CLI natively supports PostToolUse (observation-only) and
+        passes a Claude-Code-compatible payload (``session_id``,
+        ``tool_name``) on stdin, so the shared Claude Code capture script is
+        reused unchanged. Rendered with an empty ``project_root``: Kimi runs
+        hooks with the session project dir as cwd, so the script's runtime
+        fallback chain lands captures in the working project's ``.vibe/``
+        rather than a render-time-baked ``~/.vibe``.
+        """
+        if not self._sequences_enabled():
+            return
+        try:
+            from jinja2 import FileSystemLoader, select_autoescape
+
+            from vibesop._version import __version__
+            from vibesop.utils.jinja_safety import make_shell_safe_env
+
+            template_dir = Path(__file__).parent / "templates"
+            env = make_shell_safe_env(
+                loader=FileSystemLoader(template_dir),
+                autoescape=select_autoescape(),
+                trim_blocks=True,
+                lstrip_blocks=True,
+            )
+            template = env.get_template("claude-code/hooks/vibesop-tool-seq.sh.j2")
+            hook_content = template.render(version=__version__, project_root="")
+            hook_path = output_dir / "hooks" / "vibesop-tool-seq.sh"
+            self.write_file_atomic(hook_path, hook_content, validate_security=False)
+            hook_path.chmod(0o755)
+            result.add_file(hook_path)
+        except Exception as e:
+            result.add_warning(f"Failed to write vibesop-tool-seq.sh: {e}")
 
     def get_settings_schema(self) -> dict[str, Any]:
         return {

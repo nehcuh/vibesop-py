@@ -19,6 +19,15 @@ Files (all under ``<project_root>/.vibe/``, all covered by
   older rotation) before the next append, capping total capture at ~2x the cap
 - ``tool_sequences.cursor`` — JSON ``{"offset": <byte offset>}`` watermark so
   assembly never re-feeds already-processed entries
+- ``tool_sequences.last`` — one epoch-seconds line written by the capture
+  hook on every event (M12 M1 liveness signal; maintained by the hook
+  template, read by ``vibe sequence status``)
+
+NOT covered by ``--tool-sequences`` (observability-domain files owned by
+``core/observability/tool_call_bridge.py``, under ``.vibe/observability/``):
+the bridged ``tool_call`` spans in ``spans.jsonl``, ``route_outcomes.jsonl``
+and ``tool_call_bridge_state.json``. Purging them belongs with the
+observability data, not with capture-log housekeeping.
 """
 
 from __future__ import annotations
@@ -39,6 +48,9 @@ logger = logging.getLogger(__name__)
 TOOL_SEQUENCES_FILENAME = "tool_sequences.jsonl"
 ROTATED_FILENAME = "tool_sequences.0.jsonl"
 CURSOR_FILENAME = "tool_sequences.cursor"
+#: Liveness heartbeat written by the capture hook (one epoch-seconds line)
+#: on every recorded event — the M1 "capture is alive" signal.
+LAST_CAPTURE_FILENAME = "tool_sequences.last"
 #: Session-less entries are split into a new group when the gap between two
 #: consecutive events exceeds this window.
 DEFAULT_WINDOW_MINUTES = 30
@@ -62,6 +74,16 @@ def rotated_path(project_root: str | Path) -> Path:
 def cursor_path(project_root: str | Path) -> Path:
     """Return the assembly watermark file path for *project_root*."""
     return Path(project_root) / ".vibe" / CURSOR_FILENAME
+
+
+def last_capture_path(project_root: str | Path) -> Path:
+    """Return the last-capture heartbeat path for *project_root*.
+
+    Written by the PostToolUse hook template on every captured event; a
+    single line of epoch seconds. Absence means capture never fired (or
+    the installed hook predates the liveness fix).
+    """
+    return Path(project_root) / ".vibe" / LAST_CAPTURE_FILENAME
 
 
 def record_tool_event(payload: Mapping[str, Any], project_root: str | Path) -> bool:
@@ -146,6 +168,18 @@ def assemble_tool_sequences(
     # Advance-first watermark: a crash below must never double-feed entries.
     _write_cursor(cursor_path(project_root), size)
 
+    # M12 M1: single-reader fan-out (gate15 claude 裁决) — this function is
+    # the ONLY reader advancing the shared cursor, so the tool_call bridge
+    # hooks in here rather than keeping a cursor of its own (rotation only
+    # resets the main cursor; multi-cursor semantics are undefined). Bridge
+    # failures must never break assembly.
+    try:
+        from vibesop.core.observability.tool_call_bridge import bridge_entries
+
+        bridge_entries(entries, project_root)
+    except Exception:
+        logger.debug("tool-call bridge fan-out failed", exc_info=True)
+
     groups = [
         steps for steps in _group_sequences(entries, window_minutes) if len(steps) >= min_steps
     ]
@@ -164,15 +198,15 @@ def assemble_tool_sequences(
 
 
 def clear_tool_sequences(project_root: str | Path) -> int:
-    """Delete the capture log, its rotation, and the watermark (``vibe data purge``).
-
-    Returns files removed.
+    """Delete the capture log, its rotation, the watermark, and the liveness
+    heartbeat (``vibe data purge``). Returns files removed.
     """
     removed = 0
     for path in (
         sequences_path(project_root),
         rotated_path(project_root),
         cursor_path(project_root),
+        last_capture_path(project_root),
     ):
         if path.exists():
             path.unlink()
@@ -227,9 +261,16 @@ def _parse_ts(value: Any) -> datetime | None:
     if not isinstance(value, str):
         return None
     try:
-        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+        dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
     except ValueError:
         return None
+    # Normalize tz-naive timestamps (hand-written/foreign capture data) to
+    # UTC — record_tool_event always writes aware ISO, but a naive value
+    # would otherwise raise TypeError downstream and abort a whole bridge
+    # batch (gate16b claude N1).
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=UTC)
+    return dt
 
 
 def _group_sequences(

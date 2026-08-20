@@ -9,6 +9,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### M12 M0+M1 — Skill-discovery data link: clustering extraction fix + behavior bridge (2026-08-20)
+
+First two milestones of the conversation-insight → skill-discovery design
+(`.omx/artifacts/m12-product-design.md`, gate15/15b/15c). Fixes two
+silent-death defects found by adversarial review on real dogfood data, and
+builds the tool_call span producer the dashboard/aggregator consumers were
+always waiting for.
+
+- **M0 — clustering extraction repair** (`core/observability/clustering.py`):
+  `_extract_query` fell back to nothing because route-span producers put
+  the query only in `metadata` (JSON string) while the extractor read only
+  `input_data` — measured 75 real route spans → 0 extractable queries →
+  the whole W1-W4 cluster-candidate chain silently never ran. Metadata
+  fallback added (input_data preferred; JSON-string and dict metadata;
+  bad JSON silently skipped). Smoke after fix: 98 extractable, 63 clusters.
+- **M1a — hook channel repair**: root cause of the "claude-code capture is
+  live" fallacy — the globally installed tool-seq hook baked
+  `project_root=$HOME`, writing weeks of captures to
+  `~/.vibe/tool_sequences.jsonl` instead of the project. Template now
+  prefers `CLAUDE_PROJECT_DIR`; failures log to `.vibe/hook_errors.log`
+  (64KB cap) instead of `/dev/null`; success refreshes the
+  `.vibe/tool_sequences.last` heartbeat. Route hook template (shared by
+  claude/kimi/opencode/cursor) forwards the platform `session_id` so route
+  spans join with tool telemetry. Kimi CLI PostToolUse capture implemented;
+  pi spike: supported, deferred (`.omx/artifacts/m12-m1-hook-spike.md`).
+- **M1b — tool_call bridge + outcome signals** (new
+  `core/observability/tool_call_bridge.py`): joins captured tool events to
+  route spans (session-first, ±30min window fallback, ambiguity refusal,
+  CLI spans excluded) and emits real `tool_call` spans (tool names only);
+  idempotent re-runs; single-reader fanout inside
+  `assemble_tool_sequences` (no second cursor). Outcome signals →
+  `.vibe/observability/route_outcomes.jsonl` (accepted ≈ strong positive,
+  re-ask ≈ weak negative, session-progressed ≈ weak positive; write-once
+  weak signals, not ground truth). New `vibe sequence status` (capture
+  age, sizes, cursor progress).
+- Reviews: gate16/16b (claude+pi) — two independent BLOCKs on one flaky
+  hash-randomized test (fixed via sha1-derived embeddings) and all nits
+  converged. Full suite 5681 passed / 0 failed; orbstack e2e 7/7.
+
 ### M11 — Evidence-based keyword/TF-IDF scoring (2026-08-20)
 
 Fixes the keyword layer's dominant misroute class: additive bonuses

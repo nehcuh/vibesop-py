@@ -30,6 +30,7 @@ success signals.
 from __future__ import annotations
 
 import hashlib
+import json
 import logging
 from collections import defaultdict
 from dataclasses import dataclass, field
@@ -340,28 +341,58 @@ def cluster_queries(
 
 
 def _extract_query(span: dict) -> str | None:
-    """Pull the user query out of a span's input_data.
+    """Pull the user query out of a span.
 
-    Handles three shapes observed in spans.jsonl:
+    Compatibility strategy (M12 M0): ``input_data`` is preferred (more
+    structured — an explicit payload dict), ``metadata`` is the fallback.
+    Both sources are sanitized and truncated at write time by the span
+    producers (``metadata["query"]`` is capped at 200 chars), so no
+    re-sanitization happens here.
+
+    Why the fallback exists: the route span producers
+    (``agent/runtime/agent_runtime.py`` and ``cli/main.py``) put the
+    query only into ``metadata["query"]`` and the span name, leaving
+    ``input_data`` unset. Without the fallback, route spans yielded zero
+    extractable queries and the whole clustering chain silently spun on
+    empty (measured on this repo's spans.jsonl: 75 route spans, 0
+    queries, 0 clusters).
+
+    Shapes handled:
     - ``input_data`` is a dict with ``query`` key (route spans)
     - ``input_data`` is a JSON-encoded string of same shape
     - ``input_data`` is the raw query string itself
+    - ``metadata`` is a dict with ``query`` key (fallback)
+    - ``metadata`` is a JSON-encoded string of same shape (fallback;
+      malformed JSON is silently skipped, never raises)
     """
     raw = span.get("input_data")
-    if raw is None:
-        return None
     if isinstance(raw, dict):
         q = raw.get("query")
-        return str(q) if q is not None else None
-    if isinstance(raw, str):
-        import json
-
+        if q is not None:
+            return str(q)
+    elif isinstance(raw, str):
         try:
             parsed = json.loads(raw)
         except (TypeError, ValueError):
             return raw  # treat the string itself as the query
         if isinstance(parsed, dict):
             q = parsed.get("query")
-            return str(q) if q is not None else None
-        return raw
+            if q is not None:
+                return str(q)
+        else:
+            return raw
+
+    # Metadata fallback. Unlike input_data, a non-JSON metadata string is
+    # NOT treated as the query — metadata is a sidecar, its raw string
+    # form carries no "this IS the query" semantics. Parse failures and
+    # missing keys silently return None.
+    meta = span.get("metadata")
+    if isinstance(meta, str):
+        try:
+            meta = json.loads(meta)
+        except (TypeError, ValueError):
+            return None
+    if isinstance(meta, dict):
+        q = meta.get("query")
+        return str(q) if q is not None else None
     return None

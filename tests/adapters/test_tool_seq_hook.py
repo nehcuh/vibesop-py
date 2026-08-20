@@ -78,18 +78,33 @@ class TestToolSeqHookTemplate:
         )
         assert result.returncode == 0
 
-    def test_injected_project_root_is_deterministic_seq_root(self) -> None:
-        # Render-time root wins over the directory-crawl fallback chain (M3);
-        # shellquote keeps paths with spaces a single shell token.
+    def test_claude_project_dir_wins_over_render_time_root(self) -> None:
+        # M12 gate15 BLOCK-2 root cause: a globally-installed hook renders
+        # with project_root=$HOME, so captures scattered into ~/.vibe. The
+        # working project (CLAUDE_PROJECT_DIR) must take precedence; the
+        # render-time root is the deterministic fallback for project-local
+        # installs. shellquote keeps paths with spaces a single shell token.
         content = _rendered_hook("/tmp/my proj")
-        assert "_SEQ_ROOT='/tmp/my proj'" in content
+        assert '_SEQ_ROOT="${CLAUDE_PROJECT_DIR:-}"' in content
+        assert "[ -z \"$_SEQ_ROOT\" ] && _SEQ_ROOT='/tmp/my proj'" in content
 
     def test_missing_project_root_renders_empty_and_keeps_fallback(self) -> None:
         content = _rendered_hook()
-        assert "_SEQ_ROOT=''" in content
-        # fallback chain preserved: crawl result, then CLAUDE_PROJECT_DIR/PWD
+        assert "[ -z \"$_SEQ_ROOT\" ] && _SEQ_ROOT=''" in content
+        # fallback chain preserved: crawl result, then cwd
         assert '[ -z "$_SEQ_ROOT" ] && _SEQ_ROOT="$_VIBESOP_PROJECT_ROOT"' in content
-        assert '[ -z "$_SEQ_ROOT" ] && _SEQ_ROOT="${CLAUDE_PROJECT_DIR:-$PWD}"' in content
+        assert '[ -z "$_SEQ_ROOT" ] && _SEQ_ROOT="$PWD"' in content
+
+    def test_failure_not_swallowed_and_liveness_signal(self) -> None:
+        # M12: failures append to a capped local log instead of vanishing;
+        # successful captures refresh a one-line epoch liveness file.
+        content = _rendered_hook()
+        assert "hook_errors.log" in content
+        assert "tool_sequences.last" in content
+        assert "65536" in content  # log size cap
+        assert "date +%s" in content  # liveness timestamp
+        # the old silent-death pattern is gone
+        assert ">/dev/null 2>&1 || true" not in content
 
 
 class TestAdapterRegistration:
@@ -162,3 +177,109 @@ class TestAdapterRegistration:
 
         assert "vibesop-tool-seq" not in results
         assert not (config_dir / "hooks" / "vibesop-tool-seq.sh").exists()
+
+
+class TestToolSeqHookBehavior:
+    """Execute the rendered hook with fake PostToolUse payloads (M12).
+
+    Uses a stub ``vibe`` binary on PATH so the tests stay hermetic. ``HOME``
+    is redirected so the real ``~/.local/bin/vibe`` never shadows the stub.
+    """
+
+    PAYLOAD = b'{"session_id":"sess-1","tool_name":"Read","cwd":"/tmp/work"}'
+
+    def _setup(self, tmp_path: Path, vibe_body: str) -> dict[str, str]:
+        sh = shutil.which("sh")
+        if sh is None:
+            pytest.skip("sh not available")
+        fake_bin = tmp_path / "bin"
+        fake_bin.mkdir()
+        (fake_bin / "vibe").write_text(f"#!/bin/sh\n{vibe_body}\n", encoding="utf-8")
+        (fake_bin / "vibe").chmod(0o755)
+        home = tmp_path / "home"
+        home.mkdir(exist_ok=True)
+        work = tmp_path / "work"
+        work.mkdir(exist_ok=True)
+        script = tmp_path / "vibesop-tool-seq.sh"
+        # Empty render-time root: exercises the runtime fallback chain.
+        script.write_text(_rendered_hook(""), encoding="utf-8")
+        env = {
+            "HOME": str(home),
+            "PATH": f"{fake_bin}:/usr/bin:/bin",
+            "CLAUDE_PROJECT_DIR": str(work),
+        }
+        return {"script": str(script), "env": env, "work": str(work), "cwd": str(work)}
+
+    def _run(self, setup: dict[str, str]) -> subprocess.CompletedProcess[bytes]:
+        return subprocess.run(
+            ["sh", setup["script"]],
+            input=self.PAYLOAD,
+            capture_output=True,
+            # Hermetic cwd: from the repo checkout the template's crawl would
+            # find the real vibesop pyproject and the uv fallback would run
+            # the real CLI. From tmp_path the crawl finds nothing.
+            cwd=setup["cwd"],
+            env=setup["env"],
+            timeout=60,
+            check=False,
+        )
+
+    def test_success_updates_last_capture_and_stays_silent(self, tmp_path: Path) -> None:
+        setup = self._setup(tmp_path, "exit 0")
+        result = self._run(setup)
+        assert result.returncode == 0
+        assert result.stdout == b""  # hooks must never write to stdout
+        vibe_dir = Path(setup["work"]) / ".vibe"
+        last = vibe_dir / "tool_sequences.last"
+        assert last.exists()
+        assert last.read_text(encoding="utf-8").strip().isdigit()
+        assert not (vibe_dir / "hook_errors.log").exists()
+
+    def test_failure_writes_capped_error_log_and_exits_zero(self, tmp_path: Path) -> None:
+        setup = self._setup(tmp_path, "echo boom >&2; exit 3")
+        result = self._run(setup)
+        assert result.returncode == 0  # never blocks the host agent
+        assert result.stdout == b""
+        vibe_dir = Path(setup["work"]) / ".vibe"
+        errlog = vibe_dir / "hook_errors.log"
+        assert errlog.exists()
+        text = errlog.read_text(encoding="utf-8")
+        assert "rc=3" in text
+        assert "boom" in text
+        assert not (vibe_dir / "tool_sequences.last").exists()
+
+    def test_missing_vibe_and_uv_logs_rc127(self, tmp_path: Path) -> None:
+        setup = self._setup(tmp_path, "exit 0")
+        # Remove the stub vibe and any uv from PATH: the crawl fallback finds
+        # no vibesop checkout under tmp_path, so rc=127 must be logged.
+        (tmp_path / "bin" / "vibe").unlink()
+        result = self._run(setup)
+        assert result.returncode == 0
+        errlog = Path(setup["work"]) / ".vibe" / "hook_errors.log"
+        assert errlog.exists()
+        assert "rc=127" in errlog.read_text(encoding="utf-8")
+
+    def test_error_log_is_capped(self, tmp_path: Path) -> None:
+        setup = self._setup(tmp_path, "echo boom >&2; exit 3")
+        vibe_dir = Path(setup["work"]) / ".vibe"
+        vibe_dir.mkdir()
+        errlog = vibe_dir / "hook_errors.log"
+        errlog.write_text(
+            ("old-line-" + "x" * 90 + "\n") * 1000, encoding="utf-8"
+        )  # ~97KB > 64KB cap
+        result = self._run(setup)
+        assert result.returncode == 0
+        lines = errlog.read_text(encoding="utf-8").splitlines()
+        assert len(lines) <= 201  # 200 kept + 1 new
+        assert any("rc=3" in line for line in lines)
+
+    def test_claude_project_dir_wins_over_render_time_root(self, tmp_path: Path) -> None:
+        # Stub records its argv; CLAUDE_PROJECT_DIR (set in _setup) must beat
+        # the render-time root for --project-root.
+        args_file = tmp_path / "vibe-args"
+        setup = self._setup(tmp_path, f'printf \'%s\' "$*" > "{args_file}"\nexit 0')
+        # Re-render with a bogus render-time root that must NOT win.
+        Path(setup["script"]).write_text(_rendered_hook("/should/not/win"), encoding="utf-8")
+        result = self._run(setup)
+        assert result.returncode == 0
+        assert f"--project-root {setup['work']}" in args_file.read_text(encoding="utf-8")

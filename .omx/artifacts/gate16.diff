@@ -1,0 +1,2044 @@
+diff --git a/src/vibesop/adapters/kimi_cli.py b/src/vibesop/adapters/kimi_cli.py
+index 0ff6e6f..965241b 100644
+--- a/src/vibesop/adapters/kimi_cli.py
++++ b/src/vibesop/adapters/kimi_cli.py
+@@ -183,6 +183,21 @@ class KimiCliAdapter(FileBasedAdapter):
+             ]
+         )
+ 
++        if self._sequences_enabled():
++            lines.extend(
++                [
++                    "# Tool-sequence capture (M12): record tool calls for local",
++                    "# skill-distillation behavior evidence. PostToolUse is",
++                    "# observation-only and the hook never blocks (always exits 0).",
++                    "# Requires ~/.kimi-code/hooks/vibesop-tool-seq.sh.",
++                    "[[hooks]]",
++                    'event = "PostToolUse"',
++                    'command = "bash ~/.kimi-code/hooks/vibesop-tool-seq.sh"',
++                    "timeout = 10",
++                    "",
++                ]
++            )
++
+         return "\n".join(lines)
+ 
+     def _merge_config_with_existing(self, config_path: Path, new_config: str) -> str:
+@@ -272,6 +287,9 @@ class KimiCliAdapter(FileBasedAdapter):
+             # 3. Route hook
+             self._render_route_hook(output_dir, result)
+ 
++            # 4. Tool-sequence capture hook (PostToolUse — M12 behavior evidence)
++            self._render_tool_seq_hook(output_dir, result)
++
+         except Exception as e:
+             result.add_error(str(e))
+             result.success = False
+@@ -517,6 +535,60 @@ class KimiCliAdapter(FileBasedAdapter):
+     def _render_env_script(self, output_dir: Path, result: RenderResult) -> None:
+         """Kimi CLI does not use environment scripts."""
+ 
++    # ---- Tool-sequence capture hook (M12) ----
++    def _sequences_enabled(self) -> bool:
++        """Read the ``sequences.enabled`` switch (default true).
++
++        Same reading pattern as the Claude Code adapter — env vars arrive as
++        raw strings. Fail-open on config errors: capture is local-only
++        telemetry, and a broken config must not silently disable it.
++        """
++        try:
++            from vibesop.core.config.manager import ConfigManager
++
++            enabled = ConfigManager(self._project_root).get("sequences.enabled", True)
++            if isinstance(enabled, str):  # env vars are returned as raw strings
++                enabled = enabled.strip().lower() in ("true", "1", "yes", "on")
++            return bool(enabled)
++        except Exception:
++            logger.debug("sequences.enabled lookup failed, defaulting to enabled", exc_info=True)
++            return True
++
++    def _render_tool_seq_hook(self, output_dir: Path, result: RenderResult) -> None:
++        """Render the PostToolUse tool-sequence capture hook.
++
++        Kimi Code CLI natively supports PostToolUse (observation-only) and
++        passes a Claude-Code-compatible payload (``session_id``,
++        ``tool_name``) on stdin, so the shared Claude Code capture script is
++        reused unchanged. Rendered with an empty ``project_root``: Kimi runs
++        hooks with the session project dir as cwd, so the script's runtime
++        fallback chain lands captures in the working project's ``.vibe/``
++        rather than a render-time-baked ``~/.vibe``.
++        """
++        if not self._sequences_enabled():
++            return
++        try:
++            from jinja2 import FileSystemLoader, select_autoescape
++
++            from vibesop._version import __version__
++            from vibesop.utils.jinja_safety import make_shell_safe_env
++
++            template_dir = Path(__file__).parent / "templates"
++            env = make_shell_safe_env(
++                loader=FileSystemLoader(template_dir),
++                autoescape=select_autoescape(),
++                trim_blocks=True,
++                lstrip_blocks=True,
++            )
++            template = env.get_template("claude-code/hooks/vibesop-tool-seq.sh.j2")
++            hook_content = template.render(version=__version__, project_root="")
++            hook_path = output_dir / "hooks" / "vibesop-tool-seq.sh"
++            self.write_file_atomic(hook_path, hook_content, validate_security=False)
++            hook_path.chmod(0o755)
++            result.add_file(hook_path)
++        except Exception as e:
++            result.add_warning(f"Failed to write vibesop-tool-seq.sh: {e}")
++
+     def get_settings_schema(self) -> dict[str, Any]:
+         return {
+             "$schema": "https://json.schemastore.org/kimi-cli-settings.json",
+diff --git a/src/vibesop/adapters/templates/claude-code/hooks/vibesop-tool-seq.sh.j2 b/src/vibesop/adapters/templates/claude-code/hooks/vibesop-tool-seq.sh.j2
+index e293fac..f187594 100644
+--- a/src/vibesop/adapters/templates/claude-code/hooks/vibesop-tool-seq.sh.j2
++++ b/src/vibesop/adapters/templates/claude-code/hooks/vibesop-tool-seq.sh.j2
+@@ -9,7 +9,10 @@
+ # Disable with: vibe config set sequences.enabled false
+ #
+ # Input: Claude Code PostToolUse hook JSON via stdin.
+-# This hook NEVER blocks Claude Code: any failure exits 0 silently.
++# This hook NEVER blocks Claude Code: it always exits 0 and writes nothing to
++# stdout. Failures are appended to <root>/.vibe/hook_errors.log (capped);
++# every successful capture refreshes <root>/.vibe/tool_sequences.last (epoch
++# seconds) as a liveness signal.
+ 
+ # Make common uv/vibe install locations discoverable when this hook runs from
+ # a non-interactive shell (Claude Code invokes hooks with a minimal PATH).
+@@ -35,21 +38,56 @@ for _START_DIR in "$_HOOK_DIR/.." "$_HOOK_DIR/../.." "$CLAUDE_PROJECT_DIR" "$PWD
+     done
+ done
+ 
+-# Where the capture data should live: the project root injected at render
+-# time when known (deterministic — no directory crawling), otherwise the
+-# vibesop project root found above, otherwise the Claude Code project dir,
+-# otherwise the hook's cwd.
+-_SEQ_ROOT={{ project_root|shellquote }}
++# Where the capture data should live. The project the agent is actually
++# working in (CLAUDE_PROJECT_DIR) wins: a globally-installed hook is rendered
++# with project_root=$HOME, and without this precedence all captures scatter
++# into ~/.vibe regardless of the working project (the M12 gate15 BLOCK-2
++# root cause — the dogfood repo's .vibe/tool_sequences.jsonl never appeared
++# because records landed in ~/.vibe). For project-local installs
++# CLAUDE_PROJECT_DIR equals the render-time root anyway. Fallbacks:
++# render-time root, vibesop source checkout, cwd.
++_SEQ_ROOT="${CLAUDE_PROJECT_DIR:-}"
++[ -z "$_SEQ_ROOT" ] && _SEQ_ROOT={{ project_root|shellquote }}
+ [ -z "$_SEQ_ROOT" ] && _SEQ_ROOT="$_VIBESOP_PROJECT_ROOT"
+-[ -z "$_SEQ_ROOT" ] && _SEQ_ROOT="${CLAUDE_PROJECT_DIR:-$PWD}"
++[ -z "$_SEQ_ROOT" ] && _SEQ_ROOT="$PWD"
++
++# Diagnostics paths. Success stays silent (nothing on stdout); failures go
++# to a capped local log; every successful capture rewrites a one-line epoch
++# liveness file.
++_VIBE_DIR="$_SEQ_ROOT/.vibe"
++_ERRLOG="$_VIBE_DIR/hook_errors.log"
++_LASTFILE="$_VIBE_DIR/tool_sequences.last"
++
++_log_hook_error() {
++    mkdir -p "$_VIBE_DIR" 2>/dev/null || return 0
++    # Cap at ~64KB: keep the most recent 200 lines so the log can't grow
++    # unbounded (PostToolUse fires after every tool call).
++    if [ -f "$_ERRLOG" ] && [ "$(wc -c < "$_ERRLOG" 2>/dev/null | tr -d '[:space:]')" -gt 65536 ] 2>/dev/null; then
++        tail -n 200 "$_ERRLOG" > "$_ERRLOG.tmp.$$" 2>/dev/null \
++            && mv "$_ERRLOG.tmp.$$" "$_ERRLOG" 2>/dev/null
++    fi
++    printf '%s %s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null)" "$1" >> "$_ERRLOG" 2>/dev/null
++    return 0
++}
+ 
+ # Record the event. Prefer an installed `vibe` binary (fast — PostToolUse
+ # fires after every tool call); fall back to `uv run` from the project root.
+-# All output and failures are swallowed: never block the host agent.
++_RC=0
++_OUT=""
+ if command -v vibe >/dev/null 2>&1; then
+-    printf '%s' "$INPUT" | vibe sequence record-tool --project-root "$_SEQ_ROOT" >/dev/null 2>&1 || true
++    _OUT=$(printf '%s' "$INPUT" | vibe sequence record-tool --project-root "$_SEQ_ROOT" 2>&1) || _RC=$?
+ elif [ -n "$_VIBESOP_PROJECT_ROOT" ] && command -v uv >/dev/null 2>&1; then
+-    (cd "$_VIBESOP_PROJECT_ROOT" && printf '%s' "$INPUT" | uv run vibe sequence record-tool --project-root "$_SEQ_ROOT") >/dev/null 2>&1 || true
++    _OUT=$(cd "$_VIBESOP_PROJECT_ROOT" && printf '%s' "$INPUT" | uv run vibe sequence record-tool --project-root "$_SEQ_ROOT" 2>&1) || _RC=$?
++else
++    _RC=127
++    _OUT="no 'vibe' binary on PATH and no uv fallback (vibesop project root not found)"
++fi
++
++if [ "$_RC" -eq 0 ]; then
++    # Liveness signal: single-line epoch file, refreshed on every capture.
++    mkdir -p "$_VIBE_DIR" 2>/dev/null && date +%s > "$_LASTFILE" 2>/dev/null
++else
++    _log_hook_error "record-tool failed rc=$_RC: $(printf '%s' "$_OUT" | tr '\n' ' ' | tail -c 400)"
+ fi
+ 
+ exit 0
+diff --git a/src/vibesop/adapters/templates/shared/vibesop-route.sh.j2 b/src/vibesop/adapters/templates/shared/vibesop-route.sh.j2
+index 2200fe2..a451ab4 100644
+--- a/src/vibesop/adapters/templates/shared/vibesop-route.sh.j2
++++ b/src/vibesop/adapters/templates/shared/vibesop-route.sh.j2
+@@ -7,7 +7,7 @@ set -e
+ # minimal PATH that typically omits ~/.local/bin, /opt/homebrew/bin, etc.)
+ export PATH="$HOME/.local/bin:$HOME/.cargo/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
+ 
+-INPUT=$(cat); QUERY=""
++INPUT=$(cat); QUERY=""; SESSION_ID=""
+ # Different agents use different JSON envelope field names for the user's
+ # prompt. Try them in order; fall back to raw stdin if none match (or if jq
+ # is not installed, or if the input is plain text rather than JSON).
+@@ -17,6 +17,15 @@ if command -v jq &> /dev/null; then
+         then (.prompt // .user_prompt // .query // .message // .text // empty)
+         else empty
+         end' 2>/dev/null || true)
++    # Forward the platform session id so route spans carry the real session
++    # and can join with tool-call telemetry captured under it (M12 M1);
++    # without this the Python side mints a fresh UUID per invocation and the
++    # join key breaks. Claude Code / Kimi CLI payloads use "session_id".
++    SESSION_ID=$(echo "$INPUT" | jq -r '
++        if type == "object"
++        then (.session_id // .sessionId // empty)
++        else empty
++        end' 2>/dev/null || true)
+ fi
+ [ -z "$QUERY" ] && QUERY="$INPUT"
+ [ -z "$QUERY" ] && { echo '{}'; exit 0; }
+@@ -68,5 +77,6 @@ print(r.handle_query_for_hook(
+     hook_event_name='{{ hook_event_name|pyquote }}',
+     include_additional_context={{ 'True' if include_additional_context else 'False' }},
+     no_match_message={{ 'True' if no_match_message else 'False' }},
++    session_id=(sys.argv[2] if len(sys.argv) > 2 else '') or None,
+ ))
+-" "$QUERY"
++" "$QUERY" "$SESSION_ID"
+diff --git a/src/vibesop/cli/commands/sequence_cmd.py b/src/vibesop/cli/commands/sequence_cmd.py
+index 1773e87..6e47e2e 100644
+--- a/src/vibesop/cli/commands/sequence_cmd.py
++++ b/src/vibesop/cli/commands/sequence_cmd.py
+@@ -12,6 +12,7 @@ from __future__ import annotations
+ import json
+ import logging
+ import sys
++from datetime import UTC, datetime, timedelta
+ from pathlib import Path
+ 
+ import typer
+@@ -96,5 +97,105 @@ def assemble(
+     console.print(f"[green]✓[/green] Fed {fed} tool sequence(s) into instinct learning.")
+ 
+ 
++@app.command("status")
++def status(
++    project_root: Path = typer.Option(
++        Path(), "--project-root", help="Project root (where .vibe/ lives). Defaults to cwd."
++    ),
++) -> None:
++    """Report capture liveness: last-capture age, file sizes, rotation state.
++
++    The last-capture heartbeat (``.vibe/tool_sequences.last``, one
++    epoch-seconds line) is written by the hook template on every captured
++    event; when it is missing we cannot distinguish "never captured" from
++    "installed hook predates the liveness fix" — both are reported.
++    """
++    from vibesop.core.instinct.tool_sequences import (
++        cursor_path,
++        last_capture_path,
++        rotated_path,
++        sequences_path,
++    )
++
++    data = sequences_path(project_root)
++    rotated = rotated_path(project_root)
++    cursor = cursor_path(project_root)
++    heartbeat = last_capture_path(project_root)
++
++    # --- liveness heartbeat ---
++    last_ts = _read_last_capture(heartbeat)
++    if last_ts is None:
++        console.print(
++            f"[yellow]last-capture:[/yellow] 从未捕获或 hook 未更新（无 {heartbeat.name}）"
++        )
++    else:
++        age = datetime.now(UTC) - last_ts
++        style = "green" if age.days < 7 else "red"
++        console.print(
++            f"[{style}]last-capture:[/{style}] {last_ts.isoformat()} （{_format_age(age)}前）"
++        )
++
++    # --- capture log ---
++    if data.exists():
++        size = data.stat().st_size
++        console.print(f"capture: {data} — {_format_bytes(size)}")
++    else:
++        size = 0
++        console.print(f"capture: {data} — [dim]不存在[/dim]")
++
++    # --- rotation ---
++    if rotated.exists():
++        console.print(f"rotation: {rotated} — {_format_bytes(rotated.stat().st_size)}")
++    else:
++        console.print("rotation: [dim]无（未发生轮转）[/dim]")
++
++    # --- assembly watermark ---
++    if cursor.exists():
++        try:
++            offset = json.loads(cursor.read_text(encoding="utf-8")).get("offset", 0)
++        except json.JSONDecodeError:
++            offset = -1
++        if offset < 0:
++            console.print("assembly: [red]cursor 损坏[/red]")
++        elif not data.exists():
++            console.print(f"assembly: cursor offset={offset}（capture 文件不存在）")
++        else:
++            pending = max(size - offset, 0)
++            state = "已装配到最新" if pending == 0 else f"待装配 {_format_bytes(pending)}"
++            console.print(f"assembly: offset={offset}/{size} — {state}")
++    else:
++        console.print("assembly: [dim]无 cursor（从未装配）[/dim]")
++
++
++def _read_last_capture(path: Path) -> datetime | None:
++    """Parse the one-line epoch-seconds heartbeat; None when absent/broken."""
++    try:
++        raw = path.read_text(encoding="utf-8").splitlines()[0].strip()
++        return datetime.fromtimestamp(float(raw), tz=UTC)
++    except (OSError, IndexError, ValueError, OverflowError):
++        return None
++
++
++def _format_age(delta: timedelta) -> str:
++    seconds = int(delta.total_seconds())
++    if seconds < 120:
++        return f"{seconds} 秒"
++    minutes = seconds // 60
++    if minutes < 120:
++        return f"{minutes} 分钟"
++    hours = minutes // 60
++    if hours < 72:
++        return f"{hours} 小时"
++    return f"{hours // 24} 天"
++
++
++def _format_bytes(n: int) -> str:
++    if n < 1024:
++        return f"{n} B"
++    if n < 1024 * 1024:
++        return f"{n / 1024:.1f} KB"
++    return f"{n / (1024 * 1024):.1f} MB"
++
++
+ if __name__ == "__main__":
+     app()
+diff --git a/src/vibesop/core/instinct/tool_sequences.py b/src/vibesop/core/instinct/tool_sequences.py
+index 40ec852..c5009f2 100644
+--- a/src/vibesop/core/instinct/tool_sequences.py
++++ b/src/vibesop/core/instinct/tool_sequences.py
+@@ -19,6 +19,9 @@ Files (all under ``<project_root>/.vibe/``, all covered by
+   older rotation) before the next append, capping total capture at ~2x the cap
+ - ``tool_sequences.cursor`` — JSON ``{"offset": <byte offset>}`` watermark so
+   assembly never re-feeds already-processed entries
++- ``tool_sequences.last`` — one epoch-seconds line written by the capture
++  hook on every event (M12 M1 liveness signal; maintained by the hook
++  template, read by ``vibe sequence status``)
+ """
+ 
+ from __future__ import annotations
+@@ -39,6 +42,9 @@ logger = logging.getLogger(__name__)
+ TOOL_SEQUENCES_FILENAME = "tool_sequences.jsonl"
+ ROTATED_FILENAME = "tool_sequences.0.jsonl"
+ CURSOR_FILENAME = "tool_sequences.cursor"
++#: Liveness heartbeat written by the capture hook (one epoch-seconds line)
++#: on every recorded event — the M1 "capture is alive" signal.
++LAST_CAPTURE_FILENAME = "tool_sequences.last"
+ #: Session-less entries are split into a new group when the gap between two
+ #: consecutive events exceeds this window.
+ DEFAULT_WINDOW_MINUTES = 30
+@@ -64,6 +70,16 @@ def cursor_path(project_root: str | Path) -> Path:
+     return Path(project_root) / ".vibe" / CURSOR_FILENAME
+ 
+ 
++def last_capture_path(project_root: str | Path) -> Path:
++    """Return the last-capture heartbeat path for *project_root*.
++
++    Written by the PostToolUse hook template on every captured event; a
++    single line of epoch seconds. Absence means capture never fired (or
++    the installed hook predates the liveness fix).
++    """
++    return Path(project_root) / ".vibe" / LAST_CAPTURE_FILENAME
++
++
+ def record_tool_event(payload: Mapping[str, Any], project_root: str | Path) -> bool:
+     """Append one hook event to the capture log. Returns True when recorded.
+ 
+@@ -146,6 +162,18 @@ def assemble_tool_sequences(
+     # Advance-first watermark: a crash below must never double-feed entries.
+     _write_cursor(cursor_path(project_root), size)
+ 
++    # M12 M1: single-reader fan-out (gate15 claude 裁决) — this function is
++    # the ONLY reader advancing the shared cursor, so the tool_call bridge
++    # hooks in here rather than keeping a cursor of its own (rotation only
++    # resets the main cursor; multi-cursor semantics are undefined). Bridge
++    # failures must never break assembly.
++    try:
++        from vibesop.core.observability.tool_call_bridge import bridge_entries
++
++        bridge_entries(entries, project_root)
++    except Exception:
++        logger.debug("tool-call bridge fan-out failed", exc_info=True)
++
+     groups = [
+         steps for steps in _group_sequences(entries, window_minutes) if len(steps) >= min_steps
+     ]
+diff --git a/src/vibesop/core/observability/clustering.py b/src/vibesop/core/observability/clustering.py
+index 80a4d44..e07b6b5 100644
+--- a/src/vibesop/core/observability/clustering.py
++++ b/src/vibesop/core/observability/clustering.py
+@@ -30,6 +30,7 @@ success signals.
+ from __future__ import annotations
+ 
+ import hashlib
++import json
+ import logging
+ from collections import defaultdict
+ from dataclasses import dataclass, field
+@@ -340,28 +341,58 @@ def cluster_queries(
+ 
+ 
+ def _extract_query(span: dict) -> str | None:
+-    """Pull the user query out of a span's input_data.
+-
+-    Handles three shapes observed in spans.jsonl:
++    """Pull the user query out of a span.
++
++    Compatibility strategy (M12 M0): ``input_data`` is preferred (more
++    structured — an explicit payload dict), ``metadata`` is the fallback.
++    Both sources are sanitized and truncated at write time by the span
++    producers (``metadata["query"]`` is capped at 200 chars), so no
++    re-sanitization happens here.
++
++    Why the fallback exists: the route span producers
++    (``agent/runtime/agent_runtime.py`` and ``cli/main.py``) put the
++    query only into ``metadata["query"]`` and the span name, leaving
++    ``input_data`` unset. Without the fallback, route spans yielded zero
++    extractable queries and the whole clustering chain silently spun on
++    empty (measured on this repo's spans.jsonl: 75 route spans, 0
++    queries, 0 clusters).
++
++    Shapes handled:
+     - ``input_data`` is a dict with ``query`` key (route spans)
+     - ``input_data`` is a JSON-encoded string of same shape
+     - ``input_data`` is the raw query string itself
++    - ``metadata`` is a dict with ``query`` key (fallback)
++    - ``metadata`` is a JSON-encoded string of same shape (fallback;
++      malformed JSON is silently skipped, never raises)
+     """
+     raw = span.get("input_data")
+-    if raw is None:
+-        return None
+     if isinstance(raw, dict):
+         q = raw.get("query")
+-        return str(q) if q is not None else None
+-    if isinstance(raw, str):
+-        import json
+-
++        if q is not None:
++            return str(q)
++    elif isinstance(raw, str):
+         try:
+             parsed = json.loads(raw)
+         except (TypeError, ValueError):
+             return raw  # treat the string itself as the query
+         if isinstance(parsed, dict):
+             q = parsed.get("query")
+-            return str(q) if q is not None else None
+-        return raw
++            if q is not None:
++                return str(q)
++        else:
++            return raw
++
++    # Metadata fallback. Unlike input_data, a non-JSON metadata string is
++    # NOT treated as the query — metadata is a sidecar, its raw string
++    # form carries no "this IS the query" semantics. Parse failures and
++    # missing keys silently return None.
++    meta = span.get("metadata")
++    if isinstance(meta, str):
++        try:
++            meta = json.loads(meta)
++        except (TypeError, ValueError):
++            return None
++    if isinstance(meta, dict):
++        q = meta.get("query")
++        return str(q) if q is not None else None
+     return None
+diff --git a/src/vibesop/core/observability/tool_call_bridge.py b/src/vibesop/core/observability/tool_call_bridge.py
+new file mode 100644
+index 0000000..9fca8ce
+--- /dev/null
++++ b/src/vibesop/core/observability/tool_call_bridge.py
+@@ -0,0 +1,594 @@
++"""Tool-call span bridge + route outcome signals (M12 M1).
++
++Two jobs share one scan of ``.vibe/observability/spans.jsonl``:
++
++1. **Assembly bridge (producer of ``span_kind="tool_call"`` spans).**
++   ``tool_call`` consumers already exist (``aggregator.get_skill_metrics``
++   tool distribution, ``aggregator.get_pattern_sequences``,
++   ``dag_rebuilder``) but nothing produced such spans. Meanwhile
++   ``.vibe/tool_sequences.jsonl`` captures ``{"tool", "ts", "session"}``
++   events from the host agent's PostToolUse hook. This bridge joins tool
++   events to route spans and rewrites them as standard ``tool_call``
++   spans appended to the same trace as their parent route span.
++
++   Join strategy (design doc m12-product-design.md v3, gate15 裁定):
++   - **session join first**: the agent path (``agent_runtime.handle_query``)
++     stamps route spans with the real platform session UUID, which matches
++     the hook event's ``session``. When several route spans share the
++     session, the tool call belongs to the *latest route span started
++     before the event* — tools execute after the routing decision that
++     triggered them.
++   - **time-window fallback**: events whose session matches nothing (or
++     carries none) join to the UNIQUE route span within
++     ``±JOIN_WINDOW_MINUTES`` of the event. Zero candidates → unmatched;
++     more than one → ambiguous, refused (mis-attribution is worse than no
++     attribution). Both counted in telemetry.
++   - **CLI route spans are excluded from join candidacy entirely**:
++     ``cli/main.py`` mints a fresh session UUID per invocation, so its
++     session can never match a hook event, and letting CLI spans into the
++     time-window fallback would risk mis-attaching agent tool calls to an
++     unrelated ``vibe route`` that happened to run nearby.
++
++2. **Outcome signals for miss route spans** (M1 slice), appended to
++   ``.vibe/observability/route_outcomes.jsonl`` (one JSON per line;
++   corrupt lines skipped on read, per project JSONL convention):
++   - explicit accept (``vibe instinct accept`` → routing_pending item with
++     ``status="accepted"`` whose query matches the span) ≈ strong positive
++   - re-ask (the span's ``task_id`` — full-text derived, truncation-safe —
++     reappears on a LATER route span) ≈ weak negative
++   - session completed without re-ask (a later different-task span in the
++     same session, or the span is older than ``SESSION_COMPLETE_HOURS``)
++     ≈ weak positive
++   Spans with ``has_match`` missing (CLI error paths, pre-W5.0 spans) are
++   "unknown" and never enter the miss pool (conservative direction);
++   ``mode="not_intercepted"``/``"slash_command"`` spans are not routing
++   attempts and are excluded too.
++
++   Outcome derivation lives HERE (assembly stage), not in the M2 scan
++   stage: the bridge already pays a full spans.jsonl scan on every
++   assembly run and runs on the same cadence as capture, so outcomes
++   refresh incrementally for free. A scan-stage implementation would
++   duplicate the span read and only update when someone runs clustering.
++
++Idempotency: the bridge runs inside the single assembly reader's fan-out
++(``assemble_tool_sequences`` — one shared cursor, per gate15: rotation
++only resets the main cursor, multi-cursor semantics undefined), so events
++normally arrive exactly once. A manual/cron re-run (``run_bridge``) may
++re-feed the same events; already-processed ``(session, ts, tool)`` keys
++are kept in ``.vibe/observability/tool_call_bridge_state.json`` and never
++produce a second span. Outcome lines are deduped by ``span_id`` against
++the outcomes file itself, so state-file loss cannot duplicate outcomes.
++
++Privacy: tool_call spans carry ONLY the tool name — never arguments,
++paths, or responses (same rule as the capture side).
++"""
++
++from __future__ import annotations
++
++import json
++import logging
++from dataclasses import dataclass, field
++from datetime import UTC, datetime, timedelta
++from pathlib import Path
++from typing import TYPE_CHECKING, Any
++
++from vibesop.core.observability._span_fields import span_timestamp
++from vibesop.core.observability.models import Span
++from vibesop.core.observability.span_writer import SpanWriter
++from vibesop.core.observability.task_id import derive_task_id, normalize_query
++
++if TYPE_CHECKING:
++    from collections.abc import Iterable
++
++logger = logging.getLogger(__name__)
++
++#: Time-window fallback half-width: an unmatched-session event joins to the
++#: unique route span whose start is within this many minutes of the event.
++JOIN_WINDOW_MINUTES = 30
++#: A miss span older than this with no re-ask counts as "session completed".
++SESSION_COMPLETE_HOURS = 24
++#: Cap on remembered (session, ts, tool) keys; oldest are evicted FIFO.
++MAX_SEEN_KEYS = 50_000
++
++STATE_FILENAME = "tool_call_bridge_state.json"
++OUTCOMES_FILENAME = "route_outcomes.jsonl"
++SPANS_FILENAME = "spans.jsonl"
++BRIDGE_SOURCE = "tool_call_bridge"
++
++#: metadata markers of the CLI route path (cli/main.py) — excluded from join.
++_CLI_PLATFORM = "vibe-cli"
++
++ToolEvent = tuple[str, datetime | None, str | None]
++
++
++@dataclass
++class BridgeStats:
++    """Telemetry for one bridge run."""
++
++    bridged: int = 0
++    dedup_skipped: int = 0
++    joined_session: int = 0
++    joined_window: int = 0
++    unmatched: int = 0
++    ambiguous: int = 0
++    outcomes_recorded: int = 0
++    notes: list[str] = field(default_factory=list)
++
++
++@dataclass
++class _RouteSpan:
++    """Normalized view of one route span for joining / outcome derivation."""
++
++    id: str
++    trace_id: str
++    session_id: str | None
++    task_id: str | None
++    agent_id: str | None
++    project_id: str
++    started_at: datetime | None
++    is_cli: bool
++    has_match: bool | None  # None = unknown (missing key)
++    mode: str | None
++    query: str  # metadata query (≤200 chars, may be truncated)
++
++
++# ---------------------------------------------------------------------------
++# Public API
++# ---------------------------------------------------------------------------
++
++
++def bridge_entries(
++    entries: Iterable[ToolEvent],
++    project_root: str | Path,
++) -> BridgeStats:
++    """Join tool events to route spans, write tool_call spans + outcomes.
++
++    Called from the single assembly reader's fan-out
++    (``assemble_tool_sequences``) and safe to call directly for a manual
++    re-run: processed event keys are remembered in the bridge state file.
++    Never raises — telemetry must not break capture or assembly.
++    """
++    stats = BridgeStats()
++    try:
++        _run(list(entries), Path(project_root), stats)
++    except Exception:
++        logger.debug("tool-call bridge run failed", exc_info=True)
++        stats.notes.append("bridge run failed; see debug log")
++    return stats
++
++
++def run_bridge(project_root: str | Path) -> BridgeStats:
++    """Manual/cron entry: bridge ALL events currently in the capture log.
++
++    Uses no cursor of its own (single-reader rule); re-processing is made
++    safe by the (session, ts, tool) dedup keys in the bridge state file.
++    Outcome derivation runs even when there is nothing new to bridge.
++    """
++    from vibesop.core.instinct.tool_sequences import _parse_entries, sequences_path
++
++    entries: list[ToolEvent] = []
++    path = sequences_path(project_root)
++    if path.exists():
++        with path.open("rb") as f:
++            entries = _parse_entries(f)
++    return bridge_entries(entries, project_root)
++
++
++# ---------------------------------------------------------------------------
++# Bridge core
++# ---------------------------------------------------------------------------
++
++
++def _run(entries: list[ToolEvent], root: Path, stats: BridgeStats) -> None:
++    spans_path = root / ".vibe" / "observability" / SPANS_FILENAME
++    route_spans = _load_route_spans(spans_path)
++    state = _load_state(root / ".vibe" / "observability" / STATE_FILENAME)
++
++    if entries and route_spans:
++        _bridge_events(entries, route_spans, spans_path, state, stats)
++    elif entries:
++        # No route spans to join against. Still mark events seen: the
++        # assembly cursor has already advanced past them, so an unmarked
++        # event would be retried forever by manual re-runs.
++        stats.notes.append("no route spans found; events left unbridged")
++        seen = set(state["seen"])
++        for ev in entries:
++            key = _event_key(*ev)
++            if key in seen:
++                stats.dedup_skipped += 1
++                continue
++            state["seen"].append(key)
++            seen.add(key)
++            stats.unmatched += 1
++
++    _derive_outcomes(route_spans, root, stats)
++    _save_state(root / ".vibe" / "observability" / STATE_FILENAME, state)
++
++
++def _bridge_events(
++    entries: list[ToolEvent],
++    route_spans: list[_RouteSpan],
++    spans_path: Path,
++    state: dict[str, Any],
++    stats: BridgeStats,
++) -> None:
++    seen: set[str] = set(state["seen"])
++    joinable = [rs for rs in route_spans if not rs.is_cli]
++    by_session: dict[str, list[_RouteSpan]] = {}
++    for rs in joinable:
++        if rs.session_id:
++            by_session.setdefault(rs.session_id, []).append(rs)
++    window = timedelta(minutes=JOIN_WINDOW_MINUTES)
++    writer = SpanWriter(storage_path=spans_path)
++
++    for tool, ts, session in entries:
++        key = _event_key(tool, ts, session)
++        if key in seen:
++            stats.dedup_skipped += 1
++            continue
++        state["seen"].append(key)
++        seen.add(key)
++
++        route, how = _join_one(ts, session, by_session, joinable, window)
++        if route is None:
++            if how == "ambiguous":
++                stats.ambiguous += 1
++            else:
++                stats.unmatched += 1
++            continue
++
++        writer.write_span(_tool_call_span(tool, ts, session, route))
++        stats.bridged += 1
++        if how == "session":
++            stats.joined_session += 1
++        else:
++            stats.joined_window += 1
++
++
++def _join_one(
++    ts: datetime | None,
++    session: str | None,
++    by_session: dict[str, list[_RouteSpan]],
++    joinable: list[_RouteSpan],
++    window: timedelta,
++) -> tuple[_RouteSpan | None, str]:
++    """Pick the parent route span for one event.
++
++    Returns (span, "session"|"window") on success, (None, "unmatched") or
++    (None, "ambiguous") otherwise.
++    """
++    if session and session in by_session:
++        candidates = by_session[session]
++        if ts is not None:
++            preceding = [
++                rs for rs in candidates if rs.started_at is not None and rs.started_at <= ts
++            ]
++            if preceding:
++                return max(
++                    preceding, key=lambda rs: rs.started_at or datetime.min.replace(tzinfo=UTC)
++                ), "session"
++            # Event predates every route span of its session (clock skew or
++            # truncated span history): fall through to the window rule.
++        elif len(candidates) == 1:
++            return candidates[0], "session"
++
++    if ts is None:
++        return None, "unmatched"
++    near = [
++        rs for rs in joinable if rs.started_at is not None and abs(rs.started_at - ts) <= window
++    ]
++    if len(near) == 1:
++        return near[0], "window"
++    if len(near) > 1:
++        return None, "ambiguous"
++    return None, "unmatched"
++
++
++def _tool_call_span(tool: str, ts: datetime | None, session: str | None, route: _RouteSpan) -> Span:
++    """Build the bridged tool_call span. Tool name only — never arguments."""
++    at = ts or datetime.now(UTC)
++    span = Span(
++        id=Span.new_id(),
++        trace_id=route.trace_id,
++        name=f"tool:{tool}",
++        span_kind="tool_call",
++        task_id=route.task_id,
++        session_id=session or route.session_id,
++        agent_id=route.agent_id,
++        parent_span_id=route.id,
++        status="ok",
++        started_at=at,
++        ended_at=at,  # hook events carry no duration; 0ms beats "running"
++        metadata={"tool": tool, "source": BRIDGE_SOURCE},
++        project_id=route.project_id,
++    )
++    return span
++
++
++def _event_key(tool: str, ts: datetime | None, session: str | None) -> str:
++    return f"{session or ''}|{ts.isoformat() if ts else ''}|{tool}"
++
++
++# ---------------------------------------------------------------------------
++# Route span loading
++# ---------------------------------------------------------------------------
++
++
++def _load_route_spans(spans_path: Path) -> list[_RouteSpan]:
++    """Read route spans (span_kind=task, name starts with ``route:``).
++
++    Fault-tolerant per project JSONL convention: corrupt lines are skipped.
++    """
++    if not spans_path.exists():
++        return []
++    spans: list[_RouteSpan] = []
++    try:
++        with spans_path.open("r", encoding="utf-8") as f:
++            for raw_line in f:
++                line = raw_line.strip()
++                if not line:
++                    continue
++                try:
++                    record = json.loads(line)
++                except json.JSONDecodeError:
++                    continue
++                rs = _as_route_span(record)
++                if rs is not None:
++                    spans.append(rs)
++    except OSError:
++        logger.debug("failed to read spans for bridging", exc_info=True)
++    return spans
++
++
++def _as_route_span(record: dict[str, Any]) -> _RouteSpan | None:
++    if not isinstance(record, dict):
++        return None
++    if record.get("span_kind") != "task":
++        return None
++    name = record.get("name")
++    if not isinstance(name, str) or not name.startswith("route:"):
++        return None
++
++    meta = record.get("metadata")
++    if isinstance(meta, str):  # SpanWriter serialises metadata to a string
++        try:
++            meta = json.loads(meta)
++        except (json.JSONDecodeError, TypeError):
++            meta = {}
++    if not isinstance(meta, dict):
++        meta = {}
++
++    has_match_raw = meta.get("has_match")
++    has_match = bool(has_match_raw) if has_match_raw is not None else None
++    session_id = record.get("session_id")
++    mode = meta.get("mode")
++    query = meta.get("query")
++    return _RouteSpan(
++        id=str(record.get("id") or ""),
++        trace_id=str(record.get("trace_id") or ""),
++        session_id=session_id if isinstance(session_id, str) and session_id else None,
++        task_id=record.get("task_id") if isinstance(record.get("task_id"), str) else None,
++        agent_id=record.get("agent_id") if isinstance(record.get("agent_id"), str) else None,
++        project_id=str(record.get("project_id") or "default"),
++        started_at=_parse_dt(span_timestamp(record)),
++        is_cli=(meta.get("platform") == _CLI_PLATFORM or meta.get("source") == "cli"),
++        has_match=has_match,
++        mode=mode if isinstance(mode, str) else None,
++        query=query if isinstance(query, str) else "",
++    )
++
++
++def _parse_dt(value: Any) -> datetime | None:
++    if not isinstance(value, str) or not value:
++        return None
++    try:
++        dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
++    except ValueError:
++        return None
++    if dt.tzinfo is None:  # matches aggregator's tz-naive guard (P1-2)
++        dt = dt.replace(tzinfo=UTC)
++    return dt
++
++
++# ---------------------------------------------------------------------------
++# Outcome signals
++# ---------------------------------------------------------------------------
++
++
++def _derive_outcomes(route_spans: list[_RouteSpan], root: Path, stats: BridgeStats) -> None:
++    """Append newly-determinable miss outcomes to route_outcomes.jsonl.
++
++    Dedup by span_id against the outcomes file itself (not the state file),
++    so a lost state file can never duplicate an outcome line.
++    """
++    outcomes_path = root / ".vibe" / "observability" / OUTCOMES_FILENAME
++    recorded = _load_recorded_span_ids(outcomes_path)
++
++    misses = [rs for rs in route_spans if _is_miss(rs)]
++    if not misses:
++        return
++    accepted_queries = _load_accepted_queries(root)
++    now = datetime.now(UTC)
++    session_complete_after = timedelta(hours=SESSION_COMPLETE_HOURS)
++
++    new_lines: list[str] = []
++    for miss in misses:
++        if not miss.id or miss.id in recorded:
++            continue
++        outcome = _classify(miss, route_spans, accepted_queries, now, session_complete_after)
++        if outcome is None:
++            continue  # not yet determinable — retried on the next run
++        kind, reason = outcome
++        new_lines.append(
++            json.dumps(
++                {
++                    "span_id": miss.id,
++                    "trace_id": miss.trace_id,
++                    "task_id": miss.task_id,
++                    "session_id": miss.session_id,
++                    "span_ts": miss.started_at.isoformat() if miss.started_at else None,
++                    "outcome": kind,
++                    "reason": reason,
++                    "recorded_at": now.isoformat(),
++                },
++                ensure_ascii=False,
++            )
++        )
++        recorded.add(miss.id)
++
++    if not new_lines:
++        return
++    outcomes_path.parent.mkdir(parents=True, exist_ok=True)
++    with outcomes_path.open("a", encoding="utf-8") as f:
++        for line in new_lines:
++            f.write(line + "\n")
++    stats.outcomes_recorded += len(new_lines)
++
++
++def _is_miss(rs: _RouteSpan) -> bool:
++    """Conservative miss rule: explicit has_match=False on a routed attempt."""
++    if rs.has_match is not False:  # True → hit; None → unknown, never a miss
++        return False
++    return rs.mode not in ("not_intercepted", "slash_command")
++
++
++def _classify(
++    miss: _RouteSpan,
++    route_spans: list[_RouteSpan],
++    accepted_queries: list[str],
++    now: datetime,
++    session_complete_after: timedelta,
++) -> tuple[str, str] | None:
++    """Return (outcome, reason) or None when not yet determinable.
++
++    Precedence: explicit accept (strong) > re-ask (weak neg) > completion
++    (weak pos). A span with no re-ask and no completion evidence stays
++    undecided and is re-evaluated on the next run.
++    """
++    if _matches_accepted(miss, accepted_queries):
++        return "strong_positive", "explicit_accept"
++
++    later_same_task = [
++        rs
++        for rs in route_spans
++        if rs.task_id
++        and miss.task_id
++        and rs.task_id == miss.task_id
++        and rs.id != miss.id
++        and rs.started_at is not None
++        and miss.started_at is not None
++        and rs.started_at > miss.started_at
++    ]
++    if later_same_task:
++        return "weak_negative", "reask_same_task_id"
++
++    session_moved_on = any(
++        rs.session_id
++        and miss.session_id
++        and rs.session_id == miss.session_id
++        and rs.task_id != miss.task_id
++        and rs.started_at is not None
++        and miss.started_at is not None
++        and rs.started_at > miss.started_at
++        for rs in route_spans
++    )
++    if session_moved_on:
++        return "weak_positive", "session_continued_without_reask"
++    if miss.started_at is not None and now - miss.started_at > session_complete_after:
++        return "weak_positive", "session_expired_without_reask"
++    return None
++
++
++def _matches_accepted(miss: _RouteSpan, accepted_queries: list[str]) -> bool:
++    """Match a miss span against accepted routing_pending queries.
++
++    Exact ``task_id`` equality first; the span's metadata query is truncated
++    at 200 chars while pending stores up to 500, so fall back to a
++    normalized-prefix comparison (either direction).
++    """
++    for query in accepted_queries:
++        if miss.task_id and derive_task_id(query) == miss.task_id:
++            return True
++        span_norm = normalize_query(miss.query)
++        pend_norm = normalize_query(query)
++        if (
++            span_norm
++            and pend_norm
++            and (pend_norm.startswith(span_norm) or span_norm.startswith(pend_norm))
++        ):
++            return True
++    return False
++
++
++def _load_accepted_queries(root: Path) -> list[str]:
++    """Queries of routing_pending items with status="accepted" (explicit accept)."""
++    path = root / ".vibe" / "instincts" / "routing_pending.jsonl"
++    if not path.exists():
++        return []
++    queries: list[str] = []
++    try:
++        for raw_line in path.read_text(encoding="utf-8").splitlines():
++            stripped = raw_line.strip()
++            if not stripped:
++                continue
++            try:
++                data = json.loads(stripped)
++            except json.JSONDecodeError:
++                continue
++            if not isinstance(data, dict) or data.get("status") != "accepted":
++                continue
++            query = data.get("query")
++            if isinstance(query, str) and query.strip():
++                queries.append(query)
++    except OSError:
++        logger.debug("failed to read routing_pending for outcomes", exc_info=True)
++    return queries
++
++
++def _load_recorded_span_ids(outcomes_path: Path) -> set[str]:
++    if not outcomes_path.exists():
++        return set()
++    ids: set[str] = set()
++    try:
++        for raw_line in outcomes_path.read_text(encoding="utf-8").splitlines():
++            stripped = raw_line.strip()
++            if not stripped:
++                continue
++            try:
++                data = json.loads(stripped)
++            except json.JSONDecodeError:
++                continue
++            span_id = data.get("span_id") if isinstance(data, dict) else None
++            if isinstance(span_id, str) and span_id:
++                ids.add(span_id)
++    except OSError:
++        logger.debug("failed to read existing outcomes", exc_info=True)
++    return ids
++
++
++# ---------------------------------------------------------------------------
++# Bridge state (event dedup keys)
++# ---------------------------------------------------------------------------
++
++
++def _load_state(path: Path) -> dict[str, Any]:
++    try:
++        data = json.loads(path.read_text(encoding="utf-8"))
++        seen = data.get("seen")
++        if isinstance(seen, list):
++            return {"seen": [k for k in seen if isinstance(k, str)]}
++    except (OSError, json.JSONDecodeError, AttributeError):
++        pass
++    return {"seen": []}
++
++
++def _save_state(path: Path, state: dict[str, Any]) -> None:
++    from vibesop.utils.atomic_writer import write_text
++
++    seen = state["seen"]
++    if len(seen) > MAX_SEEN_KEYS:  # FIFO eviction of the oldest keys
++        seen = seen[-MAX_SEEN_KEYS:]
++    try:
++        write_text(path, json.dumps({"seen": seen}))
++    except OSError:
++        logger.debug("failed to persist bridge state", exc_info=True)
+diff --git a/tests/adapters/test_hook_templates.py b/tests/adapters/test_hook_templates.py
+index f842adb..c823676 100644
+--- a/tests/adapters/test_hook_templates.py
++++ b/tests/adapters/test_hook_templates.py
+@@ -4,6 +4,10 @@ Verifies that ``render_route_hook()`` in ``_shared.py`` produces valid
+ shell scripts that delegate to AgentRuntime.handle_query_for_hook().
+ """
+ 
++from pathlib import Path
++
++import pytest
++
+ from vibesop.adapters._shared import render_route_hook
+ 
+ 
+@@ -122,3 +126,90 @@ class TestRenderRouteHook:
+         assert "PRIMARY=" not in result
+         assert "SKILL_CONTENT=" not in result
+         assert "ALTERNATIVES_JSON" not in result
++
++
++class TestRouteHookSessionForwarding:
++    """M12 M1: the route hook must forward the platform session_id so route
++    spans join with tool-call telemetry captured under the same session."""
++
++    def test_template_extracts_and_forwards_session_id(self) -> None:
++        result = render_route_hook(
++            platform="claude-code",
++            platform_name="Claude Code",
++            hook_event_name="UserPromptSubmit",
++        )
++        # jq extraction from the hook payload (both casings tolerated)
++        assert ".session_id // .sessionId" in result
++        assert 'SESSION_ID=$(echo "$INPUT" | jq -r' in result
++        # forwarded into handle_query_for_hook as the second positional arg
++        assert "session_id=(sys.argv[2] if len(sys.argv) > 2 else '') or None" in result
++        assert '"$QUERY" "$SESSION_ID"' in result
++
++    def _run_rendered_script(self, tmp_path: Path, payload: str) -> str:
++        """Execute the rendered route script hermetically and return stdout.
++
++        The script prepends real system dirs (/opt/homebrew/bin, /usr/bin) to
++        PATH, so ``python3``/``uv`` stubs on PATH never win. The one
++        interpreter path fully under our control is the uv-tool fallback
++        ``$HOME/.local/share/uv/tools/vibesop/bin/python`` — plant the stub
++        there. From cwd=tmp_path the real ``uv run python -c "import
++        vibesop"`` probe fails (no project, no vibesop), so the stub is
++        selected.
++        """
++        import shutil
++        import subprocess
++
++        jq = shutil.which("jq")
++        bash = shutil.which("bash")
++        if jq is None or bash is None:
++            pytest.skip("bash/jq not available")
++
++        home = tmp_path / "home"
++        stub = home / ".local" / "share" / "uv" / "tools" / "vibesop" / "bin" / "python"
++        stub.parent.mkdir(parents=True, exist_ok=True)
++        stub.write_text(
++            '#!/bin/sh\ncase "$*" in\n'
++            "  *import\\ vibesop*) exit 0;;\n"
++            "  *) printf 'STUBARGS:%s\\n' \"$*\";;\n"
++            "esac\n",
++            encoding="utf-8",
++        )
++        stub.chmod(0o755)
++
++        script = tmp_path / "vibesop-route.sh"
++        script.write_text(
++            render_route_hook(platform="claude-code", platform_name="Claude Code"),
++            encoding="utf-8",
++        )
++        result = subprocess.run(
++            [bash, str(script)],
++            input=payload.encode(),
++            capture_output=True,
++            cwd=tmp_path,
++            env={
++                "HOME": str(home),
++                "PATH": f"/usr/bin:/bin:{Path(jq).parent}",
++            },
++            timeout=60,
++            check=False,
++        )
++        assert result.returncode == 0, result.stderr.decode()
++        return result.stdout.decode()
++
++    def test_rendered_script_passes_payload_session_id(self, tmp_path) -> None:
++        """The payload's session_id reaches the Python invocation as argv[2]."""
++        import json
++
++        payload = json.dumps({"prompt": "hello stub test", "session_id": "abc-123-session"})
++        out = self._run_rendered_script(tmp_path, payload)
++        assert "STUBARGS:" in out
++        assert "abc-123-session" in out
++        assert "hello stub test" in out
++
++    def test_rendered_script_without_session_id_passes_empty(self, tmp_path) -> None:
++        """Payloads without session_id forward an empty string -> None."""
++        import json
++
++        out = self._run_rendered_script(tmp_path, json.dumps({"prompt": "hello no session"}))
++        assert "STUBARGS:" in out
++        assert "hello no session" in out
+diff --git a/tests/adapters/test_kimi_cli.py b/tests/adapters/test_kimi_cli.py
+index f206895..7c3035a 100644
+--- a/tests/adapters/test_kimi_cli.py
++++ b/tests/adapters/test_kimi_cli.py
+@@ -50,7 +50,7 @@ class TestKimiCliAdapter:
+         result = adapter.render_config(manifest, tmp_path)
+ 
+         assert result.success
+-        assert result.file_count == 7  # config.toml + AGENTS.md + hook + docs/(4 files)
++        assert result.file_count == 8  # config.toml + AGENTS.md + hooks(2) + docs/(4 files)
+         assert (tmp_path / "config.toml").exists()
+         assert (tmp_path / "AGENTS.md").exists()
+         assert (tmp_path / "hooks" / "vibesop-route.sh").exists()
+@@ -78,8 +78,8 @@ class TestKimiCliAdapter:
+ 
+         assert result.success
+         assert (
+-            result.file_count == 9
+-        )  # config.toml + README.md + skill + AGENTS.md + hook + docs/(4 files)
++            result.file_count == 10
++        )  # config.toml + README.md + skill + AGENTS.md + hooks(2) + docs/(4 files)
+         assert (tmp_path / "config.toml").exists()
+         assert (tmp_path / "README.md").exists()
+         assert (tmp_path / "AGENTS.md").exists()
+@@ -235,7 +235,7 @@ class TestKimiCliAdapter:
+         result = adapter.render_config_only(manifest, tmp_path)
+ 
+         assert result.success
+-        assert result.file_count == 3  # config.toml + README.md + hook
++        assert result.file_count == 4  # config.toml + README.md + hooks(2)
+         assert (tmp_path / "config.toml").exists()
+         assert (tmp_path / "README.md").exists()
+         assert (tmp_path / "hooks" / "vibesop-route.sh").exists()
+@@ -250,7 +250,7 @@ class TestKimiCliAdapter:
+         result = adapter.render_config_only(manifest, tmp_path)
+ 
+         assert result.success
+-        assert result.file_count == 2  # config.toml + hook
++        assert result.file_count == 3  # config.toml + hooks(2)
+         assert not (tmp_path / "README.md").exists()
+         assert (tmp_path / "hooks" / "vibesop-route.sh").exists()
+ 
+@@ -387,7 +387,9 @@ class TestKimiCliAdapterEdgeCases:
+ 
+         result = adapter.render_config(manifest, tmp_path)
+         assert result.success
+-        assert result.file_count == 7  # config.toml + AGENTS.md + hook + docs/(4 files), no README
++        assert (
++            result.file_count == 8
++        )  # config.toml + AGENTS.md + hooks(2) + docs/(4 files), no README
+ 
+     def test_render_with_full_metadata(self, tmp_path: Path) -> None:
+         """Test rendering with full metadata."""
+@@ -489,3 +491,55 @@ class TestKimiCLISkillContentRender:
+         assert skill_dir.is_symlink(), "Symlink was lost on second build"
+         content = (skill_dir / "SKILL.md").read_text(encoding="utf-8")
+         assert "Full Review Skill" in content
++
++
++class TestKimiToolSeqHook:
++    """M12 M1: Kimi CLI natively supports PostToolUse (observation-only,
++    session_id in payload), so the shared capture hook is installed too."""
++
++    def _hermetic(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, *, enabled: bool) -> None:
++        monkeypatch.setenv("HOME", str(tmp_path))  # ignore real ~/.vibe config
++        monkeypatch.setenv("VIBE_SEQUENCES_ENABLED", "true" if enabled else "false")
++
++    def test_render_config_includes_tool_seq_hook_and_post_tool_use(
++        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
++    ) -> None:
++        self._hermetic(monkeypatch, tmp_path, enabled=True)
++        adapter = KimiCliAdapter(project_root=tmp_path)
++        output_dir = tmp_path / "out"
++
++        result = adapter.render_config(
++            Manifest(metadata=ManifestMetadata(platform="kimi-cli")), output_dir
++        )
++
++        assert result.success, result.errors
++        hook = output_dir / "hooks" / "vibesop-tool-seq.sh"
++        assert hook.exists()
++        if sys.platform != "win32":
++            assert hook.stat().st_mode & 0o111
++        content = hook.read_text(encoding="utf-8")
++        assert "vibe sequence record-tool" in content
++        # Rendered with an empty project_root: Kimi runs hooks with the
++        # session project dir as cwd, so the runtime fallback chain decides.
++        assert "[ -z \"$_SEQ_ROOT\" ] && _SEQ_ROOT=''" in content
++        config_toml = (output_dir / "config.toml").read_text(encoding="utf-8")
++        assert 'event = "PostToolUse"' in config_toml
++        assert "vibesop-tool-seq.sh" in config_toml
++
++    def test_render_config_disabled_omits_tool_seq(
++        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
++    ) -> None:
++        self._hermetic(monkeypatch, tmp_path, enabled=False)
++        adapter = KimiCliAdapter(project_root=tmp_path)
++        output_dir = tmp_path / "out"
++
++        result = adapter.render_config(
++            Manifest(metadata=ManifestMetadata(platform="kimi-cli")), output_dir
++        )
++
++        assert result.success, result.errors
++        assert not (output_dir / "hooks" / "vibesop-tool-seq.sh").exists()
++        config_toml = (output_dir / "config.toml").read_text(encoding="utf-8")
++        assert "PostToolUse" not in config_toml
++        # route hook is unaffected
++        assert (output_dir / "hooks" / "vibesop-route.sh").exists()
+diff --git a/tests/adapters/test_tool_seq_hook.py b/tests/adapters/test_tool_seq_hook.py
+index 0acf008..d0cc3d9 100644
+--- a/tests/adapters/test_tool_seq_hook.py
++++ b/tests/adapters/test_tool_seq_hook.py
+@@ -78,18 +78,33 @@ class TestToolSeqHookTemplate:
+         )
+         assert result.returncode == 0
+ 
+-    def test_injected_project_root_is_deterministic_seq_root(self) -> None:
+-        # Render-time root wins over the directory-crawl fallback chain (M3);
+-        # shellquote keeps paths with spaces a single shell token.
++    def test_claude_project_dir_wins_over_render_time_root(self) -> None:
++        # M12 gate15 BLOCK-2 root cause: a globally-installed hook renders
++        # with project_root=$HOME, so captures scattered into ~/.vibe. The
++        # working project (CLAUDE_PROJECT_DIR) must take precedence; the
++        # render-time root is the deterministic fallback for project-local
++        # installs. shellquote keeps paths with spaces a single shell token.
+         content = _rendered_hook("/tmp/my proj")
+-        assert "_SEQ_ROOT='/tmp/my proj'" in content
++        assert '_SEQ_ROOT="${CLAUDE_PROJECT_DIR:-}"' in content
++        assert "[ -z \"$_SEQ_ROOT\" ] && _SEQ_ROOT='/tmp/my proj'" in content
+ 
+     def test_missing_project_root_renders_empty_and_keeps_fallback(self) -> None:
+         content = _rendered_hook()
+-        assert "_SEQ_ROOT=''" in content
+-        # fallback chain preserved: crawl result, then CLAUDE_PROJECT_DIR/PWD
++        assert "[ -z \"$_SEQ_ROOT\" ] && _SEQ_ROOT=''" in content
++        # fallback chain preserved: crawl result, then cwd
+         assert '[ -z "$_SEQ_ROOT" ] && _SEQ_ROOT="$_VIBESOP_PROJECT_ROOT"' in content
+-        assert '[ -z "$_SEQ_ROOT" ] && _SEQ_ROOT="${CLAUDE_PROJECT_DIR:-$PWD}"' in content
++        assert '[ -z "$_SEQ_ROOT" ] && _SEQ_ROOT="$PWD"' in content
++
++    def test_failure_not_swallowed_and_liveness_signal(self) -> None:
++        # M12: failures append to a capped local log instead of vanishing;
++        # successful captures refresh a one-line epoch liveness file.
++        content = _rendered_hook()
++        assert "hook_errors.log" in content
++        assert "tool_sequences.last" in content
++        assert "65536" in content  # log size cap
++        assert "date +%s" in content  # liveness timestamp
++        # the old silent-death pattern is gone
++        assert ">/dev/null 2>&1 || true" not in content
+ 
+ 
+ class TestAdapterRegistration:
+@@ -162,3 +177,109 @@ class TestAdapterRegistration:
+ 
+         assert "vibesop-tool-seq" not in results
+         assert not (config_dir / "hooks" / "vibesop-tool-seq.sh").exists()
++
++
++class TestToolSeqHookBehavior:
++    """Execute the rendered hook with fake PostToolUse payloads (M12).
++
++    Uses a stub ``vibe`` binary on PATH so the tests stay hermetic. ``HOME``
++    is redirected so the real ``~/.local/bin/vibe`` never shadows the stub.
++    """
++
++    PAYLOAD = b'{"session_id":"sess-1","tool_name":"Read","cwd":"/tmp/work"}'
++
++    def _setup(self, tmp_path: Path, vibe_body: str) -> dict[str, str]:
++        sh = shutil.which("sh")
++        if sh is None:
++            pytest.skip("sh not available")
++        fake_bin = tmp_path / "bin"
++        fake_bin.mkdir()
++        (fake_bin / "vibe").write_text(f"#!/bin/sh\n{vibe_body}\n", encoding="utf-8")
++        (fake_bin / "vibe").chmod(0o755)
++        home = tmp_path / "home"
++        home.mkdir(exist_ok=True)
++        work = tmp_path / "work"
++        work.mkdir(exist_ok=True)
++        script = tmp_path / "vibesop-tool-seq.sh"
++        # Empty render-time root: exercises the runtime fallback chain.
++        script.write_text(_rendered_hook(""), encoding="utf-8")
++        env = {
++            "HOME": str(home),
++            "PATH": f"{fake_bin}:/usr/bin:/bin",
++            "CLAUDE_PROJECT_DIR": str(work),
++        }
++        return {"script": str(script), "env": env, "work": str(work), "cwd": str(work)}
++
++    def _run(self, setup: dict[str, str]) -> subprocess.CompletedProcess[bytes]:
++        return subprocess.run(
++            ["sh", setup["script"]],
++            input=self.PAYLOAD,
++            capture_output=True,
++            # Hermetic cwd: from the repo checkout the template's crawl would
++            # find the real vibesop pyproject and the uv fallback would run
++            # the real CLI. From tmp_path the crawl finds nothing.
++            cwd=setup["cwd"],
++            env=setup["env"],
++            timeout=60,
++            check=False,
++        )
++
++    def test_success_updates_last_capture_and_stays_silent(self, tmp_path: Path) -> None:
++        setup = self._setup(tmp_path, "exit 0")
++        result = self._run(setup)
++        assert result.returncode == 0
++        assert result.stdout == b""  # hooks must never write to stdout
++        vibe_dir = Path(setup["work"]) / ".vibe"
++        last = vibe_dir / "tool_sequences.last"
++        assert last.exists()
++        assert last.read_text(encoding="utf-8").strip().isdigit()
++        assert not (vibe_dir / "hook_errors.log").exists()
++
++    def test_failure_writes_capped_error_log_and_exits_zero(self, tmp_path: Path) -> None:
++        setup = self._setup(tmp_path, "echo boom >&2; exit 3")
++        result = self._run(setup)
++        assert result.returncode == 0  # never blocks the host agent
++        assert result.stdout == b""
++        vibe_dir = Path(setup["work"]) / ".vibe"
++        errlog = vibe_dir / "hook_errors.log"
++        assert errlog.exists()
++        text = errlog.read_text(encoding="utf-8")
++        assert "rc=3" in text
++        assert "boom" in text
++        assert not (vibe_dir / "tool_sequences.last").exists()
++
++    def test_missing_vibe_and_uv_logs_rc127(self, tmp_path: Path) -> None:
++        setup = self._setup(tmp_path, "exit 0")
++        # Remove the stub vibe and any uv from PATH: the crawl fallback finds
++        # no vibesop checkout under tmp_path, so rc=127 must be logged.
++        (tmp_path / "bin" / "vibe").unlink()
++        result = self._run(setup)
++        assert result.returncode == 0
++        errlog = Path(setup["work"]) / ".vibe" / "hook_errors.log"
++        assert errlog.exists()
++        assert "rc=127" in errlog.read_text(encoding="utf-8")
++
++    def test_error_log_is_capped(self, tmp_path: Path) -> None:
++        setup = self._setup(tmp_path, "echo boom >&2; exit 3")
++        vibe_dir = Path(setup["work"]) / ".vibe"
++        vibe_dir.mkdir()
++        errlog = vibe_dir / "hook_errors.log"
++        errlog.write_text(
++            ("old-line-" + "x" * 90 + "\n") * 1000, encoding="utf-8"
++        )  # ~97KB > 64KB cap
++        result = self._run(setup)
++        assert result.returncode == 0
++        lines = errlog.read_text(encoding="utf-8").splitlines()
++        assert len(lines) <= 201  # 200 kept + 1 new
++        assert any("rc=3" in line for line in lines)
++
++    def test_claude_project_dir_wins_over_render_time_root(self, tmp_path: Path) -> None:
++        # Stub records its argv; CLAUDE_PROJECT_DIR (set in _setup) must beat
++        # the render-time root for --project-root.
++        args_file = tmp_path / "vibe-args"
++        setup = self._setup(tmp_path, f'printf \'%s\' "$*" > "{args_file}"\nexit 0')
++        # Re-render with a bogus render-time root that must NOT win.
++        Path(setup["script"]).write_text(_rendered_hook("/should/not/win"), encoding="utf-8")
++        result = self._run(setup)
++        assert result.returncode == 0
++        assert f"--project-root {setup['work']}" in args_file.read_text(encoding="utf-8")
+diff --git a/tests/cli/test_sequence_cmd.py b/tests/cli/test_sequence_cmd.py
+index 2e4b889..5ffe18b 100644
+--- a/tests/cli/test_sequence_cmd.py
++++ b/tests/cli/test_sequence_cmd.py
+@@ -115,6 +115,61 @@ class TestAssembleCommand:
+         assert "Fed 0 tool sequence(s)" in result.output
+ 
+ 
++class TestStatusCommand:
++    def test_no_capture_reports_never_captured(self, runner: CliRunner, tmp_path: Path) -> None:
++        result = runner.invoke(sequence_app, ["status", "--project-root", str(tmp_path)])
++        assert result.exit_code == 0
++        assert "从未捕获或 hook 未更新" in result.output
++        assert "不存在" in result.output  # capture file
++        assert "无 cursor" in result.output
++
++    def test_reports_age_sizes_rotation_and_watermark(
++        self, runner: CliRunner, tmp_path: Path
++    ) -> None:
++        from vibesop.core.instinct.tool_sequences import last_capture_path, rotated_path
++
++        lines = [json.dumps({"tool": "Read", "ts": "t", "session": "s"})]
++        sequences_path(tmp_path).parent.mkdir(parents=True, exist_ok=True)
++        sequences_path(tmp_path).write_text("\n".join(lines) + "\n", encoding="utf-8")
++        size = sequences_path(tmp_path).stat().st_size
++        rotated_path(tmp_path).write_text("{}\n", encoding="utf-8")
++        cursor_path(tmp_path).write_text(json.dumps({"offset": size}), encoding="utf-8")
++        from datetime import UTC, datetime
++
++        epoch = int(datetime.now(UTC).timestamp()) - 300  # 5 minutes ago
++        last_capture_path(tmp_path).write_text(f"{epoch}\n", encoding="utf-8")
++
++        result = runner.invoke(sequence_app, ["status", "--project-root", str(tmp_path)])
++        assert result.exit_code == 0
++        assert "last-capture:" in result.output
++        assert "5 分钟前" in result.output  # age rendered
++        assert f"{size} B" in result.output  # capture size
++        assert "rotation:" in result.output and "3 B" in result.output
++        assert "已装配到最新" in result.output
++
++    def test_pending_bytes_reported(self, runner: CliRunner, tmp_path: Path) -> None:
++        sequences_path(tmp_path).parent.mkdir(parents=True, exist_ok=True)
++        sequences_path(tmp_path).write_text(
++            json.dumps({"tool": "Read", "ts": "t", "session": "s"}) + "\n", encoding="utf-8"
++        )
++        cursor_path(tmp_path).write_text(json.dumps({"offset": 0}), encoding="utf-8")
++
++        result = runner.invoke(sequence_app, ["status", "--project-root", str(tmp_path)])
++        assert result.exit_code == 0
++        assert "待装配" in result.output
++
++    def test_corrupt_heartbeat_treated_as_never_captured(
++        self, runner: CliRunner, tmp_path: Path
++    ) -> None:
++        from vibesop.core.instinct.tool_sequences import last_capture_path
++
++        last_capture_path(tmp_path).parent.mkdir(parents=True, exist_ok=True)
++        last_capture_path(tmp_path).write_text("not-an-epoch\n", encoding="utf-8")
++        result = runner.invoke(sequence_app, ["status", "--project-root", str(tmp_path)])
++        assert result.exit_code == 0
++        assert "从未捕获或 hook 未更新" in result.output
++
++
+ class TestDataPurgeToolSequences:
+     def _seed(self, tmp_path: Path) -> None:
+         sequences_path(tmp_path).parent.mkdir(parents=True, exist_ok=True)
+diff --git a/tests/core/observability/test_clustering.py b/tests/core/observability/test_clustering.py
+index 39320af..9b68c2c 100644
+--- a/tests/core/observability/test_clustering.py
++++ b/tests/core/observability/test_clustering.py
+@@ -18,6 +18,7 @@ import numpy as np
+ 
+ from vibesop.core.observability.clustering import (
+     Cluster,
++    _extract_query,
+     cluster_queries,
+ )
+ from vibesop.core.observability.embedding import EmbeddingCache
+@@ -129,9 +130,7 @@ class TestSoftMerge:
+         with patch.object(cache, "_compute", side_effect=_boundary_compute):
+             spans = _spans([("t1", "q1"), ("t2", "q2")])
+             clusters = cluster_queries(spans, cache=cache, threshold=0.80)
+-        assert len(clusters) == 1, (
+-            f"cosine==threshold should merge; got {len(clusters)} clusters"
+-        )
++        assert len(clusters) == 1, f"cosine==threshold should merge; got {len(clusters)} clusters"
+ 
+     def test_threshold_just_below_boundary_excludes(self, tmp_path: Path) -> None:
+         """Cosine just below threshold should NOT merge."""
+@@ -338,3 +337,102 @@ class TestMaxSpansPerTaskSampling:
+         assert len(clusters) == 2
+         assert all(c.span_count == 3 for c in clusters)
+ 
++
++class TestExtractQueryMetadataFallback:
++    """M12 M0: ``_extract_query`` falls back to ``metadata`` when
++    ``input_data`` carries no query.
++
++    Route span producers (agent_runtime.py / cli/main.py) put the query
++    only into ``metadata["query"]`` (a JSON string) and the span name.
++    Pre-M0, ``_extract_query`` read only ``input_data``, so route spans
++    yielded zero extractable queries and clustering silently spun empty.
++    """
++
++    def test_metadata_json_string_fallback(self) -> None:
++        """input_data absent + metadata as JSON string with query → extracted."""
++        span = {
++            "task_id": "t1",
++            "name": "route:how do I fix lint errors",
++            "input_data": None,
++            "metadata": '{"query": "how do I fix lint errors", "platform": "vibe-cli"}',
++        }
++        assert _extract_query(span) == "how do I fix lint errors"
++
++    def test_metadata_dict_fallback(self) -> None:
++        """metadata already a dict (e.g. in-memory span objects) → extracted."""
++        span = {
++            "task_id": "t1",
++            "metadata": {"query": "run the tests", "platform": "claude-code"},
++        }
++        assert _extract_query(span) == "run the tests"
++
++    def test_input_data_preferred_over_metadata(self) -> None:
++        """input_data wins when both sources carry a query (compat strategy)."""
++        span = {
++            "input_data": {"query": "from input_data"},
++            "metadata": '{"query": "from metadata"}',
++        }
++        assert _extract_query(span) == "from input_data"
++
++    def test_input_data_dict_without_query_falls_back(self) -> None:
++        """input_data dict lacking 'query' → metadata fallback kicks in."""
++        span = {
++            "input_data": {"prompt_preview": "not a query"},
++            "metadata": '{"query": "fallback query"}',
++        }
++        assert _extract_query(span) == "fallback query"
++
++    def test_both_missing_returns_none(self) -> None:
++        """No input_data, no metadata → None."""
++        assert _extract_query({"task_id": "t1"}) is None
++        assert _extract_query({"input_data": None, "metadata": None}) is None
++
++    def test_metadata_missing_query_key_returns_none(self) -> None:
++        """metadata parses fine but has no 'query' key → None (not the raw string)."""
++        span = {"metadata": '{"platform": "vibe-cli", "mode": "matched"}'}
++        assert _extract_query(span) is None
++
++    def test_malformed_metadata_json_does_not_crash(self) -> None:
++        """Broken JSON metadata → silent None, never raises."""
++        span = {"metadata": '{"query": "unterminated'}
++        assert _extract_query(span) is None
++        span2 = {"metadata": "not json at all"}
++        assert _extract_query(span2) is None
++
++    def test_non_dict_metadata_json_returns_none(self) -> None:
++        """metadata parsing to a non-dict (list/number) → None."""
++        assert _extract_query({"metadata": '["a", "b"]'}) is None
++        assert _extract_query({"metadata": "42"}) is None
++
++    def test_input_data_shapes_unchanged(self) -> None:
++        """Regression: the three pre-M0 input_data shapes still work."""
++        assert _extract_query({"input_data": {"query": "dict shape"}}) == "dict shape"
++        assert _extract_query({"input_data": '{"query": "json shape"}'}) == "json shape"
++        assert _extract_query({"input_data": "raw query string"}) == "raw query string"
++        # input_data dict without query and no metadata → None (unchanged)
++        assert _extract_query({"input_data": {"other": 1}}) is None
++
++    def test_cluster_queries_extracts_from_metadata(self, tmp_path: Path) -> None:
++        """End-to-end: route-shaped spans (metadata-only query) now cluster."""
++        cache = EmbeddingCache(cache_path=tmp_path / "emb.npz")
++        spans = [
++            {
++                "task_id": "t1",
++                "name": "route:fix the flaky test",
++                "input_data": None,
++                "metadata": '{"query": "fix the flaky test"}',
++                "project_id": "test",
++            },
++            {
++                "task_id": "t2",
++                "name": "route:unrelated topic",
++                "input_data": None,
++                "metadata": {"query": "unrelated topic"},
++                "project_id": "test",
++            },
++        ]
++        with patch.object(cache, "_compute", side_effect=_angle_embedding):
++            clusters = cluster_queries(spans, cache=cache)
++        assert len(clusters) == 2
++        queries = {q for c in clusters for q in c.queries}
++        assert queries == {"fix the flaky test", "unrelated topic"}
+diff --git a/tests/core/observability/test_tool_call_bridge.py b/tests/core/observability/test_tool_call_bridge.py
+new file mode 100644
+index 0000000..c1a06f2
+--- /dev/null
++++ b/tests/core/observability/test_tool_call_bridge.py
+@@ -0,0 +1,400 @@
++"""Tests for the M12 M1 tool-call bridge + route outcome signals.
++
++Covers the join strategies (session hit / time-window fallback / ambiguity
++refusal / CLI-span exclusion), idempotent re-runs, the three outcome-signal
++branches, and an end-to-end pass: spans.jsonl + tool_sequences.jsonl
++fixtures → ``assemble_tool_sequences`` fan-out → bridged tool_call spans
++consumed by ``SpanAggregator.get_pattern_sequences``.
++"""
++
++from __future__ import annotations
++
++import json
++from datetime import UTC, datetime, timedelta
++from pathlib import Path
++
++from vibesop.core.instinct.learner import InstinctLearner
++from vibesop.core.instinct.tool_sequences import assemble_tool_sequences, sequences_path
++from vibesop.core.observability.aggregator import SpanAggregator
++from vibesop.core.observability.models import Span
++from vibesop.core.observability.span_writer import SpanWriter
++from vibesop.core.observability.task_id import derive_task_id
++from vibesop.core.observability.tool_call_bridge import (
++    OUTCOMES_FILENAME,
++    BridgeStats,
++    bridge_entries,
++    run_bridge,
++)
++
++T0 = datetime(2026, 8, 20, 10, 0, 0, tzinfo=UTC)
++
++
++def _spans_path(root: Path) -> Path:
++    return root / ".vibe" / "observability" / "spans.jsonl"
++
++
++def _outcomes_path(root: Path) -> Path:
++    return root / ".vibe" / "observability" / OUTCOMES_FILENAME
++
++
++def _route_span(
++    root: Path,
++    *,
++    query: str = "how do I deploy the service",
++    session: str | None = "sess-1",
++    started: datetime = T0,
++    has_match: bool | None = False,
++    platform: str = "claude-code",
++    mode: str = "single",
++    source: str | None = None,
++    span_id: str | None = None,
++    trace_id: str | None = None,
++    task_id: str | None = None,
++) -> Span:
++    meta: dict = {"query": query, "platform": platform, "mode": mode}
++    if has_match is not None:
++        meta["has_match"] = has_match
++    if source is not None:
++        meta["source"] = source
++    span = Span(
++        id=span_id or Span.new_id(),
++        trace_id=trace_id or Span.new_trace_id(),
++        name=f"route:{query[:40]}",
++        span_kind="task",
++        task_id=task_id if task_id is not None else derive_task_id(query),
++        session_id=session,
++        agent_id=platform,
++        status="ok",
++        started_at=started,
++        ended_at=started,
++        metadata=meta,
++    )
++    SpanWriter(storage_path=_spans_path(root)).write_span(span)
++    return span
++
++
++def _read_spans(root: Path) -> list[dict]:
++    if not _spans_path(root).exists():
++        return []
++    records = []
++    for line in _spans_path(root).read_text(encoding="utf-8").splitlines():
++        if not line.strip():
++            continue
++        rec = json.loads(line)
++        meta = rec.get("metadata")
++        if isinstance(meta, str):
++            rec["metadata"] = json.loads(meta)
++        records.append(rec)
++    return records
++
++
++def _tool_spans(root: Path) -> list[dict]:
++    return [s for s in _read_spans(root) if s.get("span_kind") == "tool_call"]
++
++
++def _read_outcomes(root: Path) -> list[dict]:
++    path = _outcomes_path(root)
++    if not path.exists():
++        return []
++    return [
++        json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()
++    ]
++
++
++def _event(tool: str, ts: datetime | None, session: str | None):
++    return (tool, ts, session)
++
++
++class TestSessionJoin:
++    def test_joins_latest_preceding_route_span_in_session(self, tmp_path: Path) -> None:
++        first = _route_span(tmp_path, query="first question", started=T0, span_id="span-a")
++        second = _route_span(
++            tmp_path,
++            query="second question",
++            started=T0 + timedelta(minutes=10),
++            span_id="span-b",
++        )
++        stats = bridge_entries([_event("Read", T0 + timedelta(minutes=15), "sess-1")], tmp_path)
++
++        assert stats.bridged == 1
++        assert stats.joined_session == 1
++        tool_spans = _tool_spans(tmp_path)
++        assert len(tool_spans) == 1
++        bridged = tool_spans[0]
++        assert bridged["parent_span_id"] == second.id
++        assert bridged["trace_id"] == second.trace_id
++        assert bridged["trace_id"] != first.trace_id
++        assert bridged["name"] == "tool:Read"
++        assert bridged["span_kind"] == "tool_call"
++        assert bridged["session_id"] == "sess-1"
++        assert bridged["task_id"] == second.task_id
++        assert bridged["status"] == "ok"
++        # privacy: tool name only in metadata
++        assert set(bridged["metadata"]) <= {"tool", "source"}
++
++    def test_event_before_session_spans_falls_to_window(self, tmp_path: Path) -> None:
++        route = _route_span(tmp_path, started=T0, span_id="span-a")
++        # Event predates the only route span of its session by 5 min, still
++        # inside the join window → window fallback rescues the attachment.
++        stats = bridge_entries([_event("Read", T0 - timedelta(minutes=5), "sess-1")], tmp_path)
++        assert stats.joined_window == 1
++        assert _tool_spans(tmp_path)[0]["parent_span_id"] == route.id
++
++
++class TestWindowFallback:
++    def test_sessionless_event_joins_unique_span_in_window(self, tmp_path: Path) -> None:
++        route = _route_span(tmp_path, session="other-session", started=T0)
++        stats = bridge_entries([_event("Bash", T0 + timedelta(minutes=20), None)], tmp_path)
++        assert stats.joined_window == 1
++        bridged = _tool_spans(tmp_path)[0]
++        assert bridged["parent_span_id"] == route.id
++        assert bridged["session_id"] == "other-session"  # inherited from route
++
++    def test_outside_window_unmatched(self, tmp_path: Path) -> None:
++        _route_span(tmp_path, started=T0)
++        stats = bridge_entries([_event("Bash", T0 + timedelta(hours=2), None)], tmp_path)
++        assert stats.unmatched == 1
++        assert _tool_spans(tmp_path) == []
++
++    def test_ambiguous_window_refused(self, tmp_path: Path) -> None:
++        _route_span(tmp_path, session="s-a", started=T0, query="question one")
++        _route_span(
++            tmp_path,
++            session="s-b",
++            started=T0 + timedelta(minutes=5),
++            query="question two",
++        )
++        stats = bridge_entries([_event("Bash", T0 + timedelta(minutes=10), None)], tmp_path)
++        assert stats.ambiguous == 1
++        assert stats.bridged == 0
++        assert _tool_spans(tmp_path) == []
++
++
++class TestCLIExclusion:
++    def test_cli_route_spans_never_joined(self, tmp_path: Path) -> None:
++        _route_span(
++            tmp_path,
++            platform="vibe-cli",
++            source="cli",
++            session="minted-per-invocation",
++            started=T0,
++        )
++        # Session-less event in the same window: the CLI span must not be a
++        # window candidate, so the event stays unmatched.
++        stats = bridge_entries([_event("Bash", T0 + timedelta(minutes=5), None)], tmp_path)
++        assert stats.unmatched == 1
++        assert _tool_spans(tmp_path) == []
++
++    def test_cli_session_id_not_matched(self, tmp_path: Path) -> None:
++        _route_span(
++            tmp_path,
++            platform="vibe-cli",
++            source="cli",
++            session="minted-per-invocation",
++            started=T0,
++        )
++        # Even an event literally carrying the CLI span's session id must not
++        # attach (agent hook events can never legitimately carry it).
++        stats = bridge_entries(
++            [_event("Bash", T0 + timedelta(minutes=5), "minted-per-invocation")], tmp_path
++        )
++        assert stats.unmatched == 1
++        assert _tool_spans(tmp_path) == []
++
++
++class TestIdempotency:
++    def test_repeated_entries_never_duplicate_spans(self, tmp_path: Path) -> None:
++        _route_span(tmp_path, started=T0, span_id="span-a")
++        entries = [_event("Read", T0 + timedelta(minutes=5), "sess-1")]
++
++        first = bridge_entries(entries, tmp_path)
++        second = bridge_entries(entries, tmp_path)
++
++        assert first.bridged == 1
++        assert second.bridged == 0
++        assert second.dedup_skipped == 1
++        assert len(_tool_spans(tmp_path)) == 1
++
++    def test_run_bridge_manual_rerun_is_safe(self, tmp_path: Path) -> None:
++        _route_span(tmp_path, started=T0, span_id="span-a")
++        ts = (T0 + timedelta(minutes=5)).isoformat()
++        sequences_path(tmp_path).parent.mkdir(parents=True, exist_ok=True)
++        sequences_path(tmp_path).write_text(
++            json.dumps({"tool": "Read", "ts": ts, "session": "sess-1"}) + "\n",
++            encoding="utf-8",
++        )
++        assert run_bridge(tmp_path).bridged == 1
++        rerun = run_bridge(tmp_path)
++        assert rerun.bridged == 0
++        assert rerun.dedup_skipped == 1
++        assert len(_tool_spans(tmp_path)) == 1
++
++
++class TestOutcomeSignals:
++    def test_explicit_accept_is_strong_positive(self, tmp_path: Path) -> None:
++        query = "how do I rotate the signing keys"
++        miss = _route_span(tmp_path, query=query, started=T0, span_id="miss-1")
++        pending = tmp_path / ".vibe" / "instincts" / "routing_pending.jsonl"
++        pending.parent.mkdir(parents=True, exist_ok=True)
++        pending.write_text(
++            json.dumps(
++                {
++                    "id": "rp-1",
++                    "query": query,
++                    "skill_id": "deploy",
++                    "kind": "no_match",
++                    "status": "accepted",
++                }
++            )
++            + "\n",
++            encoding="utf-8",
++        )
++        stats = bridge_entries([], tmp_path)
++        outcomes = _read_outcomes(tmp_path)
++        assert stats.outcomes_recorded == 1
++        assert outcomes[0]["span_id"] == miss.id
++        assert outcomes[0]["outcome"] == "strong_positive"
++        assert outcomes[0]["reason"] == "explicit_accept"
++
++    def test_reask_same_task_id_is_weak_negative(self, tmp_path: Path) -> None:
++        query = "how do I rotate the signing keys"
++        # now-relative: the newer span must stay inside SESSION_COMPLETE_HOURS
++        # so "no evidence yet" — not expiry — is what keeps it undecided.
++        now = datetime.now(UTC)
++        older = _route_span(
++            tmp_path, query=query, started=now - timedelta(hours=2), span_id="miss-old"
++        )
++        newer = _route_span(
++            tmp_path, query=query, started=now - timedelta(hours=1), span_id="miss-new"
++        )
++        bridge_entries([], tmp_path)
++        outcomes = {o["span_id"]: o for o in _read_outcomes(tmp_path)}
++        assert outcomes[older.id]["outcome"] == "weak_negative"
++        assert outcomes[older.id]["reason"] == "reask_same_task_id"
++        # The newer span has no later re-ask and no completion evidence yet
++        # (same session, same task, recent) → stays undecided.
++        assert newer.id not in outcomes
++
++    def test_session_continued_is_weak_positive(self, tmp_path: Path) -> None:
++        miss = _route_span(tmp_path, query="question one", started=T0, span_id="miss-1")
++        _route_span(
++            tmp_path,
++            query="a different question",
++            started=T0 + timedelta(minutes=30),
++            span_id="other-1",
++        )
++        bridge_entries([], tmp_path)
++        outcomes = _read_outcomes(tmp_path)
++        assert len(outcomes) == 1
++        assert outcomes[0]["span_id"] == miss.id
++        assert outcomes[0]["outcome"] == "weak_positive"
++        assert outcomes[0]["reason"] == "session_continued_without_reask"
++
++    def test_expired_session_is_weak_positive(self, tmp_path: Path) -> None:
++        miss = _route_span(
++            tmp_path, started=datetime.now(UTC) - timedelta(hours=48), span_id="miss-1"
++        )
++        bridge_entries([], tmp_path)
++        outcomes = _read_outcomes(tmp_path)
++        assert len(outcomes) == 1
++        assert outcomes[0]["span_id"] == miss.id
++        assert outcomes[0]["reason"] == "session_expired_without_reask"
++
++    def test_unknown_and_not_intercepted_never_enter_miss_pool(self, tmp_path: Path) -> None:
++        _route_span(tmp_path, has_match=None, started=T0)  # no has_match key
++        _route_span(tmp_path, has_match=False, mode="not_intercepted", started=T0, query="继续")
++        _route_span(tmp_path, has_match=True, started=T0, query="a matched question")
++        stats = bridge_entries([], tmp_path)
++        assert stats.outcomes_recorded == 0
++        assert _read_outcomes(tmp_path) == []
++
++    def test_recent_miss_without_evidence_stays_undecided(self, tmp_path: Path) -> None:
++        _route_span(tmp_path, started=datetime.now(UTC) - timedelta(minutes=5))
++        stats = bridge_entries([], tmp_path)
++        assert stats.outcomes_recorded == 0
++
++    def test_outcomes_not_duplicated_on_rerun(self, tmp_path: Path) -> None:
++        _route_span(tmp_path, started=datetime.now(UTC) - timedelta(hours=48), span_id="miss-1")
++        assert bridge_entries([], tmp_path).outcomes_recorded == 1
++        assert bridge_entries([], tmp_path).outcomes_recorded == 0
++        assert len(_read_outcomes(tmp_path)) == 1
++
++    def test_corrupt_outcome_lines_skipped(self, tmp_path: Path) -> None:
++        _route_span(tmp_path, started=datetime.now(UTC) - timedelta(hours=48), span_id="miss-1")
++        path = _outcomes_path(tmp_path)
++        path.parent.mkdir(parents=True, exist_ok=True)
++        path.write_text("{broken json\n", encoding="utf-8")
++        stats = bridge_entries([], tmp_path)
++        assert stats.outcomes_recorded == 1
++
++
++class TestEndToEnd:
++    def test_assemble_fans_out_to_bridge_and_aggregator_consumes(self, tmp_path: Path) -> None:
++        now = datetime.now(UTC)
++        route = _route_span(
++            tmp_path,
++            query="how do I deploy the service",
++            session="sess-e2e",
++            started=now - timedelta(minutes=10),
++            span_id="route-e2e",
++        )
++        entries = [
++            {
++                "tool": tool,
++                "ts": (now - timedelta(minutes=5 - i)).isoformat(),
++                "session": "sess-e2e",
++            }
++            for i, tool in enumerate(["Read", "Edit", "Bash"])
++        ]
++        sequences_path(tmp_path).parent.mkdir(parents=True, exist_ok=True)
++        sequences_path(tmp_path).write_text(
++            "".join(json.dumps(e) + "\n" for e in entries), encoding="utf-8"
++        )
++
++        learner = InstinctLearner(storage_path=tmp_path / ".vibe" / "instincts.jsonl")
++        fed = assemble_tool_sequences(tmp_path, learner=learner)
++        assert fed == 1  # InstinctLearner still fed via the same reader
++
++        tool_spans = _tool_spans(tmp_path)
++        assert len(tool_spans) == 3
++        assert all(s["parent_span_id"] == route.id for s in tool_spans)
++        assert all(s["trace_id"] == route.trace_id for s in tool_spans)
++
++        # The pre-existing consumer reads the bridged spans back.
++        agg = SpanAggregator(_spans_path(tmp_path))
++        patterns = agg.get_pattern_sequences(min_occurrences=1)
++        assert len(patterns) == 1
++        assert patterns[0].steps == ["Read", "Edit", "Bash"]
++
++        # Second assemble: watermark advanced → no duplicate bridge output.
++        fed_again = assemble_tool_sequences(tmp_path, learner=learner)
++        assert fed_again == 0
++        assert len(_tool_spans(tmp_path)) == 3
++
++    def test_bridge_failure_never_breaks_assembly(self, tmp_path: Path, monkeypatch) -> None:
++        import vibesop.core.observability.tool_call_bridge as bridge_mod
++
++        def _boom(entries, root):
++            raise RuntimeError("bridge exploded")
++
++        monkeypatch.setattr(bridge_mod, "bridge_entries", _boom)
++        learner = InstinctLearner(storage_path=tmp_path / ".vibe" / "instincts.jsonl")
++        sequences_path(tmp_path).parent.mkdir(parents=True, exist_ok=True)
++        sequences_path(tmp_path).write_text(
++            "".join(
++                json.dumps({"tool": t, "ts": None, "session": "s"}) + "\n"
++                for t in ("Read", "Edit", "Bash")
++            ),
++            encoding="utf-8",
++        )
++        # The fan-out in assemble swallows bridge failures by design…
++        assert assemble_tool_sequences(tmp_path, learner=learner) == 1
++
++    def test_bridge_entries_itself_never_raises(self, tmp_path: Path) -> None:
++        # …and even called directly (broken spans file) it degrades quietly.
++        spans_dir = tmp_path / ".vibe" / "observability"
++        spans_dir.mkdir(parents=True)
++        (spans_dir / "spans.jsonl").write_text("{broken\n", encoding="utf-8")
++        stats = bridge_entries([_event("Read", T0, "s")], tmp_path)
++        assert isinstance(stats, BridgeStats)
++        assert stats.bridged == 0

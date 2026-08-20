@@ -11,6 +11,7 @@ Contract:
 
 from __future__ import annotations
 
+import hashlib
 from pathlib import Path
 from unittest.mock import patch
 
@@ -18,6 +19,7 @@ import numpy as np
 
 from vibesop.core.observability.clustering import (
     Cluster,
+    _extract_query,
     cluster_queries,
 )
 from vibesop.core.observability.embedding import EmbeddingCache
@@ -38,10 +40,12 @@ def _unit_vec(angle: float, dim: int = 384) -> np.ndarray:
 def _angle_embedding(query: str) -> np.ndarray:
     """Map query → unit vector via deterministic hash → [0, 2π).
 
-    Used so that the same query always maps to the same vector, but
-    different queries land at different angles.
+    Uses hashlib (NOT built-in hash(), which is PYTHONHASHSEED-randomized
+    per process and made the metadata e2e test flaky ~15% of runs — gate16).
+    Same query always maps to the same vector; different queries land at
+    different angles.
     """
-    h = hash(query) & 0xFFFF
+    h = int.from_bytes(hashlib.sha1(query.encode("utf-8")).digest()[:2], "big")
     angle = (h % 360) * (np.pi / 180.0)
     return _unit_vec(angle)
 
@@ -129,9 +133,7 @@ class TestSoftMerge:
         with patch.object(cache, "_compute", side_effect=_boundary_compute):
             spans = _spans([("t1", "q1"), ("t2", "q2")])
             clusters = cluster_queries(spans, cache=cache, threshold=0.80)
-        assert len(clusters) == 1, (
-            f"cosine==threshold should merge; got {len(clusters)} clusters"
-        )
+        assert len(clusters) == 1, f"cosine==threshold should merge; got {len(clusters)} clusters"
 
     def test_threshold_just_below_boundary_excludes(self, tmp_path: Path) -> None:
         """Cosine just below threshold should NOT merge."""
@@ -338,3 +340,102 @@ class TestMaxSpansPerTaskSampling:
         assert len(clusters) == 2
         assert all(c.span_count == 3 for c in clusters)
 
+
+class TestExtractQueryMetadataFallback:
+    """M12 M0: ``_extract_query`` falls back to ``metadata`` when
+    ``input_data`` carries no query.
+
+    Route span producers (agent_runtime.py / cli/main.py) put the query
+    only into ``metadata["query"]`` (a JSON string) and the span name.
+    Pre-M0, ``_extract_query`` read only ``input_data``, so route spans
+    yielded zero extractable queries and clustering silently spun empty.
+    """
+
+    def test_metadata_json_string_fallback(self) -> None:
+        """input_data absent + metadata as JSON string with query → extracted."""
+        span = {
+            "task_id": "t1",
+            "name": "route:how do I fix lint errors",
+            "input_data": None,
+            "metadata": '{"query": "how do I fix lint errors", "platform": "vibe-cli"}',
+        }
+        assert _extract_query(span) == "how do I fix lint errors"
+
+    def test_metadata_dict_fallback(self) -> None:
+        """metadata already a dict (e.g. in-memory span objects) → extracted."""
+        span = {
+            "task_id": "t1",
+            "metadata": {"query": "run the tests", "platform": "claude-code"},
+        }
+        assert _extract_query(span) == "run the tests"
+
+    def test_input_data_preferred_over_metadata(self) -> None:
+        """input_data wins when both sources carry a query (compat strategy)."""
+        span = {
+            "input_data": {"query": "from input_data"},
+            "metadata": '{"query": "from metadata"}',
+        }
+        assert _extract_query(span) == "from input_data"
+
+    def test_input_data_dict_without_query_falls_back(self) -> None:
+        """input_data dict lacking 'query' → metadata fallback kicks in."""
+        span = {
+            "input_data": {"prompt_preview": "not a query"},
+            "metadata": '{"query": "fallback query"}',
+        }
+        assert _extract_query(span) == "fallback query"
+
+    def test_both_missing_returns_none(self) -> None:
+        """No input_data, no metadata → None."""
+        assert _extract_query({"task_id": "t1"}) is None
+        assert _extract_query({"input_data": None, "metadata": None}) is None
+
+    def test_metadata_missing_query_key_returns_none(self) -> None:
+        """metadata parses fine but has no 'query' key → None (not the raw string)."""
+        span = {"metadata": '{"platform": "vibe-cli", "mode": "matched"}'}
+        assert _extract_query(span) is None
+
+    def test_malformed_metadata_json_does_not_crash(self) -> None:
+        """Broken JSON metadata → silent None, never raises."""
+        span = {"metadata": '{"query": "unterminated'}
+        assert _extract_query(span) is None
+        span2 = {"metadata": "not json at all"}
+        assert _extract_query(span2) is None
+
+    def test_non_dict_metadata_json_returns_none(self) -> None:
+        """metadata parsing to a non-dict (list/number) → None."""
+        assert _extract_query({"metadata": '["a", "b"]'}) is None
+        assert _extract_query({"metadata": "42"}) is None
+
+    def test_input_data_shapes_unchanged(self) -> None:
+        """Regression: the three pre-M0 input_data shapes still work."""
+        assert _extract_query({"input_data": {"query": "dict shape"}}) == "dict shape"
+        assert _extract_query({"input_data": '{"query": "json shape"}'}) == "json shape"
+        assert _extract_query({"input_data": "raw query string"}) == "raw query string"
+        # input_data dict without query and no metadata → None (unchanged)
+        assert _extract_query({"input_data": {"other": 1}}) is None
+
+    def test_cluster_queries_extracts_from_metadata(self, tmp_path: Path) -> None:
+        """End-to-end: route-shaped spans (metadata-only query) now cluster."""
+        cache = EmbeddingCache(cache_path=tmp_path / "emb.npz")
+        spans = [
+            {
+                "task_id": "t1",
+                "name": "route:fix the flaky test",
+                "input_data": None,
+                "metadata": '{"query": "fix the flaky test"}',
+                "project_id": "test",
+            },
+            {
+                "task_id": "t2",
+                "name": "route:unrelated topic",
+                "input_data": None,
+                "metadata": {"query": "unrelated topic"},
+                "project_id": "test",
+            },
+        ]
+        with patch.object(cache, "_compute", side_effect=_angle_embedding):
+            clusters = cluster_queries(spans, cache=cache)
+        assert len(clusters) == 2
+        queries = {q for c in clusters for q in c.queries}
+        assert queries == {"fix the flaky test", "unrelated topic"}

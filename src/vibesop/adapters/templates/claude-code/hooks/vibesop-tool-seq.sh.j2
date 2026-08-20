@@ -9,7 +9,10 @@
 # Disable with: vibe config set sequences.enabled false
 #
 # Input: Claude Code PostToolUse hook JSON via stdin.
-# This hook NEVER blocks Claude Code: any failure exits 0 silently.
+# This hook NEVER blocks Claude Code: it always exits 0 and writes nothing to
+# stdout. Failures are appended to <root>/.vibe/hook_errors.log (capped);
+# every successful capture refreshes <root>/.vibe/tool_sequences.last (epoch
+# seconds) as a liveness signal.
 
 # Make common uv/vibe install locations discoverable when this hook runs from
 # a non-interactive shell (Claude Code invokes hooks with a minimal PATH).
@@ -35,21 +38,56 @@ for _START_DIR in "$_HOOK_DIR/.." "$_HOOK_DIR/../.." "$CLAUDE_PROJECT_DIR" "$PWD
     done
 done
 
-# Where the capture data should live: the project root injected at render
-# time when known (deterministic — no directory crawling), otherwise the
-# vibesop project root found above, otherwise the Claude Code project dir,
-# otherwise the hook's cwd.
-_SEQ_ROOT={{ project_root|shellquote }}
+# Where the capture data should live. The project the agent is actually
+# working in (CLAUDE_PROJECT_DIR) wins: a globally-installed hook is rendered
+# with project_root=$HOME, and without this precedence all captures scatter
+# into ~/.vibe regardless of the working project (the M12 gate15 BLOCK-2
+# root cause — the dogfood repo's .vibe/tool_sequences.jsonl never appeared
+# because records landed in ~/.vibe). For project-local installs
+# CLAUDE_PROJECT_DIR equals the render-time root anyway. Fallbacks:
+# render-time root, vibesop source checkout, cwd.
+_SEQ_ROOT="${CLAUDE_PROJECT_DIR:-}"
+[ -z "$_SEQ_ROOT" ] && _SEQ_ROOT={{ project_root|shellquote }}
 [ -z "$_SEQ_ROOT" ] && _SEQ_ROOT="$_VIBESOP_PROJECT_ROOT"
-[ -z "$_SEQ_ROOT" ] && _SEQ_ROOT="${CLAUDE_PROJECT_DIR:-$PWD}"
+[ -z "$_SEQ_ROOT" ] && _SEQ_ROOT="$PWD"
+
+# Diagnostics paths. Success stays silent (nothing on stdout); failures go
+# to a capped local log; every successful capture rewrites a one-line epoch
+# liveness file.
+_VIBE_DIR="$_SEQ_ROOT/.vibe"
+_ERRLOG="$_VIBE_DIR/hook_errors.log"
+_LASTFILE="$_VIBE_DIR/tool_sequences.last"
+
+_log_hook_error() {
+    mkdir -p "$_VIBE_DIR" 2>/dev/null || return 0
+    # Cap at ~64KB: keep the most recent 200 lines so the log can't grow
+    # unbounded (PostToolUse fires after every tool call).
+    if [ -f "$_ERRLOG" ] && [ "$(wc -c < "$_ERRLOG" 2>/dev/null | tr -d '[:space:]')" -gt 65536 ] 2>/dev/null; then
+        tail -n 200 "$_ERRLOG" > "$_ERRLOG.tmp.$$" 2>/dev/null \
+            && mv "$_ERRLOG.tmp.$$" "$_ERRLOG" 2>/dev/null
+    fi
+    printf '%s %s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null)" "$1" >> "$_ERRLOG" 2>/dev/null
+    return 0
+}
 
 # Record the event. Prefer an installed `vibe` binary (fast — PostToolUse
 # fires after every tool call); fall back to `uv run` from the project root.
-# All output and failures are swallowed: never block the host agent.
+_RC=0
+_OUT=""
 if command -v vibe >/dev/null 2>&1; then
-    printf '%s' "$INPUT" | vibe sequence record-tool --project-root "$_SEQ_ROOT" >/dev/null 2>&1 || true
+    _OUT=$(printf '%s' "$INPUT" | vibe sequence record-tool --project-root "$_SEQ_ROOT" 2>&1) || _RC=$?
 elif [ -n "$_VIBESOP_PROJECT_ROOT" ] && command -v uv >/dev/null 2>&1; then
-    (cd "$_VIBESOP_PROJECT_ROOT" && printf '%s' "$INPUT" | uv run vibe sequence record-tool --project-root "$_SEQ_ROOT") >/dev/null 2>&1 || true
+    _OUT=$(cd "$_VIBESOP_PROJECT_ROOT" && printf '%s' "$INPUT" | uv run vibe sequence record-tool --project-root "$_SEQ_ROOT" 2>&1) || _RC=$?
+else
+    _RC=127
+    _OUT="no 'vibe' binary on PATH and no uv fallback (vibesop project root not found)"
+fi
+
+if [ "$_RC" -eq 0 ]; then
+    # Liveness signal: single-line epoch file, refreshed on every capture.
+    mkdir -p "$_VIBE_DIR" 2>/dev/null && date +%s > "$_LASTFILE" 2>/dev/null
+else
+    _log_hook_error "record-tool failed rc=$_RC: $(printf '%s' "$_OUT" | tr '\n' ' ' | tail -c 400)"
 fi
 
 exit 0

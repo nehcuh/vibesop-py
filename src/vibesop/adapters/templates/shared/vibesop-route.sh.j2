@@ -7,7 +7,7 @@ set -e
 # minimal PATH that typically omits ~/.local/bin, /opt/homebrew/bin, etc.)
 export PATH="$HOME/.local/bin:$HOME/.cargo/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
 
-INPUT=$(cat); QUERY=""
+INPUT=$(cat); QUERY=""; SESSION_ID=""
 # Different agents use different JSON envelope field names for the user's
 # prompt. Try them in order; fall back to raw stdin if none match (or if jq
 # is not installed, or if the input is plain text rather than JSON).
@@ -15,6 +15,15 @@ if command -v jq &> /dev/null; then
     QUERY=$(echo "$INPUT" | jq -r '
         if type == "object"
         then (.prompt // .user_prompt // .query // .message // .text // empty)
+        else empty
+        end' 2>/dev/null || true)
+    # Forward the platform session id so route spans carry the real session
+    # and can join with tool-call telemetry captured under it (M12 M1);
+    # without this the Python side mints a fresh UUID per invocation and the
+    # join key breaks. Claude Code / Kimi CLI payloads use "session_id".
+    SESSION_ID=$(echo "$INPUT" | jq -r '
+        if type == "object"
+        then (.session_id // .sessionId // empty)
         else empty
         end' 2>/dev/null || true)
 fi
@@ -68,5 +77,6 @@ print(r.handle_query_for_hook(
     hook_event_name='{{ hook_event_name|pyquote }}',
     include_additional_context={{ 'True' if include_additional_context else 'False' }},
     no_match_message={{ 'True' if no_match_message else 'False' }},
+    session_id=(sys.argv[2] if len(sys.argv) > 2 else '') or None,
 ))
-" "$QUERY"
+" "$QUERY" "$SESSION_ID"

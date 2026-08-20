@@ -115,6 +115,61 @@ class TestAssembleCommand:
         assert "Fed 0 tool sequence(s)" in result.output
 
 
+class TestStatusCommand:
+    def test_no_capture_reports_never_captured(self, runner: CliRunner, tmp_path: Path) -> None:
+        result = runner.invoke(sequence_app, ["status", "--project-root", str(tmp_path)])
+        assert result.exit_code == 0
+        assert "从未捕获或 hook 未更新" in result.output
+        assert "不存在" in result.output  # capture file
+        assert "无 cursor" in result.output
+
+    def test_reports_age_sizes_rotation_and_watermark(
+        self, runner: CliRunner, tmp_path: Path
+    ) -> None:
+        from vibesop.core.instinct.tool_sequences import last_capture_path, rotated_path
+
+        lines = [json.dumps({"tool": "Read", "ts": "t", "session": "s"})]
+        sequences_path(tmp_path).parent.mkdir(parents=True, exist_ok=True)
+        sequences_path(tmp_path).write_text("\n".join(lines) + "\n", encoding="utf-8")
+        size = sequences_path(tmp_path).stat().st_size
+        rotated_path(tmp_path).write_text("{}\n", encoding="utf-8")
+        cursor_path(tmp_path).write_text(json.dumps({"offset": size}), encoding="utf-8")
+        from datetime import UTC, datetime
+
+        epoch = int(datetime.now(UTC).timestamp()) - 300  # 5 minutes ago
+        last_capture_path(tmp_path).write_text(f"{epoch}\n", encoding="utf-8")
+
+        result = runner.invoke(sequence_app, ["status", "--project-root", str(tmp_path)])
+        assert result.exit_code == 0
+        assert "last-capture:" in result.output
+        assert "5 分钟前" in result.output  # age rendered
+        assert f"{size} B" in result.output  # capture size
+        assert "rotation:" in result.output and "3 B" in result.output
+        assert "已装配到最新" in result.output
+
+    def test_pending_bytes_reported(self, runner: CliRunner, tmp_path: Path) -> None:
+        sequences_path(tmp_path).parent.mkdir(parents=True, exist_ok=True)
+        sequences_path(tmp_path).write_text(
+            json.dumps({"tool": "Read", "ts": "t", "session": "s"}) + "\n", encoding="utf-8"
+        )
+        cursor_path(tmp_path).write_text(json.dumps({"offset": 0}), encoding="utf-8")
+
+        result = runner.invoke(sequence_app, ["status", "--project-root", str(tmp_path)])
+        assert result.exit_code == 0
+        assert "待装配" in result.output
+
+    def test_corrupt_heartbeat_treated_as_never_captured(
+        self, runner: CliRunner, tmp_path: Path
+    ) -> None:
+        from vibesop.core.instinct.tool_sequences import last_capture_path
+
+        last_capture_path(tmp_path).parent.mkdir(parents=True, exist_ok=True)
+        last_capture_path(tmp_path).write_text("not-an-epoch\n", encoding="utf-8")
+        result = runner.invoke(sequence_app, ["status", "--project-root", str(tmp_path)])
+        assert result.exit_code == 0
+        assert "从未捕获或 hook 未更新" in result.output
+
+
 class TestDataPurgeToolSequences:
     def _seed(self, tmp_path: Path) -> None:
         sequences_path(tmp_path).parent.mkdir(parents=True, exist_ok=True)

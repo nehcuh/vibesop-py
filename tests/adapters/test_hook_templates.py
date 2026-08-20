@@ -4,6 +4,10 @@ Verifies that ``render_route_hook()`` in ``_shared.py`` produces valid
 shell scripts that delegate to AgentRuntime.handle_query_for_hook().
 """
 
+from pathlib import Path
+
+import pytest
+
 from vibesop.adapters._shared import render_route_hook
 
 
@@ -122,3 +126,90 @@ class TestRenderRouteHook:
         assert "PRIMARY=" not in result
         assert "SKILL_CONTENT=" not in result
         assert "ALTERNATIVES_JSON" not in result
+
+
+class TestRouteHookSessionForwarding:
+    """M12 M1: the route hook must forward the platform session_id so route
+    spans join with tool-call telemetry captured under the same session."""
+
+    def test_template_extracts_and_forwards_session_id(self) -> None:
+        result = render_route_hook(
+            platform="claude-code",
+            platform_name="Claude Code",
+            hook_event_name="UserPromptSubmit",
+        )
+        # jq extraction from the hook payload (both casings tolerated)
+        assert ".session_id // .sessionId" in result
+        assert 'SESSION_ID=$(echo "$INPUT" | jq -r' in result
+        # forwarded into handle_query_for_hook as the second positional arg
+        assert "session_id=(sys.argv[2] if len(sys.argv) > 2 else '') or None" in result
+        assert '"$QUERY" "$SESSION_ID"' in result
+
+    def _run_rendered_script(self, tmp_path: Path, payload: str) -> str:
+        """Execute the rendered route script hermetically and return stdout.
+
+        The script prepends real system dirs (/opt/homebrew/bin, /usr/bin) to
+        PATH, so ``python3``/``uv`` stubs on PATH never win. The one
+        interpreter path fully under our control is the uv-tool fallback
+        ``$HOME/.local/share/uv/tools/vibesop/bin/python`` — plant the stub
+        there. From cwd=tmp_path the real ``uv run python -c "import
+        vibesop"`` probe fails (no project, no vibesop), so the stub is
+        selected.
+        """
+        import shutil
+        import subprocess
+
+        jq = shutil.which("jq")
+        bash = shutil.which("bash")
+        if jq is None or bash is None:
+            pytest.skip("bash/jq not available")
+
+        home = tmp_path / "home"
+        stub = home / ".local" / "share" / "uv" / "tools" / "vibesop" / "bin" / "python"
+        stub.parent.mkdir(parents=True, exist_ok=True)
+        stub.write_text(
+            '#!/bin/sh\ncase "$*" in\n'
+            "  *import\\ vibesop*) exit 0;;\n"
+            "  *) printf 'STUBARGS:%s\\n' \"$*\";;\n"
+            "esac\n",
+            encoding="utf-8",
+        )
+        stub.chmod(0o755)
+
+        script = tmp_path / "vibesop-route.sh"
+        script.write_text(
+            render_route_hook(platform="claude-code", platform_name="Claude Code"),
+            encoding="utf-8",
+        )
+        result = subprocess.run(
+            [bash, str(script)],
+            input=payload.encode(),
+            capture_output=True,
+            cwd=tmp_path,
+            env={
+                "HOME": str(home),
+                "PATH": f"/usr/bin:/bin:{Path(jq).parent}",
+            },
+            timeout=60,
+            check=False,
+        )
+        assert result.returncode == 0, result.stderr.decode()
+        return result.stdout.decode()
+
+    def test_rendered_script_passes_payload_session_id(self, tmp_path) -> None:
+        """The payload's session_id reaches the Python invocation as argv[2]."""
+        import json
+
+        payload = json.dumps({"prompt": "hello stub test", "session_id": "abc-123-session"})
+        out = self._run_rendered_script(tmp_path, payload)
+        assert "STUBARGS:" in out
+        assert "abc-123-session" in out
+        assert "hello stub test" in out
+
+    def test_rendered_script_without_session_id_passes_empty(self, tmp_path) -> None:
+        """Payloads without session_id forward an empty string -> None."""
+        import json
+
+        out = self._run_rendered_script(tmp_path, json.dumps({"prompt": "hello no session"}))
+        assert "STUBARGS:" in out
+        assert "hello no session" in out

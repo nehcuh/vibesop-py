@@ -50,7 +50,7 @@ class TestKimiCliAdapter:
         result = adapter.render_config(manifest, tmp_path)
 
         assert result.success
-        assert result.file_count == 7  # config.toml + AGENTS.md + hook + docs/(4 files)
+        assert result.file_count == 8  # config.toml + AGENTS.md + hooks(2) + docs/(4 files)
         assert (tmp_path / "config.toml").exists()
         assert (tmp_path / "AGENTS.md").exists()
         assert (tmp_path / "hooks" / "vibesop-route.sh").exists()
@@ -78,8 +78,8 @@ class TestKimiCliAdapter:
 
         assert result.success
         assert (
-            result.file_count == 9
-        )  # config.toml + README.md + skill + AGENTS.md + hook + docs/(4 files)
+            result.file_count == 10
+        )  # config.toml + README.md + skill + AGENTS.md + hooks(2) + docs/(4 files)
         assert (tmp_path / "config.toml").exists()
         assert (tmp_path / "README.md").exists()
         assert (tmp_path / "AGENTS.md").exists()
@@ -235,7 +235,7 @@ class TestKimiCliAdapter:
         result = adapter.render_config_only(manifest, tmp_path)
 
         assert result.success
-        assert result.file_count == 3  # config.toml + README.md + hook
+        assert result.file_count == 4  # config.toml + README.md + hooks(2)
         assert (tmp_path / "config.toml").exists()
         assert (tmp_path / "README.md").exists()
         assert (tmp_path / "hooks" / "vibesop-route.sh").exists()
@@ -250,7 +250,7 @@ class TestKimiCliAdapter:
         result = adapter.render_config_only(manifest, tmp_path)
 
         assert result.success
-        assert result.file_count == 2  # config.toml + hook
+        assert result.file_count == 3  # config.toml + hooks(2)
         assert not (tmp_path / "README.md").exists()
         assert (tmp_path / "hooks" / "vibesop-route.sh").exists()
 
@@ -387,7 +387,9 @@ class TestKimiCliAdapterEdgeCases:
 
         result = adapter.render_config(manifest, tmp_path)
         assert result.success
-        assert result.file_count == 7  # config.toml + AGENTS.md + hook + docs/(4 files), no README
+        assert (
+            result.file_count == 8
+        )  # config.toml + AGENTS.md + hooks(2) + docs/(4 files), no README
 
     def test_render_with_full_metadata(self, tmp_path: Path) -> None:
         """Test rendering with full metadata."""
@@ -489,3 +491,55 @@ class TestKimiCLISkillContentRender:
         assert skill_dir.is_symlink(), "Symlink was lost on second build"
         content = (skill_dir / "SKILL.md").read_text(encoding="utf-8")
         assert "Full Review Skill" in content
+
+
+class TestKimiToolSeqHook:
+    """M12 M1: Kimi CLI natively supports PostToolUse (observation-only,
+    session_id in payload), so the shared capture hook is installed too."""
+
+    def _hermetic(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, *, enabled: bool) -> None:
+        monkeypatch.setenv("HOME", str(tmp_path))  # ignore real ~/.vibe config
+        monkeypatch.setenv("VIBE_SEQUENCES_ENABLED", "true" if enabled else "false")
+
+    def test_render_config_includes_tool_seq_hook_and_post_tool_use(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        self._hermetic(monkeypatch, tmp_path, enabled=True)
+        adapter = KimiCliAdapter(project_root=tmp_path)
+        output_dir = tmp_path / "out"
+
+        result = adapter.render_config(
+            Manifest(metadata=ManifestMetadata(platform="kimi-cli")), output_dir
+        )
+
+        assert result.success, result.errors
+        hook = output_dir / "hooks" / "vibesop-tool-seq.sh"
+        assert hook.exists()
+        if sys.platform != "win32":
+            assert hook.stat().st_mode & 0o111
+        content = hook.read_text(encoding="utf-8")
+        assert "vibe sequence record-tool" in content
+        # Rendered with an empty project_root: Kimi runs hooks with the
+        # session project dir as cwd, so the runtime fallback chain decides.
+        assert "[ -z \"$_SEQ_ROOT\" ] && _SEQ_ROOT=''" in content
+        config_toml = (output_dir / "config.toml").read_text(encoding="utf-8")
+        assert 'event = "PostToolUse"' in config_toml
+        assert "vibesop-tool-seq.sh" in config_toml
+
+    def test_render_config_disabled_omits_tool_seq(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        self._hermetic(monkeypatch, tmp_path, enabled=False)
+        adapter = KimiCliAdapter(project_root=tmp_path)
+        output_dir = tmp_path / "out"
+
+        result = adapter.render_config(
+            Manifest(metadata=ManifestMetadata(platform="kimi-cli")), output_dir
+        )
+
+        assert result.success, result.errors
+        assert not (output_dir / "hooks" / "vibesop-tool-seq.sh").exists()
+        config_toml = (output_dir / "config.toml").read_text(encoding="utf-8")
+        assert "PostToolUse" not in config_toml
+        # route hook is unaffected
+        assert (output_dir / "hooks" / "vibesop-route.sh").exists()

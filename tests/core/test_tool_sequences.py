@@ -9,6 +9,7 @@ fault tolerance), and ``clear_tool_sequences`` (data purge path).
 from __future__ import annotations
 
 import json
+from datetime import timedelta
 from pathlib import Path
 
 import pytest
@@ -19,6 +20,7 @@ from vibesop.core.instinct.tool_sequences import (
     assemble_tool_sequences,
     clear_tool_sequences,
     cursor_path,
+    last_capture_path,
     record_tool_event,
     rotated_path,
     sequences_path,
@@ -78,6 +80,23 @@ class TestRecordToolEvent:
         record_tool_event({"tool_name": "Read", "session_id": "s"}, tmp_path)
         record_tool_event({"tool_name": "Edit", "session_id": "s"}, tmp_path)
         assert len(sequences_path(tmp_path).read_text(encoding="utf-8").splitlines()) == 2
+
+
+class TestParseTs:
+    def test_naive_timestamp_normalized_to_utc(self) -> None:
+        """gate16b claude N1: tz-naive capture ts must not crash the bridge."""
+        dt = tool_sequences._parse_ts("2026-08-20T10:00:00")
+        assert dt is not None and dt.tzinfo is not None
+        assert dt.utcoffset() == timedelta(0)
+
+    def test_aware_timestamp_passthrough(self) -> None:
+        dt = tool_sequences._parse_ts("2026-08-20T10:00:00+08:00")
+        assert dt is not None and dt.utcoffset() == timedelta(hours=8)
+
+    def test_garbage_returns_none(self) -> None:
+        assert tool_sequences._parse_ts("not-a-date") is None
+        assert tool_sequences._parse_ts(None) is None
+        assert tool_sequences._parse_ts(123) is None
 
 
 class TestRotation:
@@ -334,6 +353,15 @@ class TestClearToolSequences:
 
     def test_missing_files_return_zero(self, tmp_path: Path) -> None:
         assert clear_tool_sequences(tmp_path) == 0
+
+    def test_removes_last_capture_heartbeat(self, tmp_path: Path) -> None:
+        # gate16 pi nit: the liveness file is capture state — purge must
+        # remove it too, or a post-purge `vibe sequence status` would show
+        # a stale "alive" signal.
+        _write_lines(sequences_path(tmp_path), [_entry("Read")])
+        _write_lines(last_capture_path(tmp_path), ["1792000000"])
+        assert clear_tool_sequences(tmp_path) == 2
+        assert not last_capture_path(tmp_path).exists()
 
     @pytest.mark.parametrize("only_cursor", [True, False])
     def test_partial_state(self, tmp_path: Path, only_cursor: bool) -> None:
