@@ -383,6 +383,10 @@ class UnifiedRouter(
             self._matchers_warmed = True
 
     def reload_candidates(self) -> int:
+        # Force matcher re-warm on the next route: the keyword/TF-IDF
+        # matchers hold pool-level statistics (IDF table, fitted vectors)
+        # that must be rebuilt against the reloaded candidate pool.
+        self._matchers_warmed = False
         return self._candidate_manager.reload()
 
     def invalidate_project_cache(self) -> None:

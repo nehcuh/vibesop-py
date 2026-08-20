@@ -17,6 +17,12 @@ from vibesop.core.matching.base import (
     RoutingContext,
     SimilarityMetric,
 )
+from vibesop.core.matching.idf import (
+    ANCHOR_STOPWORDS,
+    IDFTable,
+    candidate_token_set,
+    find_anchors,
+)
 from vibesop.core.matching.similarity import (
     SimilarityCalculator,
     cosine_similarity,
@@ -39,7 +45,10 @@ from vibesop.core.matching.tokenizers import (
 )
 
 __all__ = [
+    "ANCHOR_STOPWORDS",
     "EmbeddingMatcher",
+    # IDF evidence (M11)
+    "IDFTable",
     # Base interfaces
     "IMatcher",
     # Strategies
@@ -58,7 +67,9 @@ __all__ = [
     "TFIDFVector",
     "TokenizerConfig",
     "TokenizerMode",
+    "candidate_token_set",
     "cosine_similarity",
+    "find_anchors",
     # Tokenizers
     "tokenize",
 ]

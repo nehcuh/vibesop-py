@@ -9,6 +9,60 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### M11 — Evidence-based keyword/TF-IDF scoring (2026-08-20)
+
+Fixes the keyword layer's dominant misroute class: additive bonuses
+(prefix/substring/name) were decoupled from query coverage, so a long
+production-log query mentioning two generic words (复审/review/design)
+reached 0.92-0.98 against skills like kimi-gated-fix or
+ui-ux-pro-max-skill/design. routing_eval_extended: **81/107 → 98/107**
+(+17, zero regressions; base 31/34 and oneshot 10/11 unchanged).
+Design + calibration: `.omx/artifacts/m11-design-a.md`;
+eval diff: `.omx/artifacts/m11-eval-diff.md`.
+
+- **New `core/matching/idf.py`**: `IDFTable` — pool-level, normalized
+  (`w(t) = (ln((N+1)/(df+1))+1)/(ln(N+1)+1)`), pool-size-agnostic token
+  specificity over candidate name/description/intent/keywords;
+  `find_anchors` (non-stopword + high-IDF + exact/name/keyword evidence,
+  with word-boundary checking for Latin tokens so "art" is not evidenced
+  by "smart"); `ANCHOR_STOPWORDS` — the full function-word union
+  (articles/pronouns/modals/copulas/prepositions/conjunctions/adverbs/
+  generic verbs), required because function words like "get"/"not" are
+  *rare* in a skill-catalog corpus and would otherwise pose as
+  high-specificity anchors (gate14 review caught "get" anchoring
+  grill-me at w=0.83).
+- **`KeywordMatcher` evidence scoring** (`core/matching/strategies.py`):
+  additive bonuses are now gated by `g = min(1, cov / keyword_coverage_ref)`
+  where `cov` is the IDF-weighted share of meaningful query tokens hitting
+  the candidate; partial bonus is per-query-token-best (no cross-pair
+  accumulation); no anchor caps the score at `keyword_anchor_cap` (0.25,
+  below the matcher floor); ≥2 anchors in the *curated* name/keywords
+  fields plus `cov ≥ keyword_multi_anchor_cov_floor` saturate the gate
+  (keeps genuine focused queries routable); the 0.4 name bonus requires a
+  multi-token name or a single-token name with `w ≥ keyword_name_idf_min`
+  ("design" no longer triggers it inside arbitrary long queries;
+  "instinct" still does). Unwarmed matchers (no candidate pool seen)
+  fall back to the pre-M11 formula unchanged.
+- **`TFIDFMatcher` anchor gate**: results without anchor evidence are
+  dropped (`tfidf_anchor_gate_enabled` to disable) — TF-IDF cosine keys
+  on surface overlap, so short queries sharing one generic term with a
+  candidate reached routable scores on noise.
+- **7 new `RoutingConfig` knobs** (`keyword_coverage_ref`,
+  `keyword_anchor_idf_min`, `keyword_anchor_cap`,
+  `keyword_multi_anchor_min`, `keyword_multi_anchor_cov_floor`,
+  `keyword_name_idf_min`, `tfidf_anchor_gate_enabled`) with calibration
+  records in their field descriptions; plumbed through
+  `RouterFactory.build_matchers` → `MatcherConfig`.
+- **`reload_candidates()` now forces matcher re-warm**, so pool-level
+  statistics (IDF table, and the pre-existing TF-IDF fit) rebuild against
+  the reloaded pool instead of going stale.
+- Known residual (unchanged by this milestone): 9 extended errors remain —
+  3 scenario-layer fixed-0.9 regex hits, 4 recall misses (fallback), 2
+  semantic-index trusted-floor edge cases. The E21-style risk flagged in
+  the design (multi-anchor exemption turning an abstain into a
+  wrong-accept) did **not** materialize in the production run — that query
+  still abstains (fallback_llm).
+
 ### Routing nits convergence — triage cache & threshold config (2026-08-18)
 
 - **AI triage serves fresh persistent-cache hits without an LLM**

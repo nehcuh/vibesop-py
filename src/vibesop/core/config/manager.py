@@ -286,6 +286,99 @@ class RoutingConfig(TolerantConfig):
         "1.0 make pack acceptance nearly impossible (any trusted profile "
         "above the noise band arbitrates).",
     )
+    keyword_coverage_ref: float = Field(
+        default=0.5,
+        gt=0.0,
+        le=1.0,
+        description="Coverage-gate saturation point (M11) for KeywordMatcher "
+        "evidence scoring: additive bonuses (partial + name/keyword hits) are "
+        "scaled by g = min(1, cov / keyword_coverage_ref), where cov is the "
+        "IDF-weighted share of meaningful query tokens that hit the "
+        "candidate. This kills the pre-M11 failure mode where a 100-token "
+        "log-dump query mentioning two generic words (复审/review/design) "
+        "reached 0.9+ on additive bonuses alone. Calibration (2026-08, "
+        ".omx/artifacts/m11-design-a.md): REF band 0.4-0.6 re-verified on "
+        "production code with the FULL mechanism (coverage gate + anchor "
+        "gate + stopword table + TF-IDF gate) — extended eval is 98/107 at "
+        "every point of the band, base 31/34 and oneshot 10/11 unchanged; "
+        "the mechanism is insensitive inside this band, 0.5 is the "
+        "midpoint.",
+    )
+    keyword_anchor_idf_min: float = Field(
+        default=0.78,
+        ge=0.0,
+        le=1.0,
+        description="Minimum normalized pool-IDF weight for a query token to "
+        "count as an anchor (M11). Without any anchor, a keyword score is "
+        "capped at keyword_anchor_cap. Anchors are also gated on an English "
+        "stopword list: in a skill-catalog corpus, function words like "
+        "'not' are RARE (high IDF) yet semantically empty. Calibration "
+        "(2026-08): the binding interval is (0.724, 0.78] — 'type' (0.724) "
+        "must NOT anchor, while CJK domain bigrams like 模式 (0.786) must. "
+        "Weights are normalized (pool-size-agnostic), but tokens near this "
+        "boundary can flip when the installed pool changes significantly; "
+        "re-run the routing evals after major pool changes. SMALL POOLS: "
+        "normalized weights compress as N shrinks (e.g. df=2 gives w≈0.68 "
+        "at N=10 vs 0.83 at N=239), so the anchor gate gets STRICTER — "
+        "recall drops, not precision. Lower this value on small pools.",
+    )
+    keyword_anchor_cap: float = Field(
+        default=0.25,
+        ge=0.0,
+        le=1.0,
+        description="Score cap for anchorless keyword matches (M11). Set "
+        "below the 0.3 matcher min_confidence default so anchorless matches "
+        "abstain even on installations whose routing.min_confidence "
+        "preference has not been raised to 0.6.",
+    )
+    keyword_multi_anchor_min: int = Field(
+        default=2,
+        ge=1,
+        le=10,
+        description="Multi-anchor exemption (M11): with at least this many "
+        "anchor hits in the CURATED fields (name/keywords — description hits "
+        "are free-text coincidences and do not count) plus coverage >= "
+        "keyword_multi_anchor_cov_floor, the coverage gate saturates (g=1). "
+        "This is what keeps genuine focused queries ('深度诊断…优化建议', "
+        "coverage only 0.14 but two distinctive keyword hits) routable while "
+        "long noisy queries with a single generic hit stay gated.",
+    )
+    keyword_multi_anchor_cov_floor: float = Field(
+        default=0.08,
+        ge=0.0,
+        le=1.0,
+        description="Coverage floor for the multi-anchor exemption (M11) — "
+        "prevents the exemption from rescuing queries whose anchors are "
+        "incidental mentions inside a long unrelated text. Calibration "
+        "(2026-08): the binding interval is (0.049, 0.139), between the "
+        "meeting-notes misroute (0.049, must not exempt) and the closest "
+        "base-set positive (0.139, must exempt); 0.08 sits near the "
+        "log-midpoint.",
+    )
+    keyword_name_idf_min: float = Field(
+        default=0.7,
+        ge=0.0,
+        le=1.0,
+        description="Minimum normalized IDF weight for a SINGLE-token skill "
+        "name to earn the 0.4 name bonus when it appears in the query "
+        "(M11). Generic one-word names ('design', w=0.465 in the calibration "
+        "pool) no longer trigger the bonus inside arbitrary long queries; "
+        "distinctive names ('instinct', w=0.83) still do — being named "
+        "literally is explicit intent. Multi-token names are exempt (already "
+        "specific).",
+    )
+    tfidf_anchor_gate_enabled: bool = Field(
+        default=True,
+        description="Result-level anchor gate (M11) for TFIDFMatcher: TF-IDF "
+        "results without any anchor (non-stopword, high-IDF query token with "
+        "exact/name/keyword evidence) are dropped. TF-IDF cosine keys on "
+        "surface overlap, so short queries sharing one generic term with a "
+        "candidate reach routable scores on noise ('按批次拆 commit' -> "
+        "setup-pre-commit at 0.63). The gate uses the same anchor definition "
+        "and threshold (keyword_anchor_idf_min) as the keyword matcher. "
+        "Disable to restore pre-M11 behavior if it false-negative-filters a "
+        "genuine generic-vocabulary positive.",
+    )
     ai_triage_recall_min_similarity: float = Field(
         default=0.25,
         ge=0.0,

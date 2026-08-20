@@ -18,6 +18,12 @@ from vibesop.core.matching.base import (
     RoutingContext,
     SimilarityMetric,
 )
+from vibesop.core.matching.idf import (
+    ANCHOR_STOPWORDS,
+    IDFTable,
+    candidate_token_set,
+    find_anchors,
+)
 from vibesop.core.matching.similarity import SimilarityCalculator
 from vibesop.core.matching.tfidf import TFIDFCalculator
 from vibesop.core.matching.tokenizers import TokenizerConfig, tokenize
@@ -46,6 +52,22 @@ class MatcherConfig:
     case_sensitive: bool = False
     use_cache: bool = True
     tokenizer_config: TokenizerConfig = field(default_factory=TokenizerConfig)
+    # --- M11 evidence-based scoring knobs (mirror RoutingConfig; populated
+    # by RouterFactory.build_matchers from the active RoutingConfig). ---
+    # Coverage-gate saturation point: bonus scale g = min(1, cov/ref).
+    keyword_coverage_ref: float = 0.5
+    # Minimum normalized IDF weight for a token to count as an anchor.
+    keyword_anchor_idf_min: float = 0.78
+    # Score cap when no anchor evidences the match.
+    keyword_anchor_cap: float = 0.25
+    # Multi-anchor exemption: >= this many name/keyword anchors plus
+    # coverage >= keyword_multi_anchor_cov_floor saturate the gate (g=1).
+    keyword_multi_anchor_min: int = 2
+    keyword_multi_anchor_cov_floor: float = 0.08
+    # Single-token names need this IDF weight to earn the name bonus.
+    keyword_name_idf_min: float = 0.7
+    # Drop TF-IDF results that have no anchor evidence.
+    tfidf_anchor_gate_enabled: bool = True
 
 
 def _is_meaningful_token(token: str) -> bool:
@@ -67,6 +89,7 @@ class KeywordMatcher:
     def __init__(self, config: MatcherConfig | None = None):
         self._config = config or MatcherConfig()
         self._cache: dict[str, list[MatchResult]] = {}
+        self._idf: IDFTable | None = None
 
     def match(
         self,
@@ -129,7 +152,151 @@ class KeywordMatcher:
         return self._score(query_tokens, candidate)
 
     def _score(self, query_tokens: set[str], candidate: SkillCandidateDict) -> ConfidenceScore:
-        """Calculate keyword match score with substring and prefix bonuses."""
+        """Dispatch to evidence-based scoring once the pool IDF table exists.
+
+        Before warm_up (e.g. a standalone ``score()`` call on a single
+        candidate) there is no corpus to measure specificity against, so the
+        legacy additive formula is used unchanged.
+        """
+        if self._idf is None:
+            return self._score_legacy(query_tokens, candidate)
+        return self._score_evidence(query_tokens, candidate)
+
+    def _score_evidence(
+        self, query_tokens: set[str], candidate: SkillCandidateDict
+    ) -> ConfidenceScore:
+        """Evidence-based scoring (M11): bonuses are gated by evidence quality.
+
+        evidence = specificity (IDF anchors) x coverage (idf-weighted share
+        of meaningful query tokens that hit the candidate):
+
+        - partial bonus: per-query-token BEST pair only (no cross-pair
+          accumulation — the old loop summed over every candidate token, so
+          any long query maxed the 0.4 cap against any candidate).
+        - substring bonus: idf-discounted per hit (generic tokens like
+          "review"/"design" contribute little).
+        - coverage gate: both bonuses are scaled by
+          g = min(1, cov / keyword_coverage_ref), where cov is the
+          idf-weighted hit share over meaningful query tokens.
+        - anchor gate: without any anchor (non-stopword, high-idf token with
+          exact/name/keyword evidence) the score is capped at
+          keyword_anchor_cap, below the matcher min_confidence floor.
+          Function words (ANCHOR_STOPWORDS) contribute no evidence at all —
+          excluded from anchors, bonuses, and the coverage numerator AND
+          denominator.
+        - multi-anchor exemption: >= keyword_multi_anchor_min anchors in the
+          CURATED fields (name/keywords) plus non-trivial coverage saturate
+          the gate (g=1) — a focused query that names several distinctive
+          terms of the skill is a genuine match even when long.
+        - name bonus: only for multi-token names or single-token names with
+          high specificity (keyword_name_idf_min); not coverage-scaled
+          (the user literally named the skill).
+
+        Calibration record: .omx/artifacts/m11-design-a.md.
+        """
+        cfg = self._config
+        idf = self._idf
+        assert idf is not None  # guaranteed by _score dispatch
+
+        _tmp_keywords = candidate.get("keywords", [])
+        keywords_list = _tmp_keywords if isinstance(_tmp_keywords, list) else []
+        name = str(candidate.get("name", "")).lower()
+        keywords_text = " ".join(str(k).lower() for k in keywords_list)
+        candidate_tokens = candidate_token_set(candidate)
+
+        union = query_tokens | candidate_tokens
+        if not union:
+            return 0.0
+        exact_matches = query_tokens & candidate_tokens
+        base_score = len(exact_matches) / len(union)
+
+        # Function words carry no signal (gate14b pi BLOCK: "can"/"together"
+        # rode prefix/substring hits to saturate the coverage gate and lift a
+        # junk match to 0.7). They earn NO evidence at all — not anchors, not
+        # bonuses, not coverage mass (numerator or denominator).
+        meaningful = [
+            qt for qt in query_tokens if _is_meaningful_token(qt) and qt not in ANCHOR_STOPWORDS
+        ]
+
+        # Per-query-token best partial hit (prefix 0.15 / substring 0.08),
+        # plus the hit weight used by coverage (exact 1.0 / prefix 0.6 /
+        # substring 0.32).
+        partial_raw = 0.0
+        hit_weight: dict[str, float] = {}
+        for qt in meaningful:
+            if qt in exact_matches:
+                hit_weight[qt] = 1.0
+                continue
+            best = 0.0
+            for ct in candidate_tokens:
+                if ct in exact_matches:
+                    continue
+                if qt.startswith(ct) or ct.startswith(qt):
+                    best = max(best, 0.15)
+                elif qt in ct or ct in qt:
+                    best = max(best, 0.08)
+            partial_raw += best
+            hit_weight[qt] = best / 0.15 * 0.6 if best else 0.0
+
+        denominator = sum(idf.weight(qt) for qt in meaningful) or 1.0
+        coverage = min(
+            1.0,
+            sum(idf.weight(qt) * hit_weight.get(qt, 0.0) for qt in meaningful) / denominator,
+        )
+        # max(..., 1e-9): keyword_coverage_ref=0 would otherwise divide by
+        # zero; 0 degrades to "always saturated" (coverage gating off).
+        gate = min(1.0, coverage / max(cfg.keyword_coverage_ref, 1e-9))
+
+        # Deliberately plain containment (not word-boundary-checked like
+        # find_anchors): this is a weak, IDF-discounted bonus capped at 0.5 —
+        # cap-lifting/gate power lives exclusively in the anchor check.
+        substring_bonus = min(
+            0.5,
+            sum(
+                0.25 * (0.4 + 0.6 * idf.weight(qt))
+                for qt in meaningful
+                if qt in name or qt in keywords_text
+            ),
+        )
+
+        name_bonus = 0.0
+        # sorted(): set iteration order is nondeterministic; the containment
+        # test below must not depend on it.
+        query_lower = " ".join(sorted(query_tokens))
+        if (
+            name
+            and _is_meaningful_token(query_lower)
+            and (query_lower in name or name in query_lower)
+        ):
+            name_tokens = [t for t in tokenize(name) if _is_meaningful_token(t)]
+            # Note: keyword_name_idf_min (0.7) is deliberately below the
+            # anchor bar keyword_anchor_idf_min (0.78) — the [0.7, 0.78)
+            # band is inconsistent with the anchor gate but conservative
+            # (name-in-query is stronger evidence than a bare keyword hit,
+            # so it tolerates slightly lower specificity).
+            if len(name_tokens) >= 2 or (
+                name_tokens and max(idf.weight(t) for t in name_tokens) >= cfg.keyword_name_idf_min
+            ):
+                name_bonus = 0.4
+
+        anchors, nk_anchors = find_anchors(
+            meaningful, exact_matches, name, keywords_text, idf, cfg.keyword_anchor_idf_min
+        )
+        if (
+            len(nk_anchors) >= cfg.keyword_multi_anchor_min
+            and coverage >= cfg.keyword_multi_anchor_cov_floor
+        ):
+            gate = 1.0
+
+        score = min(1.0, base_score + gate * (min(partial_raw, 0.4) + substring_bonus) + name_bonus)
+        if not anchors:
+            score = min(score, cfg.keyword_anchor_cap)
+        return score
+
+    def _score_legacy(
+        self, query_tokens: set[str], candidate: SkillCandidateDict
+    ) -> ConfidenceScore:
+        """Pre-M11 additive scoring, kept verbatim as the unwarmed fallback."""
         _tmp_keywords = candidate.get("keywords", [])
         keywords_list = _tmp_keywords if isinstance(_tmp_keywords, list) else []
         # Get text fields from candidate
@@ -171,7 +338,9 @@ class KeywordMatcher:
 
         # Exact name match (full query contained in name or vice versa)
         name_bonus = 0.0
-        query_lower = " ".join(query_tokens)
+        # sorted(): set iteration order is nondeterministic; the containment
+        # test below must not depend on it.
+        query_lower = " ".join(sorted(query_tokens))
         if (
             name
             and _is_meaningful_token(query_lower)
@@ -202,7 +371,12 @@ class KeywordMatcher:
         return list(query_tokens & candidate_tokens)
 
     def warm_up(self, candidates: list[SkillCandidateDict]) -> None:
-        pass
+        # Explicit reset semantics: rebuild the pool-level IDF table from
+        # whatever pool is given — an EMPTY pool resets to None, returning
+        # the matcher to the legacy (unwarmed) formula — and always drop
+        # cached results computed against the previous pool.
+        self._idf = IDFTable.build(candidates) if candidates else None
+        self._cache.clear()
 
     def get_capabilities(self) -> MatcherCapabilitiesDict:
         return {
@@ -222,6 +396,7 @@ class TFIDFMatcher:
         self._similarity_calc = SimilarityCalculator(metric=SimilarityMetric.COSINE)
         self._fitted = False
         self._candidate_vectors: dict[str, dict[str, float]] = {}
+        self._idf: IDFTable | None = None
 
     def fit(self, candidates: list[dict[str, Any]]) -> None:
         documents = []
@@ -235,6 +410,13 @@ class TFIDFMatcher:
 
         # Fit TF-IDF
         self._tfidf_calc.fit(documents)
+        # Pool-level IDF for the anchor gate (shares the candidate-token
+        # definition with KeywordMatcher so both matchers gate identically).
+        # Skip degenerate pools (<2 docs): every token would get w=1.0,
+        # making every hit an "anchor" and the gate a no-op — worse, score()'s
+        # single-candidate fit would leave that table behind and neuter the
+        # gate for subsequent real match() calls (gate14 claude nit).
+        self._idf = IDFTable.build(candidates) if len(candidates) >= 2 else None
         self._fitted = True
 
     def match(
@@ -279,7 +461,48 @@ class TFIDFMatcher:
                 )
 
         results.sort(key=lambda r: r.confidence, reverse=True)
+
+        # Anchor gate (M11): TF-IDF cosine keys on surface overlap, so a
+        # short query sharing one generic term with a candidate (e.g.
+        # "commit", "review") can reach a routable score on noise alone.
+        # Require at least one anchor — a non-stopword, high-specificity
+        # query token with exact/name/keyword evidence (same definition as
+        # the KeywordMatcher gate). Results without anchor evidence are
+        # dropped, deferring to lower layers / no-match.
+        if self._config.tfidf_anchor_gate_enabled and self._idf is not None and results:
+            by_id = {str(c.get("id", "")): c for c in candidates}
+            # Tokenize the query once; the per-candidate gate reuses it.
+            meaningful = [
+                t
+                for t in set(tokenize(query, self._config.tokenizer_config))
+                if _is_meaningful_token(t)
+            ]
+            results = [
+                r
+                for r in results
+                if r.skill_id in by_id and self._has_anchor(meaningful, by_id[r.skill_id])
+            ]
+
         return results[:top_k]
+
+    def _has_anchor(self, meaningful: list[str], candidate: SkillCandidateDict) -> bool:
+        """True iff the (pre-tokenized) query carries an anchor for this candidate."""
+        assert self._idf is not None
+        _tmp_keywords = candidate.get("keywords", [])
+        keywords_list = _tmp_keywords if isinstance(_tmp_keywords, list) else []
+        name = str(candidate.get("name", "")).lower()
+        keywords_text = " ".join(str(k).lower() for k in keywords_list)
+        candidate_tokens = candidate_token_set(candidate)
+        exact_matches = set(meaningful) & candidate_tokens
+        anchors, _ = find_anchors(
+            meaningful,
+            exact_matches,
+            name,
+            keywords_text,
+            self._idf,
+            self._config.keyword_anchor_idf_min,
+        )
+        return bool(anchors)
 
     def score(
         self,
@@ -336,6 +559,11 @@ class TFIDFMatcher:
     def warm_up(self, candidates: list[SkillCandidateDict]) -> None:
         if candidates:
             self.fit(candidates)
+        else:
+            # Explicit reset, symmetric with KeywordMatcher.warm_up: an empty
+            # pool must not keep gating on stale fit/IDF statistics.
+            self._fitted = False
+            self._idf = None
 
     def get_capabilities(self) -> MatcherCapabilitiesDict:
         return {

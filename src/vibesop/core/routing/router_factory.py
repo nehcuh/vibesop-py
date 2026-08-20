@@ -96,6 +96,13 @@ class RouterFactory:
         matcher_config = MatcherConfig(
             min_confidence=routing_config.min_confidence,
             use_cache=routing_config.use_cache,
+            keyword_coverage_ref=routing_config.keyword_coverage_ref,
+            keyword_anchor_idf_min=routing_config.keyword_anchor_idf_min,
+            keyword_anchor_cap=routing_config.keyword_anchor_cap,
+            keyword_multi_anchor_min=routing_config.keyword_multi_anchor_min,
+            keyword_multi_anchor_cov_floor=routing_config.keyword_multi_anchor_cov_floor,
+            keyword_name_idf_min=routing_config.keyword_name_idf_min,
+            tfidf_anchor_gate_enabled=routing_config.tfidf_anchor_gate_enabled,
         )
 
         matchers: list[tuple[RoutingLayer, IMatcher]] = [  # pyright: ignore[reportAssignmentType]

@@ -150,6 +150,42 @@ installed packs (M9: 67→76/107 on routing_eval_extended, zero regressions).
 2. **Exact Match**: Direct token matching
 3. **Confidence Threshold**: Default 0.6 (configurable)
 
+**Evidence-based scoring (M11)**: once warmed with the candidate pool,
+`KeywordMatcher` scores with evidence gating instead of purely additive
+bonuses — see `core/matching/idf.py` and the calibration record in
+`.omx/artifacts/m11-design-a.md`:
+
+- **IDF-weighted coverage gate**: additive bonuses (partial + name/keyword
+  hits) are scaled by `g = min(1, cov / keyword_coverage_ref)`, where `cov`
+  is the pool-IDF-weighted share of meaningful query tokens that hit the
+  candidate. Generic tokens ("review", "design", "workflow") contribute
+  almost nothing; a long query with 1-2 incidental hits can no longer reach
+  0.9.
+- **Anchor gate**: without an anchor — a non-stopword, high-specificity
+  (`w ≥ keyword_anchor_idf_min`) query token with exact/name/keyword
+  evidence — the score is capped at `keyword_anchor_cap` (0.25, below the
+  matcher floor). English function words (`ANCHOR_STOPWORDS` in
+  `core/matching/idf.py`) contribute no bonus/coverage/anchor evidence at
+  all: in a skill-catalog corpus, words like "get"/"not" are *rare* (high
+  IDF) yet semantically empty. (They still count in the Jaccard `base_score`
+  and whole-name containment — bounded inputs that cannot lift a score past
+  the anchorless cap; do not raise `keyword_anchor_cap` above the matcher
+  floor without revisiting this.) Note the gate gets STRICTER on small pools
+  (normalized IDF weights compress as N shrinks, so fewer tokens clear the
+  bar) — small-pool deployments should lower `keyword_anchor_idf_min`
+  (see its config field description).
+- **Multi-anchor exemption**: ≥2 anchors in the curated name/keywords
+  fields plus non-trivial coverage saturate the gate, keeping genuine
+  focused queries routable even when verbose.
+- **Name bonus guard**: the 0.4 name bonus now requires a multi-token name
+  or a distinctive single-token name (`w ≥ keyword_name_idf_min`).
+- **Per-token-best partial**: each query token contributes only its best
+  prefix/substring hit, not one per candidate token.
+
+The same anchor definition gates `TFIDFMatcher` results
+(`tfidf_anchor_gate_enabled`). All knobs live in `RoutingConfig` with
+calibration notes in their field descriptions.
+
 **Performance**:
 - P50: 0.03ms
 - P95: 0.05ms
