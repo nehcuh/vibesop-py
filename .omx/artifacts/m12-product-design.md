@@ -168,6 +168,12 @@ kimi/pi 行为采集强行适配、看板写操作、任何云端共享。
   重跑标定与出口验证）。实现与验收手段（合成注入测试、
   miss_pool_size/miss_admitted_count 操作员可见、embedding 降级显式
   标注）均已落地，延期仅是数据积累问题。
+  **出口状态（2026-08-21 更新）：通过**——cmspark 真实数据（309
+  distinct miss query，一个月）重验：标定区间不变（0.70 维持）,5 条
+  miss_recurrence 候选准入且卡片完整，5/5 人工认可为真实工作流。
+  过程中暴露并修复两个真实缺陷（unstable 行占满池容量堵死准入 →
+  类分离预算；content-block 信封未拆 → `_extract_query` 扩展，均经
+  gate21 双路复审）。全程记录:`.omx/artifacts/m12-m2-exit-verification.md`。
 - **M3 行为一致性门**（依赖 M1）。
 - **M4 看板发现页（只读）**（依赖 M2，可与 M3 并行）；ScanSummary 加
   各层 miss 份额分布（上线前后对比，供 dismiss 熔断观测）。
