@@ -130,13 +130,15 @@ def candidate_source(candidate: ClusterCandidate) -> str:
 
 
 def behavior_evidence_label(candidate: ClusterCandidate) -> str:
-    """Behavior-evidence marker for the card: consistent / unavailable / 未采集.
+    """Behavior-evidence marker: consistent / divergent / unavailable / 未采集.
 
     ``behavior_evidence`` 字段由 M3 行为一致性门写入；字段缺失 =
-    未采集（诚实标注，不编造）。
+    未采集（诚实标注，不编造）。三态语义见 behavior_consistency 模块
+    docstring —— divergent（够数据但不达标）是设计原文两态之外的第三
+    态，因为"有数据且低于阈值"不能诚实归入 unavailable。
     """
     evidence = getattr(candidate, "behavior_evidence", None)
-    if evidence in ("consistent", "unavailable"):
+    if evidence in ("consistent", "divergent", "unavailable"):
         return evidence
     return "not_collected"
 
@@ -460,7 +462,7 @@ class DiscoveryRow:
     fingerprint: str
     score: float
     source: str
-    behavior: str  # consistent / unavailable / not_collected
+    behavior: str  # consistent / divergent / unavailable / not_collected
     dismissed: bool = False
     muted: bool = False
     mute_expires_at: datetime | None = None

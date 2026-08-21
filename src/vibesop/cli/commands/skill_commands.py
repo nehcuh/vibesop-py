@@ -1286,6 +1286,7 @@ from vibesop.core.observability import skill_promote as _sp  # noqa: E402
 _MISS_COSINE_THRESHOLD_DEFAULT = _sp.MISS_COSINE_THRESHOLD
 _MISS_MIN_PAIRS_DEFAULT = _sp.MISS_RECURRENCE_MIN_PAIRS
 _MISS_MIN_DAYS_DEFAULT = _sp.MISS_RECURRENCE_MIN_DAYS
+_BEHAVIOR_JACCARD_THRESHOLD = _sp._BEHAVIOR_JACCARD_THRESHOLD  # M3, same one-place rule
 
 
 @app.command(name="scan-candidates")
@@ -1329,6 +1330,16 @@ def scan_candidates_cmd(  # pyright: ignore[reportUnusedFunction]
         _MISS_MIN_DAYS_DEFAULT,
         "--miss-min-days",
         help="Min distinct natural days for miss_recurrence admission (>=1, conjunctive)",
+    ),
+    behavior_threshold: float = typer.Option(
+        _BEHAVIOR_JACCARD_THRESHOLD,
+        "--behavior-threshold",
+        help=(
+            "M3 behavior-consistency gate: min mean pairwise bigram-Jaccard "
+            "for behavior_evidence=consistent (0..1; below → divergent; "
+            "<2 sequences → unavailable). Provisional 0.5 pending calibration "
+            "(.omx/artifacts/m3-behavior-calibration.md)."
+        ),
     ),
     cross_project: bool = typer.Option(
         False,
@@ -1397,6 +1408,11 @@ def scan_candidates_cmd(  # pyright: ignore[reportUnusedFunction]
     if miss_min_days < 1:
         console.print(f"[red]✗[/red] --miss-min-days must be >=1, got {miss_min_days}")
         raise typer.Exit(1)
+    if not (0.0 <= behavior_threshold <= 1.0):
+        console.print(
+            f"[red]✗[/red] --behavior-threshold must be in [0.0, 1.0], got {behavior_threshold}"
+        )
+        raise typer.Exit(1)
 
     from vibesop.core.instinct.learner import InstinctLearner
     from vibesop.core.observability.embedding import get_embedding_cache
@@ -1443,6 +1459,7 @@ def scan_candidates_cmd(  # pyright: ignore[reportUnusedFunction]
         miss_cosine_threshold=miss_cosine_threshold,
         miss_min_pairs=miss_min_pairs,
         miss_min_days=miss_min_days,
+        behavior_threshold=behavior_threshold,
         dry_run=dry_run,
     )
 
@@ -2343,6 +2360,10 @@ def _render_source(row: DiscoveryRow) -> str:
 def _render_behavior(row: DiscoveryRow) -> str:
     if row.behavior == "consistent":
         return "[green]consistent[/green]"
+    if row.behavior == "divergent":
+        # M3 第三态: 有数据但低于阈值 —— 与 consistent/unavailable 同形
+        # (英文 token), 区别于字段缺失的「未采集」。
+        return "[yellow]divergent[/yellow]"
     if row.behavior == "unavailable":
         return "[yellow]unavailable[/yellow]"
     return "[dim]未采集[/dim]"

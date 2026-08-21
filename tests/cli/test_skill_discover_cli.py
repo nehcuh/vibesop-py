@@ -379,6 +379,29 @@ class TestScanCandidatesRendering:
         )
         assert result.exit_code == 1
 
+    def test_behavior_threshold_wires_to_scan_kwargs(self, cli_runner, discovery_env) -> None:
+        """gate24 pi#9b: M3 knob 接线 + 越界拒绝。"""
+        from vibesop.core.observability.skill_promote import ScanSummary
+
+        result, captured = self._invoke(
+            cli_runner, discovery_env, ScanSummary(), extra_args=["--behavior-threshold", "0.7"]
+        )
+        assert result.exit_code == 0
+        assert captured["behavior_threshold"] == 0.7
+
+    def test_behavior_threshold_bounds_validated(self, cli_runner, discovery_env) -> None:
+        from vibesop.core.observability.skill_promote import ScanSummary
+
+        for bad in ("1.5", "-0.1"):
+            result, _ = self._invoke(
+                cli_runner,
+                discovery_env,
+                ScanSummary(),
+                extra_args=["--behavior-threshold", bad],
+            )
+            assert result.exit_code == 1
+            assert "--behavior-threshold" in result.output
+
 
 class TestResolveCandidateHardening:
     """gate22 follow-up: _resolve_discovery_candidate aligned with the
@@ -436,6 +459,31 @@ class TestResolveCandidateHardening:
         assert result.exit_code == 1
         assert "ambiguous" in result.output
         assert "+2 more" in result.output
+
+
+class TestBehaviorColumn:
+    """M3 — discover 表格 Behavior 列渲染三态 + 未采集。"""
+
+    def test_three_states_rendered(self, cli_runner: CliRunner, discovery_env) -> None:
+        stores, _ = discovery_env
+        consistent = _candidate("c1" + "0" * 38, ["consistent behavior query"])
+        consistent.behavior_evidence = "consistent"
+        consistent.behavior_score = 0.9
+        divergent = _candidate("c2" + "0" * 38, ["divergent behavior query"])
+        divergent.behavior_evidence = "divergent"
+        divergent.behavior_score = 0.2
+        unavailable = _candidate("c3" + "0" * 38, ["unavailable behavior query"])
+        unavailable.behavior_evidence = "unavailable"
+        legacy = _candidate("c4" + "0" * 38, ["not collected behavior query"])
+        for c in (consistent, divergent, unavailable, legacy):
+            stores["project"].upsert(c)
+
+        result = cli_runner.invoke(app, ["skill", "discover"])
+        assert result.exit_code == 0
+        assert "consistent" in result.output
+        assert "divergent" in result.output
+        assert "unavailable" in result.output
+        assert "未采集" in result.output
 
 
 class TestFirstSeenColumn:

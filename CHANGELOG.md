@@ -9,6 +9,57 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### M12 M3 — behavior-consistency evidence (bigram-Jaccard) on discovery cards (2026-08-21)
+
+If a missed-routing pattern recurs AND the agent handled each recurrence
+with a similar tool-call sequence, the candidate is a more trustworthy
+workflow. M3 annotates each candidate with that evidence.
+
+- **`behavior_consistency.py`** (new): joins a cluster's route spans to
+  their child tool spans (parent_span_id OR trace_id union — union is
+  deliberate, nested non-route parents would otherwise be dropped;
+  grouping key unified with attribution key) keyed by the composite
+  `(project_id, task_id)` (bare task_id would mix cross-project legacy
+  traces), ordered by started_at, consecutive duplicate tool names
+  folded (honest rationale: set semantics make (X,X) self-bigrams
+  undiscriminating, NOT "drowning"; the fold's inflation direction on
+  repeat-heavy traces is recorded). Bigram sets → pairwise Jaccard →
+  mean → three states: consistent (≥2 sequences, mean ≥ threshold) /
+  divergent (enough data, below threshold — added beyond the design
+  doc's two states because "has data, below threshold" cannot honestly
+  read "unavailable"; design doc updated) / unavailable (<2 sequences;
+  single-tool traces have empty bigrams and don't count — the residual
+  tool-set blind spot is documented). Field absent = 未采集 as before.
+- **Threshold**: `_BEHAVIOR_JACCARD_THRESHOLD = 0.5`, module constant +
+  `scan-candidates --behavior-threshold` flag (validated [0,1] in-module
+  and at CLI). Calibration ran self-supervised on real cmspark data
+  (within-cluster pairs positive, cross-cluster negative): 0 positive /
+  1 negative pair → decision-band evidence insufficient → 0.5 kept as
+  an UNVALIDATED starting point; recheck trigger and folded/unfolded
+  dual reporting recorded in `.omx/artifacts/m3-behavior-calibration.md`.
+  The calibration script dedups by trace identity (same trace can reach
+  multiple candidates via shared task_ids across scan windows — without
+  the dedup a same-trace pair would score Jaccard 1.0 as a "negative"),
+  skips any shared-group pair, and exits 2 on thin samples so future
+  gated calls fail closed.
+- **Wiring**: `ClusterCandidate.behavior_evidence` / `behavior_score`
+  (strict validation, legacy rows → None); scan fills on both gold and
+  miss_recurrence paths, rescan overwrites with the latest value (unlike
+  first_seen_at's earliest-wins — behavior evidence tracks freshness);
+  `behavior_spans` captured before the W5.1 age-out filter so legacy
+  tool spans (no project_id) still join. Discover table renders
+  consistent / divergent / unavailable / 未采集; dashboard passes the
+  label through. Annotation only — admission/eviction/evidence_score do
+  NOT consume it (M3 is card-level evidence, not an admission gate).
+- Tests: 11 unit (join/sort/fold/legacy shapes/orphans/three states/
+  threshold knob/composite key/parent-trace grouping), calibration
+  self-test + anti-leak + thin-sample exit code, scan integration
+  (gold + miss paths, rescan-overwrite, pre-age-out capture),
+  serialization round-trip, CLI 4-state render + flag validation.
+- Gate 24 dual review: claude PASS_WITH_NITS (join composite-dimension
+  MAJOR + fold-rationale MINOR) + pi PASS_WITH_NITS (calibration
+  trace-leak MAJOR + 8 nits), 0 BLOCK, all converged.
+
 ### M12 discover UX — resolver hardening + candidate first_seen_at (2026-08-21)
 
 Gate-22 follow-ups plus a schema addition, from dual-review nits and a

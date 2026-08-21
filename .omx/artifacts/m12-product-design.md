@@ -64,7 +64,9 @@ M0 前置修复（新设里程碑）
        （合取）；miss 簇以 miss_recurrence 准入（不再要求 gold_rate）
        │
   M3 行为一致性门：工具序列 bigram-Jaccard ≥ 阈值（标定后进配置）→
-       behavior_evidence: consistent / unavailable（诚实降级标注）
+       behavior_evidence: consistent / divergent / unavailable（三态；
+       gate24 修订——原文两态无法诚实归入"有数据但低于阈值"的情形，
+       divergent 为新增第三态；字段缺失 = 未采集，诚实降级标注）
        │
   M4 看板发现页（/api/discoveries，只读）——变更操作（promote/dismiss/
        mute）只在 CLI，看板不写（pi 裁决：保人审闸门单入口）

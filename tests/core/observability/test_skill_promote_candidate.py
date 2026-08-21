@@ -13,6 +13,8 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
+import pytest
+
 from vibesop.core.observability.skill_promote import ClusterCandidate
 
 
@@ -145,3 +147,42 @@ class TestFirstSeenAtField:
         payload["first_seen_at"] = "2026-06-15T08:30:00"  # hand-edited, no offset
         parsed = ClusterCandidate.from_dict(payload)
         assert parsed.first_seen_at == datetime(2026, 6, 15, 8, 30, tzinfo=UTC)
+
+
+class TestBehaviorEvidenceField:
+    """M3 — ClusterCandidate.behavior_evidence / behavior_score."""
+
+    def test_round_trip_preserves_behavior_fields(self) -> None:
+        c = _make()
+        c.behavior_evidence = "divergent"
+        c.behavior_score = 0.33
+        round_tripped = ClusterCandidate.from_dict(c.to_dict())
+        assert round_tripped.behavior_evidence == "divergent"
+        assert round_tripped.behavior_score == 0.33
+
+    def test_from_dict_tolerates_missing_behavior_fields(self) -> None:
+        """Pre-M3 rows on disk lack both keys → None → 展示层 "未采集"."""
+        payload = _make().to_dict()
+        del payload["behavior_evidence"]
+        del payload["behavior_score"]
+        parsed = ClusterCandidate.from_dict(payload)
+        assert parsed.behavior_evidence is None
+        assert parsed.behavior_score is None
+
+    def test_invalid_behavior_evidence_rejected(self) -> None:
+        """Hand-edited files carrying garbage values fail loudly (same
+        defensive convention as status/source)."""
+        payload = _make().to_dict()
+        payload["behavior_evidence"] = "mostly-harmless"
+        with pytest.raises(ValueError, match="behavior_evidence"):
+            ClusterCandidate.from_dict(payload)
+
+    def test_invalid_behavior_score_rejected(self) -> None:
+        """gate24 pi#6: 与 behavior_evidence 对称的严格校验 —— 越界 /
+        非数值 / bool 都拒收,不静默 None 化(脏数据须可审计)。"""
+        for bad in (1.5, -0.1, "high", True):
+            payload = _make().to_dict()
+            payload["behavior_evidence"] = "consistent"
+            payload["behavior_score"] = bad
+            with pytest.raises(ValueError, match="behavior_score"):
+                ClusterCandidate.from_dict(payload)

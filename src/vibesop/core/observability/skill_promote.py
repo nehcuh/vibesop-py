@@ -57,6 +57,11 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, get_args
 
+from vibesop.core.observability.behavior_consistency import (
+    _BEHAVIOR_JACCARD_THRESHOLD,
+    _VALID_BEHAVIOR_STATES,
+)
+
 if TYPE_CHECKING:
     # Type-only imports — runtime imports happen inside ``scan_candidates``
     # to avoid forcing all callers to have clustering/gold_detection deps
@@ -87,6 +92,10 @@ StepLabel = Literal["core", "common", "optional"]
 _VALID_STATUS: frozenset[str] = frozenset(get_args(CandidateStatus))
 _VALID_SOURCE: frozenset[str] = frozenset(get_args(CandidateSource))
 _VALID_STEP_LABEL: frozenset[str] = frozenset(get_args(StepLabel))
+# M3: three-state behavior evidence — single source is
+# behavior_consistency._VALID_BEHAVIOR_STATES (imported above, gate24
+# pi#7); see that module's docstring for why "divergent" exists alongside
+# the design doc's original two states.
 
 _TTL_DAYS = 30
 MAX_PENDING = 50
@@ -373,10 +382,32 @@ class ClusterCandidate:
     # None for candidates promoted before M5 (legacy) — activation then
     # requires --force.
     draft_sha256: str | None = None
+    # M3 行为一致性门 (behavior_consistency.py): 三态标注 + 聚合分。
+    # ``behavior_evidence``: consistent / divergent / unavailable;
+    # None = 未采集 (pre-M3 存量行, 展示层 "未采集").
+    # ``behavior_score``: mean pairwise bigram-Jaccard, None when
+    # unavailable. 重扫语义: 用最新计算值覆盖 (与 first_seen_at 的
+    # earliest-wins 不同 —— 行为证据随数据新鲜度更新, upsert 整行
+    # 替换天然满足, 无需 merge 逻辑).
+    behavior_evidence: str | None = None
+    behavior_score: float | None = None
 
     def __post_init__(self) -> None:
         _validate_choice(self.status, _VALID_STATUS, "status")
         _validate_choice(self.source, _VALID_SOURCE, "source")
+        if self.behavior_evidence is not None:
+            _validate_choice(self.behavior_evidence, _VALID_BEHAVIOR_STATES, "behavior_evidence")
+        # gate24 pi#6: 与 behavior_evidence 的严格校验对称 —— 非法值
+        # 拒收(ValueError),不放行 None 化(静默吞掉脏数据会让
+        # consistent/divergent 判定事后无法审计)。bool 是 int 子类,
+        # 显式排除。
+        if self.behavior_score is not None and (
+            isinstance(self.behavior_score, bool)
+            or not isinstance(self.behavior_score, int | float)
+            or not (0.0 <= self.behavior_score <= 1.0)
+        ):
+            msg = f"behavior_score={self.behavior_score!r} is not a number in [0.0, 1.0]"
+            raise ValueError(msg)
         if self.ttl_expires_at is None:
             self.ttl_expires_at = self.created_at + timedelta(days=_TTL_DAYS)
         for label in self.step_labels.values():
@@ -1099,6 +1130,7 @@ def scan_candidates(
     miss_cosine_threshold: float = MISS_COSINE_THRESHOLD,
     miss_min_pairs: int = MISS_RECURRENCE_MIN_PAIRS,
     miss_min_days: int = MISS_RECURRENCE_MIN_DAYS,
+    behavior_threshold: float = _BEHAVIOR_JACCARD_THRESHOLD,
     dry_run: bool = False,
     include_legacy: bool = False,
 ) -> ScanSummary:
@@ -1138,6 +1170,7 @@ def scan_candidates(
     idempotent on ``cluster_id``, so re-scanning the same spans produces
     the same pending rows (refreshed counts, no duplicates).
     """
+    from vibesop.core.observability.behavior_consistency import assess_behavior_consistency
     from vibesop.core.observability.clustering import _extract_query, cluster_queries
     from vibesop.core.observability.embedding import get_embedding_cache
     from vibesop.core.observability.gold_detection import (
@@ -1154,6 +1187,20 @@ def scan_candidates(
 
     if not spans:
         return summary
+
+    # M3: the behavior join evaluates against the PRE-filter span list.
+    # (gate24 pi#3 — an earlier note here wrongly claimed the parent route
+    # "already passed the filter"; the join matches route spans in this
+    # pre-filter list, filter-passing or not.) Two recorded consequences:
+    # 1. pre-W5.0 tool_call spans carry no project_id and would be dropped
+    #    by the age-out below; keeping them preserves per-trace evidence
+    #    when their trace/parent matches a candidate.
+    # 2. Legacy routes (project_id "default") never match the composite
+    #    (project_id, task_id) candidate key, but their tool spans can
+    #    still join via the trace_id fallback. Bidirectional effect,
+    #    accepted: legacy recurrence can push n up toward consistent OR
+    #    drag the mean down to divergent.
+    behavior_spans = spans
 
     # W5.1 Task 2.3: lazy age-out for pre-W5.0 spans.
     if not include_legacy:
@@ -1282,6 +1329,13 @@ def scan_candidates(
             cluster_spans, total_span_count=cluster.span_count
         )
 
+        # M3: behavior evidence from the cluster's own spans (tool_call
+        # spans are already loaded — no extra scan). Recomputed fresh
+        # every rescan; upsert's whole-row refresh means the latest value
+        # always wins (unlike first_seen_at's earliest-wins).
+        behavior_state, behavior_score, _n_seq = assess_behavior_consistency(
+            list(cluster.task_keys), behavior_spans, threshold=behavior_threshold
+        )
         candidate = ClusterCandidate(
             cluster_id=cluster.cluster_id,
             task_ids=list(cluster.task_ids),
@@ -1294,6 +1348,8 @@ def scan_candidates(
             step_labels=labels,
             core_steps=core_steps,
             is_unstable=is_unstable,
+            behavior_evidence=behavior_state,
+            behavior_score=behavior_score,
             project_distribution=dict(cluster.project_distribution),
         )
 
@@ -1330,6 +1386,9 @@ def scan_candidates(
             s for s in miss_spans if (s.get("project_id") or "default", s.get("task_id")) in mc_keys
         ]
         freq, labels, core_steps = label_step_frequency(mc_spans, total_span_count=mc.span_count)
+        behavior_state, behavior_score, _n_seq = assess_behavior_consistency(
+            list(mc.task_keys), behavior_spans, threshold=behavior_threshold
+        )
         candidate = ClusterCandidate(
             cluster_id=mc.cluster_id,
             task_ids=list(mc.task_ids),
@@ -1343,6 +1402,8 @@ def scan_candidates(
             core_steps=core_steps,
             is_unstable=False,
             source="miss_recurrence",
+            behavior_evidence=behavior_state,
+            behavior_score=behavior_score,
             project_distribution=dict(mc.project_distribution),
         )
         if dry_run:
