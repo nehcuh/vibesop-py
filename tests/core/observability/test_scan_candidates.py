@@ -336,6 +336,7 @@ class TestSummaryShape:
             "miss_admitted_count",
             "miss_rejected_count",
             "embedding_degraded",
+            "miss_share_by_layer",
         }
         assert d["promoted_count"] == 1
         assert d["unstable_count"] == 0

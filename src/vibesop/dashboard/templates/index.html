@@ -119,6 +119,21 @@
 
   .clickable { cursor: pointer; color: var(--accent); }
   .clickable:hover { text-decoration: underline; }
+
+  /* Discoveries (M12 M4 — read-only) */
+  .note { background: rgba(88,166,255,.08); border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; font-size: 13px; color: var(--dim); margin-bottom: 14px; }
+  .note code { color: var(--accent); }
+  .disc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 14px; }
+  .disc-card .head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
+  .disc-card .pattern { font-size: 13px; margin-bottom: 8px; }
+  .disc-card .examples { font-size: 12px; color: var(--dim); margin: 6px 0; }
+  .disc-card .examples div { padding: 2px 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .disc-card .meta-line2 { font-size: 12px; color: var(--dim); margin-top: 6px; }
+  .disc-card .cli-hint { font-size: 11px; color: var(--dim); margin-top: 10px; border-top: 1px solid var(--border); padding-top: 8px; }
+  .badge.pending { background: rgba(88,166,255,.15); color: var(--accent); }
+  .badge.dismissed { background: rgba(248,81,73,.15); color: var(--red); }
+  .badge.muted { background: rgba(210,153,34,.15); color: var(--yellow); }
+  .badge.miss { background: rgba(163,113,247,.15); color: var(--purple); }
 </style>
 </head>
 <body>
@@ -130,6 +145,7 @@
     <button data-tab="history">📋 History</button>
     <button data-tab="traces">🔍 Traces</button>
     <button data-tab="conversations">💬 Conversations</button>
+    <button data-tab="discoveries">✨ Discoveries</button>
   </nav>
   <button class="refresh" onclick="refreshAll()">🔄 Refresh</button>
 </header>
@@ -210,6 +226,13 @@
     </div>
     <div id="conv-detail" style="display:none" class="detail"></div>
   </div>
+
+  <!-- Discoveries Tab (M12 M4 — read-only) -->
+  <div id="tab-discoveries" class="tab">
+    <div class="note">🔒 只读视图 —— promote / dismiss / mute 均在 CLI 操作：<code>vibe skill discover</code>。看板展示全部状态（含 dismissed / muted，以徽章区分）；CLI 默认只显示 pending，<code>--all</code> 查看全部。</div>
+    <div class="cards" id="disc-stats"></div>
+    <div id="disc-list"></div>
+  </div>
 </main>
 
 <script>
@@ -257,6 +280,7 @@ async function loadTab(tab) {
     case 'history': loadHistory(); break;
     case 'traces': loadTraces(); break;
     case 'conversations': loadConversations(); break;
+    case 'discoveries': loadDiscoveries(); break;
   }
 }
 
@@ -629,6 +653,75 @@ async function showConversation(id) {
     <details style="margin-top:10px"><summary style="cursor:pointer;font-size:12px;color:var(--dim)">Raw JSON</summary><pre>${escapeHtml(JSON.stringify(c, null, 2))}</pre></details>
   `;
   div.scrollIntoView({ behavior: 'smooth' });
+}
+
+// ── Discoveries (M12 M4 — read-only) ───────────────────────────
+async function loadDiscoveries() {
+  const data = await api('/api/discoveries');
+  const stats = data.stats || {};
+  const byStatus = stats.by_status || {};
+
+  document.getElementById('disc-stats').innerHTML = `
+    <div class="card">
+      <div class="label">Candidates</div>
+      <div class="value accent">${stats.total ?? 0}</div>
+      <div class="sub">project + global scopes</div>
+    </div>
+    <div class="card">
+      <div class="label">Pending</div>
+      <div class="value green">${byStatus.pending ?? 0}</div>
+      <div class="sub">awaiting CLI review</div>
+    </div>
+    <div class="card">
+      <div class="label">Dismissed / Muted</div>
+      <div class="value ${(byStatus.dismissed || byStatus.muted) ? 'yellow' : ''}">${(byStatus.dismissed ?? 0) + (byStatus.muted ?? 0)}</div>
+      <div class="sub">negative list / 静音中</div>
+    </div>
+    <div class="card">
+      <div class="label">Cooling</div>
+      <div class="value">${stats.cooling ?? 0}</div>
+      <div class="sub">14 天无新增成员</div>
+    </div>
+  `;
+
+  const list = document.getElementById('disc-list');
+  const cards = data.discoveries || [];
+  if (!cards.length) {
+    list.innerHTML = '<div class="empty">Discovery 队列暂无候选。正常使用 vibe 并定期运行 <code>vibe skill scan-candidates</code> 后，复现模式会汇聚到这里。</div>';
+    return;
+  }
+
+  list.innerHTML = '<div class="disc-grid">' + cards.map(c => {
+    const ev = c.evidence || {};
+    const xpBadge = c.is_cross_project ? '<span class="badge miss">[XP]</span>' : '';
+    const scopeBadge = '<span class="badge ' + (c.scope === 'global' ? 'orchestrated' : 'single') + '">' + escapeHtml(c.scope) + '</span>';
+    let statusBadge = '<span class="badge pending">pending</span>';
+    if (c.status === 'dismissed') statusBadge = '<span class="badge dismissed">dismissed</span>';
+    else if (c.status === 'muted') statusBadge = '<span class="badge muted">muted' + (c.mute_expires_at ? ' → ' + escapeHtml(c.mute_expires_at.substring(0, 10)) : '') + '</span>';
+    const sourceBadge = c.source === 'miss_recurrence'
+      ? '<span class="badge miss">miss×复现</span>'
+      : '<span class="badge single">gold ' + Math.round((ev.gold_rate || 0) * 100) + '%</span>';
+    const examples = (c.example_queries || []).map(q =>
+      '<div>• ' + escapeHtml(q) + '</div>').join('');
+    const steps = (c.top_steps || []).map(s =>
+      '<span class="tool-call-badge">' + escapeHtml(s.name) + ' · ' + escapeHtml(s.label) + '</span>').join(' ');
+    const projects = Object.entries(c.project_distribution || {}).map(([k, v]) => escapeHtml(k) + '×' + v).join(', ');
+    return '<div class="card disc-card">' +
+      '<div class="head">' + xpBadge +
+        '<span class="mono clickable" title="' + escapeHtml(c.cluster_id) + '">' + escapeHtml(c.cluster_id_short) + '</span>' +
+        scopeBadge + statusBadge + sourceBadge +
+        '<span style="margin-left:auto;font-size:12px;color:var(--dim)">score ' + c.score + '</span>' +
+      '</div>' +
+      '<div class="pattern">' + escapeHtml(c.pattern_summary || '(no query)') + '</div>' +
+      (examples ? '<div class="examples">' + examples + '</div>' : '') +
+      '<div class="meta-line2">证据: ' + (ev.span_count ?? 0) + ' spans · ' + (ev.distinct_task_keys ?? 0) + ' tasks' +
+        ' · 行为: ' + escapeHtml(c.behavior_evidence || 'not_collected') +
+        ' · 年龄: ' + c.age_days + 'd' + (c.cooling ? ' (冷却中)' : '') + '</div>' +
+      (steps ? '<div class="meta-line2">' + steps + '</div>' : '') +
+      (projects ? '<div class="meta-line2">项目: ' + projects + '</div>' : '') +
+      '<div class="cli-hint">' + escapeHtml(c.cli_hint) + '</div>' +
+    '</div>';
+  }).join('') + '</div>';
 }
 
 // ── Init ───────────────────────────────────────────────────────

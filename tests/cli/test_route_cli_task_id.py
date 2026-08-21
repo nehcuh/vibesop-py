@@ -159,3 +159,85 @@ class TestRouteCliTaskId:
         assert len(set(task_ids)) == 2, (
             f"distinct queries must yield distinct task_ids, got: {task_ids}"
         )
+
+
+class TestRouteCliLayerMetadata:
+    """gate18 pi NIT-4 — CLI route spans carry ``metadata.layer``.
+
+    Semantics: match → winning layer (``primary.layer``); miss → deepest
+    cascade layer (``layer_details[-1]``). Feeds
+    ``ScanSummary.miss_share_by_layer``.
+    """
+
+    @patch("vibesop.agent.runtime.AgentRuntime")
+    @patch("vibesop.agent.runtime.IntentInterceptor")
+    @patch("vibesop.cli.main.sys.stdin")
+    def test_match_writes_winning_layer(
+        self,
+        mock_stdin: MagicMock,
+        mock_interceptor_cls: MagicMock,
+        mock_runtime_cls: MagicMock,
+        mock_router: MagicMock,
+        cli_runner: CliRunner,
+        fresh_tracer: Path,
+    ) -> None:
+        from vibesop.core.models import RoutingLayer
+
+        mock_stdin.isatty.return_value = False
+        mock_router.route.return_value.primary.layer = RoutingLayer.SEMANTIC_INDEX
+        mock_runtime_cls.return_value.router._router = mock_router
+
+        query = "cmspark screenshot permission popup"
+        mock_interceptor_cls.return_value = _make_interceptor(query)
+        r = cli_runner.invoke(app, ["route", "--json", query])
+        assert r.exit_code == 0, f"failed: {r.output}"
+
+        route_spans = _read_route_spans(fresh_tracer)
+        assert len(route_spans) == 1
+        metadata = route_spans[0].get("metadata") or {}
+        if isinstance(metadata, str):
+            metadata = json.loads(metadata)
+        assert metadata.get("layer") == "semantic_index"
+
+    @patch("vibesop.agent.runtime.AgentRuntime")
+    @patch("vibesop.agent.runtime.IntentInterceptor")
+    @patch("vibesop.cli.main.sys.stdin")
+    def test_miss_writes_deepest_cascade_layer(
+        self,
+        mock_stdin: MagicMock,
+        mock_interceptor_cls: MagicMock,
+        mock_runtime_cls: MagicMock,
+        mock_router: MagicMock,
+        cli_runner: CliRunner,
+        fresh_tracer: Path,
+    ) -> None:
+        from types import SimpleNamespace
+
+        from vibesop.core.models import RoutingLayer
+
+        mock_stdin.isatty.return_value = False
+        # Miss: no primary, but the cascade recorded its deepest layer.
+        miss_orch = MagicMock()
+        miss_orch.mode.value = "single"
+        miss_orch.execution_plan = None
+        miss_orch.primary = None
+        miss_orch.has_match = False
+        miss_orch.layer_details = [
+            SimpleNamespace(layer=RoutingLayer.LEVENSHTEIN),
+        ]
+        miss_orch.to_dict.return_value = {"mode": "single"}
+        mock_router._to_orchestration_result.return_value = miss_orch
+        mock_runtime_cls.return_value.router._router = mock_router
+
+        query = "totally unroutable xyzzy query"
+        mock_interceptor_cls.return_value = _make_interceptor(query)
+        r = cli_runner.invoke(app, ["route", "--json", query])
+        assert r.exit_code == 0, f"failed: {r.output}"
+
+        route_spans = _read_route_spans(fresh_tracer)
+        assert len(route_spans) == 1
+        metadata = route_spans[0].get("metadata") or {}
+        if isinstance(metadata, str):
+            metadata = json.loads(metadata)
+        assert metadata.get("has_match") is False
+        assert metadata.get("layer") == "levenshtein"

@@ -17,6 +17,7 @@ Usage:
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 from datetime import UTC, datetime, timedelta
@@ -469,23 +470,7 @@ def add(
     console.print(f"[dim]  Description:[/dim] {metadata.description}")
 
     console.print("\n[dim]Phase 2: Security audit...[/dim]")
-    from vibesop.security.skill_auditor import SkillSecurityAuditor, ThreatLevel
-
-    auditor = SkillSecurityAuditor(strict_mode=False, project_root=".")
-    auditor.add_allowed_path(skill_path)
-    audit_result = auditor.audit_skill_file(skill_path / "SKILL.md")
-
-    if audit_result.risk_level == ThreatLevel.CRITICAL:
-        console.print("[red]✗ Critical security risks detected![/red]")
-        console.print(audit_result.reason)
-        raise typer.Exit(1)
-    elif audit_result.risk_level in (ThreatLevel.HIGH, ThreatLevel.MEDIUM):
-        console.print("[yellow]⚠ Security warnings:[/yellow]")
-        console.print(audit_result.reason)
-        if not questionary.confirm("Continue despite warnings?", default=False).ask():
-            raise typer.Exit(1)
-    else:
-        console.print("[green]✓ Security audit passed[/green]")
+    _audit_skill_or_exit(skill_path)
 
     console.print("\n[dim]Phase 3: Installation scope[/dim]")
 
@@ -503,28 +488,7 @@ def add(
         ).ask()
 
     console.print(f"\n[dim]Phase 4: Installing {scope}...[/dim]")
-    from vibesop.installer.skill_installer import SkillInstaller
-
-    installer = SkillInstaller()
-
-    project_path = _install_root(scope)
-    if scope == "global":
-        _migrate_legacy_global_skills(Path.home())
-    install_result = installer.install_skill(
-        skill_path=skill_path,
-        project_path=project_path,
-        force=force,
-    )
-
-    if not install_result["success"]:
-        console.print("[red]✗ Installation failed[/red]")
-        for error in install_result["errors"]:
-            console.print(f"  [dim]• {error}[/dim]")
-        raise typer.Exit(1)
-
-    for warning in install_result["warnings"]:
-        console.print(f"[yellow]⚠ {warning}[/yellow]")
-    console.print(f"[green]✓ Installed to:[/green] {install_result['installed_path']}")
+    _install_skill_or_exit(skill_path, scope, force=force)
 
     if auto_config:
         console.print("\n[dim]Phase 5: Auto-configuring with LLM understanding...[/dim]")
@@ -558,6 +522,65 @@ def add(
             border_style="green",
         )
     )
+
+
+def _audit_skill_or_exit(skill_path: Path) -> None:
+    """Security audit — Phase 2 of ``vibe skill add``.
+
+    Extracted (M12 M5) so ``vibe skill promote --activate`` runs the
+    EXACT same audit instead of a copy. Raises ``typer.Exit(1)`` on
+    critical risk or declined warnings.
+    """
+    from vibesop.security.skill_auditor import SkillSecurityAuditor, ThreatLevel
+
+    auditor = SkillSecurityAuditor(strict_mode=False, project_root=".")
+    auditor.add_allowed_path(skill_path)
+    audit_result = auditor.audit_skill_file(skill_path / "SKILL.md")
+
+    if audit_result.risk_level == ThreatLevel.CRITICAL:
+        console.print("[red]✗ Critical security risks detected![/red]")
+        console.print(audit_result.reason)
+        raise typer.Exit(1)
+    elif audit_result.risk_level in (ThreatLevel.HIGH, ThreatLevel.MEDIUM):
+        console.print("[yellow]⚠ Security warnings:[/yellow]")
+        console.print(audit_result.reason)
+        if not questionary.confirm("Continue despite warnings?", default=False).ask():
+            raise typer.Exit(1)
+    else:
+        console.print("[green]✓ Security audit passed[/green]")
+
+
+def _install_skill_or_exit(skill_path: Path, scope: str, *, force: bool) -> str:
+    """Install into the scope's skills root — Phase 4 of ``vibe skill add``.
+
+    Extracted (M12 M5) so ``vibe skill promote --activate`` registers via
+    the EXACT same installer path (``~/.vibe/skills`` for global, legacy
+    migration included) instead of a copy. Returns the installed path;
+    raises ``typer.Exit(1)`` on install failure.
+    """
+    from vibesop.installer.skill_installer import SkillInstaller
+
+    installer = SkillInstaller()
+
+    project_path = _install_root(scope)
+    if scope == "global":
+        _migrate_legacy_global_skills(Path.home())
+    install_result = installer.install_skill(
+        skill_path=skill_path,
+        project_path=project_path,
+        force=force,
+    )
+
+    if not install_result["success"]:
+        console.print("[red]✗ Installation failed[/red]")
+        for error in install_result["errors"]:
+            console.print(f"  [dim]• {error}[/dim]")
+        raise typer.Exit(1)
+
+    for warning in install_result["warnings"]:
+        console.print(f"[yellow]⚠ {warning}[/yellow]")
+    console.print(f"[green]✓ Installed to:[/green] {install_result['installed_path']}")
+    return str(install_result["installed_path"])
 
 
 def _install_root(scope: str) -> Path:
@@ -1445,6 +1468,14 @@ def scan_candidates_cmd(  # pyright: ignore[reportUnusedFunction]
     if getattr(summary, "miss_rejected_count", 0):
         miss_line += f" ({summary.miss_rejected_count} refused: pool at cap)"
     console.print(miss_line + "[/dim]")
+    # M12 M4 item (done in M5, file-ownership): per-layer miss share.
+    # Current route-span producers don't emit a layer field, so real data
+    # buckets into "unknown" — rendered as-is (honest degradation).
+    if summary.miss_share_by_layer:
+        share = ", ".join(
+            f"{layer} {fraction:.0%}" for layer, fraction in summary.miss_share_by_layer.items()
+        )
+        console.print(f"  [dim]miss share by layer: {share}[/dim]")
     if summary.pruned_count:
         console.print(f"  [dim]pruned {summary.pruned_count} TTL-expired row(s)[/dim]")
     if summary.capped:
@@ -1677,7 +1708,29 @@ def promote_cmd(  # pyright: ignore[reportUnusedFunction]
             "Draft destination: 'project' writes to <cwd>/.vibe/observability/skill_drafts/ "
             "(default); 'global' writes to ~/.vibe/observability/skill_drafts/ (W5.2). "
             "Global drafts are visible from any cwd but still require explicit "
-            "`vibe skill add` to activate — drafts are NEVER auto-discovered."
+            "activation — drafts are NEVER auto-discovered."
+        ),
+    ),
+    activate: bool = typer.Option(
+        False,
+        "--activate",
+        help=(
+            "Register the skill into routing in one step (M12 M5). Refused "
+            "unless the draft was edited since generation (content-hash "
+            "guard) or --force is passed. Global scope additionally requires "
+            "cross-project evidence (or --force) AND an interactive privacy "
+            "confirmation (always, even with --force)."
+        ),
+    ),
+    force: bool = typer.Option(
+        False,
+        "--force",
+        help=(
+            "Bypass the edit guard (and the global cross-project evidence "
+            "requirement). With --activate it is also forwarded to the "
+            "installer as a forced reinstall when the skill is already "
+            "installed (gate18 claude NIT-1). It never skips the global "
+            "privacy confirmation."
         ),
     ),
 ) -> None:
@@ -1687,10 +1740,20 @@ def promote_cmd(  # pyright: ignore[reportUnusedFunction]
     ``.vibe/observability/skill_drafts/<id>/`` (project scope, default) or
     ``~/.vibe/observability/skill_drafts/<id>/`` (global scope, W5.2) —
     paths that ``CandidateManager`` does NOT auto-discover. To inject the
-    skill into routing, copy the draft into the appropriate ``skills/``
-    dir and run ``vibe skill add <path>``. This is the literal
+    skill into routing, either edit the draft and re-run with
+    ``--activate`` (M12 M5), or copy the draft into the appropriate
+    ``skills/`` dir and run ``vibe skill add <path>``. This is the literal
     "未审不注入" guarantee (W4 review P0 — prior version wrote under
     ``.vibe/skills/`` which IS auto-discovered).
+
+    M12 M5 edit guard: the sha256 of the freshly generated draft is
+    recorded on the candidate (``draft_sha256``). ``--activate`` compares
+    the CURRENT file hash — identical means no human edit happened and
+    activation is refused (mtime checks are spoofable by whitespace-only
+    edits; content hash is not). The hash is recorded only when this run
+    freshly writes the draft — a re-promote over an existing (possibly
+    edited) draft does NOT re-baseline the guard. Legacy candidates
+    (promoted before M5, no recorded hash) require ``--force``.
 
     W5.2: For cross-project clusters, the candidate is loaded from the
     global store; promote with ``--scope global`` to keep the draft
@@ -1763,11 +1826,25 @@ def promote_cmd(  # pyright: ignore[reportUnusedFunction]
         if scope == "project"
         else _GLOBAL_OBSERVABILITY_DIR / "skill_drafts"
     )
-    skill_path = materialize_candidate(candidate, skill_id, drafts_root=drafts_root, scope=scope)
+    # M12 M5: record the draft content hash ONLY when this run freshly
+    # writes the draft. materialize_candidate never overwrites an
+    # existing draft, so a re-promote over an edited draft must not
+    # re-baseline the edit guard (passing None leaves the recorded hash
+    # untouched — see ClusterCandidateStore.promote). gate18 pi NIT-2:
+    # freshness comes from MaterializeResult.fresh, decided inside
+    # materialize_candidate's locked check+write — no racy pre-check here.
+    materialized = materialize_candidate(candidate, skill_id, drafts_root=drafts_root, scope=scope)
+    skill_path = materialized.path
+    draft_sha256 = (
+        hashlib.sha256(skill_path.read_bytes()).hexdigest() if materialized.fresh else None
+    )
 
     # Flip store status (idempotent on already-promoted rows).
     # Promote the store that actually holds the candidate.
-    store.promote(cluster_id, skill_id)
+    store.promote(cluster_id, skill_id, draft_sha256=draft_sha256)
+    # Reload so _activate_promoted_draft sees the hash recorded above
+    # (get() returns a fresh parse; the pre-promote object is stale).
+    candidate = store.get(cluster_id) or candidate
 
     console.print(f"[green]✓[/green] Promoted '{cluster_id}' → skill_id={skill_id}")
     console.print(f"  [dim]draft:[/dim] {skill_path}")
@@ -1797,6 +1874,144 @@ def promote_cmd(  # pyright: ignore[reportUnusedFunction]
         "split the draft if they aren't[/dim]"
     )
     console.print("    [dim]3. spell out when this skill should NOT be used[/dim]")
+
+    if activate:
+        _activate_promoted_draft(
+            candidate,
+            skill_id,
+            skill_path,
+            scope,
+            force=force,
+        )
+
+
+def _print_promoted_not_activated() -> None:
+    """gate18 pi residual-1: clarify post-refusal state — the candidate
+    was already flipped to promoted (draft written) before the guard
+    chain ran; refusal only blocks REGISTRATION, nothing entered routing."""
+    console.print(
+        "  [dim]note: the candidate is now 'promoted' (draft written) but NOT "
+        "registered — nothing entered routing.[/dim]"
+    )
+
+
+def _activate_promoted_draft(
+    candidate: ClusterCandidate,
+    skill_id: str,
+    skill_path: Path,
+    scope: _CandidateStoreScope,
+    *,
+    force: bool,
+) -> None:
+    """``promote --activate`` (M12 M5): edit-guarded one-step registration.
+
+    Guard chain (design v3 数据流 M5 — 消解「--activate 与无人工确认不
+    激活」的自相矛盾):
+
+    1. Draft file missing → refuse.
+    2. ``draft_sha256`` is None (legacy pre-M5 candidate) → refuse unless
+       ``--force``, with an honest message.
+    3. Current draft hash == recorded hash (never edited) → refuse unless
+       ``--force``. The refusal points at the review checklist printed by
+       ``promote_cmd`` above.
+    4. Global scope: requires cross-project evidence
+       (``is_cross_project``) OR ``--force``; AND an interactive privacy
+       confirmation (``typer.confirm(default=False)``) — ALWAYS, even
+       with ``--force`` (privacy boundary: 默认 N 显式确认).
+
+    Registration reuses the exact ``vibe skill add`` path:
+    ``_detect_and_load_skill`` → ``_audit_skill_or_exit`` →
+    ``_install_skill_or_exit`` → ``_auto_configure_skill_with_llm`` →
+    ``_verify_and_sync``. Nothing is duplicated.
+    """
+    console.print("\n[dim]--activate: checking edit guard...[/dim]")
+
+    if not skill_path.exists():
+        console.print(
+            f"[red]✗[/red] Draft file missing: {skill_path}\n"
+            "  [dim]Re-run `vibe skill promote` (without --activate) to regenerate it.[/dim]"
+        )
+        _print_promoted_not_activated()
+        raise typer.Exit(1)
+
+    current_sha256 = hashlib.sha256(skill_path.read_bytes()).hexdigest()
+    if candidate.draft_sha256 is None:
+        if not force:
+            # gate18 pi NIT-1: the prior message suggested re-running
+            # promote to record the hash — a dead end (materialize keeps
+            # the existing draft, so no hash is ever recorded). The two
+            # paths that actually work are --force, or delete + fresh
+            # re-promote.
+            console.print(
+                "[red]✗[/red] Activation refused: no draft hash recorded for this "
+                "candidate (promoted before the M5 edit guard existed), so "
+                "substantive editing cannot be verified.\n"
+                "  [dim]Two working paths: (a) pass --force to bypass the guard; or "
+                "(b) delete the draft directory shown above and re-run "
+                "`vibe skill promote` — a freshly generated draft records the "
+                "baseline hash; then edit it and activate. (Re-running promote "
+                "alone keeps the existing draft and never records a hash.)[/dim]"
+            )
+            _print_promoted_not_activated()
+            raise typer.Exit(1)
+        console.print(
+            "[yellow]⚠ --force: no recorded draft hash (legacy candidate) — "
+            "edit guard bypassed.[/yellow]"
+        )
+    elif current_sha256 == candidate.draft_sha256:
+        if not force:
+            console.print(
+                "[red]✗[/red] Activation refused: the draft is byte-identical to "
+                "the generated version — no human edit detected.\n"
+                "  [dim]Edit the draft per the review checklist above, then "
+                "re-run with --activate — or pass --force to bypass.[/dim]"
+            )
+            _print_promoted_not_activated()
+            raise typer.Exit(1)
+        console.print(
+            "[yellow]⚠ --force: draft unchanged since generation — edit guard bypassed.[/yellow]"
+        )
+    else:
+        console.print("[green]✓[/green] Draft edited since generation (content hash differs)")
+
+    if scope == "global":
+        if not candidate.is_cross_project and not force:
+            console.print(
+                "[red]✗[/red] Global activation refused: this candidate has no "
+                "cross-project evidence ([XP]).\n"
+                "  [dim]Global skills affect every project — promote a "
+                "cross-project cluster, or pass --force to override.[/dim]"
+            )
+            _print_promoted_not_activated()
+            raise typer.Exit(1)
+        # Privacy boundary (design v3): explicit confirmation, default N,
+        # ALWAYS required for global activation — --force does NOT skip it.
+        if not typer.confirm(
+            f"Activate '{skill_id}' GLOBALLY (~/.vibe/skills/, visible to all projects)?",
+            default=False,
+        ):
+            console.print("[dim]Aborted — global activation requires explicit confirmation.[/dim]")
+            _print_promoted_not_activated()
+            raise typer.Exit(1)
+
+    # Registration: the exact `vibe skill add` path (factored phases).
+    draft_dir = skill_path.parent
+    _, metadata = _detect_and_load_skill(str(draft_dir))
+    if not metadata:
+        console.print("[red]✗ Could not load skill metadata from the draft[/red]")
+        raise typer.Exit(1)
+
+    _audit_skill_or_exit(draft_dir)
+    _install_skill_or_exit(draft_dir, scope, force=force)
+    _auto_configure_skill_with_llm(metadata, scope, str(draft_dir))
+    indexed = _verify_and_sync(metadata.id, scope)
+
+    console.print(f"[bold green]✨ Activated:[/bold green] {skill_id} ({scope})")
+    if not indexed:
+        console.print(
+            "[yellow]Run [cyan]vibe skills index[/cyan] before it can be "
+            "semantically routed.[/yellow]"
+        )
 
 
 @app.command(name="dismiss")
@@ -1911,6 +2126,12 @@ def _gather_scoped_candidates() -> dict[str, tuple[_CandidateStoreScope, Cluster
     Dedup by cluster_id preferring the more heterogeneous record (same
     rule as ``_merge_dedup_candidates``), keeping the scope so dismiss /
     mute land in the matching signal store.
+
+    gate18 claude NIT-3: this dedup rule has a deliberate mirror in the
+    dashboard read-model (``vibesop.dashboard._discoveries``'s
+    ``_load_scoped_candidates``) — the two MUST stay semantically
+    identical so CLI and board render the same queue. Change one, change
+    the other.
     """
     by_id: dict[str, tuple[_CandidateStoreScope, ClusterCandidate]] = {}
     for scope in ("project", "global"):

@@ -10,6 +10,7 @@ SKILL.md. W4.E adds the materialize step.
 
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -99,13 +100,17 @@ class TestScanCandidates:
         mock_cache = MagicMock()
         mock_cache.embed = MagicMock(side_effect=_fake_embedding)
         mock_cache.embed_batch = MagicMock(
-            return_value=[_fake_embedding(q) for q in ["topic-A one", "topic-A two", "topic-A three"]]
+            return_value=[
+                _fake_embedding(q) for q in ["topic-A one", "topic-A two", "topic-A three"]
+            ]
         )
 
         with (
             patch("vibesop.core.observability.span_writer.SpanWriter", return_value=mock_writer),
             patch("vibesop.core.instinct.learner.InstinctLearner", return_value=mock_learner),
-            patch("vibesop.core.observability.embedding.get_embedding_cache", return_value=mock_cache),
+            patch(
+                "vibesop.core.observability.embedding.get_embedding_cache", return_value=mock_cache
+            ),
         ):
             r = cli_runner.invoke(app, ["skill", "scan-candidates", "--dry-run"])
 
@@ -150,7 +155,9 @@ class TestScanCandidates:
         with (
             patch("vibesop.core.observability.span_writer.SpanWriter", return_value=mock_writer),
             patch("vibesop.core.instinct.learner.InstinctLearner", return_value=real_learner),
-            patch("vibesop.core.observability.embedding.get_embedding_cache", return_value=mock_cache),
+            patch(
+                "vibesop.core.observability.embedding.get_embedding_cache", return_value=mock_cache
+            ),
         ):
             r = cli_runner.invoke(app, ["skill", "scan-candidates"])
 
@@ -162,37 +169,23 @@ class TestScanCandidates:
 class TestCliArgBounds:
     """P1-6: --min-cluster-size, --min-gold-rate, --limit bounds."""
 
-    def test_min_cluster_size_zero_exits_1(
-        self, cli_runner: CliRunner, tmp_store
-    ) -> None:
+    def test_min_cluster_size_zero_exits_1(self, cli_runner: CliRunner, tmp_store) -> None:
         r = cli_runner.invoke(app, ["skill", "scan-candidates", "--min-cluster-size", "0"])
         assert r.exit_code == 1
         assert "min-cluster-size" in r.output
         assert ">=1" in r.output
 
-    def test_min_cluster_size_negative_exits_1(
-        self, cli_runner: CliRunner, tmp_store
-    ) -> None:
-        r = cli_runner.invoke(
-            app, ["skill", "scan-candidates", "--min-cluster-size", "-3"]
-        )
+    def test_min_cluster_size_negative_exits_1(self, cli_runner: CliRunner, tmp_store) -> None:
+        r = cli_runner.invoke(app, ["skill", "scan-candidates", "--min-cluster-size", "-3"])
         assert r.exit_code == 1
 
-    def test_min_gold_rate_above_one_exits_1(
-        self, cli_runner: CliRunner, tmp_store
-    ) -> None:
-        r = cli_runner.invoke(
-            app, ["skill", "scan-candidates", "--min-gold-rate", "1.5"]
-        )
+    def test_min_gold_rate_above_one_exits_1(self, cli_runner: CliRunner, tmp_store) -> None:
+        r = cli_runner.invoke(app, ["skill", "scan-candidates", "--min-gold-rate", "1.5"])
         assert r.exit_code == 1
         assert "min-gold-rate" in r.output
 
-    def test_min_gold_rate_negative_exits_1(
-        self, cli_runner: CliRunner, tmp_store
-    ) -> None:
-        r = cli_runner.invoke(
-            app, ["skill", "scan-candidates", "--min-gold-rate", "-0.2"]
-        )
+    def test_min_gold_rate_negative_exits_1(self, cli_runner: CliRunner, tmp_store) -> None:
+        r = cli_runner.invoke(app, ["skill", "scan-candidates", "--min-gold-rate", "-0.2"])
         assert r.exit_code == 1
 
     def test_limit_zero_exits_1(self, cli_runner: CliRunner, tmp_store) -> None:
@@ -256,13 +249,17 @@ class TestScanCandidatesDaysWindow:
         mock_cache = MagicMock()
         mock_cache.embed = MagicMock(side_effect=_fake_embedding)
         mock_cache.embed_batch = MagicMock(
-            return_value=[_fake_embedding(q) for q in ["topic-A one", "topic-A two", "topic-A three"]]
+            return_value=[
+                _fake_embedding(q) for q in ["topic-A one", "topic-A two", "topic-A three"]
+            ]
         )
 
         with (
             patch("vibesop.core.observability.span_writer.SpanWriter", return_value=mock_writer),
             patch("vibesop.core.instinct.learner.InstinctLearner", return_value=mock_learner),
-            patch("vibesop.core.observability.embedding.get_embedding_cache", return_value=mock_cache),
+            patch(
+                "vibesop.core.observability.embedding.get_embedding_cache", return_value=mock_cache
+            ),
         ):
             r = cli_runner.invoke(app, ["skill", "scan-candidates", "--days", "30", "--dry-run"])
 
@@ -298,13 +295,17 @@ class TestScanCandidatesDaysWindow:
         mock_cache = MagicMock()
         mock_cache.embed = MagicMock(side_effect=_fake_embedding)
         mock_cache.embed_batch = MagicMock(
-            return_value=[_fake_embedding(q) for q in ["topic-A one", "topic-A two", "topic-A three"]]
+            return_value=[
+                _fake_embedding(q) for q in ["topic-A one", "topic-A two", "topic-A three"]
+            ]
         )
 
         with (
             patch("vibesop.core.observability.span_writer.SpanWriter", return_value=mock_writer),
             patch("vibesop.core.instinct.learner.InstinctLearner", return_value=mock_learner),
-            patch("vibesop.core.observability.embedding.get_embedding_cache", return_value=mock_cache),
+            patch(
+                "vibesop.core.observability.embedding.get_embedding_cache", return_value=mock_cache
+            ),
         ):
             r = cli_runner.invoke(app, ["skill", "scan-candidates", "--dry-run"])
 
@@ -323,8 +324,7 @@ class TestScanCandidatesDaysWindow:
 
         now = datetime.now(UTC)
         spans = [
-            self._span_with_started_at(f"t{i}", f"topic-A q{i}", now.isoformat())
-            for i in range(5)
+            self._span_with_started_at(f"t{i}", f"topic-A q{i}", now.isoformat()) for i in range(5)
         ]
 
         mock_writer = MagicMock()
@@ -342,7 +342,9 @@ class TestScanCandidatesDaysWindow:
         with (
             patch("vibesop.core.observability.span_writer.SpanWriter", return_value=mock_writer),
             patch("vibesop.core.instinct.learner.InstinctLearner", return_value=mock_learner),
-            patch("vibesop.core.observability.embedding.get_embedding_cache", return_value=mock_cache),
+            patch(
+                "vibesop.core.observability.embedding.get_embedding_cache", return_value=mock_cache
+            ),
         ):
             r = cli_runner.invoke(
                 app,
@@ -354,9 +356,7 @@ class TestScanCandidatesDaysWindow:
 
 
 class TestCandidatesList:
-    def test_candidates_lists_pending(
-        self, cli_runner: CliRunner, tmp_store
-    ) -> None:
+    def test_candidates_lists_pending(self, cli_runner: CliRunner, tmp_store) -> None:
         """Default ``vibe skill candidates`` lists stable pending rows."""
         from datetime import UTC, datetime, timedelta
 
@@ -432,9 +432,7 @@ class TestCandidatesList:
         assert "good_abc" in r_both.output
         assert "wobbly_x" in r_both.output
 
-    def test_candidates_json_output_schema(
-        self, cli_runner: CliRunner, tmp_store
-    ) -> None:
+    def test_candidates_json_output_schema(self, cli_runner: CliRunner, tmp_store) -> None:
         """``--json`` returns a valid JSON array with documented fields."""
         from datetime import UTC, datetime, timedelta
 
@@ -475,9 +473,7 @@ class TestCandidatesList:
 
 
 class TestPromote:
-    def test_promote_flips_status(
-        self, cli_runner: CliRunner, tmp_store
-    ) -> None:
+    def test_promote_flips_status(self, cli_runner: CliRunner, tmp_store) -> None:
         """``vibe skill promote <id>`` flips status to promoted and
         derives a skill_id from the representative query."""
         c = ClusterCandidate(
@@ -524,17 +520,13 @@ class TestPromote:
         assert "2. confirm the example queries are a single workflow" in r.output
         assert "3. spell out when this skill should NOT be used" in r.output
 
-    def test_promote_unknown_id_errors(
-        self, cli_runner: CliRunner, tmp_store
-    ) -> None:
+    def test_promote_unknown_id_errors(self, cli_runner: CliRunner, tmp_store) -> None:
         """Unknown cluster_id → exit code 1, error message."""
         r = cli_runner.invoke(app, ["skill", "promote", "does-not-exist"])
         assert r.exit_code == 1
         assert "not in pool" in r.output
 
-    def test_promote_dismissed_is_blocked(
-        self, cli_runner: CliRunner, tmp_store
-    ) -> None:
+    def test_promote_dismissed_is_blocked(self, cli_runner: CliRunner, tmp_store) -> None:
         """Promoting a dismissed cluster is blocked (terminal sticky)."""
         c = ClusterCandidate(
             cluster_id="abc123def456",
@@ -553,9 +545,7 @@ class TestPromote:
 
 
 class TestDismiss:
-    def test_dismiss_with_reason(
-        self, cli_runner: CliRunner, tmp_store
-    ) -> None:
+    def test_dismiss_with_reason(self, cli_runner: CliRunner, tmp_store) -> None:
         """``vibe skill dismiss <id> --reason TEXT`` records the reason."""
         c = ClusterCandidate(
             cluster_id="abc123def456",
@@ -580,9 +570,7 @@ class TestDismiss:
         assert stored.status == "dismissed"
         assert stored.dismiss_reason == "false positive"
 
-    def test_dismiss_unknown_id_errors(
-        self, cli_runner: CliRunner, tmp_store
-    ) -> None:
+    def test_dismiss_unknown_id_errors(self, cli_runner: CliRunner, tmp_store) -> None:
         """Dismissing unknown cluster_id → exit code 1."""
         r = cli_runner.invoke(app, ["skill", "dismiss", "no-such-id"])
         assert r.exit_code == 1
@@ -620,9 +608,7 @@ class TestDismiss:
             "_GLOBAL_OBSERVABILITY_DIR",
             fake_home / ".vibe" / "observability",
         )
-        global_store = ClusterCandidateStore(
-            storage_dir=fake_home / ".vibe" / "observability"
-        )
+        global_store = ClusterCandidateStore(storage_dir=fake_home / ".vibe" / "observability")
         global_store.upsert(
             ClusterCandidate(
                 cluster_id="xp-only-dismiss",
@@ -639,9 +625,7 @@ class TestDismiss:
         # Default dismiss scope is 'project'; project store is empty.
         # Fallback should find the candidate in global store and dismiss it.
         with patch.object(skill_commands, "_get_candidate_store") as mock_get:
-            project_store = ClusterCandidateStore(
-                storage_dir=tmp_path / ".vibe" / "observability"
-            )
+            project_store = ClusterCandidateStore(storage_dir=tmp_path / ".vibe" / "observability")
 
             def fake_get(scope: str = "project"):
                 return global_store if scope == "global" else project_store
@@ -771,9 +755,7 @@ class TestMaterializeCandidate:
         # get_candidates returns list of dicts with ``id`` key.
         discovered_ids = {c.get("id", "") for c in discovered}
         # No discovered skill_id should reference the drafted slug.
-        assert not any(
-            "some-repeated-task" in sid for sid in discovered_ids
-        ), (
+        assert not any("some-repeated-task" in sid for sid in discovered_ids), (
             f"未审不注入 BROKEN: CandidateManager discovered drafted skill. "
             f"Matching ids: {[sid for sid in discovered_ids if 'some-repeated-task' in sid]}. "
             f"Total discovered: {len(discovered_ids)}."
@@ -858,17 +840,13 @@ class TestMaterializeCandidate:
         # Strip the body — frontmatter is between the first two --- lines.
         lines = content.splitlines()
         assert lines[0].strip() == "---", "frontmatter must start with ---"
-        end_idx = next(
-            i for i, ln in enumerate(lines[1:], start=1) if ln.strip() == "---"
-        )
+        end_idx = next(i for i, ln in enumerate(lines[1:], start=1) if ln.strip() == "---")
         frontmatter_text = "\n".join(lines[1:end_idx])
         parsed = _yaml.safe_load(frontmatter_text)
         assert isinstance(parsed, dict)
         # The sanitized name should be single-line (newlines stripped).
         name = parsed.get("name", "")
-        assert "\n" not in name, (
-            f"name field must be single-line; got: {name!r}"
-        )
+        assert "\n" not in name, f"name field must be single-line; got: {name!r}"
         # The original query's colon is preserved in the VALUE (quoted
         # strings allow that), but the YAML itself parses cleanly. The
         # test's reason for existing is that parsing succeeds — the
@@ -902,6 +880,251 @@ class TestMaterializeCandidate:
         # Format: custom/<slug>-<cluster_id[:8]>
         assert stored.source_skill_id.startswith("custom/")
         assert stored.source_skill_id.endswith("-abc123de"), (
-            f"skill_id should include cluster_id[:8] suffix; "
-            f"got: {stored.source_skill_id}"
+            f"skill_id should include cluster_id[:8] suffix; got: {stored.source_skill_id}"
         )
+
+
+class TestPromoteActivate:
+    """M12 M5 — promote --activate + content-hash edit guard + global guardrails.
+
+    The registration phases (audit / install / configure / verify) are
+    patched out — they are the SAME helpers `vibe skill add` uses, and
+    their behavior is covered by the add tests. What these tests pin is
+    the guard chain and the wiring.
+    """
+
+    def _candidate(self, cluster_id: str = "abc123def456", **overrides) -> ClusterCandidate:
+        payload = {
+            "cluster_id": cluster_id,
+            "task_ids": ["t1"],
+            "queries": ["topic-A one"],
+            "span_count": 5,
+            "gold_rate": 0.8,
+            "gold_task_ids": ["t1"],
+        }
+        payload.update(overrides)
+        return ClusterCandidate(**payload)
+
+    def _activation_stubs(self):
+        """Patch the factored `vibe skill add` phases out of promote --activate.
+
+        Usage: ``with self._activation_stubs() as install_mock:``
+        """
+        import contextlib
+
+        @contextlib.contextmanager
+        def _stack():
+            with (
+                patch.object(skill_commands, "_audit_skill_or_exit"),
+                patch.object(
+                    skill_commands, "_install_skill_or_exit", return_value="/fake/installed"
+                ) as install_mock,
+                patch.object(skill_commands, "_auto_configure_skill_with_llm"),
+                patch.object(skill_commands, "_verify_and_sync", return_value=False),
+            ):
+                yield install_mock
+
+        return _stack()
+
+    def _draft_path(self, tmp_path: Path, cluster_id: str = "abc123def456") -> Path:
+        drafts_root = tmp_path / ".vibe" / "observability" / "skill_drafts"
+        matches = list(drafts_root.rglob("SKILL.md"))
+        assert len(matches) == 1, f"expected 1 draft, got {matches}"
+        return matches[0]
+
+    def test_promote_records_draft_hash(
+        self, cli_runner: CliRunner, tmp_store, tmp_path: Path, monkeypatch
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
+        tmp_store.upsert(self._candidate())
+        r = cli_runner.invoke(app, ["skill", "promote", "abc123def456"])
+        assert r.exit_code == 0, f"failed: {r.output}"
+        expected = hashlib.sha256(self._draft_path(tmp_path).read_bytes()).hexdigest()
+        stored = tmp_store.get("abc123def456")
+        assert stored is not None
+        assert stored.draft_sha256 == expected
+
+    def test_activate_refused_on_unedited_draft(
+        self, cli_runner: CliRunner, tmp_store, tmp_path: Path, monkeypatch
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
+        tmp_store.upsert(self._candidate())
+        with self._activation_stubs() as install_mock:
+            r = cli_runner.invoke(app, ["skill", "promote", "abc123def456", "--activate"])
+        assert r.exit_code == 1
+        assert "no human edit detected" in r.output
+        assert "review checklist" in r.output  # refusal points at the checklist
+        # gate18 pi residual-1: refusal discloses the post-state.
+        assert "but NOT registered" in r.output
+        install_mock.assert_not_called()
+
+    def test_activate_succeeds_after_substantive_edit(
+        self, cli_runner: CliRunner, tmp_store, tmp_path: Path, monkeypatch
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
+        tmp_store.upsert(self._candidate())
+        r1 = cli_runner.invoke(app, ["skill", "promote", "abc123def456"])
+        assert r1.exit_code == 0, f"failed: {r1.output}"
+
+        # Human edit: rewrite name/description per the review checklist.
+        draft = self._draft_path(tmp_path)
+        draft.write_text(
+            draft.read_text(encoding="utf-8").replace(
+                "name: draft-abc123de", "name: topic-a-workflow"
+            ),
+            encoding="utf-8",
+        )
+
+        with self._activation_stubs() as install_mock:
+            r2 = cli_runner.invoke(app, ["skill", "promote", "abc123def456", "--activate"])
+        assert r2.exit_code == 0, f"failed: {r2.output}"
+        assert "Activated" in r2.output
+        install_mock.assert_called_once()
+        assert install_mock.call_args.args[1] == "project"  # scope positional
+
+    def test_repromote_does_not_rebaseline_hash(
+        self, cli_runner: CliRunner, tmp_store, tmp_path: Path, monkeypatch
+    ) -> None:
+        """materialize never overwrites an existing draft; a re-promote
+        must NOT re-record the edited draft's hash as the baseline."""
+        monkeypatch.chdir(tmp_path)
+        tmp_store.upsert(self._candidate())
+        cli_runner.invoke(app, ["skill", "promote", "abc123def456"])
+        original_hash = tmp_store.get("abc123def456").draft_sha256  # type: ignore[union-attr]
+
+        draft = self._draft_path(tmp_path)
+        draft.write_text(draft.read_text(encoding="utf-8") + "\nhuman edit\n", encoding="utf-8")
+        cli_runner.invoke(app, ["skill", "promote", "abc123def456"])
+
+        assert tmp_store.get("abc123def456").draft_sha256 == original_hash  # type: ignore[union-attr]
+
+    def test_activate_force_overrides_edit_guard(
+        self, cli_runner: CliRunner, tmp_store, tmp_path: Path, monkeypatch
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
+        tmp_store.upsert(self._candidate())
+        with self._activation_stubs():
+            r = cli_runner.invoke(
+                app, ["skill", "promote", "abc123def456", "--activate", "--force"]
+            )
+        assert r.exit_code == 0, f"failed: {r.output}"
+        assert "edit guard bypassed" in r.output
+        assert "Activated" in r.output
+
+    def test_activate_legacy_none_hash_requires_force(
+        self, cli_runner: CliRunner, tmp_store, tmp_path: Path, monkeypatch
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
+        tmp_store.upsert(self._candidate())
+        cli_runner.invoke(app, ["skill", "promote", "abc123def456"])
+
+        # Simulate a pre-M5 row: strip draft_sha256 from the stored JSONL.
+        store_file = tmp_path / "obs" / "cluster_candidates.jsonl"
+        rows = [json.loads(line) for line in store_file.read_text().splitlines() if line.strip()]
+        assert rows and rows[0].pop("draft_sha256", None) is not None
+        store_file.write_text("".join(json.dumps(row) + "\n" for row in rows))
+
+        r = cli_runner.invoke(app, ["skill", "promote", "abc123def456", "--activate"])
+        assert r.exit_code == 1
+        assert "no draft hash recorded" in r.output
+        # gate18 pi NIT-1: the suggested remedy must actually work —
+        # re-promote alone never records a hash (existing draft kept).
+        assert "delete the draft directory" in r.output
+        assert "never records a hash" in r.output
+
+        with self._activation_stubs():
+            r2 = cli_runner.invoke(
+                app, ["skill", "promote", "abc123def456", "--activate", "--force"]
+            )
+        assert r2.exit_code == 0, f"failed: {r2.output}"
+        assert "legacy candidate" in r2.output
+
+    def test_activate_missing_draft_refused(self, tmp_path: Path) -> None:
+        """Guard step 1: missing draft file refuses (unit-level — within
+        the CLI flow promote always regenerates the draft first)."""
+        import typer
+
+        candidate = self._candidate()
+        with pytest.raises(typer.Exit) as exc_info:
+            skill_commands._activate_promoted_draft(
+                candidate, "custom/x", tmp_path / "nope" / "SKILL.md", "project", force=True
+            )
+        assert exc_info.value.exit_code == 1
+
+    def test_activate_global_requires_cross_project_evidence(
+        self, cli_runner: CliRunner, tmp_store, tmp_path: Path, monkeypatch
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setattr(skill_commands, "_GLOBAL_OBSERVABILITY_DIR", tmp_path / "gobs")
+        tmp_store.upsert(self._candidate())  # single-project candidate
+        # Pass the edit guard first (two-step flow: promote, edit, activate).
+        r1 = cli_runner.invoke(app, ["skill", "promote", "abc123def456", "--scope", "global"])
+        assert r1.exit_code == 0, f"failed: {r1.output}"
+        draft_file = next((tmp_path / "gobs" / "skill_drafts").rglob("SKILL.md"))
+        draft_file.write_text(
+            draft_file.read_text(encoding="utf-8") + "\nhuman edit\n", encoding="utf-8"
+        )
+        with self._activation_stubs() as install_mock:
+            r = cli_runner.invoke(
+                app, ["skill", "promote", "abc123def456", "--scope", "global", "--activate"]
+            )
+        assert r.exit_code == 1
+        assert "cross-project evidence" in r.output
+        install_mock.assert_not_called()
+
+    def test_activate_global_confirm_no_aborts(
+        self, cli_runner: CliRunner, tmp_store, tmp_path: Path, monkeypatch
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setattr(skill_commands, "_GLOBAL_OBSERVABILITY_DIR", tmp_path / "gobs")
+        tmp_store.upsert(self._candidate(project_distribution={"/p/alpha": 3, "/p/beta": 2}))
+        r1 = cli_runner.invoke(app, ["skill", "promote", "abc123def456", "--scope", "global"])
+        assert r1.exit_code == 0, f"failed: {r1.output}"
+        draft_file = next((tmp_path / "gobs" / "skill_drafts").rglob("SKILL.md"))
+        draft_file.write_text(
+            draft_file.read_text(encoding="utf-8") + "\nhuman edit\n", encoding="utf-8"
+        )
+        with self._activation_stubs() as install_mock:
+            r = cli_runner.invoke(
+                app,
+                ["skill", "promote", "abc123def456", "--scope", "global", "--activate"],
+                input="n\n",
+            )
+        assert r.exit_code == 1
+        assert "Aborted" in r.output
+        install_mock.assert_not_called()
+
+    def test_activate_global_confirm_yes_succeeds(
+        self, cli_runner: CliRunner, tmp_store, tmp_path: Path, monkeypatch
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setattr(skill_commands, "_GLOBAL_OBSERVABILITY_DIR", tmp_path / "gobs")
+        tmp_store.upsert(self._candidate(project_distribution={"/p/alpha": 3, "/p/beta": 2}))
+        with self._activation_stubs() as install_mock:
+            r = cli_runner.invoke(
+                app,
+                ["skill", "promote", "abc123def456", "--scope", "global", "--activate", "--force"],
+                input="y\n",
+            )
+        assert r.exit_code == 0, f"failed: {r.output}"
+        assert "Activated" in r.output
+        install_mock.assert_called_once()
+        assert install_mock.call_args.args[1] == "global"
+
+    def test_global_force_still_requires_confirmation(
+        self, cli_runner: CliRunner, tmp_store, tmp_path: Path, monkeypatch
+    ) -> None:
+        """Privacy boundary: --force bypasses evidence + edit guard but
+        NEVER the explicit global confirmation (default N)."""
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setattr(skill_commands, "_GLOBAL_OBSERVABILITY_DIR", tmp_path / "gobs")
+        tmp_store.upsert(self._candidate())  # single-project, would need --force
+        with self._activation_stubs() as install_mock:
+            r = cli_runner.invoke(
+                app,
+                ["skill", "promote", "abc123def456", "--scope", "global", "--activate", "--force"],
+                input="\n",  # empty answer → default False
+            )
+        assert r.exit_code == 1
+        assert "Aborted" in r.output
+        install_mock.assert_not_called()

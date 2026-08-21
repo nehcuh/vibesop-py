@@ -71,9 +71,11 @@ __all__ = [
     "CandidateStatus",
     "ClusterCandidate",
     "ClusterCandidateStore",
+    "MaterializeResult",
     "ScanSummary",
     "StepLabel",
     "label_step_frequency",
+    "sanitize_body_text",
     "scan_candidates",
 ]
 
@@ -216,6 +218,14 @@ class ClusterCandidate:
     source_skill_id: str | None = None
     dismiss_reason: str | None = None
     project_distribution: dict[str, int] = field(default_factory=dict)
+    # M12 M5: sha256 of the SKILL.md draft bytes as written at promote
+    # time. ``promote --activate`` compares the CURRENT draft file hash
+    # against this value — identical means the draft was never edited by
+    # a human, so activation is refused (content-hash edit guard; mtime
+    # checks are spoofable by whitespace-only edits and are not used).
+    # None for candidates promoted before M5 (legacy) — activation then
+    # requires --force.
+    draft_sha256: str | None = None
 
     def __post_init__(self) -> None:
         _validate_choice(self.status, _VALID_STATUS, "status")
@@ -490,7 +500,9 @@ class ClusterCandidateStore:
             self._rewrite_all_locked(survivors)
         return pruned
 
-    def promote(self, cluster_id: str, skill_id: str) -> ClusterCandidate | None:
+    def promote(
+        self, cluster_id: str, skill_id: str, *, draft_sha256: str | None = None
+    ) -> ClusterCandidate | None:
         """Flip status pending → promoted, set ``source_skill_id`` and
         ``reviewed_at``. Returns the updated candidate, or None if not
         found / already terminal.
@@ -499,15 +511,24 @@ class ClusterCandidateStore:
         refreshes ``reviewed_at`` (supports change-of-mind on the skill
         name). Re-promoting a dismissed row is a no-op (explicit decision
         override would surprise the user — dismiss stays sticky).
+
+        ``draft_sha256`` (M12 M5): content hash of the draft as generated,
+        recorded for the ``promote --activate`` edit guard. Passed only by
+        callers that just (re)materialized the draft; None leaves any
+        previously recorded hash untouched.
         """
+
+        def _apply(c: ClusterCandidate) -> None:
+            c.status = "promoted"
+            c.source_skill_id = skill_id
+            c.reviewed_at = _now_utc()
+            if draft_sha256 is not None:
+                c.draft_sha256 = draft_sha256
+
         with self._lock:
             return self._locked_transition(
                 cluster_id,
-                lambda c: (
-                    setattr(c, "status", "promoted"),
-                    setattr(c, "source_skill_id", skill_id),
-                    setattr(c, "reviewed_at", _now_utc()),
-                ),
+                _apply,
                 allow_if_terminal=lambda c: c.status == "promoted",
             )
 
@@ -799,6 +820,17 @@ class ScanSummary:
         task_id groupings only (gate17 pi BLOCK-1; design v3 M2 前置:
         degradation must be explicit in scan output, not just per-query
         warnings). The CLI lane renders the marker; this is the signal.
+    miss_share_by_layer:
+        Share of the miss pool per routing layer (M12 M4 item, done in
+        M5 for file-ownership disjointness): ``{layer: fraction}`` over
+        the same miss spans counted by ``miss_pool_size``, fractions
+        summing to 1.0. The layer is read from the span's metadata
+        ``layer`` field. gate18: producers (``cli/main.py`` route path,
+        ``agent_runtime.handle_query``) now WRITE this field — winning
+        layer on match, deepest cascade layer on miss — so new spans
+        bucket by real layer; spans written before that change (and
+        spans where no layer was determinable) fall into ``"unknown"``.
+        Empty dict when there are no misses.
     """
 
     promoted_count: int = 0
@@ -810,6 +842,7 @@ class ScanSummary:
     miss_admitted_count: int = 0
     miss_rejected_count: int = 0
     embedding_degraded: bool = False
+    miss_share_by_layer: dict[str, float] = field(default_factory=dict)
 
 
 def scan_candidates(
@@ -928,6 +961,7 @@ def scan_candidates(
         if is_route_miss_span(s) and not _is_low_information_query(_extract_query(s) or "")
     ]
     summary.miss_pool_size = len(miss_spans)
+    summary.miss_share_by_layer = _miss_share_by_layer(miss_spans)
     admitted_miss: list[Cluster] = []
     if miss_spans:
         miss_clusters = cluster_queries(
@@ -1147,6 +1181,35 @@ def _miss_recurrence_counts(cluster: Cluster, miss_spans: list[dict[str, Any]]) 
     return len(pairs), len(days)
 
 
+def _miss_share_by_layer(miss_spans: list[dict[str, Any]]) -> dict[str, float]:
+    """Per-layer share of the miss pool (M12 M4 item; ScanSummary field).
+
+    Reads the span metadata ``layer`` field (dict or JSON-string
+    metadata, same tolerance as ``is_route_miss_span``). Since gate18
+    the route-span producers (``cli/main.py``, ``agent_runtime``) write
+    ``layer`` — winning layer on match, deepest cascade layer on miss —
+    so new misses bucket by the layer they fell through. Spans written
+    BEFORE that change carry no such field and bucket into
+    ``"unknown"`` (honest degradation for legacy data, not a bug).
+    Empty pool → empty dict. Fractions sum to 1.0 (±float dust).
+    """
+    if not miss_spans:
+        return {}
+    counts: dict[str, int] = {}
+    for span in miss_spans:
+        meta = span.get("metadata")
+        if isinstance(meta, str):
+            try:
+                meta = json.loads(meta)
+            except json.JSONDecodeError:
+                meta = None
+        layer = meta.get("layer") if isinstance(meta, dict) else None
+        key = str(layer) if isinstance(layer, str) and layer else "unknown"
+        counts[key] = counts.get(key, 0) + 1
+    total = len(miss_spans)
+    return {layer: count / total for layer, count in sorted(counts.items())}
+
+
 def _sanitize_yaml_value(text: str, max_len: int = 80) -> str:
     """Make a string safe to interpolate into YAML frontmatter.
 
@@ -1171,7 +1234,7 @@ def _sanitize_yaml_value(text: str, max_len: int = 80) -> str:
     return f'"{escaped}"'
 
 
-def _sanitize_body_text(text: str, max_len: int = 200) -> str:
+def sanitize_body_text(text: str, max_len: int = 200) -> str:
     """Collapse a raw query to a single display line for the SKILL.md body.
 
     M7 F6: raw cluster queries were embedded verbatim into the queries
@@ -1187,11 +1250,19 @@ def _sanitize_body_text(text: str, max_len: int = 200) -> str:
     the safeguard is human review before activation (plus the
     cross-project warning block), not character-level mangling that
     would make the examples useless.
+
+    Public since M12 gate18 (was ``_sanitize_body_text``): the dashboard
+    read-model (``dashboard/_discoveries.py``) consumes it too — renames
+    must update both call sites.
     """
     cleaned = " ".join(str(text).split())
     if len(cleaned) > max_len:
         cleaned = cleaned[:max_len].rstrip() + "…"
     return cleaned
+
+
+# Backward-compat alias for the pre-gate18 private name.
+_sanitize_body_text = sanitize_body_text
 
 
 def _project_id_to_basename(project_id: str) -> str:
@@ -1306,6 +1377,13 @@ def _render_skill_md(
     to YAML frontmatter (basenames only — absolute paths leak user /
     org structure and must never appear in the SKILL.md body) and a
     warning header is prepended after the frontmatter.
+
+    M12 M5 privacy boundary (design v3 §隐私边界: 全局草稿不含示例
+    query 与项目标识): for ``scope="global"`` the example-queries block
+    is replaced by an omission note, ``project_distribution`` is NOT
+    emitted, and the cross-project warning no longer names projects —
+    even basenames are project identifiers once the draft can travel
+    across machines. Project scope keeps the permissive rendering.
     """
     # M7 F3 (adjudicated design — do NOT "optimize" this back into a
     # query-derived name): ``name`` is the strongest routing-match magnet
@@ -1324,10 +1402,17 @@ def _render_skill_md(
     )
     # M7 F6: queries are sanitized to single display lines (see
     # ``_sanitize_body_text``) before entering the markdown body.
-    queries_block = (
-        "\n".join(f"- {_sanitize_body_text(q)}" for q in candidate.queries[:5])
-        or "- (no representative queries recorded)"
-    )
+    # M12 M5: global drafts carry NO example queries (privacy boundary).
+    if scope == "global":
+        queries_block = (
+            "- (example queries omitted — global drafts never carry raw "
+            "queries, per the M12 privacy boundary)"
+        )
+    else:
+        queries_block = (
+            "\n".join(f"- {_sanitize_body_text(q)}" for q in candidate.queries[:5])
+            or "- (no representative queries recorded)"
+        )
     if candidate.core_steps:
         steps_block = "\n".join(
             f"{i}. {step}" for i, step in enumerate(candidate.core_steps, start=1)
@@ -1339,7 +1424,9 @@ def _render_skill_md(
         )
 
     # W5.2: cross-project frontmatter + warning header (permissive policy).
-    if candidate.is_cross_project:
+    # M12 M5: global drafts omit project identifiers entirely — no
+    # project_distribution YAML, and the warning names no projects.
+    if candidate.is_cross_project and scope != "global":
         # Basenames only, collision-suffixed — never emit absolute paths
         # (privacy P-5) AND avoid duplicate YAML keys when two pool
         # members share a basename (omx-code-review CRITICAL #1).
@@ -1353,6 +1440,17 @@ def _render_skill_md(
 scope_recommended: global
 """
         warning_block = _format_cross_project_warning(candidate.project_distribution)
+    elif candidate.is_cross_project:
+        cross_project_frontmatter = "scope_recommended: global\n"
+        warning_block = (
+            "\n> ⚠ **Cross-project cluster — handle with care.**\n"
+            "> \n"
+            "> This skill was synthesized from queries across multiple projects\n"
+            "> (project names omitted: global drafts carry no project identifiers,\n"
+            "> per the M12 privacy boundary). The steps below may encode one\n"
+            "> project's workflow that doesn't apply to the others. Review\n"
+            "> carefully before activating.\n"
+        )
     else:
         cross_project_frontmatter = ""
         warning_block = ""
@@ -1428,13 +1526,28 @@ routing, copy this directory into `{activate_path.rsplit("/", 1)[0]}/` and run
 """
 
 
+@dataclass
+class MaterializeResult:
+    """Result of ``materialize_candidate`` (gate18 pi NIT-2).
+
+    ``fresh`` is True only when THIS call wrote the draft — the
+    existence check and the write happen inside one critical section,
+    so a concurrent promote of the same cluster cannot have its bytes
+    mistaken for this process's freshly generated baseline (the edit
+    guard's ``draft_sha256`` relies on this).
+    """
+
+    path: Path
+    fresh: bool
+
+
 def materialize_candidate(
     candidate: ClusterCandidate,
     skill_id: str,
     *,
     drafts_root: Path | None = None,
     scope: Literal["project", "global"] = "project",
-) -> Path:
+) -> MaterializeResult:
     """Write a SKILL.md draft for a promoted cluster candidate.
 
     Path: ``<drafts_root>/<skill_id>/SKILL.md`` where ``drafts_root``
@@ -1454,10 +1567,16 @@ def materialize_candidate(
     call auto-discovered the draft.
 
     Idempotent: if SKILL.md already exists at the target path, return
-    the path WITHOUT overwriting. The user may have edited the draft
-    since promotion; clobbering would lose their edits. Re-promoting
-    the same cluster still updates store metadata (reviewed_at etc.)
-    via ``ClusterCandidateStore.promote``.
+    ``fresh=False`` WITHOUT overwriting. The user may have edited the
+    draft since promotion; clobbering would lose their edits.
+    Re-promoting the same cluster still updates store metadata
+    (reviewed_at etc.) via ``ClusterCandidateStore.promote``.
+
+    gate18 pi NIT-2 (TOCTOU): the freshness decision is made HERE,
+    inside a cross-process lock bracketing check + write — callers must
+    not pre-check ``skill_path.exists()`` themselves (a pre-check races
+    with a concurrent promote and could record the other process's
+    bytes as the edit-guard baseline hash).
 
     Parameters
     ----------
@@ -1478,8 +1597,8 @@ def materialize_candidate(
 
     Returns
     -------
-    Path
-        The path to the written SKILL.md.
+    MaterializeResult
+        ``path`` to the SKILL.md; ``fresh`` True iff this call wrote it.
     """
     root = (
         drafts_root
@@ -1490,19 +1609,25 @@ def materialize_candidate(
     skill_dir.mkdir(parents=True, exist_ok=True)
     skill_path = skill_dir / "SKILL.md"
 
-    if skill_path.exists():
-        logger.info(
-            "skill_promote: SKILL.md already exists at %s — not overwriting",
-            skill_path,
-        )
-        return skill_path
+    # gate18 pi NIT-2: sibling .lock file (AtomicWriter renames the data
+    # file, so locking the data path itself would not survive the swap —
+    # same caveat documented in utils.file_lock).
+    from vibesop.utils.file_lock import cross_process_lock
 
-    content = _render_skill_md(candidate, skill_id, scope=scope)
-    # Grok re-review HIGH: use AtomicWriter (temp + rename) so a crash
-    # mid-write never leaves a partial SKILL.md. SkillLoader would parse
-    # garbage and silently fail to load the very promote the user just
-    # confirmed. Mirrors ``ClusterCandidateStore._rewrite_all_locked``.
-    from vibesop.utils.atomic_writer import write_text
+    with cross_process_lock(skill_dir / ".materialize.lock"):
+        if skill_path.exists():
+            logger.info(
+                "skill_promote: SKILL.md already exists at %s — not overwriting",
+                skill_path,
+            )
+            return MaterializeResult(path=skill_path, fresh=False)
 
-    write_text(skill_path, content)
-    return skill_path
+        content = _render_skill_md(candidate, skill_id, scope=scope)
+        # Grok re-review HIGH: use AtomicWriter (temp + rename) so a crash
+        # mid-write never leaves a partial SKILL.md. SkillLoader would parse
+        # garbage and silently fail to load the very promote the user just
+        # confirmed. Mirrors ``ClusterCandidateStore._rewrite_all_locked``.
+        from vibesop.utils.atomic_writer import write_text
+
+        write_text(skill_path, content)
+        return MaterializeResult(path=skill_path, fresh=True)

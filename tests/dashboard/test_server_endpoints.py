@@ -6,6 +6,7 @@ Tests the new Phase B endpoints with FastAPI TestClient:
 - ``POST /api/reflections`` — input validation + store write
 - ``GET /api/reflections`` — list filters
 - ``PATCH /api/reflections/{id}`` — status update + error mapping
+- ``GET /api/discoveries`` — M12 M4 read-only Discovery queue
 
 Test layout uses ``tmp_path`` + monkeypatch of ``_resolve_project_root``
 so each test gets an isolated ``.vibe`` directory. Fixtures build minimal
@@ -556,3 +557,213 @@ class TestReflectionPatchEndpoint:
         match = [r for r in body if r["id"] == rid]
         assert match
         assert match[0]["status"] == "dismissed"
+
+
+# ---------------------------------------------------------------------------
+# GET /api/discoveries (M12 M4 — read-only Discovery queue)
+# ---------------------------------------------------------------------------
+
+
+def _global_obs_dir() -> Path:
+    """Global-scope observability dir. ``Path.home()`` is redirected to an
+    isolated tmp home by the autouse ``_isolated_home`` conftest fixture,
+    so this never touches the real ``~/.vibe``."""
+    return Path.home() / ".vibe" / "observability"
+
+
+def _seed_candidate(
+    store_dir: Path,
+    *,
+    seed: str,
+    queries: list[str],
+    span_count: int = 5,
+    gold_rate: float = 0.8,
+    source: str = "gold",
+    project_distribution: dict[str, int] | None = None,
+) -> str:
+    """Write one pending ClusterCandidate via the real store. Returns cluster_id.
+
+    cluster_id derives from hashlib.sha1 — never the builtin ``hash()``
+    (process-randomized → flaky across runs).
+    """
+    import hashlib
+
+    from vibesop.core.observability.skill_promote import (
+        ClusterCandidate,
+        ClusterCandidateStore,
+    )
+
+    cluster_id = hashlib.sha1(seed.encode()).hexdigest()
+    store = ClusterCandidateStore(store_dir)
+    store.upsert(
+        ClusterCandidate(
+            cluster_id=cluster_id,
+            task_ids=[f"{seed}-t{i}" for i in range(3)],
+            queries=queries,
+            span_count=span_count,
+            gold_rate=gold_rate,
+            gold_task_ids=[f"{seed}-t0"],
+            source=source,  # type: ignore[arg-type]
+            project_distribution=project_distribution or {},
+        )
+    )
+    return cluster_id
+
+
+class TestDiscoveriesEndpoint:
+    """``GET /api/discoveries`` — M12 M4 contract: read-only aggregation of
+    the project + global candidate stores joined with dismiss/mute signals.
+    Mutation stays CLI-only; the endpoint never writes."""
+
+    def test_returns_empty_payload_when_no_stores(self, client: TestClient) -> None:
+        """Fresh project (no candidate file, no global store) → 200 with
+        empty lists, not 500 — and the read-only guarantee: the request
+        must NOT create the global observability dir (store constructors
+        mkdir on init; the endpoint guards on file existence first)."""
+        global_obs = _global_obs_dir()
+        assert not global_obs.exists()  # pre-condition
+
+        response = client.get("/api/discoveries")
+        assert response.status_code == 200
+        body = response.json()
+        assert body["discoveries"] == []
+        assert body["stats"]["total"] == 0
+        assert "vibe skill discover" in body["cli_hint"]
+        # Headline read-only guarantee: no directories created by the GET.
+        # (Only the global side is lockable this way — tmp_project's
+        # fixture pre-creates the project-side dir.)
+        assert not global_obs.exists()
+
+    def test_aggregates_project_and_global_scopes(
+        self, client: TestClient, tmp_project: Path
+    ) -> None:
+        pid = _seed_candidate(
+            tmp_project / ".vibe" / "observability",
+            seed="proj",
+            queries=["how do I run the tests"],
+            span_count=8,
+            gold_rate=0.9,
+        )
+        gid = _seed_candidate(
+            _global_obs_dir(),
+            seed="glob",
+            queries=["deploy the staging env"],
+            span_count=4,
+            gold_rate=0.7,
+            project_distribution={"/Users/x/proj-a": 2, "/Users/x/proj-b": 2},
+        )
+
+        response = client.get("/api/discoveries")
+        assert response.status_code == 200
+        body = response.json()
+        cards = body["discoveries"]
+        assert len(cards) == 2
+        by_scope = {c["scope"]: c for c in cards}
+        assert by_scope["project"]["cluster_id"] == pid
+        assert by_scope["project"]["cluster_id_short"] == pid[:8]
+        assert by_scope["global"]["cluster_id"] == gid
+        # Sorted by evidence_score desc — the larger, higher-gold project
+        # cluster outranks the smaller global one.
+        assert cards[0]["cluster_id"] == pid
+        # Basename-only redaction: absolute project paths never leak.
+        assert set(by_scope["global"]["project_distribution"]) == {"proj-a", "proj-b"}
+        assert by_scope["global"]["is_cross_project"] is True
+        # Read-only contract is explicit on every card + payload header.
+        assert all("vibe skill promote" in c["cli_hint"] for c in cards)
+        assert body["stats"]["by_scope"] == {"project": 1, "global": 1}
+
+    def test_same_cluster_id_deduped_across_scopes(
+        self, client: TestClient, tmp_project: Path
+    ) -> None:
+        """Same cluster_id in both stores → one card, keeping the more
+        heterogeneous record (CLI ``_gather_scoped_candidates`` parity)."""
+        _seed_candidate(tmp_project / ".vibe" / "observability", seed="dup", queries=["q"])
+        _seed_candidate(
+            _global_obs_dir(),
+            seed="dup",
+            queries=["q"],
+            project_distribution={"/p/a": 1, "/p/b": 1},
+        )
+
+        cards = client.get("/api/discoveries").json()["discoveries"]
+        assert len(cards) == 1
+        assert cards[0]["scope"] == "global"
+
+    def test_free_text_sanitized_and_truncated(
+        self, client: TestClient, tmp_project: Path
+    ) -> None:
+        """Raw queries may contain newlines / 300+ chars — card text must be
+        single-line and truncated with an ellipsis."""
+        long_query = "line one\n\n" + "x" * 300
+        _seed_candidate(
+            tmp_project / ".vibe" / "observability",
+            seed="long",
+            queries=[long_query],
+        )
+
+        card = client.get("/api/discoveries").json()["discoveries"][0]
+        assert "\n" not in card["pattern_summary"]
+        assert card["pattern_summary"].endswith("…")
+        assert len(card["pattern_summary"]) <= 121
+        example = card["example_queries"][0]
+        assert "\n" not in example
+        assert len(example) <= 201
+
+    def test_dismissed_and_muted_status_surface(
+        self, client: TestClient, tmp_project: Path
+    ) -> None:
+        """Negative-list / mute signals (DiscoverySignalStore) annotate the
+        card status without touching the candidate row."""
+        from vibesop.core.observability.discovery import (
+            DiscoverySignalStore,
+            cluster_fingerprint,
+        )
+
+        obs_dir = tmp_project / ".vibe" / "observability"
+        dismissed_queries = ["alpha pattern query"]
+        muted_queries = ["beta pattern query"]
+        dismissed_id = _seed_candidate(obs_dir, seed="dism", queries=dismissed_queries)
+        _seed_candidate(obs_dir, seed="mute", queries=muted_queries)
+
+        signals = DiscoverySignalStore(obs_dir)
+        signals.record_dismiss(cluster_fingerprint(dismissed_queries), dismissed_id, reason="noise")
+        signals.record_mute(cluster_fingerprint(muted_queries), "mute-cluster")
+
+        body = client.get("/api/discoveries").json()
+        statuses = {c["cluster_id_short"]: c["status"] for c in body["discoveries"]}
+        assert statuses[dismissed_id[:8]] == "dismissed"
+        muted_card = next(c for c in body["discoveries"] if c["status"] == "muted")
+        assert muted_card["mute_expires_at"] is not None
+        assert body["stats"]["by_status"] == {"dismissed": 1, "muted": 1}
+
+    def test_expired_mute_does_not_mark_card(
+        self, client: TestClient, tmp_project: Path
+    ) -> None:
+        """Mutes auto-restore on expiry — an expired mute leaves the card
+        pending (到期自动恢复, no explicit unmute)."""
+        from datetime import UTC, datetime, timedelta
+
+        from vibesop.core.observability.discovery import (
+            DiscoverySignalStore,
+            cluster_fingerprint,
+        )
+
+        obs_dir = tmp_project / ".vibe" / "observability"
+        queries = ["gamma pattern query"]
+        _seed_candidate(obs_dir, seed="exp", queries=queries)
+        DiscoverySignalStore(obs_dir).record_mute(
+            cluster_fingerprint(queries),
+            "exp-cluster",
+            days=1,
+            now=datetime.now(UTC) - timedelta(days=3),
+        )
+
+        card = client.get("/api/discoveries").json()["discoveries"][0]
+        assert card["status"] == "pending"
+        assert card["mute_expires_at"] is None
+
+    def test_write_methods_rejected(self, client: TestClient) -> None:
+        """Read-only contract: no POST/PUT/DELETE on the discoveries surface."""
+        assert client.post("/api/discoveries", json={}).status_code == 405
+        assert client.put("/api/discoveries", json={}).status_code == 405
+        assert client.delete("/api/discoveries").status_code == 405

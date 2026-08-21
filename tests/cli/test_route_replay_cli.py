@@ -18,6 +18,7 @@ so direct isatty patches don't work — grok P0-2 follow-up).
 from __future__ import annotations
 
 import json
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -46,14 +47,19 @@ def _write_spans(span_file: Path, spans: list[dict]) -> None:
 
 
 def _gold_spans() -> list[dict]:
-    """3 spans with distinct trace_ids — meets min_gold_run_count=3."""
+    """3 spans with distinct trace_ids — meets min_gold_run_count=3.
+
+    Timestamps are relative to now: recall/replay applies a rolling 30-day
+    look-back (replay.py _DEFAULT_DAYS_WINDOW), so hard-coded dates become
+    a time bomb once they age out of the window.
+    """
     return [
         {
             "task_id": "t_cmspark_01",
             "input_data": {"query": "cmspark screenshot permission popup"},
             "name": "route:query",
             "project_id": "test",
-            "timestamp": f"2026-07-2{i}T12:00:00+00:00",
+            "timestamp": (datetime.now(UTC) - timedelta(days=5 - i)).isoformat(),
             "trace_id": f"T-prior-{i}",
             "metadata": {"skill_id": "cmspark-fix"},
         }

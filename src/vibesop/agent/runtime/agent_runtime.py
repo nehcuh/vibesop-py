@@ -456,7 +456,6 @@ class AgentRuntime:
                 agent_id=platform,
                 metadata={"query": query[:200], "platform": platform},
             ) as _task_span:
-
                 # Generate conversation ID if not provided
                 if not conversation_id:
                     project_hash = hashlib.sha256(str(self.project_root).encode()).hexdigest()[:16]
@@ -501,11 +500,19 @@ class AgentRuntime:
                     return result
 
                 result.intercepted = True
-                result.mode = decision.mode.value if hasattr(decision.mode, "value") else str(decision.mode)
+                result.mode = (
+                    decision.mode.value if hasattr(decision.mode, "value") else str(decision.mode)
+                )
 
                 # 3. Route the query
+                # gate18 pi NIT-4: routing layer for the task span (set in
+                # the branches below; written to span metadata at step 6).
+                _route_layer: str | None = None
                 try:
-                    if decision.mode in (InterceptionMode.ORCHESTRATE, InterceptionMode.MULTI_AGENT_SQUAD):
+                    if decision.mode in (
+                        InterceptionMode.ORCHESTRATE,
+                        InterceptionMode.MULTI_AGENT_SQUAD,
+                    ):
                         squad_ctx: Any = None
                         if decision.analysis is not None:
                             from vibesop.core.matching import RoutingContext
@@ -521,7 +528,9 @@ class AgentRuntime:
                             squad_ctx.metadata["intent_analysis"] = squad_ctx.intent_analysis
                             squad_ctx.metadata["_interception_mode"] = mode_tag
 
-                        orch_result = self.router.orchestrate(query, callbacks=callbacks, context=squad_ctx)
+                        orch_result = self.router.orchestrate(
+                            query, callbacks=callbacks, context=squad_ctx
+                        )
                         if orch_result.get("is_multi_intent"):
                             result.mode = "orchestrate"
                             plan = orch_result.get("plan", {})
@@ -540,6 +549,9 @@ class AgentRuntime:
                             result.skill_id = single.get("skill_id", "") or ""
                             result.confidence = single.get("confidence", 0.0)
                             result.mode = "single"
+                            # single_result["layer"] is the winning layer's
+                            # value on match, None on miss (agent __init__).
+                            _route_layer = single.get("layer") or None
                     else:
                         routing_result = self.router.route(query, enable_ai_triage=True)
 
@@ -552,24 +564,48 @@ class AgentRuntime:
 
                         # 5. Extract match details
                         if hasattr(routing_result, "has_match") and routing_result.has_match:
-                            primary = routing_result.primary if hasattr(routing_result, "primary") else None
+                            primary = (
+                                routing_result.primary
+                                if hasattr(routing_result, "primary")
+                                else None
+                            )
                             if primary:
                                 result.skill_id = getattr(primary, "skill_id", "")
                                 result.skill_name = getattr(primary, "skill_name", "")
                                 result.confidence = getattr(primary, "confidence", 0.0)
+                                # gate18 pi NIT-4: winning layer.
+                                _win_layer = getattr(primary, "layer", None)
+                                if _win_layer is not None:
+                                    _route_layer = getattr(_win_layer, "value", str(_win_layer))
 
                             if hasattr(routing_result, "alternatives"):
                                 for alt in routing_result.alternatives[:5]:
                                     result.alternatives.append(
-                                        {"skill_id": getattr(alt, "skill_id", ""), "confidence": getattr(alt, "confidence", 0.0)}
+                                        {
+                                            "skill_id": getattr(alt, "skill_id", ""),
+                                            "confidence": getattr(alt, "confidence", 0.0),
+                                        }
                                     )
 
                             if hasattr(routing_result, "plan") and routing_result.plan:
                                 try:
                                     from vibesop.agent.execution_protocol import ExecutionProtocol
-                                    result.plan = ExecutionProtocol.plan_to_json(routing_result.plan)
+
+                                    result.plan = ExecutionProtocol.plan_to_json(
+                                        routing_result.plan
+                                    )
                                 except Exception as e:
                                     logger.debug(f"Plan serialization failed: {e}")
+                        else:
+                            # gate18 pi NIT-4: miss → attribute the deepest
+                            # layer the cascade reached (layer_details[-1]);
+                            # absent details → field omitted (consumer buckets
+                            # missing as "unknown").
+                            _details = getattr(routing_result, "layer_details", None) or []
+                            if _details:
+                                _last_layer = getattr(_details[-1], "layer", None)
+                                if _last_layer is not None:
+                                    _route_layer = getattr(_last_layer, "value", str(_last_layer))
                 except Exception as e:
                     result.errors.append(f"Routing failed: {e}")
                     _task_span.set_error(f"Routing failed: {e}")
@@ -595,12 +631,21 @@ class AgentRuntime:
                 _task_span.metadata["mode"] = result.mode
                 _task_span.metadata["confidence"] = result.confidence
                 _task_span.metadata["has_match"] = result.has_match
+                # gate18 pi NIT-4: layer semantics — match → winning layer;
+                # miss → deepest cascade layer; omitted when unknown
+                # (ScanSummary.miss_share_by_layer buckets missing as
+                # "unknown"; pre-change spans simply lack the field).
+                # isinstance guard: a mocked router's .value can be a
+                # non-str MagicMock — never write that into span metadata.
+                if isinstance(_route_layer, str) and _route_layer:
+                    _task_span.metadata["layer"] = _route_layer
 
                 # --- Instinct feedback bridge (neutral signal) ---
                 if result.has_match and result.skill_id:
                     try:
                         # Dynamic import to avoid circular dependency at module load
                         from vibesop.core.routing.context_mixin import RouterContextMixin
+
                         mixin = RouterContextMixin.__new__(RouterContextMixin)
                         mixin._project_root = str(self.project_root)
                         mixin.record_instinct_matched(query, result.skill_id)

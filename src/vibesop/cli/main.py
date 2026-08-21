@@ -821,9 +821,7 @@ def route(
             from vibesop.cli.progress import LiveOrchestrationCallbacks
 
             with LiveOrchestrationCallbacks(console=console) as callbacks:
-                result = router.orchestrate(
-                    decision.query, context=context, callbacks=callbacks
-                )
+                result = router.orchestrate(decision.query, context=context, callbacks=callbacks)
         else:
             result = router.orchestrate(decision.query, context=context)
 
@@ -843,6 +841,28 @@ def route(
         if _mode is not None:
             _cli_task_span.metadata["mode"] = getattr(_mode, "value", str(_mode))
         _cli_task_span.metadata["has_match"] = bool(getattr(result, "has_match", False))
+        # gate18 pi NIT-4: record the routing layer so ScanSummary
+        # .miss_share_by_layer has real buckets. Semantics (mirror
+        # agent_runtime.handle_query): match → the winning layer
+        # (primary.layer); miss → the deepest layer the cascade reached
+        # (layer_details[-1]); omitted entirely when neither is
+        # available — the consumer buckets missing as "unknown", and
+        # spans written before this change simply have no field.
+        _layer = None
+        _primary_layer = getattr(_primary, "layer", None) if _primary else None
+        if _primary_layer is not None:
+            _layer = getattr(_primary_layer, "value", str(_primary_layer))
+        else:
+            _details = getattr(result, "layer_details", None) or []
+            if _details:
+                _last_layer = getattr(_details[-1], "layer", None)
+                if _last_layer is not None:
+                    _layer = getattr(_last_layer, "value", str(_last_layer))
+        # isinstance guard: enum .value on a mocked router can be a
+        # non-str MagicMock, which must not leak into span metadata
+        # (JSON serialization).
+        if isinstance(_layer, str) and _layer:
+            _cli_task_span.metadata["layer"] = _layer
 
     # Phase 4: render Agent Squad summary when the plan contains a squad
     squad_already_rendered = False

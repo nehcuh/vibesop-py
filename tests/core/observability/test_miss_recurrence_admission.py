@@ -426,3 +426,53 @@ class TestGoldPathNotRegressed:
 
         assert store.pending_count() == 1
         assert len(store.list_all()) == 1
+
+
+class TestMissShareByLayer:
+    """M12 M4 item (done in M5) — ScanSummary.miss_share_by_layer.
+
+    Route-span producers currently do NOT emit a ``layer`` metadata
+    field, so the honest bucket for real data is "unknown".
+    """
+
+    def test_share_computed_with_layer_and_unknown_bucket(
+        self, fresh_learner: InstinctLearner, cache: EmbeddingCache, store: ClusterCandidateStore
+    ) -> None:
+        spans = [
+            _miss_span("k1", "miss-topic one", D1),
+            _miss_span("k2", "miss-topic two", D2),
+            # Future-producer shape: an explicit layer field.
+            {
+                **_miss_span("k3", "miss-topic three", D2),
+                "metadata": {
+                    "query": "miss-topic three",
+                    "mode": "single",
+                    "has_match": False,
+                    "layer": "semantic_index",
+                },
+            },
+            # JSON-string metadata without layer → unknown.
+            _miss_span("k4", "miss-topic four", D2, metadata_as_string=True),
+        ]
+        with patch.object(cache, "_compute", side_effect=_fake_embedding):
+            summary = scan_candidates(spans, fresh_learner, store, cache=cache)
+
+        assert summary.miss_pool_size == 4
+        assert summary.miss_share_by_layer == {
+            "semantic_index": 0.25,
+            "unknown": 0.75,
+        }
+
+    def test_share_empty_when_no_misses(
+        self, fresh_learner: InstinctLearner, cache: EmbeddingCache, store: ClusterCandidateStore
+    ) -> None:
+        spans = [_gold_span("g1", "topic-A one")]
+        with patch.object(cache, "_compute", side_effect=_fake_embedding):
+            summary = scan_candidates(spans, fresh_learner, store, cache=cache)
+        assert summary.miss_share_by_layer == {}
+
+    def test_share_empty_when_no_spans(
+        self, fresh_learner: InstinctLearner, cache: EmbeddingCache, store: ClusterCandidateStore
+    ) -> None:
+        summary = scan_candidates([], fresh_learner, store, cache=cache)
+        assert summary.miss_share_by_layer == {}

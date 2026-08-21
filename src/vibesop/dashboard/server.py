@@ -18,6 +18,7 @@ from fastapi import FastAPI, Query
 from fastapi.responses import HTMLResponse, JSONResponse
 
 from vibesop.core.observability.reflection import Reflection, ReflectionStore
+from vibesop.dashboard._discoveries import build_discoveries_payload
 from vibesop.dashboard._schemas import ReflectionCreate, ReflectionStatusUpdate
 
 logger = logging.getLogger(__name__)
@@ -495,6 +496,22 @@ def create_app() -> FastAPI:
                 status_code=500,
             )
         return JSONResponse(updated.to_dict())
+
+    # ------------------------------------------------------------------
+    # API: Discoveries (M12 M4 — read-only Discovery queue)
+    # ------------------------------------------------------------------
+
+    @app.get("/api/discoveries")
+    async def api_discoveries() -> JSONResponse:
+        """Read-only Discovery queue aggregated from project + global stores.
+
+        Mutation (promote/dismiss/mute) is CLI-only by design (M12 v3 M4:
+        保人审闸门单入口) — this endpoint exposes no write operations and
+        performs none (no scans, no observation writes). Missing stores
+        (fresh project, no global pool) yield empty lists, never 500.
+        """
+        root = _resolve_project_root()
+        return JSONResponse(build_discoveries_payload(root))
 
     # API: Conversations  # noqa: ERA001
 

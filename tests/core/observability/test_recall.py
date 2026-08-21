@@ -554,12 +554,15 @@ class TestW3RealInstinctLearnerIntegration:
         cache = EmbeddingCache(cache_path=tmp_path / "emb.npz", dim=384)
 
         # Spans: 3 distinct traces for same task_id → distinct_trace_count=3
+        # Timestamps relative to now — recall applies a rolling 30-day
+        # look-back (replay.py _DEFAULT_DAYS_WINDOW); hard-coded dates age
+        # out of the window and turn this test into a time bomb.
         spans = [
             {
                 "task_id": "t_cmspark_real",
                 "input_data": {"query": query_text},
                 "name": "route:query",
-                "timestamp": f"2026-07-2{i}T12:00:00+00:00",
+                "timestamp": (datetime.now(UTC) - timedelta(days=5 - i)).isoformat(),
                 "trace_id": f"T-real-{i}",
                 "metadata": {"skill_id": "cmspark-fix"},
                 "project_id": "test",
@@ -608,7 +611,7 @@ class TestW3RealInstinctLearnerIntegration:
                 "task_id": "t_lid_real",
                 "input_data": {"query": canonical_query},
                 "name": "route:query",
-                "timestamp": f"2026-07-2{i}T18:00:00+00:00",
+                "timestamp": (datetime.now(UTC) - timedelta(days=5 - i)).isoformat(),
                 "trace_id": f"T-lid-{i}",
                 "project_id": "test",
             }

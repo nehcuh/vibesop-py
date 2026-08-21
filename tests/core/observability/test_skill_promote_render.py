@@ -57,9 +57,7 @@ class TestProjectIdToBasename:
 class TestWarningBlock:
     def test_warning_block_lists_all_projects_by_basename(self) -> None:
         """Warning names source projects + their span counts."""
-        block = _format_cross_project_warning(
-            {"/Users/jane/proj-a": 7, "/Users/jane/proj-b": 3}
-        )
+        block = _format_cross_project_warning({"/Users/jane/proj-a": 7, "/Users/jane/proj-b": 3})
         assert "Cross-project cluster" in block
         assert "`proj-a` (7 spans)" in block
         assert "`proj-b` (3 spans)" in block
@@ -72,9 +70,7 @@ class TestWarningBlock:
 
     def test_warning_block_never_emits_absolute_paths(self) -> None:
         """Privacy P-5: absolute filesystem paths must not appear."""
-        block = _format_cross_project_warning(
-            {"/Users/jane.doe/super/secret/path/proj-x": 5}
-        )
+        block = _format_cross_project_warning({"/Users/jane.doe/super/secret/path/proj-x": 5})
         assert "/Users/" not in block
         assert "jane.doe" not in block
         assert "secret" not in block
@@ -144,7 +140,10 @@ class TestRenderCrossProject:
     def test_render_never_emits_absolute_paths(self) -> None:
         """Privacy P-5 regression: no absolute paths anywhere in body."""
         c = _make_candidate(
-            project_distribution={"/Users/jane.doe/secret/proj-x": 4, "/Users/jane.doe/other/proj-y": 2},
+            project_distribution={
+                "/Users/jane.doe/secret/proj-x": 4,
+                "/Users/jane.doe/other/proj-y": 2,
+            },
             queries=["q1", "q2"],
         )
         content = _render_skill_md(c, "custom/test-priv")
@@ -176,9 +175,7 @@ class TestDedupBasenames:
     """
 
     def test_dedupe_returns_distinct_keys_for_same_basename(self) -> None:
-        out = dedupe_project_distribution(
-            {"/users/a/work/foo": 3, "/users/b/home/foo": 5}
-        )
+        out = dedupe_project_distribution({"/users/a/work/foo": 3, "/users/b/home/foo": 5})
         assert len(out) == 2
         # Both basenames preserved, but second is suffixed.
         assert "foo" in out
@@ -186,17 +183,13 @@ class TestDedupBasenames:
 
     def test_dedupe_preserves_counts_without_summing(self) -> None:
         """Counts are NOT merged — suffix signals multiple sources."""
-        out = dedupe_project_distribution(
-            {"/users/a/work/foo": 3, "/users/b/home/foo": 5}
-        )
+        out = dedupe_project_distribution({"/users/a/work/foo": 3, "/users/b/home/foo": 5})
         # First-seen wins the bare name.
         assert out["foo"] == 3
         assert out["foo-2"] == 5
 
     def test_dedupe_three_collisions(self) -> None:
-        out = dedupe_project_distribution(
-            {"/p/foo": 1, "/q/foo": 2, "/r/foo": 3}
-        )
+        out = dedupe_project_distribution({"/p/foo": 1, "/q/foo": 2, "/r/foo": 3})
         assert set(out.keys()) == {"foo", "foo-2", "foo-3"}
 
     def test_dedupe_does_not_collide_with_real_basename_hyphen_n(self) -> None:
@@ -208,9 +201,7 @@ class TestDedupBasenames:
         Pre-fix: ``{foo: 1, foo-2: 4}`` (third entry clobbers second synthetic).
         Post-fix: ``{foo: 1, foo-2: 3, foo-2-2: 4}`` (synthetic keeps incrementing).
         """
-        out = dedupe_project_distribution(
-            {"/p/foo": 1, "/q/foo": 3, "/q/foo-2": 4}
-        )
+        out = dedupe_project_distribution({"/p/foo": 1, "/q/foo": 3, "/q/foo-2": 4})
         # All three counts preserved (no silent overwrite).
         assert sorted(out.values()) == [1, 3, 4], f"counts lost: {out}"
         # No duplicate keys (the whole point).
@@ -226,9 +217,7 @@ class TestDedupBasenames:
         assert sorted(out.values()) == [1, 2, 3, 4, 5]
 
     def test_dedupe_no_collision_when_basenames_differ(self) -> None:
-        out = dedupe_project_distribution(
-            {"/users/a/alpha": 4, "/users/b/beta": 2}
-        )
+        out = dedupe_project_distribution({"/users/a/alpha": 4, "/users/b/beta": 2})
         assert out == {"alpha": 4, "beta": 2}
 
     def test_render_with_duplicate_basenames_yields_parseable_yaml(self) -> None:
@@ -248,9 +237,7 @@ class TestDedupBasenames:
 
     def test_warning_block_handles_duplicate_basenames(self) -> None:
         """Warning prose must also dedupe so it stays readable."""
-        block = _format_cross_project_warning(
-            {"/users/a/work/foo": 4, "/users/b/home/foo": 2}
-        )
+        block = _format_cross_project_warning({"/users/a/work/foo": 4, "/users/b/home/foo": 2})
         assert "`foo` (4 spans)" in block
         assert "`foo-2` (2 spans)" in block
 
@@ -351,9 +338,75 @@ class TestSanitizeBodyText:
         c = _make_candidate(queries=[long_q])
         content = _render_skill_md(c, "custom/test-body-truncate")
         body = content.split("---\n", 2)[2]
-        query_lines = [
-            ln for ln in body.splitlines() if ln.startswith("- word")
-        ]
+        query_lines = [ln for ln in body.splitlines() if ln.startswith("- word")]
         assert len(query_lines) == 1
         assert query_lines[0].endswith("…")
         assert len(query_lines[0]) < 250
+
+
+class TestGlobalPrivacyBoundary:
+    """M12 M5 — global drafts carry NO example queries / project identifiers.
+
+    Design v3 §隐私边界: 全局草稿不含示例 query 与项目标识. Project scope
+    keeps the permissive rendering (covered by the classes above).
+    """
+
+    def test_global_draft_omits_example_queries(self) -> None:
+        c = _make_candidate(queries=["my secret refactor query", "another private query"])
+        content = _render_skill_md(c, "custom/foo", scope="global")
+        assert "my secret refactor query" not in content
+        assert "another private query" not in content
+        assert "example queries omitted" in content
+
+    def test_project_draft_keeps_example_queries(self) -> None:
+        c = _make_candidate(queries=["visible project query"])
+        content = _render_skill_md(c, "custom/foo", scope="project")
+        assert "visible project query" in content
+
+    def test_global_cross_project_omits_project_identifiers(self) -> None:
+        c = _make_candidate(
+            project_distribution={"/home/user/alpha": 3, "/home/user/beta": 2},
+        )
+        content = _render_skill_md(c, "custom/foo", scope="global")
+        assert "project_distribution" not in content
+        assert "alpha" not in content
+        assert "beta" not in content
+        # The cross-project warning survives, but names nothing.
+        assert "Cross-project cluster" in content
+        assert "project names omitted" in content
+
+    def test_project_cross_project_keeps_distribution(self) -> None:
+        """Sanity: project scope keeps the W5.2 permissive rendering."""
+        c = _make_candidate(project_distribution={"/home/user/alpha": 3, "/home/user/beta": 2})
+        content = _render_skill_md(c, "custom/foo", scope="project")
+        assert "project_distribution" in content
+        assert "alpha" in content
+
+    def test_global_single_project_has_no_warning(self) -> None:
+        c = _make_candidate()
+        content = _render_skill_md(c, "custom/foo", scope="global")
+        assert "Cross-project cluster" not in content
+
+
+class TestMaterializeFreshFlag:
+    """gate18 pi NIT-2 — freshness is decided inside materialize_candidate.
+
+    The first call writes and reports ``fresh=True``; a second call over
+    an existing (possibly edited) draft reports ``fresh=False`` and does
+    not clobber. Callers key the edit-guard baseline hash off this flag.
+    """
+
+    def test_first_write_fresh_second_not(self, tmp_path) -> None:
+        from vibesop.core.observability.skill_promote import materialize_candidate
+
+        candidate = _make_candidate()
+        first = materialize_candidate(candidate, "custom/foo", drafts_root=tmp_path)
+        assert first.fresh is True
+        assert first.path.exists()
+
+        # Simulate a human edit between promotes.
+        first.path.write_text("edited by human", encoding="utf-8")
+        second = materialize_candidate(candidate, "custom/foo", drafts_root=tmp_path)
+        assert second.fresh is False
+        assert second.path == first.path
+        assert second.path.read_text(encoding="utf-8") == "edited by human"

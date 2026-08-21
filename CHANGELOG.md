@@ -9,6 +9,64 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### M12 M4+M5 — Dashboard discoveries page (read-only) + promote --activate with edit guard (2026-08-21)
+
+The last two data-independent milestones of the skill-discovery design
+(`.omx/artifacts/m12-product-design.md`): a read-only board surface for
+discovery candidates, and one-step activation for reviewed drafts.
+
+- **M4 — dashboard Discoveries page** (new `dashboard/_discoveries.py`,
+  `server.py`, `templates/index.html`): `GET /api/discoveries` aggregates
+  project + global candidate stores through the same
+  `discovery.build_queue(observe=False)` read path as
+  `vibe skill discover` — identical scoring/sorting/dismiss/mute/cooling
+  semantics with zero writes (store constructors mkdir on creation; every
+  access is guarded by an existence check first, verified with an
+  isolated-HOME test). Cards carry pattern summary, evidence strength,
+  sanitized example queries, step labels, capture age, [XP]/scope/status
+  badges, and a `cli_hint` — the board is deliberately read-only, all
+  mutations stay in the CLI (single human-review gate). The banner
+  discloses the view divergence: board shows all statuses, CLI defaults
+  to pending (`--all` for everything).
+- **M5 — `promote --activate` + content-hash edit guard**
+  (`skill_promote.py`, `skill_commands.py`): draft generation records the
+  draft's sha256 on the candidate row (fresh writes only — re-promote
+  never re-baselines); `--activate` registers the draft through the exact
+  `vibe skill add` path (`_audit_skill_or_exit` / `_install_skill_or_exit`
+  factored out of `add`, zero logic duplication) and is REFUSED unless
+  the draft changed since generation or `--force` is given. Legacy
+  candidates (no recorded hash) require `--force`; the refusal message
+  only suggests remedies that actually work. Guard ordering: missing
+  file → legacy hash → unedited → global evidence → confirm; every
+  refusal notes the candidate is promoted-but-not-activated.
+  `materialize_candidate` now returns `MaterializeResult(path, fresh)`
+  with the existence check and write inside one `cross_process_lock`
+  critical section (TOCTOU hardening).
+- **Global-scope privacy guardrails**: global drafts omit example
+  queries, project distribution, and project names (verified zero-leak
+  against `SECRET-TOKEN` / user-path fixtures); global activation
+  additionally requires cross-project evidence or `--force` AND an
+  interactive privacy confirmation (`default=False`) that `--force`
+  cannot skip (fail-closed on EOF).
+- **`ScanSummary.miss_share_by_layer` + producer `metadata.layer`**:
+  scan summaries now report the per-layer miss distribution, and both
+  route-span producers (CLI `main.py`, hook `agent_runtime.py`) write
+  `metadata.layer` (winning layer on match, deepest cascade layer on
+  miss) — spans written before this change bucket as `unknown`. This is
+  the dismiss-fuse observability feed for the M11 miss-pool composition
+  shift.
+- **Time-bomb test fix** (pre-existing HEAD failures, unrelated to
+  M4/M5): three fixtures hard-coded `2026-07-2x` dates against
+  `replay.py`'s rolling 30-day look-back; the oldest span aged out on
+  2026-08-20. All three now use `now(UTC) - timedelta(...)` relative
+  dates.
+- `skill_promote._sanitize_body_text` promoted to public
+  `sanitize_body_text` (private alias kept) — second consumer is the
+  dashboard read-model.
+- Reviews: gate18 (claude+pi) both PASS_WITH_NITS, 0 BLOCK; all nits
+  converged. Full suite 5793 passed / 14 skipped / 0 failed; orbstack
+  e2e 7/7.
+
 ### M12 M2 — miss-cluster admission + unified Discovery CLI (2026-08-20)
 
 The discovery half of the skill-discovery design

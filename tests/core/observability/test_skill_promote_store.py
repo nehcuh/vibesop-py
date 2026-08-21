@@ -20,8 +20,6 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-import pytest
-
 from vibesop.core.observability.skill_promote import (
     MAX_PENDING,
     ClusterCandidate,
@@ -140,9 +138,7 @@ class TestUpsert:
 
         # Rescan sees the same cluster_id with different counts — MUST
         # NOT overwrite the promoted row.
-        store.upsert(
-            _make_candidate(cluster_id="c1", span_count=99, gold_rate=0.99)
-        )
+        store.upsert(_make_candidate(cluster_id="c1", span_count=99, gold_rate=0.99))
         still_promoted = store.get("c1")
         assert still_promoted is not None
         assert still_promoted.status == "promoted"
@@ -180,8 +176,7 @@ class TestHardCap:
                     cluster_id=f"c{i}",
                     gold_rate=0.10 + i * 0.01,
                     span_count=10 + i,
-                    created_at=datetime(2026, 1, 1, tzinfo=UTC)
-                    + timedelta(hours=i),
+                    created_at=datetime(2026, 1, 1, tzinfo=UTC) + timedelta(hours=i),
                 )
             )
         assert store.pending_count() == MAX_PENDING
@@ -198,9 +193,7 @@ class TestHardCap:
         assert store.get("c0") is None, "lowest gold_rate row should be evicted"
         assert store.get("c_new") is not None
 
-    def test_hard_cap_rejects_new_row_below_min(
-        self, tmp_path: Path, caplog
-    ) -> None:
+    def test_hard_cap_rejects_new_row_below_min(self, tmp_path: Path, caplog) -> None:
         """Admit-only-if-better: a new row whose gold_rate doesn't beat
         the current minimum is REJECTED, not inserted.
 
@@ -219,8 +212,7 @@ class TestHardCap:
                     cluster_id=f"c{i}",
                     gold_rate=0.50 + i * 0.01,
                     span_count=10 + i,
-                    created_at=datetime(2026, 1, 1, tzinfo=UTC)
-                    + timedelta(hours=i),
+                    created_at=datetime(2026, 1, 1, tzinfo=UTC) + timedelta(hours=i),
                 )
             )
         assert store.pending_count() == MAX_PENDING
@@ -240,13 +232,11 @@ class TestHardCap:
             "admit-only-if-better: worse new row must NOT be inserted"
         )
         # Eviction was logged at WARNING (pi P0: cron visibility).
-        assert any(
-            "rejecting new cluster c_worse" in rec.message for rec in caplog.records
-        ), f"expected rejection log; got: {[r.message for r in caplog.records]}"
+        assert any("rejecting new cluster c_worse" in rec.message for rec in caplog.records), (
+            f"expected rejection log; got: {[r.message for r in caplog.records]}"
+        )
 
-    def test_hard_cap_admits_better_unstable_displacing_unstable(
-        self, tmp_path: Path
-    ) -> None:
+    def test_hard_cap_admits_better_unstable_displacing_unstable(self, tmp_path: Path) -> None:
         """At cap, a new unstable row can displace an existing unstable
         row if its gold_rate is higher. But it cannot displace a stable
         row (admit-only-if-better compares against the minimum)."""
@@ -340,9 +330,7 @@ class TestTzNaiveDatetime:
 
 
 class TestPruneExpired:
-    def test_prune_expired_removes_only_pending_past_ttl(
-        self, tmp_path: Path
-    ) -> None:
+    def test_prune_expired_removes_only_pending_past_ttl(self, tmp_path: Path) -> None:
         """TTL-expired pending rows are pruned. Promoted / dismissed
         rows survive even if their TTL has passed — terminal states are
         audit records, not backlog."""
@@ -430,17 +418,11 @@ class TestTransitions:
 
 
 class TestListUnstable:
-    def test_list_unstable_filters_gold_rate_below_threshold(
-        self, tmp_path: Path
-    ) -> None:
+    def test_list_unstable_filters_gold_rate_below_threshold(self, tmp_path: Path) -> None:
         """``list_unstable`` returns only pending candidates with
         ``is_unstable=True``. Sorted by gold_rate asc (worst first)."""
         store = ClusterCandidateStore(storage_dir=tmp_path)
-        store.upsert(
-            _make_candidate(
-                cluster_id="stable1", gold_rate=0.8, is_unstable=False
-            )
-        )
+        store.upsert(_make_candidate(cluster_id="stable1", gold_rate=0.8, is_unstable=False))
         store.upsert(
             _make_candidate(
                 cluster_id="unstable1",
@@ -472,3 +454,52 @@ class TestListUnstable:
 
         all_pending = store.list_pending(include_unstable=True)
         assert len(all_pending) == 3
+
+
+class TestDraftSha256:
+    """M12 M5 — content-hash edit guard persistence.
+
+    ``draft_sha256`` records the draft's sha256 at promote time so
+    ``promote --activate`` can verify a substantive human edit.
+    """
+
+    def test_field_defaults_to_none(self) -> None:
+        assert _make_candidate().draft_sha256 is None
+
+    def test_round_trip_preserves_hash(self) -> None:
+        c = _make_candidate()
+        c.draft_sha256 = "ab" * 32
+        assert ClusterCandidate.from_dict(c.to_dict()).draft_sha256 == "ab" * 32
+
+    def test_from_dict_missing_key_is_none(self) -> None:
+        """Legacy rows (pre-M5) carry no draft_sha256 key → None."""
+        d = _make_candidate().to_dict()
+        d.pop("draft_sha256", None)
+        assert ClusterCandidate.from_dict(d).draft_sha256 is None
+
+    def test_promote_records_hash(self, tmp_path: Path) -> None:
+        store = ClusterCandidateStore(storage_dir=tmp_path)
+        store.upsert(_make_candidate(cluster_id="h1"))
+        store.promote("h1", "custom/x", draft_sha256="cd" * 32)
+        row = store.get("h1")
+        assert row is not None
+        assert row.draft_sha256 == "cd" * 32
+
+    def test_promote_without_hash_preserves_existing(self, tmp_path: Path) -> None:
+        """Re-promote without a hash (e.g. draft already existed) must not
+        clear the recorded hash — None means 'leave untouched'."""
+        store = ClusterCandidateStore(storage_dir=tmp_path)
+        store.upsert(_make_candidate(cluster_id="h2"))
+        store.promote("h2", "custom/x", draft_sha256="ef" * 32)
+        store.promote("h2", "custom/x")  # no hash passed
+        row = store.get("h2")
+        assert row is not None
+        assert row.draft_sha256 == "ef" * 32
+
+    def test_promote_hash_survives_reload(self, tmp_path: Path) -> None:
+        store = ClusterCandidateStore(storage_dir=tmp_path)
+        store.upsert(_make_candidate(cluster_id="h3"))
+        store.promote("h3", "custom/x", draft_sha256="01" * 32)
+        reloaded = ClusterCandidateStore(storage_dir=tmp_path).get("h3")
+        assert reloaded is not None
+        assert reloaded.draft_sha256 == "01" * 32
