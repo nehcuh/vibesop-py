@@ -9,6 +9,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### M12 follow-up — low-information filter shape rules (2026-08-21)
+
+Implements Insight 1 of the retention-pool mining
+(`.omx/artifacts/retention-pool-insights.md`): the pre-pool
+low-information filter (`skill_promote._is_low_information_query`) caught
+only 1/12 real continuation fragments with its exact-match wordlist —
+continuation traffic has *shapes*, not fixed strings.
+
+- **Rule A (continuation prefix + phase-token-only remainder)**: strips
+  leading continuation verbs (继续/接着/开始/做, iteratively) and
+  particles/connectives, then requires every remaining token to be a
+  phase token (`M1`, `D1c`, `P2`, `phase3`) or a particle — otherwise
+  the query passes. Pure phase/particle lists without a prefix
+  (`M1 和 M2`) are also filtered; documented with rationale.
+- **Rule B (enumeration option-reply)**: enumeration-led query, ≤30
+  chars, containing a bare letter option token whose right boundary is
+  end-of-string / next enumeration marker / separator punctuation —
+  tightened after gate19 found the naive `[A-Z]` form filtered real
+  tasks (`1. 完成 A 模块`, `1. 看 A 和 B 的差异`). Rule B hits log at
+  debug level for false-kill audits.
+- Coverage on the 12 retention fixtures: **7 filtered / 5 consciously
+  released** (`加吧`, status updates, probes, >30-char multi-answers —
+  each documented in the docstring; `清理吧` calibration counterexample
+  stays safe). Full-width punctuation variants added to the strip set.
+- Tests: 45 shape-rule cases incl. the 12 retention fixtures and
+  must-NOT-catch counterexamples for both rules.
+- Reviews: gate19 (claude+pi) both PASS_WITH_NITS, 0 BLOCK, and
+  independently converged on the same four findings (Rule B over-filter,
+  dead `phase\s*` regex, undocumented no-prefix filtering, test gaps) —
+  all converged.
+
 ### M12 M4+M5 — Dashboard discoveries page (read-only) + promote --activate with edit guard (2026-08-21)
 
 The last two data-independent milestones of the skill-discovery design

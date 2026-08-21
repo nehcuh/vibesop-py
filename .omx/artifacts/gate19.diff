@@ -1,0 +1,227 @@
+diff --git a/src/vibesop/core/observability/skill_promote.py b/src/vibesop/core/observability/skill_promote.py
+index 8943dc4..dd9edca 100644
+--- a/src/vibesop/core/observability/skill_promote.py
++++ b/src/vibesop/core/observability/skill_promote.py
+@@ -49,6 +49,7 @@ from __future__ import annotations
+ 
+ import json
+ import logging
++import re
+ import threading
+ from collections.abc import Callable, Iterable
+ from dataclasses import asdict, dataclass, field
+@@ -160,15 +161,107 @@ _DEGENERATE_QUERIES = frozenset(
+     }
+ )
+ 
++# Insight-1 shape rules (retention-pool-insights.md §洞察 1): exact-match
++# wordlists can't catch continuation traffic — the 12 retention fragments
++# scored 1/12 against the wordlist. Two conservative shape rules below
++# lift coverage to 7/12. OVER-FILTERING is the failure mode: every rule
++# ships with a must-NOT-catch counterexample in the tests.
++#
++# Rule A verbs/particles. "做" doubles as a leading continuation verb
++# ("做 D1c") and as a mid-remainder filler ("继续往后做吧") — both are
++# stripped only from the FRONT, iteratively with the particles, so a real
++# object ("继续做用户登录模块" → "用户登录模块" remains) always survives.
++_CONTINUATION_VERBS = ("继续", "接着", "开始", "做")
++_CONTINUATION_PARTICLES = frozenset(
++    {"吧", "了", "哦", "啊", "呢", "嘛", "往后", "抛光", "和", "与", "跟"}
++)
++# Phase tokens: M1 / D1c / P2 / Phase2b / phase 3 (whole-token fullmatch).
++_PHASE_TOKEN_RE = re.compile(r"(?:phase\s*\d+[a-z]?|[a-z]?\d+[a-z]?)$", re.IGNORECASE)
++# Punctuation stripped when checking "nothing remains" (ASCII + common CJK).
++_STRIP_PUNCT = " \t　.,、。!?:;·…—-()（）[]【】\"'′"
++
++# Rule B: enumeration option-reply — "1. 接受 C′ 2. D". Requires the
++# numeric-enumeration opening, short length, AND a standalone bare-letter
++# option token (case-sensitive [A-Z] — "NPE" / "evaluate" must not count).
++_ENUMERATION_OPEN_RE = re.compile(r"^\s*\d+\s*[.、)]")
++_OPTION_TOKEN_RE = re.compile(r"[A-Z][′']?$")
++_ENUMERATION_MAX_LEN = 30
++
+ 
+ def _is_low_information_query(query: str) -> bool:
+-    """True for content-free queries (calibration: pre-pool filter, M2c)."""
++    """True for content-free queries (calibration: pre-pool filter, M2c).
++
++    Rule inventory:
++
++    1. Exact-match wordlist (``_DEGENERATE_QUERIES``).
++    2. Latin-only length ≤4 — the length rule is Latin-only: short CJK
++       strings CAN carry intent (清理吧 — a calibration pair), short
++       Latin ones can't (gate17 pi).
++    3. Rule A — continuation prefix + phase-token-only remainder
++       (Insight 1): iteratively strip leading continuation verbs
++       {继续,接着,开始,做} and particles {吧,了,…,和,与,跟}; if the
++       remainder is empty or every whitespace-token is a phase token
++       (M1/D1c/P2/Phase2b) or particle → low-information.
++    4. Rule B — enumeration option-reply (Insight 1): numeric-enumeration
++       opening + ≤30 chars + a standalone bare-letter option token
++       (``C′``/``D``).
++
++    Deliberately NOT filtered (known-safe omissions — honest
++    documentation beats aggressive rules; retention-pool §洞察 1):
++    ``加吧`` (2-char CJK verb+particle — the calibration counterexample
++    ``清理吧`` proves this shape carries intent), ``我看下恢复了``
++    (status update), ``reply with exactly: claude-ok`` (probe),
++    ``我用的是 dist-package 下面的 chrome-extension`` (substantive
++    answer), and the long multi-answer enumeration reply (>30 chars —
++    Rule B's length cap is the accepted limit).
++    """
+     q = query.strip().lower()
+     if q in _DEGENERATE_QUERIES:
+         return True
+-    # The length rule is Latin-only: short CJK strings CAN carry intent
+-    # (清理吧 — a calibration pair), short Latin ones can't (gate17 pi).
+-    return len(q) <= 4 and not any("一" <= ch <= "鿿" for ch in q)
++    if len(q) <= 4 and not any("一" <= ch <= "鿿" for ch in q):
++        return True
++    if _is_continuation_phase_only(q):
++        return True
++    return _is_enumeration_option_reply(query.strip())
++
++
++def _is_continuation_phase_only(q: str) -> bool:
++    """Rule A — continuation prefix + phase-token-only remainder.
++
++    ``q`` is already stripped+lowercased. Front-strips verbs and
++    particles interchangeably (e.g. 继续往后做吧 → 继续,往后,做,吧 all
++    peel off), then requires every remaining whitespace-token to be a
++    phase token or a particle. Any substantive token (处理/backlog/
++    用户登录模块) fails the check — conservative direction.
++    """
++    rest = q
++    while rest:
++        for prefix in (*_CONTINUATION_VERBS, *_CONTINUATION_PARTICLES):
++            if rest.startswith(prefix):
++                rest = rest[len(prefix) :].lstrip()
++                break
++        else:
++            break
++    rest = rest.strip(_STRIP_PUNCT)
++    if not rest:
++        return True
++    tokens = [t.strip(_STRIP_PUNCT) for t in rest.split()]
++    tokens = [t for t in tokens if t]
++    return bool(tokens) and all(
++        _PHASE_TOKEN_RE.fullmatch(t) or t in _CONTINUATION_PARTICLES for t in tokens
++    )
++
++
++def _is_enumeration_option_reply(q: str) -> bool:
++    """Rule B — enumeration option-reply (original case; the option
++    token is case-sensitive [A-Z] so words like NPE/evaluate never
++    match). Accepted limit: replies longer than 30 chars pass through
++    even when they are option answers (documented omission)."""
++    if len(q) > _ENUMERATION_MAX_LEN or not _ENUMERATION_OPEN_RE.match(q):
++        return False
++    return any(
++        _OPTION_TOKEN_RE.fullmatch(token) for token in re.split(r"[\s.,、;，。]+", q) if token
++    )
+ 
+ 
+ def _validate_choice(value: str, valid: frozenset[str], field_name: str) -> str:
+diff --git a/tests/core/observability/test_miss_recurrence_admission.py b/tests/core/observability/test_miss_recurrence_admission.py
+index 0647e36..f745a9a 100644
+--- a/tests/core/observability/test_miss_recurrence_admission.py
++++ b/tests/core/observability/test_miss_recurrence_admission.py
+@@ -476,3 +476,98 @@ class TestMissShareByLayer:
+     ) -> None:
+         summary = scan_candidates([], fresh_learner, store, cache=cache)
+         assert summary.miss_share_by_layer == {}
++
++
++class TestLowInformationShapeRules:
++    """Insight 1 (retention-pool-insights.md §洞察 1) — shape rules on top
++    of the wordlist. The 12 retention fragments are the fixtures:
++    7 filtered / 5 deliberately not filtered. Behavior-focused: verdicts
++    are asserted via the public filter ``_is_low_information_query``.
++    """
++
++    @pytest.mark.parametrize(
++        "query",
++        [
++            # Rule A — continuation prefix + phase-token-only remainder.
++            "继续往后做吧",
++            "继续 Phase2b 和 Phase3",
++            "继续 P2 抛光",
++            "开始 M1",
++            "做 D1c",
++            # Pre-existing rules (wordlist / latin≤4).
++            "B+C",
++            # Rule B — enumeration option-reply.
++            "1. 接受 C′ 2. D",
++        ],
++    )
++    def test_retention_fragments_filtered(self, query: str) -> None:
++        from vibesop.core.observability.skill_promote import _is_low_information_query
++
++        assert _is_low_information_query(query) is True
++
++    @pytest.mark.parametrize(
++        "query,why",
++        [
++            # 2-char CJK verb+particle — 清理吧 (calibration pair) proves
++            # this shape carries intent.
++            ("加吧", "CJK verb+particle carries intent (cf. 清理吧)"),
++            # Status update — not a routing signal, but not proven
++            # content-free either; conservative pass-through.
++            ("我看下恢复了", "status update"),
++            # Probe string — must round-trip verbatim for diagnostics.
++            ("reply with exactly: claude-ok", "probe"),
++            # Substantive answer to an agent question — has content.
++            (
++                "我用的是 dist-package 下面的 chrome-extension",
++                "substantive answer",
++            ),
++            # Long multi-answer enumeration — Rule B's ≤30-char cap is the
++            # accepted limit (documented omission).
++            (
++                "1. 互斥 2. 不禁 evaluate 3. 并发最多到 5 吧 4. 根据你们的建议来选择合适的方案 5. 能",
++                "long enumeration (>30 chars, accepted limit)",
++            ),
++        ],
++    )
++    def test_retention_fragments_deliberately_kept(self, query: str, why: str) -> None:
++        from vibesop.core.observability.skill_promote import _is_low_information_query
++
++        assert _is_low_information_query(query) is False, f"over-filtered: {why}"
++
++    @pytest.mark.parametrize(
++        "query,why",
++        [
++            # Calibration counterexample — terse CJK imperative.
++            ("清理吧", "calibration pair: 2-char CJK carries intent"),
++            # Continuation prefix with a REAL object must survive Rule A
++            # (处理 is not in the verb set; remainder has content).
++            ("继续处理 backlog 里的 X 文件", "real object after 继续"),
++            ("继续做用户登录模块", "real object after 继续做"),
++            # Enumeration with no bare-letter option (NPE is a word) must
++            # survive Rule B.
++            ("1. 修复登录页面 NPE 2. 补充集成测试", "NPE is not a bare option letter"),
++            # Ordinary task queries.
++            ("帮我重构登录模块的鉴权逻辑", "normal CJK task query"),
++            ("fix the login page NPE", "normal latin task query"),
++        ],
++    )
++    def test_counterexamples_never_filtered(self, query: str, why: str) -> None:
++        from vibesop.core.observability.skill_promote import _is_low_information_query
++
++        assert _is_low_information_query(query) is False, f"over-filtered: {why}"
++
++    def test_shape_rules_actually_exclude_from_miss_pool(
++        self, fresh_learner: InstinctLearner, cache: EmbeddingCache, store: ClusterCandidateStore
++    ) -> None:
++        """End-to-end: Rule-A fragments never reach the miss pool (the
++        0.72–0.82 cosine-match-everything poison the filter exists for)."""
++        spans = [
++            _miss_span("k1", "继续往后做吧", D1),
++            _miss_span("k2", "继续 Phase2b 和 Phase3", D2),
++            _miss_span("k3", "开始 M1", D2),
++        ]
++        with patch.object(cache, "_compute", side_effect=_fake_embedding):
++            summary = scan_candidates(spans, fresh_learner, store, cache=cache)
++
++        assert summary.miss_pool_size == 0
++        assert store.pending_count() == 0

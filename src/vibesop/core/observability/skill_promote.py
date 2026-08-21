@@ -49,6 +49,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import threading
 from collections.abc import Callable, Iterable
 from dataclasses import asdict, dataclass, field
@@ -160,15 +161,137 @@ _DEGENERATE_QUERIES = frozenset(
     }
 )
 
+# Insight-1 shape rules (retention-pool-insights.md §洞察 1): exact-match
+# wordlists can't catch continuation traffic — the 12 retention fragments
+# scored 1/12 against the wordlist. Two conservative shape rules below
+# lift coverage to 7/12. OVER-FILTERING is the failure mode: every rule
+# ships with a must-NOT-catch counterexample in the tests.
+#
+# Rule A verbs/particles/fillers. "做" doubles as a leading continuation
+# verb ("做 D1c") and as a mid-remainder filler ("继续往后做吧") — both
+# are stripped only from the FRONT, iteratively with the particles, so a
+# real object ("继续做用户登录模块" → "用户登录模块" remains) always
+# survives. "抛光" is a real verb, not a particle (gate19): it sits in
+# the filler set because in continuation traffic it names a PHASE
+# activity, not a routing target ("继续 P2 抛光" — insight fixture) —
+# the same philosophy as "做 D1c".
+_CONTINUATION_VERBS = ("继续", "接着", "开始", "做")
+# 语气词 (吧/了/哦/啊/呢/嘛) + 连接词 (和/与/跟) + 续聊填充词 (往后/抛光 —
+# 后者是实义动词，此处按相位行为词处理，见上).
+_CONTINUATION_PARTICLES = frozenset(
+    {"吧", "了", "哦", "啊", "呢", "嘛", "往后", "抛光", "和", "与", "跟"}
+)
+# Phase tokens: M1 / D1c / P2 / Phase2b / phase3 (whole-token fullmatch,
+# so no whitespace inside a token — the space-separated form "phase 3"
+# splits into ["phase", "3"] and is NOT caught: documented safe-omission,
+# conservative direction, gate19 NIT-2).
+_PHASE_TOKEN_RE = re.compile(r"(?:phase\d+[a-z]?|[a-z]?\d+[a-z]?)$", re.IGNORECASE)
+# Punctuation stripped when checking "nothing remains" (ASCII + CJK,
+# incl. full-width variants — gate19 NIT-4: 继续吧！ must peel like 继续吧!).
+_STRIP_PUNCT = " \t　.,、。!?:;·…—-()（）[]【】\"'′！？：；"
+
+# Rule B: enumeration option-reply — "1. 接受 C′ 2. D". Requires the
+# numeric-enumeration opening, short length, AND a standalone bare-letter
+# option token. gate19 NIT-1: the bare letter must be standalone on BOTH
+# sides — (?<![A-Za-z]) so the E in "NPE" can't match, and a lookahead so
+# it counts as an option only when followed by end-of-string, another
+# enumeration marker, or separator punctuation ("C′ 2." / trailing "D"
+# stay filtered; "A 模块" / "A 和 B" / "X 文件" are real task shapes and
+# released).
+_ENUMERATION_OPEN_RE = re.compile(r"^\s*\d+\s*[.、)]")
+_OPTION_TOKEN_RE = re.compile(r"(?<![A-Za-z])[A-Z][′']?(?=\s*(?:\d+\s*[.、)]|[.,、;，。!！]|$))")
+_ENUMERATION_MAX_LEN = 30
+
 
 def _is_low_information_query(query: str) -> bool:
-    """True for content-free queries (calibration: pre-pool filter, M2c)."""
+    """True for content-free queries (calibration: pre-pool filter, M2c).
+
+    Rule inventory:
+
+    1. Exact-match wordlist (``_DEGENERATE_QUERIES``).
+    2. Latin-only length ≤4 — the length rule is Latin-only: short CJK
+       strings CAN carry intent (清理吧 — a calibration pair), short
+       Latin ones can't (gate17 pi).
+    3. Rule A — continuation prefix + phase-token-only remainder
+       (Insight 1): iteratively strip leading continuation verbs
+       {继续,接着,开始,做} and particles {吧,了,…,和,与,跟}; if the
+       remainder is empty or every whitespace-token is a phase token
+       (M1/D1c/P2/Phase2b) or particle → low-information. gate19 NIT-3:
+       the prefix is NOT required — a bare phase/particle list with no
+       continuation verb (``M1 和 M2``, ``和 M1``) is also filtered,
+       because a bare phase list carries no routing intent either.
+    4. Rule B — enumeration option-reply (Insight 1): numeric-enumeration
+       opening + ≤30 chars + a standalone bare-letter option token
+       (``C′``/``D``) NOT followed by CJK/letter content (gate19 NIT-1:
+       ``A 模块``/``A 和 B`` are task shapes, not option replies).
+
+    Deliberately NOT filtered (known-safe omissions — honest
+    documentation beats aggressive rules; retention-pool §洞察 1):
+    ``加吧`` (2-char CJK verb+particle — the calibration counterexample
+    ``清理吧`` proves this shape carries intent), ``我看下恢复了``
+    (status update), ``reply with exactly: claude-ok`` (probe),
+    ``我用的是 dist-package 下面的 chrome-extension`` (substantive
+    answer), and the long multi-answer enumeration reply (>30 chars —
+    Rule B's length cap is the accepted limit).
+    """
     q = query.strip().lower()
     if q in _DEGENERATE_QUERIES:
         return True
-    # The length rule is Latin-only: short CJK strings CAN carry intent
-    # (清理吧 — a calibration pair), short Latin ones can't (gate17 pi).
-    return len(q) <= 4 and not any("一" <= ch <= "鿿" for ch in q)
+    if len(q) <= 4 and not any("一" <= ch <= "鿿" for ch in q):
+        return True
+    if _is_continuation_phase_only(q):
+        return True
+    return _is_enumeration_option_reply(query.strip())
+
+
+def _is_continuation_phase_only(q: str) -> bool:
+    """Rule A — continuation prefix + phase-token-only remainder.
+
+    ``q`` is already stripped+lowercased. Front-strips verbs and
+    particles interchangeably (e.g. 继续往后做吧 → 继续,往后,做,吧 all
+    peel off), then requires every remaining whitespace-token to be a
+    phase token or a particle. Any substantive token (处理/backlog/
+    用户登录模块) fails the check — conservative direction.
+
+    gate19 NIT-3: stripping a continuation prefix is NOT required — a
+    bare phase/particle list (``M1 和 M2``, ``和 M1``) also matches.
+    Deliberate: a bare phase list carries no routing intent, so filtering
+    it is the same judgment as the prefixed form, just documented now.
+    """
+    rest = q
+    while rest:
+        for prefix in (*_CONTINUATION_VERBS, *_CONTINUATION_PARTICLES):
+            if rest.startswith(prefix):
+                rest = rest[len(prefix) :].lstrip()
+                break
+        else:
+            break
+    rest = rest.strip(_STRIP_PUNCT)
+    if not rest:
+        return True
+    tokens = [t.strip(_STRIP_PUNCT) for t in rest.split()]
+    tokens = [t for t in tokens if t]
+    return bool(tokens) and all(
+        _PHASE_TOKEN_RE.fullmatch(t) or t in _CONTINUATION_PARTICLES for t in tokens
+    )
+
+
+def _is_enumeration_option_reply(q: str) -> bool:
+    """Rule B — enumeration option-reply (original case; the option
+    token is case-sensitive [A-Z] so words like NPE/evaluate never
+    match, and gate19 NIT-1: the letter must be followed by end /
+    another enumeration marker / separator punctuation — ``A 模块``,
+    ``A 和 B``, ``X 文件`` are task shapes and are released). Accepted
+    limit: replies longer than 30 chars pass through even when they are
+    option answers (documented omission)."""
+    if len(q) > _ENUMERATION_MAX_LEN or not _ENUMERATION_OPEN_RE.match(q):
+        return False
+    hit = _OPTION_TOKEN_RE.search(q)
+    if hit:
+        # gate19 (both reviewers): debug-level audit trail so false kills
+        # are reconstructable post-hoc from scan logs.
+        logger.debug("low-information Rule B hit (option-reply shape): %r", q)
+    return hit is not None
 
 
 def _validate_choice(value: str, valid: frozenset[str], field_name: str) -> str:

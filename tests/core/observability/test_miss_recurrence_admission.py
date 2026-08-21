@@ -476,3 +476,116 @@ class TestMissShareByLayer:
     ) -> None:
         summary = scan_candidates([], fresh_learner, store, cache=cache)
         assert summary.miss_share_by_layer == {}
+
+
+class TestLowInformationShapeRules:
+    """Insight 1 (retention-pool-insights.md §洞察 1) — shape rules on top
+    of the wordlist. The 12 retention fragments are the fixtures:
+    7 filtered / 5 deliberately not filtered. Behavior-focused: verdicts
+    are asserted via the public filter ``_is_low_information_query``.
+    """
+
+    @pytest.mark.parametrize(
+        "query",
+        [
+            # Rule A — continuation prefix + phase-token-only remainder.
+            "继续往后做吧",
+            "继续 Phase2b 和 Phase3",
+            "继续 P2 抛光",
+            "开始 M1",
+            "做 D1c",
+            # Pre-existing rules (wordlist / latin≤4).
+            "B+C",
+            # Rule B — enumeration option-reply.
+            "1. 接受 C′ 2. D",
+            # gate19 NIT-4: 接着 prefix continuation.
+            "接着做 D2",
+            # gate19 NIT-4: full-width punctuation peels like ASCII.
+            "继续吧！",
+            # gate19 NIT-3 (documented): bare phase/particle lists carry
+            # no routing intent — filtered with no continuation prefix.
+            "M1 和 M2",
+        ],
+    )
+    def test_retention_fragments_filtered(self, query: str) -> None:
+        from vibesop.core.observability.skill_promote import _is_low_information_query
+
+        assert _is_low_information_query(query) is True
+
+    @pytest.mark.parametrize(
+        "query,why",
+        [
+            # 2-char CJK verb+particle — 清理吧 (calibration pair) proves
+            # this shape carries intent.
+            ("加吧", "CJK verb+particle carries intent (cf. 清理吧)"),
+            # Status update — not a routing signal, but not proven
+            # content-free either; conservative pass-through.
+            ("我看下恢复了", "status update"),
+            # Probe string — must round-trip verbatim for diagnostics.
+            ("reply with exactly: claude-ok", "probe"),
+            # Substantive answer to an agent question — has content.
+            (
+                "我用的是 dist-package 下面的 chrome-extension",
+                "substantive answer",
+            ),
+            # Long multi-answer enumeration — Rule B's ≤30-char cap is the
+            # accepted limit (documented omission).
+            (
+                "1. 互斥 2. 不禁 evaluate 3. 并发最多到 5 吧 4. 根据你们的建议来选择合适的方案 5. 能",
+                "long enumeration (>30 chars, accepted limit)",
+            ),
+            # gate19 NIT-2: space-separated "phase 3" splits into
+            # ["phase", "3"] before the token fullmatch — documented
+            # safe-omission (conservative direction).
+            ("继续 phase 3", "space-separated phase token, documented omission"),
+        ],
+    )
+    def test_retention_fragments_deliberately_kept(self, query: str, why: str) -> None:
+        from vibesop.core.observability.skill_promote import _is_low_information_query
+
+        assert _is_low_information_query(query) is False, f"over-filtered: {why}"
+
+    @pytest.mark.parametrize(
+        "query,why",
+        [
+            # Calibration counterexample — terse CJK imperative.
+            ("清理吧", "calibration pair: 2-char CJK carries intent"),
+            # Continuation prefix with a REAL object must survive Rule A
+            # (处理 is not in the verb set; remainder has content).
+            ("继续处理 backlog 里的 X 文件", "real object after 继续"),
+            ("继续做用户登录模块", "real object after 继续做"),
+            # Enumeration with no bare-letter option (NPE is a word) must
+            # survive Rule B.
+            ("1. 修复登录页面 NPE 2. 补充集成测试", "NPE is not a bare option letter"),
+            # gate19 NIT-1 (both reviewers, verified over-filter): bare
+            # letter FOLLOWED by content is a task shape, not an option.
+            ("1. 完成 A 模块", "letter + CJK object"),
+            ("1. 看 A 和 B 的差异", "letters as task subjects"),
+            ("1. 对比 A 方案和 B 方案", "letters label plans, not options"),
+            ("1. 方案 I 更好", "roman numeral as label"),
+            ("1. 修 X 文件 2. 加日志", "letter + CJK object in enumeration"),
+            # Ordinary task queries.
+            ("帮我重构登录模块的鉴权逻辑", "normal CJK task query"),
+            ("fix the login page NPE", "normal latin task query"),
+        ],
+    )
+    def test_counterexamples_never_filtered(self, query: str, why: str) -> None:
+        from vibesop.core.observability.skill_promote import _is_low_information_query
+
+        assert _is_low_information_query(query) is False, f"over-filtered: {why}"
+
+    def test_shape_rules_actually_exclude_from_miss_pool(
+        self, fresh_learner: InstinctLearner, cache: EmbeddingCache, store: ClusterCandidateStore
+    ) -> None:
+        """End-to-end: Rule-A fragments never reach the miss pool (the
+        0.72–0.82 cosine-match-everything poison the filter exists for)."""
+        spans = [
+            _miss_span("k1", "继续往后做吧", D1),
+            _miss_span("k2", "继续 Phase2b 和 Phase3", D2),
+            _miss_span("k3", "开始 M1", D2),
+        ]
+        with patch.object(cache, "_compute", side_effect=_fake_embedding):
+            summary = scan_candidates(spans, fresh_learner, store, cache=cache)
+
+        assert summary.miss_pool_size == 0
+        assert store.pending_count() == 0
