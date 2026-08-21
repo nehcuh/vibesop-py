@@ -1723,6 +1723,69 @@ def candidates_cmd(  # pyright: ignore[reportUnusedFunction]
     )
 
 
+def _resolve_candidate_for_mutation(
+    cluster_id: str, scope: _CandidateStoreScope
+) -> tuple[ClusterCandidateStore, _CandidateStoreScope, ClusterCandidate] | None:
+    """Resolve a full or unique-prefix cluster_id to (store, scope, candidate).
+
+    Semantics mirror ``_resolve_discovery_candidate`` (exact → unique
+    prefix → ambiguous error listing the matches → None for not-found),
+    adapted for the W4 mutation commands in two ways: it returns the
+    STORE object (promote / dismiss flip row status on it), and it
+    resolves against ``list_all()`` rather than pending-only — preserving
+    the pre-existing ``store.get`` reachability (idempotent re-promote of
+    a promoted row, reason update on a dismissed row).
+
+    Dual-store ordering (W5.2, omx-code-review ARCHITECT #2): the
+    requested scope's store is authoritative for exact matches; the
+    fallback store is consulted second. Prefix matching searches BOTH
+    stores (dedup by cluster_id, requested scope wins); more than one
+    distinct match refuses with the IDs listed for copy-paste.
+
+    The ``vibe skill candidates`` table shows 8-char truncated IDs, so
+    prefix input is the COMMON path — without this, users got
+    "not in pool" for exactly what the table displayed.
+    """
+    # gate22 MAJOR-1 (both reviewers): startswith("") is always True —
+    # without this guard, `vibe skill promote ""` (or an unset $CID)
+    # would flip the whole pool's first row to the sticky promoted
+    # terminal state. Empty input resolves to nothing.
+    if not cluster_id:
+        return None
+
+    primary_store = _get_candidate_store(scope=scope)
+    fallback_scope: _CandidateStoreScope = "global" if scope == "project" else "project"
+    fallback_store = _get_candidate_store(scope=fallback_scope)
+
+    candidate = primary_store.get(cluster_id)
+    if candidate is not None:
+        return primary_store, scope, candidate
+    fallback = fallback_store.get(cluster_id)
+    if fallback is not None:
+        return fallback_store, fallback_scope, fallback
+
+    matches: dict[str, tuple[ClusterCandidateStore, _CandidateStoreScope, ClusterCandidate]] = {}
+    for store, store_scope in ((primary_store, scope), (fallback_store, fallback_scope)):
+        for row in store.list_all():
+            if row.cluster_id.startswith(cluster_id) and row.cluster_id not in matches:
+                matches[row.cluster_id] = (store, store_scope, row)
+    if len(matches) > 1:
+        # gate22 (claude NIT-4 = pi NIT-2): annotate each match with its
+        # scope so cross-scope collisions don't make the user guess, and
+        # never silently truncate the listing.
+        entries = sorted(f"{cid} ({sc})" for cid, (_store, sc, _row) in matches.items())
+        listing = ", ".join(entries[:8])
+        if len(entries) > 8:
+            listing += f", +{len(entries) - 8} more"
+        console.print(
+            f"[red]✗[/red] Cluster id prefix '{cluster_id}' is ambiguous — matches: {listing}"
+        )
+        raise typer.Exit(1)
+    if matches:
+        return next(iter(matches.values()))
+    return None
+
+
 @app.command(name="promote")
 def promote_cmd(  # pyright: ignore[reportUnusedFunction]
     cluster_id: str = typer.Argument(..., help="Cluster ID from `vibe skill candidates`"),
@@ -1794,25 +1857,22 @@ def promote_cmd(  # pyright: ignore[reportUnusedFunction]
     # opted in. Now: try the requested scope's store first; fall back to
     # the other store ONLY if the cluster isn't in the requested one
     # (with a visible hint so the user sees the redirect).
-    primary_store = _get_candidate_store(scope=scope)
-    fallback_scope: _CandidateStoreScope = "global" if scope == "project" else "project"
-    fallback_store = _get_candidate_store(scope=fallback_scope)
-    candidate = primary_store.get(cluster_id)
-    store = primary_store
-    if candidate is None:
-        fallback = fallback_store.get(cluster_id)
-        if fallback is not None:
-            candidate = fallback
-            store = fallback_store
-            console.print(
-                f"[dim]Cluster '{cluster_id}' found in {fallback_scope} store; "
-                f"flipping that store's status. Draft still lands at --scope {scope} "
-                f"(per user request).[/dim]"
-            )
-
-    if candidate is None:
+    # Prefix resolution: the candidates table shows 8-char IDs, so promote
+    # accepts full OR unique-prefix IDs (see _resolve_candidate_for_mutation).
+    resolved = _resolve_candidate_for_mutation(cluster_id, scope)
+    if resolved is None:
         console.print(f"[red]✗[/red] Cluster '{cluster_id}' not in pool")
         raise typer.Exit(1)
+    store, resolved_scope, candidate = resolved
+    if resolved_scope != scope:
+        console.print(
+            f"[dim]Cluster '{cluster_id}' found in {resolved_scope} store; "
+            f"flipping that store's status. Draft still lands at --scope {scope} "
+            f"(per user request).[/dim]"
+        )
+    # All downstream writes (skill_id derivation, store.promote, messages)
+    # use the FULL id — never the user's prefix.
+    cluster_id = candidate.cluster_id
 
     if candidate.status == "dismissed":
         console.print(
@@ -2059,24 +2119,20 @@ def dismiss_cmd(  # pyright: ignore[reportUnusedFunction]
     # candidates in the global store can actually be dismissed. Prior version
     # hard-coded scope='project' and reported "not in pool" for clusters that
     # visibly appeared in `candidates` listing — user trap.
-    primary_store = _get_candidate_store(scope=scope)
-    fallback_scope: _CandidateStoreScope = "global" if scope == "project" else "project"
-    fallback_store = _get_candidate_store(scope=fallback_scope)
-    candidate = primary_store.get(cluster_id)
-    store = primary_store
-    if candidate is None:
-        fallback = fallback_store.get(cluster_id)
-        if fallback is not None:
-            candidate = fallback
-            store = fallback_store
-            console.print(
-                f"[dim]Cluster '{cluster_id}' found in {fallback_scope} store; "
-                f"dismissing there.[/dim]"
-            )
-
-    if candidate is None:
+    # Prefix resolution mirrors promote (see _resolve_candidate_for_mutation):
+    # the candidates table shows 8-char IDs, so dismiss accepts full OR
+    # unique-prefix IDs across both stores.
+    resolved = _resolve_candidate_for_mutation(cluster_id, scope)
+    if resolved is None:
         console.print(f"[red]✗[/red] Cluster '{cluster_id}' not in pool")
         raise typer.Exit(1)
+    store, resolved_scope, candidate = resolved
+    if resolved_scope != scope:
+        console.print(
+            f"[dim]Cluster '{cluster_id}' found in {resolved_scope} store; dismissing there.[/dim]"
+        )
+    # Downstream writes use the FULL id, never the user's prefix.
+    cluster_id = candidate.cluster_id
 
     if candidate.status == "promoted":
         console.print(

@@ -1,0 +1,412 @@
+diff --git a/src/vibesop/cli/commands/skill_commands.py b/src/vibesop/cli/commands/skill_commands.py
+index d468bca..492bbd8 100644
+--- a/src/vibesop/cli/commands/skill_commands.py
++++ b/src/vibesop/cli/commands/skill_commands.py
+@@ -1723,6 +1723,69 @@ def candidates_cmd(  # pyright: ignore[reportUnusedFunction]
+     )
+ 
+ 
++def _resolve_candidate_for_mutation(
++    cluster_id: str, scope: _CandidateStoreScope
++) -> tuple[ClusterCandidateStore, _CandidateStoreScope, ClusterCandidate] | None:
++    """Resolve a full or unique-prefix cluster_id to (store, scope, candidate).
++
++    Semantics mirror ``_resolve_discovery_candidate`` (exact → unique
++    prefix → ambiguous error listing the matches → None for not-found),
++    adapted for the W4 mutation commands in two ways: it returns the
++    STORE object (promote / dismiss flip row status on it), and it
++    resolves against ``list_all()`` rather than pending-only — preserving
++    the pre-existing ``store.get`` reachability (idempotent re-promote of
++    a promoted row, reason update on a dismissed row).
++
++    Dual-store ordering (W5.2, omx-code-review ARCHITECT #2): the
++    requested scope's store is authoritative for exact matches; the
++    fallback store is consulted second. Prefix matching searches BOTH
++    stores (dedup by cluster_id, requested scope wins); more than one
++    distinct match refuses with the IDs listed for copy-paste.
++
++    The ``vibe skill candidates`` table shows 8-char truncated IDs, so
++    prefix input is the COMMON path — without this, users got
++    "not in pool" for exactly what the table displayed.
++    """
++    # gate22 MAJOR-1 (both reviewers): startswith("") is always True —
++    # without this guard, `vibe skill promote ""` (or an unset $CID)
++    # would flip the whole pool's first row to the sticky promoted
++    # terminal state. Empty input resolves to nothing.
++    if not cluster_id:
++        return None
++
++    primary_store = _get_candidate_store(scope=scope)
++    fallback_scope: _CandidateStoreScope = "global" if scope == "project" else "project"
++    fallback_store = _get_candidate_store(scope=fallback_scope)
++
++    candidate = primary_store.get(cluster_id)
++    if candidate is not None:
++        return primary_store, scope, candidate
++    fallback = fallback_store.get(cluster_id)
++    if fallback is not None:
++        return fallback_store, fallback_scope, fallback
++
++    matches: dict[str, tuple[ClusterCandidateStore, _CandidateStoreScope, ClusterCandidate]] = {}
++    for store, store_scope in ((primary_store, scope), (fallback_store, fallback_scope)):
++        for row in store.list_all():
++            if row.cluster_id.startswith(cluster_id) and row.cluster_id not in matches:
++                matches[row.cluster_id] = (store, store_scope, row)
++    if len(matches) > 1:
++        # gate22 (claude NIT-4 = pi NIT-2): annotate each match with its
++        # scope so cross-scope collisions don't make the user guess, and
++        # never silently truncate the listing.
++        entries = sorted(f"{cid} ({sc})" for cid, (_store, sc, _row) in matches.items())
++        listing = ", ".join(entries[:8])
++        if len(entries) > 8:
++            listing += f", +{len(entries) - 8} more"
++        console.print(
++            f"[red]✗[/red] Cluster id prefix '{cluster_id}' is ambiguous — matches: {listing}"
++        )
++        raise typer.Exit(1)
++    if matches:
++        return next(iter(matches.values()))
++    return None
++
++
+ @app.command(name="promote")
+ def promote_cmd(  # pyright: ignore[reportUnusedFunction]
+     cluster_id: str = typer.Argument(..., help="Cluster ID from `vibe skill candidates`"),
+@@ -1794,25 +1857,22 @@ def promote_cmd(  # pyright: ignore[reportUnusedFunction]
+     # opted in. Now: try the requested scope's store first; fall back to
+     # the other store ONLY if the cluster isn't in the requested one
+     # (with a visible hint so the user sees the redirect).
+-    primary_store = _get_candidate_store(scope=scope)
+-    fallback_scope: _CandidateStoreScope = "global" if scope == "project" else "project"
+-    fallback_store = _get_candidate_store(scope=fallback_scope)
+-    candidate = primary_store.get(cluster_id)
+-    store = primary_store
+-    if candidate is None:
+-        fallback = fallback_store.get(cluster_id)
+-        if fallback is not None:
+-            candidate = fallback
+-            store = fallback_store
+-            console.print(
+-                f"[dim]Cluster '{cluster_id}' found in {fallback_scope} store; "
+-                f"flipping that store's status. Draft still lands at --scope {scope} "
+-                f"(per user request).[/dim]"
+-            )
+-
+-    if candidate is None:
++    # Prefix resolution: the candidates table shows 8-char IDs, so promote
++    # accepts full OR unique-prefix IDs (see _resolve_candidate_for_mutation).
++    resolved = _resolve_candidate_for_mutation(cluster_id, scope)
++    if resolved is None:
+         console.print(f"[red]✗[/red] Cluster '{cluster_id}' not in pool")
+         raise typer.Exit(1)
++    store, resolved_scope, candidate = resolved
++    if resolved_scope != scope:
++        console.print(
++            f"[dim]Cluster '{cluster_id}' found in {resolved_scope} store; "
++            f"flipping that store's status. Draft still lands at --scope {scope} "
++            f"(per user request).[/dim]"
++        )
++    # All downstream writes (skill_id derivation, store.promote, messages)
++    # use the FULL id — never the user's prefix.
++    cluster_id = candidate.cluster_id
+ 
+     if candidate.status == "dismissed":
+         console.print(
+@@ -2059,24 +2119,20 @@ def dismiss_cmd(  # pyright: ignore[reportUnusedFunction]
+     # candidates in the global store can actually be dismissed. Prior version
+     # hard-coded scope='project' and reported "not in pool" for clusters that
+     # visibly appeared in `candidates` listing — user trap.
+-    primary_store = _get_candidate_store(scope=scope)
+-    fallback_scope: _CandidateStoreScope = "global" if scope == "project" else "project"
+-    fallback_store = _get_candidate_store(scope=fallback_scope)
+-    candidate = primary_store.get(cluster_id)
+-    store = primary_store
+-    if candidate is None:
+-        fallback = fallback_store.get(cluster_id)
+-        if fallback is not None:
+-            candidate = fallback
+-            store = fallback_store
+-            console.print(
+-                f"[dim]Cluster '{cluster_id}' found in {fallback_scope} store; "
+-                f"dismissing there.[/dim]"
+-            )
+-
+-    if candidate is None:
++    # Prefix resolution mirrors promote (see _resolve_candidate_for_mutation):
++    # the candidates table shows 8-char IDs, so dismiss accepts full OR
++    # unique-prefix IDs across both stores.
++    resolved = _resolve_candidate_for_mutation(cluster_id, scope)
++    if resolved is None:
+         console.print(f"[red]✗[/red] Cluster '{cluster_id}' not in pool")
+         raise typer.Exit(1)
++    store, resolved_scope, candidate = resolved
++    if resolved_scope != scope:
++        console.print(
++            f"[dim]Cluster '{cluster_id}' found in {resolved_scope} store; dismissing there.[/dim]"
++        )
++    # Downstream writes use the FULL id, never the user's prefix.
++    cluster_id = candidate.cluster_id
+ 
+     if candidate.status == "promoted":
+         console.print(
+diff --git a/tests/cli/test_skill_promote_cli.py b/tests/cli/test_skill_promote_cli.py
+index f59feaf..cb992d9 100644
+--- a/tests/cli/test_skill_promote_cli.py
++++ b/tests/cli/test_skill_promote_cli.py
+@@ -21,7 +21,7 @@ from typer.testing import CliRunner
+ 
+ from vibesop.cli.commands import skill_commands
+ from vibesop.cli.main import app
+-from vibesop.core.observability.skill_promote import ClusterCandidate
++from vibesop.core.observability.skill_promote import ClusterCandidate, ClusterCandidateStore
+ 
+ 
+ @pytest.fixture
+@@ -1128,3 +1128,203 @@ class TestPromoteActivate:
+         assert r.exit_code == 1
+         assert "Aborted" in r.output
+         install_mock.assert_not_called()
++
++
++class TestPrefixResolution:
++    """Prefix UX fix — the candidates table shows 8-char truncated cluster
++    IDs, so promote/dismiss must accept full OR unique-prefix IDs.
++
++    Semantics mirror ``_resolve_discovery_candidate``: exact → unique
++    prefix → ambiguous (lists matches) → "not in pool".
++    """
++
++    def _candidate(self, cluster_id: str, query: str = "topic-A one") -> ClusterCandidate:
++        return ClusterCandidate(
++            cluster_id=cluster_id,
++            task_ids=["t1"],
++            queries=[query],
++            span_count=5,
++            gold_rate=0.8,
++            gold_task_ids=["t1"],
++        )
++
++    def test_prefix_promote_succeeds(
++        self, cli_runner: CliRunner, tmp_store, tmp_path: Path, monkeypatch
++    ) -> None:
++        monkeypatch.chdir(tmp_path)
++        full_id = "abc123def4567890"
++        tmp_store.upsert(self._candidate(full_id))
++
++        # gate22 NIT-3: a 6-char prefix (NOT the 8-char display length) so
++        # the skill_id suffix assertion can actually fail if the prefix
++        # leaks downstream.
++        prefix = full_id[:6]
++        r = cli_runner.invoke(app, ["skill", "promote", prefix])
++        assert r.exit_code == 0, f"failed: {r.output}"
++        # The echoed line carries the FULL id — locks the rebind directly.
++        assert f"Promoted '{full_id}'" in r.output
++
++        stored = tmp_store.get(full_id)
++        assert stored is not None
++        assert stored.status == "promoted"
++        # skill_id derived from the FULL cluster_id (suffix is the 8-char
++        # form — a 6-char prefix would NOT endswith-match this).
++        assert stored.source_skill_id is not None
++        assert stored.source_skill_id.endswith(full_id[:8])
++        assert prefix != full_id[:8]  # sanity: the prefix is not the suffix
++
++    def test_empty_string_resolves_to_not_in_pool(self, cli_runner: CliRunner, tmp_store) -> None:
++        """gate22 MAJOR-1: startswith("") is always True — without the
++        guard, `promote ""` would flip the first pool row to the sticky
++        promoted terminal state."""
++        full_id = "abc123def4567890"
++        tmp_store.upsert(self._candidate(full_id))
++        r = cli_runner.invoke(app, ["skill", "promote", ""])
++        assert r.exit_code == 1
++        assert "not in pool" in r.output
++        assert tmp_store.get(full_id).status == "pending"  # type: ignore[union-attr]
++
++    def test_prefix_hitting_dismissed_row_stays_sticky(
++        self, cli_runner: CliRunner, tmp_store
++    ) -> None:
++        """gate22 pi NIT-5: prefix resolution reaches terminal rows (parity
++        with the old store.get path) → the sticky-dismiss refusal fires."""
++        full_id = "deadbeef12345678"
++        tmp_store.upsert(self._candidate(full_id))
++        tmp_store.dismiss(full_id, reason="noise")
++
++        r = cli_runner.invoke(app, ["skill", "promote", full_id[:8]])
++        assert r.exit_code == 1
++        assert "sticky" in r.output
++
++    def test_prefix_dismiss_succeeds(self, cli_runner: CliRunner, tmp_store) -> None:
++        full_id = "def456abc7890123"
++        tmp_store.upsert(self._candidate(full_id))
++
++        r = cli_runner.invoke(app, ["skill", "dismiss", full_id[:8], "--reason", "noise"])
++        assert r.exit_code == 0, f"failed: {r.output}"
++        assert "Dismissed" in r.output
++        stored = tmp_store.get(full_id)
++        assert stored is not None
++        assert stored.status == "dismissed"
++        assert stored.dismiss_reason == "noise"
++
++    def test_ambiguous_prefix_errors_and_lists_matches(
++        self, cli_runner: CliRunner, tmp_store
++    ) -> None:
++        id_a = "abc1111111111111"
++        id_b = "abc2222222222222"
++        tmp_store.upsert(self._candidate(id_a, query="query alpha"))
++        tmp_store.upsert(self._candidate(id_b, query="query beta"))
++
++        r = cli_runner.invoke(app, ["skill", "promote", "abc"])
++        assert r.exit_code == 1
++        assert "ambiguous" in r.output
++        assert id_a in r.output  # matched IDs listed for copy-paste
++        assert id_b in r.output
++        # Nothing was mutated.
++        assert tmp_store.get(id_a).status == "pending"  # type: ignore[union-attr]
++        assert tmp_store.get(id_b).status == "pending"  # type: ignore[union-attr]
++
++        r2 = cli_runner.invoke(app, ["skill", "dismiss", "abc"])
++        assert r2.exit_code == 1
++        assert "ambiguous" in r2.output
++
++    def test_unknown_prefix_still_not_in_pool(self, cli_runner: CliRunner, tmp_store) -> None:
++        tmp_store.upsert(self._candidate("abc123def4567890"))
++        r = cli_runner.invoke(app, ["skill", "promote", "zzz999"])
++        assert r.exit_code == 1
++        assert "not in pool" in r.output
++        r2 = cli_runner.invoke(app, ["skill", "dismiss", "zzz999"])
++        assert r2.exit_code == 1
++        assert "not in pool" in r2.output
++
++    def test_exact_id_still_works(self, cli_runner: CliRunner, tmp_store) -> None:
++        """Regression: full-ID path unchanged."""
++        full_id = "aaaabbbbccccdddd"
++        tmp_store.upsert(self._candidate(full_id))
++        r = cli_runner.invoke(app, ["skill", "dismiss", full_id])
++        assert r.exit_code == 0, f"failed: {r.output}"
++        assert tmp_store.get(full_id).status == "dismissed"  # type: ignore[union-attr]
++
++
++class TestPrefixResolutionDualStore:
++    """gate22 MAJOR-2 — cross-scope prefix resolution with REAL dual stores
++    (the single-store tmp_store fixture makes primary/fallback the same
++    object, covering none of this). Pattern mirrors
++    ``test_dismiss_cross_project_candidate_via_global_fallback``.
++    """
++
++    def _candidate(self, cluster_id: str, query: str = "topic-A one") -> ClusterCandidate:
++        return ClusterCandidate(
++            cluster_id=cluster_id,
++            task_ids=["t1"],
++            queries=[query],
++            span_count=5,
++            gold_rate=0.8,
++            gold_task_ids=["t1"],
++        )
++
++    def _dual_stores(self, tmp_path: Path, monkeypatch):
++        """Two real stores; _get_candidate_store routes by scope."""
++        project_store = ClusterCandidateStore(storage_dir=tmp_path / "proj")
++        global_store = ClusterCandidateStore(storage_dir=tmp_path / "glob")
++        monkeypatch.setattr(skill_commands, "_GLOBAL_OBSERVABILITY_DIR", tmp_path / "glob")
++        patcher = patch.object(
++            skill_commands,
++            "_get_candidate_store",
++            side_effect=lambda scope="project": (
++                global_store if scope == "global" else project_store
++            ),
++        )
++        return project_store, global_store, patcher
++
++    def test_prefix_hit_in_fallback_store_flips_fallback(
++        self, cli_runner: CliRunner, tmp_path: Path, monkeypatch
++    ) -> None:
++        project_store, global_store, patcher = self._dual_stores(tmp_path, monkeypatch)
++        full_id = "xp11111111111111"
++        global_store.upsert(self._candidate(full_id))
++
++        with patcher:
++            r = cli_runner.invoke(app, ["skill", "dismiss", full_id[:8]])
++        assert r.exit_code == 0, f"failed: {r.output}"
++        assert "found in global store" in r.output
++        assert global_store.get(full_id).status == "dismissed"  # type: ignore[union-attr]
++        assert project_store.get(full_id) is None  # primary untouched
++
++    def test_same_id_in_both_stores_requested_scope_wins(
++        self, cli_runner: CliRunner, tmp_path: Path, monkeypatch
++    ) -> None:
++        project_store, global_store, patcher = self._dual_stores(tmp_path, monkeypatch)
++        full_id = "dual222222222222"
++        project_store.upsert(self._candidate(full_id))
++        global_store.upsert(self._candidate(full_id))
++
++        with patcher:
++            r = cli_runner.invoke(app, ["skill", "dismiss", full_id[:8]])
++        assert r.exit_code == 0, f"failed: {r.output}"
++        # Requested scope (project) flipped; global row untouched.
++        assert project_store.get(full_id).status == "dismissed"  # type: ignore[union-attr]
++        assert global_store.get(full_id).status == "pending"  # type: ignore[union-attr]
++        assert "found in global store" not in r.output
++
++    def test_cross_store_prefix_collision_is_ambiguous(
++        self, cli_runner: CliRunner, tmp_path: Path, monkeypatch
++    ) -> None:
++        project_store, global_store, patcher = self._dual_stores(tmp_path, monkeypatch)
++        id_a = "xpaaaa1111111111"
++        id_b = "xpbbbb2222222222"
++        project_store.upsert(self._candidate(id_a, query="query alpha"))
++        global_store.upsert(self._candidate(id_b, query="query beta"))
++
++        with patcher:
++            r = cli_runner.invoke(app, ["skill", "dismiss", "xp"])
++        assert r.exit_code == 1
++        assert "ambiguous" in r.output
++        # gate22 NIT-4: scope annotation on each match.
++        assert f"{id_a} (project)" in r.output
++        assert f"{id_b} (global)" in r.output
++        # No side effects in EITHER store.
++        assert project_store.get(id_a).status == "pending"  # type: ignore[union-attr]
++        assert global_store.get(id_b).status == "pending"  # type: ignore[union-attr]
+diff --git a/tests/core/observability/test_replay_acceptance_smoke.py b/tests/core/observability/test_replay_acceptance_smoke.py
+index 7cc3019..e1a04e5 100644
+--- a/tests/core/observability/test_replay_acceptance_smoke.py
++++ b/tests/core/observability/test_replay_acceptance_smoke.py
+@@ -21,6 +21,7 @@ follow-rate telemetry with deterministic algorithmic preconditions).
+ from __future__ import annotations
+ 
+ import json
++from datetime import UTC, datetime, timedelta
+ from pathlib import Path
+ from unittest.mock import MagicMock, patch
+ 
+@@ -37,12 +38,29 @@ FIXTURE = Path(__file__).resolve().parents[3] / "tests" / "fixtures" / "replay_g
+ 
+ 
+ def _load_fixture() -> list[dict]:
++    """Load the fixture with timestamps rebased relative to NOW.
++
++    The on-disk fixture carries hardcoded 2026-07 timestamps, but recall
++    filters spans by a wall-clock 30-day look-back window
++    (``recall._DEFAULT_DAYS_WINDOW``) — the fixture aged out on
++    2026-08-21 when T-cmspark-3 crossed the cutoff (distinct traces
++    dropped 3→2, is_gold flipped, test failed). Rebase every timestamp
++    by a fixed shift so the newest span is always ~1 day old; relative
++    gaps (and thus distinct-trace / span-count semantics) are preserved.
++    """
+     spans: list[dict] = []
+     with FIXTURE.open() as f:
+-        for line in f:
+-            line = line.strip()
++        for raw in f:
++            line = raw.strip()
+             if line:
+                 spans.append(json.loads(line))
++    timestamps = [datetime.fromisoformat(s["timestamp"]) for s in spans if s.get("timestamp")]
++    if not timestamps:
++        return spans
++    shift = datetime.now(UTC) - timedelta(days=1) - max(timestamps)
++    for s in spans:
++        if s.get("timestamp"):
++            s["timestamp"] = (datetime.fromisoformat(s["timestamp"]) + shift).isoformat()
+     return spans
+ 
+ 

@@ -9,6 +9,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### M12 dogfood fix — promote/dismiss accept displayed 8-char cluster-id prefixes (2026-08-21)
+
+Found by real use: `vibe skill candidates` renders 8-char truncated
+cluster ids, but `vibe skill promote <id>` / `vibe skill dismiss <id>`
+resolved the argument by exact match on the full 16-char id — typing
+the displayed id always failed with "not in pool" (real hit: cluster
+`bd1bc217…` in the cmspark pool).
+
+- **Prefix resolution** (`skill_commands.py`): new
+  `_resolve_candidate_for_mutation` shared by promote and dismiss.
+  Empty input → not-in-pool (guard: `startswith("")` would otherwise
+  match every row and silently flip a single-row pool into the sticky
+  promoted terminal state). Exact match in the requested-scope store
+  first (W5.2 scope authority preserved) → exact in the fallback store
+  (keeps the "found in {scope} store" hint) → unique prefix over the
+  union of both stores (dedup by cluster_id, requested scope wins) →
+  ambiguous prefix lists up to 8 scope-annotated full ids (`+N more`
+  past 8) and exits without mutating anything. On success the local
+  cluster_id is rebound to the full id, so status flips, skill_id
+  derivation, and draft paths never see the prefix. Resolution runs
+  over `list_all()` so terminal rows stay reachable (idempotent
+  re-promote, dismissed-row reason updates, sticky guards fire on
+  prefix input too). `_resolve_discovery_candidate` was not reused —
+  it only sees pending rows and doesn't return the store; backporting
+  the empty-guard + annotated listing to it is a recorded follow-up.
+- **Time-bomb fixture fix** (`test_replay_acceptance_smoke.py`):
+  `_load_fixture()` rebases the hardcoded 2026-07 timestamps relative
+  to now (newest ≈ 1 day old, relative gaps preserved). The fixture
+  aged out on 2026-08-21 when a trace crossed recall's wall-clock
+  30-day window (`recall._DEFAULT_DAYS_WINDOW`), flipping is_gold
+  mid-session and failing `test_cmspark_gold_match_triggers_replay`
+  with no code change.
+- Tests: `TestPrefixResolution` + `TestPrefixResolutionDualStore`
+  (distinct side_effect stores: fallback hint, same-id-both-stores
+  primary-wins, cross-store ambiguity with zero side effects), empty
+  input, sticky-via-prefix; `tests/cli` 733 green. Gate 22 dual review:
+  pi PASS_WITH_NITS + claude soft-BLOCK round 1, all findings
+  converged, claude round 2 PASS.
+
 ### M12 M2 exit unblock — class-separated pool budgets + content-block envelope (2026-08-21)
 
 Found by the first full-history scan on real dogfood data (cmspark: 780

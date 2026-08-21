@@ -21,6 +21,7 @@ follow-rate telemetry with deterministic algorithmic preconditions).
 from __future__ import annotations
 
 import json
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -37,12 +38,29 @@ FIXTURE = Path(__file__).resolve().parents[3] / "tests" / "fixtures" / "replay_g
 
 
 def _load_fixture() -> list[dict]:
+    """Load the fixture with timestamps rebased relative to NOW.
+
+    The on-disk fixture carries hardcoded 2026-07 timestamps, but recall
+    filters spans by a wall-clock 30-day look-back window
+    (``recall._DEFAULT_DAYS_WINDOW``) — the fixture aged out on
+    2026-08-21 when T-cmspark-3 crossed the cutoff (distinct traces
+    dropped 3→2, is_gold flipped, test failed). Rebase every timestamp
+    by a fixed shift so the newest span is always ~1 day old; relative
+    gaps (and thus distinct-trace / span-count semantics) are preserved.
+    """
     spans: list[dict] = []
     with FIXTURE.open() as f:
-        for line in f:
-            line = line.strip()
+        for raw in f:
+            line = raw.strip()
             if line:
                 spans.append(json.loads(line))
+    timestamps = [datetime.fromisoformat(s["timestamp"]) for s in spans if s.get("timestamp")]
+    if not timestamps:
+        return spans
+    shift = datetime.now(UTC) - timedelta(days=1) - max(timestamps)
+    for s in spans:
+        if s.get("timestamp"):
+            s["timestamp"] = (datetime.fromisoformat(s["timestamp"]) + shift).isoformat()
     return spans
 
 
