@@ -9,6 +9,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### E2E command-surface smoke — scripts/e2e_command_smoke.py (2026-08-22)
+
+The LLM-routing e2e covered routing depth, but the ~45 top-level
+commands had no systematic validation — least of all the long-running
+stateful ones. New container smoke (orbstack `vibesop-val-base` recipe,
+same conventions as e2e_llm_routing): **58 cases, 58/58 in-container,
+routing e2e still 7/7 in the same run**.
+
+- Tier 1 real execution: full `vibe loop` lifecycle — create
+  (`* * * * *`) → list → a REAL `tick --name` execution through
+  AgentRuntime.handle_query (asserts the pipeline ran AND persisted:
+  `Total Runs` + rc=0 requires zero failures) → pause → tick asserts
+  skip → resume → a failure-machinery round-trip (`--command` with a
+  deterministically failing command → DEAD at max_failures=1 →
+  `loop reset` → ACTIVE) → delete. Observability commands against
+  SpanWriter-seeded spans (scan-candidates pins the seeded cluster's
+  query text, candidates, discover, sequence status, instinct,
+  route-stats, trace). session/feedback/deviation run empty-state.
+- Tier 2 rc+marker snapshots (status/doctor assert output markers;
+  dashboard started on a free port → HTTP 200 poll → process-group
+  kill with SIGKILL escalation, server log kept for diagnosis).
+- Tier 3 --help-only for network/interactive commands (market,
+  install, sync-registry, quickstart, onboard, prompt-chain).
+- Robustness: pre-create best-effort delete (mid-run failure no longer
+  poisons reruns), TimeoutExpired recorded as FAIL so the summary
+  always prints, DEEPSEEK_API_KEY FATAL guard (rc=2, e2e convention),
+  first/last fingerprint of the project-root `.vibe` fails the run on
+  cross-contamination.
+- Dogfood finding recorded as backlog: LoopStore is HOME-level
+  (`~/.vibe/loops/`) — `vibe loop list` enumerates every project's
+  loops from any cwd; the smoke scopes all executions with `--name`.
+  Also documented: `verify` rc∈{0,1} is correct semantics, bare
+  `badges` needs a subcommand, `loop tick` is gated by `loop.enabled`
+  (default false).
+- Gate 25 dual review: claude + pi both PASS_WITH_NITS, 0 BLOCK; both
+  MAJORs (unscoped executing tick, non-rerunnable after mid-run
+  failure) and all nit intersections converged.
+
 ### M12 M3 — behavior-consistency evidence (bigram-Jaccard) on discovery cards (2026-08-21)
 
 If a missed-routing pattern recurs AND the agent handled each recurrence
