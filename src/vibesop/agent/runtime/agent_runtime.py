@@ -71,6 +71,15 @@ class AgentRuntimeResult:
     slash_result: dict[str, Any] | None = None
     errors: list[str] = field(default_factory=list)
     project_root: Path | None = None
+    # The ROUTER's real match verdict, distinct from the mode-derived
+    # ``has_match`` property below (which is ``intercepted and mode in
+    # (...)`` and stays True on a real miss once the interceptor chose a
+    # routing mode — the M12 hook-path miss blind spot). Span metadata
+    # ``has_match`` is written from THIS field so
+    # ``gold_detection.is_route_miss_span`` can see hook-path misses.
+    # Existing consumers of the property (instinct bridge, hook JSON)
+    # are untouched.
+    router_matched: bool = False
 
     @property
     def has_match(self) -> bool:
@@ -536,6 +545,18 @@ class AgentRuntime:
                             plan = orch_result.get("plan", {})
                             result.plan = plan
                             steps = plan.get("steps", [])
+                            # Multi-intent verdict (gate20 claude NIT-1):
+                            # PlanBuilder steps CAN carry
+                            # skill_id="fallback-llm" (plan_builder.py
+                            # :321-339, squad branch :626), so non-empty
+                            # steps is NOT sufficient — a plan counts as a
+                            # match only when at least one step routed to a
+                            # REAL skill. All-fallback/empty → miss, the
+                            # same verdict the single-intent branch gives
+                            # fallback-llm (skill_id None there).
+                            result.router_matched = any(
+                                s.get("skill_id") not in ("", "fallback-llm", None) for s in steps
+                            )
                             if steps:
                                 result.skill_id = steps[0].get("skill_id", "")
                                 result.confidence = 0.8
@@ -549,11 +570,28 @@ class AgentRuntime:
                             result.skill_id = single.get("skill_id", "") or ""
                             result.confidence = single.get("confidence", 0.0)
                             result.mode = "single"
+                            # single_result carries no explicit has_match
+                            # key; agent/__init__.py builds skill_id as
+                            # ``primary.skill_id if has_match else None``,
+                            # so a truthy skill_id IS the router's verdict
+                            # (most truthful signal available on this path).
+                            # INVARIANT (gate20 pi NIT-3): this relies on
+                            # agent/__init__.py:347-351 ALWAYS building
+                            # single_result WITH the skill_id key (None on
+                            # miss) — a missing key also yields False via
+                            # .get, which would mislabel a real match as a
+                            # miss. If that construction changes, re-review
+                            # this line.
+                            result.router_matched = bool(single.get("skill_id"))
                             # single_result["layer"] is the winning layer's
                             # value on match, None on miss (agent __init__).
                             _route_layer = single.get("layer") or None
                     else:
                         routing_result = self.router.route(query, enable_ai_triage=True)
+                        # The router's real match verdict — persisted
+                        # separately from the mode-derived has_match
+                        # property (see AgentRuntimeResult.router_matched).
+                        result.router_matched = bool(getattr(routing_result, "has_match", False))
 
                         # 4. Present the decision
                         try:
@@ -630,7 +668,28 @@ class AgentRuntime:
                 _task_span.metadata["skill_id"] = result.skill_id or ""
                 _task_span.metadata["mode"] = result.mode
                 _task_span.metadata["confidence"] = result.confidence
-                _task_span.metadata["has_match"] = result.has_match
+                # Deliberate asymmetry (M12 miss blind-spot fix): the span
+                # carries the ROUTER's real verdict (router_matched), NOT
+                # the mode-derived has_match property — the property stays
+                # True on intercepted single-mode misses, which kept
+                # hook-path misses invisible to is_route_miss_span.
+                # mode on a genuine miss is "single" (set from the
+                # interception decision before routing), which the miss
+                # predicate accepts (only "not_intercepted" is excluded).
+                #
+                # Consumers of this key (gate20): BOTH
+                # ``gold_detection.is_route_miss_span`` (discovery pool)
+                # AND ``tool_call_bridge._is_miss`` (outcome-signal
+                # derivation) read metadata has_match — hook-path misses
+                # now enter the bridge's miss set for the first time.
+                # Direction verified correct: hook spans carry the real
+                # platform session_id (route-hook forwarding), so
+                # session_moved_on / re-ask evidence is meaningful — NOT
+                # the hollow-weak_positive case the bridge's CLI exclusion
+                # guards (one-shot CLI sessions). The gate17
+                # cross-reference convention ("change one, re-read the
+                # other") was honored — both predicates re-checked.
+                _task_span.metadata["has_match"] = result.router_matched
                 # gate18 pi NIT-4: layer semantics — match → winning layer;
                 # miss → deepest cascade layer; omitted when unknown
                 # (ScanSummary.miss_share_by_layer buckets missing as

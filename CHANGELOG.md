@@ -9,6 +9,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### M12 follow-up — hook-path miss blind spot fixed (2026-08-21)
+
+`AgentRuntimeResult.has_match` was a mode-derived property
+(`intercepted and mode in ("single", …)`) and the orchestrate branch set
+`mode="single"` even when `single_result["skill_id"]` was empty — so
+hook-path spans NEVER carried `has_match=False` and the M12 miss pool
+only ever saw CLI-path misses.
+
+- New `AgentRuntimeResult.router_matched` field carries the router's
+  real verdict: non-orchestrate → `routing_result.has_match`;
+  orchestrate single-intent → `bool(single_result["skill_id"])`
+  (invariant: `agent/__init__.py` builds the key always, None on miss);
+  multi-intent → at least one step with a non-fallback skill_id
+  (all-fallback plans are real misses, matching the single-intent
+  fallback-llm verdict). Routing-exception spans carry no `has_match`
+  key at all — both predicates bucket them as unknown, not miss.
+- Span metadata `has_match` now writes `router_matched` (the CLI path
+  already wrote the real verdict — producers are aligned). The
+  mode-derived property is unchanged for its existing consumers
+  (instinct bridge, hook JSON).
+- Both metadata consumers declared at the write site:
+  `gold_detection.is_route_miss_span` (discovery pool) and
+  `tool_call_bridge._is_miss` (outcome-signal derivation) — hook-path
+  misses now feed both; bridge evidence stays meaningful because hook
+  spans carry real platform session_ids (not CLI one-shots).
+- Reviews: gate20 (claude+pi) both PASS_WITH_NITS, 0 BLOCK,
+  independently converged on the same findings (undeclared bridge
+  consumer, two test gaps, multi-intent fallback asymmetry) — all
+  converged. Note: pre-fix hook spans keep their wrong
+  `has_match=True`; the pool does not backfill historical data.
+
 ### M12 follow-up — low-information filter shape rules (2026-08-21)
 
 Implements Insight 1 of the retention-pool mining

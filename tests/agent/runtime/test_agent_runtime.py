@@ -257,10 +257,10 @@ class TestAgentRuntimeLayerMetadata:
         spans = self._route_spans(fresh_tracer)
         assert len(spans) == 1
         metadata = spans[0].get("metadata") or {}
-        # NOTE: metadata.has_match comes from AgentRuntimeResult.has_match,
-        # which is mode-derived (intercepted + single) — not from the
-        # router's no-match. Pre-existing semantics, out of scope here;
-        # what gate18 adds is the layer attribution on router-level miss.
+        # Post-fix (miss blind spot): the span now carries the router's
+        # real verdict via router_matched — a router-level miss writes
+        # has_match=False even though the mode-derived property stays True.
+        assert metadata.get("has_match") is False
         assert metadata.get("layer") == "embedding"
 
     def test_miss_without_layer_details_omits_field(self, fresh_tracer, tmp_path) -> None:
@@ -280,3 +280,266 @@ class TestAgentRuntimeLayerMetadata:
         assert len(spans) == 1
         metadata = spans[0].get("metadata") or {}
         assert "layer" not in metadata
+
+
+class TestRouterMatchedSpanVerdict:
+    """M12 hook-path miss blind-spot fix — spans carry the router's real
+    verdict (``router_matched``), so ``is_route_miss_span`` can see
+    hook-path misses. The mode-derived ``has_match`` property is
+    unchanged for its existing consumers.
+    """
+
+    @pytest.fixture
+    def fresh_tracer(self, tmp_path, monkeypatch):
+        """Point the tracer singleton (and the agent_runtime cache) at tmp_path."""
+        import vibesop.core.observability.tracer as tracer_mod
+        from vibesop.agent.runtime import agent_runtime as ar_module
+        from vibesop.core.observability.tracer import ObservabilityTracer
+
+        span_file = tmp_path / "spans.jsonl"
+        fresh = ObservabilityTracer(storage_path=span_file, enabled=True)
+        monkeypatch.setattr(tracer_mod, "_tracer", fresh)
+        monkeypatch.setattr(ar_module, "_obs_tracer", None, raising=False)
+        return span_file
+
+    def _route_span(self, span_file) -> dict:
+        import json
+
+        spans = []
+        with span_file.open() as f:
+            for raw in f:
+                if raw.strip():
+                    spans.append(json.loads(raw))
+        route_spans = [s for s in spans if str(s.get("name", "")).startswith("route:")]
+        assert len(route_spans) == 1, f"expected 1 route span, got {len(route_spans)}"
+        return route_spans[0]
+
+    @staticmethod
+    def _metadata(span: dict) -> dict:
+        import json
+
+        meta = span.get("metadata") or {}
+        return json.loads(meta) if isinstance(meta, str) else meta
+
+    def _miss_router(self, *, matched: bool):
+        from unittest.mock import MagicMock
+
+        routing_result = MagicMock()
+        routing_result.has_match = matched
+        routing_result.primary = None
+        routing_result.layer_details = []
+        if matched:
+            from types import SimpleNamespace
+
+            from vibesop.core.models import RoutingLayer
+
+            routing_result.primary = SimpleNamespace(
+                skill_id="some-skill",
+                skill_name="Some Skill",
+                confidence=0.9,
+                layer=RoutingLayer.KEYWORD,
+            )
+            routing_result.alternatives = []
+            routing_result.plan = None
+        router = MagicMock()
+        router.route.return_value = routing_result
+        return router
+
+    def test_hook_miss_enters_miss_predicate(self, fresh_tracer, tmp_path) -> None:
+        from vibesop.core.observability.gold_detection import is_route_miss_span
+
+        runtime = AgentRuntime(project_root=tmp_path)
+        runtime._router = self._miss_router(matched=False)
+        runtime.handle_query("review my code")
+
+        span = self._route_span(fresh_tracer)
+        metadata = self._metadata(span)
+        assert metadata.get("has_match") is False
+        # Genuine hook-path miss: mode stays "single" (set from the
+        # interception decision before routing) — NOT "not_intercepted",
+        # so the miss predicate accepts it without any predicate widening.
+        assert metadata.get("mode") == "single"
+        assert is_route_miss_span(span) is True
+
+    def test_hook_match_stays_out_of_miss_pool(self, fresh_tracer, tmp_path) -> None:
+        from vibesop.core.observability.gold_detection import is_route_miss_span
+
+        runtime = AgentRuntime(project_root=tmp_path)
+        runtime._router = self._miss_router(matched=True)
+        runtime.handle_query("review my code")
+
+        span = self._route_span(fresh_tracer)
+        metadata = self._metadata(span)
+        assert metadata.get("has_match") is True
+        assert is_route_miss_span(span) is False
+
+    def _orchestrate_runtime(self, tmp_path, orch_result: dict):
+        from unittest.mock import MagicMock
+
+        from vibesop.agent.runtime import InterceptionMode
+
+        decision = MagicMock()
+        decision.should_route = True
+        decision.mode = InterceptionMode.ORCHESTRATE
+        decision.analysis = None
+        decision.query = "orchestrate this"
+        decision.reason = "test"
+        interceptor = MagicMock()
+        interceptor.should_intercept.return_value = decision
+
+        router = MagicMock()
+        router.orchestrate.return_value = orch_result
+
+        runtime = AgentRuntime(project_root=tmp_path)
+        runtime._interceptor = interceptor
+        runtime._router = router
+        return runtime
+
+    def test_orchestrate_single_miss(self, fresh_tracer, tmp_path) -> None:
+        """single_result with empty skill_id (agent/__init__ builds it as
+        ``primary.skill_id if has_match else None``) → real miss."""
+        from vibesop.core.observability.gold_detection import is_route_miss_span
+
+        runtime = self._orchestrate_runtime(
+            tmp_path,
+            {
+                "is_multi_intent": False,
+                "single_result": {"skill_id": None, "confidence": 0.0, "layer": None},
+            },
+        )
+        runtime.handle_query("orchestrate this")
+
+        span = self._route_span(fresh_tracer)
+        metadata = self._metadata(span)
+        assert metadata.get("has_match") is False
+        assert metadata.get("mode") == "single"
+        assert is_route_miss_span(span) is True
+
+    def test_orchestrate_single_match(self, fresh_tracer, tmp_path) -> None:
+        runtime = self._orchestrate_runtime(
+            tmp_path,
+            {
+                "is_multi_intent": False,
+                "single_result": {"skill_id": "some-skill", "confidence": 0.9, "layer": "keyword"},
+            },
+        )
+        runtime.handle_query("orchestrate this")
+
+        metadata = self._metadata(self._route_span(fresh_tracer))
+        assert metadata.get("has_match") is True
+        assert metadata.get("layer") == "keyword"
+
+    def test_orchestrate_multi_intent_plan_is_a_match(self, fresh_tracer, tmp_path) -> None:
+        """Multi-intent: a non-empty step list is the match verdict."""
+        runtime = self._orchestrate_runtime(
+            tmp_path,
+            {
+                "is_multi_intent": True,
+                "plan": {"steps": [{"skill_id": "step-skill", "intent": "do the thing"}]},
+            },
+        )
+        runtime.handle_query("orchestrate this")
+
+        metadata = self._metadata(self._route_span(fresh_tracer))
+        assert metadata.get("has_match") is True
+        assert metadata.get("mode") == "orchestrate"
+
+    def test_property_semantics_unchanged(self, tmp_path) -> None:
+        """The mode-derived has_match property is NOT changed: existing
+        consumers (instinct bridge, hook JSON) keep their semantics."""
+        from vibesop.agent.runtime.agent_runtime import AgentRuntimeResult
+
+        result = AgentRuntimeResult()
+        result.intercepted = True
+        result.mode = "single"
+        # Mode-derived property stays True even when the router missed…
+        assert result.has_match is True
+        # …while the router's verdict is carried separately.
+        assert result.router_matched is False
+
+    def test_orchestrate_multi_intent_empty_steps_is_miss(self, fresh_tracer, tmp_path) -> None:
+        """gate20 pi NIT-2: empty plan steps → bool(steps) False side —
+        the predicate must see the miss."""
+        from vibesop.core.observability.gold_detection import is_route_miss_span
+
+        runtime = self._orchestrate_runtime(
+            tmp_path,
+            {"is_multi_intent": True, "plan": {"steps": []}},
+        )
+        runtime.handle_query("orchestrate this")
+
+        span = self._route_span(fresh_tracer)
+        metadata = self._metadata(span)
+        assert metadata.get("has_match") is False
+        assert metadata.get("mode") == "orchestrate"
+        assert is_route_miss_span(span) is True
+
+    def test_orchestrate_all_fallback_plan_is_miss(self, fresh_tracer, tmp_path) -> None:
+        """gate20 claude NIT-1: PlanBuilder steps can carry
+        skill_id="fallback-llm" — an all-fallback plan is a MISS, same
+        verdict the single-intent branch gives fallback-llm."""
+        from vibesop.core.observability.gold_detection import is_route_miss_span
+
+        runtime = self._orchestrate_runtime(
+            tmp_path,
+            {
+                "is_multi_intent": True,
+                "plan": {
+                    "steps": [
+                        {"skill_id": "fallback-llm", "intent": "answer generally"},
+                        {"skill_id": "fallback-llm", "intent": "summarize"},
+                    ]
+                },
+            },
+        )
+        runtime.handle_query("orchestrate this")
+
+        span = self._route_span(fresh_tracer)
+        metadata = self._metadata(span)
+        assert metadata.get("has_match") is False
+        assert is_route_miss_span(span) is True
+
+    def test_orchestrate_mixed_plan_is_match(self, fresh_tracer, tmp_path) -> None:
+        """A plan with at least one REAL skill step is a match even if
+        other steps fell back."""
+        runtime = self._orchestrate_runtime(
+            tmp_path,
+            {
+                "is_multi_intent": True,
+                "plan": {
+                    "steps": [
+                        {"skill_id": "fallback-llm", "intent": "answer generally"},
+                        {"skill_id": "real-skill", "intent": "do the thing"},
+                    ]
+                },
+            },
+        )
+        runtime.handle_query("orchestrate this")
+
+        metadata = self._metadata(self._route_span(fresh_tracer))
+        assert metadata.get("has_match") is True
+
+    def test_routing_exception_span_is_unknown_not_miss(self, fresh_tracer, tmp_path) -> None:
+        """gate20 pi NIT-2: routing raises → early return BEFORE the
+        metadata write → the span carries NO has_match key → both
+        predicates treat it as unknown, never a miss."""
+        from unittest.mock import MagicMock
+
+        from vibesop.core.observability.gold_detection import is_route_miss_span
+        from vibesop.core.observability.tool_call_bridge import _as_route_span, _is_miss
+
+        router = MagicMock()
+        router.route.side_effect = RuntimeError("boom")
+
+        runtime = AgentRuntime(project_root=tmp_path)
+        runtime._router = router
+        result = runtime.handle_query("review my code")
+        assert result.errors  # routing failure recorded
+
+        span = self._route_span(fresh_tracer)
+        metadata = self._metadata(span)
+        assert "has_match" not in metadata
+        assert is_route_miss_span(span) is False  # unknown, not miss
+        bridge_span = _as_route_span(span)
+        assert bridge_span.has_match is None
+        assert _is_miss(bridge_span) is False

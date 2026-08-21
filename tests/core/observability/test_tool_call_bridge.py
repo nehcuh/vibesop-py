@@ -449,3 +449,48 @@ class TestEndToEnd:
         stats = bridge_entries([_event("Read", T0, "s")], tmp_path)
         assert isinstance(stats, BridgeStats)
         assert stats.bridged == 0
+
+
+class TestHookPathMissPredicate:
+    """gate20 (pi NIT-1 = claude NIT-2) — the bridge now sees hook-path misses.
+
+    Since gate20, ``agent_runtime.handle_query`` writes the router's real
+    verdict into span metadata ``has_match`` (previously a mode-derived
+    value that was never False on intercepted misses). Hook-path misses
+    therefore enter ``_is_miss`` for the first time. Direction is correct:
+    hook spans carry the real platform session_id (route-hook forwarding),
+    so session/re-ask outcome evidence is meaningful — NOT the hollow
+    weak-positive case the CLI exclusion guards.
+    """
+
+    def test_is_miss_accepts_hook_path_miss_span(self, tmp_path: Path) -> None:
+        from vibesop.core.observability.tool_call_bridge import _as_route_span, _is_miss
+
+        _route_span(
+            tmp_path,
+            has_match=False,
+            mode="single",
+            platform="claude-code",
+            session="real-platform-session-uuid",
+        )
+        record = _read_spans(tmp_path)[0]
+        rs = _as_route_span(record)
+
+        assert rs.is_cli is False
+        assert rs.session_id == "real-platform-session-uuid"
+        assert rs.has_match is False
+        assert _is_miss(rs) is True
+
+    def test_hook_miss_produces_outcome_row(self, tmp_path: Path) -> None:
+        """End-to-end: an expired hook-path miss lands in route_outcomes."""
+        _route_span(
+            tmp_path,
+            has_match=False,
+            started=datetime.now(UTC) - timedelta(hours=48),
+            session="real-platform-session-uuid",
+            span_id="hook-miss-1",
+        )
+        stats = bridge_entries([], tmp_path)
+        assert stats.outcomes_recorded == 1
+        outcomes = _read_outcomes(tmp_path)
+        assert outcomes[0]["span_id"] == "hook-miss-1"

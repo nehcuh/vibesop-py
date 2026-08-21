@@ -122,6 +122,12 @@ def is_route_miss_span(span: dict[str, Any]) -> bool:
     Spans with ``has_match`` missing (CLI error paths, pre-W5.0 legacy
     spans) are **unknown**, never misses (conservative direction).
 
+    Producer alignment (gate20): both route-span producers now write the
+    router's REAL match verdict — the CLI path always did
+    (``cli/main.py``), and the hook path (``agent_runtime.handle_query``)
+    writes ``router_matched`` here since gate20 (previously a mode-derived
+    value that hid hook-path misses from this predicate).
+
     Metadata may be a dict or a JSON-encoded string (SpanWriter
     serialises it); malformed JSON is treated as unknown, never raises.
 
