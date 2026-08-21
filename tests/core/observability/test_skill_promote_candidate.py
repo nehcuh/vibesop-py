@@ -101,3 +101,47 @@ class TestBackwardsCompat:
         c = ClusterCandidate.from_dict(legacy_payload)
         assert c.project_distribution == {}
         assert c.is_cross_project is False
+
+
+class TestFirstSeenAtField:
+    """M12 NIT-B — ClusterCandidate.first_seen_at (模式首见时间)."""
+
+    def test_round_trip_preserves_first_seen_at(self) -> None:
+        first_seen = datetime(2026, 6, 15, 8, 30, tzinfo=UTC)
+        c = _make()
+        c.first_seen_at = first_seen
+        round_tripped = ClusterCandidate.from_dict(c.to_dict())
+        assert round_tripped.first_seen_at == first_seen
+
+    def test_from_dict_tolerates_missing_first_seen_at(self) -> None:
+        """Pre-NIT-B rows on disk lack the key → None → display falls back
+        to created_at semantics."""
+        legacy_payload = {
+            "cluster_id": "legacy-2",
+            "task_ids": ["t1"],
+            "queries": ["legacy query"],
+            "span_count": 5,
+            "gold_rate": 0.7,
+            "gold_task_ids": ["t1"],
+            "created_at": "2026-06-01T00:00:00+00:00",
+            "ttl_expires_at": "2026-07-01T00:00:00+00:00",
+            "step_freq": {},
+            "step_labels": {},
+            "core_steps": [],
+            "status": "pending",
+            "is_unstable": False,
+            "reviewed_at": None,
+            "source_skill_id": None,
+            "dismiss_reason": None,
+            # NOTE: no first_seen_at key — simulates pre-NIT-B row
+        }
+        c = ClusterCandidate.from_dict(legacy_payload)
+        assert c.first_seen_at is None
+
+    def test_from_dict_parses_naive_first_seen_at_as_utc(self) -> None:
+        c = _make()
+        c.first_seen_at = datetime(2026, 6, 15, 8, 30, tzinfo=UTC)
+        payload = c.to_dict()
+        payload["first_seen_at"] = "2026-06-15T08:30:00"  # hand-edited, no offset
+        parsed = ClusterCandidate.from_dict(payload)
+        assert parsed.first_seen_at == datetime(2026, 6, 15, 8, 30, tzinfo=UTC)

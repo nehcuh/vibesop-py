@@ -2284,16 +2284,37 @@ def _discovery_dismiss_total() -> int:
 def _resolve_discovery_candidate(
     cluster_id: str,
 ) -> tuple[_CandidateStoreScope, ClusterCandidate] | None:
-    """Resolve a full or 8-char-prefix cluster_id to (scope, candidate)."""
+    """Resolve a full or 8-char-prefix cluster_id to (scope, candidate).
+
+    gate22 follow-up (NIT): aligned with ``_resolve_candidate_for_mutation``
+    on the two input-hygiene points — empty-string guard and an ambiguous
+    listing that names every match with its scope. Kept as a separate
+    implementation rather than a shared helper: the mutation variant
+    resolves against ``list_all()`` (terminal rows reachable) and returns
+    the store object, while this one only sees pending rows via
+    ``_gather_scoped_candidates()``.
+    """
+    # startswith("") is always True — without this guard, an empty argument
+    # (or unset $CID) would silently hit the first pending row.
+    if not cluster_id:
+        return None
     by_id = _gather_scoped_candidates()
     exact = by_id.get(cluster_id)
     if exact is not None:
         return exact
-    matches = [pair for cid, pair in by_id.items() if cid.startswith(cluster_id)]
+    matches = [(cid, scope) for cid, (scope, _c) in by_id.items() if cid.startswith(cluster_id)]
     if len(matches) == 1:
-        return matches[0]
+        return by_id[matches[0][0]]
     if len(matches) > 1:
-        console.print(f"[red]✗[/red] Cluster id prefix '{cluster_id}' is ambiguous")
+        # Annotate each match with its scope so cross-scope collisions
+        # don't make the user guess, and never silently truncate.
+        entries = sorted(f"{cid} ({scope})" for cid, scope in matches)
+        listing = ", ".join(entries[:8])
+        if len(entries) > 8:
+            listing += f", +{len(entries) - 8} more"
+        console.print(
+            f"[red]✗[/red] Cluster id prefix '{cluster_id}' is ambiguous — matches: {listing}"
+        )
         raise typer.Exit(1)
     return None
 
@@ -2355,7 +2376,7 @@ def _render_discovery_list(rows: list[DiscoveryRow], *, show_all: bool) -> None:
     table.add_column("Examples", max_width=40)
     table.add_column("Source", justify="right")
     table.add_column("Behavior")
-    table.add_column("Age", justify="right")
+    table.add_column("First seen", justify="right")
     if show_all:
         table.add_column("Status")
 

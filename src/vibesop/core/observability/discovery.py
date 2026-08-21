@@ -416,6 +416,13 @@ class DiscoveryObservationStore:
         if grew:
             data[fingerprint] = {
                 "span_count": span_count,
+                # gate23 (claude#2): NOT the same clock as
+                # ``ClusterCandidate.first_seen_at`` (skill_promote.py) —
+                # that one is the cluster's earliest span timestamp
+                # (模式首见, drives the discover "First seen" column);
+                # this one is when the discovery queue first OBSERVED the
+                # candidate (this entry's ``last_growth_at`` is what
+                # drives cooling).
                 "first_seen_at": (entry.get("first_seen_at") if isinstance(entry, dict) else None)
                 or now.isoformat(),
                 "last_growth_at": now.isoformat(),
@@ -502,7 +509,9 @@ def build_queue(
                 muted=fingerprint in mutes,
                 mute_expires_at=mutes.get(fingerprint),
                 cooling=observation_store.is_cooling(fingerprint, now=now),
-                age_days=max(0, (now - candidate.created_at).days),
+                # M12 NIT-B: 簇首见年龄 (pattern first-sight), not 入池年龄.
+                # Legacy rows without first_seen_at fall back to created_at.
+                age_days=max(0, (now - (candidate.first_seen_at or candidate.created_at)).days),
             )
         )
     rows.sort(key=lambda r: (r.score, r.candidate.span_count, r.candidate.cluster_id), reverse=True)

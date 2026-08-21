@@ -396,3 +396,131 @@ class TestEmptyTaskKeysGuard:
             "empty task_keys" in rec.message and rec.levelno == logging.ERROR
             for rec in caplog.records
         )
+
+
+class TestFirstSeenAt:
+    """M12 NIT-B — scan fills ``ClusterCandidate.first_seen_at`` from the
+    cluster's earliest span timestamp; rescan keeps the earlier value."""
+
+    @staticmethod
+    def _spans_ts(entries: list[tuple[str, str, str]]) -> list[dict]:
+        return [
+            {
+                "task_id": tid,
+                "input_data": {"query": q},
+                "name": "route:query",
+                "project_id": "test",
+                "started_at": ts,
+            }
+            for tid, q, ts in entries
+        ]
+
+    @staticmethod
+    def _make_gold(learner: InstinctLearner, queries: list[str]) -> None:
+        for q in queries:
+            learner.learn(pattern=q, action="x")
+            learner.record_outcome_for_query(q, success=True)
+
+    @staticmethod
+    def _miss_span(task_id: str, query: str, started_at: str) -> dict:
+        """One route-miss span in the real producer shape (mirrors
+        test_miss_recurrence_admission._miss_span)."""
+        return {
+            "span_kind": "task",
+            "name": f"route:{query}",
+            "task_id": task_id,
+            "project_id": "test",
+            "started_at": started_at,
+            "metadata": {"query": query, "mode": "single", "has_match": False},
+        }
+
+    def test_first_seen_at_is_earliest_cluster_span(
+        self, fresh_learner: InstinctLearner, cache: EmbeddingCache, store: ClusterCandidateStore
+    ) -> None:
+        spans = self._spans_ts(
+            [
+                ("t1", "topic-A one", "2026-08-10T00:00:00+00:00"),
+                ("t2", "topic-A two", "2026-07-20T12:00:00+00:00"),
+                ("t3", "topic-A three", "2026-08-01T00:00:00+00:00"),
+            ]
+        )
+        self._make_gold(fresh_learner, ["topic-A one", "topic-A two", "topic-A three"])
+
+        with patch.object(cache, "_compute", side_effect=_fake_embedding):
+            summary = scan_candidates(spans, fresh_learner, store, cache=cache)
+
+        assert summary.promoted_count == 1
+        pending = store.list_pending()
+        assert len(pending) == 1
+        assert pending[0].first_seen_at == datetime(2026, 7, 20, 12, 0, tzinfo=UTC)
+
+    def test_first_seen_at_none_when_spans_undated(
+        self, fresh_learner: InstinctLearner, cache: EmbeddingCache, store: ClusterCandidateStore
+    ) -> None:
+        """Undated spans contribute nothing — None, display falls back to
+        created_at (same tolerance as miss recurrence counting)."""
+        spans = _spans(
+            [
+                ("t1", "topic-A one"),
+                ("t2", "topic-A two"),
+                ("t3", "topic-A three"),
+            ]
+        )
+        self._make_gold(fresh_learner, ["topic-A one", "topic-A two", "topic-A three"])
+
+        with patch.object(cache, "_compute", side_effect=_fake_embedding):
+            summary = scan_candidates(spans, fresh_learner, store, cache=cache)
+
+        assert summary.promoted_count == 1
+        assert store.list_pending()[0].first_seen_at is None
+
+    def test_rescan_keeps_earlier_first_seen(
+        self, fresh_learner: InstinctLearner, cache: EmbeddingCache, store: ClusterCandidateStore
+    ) -> None:
+        """A rescan over a shorter window (only recent spans) must not push
+        the cluster's first-sight forward."""
+        old_spans = self._spans_ts(
+            [
+                ("t1", "topic-A one", "2026-07-20T12:00:00+00:00"),
+                ("t2", "topic-A two", "2026-07-21T00:00:00+00:00"),
+                ("t3", "topic-A three", "2026-07-22T00:00:00+00:00"),
+            ]
+        )
+        new_spans = self._spans_ts(
+            [
+                ("t1", "topic-A one", "2026-08-10T00:00:00+00:00"),
+                ("t2", "topic-A two", "2026-08-11T00:00:00+00:00"),
+                ("t3", "topic-A three", "2026-08-12T00:00:00+00:00"),
+            ]
+        )
+        self._make_gold(fresh_learner, ["topic-A one", "topic-A two", "topic-A three"])
+
+        with patch.object(cache, "_compute", side_effect=_fake_embedding):
+            scan_candidates(old_spans, fresh_learner, store, cache=cache)
+            scan_candidates(new_spans, fresh_learner, store, cache=cache)
+
+        pending = store.list_pending()
+        assert len(pending) == 1
+        assert pending[0].first_seen_at == datetime(2026, 7, 20, 12, 0, tzinfo=UTC)
+
+    def test_miss_recurrence_path_fills_first_seen_at(
+        self, fresh_learner: InstinctLearner, cache: EmbeddingCache, store: ClusterCandidateStore
+    ) -> None:
+        """gate23 pi#2: the miss_recurrence construction site is covered
+        too — first_seen_at comes from the admitted cluster's earliest
+        span, same as the gold path. 3 distinct (task_id, day) pairs
+        across 2 natural days clears the M2 admission gate."""
+        spans = [
+            self._miss_span("k1", "miss-topic one", "2026-08-01T10:00:00+00:00"),
+            self._miss_span("k2", "miss-topic two", "2026-08-01T22:30:00+00:00"),
+            self._miss_span("k3", "miss-topic three", "2026-08-02T09:15:00+00:00"),
+        ]
+
+        with patch.object(cache, "_compute", side_effect=_fake_embedding):
+            summary = scan_candidates(spans, fresh_learner, store, cache=cache)
+
+        assert summary.miss_admitted_count == 1
+        pending = store.list_pending()
+        assert len(pending) == 1
+        assert pending[0].source == "miss_recurrence"
+        assert pending[0].first_seen_at == datetime(2026, 8, 1, 10, 0, tzinfo=UTC)

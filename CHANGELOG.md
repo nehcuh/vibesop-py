@@ -9,6 +9,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### M12 discover UX — resolver hardening + candidate first_seen_at (2026-08-21)
+
+Gate-22 follow-ups plus a schema addition, from dual-review nits and a
+display-semantics nit found during dogfooding.
+
+- **Discovery resolver hardening** (`skill_commands.py`):
+  `_resolve_discovery_candidate` gains the same guards as the gate-22
+  mutation resolver — empty input takes the not-found path (previously
+  `startswith("")` matched every pending row, so `--mute ""` /
+  `dismiss ""` could silently hit a single-row pool), and the ambiguous
+  path now lists sorted full ids with `(project|global)` scope
+  annotations plus `+N more` past 8. Kept as a separate resolver on
+  purpose (pending-only, no store object needed); docstring records
+  why it isn't deduped with `_resolve_candidate_for_mutation`.
+- **`ClusterCandidate.first_seen_at`** (`skill_promote.py`,
+  `discovery.py`): the discover table's Age column showed candidate
+  creation age (always 0d); the decision-relevant quantity is
+  pattern-first-seen age (the ≥2-days recurrence evidence). Scan now
+  persists the cluster's earliest span timestamp (new optional field;
+  legacy rows → None → display falls back to created_at), reusing the
+  already-built per-cluster span lists on both the gold and
+  miss_recurrence paths — no new full scans. Locked-upsert merges
+  earliest-wins so a shorter rescan window never pushes first-seen
+  forward (all four None/value combinations covered). Discover column
+  renamed "Age" → "First seen"; dashboard label 年龄 → 首见.
+  `DiscoveryObservationStore.first_seen_at` (queue-observation clock,
+  drives cooling) is a different provenance with the same name —
+  cross-referencing comments added at both definitions.
+- **Second time-bomb test fixed** (`test_tool_call_bridge.py`):
+  `test_session_continued_is_weak_positive` used fixed T0; once wall
+  clock crossed T0+30min+24h the trailing span gained a
+  `session_expired_without_reask` outcome and broke the outcome-count
+  assertion (miss-1 itself never flips — session_moved_on classifies
+  before expiry). Rewritten now-relative like its neighbors; remaining
+  T0 uses in the file audited — precedence-protected or already
+  relative, no further latent bombs.
+- Tests: `TestResolveCandidateHardening` (empty dismiss/mute,
+  cross-scope ambiguous with scope annotations, `+N more`),
+  `TestFirstSeenAt`/`TestFirstSeenAtField` (earliest-span fill on gold
+  + miss paths, undated→None, earliest-wins rescan, round-trip, legacy
+  fallback), `TestFirstSeenColumn`. Gate 23 dual review: claude
+  PASS_WITH_NITS(3) + pi PASS_WITH_NITS(5), 0 BLOCK, intersection
+  converged.
+
 ### M12 dogfood fix — promote/dismiss accept displayed 8-char cluster-id prefixes (2026-08-21)
 
 Found by real use: `vibe skill candidates` renders 8-char truncated

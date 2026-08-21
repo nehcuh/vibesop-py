@@ -276,11 +276,23 @@ class TestOutcomeSignals:
         assert newer.id not in outcomes
 
     def test_session_continued_is_weak_positive(self, tmp_path: Path) -> None:
-        miss = _route_span(tmp_path, query="question one", started=T0, span_id="miss-1")
+        # now-relative: both spans must stay inside SESSION_COMPLETE_HOURS
+        # (24h). The fixed-T0 time-bomb mechanism: once the wall clock
+        # crosses T0+30min+24h, "other-1" (the LAST span, no continuation
+        # evidence) is newly judged session_expired_without_reask, adding
+        # a second outcome and breaking len(outcomes)==1. "miss-1" itself
+        # never flips — a later same-session span makes it hit the
+        # session_continued_without_reask branch, which takes precedence
+        # over the expired branch (same now-relative pattern as
+        # test_reask_same_task_id above).
+        now = datetime.now(UTC)
+        miss = _route_span(
+            tmp_path, query="question one", started=now - timedelta(hours=1), span_id="miss-1"
+        )
         _route_span(
             tmp_path,
             query="a different question",
-            started=T0 + timedelta(minutes=30),
+            started=now - timedelta(minutes=30),
             span_id="other-1",
         )
         bridge_entries([], tmp_path)

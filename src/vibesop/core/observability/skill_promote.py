@@ -344,6 +344,16 @@ class ClusterCandidate:
     gold_rate: float
     gold_task_ids: list[str]
     created_at: datetime = field(default_factory=_now_utc)
+    # M12 NIT-B: earliest span timestamp observed in the cluster (模式首见
+    # 时间). Filled at scan time from the cluster's spans; None for legacy
+    # rows scanned before this field existed — display layers fall back to
+    # ``created_at`` (入池时间). On rescan the earlier value wins (a
+    # shorter --days window must not push first-sight forward).
+    # gate23 (claude#2): NOT the same clock as
+    # ``DiscoveryObservationStore.first_seen_at`` (discovery.py) — that one
+    # records when the discovery queue first OBSERVED the candidate and
+    # drives cooling; this one is pattern first-sight in the spans.
+    first_seen_at: datetime | None = None
     ttl_expires_at: datetime | None = None  # set in __post_init__
     step_freq: dict[str, int] = field(default_factory=dict)
     step_labels: dict[str, StepLabel] = field(default_factory=dict)
@@ -389,6 +399,7 @@ class ClusterCandidate:
         """
         d = asdict(self)
         d["created_at"] = self.created_at.isoformat()
+        d["first_seen_at"] = self.first_seen_at.isoformat() if self.first_seen_at else None
         d["ttl_expires_at"] = self.ttl_expires_at.isoformat() if self.ttl_expires_at else None
         d["reviewed_at"] = self.reviewed_at.isoformat() if self.reviewed_at else None
         return d
@@ -397,9 +408,11 @@ class ClusterCandidate:
     def from_dict(cls, d: dict[str, Any]) -> ClusterCandidate:
         """Deserialize from ``to_dict`` output.
 
-        Re-parses all three datetime fields (ISO 8601 → aware datetime).
+        Re-parses all four datetime fields (ISO 8601 → aware datetime).
         Re-validates ``status`` Literal on construction (defensive
-        against hand-edited files carrying invalid values).
+        against hand-edited files carrying invalid values). Rows written
+        before ``first_seen_at`` existed simply lack the key → None →
+        display layers fall back to ``created_at`` semantics (M12 NIT-B).
 
         tz-naive datetimes (hand-edited ISO without offset) are attached
         to UTC. Without this, ``prune_expired`` raises ``TypeError`` when
@@ -407,7 +420,7 @@ class ClusterCandidate:
         scan (grok P1).
         """
         payload = dict(d)
-        for key in ("created_at", "ttl_expires_at", "reviewed_at"):
+        for key in ("created_at", "first_seen_at", "ttl_expires_at", "reviewed_at"):
             raw = payload.get(key)
             if isinstance(raw, str):
                 parsed = datetime.fromisoformat(raw)
@@ -514,6 +527,14 @@ class ClusterCandidateStore:
             preserved_ttl = existing.ttl_expires_at
             candidate.created_at = preserved_created
             candidate.ttl_expires_at = preserved_ttl
+            # first_seen_at is earliest-wins across rescans (M12 NIT-B):
+            # a rescan over a shorter span window (--days N) sees only
+            # recent spans and must not push the cluster's first-sight
+            # forward.
+            if existing.first_seen_at is not None and (
+                candidate.first_seen_at is None or existing.first_seen_at < candidate.first_seen_at
+            ):
+                candidate.first_seen_at = existing.first_seen_at
             rows[existing_idx] = candidate
             self._rewrite_all_locked(rows)
             return candidate
@@ -1268,6 +1289,7 @@ def scan_candidates(
             span_count=cluster.span_count,
             gold_rate=cluster.gold_rate,
             gold_task_ids=list(cluster.gold_task_ids),
+            first_seen_at=_earliest_span_timestamp(cluster_spans),
             step_freq=freq,
             step_labels=labels,
             core_steps=core_steps,
@@ -1315,6 +1337,7 @@ def scan_candidates(
             span_count=mc.span_count,
             gold_rate=0.0,
             gold_task_ids=[],
+            first_seen_at=_earliest_span_timestamp(mc_spans),
             step_freq=freq,
             step_labels=labels,
             core_steps=core_steps,
@@ -1374,6 +1397,33 @@ def scan_candidates(
             summary.capped = True
 
     return summary
+
+
+def _earliest_span_timestamp(spans: list[dict[str, Any]]) -> datetime | None:
+    """Earliest parseable span timestamp in a cluster (模式首见, M12 NIT-B).
+
+    Feeds ``ClusterCandidate.first_seen_at`` — the discovery queue's
+    "First seen" age. Same parsing tolerance as ``_miss_recurrence_counts``:
+    missing/unparseable timestamps contribute nothing; tz-naive values are
+    attached to UTC. An all-undated cluster yields None and the display
+    layer falls back to ``created_at``.
+    """
+    from vibesop.core.observability._span_fields import span_timestamp
+
+    earliest: datetime | None = None
+    for span in spans:
+        raw_ts = span_timestamp(span)
+        if not raw_ts:
+            continue
+        try:
+            ts = datetime.fromisoformat(str(raw_ts).replace("Z", "+00:00"))
+        except ValueError:
+            continue
+        if ts.tzinfo is None:
+            ts = ts.replace(tzinfo=UTC)
+        if earliest is None or ts < earliest:
+            earliest = ts
+    return earliest
 
 
 def _miss_recurrence_counts(cluster: Cluster, miss_spans: list[dict[str, Any]]) -> tuple[int, int]:

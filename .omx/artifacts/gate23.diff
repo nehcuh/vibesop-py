@@ -1,0 +1,587 @@
+diff --git a/CHANGELOG.md b/CHANGELOG.md
+index 80840c2..81ff767 100644
+--- a/CHANGELOG.md
++++ b/CHANGELOG.md
+@@ -9,6 +9,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
+ 
+ ## [Unreleased]
+ 
++### M12 discover UX — resolver hardening + candidate first_seen_at (2026-08-21)
++
++Gate-22 follow-ups plus a schema addition, from dual-review nits and a
++display-semantics nit found during dogfooding.
++
++- **Discovery resolver hardening** (`skill_commands.py`):
++  `_resolve_discovery_candidate` gains the same guards as the gate-22
++  mutation resolver — empty input takes the not-found path (previously
++  `startswith("")` matched every pending row, so `--mute ""` /
++  `dismiss ""` could silently hit a single-row pool), and the ambiguous
++  path now lists sorted full ids with `(project|global)` scope
++  annotations plus `+N more` past 8. Kept as a separate resolver on
++  purpose (pending-only, no store object needed); docstring records
++  why it isn't deduped with `_resolve_candidate_for_mutation`.
++- **`ClusterCandidate.first_seen_at`** (`skill_promote.py`,
++  `discovery.py`): the discover table's Age column showed candidate
++  creation age (always 0d); the decision-relevant quantity is
++  pattern-first-seen age (the ≥2-days recurrence evidence). Scan now
++  persists the cluster's earliest span timestamp (new optional field;
++  legacy rows → None → display falls back to created_at), reusing the
++  already-built per-cluster span lists on both the gold and
++  miss_recurrence paths — no new full scans. Locked-upsert merges
++  earliest-wins so a shorter rescan window never pushes first-seen
++  forward (all four None/value combinations covered). Discover column
++  renamed "Age" → "First seen"; dashboard label 年龄 → 首见.
++  `DiscoveryObservationStore.first_seen_at` (queue-observation clock,
++  drives cooling) is a different provenance with the same name —
++  cross-referencing comments added at both definitions.
++- **Second time-bomb test fixed** (`test_tool_call_bridge.py`):
++  `test_session_continued_is_weak_positive` used fixed T0; once wall
++  clock crossed T0+30min+24h the trailing span gained a
++  `session_expired_without_reask` outcome and broke the outcome-count
++  assertion (miss-1 itself never flips — session_moved_on classifies
++  before expiry). Rewritten now-relative like its neighbors; remaining
++  T0 uses in the file audited — precedence-protected or already
++  relative, no further latent bombs.
++- Tests: `TestResolveCandidateHardening` (empty dismiss/mute,
++  cross-scope ambiguous with scope annotations, `+N more`),
++  `TestFirstSeenAt`/`TestFirstSeenAtField` (earliest-span fill on gold
++  + miss paths, undated→None, earliest-wins rescan, round-trip, legacy
++  fallback), `TestFirstSeenColumn`. Gate 23 dual review: claude
++  PASS_WITH_NITS(3) + pi PASS_WITH_NITS(5), 0 BLOCK, intersection
++  converged.
++
+ ### M12 dogfood fix — promote/dismiss accept displayed 8-char cluster-id prefixes (2026-08-21)
+ 
+ Found by real use: `vibe skill candidates` renders 8-char truncated
+diff --git a/src/vibesop/cli/commands/skill_commands.py b/src/vibesop/cli/commands/skill_commands.py
+index 492bbd8..bb6f78c 100644
+--- a/src/vibesop/cli/commands/skill_commands.py
++++ b/src/vibesop/cli/commands/skill_commands.py
+@@ -2284,16 +2284,37 @@ def _discovery_dismiss_total() -> int:
+ def _resolve_discovery_candidate(
+     cluster_id: str,
+ ) -> tuple[_CandidateStoreScope, ClusterCandidate] | None:
+-    """Resolve a full or 8-char-prefix cluster_id to (scope, candidate)."""
++    """Resolve a full or 8-char-prefix cluster_id to (scope, candidate).
++
++    gate22 follow-up (NIT): aligned with ``_resolve_candidate_for_mutation``
++    on the two input-hygiene points — empty-string guard and an ambiguous
++    listing that names every match with its scope. Kept as a separate
++    implementation rather than a shared helper: the mutation variant
++    resolves against ``list_all()`` (terminal rows reachable) and returns
++    the store object, while this one only sees pending rows via
++    ``_gather_scoped_candidates()``.
++    """
++    # startswith("") is always True — without this guard, an empty argument
++    # (or unset $CID) would silently hit the first pending row.
++    if not cluster_id:
++        return None
+     by_id = _gather_scoped_candidates()
+     exact = by_id.get(cluster_id)
+     if exact is not None:
+         return exact
+-    matches = [pair for cid, pair in by_id.items() if cid.startswith(cluster_id)]
++    matches = [(cid, scope) for cid, (scope, _c) in by_id.items() if cid.startswith(cluster_id)]
+     if len(matches) == 1:
+-        return matches[0]
++        return by_id[matches[0][0]]
+     if len(matches) > 1:
+-        console.print(f"[red]✗[/red] Cluster id prefix '{cluster_id}' is ambiguous")
++        # Annotate each match with its scope so cross-scope collisions
++        # don't make the user guess, and never silently truncate.
++        entries = sorted(f"{cid} ({scope})" for cid, scope in matches)
++        listing = ", ".join(entries[:8])
++        if len(entries) > 8:
++            listing += f", +{len(entries) - 8} more"
++        console.print(
++            f"[red]✗[/red] Cluster id prefix '{cluster_id}' is ambiguous — matches: {listing}"
++        )
+         raise typer.Exit(1)
+     return None
+ 
+@@ -2355,7 +2376,7 @@ def _render_discovery_list(rows: list[DiscoveryRow], *, show_all: bool) -> None:
+     table.add_column("Examples", max_width=40)
+     table.add_column("Source", justify="right")
+     table.add_column("Behavior")
+-    table.add_column("Age", justify="right")
++    table.add_column("First seen", justify="right")
+     if show_all:
+         table.add_column("Status")
+ 
+diff --git a/src/vibesop/core/observability/discovery.py b/src/vibesop/core/observability/discovery.py
+index 39fadd8..98eefef 100644
+--- a/src/vibesop/core/observability/discovery.py
++++ b/src/vibesop/core/observability/discovery.py
+@@ -416,6 +416,13 @@ class DiscoveryObservationStore:
+         if grew:
+             data[fingerprint] = {
+                 "span_count": span_count,
++                # gate23 (claude#2): NOT the same clock as
++                # ``ClusterCandidate.first_seen_at`` (skill_promote.py) —
++                # that one is the cluster's earliest span timestamp
++                # (模式首见, drives the discover "First seen" column);
++                # this one is when the discovery queue first OBSERVED the
++                # candidate (this entry's ``last_growth_at`` is what
++                # drives cooling).
+                 "first_seen_at": (entry.get("first_seen_at") if isinstance(entry, dict) else None)
+                 or now.isoformat(),
+                 "last_growth_at": now.isoformat(),
+@@ -502,7 +509,9 @@ def build_queue(
+                 muted=fingerprint in mutes,
+                 mute_expires_at=mutes.get(fingerprint),
+                 cooling=observation_store.is_cooling(fingerprint, now=now),
+-                age_days=max(0, (now - candidate.created_at).days),
++                # M12 NIT-B: 簇首见年龄 (pattern first-sight), not 入池年龄.
++                # Legacy rows without first_seen_at fall back to created_at.
++                age_days=max(0, (now - (candidate.first_seen_at or candidate.created_at)).days),
+             )
+         )
+     rows.sort(key=lambda r: (r.score, r.candidate.span_count, r.candidate.cluster_id), reverse=True)
+diff --git a/src/vibesop/core/observability/skill_promote.py b/src/vibesop/core/observability/skill_promote.py
+index b952181..ebab978 100644
+--- a/src/vibesop/core/observability/skill_promote.py
++++ b/src/vibesop/core/observability/skill_promote.py
+@@ -344,6 +344,16 @@ class ClusterCandidate:
+     gold_rate: float
+     gold_task_ids: list[str]
+     created_at: datetime = field(default_factory=_now_utc)
++    # M12 NIT-B: earliest span timestamp observed in the cluster (模式首见
++    # 时间). Filled at scan time from the cluster's spans; None for legacy
++    # rows scanned before this field existed — display layers fall back to
++    # ``created_at`` (入池时间). On rescan the earlier value wins (a
++    # shorter --days window must not push first-sight forward).
++    # gate23 (claude#2): NOT the same clock as
++    # ``DiscoveryObservationStore.first_seen_at`` (discovery.py) — that one
++    # records when the discovery queue first OBSERVED the candidate and
++    # drives cooling; this one is pattern first-sight in the spans.
++    first_seen_at: datetime | None = None
+     ttl_expires_at: datetime | None = None  # set in __post_init__
+     step_freq: dict[str, int] = field(default_factory=dict)
+     step_labels: dict[str, StepLabel] = field(default_factory=dict)
+@@ -389,6 +399,7 @@ class ClusterCandidate:
+         """
+         d = asdict(self)
+         d["created_at"] = self.created_at.isoformat()
++        d["first_seen_at"] = self.first_seen_at.isoformat() if self.first_seen_at else None
+         d["ttl_expires_at"] = self.ttl_expires_at.isoformat() if self.ttl_expires_at else None
+         d["reviewed_at"] = self.reviewed_at.isoformat() if self.reviewed_at else None
+         return d
+@@ -397,9 +408,11 @@ class ClusterCandidate:
+     def from_dict(cls, d: dict[str, Any]) -> ClusterCandidate:
+         """Deserialize from ``to_dict`` output.
+ 
+-        Re-parses all three datetime fields (ISO 8601 → aware datetime).
++        Re-parses all four datetime fields (ISO 8601 → aware datetime).
+         Re-validates ``status`` Literal on construction (defensive
+-        against hand-edited files carrying invalid values).
++        against hand-edited files carrying invalid values). Rows written
++        before ``first_seen_at`` existed simply lack the key → None →
++        display layers fall back to ``created_at`` semantics (M12 NIT-B).
+ 
+         tz-naive datetimes (hand-edited ISO without offset) are attached
+         to UTC. Without this, ``prune_expired`` raises ``TypeError`` when
+@@ -407,7 +420,7 @@ class ClusterCandidate:
+         scan (grok P1).
+         """
+         payload = dict(d)
+-        for key in ("created_at", "ttl_expires_at", "reviewed_at"):
++        for key in ("created_at", "first_seen_at", "ttl_expires_at", "reviewed_at"):
+             raw = payload.get(key)
+             if isinstance(raw, str):
+                 parsed = datetime.fromisoformat(raw)
+@@ -514,6 +527,14 @@ class ClusterCandidateStore:
+             preserved_ttl = existing.ttl_expires_at
+             candidate.created_at = preserved_created
+             candidate.ttl_expires_at = preserved_ttl
++            # first_seen_at is earliest-wins across rescans (M12 NIT-B):
++            # a rescan over a shorter span window (--days N) sees only
++            # recent spans and must not push the cluster's first-sight
++            # forward.
++            if existing.first_seen_at is not None and (
++                candidate.first_seen_at is None or existing.first_seen_at < candidate.first_seen_at
++            ):
++                candidate.first_seen_at = existing.first_seen_at
+             rows[existing_idx] = candidate
+             self._rewrite_all_locked(rows)
+             return candidate
+@@ -1268,6 +1289,7 @@ def scan_candidates(
+             span_count=cluster.span_count,
+             gold_rate=cluster.gold_rate,
+             gold_task_ids=list(cluster.gold_task_ids),
++            first_seen_at=_earliest_span_timestamp(cluster_spans),
+             step_freq=freq,
+             step_labels=labels,
+             core_steps=core_steps,
+@@ -1315,6 +1337,7 @@ def scan_candidates(
+             span_count=mc.span_count,
+             gold_rate=0.0,
+             gold_task_ids=[],
++            first_seen_at=_earliest_span_timestamp(mc_spans),
+             step_freq=freq,
+             step_labels=labels,
+             core_steps=core_steps,
+@@ -1376,6 +1399,33 @@ def scan_candidates(
+     return summary
+ 
+ 
++def _earliest_span_timestamp(spans: list[dict[str, Any]]) -> datetime | None:
++    """Earliest parseable span timestamp in a cluster (模式首见, M12 NIT-B).
++
++    Feeds ``ClusterCandidate.first_seen_at`` — the discovery queue's
++    "First seen" age. Same parsing tolerance as ``_miss_recurrence_counts``:
++    missing/unparseable timestamps contribute nothing; tz-naive values are
++    attached to UTC. An all-undated cluster yields None and the display
++    layer falls back to ``created_at``.
++    """
++    from vibesop.core.observability._span_fields import span_timestamp
++
++    earliest: datetime | None = None
++    for span in spans:
++        raw_ts = span_timestamp(span)
++        if not raw_ts:
++            continue
++        try:
++            ts = datetime.fromisoformat(str(raw_ts).replace("Z", "+00:00"))
++        except ValueError:
++            continue
++        if ts.tzinfo is None:
++            ts = ts.replace(tzinfo=UTC)
++        if earliest is None or ts < earliest:
++            earliest = ts
++    return earliest
++
++
+ def _miss_recurrence_counts(cluster: Cluster, miss_spans: list[dict[str, Any]]) -> tuple[int, int]:
+     """Count distinct (task_id, natural-day) pairs and days in a miss cluster.
+ 
+diff --git a/src/vibesop/dashboard/templates/index.html b/src/vibesop/dashboard/templates/index.html
+index 2c25b37..29237cc 100644
+--- a/src/vibesop/dashboard/templates/index.html
++++ b/src/vibesop/dashboard/templates/index.html
+@@ -716,7 +716,7 @@ async function loadDiscoveries() {
+       (examples ? '<div class="examples">' + examples + '</div>' : '') +
+       '<div class="meta-line2">证据: ' + (ev.span_count ?? 0) + ' spans · ' + (ev.distinct_task_keys ?? 0) + ' tasks' +
+         ' · 行为: ' + escapeHtml(c.behavior_evidence || 'not_collected') +
+-        ' · 年龄: ' + c.age_days + 'd' + (c.cooling ? ' (冷却中)' : '') + '</div>' +
++        ' · 首见: ' + c.age_days + 'd' + (c.cooling ? ' (冷却中)' : '') + '</div>' +
+       (steps ? '<div class="meta-line2">' + steps + '</div>' : '') +
+       (projects ? '<div class="meta-line2">项目: ' + projects + '</div>' : '') +
+       '<div class="cli-hint">' + escapeHtml(c.cli_hint) + '</div>' +
+diff --git a/tests/cli/test_skill_discover_cli.py b/tests/cli/test_skill_discover_cli.py
+index 43b4ebc..505622b 100644
+--- a/tests/cli/test_skill_discover_cli.py
++++ b/tests/cli/test_skill_discover_cli.py
+@@ -380,6 +380,95 @@ class TestScanCandidatesRendering:
+         assert result.exit_code == 1
+ 
+ 
++class TestResolveCandidateHardening:
++    """gate22 follow-up: _resolve_discovery_candidate aligned with the
++    mutation resolver — empty-string guard + scope-annotated ambiguous
++    listing with ``+N more`` truncation."""
++
++    def test_empty_id_takes_not_found_path(self, cli_runner: CliRunner, discovery_env) -> None:
++        stores, _ = discovery_env
++        candidate = _candidate("a" * 40, ["single pending query"])
++        stores["project"].upsert(candidate)
++        # startswith("") is always True — without the guard this would
++        # silently dismiss the only pending row.
++        result = cli_runner.invoke(app, ["skill", "discover", "dismiss", ""])
++        assert result.exit_code == 1
++        assert "not in Discovery queue" in result.output
++        shown = cli_runner.invoke(app, ["skill", "discover"])
++        assert "single pending query" in shown.output
++
++    def test_empty_mute_id_takes_not_found_path(self, cli_runner: CliRunner, discovery_env) -> None:
++        """gate23 pi#3/claude#3: the ``--mute`` entry shares the same
++        resolver — empty string must take the not-found path too, with no
++        mute recorded."""
++        stores, dirs = discovery_env
++        candidate = _candidate("a" * 40, ["single pending query"])
++        stores["project"].upsert(candidate)
++        result = cli_runner.invoke(app, ["skill", "discover", "--mute", ""])
++        assert result.exit_code == 1
++        assert "not in Discovery queue" in result.output
++        assert DiscoverySignalStore(dirs["project"]).active_mutes() == {}
++        assert DiscoverySignalStore(dirs["global"]).active_mutes() == {}
++        shown = cli_runner.invoke(app, ["skill", "discover"])
++        assert "single pending query" in shown.output
++
++    def test_ambiguous_prefix_lists_full_ids_with_scope(
++        self, cli_runner: CliRunner, discovery_env
++    ) -> None:
++        stores, _ = discovery_env
++        project_id = "ab" + "1" * 38
++        global_id = "ab" + "2" * 38
++        stores["project"].upsert(_candidate(project_id, ["proj ambiguous query"]))
++        stores["global"].upsert(_candidate(global_id, ["glob ambiguous query"]))
++        result = cli_runner.invoke(app, ["skill", "discover", "dismiss", "ab"])
++        assert result.exit_code == 1
++        assert "ambiguous" in result.output
++        assert f"{project_id} (project)" in result.output
++        assert f"{global_id} (global)" in result.output
++
++    def test_ambiguous_listing_truncates_with_more(
++        self, cli_runner: CliRunner, discovery_env
++    ) -> None:
++        stores, _ = discovery_env
++        for i in range(10):
++            stores["project"].upsert(_candidate(f"cd{i:038d}", [f"bulk ambiguous query {i}"]))
++        result = cli_runner.invoke(app, ["skill", "discover", "dismiss", "cd"])
++        assert result.exit_code == 1
++        assert "ambiguous" in result.output
++        assert "+2 more" in result.output
++
++
++class TestFirstSeenColumn:
++    """M12 NIT-B — discover 表格 First seen 列显示簇首见年龄(模式首见
++    至今),而非候选入池年龄。"""
++
++    def test_first_seen_column_uses_pattern_first_sight(
++        self, cli_runner: CliRunner, discovery_env
++    ) -> None:
++        stores, _ = discovery_env
++        candidate = _candidate("f5" + "0" * 38, ["old pattern query"])
++        # 入池是刚刚(created_at=now),但模式首见在 20 天前。
++        candidate.first_seen_at = datetime.now(UTC) - timedelta(days=20)
++        stores["project"].upsert(candidate)
++        result = cli_runner.invoke(app, ["skill", "discover"])
++        assert result.exit_code == 0
++        assert "First seen" in result.output
++        assert "20d" in result.output
++
++    def test_legacy_row_without_first_seen_falls_back_to_created_at(
++        self, cli_runner: CliRunner, discovery_env
++    ) -> None:
++        stores, _ = discovery_env
++        # first_seen_at=None(存量行)→ 回退 created_at 语义 → 0d。
++        candidate = _candidate("f6" + "0" * 38, ["fresh pattern query"])
++        stores["project"].upsert(candidate)
++        result = cli_runner.invoke(app, ["skill", "discover"])
++        assert result.exit_code == 0
++        assert "First seen" in result.output
++        assert "0d" in result.output
++        assert "20d" not in result.output
++
++
+ class TestCrossScopeDismiss:
+     """gate17 claude nit 1 / pi nit 3: one dismissal covers both scopes."""
+ 
+diff --git a/tests/core/observability/test_scan_candidates.py b/tests/core/observability/test_scan_candidates.py
+index bea19c5..9151a26 100644
+--- a/tests/core/observability/test_scan_candidates.py
++++ b/tests/core/observability/test_scan_candidates.py
+@@ -396,3 +396,131 @@ class TestEmptyTaskKeysGuard:
+             "empty task_keys" in rec.message and rec.levelno == logging.ERROR
+             for rec in caplog.records
+         )
++
++
++class TestFirstSeenAt:
++    """M12 NIT-B — scan fills ``ClusterCandidate.first_seen_at`` from the
++    cluster's earliest span timestamp; rescan keeps the earlier value."""
++
++    @staticmethod
++    def _spans_ts(entries: list[tuple[str, str, str]]) -> list[dict]:
++        return [
++            {
++                "task_id": tid,
++                "input_data": {"query": q},
++                "name": "route:query",
++                "project_id": "test",
++                "started_at": ts,
++            }
++            for tid, q, ts in entries
++        ]
++
++    @staticmethod
++    def _make_gold(learner: InstinctLearner, queries: list[str]) -> None:
++        for q in queries:
++            learner.learn(pattern=q, action="x")
++            learner.record_outcome_for_query(q, success=True)
++
++    @staticmethod
++    def _miss_span(task_id: str, query: str, started_at: str) -> dict:
++        """One route-miss span in the real producer shape (mirrors
++        test_miss_recurrence_admission._miss_span)."""
++        return {
++            "span_kind": "task",
++            "name": f"route:{query}",
++            "task_id": task_id,
++            "project_id": "test",
++            "started_at": started_at,
++            "metadata": {"query": query, "mode": "single", "has_match": False},
++        }
++
++    def test_first_seen_at_is_earliest_cluster_span(
++        self, fresh_learner: InstinctLearner, cache: EmbeddingCache, store: ClusterCandidateStore
++    ) -> None:
++        spans = self._spans_ts(
++            [
++                ("t1", "topic-A one", "2026-08-10T00:00:00+00:00"),
++                ("t2", "topic-A two", "2026-07-20T12:00:00+00:00"),
++                ("t3", "topic-A three", "2026-08-01T00:00:00+00:00"),
++            ]
++        )
++        self._make_gold(fresh_learner, ["topic-A one", "topic-A two", "topic-A three"])
++
++        with patch.object(cache, "_compute", side_effect=_fake_embedding):
++            summary = scan_candidates(spans, fresh_learner, store, cache=cache)
++
++        assert summary.promoted_count == 1
++        pending = store.list_pending()
++        assert len(pending) == 1
++        assert pending[0].first_seen_at == datetime(2026, 7, 20, 12, 0, tzinfo=UTC)
++
++    def test_first_seen_at_none_when_spans_undated(
++        self, fresh_learner: InstinctLearner, cache: EmbeddingCache, store: ClusterCandidateStore
++    ) -> None:
++        """Undated spans contribute nothing — None, display falls back to
++        created_at (same tolerance as miss recurrence counting)."""
++        spans = _spans(
++            [
++                ("t1", "topic-A one"),
++                ("t2", "topic-A two"),
++                ("t3", "topic-A three"),
++            ]
++        )
++        self._make_gold(fresh_learner, ["topic-A one", "topic-A two", "topic-A three"])
++
++        with patch.object(cache, "_compute", side_effect=_fake_embedding):
++            summary = scan_candidates(spans, fresh_learner, store, cache=cache)
++
++        assert summary.promoted_count == 1
++        assert store.list_pending()[0].first_seen_at is None
++
++    def test_rescan_keeps_earlier_first_seen(
++        self, fresh_learner: InstinctLearner, cache: EmbeddingCache, store: ClusterCandidateStore
++    ) -> None:
++        """A rescan over a shorter window (only recent spans) must not push
++        the cluster's first-sight forward."""
++        old_spans = self._spans_ts(
++            [
++                ("t1", "topic-A one", "2026-07-20T12:00:00+00:00"),
++                ("t2", "topic-A two", "2026-07-21T00:00:00+00:00"),
++                ("t3", "topic-A three", "2026-07-22T00:00:00+00:00"),
++            ]
++        )
++        new_spans = self._spans_ts(
++            [
++                ("t1", "topic-A one", "2026-08-10T00:00:00+00:00"),
++                ("t2", "topic-A two", "2026-08-11T00:00:00+00:00"),
++                ("t3", "topic-A three", "2026-08-12T00:00:00+00:00"),
++            ]
++        )
++        self._make_gold(fresh_learner, ["topic-A one", "topic-A two", "topic-A three"])
++
++        with patch.object(cache, "_compute", side_effect=_fake_embedding):
++            scan_candidates(old_spans, fresh_learner, store, cache=cache)
++            scan_candidates(new_spans, fresh_learner, store, cache=cache)
++
++        pending = store.list_pending()
++        assert len(pending) == 1
++        assert pending[0].first_seen_at == datetime(2026, 7, 20, 12, 0, tzinfo=UTC)
++
++    def test_miss_recurrence_path_fills_first_seen_at(
++        self, fresh_learner: InstinctLearner, cache: EmbeddingCache, store: ClusterCandidateStore
++    ) -> None:
++        """gate23 pi#2: the miss_recurrence construction site is covered
++        too — first_seen_at comes from the admitted cluster's earliest
++        span, same as the gold path. 3 distinct (task_id, day) pairs
++        across 2 natural days clears the M2 admission gate."""
++        spans = [
++            self._miss_span("k1", "miss-topic one", "2026-08-01T10:00:00+00:00"),
++            self._miss_span("k2", "miss-topic two", "2026-08-01T22:30:00+00:00"),
++            self._miss_span("k3", "miss-topic three", "2026-08-02T09:15:00+00:00"),
++        ]
++
++        with patch.object(cache, "_compute", side_effect=_fake_embedding):
++            summary = scan_candidates(spans, fresh_learner, store, cache=cache)
++
++        assert summary.miss_admitted_count == 1
++        pending = store.list_pending()
++        assert len(pending) == 1
++        assert pending[0].source == "miss_recurrence"
++        assert pending[0].first_seen_at == datetime(2026, 8, 1, 10, 0, tzinfo=UTC)
+diff --git a/tests/core/observability/test_skill_promote_candidate.py b/tests/core/observability/test_skill_promote_candidate.py
+index 9935607..0faa1f5 100644
+--- a/tests/core/observability/test_skill_promote_candidate.py
++++ b/tests/core/observability/test_skill_promote_candidate.py
+@@ -101,3 +101,47 @@ class TestBackwardsCompat:
+         c = ClusterCandidate.from_dict(legacy_payload)
+         assert c.project_distribution == {}
+         assert c.is_cross_project is False
++
++
++class TestFirstSeenAtField:
++    """M12 NIT-B — ClusterCandidate.first_seen_at (模式首见时间)."""
++
++    def test_round_trip_preserves_first_seen_at(self) -> None:
++        first_seen = datetime(2026, 6, 15, 8, 30, tzinfo=UTC)
++        c = _make()
++        c.first_seen_at = first_seen
++        round_tripped = ClusterCandidate.from_dict(c.to_dict())
++        assert round_tripped.first_seen_at == first_seen
++
++    def test_from_dict_tolerates_missing_first_seen_at(self) -> None:
++        """Pre-NIT-B rows on disk lack the key → None → display falls back
++        to created_at semantics."""
++        legacy_payload = {
++            "cluster_id": "legacy-2",
++            "task_ids": ["t1"],
++            "queries": ["legacy query"],
++            "span_count": 5,
++            "gold_rate": 0.7,
++            "gold_task_ids": ["t1"],
++            "created_at": "2026-06-01T00:00:00+00:00",
++            "ttl_expires_at": "2026-07-01T00:00:00+00:00",
++            "step_freq": {},
++            "step_labels": {},
++            "core_steps": [],
++            "status": "pending",
++            "is_unstable": False,
++            "reviewed_at": None,
++            "source_skill_id": None,
++            "dismiss_reason": None,
++            # NOTE: no first_seen_at key — simulates pre-NIT-B row
++        }
++        c = ClusterCandidate.from_dict(legacy_payload)
++        assert c.first_seen_at is None
++
++    def test_from_dict_parses_naive_first_seen_at_as_utc(self) -> None:
++        c = _make()
++        c.first_seen_at = datetime(2026, 6, 15, 8, 30, tzinfo=UTC)
++        payload = c.to_dict()
++        payload["first_seen_at"] = "2026-06-15T08:30:00"  # hand-edited, no offset
++        parsed = ClusterCandidate.from_dict(payload)
++        assert parsed.first_seen_at == datetime(2026, 6, 15, 8, 30, tzinfo=UTC)
+diff --git a/tests/core/observability/test_tool_call_bridge.py b/tests/core/observability/test_tool_call_bridge.py
+index e7ec698..411bf90 100644
+--- a/tests/core/observability/test_tool_call_bridge.py
++++ b/tests/core/observability/test_tool_call_bridge.py
+@@ -276,11 +276,23 @@ class TestOutcomeSignals:
+         assert newer.id not in outcomes
+ 
+     def test_session_continued_is_weak_positive(self, tmp_path: Path) -> None:
+-        miss = _route_span(tmp_path, query="question one", started=T0, span_id="miss-1")
++        # now-relative: both spans must stay inside SESSION_COMPLETE_HOURS
++        # (24h). The fixed-T0 time-bomb mechanism: once the wall clock
++        # crosses T0+30min+24h, "other-1" (the LAST span, no continuation
++        # evidence) is newly judged session_expired_without_reask, adding
++        # a second outcome and breaking len(outcomes)==1. "miss-1" itself
++        # never flips — a later same-session span makes it hit the
++        # session_continued_without_reask branch, which takes precedence
++        # over the expired branch (same now-relative pattern as
++        # test_reask_same_task_id above).
++        now = datetime.now(UTC)
++        miss = _route_span(
++            tmp_path, query="question one", started=now - timedelta(hours=1), span_id="miss-1"
++        )
+         _route_span(
+             tmp_path,
+             query="a different question",
+-            started=T0 + timedelta(minutes=30),
++            started=now - timedelta(minutes=30),
+             span_id="other-1",
+         )
+         bridge_entries([], tmp_path)

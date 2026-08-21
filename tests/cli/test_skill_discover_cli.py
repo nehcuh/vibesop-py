@@ -380,6 +380,95 @@ class TestScanCandidatesRendering:
         assert result.exit_code == 1
 
 
+class TestResolveCandidateHardening:
+    """gate22 follow-up: _resolve_discovery_candidate aligned with the
+    mutation resolver — empty-string guard + scope-annotated ambiguous
+    listing with ``+N more`` truncation."""
+
+    def test_empty_id_takes_not_found_path(self, cli_runner: CliRunner, discovery_env) -> None:
+        stores, _ = discovery_env
+        candidate = _candidate("a" * 40, ["single pending query"])
+        stores["project"].upsert(candidate)
+        # startswith("") is always True — without the guard this would
+        # silently dismiss the only pending row.
+        result = cli_runner.invoke(app, ["skill", "discover", "dismiss", ""])
+        assert result.exit_code == 1
+        assert "not in Discovery queue" in result.output
+        shown = cli_runner.invoke(app, ["skill", "discover"])
+        assert "single pending query" in shown.output
+
+    def test_empty_mute_id_takes_not_found_path(self, cli_runner: CliRunner, discovery_env) -> None:
+        """gate23 pi#3/claude#3: the ``--mute`` entry shares the same
+        resolver — empty string must take the not-found path too, with no
+        mute recorded."""
+        stores, dirs = discovery_env
+        candidate = _candidate("a" * 40, ["single pending query"])
+        stores["project"].upsert(candidate)
+        result = cli_runner.invoke(app, ["skill", "discover", "--mute", ""])
+        assert result.exit_code == 1
+        assert "not in Discovery queue" in result.output
+        assert DiscoverySignalStore(dirs["project"]).active_mutes() == {}
+        assert DiscoverySignalStore(dirs["global"]).active_mutes() == {}
+        shown = cli_runner.invoke(app, ["skill", "discover"])
+        assert "single pending query" in shown.output
+
+    def test_ambiguous_prefix_lists_full_ids_with_scope(
+        self, cli_runner: CliRunner, discovery_env
+    ) -> None:
+        stores, _ = discovery_env
+        project_id = "ab" + "1" * 38
+        global_id = "ab" + "2" * 38
+        stores["project"].upsert(_candidate(project_id, ["proj ambiguous query"]))
+        stores["global"].upsert(_candidate(global_id, ["glob ambiguous query"]))
+        result = cli_runner.invoke(app, ["skill", "discover", "dismiss", "ab"])
+        assert result.exit_code == 1
+        assert "ambiguous" in result.output
+        assert f"{project_id} (project)" in result.output
+        assert f"{global_id} (global)" in result.output
+
+    def test_ambiguous_listing_truncates_with_more(
+        self, cli_runner: CliRunner, discovery_env
+    ) -> None:
+        stores, _ = discovery_env
+        for i in range(10):
+            stores["project"].upsert(_candidate(f"cd{i:038d}", [f"bulk ambiguous query {i}"]))
+        result = cli_runner.invoke(app, ["skill", "discover", "dismiss", "cd"])
+        assert result.exit_code == 1
+        assert "ambiguous" in result.output
+        assert "+2 more" in result.output
+
+
+class TestFirstSeenColumn:
+    """M12 NIT-B — discover 表格 First seen 列显示簇首见年龄(模式首见
+    至今),而非候选入池年龄。"""
+
+    def test_first_seen_column_uses_pattern_first_sight(
+        self, cli_runner: CliRunner, discovery_env
+    ) -> None:
+        stores, _ = discovery_env
+        candidate = _candidate("f5" + "0" * 38, ["old pattern query"])
+        # 入池是刚刚(created_at=now),但模式首见在 20 天前。
+        candidate.first_seen_at = datetime.now(UTC) - timedelta(days=20)
+        stores["project"].upsert(candidate)
+        result = cli_runner.invoke(app, ["skill", "discover"])
+        assert result.exit_code == 0
+        assert "First seen" in result.output
+        assert "20d" in result.output
+
+    def test_legacy_row_without_first_seen_falls_back_to_created_at(
+        self, cli_runner: CliRunner, discovery_env
+    ) -> None:
+        stores, _ = discovery_env
+        # first_seen_at=None(存量行)→ 回退 created_at 语义 → 0d。
+        candidate = _candidate("f6" + "0" * 38, ["fresh pattern query"])
+        stores["project"].upsert(candidate)
+        result = cli_runner.invoke(app, ["skill", "discover"])
+        assert result.exit_code == 0
+        assert "First seen" in result.output
+        assert "0d" in result.output
+        assert "20d" not in result.output
+
+
 class TestCrossScopeDismiss:
     """gate17 claude nit 1 / pi nit 3: one dismissal covers both scopes."""
 

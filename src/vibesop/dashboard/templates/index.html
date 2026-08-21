@@ -716,7 +716,7 @@ async function loadDiscoveries() {
       (examples ? '<div class="examples">' + examples + '</div>' : '') +
       '<div class="meta-line2">证据: ' + (ev.span_count ?? 0) + ' spans · ' + (ev.distinct_task_keys ?? 0) + ' tasks' +
         ' · 行为: ' + escapeHtml(c.behavior_evidence || 'not_collected') +
-        ' · 年龄: ' + c.age_days + 'd' + (c.cooling ? ' (冷却中)' : '') + '</div>' +
+        ' · 首见: ' + c.age_days + 'd' + (c.cooling ? ' (冷却中)' : '') + '</div>' +
       (steps ? '<div class="meta-line2">' + steps + '</div>' : '') +
       (projects ? '<div class="meta-line2">项目: ' + projects + '</div>' : '') +
       '<div class="cli-hint">' + escapeHtml(c.cli_hint) + '</div>' +
