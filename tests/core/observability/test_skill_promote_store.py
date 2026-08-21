@@ -7,7 +7,9 @@ Verifies the persistence layer for the skill-promote pipeline:
    - New row → append.
    - Existing pending → refresh counts, preserve created_at + ttl.
    - Existing promoted/dismissed → no-op (terminal sticky).
-3. Hard cap eviction: at ``MAX_PENDING`` + 1, drop lowest gold_rate.
+3. Hard cap eviction: per-class budgets (F-a) — stable rows cap at
+   ``MAX_PENDING`` and evict lowest gold_rate; the unstable diagnosis
+   bucket caps at ``MAX_PENDING_UNSTABLE`` and evicts lowest span_count.
 4. TTL prune: delete expired pending; keep terminal + unexpired.
 5. State transitions: promote / dismiss flip status + set fields.
 6. list_unstable filters by ``is_unstable`` flag.
@@ -22,6 +24,7 @@ from pathlib import Path
 
 from vibesop.core.observability.skill_promote import (
     MAX_PENDING,
+    MAX_PENDING_UNSTABLE,
     ClusterCandidate,
     ClusterCandidateStore,
 )
@@ -236,43 +239,100 @@ class TestHardCap:
             f"expected rejection log; got: {[r.message for r in caplog.records]}"
         )
 
-    def test_hard_cap_admits_better_unstable_displacing_unstable(self, tmp_path: Path) -> None:
-        """At cap, a new unstable row can displace an existing unstable
-        row if its gold_rate is higher. But it cannot displace a stable
-        row (admit-only-if-better compares against the minimum)."""
+    def test_unstable_displacement_stays_within_unstable_class(self, tmp_path: Path) -> None:
+        """F-a (per-class budgets): an unstable row can only displace
+        another unstable row — classes never compete. Eviction within the
+        unstable class drops the lowest span_count (diagnosis value scales
+        with evidence size), never a stable row — even one with a LOWER
+        gold_rate than the unstable rows."""
         store = ClusterCandidateStore(storage_dir=tmp_path)
-        # Fill to MAX_PENDING with a mix: 49 stable + 1 unstable (min).
+        # 49 stable rows (low rates) + fill the unstable bucket.
         for i in range(MAX_PENDING - 1):
             store.upsert(
                 _make_candidate(
                     cluster_id=f"stable{i}",
-                    gold_rate=0.60 + i * 0.005,
+                    gold_rate=0.10 + i * 0.005,
                     is_unstable=False,
                 )
             )
-        store.upsert(
-            _make_candidate(
-                cluster_id="worst_unstable",
-                gold_rate=0.20,
-                is_unstable=True,
+        for i in range(MAX_PENDING_UNSTABLE):
+            store.upsert(
+                _make_candidate(
+                    cluster_id=f"u{i}",
+                    gold_rate=0.60,  # higher than the stable rows — irrelevant now
+                    span_count=10 + i,
+                    is_unstable=True,
+                    created_at=datetime(2026, 1, 1, tzinfo=UTC) + timedelta(hours=i),
+                )
             )
-        )
-        assert store.pending_count(include_unstable=True) == MAX_PENDING
+        assert len(store.list_unstable()) == MAX_PENDING_UNSTABLE
 
-        # New unstable with higher rate than the worst — should displace.
+        # New unstable with the largest span_count → displaces u0
+        # (lowest span_count=10); stable rows untouched.
         store.upsert(
             _make_candidate(
                 cluster_id="new_unstable",
-                gold_rate=0.25,
+                gold_rate=0.05,
+                span_count=99,
                 is_unstable=True,
             )
         )
-        assert store.get("worst_unstable") is None, (
-            "new unstable (0.25) should displace worst unstable (0.20)"
-        )
+        assert store.get("u0") is None, "lowest-span_count unstable row should be evicted"
         assert store.get("new_unstable") is not None
-        # Stable rows untouched.
-        assert store.get("stable0") is not None
+        assert store.get("stable0") is not None, "unstable eviction must never touch stable rows"
+        assert len(store.list_unstable()) == MAX_PENDING_UNSTABLE
+
+    def test_full_unstable_bucket_never_blocks_stable_admission(self, tmp_path: Path) -> None:
+        """F-a exit blocker: a full unstable diagnosis bucket must NOT
+        block stable-class admissions — incl. miss_recurrence rows with
+        gold_rate=0.0 (the first full-history dogfood scan failure)."""
+        store = ClusterCandidateStore(storage_dir=tmp_path)
+        for i in range(MAX_PENDING_UNSTABLE):
+            store.upsert(
+                _make_candidate(cluster_id=f"u{i}", gold_rate=0.0, is_unstable=True, span_count=3)
+            )
+        assert len(store.list_unstable()) == MAX_PENDING_UNSTABLE
+
+        miss = ClusterCandidate(
+            cluster_id="miss1",
+            task_ids=["t1", "t2", "t3"],
+            queries=["how do I reset the cache"],
+            span_count=5,
+            gold_rate=0.0,
+            gold_task_ids=[],
+            source="miss_recurrence",
+        )
+        store.upsert(miss)
+        assert store.get("miss1") is not None, (
+            "miss_recurrence admission must succeed with a full unstable bucket"
+        )
+        assert store.pending_count() == 1  # stable-class count (kill-switch input)
+
+    def test_unstable_cap_rejects_weaker_new_row(self, tmp_path: Path) -> None:
+        """Unstable-class admit-only-if-better: span_count at/below the
+        current minimum is refused."""
+        store = ClusterCandidateStore(storage_dir=tmp_path)
+        for i in range(MAX_PENDING_UNSTABLE):
+            store.upsert(_make_candidate(cluster_id=f"u{i}", is_unstable=True, span_count=10 + i))
+        store.upsert(_make_candidate(cluster_id="u_worse", is_unstable=True, span_count=10))
+        assert store.get("u_worse") is None
+        assert len(store.list_unstable()) == MAX_PENDING_UNSTABLE
+
+    def test_legacy_rows_without_class_fields_load_as_stable(self, tmp_path: Path) -> None:
+        """Pre-M2/pre-F-a pool files: rows missing is_unstable / source /
+        draft_sha256 deserialize with defaults and count as stable."""
+        import json as _json
+
+        row = _make_candidate(cluster_id="legacy1").to_dict()
+        for key in ("is_unstable", "source", "draft_sha256"):
+            row.pop(key, None)
+        path = tmp_path / "cluster_candidates.jsonl"
+        path.write_text(_json.dumps(row) + "\n", encoding="utf-8")
+
+        store = ClusterCandidateStore(storage_dir=tmp_path)
+        assert store.pending_count() == 1
+        assert store.list_unstable() == []
+        assert store.get("legacy1").source == "gold"  # type: ignore[union-attr]
 
 
 class TestTzNaiveDatetime:
@@ -503,3 +563,80 @@ class TestDraftSha256:
         reloaded = ClusterCandidateStore(storage_dir=tmp_path).get("h3")
         assert reloaded is not None
         assert reloaded.draft_sha256 == "01" * 32
+
+
+class TestPerClassIsolationAndPruneTrim:
+    """gate21 follow-ups on the F-a per-class budgets."""
+
+    def test_both_classes_full_evict_only_within_own_class(self, tmp_path: Path) -> None:
+        """gate21 pi NIT-6: stable full + unstable full — each new insert
+        evicts ONLY within its own class; the other class is untouched."""
+        store = ClusterCandidateStore(storage_dir=tmp_path)
+        # created_at is now-relative (insertion order, no TTL expiry risk).
+        now = datetime.now(UTC)
+        for i in range(MAX_PENDING):
+            store.upsert(
+                _make_candidate(
+                    cluster_id=f"s{i}",
+                    gold_rate=0.50 + i * 0.005,
+                    span_count=5,
+                    created_at=now - timedelta(hours=MAX_PENDING - i),
+                )
+            )
+        for i in range(MAX_PENDING_UNSTABLE):
+            store.upsert(
+                _make_candidate(
+                    cluster_id=f"u{i}",
+                    is_unstable=True,
+                    span_count=10 + i,
+                    created_at=now - timedelta(hours=MAX_PENDING_UNSTABLE - i),
+                )
+            )
+
+        # Better stable row → evicts lowest-gold_rate STABLE (s0), no unstable loss.
+        store.upsert(_make_candidate(cluster_id="s_new", gold_rate=0.99, span_count=1))
+        assert store.get("s0") is None
+        assert store.get("s_new") is not None
+        assert len(store.list_unstable()) == MAX_PENDING_UNSTABLE
+
+        # Better unstable row → evicts lowest-span_count UNSTABLE (u0), no stable loss.
+        store.upsert(_make_candidate(cluster_id="u_new", is_unstable=True, span_count=99))
+        assert store.get("u0") is None
+        assert store.get("u_new") is not None
+        assert store.pending_count() == MAX_PENDING
+
+    def test_prune_trims_legacy_pool_to_class_caps(self, tmp_path: Path) -> None:
+        """gate21 pi NIT-2: a pre-F-a pool file with 50 unstable rows is
+        trimmed to MAX_PENDING_UNSTABLE on prune (which scan runs at start),
+        dropping the lowest span_count rows first."""
+        store = ClusterCandidateStore(storage_dir=tmp_path)
+        # Simulate a legacy file: 50 unstable rows, span_count 1..50, written
+        # directly (bypassing the insert-time cap). created_at is NOW-relative
+        # so nothing is TTL-expired — the trim, not the TTL, must do the work.
+        path = tmp_path / "cluster_candidates.jsonl"
+        import json as _json
+
+        with path.open("w", encoding="utf-8") as f:
+            for i in range(50):
+                row = _make_candidate(
+                    cluster_id=f"legacy-u{i}",
+                    is_unstable=True,
+                    span_count=i + 1,
+                    created_at=datetime.now(UTC) - timedelta(hours=50 - i),
+                )
+                f.write(_json.dumps(row.to_dict()) + "\n")
+        # …plus a few stable rows that must survive untouched.
+        store.upsert(
+            _make_candidate(cluster_id="stable-keep", gold_rate=0.9, created_at=datetime.now(UTC))
+        )
+
+        pruned = store.prune_expired()
+
+        assert pruned == 0  # nothing TTL-expired; trims don't count
+        assert len(store.list_unstable()) == MAX_PENDING_UNSTABLE
+        # Lowest span_count rows evicted first → u0..u29 gone, u30..u49 stay.
+        assert store.get("legacy-u0") is None
+        assert store.get("legacy-u29") is None
+        assert store.get("legacy-u30") is not None
+        assert store.get("legacy-u49") is not None
+        assert store.get("stable-keep") is not None

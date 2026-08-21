@@ -9,6 +9,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### M12 M2 exit unblock — class-separated pool budgets + content-block envelope (2026-08-21)
+
+Found by the first full-history scan on real dogfood data (cmspark: 780
+clusters, 408-span miss pool, 309 distinct queries): the admission gate
+worked (5 candidates passed the ≥3-pairs ∧ ≥2-days conjunction) but the
+store refused all of them — 50 unstable diagnosis rows (gold_rate=0.0)
+filled MAX_PENDING, and miss candidates (gold_rate=0.0) always lose
+admit-only-if-better. The M2 deferral of eviction-policy changes
+(recorded at skill_promote.py module comment) turned out to block the
+M2 exit on any real scan; real data ended the deferral.
+
+- **Class-separated budgets** (`skill_promote.py`): MAX_PENDING=50 now
+  governs stable-visible candidates only; the unstable diagnosis bucket
+  gets its own MAX_PENDING_UNSTABLE=20 with its own eviction (lowest
+  span_count first — diagnosis value scales with evidence; ties →
+  oldest). admit-only-if-better competes within each class; the gate17b
+  same-cluster_id gold-row protection is untouched. `prune_expired()`
+  also trims each class to its cap so pre-fix pool files drain on the
+  next scan instead of lingering for the 30-day TTL. ScanSummary gains
+  `unstable_refused_count` / `stable_refused_count`; the CLI prints
+  per-class occupancy and refusals (single locked read — no
+  double-read races). Legacy pool rows (no is_unstable key) classify as
+  stable.
+- **Content-block envelope** (`clustering.py`): `_extract_query` now
+  also unwraps whole-string JSON content-block arrays
+  (`[{"type":"text","text":...}]` — the kimi/grok payload shape),
+  including one bounded re-unwrap after the `<user_query>` envelope so
+  the same payload clusters identically in all three forms. Malformed
+  JSON / non-text / mixed / nested blocks pass through untouched. Side
+  benefit: wrapped degenerate queries (`[{"type":"text","text":"继续"}]`)
+  now hit the low-information filter after unwrapping — a filter bypass
+  is closed.
+- Threshold recalibration re-run against the 309-query real pool:
+  decision band 0.47..0.71 unchanged → `MISS_COSINE_THRESHOLD = 0.70`
+  stands.
+- Reviews: gate21 (claude+pi) both PASS_WITH_NITS, 0 BLOCK; 8
+  consolidated findings converged (per-class counters tested,存量池
+  trim-on-prune, refresh soft-cap documented, double-wrap re-unwrap,
+  extraction test matrix, CLI single-read, two stale comments).
+
 ### M12 follow-up — hook-path miss blind spot fixed (2026-08-21)
 
 `AgentRuntimeResult.has_match` was a mode-derived property

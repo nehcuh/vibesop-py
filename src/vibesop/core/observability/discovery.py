@@ -347,8 +347,11 @@ class DiscoveryObservationStore:
     with no growth for ``COOLING_DAYS`` is cooling (降档: annotated
     「冷却中」, no proactive prompting).
 
-    Whole-file JSON (small: ≤ MAX_PENDING entries). Corrupt file →
-    treated as empty (same fail-open spirit as the bad-line policy).
+    Whole-file JSON (small: bounded by the pending-pool budgets — up to
+    MAX_PENDING stable + MAX_PENDING_UNSTABLE unstable entries since the
+    F-a class separation, plus terminal rows are not observed). Corrupt
+    file → treated as empty (same fail-open spirit as the bad-line
+    policy).
     """
 
     FILENAME = "discovery_observations.json"

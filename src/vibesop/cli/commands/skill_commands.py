@@ -1403,6 +1403,8 @@ def scan_candidates_cmd(  # pyright: ignore[reportUnusedFunction]
     from vibesop.core.observability.recall import _filter_recent
     from vibesop.core.observability.skill_promote import (
         DEFAULT_UNSTABLE_GOLD_RATE,
+        MAX_PENDING,
+        MAX_PENDING_UNSTABLE,
         scan_candidates,
     )
     from vibesop.core.observability.span_writer import SpanWriter
@@ -1466,8 +1468,24 @@ def scan_candidates_cmd(  # pyright: ignore[reportUnusedFunction]
         f"{summary.miss_admitted_count} miss_recurrence candidate(s) admitted"
     )
     if getattr(summary, "miss_rejected_count", 0):
-        miss_line += f" ({summary.miss_rejected_count} refused: pool at cap)"
+        # F-a: refusal is at the STABLE-class cap (the unstable bucket no
+        # longer blocks miss admissions) — say the class explicitly.
+        miss_line += f" ({summary.miss_rejected_count} refused: stable pool at cap)"
     console.print(miss_line + "[/dim]")
+    # F-a: unstable-bucket churn visibility (per-class refusal count).
+    if getattr(summary, "unstable_refused_count", 0):
+        console.print(
+            f"  [dim]unstable diagnosis bucket full — "
+            f"{summary.unstable_refused_count} row(s) refused at cap "
+            f"{MAX_PENDING_UNSTABLE}[/dim]"
+        )
+    # gate21 pi NIT-4: stable-class refusals, symmetric with the above.
+    if getattr(summary, "stable_refused_count", 0):
+        console.print(
+            f"  [dim]stable pool full — "
+            f"{summary.stable_refused_count} gold candidate(s) refused at cap "
+            f"{MAX_PENDING}[/dim]"
+        )
     # M12 M4 item (done in M5, file-ownership): per-layer miss share.
     # Current route-span producers don't emit a layer field, so real data
     # buckets into "unknown" — rendered as-is (honest degradation).
@@ -1482,10 +1500,17 @@ def scan_candidates_cmd(  # pyright: ignore[reportUnusedFunction]
         console.print(
             "  [yellow]⚠ hard cap reached — review backlog or dismiss to make room[/yellow]"
         )
+    # gate21 (claude NIT-3 = pi NIT-1): ONE unlocked read, classified in
+    # memory — two separate pending_count() calls can snapshot different
+    # file states under a concurrent writer and render an inconsistent
+    # (theoretically negative) unstable count.
+    all_pending = store.list_pending(include_unstable=True)
+    stable_pending = sum(1 for r in all_pending if not r.is_unstable)
+    unstable_pending = len(all_pending) - stable_pending
     console.print(
         f"  [dim]scope: {scope_msg} | "
-        f"pool: {store.pending_count()} stable pending, "
-        f"{store.pending_count(include_unstable=True)} total "
+        f"pool: {stable_pending} stable pending (cap {MAX_PENDING}), "
+        f"{unstable_pending} unstable (cap {MAX_PENDING_UNSTABLE}) "
         f"(use `vibe skill candidates` to review)[/dim]"
     )
 

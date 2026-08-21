@@ -401,7 +401,14 @@ def _extract_skill_id(span: dict) -> str | None:
 
 
 def _extract_query(span: dict) -> str | None:
-    """Same shape as clustering._extract_query — kept local to avoid cross-module coupling."""
+    """Read the query from ``input_data`` only — deliberately a SUBSET of
+    ``clustering._extract_query`` (gate21: the old "same shape" comment
+    had drifted). Divergence, stated precisely: this copy lacks the
+    ``metadata`` fallback (M0), the ``<user_query>`` envelope unwrap, and
+    the content-block-array unwrap (F-b). Kept local to avoid
+    cross-module coupling; recall's consumers tolerate the narrower
+    extraction. If you change clustering's extraction, decide separately
+    whether recall needs it — they are NOT the same function."""
     raw = span.get("input_data")
     if raw is None:
         return None

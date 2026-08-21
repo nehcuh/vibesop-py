@@ -350,12 +350,56 @@ def _extract_query(span: dict) -> str | None:
     continuations like "继续" merged with unrelated cmspark queries at
     0.70) and defeat content-length filters. Unwrap when the whole string
     is exactly one envelope; partial/embedded envelopes are left alone.
+
+    F-b (2026-08-21, first full-history dogfood scan): kimi/grok spans
+    carry the query as a serialized JSON content-block array
+    (``[{"type":"text","text":"…"}]``) — raw JSON inflates/deflates
+    cosine arbitrarily and renders candidate cards unreadable. Whole-string
+    arrays of text blocks unwrap to the concatenated text fields;
+    malformed JSON or non-text blocks are left as-is (same conservative
+    style as the envelope unwrap). gate21: the block unwrap also runs
+    ONCE on envelope contents (bounded, non-recursive), so double-wrapped
+    payloads cluster identically to their bare-array / plain-text forms.
     """
     q = _extract_query_raw(span)
     if q is None:
         return None
     m = _USER_QUERY_ENVELOPE_RE.match(q)
-    return m.group(1) if m else q
+    if m:
+        # gate21 pi NIT-5: run the content-block unwrap ONCE on the
+        # envelope content (bounded, non-recursive — no second envelope
+        # pass). Without it, ``<user_query>[{"type":"text",…}]</user_query>``
+        # keeps its JSON while the bare-array form of the same payload is
+        # unwrapped — the two would cluster differently for no reason.
+        return _unwrap_content_block_array(m.group(1))
+    return _unwrap_content_block_array(q)
+
+
+def _unwrap_content_block_array(q: str) -> str:
+    """Unwrap a whole-string JSON content-block array to its text fields.
+
+    Only fires when the ENTIRE string parses as a non-empty list of
+    ``{"type": "text", "text": str}`` blocks — embedded JSON, malformed
+    JSON, mixed/non-text block types all pass through unchanged.
+    """
+    stripped = q.strip()
+    if not stripped.startswith("["):
+        return q
+    try:
+        parsed = json.loads(stripped)
+    except (TypeError, ValueError):
+        return q
+    if not (isinstance(parsed, list) and parsed):
+        return q
+    texts: list[str] = []
+    for block in parsed:
+        if not isinstance(block, dict) or block.get("type") != "text":
+            return q
+        text = block.get("text")
+        if not isinstance(text, str):
+            return q
+        texts.append(text)
+    return "\n".join(texts)
 
 
 _USER_QUERY_ENVELOPE_RE = re.compile(r"^\s*<user_query>\s*(.*?)\s*</user_query>\s*$", re.DOTALL)

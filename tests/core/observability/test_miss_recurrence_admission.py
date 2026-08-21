@@ -336,6 +336,136 @@ class TestCapRejectionCounting:
         assert summary.capped is True
         assert store.pending_count() == MAX_PENDING  # pool unchanged
 
+    def test_full_unstable_bucket_does_not_block_miss_admission(
+        self, fresh_learner: InstinctLearner, cache: EmbeddingCache, store: ClusterCandidateStore
+    ) -> None:
+        """F-a (2026-08-21 exit blocker): the unstable diagnosis bucket has
+        its own cap (MAX_PENDING_UNSTABLE) — a full bucket must NOT block
+        miss_recurrence admission, which competes only within the stable
+        class."""
+        from vibesop.core.observability.skill_promote import (
+            MAX_PENDING_UNSTABLE,
+            ClusterCandidate,
+        )
+
+        # Fill the unstable diagnosis bucket completely.
+        for i in range(MAX_PENDING_UNSTABLE):
+            store.upsert(
+                ClusterCandidate(
+                    cluster_id=f"unstable-{i}",
+                    task_ids=[f"t{i}"],
+                    queries=["filler query"],
+                    span_count=3,
+                    gold_rate=0.1,
+                    gold_task_ids=[],
+                    is_unstable=True,
+                )
+            )
+
+        # Cross-day fixture that passes the admission conjunction gate.
+        spans = [
+            _miss_span("k1", "miss-topic one", D1),
+            _miss_span("k1", "miss-topic one", D2),
+            _miss_span("k2", "miss-topic two", D2),
+        ]
+        with patch.object(cache, "_compute", side_effect=_fake_embedding):
+            summary = scan_candidates(spans, fresh_learner, store, cache=cache)
+
+        assert summary.miss_admitted_count == 1
+        assert summary.miss_rejected_count == 0
+        assert summary.unstable_refused_count == 0
+        # gate21 pi NIT-6: stable pool is EMPTY here — capped must be False.
+        assert summary.capped is False
+
+    def test_full_unstable_bucket_refuses_weaker_unstable_candidate(
+        self, fresh_learner: InstinctLearner, cache: EmbeddingCache, store: ClusterCandidateStore
+    ) -> None:
+        """gate21 claude NIT-1: drive the unstable_refused_count increment
+        path — bucket at cap + a weaker (lower span_count) unstable
+        candidate → classified (unstable_count) but refused at the store."""
+        from vibesop.core.observability.skill_promote import (
+            MAX_PENDING_UNSTABLE,
+            ClusterCandidate,
+        )
+
+        # Bucket at cap; minimum span_count is 10.
+        for i in range(MAX_PENDING_UNSTABLE):
+            store.upsert(
+                ClusterCandidate(
+                    cluster_id=f"unstable-{i}",
+                    task_ids=[f"t{i}"],
+                    queries=["filler query"],
+                    span_count=10 + i,
+                    gold_rate=0.1,
+                    gold_task_ids=[],
+                    is_unstable=True,
+                )
+            )
+
+        # One gold-path cluster, span_count 3, gold_rate 0.0 → unstable
+        # candidate too weak (3 <= 10) to displace anything.
+        spans = [
+            _gold_span("g1", "topic-A one"),
+            _gold_span("g1", "topic-A one"),
+            _gold_span("g1", "topic-A one"),
+        ]
+        with patch.object(cache, "_compute", side_effect=_fake_embedding):
+            summary = scan_candidates(spans, fresh_learner, store, cache=cache)
+
+        assert summary.unstable_count == 1  # classified…
+        assert summary.unstable_refused_count == 1  # …but refused at the cap
+        assert len(store.list_unstable()) == MAX_PENDING_UNSTABLE
+
+    def test_full_stable_pool_refuses_weaker_stable_candidate(
+        self, fresh_learner: InstinctLearner, cache: EmbeddingCache, store: ClusterCandidateStore
+    ) -> None:
+        """gate21 pi NIT-4: stable_refused_count — symmetric with the
+        unstable path. Pool at MAX_PENDING with gold_rate=1.0 rows; a new
+        stable candidate at 2/3 gold loses admit-only-if-better."""
+        from types import SimpleNamespace
+
+        from vibesop.core.observability.skill_promote import (
+            MAX_PENDING,
+            ClusterCandidate,
+        )
+
+        for i in range(MAX_PENDING):
+            store.upsert(
+                ClusterCandidate(
+                    cluster_id=f"gold-{i}",
+                    task_ids=[f"t{i}"],
+                    queries=["filler query"],
+                    span_count=5,
+                    gold_rate=1.0,
+                    gold_task_ids=[f"t{i}"],
+                )
+            )
+
+        # 3 task_ids merge into one cluster ("miss-topic" vectors collapse);
+        # 2 of 3 carry a qualifying instinct → gold_rate 2/3 ≥ 0.60 →
+        # stable classification, but 0.67 <= min pending 1.0 → refused.
+        gold_instinct = SimpleNamespace(success_count=99)
+        mock_learner = fresh_learner
+
+        class _SelectiveLearner:
+            def get_instinct_for_query(self, query: str):
+                return None if "gold-c" in query else gold_instinct
+
+            def __getattr__(self, name):  # delegate everything else
+                return getattr(mock_learner, name)
+
+        spans = [
+            _gold_span("k1", "miss-topic gold-a"),
+            _gold_span("k2", "miss-topic gold-b"),
+            _gold_span("k3", "miss-topic gold-c"),
+        ]
+        with patch.object(cache, "_compute", side_effect=_fake_embedding):
+            summary = scan_candidates(spans, _SelectiveLearner(), store, cache=cache)
+
+        assert summary.promoted_count == 1  # classified stable…
+        assert summary.stable_refused_count == 1  # …but refused at the cap
+        assert store.pending_count() == MAX_PENDING
+
 
 class TestGoldPendingCollision:
     def test_miss_upsert_skipped_when_pending_gold_row_exists(

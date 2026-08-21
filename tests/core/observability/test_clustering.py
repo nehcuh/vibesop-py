@@ -453,3 +453,94 @@ class TestExtractQueryMetadataFallback:
         assert len(clusters) == 2
         queries = {q for c in clusters for q in c.queries}
         assert queries == {"fix the flaky test", "unrelated topic"}
+
+
+class TestContentBlockArrayUnwrap:
+    """F-b (2026-08-21, first full-history dogfood scan): kimi/grok spans
+    carry the query as a serialized JSON content-block array
+    (``[{"type":"text","text":"…"}]``). Whole-string arrays of text blocks
+    unwrap to the concatenated text; anything else passes through.
+    """
+
+    def test_single_text_block_unwrapped(self) -> None:
+        q = '[{"type":"text","text":"Independent Kimi rereview of LOCKED spec"}]'
+        span = {"metadata": {"query": q}}
+        assert _extract_query(span) == "Independent Kimi rereview of LOCKED spec"
+
+    def test_multi_block_concatenated(self) -> None:
+        q = '[{"type":"text","text":"part one"},{"type":"text","text":"part two"}]'
+        assert _extract_query({"input_data": {"query": q}}) == "part one\npart two"
+
+    def test_malformed_json_left_as_is(self) -> None:
+        q = '[{"type":"text","text":"broken"'
+        assert _extract_query({"input_data": {"query": q}}) == q
+
+    def test_non_text_block_left_as_is(self) -> None:
+        q = '[{"type":"image","source":{"data":"..."}}]'
+        assert _extract_query({"input_data": {"query": q}}) == q
+        # Mixed arrays (text + non-text) also pass through unchanged.
+        q2 = '[{"type":"text","text":"a"},{"type":"image"}]'
+        assert _extract_query({"input_data": {"query": q2}}) == q2
+
+    def test_embedded_array_left_as_is(self) -> None:
+        """Whole-string only: a JSON array embedded in prose is not touched."""
+        q = 'please review [{"type":"text","text":"a"}] now'
+        assert _extract_query({"input_data": {"query": q}}) == q
+
+    def test_envelope_then_block_double_unwrap(self) -> None:
+        """gate21 pi NIT-5: envelope content gets ONE bounded content-block
+        unwrap (non-recursive — no second envelope pass), so a double-wrapped
+        payload extracts identically to its bare-array and plain-text forms."""
+        q = '<user_query>[{"type":"text","text":"inner"}]</user_query>'
+        assert _extract_query({"input_data": {"query": q}}) == "inner"
+
+    def test_block_wrapped_query_clusters_by_unwrapped_text(self, tmp_path: Path) -> None:
+        """E2e: a span whose query is a content-block array merges with the
+        same text written plainly — identical unwrapped text → identical
+        angle embedding → cosine 1.0. Without the unwrap, the raw JSON
+        string hashes to a different angle and the two never merge."""
+        cache = EmbeddingCache(cache_path=tmp_path / "emb.npz")
+        plain = "deploy the companion service"
+        wrapped = '[{"type":"text","text":"deploy the companion service"}]'
+        with patch.object(cache, "_compute", side_effect=_angle_embedding):
+            clusters = cluster_queries(
+                _spans([("t1", plain), ("t2", wrapped)]),
+                cache=cache,
+                threshold=0.80,
+            )
+        assert len(clusters) == 1, f"expected merged cluster, got {len(clusters)}"
+        assert set(clusters[0].task_ids) == {"t1", "t2"}
+        # Queries are stored UNWRAPPED on the cluster.
+        assert all(not q.startswith("[") for q in clusters[0].queries)
+
+    def test_double_wrapped_merges_with_bare_and_plain(self, tmp_path: Path) -> None:
+        """gate21 pi NIT-5: plain / bare-array / envelope+array forms of the
+        SAME payload all unwrap to the same text → one cluster."""
+        cache = EmbeddingCache(cache_path=tmp_path / "emb.npz")
+        plain = "rereview the locked spec"
+        bare = '[{"type":"text","text":"rereview the locked spec"}]'
+        double = '<user_query>[{"type":"text","text":"rereview the locked spec"}]</user_query>'
+        with patch.object(cache, "_compute", side_effect=_angle_embedding):
+            clusters = cluster_queries(
+                _spans([("t1", plain), ("t2", bare), ("t3", double)]),
+                cache=cache,
+                threshold=0.80,
+            )
+        assert len(clusters) == 1, f"expected 1 merged cluster, got {len(clusters)}"
+        assert set(clusters[0].task_ids) == {"t1", "t2", "t3"}
+
+    def test_empty_and_non_dict_arrays_left_as_is(self) -> None:
+        """gate21 pi NIT-6: shapes that must pass through unchanged."""
+        for q in ("[]", "[1,2,3]", '["a","b"]', '[{"type":"text"}]'):
+            assert _extract_query({"input_data": {"query": q}}) == q
+
+    def test_leading_whitespace_array_unwrapped(self) -> None:
+        q = '  [{"type":"text","text":"padded"}]  '
+        assert _extract_query({"input_data": {"query": q}}) == "padded"
+
+    def test_input_data_raw_json_string_path(self) -> None:
+        """input_data as the raw JSON string (not a dict) — _extract_query_raw
+        returns the string itself for non-dict JSON, then the block unwrap
+        fires. gate21 pi NIT-6: previously correct but untested."""
+        q = '[{"type":"text","text":"raw string form"}]'
+        assert _extract_query({"input_data": q}) == "raw string form"

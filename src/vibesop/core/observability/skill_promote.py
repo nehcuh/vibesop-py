@@ -90,6 +90,15 @@ _VALID_STEP_LABEL: frozenset[str] = frozenset(get_args(StepLabel))
 
 _TTL_DAYS = 30
 MAX_PENDING = 50
+# F-a (2026-08-21, first full-history dogfood scan): the unstable
+# diagnosis bucket gets its own SMALLER cap, separate from MAX_PENDING.
+# Real-data evidence: 50 unstable gold rows (gold_rate=0.0) filled the
+# shared cap and blocked ALL miss_recurrence admissions — the M2 exit
+# criterion (≥1 real admitted candidate in `vibe skill discover`) was
+# unreachable on every real scan. Diagnosis value scales with evidence
+# size, so within the unstable class admit-only-if-better compares
+# span_count and eviction drops the lowest span_count (ties → oldest).
+MAX_PENDING_UNSTABLE = 20
 
 # Step-frequency thresholds (W4.B). Not in v3 spec — picked from
 # workflow-mining conventions. Documented as reviewer Q3.
@@ -127,12 +136,17 @@ MISS_COSINE_THRESHOLD = 0.70  # Calibrated on 48 hand-labelled pairs
 MISS_RECURRENCE_MIN_PAIRS = 3
 MISS_RECURRENCE_MIN_DAYS = 2
 
-# Known behaviour (gate17 claude nit 8): when the candidate store is at
-# MAX_PENDING, the admit-only-if-better policy compares gold_rate — and
-# miss_recurrence candidates carry gold_rate=0.0, so they ALWAYS lose and
-# are silently refused. The eviction policy itself is deliberately NOT
-# changed in M2 (prioritisation is a DiscoveryConfig-era decision); the
-# scan surfaces the loss via ScanSummary.miss_rejected_count.
+# Known behaviour (gate17 claude nit 8, RESOLVED F-a 2026-08-21): when
+# the candidate store is at MAX_PENDING, the admit-only-if-better policy
+# compares gold_rate — and miss_recurrence candidates carry gold_rate=0.0,
+# so they ALWAYS lose and are silently refused. The deferral note here
+# used to say eviction policy was a DiscoveryConfig-era decision; the
+# first full-history dogfood scan (780 clusters, 408-span miss pool)
+# proved that deferral blocks the M2 exit: 50 unstable diagnosis rows
+# filled the shared cap and 5 gate-passing miss candidates were all
+# refused. Resolution: per-class budgets (MAX_PENDING for stable-visible,
+# MAX_PENDING_UNSTABLE for the unstable diagnosis bucket) — see
+# ClusterCandidateStore._do_locked_upsert.
 
 # Fixed probe text for the embedding health check (gate17 pi BLOCK-1).
 # One embed per scan; the fixed text makes repeat scans an EmbeddingCache
@@ -410,13 +424,18 @@ class ClusterCandidateStore:
     candidate per line. Production caller passes ``storage_dir`` as the
     leaf directory (matches ``ReflectionStore`` convention).
 
-    Hard cap: ``MAX_PENDING`` pending rows. Upserting a NEW pending row
-    when at cap uses **admit-only-if-better** policy: the new row is
-    admitted iff its ``gold_rate`` exceeds the lowest pending
-    ``gold_rate``; otherwise it's silently rejected (logged at WARNING).
-    This prevents an unstable new row (rate≈0.15) from displacing a
-    stable pending row (rate≈0.65). Promoted / dismissed rows do NOT
-    count against the cap (they're terminal audit records, not backlog).
+    Hard cap: PER-CLASS budgets (F-a, 2026-08-21). Stable-visible pending
+    rows cap at ``MAX_PENDING``; unstable diagnosis rows cap at
+    ``MAX_PENDING_UNSTABLE`` — the two classes never compete, so a full
+    diagnosis bucket can no longer block stable/miss_recurrence
+    admissions (real-data exit blocker on the first full-history dogfood
+    scan). Upserting a NEW pending row when its class is at cap uses
+    **admit-only-if-better** WITHIN the class: stable rows compare
+    ``gold_rate`` (a new row is admitted iff its rate exceeds the lowest
+    pending rate); unstable rows compare ``span_count`` (diagnosis value
+    scales with evidence size). Refusals are logged at WARNING. Promoted
+    / dismissed rows do NOT count against either cap (they're terminal
+    audit records, not backlog).
 
     Failure mode: malformed JSON lines are skipped on read (same as
     ``ReflectionStore.list_all``) — a corrupt line must not crash the
@@ -483,6 +502,14 @@ class ClusterCandidateStore:
                 return existing
             # Refresh in place: preserve created_at + ttl_expires_at
             # (TTL doesn't reset on rescan), update mutable signal.
+            # gate21 (claude NIT-4 = pi NIT-3, accepted semantics): the
+            # refresh replaces the WHOLE row including is_unstable, and
+            # bypasses the insert-time cap check — a cluster whose
+            # gold_rate drifts across the stable/unstable boundary flips
+            # class and can transiently exceed the class cap by ≤1. The
+            # overage self-heals on the next new insert of that class
+            # (cap logic fires then); total rows are conserved. Accepted
+            # rather than re-engineered: rare, bounded, diagnosis-side.
             preserved_created = existing.created_at
             preserved_ttl = existing.ttl_expires_at
             candidate.created_at = preserved_created
@@ -491,56 +518,87 @@ class ClusterCandidateStore:
             self._rewrite_all_locked(rows)
             return candidate
 
-        # New row — enforce hard cap on pending count BEFORE insert.
-        pending_rows = [r for r in rows if r.status == "pending"]
-        if len(pending_rows) >= MAX_PENDING:
-            # Admit-only-if-better: reject new rows whose gold_rate
-            # doesn't beat the current minimum. Prevents unstable new
-            # arrivals (rate≈0.15) from displacing stable pending rows
-            # (rate≈0.65). Grok+pi P1 consensus on W4 review.
-            current_min = min((r.gold_rate for r in pending_rows), default=0.0)
-            if candidate.gold_rate <= current_min:
-                logger.warning(
-                    "cluster_candidates hard cap reached — rejecting new "
-                    "cluster %s (gold_rate=%.2f <= min pending %.2f). "
-                    "Review backlog or dismiss to make room.",
-                    candidate.cluster_id,
-                    candidate.gold_rate,
-                    current_min,
-                )
-                return candidate  # not inserted; caller sees no error
-            self._evict_lowest_gold_rate_locked(rows)
+        # New row — enforce the per-class hard cap BEFORE insert (F-a:
+        # stable and unstable budgets are separate; a row only ever
+        # competes within its own class).
+        class_rows = [
+            r for r in rows if r.status == "pending" and r.is_unstable == candidate.is_unstable
+        ]
+        class_cap = MAX_PENDING_UNSTABLE if candidate.is_unstable else MAX_PENDING
+        if len(class_rows) >= class_cap:
+            # Admit-only-if-better within the class: stable rows compare
+            # gold_rate (prevents a rate≈0.15 arrival from displacing a
+            # rate≈0.65 row — grok+pi P1 on W4); unstable diagnosis rows
+            # compare span_count (diagnosis value scales with evidence
+            # size — F-a).
+            if candidate.is_unstable:
+                current_min = min(r.span_count for r in class_rows)
+                if candidate.span_count <= current_min:
+                    logger.warning(
+                        "cluster_candidates unstable cap (%d) reached — rejecting new "
+                        "unstable cluster %s (span_count=%d <= min pending %d).",
+                        class_cap,
+                        candidate.cluster_id,
+                        candidate.span_count,
+                        current_min,
+                    )
+                    return candidate  # not inserted; caller sees no error
+            else:
+                current_min_rate = min(r.gold_rate for r in class_rows)
+                if candidate.gold_rate <= current_min_rate:
+                    logger.warning(
+                        "cluster_candidates stable cap (%d) reached — rejecting new "
+                        "cluster %s (gold_rate=%.2f <= min pending %.2f). "
+                        "Review backlog or dismiss to make room.",
+                        class_cap,
+                        candidate.cluster_id,
+                        candidate.gold_rate,
+                        current_min_rate,
+                    )
+                    return candidate  # not inserted; caller sees no error
+            self._evict_for_class_locked(rows, unstable=candidate.is_unstable)
 
         rows.append(candidate)
         self._rewrite_all_locked(rows)
         return candidate
 
-    def _evict_lowest_gold_rate_locked(self, rows: list[ClusterCandidate]) -> None:
-        """Drop the lowest-gold_rate pending row (FIFO tiebreak).
+    def _evict_for_class_locked(self, rows: list[ClusterCandidate], *, unstable: bool) -> None:
+        """Drop the weakest pending row of ONE class (stable or unstable).
 
-        Mutates ``rows`` in place. No-op if there are no pending rows.
+        Mutates ``rows`` in place. No-op if the class has no pending rows.
         Called by ``_do_locked_upsert`` ONLY after the new candidate has
-        passed the admit-only-if-better check — i.e. the new row's
-        gold_rate exceeds the current minimum.
+        passed its class's admit-only-if-better check.
+
+        Eviction key (F-a): stable class drops lowest ``gold_rate``;
+        unstable class drops lowest ``span_count``. Ties → oldest
+        ``created_at`` first (FIFO) in both classes.
 
         Logs at WARNING (not INFO) so cron-scheduled scans surface the
         eviction in default log verbosity (pi P0: silent eviction
         violates "未审不注入" spirit when run via cron).
         """
-        pending_indices = [(i, r) for i, r in enumerate(rows) if r.status == "pending"]
+        pending_indices = [
+            (i, r)
+            for i, r in enumerate(rows)
+            if r.status == "pending" and r.is_unstable == unstable
+        ]
         if not pending_indices:
             return
-        # Sort by (gold_rate asc, created_at asc) — lowest gold_rate
-        # first, FIFO tiebreak. The pending_indices list is already in
-        # insertion order, so stable sort preserves FIFO for ties.
-        target_idx, _ = min(
-            pending_indices, key=lambda pair: (pair[1].gold_rate, pair[1].created_at)
-        )
-        evicted = rows.pop(target_idx)
+        if unstable:
+            target_idx, evicted = min(
+                pending_indices, key=lambda pair: (pair[1].span_count, pair[1].created_at)
+            )
+        else:
+            target_idx, evicted = min(
+                pending_indices, key=lambda pair: (pair[1].gold_rate, pair[1].created_at)
+            )
+        rows.pop(target_idx)
         logger.warning(
-            "cluster_candidates hard cap reached — evicted %s (gold_rate=%.2f)",
+            "cluster_candidates %s cap reached — evicted %s (gold_rate=%.2f, span_count=%d)",
+            "unstable" if unstable else "stable",
             evicted.cluster_id,
             evicted.gold_rate,
+            evicted.span_count,
         )
 
     def list_pending(self, *, include_unstable: bool = False) -> list[ClusterCandidate]:
@@ -587,6 +645,12 @@ class ClusterCandidateStore:
         Only pending rows are pruned. Promoted / dismissed rows are
         audit records and never expire (they record the human decision).
 
+        Also trims each class to its budget (gate21 pi NIT-2): the
+        insert path only gates NEW rows, so legacy pools that exceed a
+        class cap (e.g. pre-F-a files with 50 unstable rows) are trimmed
+        here using the class eviction order. Trims don't count toward
+        the return value (TTL expiries only).
+
         Called at the start of every ``scan_candidates`` run so the pool
         stays bounded without manual cleanup.
         """
@@ -619,7 +683,25 @@ class ClusterCandidateStore:
                 pruned += 1
                 continue
             survivors.append(r)
-        if pruned:
+        # gate21 pi NIT-2: also trim each class to its cap. The insert
+        # path only gates NEW rows, so a pre-F-a pool file (e.g. 50
+        # unstable rows written before the per-class budgets) would sit
+        # above the unstable cap for weeks, rendering "50 unstable
+        # (cap 20)" on every scan. Trim using the class eviction order
+        # (stable: lowest gold_rate; unstable: lowest span_count; ties →
+        # oldest) via the shared eviction helper. Trims are NOT included
+        # in the return value (that counts TTL expiries, surfaced as
+        # ScanSummary.pruned_count); each trim is logged at WARNING by
+        # the eviction helper.
+        trimmed = 0
+        for unstable, cap in ((False, MAX_PENDING), (True, MAX_PENDING_UNSTABLE)):
+            while (
+                sum(1 for r in survivors if r.status == "pending" and r.is_unstable == unstable)
+                > cap
+            ):
+                self._evict_for_class_locked(survivors, unstable=unstable)
+                trimmed += 1
+        if pruned or trimmed:
             self._rewrite_all_locked(survivors)
         return pruned
 
@@ -912,9 +994,11 @@ class ScanSummary:
         TTL-expired pending rows removed at scan start. Promoted /
         dismissed rows are NOT pruned (audit records).
     capped:
-        True iff the store hit ``MAX_PENDING`` at any point during this
-        scan. The hard cap evicts the lowest-gold_rate pending row on
-        each new insert past the cap (reviewer Q4).
+        True iff the store hit ``MAX_PENDING`` (stable-class cap) at any
+        point during this scan. Past the cap, admit-only-if-better evicts
+        the weakest row of the candidate's own class — lowest gold_rate
+        for stable, lowest span_count for unstable (reviewer Q4; F-a
+        per-class budgets).
     clusters_seen:
         Total clusters returned by ``cluster_queries`` across both
         clusterings (gold path over all spans + M12 M2 miss path over
@@ -932,10 +1016,22 @@ class ScanSummary:
         These become stable-visible candidates with
         ``source="miss_recurrence"`` despite ``gold_rate == 0.0``.
     miss_rejected_count:
-        Admitted miss candidates the store REFUSED — at ``MAX_PENDING``
-        the admit-only-if-better policy compares ``gold_rate``, and miss
-        candidates carry 0.0, so they always lose (gate17 claude nit 8).
-        Without this field a full pool would silently swallow them.
+        Admitted miss candidates the store REFUSED at the stable-class
+        cap (F-a: budgets are per-class now — miss candidates compete on
+        ``gold_rate`` within the STABLE class, where their 0.0 still
+        loses to gold rows; a full UNSTABLE bucket no longer blocks
+        them). Without this field a full pool would silently swallow
+        them.
+    unstable_refused_count:
+        Unstable (diagnosis-bucket) candidates the store refused at the
+        ``MAX_PENDING_UNSTABLE`` cap this run (F-a). Surfaced so a
+        churning diagnosis bucket is visible, not silent.
+    stable_refused_count:
+        Stable-class candidates (gold path) the store refused at the
+        ``MAX_PENDING`` cap this run (gate21 pi NIT-4 — symmetric with
+        ``unstable_refused_count``; previously visible only via the
+        store's WARNING log). Miss-path refusals are counted separately
+        in ``miss_rejected_count``.
     embedding_degraded:
         True when the pre-clustering embedding probe (one fixed-string
         ``cache.embed`` — a cache hit on repeat scans) returned None,
@@ -964,6 +1060,8 @@ class ScanSummary:
     miss_pool_size: int = 0
     miss_admitted_count: int = 0
     miss_rejected_count: int = 0
+    unstable_refused_count: int = 0
+    stable_refused_count: int = 0
     embedding_degraded: bool = False
     miss_share_by_layer: dict[str, float] = field(default_factory=dict)
 
@@ -1186,6 +1284,16 @@ def scan_candidates(
             continue
 
         store.upsert(candidate)
+        # F-a: surface per-class refusals. upsert silently refuses new
+        # rows at the class cap under admit-only-if-better — detect the
+        # refusal (row absent) and count it per class so pool churn is
+        # visible in the scan output, not just in the store's WARNING log
+        # (gate21 pi NIT-4: stable refusals counted symmetrically).
+        landed = store.get(candidate.cluster_id) is not None
+        if not landed and is_unstable:
+            summary.unstable_refused_count += 1
+        elif not landed:
+            summary.stable_refused_count += 1
         if store.pending_count() >= MAX_PENDING:
             summary.capped = True
 
@@ -1241,20 +1349,24 @@ def scan_candidates(
             continue
         store.upsert(candidate)
         # gate17 claude nit 8: count only when the row actually LANDED.
-        # upsert silently refuses new rows at MAX_PENDING under
-        # admit-only-if-better, and a gold_rate=0.0 miss candidate always
-        # loses that comparison — detect the refusal (row absent) and
-        # surface it via miss_rejected_count instead of lying in
-        # miss_admitted_count. An existing terminal row counts as landed
-        # (the candidate IS in the pool, human already decided).
+        # upsert silently refuses new rows at the class cap under
+        # admit-only-if-better — a gold_rate=0.0 miss candidate still
+        # loses that comparison against gold rows WITHIN the stable class
+        # (F-a split the budgets, so a full unstable bucket no longer
+        # blocks it, but a full stable pool still can) — detect the
+        # refusal (row absent) and surface it via miss_rejected_count
+        # instead of lying in miss_admitted_count. An existing terminal
+        # row counts as landed (the candidate IS in the pool, human
+        # already decided).
         if store.get(candidate.cluster_id) is not None:
             summary.miss_admitted_count += 1
         else:
             summary.miss_rejected_count += 1
             logger.warning(
-                "miss_recurrence candidate %s refused by store (pool at "
-                "MAX_PENDING=%d; gold_rate=0.0 always loses "
-                "admit-only-if-better). Review backlog or dismiss to make room.",
+                "miss_recurrence candidate %s refused by store (stable-class "
+                "pool at MAX_PENDING=%d; gold_rate=0.0 loses "
+                "admit-only-if-better to gold rows). Review backlog or "
+                "dismiss to make room.",
                 candidate.cluster_id,
                 MAX_PENDING,
             )
