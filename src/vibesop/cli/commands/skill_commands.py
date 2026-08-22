@@ -1188,6 +1188,9 @@ def _index_newly_added_skill(skill_id: str, scope: str) -> bool:
         profile = indexer._analyze_skill(loaded, llm)
         if profile is None:
             return False
+        # gate32 A2: deterministic triggers from the live spec, BEFORE the
+        # embedding is computed (they are part of the profile text now).
+        profile.triggers = indexer._spec_triggers(loaded)
         indexer._compute_embeddings({skill_id: profile})
 
         layer = "project" if scope == "project" else "global"

@@ -35,6 +35,7 @@ def _fake_loaded_skill(
     source_file: Path | None,
     *,
     name: str | None = None,
+    triggers: list[str] | None = None,
 ) -> SimpleNamespace:
     """Build a duck-typed LoadedSkill stub for indexer logic.
 
@@ -48,7 +49,7 @@ def _fake_loaded_skill(
         description="Test skill",
         intent="test",
         tags=[],
-        triggers=[],
+        triggers=triggers or [],
         capabilities=[],
     )
     return SimpleNamespace(
@@ -155,12 +156,14 @@ class TestClassifySkillSource:
 
 
 class TestSaveIndexSchema:
-    def test_save_writes_v1_4_0_schema(self, indexer: SkillIndexer) -> None:
+    def test_save_writes_current_schema_version(self, indexer: SkillIndexer) -> None:
         profiles = {"a/b": _make_profile("a/b")}
         indexer._save_index(profiles, scope="global")
 
         data = json.loads(indexer.global_index_path.read_text(encoding="utf-8"))
-        assert data["version"] == "1.4.0"
+        # gate32 A2 bumped the schema to 1.5.0 (SkillProfile.triggers) — pin the
+        # indexer constant, not a literal, so the next bump edits one place.
+        assert data["version"] == SkillIndexer.INDEX_VERSION
         assert data["scope"] == "global"
         assert data["indexed_count"] == 1
         assert "indexed_at" in data
@@ -1593,13 +1596,15 @@ class TestEmbeddingSupport:
         prof = SkillProfile.from_dict(d)
         assert prof.embedding is None
 
-    def test_save_index_writes_v1_4_0_schema(self, indexer: SkillIndexer) -> None:
+    def test_save_index_writes_current_schema_version(self, indexer: SkillIndexer) -> None:
         prof = _make_profile("a/b")
         prof.embedding = [0.1, 0.2]
         indexer._save_index({"a/b": prof}, scope="global")
 
         data = json.loads(indexer.global_index_path.read_text(encoding="utf-8"))
-        assert data["version"] == "1.4.0"
+        # gate32 A2 bumped the schema to 1.5.0 (SkillProfile.triggers) — pin the
+        # indexer constant, not a literal, so the next bump edits one place.
+        assert data["version"] == SkillIndexer.INDEX_VERSION
         assert data["skills"]["a/b"]["embedding"] == [0.1, 0.2]
 
     def test_load_single_index_restores_embedding(self, indexer: SkillIndexer) -> None:
@@ -1653,3 +1658,119 @@ class TestEmbeddingSupport:
             indexer._compute_embeddings({"a/b": prof})
 
         assert prof.embedding == [0.1, 0.2, 0.3]
+
+
+class TestGate32TriggersInProfile:
+    """gate32 A2: SkillProfile.triggers — populated from the live spec on
+    both index paths, embedded via _compute_profile_text (0.45 door), and
+    deliberately NOT merged into query_patterns (Jaccard 0.20 fast path).
+    """
+
+    def test_spec_triggers_extraction(self) -> None:
+        ls = _fake_loaded_skill("a/b", None, triggers=["合并 main", "  ", "push 吧"])
+        assert SkillIndexer._spec_triggers(ls) == ["合并 main", "push 吧"]
+
+    def test_spec_triggers_defensive(self) -> None:
+        ls = _fake_loaded_skill("a/b", None)
+        ls.metadata.triggers = "not-a-list"
+        assert SkillIndexer._spec_triggers(ls) == []
+        ls.metadata.triggers = None
+        assert SkillIndexer._spec_triggers(ls) == []
+        ls.metadata = SimpleNamespace()  # no triggers attr at all
+        assert SkillIndexer._spec_triggers(ls) == []
+
+    def test_profile_text_includes_triggers(self) -> None:
+        prof = _make_profile("a/b")
+        prof.triggers = ["合并 main"]
+        text = SkillIndexer._compute_profile_text(prof)
+        assert "合并 main" in text
+        assert text.endswith("合并 main")  # appended after profile fields
+
+    def test_triggers_round_trip(self, indexer: SkillIndexer) -> None:
+        prof = _make_profile("a/b")
+        prof.triggers = ["t one", "t two"]
+        loaded = SkillProfile.from_dict(prof.to_dict())
+        assert loaded.triggers == ["t one", "t two"]
+        # Legacy index rows (pre-1.5.0) have no triggers key.
+        legacy = prof.to_dict()
+        del legacy["triggers"]
+        assert SkillProfile.from_dict(legacy).triggers == []
+
+    def test_query_patterns_not_polluted_by_triggers(self) -> None:
+        """pi BLOCK-3 regression pin: setting profile.triggers must NOT
+        leak into query_patterns — that list feeds the Jaccard 0.20 fast
+        path (no margin gate, no triage arbitration), which verbatim user
+        queries must not lower. The embedding text is the ONLY consumer."""
+        prof = _make_profile("a/b")
+        original_qp = list(prof.query_patterns)
+        prof.triggers = ["把 nits 都收敛了把"]
+
+        assert prof.query_patterns == original_qp
+        assert "把 nits 都收敛了把" not in prof.query_patterns
+        assert "把 nits 都收敛了把" in SkillIndexer._compute_profile_text(prof)
+
+    def test_fresh_path_populates_triggers(self, indexer: SkillIndexer, global_home: Path) -> None:
+        skills = {
+            "g/a": _fake_loaded_skill(
+                "g/a",
+                global_home / ".config" / "skills" / "g" / "a" / "SKILL.md",
+                triggers=["帮我合并到 main 吧"],
+            )
+        }
+        with (
+            patch(
+                "vibesop.core.skills.loader.SkillLoader.discover_all",
+                return_value=skills,
+            ),
+            patch.object(indexer, "_get_llm", return_value=SimpleNamespace(name="fake")),
+            patch.object(
+                indexer,
+                "_analyze_skill",
+                side_effect=lambda ls, _llm: _make_profile(ls.metadata.id),
+            ),
+        ):
+            result = indexer.build_index(scope="global", show_progress=False)
+
+        assert result.success
+        profile = indexer.get_profile("g/a")
+        assert profile is not None
+        assert profile.triggers == ["帮我合并到 main 吧"]
+
+    def test_cache_hit_restamps_triggers_from_live_spec(
+        self, indexer: SkillIndexer, global_home: Path
+    ) -> None:
+        """Pre-1.5.0 profiles lack the triggers field; a cache hit (prompt
+        hash unchanged — the analysis prompt already contained triggers)
+        must restamp triggers from the live spec, not keep [] forever."""
+        ls = _fake_loaded_skill(
+            "g/a",
+            global_home / ".config" / "skills" / "g" / "a" / "SKILL.md",
+            triggers=["推上去吧"],
+        )
+        legacy = _make_profile("g/a")
+        legacy.content_hash = indexer._hash_prompt(indexer._build_prompt(ls))
+        legacy_dict = legacy.to_dict()
+        del legacy_dict["triggers"]  # simulate a pre-1.5.0 index row
+        indexer.global_index_path.parent.mkdir(parents=True, exist_ok=True)
+        indexer.global_index_path.write_text(
+            json.dumps({"version": "1.4.0", "scope": "global", "skills": {"g/a": legacy_dict}}),
+            encoding="utf-8",
+        )
+
+        def _explode(_ls: object, _llm: object) -> SkillProfile:
+            raise AssertionError("LLM must not be called — this should be a cache hit")
+
+        with (
+            patch(
+                "vibesop.core.skills.loader.SkillLoader.discover_all",
+                return_value={"g/a": ls},
+            ),
+            patch.object(indexer, "_get_llm", return_value=SimpleNamespace(name="fake")),
+            patch.object(indexer, "_analyze_skill", side_effect=_explode),
+        ):
+            result = indexer.build_index(scope="global", show_progress=False)
+
+        assert result.success
+        profile = indexer.get_profile("g/a")
+        assert profile is not None
+        assert profile.triggers == ["推上去吧"]

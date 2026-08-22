@@ -9,6 +9,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 路由闭环修复 — triggers 全链路贯通 + 回放基线（gate32, 2026-08-22）
+
+起因:cmspark 激活的技能接不住产生自己的 query(verbatim 也只有
+0.26 cosine)。四路独立对抗 + claude/pi/grok 三路评审把 v1 的
+per-field max-pooling 方案否决(打错靶子:0.45 门 embed 的是 LLM
+profile 文本,triggers 不在里面),收敛为闭环修复 + 测量基础设施,
+路由行为本身一步不动。
+
+- **A1 渲染器预填 triggers**(project scope):簇内 query 样本经
+  B4-lite 卫生谓词(`_is_agent_prompt_shape`:agent 提示词前缀黑名单
+  + 150 字符上限;miss 池 64% 是子代理 prompt 回声)过滤后写入
+  frontmatter;global scope 留 TODO 占位(M12 隐私边界)。M7 F3 完好:
+  编辑守卫(content-hash)保证未编辑草稿无法激活,索引器只见人工
+  过目后的 triggers。
+- **A2 SkillProfile.triggers**:索引构建时从 live spec 确定性填充
+  (fresh + cache-hit 双路径 restamp,与 pack_owner 同款),进入
+  `_compute_profile_text` 的 embedding 文本——0.45 门从此看得到
+  triggers。**刻意不进 query_patterns**(那条还喂 Jaccard 0.20 无
+  margin 快路径,pi BLOCK-3 / grok M1)。INDEX_VERSION 1.4.0→1.5.0。
+- **A3 `scripts/replay_routing_baseline.py`**:离线回放基线——真实
+  query 取 `metadata["query"]`(span name 是 80 字符截断的展示文本),
+  miss 判定走 `is_route_miss_span`,含 P0-shadow would-fire 记录
+  (exact/containment ≥6 字符)、identity-diff 改判清单、agent 形状
+  剔除、确定性抽样人工裁决表。cmspark 首跑:3549 route span / 650
+  miss / P0-shadow 22 query 29 对——覆盖率远低于对抗评审的乐观上限,
+  证明 shadow 成本可控;**精度待人工裁决**(原始覆盖率是上限不是
+  正确性证据,pi 复审),激活前还需带护栏的新 shadow 周期。
+- **A3 精度侧(实施复审后补)**:hit A→B 劫持检测(对现存命中也跑
+  shadow)+ agent 形状误触发计数。cmspark 实测:**1620 条真实命中里
+  130 条(8.0%)若激活裸 P0 会被劫持**(top 被劫:riper-workflow 35、
+  omx/ci 22),另有 10 次垃圾误触发、117 次 fallback 救回——证明
+  三路评审"shadow-first、P0 推迟"的裁决在数据上完全正确。
+- **A2 分布测量(pi/claude MAJOR 验收数字)**:
+  `scripts/measure_index_embedding_shift.py` 对 141 条人工裁决评测集
+  做前后对照——top1 分布基本不动(mean 0.4275→0.4257),margin 中位
+  0.0276→0.0254,正例 **lost_hit=0 / gained_hit=0 / identity_change=0**
+  (报告:.omx/artifacts/gate32-embedding-shift.json)。分布移动可控,
+  阈值/margin 维持不动。triggers 覆盖还薄(全池 5/110),效果随 A1
+  预填的技能累积显现。
+- **推迟项(带触发条件)**:P0-lite(泛化 guarded-explicit,覆盖率
+  >60% + verbatim-miss 残差 >0 + shadow 精度达标才启动)、P1 完整版
+  per-field max-pooling、P3 灰区放行(先 shadow)、B4 完整池卫生门。
+
 ### Promote 草稿骨架升级 + ASCII skill_id（gate31, 2026-08-22）
 
 cmspark 首次真实 promote 暴露：草稿只有簇元数据没有编辑骨架（Steps

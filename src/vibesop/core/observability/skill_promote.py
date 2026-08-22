@@ -338,6 +338,46 @@ def _is_enumeration_option_reply(q: str) -> bool:
     return hit is not None
 
 
+# gate32 A1 (B4-lite): agent-prompt shapes that must NOT be auto-prefilled
+# into a draft's ``triggers:`` field. Dogfood evidence (cmspark spans):
+# ~64% of the miss pool is sub-agent prompt echoes / machine wrappers
+# ("You are an adversarial SKEPTIC…", "<system-reminder>…",
+# '[ { "type": "text"…'). They are legitimate pool members for human
+# review (bd1bc217 was promoted from such a cluster), but copying them
+# verbatim into triggers would auto-route future agent-prompt traffic
+# onto the skill. The human editor can always add a cleaned trigger by
+# hand — this filter only governs the AUTOMATIC prefill sample.
+_AGENT_PROMPT_PREFIXES = (
+    "you are ",
+    "ou are ",  # span-name truncation drops the first char ("Y")
+    "<system-reminder",
+    "system-reminder",
+    "<command-",
+    "[ {",
+    "[{",
+    "background task ",
+)
+# Long prompts are delegation payloads, not vocabulary. Real user
+# instructions in the dogfood pool run <100 chars; 150 leaves margin
+# while excluding pasted prompt templates.
+_AGENT_PROMPT_MAX_LEN = 150
+
+
+def _is_agent_prompt_shape(query: str) -> bool:
+    """True for machine/agent-prompt-shaped text (gate32 A1 hygiene).
+
+    Conservative by design — false positives here only mean "human
+    writes the trigger by hand", false negatives mean a garbage phrase
+    becomes a live routing trigger after activation.
+    """
+    q = " ".join(str(query).split()).lower()
+    if not q:
+        return True
+    if len(q) > _AGENT_PROMPT_MAX_LEN:
+        return True
+    return q.startswith(_AGENT_PROMPT_PREFIXES)
+
+
 def _validate_choice(value: str, valid: frozenset[str], field_name: str) -> str:
     """Runtime-validate a Literal field (mirrors ``Reflection`` helper)."""
     if value not in valid:
@@ -1903,6 +1943,14 @@ def _render_skill_md(
     org structure and must never appear in the SKILL.md body) and a
     warning header is prepended after the frontmatter.
 
+    gate32 A1: ``triggers:`` is prefilled from hygiene-filtered cluster
+    queries (project scope only) so an activated skill can catch the
+    pattern that produced it. This does NOT weaken M7 F3: the draft
+    cannot be activated unedited (content-hash guard), so prefilled
+    triggers only reach routing after human review. Global drafts get a
+    TODO placeholder instead (privacy boundary, same as the queries
+    block).
+
     M12 M5 privacy boundary (design v3 §隐私边界: 全局草稿不含示例
     query 与项目标识): for ``scope="global"`` the example-queries block
     is replaced by an omission note, ``project_distribution`` is NOT
@@ -1938,6 +1986,53 @@ def _render_skill_md(
             "\n".join(f"- {_sanitize_body_text(q)}" for q in candidate.queries[:5])
             or "- (no representative queries recorded)"
         )
+    # gate32 A1: prefill ``triggers:`` from the cluster's example queries
+    # so an activated skill can catch the very pattern that produced it
+    # (dogfood: a promoted skill scored 0.26 against its own canonical
+    # query until triggers were hand-added). Three constraints, all
+    # review-mandated:
+    # - SAMPLES pass B4-lite hygiene (_is_low_information_query +
+    #   _is_agent_prompt_shape) — the miss pool is ~64% sub-agent prompt
+    #   echoes; prefilling them verbatim would auto-route future agent
+    #   traffic onto the skill (pi MAJOR-1 / grok M4 / claude MAJOR-1).
+    # - M7 F3 stays intact: activation still requires a human edit
+    #   (draft_sha256 content-hash guard), so the indexer only ever sees
+    #   reviewed triggers (pi BLOCK-2: data source = the ACTIVATED
+    #   frontmatter, never raw cluster queries).
+    # - M12 M5 privacy boundary: global drafts get a TODO placeholder,
+    #   never raw queries (claude MAJOR-2 / grok: scope gate shared with
+    #   the queries block).
+    if scope == "global":
+        triggers_line = (
+            "# triggers: TODO after review — global drafts never prefill raw "
+            "queries (M12 privacy boundary); write intent phrases by hand"
+        )
+    else:
+        # pi impl NIT-2: sanitize at the SAME 150-char budget as the
+        # hygiene shape filter — otherwise an 81–150 char sample passes
+        # hygiene but gets silently truncated to 80 here, and the
+        # "150 leaves margin" rationale would be false for prefilled
+        # content.
+        # claude impl NIT-2: filter BEFORE slicing — slicing first would
+        # yield the TODO placeholder whenever the first 5 samples are all
+        # hygiene-filtered even when clean samples exist deeper in the
+        # list.
+        clean_samples = [
+            q
+            for q in candidate.queries
+            if not _is_low_information_query(q) and not _is_agent_prompt_shape(q)
+        ]
+        trigger_items = [
+            _sanitize_yaml_value(q, max_len=_AGENT_PROMPT_MAX_LEN) for q in clean_samples[:5]
+        ]
+        if trigger_items:
+            triggers_line = f"triggers: [{', '.join(trigger_items)}]"
+        else:
+            triggers_line = (
+                "# triggers: TODO — every sample query was filtered by hygiene "
+                "rules; write intent phrases by hand"
+            )
+
     if candidate.core_steps:
         steps_block = "\n".join(
             f"{i}. {step}" for i, step in enumerate(candidate.core_steps, start=1)
@@ -2007,6 +2102,7 @@ scope_recommended: global
 id: {skill_id}
 name: {name}
 description: {description}
+{triggers_line}
 tags: [auto-drafted, task-memory-loop]
 intent: workflow
 namespace: custom

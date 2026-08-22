@@ -1,0 +1,1471 @@
+diff --git a/CHANGELOG.md b/CHANGELOG.md
+index b2f8893..79a3e2b 100644
+--- a/CHANGELOG.md
++++ b/CHANGELOG.md
+@@ -9,6 +9,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
+ 
+ ## [Unreleased]
+ 
++### 路由闭环修复 — triggers 全链路贯通 + 回放基线（gate32, 2026-08-22）
++
++起因:cmspark 激活的技能接不住产生自己的 query(verbatim 也只有
++0.26 cosine)。四路独立对抗 + claude/pi/grok 三路评审把 v1 的
++per-field max-pooling 方案否决(打错靶子:0.45 门 embed 的是 LLM
++profile 文本,triggers 不在里面),收敛为闭环修复 + 测量基础设施,
++路由行为本身一步不动。
++
++- **A1 渲染器预填 triggers**(project scope):簇内 query 样本经
++  B4-lite 卫生谓词(`_is_agent_prompt_shape`:agent 提示词前缀黑名单
++  + 150 字符上限;miss 池 64% 是子代理 prompt 回声)过滤后写入
++  frontmatter;global scope 留 TODO 占位(M12 隐私边界)。M7 F3 完好:
++  编辑守卫(content-hash)保证未编辑草稿无法激活,索引器只见人工
++  过目后的 triggers。
++- **A2 SkillProfile.triggers**:索引构建时从 live spec 确定性填充
++  (fresh + cache-hit 双路径 restamp,与 pack_owner 同款),进入
++  `_compute_profile_text` 的 embedding 文本——0.45 门从此看得到
++  triggers。**刻意不进 query_patterns**(那条还喂 Jaccard 0.20 无
++  margin 快路径,pi BLOCK-3 / grok M1)。INDEX_VERSION 1.4.0→1.5.0。
++- **A3 `scripts/replay_routing_baseline.py`**:离线回放基线——真实
++  query 取 `metadata["query"]`(span name 是 80 字符截断的展示文本),
++  miss 判定走 `is_route_miss_span`,含 P0-shadow would-fire 记录
++  (exact/containment ≥6 字符)、identity-diff 改判清单、agent 形状
++  剔除、确定性抽样人工裁决表。cmspark 首跑:3549 route span / 650
++  miss / P0-shadow 22 query 29 对(远低于对抗评审的乐观上限,证明
++  shadow-first 裁决正确)。
++- **推迟项(带触发条件)**:P0-lite(泛化 guarded-explicit,覆盖率
++  >60% + verbatim-miss 残差 >0 + shadow 精度达标才启动)、P1 完整版
++  per-field max-pooling、P3 灰区放行(先 shadow)、B4 完整池卫生门。
++
+ ### Promote 草稿骨架升级 + ASCII skill_id（gate31, 2026-08-22）
+ 
+ cmspark 首次真实 promote 暴露：草稿只有簇元数据没有编辑骨架（Steps
+diff --git a/scripts/replay_routing_baseline.py b/scripts/replay_routing_baseline.py
+new file mode 100644
+index 0000000..63f0d72
+--- /dev/null
++++ b/scripts/replay_routing_baseline.py
+@@ -0,0 +1,501 @@
++#!/usr/bin/env python3
++"""Offline routing-replay baseline measurement (gate32 v3, A3).
++
++Reads a project's recorded route spans (``.vibe/observability/spans.jsonl``),
++classifies misses with the gold-detection predicate
++(``is_route_miss_span`` — deliberately NOT ``tool_call_bridge._is_miss``,
++whose stricter CLI/slash exclusions serve a different consumer), and
++measures what the proposed P0 trigger rules WOULD have caught. Purely
++offline: zero LLM calls, zero routing-behavior changes, and no writes to
++the target project except the report file itself.
++
++P0 shadow rules (record-only, never fed back into routing), applied to the
++normalized query (lowercase + whitespace-collapsed):
++
++- exact: normalized query == normalized trigger (any trigger length)
++- containment: normalized trigger of >= 6 chars is a substring of the
++  normalized query
++
++Agent-prompt-shaped "queries" (system prompts, serialized tool results
++that leaked into the route span) are misses by construction and are
++counted separately, excluded from the P0-shadow benefit denominator.
++
++Usage:
++    uv run python scripts/replay_routing_baseline.py --project-root <path> \
++        [--out report.json] [--sample-adjudicate N] [--no-semantic]
++"""
++
++from __future__ import annotations
++
++import argparse
++import hashlib
++import json
++import statistics
++import sys
++from pathlib import Path
++from typing import Any
++
++ROOT = Path(__file__).resolve().parent.parent
++sys.path.insert(0, str(ROOT / "src"))
++
++from vibesop.core.observability.gold_detection import is_route_miss_span  # noqa: E402
++from vibesop.core.routing.triage_recall import (  # noqa: E402
++    MODEL_NAME,
++    EmbeddingRecall,
++    _cosine_similarity,
++)
++
++# SpanWriter caps metadata["query"] at 200 chars (agent_runtime.py); a query
++# at the cap may be truncated, so its replay fidelity is suspect.
++QUERY_CAP = 200
++# Containment fires only for triggers of at least this many normalized chars
++# (short triggers like "go" would substring-match everything).
++CONTAINMENT_MIN_TRIGGER = 6
++# Longer than this, a "query" is almost certainly an injected agent prompt,
++# not something a human typed.
++AGENT_PROMPT_LEN = 150
++_AGENT_PREFIXES = ("you are ", "ou are ", "<system-reminder", "[ {")
++
++
++def parse_metadata(raw: Any) -> dict[str, Any] | None:
++    """Tolerantly parse span metadata: dict, JSON string, or None."""
++    if isinstance(raw, dict):
++        return raw
++    if isinstance(raw, str):
++        try:
++            parsed = json.loads(raw)
++        except (TypeError, ValueError):
++            return None
++        return parsed if isinstance(parsed, dict) else None
++    return None
++
++
++def _is_route_span(span: dict[str, Any]) -> bool:
++    name = span.get("name")
++    return span.get("span_kind") == "task" and isinstance(name, str) and name.startswith("route:")
++
++
++def load_route_records(spans_path: Path) -> tuple[list[dict[str, Any]], dict[str, int]]:
++    """Extract route-task records from spans.jsonl.
++
++    Returns (records, counters). Each record carries the real query from
++    ``metadata["query"]`` (the span name is a truncated display string and
++    is never used), its truncation flag, the miss verdict, and the parsed
++    metadata. Unparseable lines and route spans without a usable query are
++    skipped and counted — repo storage convention: skip bad rows, never
++    take down the batch.
++    """
++    records: list[dict[str, Any]] = []
++    counters = {"bad_lines": 0, "non_route_spans": 0, "no_query": 0}
++    with spans_path.open("r", encoding="utf-8") as f:
++        for raw_line in f:
++            line = raw_line.strip()
++            if not line:
++                continue
++            try:
++                span = json.loads(line)
++            except json.JSONDecodeError:
++                counters["bad_lines"] += 1
++                continue
++            if not isinstance(span, dict):
++                counters["bad_lines"] += 1
++                continue
++            if not _is_route_span(span):
++                counters["non_route_spans"] += 1
++                continue
++            meta = parse_metadata(span.get("metadata"))
++            query = meta.get("query") if meta else None
++            if not isinstance(query, str) or not query.strip():
++                counters["no_query"] += 1
++                continue
++            records.append(
++                {
++                    "query": query,
++                    "truncated": len(query) >= QUERY_CAP,
++                    "is_miss": is_route_miss_span(span),
++                    "metadata": meta or {},
++                }
++            )
++    return records, counters
++
++
++def normalize(text: str) -> str:
++    """Lowercase + collapse all whitespace runs to single spaces."""
++    return " ".join(text.lower().split())
++
++
++def is_agent_prompt_shape(query: str) -> bool:
++    """Heuristic: this "query" is an injected agent prompt, not user input.
++
++    These are misses by construction — routing had nothing to answer — so
++    they are excluded from the P0-shadow benefit denominator.
++    """
++    q = query.strip()
++    ql = q.lower()
++    if len(q) > AGENT_PROMPT_LEN:
++        return True
++    return ql.startswith(_AGENT_PREFIXES[:3]) or q.startswith(_AGENT_PREFIXES[3])
++
++
++def build_trigger_index(skills: dict[str, Any]) -> list[tuple[str, str, str]]:
++    """Flatten skills into (skill_id, raw_trigger, normalized_trigger) rows."""
++    index: list[tuple[str, str, str]] = []
++    for skill_id, skill in skills.items():
++        for trigger in getattr(skill.metadata, "triggers", None) or []:
++            raw = str(trigger)
++            norm = normalize(raw)
++            if norm:
++                index.append((skill_id, raw, norm))
++    return index
++
++
++def p0_shadow(query: str, trigger_index: list[tuple[str, str, str]]) -> list[dict[str, str]]:
++    """Offline P0 verdict for one query: which skills would have fired.
++
++    A skill matching both rules is recorded once, as exact (the stronger
++    signal). Multiple skills matching the same query is a collision.
++    """
++    qn = normalize(query)
++    if not qn:
++        return []
++    matches: list[dict[str, str]] = []
++    for skill_id, raw, norm in trigger_index:
++        if qn == norm:
++            matches.append({"skill_id": skill_id, "rule": "exact", "trigger": raw})
++        elif len(norm) >= CONTAINMENT_MIN_TRIGGER and norm in qn:
++            matches.append({"skill_id": skill_id, "rule": "containment", "trigger": raw})
++    return matches
++
++
++def build_identity_diff(
++    records: list[dict[str, Any]],
++    trigger_index: list[tuple[str, str, str]],
++) -> tuple[list[dict[str, Any]], dict[str, int]]:
++    """The "verdict change" list: misses the P0 rules would have caught.
++
++    Only non-agent-shaped misses are evaluated. Each entry pairs the
++    observed routing outcome (whatever the span metadata recorded) with the
++    would-fire targets, for human adjudication.
++    """
++    entries: list[dict[str, Any]] = []
++    counters = {"misses": 0, "agent_prompt_shape_misses": 0, "misses_evaluated": 0}
++    for rec in records:
++        if not rec["is_miss"]:
++            continue
++        counters["misses"] += 1
++        if is_agent_prompt_shape(rec["query"]):
++            counters["agent_prompt_shape_misses"] += 1
++            continue
++        counters["misses_evaluated"] += 1
++        matches = p0_shadow(rec["query"], trigger_index)
++        if not matches:
++            continue
++        meta = rec["metadata"]
++        entries.append(
++            {
++                "query": rec["query"],
++                "truncated": rec["truncated"],
++                "observed": {
++                    "skill_id": meta.get("skill_id"),
++                    "has_match": meta.get("has_match"),
++                    "layer": meta.get("layer"),
++                },
++                "would_fire": matches,
++                "collision": len({m["skill_id"] for m in matches}) > 1,
++            }
++        )
++    return entries, counters
++
++
++def build_candidate_texts(skills: dict[str, Any]) -> dict[str, str]:
++    """Per-skill recall text via EmbeddingRecall._candidate_text (same text
++    the production semantic recall embeds, so scores are comparable)."""
++    texts: dict[str, str] = {}
++    for skill_id, skill in skills.items():
++        spec = skill.metadata
++        texts[skill_id] = EmbeddingRecall._candidate_text(
++            {
++                "id": spec.id,
++                "description": spec.description,
++                "intent": spec.intent or "",
++                "triggers": list(spec.triggers or []),
++                "keywords": list(getattr(spec, "keywords", None) or []),
++                "scenarios": list(getattr(spec, "scenarios", None) or []),
++            }
++        )
++    return texts
++
++
++def load_embedding_model() -> Any | None:
++    """Lazy-load the recall embedding model; any failure → None (skipped).
++
++    Loads SentenceTransformer directly instead of instantiating
++    EmbeddingRecall so the replay never touches the project's on-disk
++    embedding cache.
++    """
++    try:
++        from sentence_transformers import (
++            SentenceTransformer,  # pyright: ignore[reportMissingImports]
++        )
++
++        return SentenceTransformer(MODEL_NAME)
++    except Exception as e:
++        print(f"Semantic scoring skipped: embedding model unavailable ({e})", file=sys.stderr)
++        return None
++
++
++def semantic_scores(
++    entries: list[dict[str, Any]],
++    candidate_texts: dict[str, str],
++    model: Any | None,
++) -> dict[str, Any]:
++    """Verbatim-semantic spot check: query vs would-fire skill text cosine.
++
++    For each would-fire (query, skill) pair, embed both verbatim and score
++    with the production cosine. Distribution only (min/median/max) — this
++    is a plausibility signal for adjudication, not a threshold proposal.
++    """
++    if model is None:
++        return {"available": False, "reason": "embedding model unavailable"}
++    pairs = [
++        (entry["query"], match["skill_id"])
++        for entry in entries
++        for match in entry["would_fire"]
++        if match["skill_id"] in candidate_texts
++    ]
++    if not pairs:
++        return {"available": True, "scored_pairs": 0}
++    unique_queries = sorted({q for q, _ in pairs})
++    unique_skills = sorted({sid for _, sid in pairs})
++    try:
++        raw = model.encode(
++            unique_queries + [candidate_texts[sid] for sid in unique_skills],
++            show_progress_bar=False,
++        )
++        vectors = [v.tolist() if hasattr(v, "tolist") else list(v) for v in raw]
++    except Exception as e:
++        return {"available": False, "reason": f"encoding failed: {e}"}
++    q_vecs = dict(zip(unique_queries, vectors[: len(unique_queries)], strict=True))
++    s_vecs = dict(zip(unique_skills, vectors[len(unique_queries) :], strict=True))
++    scores = [round(_cosine_similarity(q_vecs[q], s_vecs[s]), 4) for q, s in pairs]
++    return {
++        "available": True,
++        "scored_pairs": len(scores),
++        "min": min(scores),
++        "median": round(statistics.median(scores), 4),
++        "max": max(scores),
++    }
++
++
++def deterministic_sample(entries: list[dict[str, Any]], n: int) -> list[dict[str, Any]]:
++    """Pick n entries deterministically via sha1 content digests.
++
++    Builtin hash() is process-randomized (PYTHONHASHSEED) and banned for
++    reproducibility; sha1 of the canonical JSON is stable across runs and
++    machines, and independent of input ordering. Duplicate (query, skills)
++    verdicts collapse to one row — labeling the same verdict twice wastes
++    adjudication effort.
++    """
++    keyed = sorted(
++        entries,
++        key=lambda e: hashlib.sha1(
++            json.dumps(e, sort_keys=True, ensure_ascii=False).encode("utf-8")
++        ).hexdigest(),
++    )
++    picked: list[dict[str, Any]] = []
++    seen: set[tuple[str, frozenset[str]]] = set()
++    for entry in keyed:
++        verdict_key = (
++            normalize(entry["query"]),
++            frozenset(m["skill_id"] for m in entry["would_fire"]),
++        )
++        if verdict_key in seen:
++            continue
++        seen.add(verdict_key)
++        picked.append(entry)
++        if len(picked) >= n:
++            break
++    return picked
++
++
++def write_adjudication_md(path: Path, entries: list[dict[str, Any]]) -> None:
++    """Write the sampled would-fire entries as a human-labeling table."""
++
++    def _cell(text: Any) -> str:
++        return " ".join(str(text).split()).replace("|", "\\|")
++
++    lines = [
++        "# P0-shadow adjudication sample",
++        "",
++        "Mark `verdict` with `correct` (would-fire skill is the right route) or",
++        "`wrong`; add notes as needed. Queries marked `(truncated?)` hit the",
++        f"{QUERY_CAP}-char metadata cap and may be cut off.",
++        "",
++        "| # | query | observed_skill | would_fire_skills | rules | truncated | verdict | notes |",
++        "|---|-------|----------------|-------------------|-------|-----------|---------|-------|",
++    ]
++    for i, entry in enumerate(entries, 1):
++        skills = ", ".join(m["skill_id"] for m in entry["would_fire"])
++        rules = ", ".join(m["rule"] for m in entry["would_fire"])
++        observed = entry["observed"].get("skill_id") or "(miss)"
++        lines.append(
++            f"| {i} | {_cell(entry['query'])} | {_cell(observed)} | {_cell(skills)} "
++            f"| {rules} | {'yes' if entry['truncated'] else 'no'} |  |  |"
++        )
++    lines.append("")
++    path.parent.mkdir(parents=True, exist_ok=True)
++    path.write_text("\n".join(lines), encoding="utf-8")
++
++
++def load_skills(project_root: Path) -> dict[str, Any]:
++    """Discover the project's skills with the production loader."""
++    from vibesop.core.skills.loader import SkillLoader
++
++    return SkillLoader(project_root=project_root).discover_all()
++
++
++def run(
++    project_root: Path,
++    spans_path: Path | None = None,
++    out: Path | None = None,
++    sample_adjudicate: int | None = None,
++    no_semantic: bool = False,
++    skills: dict[str, Any] | None = None,
++) -> dict[str, Any]:
++    """Run the baseline measurement and write the report (plus the
++    adjudication sample when requested). Returns the report dict."""
++    if spans_path is None:
++        spans_path = project_root / ".vibe" / "observability" / "spans.jsonl"
++    if out is None:
++        out = project_root / ".vibe" / "observability" / "replay_baseline.json"
++    if skills is None:
++        skills = load_skills(project_root)
++
++    records, counters = load_route_records(spans_path)
++    trigger_index = build_trigger_index(skills)
++    entries, diff_counters = build_identity_diff(records, trigger_index)
++
++    misses = [r for r in records if r["is_miss"]]
++    model = None if no_semantic else load_embedding_model()
++    semantic = semantic_scores(entries, build_candidate_texts(skills), model)
++
++    report: dict[str, Any] = {
++        "tool": "replay_routing_baseline",
++        "project_root": str(project_root),
++        "spans_path": str(spans_path),
++        "baseline": {
++            "total_route_spans": len(records),
++            "bad_lines": counters["bad_lines"],
++            "non_route_spans": counters["non_route_spans"],
++            "no_query": counters["no_query"],
++            "misses": diff_counters["misses"],
++            "truncated_queries": sum(1 for r in records if r["truncated"]),
++            "unique_miss_queries": len({normalize(r["query"]) for r in misses}),
++            "agent_prompt_shape_misses": diff_counters["agent_prompt_shape_misses"],
++        },
++        "p0_shadow": {
++            "skills_loaded": len(skills),
++            "triggers_indexed": len(trigger_index),
++            "misses_evaluated": diff_counters["misses_evaluated"],
++            "would_fire_queries": len(entries),
++            "would_fire_pairs": sum(len(e["would_fire"]) for e in entries),
++            "collisions": sum(1 for e in entries if e["collision"]),
++            "rules": {
++                "exact": sum(1 for e in entries for m in e["would_fire"] if m["rule"] == "exact"),
++                "containment": sum(
++                    1 for e in entries for m in e["would_fire"] if m["rule"] == "containment"
++                ),
++            },
++            "entries": entries,
++        },
++        "semantic": semantic,
++    }
++
++    report["report_path"] = str(out)
++    out.parent.mkdir(parents=True, exist_ok=True)
++    out.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
++
++    if sample_adjudicate is not None:
++        adjudicate_path = Path(str(out) + ".adjudicate.md")
++        write_adjudication_md(adjudicate_path, deterministic_sample(entries, sample_adjudicate))
++        report["adjudication_sample"] = str(adjudicate_path)
++
++    return report
++
++
++def _print_summary(report: dict[str, Any]) -> None:
++    b = report["baseline"]
++    p = report["p0_shadow"]
++    print("\n=== Routing Replay Baseline (P0 shadow, offline) ===")
++    print(
++        f"route spans: {b['total_route_spans']} | misses: {b['misses']} "
++        f"| truncated: {b['truncated_queries']} | unique miss queries: "
++        f"{b['unique_miss_queries']}"
++    )
++    print(
++        f"skipped: {b['bad_lines']} bad lines, {b['no_query']} without query, "
++        f"{b['non_route_spans']} non-route spans"
++    )
++    print(
++        f"agent-prompt-shaped misses excluded: {b['agent_prompt_shape_misses']} "
++        f"(evaluated: {p['misses_evaluated']})"
++    )
++    print(
++        f"P0-shadow would-fire: {p['would_fire_queries']} queries, "
++        f"{p['would_fire_pairs']} pairs "
++        f"(exact: {p['rules']['exact']}, containment: {p['rules']['containment']}), "
++        f"collisions: {p['collisions']}"
++    )
++    s = report["semantic"]
++    if s.get("available") and s.get("scored_pairs"):
++        print(
++            f"semantic verbatim cosine ({s['scored_pairs']} pairs): "
++            f"min {s['min']:.4f} | median {s['median']:.4f} | max {s['max']:.4f}"
++        )
++    else:
++        print(f"semantic verbatim cosine: unavailable ({s.get('reason', 'no pairs')})")
++
++
++def main() -> int:
++    parser = argparse.ArgumentParser(description=__doc__)
++    parser.add_argument(
++        "--project-root",
++        type=Path,
++        required=True,
++        help="project whose spans and skills to replay against",
++    )
++    parser.add_argument(
++        "--out",
++        type=Path,
++        default=None,
++        help="write JSON report here "
++        "(default: <project-root>/.vibe/observability/replay_baseline.json)",
++    )
++    parser.add_argument(
++        "--sample-adjudicate",
++        type=int,
++        default=None,
++        metavar="N",
++        help="also write N deterministically-sampled would-fire entries "
++        "to <out>.adjudicate.md for human labeling",
++    )
++    parser.add_argument(
++        "--no-semantic",
++        action="store_true",
++        help="skip verbatim semantic scoring (no embedding model load)",
++    )
++    args = parser.parse_args()
++
++    report = run(
++        project_root=args.project_root,
++        out=args.out,
++        sample_adjudicate=args.sample_adjudicate,
++        no_semantic=args.no_semantic,
++    )
++    _print_summary(report)
++    print(f"\nReport written to {report['report_path']}")
++    return 0
++
++
++if __name__ == "__main__":
++    raise SystemExit(main())
+diff --git a/src/vibesop/cli/commands/skill_commands.py b/src/vibesop/cli/commands/skill_commands.py
+index 2bf2901..b963962 100644
+--- a/src/vibesop/cli/commands/skill_commands.py
++++ b/src/vibesop/cli/commands/skill_commands.py
+@@ -1188,6 +1188,9 @@ def _index_newly_added_skill(skill_id: str, scope: str) -> bool:
+         profile = indexer._analyze_skill(loaded, llm)
+         if profile is None:
+             return False
++        # gate32 A2: deterministic triggers from the live spec, BEFORE the
++        # embedding is computed (they are part of the profile text now).
++        profile.triggers = indexer._spec_triggers(loaded)
+         indexer._compute_embeddings({skill_id: profile})
+ 
+         layer = "project" if scope == "project" else "global"
+diff --git a/src/vibesop/core/observability/skill_promote.py b/src/vibesop/core/observability/skill_promote.py
+index e8a7992..c881dbb 100644
+--- a/src/vibesop/core/observability/skill_promote.py
++++ b/src/vibesop/core/observability/skill_promote.py
+@@ -338,6 +338,46 @@ def _is_enumeration_option_reply(q: str) -> bool:
+     return hit is not None
+ 
+ 
++# gate32 A1 (B4-lite): agent-prompt shapes that must NOT be auto-prefilled
++# into a draft's ``triggers:`` field. Dogfood evidence (cmspark spans):
++# ~64% of the miss pool is sub-agent prompt echoes / machine wrappers
++# ("You are an adversarial SKEPTIC…", "<system-reminder>…",
++# '[ { "type": "text"…'). They are legitimate pool members for human
++# review (bd1bc217 was promoted from such a cluster), but copying them
++# verbatim into triggers would auto-route future agent-prompt traffic
++# onto the skill. The human editor can always add a cleaned trigger by
++# hand — this filter only governs the AUTOMATIC prefill sample.
++_AGENT_PROMPT_PREFIXES = (
++    "you are ",
++    "ou are ",  # span-name truncation drops the first char ("Y")
++    "<system-reminder",
++    "system-reminder",
++    "<command-",
++    "[ {",
++    "[{",
++    "background task ",
++)
++# Long prompts are delegation payloads, not vocabulary. Real user
++# instructions in the dogfood pool run <100 chars; 150 leaves margin
++# while excluding pasted prompt templates.
++_AGENT_PROMPT_MAX_LEN = 150
++
++
++def _is_agent_prompt_shape(query: str) -> bool:
++    """True for machine/agent-prompt-shaped text (gate32 A1 hygiene).
++
++    Conservative by design — false positives here only mean "human
++    writes the trigger by hand", false negatives mean a garbage phrase
++    becomes a live routing trigger after activation.
++    """
++    q = " ".join(str(query).split()).lower()
++    if not q:
++        return True
++    if len(q) > _AGENT_PROMPT_MAX_LEN:
++        return True
++    return q.startswith(_AGENT_PROMPT_PREFIXES)
++
++
+ def _validate_choice(value: str, valid: frozenset[str], field_name: str) -> str:
+     """Runtime-validate a Literal field (mirrors ``Reflection`` helper)."""
+     if value not in valid:
+@@ -1903,6 +1943,14 @@ def _render_skill_md(
+     org structure and must never appear in the SKILL.md body) and a
+     warning header is prepended after the frontmatter.
+ 
++    gate32 A1: ``triggers:`` is prefilled from hygiene-filtered cluster
++    queries (project scope only) so an activated skill can catch the
++    pattern that produced it. This does NOT weaken M7 F3: the draft
++    cannot be activated unedited (content-hash guard), so prefilled
++    triggers only reach routing after human review. Global drafts get a
++    TODO placeholder instead (privacy boundary, same as the queries
++    block).
++
+     M12 M5 privacy boundary (design v3 §隐私边界: 全局草稿不含示例
+     query 与项目标识): for ``scope="global"`` the example-queries block
+     is replaced by an omission note, ``project_distribution`` is NOT
+@@ -1938,6 +1986,41 @@ def _render_skill_md(
+             "\n".join(f"- {_sanitize_body_text(q)}" for q in candidate.queries[:5])
+             or "- (no representative queries recorded)"
+         )
++    # gate32 A1: prefill ``triggers:`` from the cluster's example queries
++    # so an activated skill can catch the very pattern that produced it
++    # (dogfood: a promoted skill scored 0.26 against its own canonical
++    # query until triggers were hand-added). Three constraints, all
++    # review-mandated:
++    # - SAMPLES pass B4-lite hygiene (_is_low_information_query +
++    #   _is_agent_prompt_shape) — the miss pool is ~64% sub-agent prompt
++    #   echoes; prefilling them verbatim would auto-route future agent
++    #   traffic onto the skill (pi MAJOR-1 / grok M4 / claude MAJOR-1).
++    # - M7 F3 stays intact: activation still requires a human edit
++    #   (draft_sha256 content-hash guard), so the indexer only ever sees
++    #   reviewed triggers (pi BLOCK-2: data source = the ACTIVATED
++    #   frontmatter, never raw cluster queries).
++    # - M12 M5 privacy boundary: global drafts get a TODO placeholder,
++    #   never raw queries (claude MAJOR-2 / grok: scope gate shared with
++    #   the queries block).
++    if scope == "global":
++        triggers_line = (
++            "# triggers: TODO after review — global drafts never prefill raw "
++            "queries (M12 privacy boundary); write intent phrases by hand"
++        )
++    else:
++        trigger_items = [
++            _sanitize_yaml_value(q)
++            for q in candidate.queries[:5]
++            if not _is_low_information_query(q) and not _is_agent_prompt_shape(q)
++        ]
++        if trigger_items:
++            triggers_line = f"triggers: [{', '.join(trigger_items)}]"
++        else:
++            triggers_line = (
++                "# triggers: TODO — every sample query was filtered by hygiene "
++                "rules; write intent phrases by hand"
++            )
++
+     if candidate.core_steps:
+         steps_block = "\n".join(
+             f"{i}. {step}" for i, step in enumerate(candidate.core_steps, start=1)
+@@ -2007,6 +2090,7 @@ scope_recommended: global
+ id: {skill_id}
+ name: {name}
+ description: {description}
++{triggers_line}
+ tags: [auto-drafted, task-memory-loop]
+ intent: workflow
+ namespace: custom
+diff --git a/src/vibesop/core/skills/indexer.py b/src/vibesop/core/skills/indexer.py
+index ef0eb96..04c5d13 100644
+--- a/src/vibesop/core/skills/indexer.py
++++ b/src/vibesop/core/skills/indexer.py
+@@ -62,6 +62,16 @@ class SkillProfile:
+     differentiation: str = ""
+     confidence_boosters: list[str] = field(default_factory=list)
+     pack_owner: str = ""  # Pack namespace that owns this skill (set by symlink resolution)
++    # gate32 A2: the skill's frontmatter ``triggers`` carried verbatim into
++    # the profile so ``_compute_profile_text`` embeds them — the INDEX
++    # layer's 0.45 embedding door previously never saw triggers at all
++    # (they only fed the LLM analysis prompt). Populated deterministically
++    # from the live spec on BOTH the fresh-analysis and cache-hit paths,
++    # and NOT merged into ``query_patterns`` — that list also feeds the
++    # Jaccard 0.20 fast path (no margin gate, direct return without
++    # triage arbitration; gate32 pi BLOCK-3 / grok M1), which verbatim
++    # user queries must not lower.
++    triggers: list[str] = field(default_factory=list)
+     # SHA256 (truncated) of the prompt fed to the LLM. Lets the indexer skip
+     # re-analyzing skills whose content hasn't changed since the last run.
+     # Empty string means: profile from a pre-cache indexer; treat as cold.
+@@ -80,6 +90,7 @@ class SkillProfile:
+             "confidence_boosters": self.confidence_boosters,
+             "pack_owner": self.pack_owner,
+             "content_hash": self.content_hash,
++            "triggers": self.triggers,
+         }
+         if self.embedding is not None:
+             d["embedding"] = self.embedding
+@@ -95,6 +106,7 @@ class SkillProfile:
+             confidence_boosters=data.get("confidence_boosters", []),
+             pack_owner=data.get("pack_owner", ""),
+             content_hash=data.get("content_hash", ""),
++            triggers=data.get("triggers", []),
+             embedding=data.get("embedding"),
+         )
+ 
+@@ -119,7 +131,10 @@ class SkillIndexer:
+     # discovered as skills; profiles written for them by pre-fix indexers
+     # (ids like ``project/auto-config.yaml/auto-config``) are pruned at load
+     # time so stale on-disk indexes self-heal without a manual rebuild.
+-    INDEX_VERSION = "1.4.0"
++    # 1.5.0 (gate32 A2): SkillProfile gains ``triggers`` (populated from the
++    # live spec on both cache paths) and ``_compute_profile_text`` embeds
++    # them, so the INDEX layer's embedding door sees declared triggers.
++    INDEX_VERSION = "1.5.0"
+ 
+     def __init__(
+         self,
+@@ -196,6 +211,21 @@ class SkillIndexer:
+             return ""
+         return rel.parts[0] if rel.parts else ""
+ 
++    @staticmethod
++    def _spec_triggers(loaded_skill: Any) -> list[str]:
++        """Frontmatter ``triggers`` of the live skill, as a clean list.
++
++        gate32 A2: populated into ``SkillProfile.triggers`` on BOTH the
++        fresh-analysis and cache-hit paths (same restamp treatment as
++        ``pack_owner``) so the value always reflects the on-disk spec —
++        the only human-reviewed source. Defensive against malformed
++        frontmatter (non-list / non-str entries drop out).
++        """
++        raw = getattr(getattr(loaded_skill, "metadata", None), "triggers", None)
++        if not isinstance(raw, (list, tuple)):
++            return []
++        return [str(t) for t in raw if str(t).strip()]
++
+     @contextlib.contextmanager
+     def _progress_context(
+         self,
+@@ -293,7 +323,10 @@ class SkillIndexer:
+         # Apply cache hits immediately (no LLM cost, no progress tick).
+         # We re-stamp pack_owner from the live filesystem so a moved skill
+         # gets correctly reattributed even though its prompt is unchanged.
++        # gate32 A2: triggers get the same restamp treatment — they are
++        # read from the live spec, not the cached profile.
+         for skill_id, profile, loaded_skill, classification in cached_hits:
++            profile.triggers = self._spec_triggers(loaded_skill)
+             if classification == "project":
+                 profile.pack_owner = ""
+                 project_profiles[skill_id] = profile
+@@ -329,6 +362,9 @@ class SkillIndexer:
+                         try:
+                             profile = future.result()
+                             if profile:
++                                # gate32 A2: deterministic triggers from
++                                # the live spec (LLM never invents them).
++                                profile.triggers = self._spec_triggers(loaded_skill)
+                                 if classification == "project":
+                                     profile.pack_owner = ""
+                                     project_profiles[skill_id] = profile
+@@ -423,6 +459,12 @@ class SkillIndexer:
+         parts.extend(profile.confidence_boosters)
+         if profile.differentiation:
+             parts.append(profile.differentiation)
++        # gate32 A2: triggers join the embedding text so the INDEX layer's
++        # 0.45 door sees the skill's declared trigger phrases verbatim.
++        # Deliberately NOT added to ``query_patterns`` — that list also
++        # feeds the Jaccard 0.20 fast path (no margin gate, no triage
++        # arbitration; gate32 pi BLOCK-3 / grok M1).
++        parts.extend(profile.triggers)
+         return " ".join(parts)
+ 
+     def _compute_embeddings(self, profiles: dict[str, SkillProfile]) -> None:
+@@ -703,6 +745,8 @@ class SkillIndexer:
+                 prompt = self._build_prompt(ls)
+                 if existing_profile.content_hash == self._hash_prompt(prompt):
+                     existing_profile.pack_owner = pack_name
++                    # gate32 A2: same restamp as build_index's cache path.
++                    existing_profile.triggers = self._spec_triggers(ls)
+                     new_profiles[sid] = existing_profile
+                     result.indexed_count += 1
+                     continue
+@@ -719,15 +763,18 @@ class SkillIndexer:
+             if cache_misses:
+                 with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                     futures = {
+-                        executor.submit(self._analyze_skill, ls, llm): sid
++                        executor.submit(self._analyze_skill, ls, llm): (sid, ls)
+                         for sid, ls in cache_misses
+                     }
+                     for future in as_completed(futures):
+-                        sid = futures[future]
++                        sid, loaded_skill = futures[future]
+                         try:
+                             profile = future.result()
+                             if profile:
+                                 profile.pack_owner = pack_name
++                                # gate32 A2: deterministic triggers from
++                                # the live spec (LLM never invents them).
++                                profile.triggers = self._spec_triggers(loaded_skill)
+                                 new_profiles[sid] = profile
+                                 result.indexed_count += 1
+                             else:
+diff --git a/tests/core/observability/test_skill_promote_render.py b/tests/core/observability/test_skill_promote_render.py
+index cf5ad76..8e94bfd 100644
+--- a/tests/core/observability/test_skill_promote_render.py
++++ b/tests/core/observability/test_skill_promote_render.py
+@@ -451,3 +451,64 @@ class TestGate31Skeleton:
+         content = _render_skill_md(candidate, "custom/x-c1", scope="global")
+         assert "## Acceptance Checklist" in content
+         assert "example queries omitted" in content
++
++
++class TestGate32TriggersPrefill:
++    """gate32 A1: the renderer prefills frontmatter ``triggers:`` from
++    hygiene-filtered cluster queries (project scope only) so an activated
++    skill can catch the pattern that produced it."""
++
++    def test_project_scope_prefills_sanitized_triggers(self) -> None:
++        candidate = _make_candidate(queries=["帮我合并到 main 吧", "提交: 全部", "推上去吧"])
++        content = _render_skill_md(candidate, "custom/x-c1")
++        line = next(ln for ln in content.splitlines() if ln.startswith("triggers:"))
++        assert "帮我合并到 main 吧" in line
++        assert "推上去吧" in line
++        # Colon-bearing query must be quoted so the YAML stays parseable.
++        assert '"提交: 全部"' in line
++
++    def test_agent_prompt_shapes_and_low_info_filtered(self) -> None:
++        candidate = _make_candidate(
++            queries=[
++                "帮我合并到 main 吧",
++                "You are an adversarial SKEPTIC. Your job is to REFUTE",
++                "<system-reminder> background task done",
++                "继续",
++                "x" * 200,
++            ]
++        )
++        content = _render_skill_md(candidate, "custom/x-c1")
++        line = next(ln for ln in content.splitlines() if ln.startswith("triggers:"))
++        assert "帮我合并到 main 吧" in line
++        assert "SKEPTIC" not in line
++        assert "system-reminder" not in line
++        assert "继续" not in line
++
++    def test_all_filtered_yields_todo_placeholder(self) -> None:
++        candidate = _make_candidate(queries=["继续", "You are a reviewer"])
++        content = _render_skill_md(candidate, "custom/x-c1")
++        # No ACTIVE triggers key — only the commented TODO placeholder.
++        assert not any(ln.startswith("triggers:") for ln in content.splitlines())
++        assert "# triggers: TODO" in content
++
++    def test_global_scope_never_prefills_raw_queries(self) -> None:
++        """M12 privacy boundary: global drafts get a TODO placeholder,
++        never raw cluster queries (gate32 claude MAJOR-2)."""
++        candidate = _make_candidate(
++            queries=["帮我合并到 main 吧"],
++            project_distribution={"p/a": 2, "p/b": 3},
++        )
++        content = _render_skill_md(candidate, "custom/x-c1", scope="global")
++        assert "帮我合并到 main 吧" not in content
++        assert "# triggers: TODO" in content
++
++    def test_is_agent_prompt_shape_predicate(self) -> None:
++        from vibesop.core.observability.skill_promote import _is_agent_prompt_shape
++
++        assert _is_agent_prompt_shape("You are an independent reviewer")
++        assert _is_agent_prompt_shape("ou are a senior engineer")  # truncated echo
++        assert _is_agent_prompt_shape("<system-reminder> hook fired")
++        assert _is_agent_prompt_shape('[ { "type": "text", "text": "x" } ]')
++        assert _is_agent_prompt_shape("x" * 200)
++        assert not _is_agent_prompt_shape("帮我合并到 main 吧")
++        assert not _is_agent_prompt_shape("you are")  # no trailing space → not a role prompt
+diff --git a/tests/core/skills/test_indexer.py b/tests/core/skills/test_indexer.py
+index d40f902..2e2af5a 100644
+--- a/tests/core/skills/test_indexer.py
++++ b/tests/core/skills/test_indexer.py
+@@ -35,6 +35,7 @@ def _fake_loaded_skill(
+     source_file: Path | None,
+     *,
+     name: str | None = None,
++    triggers: list[str] | None = None,
+ ) -> SimpleNamespace:
+     """Build a duck-typed LoadedSkill stub for indexer logic.
+ 
+@@ -48,7 +49,7 @@ def _fake_loaded_skill(
+         description="Test skill",
+         intent="test",
+         tags=[],
+-        triggers=[],
++        triggers=triggers or [],
+         capabilities=[],
+     )
+     return SimpleNamespace(
+@@ -155,12 +156,14 @@ class TestClassifySkillSource:
+ 
+ 
+ class TestSaveIndexSchema:
+-    def test_save_writes_v1_4_0_schema(self, indexer: SkillIndexer) -> None:
++    def test_save_writes_current_schema_version(self, indexer: SkillIndexer) -> None:
+         profiles = {"a/b": _make_profile("a/b")}
+         indexer._save_index(profiles, scope="global")
+ 
+         data = json.loads(indexer.global_index_path.read_text(encoding="utf-8"))
+-        assert data["version"] == "1.4.0"
++        # gate32 A2 bumped the schema to 1.5.0 (SkillProfile.triggers) — pin the
++        # indexer constant, not a literal, so the next bump edits one place.
++        assert data["version"] == SkillIndexer.INDEX_VERSION
+         assert data["scope"] == "global"
+         assert data["indexed_count"] == 1
+         assert "indexed_at" in data
+@@ -1593,13 +1596,15 @@ class TestEmbeddingSupport:
+         prof = SkillProfile.from_dict(d)
+         assert prof.embedding is None
+ 
+-    def test_save_index_writes_v1_4_0_schema(self, indexer: SkillIndexer) -> None:
++    def test_save_index_writes_current_schema_version(self, indexer: SkillIndexer) -> None:
+         prof = _make_profile("a/b")
+         prof.embedding = [0.1, 0.2]
+         indexer._save_index({"a/b": prof}, scope="global")
+ 
+         data = json.loads(indexer.global_index_path.read_text(encoding="utf-8"))
+-        assert data["version"] == "1.4.0"
++        # gate32 A2 bumped the schema to 1.5.0 (SkillProfile.triggers) — pin the
++        # indexer constant, not a literal, so the next bump edits one place.
++        assert data["version"] == SkillIndexer.INDEX_VERSION
+         assert data["skills"]["a/b"]["embedding"] == [0.1, 0.2]
+ 
+     def test_load_single_index_restores_embedding(self, indexer: SkillIndexer) -> None:
+@@ -1653,3 +1658,110 @@ class TestEmbeddingSupport:
+             indexer._compute_embeddings({"a/b": prof})
+ 
+         assert prof.embedding == [0.1, 0.2, 0.3]
++
++
++class TestGate32TriggersInProfile:
++    """gate32 A2: SkillProfile.triggers — populated from the live spec on
++    both index paths, embedded via _compute_profile_text (0.45 door), and
++    deliberately NOT merged into query_patterns (Jaccard 0.20 fast path).
++    """
++
++    def test_spec_triggers_extraction(self) -> None:
++        ls = _fake_loaded_skill("a/b", None, triggers=["合并 main", "  ", "push 吧"])
++        assert SkillIndexer._spec_triggers(ls) == ["合并 main", "push 吧"]
++
++    def test_spec_triggers_defensive(self) -> None:
++        ls = _fake_loaded_skill("a/b", None)
++        ls.metadata.triggers = "not-a-list"
++        assert SkillIndexer._spec_triggers(ls) == []
++        ls.metadata.triggers = None
++        assert SkillIndexer._spec_triggers(ls) == []
++        ls.metadata = SimpleNamespace()  # no triggers attr at all
++        assert SkillIndexer._spec_triggers(ls) == []
++
++    def test_profile_text_includes_triggers(self) -> None:
++        prof = _make_profile("a/b")
++        prof.triggers = ["合并 main"]
++        text = SkillIndexer._compute_profile_text(prof)
++        assert "合并 main" in text
++        assert text.endswith("合并 main")  # appended after profile fields
++
++    def test_triggers_round_trip(self, indexer: SkillIndexer) -> None:
++        prof = _make_profile("a/b")
++        prof.triggers = ["t one", "t two"]
++        loaded = SkillProfile.from_dict(prof.to_dict())
++        assert loaded.triggers == ["t one", "t two"]
++        # Legacy index rows (pre-1.5.0) have no triggers key.
++        legacy = prof.to_dict()
++        del legacy["triggers"]
++        assert SkillProfile.from_dict(legacy).triggers == []
++
++    def test_fresh_path_populates_triggers(
++        self, indexer: SkillIndexer, global_home: Path
++    ) -> None:
++        skills = {
++            "g/a": _fake_loaded_skill(
++                "g/a",
++                global_home / ".config" / "skills" / "g" / "a" / "SKILL.md",
++                triggers=["帮我合并到 main 吧"],
++            )
++        }
++        with (
++            patch(
++                "vibesop.core.skills.loader.SkillLoader.discover_all",
++                return_value=skills,
++            ),
++            patch.object(indexer, "_get_llm", return_value=SimpleNamespace(name="fake")),
++            patch.object(
++                indexer,
++                "_analyze_skill",
++                side_effect=lambda ls, _llm: _make_profile(ls.metadata.id),
++            ),
++        ):
++            result = indexer.build_index(scope="global", show_progress=False)
++
++        assert result.success
++        profile = indexer.get_profile("g/a")
++        assert profile is not None
++        assert profile.triggers == ["帮我合并到 main 吧"]
++
++    def test_cache_hit_restamps_triggers_from_live_spec(
++        self, indexer: SkillIndexer, global_home: Path
++    ) -> None:
++        """Pre-1.5.0 profiles lack the triggers field; a cache hit (prompt
++        hash unchanged — the analysis prompt already contained triggers)
++        must restamp triggers from the live spec, not keep [] forever."""
++        ls = _fake_loaded_skill(
++            "g/a",
++            global_home / ".config" / "skills" / "g" / "a" / "SKILL.md",
++            triggers=["推上去吧"],
++        )
++        legacy = _make_profile("g/a")
++        legacy.content_hash = indexer._hash_prompt(indexer._build_prompt(ls))
++        legacy_dict = legacy.to_dict()
++        del legacy_dict["triggers"]  # simulate a pre-1.5.0 index row
++        indexer.global_index_path.parent.mkdir(parents=True, exist_ok=True)
++        indexer.global_index_path.write_text(
++            json.dumps(
++                {"version": "1.4.0", "scope": "global", "skills": {"g/a": legacy_dict}}
++            ),
++            encoding="utf-8",
++        )
++
++        def _explode(_ls: object, _llm: object) -> SkillProfile:
++            raise AssertionError("LLM must not be called — this should be a cache hit")
++
++        with (
++            patch(
++                "vibesop.core.skills.loader.SkillLoader.discover_all",
++                return_value={"g/a": ls},
++            ),
++            patch.object(indexer, "_get_llm", return_value=SimpleNamespace(name="fake")),
++            patch.object(indexer, "_analyze_skill", side_effect=_explode),
++        ):
++            result = indexer.build_index(scope="global", show_progress=False)
++
++        assert result.success
++        profile = indexer.get_profile("g/a")
++        assert profile is not None
++        assert profile.triggers == ["推上去吧"]
+diff --git a/tests/scripts/test_replay_routing_baseline.py b/tests/scripts/test_replay_routing_baseline.py
+new file mode 100644
+index 0000000..470b9bc
+--- /dev/null
++++ b/tests/scripts/test_replay_routing_baseline.py
+@@ -0,0 +1,416 @@
++"""Tests for scripts/replay_routing_baseline.py (gate32 v3, A3).
++
++Covers the offline baseline logic only: spans.jsonl loading (metadata as
++JSON string vs dict, bad-line skipping), truncation marking, the P0-shadow
++exact/containment rules with the >=6-char boundary, collision counting,
++agent-prompt-shape exclusion, deterministic adjudication sampling, and the
++semantic distribution with a stubbed model. The real embedding model is
++never loaded (global conftest stub).
++"""
++
++from __future__ import annotations
++
++import importlib.util
++import json
++import sys
++from pathlib import Path
++from types import SimpleNamespace
++
++import pytest
++
++ROOT = Path(__file__).resolve().parent.parent.parent
++_SCRIPT = ROOT / "scripts" / "replay_routing_baseline.py"
++
++
++def _load_module():
++    spec = importlib.util.spec_from_file_location("replay_routing_baseline", _SCRIPT)
++    module = importlib.util.module_from_spec(spec)
++    sys.modules.setdefault("replay_routing_baseline", module)
++    spec.loader.exec_module(module)
++    return module
++
++
++rrb = _load_module()
++
++
++def _span(
++    query: str | None,
++    *,
++    metadata: dict | None = None,
++    metadata_as_string: bool = False,
++    name: str | None = None,
++    span_kind: str = "task",
++) -> dict:
++    """Build a route-task span. ``metadata`` extras merge over the query."""
++    meta: dict = dict(metadata or {})
++    if query is not None:
++        meta.setdefault("query", query)
++        meta.setdefault("has_match", False)
++        meta.setdefault("mode", "single")
++    return {
++        "name": name if name is not None else f"route:{(query or '')[:80]}",
++        "span_kind": span_kind,
++        "metadata": json.dumps(meta, ensure_ascii=False) if metadata_as_string else meta,
++    }
++
++
++def _write_spans(path: Path, entries: list[dict | str]) -> Path:
++    path.parent.mkdir(parents=True, exist_ok=True)
++    with path.open("w", encoding="utf-8") as f:
++        for e in entries:
++            f.write(e if isinstance(e, str) else json.dumps(e, ensure_ascii=False))
++            f.write("\n")
++    return path
++
++
++def _skills(*specs: tuple[str, list[str]]) -> dict[str, SimpleNamespace]:
++    """Fake LoadedSkills: (skill_id, triggers) pairs."""
++    return {
++        sid: SimpleNamespace(
++            metadata=SimpleNamespace(
++                id=sid,
++                description=f"{sid} description",
++                intent=None,
++                triggers=triggers,
++                keywords=[],
++            )
++        )
++        for sid, triggers in specs
++    }
++
++
++@pytest.fixture()
++def spans_file(tmp_path: Path) -> Path:
++    return _write_spans(
++        tmp_path / ".vibe" / "observability" / "spans.jsonl",
++        [
++            _span("review my code", metadata_as_string=True),  # miss, dict-as-string meta
++            _span("run the tests"),  # miss, dict meta
++            _span("review my code", metadata={"has_match": True, "skill_id": "review"}),  # hit
++            _span("继续", metadata={"has_match": False, "mode": "not_intercepted"}),
++            _span(None, metadata={"no_query": True}, name="route:no-query"),  # no query
++            "not json at all",
++            '["a", "list"]',
++            _span("some llm call", name="llm:deepseek", span_kind="llm"),  # non-route
++            _span("x" * 200),  # at the metadata cap -> truncated
++            _span("y" * 199),  # just under the cap
++        ],
++    )
++
++
++class TestLoadRouteRecords:
++    def test_metadata_string_and_dict_both_parsed(self, spans_file: Path) -> None:
++        records, _ = rrb.load_route_records(spans_file)
++        queries = [r["query"] for r in records]
++        assert queries.count("review my code") == 2  # string-meta and dict-meta spans
++
++    def test_bad_lines_and_junk_counted(self, spans_file: Path) -> None:
++        records, counters = rrb.load_route_records(spans_file)
++        assert counters["bad_lines"] == 2  # invalid JSON + non-dict JSON
++        assert counters["no_query"] == 1
++        assert counters["non_route_spans"] == 1
++        # 10 lines - 2 bad - 1 no_query - 1 non-route = 6 route records
++        assert len(records) == 6
++
++    def test_truncation_marked_at_cap(self, spans_file: Path) -> None:
++        records, _ = rrb.load_route_records(spans_file)
++        by_len = {len(r["query"]): r["truncated"] for r in records}
++        assert by_len[200] is True
++        assert by_len[199] is False
++
++    def test_miss_classification(self, spans_file: Path) -> None:
++        records, _ = rrb.load_route_records(spans_file)
++        misses = [r["query"] for r in records if r["is_miss"]]
++        assert "review my code" in misses  # has_match=False
++        assert "run the tests" in misses
++        # has_match=True hit, and not_intercepted abstention, are not misses
++        assert len(misses) == 4  # + the two padding queries
++
++    def test_missing_metadata_means_no_query(self, tmp_path: Path) -> None:
++        path = _write_spans(
++            tmp_path / "spans.jsonl",
++            [{"name": "route:x", "span_kind": "task", "metadata": None}],
++        )
++        records, counters = rrb.load_route_records(path)
++        assert records == []
++        assert counters["no_query"] == 1
++
++
++class TestNormalize:
++    def test_lowercase_and_whitespace_collapse(self) -> None:
++        assert rrb.normalize("  Review\tTHIS\nCode ") == "review this code"
++
++
++class TestAgentPromptShape:
++    @pytest.mark.parametrize(
++        "query",
++        [
++            "You are a skill routing assistant. Pick a skill.",
++            "ou are a helpful assistant",  # truncated "You are"
++            "<system-reminder>do not route this</system-reminder>",
++            '[ {"tool": "read_file", "args": {}} ]',
++            "q" * 151,
++        ],
++    )
++    def test_agent_shapes_detected(self, query: str) -> None:
++        assert rrb.is_agent_prompt_shape(query) is True
++
++    @pytest.mark.parametrize("query", ["review my code", "q" * 150, "[ plain bracket"])
++    def test_human_queries_pass(self, query: str) -> None:
++        assert rrb.is_agent_prompt_shape(query) is False
++
++
++class TestP0Shadow:
++    def _index(self) -> list[tuple[str, str, str]]:
++        return rrb.build_trigger_index(
++            _skills(
++                ("review-skill", ["review code", "go"]),
++                ("test-skill", ["run tests"]),
++                ("short-skill", ["abcde"]),
++                ("six-skill", ["abcdef"]),
++            )
++        )
++
++    def test_exact_match_any_length(self) -> None:
++        # "go" is 2 chars: below the containment floor, but exact fires
++        matches = rrb.p0_shadow("go", self._index())
++        assert [(m["skill_id"], m["rule"]) for m in matches] == [("review-skill", "exact")]
++
++    def test_exact_is_normalized(self) -> None:
++        matches = rrb.p0_shadow("  Review   Code ", self._index())
++        assert [(m["skill_id"], m["rule"]) for m in matches] == [("review-skill", "exact")]
++
++    def test_containment_match(self) -> None:
++        matches = rrb.p0_shadow("please review code before merging", self._index())
++        assert [(m["skill_id"], m["rule"]) for m in matches] == [("review-skill", "containment")]
++
++    def test_containment_min_length_boundary(self) -> None:
++        # 5-char trigger contained in query: no fire
++        assert rrb.p0_shadow("the abcde thing", self._index()) == []
++        # 6-char trigger contained in query: fires
++        matches = rrb.p0_shadow("the abcdef thing", self._index())
++        assert [(m["skill_id"], m["rule"]) for m in matches] == [("six-skill", "containment")]
++
++    def test_no_match(self) -> None:
++        assert rrb.p0_shadow("deploy the service", self._index()) == []
++
++    def test_collision_across_skills(self) -> None:
++        index = rrb.build_trigger_index(
++            _skills(("skill-a", ["review code"]), ("skill-b", ["review code"]))
++        )
++        matches = rrb.p0_shadow("review code", index)
++        assert {m["skill_id"] for m in matches} == {"skill-a", "skill-b"}
++
++
++class TestIdentityDiff:
++    def _records(self) -> list[dict]:
++        return [
++            {
++                "query": "review code",  # would fire exact
++                "truncated": False,
++                "is_miss": True,
++                "metadata": {"has_match": False, "mode": "single", "layer": "keyword"},
++            },
++            {
++                "query": "You are a routing assistant. " * 10,  # agent-shaped miss
++                "truncated": True,
++                "is_miss": True,
++                "metadata": {"has_match": False, "mode": "single"},
++            },
++            {
++                "query": "unrelated question",  # miss, no would-fire
++                "truncated": False,
++                "is_miss": True,
++                "metadata": {"has_match": False},
++            },
++            {
++                "query": "review code",  # a hit: never evaluated
++                "truncated": False,
++                "is_miss": False,
++                "metadata": {"has_match": True, "skill_id": "review-skill"},
++            },
++        ]
++
++    def test_would_fire_entries_and_counters(self) -> None:
++        index = rrb.build_trigger_index(_skills(("review-skill", ["review code"])))
++        entries, counters = rrb.build_identity_diff(self._records(), index)
++
++        assert counters == {"misses": 3, "agent_prompt_shape_misses": 1, "misses_evaluated": 2}
++        assert len(entries) == 1
++        entry = entries[0]
++        assert entry["query"] == "review code"
++        assert entry["collision"] is False
++        assert entry["would_fire"][0]["skill_id"] == "review-skill"
++        # observed outcome carried through for the diff; missing keys -> None
++        assert entry["observed"] == {"skill_id": None, "has_match": False, "layer": "keyword"}
++
++    def test_collision_counted(self) -> None:
++        index = rrb.build_trigger_index(
++            _skills(("skill-a", ["review code"]), ("skill-b", ["review code"]))
++        )
++        entries, _ = rrb.build_identity_diff(self._records(), index)
++        assert entries[0]["collision"] is True
++
++
++class TestDeterministicSample:
++    def _entries(self, n: int) -> list[dict]:
++        return [
++            {
++                "query": f"query {i}",
++                "truncated": False,
++                "observed": {"skill_id": None, "has_match": False, "layer": None},
++                "would_fire": [{"skill_id": f"skill-{i}", "rule": "exact", "trigger": "t"}],
++                "collision": False,
++            }
++            for i in range(n)
++        ]
++
++    def test_stable_across_calls_and_orderings(self) -> None:
++        entries = self._entries(20)
++        first = rrb.deterministic_sample(entries, 5)
++        second = rrb.deterministic_sample(entries, 5)
++        assert [e["query"] for e in first] == [e["query"] for e in second]
++        # input ordering does not change the selection
++        shuffled = list(reversed(entries))
++        assert [e["query"] for e in rrb.deterministic_sample(shuffled, 5)] == [
++            e["query"] for e in first
++        ]
++
++    def test_n_larger_than_pool_returns_all(self) -> None:
++        assert len(rrb.deterministic_sample(self._entries(3), 10)) == 3
++
++    def test_empty_pool(self) -> None:
++        assert rrb.deterministic_sample([], 5) == []
++
++    def test_duplicate_verdicts_collapse(self) -> None:
++        entries = self._entries(4)
++        # same query + same would-fire skill as entry 0, different span context
++        dup = dict(entries[0])
++        dup["observed"] = {"skill_id": "other", "has_match": False, "layer": None}
++        sampled = rrb.deterministic_sample([*entries, dup], 10)
++        assert len(sampled) == 4  # the duplicate verdict is dropped
++
++
++class _FakeModel:
++    """Deterministic stand-in for SentenceTransformer.encode."""
++
++    def encode(self, texts, show_progress_bar=False):
++        return [[float(len(t)), 1.0, 2.0] for t in texts]
++
++
++class TestSemanticScores:
++    def _entries(self) -> list[dict]:
++        return [
++            {
++                "query": "review code",
++                "truncated": False,
++                "observed": {"skill_id": None, "has_match": False, "layer": None},
++                "would_fire": [
++                    {"skill_id": "a", "rule": "exact", "trigger": "review code"},
++                    {"skill_id": "b", "rule": "containment", "trigger": "review"},
++                ],
++                "collision": True,
++            }
++        ]
++
++    def test_distribution_with_fake_model(self) -> None:
++        result = rrb.semantic_scores(self._entries(), {"a": "aaa", "b": "bbbb"}, _FakeModel())
++        assert result["available"] is True
++        assert result["scored_pairs"] == 2
++        assert result["min"] <= result["median"] <= result["max"]
++
++    def test_model_unavailable_skips(self) -> None:
++        result = rrb.semantic_scores(self._entries(), {"a": "aaa"}, None)
++        assert result == {"available": False, "reason": "embedding model unavailable"}
++
++    def test_no_pairs(self) -> None:
++        result = rrb.semantic_scores([], {"a": "aaa"}, _FakeModel())
++        assert result == {"available": True, "scored_pairs": 0}
++
++
++class TestRunEndToEnd:
++    def _project(self, tmp_path: Path) -> Path:
++        _write_spans(
++            tmp_path / ".vibe" / "observability" / "spans.jsonl",
++            [
++                _span("review code"),  # miss, would fire exact
++                _span("please run tests now"),  # miss, would fire containment
++                _span("unrelated question"),  # miss, no would-fire
++                _span("You are an agent. " * 20),  # agent-shaped miss
++                _span("review code", metadata={"has_match": True, "skill_id": "review-skill"}),
++            ],
++        )
++        return tmp_path
++
++    def _skills(self) -> dict[str, SimpleNamespace]:
++        return _skills(
++            ("review-skill", ["review code"]),
++            ("test-skill", ["run tests"]),
++        )
++
++    def test_report_and_default_out_path(self, tmp_path: Path) -> None:
++        project = self._project(tmp_path)
++        report = rrb.run(project, no_semantic=True, skills=self._skills())
++
++        out = project / ".vibe" / "observability" / "replay_baseline.json"
++        assert out.exists()
++        on_disk = json.loads(out.read_text(encoding="utf-8"))
++        assert on_disk["tool"] == "replay_routing_baseline"
++
++        b = report["baseline"]
++        assert b["total_route_spans"] == 5
++        assert b["misses"] == 4
++        assert b["agent_prompt_shape_misses"] == 1
++        assert b["unique_miss_queries"] == 4  # two "review code" spans, miss + hit
++
++        p = report["p0_shadow"]
++        assert p["misses_evaluated"] == 3
++        assert p["would_fire_queries"] == 2
++        assert p["rules"] == {"exact": 1, "containment": 1}
++        # embedding model is stubbed suite-wide, but --no-semantic short-circuits
++        assert report["semantic"] == {"available": False, "reason": "embedding model unavailable"}
++
++    def test_sample_adjudicate_writes_markdown(self, tmp_path: Path) -> None:
++        project = self._project(tmp_path)
++        out = tmp_path / "report.json"
++        report = rrb.run(
++            project, out=out, sample_adjudicate=1, no_semantic=True, skills=self._skills()
++        )
++
++        adjudicate = Path(str(out) + ".adjudicate.md")
++        assert adjudicate.exists()
++        assert report["adjudication_sample"] == str(adjudicate)
++        text = adjudicate.read_text(encoding="utf-8")
++        assert "| # | query |" in text
++        # N=1 sampled from the 2 would-fire entries
++        body_rows = [line for line in text.splitlines() if line.startswith("| 1 |")]
++        assert len(body_rows) == 1
++        assert "| 2 |" not in text
++
++    def test_semantic_runs_with_stubbed_loader(self, tmp_path: Path, monkeypatch) -> None:
++        project = self._project(tmp_path)
++        monkeypatch.setattr(rrb, "load_embedding_model", _FakeModel)
++        report = rrb.run(project, skills=self._skills())
++        assert report["semantic"]["available"] is True
++        assert report["semantic"]["scored_pairs"] == 2
++
++
++class TestLoadSkillsIntegration:
++    def test_discovers_project_skills(self, tmp_path: Path, monkeypatch) -> None:
++        """Real SkillLoader against a fake skills dir (no embedding model)."""
++        monkeypatch.chdir(tmp_path)  # SkillConfigManager state stays in tmp
++        skill_dir = tmp_path / "skills" / "my-skill"
++        skill_dir.mkdir(parents=True)
++        (skill_dir / "SKILL.md").write_text(
++            "---\n"
++            "name: my-skill\n"
++            "description: does my things\n"
++            "triggers:\n"
++            "  - do my thing\n"
++            "---\n"
++            "Body.\n",
++            encoding="utf-8",
++        )
++        skills = rrb.load_skills(tmp_path)
++        mine = [s for s in skills.values() if s.metadata.triggers == ["do my thing"]]
++        assert len(mine) == 1

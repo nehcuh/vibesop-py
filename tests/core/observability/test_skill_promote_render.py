@@ -451,3 +451,64 @@ class TestGate31Skeleton:
         content = _render_skill_md(candidate, "custom/x-c1", scope="global")
         assert "## Acceptance Checklist" in content
         assert "example queries omitted" in content
+
+
+class TestGate32TriggersPrefill:
+    """gate32 A1: the renderer prefills frontmatter ``triggers:`` from
+    hygiene-filtered cluster queries (project scope only) so an activated
+    skill can catch the pattern that produced it."""
+
+    def test_project_scope_prefills_sanitized_triggers(self) -> None:
+        candidate = _make_candidate(queries=["帮我合并到 main 吧", "提交: 全部", "推上去吧"])
+        content = _render_skill_md(candidate, "custom/x-c1")
+        line = next(ln for ln in content.splitlines() if ln.startswith("triggers:"))
+        assert "帮我合并到 main 吧" in line
+        assert "推上去吧" in line
+        # Colon-bearing query must be quoted so the YAML stays parseable.
+        assert '"提交: 全部"' in line
+
+    def test_agent_prompt_shapes_and_low_info_filtered(self) -> None:
+        candidate = _make_candidate(
+            queries=[
+                "帮我合并到 main 吧",
+                "You are an adversarial SKEPTIC. Your job is to REFUTE",
+                "<system-reminder> background task done",
+                "继续",
+                "x" * 200,
+            ]
+        )
+        content = _render_skill_md(candidate, "custom/x-c1")
+        line = next(ln for ln in content.splitlines() if ln.startswith("triggers:"))
+        assert "帮我合并到 main 吧" in line
+        assert "SKEPTIC" not in line
+        assert "system-reminder" not in line
+        assert "继续" not in line
+
+    def test_all_filtered_yields_todo_placeholder(self) -> None:
+        candidate = _make_candidate(queries=["继续", "You are a reviewer"])
+        content = _render_skill_md(candidate, "custom/x-c1")
+        # No ACTIVE triggers key — only the commented TODO placeholder.
+        assert not any(ln.startswith("triggers:") for ln in content.splitlines())
+        assert "# triggers: TODO" in content
+
+    def test_global_scope_never_prefills_raw_queries(self) -> None:
+        """M12 privacy boundary: global drafts get a TODO placeholder,
+        never raw cluster queries (gate32 claude MAJOR-2)."""
+        candidate = _make_candidate(
+            queries=["帮我合并到 main 吧"],
+            project_distribution={"p/a": 2, "p/b": 3},
+        )
+        content = _render_skill_md(candidate, "custom/x-c1", scope="global")
+        assert "帮我合并到 main 吧" not in content
+        assert "# triggers: TODO" in content
+
+    def test_is_agent_prompt_shape_predicate(self) -> None:
+        from vibesop.core.observability.skill_promote import _is_agent_prompt_shape
+
+        assert _is_agent_prompt_shape("You are an independent reviewer")
+        assert _is_agent_prompt_shape("ou are a senior engineer")  # truncated echo
+        assert _is_agent_prompt_shape("<system-reminder> hook fired")
+        assert _is_agent_prompt_shape('[ { "type": "text", "text": "x" } ]')
+        assert _is_agent_prompt_shape("x" * 200)
+        assert not _is_agent_prompt_shape("帮我合并到 main 吧")
+        assert not _is_agent_prompt_shape("you are")  # no trailing space → not a role prompt

@@ -62,6 +62,16 @@ class SkillProfile:
     differentiation: str = ""
     confidence_boosters: list[str] = field(default_factory=list)
     pack_owner: str = ""  # Pack namespace that owns this skill (set by symlink resolution)
+    # gate32 A2: the skill's frontmatter ``triggers`` carried verbatim into
+    # the profile so ``_compute_profile_text`` embeds them — the INDEX
+    # layer's 0.45 embedding door previously never saw triggers at all
+    # (they only fed the LLM analysis prompt). Populated deterministically
+    # from the live spec on BOTH the fresh-analysis and cache-hit paths,
+    # and NOT merged into ``query_patterns`` — that list also feeds the
+    # Jaccard 0.20 fast path (no margin gate, direct return without
+    # triage arbitration; gate32 pi BLOCK-3 / grok M1), which verbatim
+    # user queries must not lower.
+    triggers: list[str] = field(default_factory=list)
     # SHA256 (truncated) of the prompt fed to the LLM. Lets the indexer skip
     # re-analyzing skills whose content hasn't changed since the last run.
     # Empty string means: profile from a pre-cache indexer; treat as cold.
@@ -80,6 +90,7 @@ class SkillProfile:
             "confidence_boosters": self.confidence_boosters,
             "pack_owner": self.pack_owner,
             "content_hash": self.content_hash,
+            "triggers": self.triggers,
         }
         if self.embedding is not None:
             d["embedding"] = self.embedding
@@ -95,6 +106,7 @@ class SkillProfile:
             confidence_boosters=data.get("confidence_boosters", []),
             pack_owner=data.get("pack_owner", ""),
             content_hash=data.get("content_hash", ""),
+            triggers=data.get("triggers", []),
             embedding=data.get("embedding"),
         )
 
@@ -119,7 +131,10 @@ class SkillIndexer:
     # discovered as skills; profiles written for them by pre-fix indexers
     # (ids like ``project/auto-config.yaml/auto-config``) are pruned at load
     # time so stale on-disk indexes self-heal without a manual rebuild.
-    INDEX_VERSION = "1.4.0"
+    # 1.5.0 (gate32 A2): SkillProfile gains ``triggers`` (populated from the
+    # live spec on both cache paths) and ``_compute_profile_text`` embeds
+    # them, so the INDEX layer's embedding door sees declared triggers.
+    INDEX_VERSION = "1.5.0"
 
     def __init__(
         self,
@@ -195,6 +210,21 @@ class SkillIndexer:
         except ValueError:
             return ""
         return rel.parts[0] if rel.parts else ""
+
+    @staticmethod
+    def _spec_triggers(loaded_skill: Any) -> list[str]:
+        """Frontmatter ``triggers`` of the live skill, as a clean list.
+
+        gate32 A2: populated into ``SkillProfile.triggers`` on BOTH the
+        fresh-analysis and cache-hit paths (same restamp treatment as
+        ``pack_owner``) so the value always reflects the on-disk spec —
+        the only human-reviewed source. Defensive against malformed
+        frontmatter (non-list / non-str entries drop out).
+        """
+        raw = getattr(getattr(loaded_skill, "metadata", None), "triggers", None)
+        if not isinstance(raw, (list, tuple)):
+            return []
+        return [str(t) for t in raw if str(t).strip()]
 
     @contextlib.contextmanager
     def _progress_context(
@@ -293,7 +323,10 @@ class SkillIndexer:
         # Apply cache hits immediately (no LLM cost, no progress tick).
         # We re-stamp pack_owner from the live filesystem so a moved skill
         # gets correctly reattributed even though its prompt is unchanged.
+        # gate32 A2: triggers get the same restamp treatment — they are
+        # read from the live spec, not the cached profile.
         for skill_id, profile, loaded_skill, classification in cached_hits:
+            profile.triggers = self._spec_triggers(loaded_skill)
             if classification == "project":
                 profile.pack_owner = ""
                 project_profiles[skill_id] = profile
@@ -329,6 +362,9 @@ class SkillIndexer:
                         try:
                             profile = future.result()
                             if profile:
+                                # gate32 A2: deterministic triggers from
+                                # the live spec (LLM never invents them).
+                                profile.triggers = self._spec_triggers(loaded_skill)
                                 if classification == "project":
                                     profile.pack_owner = ""
                                     project_profiles[skill_id] = profile
@@ -423,6 +459,12 @@ class SkillIndexer:
         parts.extend(profile.confidence_boosters)
         if profile.differentiation:
             parts.append(profile.differentiation)
+        # gate32 A2: triggers join the embedding text so the INDEX layer's
+        # 0.45 door sees the skill's declared trigger phrases verbatim.
+        # Deliberately NOT added to ``query_patterns`` — that list also
+        # feeds the Jaccard 0.20 fast path (no margin gate, no triage
+        # arbitration; gate32 pi BLOCK-3 / grok M1).
+        parts.extend(profile.triggers)
         return " ".join(parts)
 
     def _compute_embeddings(self, profiles: dict[str, SkillProfile]) -> None:
@@ -703,6 +745,14 @@ class SkillIndexer:
                 prompt = self._build_prompt(ls)
                 if existing_profile.content_hash == self._hash_prompt(prompt):
                     existing_profile.pack_owner = pack_name
+                    # gate32 A2: same restamp as build_index's cache path.
+                    # pi impl NIT-4: index_pack never recomputes embeddings
+                    # (pre-existing — no _compute_embeddings call here), so a
+                    # cache-hit pack skill transiently stores new triggers
+                    # with the old embedding; routing behaves exactly as
+                    # before the restamp until the next full
+                    # `vibe skills index` rebuilds embeddings. Accepted.
+                    existing_profile.triggers = self._spec_triggers(ls)
                     new_profiles[sid] = existing_profile
                     result.indexed_count += 1
                     continue
@@ -719,15 +769,18 @@ class SkillIndexer:
             if cache_misses:
                 with ThreadPoolExecutor(max_workers=max_workers) as executor:
                     futures = {
-                        executor.submit(self._analyze_skill, ls, llm): sid
+                        executor.submit(self._analyze_skill, ls, llm): (sid, ls)
                         for sid, ls in cache_misses
                     }
                     for future in as_completed(futures):
-                        sid = futures[future]
+                        sid, loaded_skill = futures[future]
                         try:
                             profile = future.result()
                             if profile:
                                 profile.pack_owner = pack_name
+                                # gate32 A2: deterministic triggers from
+                                # the live spec (LLM never invents them).
+                                profile.triggers = self._spec_triggers(loaded_skill)
                                 new_profiles[sid] = profile
                                 result.indexed_count += 1
                             else:

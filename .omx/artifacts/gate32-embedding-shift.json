@@ -1,0 +1,656 @@
+{
+  "before": "/tmp/gate32-global-index-before.json",
+  "after": "/Users/huchen/.vibe/skill-index.json",
+  "queries": 141,
+  "distribution": {
+    "before": {
+      "top1": {
+        "min": 0.1784,
+        "median": 0.4195,
+        "mean": 0.4275,
+        "max": 0.7137
+      },
+      "margin": {
+        "min": 0.0,
+        "median": 0.0276,
+        "mean": 0.0393,
+        "max": 0.3298
+      }
+    },
+    "after": {
+      "top1": {
+        "min": 0.1784,
+        "median": 0.4195,
+        "mean": 0.4257,
+        "max": 0.7137
+      },
+      "margin": {
+        "min": 0.0,
+        "median": 0.0254,
+        "mean": 0.038,
+        "max": 0.3298
+      }
+    }
+  },
+  "positives": {
+    "both_hit": 16,
+    "lost_hit": 0,
+    "gained_hit": 0,
+    "identity_change": 0,
+    "rows": [
+      {
+        "query": "帮我深度诊断这个项目的性能瓶颈并给出优化建议",
+        "expect": [
+          "builtin/deep-diagnosis-optimization"
+        ],
+        "before": {
+          "top1": "omx/autoresearch-goal",
+          "score": 0.5749,
+          "margin": 0.0253
+        },
+        "after": {
+          "top1": "omx/autoresearch-goal",
+          "score": 0.5749,
+          "margin": 0.0253
+        }
+      },
+      {
+        "query": "run a deep diagnosis of the codebase and suggest optimizations",
+        "expect": [
+          "builtin/deep-diagnosis-optimization"
+        ],
+        "before": {
+          "top1": "builtin/deep-diagnosis-optimization",
+          "score": 0.5961,
+          "margin": 0.0333
+        },
+        "after": {
+          "top1": "builtin/deep-diagnosis-optimization",
+          "score": 0.5961,
+          "margin": 0.0333
+        }
+      },
+      {
+        "query": "全面审查这个仓库的代码质量",
+        "expect": [
+          "builtin/deep-diagnosis-optimization"
+        ],
+        "before": {
+          "top1": "builtin/deep-diagnosis-optimization",
+          "score": 0.5429,
+          "margin": 0.0793
+        },
+        "after": {
+          "top1": "builtin/deep-diagnosis-optimization",
+          "score": 0.5429,
+          "margin": 0.0793
+        }
+      },
+      {
+        "query": "让 agent 自主运行一组实验并汇报评估结果",
+        "expect": [
+          "builtin/autonomous-experiment"
+        ],
+        "before": {
+          "top1": "builtin/autonomous-experiment",
+          "score": 0.5173,
+          "margin": 0.0311
+        },
+        "after": {
+          "top1": "builtin/autonomous-experiment",
+          "score": 0.5173,
+          "margin": 0.0311
+        }
+      },
+      {
+        "query": "start an autonomous experiment loop with prediction evaluation",
+        "expect": [
+          "builtin/autonomous-experiment"
+        ],
+        "before": {
+          "top1": "builtin/autonomous-experiment",
+          "score": 0.7137,
+          "margin": 0.1468
+        },
+        "after": {
+          "top1": "builtin/autonomous-experiment",
+          "score": 0.7137,
+          "margin": 0.1468
+        }
+      },
+      {
+        "query": "把最近踩过的坑沉淀下来，以后别再犯了",
+        "expect": [
+          "builtin/experience-evolution"
+        ],
+        "before": {
+          "top1": "builtin/session-end",
+          "score": 0.3746,
+          "margin": 0.0602
+        },
+        "after": {
+          "top1": "builtin/session-end",
+          "score": 0.3383,
+          "margin": 0.024
+        }
+      },
+      {
+        "query": "accumulate what we learned from practice into project knowledge",
+        "expect": [
+          "builtin/experience-evolution"
+        ],
+        "before": {
+          "top1": "mattpocock/teach",
+          "score": 0.5875,
+          "margin": 0.0774
+        },
+        "after": {
+          "top1": "mattpocock/teach",
+          "score": 0.5875,
+          "margin": 0.0774
+        }
+      },
+      {
+        "query": "查看一下我的 instinct 学习状态",
+        "expect": [
+          "builtin/instinct",
+          "builtin/instinct-learning"
+        ],
+        "before": {
+          "top1": "builtin/instinct",
+          "score": 0.5007,
+          "margin": 0.0278
+        },
+        "after": {
+          "top1": "builtin/instinct",
+          "score": 0.5007,
+          "margin": 0.0278
+        }
+      },
+      {
+        "query": "show my coding instincts and their confidence",
+        "expect": [
+          "builtin/instinct",
+          "builtin/instinct-learning"
+        ],
+        "before": {
+          "top1": "builtin/instinct",
+          "score": 0.5214,
+          "margin": 0.0591
+        },
+        "after": {
+          "top1": "builtin/instinct",
+          "score": 0.5214,
+          "margin": 0.0591
+        }
+      },
+      {
+        "query": "从我的工作流里学习一个新的本能模式",
+        "expect": [
+          "builtin/instinct-learning",
+          "builtin/instinct"
+        ],
+        "before": {
+          "top1": "builtin/instinct-learning",
+          "score": 0.5655,
+          "margin": 0.023
+        },
+        "after": {
+          "top1": "builtin/instinct-learning",
+          "score": 0.5655,
+          "margin": 0.023
+        }
+      },
+      {
+        "query": "用 RIPER 流程来做这个功能",
+        "expect": [
+          "builtin/riper-workflow"
+        ],
+        "before": {
+          "top1": "mattpocock/to-issues",
+          "score": 0.4636,
+          "margin": 0.0178
+        },
+        "after": {
+          "top1": "mattpocock/to-issues",
+          "score": 0.4636,
+          "margin": 0.0281
+        }
+      },
+      {
+        "query": "run the riper workflow for this feature",
+        "expect": [
+          "builtin/riper-workflow"
+        ],
+        "before": {
+          "top1": "builtin/riper-workflow",
+          "score": 0.6612,
+          "margin": 0.1447
+        },
+        "after": {
+          "top1": "builtin/riper-workflow",
+          "score": 0.6371,
+          "margin": 0.1207
+        }
+      },
+      {
+        "query": "收工了",
+        "expect": [
+          "builtin/session-end"
+        ],
+        "before": {
+          "top1": "builtin/session-end",
+          "score": 0.4429,
+          "margin": 0.1836
+        },
+        "after": {
+          "top1": "builtin/session-end",
+          "score": 0.4442,
+          "margin": 0.1849
+        }
+      },
+      {
+        "query": "that's all for now, heading out",
+        "expect": [
+          "builtin/session-end"
+        ],
+        "before": {
+          "top1": "builtin/session-end",
+          "score": 0.3774,
+          "margin": 0.1975
+        },
+        "after": {
+          "top1": "builtin/session-end",
+          "score": 0.3113,
+          "margin": 0.1314
+        }
+      },
+      {
+        "query": "今天就到这里，保存一下进度",
+        "expect": [
+          "builtin/session-end"
+        ],
+        "before": {
+          "top1": "builtin/session-end",
+          "score": 0.3535,
+          "margin": 0.1482
+        },
+        "after": {
+          "top1": "builtin/session-end",
+          "score": 0.3236,
+          "margin": 0.1183
+        }
+      },
+      {
+        "query": "把这段对话提炼成一个新技能",
+        "expect": [
+          "builtin/skill-craft"
+        ],
+        "before": {
+          "top1": "superpowers/using-superpowers",
+          "score": 0.4738,
+          "margin": 0.0105
+        },
+        "after": {
+          "top1": "superpowers/using-superpowers",
+          "score": 0.4738,
+          "margin": 0.0105
+        }
+      },
+      {
+        "query": "craft a new skill from this session's patterns",
+        "expect": [
+          "builtin/skill-craft"
+        ],
+        "before": {
+          "top1": "builtin/skill-craft",
+          "score": 0.6285,
+          "margin": 0.0194
+        },
+        "after": {
+          "top1": "builtin/skill-craft",
+          "score": 0.6285,
+          "margin": 0.0194
+        }
+      },
+      {
+        "query": "评估一下这些技能的使用质量和效果",
+        "expect": [
+          "builtin/slash-evaluate"
+        ],
+        "before": {
+          "top1": "builtin/slash-evaluate",
+          "score": 0.6031,
+          "margin": 0.1048
+        },
+        "after": {
+          "top1": "builtin/slash-evaluate",
+          "score": 0.6031,
+          "margin": 0.1048
+        }
+      },
+      {
+        "query": "which skills are performing well and which need attention",
+        "expect": [
+          "builtin/slash-evaluate"
+        ],
+        "before": {
+          "top1": "builtin/slash-evaluate",
+          "score": 0.5296,
+          "margin": 0.0198
+        },
+        "after": {
+          "top1": "builtin/slash-evaluate",
+          "score": 0.5296,
+          "margin": 0.0198
+        }
+      },
+      {
+        "query": "/help",
+        "expect": [
+          "builtin/slash-help",
+          "help"
+        ],
+        "before": {
+          "top1": "superpowers/writing-plans",
+          "score": 0.2881,
+          "margin": 0.0028
+        },
+        "after": {
+          "top1": "superpowers/writing-plans",
+          "score": 0.2881,
+          "margin": 0.0028
+        }
+      },
+      {
+        "query": "vibe 这个工具怎么用",
+        "expect": [
+          "builtin/slash-help",
+          "help"
+        ],
+        "before": {
+          "top1": "ui-ux-pro-max-skill/ui-styling",
+          "score": 0.38,
+          "margin": 0.0455
+        },
+        "after": {
+          "top1": "ui-ux-pro-max-skill/ui-styling",
+          "score": 0.38,
+          "margin": 0.0455
+        }
+      },
+      {
+        "query": "/install superpowers",
+        "expect": [
+          "builtin/slash-install"
+        ],
+        "before": {
+          "top1": "builtin/slash-install",
+          "score": 0.5834,
+          "margin": 0.3298
+        },
+        "after": {
+          "top1": "builtin/slash-install",
+          "score": 0.5834,
+          "margin": 0.3298
+        }
+      },
+      {
+        "query": "帮我安装一个技能包",
+        "expect": [
+          "builtin/slash-install"
+        ],
+        "before": {
+          "top1": "builtin/slash-install",
+          "score": 0.5033,
+          "margin": 0.002
+        },
+        "after": {
+          "top1": "builtin/slash-install",
+          "score": 0.5033,
+          "margin": 0.002
+        }
+      },
+      {
+        "query": "/list",
+        "expect": [
+          "builtin/slash-list"
+        ],
+        "before": {
+          "top1": "mattpocock/obsidian-vault",
+          "score": 0.3484,
+          "margin": 0.0067
+        },
+        "after": {
+          "top1": "mattpocock/obsidian-vault",
+          "score": 0.3484,
+          "margin": 0.0067
+        }
+      },
+      {
+        "query": "列出所有可用技能",
+        "expect": [
+          "builtin/slash-list"
+        ],
+        "before": {
+          "top1": "omx/skill",
+          "score": 0.551,
+          "margin": 0.0114
+        },
+        "after": {
+          "top1": "omx/skill",
+          "score": 0.551,
+          "margin": 0.0114
+        }
+      },
+      {
+        "query": "/orchestrate 同时做安全审查和补测试",
+        "expect": [
+          "builtin/slash-orchestrate"
+        ],
+        "before": {
+          "top1": "omx/ultraqa",
+          "score": 0.4898,
+          "margin": 0.014
+        },
+        "after": {
+          "top1": "omx/ultraqa",
+          "score": 0.4898,
+          "margin": 0.014
+        }
+      },
+      {
+        "query": "/route 这个查询到合适的技能",
+        "expect": [
+          "builtin/slash-route"
+        ],
+        "before": {
+          "top1": "builtin/slash-route",
+          "score": 0.5193,
+          "margin": 0.0857
+        },
+        "after": {
+          "top1": "builtin/slash-route",
+          "score": 0.5193,
+          "margin": 0.0857
+        }
+      },
+      {
+        "query": "来一次全维度代码库审计",
+        "expect": [
+          "builtin/deep-diagnosis-optimization"
+        ],
+        "before": {
+          "top1": "builtin/deep-diagnosis-optimization",
+          "score": 0.5455,
+          "margin": 0.0527
+        },
+        "after": {
+          "top1": "builtin/deep-diagnosis-optimization",
+          "score": 0.5455,
+          "margin": 0.0527
+        }
+      },
+      {
+        "query": "这个 bug 在 router.py 第 123 行，修复它并验证",
+        "expect": [
+          "kimi-gated-fix"
+        ],
+        "before": {
+          "top1": "omx/build-fix",
+          "score": 0.3921,
+          "margin": 0.0324
+        },
+        "after": {
+          "top1": "omx/build-fix",
+          "score": 0.3921,
+          "margin": 0.0324
+        }
+      },
+      {
+        "query": "验证这个 prompt chain 各阶段是否符合规范",
+        "expect": [
+          "prompt-chain-validator"
+        ],
+        "before": {
+          "top1": "omx/autoresearch",
+          "score": 0.4704,
+          "margin": 0.013
+        },
+        "after": {
+          "top1": "omx/autoresearch",
+          "score": 0.4704,
+          "margin": 0.013
+        }
+      },
+      {
+        "query": "审计一下第三方依赖的供应链安全",
+        "expect": [
+          "builtin/deep-diagnosis-optimization"
+        ],
+        "before": {
+          "top1": "omx/ralplan",
+          "score": 0.3427,
+          "margin": 0.0114
+        },
+        "after": {
+          "top1": "omx/ralplan",
+          "score": 0.3427,
+          "margin": 0.0114
+        }
+      },
+      {
+        "query": "commit 三批改动",
+        "expect": [
+          "omx/git-master"
+        ],
+        "before": {
+          "top1": "omx/git-master",
+          "score": 0.4543,
+          "margin": 0.0707
+        },
+        "after": {
+          "top1": "omx/git-master",
+          "score": 0.4543,
+          "margin": 0.0707
+        }
+      },
+      {
+        "query": "删掉 mission-pack-p0 worktree 并清理远程分",
+        "expect": [
+          "superpowers/using-git-worktrees"
+        ],
+        "before": {
+          "top1": "omx/cancel",
+          "score": 0.526,
+          "margin": 0.0308
+        },
+        "after": {
+          "top1": "omx/cancel",
+          "score": 0.526,
+          "margin": 0.0122
+        }
+      },
+      {
+        "query": "首先我需要你使用 fanout 对项目做多维度，深度的体检和审查",
+        "expect": [
+          "builtin/deep-diagnosis-optimization"
+        ],
+        "before": {
+          "top1": "omx/plan",
+          "score": 0.4754,
+          "margin": 0.0094
+        },
+        "after": {
+          "top1": "omx/plan",
+          "score": 0.4754,
+          "margin": 0.0094
+        }
+      },
+      {
+        "query": "清 worktree/stash",
+        "expect": [
+          "superpowers/using-git-worktrees"
+        ],
+        "before": {
+          "top1": "builtin/riper-workflow",
+          "score": 0.4221,
+          "margin": 0.0086
+        },
+        "after": {
+          "top1": "builtin/riper-workflow",
+          "score": 0.4313,
+          "margin": 0.0178
+        }
+      },
+      {
+        "query": "我先离开了",
+        "expect": [
+          "builtin/session-end"
+        ],
+        "before": {
+          "top1": "builtin/session-end",
+          "score": 0.3965,
+          "margin": 0.2037
+        },
+        "after": {
+          "top1": "builtin/session-end",
+          "score": 0.3426,
+          "margin": 0.1498
+        }
+      },
+      {
+        "query": "走一遍 dual-review 对 diff 再",
+        "expect": [
+          "superpowers/requesting-code-review"
+        ],
+        "before": {
+          "top1": "mattpocock/review",
+          "score": 0.4545,
+          "margin": 0.1149
+        },
+        "after": {
+          "top1": "mattpocock/review",
+          "score": 0.4545,
+          "margin": 0.1149
+        }
+      },
+      {
+        "query": "根据评审意见，使用 workflow 进行完整优化，记住在 worktree 中进行相应的优化工作，每个重要节点务必进行双路复审，必须要完成所有阶段的优化工作，中间不能停止，必须要 pi 和 claude 都确认完全优化完成才可以停止",
+        "expect": [
+          "builtin/deep-diagnosis-optimization"
+        ],
+        "before": {
+          "top1": "omx/ralph",
+          "score": 0.5932,
+          "margin": 0.0297
+        },
+        "after": {
+          "top1": "omx/ralph",
+          "score": 0.5932,
+          "margin": 0.0297
+        }
+      }
+    ]
+  }
+}
