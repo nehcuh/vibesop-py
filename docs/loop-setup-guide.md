@@ -90,7 +90,8 @@ LoopStore 是 HOME 级（`~/.vibe/loops/`，loop 名全局唯一），但每个 
   归属过滤（跨项目运维是合法的）；`show` 输出含 Project 行。
 
 > **⚠️ 降级警告**：`project_root` 字段与旧版 vibe 不兼容——旧版会把新
-> spec.json 隔离为 `.corrupt`（loop 消失 + launchd spam + delete 连带删
+> spec.json 隔离为 `.corrupt`（loop 消失 + launchd 每分钟触发但静默空转、
+> 无告警信号 + delete 连带删
 > 备份）；state.json 同样内嵌 LoopSpec 副本，会被同样隔离（运行历史丢失）。
 > 降级前先备份 `~/.vibe/loops/`。详见 CHANGELOG [Unreleased]。
 

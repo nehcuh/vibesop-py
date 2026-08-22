@@ -38,6 +38,7 @@ VERSION_PATTERNS = [
 SKIP_DIRS = {
     ".venv",
     ".vibe",
+    ".omx",  # review/gate artifacts are point-in-time records, not versioned docs
     "core/skills",
     "examples",
     "scripts",

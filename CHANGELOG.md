@@ -15,8 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 `LoopSpec` 新增 `project_root` 字段且模型是 `extra="forbid"` —— 旧版
 vibe 读取带该字段的 spec.json 时 `_load_model` 会判定 schema drift 并
 **隔离**该文件（spec.json 改名 `spec.json.corrupt`）：loop 从
-`loop list` 消失、已注册的 launchd job 继续每分钟 spam 失败日志、且
-`loop delete` 会连同 `.corrupt` 备份一起 rmtree 删除（数据彻底丢失）。
+`loop list` 消失、已注册的 launchd job 继续每分钟触发但**静默空转**
+（`tick --name` 找不到 spec 走 no-trigger 分支 exit 0）——更可恨的是
+没有任何告警信号，且 `loop delete` 会连同 `.corrupt` 备份一起 rmtree
+删除（数据彻底丢失）。
 **state.json 同样内嵌一份 LoopSpec 副本**，旧版读取时会触发同样的隔离
 （state.json → state.json.corrupt，运行历史丢失）。降级前务必备份整个
 `~/.vibe/loops/` 目录。

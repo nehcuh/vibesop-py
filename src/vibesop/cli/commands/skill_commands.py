@@ -1854,11 +1854,13 @@ def promote_cmd(  # pyright: ignore[reportUnusedFunction]
     M12 M5 edit guard: the sha256 of the freshly generated draft is
     recorded on the candidate (``draft_sha256``). ``--activate`` compares
     the CURRENT file hash — identical means no human edit happened and
-    activation is refused (mtime checks are spoofable by whitespace-only
-    edits; content hash is not). The hash is recorded only when this run
-    freshly writes the draft — a re-promote over an existing (possibly
-    edited) draft does NOT re-baseline the guard. Legacy candidates
-    (promoted before M5, no recorded hash) require ``--force``.
+    activation is refused (content hash, not mtime: a bare ``touch``
+    bumps mtime without editing and does NOT count, while any real byte
+    change — even whitespace-only — flips the sha256 and passes). The
+    hash is recorded only when this run freshly writes the draft — a
+    re-promote over an existing (possibly edited) draft does NOT
+    re-baseline the guard. Legacy candidates (promoted before M5, no
+    recorded hash) require ``--force``.
 
     W5.2: For cross-project clusters, the candidate is loaded from the
     global store; promote with ``--scope global`` to keep the draft
