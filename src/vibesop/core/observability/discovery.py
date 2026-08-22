@@ -107,8 +107,9 @@ def _normalize_query(query: str) -> str:
 def cluster_fingerprint(queries: list[str]) -> str:
     """Stable fingerprint for a cluster, for the sticky negative list.
 
-    ``cluster_id``（sha1 of sorted member task_ids）会随重扫成员变化而
-    漂移，不适合做否定列表的键。指纹改用排序后的归一化 query 集——
+    ``cluster_id``（sha1 of sorted (project_id, task_id) composite
+    keys — clustering.py W5.1）会随重扫成员变化而漂移，不适合做否定
+    列表的键。指纹改用排序后的归一化 query 集——
     语义内容比成员 id 稳定。已知边界：重扫后 query 集合显著变化时指纹
     也会变（dismiss 可能「漏粘」），这是保守方向的失败模式（重新出现
     在列表，可再次 dismiss），记录在案。

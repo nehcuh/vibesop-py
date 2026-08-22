@@ -1,0 +1,359 @@
+diff --git a/CHANGELOG.md b/CHANGELOG.md
+index 9cc78c2..af6943c 100644
+--- a/CHANGELOG.md
++++ b/CHANGELOG.md
+@@ -9,6 +9,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
+ 
+ ## [Unreleased]
+ 
++### 候选池去重 — upsert 重叠合并（gate30, 2026-08-22）
++
++`cluster_id` = 成员 task_id 集合的 sha1，簇吸收新 task 后 id 漂移，
++exact-match upsert 每次重扫都追加重复行（cmspark 真实池 27 条 pending
++里 8 对重复，如同一"合并 main"模式存在 61 任务与 63 任务两行）。
++
++- **`ClusterCandidateStore._do_locked_upsert`**:exact id 未命中时，对
++  task_id 集合 Jaccard ≥ 0.5(`MERGE_JACCARD_THRESHOLD`）的 pending 行
++  做 absorb-merge——吸收所有匹配行（自愈存量重复），incoming 行保留
++  最早 created_at / ttl_expires_at / first_seen_at;terminal 行永不
++  被吸收（人工决定粘性）。阈值经真实池标定：真重复对 0.88–0.99，
++  真不同模式 ≤0.41,0.5 双侧留距。
++- **新增 `find_overlapping_pending()`**：公开重叠查询，供需要在变更
++  前判断"该模式是否已在池"的调用方。
++- **gate17b miss/gold 冲突守卫重叠化**:miss_recurrence 候选到达时若
++  与 pending gold 行重叠（id 漂移后 exact get 会漏），跳过——防止较弱
++  的 miss 证据经合并路径覆盖较强的 gold 行。
++
+ ### 文档存量债清零 — checker 校准 + 全库版本/死链修复 (2026-08-22)
+ 
+ 两个文档 checker 长期全红（173 处版本不匹配 + 53 条死链）——根因一半是 checker 失准，一半是真漂移。本轮先校准 checker 再批改文档，双 checker 全绿收官。
+diff --git a/src/vibesop/core/observability/skill_promote.py b/src/vibesop/core/observability/skill_promote.py
+index e762d87..dcc3b0e 100644
+--- a/src/vibesop/core/observability/skill_promote.py
++++ b/src/vibesop/core/observability/skill_promote.py
+@@ -109,6 +109,24 @@ MAX_PENDING = 50
+ # span_count and eviction drops the lowest span_count (ties → oldest).
+ MAX_PENDING_UNSTABLE = 20
+ 
++# gate30: upsert identity is exact ``cluster_id`` FIRST, then task-set
++# overlap. ``cluster_id`` = sha1 of sorted member task_ids (clustering.py),
++# so it DRIFTS whenever a rescan adds/drops member tasks — exact-match-only
++# upsert appended a duplicate row per growth step (dogfood evidence:
++# cmspark pool carried 8 duplicate pairs, e.g. 61-task vs 63-task rows of
++# the same pattern). Overlap-merge absorbs those rows instead.
++# Threshold: Jaccard ≥ 0.5 on task_id sets. Real-pool separation was clean
++# — true growth-duplicates scored 0.88–0.99, genuinely-distinct patterns
++# with shared generic tasks ("提交" etc.) scored ≤0.41 — so 0.5 keeps
++# margin on both sides. Consecutive scans only differ by newly accumulated
++# tasks (the stored row tracks the latest scan), so growth stays well
++# above the threshold. Known edge: a rescan that SPLITS one cluster into
++# two fragments can let the second fragment absorb-erode the first;
++# conservative direction (pool loses a fragment, next full-window scan
++# regenerates it), documented like the fingerprint 漏粘 note in
++# discovery.cluster_fingerprint.
++MERGE_JACCARD_THRESHOLD = 0.5
++
+ # Step-frequency thresholds (W4.B). Not in v3 spec — picked from
+ # workflow-mining conventions. Documented as reviewer Q3.
+ _CORE_THRESHOLD = 0.70  # step appears in ≥70% of cluster spans → core
+@@ -330,17 +348,31 @@ def _now_utc() -> datetime:
+     return datetime.now(UTC)
+ 
+ 
++def _task_set_jaccard(a: Iterable[str], b: Iterable[str]) -> float:
++    """Jaccard similarity of two task_id sets; 0.0 when both are empty."""
++    sa, sb = set(a), set(b)
++    union = sa | sb
++    if not union:
++        return 0.0
++    return len(sa & sb) / len(union)
++
++
+ @dataclass
+ class ClusterCandidate:
+     """A skill candidate derived from a repeatedly-proven task cluster.
+ 
+     Identity: ``cluster_id`` (sha1 of sorted member task_ids — matches
+     ``Cluster.cluster_id`` from ``clustering.py``). Two candidates with
+-    the same cluster_id are the same candidate across rescans.
++    the same cluster_id are the same candidate across rescans. The id
++    DRIFTS when a rescan grows/shrinks the membership; the store heals
++    that by overlap-merging pending rows (``MERGE_JACCARD_THRESHOLD``),
++    so identity in practice is "the same task-set pattern", not the
++    literal hash.
+ 
+     Lifecycle: ``pending`` → ``promoted`` | ``dismissed``. Terminal
+     states are sticky: re-scans do NOT overwrite a promoted or dismissed
+-    row (the human's decision wins over fresh signal).
++    row (the human's decision wins over fresh signal), and overlap-merge
++    never absorbs terminal rows.
+ 
+     TTL: pending rows expire after ``_TTL_DAYS`` (30 days). Promoted /
+     dismissed rows do NOT expire (they're audit log of decisions).
+@@ -570,6 +602,48 @@ class ClusterCandidateStore:
+             self._rewrite_all_locked(rows)
+             return candidate
+ 
++        # gate30: no exact id match — the cluster may still BE an existing
++        # candidate whose cluster_id drifted because the rescan grew/shrank
++        # its membership (cluster_id = sha1 of sorted task_ids). Absorb
++        # every PENDING row whose task set overlaps the incoming one at
++        # Jaccard ≥ MERGE_JACCARD_THRESHOLD, then insert the incoming row
++        # with the absorbed rows' earliest created_at / ttl_expires_at /
++        # first_seen_at (same earliest-wins semantics as the exact-match
++        # refresh above). Terminal rows are never absorbed (human decision
++        # stays sticky even when the pattern regrows under a new id).
++        # Absorb-then-insert net-reduces the row count, so — like the
++        # refresh path — it bypasses the insert-time cap check.
++        absorbed_idx = [
++            i
++            for i, r in enumerate(rows)
++            if r.status == "pending"
++            and _task_set_jaccard(r.task_ids, candidate.task_ids) >= MERGE_JACCARD_THRESHOLD
++        ]
++        if absorbed_idx:
++            absorbed = [rows[i] for i in absorbed_idx]
++            logger.info(
++                "cluster_candidates overlap-merge: %s absorbs %d drifted row(s) %s "
++                "(Jaccard ≥ %.2f on task_id sets)",
++                candidate.cluster_id,
++                len(absorbed),
++                [r.cluster_id for r in absorbed],
++                MERGE_JACCARD_THRESHOLD,
++            )
++            elders = absorbed
++            candidate.created_at = min(r.created_at for r in elders)
++            ttls = [r.ttl_expires_at for r in elders if r.ttl_expires_at is not None]
++            if ttls:
++                candidate.ttl_expires_at = min(ttls)
++            first_seens = [r.first_seen_at for r in elders if r.first_seen_at is not None]
++            if first_seens and (
++                candidate.first_seen_at is None or min(first_seens) < candidate.first_seen_at
++            ):
++                candidate.first_seen_at = min(first_seens)
++            rows = [r for i, r in enumerate(rows) if i not in set(absorbed_idx)]
++            rows.append(candidate)
++            self._rewrite_all_locked(rows)
++            return candidate
++
+         # New row — enforce the per-class hard cap BEFORE insert (F-a:
+         # stable and unstable budgets are separate; a row only ever
+         # competes within its own class).
+@@ -865,6 +939,36 @@ class ClusterCandidateStore:
+                 return r
+         return None
+ 
++    def find_overlapping_pending(
++        self, task_ids: Iterable[str], *, threshold: float = MERGE_JACCARD_THRESHOLD
++    ) -> ClusterCandidate | None:
++        """Best-overlapping PENDING row for a task_id set, or None.
++
++        gate30 companion to the upsert overlap-merge: callers that must
++        reason about "is this pattern already in the pool?" before
++        mutating (e.g. scan_candidates' gold/miss collision guard) use
++        this instead of exact-id ``get``, because cluster_id drifts with
++        membership growth. Returns the pending row with the highest
++        Jaccard ≥ ``threshold`` (ties → earliest created_at, matching
++        FIFO eviction order). Terminal rows are invisible here, same as
++        in the merge path.
++        """
++        best: ClusterCandidate | None = None
++        best_score = threshold
++        for r in self._read_all_unlocked():
++            if r.status != "pending":
++                continue
++            score = _task_set_jaccard(r.task_ids, task_ids)
++            if score < threshold:
++                continue
++            if (
++                best is None
++                or score > best_score
++                or (score == best_score and r.created_at < best.created_at)
++            ):
++                best, best_score = r, score
++        return best
++
+     def pending_count(self, *, include_unstable: bool = False) -> int:
+         """Count of pending rows — kill-switch input.
+ 
+@@ -1167,7 +1271,9 @@ def scan_candidates(
+     the human material to triage. Reviewer Q1.
+ 
+     Returns ``ScanSummary``. Idempotent across rescans: upsert is
+-    idempotent on ``cluster_id``, so re-scanning the same spans produces
++    idempotent on ``cluster_id`` and overlap-merges pending rows whose
++    cluster_id drifted with membership growth (gate30,
++    ``MERGE_JACCARD_THRESHOLD``), so re-scanning the same spans produces
+     the same pending rows (refreshed counts, no duplicates).
+     """
+     from vibesop.core.observability.behavior_consistency import assess_behavior_consistency
+@@ -1419,7 +1525,16 @@ def scan_candidates(
+         # Terminal rows (promoted/dismissed) are sticky by store contract,
+         # and refreshing an existing miss_recurrence row is the intended
+         # rescan path — only the gold-pending collision is guarded.
++        # gate30: the check is overlap-aware (find_overlapping_pending),
++        # not just exact-id — a gold row whose cluster_id drifted on
++        # rescan would otherwise be merge-refreshed by the miss candidate
++        # (upsert absorbs Jaccard-overlapping pending rows), clobbering
++        # the stronger gold evidence through the back door.
+         existing = store.get(candidate.cluster_id)
++        if existing is None or existing.status != "pending":
++            overlapping = store.find_overlapping_pending(candidate.task_ids)
++            if overlapping is not None:
++                existing = overlapping
+         if (
+             existing is not None
+             and existing.status == "pending"
+@@ -1427,8 +1542,10 @@ def scan_candidates(
+         ):
+             logger.info(
+                 "miss_recurrence candidate %s skipped: a pending gold row "
+-                "with the same cluster_id exists (stronger evidence wins)",
++                "for the same pattern exists (stronger evidence wins; "
++                "exact id or Jaccard-overlap match: %s)",
+                 candidate.cluster_id,
++                existing.cluster_id,
+             )
+             continue
+         store.upsert(candidate)
+diff --git a/tests/core/observability/test_skill_promote_store.py b/tests/core/observability/test_skill_promote_store.py
+index 12b6033..b137105 100644
+--- a/tests/core/observability/test_skill_promote_store.py
++++ b/tests/core/observability/test_skill_promote_store.py
+@@ -7,6 +7,9 @@ Verifies the persistence layer for the skill-promote pipeline:
+    - New row → append.
+    - Existing pending → refresh counts, preserve created_at + ttl.
+    - Existing promoted/dismissed → no-op (terminal sticky).
++   - Drifted cluster_id (membership grew/shrank) → overlap-merge
++     absorbs pending rows at Jaccard ≥ ``MERGE_JACCARD_THRESHOLD``
++     (gate30); terminal rows are never absorbed.
+ 3. Hard cap eviction: per-class budgets (F-a) — stable rows cap at
+    ``MAX_PENDING`` and evict lowest gold_rate; the unstable diagnosis
+    bucket caps at ``MAX_PENDING_UNSTABLE`` and evicts lowest span_count.
+@@ -43,9 +46,13 @@ def _make_candidate(
+     ttl_expires_at: datetime | None = None,
+     status: str = "pending",
+ ) -> ClusterCandidate:
++    # gate30: task_ids default derives from cluster_id so independently-
++    # constructed candidates DON'T overlap-merge with each other (upsert
++    # absorbs pending rows at Jaccard ≥ MERGE_JACCARD_THRESHOLD; the old
++    # shared default ["t1", "t2"] made every pair identical).
+     return ClusterCandidate(
+         cluster_id=cluster_id,
+-        task_ids=task_ids or ["t1", "t2"],
++        task_ids=task_ids or [f"{cluster_id}-t1", f"{cluster_id}-t2"],
+         queries=queries or ["hello world", "hi world"],
+         span_count=span_count,
+         gold_rate=gold_rate,
+@@ -640,3 +647,111 @@ class TestPerClassIsolationAndPruneTrim:
+         assert store.get("legacy-u30") is not None
+         assert store.get("legacy-u49") is not None
+         assert store.get("stable-keep") is not None
++
++
++class TestOverlapMerge:
++    """gate30: cluster_id drifts when a rescan grows/shrinks membership
++    (sha1 of sorted task_ids). Upsert must absorb the drifted PENDING
++    rows instead of appending duplicates (dogfood: cmspark pool carried
++    8 duplicate pairs of the same patterns)."""
++
++    def test_grown_cluster_merges_into_existing_row(self, tmp_path: Path) -> None:
++        store = ClusterCandidateStore(tmp_path)
++        old = _make_candidate(cluster_id="old", task_ids=["t1", "t2", "t3", "t4"])
++        store.upsert(old)
++        # Rescan: same cluster + 1 new task → new cluster_id, Jaccard 4/5 = 0.8.
++        grown = _make_candidate(cluster_id="new", task_ids=["t1", "t2", "t3", "t4", "t5"])
++        store.upsert(grown)
++
++        rows = store.list_pending()
++        assert [r.cluster_id for r in rows] == ["new"]
++        assert store.get("old") is None
++
++    def test_merge_preserves_earliest_created_ttl_first_seen(self, tmp_path: Path) -> None:
++        store = ClusterCandidateStore(tmp_path)
++        old_created = datetime(2026, 7, 1, tzinfo=UTC)
++        old_ttl = old_created + timedelta(days=30)
++        old = _make_candidate(
++            cluster_id="old",
++            task_ids=["t1", "t2", "t3", "t4"],
++            created_at=old_created,
++            ttl_expires_at=old_ttl,
++        )
++        store.upsert(old)
++        grown = _make_candidate(
++            cluster_id="new",
++            task_ids=["t1", "t2", "t3", "t4", "t5"],
++            created_at=datetime(2026, 8, 20, tzinfo=UTC),
++        )
++        store.upsert(grown)
++
++        merged = store.get("new")
++        assert merged is not None
++        assert merged.created_at == old_created
++        assert merged.ttl_expires_at == old_ttl
++
++    def test_multi_absorb_collapses_duplicate_pairs(self, tmp_path: Path) -> None:
++        store = ClusterCandidateStore(tmp_path)
++        # Two legacy duplicates of the same pattern (the pre-fix pool state).
++        store.upsert(_make_candidate(cluster_id="dup-a", task_ids=["t1", "t2", "t3", "t4"]))
++        store.upsert(_make_candidate(cluster_id="dup-b", task_ids=["t1", "t2", "t3", "t4", "t5"]))
++        # Next rescan sees the full cluster → absorbs BOTH stale rows.
++        full = _make_candidate(cluster_id="full", task_ids=["t1", "t2", "t3", "t4", "t5", "t6"])
++        store.upsert(full)
++
++        rows = store.list_pending()
++        assert [r.cluster_id for r in rows] == ["full"]
++
++    def test_below_threshold_does_not_merge(self, tmp_path: Path) -> None:
++        store = ClusterCandidateStore(tmp_path)
++        # Jaccard 2/6 ≈ 0.33 < 0.5 — distinct patterns sharing generic tasks.
++        store.upsert(_make_candidate(cluster_id="a", task_ids=["t1", "t2", "x1", "x2"]))
++        store.upsert(_make_candidate(cluster_id="b", task_ids=["t1", "t2", "y1", "y2"]))
++
++        assert len(store.list_pending()) == 2
++
++    def test_terminal_rows_are_never_absorbed(self, tmp_path: Path) -> None:
++        store = ClusterCandidateStore(tmp_path)
++        store.upsert(_make_candidate(cluster_id="term", task_ids=["t1", "t2", "t3", "t4"]))
++        store.dismiss("term", reason="not a skill")
++        regrown = _make_candidate(cluster_id="regrown", task_ids=["t1", "t2", "t3", "t4", "t5"])
++        store.upsert(regrown)
++
++        # Dismissed row untouched; regrown pattern lands as its own row
++        # (the discovery-layer fingerprint sticky list is what keeps a
++        # dismissed pattern out of the queue — not the store).
++        assert store.get("term").status == "dismissed"  # type: ignore[union-attr]
++        assert store.get("regrown") is not None
++
++    def test_merge_bypasses_class_cap(self, tmp_path: Path) -> None:
++        store = ClusterCandidateStore(tmp_path)
++        for i in range(MAX_PENDING):
++            store.upsert(_make_candidate(cluster_id=f"filler-{i}", gold_rate=0.9 - i * 0.001))
++        # Pool is at the stable cap; a drifted rescan of filler-0 must
++        # merge (net row count shrinks), not hit admit-only-if-better.
++        drifted = _make_candidate(
++            cluster_id="filler-0-drift",
++            task_ids=["filler-0-t1", "filler-0-t2", "extra"],
++            gold_rate=0.0,
++        )
++        store.upsert(drifted)
++
++        assert store.get("filler-0-drift") is not None
++        assert store.get("filler-0") is None
++        assert store.pending_count() == MAX_PENDING
++
++    def test_find_overlapping_pending_returns_best_match(self, tmp_path: Path) -> None:
++        store = ClusterCandidateStore(tmp_path)
++        store.upsert(_make_candidate(cluster_id="weak", task_ids=["t1", "t2", "a", "b", "c", "d"]))
++        store.upsert(_make_candidate(cluster_id="strong", task_ids=["t1", "t2", "a", "b"]))
++
++        hit = store.find_overlapping_pending(["t1", "t2", "a", "b", "new"])
++        assert hit is not None
++        assert hit.cluster_id == "strong"  # Jaccard 4/5=0.8 beats 4/7≈0.57
++
++    def test_find_overlapping_pending_ignores_terminal(self, tmp_path: Path) -> None:
++        store = ClusterCandidateStore(tmp_path)
++        store.upsert(_make_candidate(cluster_id="term", task_ids=["t1", "t2"]))
++        store.promote("term", skill_id="some-skill")
++
++        assert store.find_overlapping_pending(["t1", "t2"]) is None

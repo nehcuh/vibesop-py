@@ -1488,6 +1488,11 @@ def scan_candidates_cmd(  # pyright: ignore[reportUnusedFunction]
         # F-a: refusal is at the STABLE-class cap (the unstable bucket no
         # longer blocks miss admissions) — say the class explicitly.
         miss_line += f" ({summary.miss_rejected_count} refused: stable pool at cap)"
+    if getattr(summary, "miss_guard_skipped_count", 0):
+        # gate30 round-2: gold/miss collision guard skips — pattern already
+        # pending as a stronger gold row, so this is informational, not a
+        # problem indicator.
+        miss_line += f" ({summary.miss_guard_skipped_count} guarded: gold row exists)"
     console.print(miss_line + "[/dim]")
     # F-a: unstable-bucket churn visibility (per-class refusal count).
     if getattr(summary, "unstable_refused_count", 0):

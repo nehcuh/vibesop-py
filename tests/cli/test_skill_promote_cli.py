@@ -896,7 +896,10 @@ class TestPromoteActivate:
     def _candidate(self, cluster_id: str = "abc123def456", **overrides) -> ClusterCandidate:
         payload = {
             "cluster_id": cluster_id,
-            "task_ids": ["t1"],
+            # gate30: derive from cluster_id — upsert overlap-merges rows
+            # whose task_id sets match, so a shared constant would silently
+            # merge distinct fixture candidates into one row.
+            "task_ids": [f"{cluster_id}-t1"],
             "queries": ["topic-A one"],
             "span_count": 5,
             "gold_rate": 0.8,
@@ -1141,7 +1144,10 @@ class TestPrefixResolution:
     def _candidate(self, cluster_id: str, query: str = "topic-A one") -> ClusterCandidate:
         return ClusterCandidate(
             cluster_id=cluster_id,
-            task_ids=["t1"],
+            # gate30: derive from cluster_id — upsert overlap-merges rows
+            # whose task_id sets match, so a shared constant would silently
+            # merge distinct fixture candidates into one row.
+            task_ids=[f"{cluster_id}-t1"],
             queries=[query],
             span_count=5,
             gold_rate=0.8,
@@ -1258,7 +1264,10 @@ class TestPrefixResolutionDualStore:
     def _candidate(self, cluster_id: str, query: str = "topic-A one") -> ClusterCandidate:
         return ClusterCandidate(
             cluster_id=cluster_id,
-            task_ids=["t1"],
+            # gate30: derive from cluster_id — upsert overlap-merges rows
+            # whose task_id sets match, so a shared constant would silently
+            # merge distinct fixture candidates into one row.
+            task_ids=[f"{cluster_id}-t1"],
             queries=[query],
             span_count=5,
             gold_rate=0.8,

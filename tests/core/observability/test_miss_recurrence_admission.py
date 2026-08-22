@@ -719,3 +719,178 @@ class TestLowInformationShapeRules:
 
         assert summary.miss_pool_size == 0
         assert store.pending_count() == 0
+
+
+class TestGuardOverlapExtension:
+    """gate30 round-2: the gold/miss collision guard is overlap-aware
+    (cluster_id drifts with membership growth) and full-set (pi M1), but
+    UNSTABLE diagnosis rows never block a miss candidate (claude MAJOR-1).
+    """
+
+    def test_drifted_gold_row_still_blocks_miss_candidate(
+        self, fresh_learner: InstinctLearner, cache: EmbeddingCache, store: ClusterCandidateStore
+    ) -> None:
+        """Gold row under a DRIFTED cluster_id (membership grew by k4) must
+        still block the overlapping miss candidate — exact-id get alone
+        would miss it and the merge would clobber the gold evidence."""
+        from vibesop.core.observability.skill_promote import ClusterCandidate
+
+        store.upsert(
+            ClusterCandidate(
+                cluster_id="drifted-gold-id",
+                task_ids=["k1", "k2", "k3", "k4"],
+                queries=["miss-topic one", "miss-topic two", "miss-topic three", "more"],
+                span_count=9,
+                gold_rate=0.8,
+                gold_task_ids=["k1"],
+                source="gold",
+            )
+        )
+        spans = [
+            _miss_span("k1", "miss-topic one", D1),
+            _miss_span("k2", "miss-topic two", D2),
+            _miss_span("k3", "miss-topic three", D2),
+        ]
+        with patch.object(cache, "_compute", side_effect=_fake_embedding):
+            summary = scan_candidates(spans, fresh_learner, store, cache=cache)
+
+        row = store.get("drifted-gold-id")
+        assert row is not None
+        assert row.source == "gold"
+        assert row.gold_rate == 0.8
+        assert summary.miss_admitted_count == 0
+        assert summary.miss_guard_skipped_count == 1
+
+    def test_unstable_row_does_not_block_miss_candidate(
+        self, fresh_learner: InstinctLearner, cache: EmbeddingCache, store: ClusterCandidateStore
+    ) -> None:
+        """claude MAJOR-1: an UNSTABLE diagnosis row (gold_rate below the
+        unstable threshold — the weakest evidence) must NOT count as the
+        'stronger evidence' that blocks a miss candidate; the miss row
+        lands beside it (same-class merge restriction keeps the unstable
+        row unabsorbed)."""
+        from vibesop.core.observability.skill_promote import ClusterCandidate
+
+        store.upsert(
+            ClusterCandidate(
+                cluster_id="unstable-diag",
+                task_ids=["k1", "k2", "k3", "k4"],
+                queries=["miss-topic one", "miss-topic two", "miss-topic three", "more"],
+                span_count=9,
+                gold_rate=0.15,
+                gold_task_ids=[],
+                source="gold",
+                is_unstable=True,
+            )
+        )
+        spans = [
+            _miss_span("k1", "miss-topic one", D1),
+            _miss_span("k2", "miss-topic two", D2),
+            _miss_span("k3", "miss-topic three", D2),
+        ]
+        with patch.object(cache, "_compute", side_effect=_fake_embedding):
+            summary = scan_candidates(spans, fresh_learner, store, cache=cache)
+
+        assert summary.miss_admitted_count == 1
+        assert summary.miss_guard_skipped_count == 0
+        # The unstable diagnosis row survives unabsorbed (cross-class).
+        diag = store.get("unstable-diag")
+        assert diag is not None
+        assert diag.is_unstable
+
+    def test_full_set_guard_blocks_when_best_match_is_miss_row(
+        self, fresh_learner: InstinctLearner, cache: EmbeddingCache, store: ClusterCandidateStore
+    ) -> None:
+        """pi round-2 NIT-3 / M1 regression: the pool holds a MISS row
+        (higher Jaccard — would win a best-match query and let the guard
+        pass) AND a GOLD row (lower Jaccard). The full-set guard must
+        still skip the incoming miss candidate, or upsert's absorb-all
+        merge would destroy the gold row through the back door."""
+        from vibesop.core.observability.skill_promote import ClusterCandidate
+
+        # Incoming miss cluster will have task_ids {k1..k4} (4 spans).
+        # Miss row: J = 4/5 = 0.80 (best match). Gold row: J = 4/7 ≈ 0.57.
+        # Mutual J = 4/8 = 0.5 exactly → strict > keeps them unmerged.
+        incoming_tasks = ["k1", "k2", "k3", "k4"]
+        store.upsert(
+            ClusterCandidate(
+                cluster_id="miss-row-best-match",
+                task_ids=[*incoming_tasks, "m1"],
+                queries=["miss-topic one"],
+                span_count=4,
+                gold_rate=0.0,
+                gold_task_ids=[],
+                source="miss_recurrence",
+            )
+        )
+        store.upsert(
+            ClusterCandidate(
+                cluster_id="gold-row-lower-overlap",
+                task_ids=[*incoming_tasks, "g1", "g2", "g3"],
+                queries=["miss-topic one"],
+                span_count=9,
+                gold_rate=0.8,
+                gold_task_ids=["k1"],
+                source="gold",
+            )
+        )
+        spans = [
+            _miss_span("k1", "miss-topic one", D1),
+            _miss_span("k2", "miss-topic two", D2),
+            _miss_span("k3", "miss-topic three", D2),
+            _miss_span("k4", "miss-topic four", D2),
+        ]
+        with patch.object(cache, "_compute", side_effect=_fake_embedding):
+            summary = scan_candidates(spans, fresh_learner, store, cache=cache)
+
+        assert summary.miss_guard_skipped_count == 1
+        assert summary.miss_admitted_count == 0
+        gold = store.get("gold-row-lower-overlap")
+        assert gold is not None
+        assert gold.source == "gold"
+        assert gold.gold_rate == 0.8
+
+    def test_exact_id_unstable_row_blocks_miss_candidate(
+        self, fresh_learner: InstinctLearner, cache: EmbeddingCache, store: ClusterCandidateStore
+    ) -> None:
+        """pi round-2 BLOCK-1 / claude round-2 MAJOR-1 regression: an
+        UNSTABLE gold row with the SAME cluster_id as the incoming miss
+        cluster must still block — upsert's exact-id match is a wholesale
+        replace (gate21), so letting the miss candidate through would
+        destroy the diagnosis row (source flip, gold_rate→0.0)."""
+        import hashlib
+
+        from vibesop.core.observability.skill_promote import ClusterCandidate
+
+        spans = [
+            _miss_span("k1", "miss-topic one", D1),
+            _miss_span("k2", "miss-topic two", D2),
+            _miss_span("k3", "miss-topic three", D2),
+        ]
+        # Pre-compute the cluster_id the miss cluster will get
+        # (sha1 of "\x1f".join("test|kN") over sorted member keys, [:16]).
+        keys = sorted(f"test|k{i}" for i in (1, 2, 3))
+        cid = hashlib.sha1("\x1f".join(keys).encode("utf-8")).hexdigest()[:16]
+        store.upsert(
+            ClusterCandidate(
+                cluster_id=cid,
+                task_ids=["k1", "k2", "k3"],
+                queries=["miss-topic one", "miss-topic two", "miss-topic three"],
+                span_count=50,
+                gold_rate=0.15,
+                gold_task_ids=[],
+                source="gold",
+                is_unstable=True,
+            )
+        )
+
+        with patch.object(cache, "_compute", side_effect=_fake_embedding):
+            summary = scan_candidates(spans, fresh_learner, store, cache=cache)
+
+        row = store.get(cid)
+        assert row is not None
+        assert row.source == "gold"  # not flipped to miss_recurrence
+        assert row.is_unstable  # diagnosis class intact
+        assert row.span_count == 50  # not replaced by the 3-span miss row
+        assert summary.miss_guard_skipped_count == 1
+        assert summary.miss_admitted_count == 0

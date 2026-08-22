@@ -7,6 +7,9 @@ Verifies the persistence layer for the skill-promote pipeline:
    - New row → append.
    - Existing pending → refresh counts, preserve created_at + ttl.
    - Existing promoted/dismissed → no-op (terminal sticky).
+   - Drifted cluster_id (membership grew/shrank) → overlap-merge
+     absorbs pending rows at Jaccard > ``MERGE_JACCARD_THRESHOLD`` (strict — 0.5 exactly does NOT merge)
+     (gate30); terminal rows are never absorbed.
 3. Hard cap eviction: per-class budgets (F-a) — stable rows cap at
    ``MAX_PENDING`` and evict lowest gold_rate; the unstable diagnosis
    bucket caps at ``MAX_PENDING_UNSTABLE`` and evicts lowest span_count.
@@ -43,9 +46,13 @@ def _make_candidate(
     ttl_expires_at: datetime | None = None,
     status: str = "pending",
 ) -> ClusterCandidate:
+    # gate30: task_ids default derives from cluster_id so independently-
+    # constructed candidates DON'T overlap-merge with each other (upsert
+    # absorbs pending rows at Jaccard > MERGE_JACCARD_THRESHOLD (strict); the old
+    # shared default ["t1", "t2"] made every pair identical).
     return ClusterCandidate(
         cluster_id=cluster_id,
-        task_ids=task_ids or ["t1", "t2"],
+        task_ids=task_ids or [f"{cluster_id}-t1", f"{cluster_id}-t2"],
         queries=queries or ["hello world", "hi world"],
         span_count=span_count,
         gold_rate=gold_rate,
@@ -640,3 +647,210 @@ class TestPerClassIsolationAndPruneTrim:
         assert store.get("legacy-u30") is not None
         assert store.get("legacy-u49") is not None
         assert store.get("stable-keep") is not None
+
+
+class TestOverlapMerge:
+    """gate30: cluster_id drifts when a rescan grows/shrinks membership
+    (sha1 of sorted task_ids). Upsert must absorb the drifted PENDING
+    rows instead of appending duplicates (dogfood: cmspark pool carried
+    8 duplicate pairs of the same patterns)."""
+
+    def test_grown_cluster_merges_into_existing_row(self, tmp_path: Path) -> None:
+        store = ClusterCandidateStore(tmp_path)
+        old = _make_candidate(cluster_id="old", task_ids=["t1", "t2", "t3", "t4"])
+        store.upsert(old)
+        # Rescan: same cluster + 1 new task → new cluster_id, Jaccard 4/5 = 0.8.
+        grown = _make_candidate(cluster_id="new", task_ids=["t1", "t2", "t3", "t4", "t5"])
+        store.upsert(grown)
+
+        rows = store.list_pending()
+        assert [r.cluster_id for r in rows] == ["new"]
+        assert store.get("old") is None
+
+    def test_merge_preserves_earliest_created_ttl_first_seen(self, tmp_path: Path) -> None:
+        store = ClusterCandidateStore(tmp_path)
+        old_created = datetime(2026, 7, 1, tzinfo=UTC)
+        old_ttl = old_created + timedelta(days=30)
+        old = _make_candidate(
+            cluster_id="old",
+            task_ids=["t1", "t2", "t3", "t4"],
+            created_at=old_created,
+            ttl_expires_at=old_ttl,
+        )
+        old.first_seen_at = old_created - timedelta(days=2)
+        store.upsert(old)
+        grown = _make_candidate(
+            cluster_id="new",
+            task_ids=["t1", "t2", "t3", "t4", "t5"],
+            created_at=datetime(2026, 8, 20, tzinfo=UTC),
+        )
+        store.upsert(grown)
+
+        merged = store.get("new")
+        assert merged is not None
+        assert merged.created_at == old_created
+        assert merged.ttl_expires_at == old_ttl
+        assert merged.first_seen_at == old_created - timedelta(days=2)
+
+    def test_exact_boundary_half_does_not_merge(self, tmp_path: Path) -> None:
+        """gate30 round-2 (pi N2 / claude NIT-3): comparison is STRICT > —
+        two 3-task clusters sharing 2 generic tasks score exactly 0.5 and
+        must stay separate (a mis-merge would repeatedly absorb a small
+        distinct pattern so it never accumulates)."""
+        store = ClusterCandidateStore(tmp_path)
+        store.upsert(_make_candidate(cluster_id="a", task_ids=["t1", "t2", "t3"]))
+        store.upsert(_make_candidate(cluster_id="b", task_ids=["t1", "t2", "x1"]))
+
+        assert len(store.list_pending()) == 2
+
+    def test_exact_hit_also_absorbs_drifted_siblings(self, tmp_path: Path) -> None:
+        """pi N1: overlap matching must run on the exact-hit path too —
+        otherwise a stable-size duplicate pair survives every rescan.
+        Rows are written DIRECTLY to the file to simulate the pre-gate30
+        legacy pool (post-gate30 upsert would already have merged them)."""
+        import json as _json
+
+        path = tmp_path / "cluster_candidates.jsonl"
+        with path.open("w", encoding="utf-8") as f:
+            for cid, tasks in (
+                ("dup-old", ["t1", "t2", "t3"]),
+                ("dup-cur", ["t1", "t2", "t3", "t4"]),
+            ):
+                row = _make_candidate(cluster_id=cid, task_ids=tasks)
+                f.write(_json.dumps(row.to_dict()) + "\n")
+        store = ClusterCandidateStore(tmp_path)
+        # Rescan reproduces the stable cluster under the SAME id as one row.
+        rescan = _make_candidate(cluster_id="dup-cur", task_ids=["t1", "t2", "t3", "t4"])
+        store.upsert(rescan)
+
+        rows = store.list_pending()
+        assert [r.cluster_id for r in rows] == ["dup-cur"]
+
+    def test_cross_class_rows_are_not_absorbed(self, tmp_path: Path) -> None:
+        """claude MAJOR-1 companion: a stable incoming row must NOT absorb
+        UNSTABLE diagnosis rows (different evidence class; wholesale
+        replace would silently destroy the diagnosis signal)."""
+        store = ClusterCandidateStore(tmp_path)
+        store.upsert(
+            _make_candidate(cluster_id="diag", task_ids=["t1", "t2", "t3", "t4"], is_unstable=True)
+        )
+        incoming = _make_candidate(cluster_id="stable-new", task_ids=["t1", "t2", "t3", "t4", "t5"])
+        store.upsert(incoming)
+
+        assert store.get("diag") is not None
+        assert store.get("stable-new") is not None
+
+    def test_merge_unions_project_distribution(self, tmp_path: Path) -> None:
+        """claude MAJOR-2: pool-level pattern identity is project-agnostic,
+        but the absorbed rows' cross-project evidence must survive via a
+        union-summed project_distribution (W5.2 [XP] signal)."""
+        store = ClusterCandidateStore(tmp_path)
+        old = _make_candidate(cluster_id="old", task_ids=["t1", "t2", "t3", "t4"])
+        old.project_distribution = {"proj-a": 2}
+        store.upsert(old)
+        grown = _make_candidate(cluster_id="new", task_ids=["t1", "t2", "t3", "t4", "t5"])
+        grown.project_distribution = {"proj-b": 3}
+        store.upsert(grown)
+
+        merged = store.get("new")
+        assert merged is not None
+        assert merged.project_distribution == {"proj-a": 2, "proj-b": 3}
+        assert merged.is_cross_project
+
+    def test_multi_absorb_collapses_duplicate_pairs(self, tmp_path: Path) -> None:
+        """Two legacy duplicates of the same pattern (the pre-fix pool
+        state, written DIRECTLY — post-gate30 upsert would merge them at
+        insert time) are both absorbed by the next rescan's upsert."""
+        import json as _json
+
+        path = tmp_path / "cluster_candidates.jsonl"
+        with path.open("w", encoding="utf-8") as f:
+            for cid, tasks in (
+                ("dup-a", ["t1", "t2", "t3", "t4"]),
+                ("dup-b", ["t1", "t2", "t3", "t4", "t5"]),
+            ):
+                row = _make_candidate(cluster_id=cid, task_ids=tasks)
+                f.write(_json.dumps(row.to_dict()) + "\n")
+        store = ClusterCandidateStore(tmp_path)
+        full = _make_candidate(cluster_id="full", task_ids=["t1", "t2", "t3", "t4", "t5", "t6"])
+        store.upsert(full)
+
+        rows = store.list_pending()
+        assert [r.cluster_id for r in rows] == ["full"]
+
+    def test_below_threshold_does_not_merge(self, tmp_path: Path) -> None:
+        store = ClusterCandidateStore(tmp_path)
+        # Jaccard 2/6 ≈ 0.33 < 0.5 — distinct patterns sharing generic tasks.
+        store.upsert(_make_candidate(cluster_id="a", task_ids=["t1", "t2", "x1", "x2"]))
+        store.upsert(_make_candidate(cluster_id="b", task_ids=["t1", "t2", "y1", "y2"]))
+
+        assert len(store.list_pending()) == 2
+
+    def test_terminal_rows_are_never_absorbed(self, tmp_path: Path) -> None:
+        store = ClusterCandidateStore(tmp_path)
+        store.upsert(_make_candidate(cluster_id="term", task_ids=["t1", "t2", "t3", "t4"]))
+        store.dismiss("term", reason="not a skill")
+        regrown = _make_candidate(cluster_id="regrown", task_ids=["t1", "t2", "t3", "t4", "t5"])
+        store.upsert(regrown)
+
+        # Dismissed row untouched; regrown pattern lands as its own row
+        # (the discovery-layer fingerprint sticky list is what keeps a
+        # dismissed pattern out of the queue — not the store).
+        assert store.get("term").status == "dismissed"  # type: ignore[union-attr]
+        assert store.get("regrown") is not None
+
+    def test_merge_bypasses_class_cap(self, tmp_path: Path) -> None:
+        store = ClusterCandidateStore(tmp_path)
+        for i in range(MAX_PENDING):
+            store.upsert(_make_candidate(cluster_id=f"filler-{i}", gold_rate=0.9 - i * 0.001))
+        # Pool is at the stable cap; a drifted rescan of filler-0 must
+        # merge (net row count shrinks), not hit admit-only-if-better.
+        drifted = _make_candidate(
+            cluster_id="filler-0-drift",
+            task_ids=["filler-0-t1", "filler-0-t2", "extra"],
+            gold_rate=0.0,
+        )
+        store.upsert(drifted)
+
+        assert store.get("filler-0-drift") is not None
+        assert store.get("filler-0") is None
+        assert store.pending_count() == MAX_PENDING
+
+    def test_find_all_overlapping_pending_returns_full_set(self, tmp_path: Path) -> None:
+        """pi M1: guards need the FULL overlap set — a best-match-only
+        query hides lower-scoring rows that the merge would absorb."""
+        store = ClusterCandidateStore(tmp_path)
+        # Both rows overlap the probe at J > 0.5 (5/9 ≈ 0.56) but are
+        # mutually below threshold (5/13 ≈ 0.38) so they coexist.
+        probe = ["a", "b", "c", "d", "e"]
+        store.upsert(_make_candidate(cluster_id="r1", task_ids=[*probe, "f1", "f2", "f3", "f4"]))
+        store.upsert(_make_candidate(cluster_id="r2", task_ids=[*probe, "g1", "g2", "g3", "g4"]))
+        store.upsert(_make_candidate(cluster_id="unrelated", task_ids=["z1", "z2", "z3"]))
+
+        hits = store.find_all_overlapping_pending(probe)
+        assert {r.cluster_id for r in hits} == {"r1", "r2"}
+
+    def test_find_all_overlapping_pending_ignores_terminal(self, tmp_path: Path) -> None:
+        store = ClusterCandidateStore(tmp_path)
+        store.upsert(_make_candidate(cluster_id="term", task_ids=["t1", "t2"]))
+        store.promote("term", skill_id="some-skill")
+
+        assert store.find_all_overlapping_pending(["t1", "t2"]) == []
+
+    def test_exact_id_cross_class_flip_preserved_for_gold_path(self, tmp_path: Path) -> None:
+        """gate21 semantics retained (pi BLOCK-1 fix is guard-side, not
+        store-side): a GOLD-path candidate exact-matching an unstable
+        pending row still wholesale-replaces it (class flip). The MISS
+        path is blocked upstream by scan_candidates' exact-id guard."""
+        store = ClusterCandidateStore(tmp_path)
+        store.upsert(
+            _make_candidate(cluster_id="flip", is_unstable=True, gold_rate=0.15, span_count=50)
+        )
+        incoming = _make_candidate(cluster_id="flip", gold_rate=0.9, span_count=60)
+        store.upsert(incoming)
+
+        row = store.get("flip")
+        assert row is not None
+        assert row.gold_rate == 0.9
+        assert not row.is_unstable
+        assert len(store.list_pending()) == 1

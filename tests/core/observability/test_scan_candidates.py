@@ -338,6 +338,7 @@ class TestSummaryShape:
             "miss_rejected_count",
             "unstable_refused_count",
             "stable_refused_count",
+            "miss_guard_skipped_count",
             "embedding_degraded",
             "miss_share_by_layer",
         }

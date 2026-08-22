@@ -9,6 +9,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 候选池去重 — upsert 重叠合并（gate30, 2026-08-22）
+
+`cluster_id` = 排序后 (project_id, task_id) 复合键集合的 sha1
+(clustering.py W5.1)，簇吸收新 task 后 id 漂移，
+exact-match upsert 每次重扫都追加重复行（cmspark 真实池 27 条 pending
+里 8 对重复，如同一"合并 main"模式存在 61 任务与 63 任务两行）。
+
+- **`ClusterCandidateStore._do_locked_upsert`**:匹配集 = exact-id
+  pending 行 ∪ 同类(is_unstable)Jaccard 严格 > 0.5 的 pending 行,
+  整集 absorb——自愈存量重复对(含簇尺寸稳定的遗留对,pi N1),
+  incoming 行保留最早 created_at / ttl_expires_at / first_seen_at,
+  project_distribution 跨行求和并集(跨项目同词汇模式 = 一个候选,
+  [XP] 证据不丢;W5.1 复合键仍只管 span 归因——claude MAJOR-2 显式
+  决策)。terminal 行永不吸收;跨类不吸收(unstable 诊断证据不被
+  stable 候选销毁,claude MAJOR-1)。严格 > 口径:两个 3 任务簇共享
+  2 个泛化 task 恰为 0.5,不合并(防小簇误并反复吞并,pi N2)。
+- **守卫重叠化 + 全集化**:gate17b miss/gold 冲突守卫从 exact `get`
+  扩为 `find_all_overlapping_pending`——任一重叠的非-miss、非
+  unstable pending 行即跳过(防止 miss 证据经 merge 路径销毁漂移后
+  的 gold 行,pi M1;unstable 行不算"更强证据");被守卫跳过的 miss
+  候选计入新 ScanSummary 字段 `miss_guard_skipped_count` 并在 scan
+  输出可见(claude NIT-2)。
+- **新增 `find_all_overlapping_pending()`**:全集重叠查询(守卫用;
+  best-match 包装因零生产调用方已在 round-3 删除,claude NIT-2)。
+- 测试:store 层 TestOverlapMerge 13 例(multi-absorb/最早值/terminal/
+  cap 绕过/0.5 边界/跨类不吸收/分布并集/exact 命中吸收兄弟行/
+  gate21 类翻转保留)+ scan 层守卫集成 4 例(漂移 gold 阻挡、
+  unstable 不阻挡、full-set 遮蔽拓扑、exact-id unstable 阻挡)。
+
 ### 文档存量债清零 — checker 校准 + 全库版本/死链修复 (2026-08-22)
 
 两个文档 checker 长期全红（173 处版本不匹配 + 53 条死链）——根因一半是 checker 失准，一半是真漂移。本轮先校准 checker 再批改文档，双 checker 全绿收官。

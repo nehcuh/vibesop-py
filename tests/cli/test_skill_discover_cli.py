@@ -44,7 +44,10 @@ def _candidate(
 ) -> ClusterCandidate:
     return ClusterCandidate(
         cluster_id=cluster_id,
-        task_ids=[f"{cluster_id[:4]}-t{i}" for i in range(3)],
+        # gate30: full cluster_id (not [:4]) — upsert overlap-merges pending
+        # rows at Jaccard > threshold (strict), so fixtures that only differ past the
+        # 4th id char (e.g. f"cd{i:038d}") would silently merge into one row.
+        task_ids=[f"{cluster_id}-t{i}" for i in range(3)],
         queries=queries,
         span_count=span_count,
         gold_rate=gold_rate,
