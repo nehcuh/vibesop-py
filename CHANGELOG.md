@@ -9,6 +9,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### EvoTrace 吸收方向对抗评审与实施路线（gate34, 2026-08-22）
+
+从 EvoTrace 学习提炼的 4 个优化方向，经三路独立对抗设计（产品/架构/质疑）
++ claude/pi/grok 三轮评审收敛为实施路线。全部材料在 `.omx/artifacts/gate34-*`。
+
+- **裁决**:D2 轨迹去重只做展示层（intake 过滤否决——gate32 A1 已裁决
+  agent 回声是合法池成员，bd1bc217 是唯一真实 promote 成功案例）;
+  D1 promote verifier 做 shadow-only（PASS/WARN 徽章，永不硬阻断,
+  activate 时重跑，包装生产 trigger 语义而非 guarded-only 匹配器）;
+  D3 分源阈值工程否决（早已分闸+小样本伪科学），只加只读统计列;
+  D4 hash chain 否决立项（决策记录
+  `docs/decisions/2026-08-22-d4-immutable-records-rejected.md`）。
+- **新增 N1 可解释性**：发现队列/看板列头自解释 + "为什么在这里"行——
+  直接回应用户"表格列看不懂"的吐槽，并入阶段一。
+- **路线**：阶段一（gate35）队列可读性+展示层去噪+统计列+回声基线测量
+  → 阶段二（gate36）promote shadow verifier。不动 P0-lite/M3/留存池/
+  probe 任何触发器。
+
 ### Grok Build 接入工具序列采集（gate33, 2026-08-22）
 
 cmspark 用 grok 时发现:路由 span 在积累(UserPromptSubmit hook),但

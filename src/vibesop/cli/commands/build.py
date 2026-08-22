@@ -152,6 +152,9 @@ def execute_build(
                 "claude-code": "~/.claude",
                 "kimi-cli": "~/.kimi-code",
                 "opencode": "~/.config/opencode",
+                # gate33: the grok adapter's config_dir is ~/.grok (not the
+                # naive ~/.grok-build the fallback produced).
+                "grok-build": "~/.grok",
             }
             deploy_dir = platform_deploy_dirs.get(target, f"~/.{target}")
             console.print(
