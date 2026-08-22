@@ -1549,6 +1549,17 @@ def scan_candidates_cmd(  # pyright: ignore[reportUnusedFunction]
         f"{unstable_pending} unstable (cap {MAX_PENDING_UNSTABLE}) "
         f"(use `vibe skill candidates` to review)[/dim]"
     )
+    # gate35 D2: 展示层去噪计数（不动 intake —— 维持 gate32 裁决,
+    # 回声是合法池成员）。标记口径 = discover 队列同一前缀谓词。
+    # gate35 复审 (claude NIT): 文案钉死「本次扫描范围」—— 这里只数
+    # 本 store（--cross-project 时=global, 否则=project）, 与 discover
+    # 双 scope 合并视图的计数口径不同, 避免混淆。
+    echo_pending = sum(1 for r in all_pending if candidate_agent_echo(r))
+    if echo_pending:
+        console.print(
+            f"  [dim]本次扫描范围含 {echo_pending} 条机器形状（shape: agent-echo，已沉底；"
+            "`vibe skill discover dismiss --shape agent-echo` 批量否决）[/dim]"
+        )
 
 
 def _resolve_project_alias(project_id: str) -> str:
@@ -2208,14 +2219,18 @@ def dismiss_cmd(  # pyright: ignore[reportUnusedFunction]
 from vibesop.core.observability.discovery import (  # noqa: E402
     DEFAULT_MUTE_DAYS,
     HISTORY_HIT_THRESHOLD,
+    SHAPE_BATCH_DISMISS_REASON,
     DiscoveryObservationStore,
     DiscoveryRow,
     DiscoverySignalStore,
     build_queue,
+    candidate_agent_echo,
     candidate_source,
     cluster_fingerprint,
     count_skill_route_hits,
+    source_outcome_stats,
     threshold_suggestion,
+    why_here,
 )
 from vibesop.core.observability.skill_promote import (  # noqa: E402
     ClusterCandidate,
@@ -2226,7 +2241,15 @@ from vibesop.core.observability.skill_promote import (  # noqa: E402
 
 discover_app = typer.Typer(
     name="discover",
-    help="Unified Discovery queue — one view over all skill candidates (M12 M2).",
+    help=(
+        "Unified Discovery queue — one view over all skill candidates (M12 M2).\n\n"
+        "词汇表 (gate35 N1):\n"
+        "来源 gold = 成功簇；miss×复现 = 未命中跨日复现\n"
+        "评分 = 入池证据分（簇规模/任务数/来源/跨项目加权，可 >1）\n"
+        "行为 = 行为一致性（consistent / divergent / unavailable / 未采集）\n"
+        "shape: agent-echo = 机器形状回声（前缀谓词命中，展示层沉底）\n"
+        "来源统计（只读）: 成功 = promoted 后路由命中 ≥5；否决 = 池翻转（不含 shape-batch）"
+    ),
     no_args_is_help=False,
 )
 
@@ -2393,6 +2416,39 @@ def _render_behavior(row: DiscoveryRow) -> str:
     return "[dim]未采集[/dim]"
 
 
+def _render_source_stats() -> None:
+    """D3 只读统计列 (修订 I): per-source 累计 success/dismiss 计数.
+
+    口径见 ``source_outcome_stats`` docstring 与 ``--help`` 词汇表;
+    shape-batch 批量否决单列, 不进 dismiss 分母。只读展示, 不改任何
+    阈值逻辑。无闭环记录时不渲染（避免空队列噪音）。
+    """
+    all_rows: list[ClusterCandidate] = []
+    for scope in ("project", "global"):
+        store = _get_candidate_store(scope=scope)  # type: ignore[arg-type]
+        all_rows.extend(store.list_all())
+    stats = source_outcome_stats(all_rows, Path.cwd() / ".vibe" / "analytics.jsonl")
+    if not stats:
+        return
+    parts = []
+    for source in sorted(stats):
+        bucket = stats[source]
+        label = "miss×复现" if source == "miss_recurrence" else source
+        part = f"{label} 成功 {bucket['success']} · 否决 {bucket['dismiss']}"
+        if bucket["shape_batch"]:
+            part += f"（shape-batch {bucket['shape_batch']}）"
+        parts.append(part)
+    console.print(
+        "[dim]来源统计（只读 · 成功=提升后路由命中≥"
+        f"{HISTORY_HIT_THRESHOLD}，否决=池翻转不含 shape-batch）: " + " · ".join(parts) + "[/dim]"
+    )
+    # 与 --history 的既有披露一致 (gate35 复审 claude NIT): cwd 项目口径。
+    console.print(
+        "[dim]命中口径：仅统计当前项目（cwd）的 analytics.jsonl；"
+        "全局 scope 提升在其他项目的命中不计入。[/dim]"
+    )
+
+
 def _render_discovery_list(rows: list[DiscoveryRow], *, show_all: bool) -> None:
     visible = rows if show_all else [r for r in rows if not r.dismissed and not r.muted]
     if not visible:
@@ -2416,31 +2472,44 @@ def _render_discovery_list(rows: list[DiscoveryRow], *, show_all: bool) -> None:
 
     table = Table(title="Discovery queue" + (" (all)" if show_all else ""))
     table.add_column("ID", style="bold", max_width=20)
-    table.add_column("Score", justify="right")
-    table.add_column("Pattern", max_width=36)
+    # gate35 N1: 列头自解释化 (完整释义见 `vibe skill discover --help` 词汇表)。
+    table.add_column("评分", justify="right")
+    table.add_column("模式", max_width=36)
     table.add_column("Examples", max_width=40)
-    table.add_column("Source", justify="right")
-    table.add_column("Behavior")
+    table.add_column("来源", justify="right")
+    table.add_column("行为")
+    table.add_column("为什么在", max_width=34)
     table.add_column("First seen", justify="right")
     if show_all:
         table.add_column("Status")
 
-    for row in rows if show_all else visible:
+    # gate35 D2: agent-echo 行打标并沉底（组内保持既有评分排序;
+    # 与看板 ``_discoveries.build_discoveries_payload`` 的沉底规则
+    # lockstep —— 同一 stable partition, 分组键语义见修订 J）。
+    displayed = rows if show_all else visible
+    echo_rows = [r for r in displayed if r.agent_echo]
+    displayed = [r for r in displayed if not r.agent_echo] + echo_rows
+
+    for row in displayed:
         candidate = row.candidate
         id_str = candidate.cluster_id[:8]
         if candidate.is_cross_project:
             id_str = f"[cyan][XP][/cyan] {id_str}"
         examples = "\n".join(_redact_query(q, 40) for q in candidate.queries[:3]) or "[dim]—[/dim]"
+        pattern = _redact_query(candidate.queries[0], 60) if candidate.queries else "[dim]—[/dim]"
+        if row.agent_echo:
+            pattern = "[dim]shape: agent-echo[/dim]\n" + pattern
         age_str = f"{row.age_days}d"
         if row.cooling:
             age_str += "\n[dim]冷却中[/dim]"
         cells = [
             id_str,
             f"{row.score:.2f}",
-            _redact_query(candidate.queries[0], 60) if candidate.queries else "[dim]—[/dim]",
+            pattern,
             examples,
             _render_source(row),
             _render_behavior(row),
+            why_here(candidate),
             age_str,
         ]
         if show_all:
@@ -2453,6 +2522,12 @@ def _render_discovery_list(rows: list[DiscoveryRow], *, show_all: bool) -> None:
         table.add_row(*cells)
 
     console.print(table)
+    if echo_rows:
+        console.print(
+            f"[dim]队列含 {len(echo_rows)} 条机器形状（shape: agent-echo，已沉底）—— "
+            "`vibe skill discover dismiss --shape agent-echo` 批量否决。[/dim]"
+        )
+    _render_source_stats()
     if any(r.cooling for r in visible):
         console.print(
             "[dim]「冷却中」= 14 天无新增成员，已降档不再主动提示（新成员出现时自动恢复）。[/dim]"
@@ -2484,9 +2559,16 @@ def _render_discovery_history() -> None:
 
     promoted = [r for r in all_rows if r.status == "promoted"]
     store_dismissed = [r for r in all_rows if r.status == "dismissed"]
-    dismissed_total = len(store_dismissed) + dismiss_total
+    # gate35 D2 (修订 E/I 字面收口): shape-batch 批量否决是去噪操作,
+    # 豁免 threshold_suggestion 的 dismiss 输入与发现精度分母,
+    # 单列展示 —— 否则一次 `--shape agent-echo` 灌满分母并污染
+    # ≥30 再议门槛。
+    shape_batch_count = sum(
+        1 for r in store_dismissed if r.dismiss_reason == SHAPE_BATCH_DISMISS_REASON
+    )
+    dismissed_total = len(store_dismissed) - shape_batch_count + dismiss_total
 
-    if not promoted and not dismissed_total:
+    if not promoted and not dismissed_total and not shape_batch_count:
         console.print("[dim]暂无闭环记录（尚无 promoted/dismissed 候选）。[/dim]")
         return
 
@@ -2529,12 +2611,17 @@ def _render_discovery_history() -> None:
             "全局 scope 提升在其他项目的命中不计入。[/dim]"
         )
 
-    if store_dismissed or dismiss_total:
+    # gate35 复审 (claude NIT): shape-batch 行由下方单列行呈现, 不进
+    # Dismissed 表 —— 否则同一批行双重展示。
+    regular_dismissed = [
+        r for r in store_dismissed if r.dismiss_reason != SHAPE_BATCH_DISMISS_REASON
+    ]
+    if regular_dismissed or dismiss_total:
         table = Table(title="Dismissed（已否决）")
         table.add_column("Cluster", style="bold")
         table.add_column("Reason", max_width=50)
         table.add_column("Via")
-        for row in store_dismissed:
+        for row in regular_dismissed:
             table.add_row(
                 row.cluster_id[:8], row.dismiss_reason or "[dim]—[/dim]", "candidate pool"
             )
@@ -2549,6 +2636,11 @@ def _render_discovery_history() -> None:
                     f"negative list ({scope})",
                 )
         console.print(table)
+    if shape_batch_count:
+        console.print(
+            f"[dim]另有 {shape_batch_count} 条 shape-batch 批量否决"
+            "（去噪操作，不计入收紧建议与精度分母）。[/dim]"
+        )
 
     total = len(promoted) + dismissed_total
     precision = len(promoted) / total if total else 0.0
@@ -2582,7 +2674,9 @@ def _discover_main(  # pyright: ignore[reportUnusedFunction]
     Default lists pending candidates sorted by evidence_score (簇规模 /
     distinct task 数 / 来源信号 / 跨项目加权——公式见
     observability.discovery 模块 docstring)。Dismissed 与静音中的候选
-    默认隐藏，--all 可见。
+    默认隐藏，--all 可见。列含义词汇表见 `vibe skill discover --help`
+    (gate35 N1, 定义在 discover_app 的 Typer help —— 子命令组的
+    --help 渲染的是 Typer help, 不是本 docstring)。
     """
     if ctx.invoked_subcommand is not None:
         return
@@ -2617,11 +2711,92 @@ def _discover_main(  # pyright: ignore[reportUnusedFunction]
     _render_discovery_list(_discovery_rows(), show_all=show_all)
 
 
+def _discover_dismiss_shape_agent_echo(*, yes: bool) -> None:
+    """gate35 D2 (修订 E): batch-dismiss all pending agent-echo candidates.
+
+    机制 = 候选行池状态翻转（复用 ``ClusterCandidateStore.dismiss``，
+    与 `vibe skill dismiss` 同一 status 机制），reason 固定
+    ``SHAPE_BATCH_DISMISS_REASON`` —— **不走** ``DiscoverySignalStore``
+    指纹负名单（避免污染 threshold_suggestion 的 dismiss 输入与
+    MAX_PENDING 容量）。选择谓词 = 展示打标同一前缀谓词
+    (``candidate_agent_echo``, 标集=否决集)。选择按去重后的队列视图
+    （标集=展示标集），翻转则在 project 和 global 两个 scope 的 store
+    里都执行 —— 同 cluster_id 的跨 scope 镜像行必须一起翻，否则下次
+    渲染复活（gate35 复审 pi-MAJOR）。
+    """
+    by_id = _gather_scoped_candidates()
+    targets = {cid: (scope, c) for cid, (scope, c) in by_id.items() if candidate_agent_echo(c)}
+    if not targets:
+        console.print("[dim]队列中没有 shape: agent-echo 候选。[/dim]")
+        return
+
+    if not yes:
+        console.print(
+            f"将否决 {len(targets)} 条 shape: agent-echo 候选"
+            "（池状态翻转，跨 scope 镜像行一并翻转，dismiss_reason=shape-batch，"
+            "不进否定列表、不计入收紧建议）："
+        )
+        for scope, candidate in sorted(targets.values(), key=lambda sc: (sc[0], sc[1].cluster_id)):
+            console.print(
+                f"  [dim]{candidate.cluster_id[:8]} ({scope})[/dim] "
+                + _redact_query(candidate.queries[0], 60)
+            )
+        # 修订 E: 确认文案点名 bd1bc217 先例 —— 回声簇是合法池成员,
+        # 全系统唯一真实 promote 成功案例正来自这类簇 (gate32 A1)。
+        console.print(
+            "[yellow]⚠ 回声簇也曾 promote 成功（bd1bc217 先例），批量否决前请确认；"
+            "确认无误后加 --yes 执行。[/yellow]"
+        )
+        return
+
+    flipped = 0
+    # gate35 复审 (pi-MAJOR): 目标簇在两个 scope 的 store 里都可能各有一
+    # 行 pending 副本（_gather_scoped_candidates 的去重只是展示口径）——
+    # 只翻转去重胜出的 scope 会让另一 scope 的镜像行下次渲染复活。
+    # 对每个目标 cluster_id 在两个 scope 都执行翻转; 只计
+    # pending→dismissed 的真实翻转 (review NIT: dismiss() 对非 pending
+    # 行的 no-op 也返回非 None, 直接计返回值会虚高)。
+    flipped_ids: set[str] = set()
+    for scope in ("project", "global"):
+        store = _get_candidate_store(scope=scope)  # type: ignore[arg-type]
+        for cid in sorted(targets):
+            row = store.get(cid)
+            if row is None or row.status != "pending":
+                continue
+            store.dismiss(cid, reason=SHAPE_BATCH_DISMISS_REASON)
+            flipped += 1
+            flipped_ids.add(cid)
+    # gate35 round2 (NIT): 镜像行括注只在实际翻得比簇数多时才加 ——
+    # 无镜像行时不打印, 避免文案暗示了未发生的事。
+    mirror_note = "，含跨 scope 镜像行" if flipped > len(flipped_ids) else ""
+    console.print(
+        f"[green]✓[/green] 已否决 {len(flipped_ids)} 个 shape: agent-echo 簇"
+        f"（{flipped} 行池状态翻转{mirror_note}；"
+        "dismiss_reason=shape-batch，豁免 threshold_suggestion；"
+        "重扫不会复活 —— terminal 状态粘性）"
+    )
+
+
 @discover_app.command(name="dismiss")
 def discover_dismiss_cmd(  # pyright: ignore[reportUnusedFunction]
-    cluster_id: str = typer.Argument(..., help="Cluster ID (full or 8-char prefix)"),
+    cluster_id: str | None = typer.Argument(
+        None, help="Cluster ID (full or 8-char prefix); omit when using --shape"
+    ),
     reason: str | None = typer.Option(
         None, "--reason", help="Why this candidate is rejected (recorded in the negative list)"
+    ),
+    shape: str | None = typer.Option(
+        None,
+        "--shape",
+        help=(
+            "Batch-dismiss every pending candidate carrying this display shape tag "
+            "(supported: 'agent-echo'). gate35 D2 (修订 E): 走候选行池状态翻转 "
+            "(dismiss_reason=shape-batch), 不进指纹负名单、不计入收紧建议; "
+            "选择谓词与展示打标同一前缀谓词 (标集=否决集)."
+        ),
+    ),
+    yes: bool = typer.Option(
+        False, "--yes", help="Confirm a --shape batch dismissal (required with --shape)"
     ),
 ) -> None:
     """Dismiss a candidate into the sticky negative list.
@@ -2630,7 +2805,30 @@ def discover_dismiss_cmd(  # pyright: ignore[reportUnusedFunction]
     不再主动提示、列表默认隐藏（--all 可见）。不翻候选行状态——与
     `vibe skill dismiss`（candidate pool status）是两套机制。反馈单向
     收紧：dismiss 计数达到阈值时建议上调准入阈值（只建议，不自动改）。
+
+    ``--shape agent-echo`` 是另一条路 (gate35 D2, 修订 E)：批量把机器
+    形状回声候选做**池状态翻转**（dismiss_reason=shape-batch，豁免
+    threshold_suggestion 输入），需显式 --yes 确认。
     """
+    if shape is not None:
+        if cluster_id is not None:
+            console.print("[red]✗[/red] --shape 批量否决不接受 cluster_id 参数")
+            raise typer.Exit(1)
+        if reason is not None:
+            console.print(
+                "[red]✗[/red] --shape 批量否决的 reason 固定为 shape-batch，勿传 --reason"
+            )
+            raise typer.Exit(1)
+        if shape != "agent-echo":
+            console.print(f"[red]✗[/red] unsupported --shape '{shape}' (supported: agent-echo)")
+            raise typer.Exit(1)
+        _discover_dismiss_shape_agent_echo(yes=yes)
+        return
+
+    if cluster_id is None:
+        console.print("[red]✗[/red] cluster_id required (or use --shape agent-echo for batch)")
+        raise typer.Exit(1)
+
     resolved = _resolve_discovery_candidate(cluster_id)
     if resolved is None:
         console.print(f"[red]✗[/red] Cluster '{cluster_id}' not in Discovery queue")

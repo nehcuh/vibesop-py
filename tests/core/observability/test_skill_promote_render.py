@@ -512,3 +512,56 @@ class TestGate32TriggersPrefill:
         assert _is_agent_prompt_shape("x" * 200)
         assert not _is_agent_prompt_shape("帮我合并到 main 吧")
         assert not _is_agent_prompt_shape("you are")  # no trailing space → not a role prompt
+
+
+class TestAgentPromptPrefixPredicate:
+    """gate35 D2 (修订 C): display-layer prefix-only predicate.
+
+    ``_is_agent_prompt_shape`` is FROZEN (replay baseline imports it);
+    ``_has_agent_prompt_prefix`` shares the prefix blacklist but drops the
+    150-char rule so pasted tracebacks / long legit specs are not tagged
+    ``shape: agent-echo`` and sunk.
+    """
+
+    def test_prefix_hits(self) -> None:
+        from vibesop.core.observability.skill_promote import _has_agent_prompt_prefix
+
+        assert _has_agent_prompt_prefix("You are an adversarial SKEPTIC. REFUTE this plan")
+        assert _has_agent_prompt_prefix("ou are a senior engineer")  # truncated echo
+        assert _has_agent_prompt_prefix("<system-reminder> hook fired")
+        assert _has_agent_prompt_prefix("system-reminder without bracket")
+        assert _has_agent_prompt_prefix("<command-name> /vibe-help")
+        assert _has_agent_prompt_prefix('[ { "type": "text", "text": "x" } ]')
+        assert _has_agent_prompt_prefix('[{"type": "text"}]')
+        assert _has_agent_prompt_prefix("background task finished: xyz")
+        # Normalization: case + whitespace collapse (same as frozen predicate).
+        assert _has_agent_prompt_prefix("  YOU   ARE  a reviewer\n")
+
+    def test_must_not_catch_long_legit_or_traceback(self) -> None:
+        """must-NOT-catch 反例: 长合法 query / 粘贴 traceback 不得命中。
+
+        The frozen ``_is_agent_prompt_shape`` returns True for these via
+        the 150-char rule — the display predicate must NOT (修订 C).
+        """
+        from vibesop.core.observability.skill_promote import (
+            _has_agent_prompt_prefix,
+            _is_agent_prompt_shape,
+        )
+
+        long_legit = "请帮我重构这个模块，要求保持现有 API 兼容，并且" * 10  # >150 chars
+        traceback = "Traceback (most recent call last):\n" + '  File "x.py", line 1\n' * 10
+        for query in (long_legit, traceback, "x" * 200):
+            assert not _has_agent_prompt_prefix(query)
+            # 对照: 冻结谓词的 150 字符规则仍在（一字不动）。
+            assert _is_agent_prompt_shape(query)
+
+    def test_must_not_catch_normal_or_empty(self) -> None:
+        from vibesop.core.observability.skill_promote import _has_agent_prompt_prefix
+
+        assert not _has_agent_prompt_prefix("帮我合并到 main 吧")
+        assert not _has_agent_prompt_prefix("how do I run the tests")
+        assert not _has_agent_prompt_prefix("you are")  # no trailing space
+        # Empty text is NOT an echo here (unlike the frozen predicate):
+        # the tag marks machine wrappers, not missing data.
+        assert not _has_agent_prompt_prefix("")
+        assert not _has_agent_prompt_prefix("   ")

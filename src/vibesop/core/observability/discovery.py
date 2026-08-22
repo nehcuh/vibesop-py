@@ -56,6 +56,7 @@ import hashlib
 import json
 import logging
 import threading
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -71,17 +72,21 @@ __all__ = [
     "DEFAULT_MUTE_DAYS",
     "DISMISS_TIGHTEN_THRESHOLD",
     "HISTORY_HIT_THRESHOLD",
+    "SHAPE_BATCH_DISMISS_REASON",
     "DiscoveryObservationStore",
     "DiscoveryRow",
     "DiscoverySignal",
     "DiscoverySignalStore",
     "behavior_evidence_label",
     "build_queue",
+    "candidate_agent_echo",
     "candidate_source",
     "cluster_fingerprint",
     "count_skill_route_hits",
     "evidence_score",
+    "source_outcome_stats",
     "threshold_suggestion",
+    "why_here",
 ]
 
 # Knob 归属（设计 §阈值哲学）：不进 RoutingConfig——observability 域，
@@ -90,6 +95,11 @@ DISMISS_TIGHTEN_THRESHOLD = 5  # dismiss 计数达到此值 → 建议上调准�
 DEFAULT_MUTE_DAYS = 14  # --mute 默认静音时长
 COOLING_DAYS = 14  # 无新增成员 N 天 → 冷却降档
 HISTORY_HIT_THRESHOLD = 5  # 闭环检查：提升后技能路由命中 ≥N 次
+# gate35 D2 (修订 E): ``vibe skill discover dismiss --shape agent-echo``
+# 批量否决走候选行池状态翻转（非指纹负名单），以此 reason 标记。该 reason
+# 的行豁免 ``threshold_suggestion`` 的 dismiss 输入（修订 I 字面收口:
+# 一次批量去噪不得灌满 per-source dismiss 分母、污染 ≥30 再议门槛）。
+SHAPE_BATCH_DISMISS_REASON = "shape-batch"
 
 SignalKind = Literal["dismiss", "mute"]
 
@@ -142,6 +152,40 @@ def behavior_evidence_label(candidate: ClusterCandidate) -> str:
     if evidence in ("consistent", "divergent", "unavailable"):
         return evidence
     return "not_collected"
+
+
+def why_here(candidate: ClusterCandidate) -> str:
+    """「为什么在这里」一行说明 —— 只从实存字段直译 (gate35 N1, 修订 F).
+
+    字段口径: ``source`` / ``gold_rate`` / ``span_count`` /
+    ``len(task_ids)`` / ``first_seen_at``（存量行缺 first_seen_at 时回退
+    ``created_at``，与 DiscoveryRow.age_days 同时钟）。**禁止**编造
+    recurrence pairs/days —— miss upsert 不落这些字段
+    (skill_promote.py / 本模块 evidence_score docstring 在案)。CLI 与
+    看板共用本函数，保证同口径。
+    """
+    first = (candidate.first_seen_at or candidate.created_at).date().isoformat()
+    evidence = f"{candidate.span_count} spans · {len(candidate.task_ids)} tasks · 首见 {first}"
+    if candidate_source(candidate) == "miss_recurrence":
+        return f"来源 miss_recurrence（未命中复现）· {evidence}"
+    return f"来源 gold（成功簇 {candidate.gold_rate * 100:.0f}%）· {evidence}"
+
+
+def candidate_agent_echo(candidate: ClusterCandidate) -> bool:
+    """True when the card's representative query hits the gate35 prefix
+    predicate (``shape: agent-echo`` display tag, 修订 C/E).
+
+    Representative = ``queries[0]`` — the same query the CLI table and the
+    dashboard card show as the pattern summary, so the tag never
+    contradicts what the user sees. 批量否决的选择谓词与此同口径
+    (标集=否决集). Lazy import keeps this module stdlib-only at import
+    time (see skill_commands' W4 import note).
+    """
+    from vibesop.core.observability.skill_promote import _has_agent_prompt_prefix
+
+    if not candidate.queries:
+        return False
+    return _has_agent_prompt_prefix(candidate.queries[0])
 
 
 def evidence_score(candidate: ClusterCandidate) -> float:
@@ -469,6 +513,10 @@ class DiscoveryRow:
     mute_expires_at: datetime | None = None
     cooling: bool = False
     age_days: int = 0
+    # gate35 D2: representative query hits the prefix predicate
+    # (``candidate_agent_echo``) — display layers tag ``shape: agent-echo``
+    # and sink the row to the queue tail.
+    agent_echo: bool = False
 
 
 def build_queue(
@@ -515,6 +563,7 @@ def build_queue(
                 # M12 NIT-B: 簇首见年龄 (pattern first-sight), not 入池年龄.
                 # Legacy rows without first_seen_at fall back to created_at.
                 age_days=max(0, (now - (candidate.first_seen_at or candidate.created_at)).days),
+                agent_echo=candidate_agent_echo(candidate),
             )
         )
     rows.sort(key=lambda r: (r.score, r.candidate.span_count, r.candidate.cluster_id), reverse=True)
@@ -598,3 +647,52 @@ def count_skill_route_hits(
                     continue  # pre-promotion hit — outside the window
             hits += 1
     return hits
+
+
+def source_outcome_stats(
+    rows: Iterable[ClusterCandidate],
+    analytics_path: Path | str,
+) -> dict[str, dict[str, int]]:
+    """Per-source cumulative outcome counts (gate35 D3 只读统计列, 修订 I).
+
+    口径（写死, 同步进 ``vibe skill discover --help`` 词汇表）:
+
+    - ``success``: ``status == "promoted"`` 且提升后路由命中
+      ``count_skill_route_hits(skill_id, since=reviewed_at)`` ≥
+      ``HISTORY_HIT_THRESHOLD``(5)。命中数本身蕴含已激活（未激活的技能
+      不会被 unified router 命中）。
+    - ``dismiss``: 池状态翻转（``status == "dismissed"``）计数,
+      **排除** ``dismiss_reason == SHAPE_BATCH_DISMISS_REASON`` 的行。
+    - ``shape_batch``: 被排除的批量去噪否决, 单列展示。
+
+    Read-only: 只读候选行与 analytics.jsonl, 不写任何 store。analytics
+    文件不存在时 ``count_skill_route_hits`` 返回 None —— 该 source 的
+    success 如实为 0（暂无数据源 ⇔ 无可验证命中）。与 threshold 逻辑
+    完全无关（只读描述统计, 不改任何阈值输入）。
+
+    边角口径 (gate35 复审 claude NIT):
+    - ``reviewed_at=None`` 的存量 promoted 行 → ``since=None``, 即
+      fail-open 全量窗口（与 ``--history`` 既有语义一致, 保守方向是
+      多计不是漏计）。
+    - 三项全零的 source 桶不进入返回（全零桶无信息量, 渲染层不展示）。
+    """
+    stats: dict[str, dict[str, int]] = {}
+    for row in rows:
+        if row.status not in ("promoted", "dismissed"):
+            continue
+        bucket = stats.setdefault(
+            candidate_source(row), {"success": 0, "dismiss": 0, "shape_batch": 0}
+        )
+        if row.status == "promoted":
+            if not row.source_skill_id:
+                continue
+            hits = count_skill_route_hits(
+                row.source_skill_id, analytics_path, since=row.reviewed_at
+            )
+            if hits is not None and hits >= HISTORY_HIT_THRESHOLD:
+                bucket["success"] += 1
+        elif row.dismiss_reason == SHAPE_BATCH_DISMISS_REASON:
+            bucket["shape_batch"] += 1
+        else:
+            bucket["dismiss"] += 1
+    return {src: b for src, b in stats.items() if any(b.values())}

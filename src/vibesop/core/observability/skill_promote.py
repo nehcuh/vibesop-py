@@ -378,6 +378,23 @@ def _is_agent_prompt_shape(query: str) -> bool:
     return q.startswith(_AGENT_PROMPT_PREFIXES)
 
 
+def _has_agent_prompt_prefix(query: str) -> bool:
+    """gate35 D2 (修订 C): display-layer echo tag — prefix blacklist ONLY.
+
+    Same normalization and ``_AGENT_PROMPT_PREFIXES`` as the frozen
+    ``_is_agent_prompt_shape``, but WITHOUT the ``_AGENT_PROMPT_MAX_LEN``
+    (150-char) rule: a pasted traceback or a long legitimate spec must
+    not be tagged ``shape: agent-echo`` and sunk in the Discovery queue.
+    Used by the discover CLI / dashboard display layer and by the
+    ``discover dismiss --shape agent-echo`` batch dismissal (标集=否决集,
+    修订 E) — intake and trigger-prefill keep using the frozen predicate.
+    Empty text is NOT an echo here (unlike the frozen predicate): the
+    tag marks machine wrappers, not missing data.
+    """
+    q = " ".join(str(query).split()).lower()
+    return q.startswith(_AGENT_PROMPT_PREFIXES)
+
+
 def _validate_choice(value: str, valid: frozenset[str], field_name: str) -> str:
     """Runtime-validate a Literal field (mirrors ``Reflection`` helper)."""
     if value not in valid:

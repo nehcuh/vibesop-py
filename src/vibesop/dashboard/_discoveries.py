@@ -44,6 +44,8 @@ from vibesop.core.observability.discovery import (
     DiscoveryRow,
     DiscoverySignalStore,
     build_queue,
+    source_outcome_stats,
+    why_here,
 )
 from vibesop.core.observability.skill_promote import (
     ClusterCandidate,
@@ -120,6 +122,25 @@ def _load_scoped_candidates(
     return by_id
 
 
+def _load_all_rows(scope_dirs: dict[Scope, Path]) -> list[ClusterCandidate]:
+    """ALL rows (incl. terminal) from both scopes — gate35 D3 stats input.
+
+    Same file-existence guard as ``_load_scoped_candidates`` (read-only
+    contract). No cross-scope dedup here: terminal rows are audit records,
+    and a duplicated cluster_id dismissed in both scopes IS two decisions
+    —— gate35 起批量 shape-dismiss 会机械镜像翻转双 scope（防复活）,
+    此时镜像行是同一次决策的两行记录, 统计按行计（与 CLI
+    ``_render_discovery_history`` 的 all_rows 口径一致）。
+    """
+    rows: list[ClusterCandidate] = []
+    for scope in _SCOPES:
+        obs_dir = scope_dirs[scope]
+        if not (obs_dir / ClusterCandidateStore.FILENAME).exists():
+            continue
+        rows.extend(ClusterCandidateStore(obs_dir).list_all())
+    return rows
+
+
 def _load_signal_unions(
     scope_dirs: dict[Scope, Path], now: datetime
 ) -> tuple[set[str], dict[str, datetime]]:
@@ -170,6 +191,11 @@ def _row_to_card(scope: Scope, row: DiscoveryRow) -> dict[str, Any]:
         "score": round(row.score, 2),
         "source": row.source,
         "behavior_evidence": row.behavior,
+        # gate35 D2/N1: 展示层回声打标 + 「为什么在这里」同口径文案
+        # (与 CLI 共用 candidate_agent_echo / why_here —— 标集=否决集,
+        # 文案只从实存字段直译, 修订 F)。
+        "agent_echo": row.agent_echo,
+        "why_here": why_here(candidate),
         "pattern_summary": (
             _display_text(candidate.queries[0], max_len=_PATTERN_MAX_LEN)
             if candidate.queries
@@ -226,9 +252,19 @@ def build_discoveries_payload(project_root: Path) -> dict[str, Any]:
         )
         scoped_rows.extend((scope, row) for row in rows)
     scoped_rows.sort(
-        key=lambda pair: (pair[1].score, pair[1].candidate.span_count, pair[1].candidate.cluster_id),
+        key=lambda pair: (
+            pair[1].score,
+            pair[1].candidate.span_count,
+            pair[1].candidate.cluster_id,
+        ),
         reverse=True,
     )
+    # gate35 D2: agent-echo 卡片沉底 —— stable partition, 组内保持评分
+    # 排序。与 CLI ``_render_discovery_list`` 的沉底规则 lockstep
+    # (同一规则, 两侧各一份, 改动必须同步)。
+    scoped_rows = [p for p in scoped_rows if not p[1].agent_echo] + [
+        p for p in scoped_rows if p[1].agent_echo
+    ]
 
     cards = [_row_to_card(scope, row) for scope, row in scoped_rows]
 
@@ -248,6 +284,13 @@ def build_discoveries_payload(project_root: Path) -> dict[str, Any]:
             "by_scope": _count("scope"),
             "by_source": _count("source"),
             "cooling": sum(1 for card in cards if card["cooling"]),
+            # gate35 D2: 回声卡片计数（前端渲染「队列含 N 条机器形状
+            # (已沉底)」）；D3: per-source 只读 outcome 计数（口径见
+            # discovery.source_outcome_stats —— shape-batch 单列）。
+            "agent_echo": sum(1 for card in cards if card["agent_echo"]),
+            "by_source_outcome": source_outcome_stats(
+                _load_all_rows(scope_dirs), project_root / ".vibe" / "analytics.jsonl"
+            ),
         },
         "discoveries": cards,
     }

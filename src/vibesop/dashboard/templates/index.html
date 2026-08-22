@@ -660,6 +660,15 @@ async function loadDiscoveries() {
   const data = await api('/api/discoveries');
   const stats = data.stats || {};
   const byStatus = stats.by_status || {};
+  const echoCount = stats.agent_echo ?? 0;
+  // gate35 D3: per-source 只读 outcome 计数（口径见 discovery.source_outcome_stats）
+  const outcomes = stats.by_source_outcome || {};
+  const outcomeText = Object.keys(outcomes).sort().map(src => {
+    const o = outcomes[src] || {};
+    const label = src === 'miss_recurrence' ? 'miss×复现' : src;
+    return label + ' 成功 ' + (o.success ?? 0) + ' · 否决 ' + (o.dismiss ?? 0) +
+      (o.shape_batch ? '（shape-batch ' + o.shape_batch + '）' : '');
+  }).join(' · ');
 
   document.getElementById('disc-stats').innerHTML = `
     <div class="card">
@@ -682,6 +691,12 @@ async function loadDiscoveries() {
       <div class="value">${stats.cooling ?? 0}</div>
       <div class="sub">14 天无新增成员</div>
     </div>
+    <div class="card" title="shape: agent-echo — 前缀谓词命中的机器形状回声，展示层沉底；批量否决: vibe skill discover dismiss --shape agent-echo">
+      <div class="label">机器形状</div>
+      <div class="value ${echoCount ? 'yellow' : ''}">${echoCount}</div>
+      <div class="sub">agent-echo · 已沉底</div>
+    </div>
+    ${outcomeText ? `<div class="card"><div class="label">来源统计（只读）</div><div class="sub" style="font-size:12px">${escapeHtml(outcomeText)}</div><div class="sub">成功=提升后路由命中≥5 · 否决=池翻转(不含 shape-batch)</div></div>` : ''}
   `;
 
   const list = document.getElementById('disc-list');
@@ -701,6 +716,9 @@ async function loadDiscoveries() {
     const sourceBadge = c.source === 'miss_recurrence'
       ? '<span class="badge miss">miss×复现</span>'
       : '<span class="badge single">gold ' + Math.round((ev.gold_rate || 0) * 100) + '%</span>';
+    const echoBadge = c.agent_echo
+      ? '<span class="badge muted" title="机器形状回声（前缀谓词命中），已沉底；批量否决: vibe skill discover dismiss --shape agent-echo">shape: agent-echo</span>'
+      : '';
     const examples = (c.example_queries || []).map(q =>
       '<div>• ' + escapeHtml(q) + '</div>').join('');
     const steps = (c.top_steps || []).map(s =>
@@ -709,11 +727,12 @@ async function loadDiscoveries() {
     return '<div class="card disc-card">' +
       '<div class="head">' + xpBadge +
         '<span class="mono clickable" title="' + escapeHtml(c.cluster_id) + '">' + escapeHtml(c.cluster_id_short) + '</span>' +
-        scopeBadge + statusBadge + sourceBadge +
+        scopeBadge + statusBadge + sourceBadge + echoBadge +
         '<span style="margin-left:auto;font-size:12px;color:var(--dim)">score ' + c.score + '</span>' +
       '</div>' +
       '<div class="pattern">' + escapeHtml(c.pattern_summary || '(no query)') + '</div>' +
       (examples ? '<div class="examples">' + examples + '</div>' : '') +
+      '<div class="meta-line2" title="为什么在这里 —— 只从候选实存字段直译（修订 F）">为什么在: ' + escapeHtml(c.why_here || '') + '</div>' +
       '<div class="meta-line2">证据: ' + (ev.span_count ?? 0) + ' spans · ' + (ev.distinct_task_keys ?? 0) + ' tasks' +
         ' · 行为: ' + escapeHtml(c.behavior_evidence || 'not_collected') +
         ' · 首见: ' + c.age_days + 'd' + (c.cooling ? ' (冷却中)' : '') + '</div>' +

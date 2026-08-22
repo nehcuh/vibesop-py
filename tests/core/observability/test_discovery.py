@@ -13,15 +13,19 @@ from vibesop.core.observability.discovery import (
     COOLING_DAYS,
     DISMISS_TIGHTEN_THRESHOLD,
     HISTORY_HIT_THRESHOLD,
+    SHAPE_BATCH_DISMISS_REASON,
     DiscoveryObservationStore,
     DiscoverySignalStore,
     behavior_evidence_label,
     build_queue,
+    candidate_agent_echo,
     candidate_source,
     cluster_fingerprint,
     count_skill_route_hits,
     evidence_score,
+    source_outcome_stats,
     threshold_suggestion,
+    why_here,
 )
 from vibesop.core.observability.skill_promote import ClusterCandidate
 
@@ -322,3 +326,107 @@ class TestCrossProcessLocking:
         DiscoveryObservationStore(tmp_path).observe("fp1", 5, now=T0)
         assert fcntl.LOCK_EX in calls
         assert fcntl.LOCK_UN in calls
+
+
+class TestWhyHere:
+    """gate35 N1 (修订 F): 「为什么在这里」只从实存字段直译。
+
+    文案-字段一致性测试（防文案说谎）: 完整断言渲染文本, 且明确不含
+    recurrence pairs/days 之类的编造口径（字段不存在于 ClusterCandidate）。
+    """
+
+    def test_gold_candidate_exact_rendering(self) -> None:
+        c = _candidate(span_count=7, gold_rate=0.8, task_ids=["t1", "t2", "t3"])
+        c.first_seen_at = datetime(2026, 7, 20, 8, 0, 0, tzinfo=UTC)
+        assert why_here(c) == ("来源 gold（成功簇 80%）· 7 spans · 3 tasks · 首见 2026-07-20")
+
+    def test_miss_candidate_exact_rendering(self) -> None:
+        c = _candidate(source="miss_recurrence", gold_rate=0.0, span_count=4)
+        c.first_seen_at = datetime(2026, 8, 1, 12, 0, 0, tzinfo=UTC)
+        assert why_here(c) == (
+            "来源 miss_recurrence（未命中复现）· 4 spans · 3 tasks · 首见 2026-08-01"
+        )
+        # 修订 F: 无 pairs/days 字段 → 文案不得出现编造的复现对数/天数口径。
+        assert "对" not in why_here(c)
+        assert "天" not in why_here(c).split("首见")[0]
+
+    def test_legacy_row_falls_back_to_created_at(self) -> None:
+        c = _candidate(created_at=T0)  # first_seen_at=None (存量行)
+        assert "首见 2026-08-01" in why_here(c)
+
+
+class TestCandidateAgentEcho:
+    """gate35 D2: 行级打标看代表 query（queries[0], 与 pattern 列同一条）。"""
+
+    def test_representative_echo_tagged(self) -> None:
+        c = _candidate(queries=["You are an adversarial SKEPTIC", "normal query"])
+        assert candidate_agent_echo(c) is True
+
+    def test_non_representative_echo_not_tagged(self) -> None:
+        """Echo only in queries[1:] → NOT tagged (标集=否决集, 修订 E)。"""
+        c = _candidate(queries=["how do I run the tests", "You are a reviewer"])
+        assert candidate_agent_echo(c) is False
+
+    def test_no_queries_not_tagged(self) -> None:
+        assert candidate_agent_echo(_candidate(queries=[])) is False
+
+
+class TestSourceOutcomeStats:
+    """gate35 D3 (修订 I): per-source 只读计数口径。
+
+    success = promoted 且提升后路由命中 ≥ HISTORY_HIT_THRESHOLD;
+    dismiss = 池翻转排除 shape-batch; shape-batch 单列。
+    """
+
+    def _analytics(self, tmp_path: Path, hits: int, skill_id: str) -> Path:
+        path = tmp_path / "analytics.jsonl"
+        path.write_text(
+            "".join(json.dumps({"primary_skill": skill_id}) + "\n" for _ in range(hits)),
+            encoding="utf-8",
+        )
+        return path
+
+    def test_success_dismiss_and_shape_batch_buckets(self, tmp_path: Path) -> None:
+        analytics = self._analytics(tmp_path, HISTORY_HIT_THRESHOLD, "custom/win")
+        winner = _candidate("w" * 40)
+        winner.status = "promoted"
+        winner.source_skill_id = "custom/win"
+        almost = _candidate("a" * 40)  # promoted but below hit threshold
+        almost.status = "promoted"
+        almost.source_skill_id = "custom/nobody-hit-this"
+        dismissed = _candidate("d" * 40)
+        dismissed.status = "dismissed"
+        dismissed.dismiss_reason = "noise"
+        batch = _candidate("b" * 40)
+        batch.status = "dismissed"
+        batch.dismiss_reason = SHAPE_BATCH_DISMISS_REASON
+        pending = _candidate("p" * 40)
+
+        stats = source_outcome_stats([winner, almost, dismissed, batch, pending], analytics)
+        assert stats == {"gold": {"success": 1, "dismiss": 1, "shape_batch": 1}}
+
+    def test_per_source_separation(self, tmp_path: Path) -> None:
+        analytics = self._analytics(tmp_path, 0, "custom/x")
+        miss = _candidate("m" * 40, source="miss_recurrence", gold_rate=0.0)
+        miss.status = "dismissed"
+        miss.dismiss_reason = "noise"
+        stats = source_outcome_stats([miss], analytics)
+        assert stats == {"miss_recurrence": {"success": 0, "dismiss": 1, "shape_batch": 0}}
+
+    def test_missing_analytics_file_yields_zero_success(self, tmp_path: Path) -> None:
+        """暂无数据源 → success 计 0；若桶因此全零则整体不返回
+        (gate35 复审 NIT: 全零桶无信息量)。"""
+        promoted = _candidate("z" * 40)
+        promoted.status = "promoted"
+        promoted.source_skill_id = "custom/anything"
+        stats = source_outcome_stats([promoted], tmp_path / "nope.jsonl")
+        assert stats == {}  # 唯一桶全零 → 不渲染
+        # 同 source 另有真实 dismiss 时桶保留, success 仍为 0。
+        dismissed = _candidate("d" * 40)
+        dismissed.status = "dismissed"
+        dismissed.dismiss_reason = "noise"
+        stats = source_outcome_stats([promoted, dismissed], tmp_path / "nope.jsonl")
+        assert stats == {"gold": {"success": 0, "dismiss": 1, "shape_batch": 0}}
+
+    def test_empty_rows(self, tmp_path: Path) -> None:
+        assert source_outcome_stats([], tmp_path / "nope.jsonl") == {}

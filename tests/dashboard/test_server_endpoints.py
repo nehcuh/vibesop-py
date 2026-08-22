@@ -133,9 +133,7 @@ class TestOrchestrationDagEndpoint:
         self, client: TestClient, tmp_project: Path
     ) -> None:
         # No plan, no span — trace_id "T-missing" doesn't exist anywhere
-        response = client.get(
-            "/api/orchestration/dag", params={"trace_id": "T-missing"}
-        )
+        response = client.get("/api/orchestration/dag", params={"trace_id": "T-missing"})
         assert response.status_code == 404
         body = response.json()
         assert "trace_id" in body["error"].lower() or "not found" in body["error"].lower()
@@ -166,9 +164,7 @@ class TestOrchestrationDagEndpoint:
             task_id="s1",
         )
 
-        response = client.get(
-            "/api/orchestration/dag", params={"trace_id": "T-full"}
-        )
+        response = client.get("/api/orchestration/dag", params={"trace_id": "T-full"})
         assert response.status_code == 200
         body = response.json()
         assert body["iterations"] == 1
@@ -192,9 +188,7 @@ class TestOrchestrationDagEndpoint:
             steps=[{"step_id": "s1"}],
         )
 
-        response = client.get(
-            "/api/orchestration/dag", params={"trace_id": "T-plan-only"}
-        )
+        response = client.get("/api/orchestration/dag", params={"trace_id": "T-plan-only"})
         assert response.status_code == 200
         body = response.json()
         assert any(n["kind"] == "plan" for n in body["nodes"])
@@ -214,9 +208,7 @@ class TestOrchestrationDagEndpoint:
             metadata={"query": "q"},
         )
 
-        response = client.get(
-            "/api/orchestration/dag", params={"trace_id": "T-span-only"}
-        )
+        response = client.get("/api/orchestration/dag", params={"trace_id": "T-span-only"})
         assert response.status_code == 200
         body = response.json()
         assert any(n["kind"] == "user_intent" for n in body["nodes"])
@@ -233,14 +225,10 @@ class TestOrchestrationDagEndpoint:
         _write_plan(tmp_project, plan_id="plan-a", trace_id="T-1")
 
         # T-1x is not T-1, must 404 despite shared prefix
-        response = client.get(
-            "/api/orchestration/dag", params={"trace_id": "T-1x"}
-        )
+        response = client.get("/api/orchestration/dag", params={"trace_id": "T-1x"})
         assert response.status_code == 404
 
-    def test_missing_trace_id_param_returns_422(
-        self, client: TestClient
-    ) -> None:
+    def test_missing_trace_id_param_returns_422(self, client: TestClient) -> None:
         """FastAPI auto-validates required query params."""
         response = client.get("/api/orchestration/dag")
         assert response.status_code == 422
@@ -286,9 +274,7 @@ class TestReflectionsPostEndpoint:
         record = json.loads(lines[0])
         assert record["kind"] == "trigger_vague"
 
-    def test_rejects_invalid_kind_with_422(
-        self, client: TestClient
-    ) -> None:
+    def test_rejects_invalid_kind_with_422(self, client: TestClient) -> None:
         payload = {
             "target_type": "task",
             "target_id": "x",
@@ -299,9 +285,7 @@ class TestReflectionsPostEndpoint:
         response = client.post("/api/reflections", json=payload)
         assert response.status_code == 422
 
-    def test_rejects_invalid_severity_with_422(
-        self, client: TestClient
-    ) -> None:
+    def test_rejects_invalid_severity_with_422(self, client: TestClient) -> None:
         payload = {
             "target_type": "task",
             "target_id": "x",
@@ -313,9 +297,7 @@ class TestReflectionsPostEndpoint:
         response = client.post("/api/reflections", json=payload)
         assert response.status_code == 422
 
-    def test_rejects_invalid_target_type_with_422(
-        self, client: TestClient
-    ) -> None:
+    def test_rejects_invalid_target_type_with_422(self, client: TestClient) -> None:
         payload = {
             "target_type": "unknown_thing",
             "target_id": "x",
@@ -326,9 +308,7 @@ class TestReflectionsPostEndpoint:
         response = client.post("/api/reflections", json=payload)
         assert response.status_code == 422
 
-    def test_rejects_empty_required_string_with_422(
-        self, client: TestClient
-    ) -> None:
+    def test_rejects_empty_required_string_with_422(self, client: TestClient) -> None:
         """Empty string is not a valid target_id/task_id/content — guard
         against accidentally-submitting-empty-form bugs."""
         payload = {
@@ -341,9 +321,7 @@ class TestReflectionsPostEndpoint:
         response = client.post("/api/reflections", json=payload)
         assert response.status_code == 422
 
-    def test_rejects_content_over_500_chars_with_422(
-        self, client: TestClient
-    ) -> None:
+    def test_rejects_content_over_500_chars_with_422(self, client: TestClient) -> None:
         payload = {
             "target_type": "task",
             "target_id": "x",
@@ -354,9 +332,7 @@ class TestReflectionsPostEndpoint:
         response = client.post("/api/reflections", json=payload)
         assert response.status_code == 422
 
-    def test_missing_required_field_returns_422(
-        self, client: TestClient
-    ) -> None:
+    def test_missing_required_field_returns_422(self, client: TestClient) -> None:
         # Missing 'kind'
         payload = {
             "target_type": "task",
@@ -411,9 +387,7 @@ class TestReflectionsListEndpoint:
     returns all (newest last, matching store order). Filters narrow by
     task_id / status / target_id."""
 
-    def test_lists_all_when_no_filter(
-        self, client: TestClient, tmp_project: Path
-    ) -> None:
+    def test_lists_all_when_no_filter(self, client: TestClient, tmp_project: Path) -> None:
         _seed_reflection(tmp_project, content="first")
         _seed_reflection(tmp_project, content="second")
 
@@ -424,9 +398,7 @@ class TestReflectionsListEndpoint:
         assert body[0]["content"] == "first"
         assert body[1]["content"] == "second"
 
-    def test_filters_by_task_id(
-        self, client: TestClient, tmp_project: Path
-    ) -> None:
+    def test_filters_by_task_id(self, client: TestClient, tmp_project: Path) -> None:
         _seed_reflection(tmp_project, task_id="T-A", content="a1")
         _seed_reflection(tmp_project, task_id="T-B", content="b1")
         _seed_reflection(tmp_project, task_id="T-A", content="a2")
@@ -437,9 +409,7 @@ class TestReflectionsListEndpoint:
         assert len(body) == 2
         assert all(r["task_id"] == "T-A" for r in body)
 
-    def test_filters_by_status_open(
-        self, client: TestClient, tmp_project: Path
-    ) -> None:
+    def test_filters_by_status_open(self, client: TestClient, tmp_project: Path) -> None:
         _seed_reflection(tmp_project, status="open", content="open-1")
         _seed_reflection(tmp_project, status="addressed", content="done-1")
         _seed_reflection(tmp_project, status="open", content="open-2")
@@ -450,35 +420,25 @@ class TestReflectionsListEndpoint:
         assert len(body) == 2
         assert all(r["status"] == "open" for r in body)
 
-    def test_filters_by_target_id(
-        self, client: TestClient, tmp_project: Path
-    ) -> None:
+    def test_filters_by_target_id(self, client: TestClient, tmp_project: Path) -> None:
         _seed_reflection(tmp_project, target_id="step:plan-1:s1")
         _seed_reflection(tmp_project, target_id="step:plan-1:s2")
 
-        response = client.get(
-            "/api/reflections", params={"target_id": "step:plan-1:s1"}
-        )
+        response = client.get("/api/reflections", params={"target_id": "step:plan-1:s1"})
         assert response.status_code == 200
         body = response.json()
         assert len(body) == 1
         assert body[0]["target_id"] == "step:plan-1:s1"
 
-    def test_returns_empty_list_when_no_reflections(
-        self, client: TestClient
-    ) -> None:
+    def test_returns_empty_list_when_no_reflections(self, client: TestClient) -> None:
         response = client.get("/api/reflections")
         assert response.status_code == 200
         assert response.json() == []
 
-    def test_invalid_status_filter_returns_422(
-        self, client: TestClient
-    ) -> None:
+    def test_invalid_status_filter_returns_422(self, client: TestClient) -> None:
         """``status`` query param is itself Literal-validated — can't ask
         for status=banana."""
-        response = client.get(
-            "/api/reflections", params={"status": "banana"}
-        )
+        response = client.get("/api/reflections", params={"status": "banana"})
         assert response.status_code == 422
 
 
@@ -496,44 +456,30 @@ class TestReflectionPatchEndpoint:
     - 200 returns the updated reflection (post-patch read)
     """
 
-    def test_updates_status_to_addressed(
-        self, client: TestClient, tmp_project: Path
-    ) -> None:
+    def test_updates_status_to_addressed(self, client: TestClient, tmp_project: Path) -> None:
         rid = _seed_reflection(tmp_project, status="open")
-        response = client.patch(
-            f"/api/reflections/{rid}", json={"status": "addressed"}
-        )
+        response = client.patch(f"/api/reflections/{rid}", json={"status": "addressed"})
         assert response.status_code == 200
         body = response.json()
         assert body["status"] == "addressed"
         assert body["id"] == rid
 
-    def test_updates_status_to_dismissed(
-        self, client: TestClient, tmp_project: Path
-    ) -> None:
+    def test_updates_status_to_dismissed(self, client: TestClient, tmp_project: Path) -> None:
         rid = _seed_reflection(tmp_project, status="open")
-        response = client.patch(
-            f"/api/reflections/{rid}", json={"status": "dismissed"}
-        )
+        response = client.patch(f"/api/reflections/{rid}", json={"status": "dismissed"})
         assert response.status_code == 200
         assert response.json()["status"] == "dismissed"
 
-    def test_returns_404_when_reflection_id_not_found(
-        self, client: TestClient
-    ) -> None:
+    def test_returns_404_when_reflection_id_not_found(self, client: TestClient) -> None:
         response = client.patch(
             "/api/reflections/nonexistent-id",
             json={"status": "addressed"},
         )
         assert response.status_code == 404
 
-    def test_rejects_invalid_status_with_422(
-        self, client: TestClient, tmp_project: Path
-    ) -> None:
+    def test_rejects_invalid_status_with_422(self, client: TestClient, tmp_project: Path) -> None:
         rid = _seed_reflection(tmp_project)
-        response = client.patch(
-            f"/api/reflections/{rid}", json={"status": "BLOCKER"}
-        )
+        response = client.patch(f"/api/reflections/{rid}", json={"status": "BLOCKER"})
         assert response.status_code == 422
 
     def test_rejects_missing_status_field_with_422(
@@ -543,9 +489,7 @@ class TestReflectionPatchEndpoint:
         response = client.patch(f"/api/reflections/{rid}", json={})
         assert response.status_code == 422
 
-    def test_patch_persists_to_disk(
-        self, client: TestClient, tmp_project: Path
-    ) -> None:
+    def test_patch_persists_to_disk(self, client: TestClient, tmp_project: Path) -> None:
         """The 200 response isn't enough — the store must actually write
         the new status so a subsequent GET reflects the change."""
         rid = _seed_reflection(tmp_project, status="open")
@@ -689,9 +633,7 @@ class TestDiscoveriesEndpoint:
         assert len(cards) == 1
         assert cards[0]["scope"] == "global"
 
-    def test_free_text_sanitized_and_truncated(
-        self, client: TestClient, tmp_project: Path
-    ) -> None:
+    def test_free_text_sanitized_and_truncated(self, client: TestClient, tmp_project: Path) -> None:
         """Raw queries may contain newlines / 300+ chars — card text must be
         single-line and truncated with an ellipsis."""
         long_query = "line one\n\n" + "x" * 300
@@ -736,9 +678,7 @@ class TestDiscoveriesEndpoint:
         assert muted_card["mute_expires_at"] is not None
         assert body["stats"]["by_status"] == {"dismissed": 1, "muted": 1}
 
-    def test_expired_mute_does_not_mark_card(
-        self, client: TestClient, tmp_project: Path
-    ) -> None:
+    def test_expired_mute_does_not_mark_card(self, client: TestClient, tmp_project: Path) -> None:
         """Mutes auto-restore on expiry — an expired mute leaves the card
         pending (到期自动恢复, no explicit unmute)."""
         from datetime import UTC, datetime, timedelta
@@ -767,3 +707,67 @@ class TestDiscoveriesEndpoint:
         assert client.post("/api/discoveries", json={}).status_code == 405
         assert client.put("/api/discoveries", json={}).status_code == 405
         assert client.delete("/api/discoveries").status_code == 405
+
+
+class TestDiscoveriesGate35:
+    """gate35 阶段一 — 看板同口径: agent-echo 打标沉底 / why_here /
+    per-source 只读统计（shape-batch 单列）。"""
+
+    def test_echo_card_tagged_and_sunk(self, client: TestClient, tmp_project: Path) -> None:
+        obs = tmp_project / ".vibe" / "observability"
+        # Echo card scores HIGHER (bigger cluster) — must still sink.
+        echo_id = _seed_candidate(
+            obs,
+            seed="echo",
+            queries=["You are an adversarial SKEPTIC"],
+            span_count=12,
+            gold_rate=0.95,
+        )
+        normal_id = _seed_candidate(
+            obs,
+            seed="norm",
+            queries=["how do I run the tests"],
+            span_count=3,
+            gold_rate=0.6,
+        )
+
+        body = client.get("/api/discoveries").json()
+        cards = body["discoveries"]
+        assert [c["cluster_id"] for c in cards] == [normal_id, echo_id]  # 沉底
+        echo_card = cards[-1]
+        assert echo_card["agent_echo"] is True
+        assert cards[0]["agent_echo"] is False
+        assert body["stats"]["agent_echo"] == 1
+
+    def test_why_here_field_consistent_with_candidate(
+        self, client: TestClient, tmp_project: Path
+    ) -> None:
+        """防文案说谎: why_here 只从实存字段直译 (修订 F)。"""
+        obs = tmp_project / ".vibe" / "observability"
+        _seed_candidate(obs, seed="why", queries=["q"], span_count=7, gold_rate=0.8)
+        card = client.get("/api/discoveries").json()["discoveries"][0]
+        assert card["why_here"].startswith("来源 gold（成功簇 80%）· 7 spans · 3 tasks · 首见 ")
+        assert "对" not in card["why_here"]  # 无编造的 recurrence pairs 口径
+
+    def test_by_source_outcome_excludes_shape_batch(
+        self, client: TestClient, tmp_project: Path
+    ) -> None:
+        """修订 I: dismiss 排除 shape-batch, 单列展示。"""
+        import json as _json
+
+        from vibesop.core.observability.discovery import SHAPE_BATCH_DISMISS_REASON
+        from vibesop.core.observability.skill_promote import ClusterCandidateStore
+
+        obs = tmp_project / ".vibe" / "observability"
+        normal_id = _seed_candidate(obs, seed="nd", queries=["normal dismissed query"])
+        batch_id = _seed_candidate(obs, seed="sb", queries=["You are a batch echo"])
+        store = ClusterCandidateStore(obs)
+        store.dismiss(normal_id, reason="noise")
+        store.dismiss(batch_id, reason=SHAPE_BATCH_DISMISS_REASON)
+        # analytics 不存在 → success 如实为 0
+        (tmp_project / ".vibe" / "analytics.jsonl").write_text(
+            _json.dumps({"primary_skill": "custom/none"}) + "\n", encoding="utf-8"
+        )
+
+        stats = client.get("/api/discoveries").json()["stats"]["by_source_outcome"]
+        assert stats == {"gold": {"success": 0, "dismiss": 1, "shape_batch": 1}}

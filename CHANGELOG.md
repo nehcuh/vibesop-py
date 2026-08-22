@@ -9,6 +9,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 发现队列可读性 + 展示层去噪（gate35 阶段一, 2026-08-22）
+
+按 gate34 定稿路线（`.omx/artifacts/gate34-synthesis.md`）实施，双路复审
+（claude+pi 两轮）收敛。`vibe skill discover` 与看板 Discovery 页：
+
+- **N1 可解释性**：列头自解释化（模式/来源/评分/行为/为什么在）+ `--help`
+  词汇表；"为什么在"行只从实存字段直译（source/gold_rate/span_count/
+  task_ids 数/first_seen_at），有"防文案说谎"测试锁定。
+- **D2 展示层去噪**：新增展示专用前缀谓词 `_has_agent_prompt_prefix`
+  （无 150 字符长度规则；`_is_agent_prompt_shape` 冻结保 replay 基线）;
+  agent-echo 卡片打标沉底；批量否决 `vibe skill discover dismiss
+  --shape agent-echo --yes` 走池状态翻转（project+global 双 scope 都翻,
+  `dismiss_reason=shape-batch` 单列、豁免 threshold_suggestion，确认文案
+  点名 bd1bc217 先例）。形态说明：定稿中"分组可展开"有意简化为打标+
+  沉底+dim,CLI 表格与看板均为平铺呈现。
+- **D3 只读统计列**：per-source success(promoted→activated→路由命中≥5)
+  /dismiss（池翻转，排除 shape-batch）计数，口径进词汇表。
+- **回声基线测量** `scripts/measure_echo_share.py`：cmspark 实测 miss 池
+  回声仅 3.0–4.8%,但**已入队卡片回声 42.9%**(9/21)——痛点在卡片层
+  不在池层，展示层裁决获数据背书；重议门槛（卡片回声率>80% 且风险人口
+  <1%）两条件均不满足，intake 过滤继续封存。
+
 ### EvoTrace 吸收方向对抗评审与实施路线（gate34, 2026-08-22）
 
 从 EvoTrace 学习提炼的 4 个优化方向，经三路独立对抗设计（产品/架构/质疑）
