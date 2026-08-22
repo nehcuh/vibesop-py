@@ -59,6 +59,8 @@ htmlcov/
 # VibeSOP observability runtime data (spans.jsonl, triage logs).
 # Per-project, generated at runtime, can grow large.
 .vibe/observability/
+# Tool-sequence capture log + cursor + liveness marker (P3 telemetry).
+.vibe/tool_sequences*
 # User-installed skills (mattpocock, superpowers, etc.) are environment-local.
 # Cross-cutting workflow definitions are project-shared and tracked.
 .vibe/skills/*
