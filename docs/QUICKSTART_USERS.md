@@ -335,7 +335,7 @@ A: 使用 `vibe feedback record` 记录反馈，VibeSOP 会学习你的偏好。
 ### 文档 Documentation
 
 - [完整文档](../README.md) - Complete documentation
-- [哲学](../PHILOSOPHY.md) - Philosophy
+- [哲学](PHILOSOPHY.md) - Philosophy
 - [架构](architecture/) - Architecture
 
 ### 社区 Community
@@ -365,5 +365,5 @@ vibe skills --help    # skills 命令帮助
 
 **祝你使用愉快！Happy using!**
 
-**版本 Version**: 8.0.0.dev0
+**版本 Version**: 8.1.0
 **更新时间 Last Updated**: 2026-06-05

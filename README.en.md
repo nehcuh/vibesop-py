@@ -5,7 +5,7 @@
 [![Python](https://img.shields.io/badge/Python-3.12+-blue.svg)](https://www.python.org/downloads/)
 [![Ruff](https://img.shields.io/badge/Ruff-Enabled-black.svg)](https://github.com/astral-sh/ruff)
 [![Coverage](https://img.shields.io/badge/Coverage-73%25-yellow.svg)]()
-[![Version](https://img.shields.io/badge/Version-8.0.0.dev0-blue.svg)](https://github.com/nehcuh/vibesop-py)
+[![Version](https://img.shields.io/badge/Version-8.1.0-blue.svg)](https://github.com/nehcuh/vibesop-py)
 [![Spec](https://img.shields.io/badge/Spec-v3.0-green.svg)](docs/skill-format-spec-v3.md)
 [![Conformance](https://img.shields.io/badge/Conformance-85%20tests-brightgreen.svg)]()
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -260,7 +260,7 @@ Terminal states (not routing layers):
 - **No Match**: all candidates below the minimum confidence threshold
 - **Fallback LLM**: last-resort raw LLM routing
 
-### Skill Market — v5.2.0
+### Skill Market (v5.2.0+)
 
 Discover and install skills from the public ecosystem:
 
@@ -287,7 +287,7 @@ vibe market trending agent
 
 **Smart Suggestion Feedback Loop** (v8.0): Unmatched queries are locally counted anonymously (hash only). Repeated misses trigger search suggestions. The orchestration confirmation flow and Claude Code tool hooks learn your repeat workflows. `vibe skills suggestions` provides a unified inbox, and `vibe skills distill` distills them into project-level skills in one click (LLM generation + full review + security audit).
 
-### Degradation — v5.2.0
+### Degradation (v5.2.0+)
 
 4-tier confidence degradation replacing binary fallback:
 
@@ -300,7 +300,7 @@ vibe market trending agent
 
 All thresholds are configurable. User-explicitly specified skills are unaffected by degradation.
 
-### Proactive Discovery — v5.2.0
+### Proactive Discovery (v5.2.0+)
 
 After every route, skills not yet used but matching the current workflow are automatically suggested, marked `[DISCOVER]`. Continuously discover skills in the ecosystem that fit your needs.
 
@@ -644,7 +644,7 @@ vibe build opencode --output ~/.config/opencode
 # Manual: source ~/.config/opencode/vibesop-env.sh && opencode
 ```
 
-### Workflow Engine (v6.2.0)
+### Workflow Engine (v6.2.0+)
 
 VibeSOP's dynamic workflow engine supports 6 orchestration patterns, automatically classifying user intent and selecting the best execution strategy.
 
@@ -680,7 +680,7 @@ vibe route --verify "refactor auth module"
 
 ## Architecture
 
-VibeSOP v6.2.0 introduces a **3-pillar architecture** (enhanced with Dynamic Workflow Engine):
+VibeSOP (v5.5.0+) introduces a **3-pillar architecture** (enhanced with Dynamic Workflow Engine):
 
 | Pillar | Purpose | Artifacts |
 |--------|---------|-----------|
@@ -841,21 +841,8 @@ uv run pytest --cov=src/vibesop --cov-report=html
 
 ## Roadmap
 
-- [x] v4.0.0: Core routing engine with 10-layer pipeline
-- [x] v4.1.0: AI Triage production readiness
-- [x] v4.2.0: Skill health monitoring
-- [x] v4.3.0: Context-aware routing + Agent Runtime
-- [x] v4.4.0: SkillOS Orchestration + Lifecycle + Feedback Loop
-- [x] v5.0.0: SkillRuntime — Scope + Lifecycle + Enable/Disable (quality convergence)
-- [x] v5.1.0: SkillMarket + Feedback Loop
-- [x] v5.2.0: Intelligent Ecosystem — Recommendations + Degradation + Discovery
-- [x] v5.3.0: Product Experience — Dashboard + Cleanup + Community + Badges + Onboarding
-- [x] v5.5.0: Skill Protocol Standard — Spec v3.0 + Reference Impl + Conformance Suite (85 tests)
-- [x] v6.0.0: Dynamic Workflow Engine Phase 1 — ClassifierAgent
-- [x] v6.1.0: Dynamic Workflow Engine Phase 2 — VerifierAgent + VerificationLoop
-- [x] v6.2.0: Dynamic Workflow Engine Phase 3 — WorkflowEngine + Reorchestrator + Tournament
-
-See: [docs/ROADMAP.md](docs/ROADMAP.md) | [version_05.md ADR](docs/version_05.md)
+For the full version history see [docs/ROADMAP.md](docs/ROADMAP.md)
+(historical record) and the [version_05.md ADR](docs/archive/version_05.md).
 
 ---
 
@@ -994,7 +981,7 @@ vibe skills add code-reviewer
 
 ---
 
-**Version**: 8.0.0.dev0
+**Version**: 8.1.0
 **Last Updated**: 2026-06-14
 **Status**: ✅ Production Ready (with Multi-Agent Squad + Hook Hardening + prompt-chain-validator)
 

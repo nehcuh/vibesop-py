@@ -1,6 +1,6 @@
 # Workflow Orchestration
 
-> **Version**: v8.0.0+  
+> **Version**: v8.1.0+  
 > **Last Updated**: 2026-04-17
 
 ---
@@ -10,7 +10,7 @@
 **Workflow orchestration is available via `vibe workflows` CLI (v5.3.0+).**
 
 VibeSOP manages the full skill lifecycle including cross-cutting workflows.
-Historical commands removed in v4.1.0 (now superseded):
+Historical commands removed in v4.1 (now superseded):
 
 - ❌ `vibe workflow run` → Use `vibe route` or `vibe orchestrate`
 - ❌ `vibe workflow list` → Use `vibe workflows list`
@@ -48,7 +48,7 @@ enable_ai_triage = true
 learning_enabled = true
 ```
 
-See [Troubleshooting](troubleshooting.md) and [CLI Reference](../../CLI_REFERENCE.md) for more details.
+See [Troubleshooting](troubleshooting.md) and [CLI Reference](CLI_REFERENCE.md) for more details.
 
 ---
 

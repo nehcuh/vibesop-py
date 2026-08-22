@@ -1,6 +1,6 @@
 # VibeSOP Trigger Patterns - Complete Reference
 
-> **Version**: 2.0.0
+> **Version**: 8.1.0
 > **Last Updated**: 2026-04-04
 > **Total Patterns**: 30
 

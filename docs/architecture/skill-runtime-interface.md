@@ -3,7 +3,7 @@
 > **Status**: Approved  
 > **Date**: 2026-04-21  
 > **Scope**: VibeSOP v5.0 — v5.2  skill ecosystem architecture contract  
-> **Related**: [v5.x Roadmap](../../docs/version_05.md)
+> **Related**: [v5.x Roadmap](../archive/version_05.md)
 
 ## 1. Overview
 

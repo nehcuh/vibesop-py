@@ -1,7 +1,7 @@
 # VibeSOP Project Status
 
 > **Last Updated**: 2026-07-18
-> **Version**: 8.0.0.dev0
+> **Version**: 8.1.0
 > **Status**: 🟢 Production Ready (SkillOS — Spec v3.0, Conformance Suite, Agent Runtime, Multi-Agent Squad)
 
 ## Executive Summary
@@ -131,8 +131,6 @@ TOTAL: 1,501 passed, 1 failed, 2 skipped
 ✅ tests/core/skills/test_getattr_security.py
 ```
 
-详见：[KIMI_REVIEW_FIXES_COMPLETE.md](docs/KIMI_REVIEW_FIXES_COMPLETE.md)
-
 ---
 
 ## Recent Improvements (Completed 2026-04-18)
@@ -235,7 +233,7 @@ vibe build claude-code
 
 ## Recent Improvements (Completed 2026-04-25)
 
-### Phase 5: SkillOS Evolution (In Progress — Target v4.4.0)
+### Phase 5: SkillOS Evolution (In Progress — Target: 4.4.x)
 - **Orchestration Preview**: Multi-intent detection + task decomposition (partial, CLI available)
 - **Streaming Progress**: Real-time phase display with Rich Live (implemented)
 - **Skill Lifecycle**: DRAFT → ACTIVE → DEPRECATED → ARCHIVED state machine (implemented)
@@ -265,7 +263,7 @@ The combination of intelligent routing, secure execution, cross-platform compati
 
 ---
 
-**Version**: 8.0.0.dev0
+**Version**: 8.1.0
 **Status**: 🟢 Production Ready — Skill Protocol Standard + Multi-Agent Squad
 **Last Updated**: 2026-07-18
 **Repository**: https://github.com/nehcuh/vibesop-py

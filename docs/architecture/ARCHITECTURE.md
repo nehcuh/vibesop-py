@@ -1,11 +1,11 @@
 # VibeSOP Architecture
 
-> **Version**: 8.0.0.dev0
+> **Version**: 8.1.0
 > **Last Updated**: 2026-06-05
 
-## Three-Pillar Architecture (v6.2.0)
+## Three-Pillar Architecture (v5.5.0+)
 
-VibeSOP v6.2.0 introduces a 3-pillar architecture that defines the AI-assisted
+VibeSOP (v5.5.0+) introduces a 3-pillar architecture that defines the AI-assisted
 development skill protocol standard:
 
 ```
@@ -97,7 +97,7 @@ vibe analyze session              → SessionAnalyzer.analyze()
 
 ---
 
-### 2. Agent Runtime Layer (`src/vibesop/agent/`) ✨ v6.2.0
+### 2. Agent Runtime Layer (`src/vibesop/agent/`) ✨ (v6.2.0+)
 
 Fully wired entry point connecting all runtime components. Platform adapters use
 `AgentRuntime.handle_query()` instead of shelling out to `vibe route` via a
@@ -584,19 +584,19 @@ of platform. The difference is purely in execution concurrency.
 
 ## v5.x Feature Overview
 
-### v5.0.0 — SkillRuntime: Scope + Lifecycle ✅
+### 5.0.0 — SkillRuntime: Scope + Lifecycle ✅
 - Scope isolation (project-level vs global skills)
 - Skill enable/disable with lifecycle state machine
 - DRAFT → ACTIVE → DEPRECATED → ARCHIVED transitions
 - Data pre-burial: usage_stats, version_history, evaluation_context
 
-### v5.1.0 — SkillMarket + Quality ✅
+### 5.1.0 — SkillMarket + Quality ✅
 - Skill marketplace: search (`vibe market search`), install (`vibe market install`)
 - Publish via GitHub Issues (`vibe market publish`)
 - 5-dimension quality evaluation (routing accuracy, user satisfaction, execution success, usage frequency, health score)
 - Automated retention/deprecation with FeedbackLoop
 
-### v5.2.0 — Intelligent Ecosystem ✅
+### 5.2.0 — Intelligent Ecosystem ✅
 - Per-skill recommendation engine (SkillRecommender)
 - 4-level confidence-gated degradation (DegradationManager)
 - Proactive discovery of unused skills matching current workflow
@@ -693,6 +693,6 @@ is implemented in `cli/commands/prompt_chain_cmd.py` and backed by
 
 ## References
 
-- [Principles](docs/PRINCIPLES.md)
-- [Contributing Guide](CONTRIBUTING.md)
-- [API Documentation](docs/api/)
+- [Principles](../PHILOSOPHY.md)
+- [Contributing Guide](../../CONTRIBUTING.md)
+- [API Documentation](../api/)

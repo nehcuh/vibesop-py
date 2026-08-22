@@ -389,8 +389,8 @@ Phase 2: Security audit...
 ## 📚 使用文档
 
 ### 用户文档
-- ✅ [快速开始指南](./QUICKSTART_SKILL_INSTALLATION.md)
-- ✅ [.skill 格式规范](./skill-format-spec.md)
+- ✅ [快速开始指南](../QUICKSTART_SKILL_INSTALLATION.md)
+- ✅ [.skill 格式规范](../skill-format-spec.md)
 - ⏳ 官方技能仓库目录
 - ⏳ 常见问题解答
 

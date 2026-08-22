@@ -5,7 +5,7 @@
 [![Python](https://img.shields.io/badge/Python-3.12+-blue.svg)](https://www.python.org/downloads/)
 [![Ruff](https://img.shields.io/badge/Ruff-Enabled-black.svg)](https://github.com/astral-sh/ruff)
 [![Coverage](https://img.shields.io/badge/Coverage-73%25-yellow.svg)]()
-[![Version](https://img.shields.io/badge/Version-8.0.0.dev0-blue.svg)](https://github.com/nehcuh/vibesop-py)
+[![Version](https://img.shields.io/badge/Version-8.1.0-blue.svg)](https://github.com/nehcuh/vibesop-py)
 [![Spec](https://img.shields.io/badge/Spec-v3.0-green.svg)](docs/skill-format-spec-v3.md)
 [![Conformance](https://img.shields.io/badge/Conformance-85%20tests-brightgreen.svg)]()
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -256,7 +256,7 @@ Terminal states (not routing layers):
 - **No Match**: all candidates below the minimum confidence threshold
 - **Fallback LLM**: last-resort raw LLM routing
 
-### 🛒 技能市场 — v5.2.0
+### 🛒 技能市场 (v5.2.0+)
 
 发现、安装公共生态中的技能：
 
@@ -283,7 +283,7 @@ vibe market trending agent
 
 **智能建议反馈环**（v8.0）：未命中查询会被本地匿名计数（仅存哈希），重复未命中时给出搜索建议；编排确认流与 Claude Code 工具钩子会学习你的重复工作流，`vibe skills suggestions` 统一收件，`vibe skills distill` 一键蒸馏为项目级技能（LLM 生成 + 全文审定 + 安全审计）。
 
-### 📉 智能降级 — v5.2.0
+### 📉 智能降级 (v5.2.0+)
 
 4 级置信度降级，替代二元 fallback：
 
@@ -296,7 +296,7 @@ vibe market trending agent
 
 所有阈值可配置。用户显式指定的技能不受降级影响。
 
-### 🔍 主动发现 — v5.2.0
+### 🔍 主动发现 (v5.2.0+)
 
 每次路由后自动推荐尚未使用但匹配当前工作流的技能，标记为 `[DISCOVER]`。让你持续发现生态中适合你的技能。
 
@@ -640,7 +640,7 @@ vibe build opencode --output ~/.config/opencode
 # Manual: source ~/.config/opencode/vibesop-env.sh && opencode
 ```
 
-### Workflow Engine (v6.2.0)
+### Workflow Engine (v6.2.0+)
 
 VibeSOP 的动态工作流引擎支持 6 种编排模式，自动分类用户意图并选择最佳执行策略。
 
@@ -676,7 +676,7 @@ vibe route --verify "重构认证模块"
 
 ## 架构
 
-VibeSOP v8.0.0 introduces a **3-pillar architecture** (enhanced with Dynamic Workflow Engine):
+VibeSOP (v5.5.0+) introduces a **3-pillar architecture** (enhanced with Dynamic Workflow Engine):
 
 | Pillar | Purpose | Artifacts |
 |--------|---------|-----------|
@@ -837,21 +837,9 @@ uv run pytest --cov=src/vibesop --cov-report=html
 
 ## 路线图
 
-- [x] v4.0.0: 核心路由引擎
-- [x] v4.1.0: AI Triage 生产就绪
-- [x] v4.2.0: 技能健康监控
-- [x] v4.3.0: 上下文感知路由 + Agent Runtime
-- [x] v4.4.0: SkillOS 编排 + 生命周期 + 反馈闭环
-- [x] v5.0.0: SkillRuntime — 作用域 + 生命周期 + 启禁用（质量收敛）
-- [x] v5.1.0: 技能市场 + 反馈闭环
-- [x] v5.2.0: 智能生态系统 — 推荐 + 退化 + 发现
-- [x] v5.3.0: 产品体验重塑 — 仪表盘 + 清理 + 社区 + 徽章 + 引导
-- [x] v5.5.0: 技能协议标准 — Spec v3.0 + 参考实现 + 兼容性套件 (85 tests)
-- [x] v6.0.0: Dynamic Workflow Engine Phase 1 — ClassifierAgent
-- [x] v6.1.0: Dynamic Workflow Engine Phase 2 — VerifierAgent + VerificationLoop
-- [x] v6.2.0: Dynamic Workflow Engine Phase 3 — WorkflowEngine + Reorchestrator + Tournament
+已完成里程碑（v4.0–v6.2 等）的完整清单见 [docs/ROADMAP.md](docs/ROADMAP.md)（历史版本记录）。
 
-详见: [docs/ROADMAP.md](docs/ROADMAP.md) | [version_05.md ADR](docs/version_05.md)
+详见: [docs/ROADMAP.md](docs/ROADMAP.md) | [version_05.md ADR](docs/archive/version_05.md)
 
 ---
 

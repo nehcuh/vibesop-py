@@ -1,6 +1,6 @@
 # Routing System Architecture
 
-> **Version**: 8.0.0.dev0
+> **Version**: 8.1.0
 > **Last Updated**: 2026-07-02
 
 ## Overview
@@ -362,7 +362,7 @@ routing:
   index_external_trusted_floor: 0.35    # Pack-vs-trusted arbitration floor (0 disables)
 ```
 
-## Degradation System (v5.2.0)
+## Degradation System (v5.2.0+)
 
 After a skill match is found, the `DegradationManager` evaluates confidence and applies a 4-level degradation:
 
@@ -388,7 +388,7 @@ Explicit user-specified skills (Layer 0 EXPLICIT, Layer 7 CUSTOM) bypass degrada
 **Implementation**: `src/vibesop/core/routing/degradation.py`
 
 
-## Skill Recommendation & Discovery (v5.2.0)
+## Skill Recommendation & Discovery (v5.2.0+)
 
 The `SkillRecommender` enriches routing results with two strategies:
 

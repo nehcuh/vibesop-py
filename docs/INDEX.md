@@ -1,7 +1,7 @@
 # VibeSOP Documentation Index
 
 > **Last Updated**: 2026-07-18
-> **Version**: 8.0.0.dev0
+> **Version**: 8.1.0
 
 This document serves as the central index for all VibeSOP documentation, organized by purpose and audience.
 
@@ -96,7 +96,6 @@ These files remain in the project root for discoverability and tool integration:
 
 - **[OMX Guide](OMX_GUIDE.md)** — oh-my-codex (OMX) skill pack complete guide
   - deep-interview, ralph, ralplan, team, ultrawork, autopilot, ultraqa
-- **[Superpowers Plans](superpowers/plans/)** — Implementation plans and delivery summaries for superpowers integration
 
 ---
 
@@ -110,11 +109,11 @@ These files remain in the project root for discoverability and tool integration:
 - **[Releasing](dev/releasing.md)** — Release process and versioning
 - **[Testing](dev/testing.md)** — Testing strategies and conventions
 
-### Technical Planning
+### Technical Planning (archive)
 
-- **[CLI Optimization Plan](dev/CLI_OPTIMIZATION_PLAN.md)** — Performance improvement initiatives
-- **[Production Readiness Review](dev/PRODUCTION_READINESS_REVIEW.md)** — Production readiness assessment
-- **[Roadmap Index](dev/roadmap-index.md)** — Detailed roadmap breakdown
+- **[CLI Optimization Plan](archive/CLI_OPTIMIZATION_PLAN.md)** — Performance improvement initiatives
+- **[Production Readiness Review](archive/PRODUCTION_READINESS_REVIEW.md)** — Production readiness assessment
+- **[Roadmap Index](archive/roadmap-index.md)** — Detailed roadmap breakdown
 
 ### Deep Dives
 
@@ -158,17 +157,17 @@ These files remain in the project root for discoverability and tool integration:
 
 ## 🌐 Community & Articles
 
-- **[Discussion Summary](DISCUSSION_SUMMARY.md)** — Community discussion summaries
+- **[Discussion Summary](archive/DISCUSSION_SUMMARY.md)** — Community discussion summaries
 - **[Vibe Coding Article](vibe-coding-article.md)** — Article on vibe coding philosophy
-- **[Version 0.5 ADR](version_05.md)** — v5.x architecture decision record (detailed)
+- **[Version 0.5 ADR](archive/version_05.md)** — v5.x architecture decision record (detailed)
 
 ---
 
-## 📊 Key Metrics (v7.0.0)
+## 📊 Key Metrics (v7.0.0+)
 
 | Metric | Value |
 |--------|-------|
-| **Version** | 8.0.0.dev0 |
+| **Version** | 8.1.0 |
 | **Tests** | 4,066+ pytest passing |
 | **Coverage** | ~73% (target: 75%) |
 | **Skills Supported** | 50+ builtin + 43 community (mattpocock + superpowers) |

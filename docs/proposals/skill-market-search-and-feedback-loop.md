@@ -2,7 +2,7 @@
 
 > **日期**: 2026-07-18
 > **状态**: ✅ 已实现（P0–P4 全部落地，逐阶段 Pi 复审 + Docker e2e，commit ae08592→322ea1a）
-> **版本**: 8.0.0.dev0
+> **版本**: 8.1.0
 > **作者**: Kimi（分析）+ Pi（评审）+ 用户（决策）
 
 ---
@@ -297,5 +297,5 @@ def add_missed_query(
 ## 附录：评审记录
 
 - **四视角 fanout**（2026-07-18，Kimi explore agents）：产品 UX / 架构实现 / 安全隐私 / 红队替代方案
-- **Pi 对抗评审**（2026-07-18，pi v0.80.7）：5 条盲区挑战（① OrchestrationResult 签名耦合 ② NO_MATCH 数据真空 ③ collector 入口不兼容 ④ 数据回流架构难题 ⑤ opt-in 死锁）+ 优先级重排（商店 P0）+ hash-only 计数器方案；经代码复核，①③⑤ 并入设计，④ 以 hooks 第三路径回应
+- **Pi 对抗评审**（2026-07-18，pi 0.80.7）：5 条盲区挑战（① OrchestrationResult 签名耦合 ② NO_MATCH 数据真空 ③ collector 入口不兼容 ④ 数据回流架构难题 ⑤ opt-in 死锁）+ 优先级重排（商店 P0）+ hash-only 计数器方案；经代码复核，①③⑤ 并入设计，④ 以 hooks 第三路径回应
 - **分歧裁决**：Pi 提议「砍 crawler 只做 git URL 安装」未采纳（用户要的是搜索发现体验，URL 安装已存在，两者互补）；「LLM 初筛代替策展」降为可选增强

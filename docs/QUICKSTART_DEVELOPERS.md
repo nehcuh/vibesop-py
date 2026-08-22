@@ -101,7 +101,7 @@ cd ~/.claude/skills/my-review
 
 ### Step 2: 创建 SKILL.md
 
-```markdown
+````markdown
 # My Code Review Skill
 
 > 我的自定义代码审查技能
@@ -134,7 +134,7 @@ type: prompt
 2. 检查性能问题
 3. 检查代码风格
 4. 提供改进建议
-```
+````
 
 ### Step 3: 使用你的技能
 
@@ -317,10 +317,10 @@ A: 可以。没有 API key 时，VibeSOP 使用关键词和 TF-IDF 匹配（准�
 
 - 📖 阅读完整文档: [README.md](../README.md)
 - 🏗️ 了解架构: [docs/architecture/](architecture/)
-- 🎯 查看技能规范: [docs/SKILL_SPEC.md](SKILL_SPEC.md)
+- 🎯 查看技能规范: [docs/skill-format-spec.md](skill-format-spec.md)
 - 💬 参与讨论: [GitHub Discussions](https://github.com/nehcuh/vibesop-py/discussions)
 
 ---
 
-**版本 Version**: 8.0.0.dev0
+**版本 Version**: 8.1.0
 **更新时间 Last Updated**: 2026-06-05

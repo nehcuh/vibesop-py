@@ -1,6 +1,6 @@
 # VibeSOP 技能生态系统完整指南
 
-> **版本**: 1.1.0
+> **版本**: 8.1.0
 > **更新时间**: 2026-06-05
 > **适用版本**: VibeSOP 8.0.0+
 
@@ -1078,13 +1078,13 @@ vibe skills sync claude-code
 ### 配置参考
 
 - **[core/registry.yaml](../core/registry.yaml)** - 技能注册表
-- **[.vibe/config.toml](.vibe/config.toml)** - 项目配置
+- **`.vibe/config.toml`** - 项目配置（运行时路径，非文档）
 
 ---
 
 ## 更新日志
 
-### v1.0.0 (2026-04-19)
+### 1.0.0 (2026-04-19)
 
 - ✅ 初始版本
 - ✅ 完整的 10 层路由系统说明

@@ -49,6 +49,6 @@ vibe route "review my code"
 
 ## Next Steps
 
-- [CLI Reference](../../CLI_REFERENCE.md) — Complete command reference
+- [CLI Reference](CLI_REFERENCE.md) — Complete command reference
 - [Troubleshooting](troubleshooting.md) — Common issues and solutions
 - [Workflow Orchestration](workflows.md) — How VibeSOP handles workflows

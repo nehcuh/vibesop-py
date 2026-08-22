@@ -788,5 +788,3 @@ vectors = encoder.encode(texts, batch_size=32)  # Single model call
 ## See Also
 
 - [Semantic Matching Guide](./guide.md) - User guide for semantic features
-- [Configuration Reference](./config.md) - Configuration options
-- [Performance Guide](./performance.md) - Performance optimization

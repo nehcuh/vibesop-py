@@ -1,6 +1,6 @@
 # Session Intelligent Routing
 
-> **Feature**: v4.2.1+ (current: v8.0.0+)
+> **Feature**: (v4.2.1+) (current: v8.1.0+)
 > **Status**: Stable
 > **Purpose**: Enable AI agents to intelligently suggest skill switches during ongoing conversations, with persistent session state across CLI invocations
 > **Platforms**: Claude Code (hooks), OpenCode (CLI), Generic (CLI)
@@ -171,7 +171,7 @@ No additional setup needed! The hook automatically:
 
 ### 5. Session State Persistence (Automatic)
 
-Starting from v4.2.1, session state is **automatically persisted** between CLI calls:
+Session state is **automatically persisted** between CLI calls (v4.2.1+):
 
 ```bash
 # Turn 1: route selects a skill
@@ -550,7 +550,7 @@ class RoutingSuggestion:
 
 ### Query Pattern Recognition
 
-Starting from v4.2.1, VibeSOP learns from your routing decisions:
+VibeSOP learns from your routing decisions (v4.2.1+):
 
 **How it works**:
 1. Each `route()` call records the query pattern → selected skill mapping
@@ -623,7 +623,7 @@ Skill quality grades (from `vibe skills report`) directly affect routing:
 
 ### Features
 
-- [x] Persistent session storage across restarts (v4.2.1)
+- [x] Persistent session storage across restarts (v4.2.1+)
 - [ ] Session TTL — auto-reset stale sessions after inactivity
 - [ ] Multi-session pattern learning
 - [ ] User feedback integration (accept/reject suggestions)
@@ -634,7 +634,6 @@ Skill quality grades (from `vibe skills report`) directly affect routing:
 
 - [Routing System](../architecture/routing-system.md)
 - [Hooks Guide](../dev/hooks-guide.md)
-- [Skill Triggers](../claude-code/rules/skill-triggers.md)
 
 ---
 

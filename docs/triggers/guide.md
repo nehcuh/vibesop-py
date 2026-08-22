@@ -1,6 +1,6 @@
 # VibeSOP Intelligent Trigger System - User Guide
 
-> **Version**: 2.0.0
+> **Version**: 8.1.0
 > **Last Updated**: 2026-04-04
 > **Phase**: 2 - Intelligent Keyword Trigger System
 
@@ -8,7 +8,7 @@
 
 > ⚠️ **DEPRECATION NOTICE**
 >
-> The `vibe auto` command documented in this guide was **removed in v4.1.0**.
+> The `vibe auto` command documented in this guide was **removed in v4.1**.
 > Use `vibe route <query>` instead for intelligent skill routing.
 > VibeSOP is now a full SkillOS — managing skill discovery, routing,
 > orchestration, lifecycle, and evaluation.

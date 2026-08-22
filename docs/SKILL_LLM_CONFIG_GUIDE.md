@@ -432,7 +432,7 @@ Test Results:
 
 ## 📚 相关文档
 
-- [技能理解与自动配置](./SKILL_UNDERSTANDING_SUMMARY.md)
+- [技能理解与自动配置](./archive/SKILL_UNDERSTANDING_SUMMARY.md)
 - [LLM 配置解析器](../src/vibesop/core/llm_config.py)
 - [技能配置管理器](../src/vibesop/core/skills/config_manager.py)
 

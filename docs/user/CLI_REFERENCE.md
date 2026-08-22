@@ -2049,7 +2049,7 @@ vibe import-rules <file> [options]
 | `vibe skill discover` | Unified discovery queue over candidates |
 | `vibe skill promote <id>` | Promote candidate → draft SKILL.md |
 
-### Removed Commands (v4.1.0)
+### Removed Commands (removed in v4.1)
 
 The following commands were removed:
 
@@ -2090,5 +2090,5 @@ The following commands were removed:
 
 For more information, see:
 - [README.md](../README.md) - Project overview
-- [Architecture Overview](architecture/README.md) - System design
-- [Positioning & Philosophy](POSITIONING.md) - Design principles
+- [Architecture Overview](../architecture/ARCHITECTURE.md) - System design
+- [Positioning & Philosophy](../PHILOSOPHY.md) - Design principles

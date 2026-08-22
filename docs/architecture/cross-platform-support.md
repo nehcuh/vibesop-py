@@ -1,6 +1,6 @@
 # Cross-Platform Support
 
-> **Version**: 8.0.0.dev0
+> **Version**: 8.1.0
 > **Updated**: 2026-06-05
 
 ## Overview
@@ -290,12 +290,12 @@ def build(
 
 ### Platform Roadmap
 
-**Phase 1: Current Platforms** (v4.3.0)
+**Phase 1: Current Platforms** (v4.3.0+)
 - ✅ Claude Code - Full support with hooks
 - ✅ Kimi Code CLI - Full support with inline hooks
 - ✅ OpenCode - Basic support, manual tracking
 
-**Phase 2: Enhanced Platforms** (v4.4.0)
+**Phase 2: Enhanced Platforms** (v4.4.0+)
 - [ ] Add Kimi Code CLI hook-based session tracking
 - [ ] Add OpenCode hooks support when available
 - [ ] Automatic session tracking for OpenCode
@@ -382,11 +382,7 @@ vibe build claude-code
 
 ## Related Documentation
 
-- [Claude Code Adapter](../adapters/claude_code.md)
-- [Kimi Code CLI Adapter](../adapters/kimi_cli.md)
-- [OpenCode Adapter](../adapters/opencode.md)
 - [Session Intelligent Routing](../user/session-intelligent-routing.md)
-- [Adapter Protocol](../dev/adapter-protocol.md)
 
 ---
 

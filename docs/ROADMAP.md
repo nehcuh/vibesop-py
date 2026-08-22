@@ -296,7 +296,7 @@ Transform VibeSOP from a routing tool into a complete Skill Operating System.
 
 ## v5.0.0 — SkillRuntime: Scope + Lifecycle (2026-Q2) ✅ CLOSED (scope + lifecycle hardened in v5.1-dev)
 
-> **ADR**: [docs/version_05.md](docs/version_05.md) (Plan: VibeSOP Skill Ecosystem Evolution, approved 2026-04-21)
+> **ADR**: [docs/archive/version_05.md](archive/version_05.md) (Plan: VibeSOP Skill Ecosystem Evolution, approved 2026-04-21)
 
 ### Goals
 Introduce scope isolation, skill enable/disable, and lifecycle state management.
@@ -429,6 +429,17 @@ Proactive skill recommendations, transparent fallback, active discovery.
 - Recommendation click-through: >30%
 - Fallback awareness: 100% of fallbacks transparent to user
 - Active discovery: <5% false positive suggestions
+
+---
+
+## v5.5.0 — 3-Pillar Skill Protocol Standard ✅ COMPLETED (2026-05-29)
+
+> VibeSOP transitions from "skill router" to **skill protocol standard definer**,
+> built on pillars: Spec, Reference, and Conformance Suite.
+
+- **The Spec**: canonical `SkillSpec` model (all 29 SKILL.md frontmatter fields), `SpecValidator`, CLI `vibe spec validate` / `vibe spec version` — Spec v3.0
+- **The Reference**: 3 integration patterns (file-based / hook-based / SDK-based adapters)
+- **The Conformance Suite**: 85 compliance tests, `vibe spec conformance --all`
 
 ---
 
@@ -730,7 +741,7 @@ User/System
 
 See something missing? Want to accelerate a feature?
 
-1. Check [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines
+1. Check [CONTRIBUTING.md](../CONTRIBUTING.md) for guidelines
 2. Open an issue to discuss the feature
 3. Submit a PR referencing the roadmap item
 

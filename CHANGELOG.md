@@ -9,6 +9,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 文档存量债清零 — checker 校准 + 全库版本/死链修复 (2026-08-22)
+
+两个文档 checker 长期全红（173 处版本不匹配 + 53 条死链）——根因一半是 checker 失准，一半是真漂移。本轮先校准 checker 再批改文档，双 checker 全绿收官。
+
+- **`check_doc_versions.py` 校准**:since 标注豁免收窄为括号形态
+  `(vX.Y.Z+)`（裸 `vX.Y.Z+` 仍检查——`current: v8.0.0+` 这类真 current
+  声明不再被藏掉）；fence 剥离（CommonMark 长度规则，代码块示例不再
+  误报）；`--fix` 从 dead flag 实现为最小版（声明上下文 + 中文版本头
+  + 双词 current 行，dev 后缀精确剥离，fence/since 永不触碰）；
+  GENERATED_FILES 豁免 AGENTS.md/CLAUDE.md（配置格式版本，非 app 版本）;
+  HISTORICAL_FILES 对齐 adr/004、清死条目。
+- **`check_docs.py` 重写**:fence 剥离 + 裸文本启发式（链接目标须含
+  `/` 或 `.`，根治 Rich markup 误报）+ docs/archive/ 豁免 + 真锚点
+  验证（GitHub slug；顺带修标题正则缺 MULTILINE 等两个 checker bug）。
+- **文档批改**:36 处头部声明刷 8.1.0(--fix + 手工）；约 20 处裸
+  `(vX.Y.Z)` since 标注括弧化；11 处 `8.0.0.dev0` 残留（徽章/中文版本
+  头/INDEX 表）归零；34 条真死链逐条重指（archive 漂移）或删除（目标
+  不复存在）;README 路线图过期清单替换为 ROADMAP 指引并补回 v5.5.0
+  里程碑行；三层架构 since 版本 zh/en 打架经 CHANGELOG 考据统一为
+  v5.5.0+;`README.zh-CN.md` 全量重写为 README.md 镜像（中文主线
+  README.md 才是事实源），撤豁免进检查范围。
+- Gate 29 双路复审（claude + pi 均 PASS_WITH_NITS,0 BLOCK)：基线账目
+  精确闭合（173 = 68 修复 + 27 豁免 + 36 fence 内 + 42 since;53 = 13
+  archive + 40 修/删）,pi 两条关闸 MEDIUM（被藏掉的真 current 声明、
+  dev0 残留）+ claude 四条 MINOR 全收敛。
+
 ### Loop 项目归属（gate26）— `vibe loop` 跨项目隔离 (2026-08-22)
 
 **⚠️ 不可降级警告：升级前先备份 `~/.vibe/loops/`。**

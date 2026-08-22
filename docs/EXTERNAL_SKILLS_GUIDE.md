@@ -1,6 +1,6 @@
 # 外部技能使用指南
 
-> **版本**: 8.0.0.dev0
+> **版本**: 8.1.0
 > **目标用户**: 技能开发者、AI Agent 集成者
 > **更新时间**: 2026-06-05
 
@@ -8,7 +8,7 @@
 
 ## 概述
 
-VibeSOP 4.1.0 起支持（当前版本 8.0.0.dev0）从外部技能包（superpowers、gstack、omx 等）动态加载和执行技能，而不仅仅是检测它们的存在。
+VibeSOP 4.1.0 起支持（当前版本 8.1.0）从外部技能包（superpowers、gstack、omx 等）动态加载和执行技能，而不仅仅是检测它们的存在。
 
 ### 核心能力
 
@@ -547,8 +547,8 @@ if definition:
 
 - [架构概述](architecture/README.md)
 - [路由系统](architecture/routing-system.md)
-- [技能规范](docs/SKILL_SPEC.md)
-- [安全指南](security/README.md)
+- [技能规范](skill-format-spec.md)
+- [安全指南](SECURITY.md)
 
 ---
 
