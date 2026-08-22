@@ -1,0 +1,229 @@
+diff --git a/CHANGELOG.md b/CHANGELOG.md
+index 056f4b7..2921727 100644
+--- a/CHANGELOG.md
++++ b/CHANGELOG.md
+@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
+ 
+ ## [Unreleased]
+ 
++### Grok Build 接入工具序列采集（gate33, 2026-08-22）
++
++cmspark 用 grok 时发现:路由 span 在积累(UserPromptSubmit hook),但
++行为证据(tool_call spans,M3 行为一致性门的数据基础)不涨——grok
++adapter 只装路由 hook,没有 PostToolUse 采集。
++
++- **`GrokBuildAdapter` 新增 `vibesop-tool-seq.json`**:PostToolUse(空
++  matcher = 全工具)→ `vibe sequence record-tool`(现成的跨平台 stdin
++  采集入口,只存 tool+ts+session,永不阻塞)。纯 JSON hook 无 shell
++  脚本依赖,保持 adapter 的 Windows 原生特性;grok 的 hook payload
++  是 Claude 兼容格式(kimi 复用同一形状)。
++- `sequences.enabled` 开关与 kimi/claude 对齐(关则不部署)。
++- 文档:CLI_REFERENCE 的 `vibe sequence` 节同步三平台接线。
++
+ ### 路由闭环修复 — triggers 全链路贯通 + 回放基线（gate32, 2026-08-22）
+ 
+ 起因:cmspark 激活的技能接不住产生自己的 query(verbatim 也只有
+diff --git a/docs/user/CLI_REFERENCE.md b/docs/user/CLI_REFERENCE.md
+index 5f36a14..5bcf0d3 100644
+--- a/docs/user/CLI_REFERENCE.md
++++ b/docs/user/CLI_REFERENCE.md
+@@ -329,10 +329,10 @@ vibe sequence <command>
+ ```
+ 
+ **Commands:**
+-- `record-tool` - Record one tool call from a Claude Code `PostToolUse` hook (reads the hook JSON from stdin; stores only tool name + timestamp + session id — never `tool_input`)
++- `record-tool` - Record one tool call from a host agent's `PostToolUse` hook (reads the hook JSON from stdin; stores only tool name + timestamp + session id — never `tool_input`). Wired by the Claude Code (`vibesop-tool-seq.sh`), Kimi CLI (same script), and Grok Build (`vibesop-tool-seq.json`, gate33) adapters
+ - `assemble` - Assemble recorded tool events into sequences (grouped by session, 30-min window fallback) and feed them to the instinct learner (`record_sequence`, application-only weight)
+ 
+-**Related:** the Claude Code adapter ships the `vibesop-tool-seq.sh` hook (installed when `sequences.enabled` is true) which pipes PostToolUse events to `vibe sequence record-tool`. Captured data lives in `.vibe/tool_sequences.jsonl` (rotated at 10MB) and can be removed with `vibe data purge --tool-sequences`.
++**Related:** the Claude Code / Kimi CLI adapters ship the `vibesop-tool-seq.sh` hook and the Grok Build adapter ships `vibesop-tool-seq.json` (installed when `sequences.enabled` is true) which pipe PostToolUse events to `vibe sequence record-tool`. Captured data lives in `.vibe/tool_sequences.jsonl` (rotated at 10MB) and can be removed with `vibe data purge --tool-sequences`.
+ 
+ ### `vibe conversation`
+ 
+diff --git a/src/vibesop/adapters/grok_build.py b/src/vibesop/adapters/grok_build.py
+index fcd456f..246bb11 100644
+--- a/src/vibesop/adapters/grok_build.py
++++ b/src/vibesop/adapters/grok_build.py
+@@ -34,6 +34,10 @@ class GrokBuildAdapter(PlatformAdapter):
+     Deploys only routing rules and JSON hooks — does **not** manage
+     ``~/.grok/skills/``, so orphan cleanup is disabled to avoid
+     deleting Grok's own builtin skills.
++
++    Hooks deployed: ``vibesop-route.json`` (UserPromptSubmit → routing)
++    and, when ``sequences.enabled`` (default true), ``vibesop-tool-seq.json``
++    (PostToolUse → tool-sequence capture for M12 behavior evidence, gate33).
+     """
+ 
+     def __init__(self, project_root: str | Path = ".") -> None:
+@@ -61,6 +65,8 @@ class GrokBuildAdapter(PlatformAdapter):
+         Generates:
+           - ~/.grok/rules/routing.md (routing protocol, always loaded)
+           - ~/.grok/hooks/vibesop-route.json (UserPromptSubmit hook)
++          - ~/.grok/hooks/vibesop-tool-seq.json (PostToolUse capture hook,
++            only when ``sequences.enabled`` — gate33)
+         """
+         result = self.create_render_result(success=True)
+ 
+@@ -90,6 +96,16 @@ class GrokBuildAdapter(PlatformAdapter):
+             hook_file.write_text(self._render_hook_json(), encoding="utf-8")
+             result.add_file(hook_file)
+ 
++            # gate33: PostToolUse tool-sequence capture (M12 behavior
++            # evidence). Grok Build passes a Claude-Code-compatible event
++            # JSON on stdin (same shape kimi reuses), and ``vibe sequence
++            # record-tool`` is the existing cross-platform capture entry —
++            # no shell script needed, keeping this adapter Windows-native.
++            if self._sequences_enabled():
++                tool_seq_file = hooks_dir / "vibesop-tool-seq.json"
++                tool_seq_file.write_text(self._render_tool_seq_hook_json(), encoding="utf-8")
++                result.add_file(tool_seq_file)
++
+             result.success = True
+ 
+         except Exception as e:
+@@ -176,3 +192,50 @@ For full documentation: read `docs/routing-protocol.md` in the VibeSOP project.
+             },
+         }
+         return json.dumps(hook_config, indent=2) + "\n"
++
++    def _sequences_enabled(self) -> bool:
++        """Read the ``sequences.enabled`` switch (default true).
++
++        Same reading pattern as the kimi/claude adapters — env vars arrive
++        as raw strings. Fail-open on config errors: capture is local-only
++        telemetry, and a broken config must not silently disable it.
++        """
++        try:
++            from vibesop.core.config.manager import ConfigManager
++
++            enabled = ConfigManager(self._project_root).get("sequences.enabled", True)
++            if isinstance(enabled, str):  # env vars are returned as raw strings
++                enabled = enabled.strip().lower() in ("true", "1", "yes", "on")
++            return bool(enabled)
++        except Exception:
++            logger.debug("sequences.enabled lookup failed, defaulting to enabled", exc_info=True)
++            return True
++
++    @staticmethod
++    def _render_tool_seq_hook_json() -> str:
++        """PostToolUse capture hook (gate33).
++
++        Empty matcher = all tools (behavior evidence needs the full
++        sequence, not just edits). The capture command is observation-only:
++        ``record-tool`` persists only tool name + timestamp + session id
++        (never tool_input) and always exits 0, so a capture failure can
++        never block the host agent. No ``statusMessage`` — capture should
++        be invisible.
++        """
++        hook_config = {
++            "hooks": {
++                "PostToolUse": [
++                    {
++                        "matcher": "",
++                        "hooks": [
++                            {
++                                "type": "command",
++                                "command": "vibe sequence record-tool",
++                                "timeout": 10,
++                            }
++                        ],
++                    }
++                ],
++            },
++        }
++        return json.dumps(hook_config, indent=2) + "\n"
+diff --git a/tests/adapters/test_tool_seq_hook.py b/tests/adapters/test_tool_seq_hook.py
+index d0cc3d9..df70ec7 100644
+--- a/tests/adapters/test_tool_seq_hook.py
++++ b/tests/adapters/test_tool_seq_hook.py
+@@ -283,3 +283,90 @@ class TestToolSeqHookBehavior:
+         result = self._run(setup)
+         assert result.returncode == 0
+         assert f"--project-root {setup['work']}" in args_file.read_text(encoding="utf-8")
++
++
++class TestGrokBuildToolSeqHook:
++    """gate33: Grok Build adapter deploys a PostToolUse tool-sequence
++    capture hook as a JSON hook (no shell script — the adapter's stated
++    Windows-native property) calling the existing cross-platform
++    ``vibe sequence record-tool`` entry."""
++
++    def _grok_manifest(self) -> Manifest:
++        return Manifest(
++            metadata=ManifestMetadata(platform="grok-build", version="8.0.0"),
++            skills=[],
++        )
++
++    def test_render_config_includes_tool_seq_hook(
++        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
++    ) -> None:
++        _hermetic_config(monkeypatch, tmp_path, enabled=True)
++        from vibesop.adapters.grok_build import GrokBuildAdapter
++
++        adapter = GrokBuildAdapter(project_root=tmp_path)
++        output_dir = tmp_path / "out"
++
++        result = adapter.render_config(self._grok_manifest(), output_dir)
++
++        assert result.success, result.errors
++        hook_file = output_dir / "hooks" / "vibesop-tool-seq.json"
++        assert hook_file.exists()
++        config = json.loads(hook_file.read_text(encoding="utf-8"))
++        post_tool_use = config["hooks"]["PostToolUse"]
++        entry = post_tool_use[0]["hooks"][0]
++        assert entry["type"] == "command"
++        assert entry["command"] == "vibe sequence record-tool"
++        assert entry["timeout"] == 10
++        # Empty matcher = capture ALL tools (behavior evidence needs the
++        # full sequence, not just edits).
++        assert post_tool_use[0]["matcher"] == ""
++        # Observation-only: no statusMessage — capture stays invisible.
++        assert "statusMessage" not in entry
++
++    def test_render_config_disabled_omits_tool_seq_hook(
++        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
++    ) -> None:
++        _hermetic_config(monkeypatch, tmp_path, enabled=False)
++        from vibesop.adapters.grok_build import GrokBuildAdapter
++
++        adapter = GrokBuildAdapter(project_root=tmp_path)
++        output_dir = tmp_path / "out"
++
++        result = adapter.render_config(self._grok_manifest(), output_dir)
++
++        assert result.success, result.errors
++        assert not (output_dir / "hooks" / "vibesop-tool-seq.json").exists()
++        # The route hook is unaffected by the sequences switch.
++        assert (output_dir / "hooks" / "vibesop-route.json").exists()
++
++    def test_capture_end_to_end_via_cli(self, tmp_path: Path) -> None:
++        """The command the hook invokes actually records: pipe a
++        Claude-compatible PostToolUse payload into ``vibe sequence
++        record-tool`` and the capture log gains exactly one minimal entry
++        (tool + ts + session — never tool_input)."""
++        vibe = shutil.which("vibe")
++        if vibe is None:
++            pytest.skip("vibe binary not on PATH")
++        work = tmp_path / "proj"
++        work.mkdir()
++        payload = {
++            "hook_event_name": "PostToolUse",
++            "tool_name": "Edit",
++            "session_id": "grok-session-1",
++            "tool_input": {"file_path": "/secret/should-not-leak"},
++        }
++        result = subprocess.run(
++            [vibe, "sequence", "record-tool"],
++            input=json.dumps(payload),
++            capture_output=True,
++            text=True,
++            cwd=work,
++            timeout=30,
++        )
++        assert result.returncode == 0
++        log = work / ".vibe" / "tool_sequences.jsonl"
++        assert log.exists()
++        entry = json.loads(log.read_text(encoding="utf-8").strip())
++        assert entry["tool"] == "Edit"
++        assert entry["session"] == "grok-session-1"
++        assert "tool_input" not in entry

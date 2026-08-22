@@ -34,6 +34,10 @@ class GrokBuildAdapter(PlatformAdapter):
     Deploys only routing rules and JSON hooks — does **not** manage
     ``~/.grok/skills/``, so orphan cleanup is disabled to avoid
     deleting Grok's own builtin skills.
+
+    Hooks deployed: ``vibesop-route.json`` (UserPromptSubmit → routing)
+    and, when ``sequences.enabled`` (default true), ``vibesop-tool-seq.json``
+    (PostToolUse → tool-sequence capture for M12 behavior evidence, gate33).
     """
 
     def __init__(self, project_root: str | Path = ".") -> None:
@@ -61,6 +65,8 @@ class GrokBuildAdapter(PlatformAdapter):
         Generates:
           - ~/.grok/rules/routing.md (routing protocol, always loaded)
           - ~/.grok/hooks/vibesop-route.json (UserPromptSubmit hook)
+          - ~/.grok/hooks/vibesop-tool-seq.json (PostToolUse capture hook,
+            only when ``sequences.enabled`` — gate33)
         """
         result = self.create_render_result(success=True)
 
@@ -89,6 +95,18 @@ class GrokBuildAdapter(PlatformAdapter):
             hook_file = hooks_dir / "vibesop-route.json"
             hook_file.write_text(self._render_hook_json(), encoding="utf-8")
             result.add_file(hook_file)
+
+            # gate33: PostToolUse tool-sequence capture (M12 behavior
+            # evidence). Grok's hook stdin envelope is camelCase
+            # (``toolName``/``sessionId`` — NOT Claude's snake_case;
+            # gate33 pi BLOCK-1, verified against grok's hooks user guide);
+            # ``vibe sequence record-tool`` accepts both casings and is the
+            # existing cross-platform capture entry — no shell script
+            # needed, keeping this adapter Windows-native.
+            if self._sequences_enabled():
+                tool_seq_file = hooks_dir / "vibesop-tool-seq.json"
+                tool_seq_file.write_text(self._render_tool_seq_hook_json(), encoding="utf-8")
+                result.add_file(tool_seq_file)
 
             result.success = True
 
@@ -168,6 +186,53 @@ For full documentation: read `docs/routing-protocol.md` in the VibeSOP project.
                             {
                                 "type": "command",
                                 "command": "vibe route --hook",
+                                "timeout": 10,
+                            }
+                        ],
+                    }
+                ],
+            },
+        }
+        return json.dumps(hook_config, indent=2) + "\n"
+
+    def _sequences_enabled(self) -> bool:
+        """Read the ``sequences.enabled`` switch (default true).
+
+        Same reading pattern as the kimi/claude adapters — env vars arrive
+        as raw strings. Fail-open on config errors: capture is local-only
+        telemetry, and a broken config must not silently disable it.
+        """
+        try:
+            from vibesop.core.config.manager import ConfigManager
+
+            enabled = ConfigManager(self._project_root).get("sequences.enabled", True)
+            if isinstance(enabled, str):  # env vars are returned as raw strings
+                enabled = enabled.strip().lower() in ("true", "1", "yes", "on")
+            return bool(enabled)
+        except Exception:
+            logger.debug("sequences.enabled lookup failed, defaulting to enabled", exc_info=True)
+            return True
+
+    @staticmethod
+    def _render_tool_seq_hook_json() -> str:
+        """PostToolUse capture hook (gate33).
+
+        Empty matcher = all tools (behavior evidence needs the full
+        sequence, not just edits). The capture command is observation-only:
+        ``record-tool`` persists only tool name + timestamp + session id
+        (never tool_input) and always exits 0, so a capture failure can
+        never block the host agent. No ``statusMessage`` — capture should
+        be invisible.
+        """
+        hook_config = {
+            "hooks": {
+                "PostToolUse": [
+                    {
+                        "matcher": "",
+                        "hooks": [
+                            {
+                                "type": "command",
+                                "command": "vibe sequence record-tool",
                                 "timeout": 10,
                             }
                         ],

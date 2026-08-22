@@ -84,6 +84,53 @@ class TestRecordToolCommand:
         assert not sequences_path(tmp_path).exists()
 
 
+class TestRecordToolRootResolution:
+    """gate33 pi MAJOR-3: without --project-root the capture must land in
+    the host-provided project root (env var → payload workspaceRoot/cwd →
+    process cwd), not wherever the hook happened to spawn."""
+
+    def _invoke_no_flag(self, runner: CliRunner, stdin: str) -> object:
+        return runner.invoke(sequence_app, ["record-tool"], input=stdin)
+
+    def test_payload_workspace_root_wins_over_cwd(
+        self, runner: CliRunner, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        work = tmp_path / "proj"
+        work.mkdir()
+        monkeypatch.chdir(tmp_path)  # process cwd is NOT the project
+        monkeypatch.delenv("GROK_WORKSPACE_ROOT", raising=False)
+        monkeypatch.delenv("CLAUDE_PROJECT_DIR", raising=False)
+        monkeypatch.setenv("HOME", str(tmp_path))
+        payload = {"toolName": "Edit", "workspaceRoot": str(work)}
+        result = self._invoke_no_flag(runner, json.dumps(payload))
+        assert result.exit_code == 0
+        assert sequences_path(work).exists()
+        assert not sequences_path(tmp_path).exists()
+
+    def test_env_var_wins_over_payload(
+        self, runner: CliRunner, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        env_root = tmp_path / "env-proj"
+        env_root.mkdir()
+        monkeypatch.setenv("GROK_WORKSPACE_ROOT", str(env_root))
+        monkeypatch.setenv("HOME", str(tmp_path))
+        payload = {"toolName": "Edit", "workspaceRoot": str(tmp_path / "elsewhere")}
+        result = self._invoke_no_flag(runner, json.dumps(payload))
+        assert result.exit_code == 0
+        assert sequences_path(env_root).exists()
+
+    def test_cwd_is_last_resort(
+        self, runner: CliRunner, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setenv("HOME", str(tmp_path))
+        for var in ("GROK_WORKSPACE_ROOT", "CLAUDE_PROJECT_DIR"):
+            monkeypatch.delenv(var, raising=False)
+        result = self._invoke_no_flag(runner, json.dumps({"tool": "Bash"}))
+        assert result.exit_code == 0
+        assert sequences_path(tmp_path).exists()
+
+
 class TestAssembleCommand:
     def test_assemble_feeds_learner(self, runner: CliRunner, tmp_path: Path) -> None:
         lines = [

@@ -1,0 +1,689 @@
+diff --git a/CHANGELOG.md b/CHANGELOG.md
+index 056f4b7..b6a4724 100644
+--- a/CHANGELOG.md
++++ b/CHANGELOG.md
+@@ -9,6 +9,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
+ 
+ ## [Unreleased]
+ 
++### Grok Build 接入工具序列采集（gate33, 2026-08-22）
++
++cmspark 用 grok 时发现:路由 span 在积累(UserPromptSubmit hook),但
++行为证据(tool_call spans,M3 行为一致性门的数据基础)不涨——grok
++adapter 只装路由 hook,没有 PostToolUse 采集。
++
++- **`GrokBuildAdapter` 新增 `vibesop-tool-seq.json`**:PostToolUse(空
++  matcher = 全工具)→ `vibe sequence record-tool`(现成的跨平台 stdin
++  采集入口,只存 tool+ts+session,永不阻塞)。纯 JSON hook 无 shell
++  脚本依赖,保持 adapter 的 Windows 原生特性。
++- **复审(pi BLOCK + claude MAJOR)抓出的连环修复**:
++  - `record_tool_event` 兼容 camelCase 载荷——grok 的 hook stdin 信封
++    是 camelCase(`toolName`/`sessionId`,grok 官方 hooks 文档实证),
++    初版的"Claude 兼容"假设会让采集 100% 静默丢弃;
++  - CLI 路径采集成功也写 `tool_sequences.last` 心跳(此前只有 shell
++    模板写,grok 下 `vibe sequence status` 会误报死);
++  - `record-tool` 项目根解析:显式 flag → `GROK_WORKSPACE_ROOT`/
++    `CLAUDE_PROJECT_DIR` env → 载荷 `workspaceRoot`/`cwd` → 进程 cwd
++    (防采集散落,gate15 教训);
++  - **`vibe route --hook` 落地**:grok 路由 hook 自部署起就是非法命令
++    (`--hook` 从未存在)——现在真的实现了:stdin 事件 JSON(snake +
++    camelCase)→ `handle_query_for_hook` 信封输出,永远 exit 0。
++- `sequences.enabled` 开关与 kimi/claude 对齐(关则不部署)。
++- 文档:CLI_REFERENCE 的 `vibe sequence` 节同步三平台接线。
++- **上线条件(双路评审附加)**:cmspark 部署后做 probe(真实 grok 会话
++  后确认 `.vibe/tool_sequences.jsonl` 在涨);probe 通过前 M3 行为门不
++  把 grok 的 tool_sequences 数据当有效证据。
++
+ ### 路由闭环修复 — triggers 全链路贯通 + 回放基线（gate32, 2026-08-22）
+ 
+ 起因:cmspark 激活的技能接不住产生自己的 query(verbatim 也只有
+diff --git a/docs/user/CLI_REFERENCE.md b/docs/user/CLI_REFERENCE.md
+index 5f36a14..5bcf0d3 100644
+--- a/docs/user/CLI_REFERENCE.md
++++ b/docs/user/CLI_REFERENCE.md
+@@ -329,10 +329,10 @@ vibe sequence <command>
+ ```
+ 
+ **Commands:**
+-- `record-tool` - Record one tool call from a Claude Code `PostToolUse` hook (reads the hook JSON from stdin; stores only tool name + timestamp + session id — never `tool_input`)
++- `record-tool` - Record one tool call from a host agent's `PostToolUse` hook (reads the hook JSON from stdin; stores only tool name + timestamp + session id — never `tool_input`). Wired by the Claude Code (`vibesop-tool-seq.sh`), Kimi CLI (same script), and Grok Build (`vibesop-tool-seq.json`, gate33) adapters
+ - `assemble` - Assemble recorded tool events into sequences (grouped by session, 30-min window fallback) and feed them to the instinct learner (`record_sequence`, application-only weight)
+ 
+-**Related:** the Claude Code adapter ships the `vibesop-tool-seq.sh` hook (installed when `sequences.enabled` is true) which pipes PostToolUse events to `vibe sequence record-tool`. Captured data lives in `.vibe/tool_sequences.jsonl` (rotated at 10MB) and can be removed with `vibe data purge --tool-sequences`.
++**Related:** the Claude Code / Kimi CLI adapters ship the `vibesop-tool-seq.sh` hook and the Grok Build adapter ships `vibesop-tool-seq.json` (installed when `sequences.enabled` is true) which pipe PostToolUse events to `vibe sequence record-tool`. Captured data lives in `.vibe/tool_sequences.jsonl` (rotated at 10MB) and can be removed with `vibe data purge --tool-sequences`.
+ 
+ ### `vibe conversation`
+ 
+diff --git a/src/vibesop/adapters/grok_build.py b/src/vibesop/adapters/grok_build.py
+index fcd456f..7fea83d 100644
+--- a/src/vibesop/adapters/grok_build.py
++++ b/src/vibesop/adapters/grok_build.py
+@@ -34,6 +34,10 @@ class GrokBuildAdapter(PlatformAdapter):
+     Deploys only routing rules and JSON hooks — does **not** manage
+     ``~/.grok/skills/``, so orphan cleanup is disabled to avoid
+     deleting Grok's own builtin skills.
++
++    Hooks deployed: ``vibesop-route.json`` (UserPromptSubmit → routing)
++    and, when ``sequences.enabled`` (default true), ``vibesop-tool-seq.json``
++    (PostToolUse → tool-sequence capture for M12 behavior evidence, gate33).
+     """
+ 
+     def __init__(self, project_root: str | Path = ".") -> None:
+@@ -61,6 +65,8 @@ class GrokBuildAdapter(PlatformAdapter):
+         Generates:
+           - ~/.grok/rules/routing.md (routing protocol, always loaded)
+           - ~/.grok/hooks/vibesop-route.json (UserPromptSubmit hook)
++          - ~/.grok/hooks/vibesop-tool-seq.json (PostToolUse capture hook,
++            only when ``sequences.enabled`` — gate33)
+         """
+         result = self.create_render_result(success=True)
+ 
+@@ -90,6 +96,18 @@ class GrokBuildAdapter(PlatformAdapter):
+             hook_file.write_text(self._render_hook_json(), encoding="utf-8")
+             result.add_file(hook_file)
+ 
++            # gate33: PostToolUse tool-sequence capture (M12 behavior
++            # evidence). Grok's hook stdin envelope is camelCase
++            # (``toolName``/``sessionId`` — NOT Claude's snake_case;
++            # gate33 pi BLOCK-1, verified against grok's hooks user guide);
++            # ``vibe sequence record-tool`` accepts both casings and is the
++            # existing cross-platform capture entry — no shell script
++            # needed, keeping this adapter Windows-native.
++            if self._sequences_enabled():
++                tool_seq_file = hooks_dir / "vibesop-tool-seq.json"
++                tool_seq_file.write_text(self._render_tool_seq_hook_json(), encoding="utf-8")
++                result.add_file(tool_seq_file)
++
+             result.success = True
+ 
+         except Exception as e:
+@@ -176,3 +194,50 @@ For full documentation: read `docs/routing-protocol.md` in the VibeSOP project.
+             },
+         }
+         return json.dumps(hook_config, indent=2) + "\n"
++
++    def _sequences_enabled(self) -> bool:
++        """Read the ``sequences.enabled`` switch (default true).
++
++        Same reading pattern as the kimi/claude adapters — env vars arrive
++        as raw strings. Fail-open on config errors: capture is local-only
++        telemetry, and a broken config must not silently disable it.
++        """
++        try:
++            from vibesop.core.config.manager import ConfigManager
++
++            enabled = ConfigManager(self._project_root).get("sequences.enabled", True)
++            if isinstance(enabled, str):  # env vars are returned as raw strings
++                enabled = enabled.strip().lower() in ("true", "1", "yes", "on")
++            return bool(enabled)
++        except Exception:
++            logger.debug("sequences.enabled lookup failed, defaulting to enabled", exc_info=True)
++            return True
++
++    @staticmethod
++    def _render_tool_seq_hook_json() -> str:
++        """PostToolUse capture hook (gate33).
++
++        Empty matcher = all tools (behavior evidence needs the full
++        sequence, not just edits). The capture command is observation-only:
++        ``record-tool`` persists only tool name + timestamp + session id
++        (never tool_input) and always exits 0, so a capture failure can
++        never block the host agent. No ``statusMessage`` — capture should
++        be invisible.
++        """
++        hook_config = {
++            "hooks": {
++                "PostToolUse": [
++                    {
++                        "matcher": "",
++                        "hooks": [
++                            {
++                                "type": "command",
++                                "command": "vibe sequence record-tool",
++                                "timeout": 10,
++                            }
++                        ],
++                    }
++                ],
++            },
++        }
++        return json.dumps(hook_config, indent=2) + "\n"
+diff --git a/src/vibesop/cli/commands/sequence_cmd.py b/src/vibesop/cli/commands/sequence_cmd.py
+index 60ced1c..0d37dd3 100644
+--- a/src/vibesop/cli/commands/sequence_cmd.py
++++ b/src/vibesop/cli/commands/sequence_cmd.py
+@@ -1,7 +1,9 @@
+ """``vibe sequence`` — tool-sequence capture & assembly (P3: distillation data source).
+ 
+-- ``vibe sequence record-tool``: called by the Claude Code PostToolUse hook;
+-  reads the hook event JSON from stdin and appends a minimal entry (tool name
++- ``vibe sequence record-tool``: called by the host agent's PostToolUse hook
++  (Claude Code / Kimi CLI via ``vibesop-tool-seq.sh``; Grok Build via
++  ``vibesop-tool-seq.json``, gate33); reads the hook event JSON from stdin —
++  snake_case AND camelCase envelopes — and appends a minimal entry (tool name
+   + timestamp + session id, never tool_input) to ``.vibe/tool_sequences.jsonl``.
+ - ``vibe sequence assemble``: fold new capture entries into instinct sequence
+   patterns (application-only telemetry, success=False).
+@@ -47,16 +49,23 @@ def _sequences_enabled(project_root: Path) -> bool:
+ 
+ @app.command("record-tool")
+ def record_tool(
+-    project_root: Path = typer.Option(
+-        Path(), "--project-root", help="Project root (where .vibe/ lives). Defaults to cwd."
++    project_root: Path | None = typer.Option(
++        None, "--project-root", help="Project root (where .vibe/ lives). Defaults to cwd."
+     ),
+ ) -> None:
+-    """Record one Claude Code PostToolUse hook event, read as JSON from stdin.
++    """Record one host-agent PostToolUse hook event, read as JSON from stdin.
+ 
+     Only the tool name, a local timestamp, and the session id are persisted —
+     ``tool_input`` (paths, secrets) is NEVER written. Malformed input is
+     dropped silently and the command always exits 0: a hook must never block
+     the host agent.
++
++    Project-root resolution when ``--project-root`` is absent (gate33 pi
++    MAJOR-3): ``$GROK_WORKSPACE_ROOT`` / ``$CLAUDE_PROJECT_DIR`` env (both
++    injected by the respective hosts around hook commands) → the payload's
++    ``workspaceRoot``/``cwd`` (grok's envelope carries both) → process cwd.
++    Without this, a hook fired from a non-project cwd would scatter captures
++    into the wrong ``.vibe/`` (the gate15 lesson).
+     """
+     try:
+         raw = sys.stdin.read()
+@@ -65,15 +74,33 @@ def record_tool(
+         payload = None
+     if isinstance(payload, dict):
+         try:
+-            if _sequences_enabled(project_root):
++            root = _resolve_hook_project_root(project_root, payload)
++            if _sequences_enabled(root):
+                 from vibesop.core.instinct.tool_sequences import record_tool_event
+ 
+-                record_tool_event(payload, project_root)
++                record_tool_event(payload, root)
+         except Exception:  # capture must never block the host agent
+             logger.debug("tool-sequence record failed", exc_info=True)
+     raise typer.Exit(0)
+ 
+ 
++def _resolve_hook_project_root(flag: Path | None, payload: dict) -> Path:
++    """Resolve where the capture lands: explicit flag → host env → payload → cwd."""
++    import os
++
++    if flag is not None:
++        return flag
++    for env_var in ("GROK_WORKSPACE_ROOT", "CLAUDE_PROJECT_DIR"):
++        value = os.environ.get(env_var)
++        if value and value.strip():
++            return Path(value.strip())
++    for key in ("workspaceRoot", "workspace_root", "cwd"):
++        value = payload.get(key)
++        if isinstance(value, str) and value.strip():
++            return Path(value.strip())
++    return Path()
++
++
+ @app.command("assemble")
+ def assemble(
+     project_root: Path = typer.Option(
+diff --git a/src/vibesop/cli/main.py b/src/vibesop/cli/main.py
+index 8f1214a..2b6d879 100644
+--- a/src/vibesop/cli/main.py
++++ b/src/vibesop/cli/main.py
+@@ -465,7 +465,14 @@ def _build_multi_agent_squad_context(
+ 
+ @app.command()
+ def route(
+-    query: str = typer.Argument(..., help="Natural language query to route"),
++    query: str | None = typer.Argument(None, help="Natural language query to route"),
++    hook: bool = typer.Option(
++        False,
++        "--hook",
++        help="Hook mode: read the host agent's hook event JSON from stdin "
++        "(deployed as the grok UserPromptSubmit JSON hook — gate33). "
++        "Prints the hook response envelope and always exits 0.",
++    ),
+     min_confidence: float | None = typer.Option(
+         None,
+         "--min-confidence",
+@@ -575,6 +582,58 @@ def route(
+     # -- Route through IntentInterceptor to respect full Agent Runtime logic --
+     from vibesop.agent.runtime import IntentInterceptor, InterceptionMode, SlashCommandExecutor
+ 
++    # gate33 (pi NIT-6 / claude MAJOR-2): the deployed grok route hook ran
++    # ``vibe route --hook`` which never existed — the grok-native routing
++    # hook was dead on arrival. Hook mode is that command made real: read
++    # the host's hook event JSON from stdin (snake_case AND camelCase
++    # envelopes — grok's stdin is camelCase throughout, per its hooks user
++    # guide), extract the query + session, and print the hook response
++    # envelope via the same ``handle_query_for_hook`` entry the shell
++    # templates use. Always exits 0 — a hook must never block the host.
++    if hook:
++        import json
++
++        from vibesop.agent.runtime import AgentRuntime
++
++        raw = sys.stdin.read()
++        try:
++            payload = json.loads(raw) if raw.strip() else None
++        except json.JSONDecodeError:
++            payload = None
++        hook_query = ""
++        session_id: str | None = None
++        if isinstance(payload, dict):
++            for key in ("prompt", "user_prompt", "query", "message", "text", "userPrompt"):
++                value = payload.get(key)
++                if isinstance(value, str) and value.strip():
++                    hook_query = value.strip()
++                    break
++            session = payload.get("session_id") or payload.get("sessionId")
++            if isinstance(session, str) and session.strip():
++                session_id = session.strip()
++        elif isinstance(raw, str) and raw.strip():
++            hook_query = raw.strip()  # plain-text stdin fallback (shell parity)
++        if not hook_query:
++            print("{}")
++            raise typer.Exit(0)
++        print(
++            AgentRuntime().handle_query_for_hook(
++                hook_query,
++                platform="grok-build",
++                hook_event_name="UserPromptSubmit",
++                include_additional_context=True,
++                no_match_message=True,
++                session_id=session_id,
++            )
++        )
++        raise typer.Exit(0)
++
++    if query is None:
++        console.print(
++            "[bold red]✗[/bold red] Missing argument QUERY (or pass --hook for stdin mode)"
++        )
++        raise typer.Exit(1)
++
+     # When --slash is explicitly passed, treat as a CLI quick command
+     if slash:
+         executor = SlashCommandExecutor()
+diff --git a/src/vibesop/core/instinct/tool_sequences.py b/src/vibesop/core/instinct/tool_sequences.py
+index c265829..e62d145 100644
+--- a/src/vibesop/core/instinct/tool_sequences.py
++++ b/src/vibesop/core/instinct/tool_sequences.py
+@@ -79,9 +79,11 @@ def cursor_path(project_root: str | Path) -> Path:
+ def last_capture_path(project_root: str | Path) -> Path:
+     """Return the last-capture heartbeat path for *project_root*.
+ 
+-    Written by the PostToolUse hook template on every captured event; a
+-    single line of epoch seconds. Absence means capture never fired (or
+-    the installed hook predates the liveness fix).
++    Written on every captured event — by the shell-template hook
++    (Claude Code / Kimi) or by ``record_tool_event`` itself on the
++    pure-CLI path (Grok's JSON hook, gate33). A single line of epoch
++    seconds. Absence means capture never fired (or the installed hook
++    predates the liveness fix).
+     """
+     return Path(project_root) / ".vibe" / LAST_CAPTURE_FILENAME
+ 
+@@ -89,16 +91,28 @@ def last_capture_path(project_root: str | Path) -> Path:
+ def record_tool_event(payload: Mapping[str, Any], project_root: str | Path) -> bool:
+     """Append one hook event to the capture log. Returns True when recorded.
+ 
+-    Extracts ONLY the tool name and session id from the hook payload
+-    (Claude Code PostToolUse uses ``tool_name``/``session_id``); the timestamp
+-    is generated locally. ``tool_input`` is never read beyond key lookup and
+-    never persisted. Events without a usable tool name are dropped.
+-    Rotates the log aside first when it exceeds ``MAX_CAPTURE_BYTES``.
++    Extracts ONLY the tool name and session id from the hook payload.
++    Field names: Claude Code / Kimi CLI use snake_case
++    (``tool_name``/``session_id``); Grok Build's stdin envelope is
++    camelCase throughout (``toolName``/``sessionId`` — grok's own
++    hooks user guide, "camelCase input"; gate33 pi BLOCK-1: assuming
++    Claude's shape for grok silently dropped 100% of events). Both
++    casings (plus the bare ``tool`` key) are accepted. The timestamp is
++    generated locally. ``tool_input``/``toolInput`` is never read beyond
++    key lookup and never persisted. Events without a usable tool name are
++    dropped. Rotates the log aside first when it exceeds
++    ``MAX_CAPTURE_BYTES``.
++
++    gate33 pi MAJOR-2: a successful record also rewrites the liveness
++    heartbeat (``tool_sequences.last``, one epoch-seconds line) — the
++    shell-template hooks do this themselves, and the pure-CLI path
++    (grok's JSON hook) must satisfy the same contract or
++    ``vibe sequence status`` would report a healthy capture as dead.
+     """
+-    tool = payload.get("tool_name") or payload.get("tool")
++    tool = payload.get("tool_name") or payload.get("tool") or payload.get("toolName")
+     if not isinstance(tool, str) or not tool.strip():
+         return False
+-    session = payload.get("session_id")
++    session = payload.get("session_id") or payload.get("sessionId")
+     entry = {
+         "tool": tool.strip(),
+         "ts": datetime.now(UTC).isoformat(),
+@@ -109,6 +123,13 @@ def record_tool_event(payload: Mapping[str, Any], project_root: str | Path) -> b
+     _rotate_if_oversized(path, project_root)
+     with path.open("a", encoding="utf-8") as f:
+         f.write(json.dumps(entry, ensure_ascii=False) + "\n")
++    try:
++        last_capture_path(project_root).write_text(
++            f"{datetime.now(UTC).timestamp():.0f}\n", encoding="utf-8"
++        )
++    except OSError:
++        # Heartbeat is best-effort; the capture itself already landed.
++        logger.debug("tool-sequence heartbeat write failed", exc_info=True)
+     return True
+ 
+ 
+diff --git a/tests/adapters/test_tool_seq_hook.py b/tests/adapters/test_tool_seq_hook.py
+index d0cc3d9..dbd3d94 100644
+--- a/tests/adapters/test_tool_seq_hook.py
++++ b/tests/adapters/test_tool_seq_hook.py
+@@ -283,3 +283,105 @@ class TestToolSeqHookBehavior:
+         result = self._run(setup)
+         assert result.returncode == 0
+         assert f"--project-root {setup['work']}" in args_file.read_text(encoding="utf-8")
++
++
++class TestGrokBuildToolSeqHook:
++    """gate33: Grok Build adapter deploys a PostToolUse tool-sequence
++    capture hook as a JSON hook (no shell script — the adapter's stated
++    Windows-native property) calling the existing cross-platform
++    ``vibe sequence record-tool`` entry."""
++
++    def _grok_manifest(self) -> Manifest:
++        return Manifest(
++            metadata=ManifestMetadata(platform="grok-build", version="8.0.0"),
++            skills=[],
++        )
++
++    def test_render_config_includes_tool_seq_hook(
++        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
++    ) -> None:
++        _hermetic_config(monkeypatch, tmp_path, enabled=True)
++        from vibesop.adapters.grok_build import GrokBuildAdapter
++
++        adapter = GrokBuildAdapter(project_root=tmp_path)
++        output_dir = tmp_path / "out"
++
++        result = adapter.render_config(self._grok_manifest(), output_dir)
++
++        assert result.success, result.errors
++        hook_file = output_dir / "hooks" / "vibesop-tool-seq.json"
++        assert hook_file.exists()
++        config = json.loads(hook_file.read_text(encoding="utf-8"))
++        post_tool_use = config["hooks"]["PostToolUse"]
++        entry = post_tool_use[0]["hooks"][0]
++        assert entry["type"] == "command"
++        assert entry["command"] == "vibe sequence record-tool"
++        assert entry["timeout"] == 10
++        # Empty matcher = capture ALL tools (behavior evidence needs the
++        # full sequence, not just edits).
++        assert post_tool_use[0]["matcher"] == ""
++        # Observation-only: no statusMessage — capture stays invisible.
++        assert "statusMessage" not in entry
++
++    def test_render_config_disabled_omits_tool_seq_hook(
++        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
++    ) -> None:
++        _hermetic_config(monkeypatch, tmp_path, enabled=False)
++        from vibesop.adapters.grok_build import GrokBuildAdapter
++
++        adapter = GrokBuildAdapter(project_root=tmp_path)
++        output_dir = tmp_path / "out"
++
++        result = adapter.render_config(self._grok_manifest(), output_dir)
++
++        assert result.success, result.errors
++        assert not (output_dir / "hooks" / "vibesop-tool-seq.json").exists()
++        # The route hook is unaffected by the sequences switch.
++        assert (output_dir / "hooks" / "vibesop-route.json").exists()
++
++    def test_capture_end_to_end_via_cli(
++        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
++    ) -> None:
++        """The command the hook invokes actually records a GROK-SHAPED
++        (camelCase — gate33 pi BLOCK-1) PostToolUse payload: the capture
++        log gains exactly one minimal entry (tool + ts + session — never
++        toolInput) plus the liveness heartbeat (pi MAJOR-2)."""
++        vibe = shutil.which("vibe")
++        if vibe is None:
++            pytest.skip("vibe binary not on PATH")
++        _hermetic_config(monkeypatch, tmp_path, enabled=True)
++        work = tmp_path / "proj"
++        work.mkdir()
++        # The real grok stdin envelope (per grok's hooks user guide):
++        # camelCase keys, plus cwd/workspaceRoot the CLI uses as the
++        # project-root fallback (pi MAJOR-3).
++        payload = {
++            "hookEventName": "post_tool_use",
++            "sessionId": "grok-session-1",
++            "cwd": str(work),
++            "workspaceRoot": str(work),
++            "toolName": "search_replace",
++            "toolInput": {"file_path": "/secret/should-not-leak"},
++        }
++        result = subprocess.run(
++            [vibe, "sequence", "record-tool"],
++            check=False,
++            input=json.dumps(payload),
++            capture_output=True,
++            text=True,
++            cwd=tmp_path,  # deliberately NOT the project dir — the payload
++            # workspaceRoot must win over the process cwd (pi MAJOR-3)
++            timeout=30,
++        )
++        assert result.returncode == 0
++        log = work / ".vibe" / "tool_sequences.jsonl"
++        assert log.exists(), "camelCase payload must be recorded (gate33 pi BLOCK-1)"
++        entry = json.loads(log.read_text(encoding="utf-8").strip())
++        assert entry["tool"] == "search_replace"
++        assert entry["session"] == "grok-session-1"
++        assert "tool_input" not in entry
++        assert "toolInput" not in entry
++        # Liveness heartbeat written by the pure-CLI path (pi MAJOR-2).
++        heartbeat = work / ".vibe" / "tool_sequences.last"
++        assert heartbeat.exists()
++        assert heartbeat.read_text(encoding="utf-8").strip().isdigit()
+diff --git a/tests/cli/test_route_commands.py b/tests/cli/test_route_commands.py
+index 46aafde..336eb8d 100644
+--- a/tests/cli/test_route_commands.py
++++ b/tests/cli/test_route_commands.py
+@@ -137,9 +137,7 @@ class TestRouteCommand:
+     """Test `vibe route` command."""
+ 
+     @pytest.fixture(autouse=True)
+-    def _hermetic_runtime(
+-        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Any
+-    ) -> None:
++    def _hermetic_runtime(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Any) -> None:
+         # Redirect .vibe state writes (missed-query inbox, routing counter,
+         # trace spans) to a tmp dir, then stub the routing boundary.
+         monkeypatch.chdir(tmp_path)
+@@ -256,9 +254,7 @@ class TestRouteEdgeCases:
+     """Edge cases for routing commands."""
+ 
+     @pytest.fixture(autouse=True)
+-    def _hermetic_runtime(
+-        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Any
+-    ) -> None:
++    def _hermetic_runtime(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Any) -> None:
+         monkeypatch.chdir(tmp_path)
+         _patch_route_runtime(monkeypatch, _single_no_match_router())
+ 
+@@ -369,9 +365,7 @@ class TestRouteSquadDisplay:
+     ) -> None:
+         """A multi-agent query should render squad summary in CLI output."""
+         monkeypatch.chdir(tmp_path)
+-        _patch_route_runtime(
+-            monkeypatch, _squad_router(), mode=InterceptionMode.MULTI_AGENT_SQUAD
+-        )
++        _patch_route_runtime(monkeypatch, _squad_router(), mode=InterceptionMode.MULTI_AGENT_SQUAD)
+         result = runner.invoke(app, ["route", "multi-agent: 设计架构、实现代码、做安全审查"])
+         assert result.exit_code == 0
+         output = result.output
+@@ -381,3 +375,56 @@ class TestRouteSquadDisplay:
+         assert "🏗️" in output  # architect role icon
+         assert "Skills: design" in output
+         assert "Protocol: sequential" in output
++
++
++class TestRouteHookMode:
++    """gate33 (pi NIT-6 / claude MAJOR-2): the grok route hook deployed
++    ``vibe route --hook`` since e9b6f15, but the flag never existed — the
++    grok-native routing hook was dead on arrival. These pin the now-real
++    hook mode: stdin event JSON (snake AND camelCase) → query/session
++    extraction → handle_query_for_hook envelope; always exit 0."""
++
++    @pytest.fixture(autouse=True)
++    def _stub_hook_runtime(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Any) -> None:
++        monkeypatch.chdir(tmp_path)
++        captured: dict[str, Any] = {}
++
++        class _StubRuntime:
++            def handle_query_for_hook(self, query: str, **kwargs: Any) -> str:
++                captured["query"] = query
++                captured.update(kwargs)
++                return '{"hookSpecificOutput": {"hookEventName": "UserPromptSubmit"}}'
++
++        monkeypatch.setattr("vibesop.agent.runtime.AgentRuntime", _StubRuntime)
++        self.captured = captured  # type: ignore[attr-defined]
++
++    def test_hook_mode_camelcase_grok_payload(self) -> None:
++        payload = {"prompt": "帮我合并到 main 吧", "sessionId": "grok-sess-1"}
++        result = runner.invoke(app, ["route", "--hook"], input=json.dumps(payload))
++        assert result.exit_code == 0
++        assert "hookSpecificOutput" in result.output
++        assert self.captured["query"] == "帮我合并到 main 吧"  # type: ignore[attr-defined]
++        assert self.captured["session_id"] == "grok-sess-1"  # type: ignore[attr-defined]
++        assert self.captured["platform"] == "grok-build"  # type: ignore[attr-defined]
++
++    def test_hook_mode_snake_case_payload(self) -> None:
++        payload = {"query": "review this", "session_id": "claude-sess"}
++        result = runner.invoke(app, ["route", "--hook"], input=json.dumps(payload))
++        assert result.exit_code == 0
++        assert self.captured["query"] == "review this"  # type: ignore[attr-defined]
++        assert self.captured["session_id"] == "claude-sess"  # type: ignore[attr-defined]
++
++    def test_hook_mode_empty_stdin_exits_zero_with_empty_envelope(self) -> None:
++        result = runner.invoke(app, ["route", "--hook"], input="")
++        assert result.exit_code == 0
++        assert result.output.strip() == "{}"
++
++    def test_hook_mode_plain_text_fallback(self) -> None:
++        result = runner.invoke(app, ["route", "--hook"], input="plain query text")
++        assert result.exit_code == 0
++        assert self.captured["query"] == "plain query text"  # type: ignore[attr-defined]
++
++    def test_no_query_no_hook_errors(self) -> None:
++        result = runner.invoke(app, ["route"])
++        assert result.exit_code == 1
++        assert "Missing argument QUERY" in result.output
+diff --git a/tests/cli/test_sequence_cmd.py b/tests/cli/test_sequence_cmd.py
+index 5ffe18b..30087fc 100644
+--- a/tests/cli/test_sequence_cmd.py
++++ b/tests/cli/test_sequence_cmd.py
+@@ -84,6 +84,53 @@ class TestRecordToolCommand:
+         assert not sequences_path(tmp_path).exists()
+ 
+ 
++class TestRecordToolRootResolution:
++    """gate33 pi MAJOR-3: without --project-root the capture must land in
++    the host-provided project root (env var → payload workspaceRoot/cwd →
++    process cwd), not wherever the hook happened to spawn."""
++
++    def _invoke_no_flag(self, runner: CliRunner, stdin: str) -> object:
++        return runner.invoke(sequence_app, ["record-tool"], input=stdin)
++
++    def test_payload_workspace_root_wins_over_cwd(
++        self, runner: CliRunner, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
++    ) -> None:
++        work = tmp_path / "proj"
++        work.mkdir()
++        monkeypatch.chdir(tmp_path)  # process cwd is NOT the project
++        monkeypatch.delenv("GROK_WORKSPACE_ROOT", raising=False)
++        monkeypatch.delenv("CLAUDE_PROJECT_DIR", raising=False)
++        monkeypatch.setenv("HOME", str(tmp_path))
++        payload = {"toolName": "Edit", "workspaceRoot": str(work)}
++        result = self._invoke_no_flag(runner, json.dumps(payload))
++        assert result.exit_code == 0
++        assert sequences_path(work).exists()
++        assert not sequences_path(tmp_path).exists()
++
++    def test_env_var_wins_over_payload(
++        self, runner: CliRunner, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
++    ) -> None:
++        env_root = tmp_path / "env-proj"
++        env_root.mkdir()
++        monkeypatch.setenv("GROK_WORKSPACE_ROOT", str(env_root))
++        monkeypatch.setenv("HOME", str(tmp_path))
++        payload = {"toolName": "Edit", "workspaceRoot": str(tmp_path / "elsewhere")}
++        result = self._invoke_no_flag(runner, json.dumps(payload))
++        assert result.exit_code == 0
++        assert sequences_path(env_root).exists()
++
++    def test_cwd_is_last_resort(
++        self, runner: CliRunner, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
++    ) -> None:
++        monkeypatch.chdir(tmp_path)
++        monkeypatch.setenv("HOME", str(tmp_path))
++        for var in ("GROK_WORKSPACE_ROOT", "CLAUDE_PROJECT_DIR"):
++            monkeypatch.delenv(var, raising=False)
++        result = self._invoke_no_flag(runner, json.dumps({"tool": "Bash"}))
++        assert result.exit_code == 0
++        assert sequences_path(tmp_path).exists()
++
++
+ class TestAssembleCommand:
+     def test_assemble_feeds_learner(self, runner: CliRunner, tmp_path: Path) -> None:
+         lines = [
+diff --git a/tests/core/test_tool_sequences.py b/tests/core/test_tool_sequences.py
+index e9d3b48..1e55e90 100644
+--- a/tests/core/test_tool_sequences.py
++++ b/tests/core/test_tool_sequences.py
+@@ -81,6 +81,45 @@ class TestRecordToolEvent:
+         record_tool_event({"tool_name": "Edit", "session_id": "s"}, tmp_path)
+         assert len(sequences_path(tmp_path).read_text(encoding="utf-8").splitlines()) == 2
+ 
++    def test_grok_camelcase_payload(self, tmp_path: Path) -> None:
++        """gate33 pi BLOCK-1: grok's hook stdin envelope is camelCase
++        (toolName/sessionId — grok hooks user guide, "camelCase input");
++        before the fix these events were 100% silently dropped."""
++        payload = {
++            "hookEventName": "post_tool_use",
++            "sessionId": "grok-sess",
++            "cwd": str(tmp_path),
++            "workspaceRoot": str(tmp_path),
++            "toolName": "run_terminal_command",
++            "toolInput": {"command": "npm test"},
++            "toolResult": {"output": "secret output"},
++        }
++        assert record_tool_event(payload, tmp_path) is True
++        entry = json.loads(sequences_path(tmp_path).read_text(encoding="utf-8").splitlines()[0])
++        assert entry == {
++            "tool": "run_terminal_command",
++            "ts": entry["ts"],
++            "session": "grok-sess",
++        }
++        assert "secret output" not in sequences_path(tmp_path).read_text(encoding="utf-8")
++
++    def test_success_writes_liveness_heartbeat(self, tmp_path: Path) -> None:
++        """gate33 pi MAJOR-2: the pure-CLI path (grok JSON hook) must write
++        tool_sequences.last just like the shell-template hooks, or
++        ``vibe sequence status`` reports a healthy capture as dead."""
++        from vibesop.core.instinct.tool_sequences import last_capture_path
++
++        assert record_tool_event({"tool_name": "Read"}, tmp_path) is True
++        heartbeat = last_capture_path(tmp_path)
++        assert heartbeat.exists()
++        assert heartbeat.read_text(encoding="utf-8").strip().isdigit()
++
++    def test_drop_writes_no_heartbeat(self, tmp_path: Path) -> None:
++        from vibesop.core.instinct.tool_sequences import last_capture_path
++
++        assert record_tool_event({"session_id": "s"}, tmp_path) is False
++        assert not last_capture_path(tmp_path).exists()
++
+ 
+ class TestParseTs:
+     def test_naive_timestamp_normalized_to_utc(self) -> None:

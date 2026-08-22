@@ -19,9 +19,10 @@ Files (all under ``<project_root>/.vibe/``, all covered by
   older rotation) before the next append, capping total capture at ~2x the cap
 - ``tool_sequences.cursor`` — JSON ``{"offset": <byte offset>}`` watermark so
   assembly never re-feeds already-processed entries
-- ``tool_sequences.last`` — one epoch-seconds line written by the capture
-  hook on every event (M12 M1 liveness signal; maintained by the hook
-  template, read by ``vibe sequence status``)
+- ``tool_sequences.last`` — one epoch-seconds line written on every captured
+  event (M12 M1 liveness signal; written by the shell hook template on the
+  Claude Code / Kimi path and by ``record_tool_event`` itself on the pure-CLI
+  Grok JSON-hook path — gate33; read by ``vibe sequence status``)
 
 NOT covered by ``--tool-sequences`` (observability-domain files owned by
 ``core/observability/tool_call_bridge.py``, under ``.vibe/observability/``):
@@ -79,9 +80,11 @@ def cursor_path(project_root: str | Path) -> Path:
 def last_capture_path(project_root: str | Path) -> Path:
     """Return the last-capture heartbeat path for *project_root*.
 
-    Written by the PostToolUse hook template on every captured event; a
-    single line of epoch seconds. Absence means capture never fired (or
-    the installed hook predates the liveness fix).
+    Written on every captured event — by the shell-template hook
+    (Claude Code / Kimi) or by ``record_tool_event`` itself on the
+    pure-CLI path (Grok's JSON hook, gate33). A single line of epoch
+    seconds. Absence means capture never fired (or the installed hook
+    predates the liveness fix).
     """
     return Path(project_root) / ".vibe" / LAST_CAPTURE_FILENAME
 
@@ -89,16 +92,28 @@ def last_capture_path(project_root: str | Path) -> Path:
 def record_tool_event(payload: Mapping[str, Any], project_root: str | Path) -> bool:
     """Append one hook event to the capture log. Returns True when recorded.
 
-    Extracts ONLY the tool name and session id from the hook payload
-    (Claude Code PostToolUse uses ``tool_name``/``session_id``); the timestamp
-    is generated locally. ``tool_input`` is never read beyond key lookup and
-    never persisted. Events without a usable tool name are dropped.
-    Rotates the log aside first when it exceeds ``MAX_CAPTURE_BYTES``.
+    Extracts ONLY the tool name and session id from the hook payload.
+    Field names: Claude Code / Kimi CLI use snake_case
+    (``tool_name``/``session_id``); Grok Build's stdin envelope is
+    camelCase throughout (``toolName``/``sessionId`` — grok's own
+    hooks user guide, "camelCase input"; gate33 pi BLOCK-1: assuming
+    Claude's shape for grok silently dropped 100% of events). Both
+    casings (plus the bare ``tool`` key) are accepted. The timestamp is
+    generated locally. ``tool_input``/``toolInput`` is never read beyond
+    key lookup and never persisted. Events without a usable tool name are
+    dropped. Rotates the log aside first when it exceeds
+    ``MAX_CAPTURE_BYTES``.
+
+    gate33 pi MAJOR-2: a successful record also rewrites the liveness
+    heartbeat (``tool_sequences.last``, one epoch-seconds line) — the
+    shell-template hooks do this themselves, and the pure-CLI path
+    (grok's JSON hook) must satisfy the same contract or
+    ``vibe sequence status`` would report a healthy capture as dead.
     """
-    tool = payload.get("tool_name") or payload.get("tool")
+    tool = payload.get("tool_name") or payload.get("tool") or payload.get("toolName")
     if not isinstance(tool, str) or not tool.strip():
         return False
-    session = payload.get("session_id")
+    session = payload.get("session_id") or payload.get("sessionId")
     entry = {
         "tool": tool.strip(),
         "ts": datetime.now(UTC).isoformat(),
@@ -109,6 +124,13 @@ def record_tool_event(payload: Mapping[str, Any], project_root: str | Path) -> b
     _rotate_if_oversized(path, project_root)
     with path.open("a", encoding="utf-8") as f:
         f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+    try:
+        last_capture_path(project_root).write_text(
+            f"{datetime.now(UTC).timestamp():.0f}\n", encoding="utf-8"
+        )
+    except OSError:
+        # Heartbeat is best-effort; the capture itself already landed.
+        logger.debug("tool-sequence heartbeat write failed", exc_info=True)
     return True
 
 

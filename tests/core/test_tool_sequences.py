@@ -81,6 +81,45 @@ class TestRecordToolEvent:
         record_tool_event({"tool_name": "Edit", "session_id": "s"}, tmp_path)
         assert len(sequences_path(tmp_path).read_text(encoding="utf-8").splitlines()) == 2
 
+    def test_grok_camelcase_payload(self, tmp_path: Path) -> None:
+        """gate33 pi BLOCK-1: grok's hook stdin envelope is camelCase
+        (toolName/sessionId — grok hooks user guide, "camelCase input");
+        before the fix these events were 100% silently dropped."""
+        payload = {
+            "hookEventName": "post_tool_use",
+            "sessionId": "grok-sess",
+            "cwd": str(tmp_path),
+            "workspaceRoot": str(tmp_path),
+            "toolName": "run_terminal_command",
+            "toolInput": {"command": "npm test"},
+            "toolResult": {"output": "secret output"},
+        }
+        assert record_tool_event(payload, tmp_path) is True
+        entry = json.loads(sequences_path(tmp_path).read_text(encoding="utf-8").splitlines()[0])
+        assert entry == {
+            "tool": "run_terminal_command",
+            "ts": entry["ts"],
+            "session": "grok-sess",
+        }
+        assert "secret output" not in sequences_path(tmp_path).read_text(encoding="utf-8")
+
+    def test_success_writes_liveness_heartbeat(self, tmp_path: Path) -> None:
+        """gate33 pi MAJOR-2: the pure-CLI path (grok JSON hook) must write
+        tool_sequences.last just like the shell-template hooks, or
+        ``vibe sequence status`` reports a healthy capture as dead."""
+        from vibesop.core.instinct.tool_sequences import last_capture_path
+
+        assert record_tool_event({"tool_name": "Read"}, tmp_path) is True
+        heartbeat = last_capture_path(tmp_path)
+        assert heartbeat.exists()
+        assert heartbeat.read_text(encoding="utf-8").strip().isdigit()
+
+    def test_drop_writes_no_heartbeat(self, tmp_path: Path) -> None:
+        from vibesop.core.instinct.tool_sequences import last_capture_path
+
+        assert record_tool_event({"session_id": "s"}, tmp_path) is False
+        assert not last_capture_path(tmp_path).exists()
+
 
 class TestParseTs:
     def test_naive_timestamp_normalized_to_utc(self) -> None:

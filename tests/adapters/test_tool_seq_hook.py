@@ -283,3 +283,105 @@ class TestToolSeqHookBehavior:
         result = self._run(setup)
         assert result.returncode == 0
         assert f"--project-root {setup['work']}" in args_file.read_text(encoding="utf-8")
+
+
+class TestGrokBuildToolSeqHook:
+    """gate33: Grok Build adapter deploys a PostToolUse tool-sequence
+    capture hook as a JSON hook (no shell script — the adapter's stated
+    Windows-native property) calling the existing cross-platform
+    ``vibe sequence record-tool`` entry."""
+
+    def _grok_manifest(self) -> Manifest:
+        return Manifest(
+            metadata=ManifestMetadata(platform="grok-build", version="8.0.0"),
+            skills=[],
+        )
+
+    def test_render_config_includes_tool_seq_hook(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        _hermetic_config(monkeypatch, tmp_path, enabled=True)
+        from vibesop.adapters.grok_build import GrokBuildAdapter
+
+        adapter = GrokBuildAdapter(project_root=tmp_path)
+        output_dir = tmp_path / "out"
+
+        result = adapter.render_config(self._grok_manifest(), output_dir)
+
+        assert result.success, result.errors
+        hook_file = output_dir / "hooks" / "vibesop-tool-seq.json"
+        assert hook_file.exists()
+        config = json.loads(hook_file.read_text(encoding="utf-8"))
+        post_tool_use = config["hooks"]["PostToolUse"]
+        entry = post_tool_use[0]["hooks"][0]
+        assert entry["type"] == "command"
+        assert entry["command"] == "vibe sequence record-tool"
+        assert entry["timeout"] == 10
+        # Empty matcher = capture ALL tools (behavior evidence needs the
+        # full sequence, not just edits).
+        assert post_tool_use[0]["matcher"] == ""
+        # Observation-only: no statusMessage — capture stays invisible.
+        assert "statusMessage" not in entry
+
+    def test_render_config_disabled_omits_tool_seq_hook(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        _hermetic_config(monkeypatch, tmp_path, enabled=False)
+        from vibesop.adapters.grok_build import GrokBuildAdapter
+
+        adapter = GrokBuildAdapter(project_root=tmp_path)
+        output_dir = tmp_path / "out"
+
+        result = adapter.render_config(self._grok_manifest(), output_dir)
+
+        assert result.success, result.errors
+        assert not (output_dir / "hooks" / "vibesop-tool-seq.json").exists()
+        # The route hook is unaffected by the sequences switch.
+        assert (output_dir / "hooks" / "vibesop-route.json").exists()
+
+    def test_capture_end_to_end_via_cli(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The command the hook invokes actually records a GROK-SHAPED
+        (camelCase — gate33 pi BLOCK-1) PostToolUse payload: the capture
+        log gains exactly one minimal entry (tool + ts + session — never
+        toolInput) plus the liveness heartbeat (pi MAJOR-2)."""
+        vibe = shutil.which("vibe")
+        if vibe is None:
+            pytest.skip("vibe binary not on PATH")
+        _hermetic_config(monkeypatch, tmp_path, enabled=True)
+        work = tmp_path / "proj"
+        work.mkdir()
+        # The real grok stdin envelope (per grok's hooks user guide):
+        # camelCase keys, plus cwd/workspaceRoot the CLI uses as the
+        # project-root fallback (pi MAJOR-3).
+        payload = {
+            "hookEventName": "post_tool_use",
+            "sessionId": "grok-session-1",
+            "cwd": str(work),
+            "workspaceRoot": str(work),
+            "toolName": "search_replace",
+            "toolInput": {"file_path": "/secret/should-not-leak"},
+        }
+        result = subprocess.run(
+            [vibe, "sequence", "record-tool"],
+            check=False,
+            input=json.dumps(payload),
+            capture_output=True,
+            text=True,
+            cwd=tmp_path,  # deliberately NOT the project dir — the payload
+            # workspaceRoot must win over the process cwd (pi MAJOR-3)
+            timeout=30,
+        )
+        assert result.returncode == 0
+        log = work / ".vibe" / "tool_sequences.jsonl"
+        assert log.exists(), "camelCase payload must be recorded (gate33 pi BLOCK-1)"
+        entry = json.loads(log.read_text(encoding="utf-8").strip())
+        assert entry["tool"] == "search_replace"
+        assert entry["session"] == "grok-session-1"
+        assert "tool_input" not in entry
+        assert "toolInput" not in entry
+        # Liveness heartbeat written by the pure-CLI path (pi MAJOR-2).
+        heartbeat = work / ".vibe" / "tool_sequences.last"
+        assert heartbeat.exists()
+        assert heartbeat.read_text(encoding="utf-8").strip().isdigit()

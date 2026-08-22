@@ -329,10 +329,10 @@ vibe sequence <command>
 ```
 
 **Commands:**
-- `record-tool` - Record one tool call from a Claude Code `PostToolUse` hook (reads the hook JSON from stdin; stores only tool name + timestamp + session id — never `tool_input`)
+- `record-tool` - Record one tool call from a host agent's `PostToolUse` hook (reads the hook JSON from stdin; stores only tool name + timestamp + session id — never `tool_input`). Wired by the Claude Code (`vibesop-tool-seq.sh`), Kimi CLI (same script), and Grok Build (`vibesop-tool-seq.json`, gate33) adapters
 - `assemble` - Assemble recorded tool events into sequences (grouped by session, 30-min window fallback) and feed them to the instinct learner (`record_sequence`, application-only weight)
 
-**Related:** the Claude Code adapter ships the `vibesop-tool-seq.sh` hook (installed when `sequences.enabled` is true) which pipes PostToolUse events to `vibe sequence record-tool`. Captured data lives in `.vibe/tool_sequences.jsonl` (rotated at 10MB) and can be removed with `vibe data purge --tool-sequences`.
+**Related:** the Claude Code / Kimi CLI adapters ship the `vibesop-tool-seq.sh` hook and the Grok Build adapter ships `vibesop-tool-seq.json` (installed when `sequences.enabled` is true) which pipe PostToolUse events to `vibe sequence record-tool`. Captured data lives in `.vibe/tool_sequences.jsonl` (rotated at 10MB) and can be removed with `vibe data purge --tool-sequences`.
 
 ### `vibe conversation`
 

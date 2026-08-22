@@ -137,9 +137,7 @@ class TestRouteCommand:
     """Test `vibe route` command."""
 
     @pytest.fixture(autouse=True)
-    def _hermetic_runtime(
-        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Any
-    ) -> None:
+    def _hermetic_runtime(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Any) -> None:
         # Redirect .vibe state writes (missed-query inbox, routing counter,
         # trace spans) to a tmp dir, then stub the routing boundary.
         monkeypatch.chdir(tmp_path)
@@ -256,9 +254,7 @@ class TestRouteEdgeCases:
     """Edge cases for routing commands."""
 
     @pytest.fixture(autouse=True)
-    def _hermetic_runtime(
-        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Any
-    ) -> None:
+    def _hermetic_runtime(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Any) -> None:
         monkeypatch.chdir(tmp_path)
         _patch_route_runtime(monkeypatch, _single_no_match_router())
 
@@ -369,9 +365,7 @@ class TestRouteSquadDisplay:
     ) -> None:
         """A multi-agent query should render squad summary in CLI output."""
         monkeypatch.chdir(tmp_path)
-        _patch_route_runtime(
-            monkeypatch, _squad_router(), mode=InterceptionMode.MULTI_AGENT_SQUAD
-        )
+        _patch_route_runtime(monkeypatch, _squad_router(), mode=InterceptionMode.MULTI_AGENT_SQUAD)
         result = runner.invoke(app, ["route", "multi-agent: 设计架构、实现代码、做安全审查"])
         assert result.exit_code == 0
         output = result.output
@@ -381,3 +375,65 @@ class TestRouteSquadDisplay:
         assert "🏗️" in output  # architect role icon
         assert "Skills: design" in output
         assert "Protocol: sequential" in output
+
+
+class TestRouteHookMode:
+    """gate33 (pi NIT-6 / claude MAJOR-2): the grok route hook deployed
+    ``vibe route --hook`` since e9b6f15, but the flag never existed — the
+    grok-native routing hook was dead on arrival. These pin the now-real
+    hook mode: stdin event JSON (snake AND camelCase) → query/session
+    extraction → handle_query_for_hook envelope; always exit 0."""
+
+    @pytest.fixture(autouse=True)
+    def _stub_hook_runtime(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Any) -> None:
+        monkeypatch.chdir(tmp_path)
+        captured: dict[str, Any] = {}
+
+        class _StubRuntime:
+            def __init__(self, **kwargs: Any) -> None:  # accepts project_root= etc.
+                captured["init_kwargs"] = kwargs
+
+            def handle_query_for_hook(self, query: str, **kwargs: Any) -> str:
+                captured["query"] = query
+                captured.update(kwargs)
+                return '{"hookSpecificOutput": {"hookEventName": "UserPromptSubmit"}}'
+
+        monkeypatch.setattr("vibesop.agent.runtime.AgentRuntime", _StubRuntime)
+        self.captured = captured  # type: ignore[attr-defined]
+
+    def test_hook_mode_camelcase_grok_payload(self) -> None:
+        payload = {"prompt": "帮我合并到 main 吧", "sessionId": "grok-sess-1"}
+        result = runner.invoke(app, ["route", "--hook"], input=json.dumps(payload))
+        assert result.exit_code == 0
+        assert "hookSpecificOutput" in result.output
+        assert self.captured["query"] == "帮我合并到 main 吧"  # type: ignore[attr-defined]
+        assert self.captured["session_id"] == "grok-sess-1"  # type: ignore[attr-defined]
+        assert self.captured["platform"] == "grok-build"  # type: ignore[attr-defined]
+        # claude r2 NIT-1 / pi r2: the runtime is constructed with the
+        # resolved project root (payload/env/cwd chain — here the cwd
+        # fallback, Path(), since the payload carries no workspaceRoot).
+        from pathlib import Path
+
+        assert self.captured["init_kwargs"]["project_root"] == Path()  # type: ignore[attr-defined]
+
+    def test_hook_mode_snake_case_payload(self) -> None:
+        payload = {"query": "review this", "session_id": "claude-sess"}
+        result = runner.invoke(app, ["route", "--hook"], input=json.dumps(payload))
+        assert result.exit_code == 0
+        assert self.captured["query"] == "review this"  # type: ignore[attr-defined]
+        assert self.captured["session_id"] == "claude-sess"  # type: ignore[attr-defined]
+
+    def test_hook_mode_empty_stdin_exits_zero_with_empty_envelope(self) -> None:
+        result = runner.invoke(app, ["route", "--hook"], input="")
+        assert result.exit_code == 0
+        assert result.output.strip() == "{}"
+
+    def test_hook_mode_plain_text_fallback(self) -> None:
+        result = runner.invoke(app, ["route", "--hook"], input="plain query text")
+        assert result.exit_code == 0
+        assert self.captured["query"] == "plain query text"  # type: ignore[attr-defined]
+
+    def test_no_query_no_hook_errors(self) -> None:
+        result = runner.invoke(app, ["route"])
+        assert result.exit_code == 1
+        assert "Missing argument QUERY" in result.output

@@ -465,7 +465,14 @@ def _build_multi_agent_squad_context(
 
 @app.command()
 def route(
-    query: str = typer.Argument(..., help="Natural language query to route"),
+    query: str | None = typer.Argument(None, help="Natural language query to route"),
+    hook: bool = typer.Option(
+        False,
+        "--hook",
+        help="Hook mode: read the host agent's hook event JSON from stdin "
+        "(deployed as the grok UserPromptSubmit JSON hook — gate33). "
+        "Prints the hook response envelope and always exits 0.",
+    ),
     min_confidence: float | None = typer.Option(
         None,
         "--min-confidence",
@@ -574,6 +581,70 @@ def route(
 
     # -- Route through IntentInterceptor to respect full Agent Runtime logic --
     from vibesop.agent.runtime import IntentInterceptor, InterceptionMode, SlashCommandExecutor
+
+    # gate33 (pi NIT-6 / claude MAJOR-2): the deployed grok route hook ran
+    # ``vibe route --hook`` which never existed — the grok-native routing
+    # hook was dead on arrival. Hook mode is that command made real: read
+    # the host's hook event JSON from stdin (snake_case AND camelCase
+    # envelopes — grok's stdin is camelCase throughout, per its hooks user
+    # guide), extract the query + session, and print the hook response
+    # envelope via the same ``handle_query_for_hook`` entry the shell
+    # templates use. Always exits 0 — a hook must never block the host.
+    if hook:
+        import json
+
+        from vibesop.agent.runtime import AgentRuntime
+        from vibesop.cli.commands.sequence_cmd import _resolve_hook_project_root
+
+        raw = sys.stdin.read()
+        try:
+            payload = json.loads(raw) if raw.strip() else None
+        except json.JSONDecodeError:
+            payload = None
+        hook_query = ""
+        session_id: str | None = None
+        if isinstance(payload, dict):
+            for key in ("prompt", "user_prompt", "query", "message", "text", "userPrompt"):
+                value = payload.get(key)
+                if isinstance(value, str) and value.strip():
+                    hook_query = value.strip()
+                    break
+            session = payload.get("session_id") or payload.get("sessionId")
+            if isinstance(session, str) and session.strip():
+                session_id = session.strip()
+        elif isinstance(raw, str) and raw.strip():
+            hook_query = raw.strip()  # plain-text stdin fallback (shell parity)
+        if not hook_query:
+            print("{}")
+            raise typer.Exit(0)
+        # claude r2 NIT-1: resolve the project root the same way
+        # record-tool does (flag n/a → host env → payload workspaceRoot/cwd
+        # → spawn cwd), so route state (spans / missed-query inbox /
+        # session seed) lands in the PROJECT's .vibe/, not wherever the
+        # hook spawned. NIT-3: any runtime failure degrades to the empty
+        # envelope — the hook contract (never block the host) wins over
+        # surfacing the error.
+        root = _resolve_hook_project_root(None, payload if isinstance(payload, dict) else {})
+        try:
+            out = AgentRuntime(project_root=root).handle_query_for_hook(
+                hook_query,
+                platform="grok-build",
+                hook_event_name="UserPromptSubmit",
+                include_additional_context=True,
+                no_match_message=True,
+                session_id=session_id,
+            )
+        except Exception:
+            logger.debug("route --hook failed", exc_info=True)
+            out = "{}"
+        print(out)
+        raise typer.Exit(0)
+
+    if query is None:
+        console.print(
+            "[bold red]✗[/bold red] Missing argument QUERY (or pass --hook for stdin mode)"
+        )
+        raise typer.Exit(1)
 
     # When --slash is explicitly passed, treat as a CLI quick command
     if slash:

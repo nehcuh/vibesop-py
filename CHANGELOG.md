@@ -9,6 +9,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Grok Build 接入工具序列采集（gate33, 2026-08-22）
+
+cmspark 用 grok 时发现:路由 span 在积累(UserPromptSubmit hook),但
+行为证据(tool_call spans,M3 行为一致性门的数据基础)不涨——grok
+adapter 只装路由 hook,没有 PostToolUse 采集。
+
+- **`GrokBuildAdapter` 新增 `vibesop-tool-seq.json`**:PostToolUse(空
+  matcher = 全工具)→ `vibe sequence record-tool`(现成的跨平台 stdin
+  采集入口,只存 tool+ts+session,永不阻塞)。纯 JSON hook 无 shell
+  脚本依赖,保持 adapter 的 Windows 原生特性。
+- **复审(pi BLOCK + claude MAJOR)抓出的连环修复**:
+  - `record_tool_event` 兼容 camelCase 载荷——grok 的 hook stdin 信封
+    是 camelCase(`toolName`/`sessionId`,grok 官方 hooks 文档实证),
+    初版的"Claude 兼容"假设会让采集 100% 静默丢弃;
+  - CLI 路径采集成功也写 `tool_sequences.last` 心跳(此前只有 shell
+    模板写,grok 下 `vibe sequence status` 会误报死);
+  - `record-tool` 项目根解析:显式 flag → `GROK_WORKSPACE_ROOT`/
+    `CLAUDE_PROJECT_DIR` env → 载荷 `workspaceRoot`/`cwd` → 进程 cwd
+    (防采集散落,gate15 教训);
+  - **`vibe route --hook` 落地**:grok 路由 hook 自部署起就是非法命令
+    (`--hook` 从未存在)——现在真的实现了:stdin 事件 JSON(snake +
+    camelCase)→ `handle_query_for_hook` 信封输出,永远 exit 0。
+- `sequences.enabled` 开关与 kimi/claude 对齐(关则不部署)。
+- 文档:CLI_REFERENCE 的 `vibe sequence` 节同步三平台接线。
+- **上线条件(双路评审附加)**:cmspark 部署后 probe 三项——(a) 真实
+  grok 会话后 `.vibe/tool_sequences.jsonl` 在涨;(b) route spans 落在
+  项目 `.vibe/`(grok 原生 UserPromptSubmit hook 的 stdout 是否被采纳
+  无仓内实证,不排除仍走 Claude 兼容通道/in-band);(c)
+  `vibe sequence status` 心跳正常。probe 通过前 M3 行为门不把 grok
+  的 tool_sequences 数据当有效证据。
+
 ### 路由闭环修复 — triggers 全链路贯通 + 回放基线（gate32, 2026-08-22）
 
 起因:cmspark 激活的技能接不住产生自己的 query(verbatim 也只有

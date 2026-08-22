@@ -1,7 +1,9 @@
 """``vibe sequence`` — tool-sequence capture & assembly (P3: distillation data source).
 
-- ``vibe sequence record-tool``: called by the Claude Code PostToolUse hook;
-  reads the hook event JSON from stdin and appends a minimal entry (tool name
+- ``vibe sequence record-tool``: called by the host agent's PostToolUse hook
+  (Claude Code / Kimi CLI via ``vibesop-tool-seq.sh``; Grok Build via
+  ``vibesop-tool-seq.json``, gate33); reads the hook event JSON from stdin —
+  snake_case AND camelCase envelopes — and appends a minimal entry (tool name
   + timestamp + session id, never tool_input) to ``.vibe/tool_sequences.jsonl``.
 - ``vibe sequence assemble``: fold new capture entries into instinct sequence
   patterns (application-only telemetry, success=False).
@@ -47,16 +49,23 @@ def _sequences_enabled(project_root: Path) -> bool:
 
 @app.command("record-tool")
 def record_tool(
-    project_root: Path = typer.Option(
-        Path(), "--project-root", help="Project root (where .vibe/ lives). Defaults to cwd."
+    project_root: Path | None = typer.Option(
+        None, "--project-root", help="Project root (where .vibe/ lives). Defaults to cwd."
     ),
 ) -> None:
-    """Record one Claude Code PostToolUse hook event, read as JSON from stdin.
+    """Record one host-agent PostToolUse hook event, read as JSON from stdin.
 
     Only the tool name, a local timestamp, and the session id are persisted —
     ``tool_input`` (paths, secrets) is NEVER written. Malformed input is
     dropped silently and the command always exits 0: a hook must never block
     the host agent.
+
+    Project-root resolution when ``--project-root`` is absent (gate33 pi
+    MAJOR-3): ``$GROK_WORKSPACE_ROOT`` / ``$CLAUDE_PROJECT_DIR`` env (both
+    injected by the respective hosts around hook commands) → the payload's
+    ``workspaceRoot``/``cwd`` (grok's envelope carries both) → process cwd.
+    Without this, a hook fired from a non-project cwd would scatter captures
+    into the wrong ``.vibe/`` (the gate15 lesson).
     """
     try:
         raw = sys.stdin.read()
@@ -65,13 +74,31 @@ def record_tool(
         payload = None
     if isinstance(payload, dict):
         try:
-            if _sequences_enabled(project_root):
+            root = _resolve_hook_project_root(project_root, payload)
+            if _sequences_enabled(root):
                 from vibesop.core.instinct.tool_sequences import record_tool_event
 
-                record_tool_event(payload, project_root)
+                record_tool_event(payload, root)
         except Exception:  # capture must never block the host agent
             logger.debug("tool-sequence record failed", exc_info=True)
     raise typer.Exit(0)
+
+
+def _resolve_hook_project_root(flag: Path | None, payload: dict) -> Path:
+    """Resolve where the capture lands: explicit flag → host env → payload → cwd."""
+    import os
+
+    if flag is not None:
+        return flag
+    for env_var in ("GROK_WORKSPACE_ROOT", "CLAUDE_PROJECT_DIR"):
+        value = os.environ.get(env_var)
+        if value and value.strip():
+            return Path(value.strip())
+    for key in ("workspaceRoot", "workspace_root", "cwd"):
+        value = payload.get(key)
+        if isinstance(value, str) and value.strip():
+            return Path(value.strip())
+    return Path()
 
 
 @app.command("assemble")
@@ -106,9 +133,11 @@ def status(
     """Report capture liveness: last-capture age, file sizes, rotation state.
 
     The last-capture heartbeat (``.vibe/tool_sequences.last``, one
-    epoch-seconds line) is written by the hook template on every captured
-    event; when it is missing we cannot distinguish "never captured" from
-    "installed hook predates the liveness fix" — both are reported.
+    epoch-seconds line) is written on every captured event — by the hook
+    template (Claude Code / Kimi) or by ``record_tool_event`` itself on the
+    Grok JSON-hook path (gate33); when it is missing we cannot distinguish
+    "never captured" from "installed hook predates the liveness fix" — both
+    are reported.
     """
     from vibesop.core.instinct.tool_sequences import (
         cursor_path,
