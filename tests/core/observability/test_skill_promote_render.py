@@ -410,3 +410,44 @@ class TestMaterializeFreshFlag:
         assert second.fresh is False
         assert second.path == first.path
         assert second.path.read_text(encoding="utf-8") == "edited by human"
+
+
+class TestGate31Skeleton:
+    """gate31: the draft body grew a fill-in skeleton (When-NOT-to-Apply /
+    Acceptance Checklist / Anti-patterns) and the empty-core-steps case
+    renders a guided TODO instead of a bare parenthetical."""
+
+    def test_skeleton_sections_present(self) -> None:
+        content = _render_skill_md(_make_candidate(), "custom/x-c1")
+        assert "## When NOT to Apply" in content
+        assert "## Acceptance Checklist" in content
+        assert "## Anti-patterns" in content
+        # Section order: boundaries right after When-to-Apply, checklist
+        # and anti-patterns after Steps, provenance last.
+        assert content.index("## When to Apply") < content.index("## When NOT to Apply")
+        assert content.index("## Steps") < content.index("## Acceptance Checklist")
+        assert content.index("## Acceptance Checklist") < content.index("## Anti-patterns")
+        assert content.index("## Anti-patterns") < content.index("## Metrics")
+
+    def test_empty_core_steps_render_guided_todo(self) -> None:
+        candidate = _make_candidate()
+        assert candidate.core_steps == []
+        content = _render_skill_md(candidate, "custom/x-c1")
+        assert "TODO: reconstruct the procedure" in content
+        assert "no core steps identified" not in content
+
+    def test_core_steps_still_render_when_present(self) -> None:
+        candidate = _make_candidate()
+        candidate.core_steps = ["route:query", "tool:edit"]
+        content = _render_skill_md(candidate, "custom/x-c1")
+        assert "1. route:query" in content
+        assert "2. tool:edit" in content
+        assert "TODO: reconstruct the procedure" not in content
+
+    def test_global_scope_also_gets_skeleton(self) -> None:
+        """The M12 privacy boundary only masks example queries; the
+        editing skeleton applies to global drafts too."""
+        candidate = _make_candidate(project_distribution={"p/a": 2, "p/b": 3})
+        content = _render_skill_md(candidate, "custom/x-c1", scope="global")
+        assert "## Acceptance Checklist" in content
+        assert "example queries omitted" in content

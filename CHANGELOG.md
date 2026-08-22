@@ -9,6 +9,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Promote 草稿骨架升级 + ASCII skill_id（gate31, 2026-08-22）
+
+cmspark 首次真实 promote 暴露：草稿只有簇元数据没有编辑骨架（Steps
+空时一句带过），且 CJK query 直接进入 skill_id/目录名（工具链兼容性
+风险）。
+
+- **`_render_skill_md` 长出编辑骨架**：新增 When NOT to Apply /
+  Acceptance Checklist / Anti-patterns 三个 TODO 占位章节（oneshot-
+  web-spec 方法论——技能的价值密度在验收条款与边界，trace 合成不出来，
+  就给人工编辑引导槽位）；core_steps 为空时渲染引导性 TODO 而非一句
+  "(no core steps identified)";promote 的 review checklist 第 3 条
+  同步指向骨架章节。name/description 保持 M7 F3 裁决的中性占位
+  （防未编辑草稿被误激活后 over-match)，本轮不动。
+- **`_slugify` ASCII 化**:CJK/重音字符丢弃（不音译）,"把 nits 都收敛
+  了把" → "nits"；全非 ASCII → 回退 "candidate"(cluster_id[:8] 后缀
+  保唯一）；截断后二次 strip("-") 防尾破折号;"/" 映射为 "-"（存量
+  洞——slug 里的 "/" 会产生嵌套目录，命名空间分隔符只由调用方的
+  `custom/` 前缀提供）。skill_id 是目录名 + 路由匹配文本，必须
+  ASCII 且无嵌套。
+
 ### 候选池去重 — upsert 重叠合并（gate30, 2026-08-22）
 
 `cluster_id` = 排序后 (project_id, task_id) 复合键集合的 sha1

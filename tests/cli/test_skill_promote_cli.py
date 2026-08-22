@@ -32,6 +32,37 @@ def cli_runner() -> CliRunner:
     return CliRunner(env={"COLUMNS": "200"})
 
 
+class TestSlugify:
+    """gate31 (pi NIT-2 / claude NIT-2): direct unit coverage for
+    ``_slugify`` — the CLI integration tests only exercise the CJK paths
+    indirectly. ``/`` maps to "-" (pi NIT-3): the namespace separator is
+    the caller's ``custom/`` prefix; a "/" inside the slug would nest
+    directories."""
+
+    @pytest.mark.parametrize(
+        ("text", "expected"),
+        [
+            ("fix screenshot permission popup", "fix-screenshot-permission-popup"),
+            ("把 nits 都收敛了把", "nits"),  # CJK dropped, Latin survives
+            ("帮我合并到主分支吧", "candidate"),  # fully non-ASCII fallback
+            ("café résumé", "caf-r-sum"),  # accents dropped, not transliterated
+            ("", "candidate"),
+            ("---", "candidate"),
+            ("fix /usr/bin/env", "fix-usr-bin-env"),  # no nested dirs
+        ],
+    )
+    def test_slugify_cases(self, text: str, expected: str) -> None:
+        assert skill_commands._slugify(text) == expected
+
+    def test_truncation_never_leaves_trailing_dash(self) -> None:
+        """The second .strip("-") after [:max_len] is load-bearing:
+        pre-gate31, "a-" * 30 returned a 50-char slug ending in "-"."""
+        slug = skill_commands._slugify("a-" * 30)
+        assert len(slug) <= 50
+        assert not slug.endswith("-")
+        assert slug.startswith("a")
+
+
 @pytest.fixture
 def tmp_store(tmp_path: Path) -> ClusterCandidate:
     """Patch the CLI's ``_get_candidate_store`` helper to return a real
@@ -518,7 +549,8 @@ class TestPromote:
         assert "review checklist before activating:" in r.output
         assert "1. rewrite name/description into intent keywords" in r.output
         assert "2. confirm the example queries are a single workflow" in r.output
-        assert "3. spell out when this skill should NOT be used" in r.output
+        # gate31: item 3 points at the new fill-in skeleton sections.
+        assert "3. fill in the When-NOT-to-Apply / Acceptance Checklist /" in r.output
 
     def test_promote_unknown_id_errors(self, cli_runner: CliRunner, tmp_store) -> None:
         """Unknown cluster_id → exit code 1, error message."""
@@ -882,6 +914,51 @@ class TestMaterializeCandidate:
         assert stored.source_skill_id.endswith("-abc123de"), (
             f"skill_id should include cluster_id[:8] suffix; got: {stored.source_skill_id}"
         )
+
+    def test_promote_skill_id_is_ascii_for_cjk_query(
+        self, cli_runner: CliRunner, tmp_store, tmp_path: Path, monkeypatch
+    ) -> None:
+        """gate31: skill ids become directory names + routing-match text,
+        so they must be ASCII. CJK characters are dropped (not
+        transliterated); Latin fragments survive; a fully non-ASCII query
+        falls back to "candidate" (the cluster suffix keeps it unique).
+        """
+        monkeypatch.chdir(tmp_path)
+
+        c = ClusterCandidate(
+            cluster_id="cjk123def456",
+            task_ids=["t1"],
+            queries=["把 nits 都收敛了把"],
+            span_count=5,
+            gold_rate=0.8,
+            gold_task_ids=["t1"],
+        )
+        tmp_store.upsert(c)
+        r = cli_runner.invoke(app, ["skill", "promote", "cjk123def456"])
+        assert r.exit_code == 0
+        sid = tmp_store.get("cjk123def456").source_skill_id  # type: ignore[union-attr]
+        assert sid == "custom/nits-cjk123de"
+        assert sid.isascii()
+
+    def test_promote_skill_id_falls_back_for_fully_non_ascii_query(
+        self, cli_runner: CliRunner, tmp_store, tmp_path: Path, monkeypatch
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
+
+        c = ClusterCandidate(
+            cluster_id="zh123def456789",
+            task_ids=["t1"],
+            queries=["帮我合并到主分支吧"],
+            span_count=5,
+            gold_rate=0.8,
+            gold_task_ids=["t1"],
+        )
+        tmp_store.upsert(c)
+        r = cli_runner.invoke(app, ["skill", "promote", "zh123def456789"])
+        assert r.exit_code == 0
+        sid = tmp_store.get("zh123def456789").source_skill_id  # type: ignore[union-attr]
+        assert sid == "custom/candidate-zh123def"
+        assert sid.isascii()
 
 
 class TestPromoteActivate:

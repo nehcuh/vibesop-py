@@ -1,0 +1,254 @@
+diff --git a/CHANGELOG.md b/CHANGELOG.md
+index a5191d1..00cf816 100644
+--- a/CHANGELOG.md
++++ b/CHANGELOG.md
+@@ -9,6 +9,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
+ 
+ ## [Unreleased]
+ 
++### Promote 草稿骨架升级 + ASCII skill_id（gate31, 2026-08-22）
++
++cmspark 首次真实 promote 暴露：草稿只有簇元数据没有编辑骨架（Steps
++空时一句带过），且 CJK query 直接进入 skill_id/目录名（工具链兼容性
++风险）。
++
++- **`_render_skill_md` 长出编辑骨架**：新增 When NOT to Apply /
++  Acceptance Checklist / Anti-patterns 三个 TODO 占位章节（oneshot-
++  web-spec 方法论——技能的价值密度在验收条款与边界，trace 合成不出来，
++  就给人工编辑引导槽位）；core_steps 为空时渲染引导性 TODO 而非一句
++  "(no core steps identified)";promote 的 review checklist 第 3 条
++  同步指向骨架章节。name/description 保持 M7 F3 裁决的中性占位
++  （防未编辑草稿被误激活后 over-match)，本轮不动。
++- **`_slugify` ASCII 化**:CJK/重音字符丢弃（不音译）,"把 nits 都收敛
++  了把" → "nits"；全非 ASCII → 回退 "candidate"(cluster_id[:8] 后缀
++  保唯一）。skill_id 是目录名 + 路由匹配文本，必须 ASCII。
++
+ ### 候选池去重 — upsert 重叠合并（gate30, 2026-08-22）
+ 
+ `cluster_id` = 排序后 (project_id, task_id) 复合键集合的 sha1
+diff --git a/src/vibesop/cli/commands/skill_commands.py b/src/vibesop/cli/commands/skill_commands.py
+index e1f918f..69b04f2 100644
+--- a/src/vibesop/cli/commands/skill_commands.py
++++ b/src/vibesop/cli/commands/skill_commands.py
+@@ -1271,11 +1271,18 @@ def _slugify(text: str, max_len: int = 50) -> str:
+ 
+     Used to derive a ``skill_id`` from a candidate's representative
+     query when the user runs ``promote`` without specifying one.
++
++    gate31: ASCII-only output. Skill ids become directory names and
++    routing-match text, and non-ASCII paths break parts of the
++    toolchain — CJK / accented characters are dropped (NOT
++    transliterated), so "把 nits 都收敛了把" yields "nits" and a fully
++    non-ASCII query falls back to "candidate" (the cluster_id[:8]
++    suffix appended by the caller keeps the id unique).
+     """
+-    slug = "".join(c if c.isalnum() or c in "-/" else "-" for c in text.lower())
++    slug = "".join(c if (c.isascii() and (c.isalnum() or c in "-/")) else "-" for c in text.lower())
+     while "--" in slug:
+         slug = slug.replace("--", "-")
+-    return slug.strip("-")[:max_len] or "candidate"
++    return slug.strip("-")[:max_len].strip("-") or "candidate"
+ 
+ 
+ # Miss-knob defaults track the calibrated constants in skill_promote so a
+@@ -1982,7 +1989,10 @@ def promote_cmd(  # pyright: ignore[reportUnusedFunction]
+         "    [dim]2. confirm the example queries are a single workflow — "
+         "split the draft if they aren't[/dim]"
+     )
+-    console.print("    [dim]3. spell out when this skill should NOT be used[/dim]")
++    console.print(
++        "    [dim]3. fill in the When-NOT-to-Apply / Acceptance Checklist / "
++        "Anti-patterns skeleton sections (the acceptance bar is the value)[/dim]"
++    )
+ 
+     if activate:
+         _activate_promoted_draft(
+diff --git a/src/vibesop/core/observability/skill_promote.py b/src/vibesop/core/observability/skill_promote.py
+index a3d340f..d9c11fa 100644
+--- a/src/vibesop/core/observability/skill_promote.py
++++ b/src/vibesop/core/observability/skill_promote.py
+@@ -1883,6 +1883,11 @@ def _render_skill_md(
+ 
+     Template mirrors ``instinct_cmd.evolve`` (lines 370-402) — YAML
+     frontmatter + Overview/When-to-Apply/Steps/Metrics sections.
++    gate31: the body grew a fill-in skeleton (When-NOT-to-Apply /
++    Acceptance Checklist / Anti-patterns, oneshot-web-spec methodology)
++    so the human editor gets guided TODO slots instead of an empty
++    shell — the review value of a skill is its acceptance bar and
++    boundaries, which the trace cannot synthesize.
+ 
+     The metrics block records provenance (``cluster_id``, ``gold_rate``,
+     ``span_count``) so future audits can trace why this skill was
+@@ -1938,9 +1943,14 @@ def _render_skill_md(
+             f"{i}. {step}" for i, step in enumerate(candidate.core_steps, start=1)
+         )
+     else:
++        # gate31: the empty case gets a guided TODO instead of a bare
++        # parenthetical — the trace lacked ≥70%-frequency step names, so
++        # the human editor reconstructs the procedure from the example
++        # queries above.
+         steps_block = (
+-            "- (no core steps identified — cluster spans lacked a step "
+-            "name appearing in ≥70% of spans)"
++            "1. TODO: reconstruct the procedure from the example queries "
++            "(the cluster's spans had no step name in ≥70% of executions — "
++            "the trace shows WHAT was asked, not HOW it was done)"
+         )
+ 
+     # W5.2: cross-project frontmatter + warning header (permissive policy).
+@@ -2019,6 +2029,15 @@ Representative queries that triggered this cluster:
+ 
+ {queries_block}
+ 
++## When NOT to Apply
++
++<!-- gate31 skeleton: name the adjacent-but-different requests this skill
++     must NOT fire on. An explicit boundary is what keeps routing precise
++     after activation. Delete this section only if truly everything
++     similar should route here. -->
++
++- TODO: requests that look like the above but differ in … (goal / scope / object)
++
+ ## Steps
+ 
+ Steps below appeared in ≥70% of cluster spans (core steps). Treat as a
+@@ -2026,6 +2045,24 @@ starting point — edit, reorder, or replace based on domain knowledge.
+ 
+ {steps_block}
+ 
++## Acceptance Checklist
++
++<!-- gate31 skeleton (oneshot-web-spec methodology): the review value of a
++     skill is its acceptance bar written BEFORE the work, in checkable
++     terms. Replace every TODO with something an observer can verify —
++     numbers, exit codes, file paths — not "looks good". -->
++
++- [ ] TODO: verifiable outcome 1 (e.g. `git status` clean, CI green)
++- [ ] TODO: verifiable outcome 2
++
++## Anti-patterns
++
++<!-- gate31 skeleton: record how this workflow has gone WRONG before —
++     soft-worded requests, skipped verification, wrong-scope edits. -->
++
++- TODO: known failure mode 1
++- TODO: known failure mode 2
++
+ ## Metrics
+ 
+ | metric | value |
+diff --git a/tests/cli/test_skill_promote_cli.py b/tests/cli/test_skill_promote_cli.py
+index 8796973..6a91084 100644
+--- a/tests/cli/test_skill_promote_cli.py
++++ b/tests/cli/test_skill_promote_cli.py
+@@ -518,7 +518,8 @@ class TestPromote:
+         assert "review checklist before activating:" in r.output
+         assert "1. rewrite name/description into intent keywords" in r.output
+         assert "2. confirm the example queries are a single workflow" in r.output
+-        assert "3. spell out when this skill should NOT be used" in r.output
++        # gate31: item 3 points at the new fill-in skeleton sections.
++        assert "3. fill in the When-NOT-to-Apply / Acceptance Checklist /" in r.output
+ 
+     def test_promote_unknown_id_errors(self, cli_runner: CliRunner, tmp_store) -> None:
+         """Unknown cluster_id → exit code 1, error message."""
+@@ -883,6 +884,51 @@ class TestMaterializeCandidate:
+             f"skill_id should include cluster_id[:8] suffix; got: {stored.source_skill_id}"
+         )
+ 
++    def test_promote_skill_id_is_ascii_for_cjk_query(
++        self, cli_runner: CliRunner, tmp_store, tmp_path: Path, monkeypatch
++    ) -> None:
++        """gate31: skill ids become directory names + routing-match text,
++        so they must be ASCII. CJK characters are dropped (not
++        transliterated); Latin fragments survive; a fully non-ASCII query
++        falls back to "candidate" (the cluster suffix keeps it unique).
++        """
++        monkeypatch.chdir(tmp_path)
++
++        c = ClusterCandidate(
++            cluster_id="cjk123def456",
++            task_ids=["t1"],
++            queries=["把 nits 都收敛了把"],
++            span_count=5,
++            gold_rate=0.8,
++            gold_task_ids=["t1"],
++        )
++        tmp_store.upsert(c)
++        r = cli_runner.invoke(app, ["skill", "promote", "cjk123def456"])
++        assert r.exit_code == 0
++        sid = tmp_store.get("cjk123def456").source_skill_id  # type: ignore[union-attr]
++        assert sid == "custom/nits-cjk123de"
++        assert sid.isascii()
++
++    def test_promote_skill_id_falls_back_for_fully_non_ascii_query(
++        self, cli_runner: CliRunner, tmp_store, tmp_path: Path, monkeypatch
++    ) -> None:
++        monkeypatch.chdir(tmp_path)
++
++        c = ClusterCandidate(
++            cluster_id="zh123def456789",
++            task_ids=["t1"],
++            queries=["帮我合并到主分支吧"],
++            span_count=5,
++            gold_rate=0.8,
++            gold_task_ids=["t1"],
++        )
++        tmp_store.upsert(c)
++        r = cli_runner.invoke(app, ["skill", "promote", "zh123def456789"])
++        assert r.exit_code == 0
++        sid = tmp_store.get("zh123def456789").source_skill_id  # type: ignore[union-attr]
++        assert sid == "custom/candidate-zh123def"
++        assert sid.isascii()
++
+ 
+ class TestPromoteActivate:
+     """M12 M5 — promote --activate + content-hash edit guard + global guardrails.
+diff --git a/tests/core/observability/test_skill_promote_render.py b/tests/core/observability/test_skill_promote_render.py
+index 3ad2c94..cf5ad76 100644
+--- a/tests/core/observability/test_skill_promote_render.py
++++ b/tests/core/observability/test_skill_promote_render.py
+@@ -410,3 +410,44 @@ class TestMaterializeFreshFlag:
+         assert second.fresh is False
+         assert second.path == first.path
+         assert second.path.read_text(encoding="utf-8") == "edited by human"
++
++
++class TestGate31Skeleton:
++    """gate31: the draft body grew a fill-in skeleton (When-NOT-to-Apply /
++    Acceptance Checklist / Anti-patterns) and the empty-core-steps case
++    renders a guided TODO instead of a bare parenthetical."""
++
++    def test_skeleton_sections_present(self) -> None:
++        content = _render_skill_md(_make_candidate(), "custom/x-c1")
++        assert "## When NOT to Apply" in content
++        assert "## Acceptance Checklist" in content
++        assert "## Anti-patterns" in content
++        # Section order: boundaries right after When-to-Apply, checklist
++        # and anti-patterns after Steps, provenance last.
++        assert content.index("## When to Apply") < content.index("## When NOT to Apply")
++        assert content.index("## Steps") < content.index("## Acceptance Checklist")
++        assert content.index("## Acceptance Checklist") < content.index("## Anti-patterns")
++        assert content.index("## Anti-patterns") < content.index("## Metrics")
++
++    def test_empty_core_steps_render_guided_todo(self) -> None:
++        candidate = _make_candidate()
++        assert candidate.core_steps == []
++        content = _render_skill_md(candidate, "custom/x-c1")
++        assert "TODO: reconstruct the procedure" in content
++        assert "no core steps identified" not in content
++
++    def test_core_steps_still_render_when_present(self) -> None:
++        candidate = _make_candidate()
++        candidate.core_steps = ["route:query", "tool:edit"]
++        content = _render_skill_md(candidate, "custom/x-c1")
++        assert "1. route:query" in content
++        assert "2. tool:edit" in content
++        assert "TODO: reconstruct the procedure" not in content
++
++    def test_global_scope_also_gets_skeleton(self) -> None:
++        """The M12 privacy boundary only masks example queries; the
++        editing skeleton applies to global drafts too."""
++        candidate = _make_candidate(project_distribution={"p/a": 2, "p/b": 3})
++        content = _render_skill_md(candidate, "custom/x-c1", scope="global")
++        assert "## Acceptance Checklist" in content
++        assert "example queries omitted" in content

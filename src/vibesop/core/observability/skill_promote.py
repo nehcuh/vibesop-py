@@ -1883,6 +1883,11 @@ def _render_skill_md(
 
     Template mirrors ``instinct_cmd.evolve`` (lines 370-402) — YAML
     frontmatter + Overview/When-to-Apply/Steps/Metrics sections.
+    gate31: the body grew a fill-in skeleton (When-NOT-to-Apply /
+    Acceptance Checklist / Anti-patterns, oneshot-web-spec methodology)
+    so the human editor gets guided TODO slots instead of an empty
+    shell — the review value of a skill is its acceptance bar and
+    boundaries, which the trace cannot synthesize.
 
     The metrics block records provenance (``cluster_id``, ``gold_rate``,
     ``span_count``) so future audits can trace why this skill was
@@ -1938,9 +1943,17 @@ def _render_skill_md(
             f"{i}. {step}" for i, step in enumerate(candidate.core_steps, start=1)
         )
     else:
+        # gate31: the empty case gets a guided TODO instead of a bare
+        # parenthetical — the trace lacked ≥70%-frequency step names, so
+        # the human editor reconstructs the procedure. gate31 pi NIT-1:
+        # the pointer must match scope — global drafts omit example
+        # queries (M12 privacy boundary), so pointing at them there is
+        # self-contradictory guidance.
+        source_hint = "the task traces" if scope == "global" else "the example queries above"
         steps_block = (
-            "- (no core steps identified — cluster spans lacked a step "
-            "name appearing in ≥70% of spans)"
+            f"1. TODO: reconstruct the procedure from {source_hint} "
+            "(the cluster's spans had no step name in ≥70% of executions — "
+            "the trace shows WHAT was asked, not HOW it was done)"
         )
 
     # W5.2: cross-project frontmatter + warning header (permissive policy).
@@ -2019,12 +2032,39 @@ Representative queries that triggered this cluster:
 
 {queries_block}
 
+## When NOT to Apply
+
+<!-- gate31 skeleton: name the adjacent-but-different requests this skill
+     must NOT fire on. An explicit boundary is what keeps routing precise
+     after activation. Delete this section only if truly everything
+     similar should route here. -->
+
+- TODO: requests that resemble this pattern but differ in … (goal / scope / object)
+
 ## Steps
 
 Steps below appeared in ≥70% of cluster spans (core steps). Treat as a
 starting point — edit, reorder, or replace based on domain knowledge.
 
 {steps_block}
+
+## Acceptance Checklist
+
+<!-- gate31 skeleton (oneshot-web-spec methodology): the review value of a
+     skill is its acceptance bar written BEFORE the work, in checkable
+     terms. Replace every TODO with something an observer can verify —
+     numbers, exit codes, file paths — not "looks good". -->
+
+- [ ] TODO: verifiable outcome 1 (e.g. `git status` clean, CI green)
+- [ ] TODO: verifiable outcome 2
+
+## Anti-patterns
+
+<!-- gate31 skeleton: record how this workflow has gone WRONG before —
+     soft-worded requests, skipped verification, wrong-scope edits. -->
+
+- TODO: known failure mode 1
+- TODO: known failure mode 2
 
 ## Metrics
 

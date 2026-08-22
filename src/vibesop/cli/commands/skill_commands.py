@@ -1271,11 +1271,22 @@ def _slugify(text: str, max_len: int = 50) -> str:
 
     Used to derive a ``skill_id`` from a candidate's representative
     query when the user runs ``promote`` without specifying one.
+
+    gate31: ASCII-only output. Skill ids become directory names and
+    routing-match text, and non-ASCII paths break parts of the
+    toolchain — CJK / accented characters are dropped (NOT
+    transliterated), so "把 nits 都收敛了把" yields "nits" and a fully
+    non-ASCII query falls back to "candidate" (the cluster_id[:8]
+    suffix appended by the caller keeps the id unique). "/" maps to
+    "-" too (gate31 pi NIT-3 = claude NIT-3): the namespace separator
+    comes from the caller's ``custom/`` prefix — a "/" inside the slug
+    would create nested directories (``fix /usr/bin/env`` →
+    ``custom/fix-/usr/bin/env-<id8>`` pre-fix).
     """
-    slug = "".join(c if c.isalnum() or c in "-/" else "-" for c in text.lower())
+    slug = "".join(c if (c.isascii() and (c.isalnum() or c == "-")) else "-" for c in text.lower())
     while "--" in slug:
         slug = slug.replace("--", "-")
-    return slug.strip("-")[:max_len] or "candidate"
+    return slug.strip("-")[:max_len].strip("-") or "candidate"
 
 
 # Miss-knob defaults track the calibrated constants in skill_promote so a
@@ -1982,7 +1993,10 @@ def promote_cmd(  # pyright: ignore[reportUnusedFunction]
         "    [dim]2. confirm the example queries are a single workflow — "
         "split the draft if they aren't[/dim]"
     )
-    console.print("    [dim]3. spell out when this skill should NOT be used[/dim]")
+    console.print(
+        "    [dim]3. fill in the When-NOT-to-Apply / Acceptance Checklist / "
+        "Anti-patterns skeleton sections (the acceptance bar is the value)[/dim]"
+    )
 
     if activate:
         _activate_promoted_draft(
